@@ -86,7 +86,10 @@ function page({ settings: own = {}, aggressive = null, open = null, second = fal
     setItem: (k, v) => void store.set(k, String(v)),
   };
   const hosts = new Map();
-  const host = (id) => ({ innerHTML: "", querySelector: () => null, querySelectorAll: () => [] });
+  // The settings pane is also where the aggressive switch is inserted (one node, moved into whichever pane is
+  // showing), so the stub host takes an insertion and reports no first child. The painters themselves are handed
+  // in below; this test asserts the settings markup, not the switch.
+  const host = (id) => ({ innerHTML: "", firstElementChild: null, insertBefore() {}, querySelector: () => null, querySelectorAll: () => [] });
   for (const id of ["as-settings", "as-settings-2", "as-watchdog"]) hosts.set(id, host(id));
   const document = { getElementById: (id) => hosts.get(id) || null, activeElement: null };
   const records = assistants || [
@@ -125,8 +128,10 @@ function page({ settings: own = {}, aggressive = null, open = null, second = fal
     "sentryState",
     "ModelMenu",
     "as$",
+    "aggressiveBlock",
+    "paintAggressive",
     `${region}; return { renderAssistantSettings, renderWatchdog, FIRST_ASSISTANT, RULE_THRESHOLDS, THRESHOLDS_OPEN_KEY, thresholdsOpen, saveThresholdsOpen, rememberThresholdOpen, thresholdSummary, ownsWatchdog, scopeOfKey };`,
-  )(document, localStorage, state, esc, () => false, () => null, { attach() {} }, (id) => document.getElementById(id));
+  )(document, localStorage, state, esc, () => false, () => null, { attach() {} }, (id) => document.getElementById(id), () => ({ nodeType: 1 }), () => {});
   return { ...api, hosts, host, store, state };
 }
 

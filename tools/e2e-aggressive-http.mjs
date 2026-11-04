@@ -168,21 +168,19 @@ const brief = (s) => ({ autonomy: s.autonomy, seconds: s.seconds, rules: s.rules
     process.exit(1);
   }
 
-  // (a) the served page is the panel's own control, and the button sits beside the Assistant one.
-  head("(a) the header button, as the panel serves it");
+  // (a) the served page no longer carries the switch in its header, and the panel's own JS draws it into the top
+  // of an assistant's Settings sub-pane. A served button here would be a second control for one state.
+  head("(a) the switch, where the panel serves it");
   const html = (await get("/")).text;
-  const idxBtn = html.indexOf('id="btn-assistant"');
-  const aggBtn = html.indexOf('id="btn-aggressive"');
-  const aggClose = aggBtn >= 0 ? html.indexOf("</button>", aggBtn) : -1;
-  const aggTag = aggBtn >= 0 && aggClose > aggBtn ? html.slice(aggBtn - 8, aggClose + 9).replace(/\s+/g, " ") : "(missing)";
-  ok(idxBtn >= 0 && aggBtn > idxBtn, "the aggressive button is served in the header, beside ✧ Assistant");
-  ok(/aria-pressed="false"/.test(aggTag), "it ships with aria-pressed=false (off)");
-  ok(/⚡ Aggressive/.test(aggTag) && /id="aggressive-state">\s*off/.test(aggTag), "it carries an on/off word next to the glyph", aggTag.slice(0, 240));
+  ok(!/id="btn-aggressive"/.test(html), "the aggressive switch is NOT in the served header any more");
+  ok(!/id="btn-hot"/.test(html), "the NOT-RUNNING button is gone from the served header too");
   const asjs = (await get("/assistant.js")).text;
-  ok(/btn-aggressive/.test(asjs), "the page's own JS owns the button (no browser confirm anywhere)");
+  ok(/id="btn-aggressive"/.test(asjs) && /id="aggressive-state"/.test(asjs), "the page's own JS builds the switch (ids intact)");
+  ok(/\.as-aggressive/.test(asjs) || /aggressiveBlock/.test(asjs), "it is created for the Settings sub-pane, not the header");
   ok(/function setAggressiveMode\(/.test(asjs) && /\/api\/assistant\/aggressive/.test(asjs), "the press posts to /api/assistant/aggressive from the panel's own script");
   ok(/setAttribute\("aria-pressed", on \? "true" : "false"\)/.test(asjs), "aria-pressed is driven from the server's state, not a local guess");
   ok(!/confirm\(/.test(asjs), "no window.confirm in the assistant script");
+  ok(!/NOT-RUNNING/.test(asjs), "no NOT-RUNNING control or rotation is left in the assistant script");
 
   const before = await state();
   head("(b) a real toggle-on: settings before, then the aggressive profile");

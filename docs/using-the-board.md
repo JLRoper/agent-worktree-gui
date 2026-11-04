@@ -37,24 +37,35 @@ is `rev-parse`, `rev-list`, `merge-base`, `cherry`, `diff`, `status` and `log`.
 | **Worktree Agent Monitor** | Click it for Settings — the same panel as ⚙ Settings, handy when the page is zoomed in. |
 | Config line | Version, how many projects are being watched, the two main cadences, scan threads, bind host — and `refresh on screen only` when that refresh mode is on. |
 | Stream readout | `pool 1/3 · 3 conversations · 29 events · 2.4/s`: scan workers busy, how many conversations, and the event rate arriving over SSE. |
-| **NOT-RUNNING** | Steps through the agents that are not running and are waiting on you. See below. |
+| **HUMAN** | Every open permission and clarify question on the board, in one rotation. See below. |
 | **✧ Assistant** | Opens the assistant panel beside the board (`A` or `Ctrl+Shift+A`) — a rail by default, and a floating window for an assistant whose own **Settings** says `floating`. Its purple badge counts the open alerts; the `⧗` pill beside it counts the **spawn cards** waiting for a click, amber once the oldest has waited over two minutes. |
 | **Collapse all** | Folds the whole tree in one press — every folder, project, worktree row, card and turn. The button then reads **Expand all**. `Ctrl+]` also opens everything; `Ctrl+[` folds one tier per press instead. |
-| **⚡ Aggressive** | Switches the assistant's aggressive profile on or off. Its pill reads `on`/`off`, so the state does not depend on colour. |
 | **Pause** | Freezes the page: closes the live stream, so nothing updates. The button reads **Resume**, which reconnects and resyncs. |
 | **⚙ Settings** | The Settings panel (`Ctrl+,`). **Refresh now** and **Fetch remotes** live in it too, under Board → **Read now**. |
 
-### The NOT-RUNNING rotation
+### The HUMAN rotation
 
-Click **NOT-RUNNING** and the panel opens the first agent that is not running, focuses its reply box and flashes
-its card amber. The button counts its place (`NOT-RUNNING 2/5`).
+Click **HUMAN** (or press `H`) and the panel opens the next open question on the board — a turn parked on a
+permission request, an agent parked on its own clarify question, or the dock's own permission card — unfolds the
+project, row and turn that own it, centres the prompt, flashes it red and its card amber, and puts the caret on the
+answer control. A permission box starts on **Deny**, deliberately: a stray key cannot approve a command.
 
-- **Enter** sends the reply and moves straight to the next waiting agent — the quickest way to clear a queue.
-- **Alt+Right** skips forward without sending; **Alt+Left** goes back.
-- Click the button again to stop; the counter disappears.
+- **H** (or another press) moves to the next question; the button counts its place (`HUMAN 2/3`).
+- The red badge is how many questions are waiting on you. Zero leaves no badge at all.
+- A question that is answered, expires or whose turn ends drops out of the rotation as you go.
 
-An agent that starts running, or that you answer, drops out of the rotation as it goes. When nothing is waiting,
-the button says so in a banner rather than pretending to step.
+The old **NOT-RUNNING** rotation, and its `Alt+Right` / `Alt+Left` steps, are gone. The stopped-agent pills on the
+cards are unchanged: the amber `not-running` pill still resumes that agent, and the green **▶** on a worktree row still
+probes every stopped agent in it.
+
+### The aggressive profile
+
+**⚡ Aggressive** is at the top of an assistant's own **Settings** sub-pane (the assistant's tab → **Settings**), not
+in the top bar. It is one switch for one mode, drawn for whichever assistant's tab is on screen — its state is the same
+whichever assistant you are looking at. Its pill reads `on`/`off`, so the state does not depend on colour, and
+`Alt+Shift+A` throws it from anywhere. While it is on it holds the waking, monitoring and acting settings; the controls
+it holds are greyed and marked **held**, and switching it off puts your own values back exactly. Press it twice and the
+no-op note says so.
 
 ---
 
@@ -923,7 +934,7 @@ does not price; no press can re-fetch it — `python tools/openrouter-prices.py`
 | `Up` / `Down` | Spawn prompt, reply box | Walk earlier prompts for this thread/board. |
 | `Enter` | Reply box | **Queue reply** while the card offers that button (a turn is running, or a finished turn's subagents are still out); otherwise send the next turn. |
 | `Ctrl+Enter` (⌘+Enter) | Reply box | **Steer turn** — send the text into the live turn. With no live turn to steer it means what `Enter` means. |
-| `Alt+Right` / `Alt+Left` | During NOT-RUNNING | Skip forward / go back. |
+| `Alt+Shift+A` | Anywhere | Switch the assistant's aggressive profile on or off. |
 | `Ctrl+,` | Anywhere | Settings. |
 | `Esc` | In the Settings search box | Clear the search and put every group back as you had it. On an empty box it closes Settings. |
 | `Esc` | Anywhere | Close what is open: an artifacts list, Settings, a maximized card, a clone row, or a folder filter. |

@@ -62,12 +62,11 @@ const state = {
   // turn's own bytes; `consoleFocus` hides the tool rows and leaves the prose, the errors and the final message.
   consoleRaw: new Set(),
   consoleFocus: new Set(),
-  // Hot Agent: the rotation through agents that are waiting for input. `stack` is the visit history (so
-  // Alt+Left can walk back), `cursor` points at the one on screen.
-  hot: { on: false, stack: [], cursor: -1 },
-  // The amber flash is held here, not only on the DOM node: opening a project or a row repaints the card, and a
-  // class added to the old element dies with it. The renderer re-applies it until the window closes.
+  // HUMAN's amber ring on a card: held here, not only on the DOM node, because opening a project or a row
+  // repaints the card and a class added to the old element dies with it. The renderer re-applies it until the
+  // window closes. (The NOT-RUNNING rotation that first drew this ring is gone; HUMAN kept the ring.)
   hotFlash: { thread: null, until: 0 },
+  hotFlashTimer: null,
   // HUMAN: the rotation through every OPEN permission and clarify question. `key` is the question last shown
   // and `at` its place in that sample; `sig` is what was last painted on the button. The list itself is never
   // stored — it is rebuilt from live state on every press, so an answered question cannot linger in it.
@@ -284,6 +283,10 @@ const state = {
   flashSeconds: loadFlashSeconds(),
   cloneStatus: {},
   approvals: new Map(),
+  // Instrumentation for the permission-prompt proof: the last count `/api/state` carried in `approvals`, when it
+  // changed, and the ids. An empty `/api/approvals` beside a non-zero count here says the page's own run feed
+  // carried the prompt and the plugin's long-poll feed was simply never used.
+  approvalsSeen: { at: 0, count: -1, ids: [] },
   scanRoots: [],
   pollGap: new Map(), // key -> observed seconds between that row's scans, smoothed
   lastScanAt: new Map(), // key -> ms of the previous scan we rendered
@@ -15215,6 +15218,14 @@ function applySnapshot(data) {
   if (Array.isArray(data.approvals)) {
     state.approvals.clear();
     for (const r of data.approvals) if (r && r.id) state.approvals.set(r.id, r);
+    // Instrumented on purpose (0.91.0): `/api/approvals` is the approval-transport plugin's own long-poll feed,
+    // while this is what the page's snapshot carried. When the two disagree — the plugin feed empty while a
+    // worker is genuinely parked — this line and `state.approvalsSeen` say which feed the reader's card came from.
+    const count = state.approvals.size;
+    if (count !== state.approvalsSeen.count) {
+      state.approvalsSeen = { at: Date.now(), count, ids: [...state.approvals.keys()] };
+      console.info(`panel: approvals from /api/state: ${count} pending${count ? ` (${state.approvalsSeen.ids.join(", ")})` : ""}`);
+    }
     renderApprovals();
   }
   // The panel's own permission requests travel with the snapshot like the CLI-transport approvals: a reload comes
@@ -17270,7 +17281,6 @@ document.addEventListener("keydown", async (e) => {
       }
     }
     void sendReply(thread);
-    if (state.hot.on) hotAfterSend(thread);
   }
 });
 // A press on the merge chip is remembered until the release: the verdict cell above is rebuilt on every scan.
@@ -17761,23 +17771,64 @@ document.addEventListener(
   { passive: false },
 );
 
-window.addEventListener("keydown", (e) => {
-  if (!state.hot.on || !e.altKey) return;
-  if (e.key === "ArrowRight") {
-    e.preventDefault();
-    hotStep(1);
-  } else if (e.key === "ArrowLeft") {
-    e.preventDefault();
-    hotStep(-1);
+
+
+// ---- HUMAN's landing helpers (they outlived the NOT-RUNNING rotation) -------------------------
+// These three were board/hot.js. The NOT-RUNNING button and its rotation are gone; HUMAN still lands a question
+// by opening the same path (hotOpenPath), finds the row a thread lives in (hotRowFor) and rings the card amber
+// (flashHotCard, kept in state.hotFlash so a repaint re-applies it). Same code, one caller now.
+function hotRowFor(thread) {
+  for (const row of state.rows.values()) {
+    if (agentsFor(row).some((c) => c.thread === thread)) return row;
   }
-});
+  return null;
+}
+
+// Open exactly the path to one card and close everything else: after Collapse all the project is only "open"
+// in state, and the folder holding it is still shut - an open project inside a closed folder is not on screen,
+// which is why the counter moved and nothing appeared. The rotation keeps one project visible at a time.
+function hotOpenPath(row) {
+  const project = row.project;
+  for (const name of [...state.expandedProjects]) {
+    if (name !== project) toggleProject(name);
+  }
+  const sec = document.querySelector(`section.project[data-project="${CSS.escape(project)}"]`);
+  const root = sec?.closest("section.root-group")?.dataset.root;
+  if (root && state.collapsedRoots.has(root)) {
+    state.collapsedRoots.delete(root);
+    saveCollapsedRoots();
+    applyRootCollapse(root);
+    paintCollapseAll();
+  }
+  if (!state.expandedProjects.has(project)) toggleProject(project);
+  const key = keyOf(project, row.path);
+  if (!state.expanded.has(key)) {
+    document.querySelector(`tr.row[data-key="${CSS.escape(key)}"]`)?.click();
+  }
+}
+
+// The whole card flashes, not just the box: the rotation moves the reader's attention to a panel, and a ring
+// around the panel is what says "this one". The caret still lands in the prompt's answer control.
+function flashHotCard(thread) {
+  const card = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`);
+  if (!card) return;
+  const until = Date.now() + 1300;
+  state.hotFlash = { thread, until };
+  card.classList.remove("hot-flash");
+  void card.offsetWidth; // restart it even when the last flash is still fading
+  card.classList.add("hot-flash");
+  clearTimeout(state.hotFlashTimer);
+  state.hotFlashTimer = setTimeout(() => {
+    state.hotFlash = { thread: null, until: 0 };
+    document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`)?.classList.remove("hot-flash");
+  }, 1300);
+}
 
 // ---- HUMAN (the question rotation) -----------------------------------------------------------
-// NOT-RUNNING steps through agents that are not running. This is the other waiting list: every OPEN question
-// on the board — a turn parked on a permission request, an agent parked on its own `clarify` question, and the
-// dock's own permission cards (a CLI approval, or the panel's remote-write request). An agent can be RUNNING and
-// still hold a question, and that is exactly the case NOT-RUNNING cannot reach — it is how permissions and
-// clarify questions kept being missed.
+// Every OPEN question on the board, in one rotation — a turn parked on a permission request, an agent parked on
+// its own `clarify` question, and the dock's own permission cards (a CLI approval, or the panel's remote-write
+// request). An agent can be RUNNING and still hold a question, which is why a rotation over stopped agents could
+// never reach them.
 //
 // THE LIST IS NEVER CACHED. It is rebuilt from live state on every press, so a question that was answered, timed
 // out, or whose turn ended is simply not in the next list. What IS remembered is the KEY of the question last
@@ -17928,8 +17979,8 @@ function humanShow(q) {
     card = document.querySelector(`.job[data-thread="${CSS.escape(q.thread)}"]`);
   } else {
     // The project and the row first: a card inside a closed row is not on the page at all, and after Collapse all
-    // the project is only open in state while its folder is still shut. hotOpenPath is the NOT-RUNNING stepper's
-    // own opener, so the two rotations cannot drift into two ideas of "open".
+    // the project is only open in state while its folder is still shut. hotOpenPath is HUMAN's own opener, so the
+    // rotation and the board cannot drift into two ideas of "open".
     const row = hotRowFor(q.thread);
     if (row) hotOpenPath(row);
     if (state.collapsedJobs.has(q.thread)) state.collapsedJobs.delete(q.thread);
@@ -17955,7 +18006,7 @@ function humanLandOnQuestion(card, q) {
   // The gate again, on the DOM this time: the box is drawn only while its turn is live and its carrier is open,
   // and a question that closed between the sample and this paint has no box to show.
   if (!box || box.classList.contains("is-expired")) return false;
-  // The card wears the NOT-RUNNING stepper's own amber ring (state-held, so a repaint keeps it), and the prompt
+  // The card wears HUMAN's amber ring (state-held, so a repaint keeps it), and the prompt
   // itself gets a red ring: this is a question, and the box is what the reader was brought here to read. ONE box
   // carries it: a ring left on the previous prompt would say two questions are current, and every reader of the
   // class (this page, the gate) counts exactly one.

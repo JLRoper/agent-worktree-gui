@@ -5,9 +5,9 @@
 //   node tools/verify-human-button.mjs --root <export>     # serve a `git archive` of another build (RED PROOF)
 //   node tools/verify-human-button.mjs --keep              # leave the sandbox on disk
 //
-// THE BRIEF. NOT-RUNNING steps through agents that are not running; a permission or a clarify question can sit on an
-// agent that IS running, and those are the ones the reader kept missing. HUMAN is the second rotation: one button
-// beside NOT-RUNNING, a red count of everything waiting on a human, and a press (or H) that opens the next question —
+// THE BRIEF. A permission or a clarify question can sit on an agent that IS running, and those are the ones the
+// reader kept missing. HUMAN is the rotation: one button in the header, a red count of everything waiting on a
+// human, and a press (or H) that opens the next question —
 // project and row unfolded, the turn that owns it unfolded and paged in, the prompt centred and flashed, its answer
 // control focused. A question that is answered, times out or whose turn ends drops out of the list, and a press that
 // lands on one which vanished between the sample and the paint steps on instead of opening a dead card.
@@ -283,7 +283,7 @@ const read = (page) =>
     const card = box?.closest(".job") || null;
     return {
       present: Boolean(btn),
-      besideHot: Boolean(btn && btn.previousElementSibling && btn.previousElementSibling.id === "btn-hot"),
+      besideAssistant: Boolean(btn && btn.previousElementSibling && btn.previousElementSibling.id === "btn-assistant"),
       label: label ? label.textContent : null,
       badgeHidden: badge ? badge.hidden : null,
       badgeText: badge ? badge.textContent : null,
@@ -293,6 +293,10 @@ const read = (page) =>
       listLength: list.length,
       keys: list.map((q) => q.key),
       kinds: list.map((q) => q.kind),
+      // The instrumented dock feed: what `/api/state` put in `state.approvals`, beside the turn approvals the
+      // rotation also reads. Zero here with an approval in `kinds` is the proof the run feed carried the prompt.
+      approvalsCount: state.approvals.size,
+      approvalsSeen: state.approvalsSeen,
       flash: box
         ? {
             cls: box.className,
@@ -594,6 +598,22 @@ async function main() {
     ok("the approval carries the command the stub asked about", parked?.approval?.approval?.command === APPROVAL_COMMAND, parked?.approval?.approval?.command);
     ok("the question carries every choice verbatim", JSON.stringify(parked?.ask?.question?.choices) === JSON.stringify(CHOICES), JSON.stringify(parked?.ask?.question?.choices));
 
+    // ---- where a permission prompt actually reaches the panel ------------------------------------------------
+    // Two feeds carry approvals and they are not the same thing. `/api/approvals` is the approval-transport
+    // plugin's long-poll feed: the plugin presents a redacted request and polls for the answer. A panel with no
+    // plugin running has an empty list there even while a run is parked. The run feed is the other one: the
+    // gateway's `approval.request` lands on the job (`lib/jobs.js`), rides `/api/state`, and is what
+    // `humanQuestions()` reads. This section is the proof of which feed the reader's card came from — and an
+    // empty plugin feed beside a live parked run is expected, not a lost prompt.
+    section("office: the two approval feeds");
+    const dockFeed = await (await fetch(`${panel.base}/api/approvals`)).json();
+    const snapNow = await (await fetch(`${panel.base}/api/state`)).json();
+    const jobApproval = (snapNow.jobs || []).find((j) => j.thread === "th-approve" && j.approval?.requestId === REQUEST_ID);
+    note(`GET /api/approvals -> ${JSON.stringify(dockFeed)}`);
+    note(`/api/state jobs[th-approve].approval -> ${JSON.stringify(jobApproval?.approval || null)}`);
+    check("the plugin's /api/approvals feed is EMPTY while the run is genuinely parked", Array.isArray(dockFeed.pending) ? dockFeed.pending.length : -1, 0);
+    ok("the run's own snapshot carries the approval (the run feed, not the plugin feed)", jobApproval?.approval?.command === APPROVAL_COMMAND, JSON.stringify(jobApproval?.approval || null));
+
     await withBrowser(
       async ({ page, pageErrors }) => {
         await page.setViewportSize({ width: 1280, height: 900 });
@@ -611,14 +631,14 @@ async function main() {
         // ---- 1. the control and its count ---------------------------------------------------------------
         section("1. the button and its red count");
         const first = await read(page);
-        const hotTitle = await page.evaluate(() => document.getElementById("btn-hot").title);
-        check("HUMAN is the control immediately after NOT-RUNNING", first.besideHot, true);
-        ok("NOT-RUNNING is still its own control beside it", /NOT-RUNNING/.test(hotTitle), hotTitle.slice(0, 40));
+        check("HUMAN is the control immediately after ✧ Assistant", first.besideAssistant, true);
         check("the label reads HUMAN while no question is being shown", first.label, "HUMAN");
         check("the badge is not hidden", first.badgeHidden, false);
         check("the badge counts every open question", first.badgeText, "3");
         check("the badge is red", first.badgeBg, "rgb(229, 83, 75)");
         check("the button wears the waiting look", first.hasQuestions, true);
+        check("the panel's dock approval feed is empty (state.approvals.size)", first.approvalsCount, 0);
+        ok("the approval still reaches HUMAN — on the turn, through the run feed", first.kinds.includes("approval"), JSON.stringify(first.kinds));
         ok("the title splits permissions from clarify questions", /1 permission/.test(first.title) && /2 clarify questions/.test(first.title), first.title.slice(0, 150));
         ok("...and names the agents holding them", agentsInTitle(first.title, 2), first.title.slice(0, 240));
 
