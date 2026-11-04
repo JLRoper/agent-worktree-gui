@@ -29,6 +29,10 @@
 // popover the stylesheet defaults to), and each frame's height is fitted to that tab's content up to 976 px — a short
 // tab in a tall window photographs as a mostly-empty box. The rect a frame was taken at is in the ledger, per frame.
 //
+// A RE-RUN IS NOT BYTE-IDENTICAL, and the difference is one line: pipeline-tab.png and bundles-tab.png print the two
+// files the tab read, and those live in a fresh mkdtemp sandbox each run — the paths are the fixture's, not the
+// reader's. pipeline-stages.png and pipeline-flow.png carry no path and reproduce byte for byte.
+//
 // Exit: 0 the frames and the ledger were written; 2 the browser half could not run at all.
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
