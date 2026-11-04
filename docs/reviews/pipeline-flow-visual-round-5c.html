@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Playwright round 5C — thirteen stages fit, and the scroller says what it hides</title>
+
+<style>
+  :root {
+    --bg: #0e1116; --panel: #151a21; --panel2: #1b212a; --line: #2a3340; --text: #e6e9ef; --dim: #9aa5b4;
+    --dimmer: #6f7a89; --green: #7ee787; --red: #ff9c94; --amber: #f0c674; --blue: #9ecbff; --purple: #c8a6ff;
+    --mono: ui-monospace, "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+    --ui: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body { margin: 0; color: var(--text); font: 15px/1.62 var(--ui); }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 30px 24px 72px; }
+  a { color: var(--blue); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  h1 { font-size: 27px; line-height: 1.22; margin: 4px 0 8px; letter-spacing: -0.2px; }
+  h2 { font-size: 19px; margin: 44px 0 12px; padding-top: 16px; border-top: 1px solid var(--line); }
+  h3 { font-size: 15.5px; margin: 26px 0 8px; color: var(--blue); }
+  h4 { font-size: 12px; margin: 18px 0 6px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.07em; }
+  p { margin: 9px 0; }
+  ul, ol { margin: 8px 0 8px 22px; padding: 0; }
+  li { margin: 5px 0; }
+  code, .mono { font-family: var(--mono); font-size: 12.8px; }
+  code { background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+  .kicker { color: var(--dimmer); font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; }
+  .sub { color: var(--dim); font-size: 16px; margin: 0 0 14px; max-width: 940px; }
+  .meta { color: var(--dim); font-size: 12.5px; }
+  .meta code { font-size: 12px; }
+  .anchor { font-family: var(--mono); font-size: 12.2px; color: var(--purple); background: #1d1826;
+            border: 1px solid #3d3352; border-radius: 4px; padding: 0 5px; white-space: nowrap; }
+  nav { margin: 18px 0 8px; padding: 12px 16px; background: var(--panel); border: 1px solid var(--line);
+        border-radius: 8px; font-size: 13px; line-height: 1.9; }
+  nav b { color: var(--dimmer); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.1em; }
+  nav a { margin: 0 10px 0 0; white-space: nowrap; }
+  .lead { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--blue);
+          border-radius: 8px; padding: 14px 18px; margin: 18px 0; }
+  .lead p { margin: 5px 0; }
+  .verdict { background: #13261a; border: 1px solid #2f5f38; border-left: 4px solid var(--green);
+             border-radius: 8px; padding: 13px 18px; margin: 18px 0; }
+  .verdict h4 { color: var(--green); margin: 0 0 4px; }
+  .failbox { background: #2a1414; border: 1px solid #6b2a2a; border-left: 4px solid var(--red);
+             border-radius: 8px; padding: 13px 18px; margin: 18px 0; }
+  .failbox h4 { color: var(--red); margin: 0 0 4px; }
+  .warn { background: #2a2414; border: 1px solid #5c4d22; border-left: 4px solid var(--amber);
+          border-radius: 8px; padding: 12px 18px; margin: 16px 0; }
+  .warn h4 { color: var(--amber); margin: 0 0 4px; }
+  .not { background: #1f1a26; border: 1px solid #44395a; border-left: 4px solid var(--purple);
+         border-radius: 8px; padding: 12px 18px; margin: 16px 0; }
+  .not h4 { color: var(--purple); margin: 0 0 4px; }
+  .box { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 18px; margin: 14px 0; }
+  .tw { overflow-x: auto; margin: 10px 0 16px; border: 1px solid var(--line); border-radius: 8px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: left; vertical-align: top; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+  th { background: var(--panel2); color: var(--dim); font-weight: 600; font-size: 12px;
+       text-transform: uppercase; letter-spacing: 0.05em; }
+  tr:last-child td { border-bottom: 0; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .good { color: var(--green); font-weight: 600; }
+  .bad { color: var(--red); font-weight: 600; }
+  .may { color: var(--amber); }
+  .dim { color: var(--dim); }
+  .small { font-size: 12.5px; }
+  figure { margin: 16px 0 22px; }
+  figure img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; background: #0b0e12; }
+  figure.small img { width: auto; max-width: 100%; }
+  figcaption { color: var(--dim); font-size: 12.5px; margin-top: 6px; }
+  pre { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px;
+        overflow-x: auto; font-family: var(--mono); font-size: 12.5px; line-height: 1.7; }
+  footer { margin-top: 54px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--dimmer); font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="kicker">agent-worktree-gui · playwright round 5C · the count and the fit control</div>
+<h1>Thirteen stages fit the card, and the scroller says what it is hiding</h1>
+<p class="sub">Round 5B left six judge lines red in the thirteen-stage case — four columns and their notches outside a
+1094 px scroller, with no count of what was missing and no way to bring it in. This round adds the count (a measurement
+of the painted rects, re-read on every scroll) and <code>fit</code> (the same grid, one step narrower), and the six lines
+are green at both widths with the one-, two-, three- and seven-stage numbers untouched.</p>
+<p class="meta">
+  Branch <code>wtgui/thirteen-stages-the-last-97f3dd</code>, measured on <code>origin/main</code> <code>1b8b795</code>
+  (<code>1.2.0</code> — the v1.2.0 changelog render; <code>git diff --stat a843641 1b8b795 -- public test tools lib</code>
+  is empty, so the code under the numbers is the same) plus this branch's commits <code>e8e14ea</code>
+  (public/pipeline-flow.js, public/pipeline-modal.js, public/style.css) and <code>92f39f8</code>
+  (tools/verify-pipeline-flow-visible.mjs) · this landing carries <code>1.3.0</code> · harness
+  <code>tools/verify-pipeline-flow-visible.mjs</code>, extended · 2026-11-04 07:38 UTC (2026-11-04 02:38 EST) ·
+  headless Chromium via Playwright · viewports 1280×800 and 1821×700 · throwaway panel, own config/stores/catalogue,
+  assistant and gateway off.
+</p>
+
+<div class="verdict">
+  <h4>148/148 judge lines and 141/141 contract checks</h4>
+  <p>Round 5B read <strong>134/140</strong> and <strong>129/129</strong> on the same harness. The six red lines were
+  V1, V2 and V3 in the thirteen-stage case at both viewports; they are green on the <em>fitted</em> drawing, and the
+  unfitted drawing is judged on the count it now prints in both states. The 1, 2, 3 and 7-stage cases read exactly as
+  5B left them: 826 px centred at 146/146, 1094/1094 with all seven notches inside.</p>
+</div>
+
+<nav>
+  <b>on this page</b>
+  <a href="#answer">The answer</a>
+  <a href="#method">Method</a>
+  <a href="#cases">The cases</a>
+  <a href="#mechanism">Mechanism</a>
+  <a href="#shots">The four shots</a>
+  <a href="#reproduce">Reproduce</a>
+  <a href="#limits">Limits</a>
+</nav>
+
+<h2 id="answer">The answer</h2>
+<p>At thirteen stages the unfitted drawing is <strong>1562 px of content in a 1094 px scroller</strong> — stages 10–13
+and their four notches are out of view, and the scroller now says so:</p>
+<div class="box"><code>showing stages 1–9 of 13 — 4 of 13 stages and 4 of 13 notches out of view</code></div>
+<p>Scrolling to the far end changes the sentence because the sentence is a measurement, not a constant:</p>
+<div class="box"><code>showing stages 5–13 of 13 — 4 of 13 stages and 3 of 13 notches out of view</code></div>
+<p>And the press the plan calls <code>fit</code> brings the whole chain in, at both widths:</p>
+<div class="box"><code>all 13 stages and 13 notches in view</code> · <code>scrollWidth 1094 = clientWidth 1094</code> ·
+  13 columns of 72.8 px in a 1090 px track</div>
+<p>The count is not a hidden implement: it is a line under the drawing with the control beside it, and it stays there
+while fitted. A pass that greened the case by making the count disappear would fail N3.</p>
+
+<h2 id="method">Method</h2>
+<p><code>tools/verify-pipeline-flow-visible.mjs</code> is 5A's harness, extended rather than replaced. It boots a
+throwaway panel of this checkout — its own <code>PANEL_CONFIG</code>, jobs store, <code>pipelines.json</code>, an
+ephemeral port, a dead <code>apiServer</code>, the board assistant off — and drives it with Chromium. Route B is
+Settings → Pipeline → a definition → <em>open the flow</em>; route A is a queue row's ⇢ press. Every value is read from
+the DOM in the page: <code>getBoundingClientRect</code> against the scroller's client box and the track's own box,
+<code>scrollWidth</code>/<code>clientWidth</code>, pairwise intersections, the arc's ends against the stage centres it
+joins, the painted colours as a contrast ratio, and the computed outline of whatever the keyboard focused.</p>
+<p>The thirteen-stage case now has four lines of its own, judged in the state they describe:</p>
+<ul>
+  <li><strong>N1</strong> — unfitted, the count is <em>rebuilt here from the measured rects</em> (not read back from
+  the element): every stage and notch outside the scroller's box, and the run of stage ordinals that is showing.</li>
+  <li><strong>N2</strong> — after scrolling to the end, the sentence changes and still matches the measurement. This is
+  the line that proves the count follows the reader rather than the first paint.</li>
+  <li><strong>K1</strong> — Tab reaches the fit control without leaving the dialog, and the ring is painted
+  (<code>solid/2px</code>). The scroller is Chromium's own tab stop, so the press is the third stop, and the run reads
+  where it lands.</li>
+  <li><strong>N3</strong> — fitted, the count is still there and says <code>all 13 stages and 13 notches in view</code>,
+  while V1–V6, C1–C4 and C8 judge the fitted drawing like every other case.</li>
+</ul>
+<p>The harness itself had a measurement bug that this round had to fix before it could judge a scrolled drawing: its
+<code>r()</code> helper names an element's left edge <code>x</code> (it returns a rect, not a DOMRect), and V1/V2 read
+<code>rect.left</code> — <code>undefined &lt; sr.left</code> is false, so a drawing scrolled LEFT had none of its
+clipped stages counted as clipped. The count's scrolled case is the first line that scrolls a drawing left; the notch
+check now reads the left edge too. That is a gate defect that predates this branch, corrected in
+<code>tools/verify-pipeline-flow-visible.mjs</code>.</p>
+
+<h2 id="cases">The cases</h2>
+<div class="tw">
+<table>
+  <tr><th>case</th><th class="num">stages</th><th class="num">track / body</th><th class="num">dead space L / R</th>
+      <th class="num">column</th><th class="num">scroll / client</th><th>verdict</th></tr>
+  <tr><td>route B · local</td><td class="num">1</td><td class="num">400 / 1118</td><td class="num">359 / 359</td>
+      <td class="num">400</td><td class="num">1094 / 1094</td><td class="good">PASS</td></tr>
+  <tr><td>route B · investigate</td><td class="num">2</td><td class="num">826 / 1118</td><td class="num">146 / 146</td>
+      <td class="num">400</td><td class="num">1094 / 1094</td><td class="good">PASS</td></tr>
+  <tr><td>route B · turnover</td><td class="num">3</td><td class="num">1090 / 1118</td><td class="num">14 / 14</td>
+      <td class="num">346</td><td class="num">1094 / 1094</td><td class="good">PASS</td></tr>
+  <tr><td>route B · sefl-review-loop</td><td class="num">7</td><td class="num">1090 / 1118</td><td class="num">14 / 14</td>
+      <td class="num">133.4</td><td class="num">1094 / 1094</td><td class="good">PASS · 7 notches inside</td></tr>
+  <tr><td>route B · acceptance-thirteen, unfitted</td><td class="num">13</td><td class="num">1090 / 1118</td>
+      <td class="num">14 / 14</td><td class="num">96</td><td class="num">1562 / 1094</td>
+      <td class="may">counted: 4 stages + 4 notches out</td></tr>
+  <tr><td>route B · acceptance-thirteen, scrolled to 468</td><td class="num">13</td><td class="num">1090 / 1118</td>
+      <td class="num">14 / 14</td><td class="num">96</td><td class="num">1562 / 1094</td>
+      <td class="may">counted: 4 stages + 3 notches out, 5–13 showing</td></tr>
+  <tr><td>route B · acceptance-thirteen, fitted</td><td class="num">13</td><td class="num">1090 / 1118</td>
+      <td class="num">14 / 14</td><td class="num">72.8</td><td class="num">1094 / 1094</td>
+      <td class="good">PASS · 13/13 stages and notches inside</td></tr>
+  <tr><td>route A · poc-flow at S3</td><td class="num">5</td><td class="num">1090 / 1118</td><td class="num">14 / 14</td>
+      <td class="num">197.2</td><td class="num">1094 / 1094</td><td class="good">PASS</td></tr>
+</table>
+</div>
+<p class="small dim">“Dead space” is the body's edge minus the track's edge, per side. The fitted card is
+1120×304.6 at both viewports; the unfitted card is 1120×289.7. Every case is identical at 1280×800 and 1821×700 —
+the card is capped at 1120 px, so the two widths differ in where the card sits, not in the drawing.</p>
+
+<h2 id="mechanism">Mechanism</h2>
+<h3>The count is a measurement</h3>
+<p><code>viewCount(root)</code> <span class="anchor">public/pipeline-flow.js:435</span> reads the scroller's own
+<code>getBoundingClientRect()</code> and scans every <code>.pflow-node</code> and <code>.pflow-notch</code>: an item is
+out when its right edge passes the box's right edge or its left edge falls behind the box's left edge, and the side it
+counts for is the side the reader has to scroll toward. <code>countText(view)</code>
+<span class="anchor">public/pipeline-flow.js:419</span> writes the one sentence; nothing else in the page composes it.
+The row and the control are emitted by <code>statusHtml()</code> <span class="anchor">public/pipeline-flow.js:482</span>
+and the row starts <code>hidden</code> — the measurement unhides it.</p>
+<p><code>readView(doc)</code> <span class="anchor">public/pipeline-modal.js:187</span> puts that sentence into the
+element, sets <code>data-out</code>, and hides both the row and the control when the drawing fits and <code>fit</code>
+is off. <code>wireFlow(doc)</code> <span class="anchor">public/pipeline-modal.js:202</span> attaches the passive
+<code>scroll</code> listener and a <code>resize</code> listener (the card is <code>96vw</code> up to its cap, so a
+window resize changes how much of a long definition fits), and hands back a cleanup that <code>paintFlow</code> and
+<code>close()</code> both call — the watcher is per painting, not per page.</p>
+<h3><code>fit</code> is the same width function, one step narrower</h3>
+<p>The track's width policy has always been the CSS custom properties <code>--pflow-minw</code> and
+<code>--pflow-gap</code>, read by the grid, the connector, the notch and the arc geometry. <code>fit</code> sets them
+once on the root — <code>.pflow[data-fit="1"] { --pflow-gap: 12px; --pflow-minw: 56px; }</code>
+<span class="anchor">public/style.css:4001</span> — so thirteen columns share the 1090 px track at 72.8 px each and the
+arcs cannot drift from the stages they join. The state lives in the dialog
+(<code>state.fit</code> <span class="anchor">public/pipeline-modal.js:310</span> resets it on open), survives a position
+or motion re-render, and the press is the control's own: <code>data-fit</code> goes to <code>1</code>, the label reads
+<em>actual size</em>, and pressing that restores the 96 px floor. It is a press, not a resize: nothing re-lays out until
+the reader asks, which is the plan's C8 trade stated openly — the whole chain for the readable column width.</p>
+<h3>The row is quiet when it has nothing to say</h3>
+<p><code>.pflow-status[hidden], .pflow-fit[hidden] { display: none; }</code>
+<span class="anchor">public/style.css:4083</span> is what keeps a one-, two-, three- or seven-stage drawing exactly as
+5B left it: the row is hidden until something is out of view, and the control is hidden with it. The thirteen fitted
+case keeps both because <code>fit</code> is on — the count is never the thing the fix hides.</p>
+<h3>And the press stops at the dialog</h3>
+<p>The page closes the Settings window for any click whose path does not include it
+(<span class="anchor">public/app.js:22543</span>, the <code>#settings</code> outside-press handler), and this dialog is
+opened from Settings. Round 5A stopped the backdrop press; a press on a control <em>inside</em> the card still reached
+that handler, so the harness saw Settings close under it the moment a control lived there. The card now stops its own
+clicks <span class="anchor">public/pipeline-modal.js:419</span> — bound on the card, not as a capture stop on document,
+because capture at document runs before the button's own handler and the press would never arrive at all.</p>
+
+<h2 id="shots">The four shots the brief asks for</h2>
+<p>Each is the harness's own card capture, taken in the same run as the numbers above, at 1280×800 and 1821×700, both
+fitted and unfitted.</p>
+
+<figure>
+  <img src="pipeline-flow-visual-round-5c/01-thirteen-unfitted-1280.png" alt="Thirteen stages, unfitted, 1280">
+  <figcaption>Thirteen stages, <strong>unfitted</strong>, 1280×800. Stages 1–9 and a sliver of 10; the count names the
+  four stages and four notches out of view and the <em>fit</em> control sits beside it.</figcaption>
+</figure>
+
+<figure>
+  <img src="pipeline-flow-visual-round-5c/02-thirteen-fitted-1280.png" alt="Thirteen stages, fitted, 1280">
+  <figcaption>Thirteen stages, <strong>fitted</strong>, 1280×800. All thirteen columns in one row, titles wrapped
+  rather than clipped, the count reads “all 13 stages and 13 notches in view”, and the focused control says
+  <em>actual size</em> — the way back to the 96 px columns.</figcaption>
+</figure>
+
+<figure>
+  <img src="pipeline-flow-visual-round-5c/03-thirteen-unfitted-1821.png" alt="Thirteen stages, unfitted, 1821">
+  <figcaption>Thirteen stages, <strong>unfitted</strong>, 1821×700. Same drawing, same count: the card is capped at
+  1120 px, so the wider viewport moves the card and not the measurement.</figcaption>
+</figure>
+
+<figure>
+  <img src="pipeline-flow-visual-round-5c/04-thirteen-fitted-1821.png" alt="Thirteen stages, fitted, 1821">
+  <figcaption>Thirteen stages, <strong>fitted</strong>, 1821×700. 1094/1094 at both widths; the count is still under
+  the drawing it describes.</figcaption>
+</figure>
+
+<figure class="small">
+  <img src="pipeline-flow-visual-round-5c/05-thirteen-fitted-last-notch-1280.png" alt="The closing notch at the fitted scale">
+  <figcaption>The closing gate at the fitted scale: the notch sits on the final column's right border, inside the card,
+  where round 5B put it for seven stages. V2 counts all thirteen notches inside the fitted scroller.</figcaption>
+</figure>
+
+<h2 id="reproduce">Reproduce</h2>
+<pre>cd C:/ProjectDevelopment/agent-worktree-gui/.worktrees/thirteen-stages-the-last-97f3dd
+node tools/verify-pipeline-flow-visible.mjs --strict --json out.json --shots shots
+
+# 148/148 judge lines, 141/141 contract checks, exit 0
+node tools/verify-pipeline-flow.mjs      # 49/49
+node --test test/*.test.js               # 1406 tests, 1406 pass, 0 fail</pre>
+<p class="small dim">The shots on this page are the harness's own, copied beside it under
+<code>docs/reviews/pipeline-flow-visual-round-5c/</code>.</p>
+
+<h2 id="limits">Limits</h2>
+<ul>
+  <li><strong>The fitted columns are 72.8 px.</strong> Titles wrap to two or three lines. That is the trade the
+  integration plan's C8 states (“legibility for overview”); C2 (no title below 11 px) and C4 (no truncated title)
+  still pass at that width, but the columns are a summary, not the place to read a long title.</li>
+  <li><strong>The count describes the painting.</strong> It follows a scroll and a window resize; it does not know about
+  a stage you have not scrolled to in another tab. It is measured from rendered rects, so a display:none flow measures
+  nothing and claims nothing (<code>viewCount</code> returns null).</li>
+  <li><strong>Nothing auto-fits.</strong> <code>fit</code> is a press and resets on the next open; a reader who wants
+  the whole chain presses it each time. That is deliberate: an automatic re-layout would spend the readable width
+  without being asked.</li>
+  <li><strong>The unfitted drawing still scrolls</strong> — it must, at 96 px columns and thirteen stages. What changed
+  is that the scroller is honest about it and offers the way out, which is the acceptance line the architecture review
+  wrote for this case.</li>
+</ul>
+
+<footer>
+  Round 5C · branch <code>wtgui/thirteen-stages-the-last-97f3dd</code> over <code>origin/main</code>
+  <code>1b8b795</code> (<code>1.2.0</code>) · landing <code>1.3.0</code> · harness
+  <code>tools/verify-pipeline-flow-visible.mjs</code> · shots under
+  <code>docs/reviews/pipeline-flow-visual-round-5c/</code>.
+</footer>
+
+</div>
+</body>
+</html>
