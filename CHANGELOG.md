@@ -17,15 +17,15 @@ has no tag.
 
 ## v0.106.2 — 2026-11-03 · 2 commits
 
-[`3db2d70`](https://github.com/JLRoper/agent-worktree-gui/commit/3db2d70b5b5dcd4454cf191e6c3788101ab5ec92) · [compare v0.106.1...v0.106.2](https://github.com/JLRoper/agent-worktree-gui/compare/v0.106.1...v0.106.2)
+[`1641e5a`](https://github.com/JLRoper/agent-worktree-gui/commit/1641e5a71bb9ac83369a5e6d0aadf6fc999a7e7e) · [compare v0.106.1...v0.106.2](https://github.com/JLRoper/agent-worktree-gui/compare/v0.106.1...v0.106.2)
 
 ### Docs & tests
 
-- docs: the Settings strip names every tab it draws, and the count comes from that list ([`2219556`](https://github.com/JLRoper/agent-worktree-gui/commit/2219556727bebf2e7889fbb5db26f501ca87a9b5))
+- docs: the Settings strip names every tab it draws, and the count comes from that list ([`728478f`](https://github.com/JLRoper/agent-worktree-gui/commit/728478f40efbf8d5827b0acd69b4528606c4b65f))
 
 ### Other
 
-- chore: 0.106.2 — the version this landing carries ([`3db2d70`](https://github.com/JLRoper/agent-worktree-gui/commit/3db2d70b5b5dcd4454cf191e6c3788101ab5ec92))
+- chore: 0.106.2 — the version this landing carries ([`1641e5a`](https://github.com/JLRoper/agent-worktree-gui/commit/1641e5a71bb9ac83369a5e6d0aadf6fc999a7e7e))
 
 ## v0.106.1 — 2026-11-03 · 3 commits
 
