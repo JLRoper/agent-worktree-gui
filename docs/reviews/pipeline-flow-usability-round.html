@@ -1,0 +1,592 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Usability round — the pipeline flow, read as a reader reads it</title>
+<style>
+  :root {
+    --bg: #0e1116; --panel: #151a21; --panel2: #1b212a; --line: #2a3340; --text: #e6e9ef; --dim: #9aa5b4;
+    --dimmer: #6f7a89; --green: #7ee787; --red: #ff9c94; --amber: #f0c674; --blue: #9ecbff; --purple: #c8a6ff;
+    --mono: ui-monospace, "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+    --ui: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body { margin: 0; color: var(--text); font: 15px/1.62 var(--ui); }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 30px 24px 72px; }
+  a { color: var(--blue); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  h1 { font-size: 27px; line-height: 1.22; margin: 4px 0 8px; letter-spacing: -0.2px; }
+  h2 { font-size: 19px; margin: 44px 0 12px; padding-top: 16px; border-top: 1px solid var(--line); }
+  h3 { font-size: 15.5px; margin: 26px 0 8px; color: var(--blue); }
+  h4 { font-size: 12px; margin: 18px 0 6px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.07em; }
+  p { margin: 9px 0; }
+  ul, ol { margin: 8px 0 8px 22px; padding: 0; }
+  li { margin: 5px 0; }
+  code, .mono { font-family: var(--mono); font-size: 12.8px; }
+  code { background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+  .kicker { color: var(--dimmer); font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; }
+  .sub { color: var(--dim); font-size: 16px; margin: 0 0 14px; max-width: 940px; }
+  .meta { color: var(--dim); font-size: 12.5px; }
+  .meta code { font-size: 12px; }
+  .anchor { font-family: var(--mono); font-size: 12.2px; color: var(--purple); background: #1d1826;
+            border: 1px solid #3d3352; border-radius: 4px; padding: 0 5px; white-space: nowrap; }
+  nav { margin: 18px 0 8px; padding: 12px 16px; background: var(--panel); border: 1px solid var(--line);
+        border-radius: 8px; font-size: 13px; line-height: 1.9; }
+  nav b { color: var(--dimmer); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.1em; }
+  nav a { margin: 0 10px 0 0; white-space: nowrap; }
+  .lead { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--blue);
+          border-radius: 8px; padding: 14px 18px; margin: 18px 0; }
+  .lead p { margin: 5px 0; }
+  .verdict { background: #2a1414; border: 1px solid #6b2a2a; border-left: 4px solid var(--red);
+             border-radius: 8px; padding: 13px 18px; margin: 18px 0; }
+  .verdict h4 { color: var(--red); margin: 0 0 4px; }
+  .goodbox { background: #13261a; border: 1px solid #2f5f38; border-left: 4px solid var(--green);
+             border-radius: 8px; padding: 13px 18px; margin: 18px 0; }
+  .goodbox h4 { color: var(--green); margin: 0 0 4px; }
+  .warn { background: #2a2414; border: 1px solid #5c4d22; border-left: 4px solid var(--amber);
+          border-radius: 8px; padding: 12px 18px; margin: 16px 0; }
+  .warn h4 { color: var(--amber); margin: 0 0 4px; }
+  .not { background: #1f1a26; border: 1px solid #44395a; border-left: 4px solid var(--purple);
+         border-radius: 8px; padding: 12px 18px; margin: 16px 0; }
+  .not h4 { color: var(--purple); margin: 0 0 4px; }
+  .box { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 18px; margin: 14px 0; }
+  .tw { overflow-x: auto; margin: 10px 0 16px; border: 1px solid var(--line); border-radius: 8px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: left; vertical-align: top; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+  th { background: var(--panel2); color: var(--dim); font-weight: 600; font-size: 12px;
+       text-transform: uppercase; letter-spacing: 0.05em; }
+  tr:last-child td { border-bottom: 0; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .good { color: var(--green); font-weight: 600; }
+  .bad { color: var(--red); font-weight: 600; }
+  .may { color: var(--amber); }
+  .dim { color: var(--dim); }
+  .small { font-size: 12.5px; }
+  figure { margin: 16px 0 22px; }
+  figure img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; background: #0b0e12; }
+  figure.small img { width: auto; max-width: 100%; }
+  figcaption { color: var(--dim); font-size: 12.5px; margin-top: 6px; }
+  .finding { border-top: 1px solid var(--line); padding-top: 6px; margin-top: 34px; }
+  .tag { font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+         border-radius: 999px; padding: 1px 8px; border: 1px solid var(--line); color: var(--dim); }
+  .tag.s1 { color: #ff9c94; border-color: #6b2a2a; background: #2a1414; }
+  .tag.s2 { color: #f0c674; border-color: #5c4d22; background: #2a2414; }
+  .tag.s3 { color: #9ecbff; border-color: #2b5480; background: #141f2c; }
+  /* the "what it must show instead" mock: a document drawing, not the product */
+  .mock { background: #0b0e12; border: 1px solid var(--line); border-radius: 10px; padding: 18px 18px 12px; margin: 16px 0; }
+  .mcard { width: 300px; background: #13181f; border: 1px solid #2b5480; border-radius: 8px; padding: 10px 12px 11px; }
+  .mrow { display: flex; align-items: baseline; gap: 8px; }
+  .mnum { font: 10px var(--mono); color: #8b96a5; }
+  .mtitle { font-size: 13px; font-weight: 600; color: var(--text); flex: 1; }
+  .mdur { font: 10px var(--mono); color: #58a6ff; white-space: nowrap; }
+  .mwhat { font-size: 11.5px; line-height: 1.45; color: var(--dim); margin: 6px 0 7px; }
+  .mmeta { display: flex; flex-wrap: wrap; gap: 4px 10px; font: 10.5px var(--mono); color: #8b96a5; }
+  .mgate { margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--line); font-size: 10.5px; line-height: 1.5; color: var(--dim); }
+  .mgate b { color: #f0c674; font-weight: 600; }
+  .mgate i { color: #c8a6ff; font-style: normal; }
+  .ruler { display: flex; align-items: center; gap: 0; margin-top: 12px; width: 560px; max-width: 100%; }
+  .ruler i { flex: 1; height: 4px; background: #2a3340; border-right: 2px solid #0b0e12; }
+  .ruler i.done { background: #2ea043; }
+  .ruler i.cur { background: #58a6ff; height: 8px; border-radius: 2px; }
+  .ruler i.next { background: #2a3340; }
+  .rlabel { font: 10px var(--mono); color: #8b96a5; margin-top: 5px; }
+  footer { margin-top: 54px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--dimmer); font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="kicker">agent-worktree-gui · usability round</div>
+<h1>Usability round — the pipeline flow, read as a reader reads it</h1>
+<p class="sub">The reader's verdict was <b>unusable</b>. This round measures that verdict instead of arguing with it: what the
+drawing prints, what it leaves out, what the two named widths change, and what a picture that conveys a pipeline would
+have to show instead.</p>
+<p class="meta">Branch <code>wtgui/playwright-usability-rou-8ec471</code>, cut from <code>main</code> at <code>f00c0e0</code> and
+rebased onto <code>main</code> <code>6cd6426</code> (1.4.1; the flow files are round 5C's) before the final run · package
+1.4.1 · harness <code>tools/verify-pipeline-flow-usability.mjs</code> · 2026-11-04 03:04 EST · headless Chromium via
+Playwright · viewports <b>1280×800</b> and <b>1821×700</b> · shots at DPR 2 · throwaway panel, own config/stores, assistant
+and gateway off · <b>0 page errors</b> · no file under <code>public/</code> touched</p>
+
+<nav>
+  <b>Contents</b><br>
+  <a href="#answer">The answer</a>
+  <a href="#baseline">1. What the reader saw</a>
+  <a href="#method">2. How it was measured</a>
+  <a href="#six">3. The six questions</a>
+  <a href="#widths">4. The two widths</a>
+  <a href="#record">5. The marks and the record</a>
+  <a href="#instead">6. What it must show instead</a>
+  <a href="#severity">7. Severity-ranked findings</a>
+  <a href="#passes">8. What still passes</a>
+  <a href="#limits">9. Limits</a>
+  <a href="#reproduce">10. Reproduce</a>
+</nav>
+
+<div class="lead" id="answer">
+  <p><b>The one-paragraph answer.</b> The drawing does not convey a pipeline. It conveys an ordered row of titled
+  rectangles joined by a one-pixel line, with a three-pixel tick at each exit and four mark colours for state. It answers
+  <i>sequence</i> and, in position mode, <i>roughly where the run is</i>. It does not answer what a stage does, who acts in
+  it, what its gate checks, what a refusal leaves behind, what a loop's cap has been spent on, or how long a stage has
+  run. Measured: the cards print <b>4, 32 and 68 words</b> of definitions that hold <b>104, 415 and 450</b> — 3.8%, 7.7%
+  and 15.1% of the pipeline's own prose. A gate is a <b>3×15 px</b> mark with <b>0 characters</b> of visible text. At
+  thirteen stages the default view shows <b>9 of 13</b> with <b>468 px</b> hidden and now says so; <code>fit</code> brings
+  all thirteen in, but a run parked at stage 11 still opens with <b>stage 11 off screen</b>. This is not a rendering bug to
+  polish; it is a picture that leaves out the nouns the reader needs.</p>
+</div>
+
+<div class="warn">
+  <h4>Main moved while this round ran</h4>
+  <p>This round was spawned at <code>f00c0e0</code> and measured that drawing. Round 5C landed on main during the run
+  (<code>6ba1e85</code>, <code>9a521e6</code>, <code>5cd412e</code>, <code>58ab40a</code>): thirteen stages fit, and the
+  scroller prints what it is hiding. This branch was rebased onto <code>58ab40a</code> and, after main moved again, onto
+  <code>6cd6426</code> (1.4.1), whose <code>public/pipeline-flow.js</code> and <code>public/pipeline-modal.js</code> are
+  byte-identical to 5C's; the harness was re-run on it. Every number below is at <code>6cd6426</code>, and each case that
+  <code>fit</code> applies to is measured twice — default and fitted. The reader's attachment predates 5C and is kept as the
+  baseline complaint; the two-stage drawing it shows is unchanged by 5C, so it is still what the reader sees for that
+  definition.</p>
+</div>
+
+<div class="verdict">
+  <h4>Verdict on the reader's word</h4>
+  <p><b>The visibility half is now answered; the content half is confirmed.</b> 5C's count and <code>fit</code> are a real
+  improvement: at thirteen stages the scroller says <i>“4 of 13 stages and 4 of 13 notches out of view”</i> and one press
+  brings all thirteen in at 72.8 px columns, at both widths. What 5C did not change is what the cards say: one to seven
+  words per stage, 67–97% of every card blank, every gate a 3 px tick, the marks index-derived, the refusal reasonless, and
+  the stage the run is in off screen until the reader finds the fit control. The reader is asking for the pipeline's nouns —
+  <b>stage, actor, gate, loop cap, position, mark</b> — and the picture still prints only the first as a title.</p>
+</div>
+
+<h2 id="baseline">1. What the reader saw</h2>
+<p>The attachment is <code>2026-11-04T07-15-18-image.png</code>, <b>1979×435</b>. The flow card in this build measures
+<b>1120×247.7</b> CSS px; at 176.7% that is <b>1979×438</b>, and the attachment is 1979×435 — the same card, three pixels
+cropped to its content. So the baseline is the same dialog this round reproduces, captured at about 177% zoom: the
+<code>github-investigate</code> definition, two stages, edit mode.</p>
+
+<figure>
+  <img src="pipeline-flow-usability-round/00-reader-baseline.png" alt="The reader's baseline screenshot: a wide dialog with two enormous, nearly empty stage boxes">
+  <figcaption><b>The baseline complaint.</b> 1979×435 — the two-stage flow at about 177%. Two 400×51.7 boxes, one word in
+  each, two amber ticks, and a legend. The note above the boxes is longer than the drawing.</figcaption>
+</figure>
+
+<p>Read as a reader, not as a test: the dialog says <b>“GitHub investigation”</b>, then <code>pipeline
+github-investigate</code>, <code>kind investigation</code>, <code>stages 2</code>, <code>next github-force-merge</code>,
+then a 29-word sentence explaining that a notch is an exit check, then two very wide, very short rectangles.
+Inside the first: a small <b>1</b> and the word <b>Probe</b>. Inside the second: a small <b>2</b> and the word
+<b>Conclude</b>. The rest of both rectangles is empty. There is no verb, no owner, no check, no time — nothing that says
+what either stage is for. The only sentence that explains the picture is the note, and the note is about the notation.</p>
+
+<figure>
+  <img src="pipeline-flow-usability-round/01-two-1280.png" alt="The same two-stage dialog at 1280">
+  <figcaption><b>The same drawing reproduced at 1280×800, DPR 2.</b> Card 1120×247.7 at x=80. Track 826×51.7 centred in a
+  1118 px body (146 px dead each side). The two cards are 400×51.7; ink area 506.9 and 774.1 px² of 20,680 — <b>97.5% and
+  96.3% empty</b>.</figcaption>
+</figure>
+
+<p>The measurement makes the reader's word concrete: a 400-pixel-wide card holds a one-word title at 11.5 px. Ninety-seven
+percent of the card is background. The card is not a container for information; it is a container for a label, and the
+label is one word.</p>
+
+<h2 id="method">2. How it was measured</h2>
+<p><code>tools/verify-pipeline-flow-usability.mjs</code> boots a throwaway panel of this checkout — its own
+<code>PANEL_CONFIG</code>, jobs store, <code>pipelines.json</code>, an ephemeral port, a dead <code>apiServer</code>, the
+board assistant off — and drives it with Chromium at <b>1280×800</b> and <b>1821×700</b>, device scale factor 2 for the
+shots. It measures in CSS pixels at the viewport:</p>
+<ul>
+  <li><b>Ink area</b> is the union of the text's own line boxes, read with a <code>Range</code> over each text node. A flex
+  item stretches to its column, so the element's rect is not the text; the <code>Range</code> is. Empty ratio =
+  <code>1 − inkArea / nodeArea</code>.</li>
+  <li><b>Words</b> are counted on the drawing's own text (<code>[data-pm-flow]</code>) and on the definition or bundle it
+  was made from — title, description, every stage prompt, every exit check and its parameters, every gate name, decider,
+  decision path, outcome and loop cap. "4 of 104" means four words printed against 104 words held.</li>
+  <li><b>Answerable</b> is a substring test on the drawing's printed text, not on its attributes: a gate's name is
+  "visible" only if a reader can read it without hovering, without a screen reader, and without devtools. The notch's
+  <code>aria-label</code> and <code>title</code> are recorded separately, with their lengths.</li>
+  <li><b>Position</b> is read from <code>data-marks-from</code>, the current card's rect against the scroller's box, and
+  <code>scrollLeft</code>/<code>scrollWidth</code>.</li>
+  <li><b>Fit</b> is measured, not assumed: the harness records the default state, presses <code>[data-pflow-fit]</code>,
+  records the fitted state, and presses again. The count sentence, the column width, the hidden pixels and the current
+  stage's visibility are compared between the two states.</li>
+</ul>
+<p>The fixtures are shaped like the real data. The two- and seven-stage cases are the seed's own <code>investigate</code>
+and <code>sefl-review-loop</code> definitions; the thirteen-stage definition is written into the catalogue for the
+acceptance case (the seed's longest is seven), each stage carrying a prompt and a parameterised exit check. The long run is
+a studio bundle with thirteen stages, one gate (<code>L1 · scope agreed</code>, decider <code>architect</code>, decision
+<code>decisions/long-1.json</code>, outcomes go/no-go) and one six-column loop <code>st12 → st6</code>, cap
+<code>3 rounds</code>, parked at stage 11. The raw ledger is in
+<a href="pipeline-flow-usability-round/ledger.json"><code>pipeline-flow-usability-round/ledger.json</code></a>.</p>
+
+<h2 id="six">3. The six questions, answered from the picture</h2>
+
+<h3>a. Can I see where a stage sits?</h3>
+<p><b>Partly — and now with a way out, one press away.</b> In edit mode every card carries a small ordinal at 9.5 px
+(<code>1</code>…<code>13</code>) and every stage is drawn <i>not reached</i>, because a definition has no position. In
+position mode at five stages the header says <code>4 of 5 — Build it</code> and the current card is blue; the whole run
+fits, so the position is legible.</p>
+<figure>
+  <img src="pipeline-flow-usability-round/08-position-1280.png" alt="Position mode at five stages: three green cards, one blue, one grey">
+  <figcaption><b>Position mode at five stages — the best the drawing gets.</b> Header <code>4 of 5 — Build it</code>;
+  three green cards, one blue current card, one grey; the gate after S2 is the 3 px tick; the loop is the arc above. The
+  position is legible because the whole run fits, and because the header repeats it in words.</figcaption>
+</figure>
+<p>At thirteen the default view still hides four stages — but 5C's scroller now says so and offers <code>fit</code>:</p>
+<figure>
+  <img src="pipeline-flow-usability-round/05-thirteen-1280.png" alt="The thirteen-stage definition at 1280, nine boxes visible with a count row under them">
+  <figcaption><b>The thirteen-stage definition, default state.</b> Nine 96×66.6 cards in the 1094 px scroller, stages 10–13
+  off the right edge. Above the legend, 5C's count reads <code>showing stages 1–9 of 13 — 4 of 13 stages and 4 of 13 notches
+  out of view</code>, with a <code>fit</code> button beside it. The drawing no longer lies about its length; it still hides
+  the four stages until the reader acts.</figcaption>
+</figure>
+<figure>
+  <img src="pipeline-flow-usability-round/05b-thirteen-1280-fit.png" alt="The same thirteen stages after fit: all thirteen columns in one card">
+  <figcaption><b>The same definition after one press of <code>fit</code>.</b> Thirteen columns of 72.8 px,
+  <code>scrollWidth 1094 = clientWidth 1094</code>, count <code>all 13 stages and 13 notches in view</code>. Titles wrap to
+  two or three lines in places (card heights 66.6 and 81.6); nothing is hidden. This is the first state in which the whole
+  run is a picture.</figcaption>
+</figure>
+<p>A run parked at stage 11 still opens with stage 11 off screen, and the count names four hidden stages without naming the
+current one:</p>
+<figure>
+  <img src="pipeline-flow-usability-round/10-long-current-offscreen-1280.png" alt="A 13-stage run at stage 11 with the current stage off screen">
+  <figcaption><b>A 13-stage run parked at stage 11, opened at 1280.</b> Header: <code>11 of 13 — Stage 11 — publish</code>.
+  The picture shows stages 1–9, all green, and <b>stage 11 is 128 px past the scroller's right edge</b>
+  (<code>scrollLeft 0</code>, <code>scrollWidth 1562</code> against <code>clientWidth 1094</code>). The count says
+  <code>showing stages 1–9 of 13 — 4 of 13 stages and 0 of 1 notch out of view</code>; it does not say the current stage is
+  one of the four. The one blue card the reader needs is the one card not on screen.</figcaption>
+</figure>
+<figure>
+  <img src="pipeline-flow-usability-round/10b-long-fit-1280.png" alt="The same run after fit: all thirteen stages and the current stage visible">
+  <figcaption><b>The same run after <code>fit</code>.</b> Count <code>all 13 stages and 1 notch in view</code>; the blue
+  current card (11) is on screen for the first time; the loop arc's ends now sit on the stages it joins (0 / −0.1 px off
+  centre). The position is visible and the arc's geometry is correct in this state.</figcaption>
+</figure>
+<p>Measured at both widths: default <b>9 of 13</b>, <b>468 px</b> hidden, <code>scrollLeft 0</code>, current stage at x=1315
+against a scroller that ends at 1187 — <b>not visible</b>; fitted <b>13 of 13</b>, 0 px hidden, 72.8 px columns, current
+stage on screen. So the answer to “where does it sit” is <b>yes, after one deliberate press of fit</b>, and <b>no on
+open</b> — and the control sits at the bottom of the drawing, under nine cards, not at the position marker.</p>
+
+<h3>b. What does each stage do?</h3>
+<p><b>No.</b> The card prints the title and the ordinal and nothing else. The stage's prompt — the instruction that says
+what the stage does — is not drawn in either route. Measured against the definitions' own prose:</p>
+<div class="tw">
+<table>
+<tr><th>Case</th><th>Stages</th><th class="num">Words on cards</th><th class="num">Words in the definition</th><th class="num">Printed</th><th>What is printed</th></tr>
+<tr><td>Two-stage definition</td><td>2</td><td class="num">4</td><td class="num">104</td><td class="num bad">3.8%</td><td>2 titles + 2 ordinals</td></tr>
+<tr><td>Seven-stage definition</td><td>7</td><td class="num">32</td><td class="num">415</td><td class="num bad">7.7%</td><td>25 title words + 7 ordinals</td></tr>
+<tr><td>Thirteen-stage definition</td><td>13</td><td class="num">68</td><td class="num">450</td><td class="num bad">15.1%</td><td>55 title words + 13 ordinals</td></tr>
+<tr><td>Position, five-stage bundle</td><td>5</td><td class="num">18</td><td class="num">151</td><td class="num bad">11.9%</td><td>13 title words + 5 ordinals</td></tr>
+</table>
+</div>
+<p><b>Per card, measured:</b> 1 word (two-stage), 1–7 words with a median of 3 (seven-stage), 4–5 (thirteen-stage), 2–3
+(position). Every card's title is set at <b>11.5 px</b> and its ordinal at <b>9.5 px</b>; the legend is 10.5 px and the loop
+label 9.5 px — nothing on a card is larger than 11.5 px. The emptiest card measured is <b>97.5% blank</b> (400×51.7,
+"Probe"); even the densest, a fitted 72.8×81.6 column holding a three-line title, is <b>33% filled</b>. 5C's count adds
+one sentence about the drawing (7–19 words) and no word about a stage.</p>
+<p>The prompts are 25–104 words per stage and are never drawn; the artifact a stage writes is not drawn in either route in
+practice. A definition carries none, and the catalogue projection the position dialog reads sends each stage as
+<code>{id, title, position}</code> only (<span class="anchor">lib/task-pipeline-assign.js:92</span>) — the artifact is
+dropped before the drawing sees it. A reader who wants to know what "Answer the review" does has to leave the dialog.</p>
+
+<h3>c. Who acts in it?</h3>
+<p><b>No — there is no actor on the drawing at all.</b> A definition has no actor field. A bundle's gate has a
+<code>decider</code>, but it is printed only inside the notch's 97-character hover title: <code>gate g2 · contract signed —
+decides decisions/2.json (go, no-go) — on artifact-2 — decider reader</code>. The substring test over the drawing's printed
+text returns <b>NONE</b> for the gate name, the decider, the decision path and the outcomes. The stage's own
+<code>owner</code>/role never reaches the drawing: <code>lib/pipeline-bundle.js</code> reads five things per pipeline
+(stages in order, prompts, artifacts, gates, handoffs) and deliberately drops the rest, owner included. So the one thing a
+reader most wants next to "Wait for the approval at the head" — <i>whose</i> approval — is absent from the data the
+drawing receives, not merely hidden from it.</p>
+
+<h3>d. What does its gate check?</h3>
+<p><b>No.</b> Every gate is the same 3×15 px vertical tick, in the 26 px gap between two cards. In the DOM its
+<code>textContent</code> is <b>0 characters</b> in every case measured; the meaning lives in an <code>aria-label</code> of
+89–186 characters and a <code>title</code> of 52–129 characters. Thirteen stages produce thirteen ticks and no words. The
+facts line names the pipeline, the kind, the stage count and the next definition; it does not name a gate either. In a
+screenshot, a printout, or a glance, the gate is a three-pixel amber mark:</p>
+<figure>
+  <img src="pipeline-flow-usability-round/03-seven-1280.png" alt="Seven stage boxes with small amber ticks at each exit">
+  <figcaption><b>Seven stages, seven gates.</b> Each amber tick is an exit check. Read the words anywhere on this picture:
+  <code>Name the branch</code>, <code>Push the branch</code>, <code>Open the pull request</code>, <code>Wait for the
+  reviewer</code>, <code>Answer the review</code>, <code>Wait for the approval at the head</code>, <code>Merge</code>, and
+  the ordinals. Not one word says <code>branch-name</code>, <code>pushed</code>, <code>pr-open</code>,
+  <code>pr-comments</code> or <code>pr-merged</code> — the checks that actually end those stages.</figcaption>
+</figure>
+
+<h3>e. What happens on a refusal, or on a loop?</h3>
+<p><b>Refusal: a red rectangle, no reason, and a header that contradicts it.</b> The only producer of a refusal in the
+whole app is the preview checkbox in the position dialog; the real caller passes <code>{ stage }</code> and nothing else
+(<span class="anchor">public/assistant.js:3462</span>), so a refusal cannot arise from a real run. When the preview is
+checked, the card turns red and the legend counts <code>refused 1</code> — and the header still says <code>4 of 5 — Build
+it</code> while the picture shows stage 3 refused and no current stage at all. No gate name, no outcome, no
+<code>no-go</code>, no next step:</p>
+<figure>
+  <img src="pipeline-flow-usability-round/09-refused-1280.png" alt="The refused preview at stage 3, with the header still saying stage 4">
+  <figcaption><b>The refusal preview.</b> Subtitle <code>4 of 5 — Build it</code>; the red card is <code>3 Shape the
+  contract</code>; legend <code>current 0 · refused 1</code>; the gate after S2 is <code>ahead</code>. The picture and the
+  header describe two different positions, and nothing on the red card says why it was refused.</figcaption>
+</figure>
+<p><b>Loop: a purple arc and a cap sentence at 9.5 px.</b> The cap is printed — <code>2 rounds</code> — and that is the one
+piece of loop vocabulary the picture gets right. What it does not print is what has been spent: the label is
+<code>2 rounds</code>, never <code>1 of 2</code>, because the caller never passes the record's <code>crossings</code>. On a
+long pipeline the arc is worse than uninformative — it is <b>misplaced</b>. The arcs layer is laid out at the track's box
+width (1090) while the grid columns overflow to 1655, so a <code>st12 → st6</code> loop is drawn from x=554 to x=1069
+instead of from st6's centre (753) to st12's centre (1485): <b>199 px left of the stage it re-enters and 416 px short of
+the stage it leaves</b>, a drawn width of 515.1 px against a correct 732. In the screenshot it reads as a loop from stage 9
+back to a point between stages 4 and 5. Press <code>fit</code> and the same arc ends on both centres (0 / −0.1 px), because
+the track now fits its box: the misplacement is a property of the <i>unfitted</i> state, not of the arc formula. The
+default is the state with the wrong picture.</p>
+<figure>
+  <img src="pipeline-flow-usability-round/06-thirteen-1280-end.png" alt="The thirteen-stage drawing scrolled to its far end">
+  <figcaption><b>The thirteen-stage drawing scrolled to its far end (scrollLeft 468), default state.</b> Stages 5–13 now,
+  stages 1–4 gone; 5C's count re-measures and reads <code>showing stages 5–13 of 13 — 4 of 13 stages and 3 of 13 notches out
+  of view</code>. The count follows the scroll; the picture still shows nine of thirteen until <code>fit</code>.</figcaption>
+</figure>
+
+<h3>f. How long has a stage been running?</h3>
+<p><b>Only the current stage, only in the facts line, only in position mode.</b> The facts read <code>began 11/4/2026,
+12:41:16 AM · in this stage 2h30m09s · stages 5</code>. No card carries a time. The queue record the position dialog reads
+carries only the current stage's <code>enteredAt</code>, and the dialog prints it once, in the header. The long run says
+<code>in this stage 6h00m10s</code> while all ten green cards before it show nothing at all. A tree's own pipeline record
+does keep a <code>history</code> of <code>{stage, at}</code> hops (<code>pipeline-records.json</code>), which is enough to
+time every stage — but the flow does not read or draw it. A reader cannot compare stages, spot the one that has been stuck
+for six hours by looking at the picture, or tell whether a gate has been waiting longer than the stage.</p>
+
+<h2 id="widths">4. The two widths are one drawing</h2>
+<p>At 1280×800 and at 1821×700 the flow card is <b>1120 px wide</b> and its scroller <b>1094 px</b> — identical. Only the
+card's x moves, from 80 to 350.5 (270.5 px), because the card is centred in a wider window. Every node width, every font
+size, every hidden pixel is the same at both:</p>
+<div class="tw">
+<table>
+<tr><th>Measurement</th><th class="num">1280×800</th><th class="num">1821×700</th><th>What the wider window buys</th></tr>
+<tr><td>Card</td><td class="num">1120×247.7 at x=80</td><td class="num">1120×247.7 at x=350.5</td><td>0 px of card</td></tr>
+<tr><td>Body / scroller</td><td class="num">1118 / 1094</td><td class="num">1118 / 1094</td><td>0 px of drawing</td></tr>
+<tr><td>Two-stage columns</td><td class="num">400 each</td><td class="num">400 each</td><td>0 px per stage</td></tr>
+<tr><td>Thirteen-stage columns</td><td class="num">96 each, 468 px hidden</td><td class="num">96 each, 468 px hidden</td><td>0 px more visible</td></tr>
+<tr><td>Thirteen-stage after <code>fit</code></td><td class="num">72.8 each, 0 hidden</td><td class="num">72.8 each, 0 hidden</td><td>0 px — one control, both widths</td></tr>
+<tr><td>Count row</td><td class="num"><code>showing stages 1–9 of 13 …</code> · fit</td><td class="num">same sentence, same control</td><td>nothing new to read</td></tr>
+<tr><td>Share of the window the dialog occupies</td><td class="num">87.5%</td><td class="num">61.5%</td><td>a wider backdrop</td></tr>
+</table>
+</div>
+<p class="small dim">Every case was captured at both widths. The seven-stage pair is
+<a href="pipeline-flow-usability-round/03-seven-1280.png">03-seven-1280</a> /
+<a href="pipeline-flow-usability-round/04-seven-1821.png">04-seven-1821</a>; the long-run pair is
+<a href="pipeline-flow-usability-round/10-long-current-offscreen-1280.png">10-long-1280</a> /
+<a href="pipeline-flow-usability-round/11-long-1821-page.png">11-long-1821</a>, with the fitted state at
+<a href="pipeline-flow-usability-round/10b-long-fit-1280.png">10b-long-fit-1280</a> /
+<a href="pipeline-flow-usability-round/11b-long-fit-1821.png">11b-long-fit-1821</a>. The card is the same size in both of each
+pair; only its x changes.</p>
+<figure>
+  <img src="pipeline-flow-usability-round/02-two-1821-page.png" alt="The 1821 viewport with the same 1120-wide card centred in a wide window">
+  <figcaption><b>1821×700, the whole viewport.</b> The card is the same 1120 px; the extra 541 px of window becomes 270 px
+  of backdrop on each side. A reader who maximises the window to see more of the pipeline gets a better-centred picture and
+  not one more word or one more stage.</figcaption>
+</figure>
+<figure>
+  <img src="pipeline-flow-usability-round/07-thirteen-1821.png" alt="Thirteen stages at 1821, still nine visible">
+  <figcaption><b>The thirteen-stage case at 1821.</b> Same 96 px columns, same nine cards, same four stages off the right
+  edge, same 468 px hidden. The wider viewport is not a wider drawing.</figcaption>
+</figure>
+
+<h2 id="record">5. The marks and the record — a note that says more than the drawing does</h2>
+<p>The position dialog's note says: <i>“the marks read the record — everything before this stage is done, this one is
+current, and everything after it is not reached.”</i> The DOM says otherwise:
+<code>data-marks-from="index"</code> in every real position case measured. The caller passes only
+<code>position: { stage: current.id }</code> (<span class="anchor">public/assistant.js:3462</span>); it never passes
+<code>ran</code>, <code>crossings</code>, <code>waitingFor</code> or <code>via</code>, although the renderer accepts all
+four. Four consequences follow, and each one removes an answer the reader asked for:</p>
+<ul>
+  <li><b>After a loop, a stage that ran is drawn <i>not reached</i>.</b> The index rule cannot know that S9 ran before the
+  run returned to S8. The renderer's own header says this is the weaker claim; the caller uses it anyway.</li>
+  <li><b>The gate's <i>waiting</i> state is unreachable.</b> <code>waitingFor</code> is never supplied, so the one state a
+  reader asks about — "what is it waiting on?" — can never be drawn, even though the notch has a state for it and an
+  <code>aria-label</code> that would say "waiting on … since …".</li>
+  <li><b>The loop cap never shows its use.</b> <code>crossings</code> is never supplied, so a capped loop is always
+  <code>2 rounds</code>/<code>3 rounds</code>, never <code>1 of 2</code> or <code>at its cap</code>.</li>
+  <li><b>The refusal is unreachable outside the preview</b>, and the preview is the only place where the picture and the
+  header can disagree.</li>
+</ul>
+<p>This is worth separating from the drawing's own defects: the renderer was built to carry state, and the one caller with a
+record does not hand it over. The usability round does not fix it, but it records that the picture is being asked to tell
+the truth with one field of evidence.</p>
+
+<h2 id="instead">6. What it must show instead</h2>
+<p>The critique already fixed the vocabulary: <b>stage, actor, gate, loop cap, position, mark</b>. The table is the spec;
+today's column is what this round measured. The drawing must print the nouns, not decorate the boxes.</p>
+<div class="tw">
+<table>
+<tr><th>Word</th><th>The data already holds</th><th>What the picture shows today</th><th>What it must show</th></tr>
+<tr><td><b>stage</b></td><td>title + a 25–104 word prompt + the artifact it writes</td><td>title (1–7 words) and an ordinal; 67–97% of the card blank</td><td>title, one line of what it does (the prompt's first sentence), and the artifact — the card earns its width</td></tr>
+<tr><td><b>actor</b></td><td>the bundle's <code>owner.role</code>; the gate's <code>decider</code></td><td>nothing; the decider is in a 97-character hover title only</td><td>the owner printed on the card, the decider printed on the gate; the loader must stop dropping <code>owner</code></td></tr>
+<tr><td><b>gate</b></td><td>name, decision path, outcomes, decider, <code>refuses_when</code></td><td>a 3×15 px tick with 0 visible characters</td><td>a labelled barrier: name + decider + outcome, or a numbered tick with a keyed list that is visible at the same time</td></tr>
+<tr><td><b>loop cap</b></td><td>cap, crossings (when the caller passes them)</td><td>“2 rounds” at 9.5 px; no used/limit; on a long track the arc lands on the wrong stages</td><td>“1 of 2 used”, what happens at the cap, and an arc that ends on the stages the data names</td></tr>
+<tr><td><b>position</b></td><td>stage id + <code>enteredAt</code>; the header's “11 of 13”</td><td>a count and a fit press now fix visibility, but the current card is still off screen on open and the count does not name it</td><td>the current card on screen at open (default to the fitted view, or auto-scroll), plus an overview ruler that marks the position in the whole run</td></tr>
+<tr><td><b>mark</b></td><td>four marks + counts; the record's <code>ran</code>/<code>crossings</code>/<code>waitingFor</code></td><td>four colours, counts in the legend, index-derived in the real caller; a refusal with no reason</td><td>keep the four colours and counts; derive them from the record; put the reason for a refusal in words next to the red card</td></tr>
+</table>
+</div>
+
+<h4>A card that answers the six questions</h4>
+<p>This is a document mock, not the product: 300 px wide instead of 96–400, four lines instead of two, and every word the
+data already holds printed where a reader can see it. It is smaller than the 400 px blank rectangle it replaces.</p>
+<div class="mock">
+  <div class="mcard">
+    <div class="mrow"><span class="mnum">11 / 13</span><span class="mtitle">Stage 11 — publish</span><span class="mdur">6h 00m</span></div>
+    <p class="mwhat">Publish the signed artifact to the UAT instance and record the install verdict.</p>
+    <div class="mmeta"><span>actor · release-driver</span><span>writes install-verdict</span><span>← from st10 · parity-report</span></div>
+    <div class="mgate"><b>G3 · Rebuild</b> — decider engineer · decides <code>decisions/3.json</code> (go / no-go) · <i>answered 08:20</i></div>
+  </div>
+  <div class="ruler"><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="cur"></i><i class="next"></i><i class="next"></i></div>
+  <div class="rlabel">1–10 done · <b>11 current</b> · 12–13 not reached — the whole run at a glance, the card in focus</div>
+</div>
+<p>Three structural requirements follow from the measurements, beyond the words on a card:</p>
+<ol>
+  <li><b>Fit the run before detailing it.</b> A 13-stage strip that opens showing nine and hiding four starts by hiding its
+  own length — even with 5C's honest count. Default long definitions to the fitted view (all thirteen at 72.8 px) and keep
+  <code>actual size</code> as the reader's deliberate zoom; or show the whole run as an overview ruler with the current stage
+  marked, and let the reader open one stage at a time.</li>
+  <li><b>Put the position where the eye is.</b> The current stage must be on screen when the dialog opens, and the header's
+  “11 of 13” must have a mark in the picture at the same time. A preview that moves the marks must also move the header,
+  or say in the header that it is a preview of another stage.</li>
+  <li><b>Print the gate and the actor, or stop drawing them.</b> A 3 px tick is not a gate; it is a decoration that makes
+  the picture look complete while withholding the one sentence the reader needs. If the words cannot fit, the picture must
+  carry a visible key on the same screen (G1, G2, …) rather than a hover that a screenshot cannot show.</li>
+</ol>
+
+<h2 id="severity">7. Severity-ranked findings</h2>
+
+<div class="finding">
+<p><span class="tag s2">S2 · high</span> <b>The default view still opens without the stage the run is in — but 5C gives
+the reader the count and the way out.</b> At thirteen stages, 9 of 13 are visible and 468 px are hidden at both widths. The
+count reads <code>showing stages 1–9 of 13 — 4 of 13 stages and 4 of 13 notches out of view</code>, and one press of
+<code>fit</code> brings all 13 in at 72.8 px columns (13/13, 0 hidden), with the current stage on screen. But a run at stage
+11 still opens with stage 11 128 px past the scroller's right edge, and the count does not say that the current stage is one
+of the four. The fix exists; the default hides the answer, and the control sits at the bottom under nine cards.</p>
+</div>
+
+<div class="finding">
+<p><span class="tag s1">S1 · blocker</span> <b>The drawing prints 3.8–15.1% of the pipeline's words.</b> Cards carry a
+title and an ordinal only: 4 of 104 words (two-stage), 32 of 415 (seven), 68 of 450 (thirteen), 18 of 151 (position). No
+prompt, no artifact, no actor, no gate text, no duration. The 29-word note above the drawing is longer than the entire
+two-stage drawing (4 words on cards).</p>
+</div>
+
+<div class="finding">
+<p><span class="tag s1">S1 · blocker</span> <b>Every gate is an unlabelled 3×15 px tick.</b> Thirteen stages, thirteen
+ticks, zero characters of visible text. The check's name and parameters live in a 52–186 character
+<code>aria-label</code>/<code>title</code>; the gate name, decider, decision path and outcomes are printed nowhere. A
+reader cannot answer “what does this gate check?” from a screenshot, a printout, or a glance — only by hovering one 3 px
+target at a time.</p>
+</div>
+
+<div class="finding">
+<p><span class="tag s2">S2 · high</span> <b>The marks are index-derived in the only caller that holds a record.</b>
+<code>data-marks-from="index"</code> in every position case; the note claims “the marks read the record”. The caller passes
+<code>{ stage }</code> only (<span class="anchor">public/assistant.js:3462</span>), so <code>ran</code>,
+<code>crossings</code>, <code>waitingFor</code> and <code>via</code> are never used: after a loop a stage that ran is drawn
+not reached, a gate can never be drawn <i>waiting</i>, and a loop can never show its use.</p>
+</div>
+
+<div class="finding">
+<p><span class="tag s2">S2 · high</span> <b>A refusal is a red box with no reason, and it contradicts the header.</b>
+The preview at stage 3 turns the card red and the legend to <code>refused 1</code>, while the subtitle still says
+<code>4 of 5 — Build it</code> and the legend says <code>current 0</code>. No gate, outcome, reason or next step is
+printed. The preview checkbox is the only producer of a refusal in the app; a real run cannot produce one.</p>
+</div>
+
+<div class="finding">
+<p><span class="tag s2">S2 · high</span> <b>On an overflowing track the loop arc is drawn on the wrong stages.</b>
+<code>st12 → st6</code> is drawn from x=554 to x=1069 instead of 753 to 1485: <b>−199 px</b> at its left
+(re-entered) end, <b>−416 px</b> at its right (leaving) end, drawn width 515.1 against a correct 732. The arcs layer is
+the track's box width (1090) while the columns overflow to 1655 (<span class="anchor">public/style.css:4051</span>,
+<span class="anchor">public/style.css:3998</span>). The picture makes a false claim about which stages loop — the one
+graph claim it was supposed to make. In the fitted state the same arc lands on both centres (0 / −0.1 px): the default is
+the wrong state, and the count under the drawing counts notches, not arc correctness, so it cannot warn about this.</p>
+</div>
+
+<div class="finding">
+<p><span class="tag s3">S3 · medium</span> <b>The cards are mostly empty.</b> 97.5% and 96.3% of the two-stage cards
+(400×51.7, ink 506.9/774.1 px²), 71.5–92% of the seven-stage cards (mean 79.3%), 73.4–80.8% of the thirteen-stage cards
+(mean 78.2%; fitted, 66.8–74.7%, mean 71.8%), 85.4–94% of the position cards (mean 89.8%). A 400 px card holds one word at
+11.5 px; the width is not doing any work, and fitting thirteen stages only moves the mean from 78% to 72% blank.</p>
+</div>
+
+<div class="finding">
+<p><span class="tag s3">S3 · medium</span> <b>“How long” is only the current stage, only in the facts line.</b>
+<code>in this stage 2h30m09s</code> (five-stage) and <code>6h00m10s</code> (long run) sit in the header; no card shows a
+time, and the position dialog's own record carries only the current stage's <code>enteredAt</code>. The reader cannot see
+which stage is stuck from the picture.</p>
+</div>
+
+<div class="finding">
+<p><span class="tag s3">S3 · medium</span> <b>The two named widths are one drawing.</b> Card 1120, scroller 1094, node
+widths (96 default, 72.8 fitted) and hidden pixels (468, then 0) identical at 1280 and 1821; only the card's x moves by
+270.5 px. The wider window gives 0 px to the pipeline, makes the dialog 61.5% of the window instead of 87.5%, and changes
+neither the count nor the fit. The width the reader chose buys a better-centred card, not a wider pipeline.</p>
+</div>
+
+<div class="finding">
+<p><span class="tag s3">S3 · medium</span> <b>The loop prints its cap but not its use.</b> <code>2 rounds</code> at 9.5 px,
+never <code>1 of 2</code> or <i>at its cap</i>; <code>crossings</code> is never supplied. The arc label is one of the two
+smallest texts in the drawing (9.5 px, with the ordinals) and the only place a loop says anything.</p>
+</div>
+
+<h2 id="passes">8. What still passes — do not lose it in the redesign</h2>
+<div class="goodbox">
+  <h4>Measured strengths</h4>
+  <ul>
+    <li><b>Contrast is good.</b> Stage titles are 11.5 px at <b>5.94:1</b> (not reached), <b>7.07:1</b> (done),
+    <b>13.68:1</b> (current) and <b>8.43:1</b> (refused preview) — all above AA. No title is truncated at either width.</li>
+    <li><b>The four marks are distinct</b> — grey, blue, green, red — and the legend counts them; the current card's
+    background and weight change too, so colour is not the only channel.</li>
+    <li><b>5C's count and fit are honest and effective.</b> The count is rebuilt from painted rects, not a document tally,
+    and re-read on every scroll (it says <code>showing stages 5–13 of 13 …</code> at the far end); <code>fit</code> brings
+    13/13 stages and 13/13 notches into view at both widths, keeps the count printed, and leaves every title untruncated at
+    11.5 px. This is the part of usability that improved this round; it should not be traded away.</li>
+    <li><b>The 5-stage arc is exact.</b> Ends on both stage centres (offset 0.0 / 0.0); the geometry is right when the track
+    fits — and, after 5C's fit, for the thirteen-stage run too (0 / −0.1 px). The long-track error is a width-policy bug in
+    the unfitted state, not the arc formula.</li>
+    <li><b>The gate is accessible.</b> The notch is outside the <code>aria-hidden</code> connector, has a real
+    <code>aria-label</code> (89–186 chars) and a <code>title</code>; a screen-reader user can hear what the picture does
+    not show.</li>
+    <li><b>No page errors</b> across both widths and all cases; the modal's Escape, focus trap, focus
+    return and backdrop behaviour were already pinned by round 5A and were not disturbed.</li>
+  </ul>
+</div>
+
+<h2 id="limits">9. Limits</h2>
+<ul>
+  <li><b>The thirteen-stage definition is injected.</b> The seed's longest is seven (<code>sefl-review-loop</code>), so the
+  acceptance case writes a thirteen-stage definition into the catalogue. It carries a prompt and a parameterised exit check
+  per stage, which is what the real seed definitions carry; it does not carry gates or loops, because a definition cannot.
+  The rich gates/loops case is the bundle (<code>long-flow</code>), which is a fixture shaped like the studio's
+  <code>pipeline-bundle.seed.json</code> (13 stages, 5 gates, 3 loops there; 13 stages, 1 gate, 1 loop here). Both are
+  measured in the default state and after 5C's <code>fit</code> press; the fitted numbers are the <code>-fit</code> cases
+  in the ledger.</li>
+  <li><b>The reader's attachment is a capture at about 177%.</b> It is the same dialog at 1120×247.7 scaled to 1979×435;
+  the <code>github-investigate</code> definition differs from the <code>investigate</code> one reproduced here, but the
+  geometry (two 400×51.7 columns, 146 px dead each side, two amber ticks) is identical.</li>
+  <li><b>Chromium scrollbars are overlay scrollbars.</b> A platform with an always-visible scrollbar would show a bar in
+  the 13-stage scroller; the application itself draws no “more” affordance either way.</li>
+  <li><b>The ink ratio is an area estimate.</b> It sums the text's line-box areas, not glyph coverage; whitespace inside a
+  line counts as ink. The empty ratios are therefore conservative — the true glyph coverage is lower.</li>
+  <li><b>No fixes.</b> <code>public/pipeline-flow.js</code>, <code>public/style.css</code> and <code>public/app.js</code>
+  were not edited; #124 holds them. This round measures and specifies.</li>
+</ul>
+
+<h2 id="reproduce">10. Reproduce</h2>
+<p>The harness is committed with the report and takes about a minute:</p>
+<div class="box"><code>node tools/verify-pipeline-flow-usability.mjs --shots &lt;dir&gt; --json &lt;file&gt;</code></div>
+<p>It prints every case's card geometry, ink area and empty ratio, the words printed against the words held, the notch
+sizes and their aria/title lengths, the count sentence and fit state, the marks rule, the current stage's visibility, the
+arc offsets and the two widths' differences. It writes <code>*.png</code> at DPR 2 and the raw ledger beside the shots. The
+ledger used for this report is <a href="pipeline-flow-usability-round/ledger.json"><code>ledger.json</code></a>; the shots
+are in <a href="pipeline-flow-usability-round/"><code>pipeline-flow-usability-round/</code></a>.</p>
+
+<footer>
+  Usability round · 2026-11-04 · branch <code>wtgui/playwright-usability-rou-8ec471</code> at <code>6cd6426</code> (1.4.1,
+  the flow files are 5C's) · harness <code>tools/verify-pipeline-flow-usability.mjs</code> · no file under
+  <code>public/</code> modified.
+</footer>
+</div>
+</body>
+</html>
