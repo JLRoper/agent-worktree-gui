@@ -305,7 +305,9 @@ most of the meaning:
   `UNMERGED (N commits)`, `NO COMMITS`, `NO BASE REF`, `EMPTY REPO`. Deliberately opinionated:
   ancestry is not evidence of landing (a squash merge leaves the branch an ancestor of nothing)
   and an ahead-count is not either (a branch can be 40 commits ahead with every patch already in
-  main under other shas). So the scan asks twice — identical trees, or `git cherry` with no `+`.
+  main under other shas). So the scan asks twice — identical trees, or `git cherry` with no `+` —
+  and only a branch whose own reflog holds a `commit:` line can be called MERGED at all: a branch
+  that was merely fast-forwarded or reset onto main has nothing of its own to land.
 - `mergeable` — the verdict *and* clean *and* not live. This is the field the row's "safe to
   remove" claim is built from, and `Store.putRow` is where it is derived.
 - `verdictStale` — set when the commit count moved but no full scan has reclassified the row yet.
