@@ -149,6 +149,9 @@ function sandbox() {
   git(work, ["init", "-q", "-b", "main"]);
   configureRepo(work);
   git(work, ["config", "core.autocrlf", "false"]);
+  // A GitHub remote, as the real clones have: the render resolves its commit links from one, and refuses when this
+  // clone carries none (see "a tree with no GitHub remote" below).
+  git(work, ["remote", "add", "github", "git@github.com:JTest/sandbox.git"]);
   copyTools(work);
   writeFileSync(path.join(work, "package.json"), `{\n  "name": "sandbox",\n  "version": "1.0.0",\n  "private": true\n}\n`, "utf8");
   writeFileSync(path.join(work, FILE), "# Changelog\n", "utf8");
@@ -220,6 +223,27 @@ test("a base that is behind refuses, and names what to do first", () => {
     // only what HEAD carries, so nothing is foreign and the commit is allowed. The behind state is proved by the
     // pure plan above; here the branch refusal is what a real tree shows.
     assert.equal(git(work, ["status", "--porcelain"]), "");
+  } finally {
+    box.done();
+  }
+});
+
+test("a tree with no GitHub remote refuses rather than commit a link-less render over the linked file", () => {
+  const box = sandbox();
+  try {
+    const { work } = box;
+    assert.equal(land(work, "--no-fetch", "--no-push").status, 0, "the sandbox renders its own three releases");
+    const before = readFileSync(path.join(work, FILE), "utf8");
+    assert.match(before, /https:\/\/github\.com\/JTest\/sandbox\/commit\//, "the render carries links");
+
+    git(work, ["remote", "rename", "github", "upstream"]);
+    git(work, ["remote", "set-url", "upstream", "git@gitlab.com:acme/widget.git"]);
+    const r = land(work, "--no-fetch", "--no-push");
+    assert.equal(r.status, 2, r.text);
+    assert.match(r.text, /land: no GitHub remote to take the changelog's links from/);
+    assert.match(r.text, /this clone's remotes are upstream \(git@gitlab\.com:acme\/widget\.git\)/);
+    assert.equal(readFileSync(path.join(work, FILE), "utf8"), before, "the refusal writes nothing");
+    assert.equal(git(work, ["status", "--porcelain"]), "", "and leaves the tree clean");
   } finally {
     box.done();
   }
