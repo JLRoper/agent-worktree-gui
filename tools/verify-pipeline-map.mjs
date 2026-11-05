@@ -249,6 +249,7 @@ try {
       if (card.rows !== Math.ceil(n / 3)) { bookCounts = false; bookBad.push(`${id}: ${card.rows} rows, expected ${Math.ceil(n / 3)}`); }
     }
     check(bookCounts, "book layout draws every stage, in rows of 3, at 11 px or more", bookBad.join("\n"));
+    check(book.cards.every((c) => c.hidden === 0), "book layout fits every card at 1280 with no horizontal scroll", book.cards.filter((c) => c.hidden).map((c) => `${c.id}: ${c.hidden} px`).join("\n"));
     check(book.cards.every((c) => c.min >= 11), "book layout's smallest painted label is 11 px or more");
     const bookBundle = book.cards.find((c) => c.id === "poc-to-uat");
     check(bookBundle.loops.filter((s) => s === "data").length === 3, "book layout draws the bundle's three carried loops in the margin", JSON.stringify(bookBundle.loops));
