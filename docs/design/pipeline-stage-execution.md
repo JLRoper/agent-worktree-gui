@@ -400,8 +400,10 @@ Five rules for it:
 1. **The panel resolves, the agent reads.** The artifact's path is resolved against the tree with the same matcher the
    gate path uses (`lib/task-pipeline-drive.js:140-182`, generalised to `artifactPathOf`), and its `sha256` is computed
    at settle (§5.3). The agent is told where it is and what it hashed; it is never told what it says.
-2. **The gate's decision is named, never read.** Rule 5 of the driver stands: the panel does not read a decision's value
-   (`lib/task-pipeline-drive.js:42-46`). The block names the file and says whose question it is.
+2. **The gate's decision is named, never read.** Rule 5 of the driver stands for every gate that does not route: the
+   panel does not read a decision's value. The block names the file and says whose question it is. The one exception is
+   a decision that declares `routes` (§6.1) — then the driver reads the record's single `outcome` field and obeys the
+   edge the DOCUMENT mapped it to; it still judges nothing.
 3. **On a loop back, the earlier visit's artifact is named as such.** That is the one input a fresh agent cannot
    reconstruct: *this* is the finding that came back, and it is the same file the earlier visit produced, not a new one.
    If it is absent, the loop-back parks (§6.1) rather than starting a stage with nothing to work on.
@@ -442,6 +444,9 @@ Every pass asks one question per row — *what does this stage's fact license?* 
 | the stage's thread is live | wait | — | nothing is written |
 | run `done`, artifact present, no gate out | move to the next stage, then start it if `auto` | — | "stage S3 settled — moved to S4 (4 of 13)" |
 | run `done`, gate out, decision record present | move, and record the crossing | — | "gate G-10 crossed by <path>" |
+| run `done`, gate out, record present, decision declares `routes` and the outcome routes to an edge | move down the ROUTED edge (the kind order is not consulted) | — | gate G-3 placed its verdict at `<path>`: fail — the row takes H-3 |
+| run `done`, gate out, record present, decision declares `routes` and the outcome routes to `null` | the pipeline is over; the cap is NOT charged, and the settle finishes the row | — | "… that outcome ends the loop H-3 (S3 → S1), so the pipeline is over" |
+| run `done`, gate out, record present, decision declares `routes` and the record is unreadable / names no declared outcome | park | `pipeline-verdict` | the gate, the path, the outcomes it declares |
 | run `done`, gate out, record absent | park | `pipeline-gate` | the gate, the path, and that the code does not decide it |
 | run `done`, declared artifact absent | park | `pipeline-artifact` | the artifact id, the path, the handoff it was to travel on |
 | run failed / interrupted / stopped | park | `pipeline-run-failed` | the status and the run's last words |
@@ -459,13 +464,18 @@ Two of these are behaviour changes and both need a failing-first test: **`pipeli
 note and the row sits still, `lib/task-pipeline-drive.js:419-421` and `:457-458`), and **`pipeline-artifact` exists at
 all**.
 
-One thing this table does not claim: **a gate's decision does not choose the route.** The driver checks that the gate's
-decision file exists and then takes the stage's edge by kind order — `sequence` first (`lib/task-pipeline-drive.js:21-31`,
-`:239-270`) — so a gate whose two outcomes were meant to lead to two different stages (approve → S10, reject → S8) takes
-the sequence either way. That is today's contract and this design leaves it alone; a pipeline that authors a gate as a
-branch will not behave as its drawing suggests, and Q11 records it. A gate anchored *after the last stage* is named in the
-driver's answer as `closing` and is never a barrier — there is no edge out of the last stage for it to guard
-(`lib/task-pipeline-drive.js:33-36`, `:216-219`) — so a row that settles there is finished by the settle, not parked.
+One thing this table does not claim: **a gate's decision does not choose the route unless the document maps it.** The
+driver checks that the gate's decision file exists and then takes the stage's edge by kind order — `sequence` first
+(`lib/task-pipeline-drive.js:21-31`, `:239-270`) — so a gate whose two outcomes were meant to lead to two different
+stages (approve → S10, reject → S8) takes the sequence either way UNLESS its decision declares `routes`. With `routes`
+— a map from an outcome to a handoff id, or to `null` for "the pipeline ends here" — the record's `outcome` picks the
+edge, and the panel still judges nothing: the seat decided, the graph routed. That is the shipped answer to Q11 below,
+and it is what lets a converged loop end at its verdict instead of spending its cap (the 3-stage `probe-fix-loop` round,
+`docs/reviews/pipeline-execution-round.html`, finding 2). A gate anchored *after the last stage* with no edge out is
+named in the driver's answer as `closing` and is never a barrier — there is no edge out of the last stage for it to
+guard (`lib/task-pipeline-drive.js:33-36`, `:216-219`) — so a row that settles there is finished by the settle, not
+parked. A last stage whose ONLY edge out is a loop does have an edge: that gate is a barrier, and its verdict is what
+ends the loop.
 
 ### 6.2 The decision record
 
@@ -654,11 +664,14 @@ behaviour, not a failure — but it is the reason the switch is read per queue r
     stays until a reader deletes it. Whether a `done` pipeline row should offer "delete the tree now that its PR is
     merged" as one press, and whether that is safe for a row whose branch was the base of another, is a cleanup
     question this design leaves open.
-11. **Does a gate's outcome ever choose the edge?** Today it cannot: the panel never reads a decision's value
-    (`lib/task-pipeline-drive.js:42-46`), so a two-outcome gate takes the sequence whatever the record says (§6.1). The
-    obvious middle path is a *bundle* mapping from an outcome name to a handoff — the record says `rejected`, the graph
-    says which edge `rejected` takes — which routes without the panel judging anything. That is a bundle-format change,
-    not a driver one, and it is the largest gap this design leaves open.
+11. **Does a gate's outcome ever choose the edge?** Answered in the shipped driver: it does when the DOCUMENT says so.
+    A gate's decision may declare `routes`, a map from an outcome name to a handoff leaving that gate's stage (or to
+    `null`, "the pipeline ends here"). The record's `outcome` picks the edge; the panel still judges nothing — the seat
+    decided, the graph routed. The alternative this question used to offer (a two-outcome gate takes the sequence
+    whatever the record says) is the un-routed shape, and it is why a converged loop used to spend its cap: the last
+    stage's only edge out was a loop, and the driver had no word to stop it. The remaining gap is the DRAWING: the
+    flow dialog prints a gate's outcomes but not where each one routes, so a reader learns the mapping from
+    `docs/task-pipeline.md` rather than from the picture.
 
 ---
 
