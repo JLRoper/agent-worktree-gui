@@ -137,6 +137,33 @@ test("a bump with no tag, a tag at another commit, a lightweight tag and an orph
   assert.deepEqual(kinds, ["missing", "wrong-commit", "lightweight", "orphan-tag"]);
 });
 
+test("a tag for a version this ref has not carried yet is held, not a finding, when its own commit declares it", () => {
+  const versions = history([["1.0.0", "a".repeat(40), { name: "v1.0.0", commit: "a".repeat(40), annotated: true }]]);
+  const held = { name: "v1.1.0", version: "1.1.0", commit: "b".repeat(40), declares: true };
+  assert.deepEqual(checkReleaseTags({ versions, orphanTags: [held] }), [], "a live branch's pre-landing anchor is not a false claim");
+});
+
+test("a tag whose own commit does not declare the version is still an orphan", () => {
+  const versions = history([["1.0.0", "a".repeat(40), { name: "v1.0.0", commit: "a".repeat(40), annotated: true }]]);
+  const findings = checkReleaseTags({ versions, orphanTags: [{ name: "v1.2.0", version: "1.2.0", commit: "c".repeat(40), declares: false }] });
+  assert.deepEqual(findings.map((f) => f.kind), ["orphan-tag"]);
+  assert.match(findings[0].message, /does not declare 1\.2\.0/);
+});
+
+test("a landed version whose tag points at another commit is still wrong-commit", () => {
+  const versions = history([
+    ["1.0.0", "a".repeat(40), { name: "v1.0.0", commit: "a".repeat(40), annotated: true }],
+    ["1.1.0", "b".repeat(40), { name: "v1.1.0", commit: "c".repeat(40), annotated: true, declares: true }],
+  ]);
+  assert.deepEqual(checkReleaseTags({ versions, orphanTags: [] }).map((f) => f.kind), ["wrong-commit"]);
+});
+
+test("a held tag still has to carry a message: a lightweight one is a finding", () => {
+  const versions = history([["1.0.0", "a".repeat(40), { name: "v1.0.0", commit: "a".repeat(40), annotated: true }]]);
+  const held = { name: "v1.1.0", version: "1.1.0", commit: "b".repeat(40), declares: true, annotated: false };
+  assert.deepEqual(checkReleaseTags({ versions, orphanTags: [held] }).map((f) => f.kind), ["lightweight"]);
+});
+
 test("a number that goes backwards in history is reported even when both bumps are tagged", () => {
   const transitions = [
     { version: "0.2.0", sha: "b".repeat(40), date: "2026-01-01", subject: "chore: bump" },

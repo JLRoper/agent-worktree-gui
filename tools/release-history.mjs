@@ -125,6 +125,20 @@ export function readTags(root = process.cwd()) {
     });
 }
 
+// What the tagged commit's own tree says. A tag for a version this ref has not carried yet can only be judged
+// here: the walk from `ref` speaks for the ref's history, and a branch's bump commit is not in that history
+// until the branch lands. `declares` is true only when package.json AT THAT COMMIT reads exactly the tag's
+// version, so a tag naming a number its commit does not carry is still the orphan the gate documents.
+export function readVersionAtCommit(root = process.cwd(), commit) {
+  if (!commit) return null;
+  try {
+    const parsed = JSON.parse(git(repoRoot(root), ["show", `${commit}:package.json`]));
+    return parsed && parsed.version != null ? String(parsed.version).trim() : null;
+  } catch {
+    return null;
+  }
+}
+
 // The history and the tags it should be anchored by, joined. `transitions` is every change to the version line in
 // the order it happened (a number that went backwards is visible there); `versions` is the first appearance of
 // each number, each carrying its tag, or null when the bump was never tagged.
@@ -136,7 +150,14 @@ export function readReleaseHistory({ root = process.cwd(), ref = "HEAD" } = {}) 
     return { ...v, tag };
   });
   const known = new Set(versions.map((v) => `v${v.version}`));
-  const orphanTags = [...byName.values()].filter((t) => t.version && !known.has(t.name));
+  // A version the ref's walk does not carry is not automatically a false claim: a live branch bumps and tags
+  // before it lands, and that tag is honest about its own commit — docs/versioning.md says so ("the branch
+  // carries a tag the gate can read"). Read each such commit's tree and record what it says, so the gate reports
+  // only the tags whose own package.json does not declare the number. A tag inside the walk is judged by first
+  // appearance instead, so `declares` is left off it.
+  const orphanTags = [...byName.values()]
+    .filter((t) => t.version && !known.has(t.name))
+    .map((t) => ({ ...t, declares: readVersionAtCommit(root, t.commit) === t.version }));
   const commit = git(repoRoot(root), ["rev-parse", `${ref}^{commit}`]).trim();
   return { ref, commit, transitions, versions, tags: [...byName.values()], orphanTags };
 }
