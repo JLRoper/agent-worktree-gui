@@ -11,25 +11,37 @@ Pass that version here and read only what came after it:
 npm run changelog -- --since v0.80.0
 ```
 
-296 releases from v0.1.0 (2026-10-20) to v1.16.0 (2026-11-05), 1022 commits between the tags. Every release is anchored by an
+297 releases from v0.1.0 (2026-10-20) to v1.16.0 (2026-11-05), 1024 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
 
 ## v1.16.0 — 2026-11-05 · 3 commits
 
-[`34aa132`](https://github.com/JLRoper/agent-worktree-gui/commit/34aa132b6ecbefec92f47ab019f4555ccd682494) · [compare v1.15.2...v1.16.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.15.2...v1.16.0)
+[`4542084`](https://github.com/JLRoper/agent-worktree-gui/commit/4542084c3c12b908b56ff3dc5fb674ebc6f01729) · [compare v1.15.3...v1.16.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.15.3...v1.16.0)
 
 ### Added
 
-- feat: the Assistant Director — a 20-minute cross-queue pass with two powers ([`2a01e7c`](https://github.com/JLRoper/agent-worktree-gui/commit/2a01e7c4da9398bedbf42fd0477503f6456f0193))
+- feat: the Assistant Director — a 20-minute cross-queue pass with two powers ([`a74cf83`](https://github.com/JLRoper/agent-worktree-gui/commit/a74cf83ff5ee5c83656df3601380a9c79d3b38fe))
 
 ### Docs & tests
 
-- docs: the Assistant Director's proof — the running panel, the tab and the suite ([`dc124bc`](https://github.com/JLRoper/agent-worktree-gui/commit/dc124bc5676cd0f60450fc27347a1b3522ae0639))
+- docs: the Assistant Director's proof — the running panel, the tab and the suite ([`dc5afe5`](https://github.com/JLRoper/agent-worktree-gui/commit/dc5afe507b148a741aee82ba7b11d3b9757a498e))
 
 ### Other
 
-- chore: 1.16.0 — the version this landing carries ([`34aa132`](https://github.com/JLRoper/agent-worktree-gui/commit/34aa132b6ecbefec92f47ab019f4555ccd682494))
+- chore: 1.16.0 — the version this landing carries ([`4542084`](https://github.com/JLRoper/agent-worktree-gui/commit/4542084c3c12b908b56ff3dc5fb674ebc6f01729))
+
+## v1.15.3 — 2026-11-05 · 2 commits
+
+[`55f4f91`](https://github.com/JLRoper/agent-worktree-gui/commit/55f4f91c2c5f5590b19c6aafbfba8f4af70acc51) · [compare v1.15.2...v1.15.3](https://github.com/JLRoper/agent-worktree-gui/compare/v1.15.2...v1.15.3)
+
+### Fixed
+
+- fix: one folder spelled with doubled slashes is still one root ([`06f8695`](https://github.com/JLRoper/agent-worktree-gui/commit/06f8695f9fcf325a3fbf2cd76b0b5e870b653536))
+
+### Other
+
+- chore: 1.15.3 — the version this landing carries ([`55f4f91`](https://github.com/JLRoper/agent-worktree-gui/commit/55f4f91c2c5f5590b19c6aafbfba8f4af70acc51))
 
 ## v1.15.2 — 2026-11-05 · 4 commits
 
