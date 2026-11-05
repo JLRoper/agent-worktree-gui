@@ -29,7 +29,7 @@ th { color:var(--dim); font-weight:600; }
 </style></head><body><div class="wrap">
 <h1>The Assistant Director</h1>
 <p class="sub">A second built-in role, its 20-minute cross-queue pass, its two powers, and the first assistant tab that reads it.
-Branch <code>wtgui/build-the-assistant-dire-2d0335</code> · base <code>5b96f9a</code> (main v1.13.0) · feature <code>c78443a</code> · version <code>23c087c</code> (v1.14.0).</p>
+Branch <code>wtgui/build-the-assistant-dire-2d0335</code> · base <code>3295fce</code> (main v1.15.0) · feature <code>f4a74df</code> · version <code>4798950</code> (v1.16.0).</p>
 
 <div class="card grid">
   <div><div class="k">Role id</div><div class="v"><code>assistant-director</code></div></div>
@@ -46,7 +46,7 @@ Branch <code>wtgui/build-the-assistant-dire-2d0335</code> · base <code>5b96f9a<
 <h2>Proof on a running panel</h2>
 <p>A sandbox panel was booted from this tree on port 8791 (no gateway, no real state), then the role was read, an assistant created from it, and its three tab reads fetched. This is the transcript:</p>
 <pre>BASE http://127.0.0.1:8791
-DIR C:\Users\roper\AppData\Local\Temp\wtgui-test-0aBwq0
+DIR &lt;sandbox&gt;
 ROLES count=2 ids=agent-manager,assistant-director
 DIRECTOR {&quot;id&quot;:&quot;assistant-director&quot;,&quot;name&quot;:&quot;Assistant Director&quot;,&quot;description&quot;:&quot;The board&#x27;s director: wakes every 20 minutes to read every assistant&#x27;s queue, find a dead run, a row parked past an hour and work nobody has started, then files the row or messages the assistant that should carry it — it never starts a worker itself.&quot;,&quot;chars&quot;:15617,&quot;cap&quot;:20000,&quot;over&quot;:false,&quot;updatedAt&quot;:&quot;2026-11-05T05:30:01.220Z&quot;}
 CREATE status=201 id=assistant-2 roleId=assistant-director
@@ -55,7 +55,7 @@ QUEUE found=true tasks=[] total=0
 STATE wakeEveryMinutes=20 spawn=off</pre>
 
 <p>The same checks are repeatable with <code>npm run verify:assistant-director</code>; it prints one PASS/FAIL per fact and exits non-zero on any failure:</p>
-<pre>panel: http://127.0.0.1:60583 (sandbox C:\Users\roper\AppData\Local\Temp\wtgui-director-verify-IqOJLN)
+<pre>panel: http://127.0.0.1:60583 (sandbox &lt;sandbox&gt;
 PASS  GET /api/roles answers 200: 200
 PASS  Assistant Director is listed
 PASS  its name is Assistant Director
