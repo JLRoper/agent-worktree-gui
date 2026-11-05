@@ -4,16 +4,36 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.10.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.11.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-275 releases from v0.1.0 (2026-10-20) to v1.10.0 (2026-11-04), 968 commits between the tags. Every release is anchored by an
+276 releases from v0.1.0 (2026-10-20) to v1.11.0 (2026-11-04), 972 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.11.0 — 2026-11-04 · 4 commits
+
+[`70dce67`](https://github.com/JLRoper/agent-worktree-gui/commit/70dce67885aa43a7b22702a269f2b5d8b6005db2) · [compare v1.10.0...v1.11.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.10.0...v1.11.0)
+
+### Added
+
+- feat: the pipeline dialog pays for its drawing, not its chrome ([`c0d9dc3`](https://github.com/JLRoper/agent-worktree-gui/commit/c0d9dc3d0e184ea16e6dceed73ad8bc603918b04))
+
+### Fixed
+
+- fix: the dialog's ledger names the tree's folder, not a machine path ([`bb2e93a`](https://github.com/JLRoper/agent-worktree-gui/commit/bb2e93a6f5b8df4e5cfcb3755640ea8472bbfdda))
+
+### Docs & tests
+
+- docs: render the changelog — 275 releases ([`f19b615`](https://github.com/JLRoper/agent-worktree-gui/commit/f19b615a2d6ef6a9dba7374388b1cca8db26b833))
+
+### Other
+
+- chore: 1.11.0 — the version this landing carries ([`70dce67`](https://github.com/JLRoper/agent-worktree-gui/commit/70dce67885aa43a7b22702a269f2b5d8b6005db2))
 
 ## v1.10.0 — 2026-11-04 · 4 commits
 
