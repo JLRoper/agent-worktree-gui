@@ -18,7 +18,7 @@
       <span class="meta" id="stream-rate"></span>
       <button id="btn-assistant" type="button" class="btn-assistant" title="assistant — watches the agents on this board, notices loops and stalls, and drafts answers to a worker's questions (A or Ctrl+Shift+A)">✧ Assistant<span id="assistant-badge" hidden>0</span><span id="assistant-spawn-badge" class="as-spawn-badge" hidden>0</span></button>
       <button id="btn-human" type="button" title="HUMAN — every open permission and clarify question on the board, in one rotation. Click or press H to step through them: each agent is opened, its prompt (the permission box or the agent's own question) centred and flashed red, and its answer control focused. The red count is how many are waiting on you; a question that is answered, expires or whose turn ends drops out of the rotation."><span id="human-label">HUMAN</span><span id="human-badge" hidden>0</span></button>
-      <button id="btn-deliver" type="button" aria-haspopup="dialog" aria-expanded="false" title="DELIVERABLES — every deliverable produced on this panel, newest first, each with how long ago it was handed back. Click or press D to open the list. Each row has one Open control: a link, or a file this panel serves, opens in a new browser tab; a file it cannot serve opens in the program this machine uses for that file; and a row that cannot be opened says why on the row itself. Clicking the row opens the agent that produced it. An agent hands something back with one line in its final message: DELIVER <link|file|image> <target> | <title>."><span id="deliver-label">DELIVERABLES</span><span id="deliver-badge" class="deliver-badge" hidden>0</span></button>
+      <button id="btn-deliver" type="button" aria-haspopup="dialog" aria-expanded="false" title="DELIVERABLES — every deliverable produced on this panel, newest first, each with how long ago it was handed back. Click or press D to open the list. Each row has one Open control: a link, or a file this panel serves, opens in a new browser tab; a file it cannot serve opens in the program this machine uses for that file; and a row that cannot be opened says why on the row itself. Clicking the row opens the agent that produced it. An agent hands something back with one line in its final message: DELIVER <link|file|image> <target> | <title>."><span id="deliver-label">DELIVERABLES</span></button>
       <button id="btn-collapse-all" type="button" title="collapse every folder, project, worktree row, card and turn in one press; Ctrl+[ folds one tier per press">Collapse all</button>
       <button id="btn-pause" type="button">Pause</button>
       <button id="btn-settings" type="button" title="settings — fonts, and the gateway's approval window (Ctrl+,)">⚙ Settings</button>
@@ -858,6 +858,72 @@
   <!-- The DELIVERABLES list's two narrowings — the text filter and the kind chips — as pure answers. app.js reads
        them by name at paint time (`window.wtDeliverKinds`), and test/deliver-kinds.test.js imports this same file. -->
   <script src="/core/deliver-kinds.js"></script>
+  <!-- THE STALE-PAGE GUARD. A tab can be running an app.js older than the shell that loaded it: the shell is served
+       no-store, but every asset URL carries the version the shell was rendered with, so a tab opened while app.js was
+       being written (or one holding a cached copy under that URL) keeps the old file. If that old app.js predates the
+       DELIVERABLES block, the header button is in the page and nothing is wired to it — a click does nothing and says
+       nothing, which is the worst shape a dead control can take. This block is INLINE, and the only reason it is
+       inline, because it must be the one piece of code that is never stale: a core/*.js guard would be cached at the
+       same old version as the app.js it is meant to catch. At click time it asks whether app.js of THIS build wired
+       the button (`data-wired`), and when it did not it names the build the page loaded with, asks /api/build which
+       build the panel serves, and offers the reload. app.js calls the same reporter if the popover throws for the
+       same reason (an old page against a new API). -->
+  <script>
+    (() => {
+      const btn = document.getElementById("btn-deliver");
+      if (!btn) return;
+      const meta = document.querySelector('meta[name="panel-build"]');
+      const loaded = ((meta && meta.getAttribute("content")) || "").trim() || "unknown";
+      let offered = false;
+      const offer = (served) => {
+        if (offered) return;
+        offered = true;
+        const bar = document.createElement("div");
+        bar.id = "stale-build-bar";
+        bar.setAttribute("role", "alert");
+        bar.style.cssText = "position:fixed;left:0;right:0;bottom:0;z-index:9999;display:flex;gap:12px;align-items:center;justify-content:center;padding:10px 16px;background:#241012;color:#ffb3ad;border-top:1px solid #7a3138;font:13px/1.4 system-ui,sans-serif";
+        const text = document.createElement("span");
+        text.id = "stale-build-text";
+        text.textContent = `This page was loaded from build ${loaded}; the panel now serves ${served}. DELIVERABLES cannot open here — reload to pick up the new app.js.`;
+        const reload = document.createElement("button");
+        reload.type = "button";
+        reload.id = "stale-build-reload";
+        reload.textContent = "Reload";
+        reload.style.cssText = "font:inherit;padding:3px 10px;border-radius:6px;border:1px solid #a03c44;background:#2d1518;color:#ffb3ad;cursor:pointer";
+        reload.addEventListener("click", () => location.reload());
+        bar.append(text, reload);
+        document.body.append(bar);
+      };
+      const report = (why) => {
+        console.error(
+          `[panel] DELIVERABLES is dead on this page: it was loaded from build ${loaded} and the panel is serving a different build now. ${why} Reload to pick up the new app.js.`,
+        );
+        fetch("/api/build", { cache: "no-store" })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((d) => {
+            const served = (d && (d.version || d.build)) || "unknown";
+            console.error(`[panel] stale page: loaded build ${loaded}, the panel serves ${served} — reload to pick up the new app.js.`);
+            offer(served);
+          })
+          .catch(() => offer("unknown"));
+      };
+      // Capture phase, so a page whose app.js DID wire the button is never touched: the guard returns before the
+      // button's own bubble listener runs. `stopPropagation` on the dead path keeps a half-built old handler from
+      // running beside this sentence.
+      document.addEventListener(
+        "click",
+        (e) => {
+          const hit = e.target instanceof Element ? e.target.closest("#btn-deliver") : null;
+          if (!hit || hit.dataset.wired === "1") return;
+          e.preventDefault();
+          e.stopPropagation();
+          report("Nothing is wired to the button.");
+        },
+        true,
+      );
+      window.__panelStaleBuild = { loaded, report };
+    })();
+  </script>
   <script src="/app.js"></script>
   <!-- The update check. Loaded after app.js because it reads that file's `state`, `turnLive` and
        the banner helpers by name — at call time, never at load, so nothing here waits on boot. -->

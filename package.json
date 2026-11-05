@@ -24,6 +24,8 @@
     "verify:pipeline-import": "node tools/verify-pipeline-import.mjs",
     "verify:version-tags": "node tools/verify-version-tags.mjs",
     "verify:deliverables-ui": "node tools/verify-deliverables-ui.mjs",
+    "verify:deliverables-stable": "node tools/verify-deliverables-stable.mjs",
+    "verify:deliverables-stale": "node tools/verify-deliverables-stale.mjs",
     "verify:matrix-bridge": "node tools/verify-matrix-bridge.mjs",
     "version:tag": "node tools/version.mjs tag",
     "version:backfill": "node tools/version.mjs backfill",

@@ -14777,7 +14777,11 @@ setInterval(() => {
   } else {
     bits.push("no changes yet");
   }
-  $("stream-rate").textContent = bits.join(" · ");
+  const rateEl = $("stream-rate");
+  rateEl.textContent = bits.join(" · ");
+  // The line ellipsizes when the header is narrow (style.css pins it so its length cannot move the buttons to its
+  // right); the whole sentence stays one hover away.
+  rateEl.title = rateEl.textContent;
 }, 1000);
 
 setInterval(() => {
@@ -15547,13 +15551,22 @@ function paintDeliverBadge() {
   if (!btn) return;
   const n = Math.max(0, Number(deliver.unseen) || 0);
   const unseen = n > 0;
-  const badge = $("deliver-badge");
-  if (badge) {
-    badge.hidden = !unseen;
+  // THE PILL EXISTS ONLY WHILE SOMETHING IS UNSEEN. A badge that ships in the markup carrying "0" and is merely
+  // `hidden` is still text inside the button: the control reads "DELIVERABLES0" to anything that reads the node, and
+  // the span measured 0x0 at (0,0) — a dead element with no job. So the node is created here when the count is real
+  // and REMOVED when it is zero; the button's own text is then the label and nothing else.
+  let badge = $("deliver-badge");
+  if (unseen) {
+    if (!badge) {
+      badge = document.createElement("span");
+      badge.id = "deliver-badge";
+      badge.className = "deliver-badge";
+      btn.append(badge);
+    }
     badge.textContent = String(n);
-    badge.title = unseen
-      ? `dismiss — ${n} deliverable${n === 1 ? "" : "s"} arrived since you last looked; this marks ${n === 1 ? "it" : "them"} seen without opening the list`
-      : "";
+    badge.title = `dismiss — ${n} deliverable${n === 1 ? "" : "s"} arrived since you last looked; this marks ${n === 1 ? "it" : "them"} seen without opening the list`;
+  } else if (badge) {
+    badge.remove();
   }
   btn.classList.toggle("has-unseen", unseen);
   btn.setAttribute(
@@ -15642,20 +15655,31 @@ function toggleDeliverPop() {
   else openDeliverPop();
 }
 
-$("btn-deliver")?.addEventListener("click", (e) => {
+const deliverBtn = $("btn-deliver");
+deliverBtn?.addEventListener("click", (e) => {
   e.stopPropagation();
-  toggleDeliverPop();
+  // The badge is the SECOND door to the same watermark: a press on the number records what the page has shown
+  // WITHOUT opening the list, and the button's own toggle never fires. It is a span inside the header button on
+  // purpose, and the press is delegated here rather than bound to the node because the node exists only while
+  // something is unseen (paintDeliverBadge creates and removes it).
+  if (e.target.closest?.("#deliver-badge")) {
+    e.preventDefault();
+    void deliverMarkSeen();
+    return;
+  }
+  try {
+    toggleDeliverPop();
+  } catch (err) {
+    // The button is here but the list could not be built. On a page whose app.js is older than the shell that is the
+    // old page meeting a new API, and a silent no-op is the one outcome a control must never have: say which build
+    // is running and let the shell's stale-build guard offer the reload (index.html).
+    const why = String((err && err.message) || err);
+    console.error(`[panel] DELIVERABLES could not open on this page: ${why}`);
+    window.__panelStaleBuild?.report?.(`Opening the list threw: ${why}.`);
+  }
 });
-
-// The badge is the SECOND door to the same watermark: a press on the number records what the page has shown WITHOUT
-// opening the list, and the button's own toggle never fires (stopPropagation — an event from inside the button is
-// still the badge's, not the button's). It is a span inside the header button on purpose: the header keeps one button
-// per feature, and the number is the only part of it that means "dismiss".
-$("deliver-badge")?.addEventListener("click", (e) => {
-  e.preventDefault();
-  e.stopPropagation();
-  void deliverMarkSeen();
-});
+// Read at click time by the shell's stale-page guard: it is how a page knows this build's app.js reached the button.
+if (deliverBtn) deliverBtn.dataset.wired = "1";
 
 // The count has to be right before the first click, and a delivery has to reach a page whose list is SHUT. One quiet
 // read paints it at load, the stream's `deliverable` frame keeps it live, and a slow poll covers a tab whose stream is
