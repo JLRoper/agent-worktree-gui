@@ -58,6 +58,9 @@ import { readSkillsIndex } from "./lib/skills.js";
 // The Matrix bridge's process lifecycle (start / stop / liveness / one --self-test). The protocol itself is the
 // standalone Python program's; this module only ever owns a child process, its pid file and its log.
 import { MatrixBridge, matrixBlock, matrixConfig, matrixPatchFrom } from "./lib/matrix-bridge.js";
+// The Bridge tab's policy: one markdown file in the panel's state folder, served at /api/matrix/policy and
+// carried into the bridge turn by the next reader. It is NOT bridge.env and never sits beside the script.
+import { MatrixPolicyStore, matrixPolicyTemplate } from "./lib/matrix-policy.js";
 import { readPermissions } from "./lib/gateway-permissions.js";
 import {
   approvalState, writeApprovalTimeout, APPROVAL_TIMEOUT_MIN, APPROVAL_TIMEOUT_MAX,
@@ -1100,6 +1103,15 @@ const settingsOut = () => ({
 // is fired from the listen callback below, once the port is bound — the panel comes up first, and a bridge that
 // cannot start surfaces as `state().boot` on the Gateway tab rather than in a log line nobody reads.
 const matrixBridge = new MatrixBridge({ config, onLog: log });
+
+// The policy the Bridge tab edits and the bridge turn carries. One store, one file, one precedence rule
+// (panel text > WTGUI_MATRIX_POLICY > the template); `statePaths` derives the file so a sandbox and a real
+// install cannot disagree about where it lives. It never touches bridge.env.
+const matrixPolicy = new MatrixPolicyStore({
+  file: statePaths(config).matrixPolicyFile,
+  env: process.env,
+  template: matrixPolicyTemplate(),
+});
 
 // ---- the Element room: every wait on a person, over the bridge above -----------------------------------------
 // The panel's third surface for a human decision, and the only one that is not this page. A clarify card, a run's
@@ -2998,6 +3010,43 @@ const server = createServer(async (req, res) => {
       // along so the page can repaint the dot and the log from one response.
       const result = await matrixBridge.selfTest();
       return sendJson(res, 200, { ...matrixBridge.state(), ...result });
+    }
+
+    // ---- the Bridge tab's one read -------------------------------------------------------------------
+    // Everything the tab draws, in one answer: the process state (with bridge.env's PATH, never a value from
+    // it), the Element channel's recent messages and failures, the policy, and a FRESH gateway probe. One
+    // request means the four sections cannot disagree about the moment they describe.
+    if (route === "/api/matrix/status" && req.method === "GET") {
+      await jobs.probe();
+      return sendJson(res, 200, {
+        at: new Date().toISOString(),
+        bridge: matrixBridge.state(),
+        element: element.state(),
+        policy: matrixPolicy.payload(),
+        gateway: jobs.transportInfo(),
+      });
+    }
+
+    // The policy store the next row consumes. GET carries the effective text (panel > environment default >
+    // template), its path, its mtime and its size against the cap. POST replaces the panel's whole copy; the
+    // mtime the page read travels with it, so a write made in between is a 409 rather than a lost edit, and
+    // over the cap is a 413 with the numbers in it.
+    if (route === "/api/matrix/policy" && req.method === "GET") {
+      return sendJson(res, 200, matrixPolicy.payload());
+    }
+
+    if (route === "/api/matrix/policy" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => null);
+      if (!body || typeof body !== "object" || Array.isArray(body)) {
+        return sendJson(res, 400, { error: "send a JSON object with a string `text` — that is the whole policy" });
+      }
+      try {
+        return sendJson(res, 200, matrixPolicy.save(body.text, { expectMtime: body.expectMtime }));
+      } catch (e) {
+        const code = (e && e.code) === "policy-too-long" ? 413 : (e && e.code) === "policy-stale" ? 409 : 400;
+        return sendJson(res, code, { error: String((e && e.message) || e), ...matrixPolicy.payload() });
+      }
     }
 
     // The models the New-agent form offers. Read from the gateway home, not from the run stream: the

@@ -722,16 +722,18 @@
         <span class="chips" id="as-chips"></span>
         <button id="btn-as-close" type="button" title="close (Esc) — it keeps watching while closed">✕</button>
       </div>
-      <!-- The float's own row: the assistant sessions — each one a real agent thread of its own — and the two panes
-           that belong to the PANEL rather than to one session: the ROLE library and the sentry's Watchdog. Everything
-           that is about ONE assistant — its card, its settings, its queue, its trees, its alerts, watches, messages
-           and pad — is a sub-tab of that assistant's own tab. Only Assistant #1 is in this markup: the rest come from
-           the assistant records the server sends, and the painter adds a button and a pane for each — so a second
+      <!-- The float's own row: the assistant sessions — each one a real agent thread of its own — and the three
+           panes that belong to the PANEL rather than to one session: the ROLE library, the sentry's Watchdog, and
+           the Matrix/Element BRIDGE (one agent, no worktree, no queue of its own). Everything that is about ONE
+           assistant — its card, its settings, its queue, its trees, its alerts, watches, messages and pad — is a
+           sub-tab of that assistant's own tab. Only Assistant #1 is in this markup: the rest come from the
+           assistant records the server sends, and the painter adds a button and a pane for each — so a second
            assistant is a record, not an edit here. -->
       <div class="as-tabs" id="as-tabs">
         <button type="button" data-as-tab="assistant-1" class="is-on" title="Assistant #1 — the assistant itself: a normal agent card with its own thread. Everything about it — Chat, Settings, its queue and trees, its alerts, watches, messages and pad — is the quiet row under this one">Assistant #1</button>
         <button type="button" data-as-tab="role" title="the role this assistant runs — the job title, the charter it carries (its own copy, injected in full on every turn), and a new assistant made from the same role. A ROLE is a library shared by every assistant, so this pane is the panel's, not one session's">Role</button>
         <button type="button" data-as-tab="watchdog" title="the panel's watchdog — the sentry's own switches (watching, the command audit's journal), the pass clock, every rule's escalation level and the bar it fires on. ONE value for the whole panel: an assistant's own settings are in that assistant's Settings tab">Watchdog</button>
+        <button type="button" data-as-tab="bridge" title="the Matrix/Element bridge — an agent with NO worktree and NO queue: it talks to you on your phone and files work into an assistant's queue. Connection (pid, bridge.env PATH only, room, senders, last send and receive), the last messages, the policy you write for it, and its alerts. It is not a session's pane: there is one bridge for the panel">Bridge</button>
       </div>
       <!-- The session's own row, under the assistant's tabs: everything that belongs to the ONE assistant the top row
            has selected. Chat is the card you talk to, Settings how it behaves, Queue and Worktrees the work it is
@@ -761,6 +763,9 @@
         </section>
         <section class="as-pane hidden" data-pane="role" id="as-role"></section>
         <section class="as-pane hidden" data-pane="watchdog" id="as-watchdog"></section>
+        <!-- The Bridge tab's markup is a frame only: public/assistant.js paints its four sections from
+             GET /api/matrix/status, and its policy box from the same answer's `policy`. -->
+        <section class="as-pane hidden" data-pane="bridge" id="as-bridge"></section>
       </div>
       <!-- The rail's one grab: the edge it shares with the board. A docked column is sized on that edge, so there
            is one band here rather than the eight a floating window needed. -->

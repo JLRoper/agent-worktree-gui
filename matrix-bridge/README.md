@@ -452,6 +452,16 @@ What the Gateway tab does:
 - `credentialsPresent` is only `existsSync(<dir of scriptPath>/bridge.env)`. The panel never opens, parses
   or echoes that file, so the password cannot reach a route, a log line or the browser.
 
+The assistant float's **Bridge** tab is the reader's other view of the same process, and it does not run a
+second copy of any of the above. It reads `GET /api/matrix/status` — the bridge state above, the Element
+channel's recent inbound/outbound records, the policy, and a fresh gateway probe — and draws four sections:
+connection (pid, live/dead, the PATH of `bridge.env`, the room and its sender rule, last send/receive),
+messages (the newest ten each way, failures highlighted, never a full transcript), policy, and alerts (bridge
+health, gateway reachability, send failures). The policy is one markdown file in the panel's state folder,
+served at `GET`/`POST /api/matrix/policy` and injected into the bridge turn; its text wins over the
+`WTGUI_MATRIX_POLICY` environment default. It is not a variable in `bridge.env`, and the panel still never
+reads that file.
+
 The bridge does not need the panel to run, and the panel does not need the bridge to run. If you install
 the module in a new checkout, update the `matrix` block (Gateway tab → Save, or `config.json`) to the new
 paths; the committed `config.json` still points at the original external checkout by design, so this
