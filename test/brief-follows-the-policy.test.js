@@ -288,12 +288,19 @@ test("a tree nobody can name still follows its project's policy", async (t) => {
     sweep(dir);
   });
 
-  await jobs.create({ prompt: "work in a hand cut tree", cwd: handTree, existing: true, branchPolicy: "allow" });
+  const first = await jobs.create({ prompt: "work in a hand cut tree", cwd: handTree, existing: true, branchPolicy: "allow" });
   const allowed = stub.last();
   assert.doesNotMatch(allowed, /cut from `/, "no parent is invented for a tree that records none");
   assert.match(allowed, /REMOTE WRITES ALLOWED/, "the project allows pushes, so the blanket line says so");
   assert.doesNotMatch(allowed, /LOCAL-ONLY/);
 
+  // One worker per tree: the first turn must end before a second is allowed in the same tree. This comparison is
+  // about the brief a later turn is given, so wait for the first run rather than racing the cut's own refusal.
+  for (let i = 0; i < 100; i++) {
+    const rec = jobs.get(first.id);
+    if (rec && !["starting", "running", "waiting"].includes(rec.status)) break;
+    await new Promise((r) => setTimeout(r, 30));
+  }
   await jobs.create({ prompt: "work in a hand cut tree", cwd: handTree, existing: true });
   assert.match(stub.last(), /LOCAL-ONLY/, "with no policy named, the default rule stands");
 });
