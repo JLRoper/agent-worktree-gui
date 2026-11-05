@@ -2101,7 +2101,42 @@ tr.row-confirm .btn-del-yes:hover { background: #3a1d22; }
   padding: 7px 10px;
   border-bottom: 1px solid var(--line);
   background: #12161d;
+  cursor: grab;
+  touch-action: none;
 }
+.deliver-pop.is-dragging .dl-head { cursor: grabbing; }
+/* ...and it says so twice: the pointer's cursor, and the six dots every title bar a reader has ever dragged
+   carries. Drawn as a background so the head's own text (the count, the filter, the chips) is untouched. */
+.deliver-pop .dl-head::before {
+  content: "";
+  flex: none;
+  width: 8px; height: 14px;
+  background-image: radial-gradient(circle, #55657e 1px, transparent 1.3px);
+  background-size: 4px 4px;
+  background-position: 0 1px;
+  opacity: .9;
+}
+/* A drag is not a text selection: the class is on for the length of the gesture, and off again on release. */
+.deliver-pop.is-dragging { user-select: none; }
+/* The grab handle: the panel's own corner, drawn as diagonal ticks and sized to the 16 px it reacts to. It is the
+   only thing that RESIZES the panel (the head only moves it), and it is visible without hovering — "the list can be
+   resized" is not a fact a reader should have to discover. */
+.deliver-pop .dl-resize {
+  position: absolute; right: 3px; bottom: 3px;
+  z-index: 1;
+  width: 16px; height: 16px;
+  border-radius: 2px;
+  cursor: nwse-resize;
+  touch-action: none;
+  opacity: .9;
+  /* Three diagonal ticks in the corner — the shape a window's own grip has, not a glyph a reader could read as a
+     second control (a hatch read as an ✕). */
+  background-image:
+    linear-gradient(135deg, transparent 0 78%, #6b7c96 78% 90%, transparent 90% 100%),
+    linear-gradient(135deg, transparent 0 52%, #6b7c96 52% 64%, transparent 64% 100%),
+    linear-gradient(135deg, transparent 0 26%, #6b7c96 26% 38%, transparent 38% 100%);
+}
+.deliver-pop .dl-resize:hover { opacity: 1; }
 .deliver-pop .dl-count {
   flex: 0 1 auto; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
