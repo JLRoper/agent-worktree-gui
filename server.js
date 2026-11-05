@@ -49,6 +49,7 @@ import { ParentBook } from "./lib/parents.js";
 import { cutChildWorktree } from "./lib/child-worktree.js";
 import { Questions, applyPlan, buildPlan, inspectProject, parentWorktreeOf, readPlan, rollGate, rollUp, worktrees as stewardWorktrees, writePlan } from "./lib/steward.js";
 import { REASON_REQUIRED, RestartController, providerKeyCheck } from "./lib/restart.js";
+import { readPipelineDocument } from "./lib/pipeline-doc.js";
 import { Approvals } from "./lib/approvals.js";
 import { RemoteWrites, POLICIES, DEFAULT_POLICY, policyFrom, policyForProject, policyLabel } from "./lib/remote-writes.js";
 import { installGuard, uninstallGuard, guardState, refreshGuardFiles, normTree } from "./lib/push-guard.js";
@@ -2724,6 +2725,15 @@ const server = createServer(async (req, res) => {
         dropped: doc.dropped,
         pipelines: doc.pipelines,
       });
+    }
+
+    // ---- one pipeline document, read for the map's `?doc=` -----------------------------------------
+    // public/pipeline-map.html draws a document it did not build, but a page served on this origin cannot fetch the
+    // factory on :8090 (no CORS header) — so the reader's own panel does the read and hands the page the bytes with
+    // the sha256 its provenance line must name. Loopback only: see lib/pipeline-doc.js for why that is the line.
+    if (route === "/api/pipeline-doc" && req.method === "GET") {
+      const read = await readPipelineDocument(url.searchParams.get("url"));
+      return sendJson(res, read.status, read.body);
     }
 
     // Replace the live catalogue. The document is the pipelines.json shape: `{version, note, pipelines}`. A version

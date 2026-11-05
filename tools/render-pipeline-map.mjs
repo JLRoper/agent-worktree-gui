@@ -41,6 +41,8 @@ const VENDOR = path.join(REPO, VENDOR_REL);
 const OUT = path.join(REPO, "public", "pipeline-map.html");
 const SCRIPT_REL = "public/pipeline-map.js";
 const SCRIPT = path.join(REPO, SCRIPT_REL);
+const IMPORT_REL = "public/core/pipeline-import.js";
+const IMPORT = path.join(REPO, IMPORT_REL);
 const PKG = path.join(REPO, "package.json");
 const MERMAID_VERSION = "11.4.1";
 
@@ -264,6 +266,7 @@ function build() {
         sourceRow(BUNDLE, "pipeline-bundle.seed.json", "the studio bundle"),
         sourceRow(VENDOR, VENDOR_REL, "mermaid, inlined"),
         sourceRow(SCRIPT, SCRIPT_REL, "this page's own script"),
+        sourceRow(IMPORT, IMPORT_REL, "the importer a document is read through"),
       ],
       mermaidVersion: MERMAID_VERSION,
     },
@@ -334,6 +337,24 @@ function html(model, vendor) {
   .stat span { color: var(--dim); font-size: 12px; }
   .chains { color: var(--dim); font-size: 12.5px; margin: 6px 0 20px; }
   .chains code { color: var(--text); }
+
+  /* The source line. It is not decoration: a drawing that does not name its source and its sha256 cannot be told
+     apart from the catalogue the page was built from, so it sits above the cards and is the first thing read. */
+  .provenance { margin: 0 0 12px; padding: 5px 0 5px 11px; border-left: 3px solid var(--line); font: 11.5px/1.65 var(--mono); color: var(--dim); }
+  .provenance[data-kind="document"] { border-left-color: var(--blue); color: #cfe0f5; }
+  .provenance b { color: var(--text); font-weight: 600; }
+  .provenance code { color: var(--text); font-size: 11.5px; }
+  .provenance code.sha { color: var(--green); word-break: break-all; }
+  .provenance .pv-tag { display: inline-block; margin-right: 7px; font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--dimmer); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; }
+  .provenance[data-kind="document"] .pv-tag { color: var(--blue); border-color: #29405a; }
+  .doc-error { margin: 0 0 14px; padding: 9px 12px; border: 1px solid #6b2b2b; border-radius: 8px; background: #2a1517; color: var(--red); font: 12.5px/1.55 var(--mono); }
+  .doc-error[hidden] { display: none; }
+  .docbtn { position: relative; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 7px; background: transparent; color: var(--dim); font: 12px var(--mono); padding: 6px 10px; cursor: pointer; }
+  .docbtn:hover { color: var(--text); border-color: #3b4656; }
+  .docbtn:focus-within, .docbtn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  .docbtn input[type="file"] { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+  .docbtn.ghost[hidden] { display: none; }
+  .sep { width: 1px; height: 18px; background: var(--line); display: inline-block; }
 
   .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin: 22px 0 10px; padding: 10px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 9px; position: sticky; top: 0; z-index: 8; }
   .controls .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--dimmer); }
@@ -432,12 +453,14 @@ function html(model, vendor) {
 <header>
   <p class="kicker">agent-worktree-gui · the pipeline library</p>
   <h1>Every pipeline the panel can put a tree on, drawn</h1>
-  <p class="lede">${meta.totalPipelines} catalogue definitions and the ${meta.bundleStages}-stage studio bundle, each stage a node: <b>its ordinal and title</b>, <b>who runs it</b> on the second line, and the <b>exit check or gate</b> on the arrow that leaves it. Solid arrows are the chain; dashed violet arrows are loops the data carries, with their cap; the one amber dashed arrow is an <b>inference</b>, named where it is drawn. Mermaid ${escHtml(meta.mermaidVersion)} is inlined below — this page opens with no network at all.</p>
+  <p class="lede">${meta.totalPipelines} catalogue definitions and the ${meta.bundleStages}-stage studio bundle, each stage a node: <b>its ordinal and title</b>, <b>who runs it</b> on the second line, and the <b>exit check or gate</b> on the arrow that leaves it. Solid arrows are the chain; dashed violet arrows are loops the data carries, with their cap; the one amber dashed arrow is an <b>inference</b>, named where it is drawn. It can also draw <b>a document it did not build</b> — a file, or <code>?doc=&lt;url|path&gt;</code> — and names that source and its sha256 above the cards. Mermaid ${escHtml(meta.mermaidVersion)} is inlined below — this page opens with no network at all.</p>
   <p class="sources">version ${escHtml(meta.version)} · generated ${escHtml(meta.generatedAt.replace("T", " ").slice(0, 19))} UTC · sources: ${meta.sources.map((s) => `<code>${escHtml(s.file)}</code> ${escHtml(s.sha256.slice(0, 12))}`).join(" · ")}</p>
 </header>
 
 <section class="summary" id="summary" aria-label="what this page covers"></section>
 <p class="chains" id="chains"></p>
+<p class="provenance" id="provenance" data-kind="built-in" aria-live="polite"></p>
+<div class="doc-error" id="doc-error" role="alert" hidden></div>
 
 <div class="controls">
   <span class="label" id="layout-label">layout</span>
@@ -452,6 +475,13 @@ function html(model, vendor) {
     <button type="button" data-n="4" aria-pressed="false">4</button>
   </div>
   <span class="label" id="draw-count" aria-live="polite">drawing…</span>
+  <span class="sep" aria-hidden="true"></span>
+  <span class="label" id="import-label">document</span>
+  <label class="docbtn" id="doc-open" title="draw a pipeline document this page did not build: an exported studio document, the panel's catalogue, or the factory's index">
+    open a document<input type="file" id="doc-file" accept="application/json,.json" aria-labelledby="import-label">
+  </label>
+  <button type="button" class="docbtn ghost" id="doc-restore" hidden>back to the built-in catalogue</button>
+  <span class="label" id="doc-status" aria-live="polite"></span>
 </div>
 
 <div class="legend" aria-label="how to read the drawing">
@@ -476,7 +506,8 @@ function html(model, vendor) {
 <footer>
   <p><b>What this page is.</b> One self-contained artefact rendered from <code>pipelines.seed.json</code> and <code>pipeline-bundle.seed.json</code> by <code>tools/render-pipeline-map.mjs</code>; its own script is <code>public/pipeline-map.js</code>. Every node, edge and loop is read from the JSON — nothing about a stage's role, its exit or its loop is typed into this page by hand. The one exception is named in the legend and on the card: <code>sefl-review-loop</code> is iterative only in its prompts, so its round trip is an inference.</p>
   <p>The derivation is a closed table: each catalogue stage's second line carries a rule id and the exact phrase from its prompt that chose it; the inspector shows the phrase, and <code>tools/verify-pipeline-map.mjs</code> re-checks it against the seed. A bundle stage is not derived at all — it prints the name and kind of its own <code>owner.role</code>, plus the count of other roles the bundle assigns to that stage.</p>
-  <p><b>Source ledger.</b> The four files this page was built from, with their sha256 over LF-normalized bytes (the git blob's bytes, so a CRLF checkout does not make this ledger stale):</p>
+  <p><b>Drawing a document this page did not build.</b> <code>open a document</code> reads a JSON file straight from disk; <code>?doc=&lt;url|path&gt;</code> draws one the page can reach — a path on the page's own origin, or an http(s) URL, which is read through the panel's own <code>GET /api/pipeline-doc</code> because a browser will not read another origin's JSON without CORS. Three shapes are understood: an exported studio document (<code>project</code> + <code>stages[]</code>), the panel's catalogue (<code>pipelines</code>), and the factory's index (<code>[{id, title, stageCount}]</code> — whose cards say the stage names are not served). The importer is <code>public/core/pipeline-import.js</code>. Every drawing prints its source and the sha256 of the exact bytes above the cards, so an imported picture can never be mistaken for the catalogue; a document that does not parse prints one visible sentence and leaves the page as it was.</p>
+  <p><b>Source ledger.</b> The ${meta.sources.length} files this page was built from, with their sha256 over LF-normalized bytes (the git blob's bytes, so a CRLF checkout does not make this ledger stale):</p>
   <table style="border-collapse:collapse;font:11.5px var(--mono);color:var(--dim);margin-top:6px">
     <thead><tr><th style="text-align:left;padding:3px 14px 3px 0">file</th><th style="text-align:left;padding:3px 14px 3px 0">role</th><th style="text-align:right;padding:3px 14px 3px 0">bytes</th><th style="text-align:left;padding:3px 0">sha256 (first 16)</th></tr></thead>
     <tbody>
@@ -489,6 +520,7 @@ function html(model, vendor) {
 
 <script id="pipeline-map-data" type="application/json">${data}</script>
 <script id="mermaid-vendor">${vendor}</script>
+<script src="core/pipeline-import.js?v=${escHtml(meta.version)}"></script>
 <script src="pipeline-map.js?v=${escHtml(meta.version)}"></script>
 </body>
 </html>
