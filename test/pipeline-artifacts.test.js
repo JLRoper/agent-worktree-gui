@@ -24,7 +24,9 @@ import { pipelineCatalogue } from "../lib/task-pipeline-assign.js";
 await import("../public/pipeline-flow.js");
 const { fromBundle, fromDefinition, fromWindowModel, markup } = globalThis.PipelineFlow;
 
-const SEED = JSON.parse(readFileSync(new URL("../pipeline-bundle.seed.json", import.meta.url), "utf8"));
+// The seed is the panel's multi-pipeline wrapper; the 13-stage studio export is its `poc-to-uat` entry.
+const SEED_DOC = JSON.parse(readFileSync(new URL("../pipeline-bundle.seed.json", import.meta.url), "utf8"));
+const SEED = SEED_DOC.pipelines.find((p) => (p.id || (p.project && p.project.id)) === "poc-to-uat");
 const SEED_FLOW = fromBundle(SEED);
 
 const chips = (html) =>

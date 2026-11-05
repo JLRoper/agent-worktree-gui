@@ -22,7 +22,10 @@ await import("../public/pipeline-flow.js");
 const { fromDefinition, fromBundle, fromWindowModel, marksFor, markup, render } = globalThis.PipelineFlow;
 
 const SEED_DEFS = JSON.parse(readFileSync(new URL("../pipelines.seed.json", import.meta.url), "utf8")).pipelines;
-const SEED_BUNDLE = JSON.parse(readFileSync(new URL("../pipeline-bundle.seed.json", import.meta.url), "utf8"));
+// The shipped seed is the panel's multi-pipeline wrapper now; the 13-stage studio export is its `poc-to-uat` entry.
+const SEED_DOC = JSON.parse(readFileSync(new URL("../pipeline-bundle.seed.json", import.meta.url), "utf8"));
+const SEED_BUNDLE = SEED_DOC.pipelines.find((p) => (p.id || (p.project && p.project.id)) === "poc-to-uat");
+assert.ok(SEED_BUNDLE, "the shipped seed must hold the poc-to-uat pipeline");
 
 const flowOf = (html) => {
   const nodes = [...html.matchAll(/<li class="pflow-node" data-stage="([^"]*)" data-pos="(\d+)" data-mark="([^"]*)"/g)].map((m) => ({
