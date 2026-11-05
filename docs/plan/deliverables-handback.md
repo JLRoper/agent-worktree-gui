@@ -544,6 +544,11 @@ A row:
 - The **`open agent`** button (`.dl-agent`) is the keyboard/AT equivalent of clicking the row.
 - A **`gone`** chip replaces nothing else when `missingAt` is set: the title is struck through, the chip's tooltip says
   when it was last seen and by which agent, and the click still tries (the file may have been restored).
+- An **answer line** (`.dl-opened`, `role="status"`) appears under the meta line after a `200 {open:"handler"}`:
+  `opened report.html with explorer.exe — the panel started the opener; it cannot see whether a window appeared`.
+  It names what was handed over and which opener took it, which are the two facts the route's 200 carries. It does
+  NOT claim a window: a detached `explorer.exe` reports no exit code, so the spawn is the whole of the evidence. A
+  later refusal on the same row replaces it, and the refusal's own sentence is never composed by the page.
 
 ### 5.3 The three click behaviours
 
@@ -724,6 +729,13 @@ stray string from a page cannot launch an arbitrary file.
 
 The `missingAt` stamp is what makes the second click honest: the row says `gone` instead of pretending, and the list
 does not silently accumulate dead rows that look alive.
+
+The page answers the `200 {open:"handler"}` too, with the two facts that answer carries: the target's name and the
+opener's basename, under the row (§5.2). It says no more than the spawn proves — a detached handler reports no exit
+code — so the sentence ends `it cannot see whether a window appeared`; the route's classification and its 403/404
+sentences are untouched. The audit (`docs/reports/deliverables-open-audit-2026-11-05.md`) measured that branch silent
+on 29 of 111 files and 7 of 32 images; `docs/reports/deliverables-open-handler-2026-11-05.md` is the proof against a
+`page` served from `public/app.js` and the same store.
 
 ### 7.3 Server wiring, in order
 
