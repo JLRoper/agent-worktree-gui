@@ -4,16 +4,35 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.17.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.17.1 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-299 releases from v0.1.0 (2026-10-20) to v1.17.0 (2026-11-05), 1036 commits between the tags. Every release is anchored by an
+300 releases from v0.1.0 (2026-10-20) to v1.17.1 (2026-11-05), 1042 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.17.1 — 2026-11-05 · 6 commits
+
+[`548b5f0`](https://github.com/JLRoper/agent-worktree-gui/commit/548b5f0875c269ebbf24026873d52ca3bfe35190) · [compare v1.17.0...v1.17.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.17.0...v1.17.1)
+
+### Fixed
+
+- fix: the capture ledger names the document by its file, not a machine folder ([`5859db3`](https://github.com/JLRoper/agent-worktree-gui/commit/5859db329449a4ceb4a1c81f431c73ce5e8121e6))
+- fix: the row says what a 200 handler opened, and by which opener ([`7c9d924`](https://github.com/JLRoper/agent-worktree-gui/commit/7c9d924d0c269d1e40337e7a05e3bda9207bca5b))
+
+### Docs & tests
+
+- docs: each factory pipeline re-opened in the map, with the shots and the refusal ([`6a84dfd`](https://github.com/JLRoper/agent-worktree-gui/commit/6a84dfdb2ef425c2624781bda762be0d816e9be7))
+- docs: render the changelog's missing v1.17.0 section ([`82b4d0f`](https://github.com/JLRoper/agent-worktree-gui/commit/82b4d0fa0f461397cc9b57c24415c610fdec0169))
+- docs: the 200 handler's answer, measured on the live store ([`d24983a`](https://github.com/JLRoper/agent-worktree-gui/commit/d24983a3e8d66470af7baa417eb8e64138639668))
+
+### Other
+
+- chore: 1.17.1 — the version this landing carries ([`548b5f0`](https://github.com/JLRoper/agent-worktree-gui/commit/548b5f0875c269ebbf24026873d52ca3bfe35190))
 
 ## v1.17.0 — 2026-11-05 · 3 commits
 
