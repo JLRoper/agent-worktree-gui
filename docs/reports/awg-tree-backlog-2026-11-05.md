@@ -2,7 +2,8 @@
 
 Base: the walk started at `origin/main` **ff84177** (1.24.1) and this record was written at **79ec3f3**
 (1.27.1, 320 releases). Measured 2026-11-05 17:00 – 17:48 EST (22:00 – 22:48Z) from the landing tree
-`wtgui/triage-and-land-the-unla-761334`.
+`wtgui/triage-and-land-the-unla-761334`; main moved three more times while the record was in flight,
+so it lands at **1.28.1**. Every number below names the ref it was measured against.
 
 **Result: 13 rows walked in the row's order — 2 landed, 11 retired as moot, 0 blocked.** Two trees the
 row put off-limits, `fix-the-two-driver-defec-72dda4` and `replace-the-push-permiss-588511`, were live
@@ -64,9 +65,11 @@ PR's base is the surface it photographs — the tab strip, `#pipeline-list`/`#pi
 - `node tools/absolute-paths.mjs`: clean — 906 tracked files, none new
 - `v1.27.1` annotated on `dfae827`; changelog rendered at the merged tip as `79ec3f3` — **320 releases**
 
-Version arithmetic: main moved under this walk twice. Landing 1 took main 1.24.1 → 1.26.0; a sibling
-landed 1.27.0 (`7703350`) and its render (`2ffb933`) while landing 2 was in flight, so landing 2 was
-rebased and its 1.26.1 number was spent before it pushed — it landed as 1.27.1.
+Version arithmetic: main moved under this walk three times. Landing 1 took main 1.24.1 → 1.26.0; a
+sibling landed 1.27.0 (`7703350`) and its render (`2ffb933`) while landing 2 was in flight, so landing 2
+was rebased and its 1.26.1 number was spent before it pushed — it landed as 1.27.1. A second sibling then
+landed 1.28.0 (`600fbc4`) while this record was being tested, so the record was rebased onto `f7e8d1f`
+and its own patch moved up to 1.28.1.
 
 ## How the eleven retirements were made
 
