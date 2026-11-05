@@ -3627,6 +3627,8 @@
         <span class="pipew-name">${esc(stage.title)}</span>
         <span class="pipew-pos mono">${esc(`${stage.position} of ${model.count}`)}</span>
         <span class="pipew-phase">${esc(pipeWindowPhaseWords(stage.phase))}</span>
+        ${current && model.visit ? `<span class="pipew-visit mono" data-pipew-visit="${esc(String(model.visit))}">visit ${esc(String(model.visit))}${model.stageRun ? ` · ${esc(model.stageRun)}` : ""}</span>` : ""}
+        ${current && model.decision && model.decision.reason ? `<span class="pipew-decision" data-pipew-decision="${esc(model.decision.code || "")}">last decision — ${esc(model.decision.reason)}</span>` : ""}
         ${live}
         <span class="pipew-artifact">${esc(stage.artifact.id)} → ${esc(stage.artifact.path)} · ${esc(stage.artifact.schema)} · ${esc(stage.artifact.writer)}</span>
         ${pipeWindowGateLine(stage.gateEnding)}
@@ -3677,9 +3679,21 @@
       mode === "unresolved"
         ? `<div class="pipew-note">this record cannot be read by the bundle — assigning a pipeline here <b>replaces</b> it with a stage the bundle holds. It is the repair, not a fallback that pretends the record was the default path.</div>`
         : "";
-    const clear =
-      mode === "pipeline"
-        ? `<button type="button" class="pipew-clear" data-pipew-clear title="clear the assignment — the task goes back to the assistant decides, and no stage or time in stage is claimed for it" aria-label="clear the pipeline assignment, back to the assistant decides">clear — back to the assistant decides</button>`
+      const clear =
+        mode === "pipeline"
+          ? `<button type="button" class="pipew-clear" data-pipew-clear title="clear the assignment — the task goes back to the assistant decides, and no stage or time in stage is claimed for it" aria-label="clear the pipeline assignment, back to the assistant decides">clear — back to the assistant decides</button>`
+          : "";
+      // The two parks only a READER can release (§6.4 of the design): a cap is a bound the panel just enforced, and a
+      // routing change is a re-export somebody has to acknowledge. Without the cap's reset a requeue re-parks on the
+      // next settle, because the count is compared as `used + 1 > limit` and a requeue never touches it.
+      const wait = model.position && model.position.waitingFor ? model.position.waitingFor : null;
+      const releaseKind = wait && (wait.kind === "cap" || wait.kind === "route") ? wait.kind : null;
+      const release = releaseKind
+        ? `<button type="button" class="pipew-release" data-pipew-release="${esc(releaseKind)}" title="${
+            releaseKind === "cap"
+              ? "release the cap — resets this loop edge's crossing count to zero and returns the row to the queue"
+              : "accept the re-export — re-stamps the routing fingerprint at this stage and returns the row to the queue"
+          }">release the ${releaseKind === "cap" ? "cap" : "routing change"}</button>`
         : "";
     return `<div class="pipew-assign" data-pipew-assign data-pipew-mode="${esc(mode)}">
       <div class="pipew-assign-head"><b>${esc(heading)}</b> — the choice is stored on the task, and entering a stage stamps that moment; the assistant decides only while no pipeline is assigned.</div>
@@ -3691,6 +3705,7 @@
         <label>starting stage <select data-pipew-stage>${pipeWindowStageOptions(catalogue, chosen, stageId)}</select></label>
         <button type="button" class="primary" data-pipew-apply>${esc(apply)}</button>
         ${clear}
+        ${release}
         <span class="pipew-assign-note" data-pipew-assign-note role="status" aria-live="polite"></span>
       </div>
     </div>`;
@@ -4033,6 +4048,35 @@
     }
   }
 
+  // The reader's release of a cap or a routing-change park (§6.4): one queue write, then the window is re-read at the
+  // new clock. It deliberately does NOT start anything — the row returns to `queued`, and the driver's next pass is
+  // what starts its stage, exactly as for any other queued pipeline row.
+  async function pipeWindowRelease(kind = "cap", { doc = document } = {}) {
+    if (pipeWindowState.busy) return null;
+    const card = doc.getElementById(PIPE_CARD_ID);
+    const note = card ? card.querySelector("[data-pipew-assign-note]") : null;
+    const { assistantId, taskId, opener } = pipeWindowState;
+    if (!assistantId || !taskId) return null;
+    pipeWindowState.busy = true;
+    if (note) note.textContent = kind === "cap" ? "releasing the cap…" : "accepting the new routing…";
+    try {
+      const out = await queueAct(assistantId, "pipeline-release", { id: taskId, release: kind });
+      if (!out) {
+        if (note) note.textContent = "the panel refused the release — see the error above";
+        return null;
+      }
+      await openTaskPipelineWindow(assistantId, taskId, opener);
+      try {
+        document.dispatchEvent(new CustomEvent("wtgui:task-pipeline-assigned", { detail: { assistantId, taskId } }));
+      } catch {
+        /* an environment without CustomEvent needs no notice */
+      }
+      return out;
+    } finally {
+      pipeWindowState.busy = false;
+    }
+  }
+
   // Delegated on the float (the pane is rebuilt on every change, so a per-row listener would die with it) and on the
   // dialog's own host for the keys. `capture` on the press is what keeps the row body's console opener from also firing:
   // one press, one window.
@@ -4086,6 +4130,12 @@
       if (e.target?.closest?.("[data-pipew-clear]")) {
         e.preventDefault();
         void pipeWindowAssign({ clear: true });
+        return;
+      }
+      if (e.target?.closest?.("[data-pipew-release]")) {
+        e.preventDefault();
+        const kind = e.target.closest("[data-pipew-release]").getAttribute("data-pipew-release") || "cap";
+        void pipeWindowRelease(kind);
         return;
       }
       if (e.target === host || e.target?.closest?.("[data-pipew-close]")) {

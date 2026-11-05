@@ -4,13 +4,13 @@
 // The policy has its own file (test/task-pipeline-drive.test.js). This one proves the wiring, because a driver that
 // nothing calls is a library nobody uses:
 //
-//   - a task put on a two-stage pipeline is STARTED unattended at its stage when it reaches the front of the queue,
-//     with the stage's own prompt and the row's id on the spawn spec;
+//   - a task put on a two-stage pipeline gets its tree CUT first (`ensureTree`), the path written on the row, and only
+//     then is its stage started — inside that tree, on the `existing: true` path every later stage uses;
 //   - the stage's run settling writes the row forward to the next stage and starts THAT stage in the same sweep;
 //   - the row stays OPEN until the last stage settles, and only then does the queue's own settle finish it;
 //   - a row with no pipeline is never started by the driver, and is still finished by the settle exactly as before.
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -50,7 +50,7 @@ function harness(t, { spawn = "auto" } = {}) {
   const dir = mkdtempSync(path.join(os.tmpdir(), "wtgui-pipeline-sweep-"));
   const bundleFile = path.join(dir, "pipeline-bundle.json");
   writeFileSync(bundleFile, JSON.stringify(bundleDoc));
-  const state = { board: [], started: [], rows: [] };
+  const state = { board: [], started: [], rows: [], cuts: [], tree: path.join(dir, "trees", "carry-the-contract-a1b2c3") };
   const jobs = {
     list: () => state.board,
     firstOfThread: (thread) => state.board.find((j) => j.thread === thread) || null,
@@ -61,6 +61,15 @@ function harness(t, { spawn = "auto" } = {}) {
     stop: async () => ({ ok: true }),
     get: () => null,
     clarify: { state: () => null },
+    // The cut the design makes its own step: a directory and a branch, and the artifacts both stages will settle
+    // with (a stage that ends `done` without its artifact parks, by design).
+    makeWorktree: async (repoDir, prompt) => {
+      state.cuts.push({ repoDir, prompt });
+      mkdirSync(path.join(state.tree, "out"), { recursive: true });
+      writeFileSync(path.join(state.tree, "out", "1.json"), JSON.stringify({ stage: 1 }));
+      writeFileSync(path.join(state.tree, "out", "2.json"), JSON.stringify({ stage: 2 }));
+      return { path: state.tree, branch: "wtgui/carry-the-contract-a1b2c3", startSha: "9f3c1a2" };
+    },
   };
   const assistant = new Assistant({
     config: { jobsFile: path.join(dir, "jobs.json"), assistantFile: path.join(dir, "assistant.json"), defaultCwd: dir, pipelineBundleFile: bundleFile },
@@ -68,10 +77,9 @@ function harness(t, { spawn = "auto" } = {}) {
     getProjects: () => [PROJECT],
     // The board the settle reads a tree's landing verdict from: empty until a test says the work landed.
     getRows: () => state.rows,
-    // No tree is cut: a stage that runs in the project's own checkout. It keeps this test about the pipeline, and it
-    // is the shape a stage whose work is a decision (rather than an edit) actually has.
+    // A stage that runs in the tree the cut made. It keeps this test about the pipeline rather than about git.
     spawner: async (spec) => {
-      const job = { id: `job-${state.started.length + 1}`, thread: THREAD, cwd: PROJECT.path, worktreePath: null, status: "running", startedAt: iso(T0) };
+      const job = { id: `job-${state.started.length + 1}`, thread: THREAD, cwd: spec.target, worktreePath: spec.target, status: "running", startedAt: iso(T0) };
       state.started.push(spec);
       state.board.push(job);
       return job;
@@ -92,7 +100,7 @@ function harness(t, { spawn = "auto" } = {}) {
 const putOnPipeline = (assistant, id, stageId = "S1") =>
   assistant.queueMutate("assistant-1", "pipeline", { id, pipeline: "two", stage: stageId });
 
-test("a pipeline task is started at its stage, advanced on settle, and finished by the last stage's settle", async (t) => {
+test("a pipeline task's tree is cut first, then its stage is started, advanced on settle, and finished by the last settle", async (t) => {
   const { assistant, state, rowOf, settleStarts } = harness(t);
 
   const added = assistant.queueMutate("assistant-1", "add", { title: "carry the contract", project: "agent-worktree-gui" }).task;
@@ -100,19 +108,37 @@ test("a pipeline task is started at its stage, advanced on settle, and finished 
   assert.equal(assigned.ok, true, assigned.error || "");
   assert.equal(rowOf(added.id).pipelineRun.stage, "S1");
 
-  // 1. The first sweep starts the stage that the reader put the row on, with no card and no press.
+  // 1. The first sweep ASKS for the tree: nothing is started, and the request names the row's project.
   assistant.sweepQueues();
   await settleStarts();
+  assert.equal(state.started.length, 0, "no worker is started before the tree exists");
+  assert.equal(state.cuts.length, 1, "the assistant cut exactly one tree");
+  assert.match(state.cuts[0].prompt, /Do stage 1\./);
+  let row = rowOf(added.id);
+  assert.equal(row.pipelineRun.tree.path, state.tree, "the path is written on the row BEFORE any start");
+  assert.equal(row.pipelineRun.tree.branch, "wtgui/carry-the-contract-a1b2c3");
+  assert.equal(row.state, "queued", "a cut with no start is a row with a tree and no thread — visible and re-startable");
+
+  // 2. The next sweep starts the stage IN that tree, on the existing-tree path.
+  assistant.sweepQueues();
+  await settleStarts();
+  assert.equal(state.cuts.length, 1, "the tree step is not called twice");
   assert.equal(state.started.length, 1, "the stage's worker was started");
   assert.equal(state.started[0].taskId, added.id, "the spawn names the queue row it serves");
+  assert.equal(state.started[0].target, state.tree);
+  assert.equal(state.started[0].existing, true);
   assert.match(state.started[0].prompt, /Do stage 1\./);
   assert.match(state.started[0].prompt, new RegExp(`Queue task #${added.id}: carry the contract`));
+  assert.match(state.started[0].prompt, /INPUTS\n/);
+  assert.match(state.started[0].prompt, /tree {8}.*carry-the-contract-a1b2c3/, "the prompt quotes the tree the stage inherits");
 
-  let row = rowOf(added.id);
+  row = rowOf(added.id);
   assert.equal(row.state, "running", "the cut linked the row running with its thread");
   assert.equal(row.thread, THREAD);
+  assert.equal(row.pipelineRun.stageRuns.at(-1).id, "two/S1#1");
+  assert.equal(row.pipelineRun.stageRuns.at(-1).thread, THREAD, "the entry learned its thread at the link");
 
-  // 2. The stage's run settles. The sweep writes the row forward and starts the NEXT stage in the same pass.
+  // 3. The stage's run settles. The sweep writes the row forward and starts the NEXT stage in the same pass.
   state.board[0].status = "done";
   assistant.sweepQueues();
   await settleStarts();
@@ -121,15 +147,18 @@ test("a pipeline task is started at its stage, advanced on settle, and finished 
   assert.equal(row.state, "running", "the row stays open: the pipeline has another stage");
   assert.equal(row.pipelineRun.stage, "S2", "the row was written forward a stage");
   assert.equal(row.pipelineRun.crossings.h1, 1);
+  assert.equal(row.pipelineRun.visits.S2, 1);
   assert.equal(state.started.length, 2, "the second stage was started by the panel, not left for the assistant");
   assert.match(state.started[1].prompt, /Do stage 2\./);
   assert.equal(state.started[1].taskId, added.id);
+  assert.equal(state.started[1].target, state.tree, "the second stage runs in the SAME tree");
+  assert.equal(state.cuts.length, 1, "no second tree is ever cut");
 
-  // 3. The last stage settles. The driver has nothing after it, so the queue's own settle finishes the row — the
+  // 4. The last stage settles. The driver has nothing after it, so the queue's own settle finishes the row — the
   //    same transition it has always made, on the row that is now done. The landing rule is unchanged: a row with a
   //    tree is done when that tree's PR reads MERGED.
   state.board[1].status = "done";
-  state.rows.push({ path: PROJECT.path, verdict: "MERGED" });
+  state.rows.push({ path: state.tree, verdict: "MERGED" });
   assistant.sweepQueues();
   await settleStarts();
 
@@ -138,6 +167,7 @@ test("a pipeline task is started at its stage, advanced on settle, and finished 
   assert.match(row.reason, /PR reads MERGED/, "the last stage is finished by the settle's landing rule, not by the driver");
   assert.equal(row.pipelineRun.stage, "S2", "the record still says which stage finished it");
   assert.equal(state.started.length, 2, "no third stage is invented at the end of the pipeline");
+  assert.equal(row.pipelineRun.stageRuns.at(-1).status, "done", "the last stage's run is recorded even though it moved nothing");
 
   const kinds = assistant.journal.map((line) => line.kind);
   assert.ok(kinds.includes("pipeline"), "each stage start is journalled as a pipeline act");
@@ -151,6 +181,7 @@ test("a queue row with no pipeline is not started by the driver, and settles as 
   assistant.sweepQueues();
   await settleStarts();
   assert.equal(state.started.length, 0, "no pipeline, no stage to invent: the assistant starts this row, as before");
+  assert.equal(state.cuts.length, 0, "and no tree is cut for it");
   assert.equal(rowOf(added.id).state, "queued");
 
   // The same row, worked by a SPAWN: the settle finishes it exactly as it did before the driver existed.
@@ -164,7 +195,7 @@ test("a queue row with no pipeline is not started by the driver, and settles as 
   assert.equal(rowOf(added.id).state, "done");
 });
 
-test("with the spawn switch on ask the panel does not start the stage", async (t) => {
+test("with the spawn switch on ask the panel does not start the stage, and does not cut a tree", async (t) => {
   const { assistant, state, rowOf, settleStarts } = harness(t, { spawn: "ask" });
 
   const added = assistant.queueMutate("assistant-1", "add", { title: "the asked row", project: "agent-worktree-gui" }).task;
@@ -173,6 +204,75 @@ test("with the spawn switch on ask the panel does not start the stage", async (t
   await settleStarts();
 
   assert.equal(state.started.length, 0, "the reader told the panel to ask first");
+  assert.equal(state.cuts.length, 0, "a tree is not cut for a stage nobody may start");
   assert.equal(rowOf(added.id).state, "queued");
   assert.equal(rowOf(added.id).pipelineRun.stage, "S1", "the row is still where the reader put it");
+});
+
+test("a cap park is released by the reader's action, and the row starts again", async (t) => {
+  const { assistant, state, rowOf, bundleFile, settleStarts } = harness(t);
+  // A capped loop instead of the rail: one stage back to itself through an edge with a cap of one.
+  writeFileSync(
+    bundleFile,
+    JSON.stringify({
+      bundleVersion: 1,
+      name: "loop",
+      pipelines: [
+        {
+          id: "two",
+          title: "Loop",
+          stages: [stage(1), stage(2)],
+          gates: [],
+          handoffs: [{ id: "h-back", from: "S2", to: "S1", artifact: "artifact-2", kind: "loop", cap: "1 round" }],
+        },
+      ],
+    }),
+  );
+
+  const added = assistant.queueMutate("assistant-1", "add", { title: "the looping row", project: "agent-worktree-gui" }).task;
+  putOnPipeline(assistant, added.id, "S2");
+  // The cut, then the first stage's start.
+  assistant.sweepQueues();
+  await settleStarts();
+  assistant.sweepQueues();
+  await settleStarts();
+  assert.equal(state.started.length, 1);
+
+  // Settle whatever the panel started last, then let the sweep act on it. The loop's first crossing is allowed
+  // (S2 → S1), the rail brings the row back to S2, and the second crossing is past a cap of one.
+  const runStage = async () => {
+    state.board[state.board.length - 1].status = "done";
+    assistant.sweepQueues();
+    await settleStarts();
+  };
+  await runStage(); // S2 settles → S1, crossing 1
+  assert.equal(rowOf(added.id).pipelineRun.stage, "S1");
+  assert.equal(rowOf(added.id).pipelineRun.crossings["h-back"], 1);
+  await runStage(); // S1 settles → S2 (the rail)
+  assert.equal(rowOf(added.id).pipelineRun.stage, "S2");
+  await runStage(); // S2 settles → the cap is hit
+  let row = rowOf(added.id);
+  assert.equal(row.state, "parked");
+  assert.equal(row.pipelineRun.waitingFor.kind, "cap");
+
+  // A requeue alone is not a release: the count is still at the cap, so the re-run parks again. (The start marker
+  // from the parked stage is moved past its grace the way a real reader's requeue minutes later would be.)
+  assistant.clock = () => T0 + 4 * 60 * 1000;
+  assistant.queueMutate("assistant-1", "state", { id: added.id, state: "queued" });
+  assistant.sweepQueues();
+  await settleStarts();
+  const restarted = state.started.length;
+  state.board[state.board.length - 1].status = "done";
+  assistant.sweepQueues();
+  await settleStarts();
+  assert.equal(state.started.length, restarted, "the requeue's re-run settles and is not started again");
+  assert.equal(rowOf(added.id).state, "parked", "the count did not move, so the cap parks it again");
+
+  // The reader's release resets the edge, and the next settle crosses it.
+  const released = assistant.queueMutate("assistant-1", "pipeline-release", { id: added.id, release: "cap" });
+  assert.equal(released.ok, true, released.error || "");
+  row = rowOf(added.id);
+  assert.equal(row.pipelineRun.crossings["h-back"], 0);
+  assert.equal(row.pipelineRun.stageRuns.at(-1).decision.by, "reader");
+  assert.equal(row.pipelineRun.stageRuns.at(-1).decision.fact.kind, "cap-release");
 });

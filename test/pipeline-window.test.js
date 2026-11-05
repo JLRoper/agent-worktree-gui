@@ -251,3 +251,41 @@ test("the window is a value: the task record it was given is untouched and the m
   assert.equal(JSON.stringify(record), before, "the record the panel is holding is not mutated");
   assert.deepEqual(JSON.parse(JSON.stringify(w)), w, "the model crosses the route as it was built");
 });
+
+test("the window hands the flow the ledger's own marks: which stages RAN, this visit, and the decision", () => {
+  const run = {
+    pipeline: "poc-to-uat",
+    stage: "S3",
+    enteredAt: ENTERED,
+    visits: { S1: 1, S2: 1, S3: 2 },
+    crossings: { "h-back": 1 },
+    via: "h-back",
+    stageRuns: [
+      { id: "poc-to-uat/S1#1", stage: "S1", visit: 1, thread: "t1", status: "done" },
+      { id: "poc-to-uat/S2#1", stage: "S2", visit: 1, thread: "t2", status: "done" },
+      // The decision the panel made about the stage the row is in, carried on its entry.
+      { id: "poc-to-uat/S3#2", stage: "S3", visit: 2, thread: null, status: null, decision: { by: "panel", trigger: "stage-settled", code: null, fact: { kind: "run-status" }, reason: "stage S2 settled — the run finished" } },
+      // A start that was asked for and refused: an entry, but nothing ran.
+      { id: "poc-to-uat/S4#1", stage: "S4", visit: 1, thread: null, status: null, decision: null },
+    ],
+  };
+  const w = build(task({ pipelineRun: run }));
+  assert.equal(w.visit, 2, "the second entry into S3 is a visit, not a reset");
+  assert.equal(w.stageRun, "poc-to-uat/S3#2");
+  assert.equal(w.current.visit, 2);
+  assert.equal(w.runs.length, 4, "the ledger crosses the route as it was written");
+  assert.equal(w.decision.reason, "stage S2 settled — the run finished");
+  // `position` is the object the drawing reads. `ran` comes from the LEDGER, not from an index: S4 has an entry but no
+  // thread and no status, so nothing claims it ran, and S3 is the stage the row is in.
+  assert.deepEqual(w.position.ran, ["S1", "S2", "S3"]);
+  assert.equal(w.position.stage, "S3");
+  assert.deepEqual(w.position.crossings, { "h-back": 1 });
+  assert.equal(w.position.via, "h-back");
+
+  // A record from before the ledger has no position evidence: `ran` is absent, and the drawing keeps its index
+  // fallback rather than being handed an empty list that would mean "nothing ran".
+  const legacy = build();
+  assert.equal(legacy.position.ran, undefined);
+  assert.equal(legacy.visit, 1, "a legacy record still reads one visit of the stage it is in");
+  assert.deepEqual(legacy.runs, []);
+});

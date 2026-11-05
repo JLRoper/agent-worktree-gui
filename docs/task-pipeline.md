@@ -25,6 +25,44 @@ The queue's schema carries the record **verbatim** (`pickTask`, `lib/assistant/q
 malformed assignment must reach the window as `unresolved`; normalising it away in the queue would silently put the task
 back on the default path.
 
+### The record grows a stage run and a tree
+
+A row that is being driven carries more than the three fields. Each entry into a stage is a **stage run**, and the
+record keeps the ledger of them:
+
+```json
+{
+  "pipeline": "poc-to-uat", "stage": "S8", "enteredAt": "2026-11-05T12:00:00.000Z",
+  "visits": { "S3": 1, "S4": 1, "S8": 2 },
+  "tree": { "path": "<repo>/.worktrees/carry-the-contract-a1b2c3", "branch": "wtgui/carry-the-contract-a1b2c3",
+            "startSha": "9f3c1a2", "cutAt": "2026-11-05T11:02:44.100Z", "by": "panel" },
+  "route": "sha256:6b1f…",
+  "stageRuns": [
+    { "id": "poc-to-uat/S8#1", "stage": "S8", "visit": 1, "at": "…", "thread": "carry the form", "job": "job-4f2a",
+      "status": "done", "settledAt": "…",
+      "tree": { "path": "…", "branch": "…", "head": "1c9f0aa", "dirty": 0 },
+      "artifact": { "id": "finding", "path": "ledger/G58.json", "present": true, "sha256": "3d0e91…" },
+      "decision": { "by": "panel", "trigger": "stage-settled", "code": null, "fact": { "kind": "run-status", "status": "done" }, "reason": "stage S8 of poc-to-uat settled — the run finished" } }
+  ]
+}
+```
+
+- **The id is a string, `<pipeline>/<stage>#<visit>`.** `visit` comes from `visits[stage]`, incremented by the same
+  write that sets `enteredAt` — so a loop back into S8 is `#2`, the first entry is still `#1`, and a bundle re-export
+  that inserts a stage renumbers nothing. Every user of the id (a journal line, a park's sentence, a test) names the
+  same thing.
+- **An entry is created when the START is asked for**, not when it settles: a stage that never started still names the
+  attempt, and a start that was refused leaves its refusal on the record. `thread` and `job` are filled at the link.
+  A retry of the same visit reuses the entry — a retry is an attempt, not a visit.
+- **`stageRuns` is capped at 30, newest last, and the cap is the WRITER's** (`lib/task-pipeline.js`), because
+  `pickTask` carries the record verbatim. A dropped entry increments `runsDropped`, the one number the cap must not lose.
+- **A record written before this existed reads as one visit of its stage**, an empty ledger and `route: null`. Nothing
+  is written back on a read; `route: null` means "entered before the fingerprint existed" and is never a mismatch.
+- **`tree` is written at the cut** (see below) and **`route` is the routing fingerprint at entry**: a sha256 over the
+  stage ids in order, each handoff's ends/kind/cap, and each gate's anchor/artifact/kind. Editing a prompt or a title
+  does not move it; editing the graph does, and the row parks `pipeline-changed` rather than being driven against a
+  graph it did not enter under.
+
 ## Three answers, and no fourth
 
 `lib/task-pipeline.js` resolves a record against a loaded bundle:
@@ -69,14 +107,21 @@ Assigning a pipeline is not a label any more: a row that carries one is **driven
 queue's own tick — asks `lib/task-pipeline-drive.js` three questions about every queue, and acts on the answers:
 
 - **what starts.** The row at the FRONT of the queue (`byQueueOrder` over the queued and running rows), when it
-  carries a pipeline that resolves. The stage's prompt is the turn; it runs in the row's tree when the row has one and
-  in its project when it does not. A row with NO pipeline is not started here and has no stage invented for it — that
-  row is the assistant's to start, exactly as it was before this driver existed.
+  carries a pipeline that resolves. Its tree is **cut first**, as its own step (§ below): the assistant's `ensureTree`
+  cuts it and writes `pipelineRun.tree` on the row, and the NEXT pass starts the stage in that tree — so every stage
+  start is the `existing: true` path, whether it is the first stage or the tenth. The stage's prompt is the turn, plus
+  the INPUTS block: the handoff's artifact by path and hash, the gate it came back through, the earlier visit's artifact
+  on a loop back, and the tree's branch/HEAD/dirty count. A row with NO pipeline is not started here and has no stage
+  invented for it — that row is the assistant's to start, exactly as it was before this driver existed.
 - **what moves.** A `running` row whose current thread is not live and whose last run reads `done` has settled its
-  STAGE. The row is written forward to the next stage in one write — `queued`, a fresh `enteredAt`, and the edge it
-  crossed counted in `crossings` — and the settle does not see it again until that stage has a run of its own.
-- **what stops it.** A capped loop at its cap, a gate that declares a decision record, a failed run, or an assignment
-  the bundle cannot resolve. Each is a value with a named code; the row parks on the sentence, or stays unresolved.
+  STAGE. The row is written forward to the next stage in one write — `queued`, a fresh `enteredAt`, the visit counted,
+  and the edge it crossed counted in `crossings` — and the settle does not see it again until that stage has a run of
+  its own.
+- **what stops it.** A capped loop at its cap, a gate that declares a decision record, a failed run, a declared
+  artifact that is not in the tree, a tree that is gone or claimed by another row, a routing change, or an assignment
+  the bundle cannot resolve. Each is a named code and a structured decision on the stage run; the row parks on the
+  rendered sentence. `unresolved` **parks** — it is a fact about a written record, not an empty state, and leaving the
+  row sitting still was the old behaviour.
 
 Unattended starts are the assistant's own switch (`spawn`, in Settings → Assistant): **`auto`** is "start it at once"
 and is the only value the driver starts a stage under. `ask` and `off` still let a settled row advance — the work is
@@ -97,7 +142,81 @@ parks naming the path, the wait is kept on the record (`pipelineRun.waitingFor`)
 moves it** — the panel never writes that file, never reads its value, and never decides the gate by finishing the
 stage before it.
 
+### The tree: one per row, cut once, reused by every stage
+
+**A pipeline row works in ONE tree. It is cut before the first stage starts, and every later stage — including every
+pass round a loop — starts a new agent in that same tree.** The pipeline never cuts a second tree and never retires one.
+
+- The driver returns `ensureTree = { taskId, project, prompt }`; the Assistant's `cutPipelineTree` calls the job store's
+  own `makeWorktree`, writes `pipelineRun.tree = { path, branch, startSha, cutAt, by }` on the row, and journals it.
+  Nothing is started by that step: a cut with no start is a row with a tree and no thread — visible, named, re-startable.
+  A cut that fails parks the row with the cut's own sentence.
+- The lookup is a sequence of three answers and then a park: `pipelineRun.tree.path`, then the most recent
+  `stageRuns[].tree.path` that still exists on disk (the ledger wins when the two disagree), then `task.worktree`. None
+  of them existing is `pipeline-tree-gone`, **never** a second cut and never the project checkout — the panel does not
+  start a stage beside the work the earlier visits left behind.
+- A tree path is claimed by every OPEN row whose run tree or `worktree` normalises to it (case-insensitively, across
+  every assistant's queue). A start whose tree is claimed by a DIFFERENT open row parks `pipeline-tree-claimed`, naming
+  the other row: two stages in one tree is the one collision that corrupts work silently.
+
+The cost, stated plainly: a stage cannot be isolated from the previous stage's mess. That is the right default for a
+review-fix loop and the wrong one for a stage that needs a clean base; the design records that as an open question.
+
+### The artifact: one new hard gate
+
+Every bundle stage declares an artifact with an id, a path and a writer. When a stage settles `done`, the driver resolves
+that path against the tree with the same `{{hole}}` matcher a gate's decision path uses, and records
+`artifact { id, path, present, sha256 }` on the stage run. **Absent → the row parks `pipeline-artifact`**, naming the
+path and the handoff that now has nothing to pass. Files over 1 MiB record `present` only (hashing a huge log in a sweep
+is a stall). A loop-back visit whose artifact hash is identical to the earlier visit's is recorded `unchanged: true` — a
+visible fact, not a park. The check is made when the row has a tree; a row with nowhere to resolve records that it could
+not check rather than inventing a park.
+
+### Park or start: the decision a person can read
+
+Every park and every move writes a `decision` on the stage run it is about:
+
+```json
+"decision": { "by": "panel", "trigger": "stage-settled", "code": "pipeline-artifact", "at": "…",
+  "fact": { "kind": "artifact", "id": "finding", "path": "ledger/G58.json", "present": false, "handoff": "H-9" },
+  "reason": "stage S7 settled — its artifact finding (ledger/G58.json) is not in the tree, so handoff H-9 has nothing to pass" }
+```
+
+`reason` is RENDERED from `fact` by one function (`renderDecision`), so the row's reason, the journal line and the
+window cannot drift apart. `by` is who performed the transition (`panel`, `reader`, `assistant`); `trigger` is what made
+it legitimate; `fact` is structured and small.
+
+| code | when | the row reads |
+|---|---|---|
+| `pipeline-gate` | the gate after the settled stage has no decision record | the gate, the path, and that the code does not decide it |
+| `pipeline-artifact` | the stage's declared artifact is not in the tree | the artifact id, the path, the handoff |
+| `pipeline-run-failed` | the stage's run ended failed/interrupted/stopped | the status and the run's last words |
+| `pipeline-cap` | a loop at or past its cap, or a cap that cannot be read | the edge, `used of limit`, or why the cap is unreadable |
+| `pipeline-tree-gone` | the row had a tree and it is no longer there | the path, and the visit that last used it |
+| `pipeline-tree-claimed` | another open row claims the same tree | the other row's id and title |
+| `pipeline-unresolved` | the record names a pipeline or stage the bundle does not hold | the contract's own sentence |
+| `pipeline-changed` | the routing fingerprint moved since the row entered | both fingerprints |
+| `pipeline-start-refused` | the spawner or the cut refused | the refusal, and that nothing was started |
+| `pipeline-starting` | a start is in flight inside the grace | a note only, never a park |
+
+### Releasing a park
+
+A park is a `manual` hold, and the panel never releases one on its own. Two parks need a named release, and both are
+queue actions:
+
+- `POST /api/assistant/queue` with `{ action: "pipeline-release", id, release: "cap" }` — **resets that edge's
+  `crossings` to 0** and writes a `reader` decision with `fact: {kind: "cap-release", edge, from, to, was}`. Without the
+  reset a requeue re-parks on the very next settle, because the count is compared as `used + 1 > limit` and a requeue
+  never resets it. That is the cap-release defect the design names: a cap park is unreleasable by requeue alone.
+- `{ action: "pipeline-release", id, release: "route" }` — re-stamps `pipelineRun.route` at the current stage and moves
+  nothing else, so a deliberate re-export can be acknowledged row by row.
+
+Every other park is released by fixing the fact: write the decision record, repair the tree, fix the record or the
+bundle, start the worker by hand.
+
 ### What the last stage does, and what stays open
+
+
 
 The settle's landing rule is unchanged. At the last stage the driver has nothing to advance to, so the queue's own
 settle finishes the row: a row with a tree is `done` when that tree's PR reads **MERGED**, and a row with no tree is
@@ -108,9 +227,13 @@ has actually landed — the same bar every other row has.
 
 | key | written when | cleared |
 |---|---|---|
-| `pipelineRun.crossings` | an edge is crossed | never — a new assignment starts a new record |
-| `pipelineRun.startingAt` | the stage's worker is asked for | when the row moves to another stage |
-| `pipelineRun.waitingFor` | a gate stops the row | when the decision record arrives |
+| `pipelineRun.visits` | a stage is entered (assign, move, loop) | never within the same pipeline; a new pipeline starts a new record |
+| `pipelineRun.stageRuns` | a start is asked for; filled at the link and at the settle | trimmed to 30 by the writer, `runsDropped` counts the loss |
+| `pipelineRun.tree` | the tree is cut | never by the pipeline — the reader deletes the tree, the record keeps the path |
+| `pipelineRun.route` | a stage is entered | re-stamped by the reader's `route` release |
+| `pipelineRun.crossings` | an edge is crossed | reset by the reader's `cap` release; a new pipeline starts a new record |
+| `pipelineRun.startingAt` | the stage's worker is asked for | when the row moves to another stage, or on a `cap` release |
+| `pipelineRun.waitingFor` | a gate, a cap or a routing change stops the row | when the record arrives (gate), on the release (cap, route) |
 
 `startingAt` exists because the tick is faster than a spawn: the sweep asks for a stage's worker, the spawner takes
 longer than one tick (a gateway probe, a `git worktree add`, the start), and without the marker the next pass would
@@ -145,6 +268,7 @@ the reader can fix; pretending the assignment was the default path would silentl
 4. the row's chip updates; reopen the window to see the stage marked `position of 13`, the moment it began, and the
    elapsed span — recomputed on open, and ticked while the window is open
 5. **clear** sends it back to the default path
-6. with the assistant's `spawn` switch on **auto**, the row at the front of the queue is started by the panel at its
-   stage, and each stage that settles writes the row forward to the next one; on **ask** or **off** the row advances the
-   same way but waits for you to start it, which is what those settings say
+6. with the assistant's `spawn` switch on **auto**, the row at the front of the queue has its tree cut first, then is
+   started by the panel at its stage; each stage that settles writes the row forward to the next one in the same tree,
+   and a stage that cannot start, cannot find its artifact, or finds a tree claimed by another row parks with a named
+   reason. On **ask** or **off** the row advances the same way but waits for you to start it, and no tree is cut.
