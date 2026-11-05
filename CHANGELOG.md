@@ -11,26 +11,27 @@ Pass that version here and read only what came after it:
 npm run changelog -- --since v0.80.0
 ```
 
-302 releases from v0.1.0 (2026-10-20) to v1.17.3 (2026-11-05), 1050 commits between the tags. Every release is anchored by an
+302 releases from v0.1.0 (2026-10-20) to v1.17.3 (2026-11-05), 1051 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
 
-## v1.17.3 — 2026-11-05 · 4 commits
+## v1.17.3 — 2026-11-05 · 5 commits
 
-[`a4825cd`](https://github.com/JLRoper/agent-worktree-gui/commit/a4825cdfb6511707e880e48de456d814005839ca) · [compare v1.17.2...v1.17.3](https://github.com/JLRoper/agent-worktree-gui/compare/v1.17.2...v1.17.3)
+[`2fc3315`](https://github.com/JLRoper/agent-worktree-gui/commit/2fc33152ec09acf8f9845e5780e978f697908b27) · [compare v1.17.2...v1.17.3](https://github.com/JLRoper/agent-worktree-gui/compare/v1.17.2...v1.17.3)
 
 ### Fixed
 
-- fix: the gate measures the popover after the header settles ([`ca22644`](https://github.com/JLRoper/agent-worktree-gui/commit/ca22644ec3ed36cca062451a7f54cf13c043bae9))
+- fix: the gate measures the popover after the header settles ([`611b01e`](https://github.com/JLRoper/agent-worktree-gui/commit/611b01e9e295c56292245702f646a76b54d95b5a))
 
 ### Docs & tests
 
 - docs: render the changelog — 301 releases ([`dd0b571`](https://github.com/JLRoper/agent-worktree-gui/commit/dd0b571bf17bdc4a8a1e7819f927fc726a66c08d))
-- docs: the origin-main screenshot, and where it came from ([`d27b2ed`](https://github.com/JLRoper/agent-worktree-gui/commit/d27b2eda399babc14ac6e3f2a0b4676742a28599))
+- docs: render the changelog — 301 releases ([`bee96fa`](https://github.com/JLRoper/agent-worktree-gui/commit/bee96fa16347829e909438dbd8cbe4fa94c9846d))
+- docs: the origin-main screenshot, and where it came from ([`23939ce`](https://github.com/JLRoper/agent-worktree-gui/commit/23939cec3dcd04c200e2090b70ccfc35e825ef16))
 
 ### Other
 
-- chore: 1.17.3 — the version this landing carries ([`a4825cd`](https://github.com/JLRoper/agent-worktree-gui/commit/a4825cdfb6511707e880e48de456d814005839ca))
+- chore: 1.17.3 — the version this landing carries ([`2fc3315`](https://github.com/JLRoper/agent-worktree-gui/commit/2fc33152ec09acf8f9845e5780e978f697908b27))
 
 ## v1.17.2 — 2026-11-05 · 4 commits
 
