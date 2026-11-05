@@ -16,14 +16,16 @@
 // over a real `Deliverables` store), the list is read from the panel's own `GET`, and the open is the panel's own
 // `POST`. The page's own request is only OBSERVED (`page.on("request")`), never fulfilled.
 //
-// THE HEADER MOVES ON ITS OWN CLOCK, AND THE POPOVER IS POSITIONED ONCE. `#stream-rate` is written by a 1 s clock
-// (`public/app.js:14772`) and is the last thing that reflows the controls: when it lands, the button moves 105 px
-// right (236 → 341 at 1440 px wide). A popover opened before that is positioned from the old box and is left behind
-// its anchor — which is the flake this gate used to report as "one edge aligned" (top 82 vs button bottom 76,
-// left/right 236/796 vs button 341/440). So the gate waits for the header to settle before it opens the list, and
-// asserts the relationship that matters — below the button, anchored to it, inside the card — rather than a
-// pixel-exact edge. PANEL_GATE_MOVE_POPOVER=1 moves the popover off its anchor so that check can be seen to fail;
-// breaking the page is the only thing the switch does, and it can never make a failing check pass.
+// THE HEADER USED TO MOVE ON ITS OWN CLOCK. `#stream-rate` is written by a 1 s clock, and while the action group was
+// content-sized every extra character in that line pushed `#btn-deliver` right (measured 105 px the first time the
+// line landed, 236 → 341 at 1440 px wide). A popover opened before that was positioned from the old box and left
+// behind its anchor — the flake this gate used to report as "one edge aligned". style.css now pins the group: it
+// fills the row and packs the buttons to the right edge, so the status line's length is not a layout input. The
+// zero-movement contract is gated by tools/verify-deliverables-stable.mjs; the settle-wait below stays as a cheap
+// guard for the first paint, and this gate still asserts the relationship that matters — below the button, anchored
+// to it, inside the card — rather than a pixel-exact edge. PANEL_GATE_MOVE_POPOVER=1 moves the popover off its
+// anchor so that check can be seen to fail; breaking the page is the only thing the switch does, and it can never
+// make a failing check pass.
 //
 // ONE SIDE EFFECT, DELIBERATELY. `POST /api/deliverables/open` for a file spawns `explorer.exe` on this box: the kit
 // boots `server.js` as a child and the route calls `spawn` inline, so there is no process seam — and inventing one
@@ -310,20 +312,24 @@ try {
     eq("the button says it is closed", header.expanded, "false");
 
     // ---- 1b. the badge: rows ABOVE the watermark, a class for the highlight, the number in the aria-label -------
-    await page.waitForFunction(() => !document.getElementById("deliver-badge").hidden, null, { timeout: 10_000 });
+    // The pill is CREATED by the page when there is something unseen (it is not in the markup: a zero count is not a
+    // node), so the wait is for the node itself, not for it to be unhidden.
+    await page.waitForFunction(() => Boolean(document.getElementById("deliver-badge")), null, { timeout: 10_000 });
     const badge = await page.evaluate(() => {
       const btn = document.getElementById("btn-deliver");
       const pill = document.getElementById("deliver-badge");
+      const r = pill.getBoundingClientRect();
       return {
         text: (pill?.textContent || "").trim(),
-        hidden: Boolean(pill?.hidden),
+        present: Boolean(pill),
+        geometry: { w: r.width, h: r.height },
         cls: btn.classList.contains("has-unseen"),
         style: btn.getAttribute("style") || "",
         label: btn.getAttribute("aria-label") || "",
       };
     });
     eq("the badge counts only rows ABOVE the watermark, never everything kept", badge.text, "199");
-    eq("…and it is shown", badge.hidden, false);
+    ok("…and it is a real pill in the button, not a 0x0 span", badge.present && badge.geometry.w > 0 && badge.geometry.h > 0, JSON.stringify(badge.geometry));
     ok("the button wears the highlight as a class", badge.cls);
     ok("…carried by the class, not an inline style", !/background|border-color/.test(badge.style), badge.style || "(no style attribute)");
     ok("the aria-label carries the number — a coloured dot is not a notification", /199 new deliverables/.test(badge.label), badge.label);
@@ -367,26 +373,28 @@ try {
     eq("D opens the list", await page.evaluate(() => document.getElementById("btn-deliver").getAttribute("aria-expanded")), "true");
     eq("the popover is the live list", await page.evaluate(() => document.getElementById("dl-list").getAttribute("role")), "listbox");
     ok("focus lands in the filter", await page.evaluate(() => document.activeElement?.id === "dl-filter"));
-    // The open has already cleared the badge, and it posted the watermark ONCE — the newest seq, nothing else.
-    await page.waitForFunction(() => document.getElementById("deliver-badge").hidden, null, { timeout: 5_000 });
+    // The open has already cleared the badge — and clearing it REMOVES the node, so the wait is for its absence.
+    await page.waitForFunction(() => !document.getElementById("deliver-badge"), null, { timeout: 5_000 });
     eq("opening the list records the watermark once, with the newest seq", seenPosts, [{ seq: newestSeq }]);
     const clearedBadge = await page.evaluate(() => {
       const btn = document.getElementById("btn-deliver");
       return {
         cls: btn.classList.contains("has-unseen"),
-        hidden: document.getElementById("deliver-badge").hidden,
+        present: Boolean(document.getElementById("deliver-badge")),
+        text: btn.textContent.trim(),
         label: btn.getAttribute("aria-label") || "",
       };
     });
-    eq("…the badge and the highlight are gone", { cls: clearedBadge.cls, hidden: clearedBadge.hidden }, { cls: false, hidden: true });
+    eq("…the badge node and the highlight are gone", { cls: clearedBadge.cls, present: clearedBadge.present }, { cls: false, present: false });
+    eq("…and the button's own text is exactly the label", clearedBadge.text, "DELIVERABLES");
     ok("…and the aria-label stops claiming anything is new", !/new deliverable/.test(clearedBadge.label), clearedBadge.label);
     // THE NEXT POLL: the page's own read again. A GET that answered just before the POST landed must not re-light it,
     // which is what taking the max of the store's watermark and this page's own is for.
     await page.evaluate(() => deliverFetch({ quiet: true }));
     eq("the next poll does not flicker it back on", await page.evaluate(() => {
       const btn = document.getElementById("btn-deliver");
-      return { cls: btn.classList.contains("has-unseen"), hidden: document.getElementById("deliver-badge").hidden };
-    }), { cls: false, hidden: true });
+      return { cls: btn.classList.contains("has-unseen"), present: Boolean(document.getElementById("deliver-badge")) };
+    }), { cls: false, present: false });
     await page.keyboard.press("Escape");
     await page.waitForSelector("#deliver-pop[hidden]", { state: "attached", timeout: 5_000 });
     ok("Esc closes it and puts focus back on the button", await page.evaluate(() => document.getElementById("deliver-pop").hidden === true && document.activeElement?.id === "btn-deliver"));
@@ -685,7 +693,7 @@ try {
       { seenSeq: seenBefore, unseenCount: 1 },
     );
     await openPage(page, restartedPanel.base, { selector: "#btn-deliver" });
-    await page.waitForFunction(() => !document.getElementById("deliver-badge").hidden, null, { timeout: 10_000 });
+    await page.waitForFunction(() => Boolean(document.getElementById("deliver-badge")), null, { timeout: 10_000 });
     const relit = await page.evaluate(() => ({
       text: document.getElementById("deliver-badge").textContent.trim(),
       cls: document.getElementById("btn-deliver").classList.contains("has-unseen"),
@@ -700,7 +708,7 @@ try {
     // The SECOND door: a press on the badge writes the SAME watermark through the same route, and never opens the list.
     seenPosts.length = 0;
     await page.click("#deliver-badge");
-    await page.waitForFunction(() => document.getElementById("deliver-badge").hidden, null, { timeout: 5_000 });
+    await page.waitForFunction(() => !document.getElementById("deliver-badge"), null, { timeout: 5_000 });
     eq("the badge's dismiss posts the same watermark, once", seenPosts, [{ seq: freshSeq }]);
     ok(
       "…without opening the list",
@@ -710,7 +718,7 @@ try {
     );
     ok("…and the highlight goes with it", await page.evaluate(() => !document.getElementById("btn-deliver").classList.contains("has-unseen")));
     await page.evaluate(() => deliverFetch({ quiet: true }));
-    ok("…and the next poll keeps it cleared", await page.evaluate(() => document.getElementById("deliver-badge").hidden === true));
+    ok("…and the next poll keeps it cleared", await page.evaluate(() => !document.getElementById("deliver-badge") && document.getElementById("btn-deliver").textContent.trim() === "DELIVERABLES"));
     const dismissed = await getJson(restartedPanel.base);
     eq(
       "the store holds the dismissed watermark: nothing above it",

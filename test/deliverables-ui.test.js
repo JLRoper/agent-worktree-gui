@@ -33,11 +33,14 @@ test("the header carries one DELIVERABLES button, between HUMAN and Collapse all
   assert.match(tag, /type="button"/, "a header control is a plain button");
   // The plan's word, and no PERMANENT count: this is an archive, not a queue (§5.1, "No badge").
   assert.match(tag, />\s*<span id="deliver-label">DELIVERABLES<\/span>/, "the label is DELIVERABLES, in its own span so the badge can sit beside it");
-  // The plan's "No badge" still means no permanent count: the badge ships `hidden` and the page paints it ONLY while
-  // rows sit above the reader's persisted watermark — outstanding, not a total of the archive (§5.1, the seen
-  // watermark's addition in 1.9.0).
-  assert.match(tag, /<span id="deliver-badge"[^>]*\bhidden\b/, "the badge is hidden in the markup — never a permanent count");
-  assert.match(tag, /class="deliver-badge"/, "…and it is the node the page paints");
+  // The plan's "No badge" means no permanent count, and the zero case is now a REMOVAL rather than a hidden node: a
+  // span that ships with "0" in it and is merely hidden still reads as part of the button ("DELIVERABLES0") and
+  // measured 0x0 at (0,0). The markup therefore carries NO badge at all; public/app.js creates the pill only while
+  // rows sit above the reader's persisted watermark and removes it when the count is zero.
+  assert.doesNotMatch(tag, /id="deliver-badge"/, "the markup carries no badge — a zero count is not a node");
+  assert.doesNotMatch(tag, /deliver-badge/, "…and no dead span of any kind inside the button");
+  assert.match(app, /function paintDeliverBadge\(\)[\s\S]{0,900}?document\.createElement\("span"\)[\s\S]{0,400}?badge\.id = "deliver-badge"/, "the page creates the pill when there is something unseen");
+  assert.match(app, /function paintDeliverBadge\(\)[\s\S]{0,1400}?badge\.remove\(\)/, "…and removes it when the count is zero");
   // The title has to say what the click does and that D is the key, because that sentence is the only
   // documentation a reader gets before the popover exists.
   assert.match(tag, /title="[^"]*every deliverable[^"]*"/i, "the title says what the list is");

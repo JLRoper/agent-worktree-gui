@@ -523,7 +523,7 @@ test("POST /api/deliverables/seen is a token-carrying write beside the open, and
   assert.match(app, /function deliverUnseenCount\(\)[\s\S]{0,200}?Number\(e\.seq\) > floor/, "the count is rows ABOVE the watermark");
   assert.match(app, /classList\.toggle\("has-unseen"/, "the highlight is a class, not an inline style");
   assert.match(app, /apiFetch\("\/api\/deliverables\/seen"/, "the page posts the watermark");
-  assert.match(app, /\$\("deliver-badge"\)\?\.addEventListener\("click"[\s\S]{0,200}?deliverMarkSeen\(\)/, "the dismiss is the same mechanism");
+  assert.match(app, /const deliverBtn = \$\("btn-deliver"\)[\s\S]{0,600}?closest\?\.\("#deliver-badge"\)[\s\S]{0,200}?deliverMarkSeen\(\)/, "the dismiss is the same mechanism, delegated because the pill exists only while something is unseen");
   assert.match(app, /function openDeliverPop\(\)[\s\S]{0,900}?deliverMarkSeen\(\)/, "opening the list writes it too");
   assert.match(app, /aria-label[\s\S]{0,200}?new deliverable/, "the aria-label carries the number");
 });

@@ -107,8 +107,16 @@ button, select, input, textarea { font-family: var(--ui); }
 .dot.bad { background: var(--red); box-shadow: 0 0 8px #e5534b80; }
 .dot.warn { background: var(--amber); box-shadow: 0 0 8px #d2992280; }
 
-.controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* The action group FILLS the header's free width and packs its buttons to the right edge. That is not a look — it
+   is what pins them: the status line beside them (`#stream-rate`) is rewritten by a 1 s clock and grows a character
+   as its numbers do, and while the group was content-sized every one of those characters pushed `#btn-deliver` right
+   (measured: 654.25 -> 660.84 on one extra digit, 588.28 -> 660.84 when the pool clause first arrived). Growing the
+   group instead of the line means the line can say anything and the buttons do not move. */
+.controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex: 1 1 auto; min-width: 0; justify-content: flex-end; }
 .meta { color: var(--dim); font-size: 12px; font-family: var(--mono); }
+/* The status line takes the row's free space and ellipsizes when there is none, so its own length is never a layout
+   input for the buttons after it. `font-variant-numeric` keeps the digits from jittering inside the box. */
+#stream-rate { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }
 
 /* zoom control: the page owns a scale factor so Ctrl +/- keeps working inside a host that
    swallows the browser's own zoom shortcuts */
@@ -137,13 +145,14 @@ button, select, input, textarea { font-family: var(--ui); }
 #btn-deliver.has-unseen:hover { border-color: #4d8a67; background: #19301f; }
 #btn-deliver[aria-expanded="true"] { border-color: #3b5680; background: #1b2534; color: #cfe6ff; }
 #btn-deliver[aria-expanded="true"]:hover { background: #223047; }
+/* The pill exists only while something is unseen: public/app.js creates it with a real count and REMOVES it when the
+   count is zero, so the button's text is never "DELIVERABLES0" and there is no dead 0x0 span inside the control. */
 #deliver-badge {
   display: inline-block; min-width: 17px; height: 17px; padding: 0 4px;
   border-radius: 9px; background: #3f9d6b; color: #fff; cursor: pointer;
   font: 700 10.5px/17px var(--ui); text-align: center;
   box-shadow: 0 0 0 1px #3f9d6b55;
 }
-#deliver-badge[hidden] { display: none; }
 
 /* The question a HUMAN hop landed on: a red ring, on the prompt box itself, that dies back to the box's own
    border. It rides beside the amber card ring HUMAN also draws, so "this agent" and "this box" are two different
