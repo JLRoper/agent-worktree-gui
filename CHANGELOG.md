@@ -4,32 +4,54 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.16.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.16.2 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-297 releases from v0.1.0 (2026-10-20) to v1.16.0 (2026-11-05), 1024 commits between the tags. Every release is anchored by an
+298 releases from v0.1.0 (2026-10-20) to v1.16.2 (2026-11-05), 1033 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
 
-## v1.16.0 — 2026-11-05 · 3 commits
+## v1.16.2 — 2026-11-05 · 9 commits
 
-[`4542084`](https://github.com/JLRoper/agent-worktree-gui/commit/4542084c3c12b908b56ff3dc5fb674ebc6f01729) · [compare v1.15.3...v1.16.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.15.3...v1.16.0)
+[`e33ec71`](https://github.com/JLRoper/agent-worktree-gui/commit/e33ec71fc83e2251d6efebbea87942c2a057aae0) · [compare v1.16.0...v1.16.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.16.0...v1.16.2)
 
-### Added
+### Fixed
 
-- feat: the Assistant Director — a 20-minute cross-queue pass with two powers ([`a74cf83`](https://github.com/JLRoper/agent-worktree-gui/commit/a74cf83ff5ee5c83656df3601380a9c79d3b38fe))
+- fix: an assistant-to-assistant message is the assistant's, not the reader's ([`e2be569`](https://github.com/JLRoper/agent-worktree-gui/commit/e2be5697c49f85c2ea23629a1730395b71673dfc))
 
 ### Docs & tests
 
-- docs: the Assistant Director's proof — the running panel, the tab and the suite ([`dc5afe5`](https://github.com/JLRoper/agent-worktree-gui/commit/dc5afe507b148a741aee82ba7b11d3b9757a498e))
+- docs: the report's transcript names a sandbox, not this machine's temp folder ([`3c55fc6`](https://github.com/JLRoper/agent-worktree-gui/commit/3c55fc6ed45e6486143c6ede83030110092284ab))
+- docs: the changelog is rendered through v1.16.0 ([`48534d1`](https://github.com/JLRoper/agent-worktree-gui/commit/48534d1a92f70405d5a64f9a9caeb04815133c28))
+- docs: the report names the branch it was proved on ([`1586ba0`](https://github.com/JLRoper/agent-worktree-gui/commit/1586ba08a45e01bfee55581d1baaf04909fc20c3))
+- docs: the changelog follows the branch to v1.16.0 ([`a012fc7`](https://github.com/JLRoper/agent-worktree-gui/commit/a012fc71c7832e5a7052243dfbb8d0d5d7b05967))
+- docs: the report names the proof, not a commit that a rebase will replace ([`ab54933`](https://github.com/JLRoper/agent-worktree-gui/commit/ab5493312050e948b30222ff0e89ac61b3dab818))
+- docs: the changelog catches up again ([`5388de9`](https://github.com/JLRoper/agent-worktree-gui/commit/5388de9d3111e755a63cf9cc5f99a6e37b23b23c))
+- docs: the DELIVERABLES popup's Open, judged by the live store ([`1ce1d7d`](https://github.com/JLRoper/agent-worktree-gui/commit/1ce1d7ddd014fe540ea51194568e50ad4a657ee5))
 
 ### Other
 
-- chore: 1.16.0 — the version this landing carries ([`4542084`](https://github.com/JLRoper/agent-worktree-gui/commit/4542084c3c12b908b56ff3dc5fb674ebc6f01729))
+- chore: 1.16.2 — the version this landing carries ([`e33ec71`](https://github.com/JLRoper/agent-worktree-gui/commit/e33ec71fc83e2251d6efebbea87942c2a057aae0))
+
+## v1.16.0 — 2026-11-05 · 3 commits
+
+[`3072db9`](https://github.com/JLRoper/agent-worktree-gui/commit/3072db93572abbedb61d71083700b10998b3a7b9) · [compare v1.15.3...v1.16.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.15.3...v1.16.0)
+
+### Added
+
+- feat: the Assistant Director — a 20-minute cross-queue pass with two powers ([`4e4071d`](https://github.com/JLRoper/agent-worktree-gui/commit/4e4071d31dcac49351ce68bbb29c892aaa706f1c))
+
+### Docs & tests
+
+- docs: the Assistant Director's proof — the running panel, the tab and the suite ([`957c11a`](https://github.com/JLRoper/agent-worktree-gui/commit/957c11a2c638474b267e16cbebede295d7a5d5e3))
+
+### Other
+
+- chore: 1.16.0 — the version this landing carries ([`3072db9`](https://github.com/JLRoper/agent-worktree-gui/commit/3072db93572abbedb61d71083700b10998b3a7b9))
 
 ## v1.15.3 — 2026-11-05 · 2 commits
 
