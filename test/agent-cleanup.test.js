@@ -78,7 +78,7 @@ test("POST /api/settings/cleanup stores the switch in config.json, and it surviv
 
 // ---- 3. the Settings row ---------------------------------------------------------------------------------------------
 test("the row is in the Board group and names both clean-ups it closes", () => {
-  const board = html.slice(html.indexOf('data-settings-group="board"'), html.indexOf('data-settings-group="branches"'));
+  const board = html.slice(html.indexOf('data-settings-group="board"'), html.indexOf('data-settings-group="repo"'));
   assert.ok(board.length > 0, "the Board group is in the page");
   assert.match(board, /<label class="settings-row settings-gap" for="agent-cleanup"/);
   assert.match(board, /<span>Agents clean up /);

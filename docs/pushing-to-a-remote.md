@@ -5,18 +5,18 @@ lists them in the order a push meets them: what each one decides, where the deci
 it. Two of the gates are the panel's own (the setting and the hook it installs); the rest were already here (the
 repo's hooks and the host's ruleset).
 
-The short version, measured on this clone: the setting for this project is `allow`, so the guard lets a push
-through without asking; the clone's own `.githooks` are not installed, so the version gate and the commit-subject
-gate are not chained; and the host's ruleset covers the default branch only. From a `wtgui/*` tree, the only thing
-that stops a push today is the instruction the tree was cut with.
+The short version: the push controls for this clone are read from `pushPermissions.repos[<repo>]` and one project's
+own `pushNewBranches` / `pushExistingBranches`; a project that names nothing inherits its repository's defaults, and
+anything nobody states asks. The clone's own `.githooks` are not installed, so the version gate and the
+commit-subject gate are not chained; and the host's ruleset covers the default branch only. From a `wtgui/*` tree,
+the instruction the tree was cut with and the two controls are what decide whether a push goes out.
 
 ## At a glance
 
 | # | gate | where it lives | what it decides | what waives it |
 |---|---|---|---|---|
 | 1 | the instruction | `lib/branch-policy.js` `branchLandingLine` (the brief's LANDING line) | push + PR, or merge into the parent locally and do not push | nothing — prose, not enforcement |
-| 2 | the project's policy | `config.json` `remoteBranchPolicy`, overridden per project by `projects[].remoteBranchPolicy` | every tree is local only / writes allowed / refused outright | Settings → **Branches on the remote**; `POST /api/settings/remote-branches`; **Always allow** in the box |
-| 2b | the per-remote switch | `projects[].allowPushWithoutAsking` (global `allowPushWithoutAsking` as its default) | a `local-only` push goes through instead of parking on the box | Settings → **Branches → Remotes**; `POST /api/settings/remote-push`; never over `deny` |
+| 2 | the project's push controls | `config.json` `pushPermissions.repos[<repo>]` (per-repository defaults + force-override) and `projects[].pushNewBranches` / `pushExistingBranches` (one project's own pair) | per branch kind: allow all / allow-name-gate / always ask / never | Settings → **Repo**; the two selects on the project card; `POST /api/settings/push-repo` and `POST /api/settings/push-project`; **Always allow** in the box writes that project's pair |
 | 3 | the installed pre-push hook | `<git-common-dir>/wtgui-hooks/pre-push`, enabled per worktree | allows, refuses, or parks the push on the panel | `WTGUI_PUSH_GRANT=1`, `--no-verify`, `-c core.hooksPath=` |
 | 4 | the permission box | `lib/remote-writes.js` + `/api/remote-write/{request,status,answer}` | once / this session / always / deny; no answer is a deny | answer it; "Always allow" writes gate 2 |
 | 5 | the chained pre-push (version gate) | `.githooks/pre-push` → `node tools/version.mjs check`, reached via `wtgui-hooks/chain` | refuses a push that carries commits and no version bump | `--no-verify` |
@@ -47,59 +47,50 @@ omitted and the worker falls back to the blanket rule, which follows the policy 
 
 This is advice. The panel cannot see inside a worker's shell, which is why gates 3 and 4 exist.
 
-## 2. The setting: `remoteBranchPolicy`
+## 2. The two push controls: `pushPermissions`
 
-Three values, and the names say exactly what they govern — whether a branch may exist on a remote at all.
+Two four-way controls with the same four values — one for a **NEW** branch (one the remote does not carry yet), one
+for an **EXISTING** branch. The pair is what decides whether a push goes through, asks, or is refused; the old
+`remoteBranchPolicy` and `allowPushWithoutAsking` keys are read only to MIGRATE an older file (see below).
 
 | value | meaning |
 |---|---|
-| `local-only` (default) | every tree the panel cuts stays on this box. A remote write is refused unless the reader grants it through the permission box — requested either by the installed hook or by the panel's own merge flow. |
-| `allow` | remote writes go through without asking. This is what **Always allow** in the box writes, so the box and the setting are one fact. |
-| `deny` | never, and do not even ask: the guard refuses without offering a choice. |
+| `allow-all` | the push goes through without asking. |
+| `allow-name-gate` | the push goes through without asking ONLY when the branch name passes the gate the hook already enforces: `main`/`master`, or `YYYYMMDD_HHMM_<TICKET>_<desc>`. A name that fails the gate parks on the permission box. |
+| `always-ask` (default) | the push parks on the reader's permission box. |
+| `never` | refused outright, and the box is not offered. **Absolute**: it beats the project's own value, the repository's value, a force-override, and the legacy keys. |
 
-Precedence is project, then global, then the closed default:
+Precedence, most specific first:
 
-1. `projects[].remoteBranchPolicy` in `config.json`, when it is one of the three values;
-2. else the global `remoteBranchPolicy`;
-3. else, and for any value that cannot be read, `local-only` — an unreadable value never opens the door.
+1. `projects[].pushNewBranches` / `pushExistingBranches` (one project's own pair);
+2. `pushPermissions.repos[<key>].newBranches` / `existingBranches` — the repository's defaults, where `<key>` is
+   `git.sefl.com/IT`, `git.sefl.com/SA`, `github/JLRoper`, `other` (any other remote) or `none` (no remote at all);
+3. the shipped `always-ask`.
 
-`lib/remote-writes.js` `policyForProject` is the one function; `POST /api/remote-write/request` and the merge route
-both call it with the tree's own project, so a tree in a repo that lands by PR is not decided by another repo's
-setting. This panel and `heroes-js` carry `allow`; every other checkout inherits the global.
+And one override above that walk: a repository section with `force: true` makes its two values win for every project
+in it. The one thing force cannot beat is `never` — a project that says never stays refused, and so does a repository
+that says never. The card renders the pair read-only (with a one-line "repo setting in force" note) while a
+force-override owns it, and `POST /api/settings/push-project` answers 409 for the same reason.
 
-Where to see it: `GET /api/remote-write/state` (`policy`, `label`, `policies`, `guards`),
-`settings.remoteBranchPolicies` in `GET /api/health`, and the `policy` on each tree in `logs/push-guard.json`.
+`lib/push-permissions.js` is the whole model: the four values, `repoKeyForRemoteUrl`, `resolvePushPermissions`,
+`branchNamePassesGate` and the `BRANCH_NAME_GATE_PATTERN` constant. `lib/push-guard.js` writes that exact pattern into
+the guard's `namegate` file, so the hook's `grep -E` and the resolver's `RegExp` are one rule rather than two.
 
-## 2b. The per-remote switch: `allowPushWithoutAsking`
+**Migration, on read.** An install that only ever knew the old keys keeps its meaning, and the file is not rewritten:
 
-The policy answers "may a branch exist on that remote at all". The switch answers the narrower question a reader asks
-about a remote they trust: is a push allowed to go through **without parking on the permission box**? It ships OFF:
+| old | new |
+|---|---|
+| `remoteBranchPolicy: "deny"` (global or per project) | `never` / `never` |
+| `remoteBranchPolicy: "allow"`, or `allowPushWithoutAsking: true` | `allow-all` / `allow-all` |
+| `remoteBranchPolicy: "local-only"`, or nothing | `always-ask` / `always-ask` |
 
-| where | key | default |
-|---|---|---|
-| one project | `projects[].allowPushWithoutAsking` | `false` when absent |
-| every project without its own | top-level `allowPushWithoutAsking` | `false` |
+Where to see it: `settings.pushPermissions` in `GET /api/config` and in every snapshot — the values, each repository
+section with its defaults and force flag, and every project's RESOLVED pair. `GET /api/remote-write/allow-push?path=…`
+(or `?project=…`, plus `?branch=…&new=1`) says what a push would meet (`permission: allow|ask|refuse`).
 
-Resolution is the policy's own precedence — the project's value, else the global, else the closed default — through
-`allowPushWithoutAskingFor` (`lib/remote-writes.js`). Only a literal `true` is on; `"yes"`, `1` and anything else
-read as OFF, the same strict reading `releaseWorktrees` uses. **`deny` wins**: the resolver returns `enabled: false`
-for a project whose policy is `deny`, whatever the switch says, and `RemoteWrites.decision` refuses before it ever
-reads the switch. `allow` keeps its own wording ("the setting allows remote writes"); the switch only changes what
-`local-only` does.
-
-- **Live effect.** `POST /api/remote-write/request` (the hook's own ask) and the merge route pass the resolved switch
-  into `remoteWrites.decision`, so a `local-only` project with the switch on allows the push instead of parking it.
-  The brief follows too: `branchLandingLine`/`remoteWriteLine` say "not asked about" rather than "will park and then
-  fail" (`lib/features/spawn.js` and the reply route pass the resolved value with the policy).
-- **Assistant-readable.** `GET /api/remote-write/allow-push?path=<checkout>` (or `?project=<name>`) returns
-  `{ project, remote, policy, allowPushWithoutAsking, source, denied, ask, say }`; `ask` is true only where a push
-  would park on the box, and `say` is the sentence to repeat. Unnamed trees resolve from the global default.
-- **Where to see it.** Settings → **Branches → Remotes** lists every project (name, path, remote) with the switch,
-  shipped unchecked; `settings.allowPushWithoutAskingProjects` in `GET /api/config` and every snapshot carries the
-  resolved value per project.
-- **Where to write it.** `POST /api/settings/remote-push` with `{ project, allow: true|false }` — a boolean or a 400,
-  an unknown project is a 404, and the write lands in that project's `config.json` entry (creating a minimal
-  `{name, path}` entry when discovery, not config, supplied the project).
+Where to write it: `POST /api/settings/push-repo` `{ repo, kind?, value?, force? }` and
+`POST /api/settings/push-project` `{ project, kind: "new"|"existing", value }`. A value outside the four, a wrong
+kind, or an unknown project is a 400/404; a project under a force-override is a 409.
 
 ## 3. The installed pre-push hook
 
@@ -120,7 +111,10 @@ JSON:
 | `pre-push` | the hook itself |
 | `panel` | the panel URL it calls back on (`http://127.0.0.1:<port>`, loopback on purpose) |
 | `timeout` | how long it waits for an answer, in seconds (min 30) |
-| `policy` | `local-only` / `allow` / `deny` for this project |
+| `new-branches` | the NEW-branch control in force for this project (`allow-all` / `allow-name-gate` / `always-ask` / `never`) |
+| `existing-branches` | the EXISTING-branch control in force for this project |
+| `namegate` | the gate pattern, written from `BRANCH_NAME_GATE_PATTERN` — the same string the resolver compiles |
+| `policy` | the legacy `local-only` / `allow` / `deny` word, still written for `GET /api/remote-write/state`; a guard installed before the two controls existed carries only this, and the hook reads it as the pair it meant |
 | `landing` | one normalized tree path per line — trees started to land, which push by design |
 | `chain` | the absolute path of the `pre-push` this worktree had when the guard went in (empty when it had none) |
 | `wtgui-guard.json` | what the install replaced, when, and which shims it wrote |
@@ -128,20 +122,23 @@ JSON:
 The hook's decision order, and this is the whole of it:
 
 1. `WTGUI_PUSH_GRANT=1` in the environment → allow, printing that no permission was asked.
-2. `policy` file is `allow` → allow.
-3. the tree's normalized top level is in `landing` → allow.
-4. `policy` is `deny` → refuse, no question offered.
-5. no `panel` file, or no `curl` on `PATH` → refuse (fail closed; a guard that cannot ask is not a guard that says yes).
-6. `POST /api/remote-write/request` → `allowed:true` allows; `refused:true` denies; anything else parks the push
-   and prints the id.
-7. while parked, poll `/api/remote-write/status?id=…` once a second: `once` / `session` / `always` allow, `deny`
+2. read the ref list and take EACH ref's control: a ref the remote carries no sha for is NEW, one it carries is
+   EXISTING. `never` on any ref refuses the whole push (no box); `allow-all` allows that ref; `allow-name-gate` allows
+   it only when the name passes `namegate`; anything else is an ask.
+3. `never` anywhere → refuse, no question offered.
+4. no ref needs asking → allow (and the hook reports the write so the panel can draw its Keep/Unwind receipt).
+5. the tree's normalized top level is in `landing` → allow.
+6. no `panel` file, or no `curl` on `PATH` → refuse (fail closed; a guard that cannot ask is not a guard that says yes).
+7. `POST /api/remote-write/request` → `allowed:true` allows; `refused:true` denies; anything else parks the push
+   and prints the id. The route re-resolves the SAME refs, so a session or once grant still applies.
+8. while parked, poll `/api/remote-write/status?id=…` once a second: `once` / `session` / `always` allow, `deny`
    refuses, and the window closing refuses.
-8. every path that allows a push runs `chain` first, and its refusal is this hook's refusal.
+9. every path that allows a push runs `chain` first, and its refusal is this hook's refusal.
 
-Two consequences worth knowing: the hook decides per TREE, not per ref or per remote — once a tree may push, it may
-push any ref to whatever `git push` names. And it is not a lock: `git push --no-verify`, `git -c core.hooksPath=
-push`, `WTGUI_PUSH_GRANT=1`, and a push from a checkout the panel did not cut all go around it. It is a speed bump
-on the default path.
+Two consequences worth knowing: the hook decides per REF KIND now — a project can publish a correctly named new
+branch without a question while an existing branch still asks — but the grant itself is per TREE once given. And it
+is not a lock: `git push --no-verify`, `git -c core.hooksPath= push`, `WTGUI_PUSH_GRANT=1`, and a push from a
+checkout the panel did not cut all go around it. It is a speed bump on the default path.
 
 ## 4. The permission box
 
@@ -152,7 +149,7 @@ worktree (`once` and `session` are matched on a normalized path, so `C:/x` and `
 |---|---|
 | **Allow once** | a one-shot grant for that tree. It is spent when the hook is TOLD the answer (`GET /api/remote-write/status` calls `spend`), so a push that then fails on the version gate spends it and the next push asks again. |
 | **Allow for this session** | the tree is added to an in-memory set — a panel restart asks again, by design. |
-| **Always allow** | `onPolicy("allow")` writes `config.json`'s `remoteBranchPolicy`: the setting, not a private list. It is the GLOBAL key, so it also turns off asking for project trees with no override of their own. |
+| **Always allow** | `onPolicy` writes the asking project's own pair to `allow-all` / `allow-all`, not a global key: one reader's grant about one tree does not open every other checkout. Under a force-override the write is stored but reported as not in force. |
 | **Deny** | nothing is granted; the remote is untouched. |
 
 Nothing answered inside the window is a deny: the panel's sweep runs every 5 s and denies at
@@ -250,8 +247,9 @@ So:
 - `git -c core.hooksPath= push` runs no hooks at all.
 - `WTGUI_PUSH_GRANT=1 git push …` skips only the panel's question; the chain still runs.
 - A tree the panel did not cut — a plain checkout, a hand-made `git worktree add` — has no guard.
-- Writing `<git-common-dir>/wtgui-hooks/policy` by hand changes what the hook decides for every tree of that clone
-  until the panel next refreshes it (a settings change, or boot). It is a mutable text file in `.git`, not a lock.
+- Writing `<git-common-dir>/wtgui-hooks/new-branches`, `existing-branches` or `namegate` by hand changes what the hook
+  decides for every tree of that clone until the panel next refreshes it (a settings change, or boot). They are mutable
+  text files in `.git`, not a lock.
 - A push from another clone or another machine is outside all of this; gate 8 is what is left.
 - `PANEL_TOKEN` gates the panel's own HTTP writes, not git.
 
@@ -261,8 +259,8 @@ So:
 # the policy in force, the grants standing, and which trees carry a guard
 curl -s http://127.0.0.1:7484/api/remote-write/state
 
-# what THIS tree's hook will decide (here: policy, landing list, chain, panel)
-cd "$(git rev-parse --show-toplevel)" && for f in policy chain landing panel timeout; do printf '%s: ' "$f"; cat "$(git rev-parse --git-common-dir)/wtgui-hooks/$f" 2>/dev/null || echo '(none)'; done
+# what THIS tree's hook will decide (here: the two controls, the gate, landing list, chain, panel)
+cd "$(git rev-parse --show-toplevel)" && for f in new-branches existing-branches namegate chain landing panel timeout; do printf '%s: ' "$f"; cat "$(git rev-parse --git-common-dir)/wtgui-hooks/$f" 2>/dev/null || echo '(none)'; done
 
 # is the guard in this tree's path at all?
 git config --worktree --get core.hooksPath
