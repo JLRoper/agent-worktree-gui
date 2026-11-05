@@ -551,6 +551,28 @@ test("server.js serves the list without a token, and opens with one (authorised(
   assert.match(openBlock, /chromeFor\(entry\.target\)/, "a link goes to Chrome");
   assert.match(openBlock, /openerFor\(entry\.target\)/, "a file/image goes through the OS association");
   assert.match(openBlock, /markMissing\(entry\.seq\)/, "a file gone at click time is stamped");
+  // The 200 the page now reports, unchanged: the handler answer still names the opener it spawned.
+  assert.ok(openBlock.includes('open: "handler", opener: path.basename(bin)'), "the handler answer still carries the opener's basename");
+  // The three refusal sentences, byte for byte. This change is the PAGE's answer to a 200; a refusal's words are the
+  // route's, and re-wording one here would make the audit's measured sentences a lie.
+  assert.ok(
+    openBlock.includes(
+      "no deliverable${asked} on this panel — the list was pruned, or this page is older than the store",
+    ),
+    "the pruned-seq 404 sentence is unchanged",
+  );
+  assert.ok(
+    openBlock.includes(
+      'no such file: ${entry.target} — it was there when ${entry.agent || "an agent"} delivered it (${entry.at}); it has since been moved or deleted',
+    ),
+    "the missing-file 404 sentence is unchanged",
+  );
+  assert.ok(
+    openBlock.includes(
+      'outside the repo: ${entry.target} — ${repo ? `it is not inside ${repo}` : "it is inside no git checkout"}; a deliverable is the file an agent put in its own tree',
+    ),
+    "the outside-the-repo 403 sentence is unchanged",
+  );
 });
 
 test("the store's onChange is one SSE frame, and the page listens for exactly that event", () => {

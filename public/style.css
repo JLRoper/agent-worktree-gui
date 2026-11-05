@@ -2201,6 +2201,14 @@ tr.row-confirm .btn-del-yes:hover { background: #3a1d22; }
   white-space: normal;
   overflow-wrap: anywhere;
 }
+/* The other answer, on the same row: a 200 `{open:"handler"}` names what was handed over and which opener took it.
+   Green, and deliberately smaller news than the refusal's red — it reports the spawn, not a window. */
+.deliver-pop .dl-opened {
+  color: #8ee08a;
+  font: 10.5px/1.45 var(--term);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 .deliver-pop .dl-empty { padding: 14px 10px; color: var(--dim); font: 12px/1.5 var(--ui); }
 .deliver-pop .dl-hint { padding-top: 0; color: var(--dimmer); }
 .deliver-pop .dl-hint code { display: block; margin-top: 7px; color: #8ee08a; font: 11px/1.5 var(--term); white-space: pre-wrap; }

@@ -111,6 +111,24 @@ test("a gone target says gone, and the click still tries", () => {
   assert.doesNotMatch(src, /data-dl-open="[^"]*"[^>]*disabled/, "a gone row still tries the click");
 });
 
+test("a 200 {open:'handler'} says what it opened and with which opener — and claims no window", () => {
+  const src = block();
+  // The branch exists at all: the page used to clear the refusal and say nothing, which the audit read as silence.
+  assert.match(src, /d\.open === "handler"/, "the page reads the route's `open` field");
+  assert.match(src, /d\.opener/, "the opener's basename is the route's answer, not a guess");
+  // What it opened is named too — the target's last segment, from the answer, not from the row's truncated tail.
+  assert.match(src, /deliverTargetName\(/, "the row names what was handed over");
+  // The row carries it, in the same place a refusal goes, and announces it.
+  assert.match(src, /dl-opened/, "the answer is painted on the row");
+  assert.match(src, /dl-opened" role="status"/, "the answer is announced politely, as a status rather than an alert");
+  // The claim stops at what a detached spawn proves. The audit's limit is the page's sentence, not a footnote.
+  assert.match(src, /cannot see whether a window appeared/, "the row does not claim the viewer appeared");
+  assert.doesNotMatch(src, /opened a window|the viewer opened\b/i, "no sentence may assert a window");
+  // A refusal still wins and still says the route's own words: this change must not compose a sentence for one.
+  assert.match(src, /sayDeliverWhy\(entry\.seq, String\(d\.error/, "403/404 still show the body's own error");
+  assert.match(src, /delete deliver\.opened\[seq\]/, "a later refusal replaces an earlier answer on that row");
+});
+
 test("the popover is the artifacts-pop idiom: fixed, above the board, scrolling", () => {
   const rule = css.match(/\.deliver-pop \{([^}]*)\}/);
   assert.ok(rule, "no .deliver-pop rule");

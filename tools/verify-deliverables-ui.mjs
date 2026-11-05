@@ -19,8 +19,9 @@
 // ONE SIDE EFFECT, DELIBERATELY. `POST /api/deliverables/open` for a file spawns `explorer.exe` on this box: the kit
 // boots `server.js` as a child and the route calls `spawn` inline, so there is no process seam — and inventing one
 // would let the gate pass while the real route was broken (plan §9.2 item 4). This gate therefore opens a real file
-// twice and prints a line saying so. It never clicks the title of a deliverable that EXISTS: the page-click check
-// uses the row whose file was deleted, which 404s before any spawn.
+// three times — the harvested proof through the route, the restored file through the route, and the restored ROW
+// through its own Open control — and prints a line saying so. The missing-file click is unchanged: it 404s before
+// any spawn.
 //
 // WHAT IS DRIVEN
 //   1. the button is in the header, between HUMAN and Collapse all; D opens it; a d in a field does not
@@ -34,6 +35,8 @@
 //   5. a title click POSTs the recorded seq ONLY — a request the panel answers 404 because the file is gone — and the
 //      row then says `gone` (missingAt, stamped by the real route)
 //   6. an unknown seq answers 404 and opens nothing; a restored file answers 200 and clears `gone`
+//   6b. the restored ROW's own Open says what it opened and with which opener — `opened gone.md with explorer.exe` —
+//      and claims no window, because a detached spawn cannot see one; a refusal is still the route's own sentence
 //   7. at the cap the footer says 200 kept
 //   8. a second, empty panel says `Nothing has been delivered yet.` and documents the grammar
 //   9. a screenshot of the header and the open list is written for the report
@@ -539,6 +542,26 @@ try {
     const cleared = await getJson();
     eq("…and `gone` is cleared in the store", cleared.body.entries.find((e) => e.seq === goneEntry.seq)?.missingAt, null);
     console.log("      note: that 200 spawned explorer.exe again — the same real route, now for a file that is there");
+
+    // ---- 6b. the 200 {open:"handler"} is not silent ----------------------------------------------
+    // The route answers from the spawn, so the row says what it handed over and to which opener, and stops there.
+    // This is the one answer the audit found the page swallowing: 29 of 111 files and 7 of 32 images reached a
+    // handler and the row said nothing, which a reader reads as "it doesn't respond at all".
+    posts.length = 0;
+    await page.locator(`.dl-row[data-seq="${goneEntry.seq}"] .dl-name`).click();
+    await page.waitForFunction((seq) => Boolean(document.querySelector(`.dl-row[data-seq="${seq}"] .dl-opened`)), goneEntry.seq, { timeout: 10_000 });
+    const answered = await page.evaluate((seq) => {
+      const line = document.querySelector(`.dl-row[data-seq="${seq}"] .dl-opened`);
+      return {
+        text: (line?.textContent || "").trim(),
+        role: line?.getAttribute("role") || "",
+        why: Boolean(document.querySelector(`.dl-row[data-seq="${seq}"] .dl-why`)),
+      };
+    }, goneEntry.seq);
+    eq("the answer's click POSTs the seq only", posts, [{ seq: goneEntry.seq }]);
+    ok("a 200 handler says what it opened and with which opener", answered.text.startsWith("opened gone.md with explorer.exe"), answered.text);
+    ok("…and claims no window, because the panel cannot see one", /cannot see whether a window appeared$/.test(answered.text), answered.text);
+    ok("…as a polite status, with no refusal left on the row", answered.role === "status" && !answered.why, JSON.stringify({ role: answered.role, why: answered.why }));
 
     // ---- 7. a deleted target answers 404 and opens nothing ---------------------------------------
     rmSync(path.join(tree, "docs", "shot.png"), { force: true });

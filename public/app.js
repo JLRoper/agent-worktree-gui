@@ -15326,6 +15326,11 @@ try {
 //
 // A REFUSAL IS SAID ON THE CARD. Missing, a directory, or outside the repo comes back from that route as the
 // sentence the reader sees under the row; the click never opens a blank tab and never hides the reason in a banner.
+// AN ANSWER IS SAID ON THE CARD TOO. The one 200 the page used to swallow is the handler's: the route answers from
+// the spawn (a detached explorer.exe reports nothing), so the row says what was handed over and to which opener —
+// `opened report.html with explorer.exe` — and says in the same line that the panel cannot see whether a window
+// appeared. That is the whole of what the spawn proves; a sentence about the window itself would claim the one fact
+// the route cannot report. A reader who saw nothing for it read the silence as "the control does not respond at all".
 // The title is the row's name now, not a second opener; the row's other control points at the AGENT that delivered
 // it, so a mis-click in a 200-row list opens a console (cheap, reversible) rather than a window (not).
 //
@@ -15352,6 +15357,7 @@ const deliver = {
   active: 0,       // index into the FILTERED rows, which is what the combobox drives
   agesTimer: null,
   why: {},         // seq → the refusal the click was given, said under that row and nowhere else
+  opened: {},      // seq → { name, opener }: what a 200 handler handed to the OS, said under its row
   seenSeq: 0,      // the store's watermark as this page knows it — it only ever moves forward here
   serverSeen: 0,   // the last watermark the STORE reported, so a failed POST can put the count back honestly
   seenPosted: 0,   // the highest seq this page has recorded; a second open with nothing new posts nothing
@@ -15829,6 +15835,14 @@ function deliverRowHtml(entry) {
   const gone = entry.missingAt ? `<span class="dl-gone" title="${esc(lastSeen)}">gone</span>` : "";
   const why = deliver.why[entry.seq];
   const whyLine = why ? `<span class="dl-why" role="alert">${esc(why)}</span>` : "";
+  const opened = deliver.opened[entry.seq];
+  // The 200 handler's answer, in the row. It names the file and the opener the ROUTE named, and stops where the
+  // route stops: the spawn was made, no window is observable. A detached child reports no exit code, so the line
+  // says "cannot see", never that the program appeared — the audit's silence is what read as a dead control.
+  const openedLine =
+    opened && !why
+      ? `<span class="dl-opened" role="status" title="${esc(`opened ${opened.name} with ${opened.opener} — ${target}`)}">opened ${esc(opened.name)} with ${esc(opened.opener)} — the panel started the opener; it cannot see whether a window appeared</span>`
+      : "";
   const how = entry.href
     ? "Open — a new browser tab, in this browser"
     : "Open — in the program this machine uses for this file";
@@ -15839,6 +15853,7 @@ function deliverRowHtml(entry) {
         <span class="dl-target mono" title="${esc(target)}">${esc(shown)}</span>
         <span class="dl-meta">${meta}${meta ? " · " : ""}<span class="dl-age" data-at="${esc(entry.at || "")}">${esc(age)}</span></span>
         ${whyLine}
+        ${openedLine}
       </span>
       ${gone}
       <button type="button" class="dl-agent" data-dl-agent="${esc(entry.seq)}" title="open the agent that delivered this">open agent</button>
@@ -15962,7 +15977,8 @@ async function deliverOpenTarget(seq) {
 }
 
 // The route, for the one case that needs it: a file with no URL on the panel. Its answer is either "the OS handler
-// has it" (nothing more to say — the program opening IS the answer) or the refusal this row must state.
+// has it" — which this row now says, with the opener's name and no claim about a window — or the refusal the row
+// must state, unchanged: the body's own `error`, never a sentence this page composes for it.
 async function deliverOpenOnServer(entry, extra) {
   try {
     const r = await apiFetch("/api/deliverables/open", {
@@ -15976,6 +15992,11 @@ async function deliverOpenOnServer(entry, extra) {
       if (r.status === 404) void deliverFetch({ quiet: true });
       return false;
     }
+    // The 200 handler is the answer the page used to swallow. `d.opener` is the basename the route spawned and
+    // `open: "handler"` is what it did; neither is a claim that a window appeared, so the row says exactly those two.
+    if (d.open === "handler") {
+      return sayDeliverOpened(entry.seq, { name: deliverTargetName(d.target || entry.target), opener: String(d.opener || "") });
+    }
     clearDeliverWhy(entry.seq);
     return true;
   } catch (e) {
@@ -15984,9 +16005,26 @@ async function deliverOpenOnServer(entry, extra) {
   }
 }
 
+// The last segment of a path or URL, for the row's answer line: what was opened, in the reader's terms.
+function deliverTargetName(target) {
+  const parts = String(target || "").split(/[\\/]+/).filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : String(target || "");
+}
+
+// A 200 that spawned a handler. One paint covers both halves — the refusal this row may be carrying goes, the
+// answer takes its place — because two repaints would flash the row twice for one click.
+function sayDeliverOpened(seq, opened) {
+  delete deliver.why[seq];
+  deliver.opened[seq] = opened;
+  paintDeliverRows({ keepScroll: true });
+  return true;
+}
+
 // A refusal belongs to its ROW. The banner is for the board (a failed write, a lost gateway); "no such file" is a
 // fact about one card, and a reader scrolling a 200-row list must see which card it was.
 function sayDeliverWhy(seq, why) {
+  // A later refusal replaces an earlier answer: the row says the last thing the route said, and only that.
+  delete deliver.opened[seq];
   deliver.why[seq] = String(why || "").trim() || "could not open that deliverable";
   paintDeliverRows({ keepScroll: true });
   return false;
