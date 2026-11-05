@@ -16,6 +16,7 @@ that stops a push today is the instruction the tree was cut with.
 |---|---|---|---|---|
 | 1 | the instruction | `lib/branch-policy.js` `branchLandingLine` (the brief's LANDING line) | push + PR, or merge into the parent locally and do not push | nothing — prose, not enforcement |
 | 2 | the project's policy | `config.json` `remoteBranchPolicy`, overridden per project by `projects[].remoteBranchPolicy` | every tree is local only / writes allowed / refused outright | Settings → **Branches on the remote**; `POST /api/settings/remote-branches`; **Always allow** in the box |
+| 2b | the per-remote switch | `projects[].allowPushWithoutAsking` (global `allowPushWithoutAsking` as its default) | a `local-only` push goes through instead of parking on the box | Settings → **Branches → Remotes**; `POST /api/settings/remote-push`; never over `deny` |
 | 3 | the installed pre-push hook | `<git-common-dir>/wtgui-hooks/pre-push`, enabled per worktree | allows, refuses, or parks the push on the panel | `WTGUI_PUSH_GRANT=1`, `--no-verify`, `-c core.hooksPath=` |
 | 4 | the permission box | `lib/remote-writes.js` + `/api/remote-write/{request,status,answer}` | once / this session / always / deny; no answer is a deny | answer it; "Always allow" writes gate 2 |
 | 5 | the chained pre-push (version gate) | `.githooks/pre-push` → `node tools/version.mjs check`, reached via `wtgui-hooks/chain` | refuses a push that carries commits and no version bump | `--no-verify` |
@@ -68,6 +69,37 @@ setting. This panel and `heroes-js` carry `allow`; every other checkout inherits
 
 Where to see it: `GET /api/remote-write/state` (`policy`, `label`, `policies`, `guards`),
 `settings.remoteBranchPolicies` in `GET /api/health`, and the `policy` on each tree in `logs/push-guard.json`.
+
+## 2b. The per-remote switch: `allowPushWithoutAsking`
+
+The policy answers "may a branch exist on that remote at all". The switch answers the narrower question a reader asks
+about a remote they trust: is a push allowed to go through **without parking on the permission box**? It ships OFF:
+
+| where | key | default |
+|---|---|---|
+| one project | `projects[].allowPushWithoutAsking` | `false` when absent |
+| every project without its own | top-level `allowPushWithoutAsking` | `false` |
+
+Resolution is the policy's own precedence — the project's value, else the global, else the closed default — through
+`allowPushWithoutAskingFor` (`lib/remote-writes.js`). Only a literal `true` is on; `"yes"`, `1` and anything else
+read as OFF, the same strict reading `releaseWorktrees` uses. **`deny` wins**: the resolver returns `enabled: false`
+for a project whose policy is `deny`, whatever the switch says, and `RemoteWrites.decision` refuses before it ever
+reads the switch. `allow` keeps its own wording ("the setting allows remote writes"); the switch only changes what
+`local-only` does.
+
+- **Live effect.** `POST /api/remote-write/request` (the hook's own ask) and the merge route pass the resolved switch
+  into `remoteWrites.decision`, so a `local-only` project with the switch on allows the push instead of parking it.
+  The brief follows too: `branchLandingLine`/`remoteWriteLine` say "not asked about" rather than "will park and then
+  fail" (`lib/features/spawn.js` and the reply route pass the resolved value with the policy).
+- **Assistant-readable.** `GET /api/remote-write/allow-push?path=<checkout>` (or `?project=<name>`) returns
+  `{ project, remote, policy, allowPushWithoutAsking, source, denied, ask, say }`; `ask` is true only where a push
+  would park on the box, and `say` is the sentence to repeat. Unnamed trees resolve from the global default.
+- **Where to see it.** Settings → **Branches → Remotes** lists every project (name, path, remote) with the switch,
+  shipped unchecked; `settings.allowPushWithoutAskingProjects` in `GET /api/config` and every snapshot carries the
+  resolved value per project.
+- **Where to write it.** `POST /api/settings/remote-push` with `{ project, allow: true|false }` — a boolean or a 400,
+  an unknown project is a 404, and the write lands in that project's `config.json` entry (creating a minimal
+  `{name, path}` entry when discovery, not config, supplied the project).
 
 ## 3. The installed pre-push hook
 

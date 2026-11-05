@@ -404,6 +404,13 @@
         <div class="settings-presets">
           <button type="button" id="btn-guard-install" title="install the pre-push guard into every local-only worktree on this board. The panel does this by itself when it cuts a worktree; this button is for the trees that were cut before it existed. It writes a pre-push hook inside the repository's .git (never a tracked file), enables it for those worktrees only, and runs any hook they already had through a shim. Report comes back here and in the log.">install the push guard now</button>
         </div>
+
+        <div class="settings-row settings-gap" id="remote-switch-heading" title="One row per project on this board: the switch answers, for THAT remote, whether a push may go through without parking on your permission box. Shipped off. A project whose remoteBranchPolicy is deny stays refused whatever this says.">
+          <span>Remotes <span class="settings-info">ⓘ</span></span>
+          <span class="settings-unit mono" id="remote-switch-count">…</span>
+        </div>
+        <div class="settings-remotes" id="remote-switch-rows"></div>
+        <div class="settings-preview mono remotes" id="remote-switch-preview">…</div>
       </div>
 
       <div class="settings-group" id="settings-panel-data" data-settings-group="data" role="tabpanel" aria-labelledby="settings-tab-data" hidden>

@@ -18417,6 +18417,9 @@ function toggleSettings(open = null) {
   // The bundle and every assistant's queue are two more reads the reader may open this window to see: refresh them
   // when their answer is old, so the tab is current on the first press after a re-export or a task moved elsewhere.
   if (Date.now() - bundlesLoadedAt > 15000) void loadBundles();
+  // The per-remote switches are read again on every visit: the project list is the snapshot's, and the resolved map
+  // may have moved since this tab last painted it.
+  paintRemoteSwitches();
   // The remote-write setting is the panel's own (config.json), but which trees carry the push guard is a file on
   // disk that another instance or a hand edit can change, so it is re-read every time the panel opens.
   void refreshRemoteGuards();
@@ -20410,6 +20413,91 @@ $("btn-guard-install")?.addEventListener("click", (e) => {
   void installPushGuardNow(e.target);
 });
 
+// ---- remotes: allow push without asking ------------------------------------------------------------
+// One row per project on this board — its name, the folder, and the remote a push would go to — with the switch the
+// reader asked for. The value is read from the server's RESOLVED map (`settings.allowPushWithoutAskingProjects`), so
+// this painter never decides what the default is: a project the server says is off is off here, and a project whose
+// policy is deny stays off whatever its own entry says. Shipped unchecked, and the help line below says what
+// unchecked means — a switch whose off state reads as "not configured" is a switch nobody dares leave alone.
+const REMOTE_SWITCH_HELP =
+  "unchecked: the assistant asks with a clarify before any push. `wtgui/*` branches are never pushed regardless of this switch — they still follow their LANDING paragraph.";
+
+function remoteSwitchRows() {
+  return [...(state.projects?.values?.() || [])]
+    .map((p) => ({ name: String(p.name || ""), path: String(p.path || ""), remote: String(p.remote || "") }))
+    .filter((p) => p.name)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function remoteSwitchOn(name) {
+  return Boolean(state.settings?.allowPushWithoutAskingProjects?.[name] === true);
+}
+
+function paintRemoteSwitches(note = "", bad = false) {
+  const holder = $("remote-switch-rows");
+  if (!holder) return;
+  // The panel repaints on every settings event and on every visit to the tab, so the checkbox the reader is on has to
+  // come back where it was: a rebuild that drops the focus makes a keyboard reader start the tab over.
+  const focused = typeof document !== "undefined" && document.activeElement?.dataset ? document.activeElement.dataset.remoteAllow || "" : "";
+  const rows = remoteSwitchRows();
+  holder.innerHTML = rows.length
+    ? rows
+        .map(
+          (p) =>
+            `<label class="settings-remote" title="${esc(`${p.name} — ${p.path || "no path"}${p.remote ? ` · remote ${p.remote}` : " · no remote configured"}`)}">` +
+            `<input type="checkbox" data-remote-allow="${esc(p.name)}"${remoteSwitchOn(p.name) ? " checked" : ""}>` +
+            `<span class="settings-remote-name">${esc(p.name)}</span>` +
+            `<span class="settings-remote-remote mono">${p.remote ? esc(p.remote) : "no remote"}</span>` +
+            `<span class="settings-remote-where mono">${esc(p.path)}</span>` +
+            `</label>`,
+        )
+        .join("")
+    : `<div class="settings-remote-empty">no projects on this board yet</div>`;
+  if (focused) {
+    const back = holder.querySelector(`[data-remote-allow="${focused}"]`);
+    if (back) back.focus();
+  }
+  const on = rows.filter((p) => remoteSwitchOn(p.name)).length;
+  const count = $("remote-switch-count");
+  if (count) count.textContent = `${on}/${rows.length}`;
+  const preview = $("remote-switch-preview");
+  if (preview) {
+    preview.textContent = bad
+      ? `NOT SAVED — ${note}. The server still says ${on}/${rows.length} on.`
+      : `${on}/${rows.length} on · ${REMOTE_SWITCH_HELP}${note ? ` · ${note}` : ""}`;
+    preview.classList.toggle("bad", Boolean(bad));
+  }
+}
+
+async function saveRemoteSwitch(name, allow, box) {
+  if (box) box.disabled = true;
+  try {
+    const r = await apiFetch(
+      "/api/settings/remote-push",
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: name, allow }) },
+      { timeoutMs: 20000 },
+    );
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    state.settings = { ...(state.settings || {}), ...(d.settings || {}) };
+    paintRemoteSwitches(d.note || "saved");
+    showBanner(`allow push without asking: ${name} ${d.allow ? "on — a push goes through without the box" : "off — a push asks you first"}`);
+  } catch (err) {
+    // A failed save is not a setting: put the box back where the server says it is and say so on the same line.
+    const painted = remoteSwitchOn(name);
+    paintRemoteSwitches(String((err && err.message) || err), true);
+    const back = $(`[data-remote-allow="${name}"]`);
+    if (back) back.checked = painted;
+  }
+}
+// ---- end remotes
+
+$("remote-switch-rows")?.addEventListener("change", (e) => {
+  const box = e.target.closest ? e.target.closest("[data-remote-allow]") : null;
+  if (!box) return;
+  void saveRemoteSwitch(box.dataset.remoteAllow, box.checked === true, box);
+});
+
 // ---- the panel's own two folders ---------------------------------------------------------------
 // Where the board's state lives (the data directory) and where an agent may throw things away (the scratch
 // directory). Both are outside the checkout, both are reported with their size, and the scratch one can be
@@ -20552,6 +20640,9 @@ function applySettings(settings) {
   const scanMode = $("scan-mode");
   if (scanMode) scanMode.value = state.settings.scanMode === "visible" ? "visible" : "all";
   paintRemotePolicy();
+  // The per-remote switches ride the same snapshot and the same event, so a change made in another tab (or by the
+  // assistant's endpoint) is what this tab draws, not this tab's last copy of it.
+  paintRemoteSwitches();
   paintChartColumns();
   paintScanRoots();
   paintCollapseAfterSetting();
@@ -20933,6 +21024,7 @@ startVisibilityReporting();
     paintChartColumns();
     paintScanRoots();
     paintRemotePolicy();
+    paintRemoteSwitches();
     paintAgentCleanup();
     void refreshRemoteGuards();
     // "On screen" mode: say what is visible before the first paint settles, so the rows in front of the reader are
