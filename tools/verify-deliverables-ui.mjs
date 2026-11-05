@@ -16,6 +16,15 @@
 // over a real `Deliverables` store), the list is read from the panel's own `GET`, and the open is the panel's own
 // `POST`. The page's own request is only OBSERVED (`page.on("request")`), never fulfilled.
 //
+// THE HEADER MOVES ON ITS OWN CLOCK, AND THE POPOVER IS POSITIONED ONCE. `#stream-rate` is written by a 1 s clock
+// (`public/app.js:14772`) and is the last thing that reflows the controls: when it lands, the button moves 105 px
+// right (236 → 341 at 1440 px wide). A popover opened before that is positioned from the old box and is left behind
+// its anchor — which is the flake this gate used to report as "one edge aligned" (top 82 vs button bottom 76,
+// left/right 236/796 vs button 341/440). So the gate waits for the header to settle before it opens the list, and
+// asserts the relationship that matters — below the button, anchored to it, inside the card — rather than a
+// pixel-exact edge. PANEL_GATE_MOVE_POPOVER=1 moves the popover off its anchor so that check can be seen to fail;
+// breaking the page is the only thing the switch does, and it can never make a failing check pass.
+//
 // ONE SIDE EFFECT, DELIBERATELY. `POST /api/deliverables/open` for a file spawns `explorer.exe` on this box: the kit
 // boots `server.js` as a child and the route calls `spawn` inline, so there is no process seam — and inventing one
 // would let the gate pass while the real route was broken (plan §9.2 item 4). This gate therefore opens a real file
@@ -323,6 +332,32 @@ try {
     await page.screenshot({ path: badgeShot, clip: { x: 0, y: 0, width: 1440, height: 110 } });
     console.log(`SHOT  ${badgeShot}`);
 
+    // ---- 1c. the header settles before anything is opened against it ------------------------------
+    // The rate line is the last thing that reflows the controls (see the header comment). Wait for it, then for the
+    // button's own box to hold still across frames: a popover positioned before that is anchored to a box that no
+    // longer exists, which is the flake this gate used to report.
+    const settled = await page.evaluate(async () => {
+      const btn = document.getElementById("btn-deliver");
+      const rate = document.getElementById("stream-rate");
+      const box = () => {
+        const r = btn.getBoundingClientRect();
+        return [r.left, r.top, r.right, r.bottom].map((n) => Math.round(n)).join(",");
+      };
+      const frame = () => new Promise((r) => requestAnimationFrame(() => r()));
+      const until = performance.now() + 8_000;
+      while (!(rate?.textContent || "").trim() && performance.now() < until) await frame();
+      let last = box();
+      let still = 0;
+      while (still < 3 && performance.now() < until) {
+        await frame();
+        const now = box();
+        still = now === last ? still + 1 : 0;
+        last = now;
+      }
+      return { box: last, rate: (rate?.textContent || "").trim() };
+    });
+    console.log(`      header  settled at ${settled.box} (rate "${settled.rate}")`);
+
     // ---- 2. D opens it; a d in a field does not --------------------------------------------------
     // Opening IS seeing: the popover's open posts the watermark once, before a row is read.
     seenPosts.length = 0;
@@ -410,19 +445,40 @@ try {
     ok("day landmarks: TODAY, YESTERDAY, then a date", labels[0] === "TODAY" && labels[1] === "YESTERDAY" && /^\d{4}-\d{2}-\d{2}$/.test(labels[2]), labels.join(" / "));
     eq("the head counts and says newest first", await page.evaluate(() => document.getElementById("dl-count").textContent.trim()), "200 deliverables — newest first");
     ok("the footer explains the cap", await page.evaluate(() => !document.getElementById("dl-foot").hidden && /200 kept — older rows are forgotten; the files stay on disk\./.test(document.getElementById("dl-foot").textContent)));
-    // It hangs under the button and stays ON the screen.
+    // THE RED PROOF, ON DEMAND. PANEL_GATE_MOVE_POPOVER=beside slides the popover off its anchor but keeps it on
+    // screen (the anchor clause must fail); =above lifts it over the button (the "below" clause must fail). Breaking
+    // the page is the only thing the switch does, and it can never make a failing check pass.
+    const MOVE = process.env.PANEL_GATE_MOVE_POPOVER || "";
+    if (MOVE) {
+      const moved = await page.evaluate((where) => {
+        const p = document.getElementById("deliver-pop");
+        const b = document.getElementById("btn-deliver").getBoundingClientRect();
+        if (where === "above") p.style.top = "0px";
+        else p.style.left = `${Math.round(b.right + 40)}px`;
+        const r = p.getBoundingClientRect();
+        return `${Math.round(r.left)},${Math.round(r.top)}`;
+      }, MOVE);
+      console.log(`      red proof: the popover was moved to ${moved} (${MOVE}) — the placement check must fail`);
+    }
+    // It hangs under the button, anchored to it, and stays inside the card. Both boxes are read in ONE frame, so the
+    // pair compared is a pair that existed together. The relationship, not a pixel: the header reflows on its own
+    // clock, and a popover positioned a frame before that is still under the button and still on screen.
     const box = await page.evaluate(() => {
       const p = document.getElementById("deliver-pop").getBoundingClientRect();
       const b = document.getElementById("btn-deliver").getBoundingClientRect();
-      return { left: p.left, right: p.right, top: p.top, width: p.width, vw: innerWidth, btnBottom: b.bottom, btnLeft: b.left, btnRight: b.right };
+      return { left: p.left, right: p.right, top: p.top, bottom: p.bottom, width: p.width, vw: innerWidth, vh: innerHeight, btnBottom: b.bottom, btnLeft: b.left, btnRight: b.right };
     });
     ok("the popover is fully on screen", box.left >= 0 && box.right <= box.vw, `left ${Math.round(box.left)}, right ${Math.round(box.right)} of ${box.vw}`);
     ok(
-      "it hangs under the button, one edge aligned",
-      Math.round(box.top) >= Math.round(box.btnBottom) &&
-        (Math.abs(box.right - box.btnRight) <= 1 || Math.abs(box.left - box.btnLeft) <= 1),
-      `top ${Math.round(box.top)} vs button bottom ${Math.round(box.btnBottom)}; left/right ${Math.round(box.left)}/${Math.round(box.right)} vs button ${Math.round(box.btnLeft)}/${Math.round(box.btnRight)}`,
+      "it hangs under the button, anchored to it and inside the card",
+      box.top >= box.btnBottom - 0.5 &&
+        box.left <= box.btnLeft + 1 &&
+        box.right >= box.btnRight - 1 &&
+        box.left >= 0 && box.right <= box.vw && box.top >= 0 && box.bottom <= box.vh,
+      `top ${Math.round(box.top)} vs button bottom ${Math.round(box.btnBottom)}; popover ${Math.round(box.left)}..${Math.round(box.right)} vs button ${Math.round(box.btnLeft)}..${Math.round(box.btnRight)}; card ${box.vw}×${box.vh}`,
     );
+    // Put the page back the way the reader would find it, so a red run's screenshot is still the real one.
+    if (MOVE) await page.evaluate(() => deliverPosition());
     ok("it is the plan's 560px wide", Math.abs(box.width - 560) <= 1, String(box.width));
     // The screenshot: the newest rows and the cap footer, before any click has painted a banner over them.
     mkdirSync(SHOT_DIR, { recursive: true });
