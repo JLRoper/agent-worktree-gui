@@ -97,10 +97,28 @@ const QUEUE = {
   ],
 };
 
+// A drive-letter path exists on exactly one machine — the one that wrote it — so the repo's own absolute-paths gate
+// (test/absolute-paths.test.js) refuses one in a committed ledger. Every path the ledger records is therefore
+// RELATIVE to the tree that was shot (or a "<tmp>/…" for the throwaway fixture): a reader can follow it from the repo
+// root, and a re-run in another checkout writes the same words.
+const machineFree = (value) => {
+  if (typeof value === "string") {
+    let s = value;
+    for (const sep of [path.sep, "/", "\\"]) s = s.split(TREE + sep).join("");
+    s = s.split(TREE).join(".");
+    for (const sep of [path.sep, "/", "\\"]) s = s.split(os.tmpdir() + sep).join("<tmp>/");
+    s = s.split(os.tmpdir()).join("<tmp>");
+    return s;
+  }
+  if (Array.isArray(value)) return value.map(machineFree);
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, machineFree(v)]));
+  return value;
+};
+
 const ledger = {
   startedAt: new Date().toISOString(),
-  tree: TREE,
-  shots: SHOTS,
+  tree: ".",
+  shots: machineFree(SHOTS) || ".",
   fixture: {
     catalogue: "pipelines.seed.json — seven definitions, no reader pipelines.json",
     bundle: "pipeline-bundle.seed.json — POC to UAT, thirteen stages (copied in as pipeline-bundle.json)",
@@ -273,7 +291,7 @@ const neededHeight = (page) =>
 const record = (name, file, data, extra = {}) => {
   if (!file) throw new Error(`frame ${name} was not written`);
   const stat = statSync(file);
-  const frame = { name, file, bytes: stat.size, sha256: sha(file), ...data, ...extra };
+  const frame = { name, file: machineFree(file), bytes: stat.size, sha256: sha(file), ...data, ...extra };
   ledger.frames.push(frame);
   console.log(`FRAME ${name}  ${file}  ${stat.size} bytes  sha256:${frame.sha256.slice(0, 16)}`);
   return frame;

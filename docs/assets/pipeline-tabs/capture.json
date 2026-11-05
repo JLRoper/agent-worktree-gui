@@ -1,7 +1,7 @@
 {
   "startedAt": "2026-11-04T15:08:29.628Z",
-  "tree": "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\hey-get-me-some-screensh-b7a6e6",
-  "shots": "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\hey-get-me-some-screensh-b7a6e6\\docs\\assets\\pipeline-tabs",
+  "tree": ".",
+  "shots": "docs\\assets\\pipeline-tabs",
   "fixture": {
     "catalogue": "pipelines.seed.json — seven definitions, no reader pipelines.json",
     "bundle": "pipeline-bundle.seed.json — POC to UAT, thirteen stages (copied in as pipeline-bundle.json)",
@@ -26,7 +26,7 @@
   "frames": [
     {
       "name": "pipeline-tab",
-      "file": "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\hey-get-me-some-screensh-b7a6e6\\docs\\assets\\pipeline-tabs\\pipeline-tab.png",
+      "file": "docs\\assets\\pipeline-tabs\\pipeline-tab.png",
       "bytes": 161910,
       "sha256": "6e09bea56e74a8b39f36169f036ccaf0278f20c1d6429e3862d5af00dc9d27db",
       "viewport": {
@@ -43,7 +43,7 @@
           "h": 576
         },
         "summary": "7 definitions",
-        "source": "C:\\Users\\roper\\AppData\\Local\\Temp\\wtgui-settings-capture-UV7G8M\\logs\\pipelines.json over C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\hey-get-me-some-screensh-b7a6e6\\pipelines.seed.json · version 1 (this panel reads 1)",
+        "source": "<tmp>/wtgui-settings-capture-UV7G8M\\logs\\pipelines.json over pipelines.seed.json · version 1 (this panel reads 1)",
         "picker": {
           "value": "local",
           "options": [
@@ -88,7 +88,7 @@
     },
     {
       "name": "pipeline-stages",
-      "file": "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\hey-get-me-some-screensh-b7a6e6\\docs\\assets\\pipeline-tabs\\pipeline-stages.png",
+      "file": "docs\\assets\\pipeline-tabs\\pipeline-stages.png",
       "bytes": 335893,
       "sha256": "f8351fe796487ebbaa9444867fb53a9f3372825961f9649c060747e0a8c04a30",
       "viewport": {
@@ -105,7 +105,7 @@
           "h": 976
         },
         "summary": "7 definitions",
-        "source": "C:\\Users\\roper\\AppData\\Local\\Temp\\wtgui-settings-capture-UV7G8M\\logs\\pipelines.json over C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\hey-get-me-some-screensh-b7a6e6\\pipelines.seed.json · version 1 (this panel reads 1)",
+        "source": "<tmp>/wtgui-settings-capture-UV7G8M\\logs\\pipelines.json over pipelines.seed.json · version 1 (this panel reads 1)",
         "picker": {
           "value": "sefl-review-loop",
           "options": [
@@ -150,7 +150,7 @@
     },
     {
       "name": "pipeline-flow",
-      "file": "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\hey-get-me-some-screensh-b7a6e6\\docs\\assets\\pipeline-tabs\\pipeline-flow.png",
+      "file": "docs\\assets\\pipeline-tabs\\pipeline-flow.png",
       "bytes": 61427,
       "sha256": "325def5fad59f842cd5dbe31de6b64962b509f4d25dfae5ea91da941a330dbb5",
       "viewport": {
@@ -175,7 +175,7 @@
     },
     {
       "name": "bundles-tab",
-      "file": "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\hey-get-me-some-screensh-b7a6e6\\docs\\assets\\pipeline-tabs\\bundles-tab.png",
+      "file": "docs\\assets\\pipeline-tabs\\bundles-tab.png",
       "bytes": 124763,
       "sha256": "9aef9f0fbf0839007a6eb1429cdb315611b9513bd96cc1c737403b04d57fe68b",
       "viewport": {
@@ -193,7 +193,7 @@
         },
         "summary": "1 pipeline · poc-to-uat",
         "summaryBad": false,
-        "source": "C:\\Users\\roper\\AppData\\Local\\Temp\\wtgui-settings-capture-UV7G8M\\logs\\pipeline-bundle.json · poc-to-uat — this panel imports whatever the studio's export saved there; the task pipeline window draws each pipeline's stages.",
+        "source": "<tmp>/wtgui-settings-capture-UV7G8M\\logs\\pipeline-bundle.json · poc-to-uat — this panel imports whatever the studio's export saved there; the task pipeline window draws each pipeline's stages.",
         "sourceBad": false,
         "pipelines": [
           {
