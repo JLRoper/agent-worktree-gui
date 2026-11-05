@@ -144,6 +144,8 @@ reader's.
 
 ## 8. Landing
 
-- change: `1611f10` — the fallback, its tests, the verifier section, the UI line and the design/proof docs
-- version: `cad3f00` — `1.12.8`, one patch above `origin/main`'s `1.12.7` at push time; tag `v1.12.8`
+- change: `88f4d42` — the fallback, its tests, the verifier section, the UI line and the design/proof docs
+- version: `4534179` — `1.12.8`, one patch above `origin/main`'s `1.12.7` at push time; tag `v1.12.8`
+- merge: `f280133` (PR #407, rebase merge — the branch's own shas were rewritten, so these are the ones
+  `origin/main` carries)
 - the design doc's §3.3 step 6 and the live proof's §5 update note describe the same rule
