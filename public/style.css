@@ -395,6 +395,19 @@ button.primary:hover { background: #24466a; }
 .settings-presets button:hover { color: var(--text); border-color: #3b4757; }
 .settings-presets button.on { border-color: var(--q-line); color: var(--q-head); background: var(--surface); }
 .settings-preview.bad { border-color: #57262a; color: #ff9c94; }
+/* The assistant reset's answer is a LIST — one line per admission, watch and wake, and a keeps line under them — so
+   it is painted as pre-wrapped text: the default `normal` would fold every row into one paragraph and the dry run's
+   whole point is that its rows can be read one at a time. `overflow-wrap` keeps a long run/admission id inside the
+   box instead of widening it. */
+.settings-preview.reset { white-space: pre-wrap; overflow-wrap: anywhere; }
+/* The restart row carries THREE controls now — the two restarts and the reset pair (whose assistant, and the press).
+   At the panel's 340px a single line squeezed the select down to its caret and wrapped every button's label, so the
+   row wraps: the restarts keep the first line and the reset pair takes the next one. Each label stays on one line,
+   and the select keeps enough width to read the assistant it names. */
+#restart-row { flex-wrap: wrap; row-gap: 8px; }
+#restart-row button { white-space: nowrap; }
+#restart-row #reset-assistant { flex: 1 1 120px; min-width: 0; max-width: 180px; }
+#restart-row #btn-reset-assistant { flex: 0 1 auto; }
 /* ---- the Skills tab: a read-only inventory, grouped source -> category ------------------------------------
    Two levels of folding: a source's heading (label, what kind of place it is, how many skills it holds) with the
    path it reads and — for a junction — the target it points at, then one heading per category the skill's own

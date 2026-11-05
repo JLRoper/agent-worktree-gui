@@ -1,13 +1,17 @@
 # The assistant reset — design
 
-Status: design, not built. There is no reset route in this tree today (`grep -rn "/reset"` over
-`server.js`, `lib/assistant.js` and `lib/assistant/` finds none). Nothing in this document was sent
-to a gateway; §7 separates what was measured from what is proposed.
+Status: **built.** The route is `lib/assistant/reset.js` + `lib/assistant/reset-store.js` (version 1.12.0), and the
+control this document designs in §4 — the third control in Settings → Gateway, the dry-run rows and the five copy
+states — landed with the same feature. §6's prerequisites are built as written except `j.admissionId` on the card:
+the route takes a fresh `GET /v1/runs/{id}` per candidate instead, which is the cost §1.1 already accepted.
 
-Scope: one control, `POST /api/assistants/:id/reset`, that makes a fenced assistant answerable
-again. It is a **control-plane** reset, not a memory wipe. It clears the unknown admission that
-fences the assistant's session, the wakes queued against it, and the watches it owns. It keeps the
-queue, the scratchpad and the charter.
+> Historical note, kept because it dates the measurements below: when this document was first written there was no
+> reset route in the tree (`grep -rn "/reset"` over `server.js`, `lib/assistant.js` and `lib/assistant/` found none),
+> and nothing in it had been sent to a gateway. §7 separates what was measured then from what was designed.
+
+Scope: one control, `POST /api/assistants/:id/reset`, that makes a fenced assistant answerable again. It is a
+**control-plane** reset, not a memory wipe. It clears the unknown admission that fences the assistant's session, the
+wakes queued against it, and the watches it owns. It keeps the queue, the scratchpad and the charter.
 
 Built from two committed research docs and the code they measure:
 
@@ -589,15 +593,17 @@ which is the only proof that matters for this feature.
 
 ## 6. Prerequisites
 
-Four small changes this design needs before the route can be honest; none is built here.
+Four small changes this design needed before the route could be honest. All four are in the tree: 2, 3 and 4 as
+written below, and 1 is deliberately NOT built — the route does a fresh `GET /v1/runs/{id}` per candidate instead, so
+the card's cache cannot reach the wire (the cost §1.1 accepted).
 
 1. `lib/jobs.js`: store `j.admissionId` at `adoptRun`/`poll` from the same GET that already yields
-   `execution_generation` (`:3231`, `:3321`).
-2. `lib/assistant.js`: add `at` to `pendingWake` entries at enqueue (around `:3804`).
+   `execution_generation` (`:3231`, `:3321`). **Not built, by choice:** the reset reads the pair from its own GET.
+2. `lib/assistant.js`: add `at` to `pendingWake` entries at enqueue (`:3817`). **Built.**
 3. `lib/assistant/reset.js`: the route factory, the enumeration, the resolve loop, the clearing,
-   following `createQueueRoutes`'s shape.
+   following `createQueueRoutes`'s shape. **Built.**
 4. `lib/assistant/reset-store.js` (or a function in the factory): the read-only `session_admissions`
-   query, `DatabaseSync`, no writes — the same pattern as `lib/session-usage.js`.
+   query, `DatabaseSync`, no writes — the same pattern as `lib/session-usage.js`. **Built.**
 
 ## 7. What is measured, and what is designed
 
@@ -609,10 +615,19 @@ Measured, and cited above:
   (`16e7a6a7…`, generation 63, epoch 18). Read-only; no row written;
 - the code paths named by file and line.
 
-Designed, not run:
+Designed here, and built and measured since — each with a proof the reader can re-run:
 
-- the route, the payloads, the copy, the placement. No reset exists, so no request in this document
-  has been sent to a gateway, and none of the copy has been seen in a browser.
-- The one measurement a build must make before landing: a real unknown admission resolved through
-  the route, followed by a new `POST /v1/runs` accepted on the same session — the pair the fence doc
-  measured by hand (rows #11 and #16), repeated through the control.
+- the route, the payloads and the placement: `node tools/verify-assistant-reset.mjs` drives a real panel over HTTP
+  with a stub gateway per run, one request per state (dry run, `409 assistant_live`, `409 fence_unclearable`,
+  success, incomplete), and asserts the resolve body is `{admission_id, execution_generation}` from a fresh GET, that
+  `/stop` is never called, that the store re-read is the verdict, and that the local half runs only after it;
+- the copy and the control: `node tools/verify-assistant-reset-ui.mjs` drives the five states in Chromium against the
+  same real route, including that a dry run sends no POST, that a refusal disarms the button, and that the success and
+  incomplete copy name `hermes --resume <thread>` with the real thread id;
+- the measurement this document said a build must make before landing — an unknown admission resolved through the
+  route, the store row settled and the projection then reading `cancelled` — is the success section of the first
+  gate, against the sandbox's own store and a stub gateway. What neither gate proves is the part that needs a REAL
+  gateway: the live `panel-assistant-*` session, and a queued turn behind the fence draining afterwards. Both settle
+  a real turn as `interrupted` on a real store, which is a reader decision and not something a gate should do
+  unasked. The route's order is what makes that safe to try: gateway first, local second, and `incomplete` when the
+  store is still fenced.
