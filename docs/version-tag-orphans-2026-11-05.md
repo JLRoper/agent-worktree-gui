@@ -9,7 +9,9 @@ gate. Everything below was measured in this worktree with `git merge-base --is-a
 
 The first answer is the one that changes the question: **none of the four tagged commits is on `main`** — not at
 `2ffb933`, not at `origin/main` when this ran. The premise that two of them are on `main` does not hold. All four
-tags are annotated (`git cat-file -t` reads `tag`), so none of the four was a `lightweight` finding either.
+tags are annotated (`git cat-file -t` reads `tag`), so none of the four was a `lightweight` finding either. Two of
+them landed while this branch was open (`v1.27.1`, `v1.28.0`); the fresh measurement after those landings is the
+section below, and the four rows here are what the brief was written against.
 
 ## The four, as they stood when the brief was written
 
@@ -57,6 +59,71 @@ and `v1.28.0` likewise moved to `600fbc46` when its branch landed.
 So: a rebase or squash landing does re-create the declaring commit, and the tag must move with it — but the move
 is a documented step of the landing, and when it is skipped the gate's finding is `wrong-commit`, not
 `orphan-tag`. The brief's four were all `orphan-tag`.
+
+## Fresh evidence, measured after the brief: PR #445 rewrote the commit `v1.28.0` named, and the tag moved
+
+Everything in this section was measured after the brief was written, at `origin/main` `1e61686`, with `gh pr view`,
+`git merge-base --is-ancestor`, `git for-each-ref --contains`, `git cat-file -p` and the gate itself. `v1.28.0` was
+the fourth finding, and it is the case that answers the question with a live rebase rather than a reconstruction:
+
+```
+$ gh pr view 445 --json number,state,mergedAt,mergeCommit
+{"mergeCommit":{"oid":"f7e8d1ffc5216107694e247e6c164667e568fc5f"},"mergedAt":"2026-11-05T22:55:59Z",
+ "number":445,"state":"MERGED","title":"feat: two four-way push controls, per project and per remote repository"}
+```
+
+Before that landing the tag named `e989fd4aaa`, the branch's own bump commit (`package.json` `1.27.0` → `1.28.0`,
+committed `2026-11-05T17:26:10-05:00`). That commit is now an ancestor of nothing:
+
+```
+$ git merge-base --is-ancestor e989fd4 origin/main; echo $?
+1
+$ git for-each-ref --contains e989fd4 --format='%(refname)'
+$                                  # no ref names it: not a branch, not main, not the tag any more
+```
+
+The commit `main` carries for the same declaration is `600fbc4640`, 16 commits below the tip, with the same subject
+and the same one-line patch — `1.27.1` → `1.28.0` (`main` had moved to `1.27.1` first, which is why the rebased
+patch starts above the branch's `1.27.0`). The rebase-merge re-created the bump under a new sha and dropped the old
+one, so the tag had to be moved, and it was:
+
+```
+$ git cat-file -p v1.28.0 | head -4
+object 600fbc4640cb39c477301df5914acbe79ec5c5c3
+type commit
+tag v1.28.0
+tagger Jake Roper <jacob.roper@sefl.com> 1793919400 -0500
+```
+
+`1793919400 -0500` is `2026-11-05T22:56:40Z`, 41 s after the merge — `node tools/version.mjs tag --ref origin/main
+--force`, the post-merge step `docs/versioning.md` prescribes, not a later repair. The message names the commit:
+`package.json first carried 1.28.0 at 600fbc4640 (chore: 1.28.0 — the version this landing carries)`.
+
+The same tag therefore takes three states, and they are three different findings, which is the whole argument for
+the fix:
+
+| when | tag names | on `main`? | gate says |
+| --- | --- | --- | --- |
+| branch open, before PR #445 | `e989fd4aaa` | no | `held on a branch` (old gate: `orphan-tag`) |
+| merged, move skipped | `e989fd4aaa` | no, but `1.28.0` is now in `main`'s walk at `600fbc46` | `wrong-commit` |
+| moved, as landed | `600fbc4640` | yes | nothing |
+
+The middle row is measured, not asserted — in a throwaway `git clone --shared` of this repo (no worktree, the real
+tags untouched) `v1.28.0` was forced back onto `e989fd4` and the gate was run against `origin/main`:
+
+```
+  wrong-commit v1.28.0 points at e989fd4aaa, but 1.28.0 first appeared at 600fbc4640
+FAIL — 1 finding across 324 version bumps
+```
+
+So the answer to the brief's question is: a rebase landing does rewrite the declaring commit and orphan the tag
+placed before it — and the tag's recovery is a move, which happened 41 s after the merge. The `orphan-tag` reading
+of the same tag was only ever true before the landing; the gate's error was calling it a finding in either state.
+
+At this measurement the four are two-and-two: `v1.27.1`@`dfae827e` and `v1.28.0`@`600fbc46` are on `main` and
+silent, while `v1.8.3`@`ea16b282` and `v1.23.1`@`988d8494` are still on no branch — numbers `main` skipped, held
+rather than failed. `node tools/verify-version-tags.mjs --ref origin/main` reads PASS at `1e61686` with the held
+wording, which is the landing gate this fix exists to keep green.
 
 ## The admin-bypass merges do not defeat the walk here
 
