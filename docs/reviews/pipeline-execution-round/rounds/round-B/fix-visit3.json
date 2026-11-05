@@ -1,0 +1,20 @@
+{
+  "stage": "fix",
+  "visit": 3,
+  "read": {
+    "artifact": "probe.json",
+    "findings": 6,
+    "failing": []
+  },
+  "applied": [],
+  "skipped": [],
+  "file": "studio/app.css",
+  "sha256": {
+    "before": "abfb4def0187c2b0b22e9a5e5a6637cbdee8617409f7de6574ab88be4148aef4",
+    "after": "abfb4def0187c2b0b22e9a5e5a6637cbdee8617409f7de6574ab88be4148aef4"
+  },
+  "changed": false,
+  "evidence": [
+    "fix-visit3.png"
+  ]
+}

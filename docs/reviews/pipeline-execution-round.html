@@ -1,0 +1,749 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pipeline-driven execution — two independent rounds on a three-stage loop</title>
+<style>
+  :root {
+    --bg: #0e1116; --panel: #151a21; --panel2: #1b212a; --line: #2a3340; --text: #e6e9ef; --dim: #9aa5b4;
+    --dimmer: #6f7a89; --green: #7ee787; --red: #ff9c94; --amber: #f0c674; --blue: #9ecbff; --purple: #c8a6ff;
+    --mono: ui-monospace, "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+    --ui: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body { margin: 0; color: var(--text); font: 15px/1.62 var(--ui); }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 30px 24px 72px; }
+  a { color: var(--blue); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  h1 { font-size: 27px; line-height: 1.22; margin: 4px 0 8px; letter-spacing: -0.2px; }
+  h2 { font-size: 19px; margin: 44px 0 12px; padding-top: 16px; border-top: 1px solid var(--line); }
+  h3 { font-size: 15.5px; margin: 26px 0 8px; color: var(--blue); }
+  h4 { font-size: 12px; margin: 18px 0 6px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.07em; }
+  p { margin: 9px 0; }
+  ul, ol { margin: 8px 0 8px 22px; padding: 0; }
+  li { margin: 5px 0; }
+  code, .mono { font-family: var(--mono); font-size: 12.8px; }
+  code { background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+  .kicker { color: var(--dimmer); font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; }
+  .sub { color: var(--dim); font-size: 16px; margin: 0 0 14px; max-width: 940px; }
+  .meta { color: var(--dim); font-size: 12.5px; }
+  .meta code { font-size: 12px; }
+  nav { margin: 18px 0 8px; padding: 12px 16px; background: var(--panel); border: 1px solid var(--line);
+        border-radius: 8px; font-size: 13px; line-height: 1.9; }
+  nav b { color: var(--dimmer); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.1em; }
+  nav a { margin: 0 10px 0 0; white-space: nowrap; }
+  .lead { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--blue);
+          border-radius: 8px; padding: 14px 18px; margin: 18px 0; }
+  .lead p { margin: 5px 0; }
+  .verdict { background: #13261a; border: 1px solid #2f5f38; border-left: 4px solid var(--green);
+             border-radius: 8px; padding: 13px 18px; margin: 18px 0; }
+  .verdict h4 { color: var(--green); margin: 0 0 4px; }
+  .warn { background: #2a2414; border: 1px solid #5c4d22; border-left: 4px solid var(--amber);
+          border-radius: 8px; padding: 12px 18px; margin: 16px 0; }
+  .warn h4 { color: var(--amber); margin: 0 0 4px; }
+  .box { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 18px; margin: 14px 0; }
+  .tw { overflow-x: auto; margin: 10px 0 16px; border: 1px solid var(--line); border-radius: 8px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: left; vertical-align: top; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+  th { background: var(--panel2); color: var(--dim); font-weight: 600; font-size: 12px;
+       text-transform: uppercase; letter-spacing: 0.05em; }
+  tr:last-child td { border-bottom: 0; }
+  td.num { text-align: right; font-family: var(--mono); font-size: 12.4px; white-space: nowrap; }
+  .small { font-size: 12.4px; }
+  .dim { color: var(--dimmer); }
+  .ok { color: var(--green); font-weight: 600; }
+  .bad { color: var(--red); font-weight: 600; }
+  .tag { font-size: 10.5px; border: 1px solid var(--line); border-radius: 999px; padding: 0 6px; color: var(--dim); }
+  .tag.live { color: var(--amber); border-color: #5c4d22; }
+  figure { margin: 16px 0; }
+  figure img { width: 100%; border: 1px solid var(--line); border-radius: 8px; display: block; }
+  figcaption { color: var(--dim); font-size: 12.5px; margin-top: 6px; }
+  .pair { display: grid; grid-template-columns: 1fr; gap: 14px; }
+  
+  pre { background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px;
+        overflow-x: auto; font-family: var(--mono); font-size: 12.2px; line-height: 1.55; white-space: pre-wrap; }
+  .files li { font-family: var(--mono); font-size: 12.6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="kicker">agent-worktree-gui · pipeline-driven execution · two rounds</div>
+<h1>Three stages, one tree, two loop-backs, one cap: a pipeline driven end to end</h1>
+<p class="sub">The driver landed on <code>origin/main</code> at <code>504f2cd</code> (1.18.0). This is what it does when a
+queue row is put on a real pipeline and left alone: nine stage runs, two crossings of a capped loop, real headless
+Chromium in every stage, and a park that says why.</p>
+
+<nav>
+  <b>on this page</b>
+  <a href="#what">What ran</a>
+  <a href="#doc">The pipeline document</a>
+  <a href="#round">Round A, sweep by sweep</a>
+  <a href="#stages">The nine stage runs</a>
+  <a href="#work">The work each stage did</a>
+  <a href="#loop">The loop and its cap</a>
+  <a href="#park">What parked it</a>
+  <a href="#tree">One tree</a>
+  <a href="#roundb">Round B</a>
+  <a href="#compare">The two rounds compared</a>
+  <a href="#noticed">What driving it showed</a>
+  <a href="#files">Files</a>
+</nav>
+
+<h2 id="what">What ran, and what is real</h2>
+<div class="lead">
+  <p><b>Real:</b> <code>Assistant.sweepQueues</code> — the panel's own clock. It read the bundle, called
+  <code>driveTaskPipelines</code> and <code>settleTasks</code>, built the stage prompt, wrote the queue file once per pass
+  and journalled each write. The queue file, the driver, the settle and the journal are the panel's own code, not a
+  re-implementation.</p>
+  <p><b>A stand-in, named:</b> the job store is the harness's own (<code>lib/jobs.js</code> is not loaded). It supplies the
+  three things the panel asks a store for — <code>list</code>, <code>firstOfThread</code> and <code>makeWorktree</code> —
+  and the harness injects one <code>spawner</code>. <code>makeWorktree</code> runs a real <code>git worktree add -b</code>
+  against the fixture repository, so the tree, the branch and the cut are real; the spawner launches the real worker
+  process.</p>
+  <p><b>Real:</b> every stage's work — a separate <code>node</code> process per stage run, driving headless Chromium
+  against the Pipeline Studio copy in the tree and writing the artifact the stage declares.</p>
+  <p><b>A seat, not a model:</b> there is no gateway, no token and no LLM. The worker is a scripted seat with a stated
+  remit; the job record it returns (<code>thread</code>, <code>status</code>, <code>finalMessage</code>) is what a
+  gateway would have returned. It is handed the prompt and its tree and nothing else, so the only way it knows which
+  stage it is in is the provenance line the driver put in that prompt.</p>
+</div>
+
+<div class="verdict">
+  <h4>Two independent rounds, the same answer</h4>
+  <p>Round A: 9 stage runs, <b>1 tree cut</b>, 2 crossings of <code>H-3</code> against a cap of 2, row parked at S3 with
+  <code>pipeline-cap</code>. Round B: identical in every routing fact. The nine stages held the row for 31s
+  (A) and 80s
+  (B) from the first entry to the last settle, with the browser workers accounting for 28s and
+  77s of that.</p>
+</div>
+
+<h2 id="doc">The pipeline document, and its sha256</h2>
+<p>The bundle was written once, validated by the panel's own loader (<code>parseBundle</code>) before anything was
+driven, and read by the assistant on every pass. Both rounds read the same bytes: the two sha256s
+are equal.</p>
+<div class="tw"><table>
+  <tr><th>field</th><th>value</th></tr>
+  <tr><td>pipeline</td><td><code>probe-fix-loop</code> — Probe, fix, verify — a capped repair loop</td></tr>
+  <tr><td>bundle file</td><td class="mono small">&lt;work&gt;/round-A/pipeline-bundle.json</td></tr>
+  <tr><td>sha256 (round A)</td><td class="mono small">9589a3e69cf6d2a41d7eccc25d0e9a013eb06867db1dddaa98418109807413d0</td></tr>
+  <tr><td>sha256 (round B)</td><td class="mono small">9589a3e69cf6d2a41d7eccc25d0e9a013eb06867db1dddaa98418109807413d0</td></tr>
+  <tr><td>stages</td><td><code>S1</code> Probe the studio → <code>out/probe.json</code><br><code>S2</code> Fix what the probe found → <code>out/fix.json</code><br><code>S3</code> Verify the fix → <code>out/verify.json</code></td></tr>
+  <tr><td>handoffs</td><td><code>H-1</code> S1 → S2 · <b>sequence</b><br><code>H-2</code> S2 → S3 · <b>sequence</b><br><code>H-3</code> S3 → S1 · <b>loop</b> · cap <b>2 rounds</b></td></tr>
+  <tr><td>gates</td><td>none — nothing can stop this pipeline but the cap</td></tr>
+</table></div>
+
+<h2 id="round">Round A, sweep by sweep</h2>
+<p>Every row below is one <code>sweepQueues()</code> pass (11 passes). A <span class="tag live">live</span>
+pass found the row's thread still running and moved nothing — the driver reads the run's status, not a sentence, and a
+live run has not settled. The pass after the worker exits is the one that advances the row.</p>
+<div class="tw"><table>
+  <tr><th>#</th><th>row state after the pass</th><th>stage</th><th>crossings</th><th>thread</th><th>the row's reason</th></tr>
+  <tr>
+      <td class="num">1</td>
+      <td>queued</td>
+      <td>S1 · visit 1</td>
+      <td class="mono small">{}</td>
+      <td class="mono small">—</td>
+      <td class="small"></td>
+    </tr>
+<tr>
+      <td class="num">2</td>
+      <td>running</td>
+      <td>S1 · visit 1</td>
+      <td class="mono small">{}</td>
+      <td class="mono small">a-01 <span class="tag live">live</span></td>
+      <td class="small"></td>
+    </tr>
+<tr>
+      <td class="num">3</td>
+      <td>running</td>
+      <td>S2 · visit 1</td>
+      <td class="mono small">{"H-1":1}</td>
+      <td class="mono small">a-02 <span class="tag live">live</span></td>
+      <td class="small"></td>
+    </tr>
+<tr>
+      <td class="num">4</td>
+      <td>running</td>
+      <td>S3 · visit 1</td>
+      <td class="mono small">{"H-1":1,"H-2":1}</td>
+      <td class="mono small">a-03 <span class="tag live">live</span></td>
+      <td class="small"></td>
+    </tr>
+<tr>
+      <td class="num">5</td>
+      <td>running</td>
+      <td>S1 · visit 2</td>
+      <td class="mono small">{"H-1":1,"H-2":1,"H-3":1}</td>
+      <td class="mono small">a-04 <span class="tag live">live</span></td>
+      <td class="small"></td>
+    </tr>
+<tr>
+      <td class="num">6</td>
+      <td>running</td>
+      <td>S2 · visit 2</td>
+      <td class="mono small">{"H-1":2,"H-2":1,"H-3":1}</td>
+      <td class="mono small">a-05 <span class="tag live">live</span></td>
+      <td class="small"></td>
+    </tr>
+<tr>
+      <td class="num">7</td>
+      <td>running</td>
+      <td>S3 · visit 2</td>
+      <td class="mono small">{"H-1":2,"H-2":2,"H-3":1}</td>
+      <td class="mono small">a-06 <span class="tag live">live</span></td>
+      <td class="small"></td>
+    </tr>
+<tr>
+      <td class="num">8</td>
+      <td>running</td>
+      <td>S1 · visit 3</td>
+      <td class="mono small">{"H-1":2,"H-2":2,"H-3":2}</td>
+      <td class="mono small">a-07 <span class="tag live">live</span></td>
+      <td class="small"></td>
+    </tr>
+<tr>
+      <td class="num">9</td>
+      <td>running</td>
+      <td>S2 · visit 3</td>
+      <td class="mono small">{"H-1":3,"H-2":2,"H-3":2}</td>
+      <td class="mono small">a-08 <span class="tag live">live</span></td>
+      <td class="small"></td>
+    </tr>
+<tr>
+      <td class="num">10</td>
+      <td>running</td>
+      <td>S3 · visit 3</td>
+      <td class="mono small">{"H-1":3,"H-2":3,"H-3":2}</td>
+      <td class="mono small">a-09 <span class="tag live">live</span></td>
+      <td class="small"></td>
+    </tr>
+<tr>
+      <td class="num">11</td>
+      <td>parked</td>
+      <td>S3 · visit 3</td>
+      <td class="mono small">{"H-1":3,"H-2":3,"H-3":2}</td>
+      <td class="mono small">a-09</td>
+      <td class="small">the loop H-3 (S3 → S1) is at its cap of 2 rounds — 2 crossings already taken, so the row s</td>
+    </tr>
+</table></div>
+
+<h2 id="stages">The nine stage runs: start, settle, thread, artifact</h2>
+<p><code>enteredAt</code> is when the record entered the stage; <code>settledAt</code> is when its run was read as
+<code>done</code> and the stage settled. Every entry's <code>tree.path</code> is the same directory as the row's
+<code>pipelineRun.tree.path</code> — one cut, nine runs, no second tree.</p>
+<div class="tw"><table>
+  <tr><th>stage run</th><th>stage</th><th>thread</th><th>entered (UTC)</th><th>settled</th><th>held</th><th>artifact sha256</th><th>in tree</th></tr>
+  <tr>
+      <td class="mono">probe-fix-loop/S1#1</td>
+      <td>Probe the studio</td>
+      <td class="mono">a-01</td>
+      <td class="num">08:37:23</td>
+      <td class="num">08:37:28</td>
+      <td class="num">4.2s</td>
+      <td class="mono small">511dd08d7c66df2a…</td>
+      <td>present</td>
+    </tr>
+<tr>
+      <td class="mono">probe-fix-loop/S2#1</td>
+      <td>Fix what the probe found</td>
+      <td class="mono">a-02</td>
+      <td class="num">08:37:28</td>
+      <td class="num">08:37:30</td>
+      <td class="num">2.0s</td>
+      <td class="mono small">671d30422a98b024…</td>
+      <td>present</td>
+    </tr>
+<tr>
+      <td class="mono">probe-fix-loop/S3#1</td>
+      <td>Verify the fix</td>
+      <td class="mono">a-03</td>
+      <td class="num">08:37:30</td>
+      <td class="num">08:37:33</td>
+      <td class="num">3.8s</td>
+      <td class="mono small">82281e4bada04e68…</td>
+      <td>present</td>
+    </tr>
+<tr>
+      <td class="mono">probe-fix-loop/S1#2</td>
+      <td>Probe the studio</td>
+      <td class="mono">a-04</td>
+      <td class="num">08:37:33</td>
+      <td class="num">08:37:37</td>
+      <td class="num">3.5s</td>
+      <td class="mono small">b62ba1ff0b897ef0…</td>
+      <td>present</td>
+    </tr>
+<tr>
+      <td class="mono">probe-fix-loop/S2#2</td>
+      <td>Fix what the probe found</td>
+      <td class="mono">a-05</td>
+      <td class="num">08:37:37</td>
+      <td class="num">08:37:39</td>
+      <td class="num">2.5s</td>
+      <td class="mono small">4cc1a76bc15014c5…</td>
+      <td>present</td>
+    </tr>
+<tr>
+      <td class="mono">probe-fix-loop/S3#2</td>
+      <td>Verify the fix</td>
+      <td class="mono">a-06</td>
+      <td class="num">08:37:39</td>
+      <td class="num">08:37:44</td>
+      <td class="num">4.9s</td>
+      <td class="mono small">38db2871d1598d01…</td>
+      <td>present</td>
+    </tr>
+<tr>
+      <td class="mono">probe-fix-loop/S1#3</td>
+      <td>Probe the studio</td>
+      <td class="mono">a-07</td>
+      <td class="num">08:37:44</td>
+      <td class="num">08:37:48</td>
+      <td class="num">3.7s</td>
+      <td class="mono small">b243e59a7446d3ed…</td>
+      <td>present</td>
+    </tr>
+<tr>
+      <td class="mono">probe-fix-loop/S2#3</td>
+      <td>Fix what the probe found</td>
+      <td class="mono">a-08</td>
+      <td class="num">08:37:48</td>
+      <td class="num">08:37:50</td>
+      <td class="num">1.8s</td>
+      <td class="mono small">26e920e868ba87d9…</td>
+      <td>present</td>
+    </tr>
+<tr>
+      <td class="mono">probe-fix-loop/S3#3</td>
+      <td>Verify the fix</td>
+      <td class="mono">a-09</td>
+      <td class="num">08:37:50</td>
+      <td class="num">08:37:54</td>
+      <td class="num">4.3s</td>
+      <td class="mono small">715720c237078061…</td>
+      <td>present</td>
+    </tr>
+</table></div>
+<p class="small dim">Total wall clock from the first entry to the last settle: 30.7s. Threads are
+distinct per stage run: the driver starts a NEW worker for every visit, including the loop-backs.</p>
+
+<h2 id="work">The work each stage did — real browser, real numbers</h2>
+<p>The probe's contract is six clauses (the pipeline's own bar, quoted in the stage prompt). Visit 1 measured four
+passing and two failing; the fix stage applied the stylesheet patch the failures named; the verify stage re-measured
+and found both fixed with no regression. Visits 2 and 3 re-probed a studio that was already at the bar.</p>
+
+<h3>Probe findings, all three visits</h3>
+<div class="tw"><table>
+  <tr><th>visit</th><th>clause</th><th>key</th><th>verdict</th><th>what it measured</th></tr>
+  <tr>
+        <td class="num">1</td>
+        <td class="mono">L1</td>
+        <td class="mono small">seed-rendered</td>
+        <td><span class="ok">pass</span></td>
+        <td class="small">13 cards S0..S12</td>
+      </tr>
+<tr>
+        <td class="num">1</td>
+        <td class="mono">L2</td>
+        <td class="mono small">no-page-errors</td>
+        <td><span class="ok">pass</span></td>
+        <td class="small">0 page, 0 console</td>
+      </tr>
+<tr>
+        <td class="num">1</td>
+        <td class="mono">L3</td>
+        <td class="mono small">card-name</td>
+        <td><span class="ok">pass</span></td>
+        <td class="small">13/13 named</td>
+      </tr>
+<tr>
+        <td class="num">1</td>
+        <td class="mono">L4</td>
+        <td class="mono small">subtext-size</td>
+        <td><span class="bad">FAIL</span></td>
+        <td class="small">min 10.5px over 26 lines</td>
+      </tr>
+<tr>
+        <td class="num">1</td>
+        <td class="mono">L5</td>
+        <td class="mono small">min-text</td>
+        <td><span class="bad">FAIL</span></td>
+        <td class="small">node-imported 8px, node-gate 9px, node-kind 9px, node-artifact 9.5px</td>
+      </tr>
+<tr>
+        <td class="num">1</td>
+        <td class="mono">L6</td>
+        <td class="mono small">bundle-docs</td>
+        <td><span class="ok">pass</span></td>
+        <td class="small">artifacts, pipeline, roles, yaml</td>
+      </tr>
+<tr>
+        <td class="num">2</td>
+        <td class="mono">L1</td>
+        <td class="mono small">seed-rendered</td>
+        <td><span class="ok">pass</span></td>
+        <td class="small">13 cards S0..S12</td>
+      </tr>
+<tr>
+        <td class="num">2</td>
+        <td class="mono">L2</td>
+        <td class="mono small">no-page-errors</td>
+        <td><span class="ok">pass</span></td>
+        <td class="small">0 page, 0 console</td>
+      </tr>
+<tr>
+        <td class="num">2</td>
+        <td class="mono">L3</td>
+        <td class="mono small">card-name</td>
+        <td><span class="ok">pass</span></td>
+        <td class="small">13/13 named</td>
+      </tr>
+<tr>
+        <td class="num">2</td>
+        <td class="mono">L4</td>
+        <td class="mono small">subtext-size</td>
+        <td><span class="ok">pass</span></td>
+        <td class="small">min 12px over 26 lines</td>
+      </tr>
+<tr>
+        <td class="num">2</td>
+        <td class="mono">L5</td>
+        <td class="mono small">min-text</td>
+        <td><span class="ok">pass</span></td>
+        <td class="small">nothing below 10px</td>
+      </tr>
+<tr>
+        <td class="num">2</td>
+        <td class="mono">L6</td>
+        <td class="mono small">bundle-docs</td>
+        <td><span class="ok">pass</span></td>
+        <td class="small">artifacts, pipeline, roles, yaml</td>
+      </tr>
+<tr>
+        <td class="num">3</td>
+        <td class="mono">L1</td>
+        <td class="mono small">seed-rendered</td>
+        <td><span class="ok">pass</span></td>
+        <td class="small">13 cards S0..S12</td>
+      </tr>
+<tr>
+        <td class="num">3</td>
+        <td class="mono">L2</td>
+        <td class="mono small">no-page-errors</td>
+        <td><span class="ok">pass</span></td>
+        <td class="small">0 page, 0 console</td>
+      </tr>
+<tr>
+        <td class="num">3</td>
+        <td class="mono">L3</td>
+        <td class="mono small">card-name</td>
+        <td><span class="ok">pass</span></td>
+        <td class="small">13/13 named</td>
+      </tr>
+<tr>
+        <td class="num">3</td>
+        <td class="mono">L4</td>
+        <td class="mono small">subtext-size</td>
+        <td><span class="ok">pass</span></td>
+        <td class="small">min 12px over 26 lines</td>
+      </tr>
+<tr>
+        <td class="num">3</td>
+        <td class="mono">L5</td>
+        <td class="mono small">min-text</td>
+        <td><span class="ok">pass</span></td>
+        <td class="small">nothing below 10px</td>
+      </tr>
+<tr>
+        <td class="num">3</td>
+        <td class="mono">L6</td>
+        <td class="mono small">bundle-docs</td>
+        <td><span class="ok">pass</span></td>
+        <td class="small">artifacts, pipeline, roles, yaml</td>
+      </tr>
+</table></div>
+
+<h3>What the fix stage changed, and what the verify stage saw</h3>
+<div class="tw"><table>
+  <tr><th>clause</th><th>rule</th><th>change</th></tr>
+  <tr>
+      <td class="mono">L4</td>
+      <td class="mono">.node-meta</td>
+      <td>role/meta line 10.5px -&gt; 12px</td>
+    </tr>
+<tr>
+      <td class="mono">L4</td>
+      <td class="mono">.node-role</td>
+      <td>role name set to 12px explicitly</td>
+    </tr>
+<tr>
+      <td class="mono">L5</td>
+      <td class="mono">.node-imported</td>
+      <td>imported badge 8px -&gt; 10px</td>
+    </tr>
+<tr>
+      <td class="mono">L5</td>
+      <td class="mono">.node-gate</td>
+      <td>gate badge 9px -&gt; 10px</td>
+    </tr>
+<tr>
+      <td class="mono">L5</td>
+      <td class="mono">.node-kind</td>
+      <td>kind label 9px -&gt; 10px</td>
+    </tr>
+<tr>
+      <td class="mono">L5</td>
+      <td class="mono">.node-artifact</td>
+      <td>artifact chip 9.5px -&gt; 10px</td>
+    </tr><tr><td colspan="3" class="small dim">visit 2: nothing applied — the probe found no failing clause, and the fix stage wrote an artifact saying so.</td></tr>
+</table></div>
+<p class="small">Visit 1's <code>fix.json</code> records <code>studio/app.css</code> before
+<code>46504f9b5d228ec0…</code> and after <code>abfb4def0187c2b0…</code>.
+Visit 1's <code>verify.json</code> says fixed: <b>L4, L5</b>, still open: none,
+regressions: none.</p>
+
+<div class="pair">
+  <figure>
+    <img src="pipeline-execution-round/shots/round-A/probe-fix-loop-S1-1.png" alt="The studio as the probe found it, before the fix">
+    <figcaption><b>Visit 1, before the fix.</b> min 10.5px over 26 lines role/meta lines;
+    node-imported 8px, node-gate 9px, node-kind 9px, node-artifact 9.5px. The badges and the role line are the smallest type on the canvas.</figcaption>
+  </figure>
+  <figure>
+    <img src="pipeline-execution-round/shots/round-A/probe-fix-loop-S3-1.png" alt="The same canvas after the fix">
+    <figcaption><b>Visit 1, after the fix (the verify stage's shot).</b> min 12px over 26 lines;
+    nothing below 10px. Same thirteen cards, same layout — only the type moved.</figcaption>
+  </figure>
+</div>
+<p class="small dim">The shots are the stages' own evidence, taken in the tree the stage ran in and copied here by the
+harness. The "saved …" clock in the studio's footer is the app's own, and is not part of any artifact.</p>
+
+<h2 id="loop">The loop and its cap</h2>
+<p><code>H-3</code> is the only edge out of S3, so it is the edge the driver takes: S3 →
+S1, kind <code>loop</code>, cap <code>2 rounds</code>.
+The driver counts crossings on the record and refuses the third.</p>
+<div class="tw"><table>
+  <tr><th>crossing</th><th>edge</th><th>after stage run</th><th>row written to</th><th>counting</th></tr>
+  <tr><td class="num">1</td><td class="mono">H-3</td><td class="mono">probe-fix-loop/S3#1</td><td class="mono">S1 · visit 2</td><td><span class="ok">allowed</span> — 1 of 2</td></tr>
+  <tr><td class="num">2</td><td class="mono">H-3</td><td class="mono">probe-fix-loop/S3#2</td><td class="mono">S1 · visit 3</td><td><span class="ok">allowed</span> — 2 of 2</td></tr>
+  <tr><td class="num">3</td><td class="mono">H-3</td><td class="mono">probe-fix-loop/S3#3</td><td class="mono">—</td><td><span class="bad">refused</span> — used 2, limit 2</td></tr>
+</table></div>
+<p>The record kept the count: <code>pipelineRun.crossings</code> reads
+<code>{"H-1":3,"H-2":3,"H-3":2}</code> at the park — the rail edges three times each, the loop twice. The
+loop is <b>not</b> re-taken on a requeue: the count lives in the queue file, which is what makes a cap survive a panel
+restart.</p>
+
+<h2 id="park">What parked the row, and why</h2>
+<div class="warn">
+  <h4>parked · pipeline-cap · S3 · by the panel</h4>
+  <p>“the loop H-3 (S3 → S1) is at its cap of 2 rounds — 2 crossings already taken, so the row stops here for a decision”</p>
+</div>
+<p>The park is a <b>manual hold</b>: nothing the panel can test releases a cap. The driver wrote the decision on the stage
+run (<code>probe-fix-loop/S3#3</code>) as a structured fact — code <code>pipeline-cap</code>, trigger
+<code>cap</code>, the edge, the used count and the limit — and rendered the sentence once for the row, the journal and
+the window. The release is the reader's: <code>pipeline-release</code> with <code>release: "cap"</code> resets that
+edge's crossings to zero (a plain requeue would re-park on the next pass, because the test is
+<code>used + 1 &gt; limit</code>).</p>
+<div class="tw"><table>
+  <tr><th>decision</th><th>stage run</th><th>code</th><th>trigger</th><th>by</th></tr>
+  <tr><td class="small">probe-fix-loop · S1 settled — the run finished</td><td class="mono">probe-fix-loop/S1#1</td><td class="mono">—</td><td class="mono">stage-settled</td><td>panel</td></tr>
+<tr><td class="small">probe-fix-loop · S2 settled — the run finished</td><td class="mono">probe-fix-loop/S2#1</td><td class="mono">—</td><td class="mono">stage-settled</td><td>panel</td></tr>
+<tr><td class="small">probe-fix-loop · S3 settled — the run finished</td><td class="mono">probe-fix-loop/S3#1</td><td class="mono">—</td><td class="mono">stage-settled</td><td>panel</td></tr>
+<tr><td class="small">probe-fix-loop · S1 settled — the run finished</td><td class="mono">probe-fix-loop/S1#2</td><td class="mono">—</td><td class="mono">stage-settled</td><td>panel</td></tr>
+<tr><td class="small">probe-fix-loop · S2 settled — the run finished</td><td class="mono">probe-fix-loop/S2#2</td><td class="mono">—</td><td class="mono">stage-settled</td><td>panel</td></tr>
+<tr><td class="small">probe-fix-loop · S3 settled — the run finished</td><td class="mono">probe-fix-loop/S3#2</td><td class="mono">—</td><td class="mono">stage-settled</td><td>panel</td></tr>
+<tr><td class="small">probe-fix-loop · S1 settled — the run finished</td><td class="mono">probe-fix-loop/S1#3</td><td class="mono">—</td><td class="mono">stage-settled</td><td>panel</td></tr>
+<tr><td class="small">probe-fix-loop · S2 settled — the run finished</td><td class="mono">probe-fix-loop/S2#3</td><td class="mono">—</td><td class="mono">stage-settled</td><td>panel</td></tr>
+<tr><td class="small">the loop H-3 (S3 → S1) is at its cap of 2 rounds — 2 crossings already taken, so the row stops here for a decision</td><td class="mono">probe-fix-loop/S3#3</td><td class="mono">pipeline-cap</td><td class="mono">cap</td><td>panel</td></tr>
+</table></div>
+
+<h2 id="tree">One tree: cut once, reused by every stage</h2>
+<p>The first sweep found a row with a project and no tree, so the driver asked for the cut (<code>ensureTree</code>); the
+assistant cut it, wrote the path on the row, and journalled it. Every stage after that started on the
+<code>existing: true</code> path in the same directory — including both loop-backs.</p>
+<div class="tw"><table>
+  <tr><th>fact</th><th>round A</th></tr>
+  <tr><td>cuts</td><td class="num">1</td></tr>
+  <tr><td>branch</td><td class="mono small">wtgui/probe-the-pipeline-studi-0cd7da</td></tr>
+  <tr><td>tree</td><td class="mono small">&lt;repo&gt;/.worktrees/probe-the-pipeline-studi-0cd7da</td></tr>
+  <tr><td>cut from</td><td class="mono">3cca959</td></tr>
+  <tr><td>stage runs in that tree</td><td class="num">9 of 9</td></tr>
+  <tr><td>tree at the park</td><td class="mono small">HEAD 3cca959 · 2 uncommitted file(s) — the stages' artifacts, left where the work was</td></tr>
+</table></div>
+
+<h2 id="roundb">Round B — an independent run of the same document</h2>
+<p>A second process, a second fixture repository, a second queue file and a second Assistant. It was given nothing but
+the same bundle.</p>
+<div class="tw"><table>
+  <tr><th>stage run</th><th>stage</th><th>thread</th><th>entered (UTC)</th><th>settled</th><th>held</th><th>artifact sha256</th></tr>
+  <tr>
+      <td class="mono">probe-fix-loop/S1#1</td>
+      <td>Probe the studio</td>
+      <td class="mono">b-01</td>
+      <td class="num">08:37:56</td>
+      <td class="num">08:38:00</td>
+      <td class="num">3.6s</td>
+      <td class="mono small">511dd08d7c66df2a…</td>
+      <td>present</td>
+    </tr>
+<tr>
+      <td class="mono">probe-fix-loop/S2#1</td>
+      <td>Fix what the probe found</td>
+      <td class="mono">b-02</td>
+      <td class="num">08:38:00</td>
+      <td class="num">08:38:02</td>
+      <td class="num">1.8s</td>
+      <td class="mono small">671d30422a98b024…</td>
+      <td>present</td>
+    </tr>
+<tr>
+      <td class="mono">probe-fix-loop/S3#1</td>
+      <td>Verify the fix</td>
+      <td class="mono">b-03</td>
+      <td class="num">08:38:02</td>
+      <td class="num">08:38:06</td>
+      <td class="num">4.0s</td>
+      <td class="mono small">82281e4bada04e68…</td>
+      <td>present</td>
+    </tr>
+<tr>
+      <td class="mono">probe-fix-loop/S1#2</td>
+      <td>Probe the studio</td>
+      <td class="mono">b-04</td>
+      <td class="num">08:38:06</td>
+      <td class="num">08:38:10</td>
+      <td class="num">4.8s</td>
+      <td class="mono small">b62ba1ff0b897ef0…</td>
+      <td>present</td>
+    </tr>
+<tr>
+      <td class="mono">probe-fix-loop/S2#2</td>
+      <td>Fix what the probe found</td>
+      <td class="mono">b-05</td>
+      <td class="num">08:38:10</td>
+      <td class="num">08:38:14</td>
+      <td class="num">3.2s</td>
+      <td class="mono small">4cc1a76bc15014c5…</td>
+      <td>present</td>
+    </tr>
+<tr>
+      <td class="mono">probe-fix-loop/S3#2</td>
+      <td>Verify the fix</td>
+      <td class="mono">b-06</td>
+      <td class="num">08:38:14</td>
+      <td class="num">08:38:18</td>
+      <td class="num">4.7s</td>
+      <td class="mono small">38db2871d1598d01…</td>
+      <td>present</td>
+    </tr>
+<tr>
+      <td class="mono">probe-fix-loop/S1#3</td>
+      <td>Probe the studio</td>
+      <td class="mono">b-07</td>
+      <td class="num">08:38:18</td>
+      <td class="num">08:39:10</td>
+      <td class="num">51.4s</td>
+      <td class="mono small">b243e59a7446d3ed…</td>
+      <td>present</td>
+    </tr>
+<tr>
+      <td class="mono">probe-fix-loop/S2#3</td>
+      <td>Fix what the probe found</td>
+      <td class="mono">b-08</td>
+      <td class="num">08:39:10</td>
+      <td class="num">08:39:12</td>
+      <td class="num">2.8s</td>
+      <td class="mono small">26e920e868ba87d9…</td>
+      <td>present</td>
+    </tr>
+<tr>
+      <td class="mono">probe-fix-loop/S3#3</td>
+      <td>Verify the fix</td>
+      <td class="mono">b-09</td>
+      <td class="num">08:39:12</td>
+      <td class="num">08:39:16</td>
+      <td class="num">4.1s</td>
+      <td class="mono small">715720c237078061…</td>
+      <td>present</td>
+    </tr>
+</table></div>
+<p class="small dim">Branch: <code>wtgui/probe-the-pipeline-studi-aa52a9</code> · tree <code>&lt;repo&gt;/.worktrees/probe-the-pipeline-studi-aa52a9</code> · cuts
+1.</p>
+
+<h2 id="compare">The two rounds compared</h2>
+<div class="tw"><table>
+  <tr><th>claim</th><th>result</th><th>evidence</th></tr>
+  <tr><td>same stage sequence</td><td><span class="ok">yes</span></td><td class="small mono">probe-fix-loop/S1#1 → probe-fix-loop/S2#1 → probe-fix-loop/S3#1 → probe-fix-loop/S1#2 → probe-fix-loop/S2#2 → probe-fix-loop/S3#2 → probe-fix-loop/S1#3 → probe-fix-loop/S2#3 → probe-fix-loop/S3#3</td></tr>
+  <tr><td>same crossings</td><td><span class="ok">yes</span></td><td class="small mono">{"H-1":3,"H-2":3,"H-3":2}</td></tr>
+  <tr><td>same end state and sentence</td><td><span class="ok">yes</span></td><td class="small">parked</td></tr>
+  <tr><td>byte-identical artifacts per visit</td><td><span class="ok">yes</span></td><td class="small">the artifacts carry no timestamp and no absolute path, so the same work produces the same bytes</td></tr>
+  <tr><td>one cut per round</td><td><span class="ok">yes</span></td><td class="small">1 cut in each round</td></tr>
+  <tr><td>every stage in the row's tree</td><td><span class="ok">yes</span></td><td class="small">9 of 9 in each round</td></tr>
+  <tr><td>a new worker per stage run</td><td><span class="ok">yes</span></td><td class="small">no thread is reused across rounds, and none within one</td></tr>
+</table></div>
+
+<h2 id="noticed">What driving it showed</h2>
+<p>Three things the driver does that the design document does not say out loud. The first is a real defect in a
+sentence a person reads; the other two are consequences of the graph rules, and a reader should know them before
+choosing a pipeline shape.</p>
+
+<div class="warn">
+  <h4>1. Visit 1's INPUTS block says a loop handed on an artifact that was never written</h4>
+  <p>On the first visit of the first stage, the prompt's inputs block names the handoff <em>into</em> S1 — the loop
+  <code>H-3</code> — and reports <code>verify · out/verify.json · not in the tree</code>. Nothing has been handed on yet:
+  the row has never run S3. The sentence is literally true and reads as a missing input on the very first turn. The
+  driver decides "the edge the row arrived by" from <code>pipelineRun.via</code> or, failing that, the last handoff whose
+  <code>to</code> is this stage — so the loop into a pipeline's first stage is announced before its first crossing.</p>
+  <pre>
+— Probe, fix, verify — a capped repair loop: stage 1 of 3, Probe the studio (probe-fix-loop/S1), visit 1
+Queue task #1: probe the pipeline studio and fix what the probe finds
+
+INPUTS
+  handed on   verify   out/verify.json   not in the tree   writer verify-seat
+              (S3 → S1, handoff H-3, loop — crossing 0 of a cap of 2)
+  tree        &lt;repo&gt;/.worktrees/probe-the-pipeline-studi-0cd7da   branch wtgui/probe-the-pipeline-studi-0cd7da
+              HEAD 3cca959   0 uncommitted files
+
+one tree, three stages, one capped loop</pre>
+</div>
+
+<div class="box">
+  <h4>2. The loop has no exit condition, so a converged pipeline still spends its cap</h4>
+  <p>After the fix, visit 2's probe found <b>0</b> failing clauses and wrote an artifact saying so. The driver still
+  crossed <code>H-3</code> because S3's only edge out is the loop — the panel does not read the artifact's value, and
+  there is no sequence edge to take. So visits 2 and 3 re-probed a studio that was already at the bar, and the row
+  parked on the cap rather than on "the work is done". A pipeline that is expected to converge needs the convergence to
+  be expressible as a gate's decision record (a barrier the code cannot cross) or as a handoff kind the driver can
+  choose between — not as a loop with a cap.</p>
+</div>
+
+<div class="box">
+  <h4>3. A stage's artifacts leave the tree dirty, and the driver reports it without cleaning it</h4>
+  <p>By visit 2 the tree reads <b>2 uncommitted files</b> — the probe's and the fix's artifacts. That is by design
+  (<code>treeFactsOf</code> measures, it never resets), and it is visible in the INPUTS block the next stage gets. It
+  does mean a pipeline whose stages write artifacts cannot end with a clean tree unless a stage commits them.</p>
+</div>
+
+<h2 id="files">Files</h2>
+<div class="box">
+  <ul class="files">
+    <li>docs/reviews/pipeline-execution-round.html — this page</li>
+    <li>docs/reviews/pipeline-execution-round/rounds/round-A.json · round-B.json — the ledgers this page is built from</li>
+    <li>docs/reviews/pipeline-execution-round/rounds/round-A|B/*.json — each stage run's artifact, kept per visit</li>
+    <li>docs/reviews/pipeline-execution-round/shots/round-A|B/*.png — the stages' screenshots</li>
+    <li>docs/reviews/pipeline-execution-round/compare.json — the two rounds compared</li>
+    <li>tools/pipeline-exec-round.mjs — the harness (two processes, one round each)</li>
+    <li>tools/pipeline-exec-worker.mjs — the stage seat (probe / fix / verify, in headless Chromium)</li>
+  </ul>
+</div>
+<p class="meta">Run it again with <code>node tools/pipeline-exec-round.mjs</code> (rounds A and B, about 90 s). The
+harness writes its fixture repositories under the OS temp directory and its ledgers, artifacts and shots under
+<code>docs/reviews/pipeline-execution-round/</code>. Driver read at <code>504f2cd</code>; package 1.18.0; Node
+v26.3.0; Playwright 1.64.1.</p>
+
+</div>
+</body>
+</html>

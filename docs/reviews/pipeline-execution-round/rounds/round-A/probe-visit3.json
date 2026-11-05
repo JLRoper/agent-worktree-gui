@@ -1,0 +1,107 @@
+{
+  "stage": "probe",
+  "visit": 3,
+  "clause_bar": [
+    {
+      "id": "L1",
+      "key": "seed-rendered",
+      "bar": "13 stage cards, S0..S12"
+    },
+    {
+      "id": "L2",
+      "key": "no-page-errors",
+      "bar": "0 uncaught and 0 console errors on load"
+    },
+    {
+      "id": "L3",
+      "key": "card-name",
+      "bar": "every card has a non-empty accessible name"
+    },
+    {
+      "id": "L4",
+      "key": "subtext-size",
+      "bar": "role and meta lines paint at >= 12px"
+    },
+    {
+      "id": "L5",
+      "key": "min-text",
+      "bar": "no text inside a card paints below 10px"
+    },
+    {
+      "id": "L6",
+      "key": "bundle-docs",
+      "bar": "bundle.json carries pipeline, roles, artifacts and yaml"
+    }
+  ],
+  "findings": [
+    {
+      "id": "L1",
+      "key": "seed-rendered",
+      "ok": true,
+      "measured": "13 cards S0..S12"
+    },
+    {
+      "id": "L2",
+      "key": "no-page-errors",
+      "ok": true,
+      "measured": "0 page, 0 console"
+    },
+    {
+      "id": "L3",
+      "key": "card-name",
+      "ok": true,
+      "measured": "13/13 named"
+    },
+    {
+      "id": "L4",
+      "key": "subtext-size",
+      "ok": true,
+      "measured": "min 12px over 26 lines"
+    },
+    {
+      "id": "L5",
+      "key": "min-text",
+      "ok": true,
+      "measured": "nothing below 10px"
+    },
+    {
+      "id": "L6",
+      "key": "bundle-docs",
+      "ok": true,
+      "measured": "artifacts, pipeline, roles, yaml"
+    }
+  ],
+  "pass": 6,
+  "fail": [],
+  "details": {
+    "cards": 13,
+    "ids": [
+      "S0",
+      "S1",
+      "S2",
+      "S3",
+      "S4",
+      "S5",
+      "S6",
+      "S7",
+      "S8",
+      "S9",
+      "S10",
+      "S11",
+      "S12"
+    ],
+    "page_errors": [],
+    "console_errors": [],
+    "subtext_min_px": 12,
+    "tiny_text": [],
+    "bundle_keys": [
+      "artifacts",
+      "pipeline",
+      "roles",
+      "yaml"
+    ]
+  },
+  "evidence": [
+    "probe-visit3.png"
+  ]
+}
