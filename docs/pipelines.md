@@ -406,6 +406,15 @@ definition the loader dropped is still named under it, with its reason: a pipeli
 why it is missing. A dirty draft is the one thing that refuses a change of selection (the select springs back and the
 status says why), because replacing the form would take the half-typed sentence with it.
 
+**Add and remove repaint the stage rows, and only those.** The dirty-draft rule is about the reader's TEXT — title,
+kind, description, `next` and each stage's fields are never replaced under the caret. A stage sequence is not text:
+`add stage` and `remove` change how many stages exist, and a form still drawing the old rows would disagree with the
+draft Save writes. Worse, the next keystroke's `updateDraftFromForm()` reads the rows back, so the stale form would
+resurrect a removed stage or drop a new one. Those two presses therefore repaint `#pipeline-stages` alone, from the
+draft, and the paint is caret-safe: the focused field's stage, class, selection and scroll are captured before the
+rows are replaced and restored after, and a press on a removed row's own `remove` hands focus to `add stage` rather
+than leaving it on a detached button.
+
 **The flow is the definition, drawn.** `open the flow` opens the same dialog a queue row opens (the task pipeline
 window's own answer, `docs/task-pipeline.md`), in edit mode (`public/pipeline-flow.js` renders,
 `public/pipeline-modal.js` is the shell): stages left to right in document order,

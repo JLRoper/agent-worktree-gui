@@ -17494,6 +17494,14 @@ async function loadPermissions() {
 // half-typed sentence with it, so paintPipelines() refreshes the list and the summary and leaves the editor alone
 // while `pipelineDraftDirty` is true; save and reload are the only ways out of a dirty draft. Every input event
 // marks the draft dirty, so a keystroke can never arrive at a form a repaint is about to replace.
+//
+// The stage SEQUENCE is the one part of a dirty form that cannot be left alone. Add and remove are presses on the
+// editor's own buttons, and the rows they change are not text the reader is typing: a form still drawing the old
+// rows disagrees with the draft Save will write, and the next keystroke's updateDraftFromForm() would read those
+// stale rows back — resurrecting a removed stage, or dropping a new one. So add and remove repaint `#pipeline-stages`
+// alone (paintPipelineStages), from the draft, and that paint is caret-safe: the focused field's stage, class,
+// selection and scroll are captured before the rows are replaced and put back after, so the guard above still holds
+// for a reader who is mid-sentence in a stage field.
 const PIPELINE_PANEL_ID = "settings-panel-pipeline";
 let pipelinesIndex = null;
 let pipelinesLoadedAt = 0;
@@ -17775,36 +17783,100 @@ function paintPipelineEditor() {
   setPipelineStatus("no unsaved changes");
 }
 
-function wirePipelineEditor() {
-  const editor = document.getElementById("pipeline-editor");
-  if (!editor) return;
-  const mark = () => {
-    pipelineDraftDirty = true;
-    setPipelineStatus("unsaved changes");
-  };
-  for (const el of editor.querySelectorAll("#pipeline-title, #pipeline-kind, #pipeline-description, #pipeline-next")) {
-    el.addEventListener("input", () => {
-      mark();
-      updateDraftFromForm();
-    });
-    el.addEventListener("change", () => {
-      mark();
-      updateDraftFromForm();
-    });
-  }
+function markPipelineDraftDirty() {
+  pipelineDraftDirty = true;
+  setPipelineStatus("unsaved changes");
+}
+
+// The stage rows are wired on every paint that REPLACES them — the full paint and paintPipelineStages — because the
+// rows are new nodes each time. A listener left on the discarded node would watch a field the reader can no longer
+// see, so a keystroke in the row that replaced it would never reach the draft.
+function wirePipelineStages(editor) {
   for (const stageEl of editor.querySelectorAll(".pipeline-stage")) {
     for (const el of stageEl.querySelectorAll("input, textarea, select")) {
       el.addEventListener("input", () => {
-        mark();
+        markPipelineDraftDirty();
         updateDraftFromForm();
       });
       el.addEventListener("change", () => {
-        mark();
+        markPipelineDraftDirty();
         updateDraftFromForm();
       });
     }
     stageEl.querySelector(".stage-remove")?.addEventListener("click", () => removePipelineStage(Number(stageEl.dataset.stageIndex)));
   }
+}
+
+// What a repaint of the stage rows has to put back: which stage the reader is in, which field of it holds the caret,
+// and where the selection and the scroll were. A press on a row's own remove button is not a caret — the button goes
+// with the row — so it is reported with no field and the repaint hands focus to the editor's add press.
+function pipelineFocusBeforeRepaint() {
+  const editor = document.getElementById("pipeline-editor");
+  const host = editor && editor.querySelector("#pipeline-stages");
+  const active = document.activeElement;
+  if (!host || !active || active === document.body) return null;
+  let stageEl = null;
+  for (let el = active; el && el !== host; el = el.parentElement) {
+    if (String(el.className || "").split(/\s+/).includes("pipeline-stage")) {
+      stageEl = el;
+      break;
+    }
+  }
+  if (!stageEl) return null;
+  const cls = String(active.className || "")
+    .split(/\s+/)
+    .find((c) => c.startsWith("stage-") && c !== "stage-remove");
+  const caret =
+    typeof active.selectionStart === "number"
+      ? { start: active.selectionStart, end: active.selectionEnd, scrollTop: Number(active.scrollTop) || 0 }
+      : null;
+  return { index: Number(stageEl.dataset.stageIndex), cls: cls || null, caret };
+}
+
+function restorePipelineFocus(was) {
+  const editor = document.getElementById("pipeline-editor");
+  if (!was || !editor) return;
+  if (was.cls) {
+    const field = editor.querySelector(`.pipeline-stage[data-stage-index="${was.index}"] .${was.cls}`);
+    if (field) {
+      field.focus({ preventScroll: true });
+      if (was.caret && typeof field.setSelectionRange === "function") {
+        field.setSelectionRange(was.caret.start, was.caret.end);
+        field.scrollTop = was.caret.scrollTop;
+      }
+      return;
+    }
+  }
+  // The row the press was on is the row that went away (a remove), and leaving focus on a detached node drops the
+  // reader at the top of the page. The editor's own add press is the nearest thing to where they were.
+  editor.querySelector("#pipeline-add-stage")?.focus({ preventScroll: true });
+}
+
+// The stage rows, rebuilt from the draft — the one part of a dirty form that is painted rather than left alone.
+function paintPipelineStages() {
+  const editor = document.getElementById("pipeline-editor");
+  const host = editor && editor.querySelector("#pipeline-stages");
+  if (!host || !pipelineDraft) return;
+  const was = pipelineFocusBeforeRepaint();
+  host.innerHTML = (pipelineDraft.stages || []).map((s, i) => pipelineStageHtml(s, i)).join("");
+  wirePipelineStages(editor);
+  restorePipelineFocus(was);
+}
+
+function wirePipelineEditor() {
+  const editor = document.getElementById("pipeline-editor");
+  if (!editor) return;
+  for (const el of editor.querySelectorAll("#pipeline-title, #pipeline-kind, #pipeline-description, #pipeline-next")) {
+    el.addEventListener("input", () => {
+      markPipelineDraftDirty();
+      updateDraftFromForm();
+    });
+    el.addEventListener("change", () => {
+      markPipelineDraftDirty();
+      updateDraftFromForm();
+    });
+  }
+  wirePipelineStages(editor);
   editor.querySelector("#pipeline-editor-close")?.addEventListener("click", () => {
     if (pipelineDraftDirty && !confirm(`discard the unsaved changes to "${pipelineOpenId}"?`)) return;
     closePipelineEditor();
@@ -17851,7 +17923,9 @@ function addPipelineStage() {
   updateDraftFromForm();
   pipelineDraft.stages = [...(pipelineDraft.stages || []), { id: "", title: "", prompt: "", exit: { check: "clean" } }];
   pipelineDraftDirty = true;
-  paintPipelineEditor();
+  // The rows, not the whole editor: the title, kind, description and next fields keep the reader's text, and the
+  // new row is drawn from the draft that Save will write.
+  paintPipelineStages();
   setPipelineStatus("unsaved changes — a new stage has no id or prompt yet", false);
 }
 
@@ -17860,7 +17934,7 @@ function removePipelineStage(index) {
   updateDraftFromForm();
   pipelineDraft.stages = (pipelineDraft.stages || []).filter((_, i) => i !== index);
   pipelineDraftDirty = true;
-  paintPipelineEditor();
+  paintPipelineStages();
   setPipelineStatus("unsaved changes");
 }
 
@@ -17914,6 +17988,8 @@ function paintPipelineSearch(query, matched) {
   }
   return hits;
 }
+
+// ---- end settings > pipeline
 
 // ---- settings > bundles ---------------------------------------------------------------------------
 // The studio pipeline bundle this panel reads — one exported file per install (config.pipelineBundleFile, default

@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // Settings > Pipeline in a real browser: the catalogue in a dropdown, one definition opened for editing, a keystroke
-// that survives a repaint, a save that reaches the live file, and a refusal whose findings land inline without losing
-// the draft. The flow modal the tab opens has its own gate: tools/verify-pipeline-flow.mjs.
+// that survives a repaint, add stage / remove stage repainting the rows they change (with the caret, selection and
+// scroll still in the stage field), a save that reaches the live file with exactly the stages on screen, and a
+// refusal whose findings land inline without losing the draft. The flow modal the tab opens has its own gate:
+// tools/verify-pipeline-flow.mjs.
 //
 //   node tools/verify-pipelines-tab.mjs
 //
@@ -142,6 +144,79 @@ try {
   check(/^saved/.test(saveStatus.trim()), "the save was accepted", saveStatus);
   const localDef = readLive().find((p) => p.id === "local");
   check(Boolean(localDef) && String(localDef.stages?.[0]?.prompt || "").includes(marker), "the live file carries the edit");
+
+  // (5b) Add stage / remove stage repaint the rows they change. A dirty draft is not a reason to keep drawing a form
+  // that disagrees with the draft Save will write: the rows and `pipelineDraft.stages` have to be one answer, and the
+  // repaint must not take the caret out of a stage field the reader is typing in.
+  const rowsNow = () => page.$$eval("#pipeline-stages .pipeline-stage", (els) => els.length);
+  const idsOnScreen = () => page.$$eval("#pipeline-stages .stage-id", (els) => els.map((el) => el.value));
+  const idsInDraft = () => page.evaluate(() => (pipelineDraft?.stages || []).map((s) => s.id));
+
+  const baseRows = await rowsNow();
+  await page.click("#pipeline-add-stage");
+  await page.click("#pipeline-add-stage");
+  const addedRows = await rowsNow();
+  const addedIds = await idsInDraft();
+  check(addedRows === baseRows + 2, "two add presses draw two rows", `${baseRows} -> ${addedRows}`);
+  check(addedIds.length === addedRows, "and the draft holds one stage per row", `${addedIds.length} stages / ${addedRows} rows`);
+
+  // The repainted rows are live: a keystroke in one reaches the draft.
+  await page.fill("#pipeline-stages .pipeline-stage:nth-child(2) .stage-id", "typed-after-add");
+  const typedIds = await idsInDraft();
+  check(typedIds[1] === "typed-after-add", "a keystroke in a repainted row reaches the draft", typedIds.join(","));
+
+  // Remove the middle row: neither the row nor the stage survives the next keystroke.
+  const beforeRemove = await idsOnScreen();
+  await page.click("#pipeline-stages .pipeline-stage:nth-child(2) .stage-remove");
+  const removedIds = await idsOnScreen();
+  await page.fill("#pipeline-stages .pipeline-stage:nth-child(1) textarea.stage-prompt", `kept-${Date.now()}`);
+  const afterRemoveIds = await idsInDraft();
+  check(removedIds.length === beforeRemove.length - 1, "remove leaves one row fewer", `${beforeRemove.length} -> ${removedIds.length}`);
+  check(afterRemoveIds.length === removedIds.length, "and the draft agrees after the keystroke", `${afterRemoveIds.length} stages / ${removedIds.length} rows`);
+  check(!afterRemoveIds.includes("typed-after-add"), "the removed stage was not resurrected by the keystroke");
+
+  // The caret, the selection and the scroll stay in the stage field across a structural repaint. The prompt is long
+  // enough to scroll, so the scroll assertion is about a real offset rather than a textarea that cannot move.
+  await page.fill("#pipeline-stages .pipeline-stage:nth-child(2) .stage-id", "second");
+  await page.fill("#pipeline-stages .pipeline-stage:nth-child(2) .stage-title", "Second stage");
+  const longPrompt = Array.from({ length: 40 }, (_, i) => `line ${i + 1} of a sentence the reader is still typing`).join("\n");
+  const caret = await page.evaluate((text) => {
+    const ta = document.querySelector("#pipeline-stages .pipeline-stage:nth-child(2) textarea.stage-prompt");
+    ta.value = text;
+    ta.dispatchEvent(new Event("input", { bubbles: true }));
+    ta.focus();
+    ta.setSelectionRange(60, 66);
+    ta.scrollTop = 24;
+    const scrollBefore = ta.scrollTop;
+    paintPipelineStages();
+    const again = document.querySelector("#pipeline-stages .pipeline-stage:nth-child(2) textarea.stage-prompt");
+    return {
+      sameNode: again === ta,
+      focused: document.activeElement === again,
+      start: again.selectionStart,
+      end: again.selectionEnd,
+      scrollBefore,
+      scrollAfter: again.scrollTop,
+      value: again.value,
+    };
+  }, longPrompt);
+  check(!caret.sameNode && caret.focused, "the repaint replaced the row and kept the caret in it");
+  check(caret.start === 60 && caret.end === 66, "and the selection is where it was", `${caret.start}-${caret.end}`);
+  check(caret.scrollBefore > 0 && caret.scrollAfter === caret.scrollBefore, "and the field's scroll is where it was", `${caret.scrollBefore} -> ${caret.scrollAfter}`);
+  check(caret.value === longPrompt, "and the half-typed sentence is still in the field");
+
+  // Save writes exactly the rows on screen.
+  const screenIds = await idsOnScreen();
+  await page.click("#pipeline-save");
+  await page.waitForFunction(
+    () => /^(saved|refused|not saved)/.test((document.getElementById("pipeline-status")?.textContent || "").trim()),
+    null,
+    { timeout: 15_000 },
+  );
+  const structuralSave = (await page.textContent("#pipeline-status")) || "";
+  check(/^saved/.test(structuralSave.trim()), "Save after the structural presses was accepted", structuralSave.trim());
+  const liveIds = (readLive().find((p) => p.id === "local")?.stages || []).map((s) => s.id);
+  check(JSON.stringify(liveIds) === JSON.stringify(screenIds), "Save persisted exactly the stages on screen", `${screenIds.join(",")} vs ${liveIds.join(",")}`);
 
   // (6) A refusal comes back with validatePipeline's own finding, shown inline, and the draft is kept.
   await page.click("#pipeline-editor textarea.stage-prompt");
