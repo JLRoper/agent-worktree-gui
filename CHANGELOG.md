@@ -4,16 +4,151 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.12.3 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.16.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-283 releases from v0.1.0 (2026-10-20) to v1.12.3 (2026-11-04), 988 commits between the tags. Every release is anchored by an
+294 releases from v0.1.0 (2026-10-20) to v1.16.0 (2026-11-05), 1016 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.16.0 — 2026-11-05 · 3 commits
+
+[`4798950`](https://github.com/JLRoper/agent-worktree-gui/commit/4798950da22bb65150d33aa0d0b97096d6a5e098) · [compare v1.15.0...v1.16.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.15.0...v1.16.0)
+
+### Added
+
+- feat: the Assistant Director — a 20-minute cross-queue pass with two powers ([`f4a74df`](https://github.com/JLRoper/agent-worktree-gui/commit/f4a74df4e16d99f1f24150ebe8a8279e3874ce41))
+
+### Docs & tests
+
+- docs: the Assistant Director's proof — the running panel, the tab and the suite ([`51fec06`](https://github.com/JLRoper/agent-worktree-gui/commit/51fec06154ddd3e729b14b1988e16a66a5acb394))
+
+### Other
+
+- chore: 1.16.0 — the version this landing carries ([`4798950`](https://github.com/JLRoper/agent-worktree-gui/commit/4798950da22bb65150d33aa0d0b97096d6a5e098))
+
+## v1.15.0 — 2026-11-05 · 1 commit
+
+[`3295fce`](https://github.com/JLRoper/agent-worktree-gui/commit/3295fcea374bbe0147d05cb6460f866d86cee1d2) · [compare v1.13.1...v1.15.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.13.1...v1.15.0)
+
+### Added
+
+- feat: the map draws a document it did not build, and names its source ([`3295fce`](https://github.com/JLRoper/agent-worktree-gui/commit/3295fcea374bbe0147d05cb6460f866d86cee1d2))
+
+## v1.13.1 — 2026-11-05 · 4 commits
+
+[`7a47b93`](https://github.com/JLRoper/agent-worktree-gui/commit/7a47b93e45faaf7e9fe25821a5f92647f2dbf7c3) · [compare v1.13.0...v1.13.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.13.0...v1.13.1)
+
+### Added
+
+- feat: the bridge obeys the panel policy and keeps its own reminders ([`05ddf0b`](https://github.com/JLRoper/agent-worktree-gui/commit/05ddf0bb5f5f841aef8cd8f6c8e90a48082d965f))
+
+### Docs & tests
+
+- test: the map's book layout is proved to fit, not only to draw ([`2b5e4e1`](https://github.com/JLRoper/agent-worktree-gui/commit/2b5e4e170f86d821c0f46ad7d39e9ec9fbfbced8))
+- docs: the retirement — 93 trees retired and 14 kept by name ([`5b96f9a`](https://github.com/JLRoper/agent-worktree-gui/commit/5b96f9a53accf27831eb7d85ab5f1ad83cd41289))
+
+### Other
+
+- chore: 1.13.1 — the version this landing carries ([`7a47b93`](https://github.com/JLRoper/agent-worktree-gui/commit/7a47b93e45faaf7e9fe25821a5f92647f2dbf7c3))
+
+## v1.13.0 — 2026-11-05 · 2 commits
+
+[`d1489ca`](https://github.com/JLRoper/agent-worktree-gui/commit/d1489cab95424ce5f8cebab51ee25d802a840555) · [compare v1.12.10...v1.13.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.12.10...v1.13.0)
+
+### Added
+
+- feat: every panel pipeline, drawn as one page with roles and loop-backs ([`3977c67`](https://github.com/JLRoper/agent-worktree-gui/commit/3977c678986ebda42f8c95e95ed6ba3ca2ceb420))
+
+### Other
+
+- chore: 1.13.0 — the version this landing carries ([`d1489ca`](https://github.com/JLRoper/agent-worktree-gui/commit/d1489cab95424ce5f8cebab51ee25d802a840555))
+
+## v1.12.10 — 2026-11-05 · 2 commits
+
+[`c128747`](https://github.com/JLRoper/agent-worktree-gui/commit/c12874762f4a6f8104597b3c5771a00666058199) · [compare v1.12.9...v1.12.10](https://github.com/JLRoper/agent-worktree-gui/compare/v1.12.9...v1.12.10)
+
+### Added
+
+- feat: the Bridge tab shows connection, messages, policy and alerts ([`892ba2c`](https://github.com/JLRoper/agent-worktree-gui/commit/892ba2c3bc20c73d307485edfa25ef145ea96f22))
+
+### Other
+
+- chore: 1.12.10 — the version this landing carries ([`c128747`](https://github.com/JLRoper/agent-worktree-gui/commit/c12874762f4a6f8104597b3c5771a00666058199))
+
+## v1.12.9 — 2026-11-04 · 3 commits
+
+[`ea7dc4d`](https://github.com/JLRoper/agent-worktree-gui/commit/ea7dc4df98591ae20ea617dab03fbf9e4a29a318) · [compare v1.12.8...v1.12.9](https://github.com/JLRoper/agent-worktree-gui/compare/v1.12.8...v1.12.9)
+
+### Docs & tests
+
+- docs: the capture that decided the reset's fallback naming path ([`f280133`](https://github.com/JLRoper/agent-worktree-gui/commit/f280133a24bf646b173f8d579f6034443c31af3c))
+- docs: the report names the shas origin/main carries, not the branch's ([`96172cd`](https://github.com/JLRoper/agent-worktree-gui/commit/96172cd0b508a3d67e8eaa74eaa33fc946f76d4f))
+
+### Other
+
+- chore: 1.12.9 — the version this landing carries ([`ea7dc4d`](https://github.com/JLRoper/agent-worktree-gui/commit/ea7dc4df98591ae20ea617dab03fbf9e4a29a318))
+
+## v1.12.8 — 2026-11-04 · 2 commits
+
+[`4534179`](https://github.com/JLRoper/agent-worktree-gui/commit/4534179eafae9616839f600a4e09a1a0450379b2) · [compare v1.12.7...v1.12.8](https://github.com/JLRoper/agent-worktree-gui/compare/v1.12.7...v1.12.8)
+
+### Other
+
+- The reset names an admission by the store's request id, verified against a GET ([`88f4d42`](https://github.com/JLRoper/agent-worktree-gui/commit/88f4d42e2865699bbc496247012cdab3f30d7049))
+- chore: 1.12.8 — the version this landing carries ([`4534179`](https://github.com/JLRoper/agent-worktree-gui/commit/4534179eafae9616839f600a4e09a1a0450379b2))
+
+## v1.12.7 — 2026-11-04 · 2 commits
+
+[`06a083d`](https://github.com/JLRoper/agent-worktree-gui/commit/06a083db051c872bc85c0507cb5ae37d30d3e25c) · [compare v1.12.6...v1.12.7](https://github.com/JLRoper/agent-worktree-gui/compare/v1.12.6...v1.12.7)
+
+### Other
+
+- Kind chips narrow the DELIVERABLES list beside its search box ([`28783fb`](https://github.com/JLRoper/agent-worktree-gui/commit/28783fb3ae641e5b86e4123863300c3a5a88caf0))
+- chore: 1.12.7 — the version this landing carries ([`06a083d`](https://github.com/JLRoper/agent-worktree-gui/commit/06a083db051c872bc85c0507cb5ae37d30d3e25c))
+
+## v1.12.6 — 2026-11-04 · 2 commits
+
+[`f9ce450`](https://github.com/JLRoper/agent-worktree-gui/commit/f9ce45013dc9a36b2a22e490d4436a1b39746a91) · [compare v1.12.5...v1.12.6](https://github.com/JLRoper/agent-worktree-gui/compare/v1.12.5...v1.12.6)
+
+### Fixed
+
+- fix: the approval card holds for the host's 600 s and answers inside it ([`5a33fdd`](https://github.com/JLRoper/agent-worktree-gui/commit/5a33fdd5a414ebb46b2dc25f911252b0c46950b6))
+
+### Docs & tests
+
+- docs: five free renderers measured, two demos, and mermaid recommended ([`f9ce450`](https://github.com/JLRoper/agent-worktree-gui/commit/f9ce45013dc9a36b2a22e490d4436a1b39746a91))
+
+## v1.12.5 — 2026-11-04 · 2 commits
+
+[`c325f7d`](https://github.com/JLRoper/agent-worktree-gui/commit/c325f7d67b2e749e43abcabfee6c566c95b3d973) · [compare v1.12.4...v1.12.5](https://github.com/JLRoper/agent-worktree-gui/compare/v1.12.4...v1.12.5)
+
+### Docs & tests
+
+- docs: the audit's ledger row is not a byte count ([`e068c5b`](https://github.com/JLRoper/agent-worktree-gui/commit/e068c5b95104198a0bfcdccec6c5bf2f066c25b0))
+
+### Other
+
+- chore: 1.12.5 — the version this landing carries ([`c325f7d`](https://github.com/JLRoper/agent-worktree-gui/commit/c325f7d67b2e749e43abcabfee6c566c95b3d973))
+
+## v1.12.4 — 2026-11-04 · 5 commits
+
+[`cfdb75b`](https://github.com/JLRoper/agent-worktree-gui/commit/cfdb75b8ba8bf37c6a161fd664fe8d80a8a7acd7) · [compare v1.12.3...v1.12.4](https://github.com/JLRoper/agent-worktree-gui/compare/v1.12.3...v1.12.4)
+
+### Docs & tests
+
+- docs: the reset proved against the live panel — three refusals, one honest gap ([`9eee525`](https://github.com/JLRoper/agent-worktree-gui/commit/9eee525f65bcbc5679266d3e0690e17b374a81cb))
+- docs: render the changelog — 283 releases ([`9069f8d`](https://github.com/JLRoper/agent-worktree-gui/commit/9069f8df5b59fb12752345ae4b779d8ec8d1f55c))
+- docs: the worktree audit — 103 trees judged by content, six worth recovering ([`5e84586`](https://github.com/JLRoper/agent-worktree-gui/commit/5e84586fa61abcf5ca64e3b186399b0f25d4d179))
+- docs: the pipeline flow read at four lengths, with the capture that measures it ([`034334a`](https://github.com/JLRoper/agent-worktree-gui/commit/034334abda4f1d1724c599370c98c1014e871cd3))
+
+### Other
+
+- chore: 1.12.4 — the version this landing carries ([`cfdb75b`](https://github.com/JLRoper/agent-worktree-gui/commit/cfdb75b8ba8bf37c6a161fd664fe8d80a8a7acd7))
 
 ## v1.12.3 — 2026-11-04 · 3 commits
 
