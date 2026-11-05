@@ -89,6 +89,7 @@ Chromium in every stage, and a park that says why.</p>
   <a href="#roundb">Round B</a>
   <a href="#compare">The two rounds compared</a>
   <a href="#noticed">What driving it showed</a>
+  <a href="#evidence">Evidence vs commentary</a>
   <a href="#files">Files</a>
 </nav>
 
@@ -726,6 +727,52 @@ one tree, three stages, one capped loop</pre>
   (<code>treeFactsOf</code> measures, it never resets), and it is visible in the INPUTS block the next stage gets. It
   does mean a pipeline whose stages write artifacts cannot end with a clean tree unless a stage commits them.</p>
 </div>
+
+<h2 id="evidence">Evidence, and the tester's commentary</h2>
+<p>Two kinds of sentence share this page. An <b>evidence</b> sentence names a file a reader can open or a command
+they can run, and the round would be wrong if it changed. A <b>commentary</b> sentence is the tester's reading of
+those files; a reader may weigh it differently without the round being wrong.</p>
+
+<div class="tw"><table>
+  <tr><th>subject</th><th>evidence — open it, or re-run it</th><th>commentary — the tester's reading</th></tr>
+  <tr><td>the pipeline</td><td>the bundle's <code>sha256</code> (<code>9589a3e6…</code>), read out of both rounds'
+  ledgers</td><td>that a three-stage capped loop is the shape worth demonstrating</td></tr>
+  <tr><td>the routing</td><td>the nine stage runs, their threads, the crossing counts and the park, as the ledgers
+  record them</td><td>that "the same answer" twice is the interesting result, and that two rounds are enough</td></tr>
+  <tr><td>the work</td><td>the nine artifacts per round, their <code>sha256</code>s, and the screenshots the stages
+  took in the tree</td><td>that the probe's six clauses are the right six, and that the CSS edit is a good fix</td></tr>
+  <tr><td>the lifecycle</td><td>one cut per round, and each stage run's own tree facts in the ledger</td><td>that
+  one tree is the right number for a three-stage pipeline</td></tr>
+  <tr><td>the three findings</td><td>the quoted INPUTS line, the visit-2 probe's zero failing clauses, the dirty count
+  per visit</td><td>that the first is a "defect", that the second makes the loop shape wrong for a converging
+  pipeline, and that the third matters</td></tr>
+</table></div>
+
+<div class="warn">
+  <h4>Where the evidence stops</h4>
+  <p>The worker is a scripted seat, not a model: it takes the driver's prompt, drives a real browser, and writes a
+  fixed artifact. So these files are evidence for the driver — its stage-run identity, its routing, its one-tree
+  lifecycle and its decision record — and for nothing else. They say nothing about how a model would read the same
+  prompt, whether a gateway would return that job record, or whether the CSS edit is the fix a reviewer would
+  choose. The round proves the panel's mechanics; the quality of the work inside a stage is outside what this
+  harness measures.</p>
+</div>
+
+<div class="verdict">
+  <h4>Re-run, 2026-11-05 08:50 UTC</h4>
+  <p>The harness was run again on this checkout, into a scratch directory, leaving the ledgers below untouched. Each
+  round rebuilt its own fixture repository, so the fixture's seed commit differs (it was <code>3cca959</code> when
+  the ledgers below were written and <code>9d98d4a</code> this time); the work did not. The bundle
+  <code>sha256</code> was the same, the observed sequence was the same nine stage runs, the crossings were the same
+  (<code>H-1</code> 3, <code>H-2</code> 3, <code>H-3</code> 2), each round cut one tree, and all nine artifact
+  <code>sha256</code>s matched round A's: <b>40 ledger checks, 0 failed</b>. The clocks differ — 30.7 s and 80.3 s
+  in the ledgers, 34.2 s and 26.7 s in the re-run, first entry to last settle — because the stages are real
+  processes and a real browser. The routing and the artifact bytes are the reproducible part; the wall-clock is not,
+  and no claim on this page rests on it.</p>
+</div>
+<p class="small dim">The re-run's ledgers and artifacts were written outside the repository and are not committed; the
+check compared them field by field with the two ledgers this page links. The command in the last paragraph repeats
+it.</p>
 
 <h2 id="files">Files</h2>
 <div class="box">
