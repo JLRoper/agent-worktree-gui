@@ -2053,8 +2053,16 @@ function questionPrompt(turn, copy = "") {
       <div class="tq-timer"><span style="width:${pct}%"></span></div>
       <span class="tq-left mono">~${fmtLeft(leftMs)} left</span>
     </div>`;
+  // How many times the panel has asked the reader again about this same question (lib/assistant.js
+  // re-asks an hour after it parked, then hourly). It is a count on THIS box, not a second box: the
+  // question never changed, only the number of times nobody answered it.
+  const reasks = Math.max(0, Number(q.reasks) || 0);
+  const again = reasks
+    ? `<span class="tq-again" title="the panel asks again once an hour while this stays unanswered — nothing else about the question has changed">↻ asked again ${reasks}× · still unanswered</span>`
+    : "";
   return `<div class="turn-question" data-question-for="${esc(turn.id)}${esc(copy)}">
     <div class="tq-head mono">❓ waiting on you — the agent is parked until you answer</div>
+    ${again}
     <div class="tq-question">${esc(q.question || "(no question text)")}</div>
     ${rows ? `<div class="tq-choices${multi ? " is-multi" : ""}">${rows}</div>` : ""}
     <div class="tq-note mono">${esc(note)}</div>
@@ -14962,6 +14970,18 @@ function humanAgentName(thread) {
 // waiting question fewer than the board held. Its card lives in the float, which is fixed and has no position on
 // the table, so an assistant is deliberately NOT ranked below: it takes its place with the cards a folded project
 // hides, newest thread first.
+// The identity of one question in the rotation: its kind, the turn it is parked on, and the gateway's own
+// request id. That id is not decoration — a turn can carry a second approval after the first is answered, and
+// that is a different question with its own place.
+//
+// It is ALSO the reason asking again cannot become a second row. A re-ask is about the SAME prompt: the turn
+// does not change and neither does the request id, so the question keeps one key and the row already in the
+// list is the one the count moves on. The count (`reasks`) is deliberately NOT part of the key — a key that
+// counted the asks would be a new key every hour, which is exactly the pile-up this exists to prevent.
+function humanQuestionKey(kind, turnId, requestId) {
+  return `${kind}:${turnId}:${requestId || ""}`;
+}
+
 function humanQuestions() {
   const out = [];
   const convs = conversations();
@@ -14983,7 +15003,10 @@ function humanQuestions() {
           kind,
           // The request id, not just the turn: a turn can carry a second approval after the first is answered,
           // and that is a different question with its own place in the rotation.
-          key: `${kind}:${t.id}:${ask?.requestId || ""}`,
+          key: humanQuestionKey(kind, t.id, ask?.requestId),
+          // How often the panel has asked again about this same question (`lib/assistant.js` re-asks an hour
+          // after it parked, then hourly). It rides on the row for the count; it is not part of the key.
+          reasks: Math.max(0, Number(ask?.reasks) || 0),
           thread: c.thread,
           turnId: t.id,
           agent: humanAgentName(c.thread),
@@ -15024,11 +15047,15 @@ function paintHumanButton() {
   const list = humanQuestions();
   const perms = list.filter((q) => q.kind !== "question").length;
   const asks = list.length - perms;
+  // How many of the open questions the panel has already asked again about. Not a second count on the
+  // button — the button counts QUESTIONS, and a re-ask never adds one — it is said in the title so a
+  // reader who has been away can tell "nobody answered" from "you were asked again and missed it".
+  const repeats = list.filter((q) => Number(q.reasks) > 0).length;
   const agents = [...new Set(list.map((q) => q.agent).filter(Boolean))];
   const at = state.human.key ? list.findIndex((q) => q.key === state.human.key) : -1;
   const label = $("human-label");
   const badge = $("human-badge");
-  const sig = `${list.length}|${perms}|${asks}|${agents.join(",")}|${at}`;
+  const sig = `${list.length}|${perms}|${asks}|${repeats}|${agents.join(",")}|${at}`;
   if (sig === state.human.sig) return;
   state.human.sig = sig;
   if (label) label.textContent = at >= 0 ? `HUMAN ${at + 1}/${list.length}` : "HUMAN";
@@ -15040,12 +15067,12 @@ function paintHumanButton() {
   btn.setAttribute(
     "aria-label",
     list.length
-      ? `HUMAN — ${list.length} open question${list.length === 1 ? "" : "s"} waiting on you: ${perms} permission${perms === 1 ? "" : "s"}, ${asks} clarify question${asks === 1 ? "" : "s"}`
+      ? `HUMAN — ${list.length} open question${list.length === 1 ? "" : "s"} waiting on you: ${perms} permission${perms === 1 ? "" : "s"}, ${asks} clarify question${asks === 1 ? "" : "s"}${repeats ? `, ${repeats} asked again` : ""}`
       : "HUMAN — nothing is waiting on you",
   );
   const named = agents.length > 4 ? `${agents.slice(0, 4).join(", ")} and ${agents.length - 4} more` : agents.join(", ");
   btn.title = list.length
-    ? `HUMAN — ${list.length} open question${list.length === 1 ? "" : "s"} waiting on you: ${perms} permission${perms === 1 ? "" : "s"}, ${asks} clarify question${asks === 1 ? "" : "s"}${named ? ` — held by ${named}` : ""}. Click or press H to step through them: each agent is opened, its prompt centred and flashed red, and its answer control focused. A question that is answered, expires or whose turn ends drops out.`
+    ? `HUMAN — ${list.length} open question${list.length === 1 ? "" : "s"} waiting on you: ${perms} permission${perms === 1 ? "" : "s"}, ${asks} clarify question${asks === 1 ? "" : "s"}${named ? ` — held by ${named}` : ""}${repeats ? `. ${repeats} of them the panel has already asked again about (once an hour, on its own clock)` : ""}. Click or press H to step through them: each agent is opened, its prompt centred and flashed red, and its answer control focused. A question that is answered, expires or whose turn ends drops out.`
     : "HUMAN — nothing is waiting on you: no permission or clarify question is open on this board. Click or press H to check again.";
 }
 
