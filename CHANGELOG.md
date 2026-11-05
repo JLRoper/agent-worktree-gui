@@ -4,16 +4,32 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.16.2 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.17.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-298 releases from v0.1.0 (2026-10-20) to v1.16.2 (2026-11-05), 1033 commits between the tags. Every release is anchored by an
+299 releases from v0.1.0 (2026-10-20) to v1.17.0 (2026-11-05), 1036 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.17.0 — 2026-11-05 · 3 commits
+
+[`77b0c15`](https://github.com/JLRoper/agent-worktree-gui/commit/77b0c15cbdbe86ba80846f8b1e0f49372d8320e3) · [compare v1.16.2...v1.17.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.16.2...v1.17.0)
+
+### Added
+
+- feat: an imported drawing prints its document id beside the sha256 ([`6843049`](https://github.com/JLRoper/agent-worktree-gui/commit/6843049b50713895f397953ae0c43cfb81552402))
+
+### Docs & tests
+
+- docs: the changelog names v1.16.2, and v1.16.0 names the shas main carries ([`a108774`](https://github.com/JLRoper/agent-worktree-gui/commit/a10877426ac9487bab72aee45aa3fad4fe9f78a9))
+
+### Other
+
+- chore: 1.17.0 — the version this landing carries ([`77b0c15`](https://github.com/JLRoper/agent-worktree-gui/commit/77b0c15cbdbe86ba80846f8b1e0f49372d8320e3))
 
 ## v1.16.2 — 2026-11-05 · 9 commits
 
