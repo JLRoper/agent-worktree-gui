@@ -6566,7 +6566,7 @@ server.listen(config.port, config.host, () => {
   void jobs.probe({ fresh: true }).then(async (t) => {
     if (!t.reachable) {
       log(`agent transport UNREACHABLE: ${t.error} — spawns will be refused until the gateway is back`);
-      return; // nothing to ask: every restored turn keeps its interrupted verdict, which is the safe one
+      return; // nothing to ask: a restored turn stays live and pending, and the orphan sweep asks again
     }
     log(`agent transport ready: hermes ${t.capabilities?.version || "?"} · runs ${t.capabilities?.runs ? "yes" : "no"} · steer ${t.capabilities?.steer ? "yes" : "no"} · per-run cwd ${t.capabilities?.runCwd ? "advertised (a run's tools still start in the gateway's directory — measured 2026-10-27)" : "NO (stock gateway — agents run in the gateway's directory)"}`);
     // What the gateway did with the turns this panel lost in a restart. `load()` stamps them `interrupted`
@@ -6576,6 +6576,13 @@ server.listen(config.port, config.host, () => {
       if (settled.length) log(`reconciled ${settled.length} turn(s) a restart cut off: ${settled.join(", ")}`);
     } catch (e) {
       log(`reconcile of restored turns failed: ${String((e && e.message) || e)}`);
+    }
+    // The assistant's own turn: the boot check found it `running`, so only now — with the reconcile's answer in
+    // hand — can a turn the gateway has lost be reported. One resume, and only for a settled `interrupted`.
+    try {
+      assistant?.resumeAfterRestart?.();
+    } catch (e) {
+      log(`assistant resume after the reconcile failed: ${String((e && e.message) || e)}`);
     }
     // ...and the runs the reconcile could not give back to a live card because the gateway answering now is
     // not the process that was issued them. A run lives in one process's memory: a card stamped with an older

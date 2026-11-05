@@ -293,7 +293,7 @@ test("404 and 409 from a stop are tolerated, and a stop that fails never blocks 
   assert.match(failed.error, /HTTP 500/, "a stop that failed is recorded as failed, not swallowed");
 });
 
-test("at boot, only a run issued to an EARLIER gateway identity is stopped", async (t) => {
+test("at boot, a restored live run is asked before anything is written, and only a run the gateway no longer has is stopped", async (t) => {
   const store = path.join(dir, `jobs-boot-${++seq}.json`);
   const card = (id, runId, over = {}) => ({
     id,
@@ -311,24 +311,40 @@ test("at boot, only a run issued to an EARLIER gateway identity is stopped", asy
     ...over,
   });
   writeFileSync(store, JSON.stringify({ savedAt: "2026-10-26T02:10:00.000Z", jobs: [
-    // Issued to the gateway that is gone: nothing this process can watch, and nobody told it to stop.
+    // Issued to the gateway that is gone: the reconcile asks and is told the run is not there.
     card("j-old", "run_old", { gatewayPid: 111, gatewayStart: 1110 }),
-    // Issued to the gateway answering now, and the boot reconcile gave it back: live work, never touched.
+    // Issued to the gateway answering now: live work, and the reconcile hands it back untouched.
     card("j-current", "run_current", { gatewayPid: 222, gatewayStart: 2220 }),
-    // Issued to the old gateway but re-attached by the reconcile: running is running, whatever the stamp says.
+    // Issued to the old gateway but still held by the one answering: running is running, whatever the stamp says.
     card("j-reattached", "run_reattached", { gatewayPid: 111, gatewayStart: 1110 }),
   ] }), "utf8");
   const { jobs, gw } = await makeJobs(t, { jobsFile: store });
-  gw.state.stopStatus = 404; // a gateway that is running now has never heard of that run
+  gw.state.stopStatus = 404; // a gateway that is running now has never heard of the run it is asked to stop
   assert.equal(jobs.jobs.size, 3, "the store was restored");
-  assert.ok(jobs.jobs.get("j-old").restoredLive && jobs.jobs.get("j-old").status === "interrupted", "an inherited live turn is interrupted at load");
-  jobs.jobs.get("j-reattached").status = "running"; // what reconcileRestored() does to a run the gateway still has
+  // THE POINT OF THE FIX: load() writes nothing. Every card that was live with a run id comes back live and
+  // awaiting the gateway's answer — the panel lost its stream, not the run, and it is not the panel's word to say.
+  for (const id of ["j-old", "j-current", "j-reattached"]) {
+    const j = jobs.jobs.get(id);
+    assert.equal(j.status, "running", `${id} is not written off at load`);
+    assert.equal(j.awaitingGateway, true, `${id} is waiting for the gateway's answer`);
+    assert.equal(j.restoredLive, true);
+    assert.doesNotMatch(String(j.error || ""), /interrupted|panel restarted/, `${id} carries no restart wording at load`);
+  }
+  // The two runs the gateway still holds are answered as running: re-attached, never written off.
+  gw.state.runs.set("run_current", { run_id: "run_current", status: "running", output: "" });
+  gw.state.runs.set("run_reattached", { run_id: "run_reattached", status: "running", output: "" });
+  const settled = await jobs.reconcileRestored();
+  assert.deepEqual(settled.sort(), ["j-current", "j-old", "j-reattached"], "the boot reconcile asks every restored run");
+  assert.equal(jobs.jobs.get("j-old").status, "interrupted", "the run the gateway no longer has is settled on that answer");
+  assert.match(jobs.jobs.get("j-old").error, /the gateway no longer has run run_old/, "and says what the gateway said");
+  assert.equal(jobs.jobs.get("j-current").status, "running", "a run the gateway still holds stays running");
+  assert.equal(jobs.jobs.get("j-reattached").status, "running", "a re-attached run stays running");
   const out = await jobs.stopStaleRuns({ identity: { pid: 222, startTime: 2220, state: "running" } });
-  assert.deepEqual(gw.state.stops, ["run_old"], "only the run from the earlier gateway is stopped");
+  assert.deepEqual(gw.state.stops, ["run_old"], "only the run the gateway no longer has is stopped");
   assert.equal(out.length, 1);
   assert.equal(out[0].already, true, "a run the gateway no longer has is a tolerated 404");
   assert.equal(jobs.jobs.get("j-old").status, "interrupted");
-  assert.equal(jobs.jobs.get("j-current").status, "interrupted");
+  assert.equal(jobs.jobs.get("j-current").status, "running", "a live run is never stopped, whatever the stamp says");
   assert.equal(jobs.jobs.get("j-reattached").status, "running", "a re-attached run is not stopped");
 });
 

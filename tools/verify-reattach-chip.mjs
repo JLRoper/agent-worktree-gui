@@ -422,7 +422,9 @@ try {
   ok("...and nothing bound the live panel's port", !panelLog.some((l) => /:7331\b/.test(l)));
   ok("it restored the seeded cards from the sandbox store", await waitFor(() => panelSaid(/restored 7 job\(s\) from/), { timeoutMs: 30_000, what: "the seeded store to be restored" }), panelLog.find((l) => /restored 7 job/.test(l)) || "");
   ok("the boot reconcile re-attached the run the gateway still had", await waitFor(() => panelSaid(/run j-healthy: the gateway still has this run \(run_healthy\) — re-attached instead of writing it off/), { timeoutMs: 20_000, what: "the automatic re-attach" }));
-  ok("...and wrote off none of the cards a 5xx is not allowed to settle", /reconciled 1 turn\(s\) a restart cut off: j-healthy(\n|$)/.test(logText) && !/reconciled .*j-chip/.test(logText), panelLog.find((l) => /reconciled \d+ turn/.test(l)) || "no reconcile line");
+  // The log is read again here, not from the snapshot taken at boot: the reconcile runs in the listen callback after
+  // /api/state is already answering, so the snapshot may predate its line (the detail below already reads the live log).
+  ok("...and wrote off none of the cards a 5xx is not allowed to settle", /reconciled 1 turn\(s\) a restart cut off: j-healthy(\n|$)/.test(panelLog.join("\n")) && !/reconciled .*j-chip/.test(panelLog.join("\n")), panelLog.find((l) => /reconciled \d+ turn/.test(l)) || "no reconcile line");
 
   const healthy = await cardFor("j-healthy");
   check("the card whose run came back is running again", healthy?.status, "running");

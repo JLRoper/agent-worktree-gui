@@ -1,19 +1,16 @@
 // What a restarted panel says about the turn it lost — and what it does with the run that outlived it.
 //
-// `load()` stamps every turn that was running as `interrupted` because the panel can no longer steer it — not because
-// the agent stopped. The run lives in the gateway, so the panel has to ask before that verdict stands, and it has to
-// stop the dead turn's clocks: live on 7473 a deploy turn the panel gave up on at 03:11 finished at 03:18, and at
-// 04:17 the card still read "interrupted · 79m22s … may still be live", its last tool burst ticking "running 77m16s".
-//
-// Asking is not enough, though, and this is what the script now pins: the write-off it landed on for a run the gateway
-// still HAD ("… so it will finish on its own, but this card cannot steer it") was a dead end in both directions.
-//   * A run still going in the gateway is not a lost turn: the panel lost the STREAM, so the card is re-attached —
-//     back to `running`, steerable, with its stream and its status poll again — and its outcome is adopted from the
-//     terminal event that arrives when the run actually finishes.
-//   * A run that has since LEFT the gateway (404) makes that write-off's promise false, and a card carrying it never
-//     resolves: the promise is cleared and the card reads interrupted-by-restart, saying only what is known.
-//   * A gateway that cannot answer for a run (a 5xx) is not an answer: the verdict stands, untouched, and is asked
-//     again later. That is the control for the two above.
+// `load()` no longer writes a live turn off. A card that was running with a run id comes back LIVE and PENDING: the
+// panel lost the stream, not the run, and it has not asked yet. `reconcileRestored()` asks the run's own endpoint and
+// `settleRestoredRun()` is the one decision every path takes, so a boot reconcile and the manual chip cannot disagree.
+//   * A run still going in the gateway is not a lost turn: the card is re-attached — back to `running`, steerable,
+//     with its stream and its status poll again — and its outcome is adopted when the run actually finishes.
+//   * A run the gateway has finished is settled on the gateway's own word (`done` / `failed` / `cancelled`).
+//   * A run that has since LEFT the gateway (404) is the one case the panel may call `interrupted`, because that is
+//     the gateway's own answer: no record, and no outcome was ever seen here.
+//   * A live turn with NO run id cannot be asked about at all, so it keeps the immediate restart write-off.
+//   * A gateway that answers nothing (a 5xx) or cannot be reached is written off only AFTER the ask — never before
+//     it — and is asked again on the next pass, so a run that turns out to be alive still re-attaches.
 //
 //   node tools/verify-restored-turns.mjs
 //
@@ -146,27 +143,37 @@ const jobs = new Jobs({ config: { jobsFile: storePath, apiServer: { url, key: "t
 const byId = (id) => jobs.jobs.get(id);
 const textOf = (j) => (j.lines || []).map((l) => String(l.text || "")).join("\n");
 
-// ── the restart verdict, before anything is asked ───────────────────────────────────────────────
+// ── the restart, before anything is asked ───────────────────────────────────────────────────────
 console.log("a restart cut the panel off mid-turn");
 check(
-  "every running turn is interrupted",
-  ["j-done", "j-live", "j-gone", "j-unknown", "j-none"].map((id) => byId(id).status),
-  ["interrupted", "interrupted", "interrupted", "interrupted", "interrupted"],
+  "a run that was live with a run id comes back live, not interrupted",
+  ["j-done", "j-live", "j-gone", "j-unknown"].map((id) => byId(id).status),
+  ["running", "running", "running", "running"],
 );
 check(
-  "its clock stops at the last line the panel saw",
-  ["j-done", "j-live", "j-gone", "j-unknown", "j-none"].map((id) => byId(id).endedAt),
-  Array(5).fill(new Date(LAST).toISOString()),
+  "...and is marked as waiting for the gateway's answer",
+  ["j-done", "j-live", "j-gone", "j-unknown"].map((id) => byId(id).awaitingGateway),
+  [true, true, true, true],
 );
-check("an interrupted turn still says the run may be live", /may still be live in the gateway/.test(byId("j-done").error), true);
+check(
+  "...with no clock stopped and no restart wording written",
+  ["j-done", "j-live", "j-gone", "j-unknown"].map((id) => [byId(id).endedAt, byId(id).error || ""]),
+  Array(4).fill([null, ""]),
+);
+check(
+  "a turn with no run id cannot be asked, so it is the one written off at load",
+  [byId("j-none").status, byId("j-none").endedAt],
+  ["interrupted", new Date(LAST).toISOString()],
+);
+check("...and names the restart as what lost it", /^the panel restarted while this was running$/.test(byId("j-none").error), true);
 check("a card the old code wrote off keeps its promise at this point", byId("j-promise").error, PROMISE);
 check("...and the outcome its notice is built from carries the same sentence", byId("j-promise").outcome.reason, PROMISE);
 
 // ── asking the run ──────────────────────────────────────────────────────────────────────────────
 console.log("the run's own answer decides the verdict");
 const settled = await jobs.reconcileRestored();
-// j-unknown (a 5xx) and j-none (no run id) are not in here: neither is an answer this panel can act on.
-check("the turns the gateway answered for were reconciled", settled, ["j-done", "j-live", "j-gone", "j-promise"]);
+// j-none (no run id) is not in here: there is nothing to ask about.
+check("the turns the gateway answered for were reconciled", settled, ["j-done", "j-live", "j-gone", "j-promise", "j-unknown"]);
 
 const done = byId("j-done");
 check("a run that finished reads done", done.status, "done");
@@ -222,12 +229,12 @@ check("...and the completion notice promises nothing", /will finish on its own/.
 check("...while still naming the run and the way it stopped", /run_promise/.test(renderCompletionNotice(promise.completion)), true);
 check("the console says what happened to it", /no record of run run_promise/.test(textOf(promise)), true);
 
-// ── the control: no answer is not an answer ─────────────────────────────────────────────────────
-console.log("a gateway that cannot answer for a run leaves the verdict alone");
+// ── the control: no answer is not a verdict until the ask has happened ─────────────────────────
+console.log("a gateway that cannot answer for a run is written off only after the ask");
 const unknown = byId("j-unknown");
-check("the 5xx case keeps the restart's verdict", unknown.status, "interrupted");
-check("...with its original wording", /may still be live in the gateway/.test(unknown.error), true);
-check("...and nothing was written to its console", /gateway has no record/.test(textOf(unknown)), false);
+check("the 5xx case settles on the restart's verdict, after the ask", unknown.status, "interrupted");
+check("...naming the panel as what lost it", /^the panel restarted while this was running \(run run_unknown\)$/.test(unknown.error), true);
+check("...and claiming no gateway record", /no record/.test(textOf(unknown)), false);
 const askedOnce = hits.run_unknown;
 await jobs.reconcileRestored();
 check("...and it is asked again on the next pass, not settled", hits.run_unknown > askedOnce, true);
