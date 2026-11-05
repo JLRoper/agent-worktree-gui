@@ -599,7 +599,10 @@
     if (prov.kind === "built-in") {
       const seeds = (BUILTIN.meta.sources || []).filter((s) => /(^|\/)(pipelines|pipeline-bundle)\.seed\.json$/.test(s.file));
       const named = seeds.map((s) => `<code>${esc(s.file)}</code> sha256 <code class="sha">${esc(s.sha256)}</code>`).join(" · ");
-      provenanceEl.innerHTML = `<span class="pv-tag">built in</span>this page was rendered from ${named || "its own seeds"} — <b>${BUILTIN.meta.totalPipelines}</b> definitions and the <b>${BUILTIN.meta.bundleStages}</b>-stage studio bundle. Nothing on this screen was fetched.`;
+      // The bundle file may hold more than the studio's own pipeline; the count is named rather than left out, so this
+      // page cannot read as "the bundle is one pipeline" after the file grew a list.
+      const others = Number(BUILTIN.meta.bundlePipelines) > 1 ? ` (the first of <b>${BUILTIN.meta.bundlePipelines}</b> pipelines the bundle file holds — the others are read in a task's pipeline window)` : "";
+      provenanceEl.innerHTML = `<span class="pv-tag">built in</span>this page was rendered from ${named || "its own seeds"} — <b>${BUILTIN.meta.totalPipelines}</b> definitions and the <b>${BUILTIN.meta.bundleStages}</b>-stage studio bundle${others}. Nothing on this screen was fetched.`;
       return;
     }
     const label = (importer && importer.SHAPES[prov.shape]) || "a document";

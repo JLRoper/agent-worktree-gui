@@ -93,6 +93,9 @@ import { createResetRoutes } from "./lib/assistant/reset.js";
 import { createPipelineWindowRoutes } from "./lib/pipeline-window.js";
 // The pipelines a window's assignment control may offer, read from the same bundle. A read, mounted beside the window.
 import { createPipelineCatalogueRoutes } from "./lib/task-pipeline-assign.js";
+// Importing a studio export into that bundle: an APPEND by pipeline id, refusing a duplicate id by name. The write side
+// of the loader, mounted with the two reads because all three answer about the one file.
+import { createPipelineBundleImportRoutes } from "./lib/pipeline-bundle-import.js";
 import { childTranscript, collectPrompt, subagentsFor, subagentRoster } from "./lib/subagents.js";
 import { thinkingFor } from "./lib/thinking.js";
 import { modelCatalogue, refreshModelCatalogue } from "./lib/hermes-models.js";
@@ -1057,6 +1060,9 @@ const pipelineWindowRoutes = createPipelineWindowRoutes({ assistant, config, sen
 // What the window's assignment control offers: the bundle's pipelines and their stages, in order. A read of the same
 // file the window resolves against, so the control cannot offer a stage the window would then call unresolved.
 const pipelineCatalogueRoutes = createPipelineCatalogueRoutes({ config, sendJson });
+// …and the import that appends to that same file: a studio export goes in beside what is already there, a duplicate
+// pipeline id is refused by name, and the merged document is re-read by the loader before it is written.
+const pipelineBundleImportRoutes = createPipelineBundleImportRoutes({ config, sendJson, readBody });
 
 // ---- restarting the gateway, or this panel ---------------------------------------------
 // Everything that touches the outside world is injectable (lib/restart.js), which is what lets
@@ -2743,6 +2749,9 @@ const server = createServer(async (req, res) => {
 
     // …and the catalogue its assignment control draws: the bundle's pipelines, their stages in order.
     if (await pipelineCatalogueRoutes(req, res, route, url)) return;
+
+    // …and the one write that changes it: a studio export appended to the bundle by pipeline id.
+    if (await pipelineBundleImportRoutes(req, res, route, url)) return;
 
     if (route === "/api/health") {
       return sendJson(res, 200, { ok: true, host: config.host, projects: registry.projects.map((p) => p.name), settings: settingsOut(), clients: clients.size });

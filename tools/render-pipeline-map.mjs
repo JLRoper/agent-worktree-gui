@@ -128,8 +128,15 @@ function readSource(file) {
 
 function build() {
   const seed = readJson(SEED, "the pipeline catalogue");
-  const bundle = readJson(BUNDLE, "the studio bundle");
-  if (!Array.isArray(bundle.stages) || !Array.isArray(bundle.roles)) throw new Error("pipeline-bundle.seed.json has no stages[]/roles[]");
+  // The bundle file is the panel's multi-pipeline wrapper (`{bundleVersion, name, pipelines: [...]}`); a bare studio
+  // document is still read, because a reader may point this renderer at an older export. This page draws the STUDIO
+  // bundle — the 13-stage POC-to-UAT pipeline — and says how many other pipelines the same file holds, because the
+  // task pipeline window and Settings > Bundles are where those are read.
+  const bundleFile = readJson(BUNDLE, "the studio bundle");
+  const bundleList = Array.isArray(bundleFile.pipelines) ? bundleFile.pipelines.filter((p) => p && typeof p === "object") : [bundleFile];
+  if (!bundleList.length) throw new Error("pipeline-bundle.seed.json holds no pipeline");
+  const bundle = bundleList.find((p) => (p.id || (p.project && p.project.id)) === "poc-to-uat") || bundleList[0];
+  if (!Array.isArray(bundle.stages) || !Array.isArray(bundle.roles)) throw new Error("pipeline-bundle.seed.json's studio pipeline has no stages[]/roles[]");
   if (!Array.isArray(seed.pipelines)) throw new Error("pipelines.seed.json has no pipelines[]");
 
   const roleById = new Map(bundle.roles.filter((r) => r && r.id).map((r) => [r.id, r]));
@@ -260,6 +267,9 @@ function build() {
       totalStages: pipelines.reduce((n, p) => n + p.stages.length, 0),
       bundleStages: bundleStages.length,
       totalLoops: pipelines.reduce((n, p) => n + p.loops.length, 0) + bundleLoops.length,
+      // How many pipelines the bundle FILE holds. Only the studio's is drawn on this page; the others are read in the
+      // task pipeline window and Settings > Bundles, and saying the number here is what keeps this line honest.
+      bundlePipelines: bundleList.length,
       roleRules: ROLE_RULES.map((r) => ({ id: r.id, label: r.label, why: r.why })),
       sources: [
         sourceRow(SEED, "pipelines.seed.json", "the catalogue of definitions"),

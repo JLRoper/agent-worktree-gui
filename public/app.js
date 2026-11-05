@@ -18147,6 +18147,57 @@ async function loadBundles() {
   return bundlesLoading;
 }
 
+// A chosen studio export, appended to the bundle this panel already reads.
+//
+// The bundle is a LIST, and the route appends by pipeline id: today's live file is one studio document, so before this
+// a second import could only replace the first and the dropdown kept one entry. The page reads the file the reader
+// chose, posts its TEXT (the server parses it with the same loader the panel reads with), and prints the route's own
+// sentence — the added pipelines and their stage counts, or the refusal's code and the id it names.
+async function bundleImportChosen(input) {
+  const note = document.getElementById("bundle-import-note");
+  const file = input && input.files && input.files[0] ? input.files[0] : null;
+  if (!file) return null;
+  const say = (message, bad = false) => {
+    if (!note) return;
+    note.textContent = message;
+    note.classList.toggle("bad", bad);
+  };
+  say(`importing ${file.name}…`);
+  let text;
+  try {
+    text = await file.text();
+  } catch (e) {
+    say(`${file.name} could not be read — ${(e && e.message) || e}`, true);
+    return null;
+  }
+  try {
+    const r = await apiFetch("/api/assistant/pipeline-bundle/import", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text, name: file.name }),
+    });
+    const body = await r.json().catch(() => null);
+    if (!r.ok || !body || body.ok !== true) {
+      // The route's refusal, in its own words: `code` first (a reader can quote it), then the sentence that names the
+      // pipeline id the bundle already holds.
+      const code = body && body.code ? ` (${body.code})` : "";
+      say(`${file.name}: ${(body && body.error) || `the panel answered ${r.status}`}${code}`, true);
+      return null;
+    }
+    say(body.reason || `imported ${file.name}`);
+    // The list above is a read of the file the write just changed, so it is re-read before the note is trusted.
+    await loadBundles();
+    return body;
+  } catch (e) {
+    say(`${file.name}: ${(e && e.message) || e}`, true);
+    return null;
+  } finally {
+    // The same file may be chosen twice in a row (a corrected export with the same name): a file input that kept its
+    // value would fire no `change` the second time and the press would look dead.
+    if (input) input.value = "";
+  }
+}
+
 // A task row's press: the SAME window the Queue pane opens. The window reads its own model and catalogue, so this
 // handler carries two ids and the row the caret came from — nothing else, and no assignment logic of its own.
 function initBundlesPanel() {
@@ -18161,11 +18212,23 @@ function initBundlesPanel() {
   document.addEventListener("wtgui:task-pipeline-assigned", () => {
     void loadBundles();
   });
+  // The import's file picker: the button is the affordance, the hidden input is what a browser will open. Reading
+  // happens on `change` (the reader may cancel the dialog, which fires nothing), so a cancelled pick leaves no note.
+  panel.addEventListener("change", (e) => {
+    if (e.target?.id !== "bundle-import-file") return;
+    void bundleImportChosen(e.target);
+  });
   panel.addEventListener("click", (e) => {
     const refresh = e.target?.closest?.("[data-bundle-refresh]");
     if (refresh) {
       e.preventDefault();
       void loadBundles();
+      return;
+    }
+    const importer = e.target?.closest?.("[data-bundle-import]");
+    if (importer) {
+      e.preventDefault();
+      document.getElementById("bundle-import-file")?.click?.();
       return;
     }
     const row = e.target?.closest?.("[data-bundle-task]");
