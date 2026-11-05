@@ -39,14 +39,15 @@ record keeps the ledger of them:
   "route": "sha256:6b1f…",
   "stageRuns": [
     { "id": "poc-to-uat/S8#1", "stage": "S8", "visit": 1, "at": "…", "thread": "carry the form", "job": "job-4f2a",
-      "status": "done", "settledAt": "…",
-      "tree": { "path": "…", "branch": "…", "head": "1c9f0aa", "dirty": 0 },
-      "artifact": { "id": "finding", "path": "ledger/G58.json", "present": true, "sha256": "3d0e91…" },
+      "status": "done", "settledAt": "…", "commit": "1c9f0aa4f3e2…",
+      "tree": { "path": "…", "branch": "…", "head": "1c9f0aa", "commit": "1c9f0aa4f3e2…", "dirty": 0 },
+      "artifact": { "id": "finding", "path": "ledger/G58.json", "present": true, "sha256": "3d0e91…",
+                    "commit": "1c9f0aa4f3e2…", "blob": "42dbd25dd307…", "blobSha256": "3d0e91…" },
       "inputs": [
         { "artifact": "review", "path": "ledger/G58.review.json", "sha256": "8ac1f0…", "present": true,
-          "writer": "review-agent", "edge": "H-10", "via": "handoff" },
+          "writer": "review-agent", "edge": "H-10", "via": "handoff", "commit": "3f9c1a2b7d4e…", "blob": "4b825dc642…", "blobSha256": "8ac1f0…" },
         { "artifact": "finding", "path": "ledger/G58.json", "sha256": "3d0e91…", "present": true,
-          "writer": "fixer", "edge": null, "via": "earlier" }
+          "writer": "fixer", "edge": null, "via": "earlier", "commit": "1c9f0aa4f3e2…", "blob": "42dbd25dd307…", "blobSha256": "3d0e91…" }
       ],
       "decision": { "by": "panel", "trigger": "stage-settled", "code": null, "fact": { "kind": "run-status", "status": "done" }, "reason": "stage S8 of poc-to-uat settled — the run finished" } }
   ]
@@ -70,9 +71,12 @@ record keeps the ledger of them:
   graph it did not enter under.
 - **`inputs` is the manifest of what the stage was handed**: one entry per artifact the document says it reads, with
   the id, the document's path, the sha256 the file had when the stage started, whether it was there, the writer the
-  document names, and the edge it arrived by (`H-10` for a handoff, `null` for a read and for the earlier visit's
-  own artifact). It is written with the entry when the START is asked for — the moment the INPUTS block is resolved —
-  because that is what the stage started with, and a later reading of the tree cannot reconstruct it.
+  document names, the edge it arrived by (`H-10` for a handoff, `null` for a read and for the earlier visit's own
+  artifact), and the **pin** — the `commit`, the `blob` object id and the `blobSha256` the input is read at. It is
+  written with the entry when the START is asked for — the moment the INPUTS block is resolved — because that is what
+  the stage started with, and a later reading of the tree cannot reconstruct it.
+- **`commit` on the stage run is the tree's HEAD at settle, full-length.** It is the pin the stage's handoff carries;
+  an abbreviated sha would be a display form two commits could share.
 
 ### The input manifest, read back
 
@@ -88,6 +92,28 @@ Two rules make it useful after the fact:
 A stage run written before this field existed answers `entries: []` — nothing recorded — and a record with no stage
 run at all answers `null`. The manifest is capped at 24 entries per run; `inputsDropped` counts what the cap refused
 so a short manifest does not read as a complete one.
+
+### The pin: a handoff is a commit, never a branch
+
+A branch is a moving name. `wtgui/carry-the-contract-a1b2c3` resolved when S3 settled and the same name resolved when
+S4 started can be two different trees, and an artifact read through it is a different artifact wearing the same path.
+So every artifact a stage settles with is pinned in `lib/stage-pin.js`:
+
+| field | what it is |
+|---|---|
+| `commit` | the tree's full HEAD at settle — the commit the input is read at |
+| `blob` | the artifact's git blob object id at `commit:path` |
+| `blobSha256` | the sha256 of the BLOB's bytes (not of the checkout — with `core.autocrlf` on the two differ on identical content) |
+| `file` | the tree-relative path the pin names, when a `{{hole}}` in the declaration resolved to a real file |
+| `uncommitted` | present when the artifact exists in the tree but **not in the commit**: it has no blob to pin |
+
+The writer's record wins over a fresh reading of the file: `stagePrompt` prints the commit, the blob and
+`read it at <commit>:<path>`, and never identifies the handoff by a branch. A start whose recorded commit this tree
+cannot resolve — a rebase, a reset, a re-cut — **parks `pipeline-refuse-input`** rather than reading whatever the
+branch says now; a blob at that commit that is not the one recorded is refused for the same reason. A run written
+before the pin existed carries no commit and is not parked: a record that could not have carried the fact is not a
+refusal. A stage that writes an artifact and leaves it uncommitted records `uncommitted: true`; the next stage is told
+there is no blob at the pin, which is a fact a reader can fix by committing, not a silent substitution.
 
 ## Three answers, and no fourth
 
@@ -136,9 +162,11 @@ queue's own tick — asks `lib/task-pipeline-drive.js` three questions about eve
   carries a pipeline that resolves. Its tree is **cut first**, as its own step (§ below): the assistant's `ensureTree`
   cuts it and writes `pipelineRun.tree` on the row, and the NEXT pass starts the stage in that tree — so every stage
   start is the `existing: true` path, whether it is the first stage or the tenth. The stage's prompt is the turn, plus
-  the INPUTS block: the handoff's artifact by path and hash, the gate it came back through, the earlier visit's artifact
-  on a loop back, and the tree's branch/HEAD/dirty count. A row with NO pipeline is not started here and has no stage
-  invented for it — that row is the assistant's to start, exactly as it was before this driver existed.
+  the INPUTS block: the handoff's artifact by path, COMMIT and blob hash, the gate it came back through, the earlier
+  visit's artifact on a loop back, and the tree's branch/HEAD/dirty count. A handoff is never named by a branch: the
+  panel stores the commit the writer settled at and hands that to the next stage. A row with NO pipeline is not
+  started here and has no stage invented for it — that row is the assistant's to start, exactly as it was before this
+  driver existed.
 - **what moves.** A `running` row whose current thread is not live and whose last run reads `done` has settled its
   STAGE. The row is written forward to the next stage in one write — `queued`, a fresh `enteredAt`, the visit counted,
   and the edge it crossed counted in `crossings` — and the settle does not see it again until that stage has a run of
@@ -192,11 +220,11 @@ review-fix loop and the wrong one for a stage that needs a clean base; the desig
 
 Every bundle stage declares an artifact with an id, a path and a writer. When a stage settles `done`, the driver resolves
 that path against the tree with the same `{{hole}}` matcher a gate's decision path uses, and records
-`artifact { id, path, present, sha256 }` on the stage run. **Absent → the row parks `pipeline-artifact`**, naming the
-path and the handoff that now has nothing to pass. Files over 1 MiB record `present` only (hashing a huge log in a sweep
-is a stall). A loop-back visit whose artifact hash is identical to the earlier visit's is recorded `unchanged: true` — a
-visible fact, not a park. The check is made when the row has a tree; a row with nowhere to resolve records that it could
-not check rather than inventing a park.
+`artifact { id, path, present, sha256, commit, blob, blobSha256 }` on the stage run. **Absent → the row parks
+`pipeline-artifact`**, naming the path and the handoff that now has nothing to pass. Files over 1 MiB record `present`
+only (hashing a huge log in a sweep is a stall). A loop-back visit whose artifact hash is identical to the earlier
+visit's is recorded `unchanged: true` — a visible fact, not a park. The check is made when the row has a tree; a row
+with nowhere to resolve records that it could not check rather than inventing a park.
 
 ### Park or start: the decision a person can read
 
@@ -222,6 +250,7 @@ it legitimate; `fact` is structured and small.
 | `pipeline-tree-claimed` | another open row claims the same tree | the other row's id and title |
 | `pipeline-unresolved` | the record names a pipeline or stage the bundle does not hold | the contract's own sentence |
 | `pipeline-changed` | the routing fingerprint moved since the row entered | both fingerprints |
+| `pipeline-refuse-input` | the handed-on artifact's recorded commit is not in this tree, or its blob is not the one recorded | the artifact, the commit it is pinned to, and that the branch moved |
 | `pipeline-start-refused` | the spawner or the cut refused | the refusal, and that nothing was started |
 | `pipeline-starting` | a start is in flight inside the grace | a note only, never a park |
 
@@ -256,6 +285,8 @@ has actually landed — the same bar every other row has.
 | `pipelineRun.visits` | a stage is entered (assign, move, loop) | never within the same pipeline; a new pipeline starts a new record |
 | `pipelineRun.stageRuns` | a start is asked for; filled at the link and at the settle | trimmed to 30 by the writer, `runsDropped` counts the loss |
 | `pipelineRun.stageRuns[].inputs` | the start is asked for (the INPUTS block's own resolution) | trimmed with its stage run |
+| `pipelineRun.stageRuns[].commit` | the stage settles (the tree's full HEAD) | trimmed with its stage run |
+| `pipelineRun.stageRuns[].artifact.commit/blob/blobSha256` | the stage settles with a resolvable artifact | trimmed with its stage run |
 | `pipelineRun.stageRuns[].inputsDropped` | only when the 24-entry cap refused one | trimmed with its stage run |
 | `pipelineRun.tree` | the tree is cut | never by the pipeline — the reader deletes the tree, the record keeps the path |
 | `pipelineRun.route` | a stage is entered | re-stamped by the reader's `route` release |

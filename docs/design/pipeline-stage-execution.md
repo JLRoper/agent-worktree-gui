@@ -377,16 +377,16 @@ summary, never the panel's opinion of the artifact:
 — poc-to-uat: stage 5 of 13, Investigate (poc-to-uat/S8), visit 2
 
 INPUTS
-  handed on   review    ledger/G58.review.json   sha256 8ac1f0…   writer review-agent
-              (S9 → S8, handoff H-10, loop — crossing 1 of a cap of 3)
+  handed on   review    ledger/G58.review.json   commit 3f9c1a2b7d4e   blob 4b825dc642db   sha256 8ac1f0…   writer review-agent
+              (S9 → S8, handoff H-10, loop — crossing 1 of a cap of 3; read it at 3f9c1a2b7d4e:ledger/G58.review.json)
   came back   the row arrived by H-10 from S8's next stage, S9; the gate G-10 after S9 declares decisions/G-10.json
               — read it; the panel does not read it for you
-  earlier     finding   ledger/G58.json   sha256 3d0e91…   (this stage, visit 1 — unchanged)
+  earlier     finding   ledger/G58.json   commit 1c9f0aa4f3e2   blob 42dbd25dd307   sha256 3d0e91…   (this stage, visit 1 — unchanged)
   tree        <repo>/.worktrees/carry-the-contract-a1b2c3   branch wtgui/carry-the-contract-a1b2c3
               HEAD 1c9f0aa   0 uncommitted files
 ```
 
-Four rules for it:
+Five rules for it:
 
 1. **The panel resolves, the agent reads.** The artifact's path is resolved against the tree with the same matcher the
    gate path uses (`lib/task-pipeline-drive.js:140-182`, generalised to `artifactPathOf`), and its `sha256` is computed
@@ -398,12 +398,19 @@ Four rules for it:
    If it is absent, the loop-back parks (§6.1) rather than starting a stage with nothing to work on.
 4. **Tree facts are facts, not cleanups.** HEAD, branch and the dirty count are quoted so the agent knows what it
    inherits. The panel never resets, stashes or cleans a stage tree (§7.3).
+5. **The handoff is a commit and a blob, never a branch.** The line names the commit the writer settled at and the
+   blob's object id, and says where to read it (`git show <commit>:<path>`). A branch resolves differently tomorrow;
+   the commit cannot. A start whose recorded commit is not in this tree parks `pipeline-refuse-input` rather than
+   reading whatever the branch says now, and a checkout that has moved off the pin is said so on the line — the agent
+   is told to read the blob, not the working file. `lib/stage-pin.js` makes the git reading; the driver only consumes
+   it, exactly as it consumes the tree facts.
 
 ### 5.3 What is resolved, and when
 
 | resolved | at | recorded on |
 |---|---|---|
 | the handoff out of the settled stage, and its artifact path | settle, before the move | the settling stage run: `artifact {id, path, present, sha256}` |
+| the tree's COMMIT, the artifact's blob id and the sha256 of the blob's bytes | settle | the stage run's `commit`, and the artifact's `commit/blob/blobSha256` |
 | the artifact's `sha256` (files up to 1 MiB; larger files record `present` only, and say so) | settle | same |
 | the gate that ended the stage, and its decision path | settle | the park's `waitingFor`, and the next run's inputs block |
 | the tree's HEAD and dirty count | each pass, for the rows being driven | the stage run, at entry and at settle |
@@ -434,6 +441,7 @@ Every pass asks one question per row — *what does this stage's fact license?* 
 | the row's tree is claimed by another open row | park | `pipeline-tree-claimed` | the other row's id and title |
 | the bundle cannot resolve the record | park | `pipeline-unresolved` | the contract's own sentence, and the kind |
 | the routing fingerprint moved since the row entered | park | `pipeline-changed` | both fingerprints, and the fields that decide routing |
+| the input's pinned commit is not in this tree, or its blob is not the one recorded | park | `pipeline-refuse-input` | the artifact, the commit, and that the branch moved |
 | the start was refused by the spawner | park | `pipeline-start-refused` | the refusal, and that nothing was started |
 | the start is in flight (`startingAt` inside the grace) | wait | `pipeline-starting` | a note only, never a park |
 | `auto` is off | move, no start | — | the row advances and waits, as it does today |
@@ -653,6 +661,7 @@ Short, because a design that does not name its seams is not actionable.
 |---|---|
 | `lib/task-pipeline.js` | `visits` and `stageRuns` written by `enterStage`; `stageRunId()`; the ledger's trim; the migration read (§2.4) |
 | `lib/task-pipeline-drive.js` | `artifactPathOf` (the `decisionPathOf` matcher, generalised); `routingFingerprint`; the inputs block in `stagePrompt`; the tree lookup and claim; `ensureTree` in the return value; five new `DRIVE_FAULTS`; the decision record; unresolved parks |
+| `lib/stage-pin.js` | the git reading behind a handoff's pin: the tree's commit, the artifact's blob id and the blob's sha256; `pinCheck` for a start that must not read a different tree |
 | `lib/assistant.js` | `ensureTree` performed before any start, and `pipelineRun.tree` written before it; tree facts (HEAD, dirty count) computed per driven row; the cap release and the fingerprint re-stamp as queue actions; the start spec is always `existing: true` |
 | `lib/assistant/queue.js` | the row's schema carries the new keys verbatim (it already carries `pipelineRun` so); the two release actions |
 | `lib/pipeline-window.js` | draw a stage's state from `stageRuns` when it is there, `crossings`/`via` when it is not |
