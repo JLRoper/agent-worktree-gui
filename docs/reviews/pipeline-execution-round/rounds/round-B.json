@@ -1,0 +1,972 @@
+{
+  "round": "B",
+  "fixture": {
+    "repo": "<repo>",
+    "head": "0df9573",
+    "studio_source": "<studio>"
+  },
+  "pipeline": {
+    "id": "probe-fix-loop",
+    "file": "<work>/round-B/pipeline-bundle.json",
+    "sha256": "9589a3e69cf6d2a41d7eccc25d0e9a013eb06867db1dddaa98418109807413d0",
+    "document": {
+      "id": "probe-fix-loop",
+      "title": "Probe, fix, verify — a capped repair loop",
+      "stages": [
+        {
+          "id": "S1",
+          "title": "Probe the studio",
+          "prompt": "Probe the Pipeline Studio copy in `studio/` for legibility defects, in a real headless browser. Measure the six clauses the pipeline's contract names (seed rendered, no page errors, every card named, role/meta lines at 12px or more, nothing inside a card below 10px, bundle.json carrying four documents) and write `out/probe.json`: one finding per clause with the number that decided it. Do not fix anything — the next stage does that.",
+          "artifact": {
+            "id": "probe",
+            "path": "out/probe.json",
+            "schema": "probe/1",
+            "writer": "probe-seat"
+          }
+        },
+        {
+          "id": "S2",
+          "title": "Fix what the probe found",
+          "prompt": "Read `out/probe.json` and fix ONLY the clauses that failed, in the tree's own copy of the studio. Each fix is a real edit to `studio/app.css`; record the file, the rule, and the sha256 before and after in `out/fix.json`. A clause the stylesheet does not hold in the shape you expect is reported as unfixable, never invented.",
+          "artifact": {
+            "id": "fix",
+            "path": "out/fix.json",
+            "schema": "fix/1",
+            "writer": "fix-seat"
+          }
+        },
+        {
+          "id": "S3",
+          "title": "Verify the fix",
+          "prompt": "Re-measure every clause in the same browser and write `out/verify.json`: for each clause, what it measured before, what it measures now, which previously-failing clauses are fixed, which are still open, and any clause the fix broke that was passing before.",
+          "artifact": {
+            "id": "verify",
+            "path": "out/verify.json",
+            "schema": "verify/1",
+            "writer": "verify-seat"
+          }
+        }
+      ],
+      "gates": [],
+      "handoffs": [
+        {
+          "id": "H-1",
+          "from": "S1",
+          "to": "S2",
+          "artifact": "probe",
+          "kind": "sequence"
+        },
+        {
+          "id": "H-2",
+          "from": "S2",
+          "to": "S3",
+          "artifact": "fix",
+          "kind": "sequence"
+        },
+        {
+          "id": "H-3",
+          "from": "S3",
+          "to": "S1",
+          "artifact": "verify",
+          "kind": "loop",
+          "cap": "2 rounds"
+        }
+      ]
+    }
+  },
+  "row": {
+    "id": 1,
+    "title": "probe the pipeline studio and fix what the probe finds",
+    "state": "parked",
+    "reason": "the loop H-3 (S3 → S1) is at its cap of 2 rounds — 2 crossings already taken, so the row stops here for a decision",
+    "stage": "S3",
+    "via": "H-2",
+    "visits": {
+      "S1": 3,
+      "S2": 3,
+      "S3": 3
+    },
+    "crossings": {
+      "H-1": 3,
+      "H-2": 3,
+      "H-3": 2
+    },
+    "tree": {
+      "path": "<repo>/.worktrees/probe-the-pipeline-studi-aa52a9",
+      "branch": "wtgui/probe-the-pipeline-studi-aa52a9",
+      "startSha": "0df9573",
+      "cutAt": "2026-11-05T08:37:56.490Z",
+      "by": "panel"
+    },
+    "waitingFor": {
+      "kind": "cap",
+      "edge": "H-3",
+      "from": "S3",
+      "to": "S1",
+      "limit": 2,
+      "used": 2,
+      "stage": "S3",
+      "since": "2026-11-05T08:39:16.986Z"
+    }
+  },
+  "cuts": [
+    {
+      "repoDir": "<repo>",
+      "prompt": "Probe the Pipeline Studio copy in `studio/` for legibility defects, in a real headless browser. Measure the six clauses the pipeline's contract names (seed rendered, no page errors, every card named, role/meta lines at 12px or more, nothing inside a card below 10px, bundle.json carrying four documents) and write `out/probe.json`: one finding per clause with the number that decided it. Do not fix anything — the next stage does that.\n\n— Probe, fix, verify — a capped repair loop: stage 1 of 3, Probe the studio (probe-fix-loop/S1), visit 1\nQueue task #1: probe the pipeline studio and fix what the probe finds\n\nINPUTS\n  handed on   verify   out/verify.json   not in the tree   writer verify-seat\n              (S3 → S1, handoff H-3, loop — crossing 0 of a cap of 2)\n\none tree, three stages, one capped loop",
+      "branch": "wtgui/probe-the-pipeline-studi-aa52a9",
+      "path": "<repo>/.worktrees/probe-the-pipeline-studi-aa52a9",
+      "at": "2026-11-05T08:37:56.490Z"
+    }
+  ],
+  "prompts": [
+    {
+      "stage": "S1",
+      "visit": 1,
+      "prompt": "Probe the Pipeline Studio copy in `studio/` for legibility defects, in a real headless browser. Measure the six clauses the pipeline's contract names (seed rendered, no page errors, every card named, role/meta lines at 12px or more, nothing inside a card below 10px, bundle.json carrying four documents) and write `out/probe.json`: one finding per clause with the number that decided it. Do not fix anything — the next stage does that.\n\n— Probe, fix, verify — a capped repair loop: stage 1 of 3, Probe the studio (probe-fix-loop/S1), visit 1\nQueue task #1: probe the pipeline studio and fix what the probe finds\n\nINPUTS\n  handed on   verify   out/verify.json   not in the tree   writer verify-seat\n              (S3 → S1, handoff H-3, loop — crossing 0 of a cap of 2)\n  tree        <repo>/.worktrees/probe-the-pipeline-studi-aa52a9   branch wtgui/probe-the-pipeline-studi-aa52a9\n              HEAD 0df9573   0 uncommitted files\n\none tree, three stages, one capped loop",
+      "target": "<repo>/.worktrees/probe-the-pipeline-studi-aa52a9"
+    },
+    {
+      "stage": "S2",
+      "visit": 1,
+      "prompt": "Read `out/probe.json` and fix ONLY the clauses that failed, in the tree's own copy of the studio. Each fix is a real edit to `studio/app.css`; record the file, the rule, and the sha256 before and after in `out/fix.json`. A clause the stylesheet does not hold in the shape you expect is reported as unfixable, never invented.\n\n— Probe, fix, verify — a capped repair loop: stage 2 of 3, Fix what the probe found (probe-fix-loop/S2), visit 1\nQueue task #1: probe the pipeline studio and fix what the probe finds\n\nINPUTS\n  handed on   probe   out/probe.json   sha256 511dd08d7c66…   writer probe-seat\n              (S1 → S2, handoff H-1, sequence)\n  tree        <repo>/.worktrees/probe-the-pipeline-studi-aa52a9   branch wtgui/probe-the-pipeline-studi-aa52a9\n              HEAD 0df9573   1 uncommitted file\n\none tree, three stages, one capped loop",
+      "target": "<repo>/.worktrees/probe-the-pipeline-studi-aa52a9"
+    },
+    {
+      "stage": "S3",
+      "visit": 1,
+      "prompt": "Re-measure every clause in the same browser and write `out/verify.json`: for each clause, what it measured before, what it measures now, which previously-failing clauses are fixed, which are still open, and any clause the fix broke that was passing before.\n\n— Probe, fix, verify — a capped repair loop: stage 3 of 3, Verify the fix (probe-fix-loop/S3), visit 1\nQueue task #1: probe the pipeline studio and fix what the probe finds\n\nINPUTS\n  handed on   fix   out/fix.json   sha256 671d30422a98…   writer fix-seat\n              (S2 → S3, handoff H-2, sequence)\n  tree        <repo>/.worktrees/probe-the-pipeline-studi-aa52a9   branch wtgui/probe-the-pipeline-studi-aa52a9\n              HEAD 0df9573   2 uncommitted files\n\none tree, three stages, one capped loop",
+      "target": "<repo>/.worktrees/probe-the-pipeline-studi-aa52a9"
+    },
+    {
+      "stage": "S1",
+      "visit": 2,
+      "prompt": "Probe the Pipeline Studio copy in `studio/` for legibility defects, in a real headless browser. Measure the six clauses the pipeline's contract names (seed rendered, no page errors, every card named, role/meta lines at 12px or more, nothing inside a card below 10px, bundle.json carrying four documents) and write `out/probe.json`: one finding per clause with the number that decided it. Do not fix anything — the next stage does that.\n\n— Probe, fix, verify — a capped repair loop: stage 1 of 3, Probe the studio (probe-fix-loop/S1), visit 2\nQueue task #1: probe the pipeline studio and fix what the probe finds\n\nINPUTS\n  handed on   verify   out/verify.json   sha256 82281e4bada0…   writer verify-seat\n              (S3 → S1, handoff H-3, loop — crossing 1 of a cap of 2)\n  earlier     probe   out/probe.json   sha256 511dd08d7c66   (this stage, visit 1 — unchanged)\n  tree        <repo>/.worktrees/probe-the-pipeline-studi-aa52a9   branch wtgui/probe-the-pipeline-studi-aa52a9\n              HEAD 0df9573   2 uncommitted files\n\none tree, three stages, one capped loop",
+      "target": "<repo>/.worktrees/probe-the-pipeline-studi-aa52a9"
+    },
+    {
+      "stage": "S2",
+      "visit": 2,
+      "prompt": "Read `out/probe.json` and fix ONLY the clauses that failed, in the tree's own copy of the studio. Each fix is a real edit to `studio/app.css`; record the file, the rule, and the sha256 before and after in `out/fix.json`. A clause the stylesheet does not hold in the shape you expect is reported as unfixable, never invented.\n\n— Probe, fix, verify — a capped repair loop: stage 2 of 3, Fix what the probe found (probe-fix-loop/S2), visit 2\nQueue task #1: probe the pipeline studio and fix what the probe finds\n\nINPUTS\n  handed on   probe   out/probe.json   sha256 b62ba1ff0b89…   writer probe-seat\n              (S1 → S2, handoff H-1, sequence)\n  earlier     fix   out/fix.json   sha256 671d30422a98   (this stage, visit 1 — unchanged)\n  tree        <repo>/.worktrees/probe-the-pipeline-studi-aa52a9   branch wtgui/probe-the-pipeline-studi-aa52a9\n              HEAD 0df9573   2 uncommitted files\n\none tree, three stages, one capped loop",
+      "target": "<repo>/.worktrees/probe-the-pipeline-studi-aa52a9"
+    },
+    {
+      "stage": "S3",
+      "visit": 2,
+      "prompt": "Re-measure every clause in the same browser and write `out/verify.json`: for each clause, what it measured before, what it measures now, which previously-failing clauses are fixed, which are still open, and any clause the fix broke that was passing before.\n\n— Probe, fix, verify — a capped repair loop: stage 3 of 3, Verify the fix (probe-fix-loop/S3), visit 2\nQueue task #1: probe the pipeline studio and fix what the probe finds\n\nINPUTS\n  handed on   fix   out/fix.json   sha256 4cc1a76bc150…   writer fix-seat\n              (S2 → S3, handoff H-2, sequence)\n  earlier     verify   out/verify.json   sha256 82281e4bada0   (this stage, visit 1 — unchanged)\n  tree        <repo>/.worktrees/probe-the-pipeline-studi-aa52a9   branch wtgui/probe-the-pipeline-studi-aa52a9\n              HEAD 0df9573   2 uncommitted files\n\none tree, three stages, one capped loop",
+      "target": "<repo>/.worktrees/probe-the-pipeline-studi-aa52a9"
+    },
+    {
+      "stage": "S1",
+      "visit": 3,
+      "prompt": "Probe the Pipeline Studio copy in `studio/` for legibility defects, in a real headless browser. Measure the six clauses the pipeline's contract names (seed rendered, no page errors, every card named, role/meta lines at 12px or more, nothing inside a card below 10px, bundle.json carrying four documents) and write `out/probe.json`: one finding per clause with the number that decided it. Do not fix anything — the next stage does that.\n\n— Probe, fix, verify — a capped repair loop: stage 1 of 3, Probe the studio (probe-fix-loop/S1), visit 3\nQueue task #1: probe the pipeline studio and fix what the probe finds\n\nINPUTS\n  handed on   verify   out/verify.json   sha256 38db2871d159…   writer verify-seat\n              (S3 → S1, handoff H-3, loop — crossing 2 of a cap of 2)\n  earlier     probe   out/probe.json   sha256 b62ba1ff0b89   (this stage, visit 2 — unchanged)\n  tree        <repo>/.worktrees/probe-the-pipeline-studi-aa52a9   branch wtgui/probe-the-pipeline-studi-aa52a9\n              HEAD 0df9573   2 uncommitted files\n\none tree, three stages, one capped loop",
+      "target": "<repo>/.worktrees/probe-the-pipeline-studi-aa52a9"
+    },
+    {
+      "stage": "S2",
+      "visit": 3,
+      "prompt": "Read `out/probe.json` and fix ONLY the clauses that failed, in the tree's own copy of the studio. Each fix is a real edit to `studio/app.css`; record the file, the rule, and the sha256 before and after in `out/fix.json`. A clause the stylesheet does not hold in the shape you expect is reported as unfixable, never invented.\n\n— Probe, fix, verify — a capped repair loop: stage 2 of 3, Fix what the probe found (probe-fix-loop/S2), visit 3\nQueue task #1: probe the pipeline studio and fix what the probe finds\n\nINPUTS\n  handed on   probe   out/probe.json   sha256 b243e59a7446…   writer probe-seat\n              (S1 → S2, handoff H-1, sequence)\n  earlier     fix   out/fix.json   sha256 4cc1a76bc150   (this stage, visit 2 — unchanged)\n  tree        <repo>/.worktrees/probe-the-pipeline-studi-aa52a9   branch wtgui/probe-the-pipeline-studi-aa52a9\n              HEAD 0df9573   2 uncommitted files\n\none tree, three stages, one capped loop",
+      "target": "<repo>/.worktrees/probe-the-pipeline-studi-aa52a9"
+    },
+    {
+      "stage": "S3",
+      "visit": 3,
+      "prompt": "Re-measure every clause in the same browser and write `out/verify.json`: for each clause, what it measured before, what it measures now, which previously-failing clauses are fixed, which are still open, and any clause the fix broke that was passing before.\n\n— Probe, fix, verify — a capped repair loop: stage 3 of 3, Verify the fix (probe-fix-loop/S3), visit 3\nQueue task #1: probe the pipeline studio and fix what the probe finds\n\nINPUTS\n  handed on   fix   out/fix.json   sha256 26e920e868ba…   writer fix-seat\n              (S2 → S3, handoff H-2, sequence)\n  earlier     verify   out/verify.json   sha256 38db2871d159   (this stage, visit 2 — unchanged)\n  tree        <repo>/.worktrees/probe-the-pipeline-studi-aa52a9   branch wtgui/probe-the-pipeline-studi-aa52a9\n              HEAD 0df9573   2 uncommitted files\n\none tree, three stages, one capped loop",
+      "target": "<repo>/.worktrees/probe-the-pipeline-studi-aa52a9"
+    }
+  ],
+  "stageRuns": [
+    {
+      "id": "probe-fix-loop/S1#1",
+      "stage": "S1",
+      "visit": 1,
+      "enteredAt": "2026-11-05T08:37:56.666Z",
+      "thread": "b-01",
+      "job": "job-b-01",
+      "status": "done",
+      "settledAt": "2026-11-05T08:38:00.236Z",
+      "tree": {
+        "path": "<repo>/.worktrees/probe-the-pipeline-studi-aa52a9",
+        "branch": "wtgui/probe-the-pipeline-studi-aa52a9",
+        "head": "0df9573",
+        "dirty": 1
+      },
+      "artifact": {
+        "id": "probe",
+        "path": "out/probe.json",
+        "present": true,
+        "sha256": "511dd08d7c66df2a2258ab28a468c66c67deedfce9a05a154f8397731392e9ae"
+      },
+      "decision": {
+        "code": null,
+        "trigger": "stage-settled",
+        "by": "panel",
+        "reason": "probe-fix-loop · S1 settled — the run finished"
+      }
+    },
+    {
+      "id": "probe-fix-loop/S2#1",
+      "stage": "S2",
+      "visit": 1,
+      "enteredAt": "2026-11-05T08:38:00.236Z",
+      "thread": "b-02",
+      "job": "job-b-02",
+      "status": "done",
+      "settledAt": "2026-11-05T08:38:02.062Z",
+      "tree": {
+        "path": "<repo>/.worktrees/probe-the-pipeline-studi-aa52a9",
+        "branch": "wtgui/probe-the-pipeline-studi-aa52a9",
+        "head": "0df9573",
+        "dirty": 2
+      },
+      "artifact": {
+        "id": "fix",
+        "path": "out/fix.json",
+        "present": true,
+        "sha256": "671d30422a98b02470ac0368035e6a498fbc166d20c7102df92d80c65ac80d22"
+      },
+      "decision": {
+        "code": null,
+        "trigger": "stage-settled",
+        "by": "panel",
+        "reason": "probe-fix-loop · S2 settled — the run finished"
+      }
+    },
+    {
+      "id": "probe-fix-loop/S3#1",
+      "stage": "S3",
+      "visit": 1,
+      "enteredAt": "2026-11-05T08:38:02.062Z",
+      "thread": "b-03",
+      "job": "job-b-03",
+      "status": "done",
+      "settledAt": "2026-11-05T08:38:06.054Z",
+      "tree": {
+        "path": "<repo>/.worktrees/probe-the-pipeline-studi-aa52a9",
+        "branch": "wtgui/probe-the-pipeline-studi-aa52a9",
+        "head": "0df9573",
+        "dirty": 2
+      },
+      "artifact": {
+        "id": "verify",
+        "path": "out/verify.json",
+        "present": true,
+        "sha256": "82281e4bada04e6825ad6069339bdc2f96db59e766661a2c35f0b3c158ef4f01"
+      },
+      "decision": {
+        "code": null,
+        "trigger": "stage-settled",
+        "by": "panel",
+        "reason": "probe-fix-loop · S3 settled — the run finished"
+      }
+    },
+    {
+      "id": "probe-fix-loop/S1#2",
+      "stage": "S1",
+      "visit": 2,
+      "enteredAt": "2026-11-05T08:38:06.054Z",
+      "thread": "b-04",
+      "job": "job-b-04",
+      "status": "done",
+      "settledAt": "2026-11-05T08:38:10.846Z",
+      "tree": {
+        "path": "<repo>/.worktrees/probe-the-pipeline-studi-aa52a9",
+        "branch": "wtgui/probe-the-pipeline-studi-aa52a9",
+        "head": "0df9573",
+        "dirty": 2
+      },
+      "artifact": {
+        "id": "probe",
+        "path": "out/probe.json",
+        "present": true,
+        "sha256": "b62ba1ff0b897ef09cc4528920157d6702825558ae74345de1e41f8563599b40"
+      },
+      "decision": {
+        "code": null,
+        "trigger": "stage-settled",
+        "by": "panel",
+        "reason": "probe-fix-loop · S1 settled — the run finished"
+      }
+    },
+    {
+      "id": "probe-fix-loop/S2#2",
+      "stage": "S2",
+      "visit": 2,
+      "enteredAt": "2026-11-05T08:38:10.846Z",
+      "thread": "b-05",
+      "job": "job-b-05",
+      "status": "done",
+      "settledAt": "2026-11-05T08:38:14.013Z",
+      "tree": {
+        "path": "<repo>/.worktrees/probe-the-pipeline-studi-aa52a9",
+        "branch": "wtgui/probe-the-pipeline-studi-aa52a9",
+        "head": "0df9573",
+        "dirty": 2
+      },
+      "artifact": {
+        "id": "fix",
+        "path": "out/fix.json",
+        "present": true,
+        "sha256": "4cc1a76bc15014c5331dab7289b3a3838c5ab6f04fe67422d0b3bcf10016e7e6"
+      },
+      "decision": {
+        "code": null,
+        "trigger": "stage-settled",
+        "by": "panel",
+        "reason": "probe-fix-loop · S2 settled — the run finished"
+      }
+    },
+    {
+      "id": "probe-fix-loop/S3#2",
+      "stage": "S3",
+      "visit": 2,
+      "enteredAt": "2026-11-05T08:38:14.013Z",
+      "thread": "b-06",
+      "job": "job-b-06",
+      "status": "done",
+      "settledAt": "2026-11-05T08:38:18.699Z",
+      "tree": {
+        "path": "<repo>/.worktrees/probe-the-pipeline-studi-aa52a9",
+        "branch": "wtgui/probe-the-pipeline-studi-aa52a9",
+        "head": "0df9573",
+        "dirty": 2
+      },
+      "artifact": {
+        "id": "verify",
+        "path": "out/verify.json",
+        "present": true,
+        "sha256": "38db2871d1598d01252c5d30d5841264a5227a2e25555178bf31fc3ba2a972bd"
+      },
+      "decision": {
+        "code": null,
+        "trigger": "stage-settled",
+        "by": "panel",
+        "reason": "probe-fix-loop · S3 settled — the run finished"
+      }
+    },
+    {
+      "id": "probe-fix-loop/S1#3",
+      "stage": "S1",
+      "visit": 3,
+      "enteredAt": "2026-11-05T08:38:18.699Z",
+      "thread": "b-07",
+      "job": "job-b-07",
+      "status": "done",
+      "settledAt": "2026-11-05T08:39:10.093Z",
+      "tree": {
+        "path": "<repo>/.worktrees/probe-the-pipeline-studi-aa52a9",
+        "branch": "wtgui/probe-the-pipeline-studi-aa52a9",
+        "head": "0df9573",
+        "dirty": 2
+      },
+      "artifact": {
+        "id": "probe",
+        "path": "out/probe.json",
+        "present": true,
+        "sha256": "b243e59a7446d3edf8c1dd27044f4a57097626b5f1fcb4a9703ad8f347d81f12"
+      },
+      "decision": {
+        "code": null,
+        "trigger": "stage-settled",
+        "by": "panel",
+        "reason": "probe-fix-loop · S1 settled — the run finished"
+      }
+    },
+    {
+      "id": "probe-fix-loop/S2#3",
+      "stage": "S2",
+      "visit": 3,
+      "enteredAt": "2026-11-05T08:39:10.093Z",
+      "thread": "b-08",
+      "job": "job-b-08",
+      "status": "done",
+      "settledAt": "2026-11-05T08:39:12.904Z",
+      "tree": {
+        "path": "<repo>/.worktrees/probe-the-pipeline-studi-aa52a9",
+        "branch": "wtgui/probe-the-pipeline-studi-aa52a9",
+        "head": "0df9573",
+        "dirty": 2
+      },
+      "artifact": {
+        "id": "fix",
+        "path": "out/fix.json",
+        "present": true,
+        "sha256": "26e920e868ba87d96928f77116aa50e1f28103e328bf13c57a6d751463e6d205"
+      },
+      "decision": {
+        "code": null,
+        "trigger": "stage-settled",
+        "by": "panel",
+        "reason": "probe-fix-loop · S2 settled — the run finished"
+      }
+    },
+    {
+      "id": "probe-fix-loop/S3#3",
+      "stage": "S3",
+      "visit": 3,
+      "enteredAt": "2026-11-05T08:39:12.904Z",
+      "thread": "b-09",
+      "job": "job-b-09",
+      "status": "done",
+      "settledAt": "2026-11-05T08:39:16.986Z",
+      "tree": {
+        "path": "<repo>/.worktrees/probe-the-pipeline-studi-aa52a9",
+        "branch": "wtgui/probe-the-pipeline-studi-aa52a9",
+        "head": "0df9573",
+        "dirty": 2
+      },
+      "artifact": {
+        "id": "verify",
+        "path": "out/verify.json",
+        "present": true,
+        "sha256": "715720c237078061e01bcdac0c54c490c095d2e73078f017a7864d9a3a37e923"
+      },
+      "decision": {
+        "code": "pipeline-cap",
+        "trigger": "cap",
+        "by": "panel",
+        "reason": "the loop H-3 (S3 → S1) is at its cap of 2 rounds — 2 crossings already taken, so the row stops here for a decision"
+      }
+    }
+  ],
+  "workerRuns": [
+    {
+      "round": "B",
+      "thread": "b-01",
+      "stage": "S1",
+      "pipeline": "probe-fix-loop",
+      "visit": 1,
+      "exit": 0,
+      "ms": 3339,
+      "stdout": [
+        "{\"ok\":true,\"stage\":\"probe\",\"visit\":1,\"pass\":4,\"fail\":[\"L4\",\"L5\"]}",
+        "{\"artifact\":\"probe.json\",\"sha256\":\"511dd08d7c66df2a2258ab28a468c66c67deedfce9a05a154f8397731392e9ae\",\"bytes\":2287}"
+      ],
+      "stderr": ""
+    },
+    {
+      "round": "B",
+      "thread": "b-02",
+      "stage": "S2",
+      "pipeline": "probe-fix-loop",
+      "visit": 1,
+      "exit": 0,
+      "ms": 1546,
+      "stdout": [
+        "{\"ok\":true,\"stage\":\"fix\",\"visit\":1,\"applied\":6,\"skipped\":0}",
+        "{\"artifact\":\"fix.json\",\"sha256\":\"671d30422a98b02470ac0368035e6a498fbc166d20c7102df92d80c65ac80d22\",\"bytes\":1123}"
+      ],
+      "stderr": ""
+    },
+    {
+      "round": "B",
+      "thread": "b-03",
+      "stage": "S3",
+      "pipeline": "probe-fix-loop",
+      "visit": 1,
+      "exit": 0,
+      "ms": 3777,
+      "stdout": [
+        "{\"ok\":true,\"stage\":\"verify\",\"visit\":1,\"fixed\":[\"L4\",\"L5\"],\"still_open\":[],\"regressions\":[]}",
+        "{\"artifact\":\"verify.json\",\"sha256\":\"82281e4bada04e6825ad6069339bdc2f96db59e766661a2c35f0b3c158ef4f01\",\"bytes\":1530}"
+      ],
+      "stderr": ""
+    },
+    {
+      "round": "B",
+      "thread": "b-04",
+      "stage": "S1",
+      "pipeline": "probe-fix-loop",
+      "visit": 2,
+      "exit": 0,
+      "ms": 4399,
+      "stdout": [
+        "{\"ok\":true,\"stage\":\"probe\",\"visit\":2,\"pass\":6,\"fail\":[]}",
+        "{\"artifact\":\"probe.json\",\"sha256\":\"b62ba1ff0b897ef09cc4528920157d6702825558ae74345de1e41f8563599b40\",\"bytes\":1943}"
+      ],
+      "stderr": ""
+    },
+    {
+      "round": "B",
+      "thread": "b-05",
+      "stage": "S2",
+      "pipeline": "probe-fix-loop",
+      "visit": 2,
+      "exit": 0,
+      "ms": 2680,
+      "stdout": [
+        "{\"ok\":true,\"stage\":\"fix\",\"visit\":2,\"applied\":0,\"skipped\":0}",
+        "{\"artifact\":\"fix.json\",\"sha256\":\"4cc1a76bc15014c5331dab7289b3a3838c5ab6f04fe67422d0b3bcf10016e7e6\",\"bytes\":424}"
+      ],
+      "stderr": ""
+    },
+    {
+      "round": "B",
+      "thread": "b-06",
+      "stage": "S3",
+      "pipeline": "probe-fix-loop",
+      "visit": 2,
+      "exit": 0,
+      "ms": 4315,
+      "stdout": [
+        "{\"ok\":true,\"stage\":\"verify\",\"visit\":2,\"fixed\":[],\"still_open\":[],\"regressions\":[]}",
+        "{\"artifact\":\"verify.json\",\"sha256\":\"38db2871d1598d01252c5d30d5841264a5227a2e25555178bf31fc3ba2a972bd\",\"bytes\":1432}"
+      ],
+      "stderr": ""
+    },
+    {
+      "round": "B",
+      "thread": "b-07",
+      "stage": "S1",
+      "pipeline": "probe-fix-loop",
+      "visit": 3,
+      "exit": 0,
+      "ms": 50804,
+      "stdout": [
+        "{\"ok\":true,\"stage\":\"probe\",\"visit\":3,\"pass\":6,\"fail\":[]}",
+        "{\"artifact\":\"probe.json\",\"sha256\":\"b243e59a7446d3edf8c1dd27044f4a57097626b5f1fcb4a9703ad8f347d81f12\",\"bytes\":1943}"
+      ],
+      "stderr": ""
+    },
+    {
+      "round": "B",
+      "thread": "b-08",
+      "stage": "S2",
+      "pipeline": "probe-fix-loop",
+      "visit": 3,
+      "exit": 0,
+      "ms": 2413,
+      "stdout": [
+        "{\"ok\":true,\"stage\":\"fix\",\"visit\":3,\"applied\":0,\"skipped\":0}",
+        "{\"artifact\":\"fix.json\",\"sha256\":\"26e920e868ba87d96928f77116aa50e1f28103e328bf13c57a6d751463e6d205\",\"bytes\":424}"
+      ],
+      "stderr": ""
+    },
+    {
+      "round": "B",
+      "thread": "b-09",
+      "stage": "S3",
+      "pipeline": "probe-fix-loop",
+      "visit": 3,
+      "exit": 0,
+      "ms": 3580,
+      "stdout": [
+        "{\"ok\":true,\"stage\":\"verify\",\"visit\":3,\"fixed\":[],\"still_open\":[],\"regressions\":[]}",
+        "{\"artifact\":\"verify.json\",\"sha256\":\"715720c237078061e01bcdac0c54c490c095d2e73078f017a7864d9a3a37e923\",\"bytes\":1432}"
+      ],
+      "stderr": ""
+    }
+  ],
+  "decisions": [
+    {
+      "stage": "S1",
+      "visit": 1,
+      "code": null,
+      "trigger": "stage-settled",
+      "by": "panel",
+      "reason": "probe-fix-loop · S1 settled — the run finished"
+    },
+    {
+      "stage": "S2",
+      "visit": 1,
+      "code": null,
+      "trigger": "stage-settled",
+      "by": "panel",
+      "reason": "probe-fix-loop · S2 settled — the run finished"
+    },
+    {
+      "stage": "S3",
+      "visit": 1,
+      "code": null,
+      "trigger": "stage-settled",
+      "by": "panel",
+      "reason": "probe-fix-loop · S3 settled — the run finished"
+    },
+    {
+      "stage": "S1",
+      "visit": 2,
+      "code": null,
+      "trigger": "stage-settled",
+      "by": "panel",
+      "reason": "probe-fix-loop · S1 settled — the run finished"
+    },
+    {
+      "stage": "S2",
+      "visit": 2,
+      "code": null,
+      "trigger": "stage-settled",
+      "by": "panel",
+      "reason": "probe-fix-loop · S2 settled — the run finished"
+    },
+    {
+      "stage": "S3",
+      "visit": 2,
+      "code": null,
+      "trigger": "stage-settled",
+      "by": "panel",
+      "reason": "probe-fix-loop · S3 settled — the run finished"
+    },
+    {
+      "stage": "S1",
+      "visit": 3,
+      "code": null,
+      "trigger": "stage-settled",
+      "by": "panel",
+      "reason": "probe-fix-loop · S1 settled — the run finished"
+    },
+    {
+      "stage": "S2",
+      "visit": 3,
+      "code": null,
+      "trigger": "stage-settled",
+      "by": "panel",
+      "reason": "probe-fix-loop · S2 settled — the run finished"
+    },
+    {
+      "stage": "S3",
+      "visit": 3,
+      "code": "pipeline-cap",
+      "trigger": "cap",
+      "by": "panel",
+      "reason": "the loop H-3 (S3 → S1) is at its cap of 2 rounds — 2 crossings already taken, so the row stops here for a decision"
+    }
+  ],
+  "journal": [
+    {
+      "at": "2026-11-05T08:37:56.105Z",
+      "kind": "queue",
+      "thread": "panel-assistant",
+      "text": "Assistant #1: added #1 probe the pipeline studio and fix what the probe finds — by reader"
+    },
+    {
+      "at": "2026-11-05T08:37:56.109Z",
+      "kind": "queue",
+      "thread": "panel-assistant",
+      "text": "Assistant #1: #1 probe the pipeline studio and fix what the probe finds → pipeline probe-fix-loop at S1 (entered 2026-11-05T08:37:56.107Z) — by reader"
+    },
+    {
+      "at": "2026-11-05T08:37:56.492Z",
+      "kind": "pipeline",
+      "thread": null,
+      "text": "#1 probe the pipeline studio and fix what the probe finds — tree cut at <repo>/.worktrees/probe-the-pipeline-studi-aa52a9 (branch wtgui/probe-the-pipeline-studi-aa52a9), no worker started"
+    },
+    {
+      "at": "2026-11-05T08:37:56.895Z",
+      "kind": "pipeline",
+      "thread": null,
+      "text": "#1 probe the pipeline studio and fix what the probe finds — starting S1 (1 of 3) of probe-fix-loop in <repo>/.worktrees/probe-the-pipeline-studi-aa52a9"
+    },
+    {
+      "at": "2026-11-05T08:37:56.916Z",
+      "kind": "queue",
+      "thread": "panel-assistant",
+      "text": "#1 probe the pipeline studio and fix what the probe finds — linked to b-01 in <repo>/.worktrees/probe-the-pipeline-studi-aa52a9 by the SPAWN that cut it"
+    },
+    {
+      "at": "2026-11-05T08:38:00.514Z",
+      "kind": "queue",
+      "thread": "b-01",
+      "text": "#1 probe the pipeline studio and fix what the probe finds — running → queued at S2 by the panel: stage S1 settled — moved to S2 (2 of 3) of probe-fix-loop"
+    },
+    {
+      "at": "2026-11-05T08:38:00.514Z",
+      "kind": "pipeline",
+      "thread": null,
+      "text": "#1 probe the pipeline studio and fix what the probe finds — starting S2 (2 of 3) of probe-fix-loop in <repo>/.worktrees/probe-the-pipeline-studi-aa52a9"
+    },
+    {
+      "at": "2026-11-05T08:38:00.531Z",
+      "kind": "queue",
+      "thread": "panel-assistant",
+      "text": "#1 probe the pipeline studio and fix what the probe finds — linked to b-02 in <repo>/.worktrees/probe-the-pipeline-studi-aa52a9 by the SPAWN that cut it"
+    },
+    {
+      "at": "2026-11-05T08:38:02.275Z",
+      "kind": "queue",
+      "thread": "b-02",
+      "text": "#1 probe the pipeline studio and fix what the probe finds — running → queued at S3 by the panel: stage S2 settled — moved to S3 (3 of 3) of probe-fix-loop"
+    },
+    {
+      "at": "2026-11-05T08:38:02.275Z",
+      "kind": "pipeline",
+      "thread": null,
+      "text": "#1 probe the pipeline studio and fix what the probe finds — starting S3 (3 of 3) of probe-fix-loop in <repo>/.worktrees/probe-the-pipeline-studi-aa52a9"
+    },
+    {
+      "at": "2026-11-05T08:38:02.289Z",
+      "kind": "queue",
+      "thread": "panel-assistant",
+      "text": "#1 probe the pipeline studio and fix what the probe finds — linked to b-03 in <repo>/.worktrees/probe-the-pipeline-studi-aa52a9 by the SPAWN that cut it"
+    },
+    {
+      "at": "2026-11-05T08:38:06.445Z",
+      "kind": "queue",
+      "thread": "b-03",
+      "text": "#1 probe the pipeline studio and fix what the probe finds — running → queued at S1 by the panel: stage S3 settled — moved to S1 (1 of 3) of probe-fix-loop"
+    },
+    {
+      "at": "2026-11-05T08:38:06.445Z",
+      "kind": "pipeline",
+      "thread": null,
+      "text": "#1 probe the pipeline studio and fix what the probe finds — starting S1 (1 of 3) of probe-fix-loop in <repo>/.worktrees/probe-the-pipeline-studi-aa52a9 — visit 2"
+    },
+    {
+      "at": "2026-11-05T08:38:06.469Z",
+      "kind": "queue",
+      "thread": "panel-assistant",
+      "text": "#1 probe the pipeline studio and fix what the probe finds — linked to b-04 in <repo>/.worktrees/probe-the-pipeline-studi-aa52a9 by the SPAWN that cut it"
+    },
+    {
+      "at": "2026-11-05T08:38:11.332Z",
+      "kind": "queue",
+      "thread": "b-04",
+      "text": "#1 probe the pipeline studio and fix what the probe finds — running → queued at S2 by the panel: stage S1 settled — moved to S2 (2 of 3) of probe-fix-loop"
+    },
+    {
+      "at": "2026-11-05T08:38:11.332Z",
+      "kind": "pipeline",
+      "thread": null,
+      "text": "#1 probe the pipeline studio and fix what the probe finds — starting S2 (2 of 3) of probe-fix-loop in <repo>/.worktrees/probe-the-pipeline-studi-aa52a9 — visit 2"
+    },
+    {
+      "at": "2026-11-05T08:38:11.380Z",
+      "kind": "queue",
+      "thread": "panel-assistant",
+      "text": "#1 probe the pipeline studio and fix what the probe finds — linked to b-05 in <repo>/.worktrees/probe-the-pipeline-studi-aa52a9 by the SPAWN that cut it"
+    },
+    {
+      "at": "2026-11-05T08:38:14.382Z",
+      "kind": "queue",
+      "thread": "b-05",
+      "text": "#1 probe the pipeline studio and fix what the probe finds — running → queued at S3 by the panel: stage S2 settled — moved to S3 (3 of 3) of probe-fix-loop"
+    },
+    {
+      "at": "2026-11-05T08:38:14.382Z",
+      "kind": "pipeline",
+      "thread": null,
+      "text": "#1 probe the pipeline studio and fix what the probe finds — starting S3 (3 of 3) of probe-fix-loop in <repo>/.worktrees/probe-the-pipeline-studi-aa52a9 — visit 2"
+    },
+    {
+      "at": "2026-11-05T08:38:14.403Z",
+      "kind": "queue",
+      "thread": "panel-assistant",
+      "text": "#1 probe the pipeline studio and fix what the probe finds — linked to b-06 in <repo>/.worktrees/probe-the-pipeline-studi-aa52a9 by the SPAWN that cut it"
+    },
+    {
+      "at": "2026-11-05T08:38:19.287Z",
+      "kind": "queue",
+      "thread": "b-06",
+      "text": "#1 probe the pipeline studio and fix what the probe finds — running → queued at S1 by the panel: stage S3 settled — moved to S1 (1 of 3) of probe-fix-loop"
+    },
+    {
+      "at": "2026-11-05T08:38:19.287Z",
+      "kind": "pipeline",
+      "thread": null,
+      "text": "#1 probe the pipeline studio and fix what the probe finds — starting S1 (1 of 3) of probe-fix-loop in <repo>/.worktrees/probe-the-pipeline-studi-aa52a9 — visit 3"
+    },
+    {
+      "at": "2026-11-05T08:38:19.314Z",
+      "kind": "queue",
+      "thread": "panel-assistant",
+      "text": "#1 probe the pipeline studio and fix what the probe finds — linked to b-07 in <repo>/.worktrees/probe-the-pipeline-studi-aa52a9 by the SPAWN that cut it"
+    },
+    {
+      "at": "2026-11-05T08:39:10.488Z",
+      "kind": "queue",
+      "thread": "b-07",
+      "text": "#1 probe the pipeline studio and fix what the probe finds — running → queued at S2 by the panel: stage S1 settled — moved to S2 (2 of 3) of probe-fix-loop"
+    },
+    {
+      "at": "2026-11-05T08:39:10.488Z",
+      "kind": "pipeline",
+      "thread": null,
+      "text": "#1 probe the pipeline studio and fix what the probe finds — starting S2 (2 of 3) of probe-fix-loop in <repo>/.worktrees/probe-the-pipeline-studi-aa52a9 — visit 3"
+    },
+    {
+      "at": "2026-11-05T08:39:10.513Z",
+      "kind": "queue",
+      "thread": "panel-assistant",
+      "text": "#1 probe the pipeline studio and fix what the probe finds — linked to b-08 in <repo>/.worktrees/probe-the-pipeline-studi-aa52a9 by the SPAWN that cut it"
+    },
+    {
+      "at": "2026-11-05T08:39:13.404Z",
+      "kind": "queue",
+      "thread": "b-08",
+      "text": "#1 probe the pipeline studio and fix what the probe finds — running → queued at S3 by the panel: stage S2 settled — moved to S3 (3 of 3) of probe-fix-loop"
+    },
+    {
+      "at": "2026-11-05T08:39:13.404Z",
+      "kind": "pipeline",
+      "thread": null,
+      "text": "#1 probe the pipeline studio and fix what the probe finds — starting S3 (3 of 3) of probe-fix-loop in <repo>/.worktrees/probe-the-pipeline-studi-aa52a9 — visit 3"
+    },
+    {
+      "at": "2026-11-05T08:39:13.427Z",
+      "kind": "queue",
+      "thread": "panel-assistant",
+      "text": "#1 probe the pipeline studio and fix what the probe finds — linked to b-09 in <repo>/.worktrees/probe-the-pipeline-studi-aa52a9 by the SPAWN that cut it"
+    },
+    {
+      "at": "2026-11-05T08:39:17.226Z",
+      "kind": "queue",
+      "thread": "b-09",
+      "text": "#1 probe the pipeline studio and fix what the probe finds — running → parked at S3 by the panel: the loop H-3 (S3 → S1) is at its cap of 2 rounds — 2 crossings already taken, so the row stops here for a decision"
+    }
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "observed": "queued",
+      "stage": "S1",
+      "visit": 1,
+      "crossings": {},
+      "thread": null,
+      "started": null,
+      "live": false,
+      "reason": null
+    },
+    {
+      "step": 2,
+      "observed": "running",
+      "stage": "S1",
+      "visit": 1,
+      "crossings": {},
+      "thread": "b-01",
+      "started": "b-01",
+      "live": true,
+      "reason": null
+    },
+    {
+      "step": 3,
+      "observed": "running",
+      "stage": "S2",
+      "visit": 1,
+      "crossings": {
+        "H-1": 1
+      },
+      "thread": "b-02",
+      "started": "b-02",
+      "live": true,
+      "reason": null
+    },
+    {
+      "step": 4,
+      "observed": "running",
+      "stage": "S3",
+      "visit": 1,
+      "crossings": {
+        "H-1": 1,
+        "H-2": 1
+      },
+      "thread": "b-03",
+      "started": "b-03",
+      "live": true,
+      "reason": null
+    },
+    {
+      "step": 5,
+      "observed": "running",
+      "stage": "S1",
+      "visit": 2,
+      "crossings": {
+        "H-1": 1,
+        "H-2": 1,
+        "H-3": 1
+      },
+      "thread": "b-04",
+      "started": "b-04",
+      "live": true,
+      "reason": null
+    },
+    {
+      "step": 6,
+      "observed": "running",
+      "stage": "S2",
+      "visit": 2,
+      "crossings": {
+        "H-1": 2,
+        "H-2": 1,
+        "H-3": 1
+      },
+      "thread": "b-05",
+      "started": "b-05",
+      "live": true,
+      "reason": null
+    },
+    {
+      "step": 7,
+      "observed": "running",
+      "stage": "S3",
+      "visit": 2,
+      "crossings": {
+        "H-1": 2,
+        "H-2": 2,
+        "H-3": 1
+      },
+      "thread": "b-06",
+      "started": "b-06",
+      "live": true,
+      "reason": null
+    },
+    {
+      "step": 8,
+      "observed": "running",
+      "stage": "S1",
+      "visit": 3,
+      "crossings": {
+        "H-1": 2,
+        "H-2": 2,
+        "H-3": 2
+      },
+      "thread": "b-07",
+      "started": "b-07",
+      "live": true,
+      "reason": null
+    },
+    {
+      "step": 9,
+      "observed": "running",
+      "stage": "S2",
+      "visit": 3,
+      "crossings": {
+        "H-1": 3,
+        "H-2": 2,
+        "H-3": 2
+      },
+      "thread": "b-08",
+      "started": "b-08",
+      "live": true,
+      "reason": null
+    },
+    {
+      "step": 10,
+      "observed": "running",
+      "stage": "S3",
+      "visit": 3,
+      "crossings": {
+        "H-1": 3,
+        "H-2": 3,
+        "H-3": 2
+      },
+      "thread": "b-09",
+      "started": "b-09",
+      "live": true,
+      "reason": null
+    },
+    {
+      "step": 11,
+      "observed": "parked",
+      "stage": "S3",
+      "visit": 3,
+      "crossings": {
+        "H-1": 3,
+        "H-2": 3,
+        "H-3": 2
+      },
+      "thread": "b-09",
+      "started": null,
+      "live": false,
+      "reason": "the loop H-3 (S3 → S1) is at its cap of 2 rounds — 2 crossings already taken, so the row stops here for a decision"
+    }
+  ],
+  "finishedAt": "2026-11-05T08:39:17.418Z"
+}

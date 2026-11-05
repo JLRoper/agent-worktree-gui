@@ -1,0 +1,54 @@
+{
+  "stage": "fix",
+  "visit": 1,
+  "read": {
+    "artifact": "probe.json",
+    "findings": 6,
+    "failing": [
+      "L4",
+      "L5"
+    ]
+  },
+  "applied": [
+    {
+      "clause": "L4",
+      "selector": ".node-meta",
+      "note": "role/meta line 10.5px -> 12px"
+    },
+    {
+      "clause": "L4",
+      "selector": ".node-role",
+      "note": "role name set to 12px explicitly"
+    },
+    {
+      "clause": "L5",
+      "selector": ".node-imported",
+      "note": "imported badge 8px -> 10px"
+    },
+    {
+      "clause": "L5",
+      "selector": ".node-gate",
+      "note": "gate badge 9px -> 10px"
+    },
+    {
+      "clause": "L5",
+      "selector": ".node-kind",
+      "note": "kind label 9px -> 10px"
+    },
+    {
+      "clause": "L5",
+      "selector": ".node-artifact",
+      "note": "artifact chip 9.5px -> 10px"
+    }
+  ],
+  "skipped": [],
+  "file": "studio/app.css",
+  "sha256": {
+    "before": "46504f9b5d228ec03ec01a8a668372b1e716c6fe7fc01b719162ae957ba2dabc",
+    "after": "abfb4def0187c2b0b22e9a5e5a6637cbdee8617409f7de6574ab88be4148aef4"
+  },
+  "changed": true,
+  "evidence": [
+    "fix-visit1.png"
+  ]
+}

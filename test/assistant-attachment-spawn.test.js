@@ -339,6 +339,10 @@ test("a turn with no attachments produces the child input it always produced", a
     notes: [],
     origin: { kind: "assistant-spawn" },
   });
+  // One worker per tree: the first comparison run is still live in this tree, so the second create would be
+  // refused by the cut's own rule. Wait for the first to settle — the comparison is about the request body, and
+  // two live agents in one tree is now exactly what the panel refuses.
+  await p.settled(viaOption.id);
   const viaAbsent = await p.jobs.create({
     prompt: "tidy the leftover files and say what you found",
     cwd: p.tree,

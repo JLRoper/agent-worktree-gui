@@ -33,6 +33,13 @@ const dir = mkdtempSync(path.join(tmpdir(), "wtgui-restart-stop-"));
 const home = path.join(dir, "hermes-home");
 const work = path.join(dir, "work");
 for (const d of [home, work]) mkdirSync(d, { recursive: true });
+// One worker per tree is enforced at the cut now, so three runs that have to be live together get three
+// directories of their own. `work` itself is still the fixture's stand-in for a tree.
+const workerDir = (name) => {
+  const d = path.join(work, name);
+  mkdirSync(d, { recursive: true });
+  return d;
+};
 // Every read of the gateway's record goes through HERMES_HOME. Point it at the sandbox so no test can see the
 // developer's own gateway_state.json (or the state.db behind it).
 process.env.HERMES_HOME = home;
@@ -257,7 +264,7 @@ test("a pid that changed but a turn that failed is still a failure", async () =>
 test("a stop is attempted for every run the panel gives up on, and journalled", async (t) => {
   const { jobs, gw } = await makeJobs(t);
   const made = [];
-  for (const name of ["a", "b", "c"]) made.push(await jobs.create({ prompt: `worker ${name}`, cwd: work, existing: true, worktree: false }));
+  for (const name of ["a", "b", "c"]) made.push(await jobs.create({ prompt: `worker ${name}`, cwd: workerDir(name), existing: true, worktree: false }));
   gw.state.stopStatus = 200;
   const controller = makeController({ jobs });
   const interrupted = await controller.interruptRunning({ by: "gateway", detail: "the test restarts it" });
@@ -273,7 +280,7 @@ test("404 and 409 from a stop are tolerated, and a stop that fails never blocks 
   const answers = { 1: 404, 2: 409, 3: 500 };
   gw.state.stopStatus = (id) => answers[String(id).split("_")[1]] || 200;
   const made = [];
-  for (const name of ["a", "b", "c"]) made.push(await jobs.create({ prompt: `worker ${name}`, cwd: work, existing: true, worktree: false }));
+  for (const name of ["a", "b", "c"]) made.push(await jobs.create({ prompt: `worker ${name}`, cwd: workerDir(name), existing: true, worktree: false }));
   const controller = makeController({ jobs });
   const interrupted = await controller.interruptRunning({ by: "gateway", detail: "the test restarts it" });
   assert.equal(interrupted.length, 3, "every run still gets its verdict, whatever the stop answered");

@@ -1,0 +1,41 @@
+{
+  "same_stage_sequence": true,
+  "sequence": [
+    "probe-fix-loop/S1#1",
+    "probe-fix-loop/S2#1",
+    "probe-fix-loop/S3#1",
+    "probe-fix-loop/S1#2",
+    "probe-fix-loop/S2#2",
+    "probe-fix-loop/S3#2",
+    "probe-fix-loop/S1#3",
+    "probe-fix-loop/S2#3",
+    "probe-fix-loop/S3#3"
+  ],
+  "same_crossings": true,
+  "crossings": {
+    "H-1": 3,
+    "H-2": 3,
+    "H-3": 2
+  },
+  "same_end_state": true,
+  "end_state": "parked",
+  "same_artifact_bytes": true,
+  "artifact_sha256": {
+    "probe-fix-loop/S1#1": "511dd08d7c66df2a2258ab28a468c66c67deedfce9a05a154f8397731392e9ae",
+    "probe-fix-loop/S2#1": "671d30422a98b02470ac0368035e6a498fbc166d20c7102df92d80c65ac80d22",
+    "probe-fix-loop/S3#1": "82281e4bada04e6825ad6069339bdc2f96db59e766661a2c35f0b3c158ef4f01",
+    "probe-fix-loop/S1#2": "b62ba1ff0b897ef09cc4528920157d6702825558ae74345de1e41f8563599b40",
+    "probe-fix-loop/S2#2": "4cc1a76bc15014c5331dab7289b3a3838c5ab6f04fe67422d0b3bcf10016e7e6",
+    "probe-fix-loop/S3#2": "38db2871d1598d01252c5d30d5841264a5227a2e25555178bf31fc3ba2a972bd",
+    "probe-fix-loop/S1#3": "b243e59a7446d3edf8c1dd27044f4a57097626b5f1fcb4a9703ad8f347d81f12",
+    "probe-fix-loop/S2#3": "26e920e868ba87d96928f77116aa50e1f28103e328bf13c57a6d751463e6d205",
+    "probe-fix-loop/S3#3": "715720c237078061e01bcdac0c54c490c095d2e73078f017a7864d9a3a37e923"
+  },
+  "one_tree_each": true,
+  "trees": [
+    "<repo>/.worktrees/probe-the-pipeline-studi-0cd7da",
+    "<repo>/.worktrees/probe-the-pipeline-studi-aa52a9"
+  ],
+  "same_tree_all_stages": true,
+  "different_runs": true
+}

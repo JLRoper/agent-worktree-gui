@@ -1,0 +1,66 @@
+{
+  "stage": "verify",
+  "visit": 2,
+  "read": {
+    "probe_visit": 2,
+    "fix_visit": 2
+  },
+  "clauses": [
+    {
+      "id": "L1",
+      "key": "seed-rendered",
+      "was_ok": true,
+      "now_ok": true,
+      "measured_before": "13 cards S0..S12",
+      "measured_now": "13 cards S0..S12"
+    },
+    {
+      "id": "L2",
+      "key": "no-page-errors",
+      "was_ok": true,
+      "now_ok": true,
+      "measured_before": "0 page, 0 console",
+      "measured_now": "0 page, 0 console"
+    },
+    {
+      "id": "L3",
+      "key": "card-name",
+      "was_ok": true,
+      "now_ok": true,
+      "measured_before": "13/13 named",
+      "measured_now": "13/13 named"
+    },
+    {
+      "id": "L4",
+      "key": "subtext-size",
+      "was_ok": true,
+      "now_ok": true,
+      "measured_before": "min 12px over 26 lines",
+      "measured_now": "min 12px over 26 lines"
+    },
+    {
+      "id": "L5",
+      "key": "min-text",
+      "was_ok": true,
+      "now_ok": true,
+      "measured_before": "nothing below 10px",
+      "measured_now": "nothing below 10px"
+    },
+    {
+      "id": "L6",
+      "key": "bundle-docs",
+      "was_ok": true,
+      "now_ok": true,
+      "measured_before": "artifacts, pipeline, roles, yaml",
+      "measured_now": "artifacts, pipeline, roles, yaml"
+    }
+  ],
+  "previously_failing": [],
+  "fixed": [],
+  "still_open": [],
+  "regressions": [],
+  "pass": 6,
+  "evidence": [
+    "verify-visit2.png"
+  ]
+}
