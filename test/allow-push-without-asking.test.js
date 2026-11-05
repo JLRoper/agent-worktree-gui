@@ -220,13 +220,13 @@ test("the worker's first line and the LANDING paragraph follow the switch — an
   process.env.API_SERVER_KEY = "";
   const { remoteWriteLine } = await import("../lib/jobs.js");
   const { branchLandingLine } = await import("../lib/branch-policy.js");
-  const base = { cwd: "C:/tree", remote: "origin" };
+  const base = { cwd: "tree", remote: "origin" };
 
   assert.match(remoteWriteLine({ ...base, branchPolicy: "local-only", allowPushWithoutAsking: true }), /ALLOWED WITHOUT ASKING/);
   assert.match(remoteWriteLine({ ...base, branchPolicy: "local-only" }), /^LOCAL-ONLY/, "the sentence off the switch is the one this panel always gave");
   assert.match(remoteWriteLine({ ...base, branchPolicy: "deny", allowPushWithoutAsking: true }), /^NO REMOTE WRITES/, "deny wins in the brief too");
 
-  const landing = (o) => branchLandingLine({ parent: "main", branch: "wtgui/x", remote: "origin", cwd: "C:/tree", ...o });
+  const landing = (o) => branchLandingLine({ parent: "main", branch: "wtgui/x", remote: "origin", cwd: "tree", ...o });
   assert.match(landing({ policy: "local-only", allowPushWithoutAsking: true }), /switch is on/);
   assert.match(landing({ policy: "local-only" }), /permission box/);
   assert.match(landing({ policy: "allow", allowPushWithoutAsking: true }), /Remote writes are allowed for this project/, "an allow policy keeps its own wording");
@@ -245,9 +245,9 @@ test("the Settings REMOTES section draws every project, checked only where the s
   const $ = (id) => (id === "remote-switch-rows" ? holder : id === "remote-switch-preview" ? preview : null);
   const state = {
     projects: new Map([
-      ["alpha", { name: "alpha", path: "C:/repos/alpha", remote: "origin" }],
-      ["beta", { name: "beta", path: "C:/repos/beta", remote: "upstream" }],
-      ["gamma", { name: "gamma", path: "C:/repos/gamma", remote: "origin" }],
+      ["alpha", { name: "alpha", path: "repos/alpha", remote: "origin" }],
+      ["beta", { name: "beta", path: "repos/beta", remote: "upstream" }],
+      ["gamma", { name: "gamma", path: "repos/gamma", remote: "origin" }],
     ]),
     settings: { allowPushWithoutAskingProjects: { alpha: false, beta: true, gamma: false } },
   };
@@ -268,9 +268,9 @@ test("the Settings REMOTES section draws every project, checked only where the s
   assert.match(html, /data-remote-allow="beta" checked/, "beta is checked");
   assert.doesNotMatch(html, /data-remote-allow="gamma" checked/, "gamma is unchecked");
   // The row answers all three facts the brief names: name, path and remote.
-  assert.match(html, /C:\/repos\/alpha/);
+  assert.match(html, /repos\/alpha/);
   assert.match(html, /origin/);
-  assert.match(html, /C:\/repos\/beta/);
+  assert.match(html, /repos\/beta/);
   assert.match(html, /upstream/);
   // The help line: an unchecked remote means the assistant asks first, and wtgui/* is never pushed by the switch.
   assert.match(preview.textContent, /clarify/i);
