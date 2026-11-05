@@ -352,6 +352,11 @@ Send `hello` from a second account in the room. Expect a typing notice, then a r
 the only check that proves the full path (Matrix event → Hermes CLI → Matrix send); the two commands above
 prove config and login separately.
 
+The sender has to be a **different account**. The bridge drops every event whose sender is its own user id
+(`if event.sender == client.user_id` in `on_room_message`), so a second device of the bot account — or a
+`curl` login with `MATRIX_PASSWORD` — is received and ignored. With only the bot's credentials on the machine
+the inbound half cannot be exercised at all; do not read the silence as a broken bridge.
+
 ---
 
 ## 8. Restart it with `restart_bridge.py`
