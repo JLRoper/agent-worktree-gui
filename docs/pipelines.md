@@ -174,6 +174,42 @@ horizontal one (one mermaid flowchart per definition, at its natural 1:1 size, s
 book mode (the same chain cut into rows of 2, 3 or 4 stages, with the row break drawn as a carriage return and
 cross-row loop-backs in the left margin). Both keep every painted label at 11 px or more.
 
+### 1.8 A document the page did not build
+
+The page is generated, so drawing anything else is an **import**, and there are two ways in: `open a document`
+reads a JSON file from disk, and `?doc=<url|path>` draws one the page can reach. Both hand the bytes to
+`public/core/pipeline-import.js`, which turns them into the same `{meta, pipelines[], bundle}` model the renderer
+already draws — no regeneration, no second page.
+
+Three shapes arrive in practice and each is drawn as what it is:
+
+| the document | what is drawn |
+| --- | --- |
+| an exported studio document (`project` + `stages[]`, `roles[]`, `handoffs[]`, `gates[]`) | one card: a stage's `owner.role` looked up in `roles[]`, a `sequence` handoff as an arrow, a `loop` handoff as the dashed one, a gate on the arrow that leaves its stage |
+| the panel's catalogue (`{pipelines: {...}}` or `[definition, …]`) | one card per definition; its stages carry no role field, so the second line says `role: not stated` |
+| the factory's `GET /api/pipelines` (`[{id, title, stageCount}]`) | one card per pipeline with `stageCount` nodes, each labelled `counted only` — an index counts stages and does not name them, and the page says so rather than inventing names |
+
+**Every drawing names its source and the sha256 of the exact bytes above the cards.** A drawing that does not say
+where it came from is indistinguishable from the catalogue it was built from, so the line is part of the page and
+not of a report about it: the built-in drawing names its two seed files and their hashes, an imported one names the
+file or URL and the full hash, plus its byte count, stage count and the moment it was read.
+
+**A document that does not parse is a visible refusal.** The page draws the built-in catalogue first, always; a
+`?doc=` or a file that is not JSON (or is JSON of none of the three shapes) prints one red sentence naming the
+document and the reason, and leaves the drawing it already had exactly as it was. The alternative — an empty
+canvas — is indistinguishable from a document with no stages in it, which is a document the reader would then
+trust.
+
+An `http(s)` URL is read through the panel's own `GET /api/pipeline-doc?url=`, because a page served on
+`127.0.0.1:<panel port>` cannot fetch the factory on `:8090` itself: the factory sends no CORS header and the
+browser is right to refuse. The route (`lib/pipeline-doc.js`) reads **loopback only**, follows redirects by hand so
+a loopback URL cannot 302 to a public host, caps the body at 4 MiB and answers the bytes, their length and their
+sha256. `node tools/verify-pipeline-import.mjs` drives the committed page: `?doc=` against a service (the factory's
+index by default is a fixture; `--live` points it at `http://127.0.0.1:8090/api/pipelines`), the same JSON through
+the file input, a malformed document by both routes with the built-in drawing still standing, and `--document`
+for a full studio file and its named stages. `test/pipeline-import.test.js` drives the importer itself.
+
+
 ---
 
 ## 2. Per-project defaults, beside `remoteBranchPolicy`
