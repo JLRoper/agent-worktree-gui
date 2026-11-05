@@ -61,7 +61,7 @@ async function panel(t) {
 test("the Agent Manager role is the panel's own charter, byte for byte", async (t) => {
   const { assistant, rolesFile } = await panel(t);
   const seed = await readFile(SEED_URL, "utf8");
-  assert.equal(assistant.roles.length, 1, "one seeded role");
+  assert.equal(assistant.roles.length, 2, "both built-in roles are seeded");
   const [role] = assistant.roles;
   assert.equal(role.id, "agent-manager");
   assert.equal(role.name, "Agent Manager");
@@ -72,7 +72,7 @@ test("the Agent Manager role is the panel's own charter, byte for byte", async (
   assert.ok(role.charter.length <= ROLE_CHARTER_MAX_CHARS, `it fits the cap (${role.charter.length}/${ROLE_CHARTER_MAX_CHARS})`);
   // Seeded once on disk, and read back rather than regenerated: a second boot keeps whatever the reader wrote.
   const stored = JSON.parse(await readFile(rolesFile, "utf8"));
-  assert.equal(stored.roles.length, 1);
+  assert.equal(stored.roles.length, 2);
   assert.equal(stored.roles[0].charter, seed);
   assert.ok(await stat(rolesFile));
 });
@@ -201,7 +201,7 @@ test("rules belong to one assistant, and adopting a role replaces only that assi
   assert.ok(!assistant.preamble(PRIMARY_ASSISTANT).includes("ask before writing"));
 
   assistant.createRole({ name: "Reviewer", description: "reads PRs and says no", from: "agent-manager" });
-  assert.equal(assistant.roles.length, 2);
+  assert.equal(assistant.roles.length, 3);
   const picked = assistant.pickRole("assistant-2", "reviewer", { adopt: true });
   assert.equal(picked.role.id, "reviewer");
   assert.equal(picked.sameAsRole, true, "its charter is the role's text again");
