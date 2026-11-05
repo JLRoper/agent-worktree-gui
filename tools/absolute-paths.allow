@@ -214,6 +214,7 @@ tools/verify-token-costs.mjs | 2 | probe: the tree this script was last run agai
 tools/verify-tool-glyphs.mjs | 1 | fixture: a fake drive path the probe compares against — nothing opens it
 tools/verify-tool-output.mjs | 7 | fixture: a fake drive path the probe compares against — nothing opens it
 tools/verify-turn-pager.mjs | 1 | probe: the tree this script was last run against, kept as its default argument
+tools/verify-two-folder-cards.mjs | 5 | fixture: the real review folder this harness scans, named by the brief — the second root is built in its own temp dir
 tools/verify-wake-ladder.mjs | 1 | fixture: a fake drive path the probe compares against — nothing opens it
 tools/verify-whole-tool-stream.mjs | 1 | probe: the tree this script was last run against, kept as its default argument
 tools/verify_cli_session_limit.py | 1 | probe: the tree this script was last run against, kept as its default argument
