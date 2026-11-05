@@ -4,30 +4,47 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.17.2 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.17.3 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-301 releases from v0.1.0 (2026-10-20) to v1.17.2 (2026-11-05), 1046 commits between the tags. Every release is anchored by an
+302 releases from v0.1.0 (2026-10-20) to v1.17.3 (2026-11-05), 1050 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
 
+## v1.17.3 — 2026-11-05 · 4 commits
+
+[`a4825cd`](https://github.com/JLRoper/agent-worktree-gui/commit/a4825cdfb6511707e880e48de456d814005839ca) · [compare v1.17.2...v1.17.3](https://github.com/JLRoper/agent-worktree-gui/compare/v1.17.2...v1.17.3)
+
+### Fixed
+
+- fix: the gate measures the popover after the header settles ([`ca22644`](https://github.com/JLRoper/agent-worktree-gui/commit/ca22644ec3ed36cca062451a7f54cf13c043bae9))
+
+### Docs & tests
+
+- docs: render the changelog — 301 releases ([`dd0b571`](https://github.com/JLRoper/agent-worktree-gui/commit/dd0b571bf17bdc4a8a1e7819f927fc726a66c08d))
+- docs: the origin-main screenshot, and where it came from ([`d27b2ed`](https://github.com/JLRoper/agent-worktree-gui/commit/d27b2eda399babc14ac6e3f2a0b4676742a28599))
+
+### Other
+
+- chore: 1.17.3 — the version this landing carries ([`a4825cd`](https://github.com/JLRoper/agent-worktree-gui/commit/a4825cdfb6511707e880e48de456d814005839ca))
+
 ## v1.17.2 — 2026-11-05 · 4 commits
 
-[`fa294b7`](https://github.com/JLRoper/agent-worktree-gui/commit/fa294b7c3ab61be86cae1c94a84177c91297fced) · [compare v1.17.1...v1.17.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.17.1...v1.17.2)
+[`75dc3a8`](https://github.com/JLRoper/agent-worktree-gui/commit/75dc3a8e659b523af5215733a62b66a7cb8e5332) · [compare v1.17.1...v1.17.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.17.1...v1.17.2)
 
 ### Docs & tests
 
 - docs: the proof reproduces against the panel, not a scratch script ([`dc5d4ca`](https://github.com/JLRoper/agent-worktree-gui/commit/dc5d4ca6983ef19b0e5954783fbff42f8ac3ee54))
 - docs: render the changelog's missing v1.17.1 section ([`f30f6d2`](https://github.com/JLRoper/agent-worktree-gui/commit/f30f6d226aff9c13f86bef637de10237078218af))
-- docs: the changelog lands with the bump, not after the merge ([`b7f2185`](https://github.com/JLRoper/agent-worktree-gui/commit/b7f2185b48485d8ad5f5db82c9e9f3bbadee4a6d))
+- docs: the changelog lands with the bump, not after the merge ([`bb90adb`](https://github.com/JLRoper/agent-worktree-gui/commit/bb90adb32c6b74ef512156251df2c0fd7fc33d77))
 
 ### Other
 
-- chore: 1.17.2 — the version this landing carries ([`fa294b7`](https://github.com/JLRoper/agent-worktree-gui/commit/fa294b7c3ab61be86cae1c94a84177c91297fced))
+- chore: 1.17.2 — the version this landing carries ([`75dc3a8`](https://github.com/JLRoper/agent-worktree-gui/commit/75dc3a8e659b523af5215733a62b66a7cb8e5332))
 
 ## v1.17.1 — 2026-11-05 · 6 commits
 
