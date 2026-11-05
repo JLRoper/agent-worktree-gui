@@ -82,7 +82,7 @@ Six samples were asked through the same sandbox route and compared with the audi
 | 270 | 403 | exactly the same sentence |
 | 9999 | 404 | exactly the `no deliverable 9999 …` sentence |
 
-None of the six carried an `opener`. `git diff e33ec71..HEAD -- server.js lib/deliverables.js` is empty, so
+None of the six carried an `opener`. `git diff 6a84dfd..HEAD -- server.js lib/deliverables.js` is empty, so
 the route's classification and its three sentences are the bytes the audit measured. A test now pins those
 sentences byte for byte (`test/deliverables.test.js`).
 
@@ -99,13 +99,16 @@ sentences byte for byte (`test/deliverables.test.js`).
 ## Reproducing
 
 ```bash
-# the store, and its handler set (read-only; the classifier only stats recorded targets)
+# the store the page paints, and its kinds (newest first, one row per target)
 curl -s http://127.0.0.1:7331/api/deliverables -o deliverables.json
-node classify-live.mjs out.json http://127.0.0.1:7331 <serving checkout>/public
+node -e "const d=require('./deliverables.json');const c={};for(const e of d.entries)c[e.kind]=(c[e.kind]||0)+1;console.log(d.kept,JSON.stringify(c))"
 
-# one handler answer, exactly as the page reads it
-curl -s -D - -X POST http://127.0.0.1:7476/api/deliverables/open \
+# one row's answer, exactly as the page reads it (a refusal launches nothing)
+curl -s -D - -X POST http://127.0.0.1:7331/api/deliverables/open \
   -H 'Content-Type: application/json' -d '{"seq":243}'
 ```
+
+The handler count itself comes from the route's own order, run per file/image row: `stat`, then the served-root
+`href`, then `deliverableRepoRoot`/`insideRepo` against the recorded `treePath` — the classifier the audit used.
 
 The screenshot is `docs/assets/deliverables-open-audit/panel-handler-says-opened.png`.
