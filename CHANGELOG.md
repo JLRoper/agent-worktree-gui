@@ -17,11 +17,11 @@ has no tag.
 
 ## v1.18.3 — 2026-11-05 · 4 commits
 
-[`d493baa`](https://github.com/JLRoper/agent-worktree-gui/commit/d493baaf5f3a39b85cf892fee7d1a903726fea51) · [compare v1.18.2...v1.18.3](https://github.com/JLRoper/agent-worktree-gui/compare/v1.18.2...v1.18.3)
+[`6b180b2`](https://github.com/JLRoper/agent-worktree-gui/commit/6b180b26ddd83275ed8cfabdb6d2ed524fee4341) · [compare v1.18.2...v1.18.3](https://github.com/JLRoper/agent-worktree-gui/compare/v1.18.2...v1.18.3)
 
 ### Fixed
 
-- fix: refuse a second dispatch of one row and any spawn into a busy tree ([`70ea537`](https://github.com/JLRoper/agent-worktree-gui/commit/70ea537b4cf28cd9e1e09a70487c6df170934626))
+- fix: refuse a second dispatch of one row and any spawn into a busy tree ([`01b1d40`](https://github.com/JLRoper/agent-worktree-gui/commit/01b1d402f7d2b6cd7ff03b939c266f91254541e7))
 
 ### Docs & tests
 
@@ -30,7 +30,7 @@ has no tag.
 
 ### Other
 
-- chore: 1.18.3 — the version this landing carries ([`d493baa`](https://github.com/JLRoper/agent-worktree-gui/commit/d493baaf5f3a39b85cf892fee7d1a903726fea51))
+- chore: 1.18.3 — the version this landing carries ([`6b180b2`](https://github.com/JLRoper/agent-worktree-gui/commit/6b180b26ddd83275ed8cfabdb6d2ed524fee4341))
 
 ## v1.18.2 — 2026-11-05 · 5 commits
 
