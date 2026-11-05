@@ -336,6 +336,48 @@ test("a gate's decision artifact is read when present and a decision with no out
   assert.match(badKind.reason, /sequence, loop, return/);
 });
 
+test("a gate's decision routes are read, and a map that cannot route every outcome is refused", () => {
+  // The happy shape: one outcome to an edge, one to null (the pipeline ends). Read as a plain map.
+  const good = panelBundle();
+  good.pipelines[0].gates[0].decision.routes = { PASS: "H-01", FAIL: null };
+  const read = parseBundle(good);
+  assert.equal(read.ok, true, read.reason || "");
+  assert.deepEqual(read.bundle.pipelines[0].gates[0].decision.routes, { PASS: "H-01", FAIL: null });
+
+  // An outcome the decision does not declare.
+  const unknown = panelBundle();
+  unknown.pipelines[0].gates[0].decision.routes = { PASS: "H-01", FAIL: null, MAYBE: null };
+  const badOutcome = parseBundle(unknown);
+  assert.equal(badOutcome.ok, false);
+  assert.equal(badOutcome.code, BUNDLE_FAULTS.GATE);
+  assert.equal(badOutcome.where, "pipelines[0].gates[0].decision.routes");
+  assert.match(badOutcome.reason, /"MAYBE", which it does not declare/);
+
+  // An outcome the map forgets: the driver would meet a verdict it cannot route.
+  const partial = panelBundle();
+  partial.pipelines[0].gates[0].decision.routes = { PASS: "H-01" };
+  const unrouted = parseBundle(partial);
+  assert.equal(unrouted.ok, false);
+  assert.equal(unrouted.code, BUNDLE_FAULTS.GATE);
+  assert.match(unrouted.reason, /FAIL and routes it nowhere/);
+
+  // A handoff that leaves a DIFFERENT stage: a gate routes the edges out of the stage it follows.
+  const elsewhere = panelBundle();
+  elsewhere.pipelines[0].gates[0].decision.routes = { PASS: "H-02", FAIL: null };
+  const wrongStage = parseBundle(elsewhere);
+  assert.equal(wrongStage.ok, false);
+  assert.equal(wrongStage.code, BUNDLE_FAULTS.HANDOFF);
+  assert.match(wrongStage.reason, /leaves stage S1/);
+
+  // A handoff this pipeline does not hold.
+  const absent = panelBundle();
+  absent.pipelines[0].gates[0].decision.routes = { PASS: "H-99", FAIL: null };
+  const missing = parseBundle(absent);
+  assert.equal(missing.ok, false);
+  assert.equal(missing.code, BUNDLE_FAULTS.REFERENCE);
+  assert.match(missing.reason, /does not hold/);
+});
+
 test("a missing file is absence, an unreadable one is a bad bundle, and the file is named back", () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), "wtgui-bundle-"));
   try {

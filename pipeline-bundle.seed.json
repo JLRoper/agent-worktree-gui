@@ -3607,7 +3607,11 @@
             "outcomes": [
               "accept",
               "reject"
-            ]
+            ],
+            "routes": {
+              "accept": "H-03",
+              "reject": "H-02"
+            }
           }
         }
       ]

@@ -66,9 +66,9 @@ record keeps the ledger of them:
 - **A record written before this existed reads as one visit of its stage**, an empty ledger and `route: null`. Nothing
   is written back on a read; `route: null` means "entered before the fingerprint existed" and is never a mismatch.
 - **`tree` is written at the cut** (see below) and **`route` is the routing fingerprint at entry**: a sha256 over the
-  stage ids in order, each handoff's ends/kind/cap, and each gate's anchor/artifact/kind. Editing a prompt or a title
-  does not move it; editing the graph does, and the row parks `pipeline-changed` rather than being driven against a
-  graph it did not enter under.
+  stage ids in order, each handoff's ends/kind/cap, and each gate's anchor/artifact/kind and its `routes` map. Editing
+  a prompt or a title does not move it; editing the graph — or re-pointing a verdict's route — does, and the row parks
+  `pipeline-changed` rather than being driven against a graph it did not enter under.
 - **`inputs` is the manifest of what the stage was handed**: one entry per artifact the document says it reads, with
   the id, the document's path, the sha256 the file had when the stage started, whether it was there, the writer the
   document names, the edge it arrived by (`H-10` for a handoff, `null` for a read and for the earlier visit's own
@@ -164,18 +164,21 @@ queue's own tick — asks `lib/task-pipeline-drive.js` three questions about eve
   start is the `existing: true` path, whether it is the first stage or the tenth. The stage's prompt is the turn, plus
   the INPUTS block: the handoff's artifact by path, COMMIT and blob hash, the gate it came back through, the earlier
   visit's artifact on a loop back, and the tree's branch/HEAD/dirty count. A handoff is never named by a branch: the
-  panel stores the commit the writer settled at and hands that to the next stage. A row with NO pipeline is not
+  panel stores the commit the writer settled at and hands that to the next stage. **An arrival is named only when the
+  RECORD names the edge** (`pipelineRun.via`): a first visit has crossed nothing, so it is handed nothing, and the block
+  does not reconstruct an edge from the graph — deriving "the last handoff whose `to` is this stage" is how a loop into
+  a pipeline's first stage used to be announced before its first crossing. A row with NO pipeline is not
   started here and has no stage invented for it — that row is the assistant's to start, exactly as it was before this
   driver existed.
 - **what moves.** A `running` row whose current thread is not live and whose last run reads `done` has settled its
   STAGE. The row is written forward to the next stage in one write — `queued`, a fresh `enteredAt`, the visit counted,
   and the edge it crossed counted in `crossings` — and the settle does not see it again until that stage has a run of
   its own.
-- **what stops it.** A capped loop at its cap, a gate that declares a decision record, a failed run, a declared
-  artifact that is not in the tree, a tree that is gone or claimed by another row, a routing change, or an assignment
-  the bundle cannot resolve. Each is a named code and a structured decision on the stage run; the row parks on the
-  rendered sentence. `unresolved` **parks** — it is a fact about a written record, not an empty state, and leaving the
-  row sitting still was the old behaviour.
+- **what stops it.** A capped loop at its cap, a gate that declares a decision record, a verdict the document cannot
+  route, a failed run, a declared artifact that is not in the tree, a tree that is gone or claimed by another row, a
+  routing change, or an assignment the bundle cannot resolve. Each is a named code and a structured decision on the
+  stage run; the row parks on the rendered sentence. `unresolved` **parks** — it is a fact about a written record, not
+  an empty state, and leaving the row sitting still was the old behaviour.
 
 Unattended starts are the assistant's own switch (`spawn`, in Settings → Assistant): **`auto`** is "start it at once"
 and is the only value the driver starts a stage under. `ask` and `off` still let a settled row advance — the work is
@@ -193,8 +196,29 @@ the tree ladder applies to an exit check it cannot evaluate.
 driver looks for that decision's own file in the row's tree and does nothing until it is there. `{{hole}}` segments
 match one path segment, so `ledger/gates/G60-{{finding_id}}.json` is whichever record the seat actually wrote. The row
 parks naming the path, the wait is kept on the record (`pipelineRun.waitingFor`), and **the record's arrival is what
-moves it** — the panel never writes that file, never reads its value, and never decides the gate by finishing the
-stage before it.
+moves it** — the panel never writes that file and never decides the gate by finishing the stage before it.
+
+**A decision that declares `routes` is also read — one field, `outcome`.** The gate's document may map its outcomes to
+edges:
+
+```json
+"decision": {
+  "path": "out/verdict.json", "outcomes": ["fail", "pass"], "writer": "verify-seat",
+  "routes": { "fail": "H-3", "pass": null }
+}
+```
+
+The seat writes `{"outcome": "pass"}` in that file, and the DOCUMENT says where that word goes: `"fail": "H-3"` takes
+the loop, `"pass": null` means **the pipeline ends here**. The driver reads the verdict **before** it charges the loop's
+cap, so a pipeline that has converged stops at its verdict instead of spending a crossing it does not need — while a
+loop that keeps failing is routed back into itself and its cap still applies. A `routes` map is checked whole at load:
+every key must be a declared outcome, every declared outcome must be routed, and every non-null target must be a handoff
+leaving the gate's own stage. A record that is not JSON, names no `outcome`, or names one the gate does not declare
+parks `pipeline-verdict` — the panel obeys a route the document declared and refuses to guess one.
+
+A verdict that ends the pipeline writes its own decision on the settled stage run (`trigger: "verdict"`,
+`fact: { kind: "verdict", outcome, edge, ended: true }`), so a reader can see WHICH word ended the loop. The row is then
+finished by the settle, on the landing rule it has always had.
 
 ### The tree: one per row, cut once, reused by every stage
 
@@ -282,6 +306,7 @@ it legitimate; `fact` is structured and small.
 | code | when | the row reads |
 |---|---|---|
 | `pipeline-gate` | the gate after the settled stage has no decision record | the gate, the path, and that the code does not decide it |
+| `pipeline-verdict` | the gate's record is there, and it names no outcome or one the decision's `routes` does not hold | the gate, the path, the outcomes it declares, and that the panel does not route a verdict the document does not hold |
 | `pipeline-artifact` | the stage's declared artifact is not in the tree | the artifact id, the path, the handoff |
 | `pipeline-run-failed` | the stage's run ended failed/interrupted/stopped | the status and the run's last words |
 | `pipeline-cap` | a loop at or past its cap, or a cap that cannot be read | the edge, `used of limit`, or why the cap is unreadable |
