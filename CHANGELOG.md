@@ -4,16 +4,45 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.27.1 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.28.1 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-320 releases from v0.1.0 (2026-10-20) to v1.27.1 (2026-11-05), 1115 commits between the tags. Every release is anchored by an
+322 releases from v0.1.0 (2026-10-20) to v1.28.1 (2026-11-05), 1121 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.28.1 — 2026-11-05 · 3 commits
+
+[`72feecd`](https://github.com/JLRoper/agent-worktree-gui/commit/72feecdd3d051095db282d388494fc0587d7768d) · [compare v1.28.0...v1.28.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.28.0...v1.28.1)
+
+### Docs & tests
+
+- test: wait for the board to settle before the push-control gate reads it ([`f7e8d1f`](https://github.com/JLRoper/agent-worktree-gui/commit/f7e8d1ffc5216107694e247e6c164667e568fc5f))
+- docs: the unlanded worktree backlog — 13 rows walked, 2 landed, 11 retired ([`26780fa`](https://github.com/JLRoper/agent-worktree-gui/commit/26780fa657ad35990427ea05e745916daf07015c))
+
+### Other
+
+- chore: 1.28.1 — the version this landing carries ([`72feecd`](https://github.com/JLRoper/agent-worktree-gui/commit/72feecdd3d051095db282d388494fc0587d7768d))
+
+## v1.28.0 — 2026-11-05 · 3 commits
+
+[`600fbc4`](https://github.com/JLRoper/agent-worktree-gui/commit/600fbc4640cb39c477301df5914acbe79ec5c5c3) · [compare v1.27.1...v1.28.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.27.1...v1.28.0)
+
+### Added
+
+- feat: two four-way push controls, per project and per remote repository ([`a2cc658`](https://github.com/JLRoper/agent-worktree-gui/commit/a2cc65833202419b386174ba09b7cc3c97b99922))
+
+### Docs & tests
+
+- docs: render the changelog — 320 releases ([`79ec3f3`](https://github.com/JLRoper/agent-worktree-gui/commit/79ec3f346e7a6909df6ce49a863721204cc50dc5))
+
+### Other
+
+- chore: 1.28.0 — the version this landing carries ([`600fbc4`](https://github.com/JLRoper/agent-worktree-gui/commit/600fbc4640cb39c477301df5914acbe79ec5c5c3))
 
 ## v1.27.1 — 2026-11-05 · 5 commits
 
