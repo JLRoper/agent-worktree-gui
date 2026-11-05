@@ -209,12 +209,51 @@ pass round a loop — starts a new agent in that same tree.** The pipeline never
   `stageRuns[].tree.path` that still exists on disk (the ledger wins when the two disagree), then `task.worktree`. None
   of them existing is `pipeline-tree-gone`, **never** a second cut and never the project checkout — the panel does not
   start a stage beside the work the earlier visits left behind.
-- A tree path is claimed by every OPEN row whose run tree or `worktree` normalises to it (case-insensitively, across
-  every assistant's queue). A start whose tree is claimed by a DIFFERENT open row parks `pipeline-tree-claimed`, naming
-  the other row: two stages in one tree is the one collision that corrupts work silently.
+- A tree path is claimed by every OPEN row whose run tree, `worktree` or **any lane tree on the record** normalises to
+  it (case-insensitively, across every assistant's queue). A start whose tree is claimed by a DIFFERENT open row parks
+  `pipeline-tree-claimed`, naming the other row: two stages in one tree is the one collision that corrupts work
+  silently. A fan-out's lane trees are the row's too — they hold its work, and a second row starting in one is the same
+  collision.
 
 The cost, stated plainly: a stage cannot be isolated from the previous stage's mess. That is the right default for a
 review-fix loop and the wrong one for a stage that needs a clean base; the design records that as an open question.
+
+### The fan-out: a per-stage block, and the one merge
+
+`shared` is the model above and the default. A pipeline may declare `isolation: "per-stage"` in its bundle, and then
+the CONCURRENT part of its graph — and only that part — runs in one tree per stage. A chain keeps today's single tree:
+the flag decides where the shape allows, not that every stage gets a directory.
+
+- **The block.** A stage with two or more non-loop successors is the fork; the lanes are its successors, and the join is
+  the earliest stage, in reading order, that every lane can reach. No fork stage and two or more roots is the same block
+  with the pipeline's start as the fork. One stage = one lane = one tree: a lane that forks again, a lane that reaches
+  the join through another stage, a lane that is another lane's ancestor, or lanes with no common join are refused **by
+  name** and the row runs `shared` — the panel does not guess a graph the document did not draw.
+- **One base.** Every lane tree and the aggregate tree are cut from the SAME commit: the fork's settled commit, or — at
+  a pipeline start — the first lane's cut, which supplies it. The row stores it as `pipelineRun.fanout.base`; it is the
+  one thing about a block that cannot be derived from the bundle.
+- **`pipelineRun.trees[<stage>]`** is the tree each lane and the join ran in, written at the cut beside the block's
+  `{ base, fork, lanes, join }`. The row's own `tree` is **never** a lane's: it is the aggregate's, because the branch
+  that lands is the merge's.
+- **The join reads the merge, not an edge.** Its tree is cut at the base and every lane branch is merged into it in ONE
+  commit — `git merge-tree --write-tree` pre-flights every lane over the object database (so a conflict is a list of
+  paths before a merge starts), then one commit is built from that tree with a parent per lane and proved against it.
+  The result is written on the join's stage run as `merge { commit, base, verified, branches[] }` **before** the
+  aggregator's worker exists; the driver will not start that worker while a merge is owed. Its INPUTS block names each
+  lane's artifact, path, commit, blob and hash — the lanes are pinned by commit, never by a moving branch name.
+- **A conflict parks.** Two lanes that wrote the same path are refused `pipeline-conflict` naming the paths and the
+  lanes; nothing is merged, HEAD does not move, and no working file is written. A person chooses which lane is right.
+  That refusal is the check behind "each stage writes only files nobody else writes" — the panel cannot know what an
+  agent will write, so the aggregate proves it.
+- **Lane branches are local only.** They exist on this disk to be merged and are never pushed. The branch that leaves
+  the machine is the row's — the aggregate's — under the ordinary landing rule.
+- **The routing fingerprint includes the isolation**, so flipping it under a live row parks `pipeline-changed` rather
+  than driving a row against a workspace model it did not enter under.
+
+Proved end to end, on real trees, by `node tools/verify-pipeline-fanout.mjs`: a 3-stage fan-out (two lanes and an
+aggregator), one tree per stage, the base each was cut from, the one aggregate commit and its parents, a byte-for-byte
+comparison of each lane's report (sha256 and the blob object id), and a deliberate conflict that is refused by path.
+
 
 ### The artifact: one new hard gate
 

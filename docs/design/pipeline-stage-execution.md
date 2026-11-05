@@ -251,6 +251,15 @@ half-edited hands that state to the next stage. That is the right default for a 
 of the failure) and the wrong one for a stage that wants a clean base — which is why it is an open question, not a
 hidden assumption (§8, Q1).
 
+**The exception, and its boundary: a fan-out block.** This decision is about a CHAIN — stages that each finish what the
+last one started. It does not reach a graph's concurrent part: two stages that are siblings, neither reading the
+other's files, should not take turns in one tree. A pipeline that declares `isolation: "per-stage"` gives such a block
+one tree per lane, all cut from the same base, and one merge in the aggregator's tree. The default stays `shared`, a
+chain under `per-stage` still keeps this one tree, and the block is refused by name (running `shared`) when the graph
+is not one flat fork/join — so nothing here changes the model above for a row that does not draw one.
+`lib/pipeline-fanout.js` is the rule, `lib/pipeline-aggregate.js` the merge, and
+[`docs/task-pipeline.md`](../task-pipeline.md) the record's fields.
+
 ### 3.2 When a tree is created, and why it is created *before* the start
 
 Today the cut and the start are one call: `startSpawn` passes `existing: false` and the spawner cuts
