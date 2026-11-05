@@ -118,6 +118,15 @@ if (live) {
 }
 
 const indexSha = sha(indexBytes);
+// The id the page must print beside that hash: whatever the document itself names, never a constant.
+const indexIds = (() => {
+  try {
+    const v = JSON.parse(indexBytes.toString("utf8"));
+    return Array.isArray(v) ? v.map((e) => String((e && e.id) || "")).filter(Boolean).join(", ") : "";
+  } catch {
+    return "";
+  }
+})();
 
 // ---- the panel that serves the page --------------------------------------------------------------------------------
 const panel = await startPanel({});
@@ -135,6 +144,7 @@ async function stateOf(page) {
       shape: ds.pipelineDocShape || "",
       sha: ds.pipelineDocSha256 || "",
       docSource: ds.pipelineDocSource || "",
+      docIds: ds.pipelineDocIds || "",
       stages: ds.pipelineDocStages || "",
       docCards: ds.pipelineDocCards || "",
       seq: ds.pipelineDocSeq || "0",
@@ -172,6 +182,7 @@ try {
     check(byUrl.stages === "9" && byUrl.docCards === "1", `the page reports 9 stage nodes in 1 card (${byUrl.stages}/${byUrl.docCards})`);
     check(byUrl.sha === indexSha, `the provenance carries the sha256 of the served bytes (${byUrl.sha || "none"})`);
     check(byUrl.docSource === indexSource, `the source line names the URL that was asked for (${byUrl.docSource})`);
+    check(byUrl.docIds === indexIds && byUrl.provenance.includes(indexIds), `the provenance prints the document id the index names (${byUrl.docIds || "none"})`);
     check(byUrl.provenance.includes(indexSource) && byUrl.provenance.includes(indexSha), "the provenance line prints the source and its full sha256", byUrl.provenance.slice(0, 320));
     check(/counted only/.test(byUrl.provenance) || /no stage names/.test(byUrl.provenance), "the page says an index counts stages instead of naming them", byUrl.provenance.slice(0, 320));
     check(byUrl.provenanceKind === "document", `the provenance line is the imported one (${byUrl.provenanceKind})`);
@@ -228,21 +239,39 @@ try {
     if (documentPath) {
       const bytes = readFileSync(documentPath);
       const docSha = sha(bytes);
+      // Everything this block asserts comes from THE DOCUMENT, not from a constant: it used to hard-code the nine
+      // stages of one pipeline, so it could not certify a second factory pipeline at all.
+      const doc = JSON.parse(bytes.toString("utf8"));
+      const docId = String((doc.project && doc.project.id) || doc.id || "");
+      const docStages = Array.isArray(doc.stages) ? doc.stages.length : 0;
+      const docTitles = (doc.stages || []).map((s) => String((s && (s.title || s.name || s.id)) || ""));
+      const seqHandoffs = (Array.isArray(doc.handoffs) ? doc.handoffs : []).filter((h) => h && String(h.kind || "") === "sequence");
+      const docIds = (doc.stages || []).map((s) => String((s && s.id) || ""));
+      const chain =
+        seqHandoffs.length === 0 ||
+        (seqHandoffs.length === Math.max(0, docStages - 1) &&
+          docIds.every((id, i) => i === docStages - 1 || seqHandoffs.some((h) => String(h.from) === id && String(h.to) === docIds[i + 1])));
       await page.goto(pageUrl(), { waitUntil: "load" });
       await settle(page, () => document.documentElement.dataset.pipelineMapReady === "1");
       await page.setInputFiles("#doc-file", { name: path.basename(documentPath), mimeType: "application/json", buffer: bytes });
       await settle(page, () => document.documentElement.dataset.pipelineSource === "document" && document.documentElement.dataset.pipelineMapReady === "1");
       const studio = await stateOf(page);
       check(studio.shape === "studio", `the exported document is read as a studio document (${studio.shape})`);
-      check(studio.cards.length === 1 && studio.nodes === 9, `it draws its nine named stages (${studio.nodes} nodes)`, JSON.stringify(studio.cards));
+      check(studio.cards.length === 1 && studio.nodes === docStages, `it draws the document's ${docStages} stages (${studio.nodes} nodes)`, JSON.stringify(studio.cards));
       check(studio.sha === docSha, `its provenance is the file's own sha256 (${studio.sha})`);
-      check(studio.titles.every((t) => /stage \d+ of 9: /.test(t)) && studio.titles.some((t) => /Extract the entities/.test(t)), "each node's accessible name is the document's own stage title", studio.titles.slice(0, 3).join(" | "));
+      check(studio.docIds === docId && studio.provenance.includes(docId), `its provenance names the document it drew (${studio.docIds || "none"})`);
+      check(
+        studio.titles.every((t, i) => t.startsWith(`stage ${i + 1} of ${docStages}: ${docTitles[i]}.`)),
+        "each node's accessible name is the document's own stage title, in its order",
+        studio.titles.slice(0, 3).join(" | "),
+      );
       check(studio.provenance.includes(docSha) && studio.provenance.includes(path.basename(documentPath)), "the provenance line names the file and its sha256", studio.provenance.slice(0, 320));
       const book = await page.evaluate(() => {
         const b = document.querySelector('#layout button[data-layout="book"]');
         return { disabled: b.disabled, title: b.title };
       });
-      check(book.disabled && /not one chain/.test(book.title), "book mode is refused for a document whose arrows converge, and says why", JSON.stringify(book));
+      if (chain) check(!book.disabled, "a chain stays cuttable into rows, so book mode is offered", JSON.stringify(book));
+      else check(book.disabled && /not one chain/.test(book.title), "book mode is refused for a document whose arrows converge, and says why", JSON.stringify(book));
       if (shots) await page.screenshot({ path: path.join(shots, "pipeline-import-studio.png"), fullPage: false });
     }
 

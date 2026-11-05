@@ -590,6 +590,7 @@
     root.dataset.pipelineDocShape = prov.shape || "";
     root.dataset.pipelineDocSha256 = prov.sha256 || "";
     root.dataset.pipelineDocSource = prov.source || "";
+    root.dataset.pipelineDocIds = (prov.ids || []).join(", ");
     root.dataset.pipelineDocStages = String(prov.stages);
     root.dataset.pipelineDocCards = String(prov.cards);
     provenanceEl.dataset.kind = prov.kind;
@@ -602,7 +603,11 @@
       return;
     }
     const label = (importer && importer.SHAPES[prov.shape]) || "a document";
-    provenanceEl.innerHTML = `<span class="pv-tag">imported</span>drawing <b>${esc(prov.source)}</b> · sha256 <code class="sha">${esc(prov.sha256)}</code> · ${prov.bytes} bytes · <b>${prov.stages}</b> stage node${prov.stages === 1 ? "" : "s"} in ${prov.cards} card${prov.cards === 1 ? "" : "s"} · read ${esc(String(prov.at || "").replace("T", " ").slice(0, 19))} UTC. The source is ${esc(label)}${prov.note ? ` — ${esc(prov.note)}` : ""}.`;
+    // The document's own id goes on this line beside the sha256, not only in the card it becomes: two documents
+    // can share a title, and the id is the one name a reader can match against the factory's index or the studio.
+    const ids = (prov.ids || []).filter(Boolean);
+    const named = ids.length ? `document <b>${esc(ids.join(", "))}</b> · ` : "";
+    provenanceEl.innerHTML = `<span class="pv-tag">imported</span>${named}drawing <b>${esc(prov.source)}</b> · sha256 <code class="sha">${esc(prov.sha256)}</code> · ${prov.bytes} bytes · <b>${prov.stages}</b> stage node${prov.stages === 1 ? "" : "s"} in ${prov.cards} card${prov.cards === 1 ? "" : "s"} · read ${esc(String(prov.at || "").replace("T", " ").slice(0, 19))} UTC. The source is ${esc(label)}${prov.note ? ` — ${esc(prov.note)}` : ""}.`;
   }
 
   function clearDocError() {
@@ -675,6 +680,9 @@
     const prov = {
       kind: "document",
       shape: adapted.shape,
+      // The document's own ids, printed beside its sha256: an index or a catalogue can carry several, and a
+      // reader matching a shot to a factory must be able to read the id off the page rather than the title.
+      ids: adapted.model.pipelines.map((p) => p.id).filter(Boolean),
       source: meta.source,
       sha256: meta.sha256,
       bytes: meta.bytes,

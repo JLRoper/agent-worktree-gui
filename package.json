@@ -63,6 +63,7 @@
     "verify:assistant-reset-ui": "node tools/verify-assistant-reset-ui.mjs",
     "measure:perf-paths": "node tools/measure-perf-paths.mjs",
     "capture:pipeline-flow": "node tools/capture-pipeline-flow.mjs",
+    "capture:pipeline-import": "node tools/capture-pipeline-import.mjs",
     "capture:pipeline-readability": "node tools/capture-pipeline-readability.mjs",
     "verify:task-pipeline-window": "node tools/verify-task-pipeline-window.mjs",
     "verify:action-harvest": "node tools/verify-action-harvest.mjs",
