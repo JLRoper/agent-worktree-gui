@@ -111,4 +111,4 @@ curl -s -D - -X POST http://127.0.0.1:7331/api/deliverables/open \
 The handler count itself comes from the route's own order, run per file/image row: `stat`, then the served-root
 `href`, then `deliverableRepoRoot`/`insideRepo` against the recorded `treePath` — the classifier the audit used.
 
-The screenshot is `docs/assets/deliverables-open-audit/panel-handler-says-opened.png`.
+The screenshot is `docs/assets/deliverables-open-audit/panel-handler-says-opened.png`. The second one, `docs/assets/deliverables-open-audit/panel-handler-says-opened-origin-main.png`, was taken from origin/main's own page — not from this branch — so the line it shows is the one main already ships.
