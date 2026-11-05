@@ -31,8 +31,13 @@ const TREE = path.resolve(opt("--root", path.resolve(HERE, "..")));
 const OUT = path.resolve(opt("--out", path.join(os.tmpdir(), "wtgui-pipeline-dialog-size")));
 const SHOTS = path.join(OUT, "shots");
 
+// The ledger is committed beside the report, so it records the tree by its FOLDER NAME, never by the machine path it
+// happened to sit at: tools/absolute-paths.mjs refuses a drive-letter path in a tracked file, and a scratch folder is
+// gone by the next run, so the path would be a line no reader can open.
+const TREE_NAME = path.basename(TREE) || TREE;
+
 const say = (line = "") => console.log(line);
-const out = { tree: TREE, at: new Date().toISOString(), viewports: [], cases: [], failures: [], pageErrors: [] };
+const out = { tree: TREE_NAME, at: new Date().toISOString(), viewports: [], cases: [], failures: [], pageErrors: [] };
 
 // The acceptance fixture the seed does not carry: thirteen stages with real titles and exit checks, so the wide end
 // of the round is measured on text a definition would actually hold.
