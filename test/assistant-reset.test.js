@@ -422,3 +422,143 @@ test("the route refuses a non-boolean dryRun, an unknown field, a GET and an id 
   assert.equal(missing.status, 404);
   assert.equal(missing.body.code, "assistant-unknown");
 });
+
+// The fallback naming path, on the shape the live proof measured: no card carries the run, and the admissions
+// store's own `request_id` is a run id the gateway still answers for. One verified match, three refusals, and the
+// live/queued rule kept on the fallback too.
+const STORE_ROW = (over = {}) => ({
+  admissionId: "16e7a6a77b11413d9ef316e8c8ecb7e4",
+  requestId: "run_bee7fd633e6a4821824ef01f7f650daa",
+  threadId: "panel-assistant-2",
+  generation: 63,
+  ownerEpoch: 18,
+  ...over,
+});
+const STORE_RUN = (over = {}) => ({
+  object: "hermes.run",
+  run_id: "run_bee7fd633e6a4821824ef01f7f650daa",
+  status: "unknown",
+  session_id: "panel-assistant-2",
+  admission_id: "16e7a6a77b11413d9ef316e8c8ecb7e4",
+  execution_generation: 63,
+  pending_controls: [],
+  ...over,
+});
+
+test("the store's request id names an admission no card names, and the resolve is the same paired body", async (t) => {
+  const { assistant, two, dbPath } = await board(t, { rows: [STORE_ROW()], jobs: [] });
+  assistant.pendingWake.push({ reason: "a stale wake", rule: "watch", assistantId: two.id, at: Date.now() - 60_000 });
+  assistant.addWatch({ thread: two.threadId, title: "still watching", assistantId: two.id });
+  const gateway = gatewayStub({
+    runs: { run_bee7fd633e6a4821824ef01f7f650daa: STORE_RUN() },
+    resolve: async (runId, body) => {
+      settleDb(dbPath, body.admission_id);
+      return { ok: true, status: 200, receipt: { run_id: runId, status: "terminal", outcome: "interrupted", execution_generation: body.execution_generation } };
+    },
+  });
+
+  const dry = await callReset({ assistant, id: two.id, body: { dryRun: true }, gateway, dbPath });
+  assert.equal(dry.status, 200);
+  assert.equal(dry.body.verdict, "clearable", "a row named through the store is clearable, not blocked");
+  assert.equal(dry.body.clear.admissions.length, 1);
+  const [row] = dry.body.clear.admissions;
+  assert.equal(row.runId, "run_bee7fd633e6a4821824ef01f7f650daa", "the store's request id is the run the resolve names");
+  assert.equal(row.card, null, "no card names it");
+  assert.equal(row.admissionId, "16e7a6a77b11413d9ef316e8c8ecb7e4");
+  assert.equal(row.executionGeneration, 63, "the generation is the GET's value");
+  assert.deepEqual(row.evidence.namedBy, "store-request-id");
+  assert.equal(row.evidence.requestId, "run_bee7fd633e6a4821824ef01f7f650daa");
+  assert.deepEqual(dry.body.block.unnameable, []);
+  assert.deepEqual(gateway.calls.map((c) => c.method), ["GET"], "a dry run sends no POST");
+
+  const real = await callReset({ assistant, id: two.id, body: {}, gateway, dbPath });
+  const post = gateway.calls.find((c) => c.method === "POST");
+  assert.ok(post, "the real call posts one resolve");
+  assert.equal(post.path, "/v1/runs/run_bee7fd633e6a4821824ef01f7f650daa/resolve-unknown");
+  assert.deepEqual(post.body, { admission_id: "16e7a6a77b11413d9ef316e8c8ecb7e4", execution_generation: 63 }, "the same paired body, from the fresh GET");
+  assert.deepEqual(Object.keys(post.body).sort(), ["admission_id", "execution_generation"]);
+  assert.equal(real.status, 200);
+  assert.equal(real.body.ok, true);
+  assert.equal(real.body.verdict, "clean");
+  assert.equal(real.body.receipts.length, 1);
+  assert.equal(real.body.receipts[0].namedBy, "store-request-id");
+  assert.equal(real.body.cleared.wakes.length, 1, "the verified name lets the local half run");
+  assert.equal(real.body.cleared.watches.length, 1);
+});
+
+test("a 404 on the store's request id falls through to the existing fence_unclearable copy", async (t) => {
+  const { assistant, two, dbPath } = await board(t, { rows: [STORE_ROW({ requestId: "run_missing_from_gateway" })], jobs: [] });
+  const gateway = gatewayStub({ runs: {} });
+  const out = await callReset({ assistant, id: two.id, body: {}, gateway, dbPath });
+
+  assert.equal(out.status, 409);
+  assert.equal(out.body.code, "fence_unclearable");
+  assert.equal(out.body.admissions.length, 1);
+  assert.equal(out.body.admissions[0].requestId, "run_missing_from_gateway");
+  assert.equal(out.body.admissions[0].refusal, "run_not_found");
+  assert.match(out.body.admissions[0].reason, /gone from the gateway \(404\)/);
+  assert.match(out.body.error, /no card here names/, "the existing refusal copy stands");
+  assert.match(out.body.error, /hermes --resume panel-assistant-2/);
+  assert.equal(gateway.calls.filter((c) => c.method === "POST").length, 0);
+});
+
+test("a run that no longer reads unknown falls through to fence_unclearable, not assistant_live", async (t) => {
+  const { assistant, two, dbPath } = await board(t, { rows: [STORE_ROW()], jobs: [] });
+  const gateway = gatewayStub({ runs: { run_bee7fd633e6a4821824ef01f7f650daa: STORE_RUN({ status: "completed" }) } });
+  const out = await callReset({ assistant, id: two.id, body: {}, gateway, dbPath });
+
+  assert.equal(out.status, 409);
+  assert.equal(out.body.code, "fence_unclearable");
+  assert.equal(out.body.admissions[0].refusal, "not_unknown");
+  assert.match(out.body.admissions[0].reason, /now reads completed, not unknown/);
+  assert.match(out.body.error, /no card here names/);
+  assert.equal(gateway.calls.filter((c) => c.method === "POST").length, 0);
+});
+
+test("a run that answers unknown for another admission is refused, not resolved", async (t) => {
+  const { assistant, two, dbPath } = await board(t, { rows: [STORE_ROW()], jobs: [] });
+  const gateway = gatewayStub({ runs: { run_bee7fd633e6a4821824ef01f7f650daa: STORE_RUN({ admission_id: "another_admission" }) } });
+  const out = await callReset({ assistant, id: two.id, body: {}, gateway, dbPath });
+
+  assert.equal(out.status, 409);
+  assert.equal(out.body.code, "fence_unclearable");
+  assert.equal(out.body.admissions[0].refusal, "admission_mismatch");
+  assert.match(out.body.admissions[0].reason, /owns another_admission, not 16e7a6a77b11413d9ef316e8c8ecb7e4/);
+  assert.equal(gateway.calls.filter((c) => c.method === "POST").length, 0);
+});
+
+test("a fallback run that is executing still refuses as assistant_live", async (t) => {
+  const { assistant, two, dbPath } = await board(t, { rows: [STORE_ROW()], jobs: [] });
+  const gateway = gatewayStub({ runs: { run_bee7fd633e6a4821824ef01f7f650daa: STORE_RUN({ status: "started" }) } });
+  const out = await callReset({ assistant, id: two.id, body: {}, gateway, dbPath });
+
+  assert.equal(out.status, 409);
+  assert.equal(out.body.code, "assistant_live");
+  assert.equal(out.body.runId, "run_bee7fd633e6a4821824ef01f7f650daa");
+  assert.equal(gateway.calls.filter((c) => c.method === "POST").length, 0);
+});
+
+test("a queued fallback run is listed behind the fence and does not block a reset", async (t) => {
+  const cards = [];
+  const { assistant, two, dbPath } = await board(t, {
+    rows: [
+      { admissionId: "adm_named", requestId: "run_1", threadId: "panel-assistant-2", generation: 1 },
+      STORE_ROW({ admissionId: "adm_queued_tail", requestId: "run_queued_tail" }),
+    ],
+    jobs: cards,
+  });
+  cards.push({ id: "card_1", thread: two.threadId, runId: "run_1", status: "interrupted", startedAt: "2026-11-04T01:02:11Z" });
+  const gateway = gatewayStub({
+    runs: {
+      run_1: { run_id: "run_1", status: "unknown", admission_id: "adm_named", execution_generation: 3, pending_controls: [] },
+      run_queued_tail: { run_id: "run_queued_tail", status: "queued", admission_id: "adm_queued_tail", execution_generation: null, pending_controls: [] },
+    },
+  });
+  const out = await callReset({ assistant, id: two.id, body: { dryRun: true }, gateway, dbPath });
+
+  assert.equal(out.status, 200, "a queued run is not assistant_live");
+  assert.equal(out.body.verdict, "blocked", "the queued row is not settleable, the other one is");
+  assert.deepEqual(out.body.block.queued, [{ runId: "run_queued_tail", executionGeneration: null, card: null }]);
+  assert.equal(out.body.clear.admissions.length, 1, "the card-named row still clears");
+  assert.equal(gateway.calls.filter((c) => c.method === "POST").length, 0);
+});

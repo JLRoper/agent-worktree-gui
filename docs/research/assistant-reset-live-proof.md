@@ -249,8 +249,16 @@ The measured version is sharper than "the run id is gone", and worth recording p
   and of `panel-assistant-3`'s FIFO, which the brief forbids and which would make this document's
   "nothing was cleared" false.
 
-So: **this fence cannot be cleared from the panel at all**, and the only remedy the panel can honestly
-offer is the one its copy gives — `hermes --resume panel-assistant-3` (design §2).
+So, as measured on the build this document covers: **this fence could not be cleared from the panel at
+all**, and the only remedy the panel could honestly offer was the one its copy gives — `hermes --resume
+panel-assistant-3` (design §2).
+
+> **Update — the fallback naming path landed.** The second bullet above is now history, not a limit:
+> `lib/assistant/reset.js` names a row no card holds through the store's own `request_id` →
+> `GET /v1/runs/{id}`, and accepts it only when that run reads `status: "unknown"` with the same
+> `admission_id`. A 404, any other status, or another admission still refuses with this section's
+> `fence_unclearable`. The GET in §3 is the exact evidence the fallback is built on. Nothing in this
+> file's measurements changed — the mutation described above was still not performed.
 
 ### 5.1 The honest gap
 

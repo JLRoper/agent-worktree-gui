@@ -18854,8 +18854,9 @@ function paintResetRow() {
 }
 
 // The dry run's rows, one per thing it would clear — the whole point of the state is that a count cannot be checked
-// against the store. `clear.admissions` names the run, admission, generation, card and how long the run has been
-// unknown; `clear.watches` and `clear.wakes` are the local half.
+// against the store. `clear.admissions` names the run, admission, generation, card (or, for a row no card names, the
+// store request id the fallback verified) and how long the run has been unknown; `clear.watches` and `clear.wakes`
+// are the local half.
 function resetDryLines(d, now) {
   const who = `${d.assistant?.name || "this assistant"}${d.assistant?.threadId ? ` · ${d.assistant.threadId}` : ""}`;
   const clear = d.clear || {};
@@ -18876,6 +18877,7 @@ function resetDryLines(d, now) {
       const bits = [`run ${a.runId}`, `admission ${a.admissionId}`];
       bits.push(a.executionGeneration == null ? "generation null" : `generation ${a.executionGeneration}`);
       if (a.card?.id) bits.push(`card ${a.card.id}${a.card.status ? ` ${a.card.status}` : ""}`);
+      if (!a.card?.id && a.evidence?.namedBy === "store-request-id") bits.push("named by its store request id");
       const answers = Array.isArray(a.evidence?.answers) ? a.evidence.answers : [];
       const first = answers.length ? Number(answers[0][0]) : NaN;
       if (Number.isFinite(first)) bits.push(`unknown for ${resetSpan(now - first)}`);
