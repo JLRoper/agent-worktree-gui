@@ -17,22 +17,22 @@ has no tag.
 
 ## v1.19.0 — 2026-11-05 · 6 commits
 
-[`8e4e298`](https://github.com/JLRoper/agent-worktree-gui/commit/8e4e2986f311cde9333cb0d57868aaf56c714d92) · [compare v1.18.3...v1.19.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.18.3...v1.19.0)
+[`59ca5d3`](https://github.com/JLRoper/agent-worktree-gui/commit/59ca5d3b8d98dcd6d7f5ff47bb5f8c1366cd19e4) · [compare v1.18.3...v1.19.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.18.3...v1.19.0)
 
 ### Added
 
-- feat: a stopped worker asks with clarify, and an unanswered question is asked again hourly ([`2a2ffe9`](https://github.com/JLRoper/agent-worktree-gui/commit/2a2ffe984bb4676269687170ab0165fa1709f70c))
+- feat: a stopped worker asks with clarify, and an unanswered question is asked again hourly ([`9ebdf5c`](https://github.com/JLRoper/agent-worktree-gui/commit/9ebdf5c8e433419d8d8b3006181286397a92405c))
 
 ### Docs & tests
 
 - docs: render the changelog — 306 releases ([`45cea65`](https://github.com/JLRoper/agent-worktree-gui/commit/45cea654f9bb07e8c6d7e64a850f9ba3d1874365))
 - docs: render the changelog — 306 releases ([`ec8baf0`](https://github.com/JLRoper/agent-worktree-gui/commit/ec8baf0ad673a5001166c1984fe1ff93f563b5a0))
-- test: a parked question is asked again an hour later, on one entry ([`3387c86`](https://github.com/JLRoper/agent-worktree-gui/commit/3387c863b4244f00eae8b76a57942c2a88a2b164))
-- docs: the clarify route is proved on this box, and a question is asked again hourly ([`0022026`](https://github.com/JLRoper/agent-worktree-gui/commit/0022026bdd97533a1e21dc624fd6b3ad07a2fe38))
+- test: a parked question is asked again an hour later, on one entry ([`8ca4a2e`](https://github.com/JLRoper/agent-worktree-gui/commit/8ca4a2e0a3773f9eee8fe621df7680e043a21902))
+- docs: the clarify route is proved on this box, and a question is asked again hourly ([`9e55b0c`](https://github.com/JLRoper/agent-worktree-gui/commit/9e55b0c9eb1edea1ba57fd7b44c220dff7e759e6))
 
 ### Other
 
-- chore: 1.19.0 — the version this landing carries ([`8e4e298`](https://github.com/JLRoper/agent-worktree-gui/commit/8e4e2986f311cde9333cb0d57868aaf56c714d92))
+- chore: 1.19.0 — the version this landing carries ([`59ca5d3`](https://github.com/JLRoper/agent-worktree-gui/commit/59ca5d3b8d98dcd6d7f5ff47bb5f8c1366cd19e4))
 
 ## v1.18.3 — 2026-11-05 · 4 commits
 
