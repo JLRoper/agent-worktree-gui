@@ -40,6 +40,7 @@
     "verify:settings-window": "node tools/verify-settings-window.mjs",
     "verify:chart-top-count": "node tools/verify-chart-top-count.mjs",
     "verify:settings-tabs": "node tools/verify-settings-tabs.mjs",
+    "verify:push-permissions": "node tools/verify-push-permissions.mjs",
     "verify:pipelines-tab": "node tools/verify-pipelines-tab.mjs",
     "verify:pipeline-flow": "node tools/verify-pipeline-flow.mjs",
     "verify:pipeline-fanout": "node tools/verify-pipeline-fanout.mjs",

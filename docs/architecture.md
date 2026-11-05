@@ -691,12 +691,13 @@ panel. It is where the entropy is; §10 points at the review that measures it.
   "scanRoots": ["C:/ProjectDevelopment"],
   "projects": [{ "name": "agent-worktree-gui", "path": "…", "remote": "github",
                  "mainBranch": "main", "prRepo": "JLRoper/agent-worktree-gui",
-                 "remoteBranchPolicy": "allow", "releaseWorktrees": true }],
+                 "pushNewBranches": "allow-name-gate", "releaseWorktrees": true }],
   "worktreeSeconds": 5, "midSeconds": 45, "dormantSeconds": 90,
   "slowSeconds": 300, "collapseAfterSeconds": 30,
   "fetchSeconds": 1800, "liveSeconds": 5,
   "threads": 5, "jobMaxRuntimeSeconds": 7200,
-  "remoteBranchPolicy": "local-only"
+  "pushPermissions": { "repos": { "github/JLRoper": { "newBranches": "allow-name-gate",
+                                                      "existingBranches": "always-ask" } } }
 }
 ```
 
@@ -704,8 +705,9 @@ Two elements of the config shape are architectural rather than incidental:
 
 - **Discovery beats registration.** Every git repo under `scanRoots` becomes a project; an entry
   in `projects[]` only *overrides* what discovery found (it can add a `prRepo`, a
-  `remoteBranchPolicy`, a `releaseWorktrees` grant). Adding a repo to the disk is the whole
-  onboarding step; non-git directories are reported in `skipped` rather than vanishing.
+  `pushNewBranches` / `pushExistingBranches` pair, a `releaseWorktrees` grant). Adding a repo to
+  the disk is the whole onboarding step; non-git directories are reported in `skipped` rather
+  than vanishing.
 - **A setting that is not `config.json` is not assumed to be writable.** The gateway's
   `approvals.timeout` and the CLI's `sessions.list_limit` live in `<HERMES_HOME>/config.yaml`, so
   the routes that change them rewrite exactly one line, re-read the file, and refuse if it does

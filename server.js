@@ -52,6 +52,22 @@ import { REASON_REQUIRED, RestartController, providerKeyCheck } from "./lib/rest
 import { readPipelineDocument } from "./lib/pipeline-doc.js";
 import { Approvals } from "./lib/approvals.js";
 import { RemoteWrites, POLICIES, DEFAULT_POLICY, policyFrom, policyForProject, policyLabel, allowPushWithoutAskingFor } from "./lib/remote-writes.js";
+import {
+  PUSH_CHOICES,
+  PUSH_CHOICE_LABELS,
+  PUSH_REPOS,
+  PUSH_REPO_KEYS,
+  DEFAULT_PUSH_CHOICE,
+  pushChoiceFrom,
+  resolvePushPermissions,
+  pushModeFor,
+  permissionForPush,
+  branchesInPushRefs,
+  branchPermission,
+  strictestPermission,
+  repoKeyForProject,
+  legacyDefaults,
+} from "./lib/push-permissions.js";
 import { installGuard, uninstallGuard, guardState, refreshGuardFiles, normTree } from "./lib/push-guard.js";
 import { safeUrl, openerFor, openerForFolder, chromeFor } from "./lib/open-url.js";
 import { errorStatus } from "./lib/errors.js";
@@ -782,6 +798,10 @@ const guardPanelUrl = () => `http://127.0.0.1:${config.port}`;
 // pushing a branch and opening a PR, so a blanket local-only would refuse their own landing path, while every other
 // repository on this box is local work whose child branches must merge into their parent instead of appearing on a
 // shared remote. Unknown names and unreadable values fall back to the global (lib/remote-writes.js `policyForProject`).
+//
+// The legacy key is still READ (the brief paragraph in lib/jobs.js is built from it, and an install that never
+// named the two controls must keep behaving as it did); it no longer DECIDES a push. lib/push-permissions.js is
+// the decision, and the two are bridged below by `pushPermissionsForPath`.
 const guardPathKey = (p) => String(p || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
 function policyForProjectPath(projectPath, project = null) {
   if (project) return policyForProject(project, config.remoteBranchPolicy);
@@ -790,14 +810,23 @@ function policyForProjectPath(projectPath, project = null) {
   return policyForProject(found, config.remoteBranchPolicy);
 }
 
-// The SAME precedence for the per-remote switch (lib/remote-writes.js `allowPushWithoutAskingFor`): the project's own
-// value over the top-level one, OFF when neither names one, and `deny` folded in by the resolver. Kept beside the
-// policy resolver so the two questions about one project are answered by the same walk of the same records.
-function allowPushWithoutAskingForPath(projectPath, project = null) {
-  if (project) return allowPushWithoutAskingFor(project, config);
+// The TWO CONTROLS in force for one project: project's own value, else the repository's defaults, else the shipped
+// `always-ask`, with `never` absolute and a repo force-override winning over the project's own (lib/push-permissions.js
+// `resolvePushPermissions`). Every surface that has to know — the guard's files, the card's selects, the permission
+// box, the assistant's endpoint — calls this one function rather than re-deriving precedence.
+function projectForPath(projectPath, project = null) {
+  if (project) return project;
   const key = guardPathKey(projectPath);
-  const found = key ? registry.projects.find((p) => guardPathKey(p.path) === key) || null : null;
-  return allowPushWithoutAskingFor(found, config);
+  return key ? registry.projects.find((p) => guardPathKey(p.path) === key) || null : null;
+}
+function pushPermissionsForPath(projectPath, project = null) {
+  return resolvePushPermissions(projectForPath(projectPath, project), config);
+}
+
+// The SAME precedence for the legacy boolean (lib/remote-writes.js `allowPushWithoutAskingFor`), kept beside the
+// policy resolver because lib/jobs.js reads it when it composes a brief's paragraph.
+function allowPushWithoutAskingForPath(projectPath, project = null) {
+  return allowPushWithoutAskingFor(projectForPath(projectPath, project), config);
 }
 
 // The project a tree belongs to: what a REPLY's brief needs in order to quote the right policy and the right remote.
@@ -826,6 +855,10 @@ async function installGuardFor({ projectPath, worktree, branch = null, landing =
   // `project` is the registry record when the caller has it (the spawn path does); a Settings install passes the path
   // alone. Either way the guard's own copy of the policy is the PROJECT's, not the global one.
   const policy = policyForProjectPath(projectPath, project && typeof project === "object" ? project : null);
+  // The two controls, resolved for this project and written into the guard's own files. The guard reads those files,
+  // not the panel's memory: a push has to be decided with the panel down, and a default it assumed would be a
+  // permission nobody granted.
+  const push = pushPermissionsForPath(projectPath, project && typeof project === "object" ? project : null);
   const out = await installGuard({
     projectPath,
     worktree,
@@ -833,6 +866,7 @@ async function installGuardFor({ projectPath, worktree, branch = null, landing =
     timeoutSeconds: config.remoteWriteSeconds,
     policy,
     landing: [...remoteWrites.landing],
+    pushPermissions: { newBranches: push.newBranches, existingBranches: push.existingBranches },
     log,
   });
   if (!out.ok) return out;
@@ -849,11 +883,14 @@ async function installGuardFor({ projectPath, worktree, branch = null, landing =
     // The policy this tree's guard was actually written with, so the Settings row can never show the global one for a
     // project that overrides it.
     policy,
+    // …and the two controls it was written with, for the same reason.
+    newBranches: out.newBranches,
+    existingBranches: out.existingBranches,
     dir: out.dir,
     at: new Date().toISOString(),
   };
   writeGuardRecord();
-  log(`push guard installed: ${cleanPath(worktree)} -> ${out.dir} (policy ${policy}${policy !== config.remoteBranchPolicy ? ` — this project's own, the global is ${config.remoteBranchPolicy}` : ""}${landing ? ", started to land" : ""})`);
+  log(`push guard installed: ${cleanPath(worktree)} -> ${out.dir} (new ${out.newBranches}, existing ${out.existingBranches}, policy ${policy}${policy !== config.remoteBranchPolicy ? ` — this project's own, the global is ${config.remoteBranchPolicy}` : ""}${landing ? ", started to land" : ""})`);
   return { ...out, policy };
 }
 
@@ -880,8 +917,9 @@ async function refreshGuards() {
     // Each project's guard gets ITS policy: a settings change of the global must not overwrite a project that
     // carries its own answer, and an "Always allow" click must not turn every other checkout's default off either.
     const policy = policyForProjectPath(projectPath);
-    const r = await refreshGuardFiles({ projectPath, panelUrl: guardPanelUrl(), timeoutSeconds: config.remoteWriteSeconds, policy, landing, log });
-    out.push({ project: key, policy, ...r });
+    const push = pushPermissionsForPath(projectPath);
+    const r = await refreshGuardFiles({ projectPath, panelUrl: guardPanelUrl(), timeoutSeconds: config.remoteWriteSeconds, policy, landing, pushPermissions: { newBranches: push.newBranches, existingBranches: push.existingBranches }, log });
+    out.push({ project: key, policy, newBranches: push.newBranches, existingBranches: push.existingBranches, ...r });
   }
   return out;
 }
@@ -905,43 +943,82 @@ function guardReport() {
   };
 }
 
-// "Always allow" in the permission box IS this setting, so the box and Settings cannot tell two different stories.
-async function setRemotePolicy(policy, { by = "reader", why = "" } = {}) {
-  const clean = policyFrom(policy, config.remoteBranchPolicy);
+// Where the two push controls are WRITTEN. Two shapes, because they live in two places:
+//
+//   * `pushPermissions.repos[<repo>]` — a remote repository's defaults and its force-override, a top-level key, so
+//     `patchPanelConfig` can assign it;
+//   * `projects[].pushNewBranches` / `projects[].pushExistingBranches` — one project's own answer, inside an array
+//     element, which a top-level assignment would replace with a single object. A project the file does not name yet
+//     gets a minimal entry (its name and path) rather than a refusal: every project on the board is allowed a row
+//     here, discovered or configured, and the path is what the entry needs to survive a boot.
+//
+// Both writers write atomically, apply the change to the in-memory config AND the registry record the page draws
+// from, then rewrite every installed guard's own copies and broadcast. A guard left reading the old answer is the
+// exact defect this feature exists to remove.
+const PUSH_KIND_KEY = { new: "newBranches", existing: "existingBranches" };
+
+async function readPanelConfigFile() {
   try {
-    await patchPanelConfig({ remoteBranchPolicy: clean });
-  } catch (e) {
-    return { error: `could not write the setting: ${String((e && e.message) || e)}` };
+    return JSON.parse(await readFile(CONFIG_PATH, "utf8"));
+  } catch {
+    return {};
   }
-  const before = config.remoteBranchPolicy;
-  config.remoteBranchPolicy = clean;
-  log(`remoteBranchPolicy: ${before} -> ${clean}${by ? ` (by ${by}${why ? `: ${why}` : ""})` : ""}`);
-  await refreshGuards();
-  broadcast({ type: "settings", settings: settingsOut() });
-  return { ok: true, policy: clean, before };
 }
 
-// The per-remote switch, written into ONE project's entry in config.json's `projects[]`. Deliberately a separate
-// writer from `patchPanelConfig`: that one assigns a top-level key, and the switch lives inside an array element — a
-// top-level assignment would replace the reader's whole projects list with a single object. A project the file does
-// not name yet gets a minimal entry (its name and path) rather than being refused: every project on the board is
-// allowed a row here, discovered or configured, and the board's own path is what the entry needs to survive a boot.
-async function setProjectAllowPushWithoutAsking(name, allow, { by = "reader" } = {}) {
-  const project = (registry.projects || []).find((p) => p.name === name) || null;
-  if (!project) return { status: 404, error: `unknown project: ${name || "(none)"} — the switch names a project on this board` };
-  let raw = {};
-  try {
-    raw = JSON.parse(await readFile(CONFIG_PATH, "utf8"));
-  } catch {
-    raw = {};
+function pushKindOf(kind) {
+  return PUSH_KIND_KEY[String(kind || "").trim()] || null;
+}
+
+async function setRepoPushSetting(repo, patch, { by = "reader" } = {}) {
+  const key = String(repo || "").trim();
+  if (!PUSH_REPO_KEYS.includes(key)) {
+    return { status: 400, error: `repo must be one of: ${PUSH_REPO_KEYS.join(", ")}` };
   }
+  const raw = await readPanelConfigFile();
+  const block = raw.pushPermissions && typeof raw.pushPermissions === "object" ? raw.pushPermissions : {};
+  const repos = block.repos && typeof block.repos === "object" ? block.repos : {};
+  const rec = repos[key] && typeof repos[key] === "object" ? repos[key] : {};
+  if (patch.newBranches !== undefined) rec.newBranches = pushChoiceFrom(patch.newBranches, DEFAULT_PUSH_CHOICE);
+  if (patch.existingBranches !== undefined) rec.existingBranches = pushChoiceFrom(patch.existingBranches, DEFAULT_PUSH_CHOICE);
+  if (typeof patch.force === "boolean") rec.force = patch.force;
+  repos[key] = rec;
+  block.repos = repos;
+  raw.pushPermissions = block;
+  try {
+    await writeConfigAtomic(`${JSON.stringify(raw, null, 2)}\n`);
+  } catch (e) {
+    return { status: 500, error: `could not write the setting: ${String((e && e.message) || e)}` };
+  }
+  config.pushPermissions = block;
+  await refreshGuards();
+  broadcast({ type: "settings", settings: settingsOut() });
+  log(`push controls: repo ${key} -> new ${rec.newBranches || DEFAULT_PUSH_CHOICE}, existing ${rec.existingBranches || DEFAULT_PUSH_CHOICE}${rec.force ? " (force-override ON)" : ""} (by ${by})`);
+  return { ok: true, repo: key, record: rec, settings: settingsOut() };
+}
+
+async function setProjectPushSetting(name, patch, { by = "reader" } = {}) {
+  const project = (registry.projects || []).find((p) => p.name === name) || null;
+  if (!project) return { status: 404, error: `unknown project: ${name || "(none)"} — the control names a project on this board` };
+  // A disabled select cannot send, but a hand-written request can: refuse rather than store an answer that the
+  // repo's force-override would silently discard. A control that looks editable and is not is a lie; so is a save
+  // that says "stored" when nothing will read it.
+  const resolved = resolvePushPermissions(project, config);
+  if (resolved.forced) {
+    return {
+      status: 409,
+      error: `${name}'s push controls are set by ${resolved.repoLabel} (force-override is on) — change that repository's defaults, or turn the force-override off first`,
+      settings: settingsOut(),
+    };
+  }
+  const raw = await readPanelConfigFile();
   if (!Array.isArray(raw.projects)) raw.projects = [];
   let entry = raw.projects.find((p) => p && p.name === name) || null;
   if (!entry) {
     entry = { name, path: cleanPath(project.path) };
     raw.projects.push(entry);
   }
-  entry.allowPushWithoutAsking = allow === true;
+  if (patch.newBranches !== undefined) entry.pushNewBranches = pushChoiceFrom(patch.newBranches, DEFAULT_PUSH_CHOICE);
+  if (patch.existingBranches !== undefined) entry.pushExistingBranches = pushChoiceFrom(patch.existingBranches, DEFAULT_PUSH_CHOICE);
   try {
     await writeConfigAtomic(`${JSON.stringify(raw, null, 2)}\n`);
   } catch (e) {
@@ -955,11 +1032,86 @@ async function setProjectAllowPushWithoutAsking(name, allow, { by = "reader" } =
     live = { name, path: cleanPath(project.path) };
     config.projects.push(live);
   }
-  live.allowPushWithoutAsking = allow === true;
-  project.allowPushWithoutAsking = allow === true;
+  if (patch.newBranches !== undefined) {
+    live.pushNewBranches = entry.pushNewBranches;
+    project.pushNewBranches = entry.pushNewBranches;
+  }
+  if (patch.existingBranches !== undefined) {
+    live.pushExistingBranches = entry.pushExistingBranches;
+    project.pushExistingBranches = entry.pushExistingBranches;
+  }
+  await refreshGuards();
   broadcast({ type: "settings", settings: settingsOut() });
-  log(`allowPushWithoutAsking: ${name} -> ${allow ? "on" : "off"} (by ${by})${policyForProject(project, config.remoteBranchPolicy) === "deny" ? " — stored, but this project's policy is deny, which wins" : ""}`);
-  return { ok: true, stored: allow === true, allow: allowPushWithoutAskingFor(project, config).enabled };
+  const after = resolvePushPermissions(project, config);
+  log(`push controls: project ${name} -> new ${after.newBranches}, existing ${after.existingBranches} (by ${by})`);
+  return { ok: true, project: name, resolved: after, settings: settingsOut() };
+}
+
+// "Always allow" in the permission box is the same fact as the two controls saying allow-all for the project that
+// asked. It writes that project's own answer, not a global one: a grant the reader gave about one tree must not
+// open every other checkout on the board. Under a repo force-override the write is stored and REPORTED as not in
+// force, so the box cannot claim a grant the resolver will ignore.
+async function grantPushControls(request, { by = "reader" } = {}) {
+  const name = String(request?.project || "").trim();
+  if (!name) {
+    return { ok: true, note: "no project named by the request — nothing but the tree's own grant was recorded" };
+  }
+  const out = await setProjectPushSetting(name, { newBranches: "allow-all", existingBranches: "allow-all" }, { by });
+  if (out.error) return { error: out.error };
+  return { ok: true, forced: Boolean(out.resolved?.forced), repo: out.resolved?.repo || null };
+}
+
+// What the page draws: the four values and their labels, each repository section with its defaults and its
+// force-override, and every project's RESOLVED pair. The page never re-derives precedence — a card that decided for
+// itself could disagree with the guard that refuses the push.
+function pushPermissionsOut() {
+  const projects = registry?.projects || [];
+  const fallback = legacyDefaults(config);
+  const repos = Object.fromEntries(
+    PUSH_REPOS.map((r) => {
+      const rec = config.pushPermissions?.repos?.[r.key] || {};
+      return [
+        r.key,
+        {
+          key: r.key,
+          label: r.label,
+          newBranches: pushChoiceFrom(rec.newBranches, fallback.newBranches),
+          existingBranches: pushChoiceFrom(rec.existingBranches, fallback.existingBranches),
+          stated: rec.newBranches !== undefined || rec.existingBranches !== undefined,
+          force: rec.force === true,
+          projects: projects.filter((p) => repoKeyForProject(p) === r.key).map((p) => p.name).sort((a, b) => a.localeCompare(b)),
+        },
+      ];
+    }),
+  );
+  return {
+    choices: PUSH_CHOICES,
+    labels: PUSH_CHOICE_LABELS,
+    defaultChoice: DEFAULT_PUSH_CHOICE,
+    defaults: fallback,
+    repos,
+    projects: Object.fromEntries(
+      projects.map((p) => {
+        const r = resolvePushPermissions(p, config);
+        return [
+          p.name,
+          {
+            repo: r.repo,
+            repoLabel: r.repoLabel,
+            newBranches: r.newBranches,
+            existingBranches: r.existingBranches,
+            newSource: r.newSource,
+            existingSource: r.existingSource,
+            forced: r.forced,
+            repoNewBranches: r.repoNewBranches,
+            repoExistingBranches: r.repoExistingBranches,
+            projectNewBranches: r.projectNewBranches,
+            projectExistingBranches: r.projectExistingBranches,
+          },
+        ];
+      }),
+    ),
+  };
 }
 
 const remoteWrites = new RemoteWrites({
@@ -967,7 +1119,9 @@ const remoteWrites = new RemoteWrites({
   onEvent: broadcast,
   onLog: log,
   timeoutSeconds: config.remoteWriteSeconds,
-  onPolicy: (policy, { by, why }) => setRemotePolicy(policy, { by, why }),
+  // "Always allow" in the box is the project's own controls saying allow-all (see `grantPushControls`). It used to
+  // write a GLOBAL policy, which meant one reader's grant about one tree opened every other checkout on the board.
+  onPolicy: (policy, { by, request }) => grantPushControls(request, { by }),
   // A grant reaches the guard's own files too, so a tree the reader allowed does not have to reach the panel to
   // find that out — and a tree started to land keeps its permission across a panel restart.
   onGrant: () => void refreshGuards(),
@@ -1189,14 +1343,12 @@ const settingsOut = () => ({
   remoteBranchPolicies: Object.fromEntries(
     (registry?.projects || []).map((p) => [p.name, policyForProject(p, config.remoteBranchPolicy)]),
   ),
-  // The narrower per-remote question, resolved the same way: the project's own `allowPushWithoutAsking` over the
-  // top-level one, OFF unless the file literally says true, and never on for a project whose policy is `deny`. Both
-  // travel with every snapshot because the Settings REMOTES rows are drawn from these maps and a tab opened before
-  // another browser moved a switch has to agree with the file.
-  allowPushWithoutAsking: config.allowPushWithoutAsking === true,
-  allowPushWithoutAskingProjects: Object.fromEntries(
-    (registry?.projects || []).map((p) => [p.name, allowPushWithoutAskingFor(p, config).enabled]),
-  ),
+  // The TWO push controls: one for a new branch, one for an existing one, each one of
+  // allow-all / allow-name-gate / always-ask / never. `pushPermissions` carries the four values, every repository
+  // section, and every project's resolved pair; the page draws the card's selects and the Settings → Repo tab from
+  // it and never re-derives precedence. The legacy `remoteBranchPolicy` below is still READ for the brief paragraph
+  // (lib/jobs.js) and reported by the Permissions tab, but it no longer decides a push.
+  pushPermissions: pushPermissionsOut(),
   remoteWriteSeconds: config.remoteWriteSeconds,
   // Whether an agent may take a worktree off the disk by itself once its work has landed, and which projects that
   // would actually apply to. The switch is the board's veto; the list is the projects that carry their own
@@ -4487,15 +4639,19 @@ const server = createServer(async (req, res) => {
       });
     }
 
-    // MAY THIS REMOTE BE PUSHED WITHOUT ASKING? The resolved switch for ONE checkout, in the shape an assistant can
-    // read without knowing config.json exists. `?path=` names the tree (a subdirectory of a project resolves to the
-    // project that owns it, the same longest-prefix rule the reply brief uses), `?project=` names a row. With neither,
-    // the global default is the honest answer — which is also what the guard would decide for an unowned tree.
+    // WHAT WOULD A PUSH MEET? The two controls resolved for ONE checkout, in the shape an assistant can read without
+    // knowing config.json exists. `?path=` names the tree (a subdirectory of a project resolves to the project that
+    // owns it, the same longest-prefix rule the reply brief uses), `?project=` names a row; `?branch=` names the ref
+    // and `?new=1` says it does not exist on the remote yet. Without a branch the answer reports both controls, and
+    // `ask` is true when EITHER of them would park — the safe reading for a caller that has not said which it means.
     if (route === "/api/remote-write/allow-push" && req.method === "GET") {
       const asked = String(url.searchParams.get("path") || url.searchParams.get("worktree") || "").trim();
       const named = String(url.searchParams.get("project") || "").trim();
       const project = (named ? (registry.projects || []).find((p) => p.name === named) || null : null) || (asked ? projectOfTree(asked) : null);
-      const answer = project ? allowPushWithoutAskingFor(project, config) : allowPushWithoutAskingForPath(asked);
+      const branch = String(url.searchParams.get("branch") || "").trim();
+      const isNew = url.searchParams.get("new") === "1" || url.searchParams.get("new") === "true";
+      const answer = resolvePushPermissions(project || {}, config);
+      const answered = branch ? permissionForPush(answer, { branch, isNew }) : pushModeFor(answer);
       const remote = String(project?.remote || "");
       const where = project?.name ? `${project.name}${asked ? ` (${cleanPath(asked)})` : ""}` : asked ? cleanPath(asked) : "";
       return sendJson(res, 200, {
@@ -4503,18 +4659,26 @@ const server = createServer(async (req, res) => {
         path: cleanPath(asked || project?.path || "") || null,
         project: project?.name || null,
         remote: remote || null,
-        policy: answer.policy,
-        allowPushWithoutAsking: answer.enabled,
-        source: answer.source,
-        denied: answer.denied,
-        // What the assistant may DO, not just what the setting says: `ask` is true only where a push would park on
-        // the reader's permission box, and `say` is one sentence it can repeat to the reader.
-        ask: !answer.enabled && !answer.denied,
-        say: answer.denied
-          ? `Remote writes are refused outright for ${where || "that checkout"} (remoteBranchPolicy: deny) — nothing may be pushed there, and the Allow push without asking switch cannot change that.`
-          : answer.enabled
-            ? `Allow push without asking is ON for ${where || "that checkout"}: a push to ${remote || "its remote"} goes through without a question. It is a permission, not an instruction — push only when the work is meant to land.`
-            : `Allow push without asking is OFF for ${where || "that checkout"}: ask the reader with a clarify before any push, or report the branch instead.`,
+        repo: answer.repo,
+        repoLabel: answer.repoLabel,
+        forced: answer.forced,
+        newBranches: answer.newBranches,
+        existingBranches: answer.existingBranches,
+        newSource: answer.newSource,
+        existingSource: answer.existingSource,
+        branch: branch || null,
+        isNew: Boolean(branch) && isNew,
+        // What the assistant may DO, not only what the settings say: allow = go ahead, ask = clarify first,
+        // refuse = do not push at all and do not offer the box.
+        permission: answered,
+        ask: answered === "ask",
+        denied: answered === "refuse",
+        say:
+          answered === "refuse"
+            ? `A push from ${where || "that checkout"} is refused outright by its push control (never) — nothing may be pushed there, and no permission box is offered.`
+            : answered === "allow"
+              ? `A push from ${where || "that checkout"} to ${remote || "its remote"} goes through without a question${branch ? ` for ${branch}` : ""}. It is a permission, not an instruction — push only when the work is meant to land.`
+              : `A push from ${where || "that checkout"} parks on the reader's permission box. Ask the reader with a clarify, or report the branch instead.`,
       });
     }
 
@@ -4543,23 +4707,27 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true, id: rec.id });
     }
 
-    // THE GUARD ASKING. A local-only worktree's `git push` reaches here (lib/push-guard.js writes the hook that
-    // calls it) and this is what draws the permission box. Three answers, and the hook reads them off the body:
-    //   allowed:true          — go ahead (the setting allows it, the tree was started to land, or a grant stands)
-    //   refused:true          — no, and no question to ask (the setting is `deny`)
+    // THE GUARD ASKING. A worktree whose push control says always-ask (or name-gate and the name does not pass)
+    // reaches here (lib/push-guard.js writes the hook that calls it) and this is what draws the permission box.
+    // Three answers, and the hook reads them off the body:
+    //   allowed:true          — go ahead (the control allows it, the tree was started to land, or a grant stands)
+    //   refused:true          — no, and no question to ask (the control is never)
     //   id + deadline         — a question is parked in the dock; the hook polls the status route for the answer
     if (route === "/api/remote-write/request" && req.method === "POST") {
       if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
       const worktree = String(body.worktree || "");
-      // The project that owns this tree decides, not the global default (which is local-only for every other
-      // checkout): a repo that lands by PR is allowed here, and one whose branches merge into a parent is refused.
+      // The project that owns this tree decides, from ITS two controls: a new branch and an existing one can carry
+      // different answers, and a push of several refs is decided by the strictest of them.
       const found = spawnFeature.projectForPath(worktree);
       const policy = policyForProject(found, config.remoteBranchPolicy);
-      // The per-remote switch is a GRANT layered on the policy, resolved for the project that owns the tree. `deny`
-      // already won inside the resolver, so decision() still refuses before it ever reads this.
-      const gate = allowPushWithoutAskingFor(found, config);
-      const decision = remoteWrites.decision(worktree, policy, { allowPushWithoutAsking: gate.enabled });
+      const push = resolvePushPermissions(found || {}, config);
+      const listed = branchesInPushRefs(body.refs);
+      const pushed = listed.length
+        ? listed
+        : [{ branch: String(body.branch || ""), isNew: body.isNew === true }];
+      const mode = strictestPermission(pushed.map((b) => permissionForPush(push, b)));
+      const decision = remoteWrites.decision(worktree, policy, { pushMode: mode });
       if (decision.allowed) {
         // A one-shot grant is spent by the write it was given for.
         if (decision.consume) remoteWrites.spend(worktree);
@@ -4576,11 +4744,11 @@ const server = createServer(async (req, res) => {
           why: decision.why,
           command: `git push ${String(body.remote || "origin")} ${String(body.branch || "<branch>")}   — from ${cleanPath(worktree)}`,
         });
-        return sendJson(res, 200, { allowed: true, why: decision.why, policy });
+        return sendJson(res, 200, { allowed: true, why: decision.why, permission: mode, newBranches: push.newBranches, existingBranches: push.existingBranches, repo: push.repo, forced: push.forced, policy });
       }
       if (!decision.ask) {
-        log(`remote write refused without asking: ${cleanPath(worktree)} (${decision.why}, policy ${policy})`);
-        return sendJson(res, 200, { allowed: false, refused: true, why: decision.why, policy });
+        log(`remote write refused without asking: ${cleanPath(worktree)} (${decision.why}, ${push.repo} new ${push.newBranches} / existing ${push.existingBranches})`);
+        return sendJson(res, 200, { allowed: false, refused: true, why: decision.why, permission: mode, newBranches: push.newBranches, existingBranches: push.existingBranches, repo: push.repo, forced: push.forced, policy });
       }
       const remote = String(body.remote || "") || found?.remote || "";
       const branch = String(body.branch || "");
@@ -4593,7 +4761,7 @@ const server = createServer(async (req, res) => {
         refs: String(body.refs || ""),
         title: `${path.basename(worktree || "") || worktree} wants to push`,
         command: `git push ${remote || "<remote>"} ${branch || "<branch>"}   — from ${cleanPath(worktree)}${body.remoteUrl ? ` (${String(body.remoteUrl).slice(0, 120)})` : ""}`,
-        description: "a worker in this LOCAL-ONLY worktree is trying to put a branch on the remote. Nothing is pushed until you answer, and Deny leaves the remote untouched.",
+        description: "a worker is trying to put a branch on the remote, and this project's push control says to ask. Nothing is pushed until you answer, and Deny leaves the remote untouched.",
       });
       return sendJson(res, 200, {
         allowed: false,
@@ -4706,57 +4874,48 @@ const server = createServer(async (req, res) => {
       }
     }
 
-    // The setting itself. Written into this panel's config.json (with every other key left exactly as it was),
-    // pushed into the guards' own copies, and broadcast so a second tab sees it at once.
-    if (route === "/api/settings/remote-branches" && req.method === "POST") {
-      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
-      const body = await readBody(req).catch(() => ({}));
-      const wanted = String(body.policy || "").trim().toLowerCase();
-      if (!POLICIES.includes(wanted)) {
-        return sendJson(res, 400, { error: `the setting must be one of: ${POLICIES.join(", ")}`, settings: settingsOut() });
-      }
-      const out = await setRemotePolicy(wanted, { by: "the Settings row" });
-      if (out.error) return sendJson(res, 500, { error: out.error, settings: settingsOut() });
-      return sendJson(res, 200, {
-        ok: true,
-        ...out,
-        settings: settingsOut(),
-        guards: guardReport(),
-        note:
-          wanted === "allow"
-            ? "saved — remote writes go through without asking from now on (the guard's own copy says so too)"
-            : wanted === "deny"
-              ? "saved — remote writes are refused outright, and the box will not even be offered"
-              : "saved — branches stay local unless you allow a write in the permission box",
-      });
-    }
-
-    // One project's "Allow pushing without asking first" switch. The tab's own route: the browsable settings
-    // (`GET /api/config`, and the snapshot's `settings`) carry the resolved values; this writes one of them. The
-    // answer carries the settings again so a second tab repaints from the server's copy rather than its own guess.
-    if (route === "/api/settings/remote-push" && req.method === "POST") {
+    // ONE PROJECT'S TWO CONTROLS. The card's selects and the Settings → Repo tab both write here, one kind at a
+    // time. The value must be one of the four — anything else is a 400 rather than a guess — and a project under a
+    // repo force-override is a 409 naming the repository, because that select is rendered disabled and a hand-written
+    // request must not slip past the same rule the page shows.
+    if (route === "/api/settings/push-project" && req.method === "POST") {
       if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
       const name = String(body.project || "").trim();
-      // A boolean or nothing: "yes", "on" and 1 are somebody's editor, and guessing at them is how a switch that was
-      // meant OFF ends up ON.
-      if (body.allow !== true && body.allow !== false) {
-        return sendJson(res, 400, { error: "allow must be true or false", settings: settingsOut() });
+      const kind = pushKindOf(body.kind);
+      if (!kind) return sendJson(res, 400, { error: "kind must be new or existing", settings: settingsOut() });
+      if (!PUSH_CHOICES.includes(String(body.value || "").trim().toLowerCase())) {
+        return sendJson(res, 400, { error: `value must be one of: ${PUSH_CHOICES.join(", ")}`, settings: settingsOut() });
       }
-      const out = await setProjectAllowPushWithoutAsking(name, body.allow, { by: "the REMOTES row" });
+      const out = await setProjectPushSetting(name, { [kind]: body.value }, { by: "the project card" });
       if (out.error) return sendJson(res, out.status || 500, { error: out.error, settings: settingsOut() });
-      return sendJson(res, 200, {
-        ok: true,
-        project: name,
-        allow: out.allow,
-        stored: out.stored,
-        settings: settingsOut(),
-        note: out.allow
-          ? "saved — a push from this project's worktrees goes through without asking"
-          : out.stored
-            ? "saved — but this project's remoteBranchPolicy is deny, which wins: nothing may be pushed there"
-            : "saved — a push from this project's worktrees asks you in the permission box first",
-      });
+      return sendJson(res, 200, { ok: true, project: name, resolved: out.resolved, settings: settingsOut(), note: `saved — ${name}: ${kind === "newBranches" ? "new" : "existing"} branches ${out.resolved[kind]}` });
+    }
+
+    // ONE REMOTE REPOSITORY'S DEFAULTS (and its force-override). A repo section edits BOTH controls and the toggle
+    // through this route, because they are one record in config.json and two writers would be two chances to lose a
+    // key. The answer carries the settings again so every open tab repaints from the server's copy.
+    if (route === "/api/settings/push-repo" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const repo = String(body.repo || "").trim();
+      const patch = {};
+      if (body.kind !== undefined || body.value !== undefined) {
+        const kind = pushKindOf(body.kind);
+        if (!kind) return sendJson(res, 400, { error: "kind must be new or existing", settings: settingsOut() });
+        if (!PUSH_CHOICES.includes(String(body.value || "").trim().toLowerCase())) {
+          return sendJson(res, 400, { error: `value must be one of: ${PUSH_CHOICES.join(", ")}`, settings: settingsOut() });
+        }
+        patch[kind] = body.value;
+      }
+      if (body.force !== undefined) {
+        if (typeof body.force !== "boolean") return sendJson(res, 400, { error: "force must be true or false", settings: settingsOut() });
+        patch.force = body.force;
+      }
+      if (!Object.keys(patch).length) return sendJson(res, 400, { error: "nothing to save: send kind+value, force, or both", settings: settingsOut() });
+      const out = await setRepoPushSetting(repo, patch, { by: "the Settings → Repo tab" });
+      if (out.error) return sendJson(res, out.status || 500, { error: out.error, settings: settingsOut() });
+      return sendJson(res, 200, { ok: true, repo, record: out.record, settings: settingsOut(), note: `${repo}: ${out.record.force ? "force-override ON — this repository's values win for every project in it" : "each project's own values win"}` });
     }
 
     // Put the guard in (or take it out of) the worktrees of a project, or in every local-only tree the board
@@ -5890,10 +6049,12 @@ const server = createServer(async (req, res) => {
         log(`merge ${row.branch} -> ${base} in ${project.name}: job ${job.id} (${job.status})`);
         return { status: 202, body: { job, ...preview } };
       };
-      // The MERGE flow asks under this project's policy too: a repo that lands by PR is answered from its own
-      // setting, and one that is local-only asks the reader like anything else.
+      // The MERGE flow asks under this project's two controls too: its last phase pushes the BASE branch, which is an
+      // EXISTING branch, so the existing-branch control is the one that decides. `never` refuses the start outright
+      // (no box), `always-ask` parks it, and allow/name-gate start it.
+      const mergePush = resolvePushPermissions(project, config);
       const decision = remoteWrites.decision(worktree, policyForProject(project, config.remoteBranchPolicy), {
-        allowPushWithoutAsking: allowPushWithoutAskingFor(project, config).enabled,
+        pushMode: permissionForPush(mergePush, { branch: base, isNew: false }),
       });
       if (decision.allowed) {
         // A one-shot grant is spent by the write it was granted for.

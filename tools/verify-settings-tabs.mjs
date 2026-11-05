@@ -34,8 +34,8 @@ import { startPanel } from "./panel-testkit.mjs";
 const WIDE = { width: 1400, height: 900 };
 const TAB_KEY = "wtgui.settingsTab";
 const RECT_KEY = "wtgui.settingsRect";
-const KEYS = ["display", "cards", "board", "branches", "data", "gateway", "skills", "updates", "permissions", "pipeline", "bundles"];
-const LABELS = ["Display", "Cards", "Board", "Branches", "Data", "Gateway", "Skills", "Updates", "Permissions", "Pipeline", "Bundles"];
+const KEYS = ["display", "cards", "board", "repo", "data", "gateway", "skills", "updates", "permissions", "pipeline", "bundles"];
+const LABELS = ["Display", "Cards", "Board", "Repo", "Data", "Gateway", "Skills", "Updates", "Permissions", "Pipeline", "Bundles"];
 const MIN = { w: 320, h: 240 };
 const EDGE = 8;
 
