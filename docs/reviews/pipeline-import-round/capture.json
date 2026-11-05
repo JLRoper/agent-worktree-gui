@@ -1,0 +1,204 @@
+{
+ "at": "2026-11-05T06:41:46.584Z",
+ "tree": ".",
+ "live": "http://127.0.0.1:8090/api/pipelines",
+ "document": "pipeline.json",
+ "panel": {
+  "base": "http://127.0.0.1:51519"
+ },
+ "cases": [
+  {
+   "case": "1 · ?doc=<url> — the factory index",
+   "at": "2026-11-05T06:41:49.465Z",
+   "source": "document",
+   "shape": "index",
+   "ids": "poc-breaking-suite",
+   "docSource": "http://127.0.0.1:8090/api/pipelines",
+   "sha256": "64b6edf2c5fe7b7ea6327f09027a1d6b981c9d3e16380b4a0f6304a1f36a452e",
+   "stagesPrinted": 9,
+   "cards": 1,
+   "nodesDrawn": 9,
+   "inView": 9,
+   "hiddenPx": 0,
+   "layout": "book",
+   "status": "9 stages 9 nodes drawn 8 arrows · 0 labelled 0 loops smallest label 11 px 3 rows of 3 fits the card · 9 of 9 in view",
+   "cardTitle": "POC-breaking suite — six layer questions, two answered",
+   "provenance": "IMPORTEDdocument poc-breaking-suite · drawing http://127.0.0.1:8090/api/pipelines · sha256 64b6edf2c5fe7b7ea6327f09027a1d6b981c9d3e16380b4a0f6304a1f36a452e · 111 bytes · 9 stage nodes in 1 card · read 2026-11-05 06:41:48 UTC. The source is a pipeline index — 1 pipeline, 9 stages counted — an index carries no stage names.",
+   "errorVisible": false,
+   "errorText": "",
+   "docUrl": "http://127.0.0.1:8090/api/pipelines",
+   "fit": {
+    "layout": "book",
+    "pressed": true,
+    "hiddenBefore": 238,
+    "perRow": 3
+   },
+   "stagesInDocument": 9,
+   "shot": {
+    "file": "01-doc-url-index.png",
+    "bytes": 139958,
+    "sha256": "c07ebe18e34b430b6f33fed26a27b0111876caec1a6c6afbcd427ccaef8a4ba6",
+    "clip": {
+     "x": 0,
+     "y": 22,
+     "width": 1400,
+     "height": 1177
+    }
+   },
+   "drawingShot": {
+    "file": "01-draw-url-index.png",
+    "bytes": 23718,
+    "sha256": "35d1ebf173f22afbe6b1ce5d8523cf2164638dfbf965b45b0d72bbfdf3578c1b"
+   }
+  },
+  {
+   "case": "2 · the same bytes through the file input",
+   "at": "2026-11-05T06:41:49.687Z",
+   "source": "document",
+   "shape": "index",
+   "ids": "poc-breaking-suite",
+   "docSource": "file: factory-index.json",
+   "sha256": "64b6edf2c5fe7b7ea6327f09027a1d6b981c9d3e16380b4a0f6304a1f36a452e",
+   "stagesPrinted": 9,
+   "cards": 1,
+   "nodesDrawn": 9,
+   "inView": 9,
+   "hiddenPx": 0,
+   "layout": "book",
+   "status": "9 stages 9 nodes drawn 8 arrows · 0 labelled 0 loops smallest label 11 px 3 rows of 3 fits the card · 9 of 9 in view",
+   "cardTitle": "POC-breaking suite — six layer questions, two answered",
+   "provenance": "IMPORTEDdocument poc-breaking-suite · drawing file: factory-index.json · sha256 64b6edf2c5fe7b7ea6327f09027a1d6b981c9d3e16380b4a0f6304a1f36a452e · 111 bytes · 9 stage nodes in 1 card · read 2026-11-05 06:41:49 UTC. The source is a pipeline index — 1 pipeline, 9 stages counted — an index carries no stage names.",
+   "errorVisible": false,
+   "errorText": "",
+   "fit": {
+    "layout": "row",
+    "pressed": false,
+    "hiddenBefore": 0
+   },
+   "stagesInDocument": 9,
+   "roundTrip": true,
+   "sameDrawing": true,
+   "shot": {
+    "file": "02-doc-file-index.png",
+    "bytes": 139717,
+    "sha256": "2e9e997c13b86c556c5cfa50f47b0bec5adf38d02114b5c616f1cf9871f7844f",
+    "clip": {
+     "x": 0,
+     "y": 22,
+     "width": 1400,
+     "height": 1177
+    }
+   },
+   "drawingShot": {
+    "file": "02-draw-file-index.png",
+    "bytes": 23718,
+    "sha256": "35d1ebf173f22afbe6b1ce5d8523cf2164638dfbf965b45b0d72bbfdf3578c1b"
+   }
+  },
+  {
+   "case": "3 · the studio's export of a second pipeline",
+   "at": "2026-11-05T06:41:50.665Z",
+   "source": "document",
+   "shape": "studio",
+   "ids": "architects",
+   "docSource": "file: pipeline.json",
+   "sha256": "f80dfd908ee093217c4e138084c04ee232eb594943eb015df42ec5bc6b9533aa",
+   "stagesPrinted": 4,
+   "cards": 1,
+   "nodesDrawn": 4,
+   "inView": 4,
+   "hiddenPx": 0,
+   "layout": "row",
+   "status": "4 stages 4 nodes drawn 3 arrows · 3 labelled 0 loops smallest label 11 px fits the card 4 of 4 in view",
+   "cardTitle": "Three-architect review segment",
+   "provenance": "IMPORTEDdocument architects · drawing file: pipeline.json · sha256 f80dfd908ee093217c4e138084c04ee232eb594943eb015df42ec5bc6b9533aa · 67415 bytes · 4 stage nodes in 1 card · read 2026-11-05 06:41:50 UTC. The source is an exported studio document — 4 stages, 3 handoffs, 1 gate.",
+   "errorVisible": false,
+   "errorText": "",
+   "fit": {
+    "layout": "row",
+    "pressed": false,
+    "hiddenBefore": 0
+   },
+   "stagesInDocument": 4,
+   "roundTrip": false,
+   "shot": {
+    "file": "03-studio-document.png",
+    "bytes": 163092,
+    "sha256": "849fc72893823f5fc866538a3b3f00047612ede79bdec5de950e905ce9fc66f4",
+    "clip": {
+     "x": 0,
+     "y": 22,
+     "width": 1400,
+     "height": 1200
+    }
+   },
+   "drawingShot": {
+    "file": "03-draw-studio-document.png",
+    "bytes": 27319,
+    "sha256": "b88c8c3984c11fc46fc75af354714b34fe4d58ae424f91ed90ef2fd2de3b055e"
+   }
+  },
+  {
+   "case": "4 · the refusal — a malformed document over the studio drawing",
+   "at": "2026-11-05T06:41:50.937Z",
+   "source": "document",
+   "shape": "studio",
+   "ids": "architects",
+   "docSource": "file: pipeline.json",
+   "sha256": "f80dfd908ee093217c4e138084c04ee232eb594943eb015df42ec5bc6b9533aa",
+   "stagesPrinted": 4,
+   "cards": 1,
+   "nodesDrawn": 4,
+   "inView": 4,
+   "hiddenPx": 0,
+   "layout": "row",
+   "status": "4 stages 4 nodes drawn 3 arrows · 3 labelled 0 loops smallest label 11 px fits the card 4 of 4 in view",
+   "cardTitle": "Three-architect review segment",
+   "provenance": "IMPORTEDdocument architects · drawing file: pipeline.json · sha256 f80dfd908ee093217c4e138084c04ee232eb594943eb015df42ec5bc6b9533aa · 67415 bytes · 4 stage nodes in 1 card · read 2026-11-05 06:41:50 UTC. The source is an exported studio document — 4 stages, 3 handoffs, 1 gate.",
+   "errorVisible": true,
+   "errorText": "Could not draw file: broken.json: not JSON — Expected double-quoted property name in JSON at position 27 (line 1 column 28). The page is still showing the last document it drew — nothing was cleared.",
+   "refusal": true,
+   "previous": {
+    "nodes": 4,
+    "sha256": "f80dfd908ee093217c4e138084c04ee232eb594943eb015df42ec5bc6b9533aa",
+    "ids": "architects"
+   },
+   "shot": {
+    "file": "04-refusal.png",
+    "bytes": 174782,
+    "sha256": "3732d24c029e78c853d1a26c4889210c3c14c99c431d1e8729e4db60c60daff0",
+    "clip": {
+     "x": 0,
+     "y": 22,
+     "width": 1400,
+     "height": 1243
+    }
+   }
+  }
+ ],
+ "notes": [],
+ "errors": [],
+ "liveIndex": {
+  "url": "http://127.0.0.1:8090/api/pipelines",
+  "bytes": 111,
+  "sha256": "64b6edf2c5fe7b7ea6327f09027a1d6b981c9d3e16380b4a0f6304a1f36a452e",
+  "ids": [
+   "poc-breaking-suite"
+  ],
+  "stages": 9
+ },
+ "studioDocument": {
+  "file": "pipeline.json",
+  "bytes": 67415,
+  "sha256": "f80dfd908ee093217c4e138084c04ee232eb594943eb015df42ec5bc6b9533aa",
+  "id": "architects",
+  "stages": 4,
+  "titles": [
+   "Review application architecture",
+   "Review data architecture",
+   "Review infrastructure architecture",
+   "Reconcile architecture decisions"
+  ]
+ },
+ "failures": []
+}

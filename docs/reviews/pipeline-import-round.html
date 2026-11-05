@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Each factory pipeline, re-opened in the map — three shots, one round trip, one refusal</title>
+<style>
+  :root {
+    --bg: #0e1116; --panel: #151a21; --panel2: #1b212a; --line: #2a3340; --text: #e6e9ef; --dim: #9aa5b4;
+    --dimmer: #6f7a89; --green: #7ee787; --red: #ff9c94; --amber: #f0c674; --blue: #9ecbff; --purple: #c8a6ff;
+    --mono: ui-monospace, "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+    --ui: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body { margin: 0; color: var(--text); font: 15px/1.62 var(--ui); }
+  .wrap { max-width: 1460px; margin: 0 auto; padding: 30px 24px 72px; }
+  .prose { max-width: 1080px; }
+  a { color: var(--blue); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  h1 { font-size: 27px; line-height: 1.22; margin: 4px 0 8px; letter-spacing: -0.2px; max-width: 1080px; }
+  h2 { font-size: 19px; margin: 44px 0 12px; padding-top: 16px; border-top: 1px solid var(--line); max-width: 1080px; }
+  h3 { font-size: 15.5px; margin: 26px 0 8px; color: var(--blue); }
+  p { margin: 9px 0; }
+  ul, ol { margin: 8px 0 8px 22px; padding: 0; }
+  li { margin: 5px 0; }
+  code, .mono { font-family: var(--mono); font-size: 12.8px; }
+  code { background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+  .kicker { color: var(--dimmer); font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; }
+  .sub { color: var(--dim); font-size: 16px; margin: 0 0 14px; max-width: 1040px; }
+  .meta { color: var(--dim); font-size: 12.5px; max-width: 1080px; }
+  .meta code { font-size: 12px; }
+  .lead { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--blue);
+          border-radius: 8px; padding: 14px 18px; margin: 18px 0; max-width: 1080px; }
+  .lead b { color: var(--green); }
+  nav { margin: 18px 0 8px; padding: 12px 16px; background: var(--panel); border: 1px solid var(--line);
+        border-radius: 8px; font-size: 13px; line-height: 1.9; max-width: 1080px; }
+  nav b { color: var(--dimmer); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.1em; }
+  nav a { margin: 0 10px 0 0; white-space: nowrap; }
+  table { border-collapse: collapse; width: 100%; max-width: 1400px; margin: 12px 0 22px; font-size: 13px; }
+  th, td { text-align: left; vertical-align: top; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+  th { color: var(--dimmer); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td code { font-size: 12.2px; }
+  figure { margin: 26px 0 34px; }
+  figure img { display: block; width: 100%; max-width: 1400px; height: auto; border: 1px solid var(--line);
+               border-radius: 8px; background: #0b0e13; }
+  figcaption { max-width: 1400px; margin-top: 10px; color: var(--dim); font-size: 13px; }
+  figcaption b { color: var(--text); }
+  figcaption .id { color: var(--purple); font-family: var(--mono); font-size: 12.6px; }
+  figcaption .sha { color: var(--dim); font-family: var(--mono); font-size: 11.6px; word-break: break-all; }
+  .tag { display: inline-block; font-size: 10.5px; letter-spacing: 0.07em; text-transform: uppercase;
+         padding: 1px 6px; border-radius: 999px; border: 1px solid var(--line); color: var(--dim); }
+  .tag.yes { color: var(--green); border-color: #2f5e39; }
+  .tag.no { color: var(--amber); border-color: #5b4a26; }
+  .tag.refused { color: var(--red); border-color: #5e3230; }
+  .box { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 18px;
+         margin: 16px 0; max-width: 1080px; }
+  .box h3 { margin-top: 0; }
+  pre { background: #0b0e13; border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px;
+        overflow-x: auto; font-family: var(--mono); font-size: 12.6px; line-height: 1.55; color: var(--text);
+        max-width: 1080px; }
+  .ok { color: var(--green); }
+  .bad { color: var(--red); }
+  .small { font-size: 12.5px; color: var(--dim); }
+  .end { max-width: 1080px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<p class="kicker">agent-worktree-gui · the pipeline map · import capture round</p>
+<h1>Each factory pipeline, re-opened in the map — three shots, one round trip, one refusal</h1>
+<p class="sub">Two documents that came out of the factory, drawn by <code>public/pipeline-map.html</code> through
+<code>?doc=</code> and through <code>open a document</code>, each shot printing the document's own id and the sha256 of
+the exact bytes beside the drawing — and one malformed document that must not take the drawing down.</p>
+
+<p class="meta">
+  branch <code>wtgui/capture-each-pipeline-ex-12b5fc</code> · base <code>origin/main</code> a108774 (1.16.2) ·
+  this branch <b>1.17.0</b>, head <code>b8bfef9</code> plus the commit that carries this page ·
+  page sources <code>pipelines.seed.json</code> 10f982246f16 · <code>public/pipeline-map.js</code> c2c07779ae64 ·
+  <code>public/core/pipeline-import.js</code> e8d1f6a7767b ·
+  factory <code>http://127.0.0.1:8090/api/pipelines</code> (ai-pipeline-factory 0.1.0, node v22.23.4) ·
+  capture run 2026-11-05 06:10:15 UTC (<code>date -u</code>: <code>Thu, Nov  5, 2026  6:10:15 AM</code>) ·
+  viewport 1400 px at <code>deviceScaleFactor</code> 1 · harness <code>tools/capture-pipeline-import.mjs</code> ·
+  ledger <a href="pipeline-import-round/capture.json"><code>pipeline-import-round/capture.json</code></a>
+</p>
+
+<nav>
+  <b>this page</b>
+  <a href="#answer">The answer</a>
+  <a href="#method">Method</a>
+  <a href="#documents">The three documents</a>
+  <a href="#cases">The four cases, measured</a>
+  <a href="#shots">The shots</a>
+  <a href="#roundtrip">Which is the round trip</a>
+  <a href="#notproved">What this does not prove</a>
+</nav>
+
+<h2 id="answer">The answer</h2>
+<div class="lead prose">
+  <p><b>Three drawings and one refusal, all four from documents the factory produced.</b> The factory's own index
+  (<code>?doc=http://127.0.0.1:8090/api/pipelines</code>) draws <b>9 counted stage nodes in 1 card</b>; the same
+  111 bytes through the file input draw the <b>same 9 nodes</b> from the <b>same sha256</b>
+  <code>64b6edf2…a452e</code>, and the two drawing crops are <b>byte-identical</b> (23,718 B, sha256
+  <code>35d1ebf1…8c1b</code>). The studio's export of a second pipeline (<span class="id">architects</span>, 4 named
+  stages) draws its <b>4 nodes in its own order</b>. A malformed document prints one red sentence naming the file and
+  <b>leaves the architects drawing standing</b> — 4 nodes, same sha256, same id, the sequence counter unmoved.</p>
+  <p>Every shot prints the document's id and the sha256 of the bytes it drew, because <b>this branch puts the id on
+  the provenance line</b> (<code>public/pipeline-map.js</code>): <code>document poc-breaking-suite · drawing
+  &lt;source&gt; · sha256 &lt;64 hex&gt; · 111 bytes · 9 stage nodes in 1 card</code>. Before this branch the line
+  named the source and the hash but not the document, so a shot could not be matched to a factory entry by the one
+  name the factory serves.</p>
+  <p>The import gate ran <span class="ok">36 passed, 0 failed</span> against the live factory, with
+  <code>--document</code> pointed at both the POC-breaking suite (9 stages) and the architects export (4 stages). On
+  the pre-change page the same gate is <span class="bad">2 failed, 34 passed</span> — both failures are the
+  document-id checks, which is the proof those two lines do the work.</p>
+</div>
+
+<h2 id="method">Method</h2>
+<div class="prose">
+<p>The sandbox panel is <code>tools/panel-testkit.mjs</code>'s <code>startPanel({})</code> — its own data dir and a
+free port, no scan traffic repainting the page. The page is the committed <code>public/pipeline-map.html</code> from
+this tree; the documents are read live, not from a fixture:</p>
+<pre>node tools/capture-pipeline-import.mjs \
+  --live http://127.0.0.1:8090/api/pipelines \
+  --document &lt;ai-development-factory&gt;/docs/pipelines/architects/pipeline.json \
+  --shots &lt;scratch&gt; --json &lt;scratch&gt;/capture.json
+
+node tools/verify-pipeline-import.mjs --live http://127.0.0.1:8090/api/pipelines \
+  --document &lt;ai-development-factory&gt;/docs/pipelines/architects/pipeline.json</pre>
+<p>The capture tool asserts nothing about a constant: each case's expected stage count comes from the document it was
+handed (the index's <code>stageCount</code>, the studio document's <code>stages[]</code>), so a second pipeline is
+certified by its own numbers. The shots are the region from the page's kicker to the card's last row, at 1400 CSS px
+and <code>deviceScaleFactor</code> 1, so each figure is 1:1 with the pixels the numbers describe.</p>
+<p><b>One control was pressed, and it is the page's own.</b> A nine-stage chain at 1:1 is wider than the card
+(<code>.wrap</code> caps at 1400 px), so the default row layout hides its tail — the earlier reading was
+<code>358 px past the card — scroll · 7 of 9 in view</code>. The capture presses <code>book · rows of N</code> (3 per
+row) for that chain, and the card's own status line then reads <code>3 rows of 3 · fits the card · 9 of 9 in view</code>.
+The four-stage document is one row, untouched: <code>fits the card · 4 of 4 in view</code>. Book mode is refused for
+it (its three arrows converge on S2), and the page says so — which is why it is photographed in row mode.</p>
+</div>
+
+<h2 id="documents">The three documents</h2>
+<table>
+  <thead>
+    <tr><th>document</th><th>where it came from</th><th class="num">bytes</th><th>sha256</th><th>shape</th><th>stages</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><span class="id">poc-breaking-suite</span></td>
+      <td><code>GET http://127.0.0.1:8090/api/pipelines</code> — the factory's live index</td>
+      <td class="num">111</td>
+      <td><span class="sha">64b6edf2c5fe7b7ea6327f09027a1d6b981c9d3e16380b4a0f6304a1f36a452e</span></td>
+      <td>index — <code>[{id, title, stageCount}]</code></td>
+      <td class="num">9 <span class="small">(counted, not named)</span></td>
+    </tr>
+    <tr>
+      <td><span class="id">poc-breaking-suite</span> (same bytes)</td>
+      <td>the same 111 bytes saved as <code>factory-index.json</code> and read through <code>open a document</code></td>
+      <td class="num">111</td>
+      <td><span class="sha">64b6edf2c5fe7b7ea6327f09027a1d6b981c9d3e16380b4a0f6304a1f36a452e</span></td>
+      <td>index</td>
+      <td class="num">9</td>
+    </tr>
+    <tr>
+      <td><span class="id">architects</span></td>
+      <td>the studio's semantic export, <code>ai-development-factory/docs/pipelines/architects/pipeline.json</code>
+          (<code>{version, project, stages[], handoffs[], gates[], roles[]}</code>, <code>position</code> stripped,
+          keys sorted — what <code>semanticPipeline()</code> in <code>tools/pipeline-studio/core.js</code> writes)</td>
+      <td class="num">67,415</td>
+      <td><span class="sha">f80dfd908ee093217c4e138084c04ee232eb594943eb015df42ec5bc6b9533aa</span></td>
+      <td>studio — one <code>project</code>, 4 named stages, 3 handoffs, 1 gate</td>
+      <td class="num">4</td>
+    </tr>
+  </tbody>
+</table>
+<p class="small prose"><b>The factory serves one pipeline.</b> <code>GET /api/pipelines</code> answers a one-entry
+index today — <code>[{"id":"poc-breaking-suite","title":"POC-breaking suite — six layer questions, two answered",
+"stageCount":9}]</code> — and the service has no route that serves a full document. So "one more factory pipeline"
+cannot be a second index entry: it is the studio's export from the same factory project, which is the other source
+the brief names. That is a fact about the factory, not a gap in this round.</p>
+
+<h2 id="cases">The four cases, measured</h2>
+<table>
+  <thead>
+    <tr><th>#</th><th>entry</th><th>document</th><th class="num">stages in doc</th><th class="num">nodes drawn</th>
+        <th>layout</th><th>card's own sentence</th><th>verdict</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1</td><td><code>?doc=&lt;url&gt;</code></td><td><span class="id">poc-breaking-suite</span> · index</td>
+      <td class="num">9</td><td class="num">9</td><td>book, 3 rows of 3</td>
+      <td><code>3 rows of 3 · fits the card · 9 of 9 in view</code></td>
+      <td><span class="tag yes">drawn</span></td>
+    </tr>
+    <tr>
+      <td>2</td><td>file input</td><td><span class="id">poc-breaking-suite</span> · index, same bytes</td>
+      <td class="num">9</td><td class="num">9</td><td>book, 3 rows of 3</td>
+      <td><code>3 rows of 3 · fits the card · 9 of 9 in view</code></td>
+      <td><span class="tag yes">round trip</span></td>
+    </tr>
+    <tr>
+      <td>3</td><td>file input</td><td><span class="id">architects</span> · studio export</td>
+      <td class="num">4</td><td class="num">4</td><td>row, 1:1</td>
+      <td><code>fits the card · 4 of 4 in view</code></td>
+      <td><span class="tag no">drawn, not a round trip</span></td>
+    </tr>
+    <tr>
+      <td>4</td><td>file input, malformed</td><td>none — <code>broken.json</code> is refused</td>
+      <td class="num">—</td><td class="num">4 <span class="small">(the previous drawing)</span></td>
+      <td>unchanged</td>
+      <td><code>4 stages · 4 nodes drawn … fits the card · 4 of 4 in view</code></td>
+      <td><span class="tag refused">refused, drawing kept</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="shots">The shots</h2>
+
+<figure>
+  <a href="pipeline-import-round/01-doc-url-index.png"><img src="pipeline-import-round/01-doc-url-index.png"
+    alt="The map drawing the factory's index for poc-breaking-suite: provenance line above, nine counted stage nodes in three rows of three"></a>
+  <figcaption>
+    <b>1 · the factory's index, by <code>?doc=</code>.</b> <span class="id">poc-breaking-suite</span>,
+    <code>http://127.0.0.1:8090/api/pipelines</code>, 111 bytes, sha256
+    <span class="sha">64b6edf2c5fe7b7ea6327f09027a1d6b981c9d3e16380b4a0f6304a1f36a452e</span>. The document counts
+    9 stages and does not name them, and the drawing says so twice: every node reads <em>counted only</em>, and the
+    provenance line ends <em>“The source is a pipeline index — 1 pipeline, 9 stages counted — an index carries no
+    stage names.”</em> 9 stage nodes drawn, 8 arrows, 11 px smallest label.
+  </figcaption>
+</figure>
+
+<figure>
+  <a href="pipeline-import-round/02-doc-file-index.png"><img src="pipeline-import-round/02-doc-file-index.png"
+    alt="The same nine-stage index drawing after the same bytes were opened through the file input"></a>
+  <figcaption>
+    <b>2 · the same bytes through <code>open a document</code>.</b> <span class="id">poc-breaking-suite</span>,
+    <code>file: factory-index.json</code>, 111 bytes, the <b>same</b> sha256
+    <span class="sha">64b6edf2c5fe7b7ea6327f09027a1d6b981c9d3e16380b4a0f6304a1f36a452e</span>. Same 9 nodes, same
+    3 rows of 3, same card sentence. The two drawing crops (the card's drawing element, without the page chrome) are
+    byte-identical — 23,718 B each, sha256 <span class="sha">35d1ebf173f22afbe6b1ce5d8523cf2164638dfbf965b45b0d72bbfdf3578c1b</span>
+    — so this is a round trip of the picture, not a resemblance.
+  </figcaption>
+</figure>
+
+<figure>
+  <a href="pipeline-import-round/03-studio-document.png"><img src="pipeline-import-round/03-studio-document.png"
+    alt="The map drawing the studio's export for architects: four named stages with roles, three handoffs converging on S2, and the gate row"></a>
+  <figcaption>
+    <b>3 · a second factory pipeline, by file.</b> <span class="id">architects</span> — the studio's semantic export,
+    67,415 bytes, sha256 <span class="sha">f80dfd908ee093217c4e138084c04ee232eb594943eb015df42ec5bc6b9533aa</span>.
+    Four <em>named</em> stages in the document's own order — <em>1 · Review application architecture</em> (role:
+    Application architect · agent), <em>2 · Review data architecture</em>, <em>3 · Review infrastructure
+    architecture</em>, <em>4 · Reconcile architecture decisions</em> (role: Review chair) — with its three handoffs
+    converging on S2 and gate <code>G1</code> below. Book mode is disabled for it and the button says why: its arrows
+    converge, so a row break would draw a sequence the document does not declare.
+  </figcaption>
+</figure>
+
+<figure>
+  <a href="pipeline-import-round/04-refusal.png"><img src="pipeline-import-round/04-refusal.png"
+    alt="The same architects drawing with a red refusal sentence above the controls, naming broken.json and the JSON parse error"></a>
+  <figcaption>
+    <b>4 · the refusal, over the standing drawing.</b> A malformed file (<code>broken.json</code>, a real export cut
+    before its first closing brace) prints one red sentence — <em>“Could not draw file: broken.json: not JSON —
+    Expected double-quoted property name in JSON at position 27 (line 1 column 28). The page is still showing the last
+    document it drew — nothing was cleared.”</em> The provenance line still names <span class="id">architects</span>
+    and its sha256, the card still draws its 4 nodes in 4 of 4 view, and the document sequence counter did not move:
+    nothing was drawn, and nothing was cleared.
+  </figcaption>
+</figure>
+
+<h2 id="roundtrip">Which shots are the round trip, and which are not</h2>
+<div class="prose">
+<table>
+  <thead><tr><th>shot</th><th>round trip?</th><th>why</th></tr></thead>
+  <tbody>
+    <tr><td>1 — <code>?doc=</code> the factory's index</td><td><span class="tag yes">one end</span></td>
+      <td>the first read of the 111 bytes the factory served.</td></tr>
+    <tr><td>2 — the same bytes by file input</td><td><span class="tag yes">the round trip</span></td>
+      <td>the same sha256 (<code>64b6edf2…</code>), the same 9 nodes, and the drawing crops byte-identical
+          (<code>35d1ebf1…</code>): the bytes survived the trip from the factory to a file and back onto the page
+          unchanged, and the page drew them identically.</td></tr>
+    <tr><td>3 — the studio's export of <span class="id">architects</span></td>
+      <td><span class="tag no">not a round trip</span></td>
+      <td>a different document, read once. It proves the map draws a second factory pipeline with its own stage
+          names, count and order — not that any bytes made a return trip.</td></tr>
+    <tr><td>4 — the refusal</td><td><span class="tag no">not a drawing at all</span></td>
+      <td>the malformed bytes are refused; the shot's value is that the previous drawing is still there.</td></tr>
+  </tbody>
+</table>
+<p>Strictly: <b>only shot 2 is the round trip</b>, and it is only a round trip <em>of shot 1</em> — the pair is one
+proof in two pictures. Shot 3 is the breadth (another pipeline, named stages), shot 4 is the failure path.</p>
+</div>
+
+<h2 id="notproved">What this does not prove</h2>
+<div class="prose">
+<ul>
+  <li><b>Not a second entry of the factory index.</b> The service holds one document; the second pipeline is the
+      studio's export, and the factory's index route still answers one entry. If the store gains a second pipeline,
+      this round says nothing about how its <code>stageCount</code> is computed.</li>
+  <li><b>Not the studio's own canvas.</b> The <code>architects</code> document was exported from the studio but the
+      studio itself was not opened; nothing here says the two surfaces draw it the same way.</li>
+  <li><b>Not every refusal.</b> One malformed JSON is photographed. The gate also drives a malformed <code>?doc=</code>
+      at boot, an empty document and a non-pipeline object, but those are assertions with no shot.</li>
+  <li><b>Not a file name that identifies the document.</b> The file path's source line prints the file's basename
+      (<code>file: pipeline.json</code>); the document's identity is the <code>document architects</code> prefix this
+      branch added, and the full path lives in this page's Method.</li>
+  <li><b>Not a live-panel reading.</b> Both surfaces are a sandboxed panel on a free port serving this tree's
+      <code>public/**</code>; the reader's own panel was not opened for these shots.</li>
+</ul>
+
+<div class="box">
+  <h3>Where these live</h3>
+  <p>The shots and the ledger are under <code>docs/reviews/pipeline-import-round/</code> beside this page, like every
+  earlier capture round (<code>pipeline-flow-visual-round-5b/</code>, <code>-5c/</code>,
+  <code>pipeline-readability-audit/</code>). <b>No rows were added to <code>docs/reports/</code></b>: in this repo that
+  directory holds four standalone operational reports and has no index or row convention to extend — the reports it
+  carries are about the panel's own operation (worktree retirement, the reset store), not about a capture round. The
+  capture ledger is this round's record, and it is one file beside the pictures it describes.</p>
+</div>
+
+<p class="small end">Reproduce: <code>node tools/capture-pipeline-import.mjs</code> with the two arguments in Method,
+writing to a scratch directory (a run pointed at <code>docs/reviews/pipeline-import-round</code> overwrites the
+committed shots, whose hashes are in the ledger). The page's own version line reads 1.17.0 and its sources ledger
+names <code>public/pipeline-map.js</code> c2c07779ae64.</p>
+
+</div>
+</div>
+</body>
+</html>
