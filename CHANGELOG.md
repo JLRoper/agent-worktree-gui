@@ -4,16 +4,34 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.27.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.27.1 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-319 releases from v0.1.0 (2026-10-20) to v1.27.0 (2026-11-05), 1110 commits between the tags. Every release is anchored by an
+320 releases from v0.1.0 (2026-10-20) to v1.27.1 (2026-11-05), 1115 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.27.1 — 2026-11-05 · 5 commits
+
+[`dfae827`](https://github.com/JLRoper/agent-worktree-gui/commit/dfae827e8ac3333fad31ec3c72e98651a2fcd0b4) · [compare v1.27.0...v1.27.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.27.0...v1.27.1)
+
+### Fixed
+
+- fix: the capture ledger names its paths relatively, so the repo's own gate passes ([`3efbb93`](https://github.com/JLRoper/agent-worktree-gui/commit/3efbb9330c3d97f62273f7932ffccb4d7d1436cf))
+
+### Docs & tests
+
+- docs: render the changelog — 319 releases ([`2ffb933`](https://github.com/JLRoper/agent-worktree-gui/commit/2ffb933d4085119ff061f85867f6a09c6c744567))
+- docs: four frames of the settings pipeline tabs, and the harness that takes them ([`8f98628`](https://github.com/JLRoper/agent-worktree-gui/commit/8f98628277ffae815049cf909fb026c1be2ea5e4))
+- docs: say which frames a re-run reproduces byte for byte ([`2d1b1e5`](https://github.com/JLRoper/agent-worktree-gui/commit/2d1b1e5303db280a7431ff4f4e4559bf46a6efaa))
+
+### Other
+
+- chore: 1.27.1 — the version this landing carries ([`dfae827`](https://github.com/JLRoper/agent-worktree-gui/commit/dfae827e8ac3333fad31ec3c72e98651a2fcd0b4))
 
 ## v1.27.0 — 2026-11-05 · 3 commits
 

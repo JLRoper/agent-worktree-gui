@@ -11106,7 +11106,7 @@ function projectSection(name) {
     </div>
     <div class="project-head meta-line">
       <span class="mono dim">${mainLine}</span><span class="spacer"></span>${board}${tip}
-      <span class="dimmer mono">${p.fetchNote ? esc(p.fetchNote) + " · " : ""}fetched ${relTime(p.fetchedAt)} ago</span>${hostChipHtml(name)}
+      <span class="dimmer mono">${p.fetchNote ? esc(p.fetchNote) + " · " : ""}fetched ${relTime(p.fetchedAt)} ago</span>${hostChipHtml(name)}${pushControlsHtml(name)}
     </div>
     ${hostPanelHtml(name)}
     <div class="wt-scroll">
@@ -12306,6 +12306,11 @@ function applySnapshot(data) {
   // sections on screen are still valid and a full re-render would be pure cost.
   const beforeSig = [...state.projects.keys()].sort().join("|");
   state.settings = data.settings || state.settings;
+  // The push controls ride every snapshot, and a project's repository is only known once discovery has probed its
+  // remote URL. The cards and the Settings sections are repainted here so that fact arrives where it is drawn,
+  // without waiting for a full board render.
+  paintPushPermissions();
+  syncPushControls();
   // The folders list is drawn from `settings`, which every snapshot carries: repaint only when the list actually
   // moved (a settings write in another tab, a hand-edited config), so a board ticking every few seconds does not
   // rebuild the rows — or stat the folders — for nothing.
@@ -16815,7 +16820,11 @@ function settingsTabKey() {
   const keys = settingsTabPanels().map((panel) => panel.dataset.settingsGroup);
   try {
     const raw = localStorage.getItem(SETTINGS_TAB_KEY);
-    if (raw && keys.includes(raw)) return raw;
+    // A tab RENAMED keeps the reader on it: "Branches" became "Repo" in this build, and falling back to Display
+    // for a key that still names the same panel would read as a forgotten choice. The old key is not rewritten
+    // here; the next select writes the new one.
+    const wanted = raw === "branches" && keys.includes("repo") ? "repo" : raw;
+    if (wanted && keys.includes(wanted)) return wanted;
   } catch {
     /* private mode */
   }
@@ -18769,9 +18778,9 @@ function toggleSettings(open = null) {
   // The bundle and every assistant's queue are two more reads the reader may open this window to see: refresh them
   // when their answer is old, so the tab is current on the first press after a re-export or a task moved elsewhere.
   if (Date.now() - bundlesLoadedAt > 15000) void loadBundles();
-  // The per-remote switches are read again on every visit: the project list is the snapshot's, and the resolved map
-  // may have moved since this tab last painted it.
-  paintRemoteSwitches();
+  // The push controls are read again on every visit: the project list is the snapshot's, and the resolved pair may
+  // have moved since this tab last painted it.
+  paintPushPermissions();
   // The remote-write setting is the panel's own (config.json), but which trees carry the push guard is a file on
   // disk that another instance or a hand edit can change, so it is re-read every time the panel opens.
   void refreshRemoteGuards();
@@ -20659,34 +20668,21 @@ document.addEventListener("click", (e) => {
   toggleShowOld(btn.dataset.ageToggle);
 });
 
-// ---- may a branch exist on a REMOTE at all? ------------------------------------------------------
-// The reader's own words: "all branches local only unless permission was specifically granted in a permission box
-// like other permissions". It lives in this panel's config.json (`remoteBranchPolicy`), so it applies to every
-// browser and survives a restart; changing it writes the installed guards' own copy of it as well, and THAT is
-// what stands between a worker's `git push` and the remote.
-const REMOTE_POLICY_SENTENCE = {
-  "local-only": "branches stay local unless you allow a write in the permission box",
-  allow: "remote writes go through without asking — the box is not offered",
-  deny: "remote writes are refused outright — the box is not even offered",
-};
-
-function remotePolicyStored() {
-  const p = String(state.settings?.remoteBranchPolicy || "local-only");
-  return REMOTE_POLICY_SENTENCE[p] ? p : "local-only";
-}
-
+// ---- the push guard's own state -------------------------------------------------------------------
+// The TWO CONTROLS live in Settings → Repo and on each card (see the push-permissions region below); this block is
+// the other half of the same panel: whether the pre-push guard is in the path at all, which trees carry it, and how
+// many are waiting on you. The old global `remoteBranchPolicy` select is gone — its three values are now one pair of
+// four-way controls — but the guard report still says which files the hook reads.
 function paintRemotePolicy(note = "", bad = false) {
-  const stored = remotePolicyStored();
-  const sel = $("remote-policy");
-  // A rejected save leaves what was picked in the box: snapping back reads as "it saved that", when the save is
-  // exactly what failed.
-  if (sel && !bad) sel.value = stored;
   const preview = $("remote-policy-preview");
   if (!preview) return;
   const g = state.remoteGuards;
   const last = g?.latest?.[0];
+  const block = pushBlock();
+  const projects = block?.projects ? Object.values(block.projects) : [];
+  const free = projects.filter((p) => p.newBranches !== "always-ask" || p.existingBranches !== "always-ask").length;
   const bits = [
-    `config.json remoteBranchPolicy: ${stored} — ${REMOTE_POLICY_SENTENCE[stored]}`,
+    block ? `push controls: ${free}/${projects.length} project(s) go through without asking something — the pair is on each card, the defaults in Settings → Repo` : "push controls: reading…",
     !g
       ? "push guard: reading…"
       : g.count
@@ -20712,33 +20708,6 @@ async function refreshRemoteGuards() {
   }
 }
 
-async function saveRemotePolicy(policy) {
-  const before = remotePolicyStored();
-  const preview = $("remote-policy-preview");
-  if (preview) {
-    preview.textContent = "saving…";
-    preview.classList.remove("bad");
-  }
-  try {
-    const r = await apiFetch(
-      "/api/settings/remote-branches",
-      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ policy }) },
-      { timeoutMs: 20000 },
-    );
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
-    state.settings = { ...(state.settings || {}), ...(d.settings || {}) };
-    state.remoteGuards = d.guards || state.remoteGuards;
-    paintRemotePolicy(d.note || "saved");
-    showBanner(`branches on the remote: ${REMOTE_POLICY_SENTENCE[d.policy] || d.policy}`);
-  } catch (err) {
-    // Put the box back where it was: the stored value did NOT change.
-    const sel = $("remote-policy");
-    if (sel) sel.value = before;
-    paintRemotePolicy(String((err && err.message) || err), true);
-  }
-}
-
 async function installPushGuardNow(btn) {
   const label = btn.textContent;
   btn.disabled = true;
@@ -20750,7 +20719,7 @@ async function installPushGuardNow(btn) {
     state.remoteGuards = d.guards || state.remoteGuards;
     const failed = Number(d.failed) || 0;
     paintRemotePolicy(`push guard installed in ${d.installed} worktree${d.installed === 1 ? "" : "s"}${failed ? `, ${failed} refused (named in the log)` : ""}`);
-    showBanner(`push guard: ${d.installed} worktree(s) now refuse a local-only push and ask you instead${failed ? ` · ${failed} could not be installed` : ""}`);
+    showBanner(`push guard: ${d.installed} worktree(s) now read the project's push controls and act on them${failed ? ` · ${failed} could not be installed` : ""}`);
   } catch (err) {
     paintRemotePolicy(`could not install the push guard: ${String((err && err.message) || err)}`, true);
   } finally {
@@ -20759,96 +20728,234 @@ async function installPushGuardNow(btn) {
   }
 }
 
-$("remote-policy")?.addEventListener("change", (e) => void saveRemotePolicy(e.target.value));
 $("btn-guard-install")?.addEventListener("click", (e) => {
   e.preventDefault();
   void installPushGuardNow(e.target);
 });
 
-// ---- remotes: allow push without asking ------------------------------------------------------------
-// One row per project on this board — its name, the folder, and the remote a push would go to — with the switch the
-// reader asked for. The value is read from the server's RESOLVED map (`settings.allowPushWithoutAskingProjects`), so
-// this painter never decides what the default is: a project the server says is off is off here, and a project whose
-// policy is deny stays off whatever its own entry says. Shipped unchecked, and the help line below says what
-// unchecked means — a switch whose off state reads as "not configured" is a switch nobody dares leave alone.
-const REMOTE_SWITCH_HELP =
-  "unchecked: the assistant asks with a clarify before any push. `wtgui/*` branches are never pushed regardless of this switch — they still follow their LANDING paragraph.";
+// ---- push permissions: the two controls, drawn on every card and in Settings → Repo -------------------
+// Four values, identical for both controls, and one resolver on the server that already decided what every project's
+// pair IS: `state.settings.pushPermissions.projects[name]` carries the resolved pair, whether a repo force-override
+// is in force, and where each value came from. This half only draws and posts. A page that re-derived precedence
+// could disagree with the guard that refuses the push, which is the failure the single resolver exists to prevent.
+//
+// The card's two selects sit in the grey host/remote bar, to the right of the host chip. When the project's
+// repository carries a force-override they render DISABLED with a one-line note naming it: a select that looks
+// editable and is not is a lie, and a note is the only honest way to show a control somebody else owns.
+const PUSH_FALLBACK = {
+  choices: ["allow-all", "allow-name-gate", "always-ask", "never"],
+  labels: {
+    "allow-all": "allow all — push without asking",
+    "allow-name-gate": "allow the name gate — ask for anything else",
+    "always-ask": "always ask — park on the box",
+    never: "never — refuse, no box",
+  },
+};
 
-function remoteSwitchRows() {
-  return [...(state.projects?.values?.() || [])]
-    .map((p) => ({ name: String(p.name || ""), path: String(p.path || ""), remote: String(p.remote || "") }))
-    .filter((p) => p.name)
-    .sort((a, b) => a.name.localeCompare(b.name));
+const pushBlock = () => state.settings?.pushPermissions || null;
+const pushChoices = () => pushBlock()?.choices || PUSH_FALLBACK.choices;
+const pushLabels = () => pushBlock()?.labels || PUSH_FALLBACK.labels;
+const pushFor = (name) => pushBlock()?.projects?.[name] || null;
+
+// One <option> list, shared by the card and the Settings tab, so the two can never offer different values.
+function pushOptionsHtml(selected) {
+  const labels = pushLabels();
+  return pushChoices()
+    .map((v) => `<option value="${esc(v)}"${v === selected ? " selected" : ""}>${esc(labels[v] || v)}</option>`)
+    .join("");
 }
 
-function remoteSwitchOn(name) {
-  return Boolean(state.settings?.allowPushWithoutAskingProjects?.[name] === true);
+// The card's pair. `p.forced` is the server's answer, not a guess from the repo record: the same resolver that
+// writes the guard's files says whether this project is under its repository's force-override.
+function pushControlsHtml(name) {
+  const p = pushFor(name);
+  const forced = p?.forced === true;
+  const dis = forced ? " disabled" : "";
+  const note = forced
+    ? `<span class="push-repo-note" title="${esc(`these two selects are set by ${p.repoLabel || p.repo || "this project's repository"} (force-override is on) — the Settings → Repo tab owns them for every project in that repository`)}">repo setting in force</span>`
+    : "";
+  return (
+    `<span class="push-controls" data-push-controls="${esc(name)}">` +
+    `<label class="push-field" title="${esc("a branch that does not exist on the remote yet. allow-name-gate lets one through without asking only when its name is main/master or YYYYMMDD_HHMM_<TICKET>_<desc>.")}">new <select class="push-select" data-push-project="${esc(name)}" data-push-kind="new"${dis}>${pushOptionsHtml(p?.newBranches)}</select></label>` +
+    `<label class="push-field" title="${esc("a branch the remote already carries. this is also the control a landing merge's push of the base branch meets.")}">existing <select class="push-select" data-push-project="${esc(name)}" data-push-kind="existing"${dis}>${pushOptionsHtml(p?.existingBranches)}</select></label>` +
+    note +
+    `</span>`
+  );
 }
 
-function paintRemoteSwitches(note = "", bad = false) {
-  const holder = $("remote-switch-rows");
+// Re-write the card's pair in place after a settings event, so a value saved in another tab (or by the permission
+// box's Always allow) does not need a full board render. Rebuilding only when the markup CHANGED keeps the select
+// the reader is on from being replaced under them.
+function syncPushControls() {
+  for (const strip of document.querySelectorAll("[data-push-controls]")) {
+    const name = strip.dataset.pushControls || "";
+    if (!name) continue;
+    const html = pushControlsHtml(name);
+    if (strip._pushHtml !== html) {
+      strip.innerHTML = html;
+      strip._pushHtml = html;
+    }
+  }
+}
+
+// The Settings → Repo tab: one collapsible section per remote repository, in the order the server names them. Each
+// section holds the two defaults and the force-override; the projects it governs are listed so a default is never
+// anonymous. `pushRepoFolds` is null until a rebuild has something to read, so the FIRST paint opens every section
+// that holds a project and a later repaint keeps the reader's own folds instead of re-opening them.
+const PUSH_REPO_ORDER = ["git.sefl.com/IT", "git.sefl.com/SA", "github/JLRoper", "other", "none"];
+let pushRepoFolds = null;
+
+function pushRepoFoldsNow() {
+  const holder = $("push-repo-sections");
+  if (!holder) return null;
+  const sections = [...holder.querySelectorAll("details[data-push-repo-section]")];
+  if (!sections.length) return null;
+  const open = new Set(sections.filter((d) => d.open).map((d) => d.dataset.pushRepoSection || ""));
+  open.delete("");
+  return open;
+}
+
+function pushRepoSectionHtml(key, rec) {
+  const label = rec?.label || key;
+  const force = rec?.force === true;
+  const projects = Array.isArray(rec?.projects) ? rec.projects : [];
+  const open = pushRepoFolds ? pushRepoFolds.has(key) : projects.length > 0;
+  const projectsLine = projects.length
+    ? `${projects.length} project${projects.length === 1 ? "" : "s"}: ${projects.join(" · ")}`
+    : key === "none"
+      ? "no project on this board has no remote at all — this section exists so one would have somewhere to say so"
+      : "no project on this board resolves to this repository yet";
+  return (
+    `<details class="settings-repo" data-push-repo-section="${esc(key)}"${open ? " open" : ""}>` +
+    `<summary class="settings-repo-head" title="${esc(`${label} — ${projectsLine}`)}">` +
+    `<span class="settings-repo-name">${esc(label)}</span>` +
+    `<span class="settings-repo-count mono">${projects.length} project${projects.length === 1 ? "" : "s"}</span>` +
+    `${force ? `<span class="settings-repo-force mono">force-override</span>` : ""}` +
+    `</summary>` +
+    `<div class="settings-repo-body">` +
+    `<label class="settings-row" title="${esc("the default for a NEW branch in this repository: one that does not exist on the remote yet. A project's own answer on its card wins unless the force-override is on.")}">` +
+    `<span>New branches</span><select data-push-repo="${esc(key)}" data-push-repo-kind="new">${pushOptionsHtml(rec?.newBranches)}</select></label>` +
+    `<label class="settings-row" title="${esc("the default for an EXISTING branch in this repository: one the remote already carries. A landing merge's push of the base branch meets this one.")}">` +
+    `<span>Existing branches</span><select data-push-repo="${esc(key)}" data-push-repo-kind="existing">${pushOptionsHtml(rec?.existingBranches)}</select></label>` +
+    `<label class="settings-remote settings-repo-force-row" title="${esc("on: this repository's two values are in force for EVERY project in it, and each project's selects render disabled with a note. never still wins over everything, including this toggle.")}">` +
+    `<input type="checkbox" data-push-force="${esc(key)}"${force ? " checked" : ""}>` +
+    `<span class="settings-remote-name">force these values for every project in this repository</span>` +
+    `</label>` +
+    `<div class="settings-preview mono settings-repo-list" title="${esc(projectsLine)}">${esc(projectsLine)}</div>` +
+    `</div></details>`
+  );
+}
+
+function paintPushPermissions(note = "", bad = false) {
+  const holder = $("push-repo-sections");
+  const block = pushBlock();
+  const count = $("push-permissions-count");
+  const help = $("push-permissions-help");
+  if (count) {
+    const projects = block?.projects ? Object.values(block.projects) : [];
+    const open = projects.filter((p) => p.newBranches !== "always-ask" || p.existingBranches !== "always-ask").length;
+    const never = projects.filter((p) => p.newBranches === "never" || p.existingBranches === "never").length;
+    count.textContent = block ? `${open}/${projects.length} without asking${never ? ` · ${never} refused outright` : ""}` : "…";
+  }
+  if (help) {
+    help.textContent = bad
+      ? `NOT SAVED — ${note}. The server still holds the values below.`
+      : `${note ? `${note} · ` : ""}allow-name-gate passes main/master or YYYYMMDD_HHMM_<TICKET>_<desc>; anything else asks. never refuses with no box and beats every other value, force-override included.`;
+    help.classList.toggle("bad", Boolean(bad));
+  }
   if (!holder) return;
-  // The panel repaints on every settings event and on every visit to the tab, so the checkbox the reader is on has to
-  // come back where it was: a rebuild that drops the focus makes a keyboard reader start the tab over.
-  const focused = typeof document !== "undefined" && document.activeElement?.dataset ? document.activeElement.dataset.remoteAllow || "" : "";
-  const rows = remoteSwitchRows();
-  holder.innerHTML = rows.length
-    ? rows
-        .map(
-          (p) =>
-            `<label class="settings-remote" title="${esc(`${p.name} — ${p.path || "no path"}${p.remote ? ` · remote ${p.remote}` : " · no remote configured"}`)}">` +
-            `<input type="checkbox" data-remote-allow="${esc(p.name)}"${remoteSwitchOn(p.name) ? " checked" : ""}>` +
-            `<span class="settings-remote-name">${esc(p.name)}</span>` +
-            `<span class="settings-remote-remote mono">${p.remote ? esc(p.remote) : "no remote"}</span>` +
-            `<span class="settings-remote-where mono">${esc(p.path)}</span>` +
-            `</label>`,
-        )
-        .join("")
-    : `<div class="settings-remote-empty">no projects on this board yet</div>`;
-  if (focused) {
-    const back = holder.querySelector(`[data-remote-allow="${focused}"]`);
-    if (back) back.focus();
+  if (!block) {
+    holder.innerHTML = `<div class="settings-remote-empty">reading the push controls…</div>`;
+    holder._pushSig = "";
+    return;
   }
-  const on = rows.filter((p) => remoteSwitchOn(p.name)).length;
-  const count = $("remote-switch-count");
-  if (count) count.textContent = `${on}/${rows.length}`;
-  const preview = $("remote-switch-preview");
-  if (preview) {
-    preview.textContent = bad
-      ? `NOT SAVED — ${note}. The server still says ${on}/${rows.length} on.`
-      : `${on}/${rows.length} on · ${REMOTE_SWITCH_HELP}${note ? ` · ${note}` : ""}`;
-    preview.classList.toggle("bad", Boolean(bad));
+  // A snapshot carries the settings every few seconds, so the sections are rebuilt only when the DATA moved. A
+  // rebuild replaces every select under the reader — the one whose dropdown is open included — and a tab that
+  // repaints on a clock is a tab nobody can use.
+  const sig = JSON.stringify([block.repos || {}, block.projects || {}]);
+  if (holder._pushSig === sig) return;
+  holder._pushSig = sig;
+  const folds = pushRepoFoldsNow();
+  if (folds) pushRepoFolds = folds;
+  holder.innerHTML = PUSH_REPO_ORDER.map((key) => pushRepoSectionHtml(key, block.repos?.[key] || { key, label: key })).join("");
+  if (bad) paintPushRepoFocus();
+}
+
+// The section that failed keeps the reader where they were: a rebuild that drops the focus makes a keyboard reader
+// start the tab over on every refusal.
+function paintPushRepoFocus() {
+  const held = document.activeElement?.dataset || {};
+  const key = held.pushRepo || held.pushForce || "";
+  if (!key) return;
+  const back = document.querySelector(`[data-push-repo="${CSS.escape(key)}"], [data-push-force="${CSS.escape(key)}"]`);
+  if (back) back.focus();
+}
+
+// The repo sections' own controls. The answer carries the whole settings block back, so both this tab and every card
+// repaint from the server's copy rather than from what the page thinks it just saved.
+async function savePushRepo(repo, patch) {
+  try {
+    const r = await apiFetch("/api/settings/push-repo", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) }, { timeoutMs: 20000 });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    state.settings = { ...(state.settings || {}), ...(d.settings || {}) };
+    paintPushPermissions(d.note || "saved");
+    syncPushControls();
+    showBanner(d.note || `push controls saved for ${repo}`);
+  } catch (err) {
+    // A failed save is not a setting: the server's copy is what the tab draws again, with the refusal on its own line.
+    paintPushPermissions(String((err && err.message) || err), true);
+    syncPushControls();
   }
 }
 
-async function saveRemoteSwitch(name, allow, box) {
-  if (box) box.disabled = true;
+async function saveProjectPush(name, kind, value) {
   try {
     const r = await apiFetch(
-      "/api/settings/remote-push",
-      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: name, allow }) },
+      "/api/settings/push-project",
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: name, kind, value }) },
       { timeoutMs: 20000 },
     );
     const d = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
     state.settings = { ...(state.settings || {}), ...(d.settings || {}) };
-    paintRemoteSwitches(d.note || "saved");
-    showBanner(`allow push without asking: ${name} ${d.allow ? "on — a push goes through without the box" : "off — a push asks you first"}`);
+    paintPushPermissions(d.note || "saved");
+    syncPushControls();
+    showBanner(d.note || `${name}: ${kind} branches ${value}`);
   } catch (err) {
-    // A failed save is not a setting: put the box back where the server says it is and say so on the same line.
-    const painted = remoteSwitchOn(name);
-    paintRemoteSwitches(String((err && err.message) || err), true);
-    const back = $(`[data-remote-allow="${name}"]`);
-    if (back) back.checked = painted;
+    paintPushPermissions(String((err && err.message) || err), true);
+    syncPushControls();
   }
 }
-// ---- end remotes
 
-$("remote-switch-rows")?.addEventListener("change", (e) => {
-  const box = e.target.closest ? e.target.closest("[data-remote-allow]") : null;
-  if (!box) return;
-  void saveRemoteSwitch(box.dataset.remoteAllow, box.checked === true, box);
+document.addEventListener("change", (e) => {
+  const project = e.target.closest ? e.target.closest("[data-push-project]") : null;
+  if (project) {
+    void saveProjectPush(project.dataset.pushProject, project.dataset.pushKind, project.value);
+    return;
+  }
+  const repo = e.target.closest ? e.target.closest("[data-push-repo-kind]") : null;
+  if (repo) {
+    void savePushRepo(repo.dataset.pushRepo, { repo: repo.dataset.pushRepo, kind: repo.dataset.pushRepoKind, value: repo.value });
+    return;
+  }
+  const force = e.target.closest ? e.target.closest("[data-push-force]") : null;
+  if (force) void savePushRepo(force.dataset.pushForce, { repo: force.dataset.pushForce, force: force.checked === true });
 });
+
+// A fold is a rendering preference, not a setting: it is remembered for this page's lifetime only, and never posted.
+// `toggle` does not bubble, so this listens in the capture phase.
+$("push-repo-sections")?.addEventListener(
+  "toggle",
+  (e) => {
+    const d = e.target.closest ? e.target.closest("details[data-push-repo-section]") : null;
+    if (!d) return;
+    const now = pushRepoFoldsNow();
+    if (now) pushRepoFolds = now;
+  },
+  true,
+);
+// ---- end push permissions
 
 // ---- the panel's own two folders ---------------------------------------------------------------
 // Where the board's state lives (the data directory) and where an agent may throw things away (the scratch
@@ -20992,9 +21099,10 @@ function applySettings(settings) {
   const scanMode = $("scan-mode");
   if (scanMode) scanMode.value = state.settings.scanMode === "visible" ? "visible" : "all";
   paintRemotePolicy();
-  // The per-remote switches ride the same snapshot and the same event, so a change made in another tab (or by the
-  // assistant's endpoint) is what this tab draws, not this tab's last copy of it.
-  paintRemoteSwitches();
+  // The push controls ride the same snapshot and the same event, so a change made in another tab (or by the
+  // permission box's Always allow) is what this page draws — both the Settings sections and every card's pair.
+  paintPushPermissions();
+  syncPushControls();
   paintChartColumns();
   paintScanRoots();
   paintCollapseAfterSetting();
@@ -21376,7 +21484,8 @@ startVisibilityReporting();
     paintChartColumns();
     paintScanRoots();
     paintRemotePolicy();
-    paintRemoteSwitches();
+    paintPushPermissions();
+    syncPushControls();
     paintAgentCleanup();
     void refreshRemoteGuards();
     // "On screen" mode: say what is visible before the first paint settles, so the rows in front of the reader are

@@ -206,7 +206,7 @@ test("under a policy of allow the hook reports the write and asks nobody", { ski
   assert.equal(body.branch, "wtgui/probe-27", "the branch travels with the report");
   assert.equal(body.worktree.replace(/\\/g, "/").toLowerCase().endsWith("/repo"), true, `the tree travels too: ${body.worktree}`);
   assert.equal(body.remote, "origin");
-  assert.match(body.why, /policy in this tree/, "and the report says why nobody was asked");
+  assert.match(body.why, /push controls for this repository/, "and the report says why nobody was asked");
   assert.equal(panel.seen.filter((s) => s.url === "/api/remote-write/request").length, 0, "no permission box was drawn");
 });
 

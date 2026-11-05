@@ -1,6 +1,6 @@
 {
   "name": "agent-worktree-gui",
-  "version": "1.27.0",
+  "version": "1.28.0",
   "private": true,
   "type": "module",
   "description": "Local GUI panel that monitors git worktrees across one or more projects (branches, merge status vs remote main, PR state, dirty work, live activity).",
@@ -40,6 +40,7 @@
     "verify:settings-window": "node tools/verify-settings-window.mjs",
     "verify:chart-top-count": "node tools/verify-chart-top-count.mjs",
     "verify:settings-tabs": "node tools/verify-settings-tabs.mjs",
+    "verify:push-permissions": "node tools/verify-push-permissions.mjs",
     "verify:pipelines-tab": "node tools/verify-pipelines-tab.mjs",
     "verify:pipeline-flow": "node tools/verify-pipeline-flow.mjs",
     "verify:pipeline-fanout": "node tools/verify-pipeline-fanout.mjs",
@@ -69,6 +70,7 @@
     "capture:pipeline-flow": "node tools/capture-pipeline-flow.mjs",
     "capture:pipeline-import": "node tools/capture-pipeline-import.mjs",
     "capture:pipeline-readability": "node tools/capture-pipeline-readability.mjs",
+    "capture:settings-pipeline": "node tools/capture-settings-pipeline.mjs",
     "verify:task-pipeline-window": "node tools/verify-task-pipeline-window.mjs",
     "verify:action-harvest": "node tools/verify-action-harvest.mjs",
     "verify:restart-line-harvest": "node tools/verify-restart-line-harvest.mjs",

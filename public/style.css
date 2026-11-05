@@ -415,6 +415,27 @@ button.primary:hover { background: #24466a; }
 .settings-remote-where { grid-column: 2 / span 2; grid-row: 2; font-size: 10.5px; color: var(--dimmer); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .settings-remote-empty { padding: 4px 2px; font-size: 11.5px; color: var(--dimmer); }
 .settings-preview.remotes { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; line-height: 1.45; }
+/* Settings → Repo: one collapsible block per remote repository. The section is the unit the reader thinks in
+   ("git.sefl.com/IT"), so its head carries the label, how many projects it governs and whether the force-override is
+   on; its body carries the two defaults, the toggle and the project list. The summary is the fold control and the
+   marker is drawn here (a platform marker inside a flex summary reads at the wrong size). */
+.settings-repos { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.settings-repo { border: 1px solid var(--line); border-radius: 7px; background: var(--surface); }
+.settings-repo > summary { cursor: pointer; padding: 6px 8px; display: flex; align-items: center; gap: 6px; list-style: none; user-select: none; }
+.settings-repo > summary::-webkit-details-marker { display: none; }
+.settings-repo > summary::before { content: "\25b8"; color: var(--dimmer); font-size: 11px; }
+.settings-repo[open] > summary::before { content: "\25be"; }
+.settings-repo-name { font: 12px var(--mono); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.settings-repo-count { margin-left: auto; font-size: 10.5px; color: var(--dimmer); white-space: nowrap; }
+.settings-repo-force { font-size: 10px; color: #f0c674; border: 1px solid #4d3d12; background: var(--amber-bg); border-radius: 999px; padding: 0 6px; white-space: nowrap; }
+.settings-repo-body { padding: 2px 8px 8px; }
+.settings-repo-body .settings-row { font-size: 11.5px; }
+.settings-repo-body .settings-row select { flex: 1 1 auto; min-width: 0; font-size: 11px; padding: 3px 5px; }
+.settings-repo-force-row { display: flex; align-items: center; gap: 7px; margin-top: 6px; font-size: 11.5px; color: var(--dim); cursor: pointer; }
+.settings-repo-force-row input { margin: 0; accent-color: #4a90d9; flex: none; }
+.settings-repo-force-row .settings-remote-name { white-space: normal; font-size: 11px; }
+.settings-repo-list { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 10.5px; line-height: 1.45; margin-top: 6px; }
+.settings-preview.push-help { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; line-height: 1.45; }
 .settings-preview.bad { border-color: #57262a; color: #ff9c94; }
 /* The assistant reset's answer is a LIST — one line per admission, watch and wake, and a keeps line under them — so
    it is painted as pre-wrapped text: the default `normal` would fold every row into one paragraph and the dry run's
@@ -865,7 +886,18 @@ button.btn-plus:hover { background: #1f4a2a; color: #d6ffe0; border-color: #3fb9
    select in the form whose value is read before spawning. */
 .form select#job-model { min-width: 210px; max-width: 460px; }
 .project.armed { box-shadow: 0 0 0 2px #2ea04380; transition: box-shadow .2s; }
-.project-head.meta-line { padding-top: 6px; padding-bottom: 6px; }
+/* The card's grey host/remote bar WRAPS on purpose: the two push controls sit to the right of the host chip, and at a
+   high zoom (or a narrow window) they must drop to a second line instead of pushing the chip or the fetched stamp
+   off the card's right edge. The selects are compact for the same reason — the empty space beside the chip is the
+   only room there is, and it is not much. */
+.project-head.meta-line { padding-top: 6px; padding-bottom: 6px; flex-wrap: wrap; row-gap: 6px; }
+.push-controls { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.push-field { display: inline-flex; align-items: center; gap: 3px; font: 10.5px var(--mono); color: var(--dimmer); text-transform: uppercase; letter-spacing: .03em; white-space: nowrap; }
+.push-select { max-width: 168px; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 1px 3px; font: 10.5px var(--mono); }
+.push-select:focus-visible { outline: 1px solid #3b4757; outline-offset: 1px; }
+/* A disabled select reads as disabled: the force-override owns it, and the note beside it says which setting does. */
+.push-select[disabled] { color: var(--dimmer); opacity: .7; cursor: not-allowed; }
+.push-repo-note { font: 10px var(--mono); color: #f0c674; border: 1px solid #4d3d12; background: var(--amber-bg); border-radius: 999px; padding: 1px 6px; white-space: nowrap; }
 
 .chips { display: flex; gap: 6px; flex-wrap: wrap; }
 .chip {
