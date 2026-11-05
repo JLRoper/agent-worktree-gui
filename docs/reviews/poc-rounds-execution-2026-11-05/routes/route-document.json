@@ -1,0 +1,1307 @@
+{
+  "route": "document",
+  "generatedAt": "2026-11-05T22:51:42.950Z",
+  "source": {
+    "yaml": "<factory>\\docs\\pipeline\\language\\examples\\starters\\poc-breaking-rounds.yaml",
+    "sha256": "bfeaba29b06f84c30e03cd49a7c2ef7c8faadef5d4ead6173b7ec6b1f7ff3951",
+    "lines": 3075,
+    "bytes": 131640
+  },
+  "document": {
+    "stages": 24,
+    "handoffs": 42,
+    "gates": 4,
+    "loop_edges": [
+      {
+        "id": "H-200-191",
+        "from": "S200",
+        "to": "S191",
+        "cap": "3 rounds, then a person reads the blocking set"
+      }
+    ]
+  },
+  "bundle": {
+    "export_sha256": "588d4b3ca400c60989d4f4f1cb6853e1494b018c8f619e56487b3728460a56fd",
+    "pipeline": "poc-breaking-rounds",
+    "removed_edges": []
+  },
+  "fixture": {
+    "repo": "<repo>",
+    "head": "2a17625",
+    "worktrees": 2
+  },
+  "row": {
+    "id": 1,
+    "title": "carry the POC-breaking rounds document through the pipeline",
+    "state": "running",
+    "reason": null,
+    "stage": "S203",
+    "via": "H-202-203",
+    "visits": {
+      "S180": 1,
+      "S181": 1,
+      "S191": 1,
+      "S192": 1,
+      "S198": 1,
+      "S199": 1,
+      "S200": 1,
+      "S201": 1,
+      "S202": 1,
+      "S203": 1
+    },
+    "crossings": {
+      "H-180-181": 1,
+      "H-181-191": 1,
+      "H-191-192": 1,
+      "H-192-198": 1,
+      "H-198-199": 1,
+      "H-199-200": 1,
+      "H-200-201": 1,
+      "H-201-202": 1,
+      "H-202-203": 1
+    },
+    "tree": {
+      "path": "<repo>/.worktrees/you-write-one-brief-from-795d6f",
+      "branch": "wtgui/you-write-one-brief-from-795d6f",
+      "startSha": "2a17625",
+      "cutAt": "2026-11-05T22:50:27.191Z",
+      "by": "panel"
+    },
+    "waitingFor": null,
+    "stageRuns": 10
+  },
+  "cuts": [
+    {
+      "repoDir": "<repo>",
+      "prompt": "You write one brief from the plan. You pin what the plan names and you do not re-pin the export to what is on disk today; a plan that names a method the criteria do not know stops at ESCALATE-AMBIGUIT",
+      "branch": "wtgui/you-write-one-brief-from-795d6f",
+      "path": "<repo>/.worktrees/you-write-one-brief-from-795d6f",
+      "from": "HEAD",
+      "at": "2026-11-05T22:50:27.190Z"
+    }
+  ],
+  "starts": [
+    {
+      "thread": "document-01",
+      "stage": "S180",
+      "visit": 1,
+      "round": 1,
+      "at": "2026-11-05T22:50:29.822Z"
+    },
+    {
+      "thread": "document-02",
+      "stage": "S181",
+      "visit": 1,
+      "round": 1,
+      "at": "2026-11-05T22:50:34.914Z"
+    },
+    {
+      "thread": "document-03",
+      "stage": "S191",
+      "visit": 1,
+      "round": 1,
+      "at": "2026-11-05T22:50:45.890Z"
+    },
+    {
+      "thread": "document-04",
+      "stage": "S192",
+      "visit": 1,
+      "round": 1,
+      "at": "2026-11-05T22:50:50.753Z"
+    },
+    {
+      "thread": "document-05",
+      "stage": "S198",
+      "visit": 1,
+      "round": 1,
+      "at": "2026-11-05T22:50:56.036Z"
+    },
+    {
+      "thread": "document-06",
+      "stage": "S199",
+      "visit": 1,
+      "round": 1,
+      "at": "2026-11-05T22:51:02.322Z"
+    },
+    {
+      "thread": "document-07",
+      "stage": "S200",
+      "visit": 1,
+      "round": 1,
+      "at": "2026-11-05T22:51:05.884Z"
+    },
+    {
+      "thread": "document-08",
+      "stage": "S201",
+      "visit": 1,
+      "round": 1,
+      "at": "2026-11-05T22:51:14.172Z"
+    },
+    {
+      "thread": "document-09",
+      "stage": "S202",
+      "visit": 1,
+      "round": 1,
+      "at": "2026-11-05T22:51:21.834Z"
+    },
+    {
+      "thread": "document-10",
+      "stage": "S203",
+      "visit": 1,
+      "round": 1,
+      "at": "2026-11-05T22:51:33.979Z"
+    }
+  ],
+  "stageRuns": [
+    {
+      "id": "poc-breaking-rounds/S180#1",
+      "stage": "S180",
+      "visit": 1,
+      "enteredAt": "2026-11-05T22:50:27.194Z",
+      "settledAt": "2026-11-05T22:50:32.732Z",
+      "thread": "document-01",
+      "job": "job-document-01",
+      "status": "done",
+      "via": null,
+      "commit": "170a7f3a2af8059d7feb38943b89503864af540a",
+      "tree": {
+        "path": "<repo>/.worktrees/you-write-one-brief-from-795d6f",
+        "branch": "wtgui/you-write-one-brief-from-795d6f",
+        "head": "170a7f3",
+        "dirty": 0
+      },
+      "artifact": {
+        "id": "episode-brief",
+        "path": "out/{{run_id}}/episode-brief.json",
+        "present": true,
+        "sha256": "ef067aea182d8527d542a130b78bf698cd0ff01eccfec5bb9363764436322131",
+        "bytes": null,
+        "commit": "170a7f3a2af8059d7feb38943b89503864af540a",
+        "blob": null,
+        "blobSha256": null,
+        "unchanged": false,
+        "uncommitted": true
+      },
+      "inputs": [],
+      "inputsDropped": 0,
+      "decision": {
+        "code": null,
+        "by": "panel",
+        "trigger": "stage-settled",
+        "reason": "poc-breaking-rounds · S180 settled — the run finished",
+        "fact": {
+          "kind": "run-status",
+          "status": "done",
+          "detail": "{\"ok\":true,\"stage\":\"S180\",\"visit\":1,\"round\":1,\"artifact\":\"out/run-1/episode-brief.json\",\"sha256\":\"ef067aea182d8527d542a130b78bf698cd0ff01eccfec5bb9363764436322131\",\"bytes\":160,\"commit\":\"170a7f3a2af8059d7feb38943b89503864af540a\"}",
+          "stage": "S180",
+          "pipeline": "poc-breaking-rounds",
+          "thread": "document-01"
+        }
+      }
+    },
+    {
+      "id": "poc-breaking-rounds/S181#1",
+      "stage": "S181",
+      "visit": 1,
+      "enteredAt": "2026-11-05T22:50:32.732Z",
+      "settledAt": "2026-11-05T22:50:38.325Z",
+      "thread": "document-02",
+      "job": "job-document-02",
+      "status": "done",
+      "via": null,
+      "commit": "7df8a986b28c939bdd0092c42bebf36c893b1ce9",
+      "tree": {
+        "path": "<repo>/.worktrees/you-write-one-brief-from-795d6f",
+        "branch": "wtgui/you-write-one-brief-from-795d6f",
+        "head": "7df8a98",
+        "dirty": 0
+      },
+      "artifact": {
+        "id": "site-ranking",
+        "path": "out/{{run_id}}/site-ranking.json",
+        "present": true,
+        "sha256": "8d91b8f81c86be42af07374aed0bf8f223a9f125ffd2f9fa83c0fd2b3e0e7820",
+        "bytes": null,
+        "commit": "7df8a986b28c939bdd0092c42bebf36c893b1ce9",
+        "blob": null,
+        "blobSha256": null,
+        "unchanged": false,
+        "uncommitted": true
+      },
+      "inputs": [
+        {
+          "artifact": "episode-brief",
+          "path": "out/{{run_id}}/episode-brief.json",
+          "present": true,
+          "sha256": "ef067aea182d8527d542a130b78bf698cd0ff01eccfec5bb9363764436322131",
+          "edge": "H-180-181",
+          "via": "handoff",
+          "commit": "170a7f3a2af8059d7feb38943b89503864af540a"
+        }
+      ],
+      "inputsDropped": 0,
+      "decision": {
+        "code": null,
+        "by": "panel",
+        "trigger": "gate-record",
+        "reason": "gate G50 crossed by <repo>\\.worktrees\\you-write-one-brief-from-795d6f\\ledger\\gates\\G50-{{run_id}}.json",
+        "fact": {
+          "kind": "gate",
+          "gate": "G50",
+          "path": "<repo>\\.worktrees\\you-write-one-brief-from-795d6f\\ledger\\gates\\G50-{{run_id}}.json",
+          "present": true,
+          "stage": "S181",
+          "pipeline": "poc-breaking-rounds"
+        }
+      }
+    },
+    {
+      "id": "poc-breaking-rounds/S191#1",
+      "stage": "S191",
+      "visit": 1,
+      "enteredAt": "2026-11-05T22:50:43.064Z",
+      "settledAt": "2026-11-05T22:50:48.226Z",
+      "thread": "document-03",
+      "job": "job-document-03",
+      "status": "done",
+      "via": null,
+      "commit": "7a5caeaa4266ef074028fdaeed102d32fbd2f4c4",
+      "tree": {
+        "path": "<repo>/.worktrees/you-write-one-brief-from-795d6f",
+        "branch": "wtgui/you-write-one-brief-from-795d6f",
+        "head": "7a5caea",
+        "dirty": 0
+      },
+      "artifact": {
+        "id": "round-brief",
+        "path": "out/{{run_id}}/r{{round}}/round-brief.json",
+        "present": true,
+        "sha256": "ea429fd4477e6efd1d8a883ad6806bb95041c4b5a4f7369d26ebf16912117981",
+        "bytes": null,
+        "commit": "7a5caeaa4266ef074028fdaeed102d32fbd2f4c4",
+        "blob": null,
+        "blobSha256": null,
+        "unchanged": false,
+        "uncommitted": true
+      },
+      "inputs": [
+        {
+          "artifact": "site-ranking",
+          "path": "out/{{run_id}}/site-ranking.json",
+          "present": true,
+          "sha256": "8d91b8f81c86be42af07374aed0bf8f223a9f125ffd2f9fa83c0fd2b3e0e7820",
+          "edge": "H-181-191",
+          "via": "handoff",
+          "commit": "7df8a986b28c939bdd0092c42bebf36c893b1ce9"
+        }
+      ],
+      "inputsDropped": 0,
+      "decision": {
+        "code": null,
+        "by": "panel",
+        "trigger": "stage-settled",
+        "reason": "poc-breaking-rounds · S191 settled — the run finished",
+        "fact": {
+          "kind": "run-status",
+          "status": "done",
+          "detail": "{\"ok\":true,\"stage\":\"S191\",\"visit\":1,\"round\":1,\"artifact\":\"out/run-1/r1/round-brief.json\",\"sha256\":\"ea429fd4477e6efd1d8a883ad6806bb95041c4b5a4f7369d26ebf16912117981\",\"bytes\":160,\"commit\":\"7a5caeaa4266ef074028fdaeed102d32fbd2f4c4\"}",
+          "stage": "S191",
+          "pipeline": "poc-breaking-rounds",
+          "thread": "document-03"
+        }
+      }
+    },
+    {
+      "id": "poc-breaking-rounds/S192#1",
+      "stage": "S192",
+      "visit": 1,
+      "enteredAt": "2026-11-05T22:50:48.226Z",
+      "settledAt": "2026-11-05T22:50:53.582Z",
+      "thread": "document-04",
+      "job": "job-document-04",
+      "status": "done",
+      "via": null,
+      "commit": "73bc6cb56b371ca38ad562adc0fd297bd7e318a2",
+      "tree": {
+        "path": "<repo>/.worktrees/you-write-one-brief-from-795d6f",
+        "branch": "wtgui/you-write-one-brief-from-795d6f",
+        "head": "73bc6cb",
+        "dirty": 0
+      },
+      "artifact": {
+        "id": "q1-records",
+        "path": "out/{{run_id}}/r{{round}}/Q1/records.jsonl",
+        "present": true,
+        "sha256": "0b4379f5dfbfca94c9d5391b940d7305599bb8ab3c512f96dd64efdd990cb158",
+        "bytes": null,
+        "commit": "73bc6cb56b371ca38ad562adc0fd297bd7e318a2",
+        "blob": null,
+        "blobSha256": null,
+        "unchanged": false,
+        "uncommitted": true
+      },
+      "inputs": [
+        {
+          "artifact": "round-brief",
+          "path": "out/{{run_id}}/r{{round}}/round-brief.json",
+          "present": true,
+          "sha256": "ea429fd4477e6efd1d8a883ad6806bb95041c4b5a4f7369d26ebf16912117981",
+          "edge": "H-191-192",
+          "via": "handoff",
+          "commit": "7a5caeaa4266ef074028fdaeed102d32fbd2f4c4"
+        }
+      ],
+      "inputsDropped": 0,
+      "decision": {
+        "code": null,
+        "by": "panel",
+        "trigger": "stage-settled",
+        "reason": "poc-breaking-rounds · S192 settled — the run finished",
+        "fact": {
+          "kind": "run-status",
+          "status": "done",
+          "detail": "{\"ok\":true,\"stage\":\"S192\",\"visit\":1,\"round\":1,\"artifact\":\"out/run-1/r1/Q1/records.jsonl\",\"sha256\":\"0b4379f5dfbfca94c9d5391b940d7305599bb8ab3c512f96dd64efdd990cb158\",\"bytes\":160,\"commit\":\"73bc6cb56b371ca38ad562adc0fd297bd7e318a2\"}",
+          "stage": "S192",
+          "pipeline": "poc-breaking-rounds",
+          "thread": "document-04"
+        }
+      }
+    },
+    {
+      "id": "poc-breaking-rounds/S198#1",
+      "stage": "S198",
+      "visit": 1,
+      "enteredAt": "2026-11-05T22:50:53.582Z",
+      "settledAt": "2026-11-05T22:50:58.992Z",
+      "thread": "document-05",
+      "job": "job-document-05",
+      "status": "done",
+      "via": null,
+      "commit": "23cc45c4451585646800dd859cdcd60d5655da23",
+      "tree": {
+        "path": "<repo>/.worktrees/you-write-one-brief-from-795d6f",
+        "branch": "wtgui/you-write-one-brief-from-795d6f",
+        "head": "23cc45c",
+        "dirty": 0
+      },
+      "artifact": {
+        "id": "combined-artefact",
+        "path": "out/{{run_id}}/r{{round}}/combined.json",
+        "present": true,
+        "sha256": "bbf1d733c17c722c39142fdd778db0127ec6e46ee246292e7afc3046843134bd",
+        "bytes": null,
+        "commit": "23cc45c4451585646800dd859cdcd60d5655da23",
+        "blob": null,
+        "blobSha256": null,
+        "unchanged": false,
+        "uncommitted": true
+      },
+      "inputs": [
+        {
+          "artifact": "q1-records",
+          "path": "out/{{run_id}}/r{{round}}/Q1/records.jsonl",
+          "present": true,
+          "sha256": "0b4379f5dfbfca94c9d5391b940d7305599bb8ab3c512f96dd64efdd990cb158",
+          "edge": "H-192-198",
+          "via": "handoff",
+          "commit": "73bc6cb56b371ca38ad562adc0fd297bd7e318a2"
+        }
+      ],
+      "inputsDropped": 0,
+      "decision": {
+        "code": null,
+        "by": "panel",
+        "trigger": "stage-settled",
+        "reason": "poc-breaking-rounds · S198 settled — the run finished",
+        "fact": {
+          "kind": "run-status",
+          "status": "done",
+          "detail": "{\"ok\":true,\"stage\":\"S198\",\"visit\":1,\"round\":1,\"artifact\":\"out/run-1/r1/combined.json\",\"sha256\":\"bbf1d733c17c722c39142fdd778db0127ec6e46ee246292e7afc3046843134bd\",\"bytes\":160,\"commit\":\"23cc45c4451585646800dd859cdcd60d5655da23\"}",
+          "stage": "S198",
+          "pipeline": "poc-breaking-rounds",
+          "thread": "document-05"
+        }
+      }
+    },
+    {
+      "id": "poc-breaking-rounds/S199#1",
+      "stage": "S199",
+      "visit": 1,
+      "enteredAt": "2026-11-05T22:50:58.992Z",
+      "settledAt": "2026-11-05T22:51:04.482Z",
+      "thread": "document-06",
+      "job": "job-document-06",
+      "status": "done",
+      "via": null,
+      "commit": "7dabdefcfc6c46acc86e622a44a84e5a10fea7aa",
+      "tree": {
+        "path": "<repo>/.worktrees/you-write-one-brief-from-795d6f",
+        "branch": "wtgui/you-write-one-brief-from-795d6f",
+        "head": "7dabdef",
+        "dirty": 0
+      },
+      "artifact": {
+        "id": "critique-record",
+        "path": "out/{{run_id}}/r{{round}}/critique.json",
+        "present": true,
+        "sha256": "560a0954aa65334bddb4facf6141d2a77fbcd90089357d807f67354d70488db6",
+        "bytes": null,
+        "commit": "7dabdefcfc6c46acc86e622a44a84e5a10fea7aa",
+        "blob": null,
+        "blobSha256": null,
+        "unchanged": false,
+        "uncommitted": true
+      },
+      "inputs": [
+        {
+          "artifact": "combined-artefact",
+          "path": "out/{{run_id}}/r{{round}}/combined.json",
+          "present": true,
+          "sha256": "bbf1d733c17c722c39142fdd778db0127ec6e46ee246292e7afc3046843134bd",
+          "edge": "H-198-199",
+          "via": "handoff",
+          "commit": "23cc45c4451585646800dd859cdcd60d5655da23"
+        }
+      ],
+      "inputsDropped": 0,
+      "decision": {
+        "code": null,
+        "by": "panel",
+        "trigger": "stage-settled",
+        "reason": "poc-breaking-rounds · S199 settled — the run finished",
+        "fact": {
+          "kind": "run-status",
+          "status": "done",
+          "detail": "{\"ok\":true,\"stage\":\"S199\",\"visit\":1,\"round\":1,\"artifact\":\"out/run-1/r1/critique.json\",\"sha256\":\"560a0954aa65334bddb4facf6141d2a77fbcd90089357d807f67354d70488db6\",\"bytes\":160,\"commit\":\"7dabdefcfc6c46acc86e622a44a84e5a10fea7aa\"}",
+          "stage": "S199",
+          "pipeline": "poc-breaking-rounds",
+          "thread": "document-06"
+        }
+      }
+    },
+    {
+      "id": "poc-breaking-rounds/S200#1",
+      "stage": "S200",
+      "visit": 1,
+      "enteredAt": "2026-11-05T22:51:04.482Z",
+      "settledAt": "2026-11-05T22:51:08.259Z",
+      "thread": "document-07",
+      "job": "job-document-07",
+      "status": "done",
+      "via": null,
+      "commit": "76a2a0e5ac130e3db74ba4ee640843a2aa88582d",
+      "tree": {
+        "path": "<repo>/.worktrees/you-write-one-brief-from-795d6f",
+        "branch": "wtgui/you-write-one-brief-from-795d6f",
+        "head": "76a2a0e",
+        "dirty": 0
+      },
+      "artifact": {
+        "id": "verdict",
+        "path": "out/{{run_id}}/r{{round}}/verdict.json",
+        "present": true,
+        "sha256": "5e27900bae7107122ac6a60136f0f653113842f9a87797ae8f34187d1bdd7130",
+        "bytes": null,
+        "commit": "76a2a0e5ac130e3db74ba4ee640843a2aa88582d",
+        "blob": null,
+        "blobSha256": null,
+        "unchanged": false,
+        "uncommitted": true
+      },
+      "inputs": [
+        {
+          "artifact": "critique-record",
+          "path": "out/{{run_id}}/r{{round}}/critique.json",
+          "present": true,
+          "sha256": "560a0954aa65334bddb4facf6141d2a77fbcd90089357d807f67354d70488db6",
+          "edge": "H-199-200",
+          "via": "handoff",
+          "commit": "7dabdefcfc6c46acc86e622a44a84e5a10fea7aa"
+        }
+      ],
+      "inputsDropped": 0,
+      "decision": {
+        "code": null,
+        "by": "panel",
+        "trigger": "gate-record",
+        "reason": "gate G51 crossed by <repo>\\.worktrees\\you-write-one-brief-from-795d6f\\ledger\\gates\\G51-{{run_id}}-r{{round}}.json",
+        "fact": {
+          "kind": "gate",
+          "gate": "G51",
+          "path": "<repo>\\.worktrees\\you-write-one-brief-from-795d6f\\ledger\\gates\\G51-{{run_id}}-r{{round}}.json",
+          "present": true,
+          "stage": "S200",
+          "pipeline": "poc-breaking-rounds"
+        }
+      }
+    },
+    {
+      "id": "poc-breaking-rounds/S201#1",
+      "stage": "S201",
+      "visit": 1,
+      "enteredAt": "2026-11-05T22:51:11.529Z",
+      "settledAt": "2026-11-05T22:51:18.325Z",
+      "thread": "document-08",
+      "job": "job-document-08",
+      "status": "done",
+      "via": null,
+      "commit": "4a144979962bdd648b8a2fed8bc0abebc9d853d2",
+      "tree": {
+        "path": "<repo>/.worktrees/you-write-one-brief-from-795d6f",
+        "branch": "wtgui/you-write-one-brief-from-795d6f",
+        "head": "4a14497",
+        "dirty": 0
+      },
+      "artifact": {
+        "id": "authored-decisions",
+        "path": "out/{{run_id}}/r{{round}}/authored-decisions.json",
+        "present": true,
+        "sha256": "3d2e56f8a2c4f09ea5b0de714eaf78c8275a065ff3d8b1e111eed5cb1ce9f6d0",
+        "bytes": null,
+        "commit": "4a144979962bdd648b8a2fed8bc0abebc9d853d2",
+        "blob": null,
+        "blobSha256": null,
+        "unchanged": false,
+        "uncommitted": true
+      },
+      "inputs": [
+        {
+          "artifact": "verdict",
+          "path": "out/{{run_id}}/r{{round}}/verdict.json",
+          "present": true,
+          "sha256": "5e27900bae7107122ac6a60136f0f653113842f9a87797ae8f34187d1bdd7130",
+          "edge": "H-200-201",
+          "via": "handoff",
+          "commit": "76a2a0e5ac130e3db74ba4ee640843a2aa88582d"
+        }
+      ],
+      "inputsDropped": 0,
+      "decision": {
+        "code": null,
+        "by": "panel",
+        "trigger": "stage-settled",
+        "reason": "poc-breaking-rounds · S201 settled — the run finished",
+        "fact": {
+          "kind": "run-status",
+          "status": "done",
+          "detail": "{\"ok\":true,\"stage\":\"S201\",\"visit\":1,\"round\":1,\"artifact\":\"out/run-1/r1/authored-decisions.json\",\"sha256\":\"3d2e56f8a2c4f09ea5b0de714eaf78c8275a065ff3d8b1e111eed5cb1ce9f6d0\",\"bytes\":160,\"commit\":\"4a144979962bdd648b8a2fed8bc0abebc9d853d2\"}",
+          "stage": "S201",
+          "pipeline": "poc-breaking-rounds",
+          "thread": "document-08"
+        }
+      }
+    },
+    {
+      "id": "poc-breaking-rounds/S202#1",
+      "stage": "S202",
+      "visit": 1,
+      "enteredAt": "2026-11-05T22:51:18.325Z",
+      "settledAt": "2026-11-05T22:51:26.341Z",
+      "thread": "document-09",
+      "job": "job-document-09",
+      "status": "done",
+      "via": null,
+      "commit": "327a3ae8956d4037008b29eb9279a0892aab9371",
+      "tree": {
+        "path": "<repo>/.worktrees/you-write-one-brief-from-795d6f",
+        "branch": "wtgui/you-write-one-brief-from-795d6f",
+        "head": "327a3ae",
+        "dirty": 0
+      },
+      "artifact": {
+        "id": "score-record",
+        "path": "out/{{run_id}}/r{{round}}/score.json",
+        "present": true,
+        "sha256": "1f300ee11150fed109217d82c671777b90e1884c046f38e7dfa5affcdc6b5286",
+        "bytes": null,
+        "commit": "327a3ae8956d4037008b29eb9279a0892aab9371",
+        "blob": null,
+        "blobSha256": null,
+        "unchanged": false,
+        "uncommitted": true
+      },
+      "inputs": [
+        {
+          "artifact": "authored-decisions",
+          "path": "out/{{run_id}}/r{{round}}/authored-decisions.json",
+          "present": true,
+          "sha256": "3d2e56f8a2c4f09ea5b0de714eaf78c8275a065ff3d8b1e111eed5cb1ce9f6d0",
+          "edge": "H-201-202",
+          "via": "handoff",
+          "commit": "4a144979962bdd648b8a2fed8bc0abebc9d853d2"
+        }
+      ],
+      "inputsDropped": 0,
+      "decision": {
+        "code": null,
+        "by": "panel",
+        "trigger": "gate-record",
+        "reason": "gate G52 crossed by <repo>\\.worktrees\\you-write-one-brief-from-795d6f\\ledger\\gates\\G52-{{run_id}}-r{{round}}.json",
+        "fact": {
+          "kind": "gate",
+          "gate": "G52",
+          "path": "<repo>\\.worktrees\\you-write-one-brief-from-795d6f\\ledger\\gates\\G52-{{run_id}}-r{{round}}.json",
+          "present": true,
+          "stage": "S202",
+          "pipeline": "poc-breaking-rounds"
+        }
+      }
+    },
+    {
+      "id": "poc-breaking-rounds/S203#1",
+      "stage": "S203",
+      "visit": 1,
+      "enteredAt": "2026-11-05T22:51:31.520Z",
+      "settledAt": null,
+      "thread": "document-10",
+      "job": "job-document-10",
+      "status": null,
+      "via": null,
+      "commit": "d51d8e9f5099b49e2ee934a11184df58584ab7f1",
+      "tree": {
+        "path": "<repo>/.worktrees/you-write-one-brief-from-795d6f",
+        "branch": "wtgui/you-write-one-brief-from-795d6f",
+        "head": "d51d8e9",
+        "dirty": 0
+      },
+      "artifact": null,
+      "inputs": [
+        {
+          "artifact": "score-record",
+          "path": "out/{{run_id}}/r{{round}}/score.json",
+          "present": true,
+          "sha256": "1f300ee11150fed109217d82c671777b90e1884c046f38e7dfa5affcdc6b5286",
+          "edge": "H-202-203",
+          "via": "handoff",
+          "commit": "327a3ae8956d4037008b29eb9279a0892aab9371"
+        }
+      ],
+      "inputsDropped": 0,
+      "decision": null
+    }
+  ],
+  "parks": [
+    {
+      "step": 4,
+      "stage": "S181",
+      "visit": 1,
+      "code": "pipeline-gate",
+      "reason": "gate G50 follows stage S181 and declares a decision record at <repo>\\.worktrees\\you-write-one-brief-from-795d6f\\ledger\\gates\\G50-{{run_id}}.json — the code does not decide it, and the record has not been written",
+      "waitingFor": {
+        "kind": "gate",
+        "gate": "G50",
+        "path": "ledger/gates/G50-{{run_id}}.json",
+        "stage": "S181",
+        "since": "2026-11-05T22:50:38.325Z"
+      },
+      "crossings": {
+        "H-180-181": 1
+      }
+    },
+    {
+      "step": 10,
+      "stage": "S200",
+      "visit": 1,
+      "code": "pipeline-gate",
+      "reason": "gate G51 follows stage S200 and declares a decision record at <repo>\\.worktrees\\you-write-one-brief-from-795d6f\\ledger\\gates\\G51-{{run_id}}-r{{round}}.json — the code does not decide it, and the record has not been written",
+      "waitingFor": {
+        "kind": "gate",
+        "gate": "G51",
+        "path": "ledger/gates/G51-{{run_id}}-r{{round}}.json",
+        "stage": "S200",
+        "since": "2026-11-05T22:51:08.259Z"
+      },
+      "crossings": {
+        "H-180-181": 1,
+        "H-181-191": 1,
+        "H-191-192": 1,
+        "H-192-198": 1,
+        "H-198-199": 1,
+        "H-199-200": 1
+      }
+    },
+    {
+      "step": 13,
+      "stage": "S202",
+      "visit": 1,
+      "code": "pipeline-gate",
+      "reason": "gate G52 follows stage S202 and declares a decision record at <repo>\\.worktrees\\you-write-one-brief-from-795d6f\\ledger\\gates\\G52-{{run_id}}-r{{round}}.json — the code does not decide it, and the record has not been written",
+      "waitingFor": {
+        "kind": "gate",
+        "gate": "G52",
+        "path": "ledger/gates/G52-{{run_id}}-r{{round}}.json",
+        "stage": "S202",
+        "since": "2026-11-05T22:51:26.341Z"
+      },
+      "crossings": {
+        "H-180-181": 1,
+        "H-181-191": 1,
+        "H-191-192": 1,
+        "H-192-198": 1,
+        "H-198-199": 1,
+        "H-199-200": 1,
+        "H-200-201": 1,
+        "H-201-202": 1
+      }
+    }
+  ],
+  "gateRecords": [
+    {
+      "gate": "G50",
+      "path": "ledger/gates/G50-run-1.json",
+      "at": "2026-11-05T22:50:43.063Z",
+      "step": 4,
+      "sha256": "99058cc570c7fad1a21236deb45b4ffac13099ab842eac4a1fdf77c4d09c0b8a",
+      "round": 1
+    },
+    {
+      "gate": "G51",
+      "path": "ledger/gates/G51-run-1-r1.json",
+      "at": "2026-11-05T22:51:11.528Z",
+      "step": 10,
+      "sha256": "e8036c4cf5ee6e26a93db1fabaf45732f6d4846ce581aaaf0b4abe3641c3334d",
+      "round": 1
+    },
+    {
+      "gate": "G52",
+      "path": "ledger/gates/G52-run-1-r1.json",
+      "at": "2026-11-05T22:51:31.519Z",
+      "step": 13,
+      "sha256": "f9ac96c27ee9cca2625d1dee6afc5367824bccd41ee37c91ace1a9fc20adec57",
+      "round": 1
+    }
+  ],
+  "releases": [],
+  "comparisons": [],
+  "worktrees": [
+    "<repo>",
+    "<repo>/.worktrees/you-write-one-brief-from-795d6f"
+  ],
+  "terminal": {
+    "kind": "settle-dropped",
+    "code": "pipeline-settle-unwritten",
+    "reason": "the last stage S203 ran (job job-document-10 reads done) and the driver settled it in memory, but the row is still running and S203's stage run still reads status null after 3 consecutive passes — the settle was never written",
+    "stage": "S203",
+    "after": 10,
+    "job": "job-document-10"
+  },
+  "steps": [
+    {
+      "step": 1,
+      "state": "queued",
+      "stage": "S180",
+      "visit": 1,
+      "crossings": {},
+      "thread": null,
+      "live": false,
+      "gate": null,
+      "reason": null
+    },
+    {
+      "step": 2,
+      "state": "running",
+      "stage": "S180",
+      "visit": 1,
+      "crossings": {},
+      "thread": "document-01",
+      "live": false,
+      "gate": null,
+      "reason": null
+    },
+    {
+      "step": 3,
+      "state": "running",
+      "stage": "S181",
+      "visit": 1,
+      "crossings": {
+        "H-180-181": 1
+      },
+      "thread": "document-02",
+      "live": false,
+      "gate": null,
+      "reason": null
+    },
+    {
+      "step": 4,
+      "state": "parked",
+      "stage": "S181",
+      "visit": 1,
+      "crossings": {
+        "H-180-181": 1
+      },
+      "thread": null,
+      "live": false,
+      "gate": "pipeline-gate",
+      "reason": "gate G50 follows stage S181 and declares a decision record at <repo>\\.worktrees\\you-write-one-brief-from-795d6f\\ledger\\gates\\G50-{{run_id}}.json — the code does not decide it, and the record has not been written"
+    },
+    {
+      "step": 5,
+      "state": "running",
+      "stage": "S191",
+      "visit": 1,
+      "crossings": {
+        "H-180-181": 1,
+        "H-181-191": 1
+      },
+      "thread": "document-03",
+      "live": false,
+      "gate": null,
+      "reason": null
+    },
+    {
+      "step": 6,
+      "state": "running",
+      "stage": "S192",
+      "visit": 1,
+      "crossings": {
+        "H-180-181": 1,
+        "H-181-191": 1,
+        "H-191-192": 1
+      },
+      "thread": "document-04",
+      "live": false,
+      "gate": null,
+      "reason": null
+    },
+    {
+      "step": 7,
+      "state": "running",
+      "stage": "S198",
+      "visit": 1,
+      "crossings": {
+        "H-180-181": 1,
+        "H-181-191": 1,
+        "H-191-192": 1,
+        "H-192-198": 1
+      },
+      "thread": "document-05",
+      "live": false,
+      "gate": null,
+      "reason": null
+    },
+    {
+      "step": 8,
+      "state": "running",
+      "stage": "S199",
+      "visit": 1,
+      "crossings": {
+        "H-180-181": 1,
+        "H-181-191": 1,
+        "H-191-192": 1,
+        "H-192-198": 1,
+        "H-198-199": 1
+      },
+      "thread": "document-06",
+      "live": false,
+      "gate": null,
+      "reason": null
+    },
+    {
+      "step": 9,
+      "state": "running",
+      "stage": "S200",
+      "visit": 1,
+      "crossings": {
+        "H-180-181": 1,
+        "H-181-191": 1,
+        "H-191-192": 1,
+        "H-192-198": 1,
+        "H-198-199": 1,
+        "H-199-200": 1
+      },
+      "thread": "document-07",
+      "live": false,
+      "gate": null,
+      "reason": null
+    },
+    {
+      "step": 10,
+      "state": "parked",
+      "stage": "S200",
+      "visit": 1,
+      "crossings": {
+        "H-180-181": 1,
+        "H-181-191": 1,
+        "H-191-192": 1,
+        "H-192-198": 1,
+        "H-198-199": 1,
+        "H-199-200": 1
+      },
+      "thread": null,
+      "live": false,
+      "gate": "pipeline-gate",
+      "reason": "gate G51 follows stage S200 and declares a decision record at <repo>\\.worktrees\\you-write-one-brief-from-795d6f\\ledger\\gates\\G51-{{run_id}}-r{{round}}.json — the code does not decide it, and the record has not been written"
+    },
+    {
+      "step": 11,
+      "state": "running",
+      "stage": "S201",
+      "visit": 1,
+      "crossings": {
+        "H-180-181": 1,
+        "H-181-191": 1,
+        "H-191-192": 1,
+        "H-192-198": 1,
+        "H-198-199": 1,
+        "H-199-200": 1,
+        "H-200-201": 1
+      },
+      "thread": "document-08",
+      "live": false,
+      "gate": null,
+      "reason": null
+    },
+    {
+      "step": 12,
+      "state": "running",
+      "stage": "S202",
+      "visit": 1,
+      "crossings": {
+        "H-180-181": 1,
+        "H-181-191": 1,
+        "H-191-192": 1,
+        "H-192-198": 1,
+        "H-198-199": 1,
+        "H-199-200": 1,
+        "H-200-201": 1,
+        "H-201-202": 1
+      },
+      "thread": "document-09",
+      "live": false,
+      "gate": null,
+      "reason": null
+    },
+    {
+      "step": 13,
+      "state": "parked",
+      "stage": "S202",
+      "visit": 1,
+      "crossings": {
+        "H-180-181": 1,
+        "H-181-191": 1,
+        "H-191-192": 1,
+        "H-192-198": 1,
+        "H-198-199": 1,
+        "H-199-200": 1,
+        "H-200-201": 1,
+        "H-201-202": 1
+      },
+      "thread": null,
+      "live": false,
+      "gate": "pipeline-gate",
+      "reason": "gate G52 follows stage S202 and declares a decision record at <repo>\\.worktrees\\you-write-one-brief-from-795d6f\\ledger\\gates\\G52-{{run_id}}-r{{round}}.json — the code does not decide it, and the record has not been written"
+    },
+    {
+      "step": 14,
+      "state": "running",
+      "stage": "S203",
+      "visit": 1,
+      "crossings": {
+        "H-180-181": 1,
+        "H-181-191": 1,
+        "H-191-192": 1,
+        "H-192-198": 1,
+        "H-198-199": 1,
+        "H-199-200": 1,
+        "H-200-201": 1,
+        "H-201-202": 1,
+        "H-202-203": 1
+      },
+      "thread": "document-10",
+      "live": false,
+      "gate": null,
+      "reason": null
+    },
+    {
+      "step": 15,
+      "state": "running",
+      "stage": "S203",
+      "visit": 1,
+      "crossings": {
+        "H-180-181": 1,
+        "H-181-191": 1,
+        "H-191-192": 1,
+        "H-192-198": 1,
+        "H-198-199": 1,
+        "H-199-200": 1,
+        "H-200-201": 1,
+        "H-201-202": 1,
+        "H-202-203": 1
+      },
+      "thread": null,
+      "live": false,
+      "gate": null,
+      "reason": null
+    },
+    {
+      "step": 16,
+      "state": "running",
+      "stage": "S203",
+      "visit": 1,
+      "crossings": {
+        "H-180-181": 1,
+        "H-181-191": 1,
+        "H-191-192": 1,
+        "H-192-198": 1,
+        "H-198-199": 1,
+        "H-199-200": 1,
+        "H-200-201": 1,
+        "H-201-202": 1,
+        "H-202-203": 1
+      },
+      "thread": null,
+      "live": false,
+      "gate": null,
+      "reason": null
+    }
+  ],
+  "prompts": [
+    {
+      "stage": "S180",
+      "visit": 1,
+      "round": 1,
+      "prompt": "You write one brief from the plan. You pin what the plan names and you do not re-pin the export to what is on disk today; a plan that names a method the criteria do not know stops at ESCALATE-AMBIGUITY with both ids quoted.\n\n— POC-breaking rounds — eight methods, six questions, one ledger: stage 1 of 24, Open the episode (poc-breaking-rounds/S180), visit 1\nQueue task #1: carry the POC-breaking rounds document through the pipeline\n\nINPUTS\n  tree        <repo>/.worktrees/you-write-one-brief-from-795d6f   branch wtgui/you-write-one-brief-from-795d6f\n              HEAD 2a17625   0 uncommitted files\n\none tree, the document's own graph",
+      "target": "<repo>/.worktrees/you-write-one-brief-from-795d6f"
+    },
+    {
+      "stage": "S181",
+      "visit": 1,
+      "round": 1,
+      "prompt": "You nominate a file and the literal that nominated it. You do not answer the question, summarise the file or rank by a guess about what a name means; a question with no site gets an exclusion with its reason.\n\n— POC-breaking rounds — eight methods, six questions, one ledger: stage 2 of 24, Sift the sites (poc-breaking-rounds/S181), visit 1\nQueue task #1: carry the POC-breaking rounds document through the pipeline\n\nINPUTS\n  handed on   episode-brief   out/{{run_id}}/episode-brief.json   commit 170a7f3a2af8   blob (the file is not in the commit)   sha256 ef067aea182d…   writer round-conductor\n              (S180 → S181, handoff H-180-181, sequence; read it at 170a7f3a2af8:out/{{run_id}}/episode-brief.json)\n              the artifact is uncommitted work — there is no blob for it at 170a7f3a2af8\n  tree        <repo>/.worktrees/you-write-one-brief-from-795d6f   branch wtgui/you-write-one-brief-from-795d6f\n              HEAD 170a7f3   0 uncommitted files\n\none tree, the document's own graph",
+      "target": "<repo>/.worktrees/you-write-one-brief-from-795d6f"
+    },
+    {
+      "stage": "S191",
+      "visit": 1,
+      "round": 1,
+      "prompt": "You write the round number, the six questions with their sites and the blocking set copied from the previous verdict. You do not widen the round to every question, and you do not paraphrase a blocking set that names three citations.\n\n— POC-breaking rounds — eight methods, six questions, one ledger: stage 12 of 24, Open the extraction round (poc-breaking-rounds/S191), visit 1\nQueue task #1: carry the POC-breaking rounds document through the pipeline\n\nINPUTS\n  handed on   site-ranking   out/{{run_id}}/site-ranking.json   commit 7df8a986b28c   blob (the file is not in the commit)   sha256 8d91b8f81c86…   writer sifter\n              (S181 → S191, handoff H-181-191, sequence; read it at 7df8a986b28c:out/{{run_id}}/site-ranking.json)\n              the artifact is uncommitted work — there is no blob for it at 7df8a986b28c\n  came back   the row arrived by H-181-191 from S181; the gate G50 after it declares ledger/gates/G50-{{run_id}}.json — read it; the panel does not read it for you\n  tree        <repo>/.worktrees/you-write-one-brief-from-795d6f   branch wtgui/you-write-one-brief-from-795d6f\n              HEAD dcf6e5f   0 uncommitted files\n\none tree, the document's own graph",
+      "target": "<repo>/.worktrees/you-write-one-brief-from-795d6f"
+    },
+    {
+      "stage": "S192",
+      "visit": 1,
+      "round": 1,
+      "prompt": "You parse the files and emit records; you do not name a purpose, judge a table or edit the schema. If a table is declared twice with different columns, stop with ESCALATE-AMBIGUITY and quote both declarations.\n\n— POC-breaking rounds — eight methods, six questions, one ledger: stage 13 of 24, Extract the entities (poc-breaking-rounds/S192), visit 1\nQueue task #1: carry the POC-breaking rounds document through the pipeline\n\nINPUTS\n  handed on   round-brief   out/{{run_id}}/r{{round}}/round-brief.json   commit 7a5caeaa4266   blob (the file is not in the commit)   sha256 ea429fd4477e…   writer round-steward\n              (S191 → S192, handoff H-191-192, sequence; read it at 7a5caeaa4266:out/{{run_id}}/r{{round}}/round-brief.json)\n              the artifact is uncommitted work — there is no blob for it at 7a5caeaa4266\n  tree        <repo>/.worktrees/you-write-one-brief-from-795d6f   branch wtgui/you-write-one-brief-from-795d6f\n              HEAD 7a5caea   0 uncommitted files\n\none tree, the document's own graph",
+      "target": "<repo>/.worktrees/you-write-one-brief-from-795d6f"
+    },
+    {
+      "stage": "S198",
+      "visit": 1,
+      "round": 1,
+      "prompt": "You load the six files, count the lines and write one artefact with eight method rows and six question rows. You never re-read the slice and you never edit a records file.\n\n— POC-breaking rounds — eight methods, six questions, one ledger: stage 19 of 24, Combine the round (poc-breaking-rounds/S198), visit 1\nQueue task #1: carry the POC-breaking rounds document through the pipeline\n\nINPUTS\n  handed on   q1-records   out/{{run_id}}/r{{round}}/Q1/records.jsonl   commit 73bc6cb56b37   blob (the file is not in the commit)   sha256 0b4379f5dfbf…   writer entity-extractor\n              (S192 → S198, handoff H-192-198, sequence; read it at 73bc6cb56b37:out/{{run_id}}/r{{round}}/Q1/records.jsonl)\n              the artifact is uncommitted work — there is no blob for it at 73bc6cb56b37\n  tree        <repo>/.worktrees/you-write-one-brief-from-795d6f   branch wtgui/you-write-one-brief-from-795d6f\n              HEAD 73bc6cb   0 uncommitted files\n\none tree, the document's own graph",
+      "target": "<repo>/.worktrees/you-write-one-brief-from-795d6f"
+    },
+    {
+      "stage": "S199",
+      "visit": 1,
+      "round": 1,
+      "prompt": "You recompute from the records files and re-read every citation at its line. You do not repair a record, you do not pass a count because it matches the artefact's own total, and you state what you did not run.\n\n— POC-breaking rounds — eight methods, six questions, one ledger: stage 20 of 24, Audit the numbers (poc-breaking-rounds/S199), visit 1\nQueue task #1: carry the POC-breaking rounds document through the pipeline\n\nINPUTS\n  handed on   combined-artefact   out/{{run_id}}/r{{round}}/combined.json   commit 23cc45c44515   blob (the file is not in the commit)   sha256 bbf1d733c17c…   writer round-combiner\n              (S198 → S199, handoff H-198-199, sequence; read it at 23cc45c44515:out/{{run_id}}/r{{round}}/combined.json)\n              the artifact is uncommitted work — there is no blob for it at 23cc45c44515\n  tree        <repo>/.worktrees/you-write-one-brief-from-795d6f   branch wtgui/you-write-one-brief-from-795d6f\n              HEAD 23cc45c   0 uncommitted files\n\none tree, the document's own graph",
+      "target": "<repo>/.worktrees/you-write-one-brief-from-795d6f"
+    },
+    {
+      "stage": "S200",
+      "visit": 1,
+      "round": 1,
+      "prompt": "You score from the audit's recomputed counts and you write the blocking set with every citation and criterion that failed. You do not read the raw records, raise a percentage by dropping what did not resolve, or write a refusal with an empty blocking set.\n\n— POC-breaking rounds — eight methods, six questions, one ledger: stage 21 of 24, Judge the criteria (poc-breaking-rounds/S200), visit 1\nQueue task #1: carry the POC-breaking rounds document through the pipeline\n\nINPUTS\n  handed on   critique-record   out/{{run_id}}/r{{round}}/critique.json   commit 7dabdefcfc6c   blob (the file is not in the commit)   sha256 560a0954aa65…   writer critic\n              (S199 → S200, handoff H-199-200, sequence; read it at 7dabdefcfc6c:out/{{run_id}}/r{{round}}/critique.json)\n              the artifact is uncommitted work — there is no blob for it at 7dabdefcfc6c\n  tree        <repo>/.worktrees/you-write-one-brief-from-795d6f   branch wtgui/you-write-one-brief-from-795d6f\n              HEAD 7dabdef   0 uncommitted files\n\none tree, the document's own graph",
+      "target": "<repo>/.worktrees/you-write-one-brief-from-795d6f"
+    },
+    {
+      "stage": "S201",
+      "visit": 1,
+      "round": 1,
+      "prompt": "You read the machine's candidate and the hand-written record and you record adopt, edit or reject with a rationale and the citation you read. You do not edit the machine's records and you do not adopt a record you have not opened.\n\n— POC-breaking rounds — eight methods, six questions, one ledger: stage 22 of 24, Resolve the authored gaps (poc-breaking-rounds/S201), visit 1\nQueue task #1: carry the POC-breaking rounds document through the pipeline\n\nINPUTS\n  handed on   verdict   out/{{run_id}}/r{{round}}/verdict.json   commit 76a2a0e5ac13   blob (the file is not in the commit)   sha256 5e27900bae71…   writer criteria-judge\n              (S200 → S201, handoff H-200-201, sequence; read it at 76a2a0e5ac13:out/{{run_id}}/r{{round}}/verdict.json)\n              the artifact is uncommitted work — there is no blob for it at 76a2a0e5ac13\n  came back   the row arrived by H-200-201 from S200; the gate G51 after it declares ledger/gates/G51-{{run_id}}-r{{round}}.json — read it; the panel does not read it for you\n  tree        <repo>/.worktrees/you-write-one-brief-from-795d6f   branch wtgui/you-write-one-brief-from-795d6f\n              HEAD c29aeb8   0 uncommitted files\n\none tree, the document's own graph",
+      "target": "<repo>/.worktrees/you-write-one-brief-from-795d6f"
+    },
+    {
+      "stage": "S202",
+      "visit": 1,
+      "round": 1,
+      "prompt": "You compare each question on its own unit and you apply the seat's decision to every disputed key. You do not score across units, and an adopted record is counted as authored rather than as machine output.\n\n— POC-breaking rounds — eight methods, six questions, one ledger: stage 23 of 24, Score the layer (poc-breaking-rounds/S202), visit 1\nQueue task #1: carry the POC-breaking rounds document through the pipeline\n\nINPUTS\n  handed on   authored-decisions   out/{{run_id}}/r{{round}}/authored-decisions.json   commit 4a144979962b   blob (the file is not in the commit)   sha256 3d2e56f8a2c4…   writer layer-owner\n              (S201 → S202, handoff H-201-202, sequence; read it at 4a144979962b:out/{{run_id}}/r{{round}}/authored-decisions.json)\n              the artifact is uncommitted work — there is no blob for it at 4a144979962b\n  tree        <repo>/.worktrees/you-write-one-brief-from-795d6f   branch wtgui/you-write-one-brief-from-795d6f\n              HEAD 4a14497   0 uncommitted files\n\none tree, the document's own graph",
+      "target": "<repo>/.worktrees/you-write-one-brief-from-795d6f"
+    },
+    {
+      "stage": "S203",
+      "visit": 1,
+      "round": 1,
+      "prompt": "You read the score record and write the page. You never add a number the record does not carry, and the page names the record's hash so a reader can re-derive it.\n\n— POC-breaking rounds — eight methods, six questions, one ledger: stage 24 of 24, Render the report (poc-breaking-rounds/S203), visit 1\nQueue task #1: carry the POC-breaking rounds document through the pipeline\n\nINPUTS\n  handed on   score-record   out/{{run_id}}/r{{round}}/score.json   commit 327a3ae8956d   blob (the file is not in the commit)   sha256 1f300ee11150…   writer criteria-scorer\n              (S202 → S203, handoff H-202-203, sequence; read it at 327a3ae8956d:out/{{run_id}}/r{{round}}/score.json)\n              the artifact is uncommitted work — there is no blob for it at 327a3ae8956d\n  came back   the row arrived by H-202-203 from S202; the gate G52 after it declares ledger/gates/G52-{{run_id}}-r{{round}}.json — read it; the panel does not read it for you\n  tree        <repo>/.worktrees/you-write-one-brief-from-795d6f   branch wtgui/you-write-one-brief-from-795d6f\n              HEAD d51d8e9   0 uncommitted files\n\none tree, the document's own graph",
+      "target": "<repo>/.worktrees/you-write-one-brief-from-795d6f"
+    }
+  ],
+  "journal": [
+    {
+      "at": "2026-11-05T22:50:26.298Z",
+      "kind": "queue",
+      "text": "Assistant #1: added #1 carry the POC-breaking rounds document through the pipeline — by reader"
+    },
+    {
+      "at": "2026-11-05T22:50:26.303Z",
+      "kind": "queue",
+      "text": "Assistant #1: #1 carry the POC-breaking rounds document through the pipeline → pipeline poc-breaking-rounds at S180 (entered 2026-11-05T22:50:26.302Z) — by reader"
+    },
+    {
+      "at": "2026-11-05T22:50:27.193Z",
+      "kind": "pipeline",
+      "text": "#1 carry the POC-breaking rounds document through the pipeline — tree cut at <repo>/.worktrees/you-write-one-brief-from-795d6f (branch wtgui/you-write-one-brief-from-795d6f), no worker started"
+    },
+    {
+      "at": "2026-11-05T22:50:29.821Z",
+      "kind": "pipeline",
+      "text": "#1 carry the POC-breaking rounds document through the pipeline — starting S180 (1 of 24) of poc-breaking-rounds in <repo>/.worktrees/you-write-one-brief-from-795d6f"
+    },
+    {
+      "at": "2026-11-05T22:50:29.891Z",
+      "kind": "queue",
+      "text": "#1 carry the POC-breaking rounds document through the pipeline — linked to document-01 in <repo>/.worktrees/you-write-one-brief-from-795d6f by the SPAWN that cut it"
+    },
+    {
+      "at": "2026-11-05T22:50:34.912Z",
+      "kind": "queue",
+      "text": "#1 carry the POC-breaking rounds document through the pipeline — running → queued at S181 by the panel: stage S180 settled — moved to S181 (2 of 24) of poc-breaking-rounds"
+    },
+    {
+      "at": "2026-11-05T22:50:34.912Z",
+      "kind": "pipeline",
+      "text": "#1 carry the POC-breaking rounds document through the pipeline — starting S181 (2 of 24) of poc-breaking-rounds in <repo>/.worktrees/you-write-one-brief-from-795d6f"
+    },
+    {
+      "at": "2026-11-05T22:50:35.298Z",
+      "kind": "queue",
+      "text": "#1 carry the POC-breaking rounds document through the pipeline — linked to document-02 in <repo>/.worktrees/you-write-one-brief-from-795d6f by the SPAWN that cut it"
+    },
+    {
+      "at": "2026-11-05T22:50:41.201Z",
+      "kind": "queue",
+      "text": "#1 carry the POC-breaking rounds document through the pipeline — running → parked at S181 by the panel: gate G50 follows stage S181 and declares a decision record at <repo>\\.worktrees\\you-write-one-brief-from-795d6f\\ledger\\gates\\G50-{{run_id}}.json — the code does not decide it, and the record has not been written"
+    },
+    {
+      "at": "2026-11-05T22:50:45.890Z",
+      "kind": "queue",
+      "text": "#1 carry the POC-breaking rounds document through the pipeline — parked → queued at S191 by the panel: gate G50 crossed by <repo>\\.worktrees\\you-write-one-brief-from-795d6f\\ledger\\gates\\G50-run-1.json — the row moved to S191"
+    },
+    {
+      "at": "2026-11-05T22:50:45.890Z",
+      "kind": "pipeline",
+      "text": "#1 carry the POC-breaking rounds document through the pipeline — starting S191 (12 of 24) of poc-breaking-rounds in <repo>/.worktrees/you-write-one-brief-from-795d6f"
+    },
+    {
+      "at": "2026-11-05T22:50:46.427Z",
+      "kind": "queue",
+      "text": "#1 carry the POC-breaking rounds document through the pipeline — linked to document-03 in <repo>/.worktrees/you-write-one-brief-from-795d6f by the SPAWN that cut it"
+    },
+    {
+      "at": "2026-11-05T22:50:50.752Z",
+      "kind": "queue",
+      "text": "#1 carry the POC-breaking rounds document through the pipeline — running → queued at S192 by the panel: stage S191 settled — moved to S192 (13 of 24) of poc-breaking-rounds"
+    },
+    {
+      "at": "2026-11-05T22:50:50.752Z",
+      "kind": "pipeline",
+      "text": "#1 carry the POC-breaking rounds document through the pipeline — starting S192 (13 of 24) of poc-breaking-rounds in <repo>/.worktrees/you-write-one-brief-from-795d6f"
+    },
+    {
+      "at": "2026-11-05T22:50:51.037Z",
+      "kind": "queue",
+      "text": "#1 carry the POC-breaking rounds document through the pipeline — linked to document-04 in <repo>/.worktrees/you-write-one-brief-from-795d6f by the SPAWN that cut it"
+    },
+    {
+      "at": "2026-11-05T22:50:56.035Z",
+      "kind": "queue",
+      "text": "#1 carry the POC-breaking rounds document through the pipeline — running → queued at S198 by the panel: stage S192 settled — moved to S198 (19 of 24) of poc-breaking-rounds"
+    },
+    {
+      "at": "2026-11-05T22:50:56.035Z",
+      "kind": "pipeline",
+      "text": "#1 carry the POC-breaking rounds document through the pipeline — starting S198 (19 of 24) of poc-breaking-rounds in <repo>/.worktrees/you-write-one-brief-from-795d6f"
+    },
+    {
+      "at": "2026-11-05T22:50:56.176Z",
+      "kind": "queue",
+      "text": "#1 carry the POC-breaking rounds document through the pipeline — linked to document-05 in <repo>/.worktrees/you-write-one-brief-from-795d6f by the SPAWN that cut it"
+    },
+    {
+      "at": "2026-11-05T22:51:02.321Z",
+      "kind": "queue",
+      "text": "#1 carry the POC-breaking rounds document through the pipeline — running → queued at S199 by the panel: stage S198 settled — moved to S199 (20 of 24) of poc-breaking-rounds"
+    },
+    {
+      "at": "2026-11-05T22:51:02.321Z",
+      "kind": "pipeline",
+      "text": "#1 carry the POC-breaking rounds document through the pipeline — starting S199 (20 of 24) of poc-breaking-rounds in <repo>/.worktrees/you-write-one-brief-from-795d6f"
+    },
+    {
+      "at": "2026-11-05T22:51:02.420Z",
+      "kind": "queue",
+      "text": "#1 carry the POC-breaking rounds document through the pipeline — linked to document-06 in <repo>/.worktrees/you-write-one-brief-from-795d6f by the SPAWN that cut it"
+    },
+    {
+      "at": "2026-11-05T22:51:05.883Z",
+      "kind": "queue",
+      "text": "#1 carry the POC-breaking rounds document through the pipeline — running → queued at S200 by the panel: stage S199 settled — moved to S200 (21 of 24) of poc-breaking-rounds"
+    },
+    {
+      "at": "2026-11-05T22:51:05.883Z",
+      "kind": "pipeline",
+      "text": "#1 carry the POC-breaking rounds document through the pipeline — starting S200 (21 of 24) of poc-breaking-rounds in <repo>/.worktrees/you-write-one-brief-from-795d6f"
+    },
+    {
+      "at": "2026-11-05T22:51:05.908Z",
+      "kind": "queue",
+      "text": "#1 carry the POC-breaking rounds document through the pipeline — linked to document-07 in <repo>/.worktrees/you-write-one-brief-from-795d6f by the SPAWN that cut it"
+    },
+    {
+      "at": "2026-11-05T22:51:10.662Z",
+      "kind": "queue",
+      "text": "#1 carry the POC-breaking rounds document through the pipeline — running → parked at S200 by the panel: gate G51 follows stage S200 and declares a decision record at <repo>\\.worktrees\\you-write-one-brief-from-795d6f\\ledger\\gates\\G51-{{run_id}}-r{{round}}.json — the code does not decide it, and the record has not been written"
+    },
+    {
+      "at": "2026-11-05T22:51:14.171Z",
+      "kind": "queue",
+      "text": "#1 carry the POC-breaking rounds document through the pipeline — parked → queued at S201 by the panel: gate G51 crossed by <repo>\\.worktrees\\you-write-one-brief-from-795d6f\\ledger\\gates\\G51-run-1-r1.json — the row moved to S201"
+    },
+    {
+      "at": "2026-11-05T22:51:14.171Z",
+      "kind": "pipeline",
+      "text": "#1 carry the POC-breaking rounds document through the pipeline — starting S201 (22 of 24) of poc-breaking-rounds in <repo>/.worktrees/you-write-one-brief-from-795d6f"
+    },
+    {
+      "at": "2026-11-05T22:51:14.533Z",
+      "kind": "queue",
+      "text": "#1 carry the POC-breaking rounds document through the pipeline — linked to document-08 in <repo>/.worktrees/you-write-one-brief-from-795d6f by the SPAWN that cut it"
+    },
+    {
+      "at": "2026-11-05T22:51:21.830Z",
+      "kind": "queue",
+      "text": "#1 carry the POC-breaking rounds document through the pipeline — running → queued at S202 by the panel: stage S201 settled — moved to S202 (23 of 24) of poc-breaking-rounds"
+    },
+    {
+      "at": "2026-11-05T22:51:21.831Z",
+      "kind": "pipeline",
+      "text": "#1 carry the POC-breaking rounds document through the pipeline — starting S202 (23 of 24) of poc-breaking-rounds in <repo>/.worktrees/you-write-one-brief-from-795d6f"
+    },
+    {
+      "at": "2026-11-05T22:51:22.069Z",
+      "kind": "queue",
+      "text": "#1 carry the POC-breaking rounds document through the pipeline — linked to document-09 in <repo>/.worktrees/you-write-one-brief-from-795d6f by the SPAWN that cut it"
+    },
+    {
+      "at": "2026-11-05T22:51:29.247Z",
+      "kind": "queue",
+      "text": "#1 carry the POC-breaking rounds document through the pipeline — running → parked at S202 by the panel: gate G52 follows stage S202 and declares a decision record at <repo>\\.worktrees\\you-write-one-brief-from-795d6f\\ledger\\gates\\G52-{{run_id}}-r{{round}}.json — the code does not decide it, and the record has not been written"
+    },
+    {
+      "at": "2026-11-05T22:51:33.978Z",
+      "kind": "queue",
+      "text": "#1 carry the POC-breaking rounds document through the pipeline — parked → queued at S203 by the panel: gate G52 crossed by <repo>\\.worktrees\\you-write-one-brief-from-795d6f\\ledger\\gates\\G52-run-1-r1.json — the row moved to S203"
+    },
+    {
+      "at": "2026-11-05T22:51:33.978Z",
+      "kind": "pipeline",
+      "text": "#1 carry the POC-breaking rounds document through the pipeline — starting S203 (24 of 24) of poc-breaking-rounds in <repo>/.worktrees/you-write-one-brief-from-795d6f"
+    },
+    {
+      "at": "2026-11-05T22:51:35.059Z",
+      "kind": "queue",
+      "text": "#1 carry the POC-breaking rounds document through the pipeline — linked to document-10 in <repo>/.worktrees/you-write-one-brief-from-795d6f by the SPAWN that cut it"
+    }
+  ]
+}

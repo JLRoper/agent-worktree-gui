@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The 24-stage POC-breaking rounds, routed through the panel's stage executor</title>
+<style>
+  :root { --bg:#0e1116; --panel:#151a21; --panel2:#1b212a; --line:#2a3340; --text:#e6e9ef; --dim:#9aa5b4;
+           --dimmer:#6f7a89; --green:#7ee787; --red:#ff9c94; --amber:#f0c674; --blue:#9ecbff; --purple:#c8a6ff;
+           --mono:ui-monospace,"Cascadia Mono",Consolas,"SF Mono",Menlo,monospace;
+           --ui:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  * { box-sizing:border-box; }
+  html { background:var(--bg); }
+  body { margin:0; color:var(--text); font:15px/1.62 var(--ui); }
+  .wrap { max-width:1120px; margin:0 auto; padding:30px 24px 72px; }
+  a { color:var(--blue); text-decoration:none; } a:hover { text-decoration:underline; }
+  h1 { font-size:27px; line-height:1.22; margin:4px 0 8px; letter-spacing:-0.2px; }
+  h2 { font-size:19px; margin:44px 0 12px; padding-top:16px; border-top:1px solid var(--line); }
+  h3 { font-size:15.5px; margin:26px 0 8px; color:var(--blue); }
+  h4 { font-size:12px; margin:18px 0 6px; color:var(--dim); text-transform:uppercase; letter-spacing:0.07em; }
+  p { margin:9px 0; }
+  ul,ol { margin:8px 0 8px 22px; padding:0; } li { margin:5px 0; }
+  code,.mono { font-family:var(--mono); font-size:12.8px; }
+  code { background:var(--panel2); border:1px solid var(--line); border-radius:4px; padding:0 4px; }
+  pre { background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:12px 14px; overflow-x:auto;
+         font-family:var(--mono); font-size:12.4px; line-height:1.55; }
+  .kicker { color:var(--dimmer); font-size:12px; text-transform:uppercase; letter-spacing:0.12em; }
+  .sub { color:var(--dim); font-size:16px; margin:0 0 14px; max-width:940px; }
+  .meta { color:var(--dim); font-size:12.5px; }
+  .meta code { font-size:12px; }
+  .anchor { font-family:var(--mono); font-size:12.2px; color:var(--purple); background:#1d1826;
+            border:1px solid #3d3352; border-radius:4px; padding:0 5px; white-space:nowrap; }
+  nav { margin:18px 0 8px; padding:12px 16px; background:var(--panel); border:1px solid var(--line);
+        border-radius:8px; font-size:13px; line-height:1.9; }
+  nav b { color:var(--dimmer); font-weight:600; text-transform:uppercase; font-size:11px; letter-spacing:0.1em; }
+  nav a { margin:0 10px 0 0; white-space:nowrap; }
+  .lead { background:var(--panel); border:1px solid var(--line); border-left:4px solid var(--blue);
+          border-radius:8px; padding:14px 18px; margin:18px 0; }
+  .lead p { margin:5px 0; }
+  .verdict { background:#13261a; border:1px solid #2f5f38; border-left:4px solid var(--green);
+             border-radius:8px; padding:13px 18px; margin:18px 0; }
+  .verdict h4 { color:var(--green); margin:0 0 4px; }
+  .failbox { background:#2a1414; border:1px solid #6b2a2a; border-left:4px solid var(--red);
+             border-radius:8px; padding:13px 18px; margin:18px 0; }
+  .failbox h4 { color:var(--red); margin:0 0 4px; }
+  .warn { background:#2a2414; border:1px solid #5c4d22; border-left:4px solid var(--amber);
+          border-radius:8px; padding:12px 18px; margin:16px 0; }
+  .warn h4 { color:var(--amber); margin:0 0 4px; }
+  .box { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px 18px; margin:14px 0; }
+  .tw { overflow-x:auto; margin:10px 0 16px; border:1px solid var(--line); border-radius:8px; }
+  table { border-collapse:collapse; width:100%; font-size:13px; }
+  th,td { text-align:left; vertical-align:top; padding:7px 10px; border-bottom:1px solid var(--line); }
+  th { background:var(--panel2); color:var(--dim); font-weight:600; font-size:12px;
+       text-transform:uppercase; letter-spacing:0.05em; }
+  tr:last-child td { border-bottom:0; }
+  .ok { color:var(--green); } .bad { color:var(--red); }
+  .warnpill { color:var(--amber); }
+  .pill { display:inline-block; margin-left:6px; padding:0 6px; border-radius:999px; font-size:10.5px;
+          text-transform:uppercase; letter-spacing:0.04em; color:var(--amber); border:1px solid #5c4d22; background:#241f10; }
+  .small { font-size:12.5px; color:var(--dim); }
+  .cols { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:12px; margin:12px 0; }
+  .stat { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:10px 14px; }
+  .stat b { display:block; font-size:22px; line-height:1.2; }
+  .stat span { color:var(--dim); font-size:12.5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="kicker">docs/reviews · agent-worktree-gui · the stage executor</div>
+<h1>The 24-stage POC-breaking rounds, routed through the panel's own stage executor</h1>
+<p class="sub">What the executor does with a document that declares 24 stages, 42 handoffs, 4 gates and a three-round
+loop — measured by running it, not by reading it.</p>
+<p class="meta">
+  branch <code>wtgui/route-the-24-stage-poc-b-245d89</code> at <code>54a6223</code> · version <code>1.26.0</code> ·
+  document <code>ai-development-factory/docs/pipeline/language/examples/starters/poc-breaking-rounds.yaml</code>
+  <code>bfeaba29b06f84c3…</code>, 3,075 lines,
+  131,640 bytes ·
+  exported bundle <code>588d4b3ca400c609…</code>, accepted by
+  <code>lib/pipeline-bundle.js</code> · run clock 2026-11-05 22:51:42 …
+  2026-11-05 23:00:33 UTC · harness <code>node tools/pipeline-exec-poc-rounds.mjs --route both</code>
+</p>
+
+<nav><b>Contents</b><br>
+  <a href="#answer">The answer</a>
+  <a href="#routed">What was routed</a>
+  <a href="#visit">The visit sequence</a>
+  <a href="#parked">Where it parked</a>
+  <a href="#loop">The loop, the cap, the release</a>
+  <a href="#tree">One tree or two</a>
+  <a href="#bytes">The artefacts, byte by byte</a>
+  <a href="#findings">What broke</a>
+  <a href="#limits">What this does not prove</a>
+  <a href="#repro">Reproducing it</a>
+  <a href="#evidence">The evidence</a>
+</nav>
+
+<h2 id="answer">The answer</h2>
+<div class="lead">
+<p><b>The document loads and drives.</b> The studio's own importer reads the YAML, its own exporter writes the
+bundle, and the panel's own loader accepts it without a warning: 24 stages, 42 handoffs, 4 gates, one
+<code>loop</code> edge carrying <code>cap: "3 rounds, then a person reads the blocking set"</code>.</p>
+<p><b>As written, the row visits 10 of the 24 stages</b> — S180, S181, S191, S192, S198, S199, S200, S201, S202,
+S203 — and parks three times, always on a gate (<code>pipeline-gate</code>), each released by the record's own
+arrival. The nine-way fork at S180 is walked as one edge, so the eight method lanes (S182–S189), the ledger keeper
+(S190) and five of the six question lanes (S193–S197) never run.</p>
+<p><b>The declared loop is never taken.</b> <code>H-200-201</code> (sequence) sorts before <code>H-200-191</code>
+(loop), so <code>crossings["H-200-191"] = 0</code> and no <code>pipeline-cap</code> park can happen. With those two
+rail edges removed, the loop runs: <b>3 crossings</b>, a cap park, the reader's release (<b>3 → 0</b>), re-entry, and
+a second cap park.</p>
+<p><b>Every route used one tree</b>, cut once and reused by every stage run; <code>git worktree list</code> shows two
+entries at the end (the repository and the one tree).</p>
+<p><b>Seven things went wrong in the executor</b> (two structural limits, five defects). The two that matter most:
+from the <b>20th thread</b> the record stops naming the run, so every later stage settles against a stale finished
+job; and the <b>last stage's settle is never written</b>, so the row sits <code>running</code> at S203 forever with
+its final stage run still <code>null</code>.</p>
+</div>
+
+<div class="cols">
+  <div class="stat"><b>10 / 24</b><span>stages visited, document as written</span></div>
+  <div class="stat"><b>3</b><span>gate parks, each crossed by its record</span></div>
+  <div class="stat"><b>0</b><span>crossings of the declared loop (as written)</span></div>
+  <div class="stat"><b>3</b><span>crossings before the cap park (control route)</span></div>
+  <div class="stat"><b>1 / 1</b><span>trees cut, document / loop route</span></div>
+  <div class="stat"><b>38</b><span>workers started in the loop route</span></div>
+</div>
+
+<div class="failbox">
+<h4>The run did not end where the design says it ends</h4>
+<p>Neither route finished the document. The document route stops at S203 with the last stage settled in memory and
+dropped (<code>pipeline-settle-unwritten</code>); the loop route stops on <code>pipeline-cap</code> at S200, which is
+the designed park — but the rounds that reached it were already settling against a stale job
+(<a href="#f5">finding 5</a>).</p>
+</div>
+
+<h2 id="routed">What was routed</h2>
+<p>Three readers, in order, and each is the real one:</p>
+<ul>
+  <li><b>the studio</b> — <code>core.importDocument()</code> reads the YAML subset the document is written in;
+      <code>core.exportBundle()</code> writes the pipeline the studio's own export button writes;</li>
+  <li><b>the panel</b> — <code>parseBundle()</code> (<code>lib/pipeline-bundle.js</code>) accepts or refuses it whole,
+      before a single sweep;</li>
+  <li><b>the panel's clock</b> — <code>Assistant.sweepQueues()</code>, which is <code>driveTaskPipelines</code>,
+      <code>settleTasks</code>, the one <code>writeQueueFile</code>, the journal, the tree cut through
+      <code>jobs.makeWorktree</code>, the gate barrier's <code>decisionPathOf</code>, and the reader's
+      <code>pipeline-release</code>. Nothing in <code>lib/</code> is stubbed.</li>
+</ul>
+<p class="small">A seat wrote each stage's artefact and committed it
+(<code>tools/pipeline-exec-stage-seat.mjs</code>); a gate seat wrote each decision record only after a park had been
+observed. The model is scripted — there is no gateway — but the routing, the trees, the commits, the pins, the
+barrier and the release are the panel's own code.</p>
+
+<h2 id="visit">The visit sequence</h2>
+<p>The row walks one edge out of each stage. Every stage run below settled <code>done</code> with its declared
+artefact present in the tree and committed, and each one's <code>commit</code> is the tree's full HEAD at settle —
+which is the pin the next stage's INPUTS block carries.</p>
+<div class="tw"><table><thead><tr>
+<th>stage run</th>
+<th>stage</th>
+<th>visit</th>
+<th>arrived by</th>
+<th>status</th>
+<th>artifact</th>
+<th>sha256</th>
+<th>commit</th>
+</tr></thead><tbody>
+<tr><td>S180#1</td><td>S180</td><td>1</td><td>—</td><td><span class="ok">done</span></td><td>episode-brief</td><td><code>ef067aea182d…</code></td><td><code>170a7f3a</code></td></tr>
+<tr><td>S181#1</td><td>S181</td><td>1</td><td>—</td><td><span class="ok">done</span></td><td>site-ranking</td><td><code>8d91b8f81c86…</code></td><td><code>7df8a986</code></td></tr>
+<tr><td>S191#1</td><td>S191</td><td>1</td><td>—</td><td><span class="ok">done</span></td><td>round-brief</td><td><code>ea429fd4477e…</code></td><td><code>7a5caeaa</code></td></tr>
+<tr><td>S192#1</td><td>S192</td><td>1</td><td>—</td><td><span class="ok">done</span></td><td>q1-records</td><td><code>0b4379f5dfbf…</code></td><td><code>73bc6cb5</code></td></tr>
+<tr><td>S198#1</td><td>S198</td><td>1</td><td>—</td><td><span class="ok">done</span></td><td>combined-artefact</td><td><code>bbf1d733c17c…</code></td><td><code>23cc45c4</code></td></tr>
+<tr><td>S199#1</td><td>S199</td><td>1</td><td>—</td><td><span class="ok">done</span></td><td>critique-record</td><td><code>560a0954aa65…</code></td><td><code>7dabdefc</code></td></tr>
+<tr><td>S200#1</td><td>S200</td><td>1</td><td>—</td><td><span class="ok">done</span></td><td>verdict</td><td><code>5e27900bae71…</code></td><td><code>76a2a0e5</code></td></tr>
+<tr><td>S201#1</td><td>S201</td><td>1</td><td>—</td><td><span class="ok">done</span></td><td>authored-decisions</td><td><code>3d2e56f8a2c4…</code></td><td><code>4a144979</code></td></tr>
+<tr><td>S202#1</td><td>S202</td><td>1</td><td>—</td><td><span class="ok">done</span></td><td>score-record</td><td><code>1f300ee11150…</code></td><td><code>327a3ae8</code></td></tr>
+<tr><td>S203#1</td><td>S203</td><td>1</td><td>—</td><td><span class="bad">not settled</span></td><td>—</td><td>—</td><td><code>d51d8e9f</code></td></tr>
+</tbody></table></div>
+<p class="small">Ten runs, ten workers, ten commits. The stages the document calls lanes — S182–S189, S190,
+S193–S197 — have no run at all: they are successors the executor never chose. S203's run is the one the driver
+settled in memory and never wrote (<a href="#f6">finding 6</a>), which is why its artefact and status read empty.</p>
+
+<p>The sweep-by-sweep record is the run's own step ledger; the row's state, stage and the thread it started:</p>
+<div class="tw"><table><thead><tr><th>sweep</th><th>row state</th><th>stage</th><th>visit</th><th>thread started</th><th>reason</th></tr></thead><tbody><tr><td>1</td><td>queued</td><td>S180</td><td>1</td><td>—</td><td></td></tr><tr><td>2</td><td>running</td><td>S180</td><td>1</td><td>document-01</td><td></td></tr><tr><td>3</td><td>running</td><td>S181</td><td>1</td><td>document-02</td><td></td></tr><tr><td>4</td><td>parked</td><td>S181</td><td>1</td><td>—</td><td>gate G50 follows stage S181 and declares a decision record at &lt;repo&gt;\.worktrees\you-write-one-brief-from-795d6f\ledger\g</td></tr><tr><td>5</td><td>running</td><td>S191</td><td>1</td><td>document-03</td><td></td></tr><tr><td>6</td><td>running</td><td>S192</td><td>1</td><td>document-04</td><td></td></tr><tr><td>7</td><td>running</td><td>S198</td><td>1</td><td>document-05</td><td></td></tr><tr><td>8</td><td>running</td><td>S199</td><td>1</td><td>document-06</td><td></td></tr><tr><td>9</td><td>running</td><td>S200</td><td>1</td><td>document-07</td><td></td></tr><tr><td>10</td><td>parked</td><td>S200</td><td>1</td><td>—</td><td>gate G51 follows stage S200 and declares a decision record at &lt;repo&gt;\.worktrees\you-write-one-brief-from-795d6f\ledger\g</td></tr><tr><td>11</td><td>running</td><td>S201</td><td>1</td><td>document-08</td><td></td></tr><tr><td>12</td><td>running</td><td>S202</td><td>1</td><td>document-09</td><td></td></tr><tr><td>13</td><td>parked</td><td>S202</td><td>1</td><td>—</td><td>gate G52 follows stage S202 and declares a decision record at &lt;repo&gt;\.worktrees\you-write-one-brief-from-795d6f\ledger\g</td></tr><tr><td>14</td><td>running</td><td>S203</td><td>1</td><td>document-10</td><td></td></tr><tr><td>15</td><td>running</td><td>S203</td><td>1</td><td>—</td><td></td></tr><tr><td>16</td><td>running</td><td>S203</td><td>1</td><td>—</td><td></td></tr></tbody></table></div>
+
+<h2 id="parked">Where it parked, and on what</h2>
+<p>Three parks, all <code>pipeline-gate</code>. The row parks at the settle of the stage BEFORE the gate, the
+record is written by the gate's own seat, and the next pass crosses: <code>waitingFor</code> names the gate and its
+declared path, and the record's arrival is the only thing that moves the row. The panel never wrote that file and
+never read its value.</p>
+<div class="tw"><table><thead><tr>
+<th>sweep</th>
+<th>stage</th>
+<th>visit</th>
+<th>code</th>
+<th>the row&#x27;s sentence</th>
+</tr></thead><tbody>
+<tr><td>4</td><td>S181</td><td>1</td><td><code>pipeline-gate</code></td><td>gate G50 follows stage S181 and declares a decision record at &lt;repo&gt;\.worktrees\you-write-one-brief-from-795d6f\ledger\gates\G50-{{run_id}}.json — the code does not decide it, and the record has not b</td></tr>
+<tr><td>10</td><td>S200</td><td>1</td><td><code>pipeline-gate</code></td><td>gate G51 follows stage S200 and declares a decision record at &lt;repo&gt;\.worktrees\you-write-one-brief-from-795d6f\ledger\gates\G51-{{run_id}}-r{{round}}.json — the code does not decide it, and the recor</td></tr>
+<tr><td>13</td><td>S202</td><td>1</td><td><code>pipeline-gate</code></td><td>gate G52 follows stage S202 and declares a decision record at &lt;repo&gt;\.worktrees\you-write-one-brief-from-795d6f\ledger\gates\G52-{{run_id}}-r{{round}}.json — the code does not decide it, and the recor</td></tr>
+</tbody></table></div>
+<div class="tw"><table><thead><tr>
+<th>route</th>
+<th>gate</th>
+<th>record written</th>
+<th>sweep</th>
+<th>sha256</th>
+</tr></thead><tbody>
+<tr><td>document</td><td>G50</td><td><code>ledger/gates/G50-run-1.json</code></td><td>4</td><td><code>99058cc570c7…</code></td></tr>
+<tr><td>document</td><td>G51</td><td><code>ledger/gates/G51-run-1-r1.json</code></td><td>10</td><td><code>e8036c4cf5ee…</code></td></tr>
+<tr><td>document</td><td>G52</td><td><code>ledger/gates/G52-run-1-r1.json</code></td><td>13</td><td><code>f9ac96c27ee9…</code></td></tr>
+<tr><td>loop</td><td>G50</td><td><code>ledger/gates/G50-run-1.json</code></td><td>4</td><td><code>99058cc570c7…</code></td></tr>
+<tr><td>loop</td><td>G51</td><td><code>ledger/gates/G51-run-1-r1.json</code></td><td>10</td><td><code>e8036c4cf5ee…</code></td></tr>
+</tbody></table></div>
+<p class="small">G53 sits after S203 and was never reached: S203 is the last stage, the driver has nothing to advance
+to, and a gate on a closing edge is named — not waited on.</p>
+
+<h2 id="loop">The loop, the cap and the release</h2>
+<p>A loop that shares its stage with the rail is unreachable (<a href="#f2">finding 2</a>), so the control route is
+the same document with exactly two handoffs removed: <code>H-200-201</code> and <code>H-200-202</code>. Everything
+else — 24 stages, 42 handoffs minus two, 4 gates, the loop's cap — is the document's own.</p>
+<p>With the rail gone, <code>H-200-191</code> is the only way out of S200 and the loop runs to its declared bound:</p>
+<div class="tw"><table><thead><tr>
+<th>sweep</th>
+<th>stage</th>
+<th>visit</th>
+<th>code</th>
+<th>the row&#x27;s sentence</th>
+</tr></thead><tbody>
+<tr><td>4</td><td>S181</td><td>1</td><td><code>pipeline-gate</code></td><td>gate G50 follows stage S181 and declares a decision record at &lt;repo&gt;\.worktrees\you-write-one-brief-from-ea1976\ledger\gates\G50-{{run_id}}.json — the code does not decide it, and the record has not b</td></tr>
+<tr><td>10</td><td>S200</td><td>1</td><td><code>pipeline-gate</code></td><td>gate G51 follows stage S200 and declares a decision record at &lt;repo&gt;\.worktrees\you-write-one-brief-from-ea1976\ledger\gates\G51-{{run_id}}-r{{round}}.json — the code does not decide it, and the recor</td></tr>
+<tr><td>26</td><td>S200</td><td>4</td><td><code>pipeline-cap</code></td><td>the loop H-200-191 (S200 → S191) is at its cap of 3 rounds — 3 crossings already taken, so the row stops here for a decision</td></tr>
+<tr><td>43</td><td>S200</td><td>7</td><td><code>pipeline-cap</code></td><td>the loop H-200-191 (S200 → S191) is at its cap of 3 rounds — 3 crossings already taken, so the row stops here for a decision</td></tr>
+</tbody></table></div>
+<p>At sweep 26 the row parked on
+<code>the loop H-200-191 (S200 → S191) is at its cap of 3 rounds — 3 crossings already taken</code>. That is the
+park the design names as unreleasable by requeue alone, so the run released it the way a reader would:
+<code>POST /api/assistant/queue {action:"pipeline-release", id, release:"cap"}</code>.</p>
+
+<div class="verdict">
+<h4>Did the cap release?</h4>
+<p><b>Yes, mechanically.</b> <code>H-200-191</code> went from <b>3</b> to
+<b>0</b>, <code>waitingFor</code> was cleared, the row returned to
+<code>queued</code> at <code>S200</code>, and the loop resumed:
+three more crossings and a second cap park at sweep 26.</p>
+<p><b>It did not release into a working round.</b> The release requeues the stage that parked (S200), so the row
+re-ran S200 at the same visit — the ledger carries two <code>S200#4</code> entries — and by then the twentieth
+thread had been reached, so the stage was settled against the stale job (<a href="#f5">finding 5</a>). The release
+moved the record; it did not put a worker back in the loop.</p>
+</div>
+
+<p class="small">The release record, verbatim from the ledger:
+<code>{&quot;edge&quot;: &quot;H-200-191&quot;, &quot;from&quot;: &quot;S200&quot;, &quot;to&quot;: &quot;S191&quot;, &quot;limit&quot;: 3, &quot;used&quot;: 3, &quot;ok&quot;: true}</code>.</p>
+
+<h2 id="tree">One tree or two</h2>
+<p>One cut per route. Every stage run in both routes records the same tree path, the same branch, and a HEAD that
+moves forward one commit per stage. <code>git worktree list --porcelain</code> at the end of each route reads two
+entries: the repository and that one tree.</p>
+<div class="tw"><table><thead><tr>
+<th>route</th>
+<th>tree</th>
+<th>branch</th>
+<th>cut at</th>
+</tr></thead><tbody>
+<tr><td>document</td><td><code>&lt;repo&gt;/.worktrees/you-write-one-brief-from-795d6f</code></td><td><code>wtgui/you-write-one-brief-from-795d6f</code></td><td>2026-11-05T22:50:27.190Z</td></tr>
+<tr><td>loop</td><td><code>&lt;repo&gt;/.worktrees/you-write-one-brief-from-ea1976</code></td><td><code>wtgui/you-write-one-brief-from-ea1976</code></td><td>2026-11-05T22:55:59.313Z</td></tr>
+</tbody></table></div>
+<p class="small">The loop route's row ran <b>30</b> surviving stage runs through that tree, and
+every one of them names it. There is no second cut, no second branch and no tree claimed by another row.</p>
+
+<h2 id="bytes">The artefacts, byte by byte between visits</h2>
+<p>The seat writes deterministic JSON that stamps the visit and the round, so a second visit of a stage SHOULD
+produce different bytes. On disk it does: seven rounds of <code>round-brief.json</code> are seven different files.
+In the ledger it does not: every visit records round 1's hash.</p>
+<div class="tw"><table><thead><tr>
+<th>stage</th>
+<th>round</th>
+<th>file the seat wrote</th>
+<th>sha256 on disk</th>
+<th>bytes</th>
+<th>sha256 in the ledger</th>
+<th>verdict</th>
+</tr></thead><tbody>
+<tr><td>S191</td><td>1</td><td><code>out/run-1/r1/round-brief.json</code></td><td><code>ea429fd4477e6efd…</code></td><td>160</td><td>—</td><td>—</td></tr>
+<tr><td>S191</td><td>2</td><td><code>out/run-1/r2/round-brief.json</code></td><td><code>34c16f91f35c0708…</code></td><td>160</td><td>—</td><td>—</td></tr>
+<tr><td>S191</td><td>3</td><td><code>out/run-1/r3/round-brief.json</code></td><td><code>aad7a5aabbd53d2f…</code></td><td>160</td><td><code>ea429fd4477e6efd…</code></td><td><span class="bad">differs</span></td></tr>
+<tr><td>S191</td><td>4</td><td><code>out/run-1/r4/round-brief.json</code></td><td><code>c6df3cea401c82a1…</code></td><td>160</td><td><code>ea429fd4477e6efd…</code></td><td><span class="bad">differs</span></td></tr>
+<tr><td>S191</td><td>5</td><td><code>out/run-1/r5/round-brief.json</code></td><td><code>e2545d8b4acf0149…</code></td><td>160</td><td><code>ea429fd4477e6efd…</code></td><td><span class="bad">differs</span></td></tr>
+<tr><td>S191</td><td>6</td><td><code>out/run-1/r6/round-brief.json</code></td><td><code>00f3d3449b79408f…</code></td><td>160</td><td><code>ea429fd4477e6efd…</code></td><td><span class="bad">differs</span></td></tr>
+<tr><td>S191</td><td>7</td><td><code>out/run-1/r7/round-brief.json</code></td><td><code>6d06b80d7d404a02…</code></td><td>160</td><td><code>ea429fd4477e6efd…</code></td><td><span class="bad">differs</span></td></tr>
+<tr><td>S192</td><td>1</td><td><code>out/run-1/r1/Q1/records.jsonl</code></td><td><code>0b4379f5dfbfca94…</code></td><td>160</td><td>—</td><td>—</td></tr>
+<tr><td>S192</td><td>2</td><td><code>out/run-1/r2/Q1/records.jsonl</code></td><td><code>f6fd4472017f850e…</code></td><td>160</td><td><code>0b4379f5dfbfca94…</code></td><td><span class="bad">differs</span></td></tr>
+<tr><td>S192</td><td>3</td><td><code>out/run-1/r3/Q1/records.jsonl</code></td><td><code>31d7a8003002390f…</code></td><td>160</td><td><code>0b4379f5dfbfca94…</code></td><td><span class="bad">differs</span></td></tr>
+<tr><td>S192</td><td>4</td><td><code>out/run-1/r4/Q1/records.jsonl</code></td><td><code>93ae7cf9fcbc9e75…</code></td><td>160</td><td><code>0b4379f5dfbfca94…</code></td><td><span class="bad">differs</span></td></tr>
+<tr><td>S192</td><td>5</td><td><code>out/run-1/r5/Q1/records.jsonl</code></td><td><code>3ad93de6d56b95f9…</code></td><td>160</td><td><code>0b4379f5dfbfca94…</code></td><td><span class="bad">differs</span></td></tr>
+<tr><td>S192</td><td>6</td><td><code>out/run-1/r6/Q1/records.jsonl</code></td><td><code>9134e1c763ad8dd7…</code></td><td>160</td><td><code>0b4379f5dfbfca94…</code></td><td><span class="bad">differs</span></td></tr>
+<tr><td>S192</td><td>7</td><td><code>out/run-1/r7/Q1/records.jsonl</code></td><td><code>f25371ec1beffd46…</code></td><td>160</td><td><code>0b4379f5dfbfca94…</code></td><td><span class="bad">differs</span></td></tr>
+<tr><td>S200</td><td>1</td><td><code>out/run-1/r1/verdict.json</code></td><td><code>5e27900bae710712…</code></td><td>160</td><td>—</td><td>—</td></tr>
+<tr><td>S200</td><td>2</td><td><code>out/run-1/r2/verdict.json</code></td><td><code>f32d62df7bb5ce76…</code></td><td>160</td><td><code>5e27900bae710712…</code></td><td><span class="bad">differs</span></td></tr>
+<tr><td>S200</td><td>3</td><td><code>out/run-1/r3/verdict.json</code></td><td><code>4660825ae7003456…</code></td><td>160</td><td><code>5e27900bae710712…</code></td><td><span class="bad">differs</span></td></tr>
+<tr><td>S200</td><td>4</td><td><code>out/run-1/r4/verdict.json</code></td><td><code>8489f92312183a9d…</code></td><td>160</td><td><code>5e27900bae710712…</code></td><td><span class="bad">differs</span></td></tr>
+<tr><td>S200</td><td>5</td><td><code>out/run-1/r5/verdict.json</code></td><td><code>ec7d3c8c6482f712…</code></td><td>160</td><td><code>5e27900bae710712…</code></td><td><span class="bad">differs</span></td></tr>
+<tr><td>S200</td><td>6</td><td><code>out/run-1/r6/verdict.json</code></td><td><code>54693cc84966627c…</code></td><td>160</td><td><code>5e27900bae710712…</code></td><td><span class="bad">differs</span></td></tr>
+<tr><td>S200</td><td>7</td><td><code>out/run-1/r7/verdict.json</code></td><td><code>a4198321b15cab78…</code></td><td>160</td><td><code>5e27900bae710712…</code></td><td><span class="bad">differs</span></td></tr>
+</tbody></table></div>
+<p class="small">Round 1's ledger cell is empty because the stage-run ledger is capped at 30 and the loop route's
+first eight runs were dropped (<code>runsDropped: 8</code>) — the file is there, its record is not.</p>
+<p>The cause is <a href="#f3">finding 3</a>: the artefact path carries <code>r{{round}}</code>, and the resolver
+takes the first name in sorted order — <code>r1</code> — at every visit. The files for rounds 2–7 exist, are
+committed, and are never read by the settle. That is also why the ledger marks every loop visit
+<code>unchanged: true</code>: the "unchanged" is the resolver re-reading the same file, and the driver's own
+<code>unchanged</code> fact is therefore not evidence about the work.</p>
+
+<h2 id="findings">What broke in the executor</h2>
+<div class="tw"><table><thead><tr>
+<th>#</th>
+<th>kind</th>
+<th>what happened</th>
+<th>where</th>
+</tr></thead><tbody>
+<tr><td>1</td><td><span class="warnpill">limit</span></td><td>A fork is one edge, not many</td><td><code class="anchor">task-pipeline-drive.js:150</code> <code class="anchor">task-pipeline-drive.js:673</code></td></tr>
+<tr><td>2</td><td><span class="warnpill">limit</span></td><td>The rail out of S200 shadows the declared loop</td><td><code class="anchor">task-pipeline-drive.js:148</code> <code class="anchor">task-pipeline-drive.js:700</code></td></tr>
+<tr><td>3</td><td><span class="bad">defect</span></td><td>A per-round artefact path resolves to round 1, every round</td><td><code class="anchor">task-pipeline-drive.js:201</code> <code class="anchor">task-pipeline-drive.js:1099</code></td></tr>
+<tr><td>4</td><td><span class="bad">defect</span></td><td>Every artefact is pinned as uncommitted work, with no blob</td><td><code class="anchor">task-pipeline-drive.js:1099</code> <code class="anchor">task-pipeline-drive.js:185</code> <code class="anchor">stage-pin.js:57</code></td></tr>
+<tr><td>5</td><td><span class="bad">defect</span></td><td>After 20 threads the record stops naming the run, and stages settle on a stale job</td><td><code class="anchor">assistant/queue.js:54</code> <code class="anchor">assistant/queue.js:130</code> <code class="anchor">assistant/queue.js:144</code></td></tr>
+<tr><td>6</td><td><span class="bad">defect</span></td><td>The last stage&#x27;s settle is never written</td><td><code class="anchor">assistant.js:1201</code> <code class="anchor">assistant.js:1191</code> <code class="anchor">assistant/queue.js:1182</code></td></tr>
+<tr><td>7</td><td><span class="bad">defect</span></td><td>A gate&#x27;s per-round record is not re-asked in the next round</td><td><code class="anchor">task-pipeline-drive.js:201</code> <code class="anchor">task-pipeline-drive.js:687</code></td></tr>
+</tbody></table></div>
+<h3 id="f1">1. A fork is one edge, not many</h3>
+<p>The executor takes ONE edge out of a stage: <code>edgeOutOf</code> sorts by kind (sequence, return, loop) and then document order, and <code>nextStageOf</code> follows that one edge. S180 has nine <code>sequence</code> successors; the row took <code>H-180-181</code> and never entered S182–S189, S190, or S193–S197. <b>10 of 24 stages ran.</b> The document's own comment says the fourteen lanes cannot be declared concurrent — the executor does not merely fail to run them at once, it runs one of them.</p>
+<p class="meta"><code class="anchor">task-pipeline-drive.js:150</code> <code class="anchor">task-pipeline-drive.js:673</code></p><h3 id="f2">2. The rail out of S200 shadows the declared loop</h3>
+<p>S200 has three edges: <code>H-200-201</code> (sequence), <code>H-200-202</code> (sequence) and <code>H-200-191</code> (loop, <code>cap: "3 rounds, …"</code>). <code>EDGE_ORDER</code> puts <code>sequence</code> first, so the loop is never a candidate: <code>crossings["H-200-191"] = 0</code> after the whole route, and the <code>pipeline-cap</code> park never happens. A document whose loop shares a stage with its rail cannot loop, whatever its cap says.</p>
+<p class="meta"><code class="anchor">task-pipeline-drive.js:148</code> <code class="anchor">task-pipeline-drive.js:700</code></p><h3 id="f3">3. A per-round artefact path resolves to round 1, every round</h3>
+<p><code>decisionPathOf</code> matches a <code>{{hole}}</code> segment with <code>readdirSync(dir).filter(…).sort()[0]</code> — the FIRST name in sorted order. Every artefact in this document carries <code>r{{round}}</code>, so every visit reads <code>r1</code>. S191 was visited 7 times; the ledger records <code>ea429fd4…</code> at all seven, and the seven files on disk are seven different 160-byte files. The ledger's <code>unchanged: true</code> on every loop visit is this resolver, not the work.</p>
+<p class="meta"><code class="anchor">task-pipeline-drive.js:201</code> <code class="anchor">task-pipeline-drive.js:1099</code></p><h3 id="f4">4. Every artefact is pinned as uncommitted work, with no blob</h3>
+<p><code>artifactCheck</code> feeds <code>relInTree</code> <code>found.shown</code> — the path built from the DECLARED segments, holes included — instead of <code>found.path</code>, the file that was actually found. <code>git rev-parse &lt;commit&gt;:out/{{run_id}}/site-ranking.json</code> fails; <code>git rev-parse &lt;commit&gt;:out/run-1/site-ranking.json</code> answers <code>47abd1269f52907a23a8de7ff6fc14548245c5c6</code>. All 9 document-route artefacts record <code>uncommitted: true</code> and <code>blob: null</code>, and the next stage's prompt says so in words.</p>
+<p class="meta"><code class="anchor">task-pipeline-drive.js:1099</code> <code class="anchor">task-pipeline-drive.js:185</code> <code class="anchor">stage-pin.js:57</code></p><h3 id="f5">5. After 20 threads the record stops naming the run, and stages settle on a stale job</h3>
+<p><code>TASK_THREADS_MAX = 20</code>: <code>normThreads</code> drops every thread after the twentieth, so <code>currentThread(task)</code> returns <code>loop-20</code> for the rest of the row's life. The loop route started <b>38 workers</b>; the record names <b>20</b>; <b>19 of the 30 surviving stage runs</b> name <code>loop-20</code> — and the last 18 of those are stages that ran AFTER it, each settled on that finished job without waiting for the worker that was actually running.</p>
+<p class="meta"><code class="anchor">assistant/queue.js:54</code> <code class="anchor">assistant/queue.js:130</code> <code class="anchor">assistant/queue.js:144</code></p><h3 id="f6">6. The last stage&#x27;s settle is never written</h3>
+<p><code>sweepQueues</code> writes the queue file only when something moved or a start was asked for. At the last stage the driver has nowhere to move (S203 is the end) and asks for no start, and <code>settleTasks</code> will not close a row with a tree until its PR reads MERGED — so the settle the driver computed in memory is discarded on every pass. After 16 sweeps the row still reads <b>running</b> at S203, the stage run still reads <b>status null</b>, and the job that did the work reads <b>done</b>.</p>
+<p class="meta"><code class="anchor">assistant.js:1201</code> <code class="anchor">assistant.js:1191</code> <code class="anchor">assistant/queue.js:1182</code></p><h3 id="f7">7. A gate&#x27;s per-round record is not re-asked in the next round</h3>
+<p>G51 declares <code>ledger/gates/G51-{{run_id}}-r{{round}}.json</code>. Once <code>G51-run-1-r1.json</code> exists, the same first-sorted-match rule finds it in every later round: G51 was crossed <b>11 times</b> and parked <b>1 time</b>, on round 1's decision. The per-round record the document declares is written once and read forever.</p>
+<p class="meta"><code class="anchor">task-pipeline-drive.js:201</code> <code class="anchor">task-pipeline-drive.js:687</code></p>
+
+<h2 id="limits">What this does not prove</h2>
+<ul>
+  <li><b>Nothing here is a model's work.</b> The seat is a script; the findings are about the executor's routing,
+      records and file resolution, not about whether a stage's prompt is any good.</li>
+  <li><b>The document route's numbers describe the graph the executor walks</b>, not a claim that the document is
+      wrong: it is a document written for a reader and a drawing, and the executor reads one edge out of it.</li>
+  <li><b>The loop route is a derived document.</b> It removes two rail edges to reach a loop the original cannot.
+      Its rounds 1–3 are real work; from the twentieth thread its later stage runs are settled against a stale job,
+      so the <i>counts</i> after that point are the executor's, not a worker's.</li>
+  <li><b>The stage-run ledger is capped at 30.</b> The loop route produced 38 stage-run entries (37 distinct
+      visits); the writer kept the newest 30 and recorded <code>runsDropped: 8</code>. The first eight (S180–S200 of
+      round 1 and S191 of round 2) survive only in <code>visits</code>, <code>crossings</code> and the journal.</li>
+  <li><b>No PR was opened and no merge was simulated.</b> The last-stage row therefore never reaches the landing rule
+      that would close it (<a href="#f6">finding 6</a>).</li>
+</ul>
+
+<h2 id="repro">Reproducing it</h2>
+<pre>node tools/pipeline-exec-poc-rounds.mjs --route both --verbose</pre>
+<p>The harness writes its ledgers under <code>docs/reviews/poc-rounds-execution-&lt;date&gt;/</code>, one directory
+per route, and copies nothing from the panel's own state. The fixture repository holds the document under test at
+<code>docs/pipeline/poc-breaking-rounds.yaml</code>, so the tree's own history shows every artefact commit beside the
+document that asked for it.</p>
+
+<h2 id="evidence">The evidence</h2>
+<ul>
+  <li><a href="poc-rounds-execution-2026-11-05/summary.json">summary.json</a> — the two routes' rows, stage runs,
+      parks, gates, releases, comparisons and the checks derived from them
+      (<code>bc24cfe2785dd5ef…</code>).</li>
+  <li><a href="poc-rounds-execution-2026-11-05/routes/route-document.json">routes/route-document.json</a> —
+      every step, prompt, stage run and decision of the document route (<code>7d0deb276ee53000…</code>).</li>
+  <li><a href="poc-rounds-execution-2026-11-05/routes/route-loop.json">routes/route-loop.json</a> — the same for the
+      control route, 38 worker starts and 30 surviving stage runs
+      (<code>eaaf04be07f73467…</code>).</li>
+  <li><a href="poc-rounds-execution-2026-11-05/artefacts.json">artefacts.json</a> and
+      <code>poc-rounds-execution-2026-11-05/artefacts/</code> — the seven rounds of S191, S192 and S200 copied out of
+      the tree, with the sha256 of each.</li>
+</ul>
+
+<p class="meta">Paths in the ledgers are portable (<code>&lt;repo&gt;</code>, <code>&lt;work&gt;</code>,
+<code>&lt;factory&gt;</code>): the run's own directories are not part of the record. Written
+2026-11-05 22:51:42 UTC; this page is generated from the ledgers it links, and every number in it is read
+from them.</p>
+
+</div>
+</body>
+</html>
