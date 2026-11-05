@@ -2386,6 +2386,10 @@ a.out-link:hover { color: #a8ccff; text-decoration: underline solid; }
    console it is supposed to sit under. */
 :root.q-width-set .turn-question { margin: 8px auto 6px; max-width: min(var(--q-width, 900px), calc(100% - 18px)); }
 .tq-head { font-size: 11.5px; color: var(--q-head); letter-spacing: .01em; }
+/* The re-ask count: the question is the same one, and this is how many times the panel has put it back in
+   front of the reader. Dimmer than the head — it is a fact about the wait, not a second question — and it
+   carries the box's own accent so it reads as part of the box rather than a warning. */
+.tq-again { display: inline-block; margin: 4px 0 0; font: 11px/1.4 var(--mono, var(--ui)); color: var(--q-accent); opacity: .9; }
 .tq-question { margin: 8px 0 9px; font: var(--q-size, 13px)/1.5 var(--ui); color: var(--q-question); white-space: pre-wrap; word-break: break-word; }
 .tq-choices { display: flex; flex-direction: column; gap: 6px; }
 .tq-choice { display: flex; align-items: flex-start; gap: 8px; width: 100%; text-align: left; padding: 7px 10px; border: 1px solid var(--q-choice-line); border-radius: 6px; background: var(--q-choice-bg); color: var(--q-choice-text); font: calc(var(--q-size, 13px) - 0.5px)/1.45 var(--ui); white-space: pre-wrap; word-break: break-word; cursor: pointer; }
@@ -3614,6 +3618,11 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 .as-stuck-chip {
   font-family: var(--mono); font-size: 9.5px; text-transform: uppercase; letter-spacing: .04em;
   color: #ffd7d5; background: #4d1a1d; border: 1px solid var(--red); border-radius: 99px; padding: 0 6px;
+}
+/* The re-ask count on a parked question: the same alert, asked again — not a new card, and not a warning. */
+.as-again-chip {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: .03em;
+  color: var(--q-head, #d7c4ff); background: #2a2440; border: 1px solid var(--violet); border-radius: 99px; padding: 0 6px;
 }
 .as-stuck-banner {
   margin: 0 0 8px; padding: 7px 9px; border: 1px solid var(--red); border-radius: 6px;

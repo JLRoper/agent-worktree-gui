@@ -1185,6 +1185,7 @@
       <div class="as-alert-head">
         <span class="as-rule is-${esc(a.severity || "warn")}">${esc(a.rule)}</span>
         ${a.stuck ? `<span class="as-stuck-chip" title="the spawn watchdog looked for a run in this card's worktree and found none">never started</span>` : ""}
+        ${parked && Number(a.asks) > 1 ? `<span class="as-again-chip" title="the panel asks again once an hour while this stays unanswered — this is the same question, not a new one, and it keeps one entry">↻ asked again ${Number(a.asks) - 1}×</span>` : ""}
         ${a.thread ? `<button class="as-thread" data-as-open="${esc(a.thread)}" type="button" title="open that agent's card">${esc(assistantThreadName(a.thread))}</button>` : ""}
         <span class="as-ago">${esc(fmtDur(Date.now() - (Date.parse(a.at) || Date.now())))} ago</span>
       </div>
