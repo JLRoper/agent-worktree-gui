@@ -123,8 +123,10 @@ try {
           renderAll();
         });
       await expandAll();
-      await page.waitForSelector("[data-push-controls]", { state: "visible", timeout: 20_000 });
-      await sleep(600);
+      // The board re-renders while discovery settles, and a half-built render can leave a duplicate strip behind: wait
+      // for ENOUGH VISIBLE controls rather than for one node, which a re-render would remove under the wait.
+      await page.waitForFunction((n) => [...document.querySelectorAll("[data-push-controls]")].filter((c) => c.getClientRects().length > 0).length >= n, REPOS.length, { timeout: 30_000 });
+      await sleep(800);
 
       const read = () =>
         page.evaluate(() => {
@@ -152,7 +154,9 @@ try {
               controlsLeft: cb ? cb.left : null,
             });
           }
-          return out;
+          // A render in flight can leave a duplicate card behind for a frame: the LAST occurrence is the one the
+          // page settled on, so that is the row this gate reads.
+          return [...new Map(out.map((row) => [row.project, row])).values()];
         });
 
       const wide = await read();
@@ -288,8 +292,8 @@ try {
       await page.reload({ waitUntil: "domcontentloaded" });
       await page.waitForSelector("section.project", { timeout: 40_000 });
       await expandAll();
-      await page.waitForSelector("[data-push-controls]", { state: "visible", timeout: 20_000 });
-      await sleep(400);
+      await page.waitForFunction((n) => [...document.querySelectorAll("[data-push-controls]")].filter((c) => c.getClientRects().length > 0).length >= n, REPOS.length, { timeout: 30_000 });
+      await sleep(600);
       const afterReload = await page.evaluate(() => {
         const s = document.querySelector('[data-push-controls="sa-app"] select[data-push-kind="existing"]');
         return s ? s.value : "";
