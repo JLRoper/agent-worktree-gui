@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Which free renderer should draw the pipeline flow?</title>
+<meta name="wtgui-measured-at" content="5e84586">
+<meta name="wtgui-version" content="1.12.3">
+<style>
+  :root {
+    --bg: #0f1115; --panel: #161a21; --panel-2: #1b2029; --line: #262c37; --line-soft: #1f242e;
+    --text: #e6e9ef; --dim: #9aa4b2; --dimmer: #6b7482;
+    --amber: #d29922; --amber-bg: #2a2312; --green: #2ea043; --green-bg: #12261a;
+    --red: #e5534b; --red-bg: #2a1618; --blue: #4a90d9; --blue-bg: #141f2c;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body { margin: 0; padding: 34px 28px 72px; background: var(--bg); color: var(--text); font: 14px/1.6 var(--ui); max-width: 1180px; }
+  h1 { font-size: 27px; line-height: 1.18; margin: 0 0 8px; letter-spacing: -0.015em; max-width: 34ch; }
+  h2 { font-size: 18px; margin: 38px 0 4px; letter-spacing: -0.01em; }
+  h2 .n { color: var(--dimmer); font-family: var(--mono); font-size: 13px; margin-right: 8px; }
+  h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--dim); margin: 26px 0 8px; font-weight: 600; }
+  p { margin: 0 0 11px; max-width: 96ch; }
+  a { color: var(--blue); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-family: var(--mono); font-size: 12px; background: var(--panel-2); border: 1px solid var(--line-soft); border-radius: 4px; padding: 1px 5px; color: #cfd6e2; overflow-wrap: anywhere; }
+  .lede { color: var(--dim); font-size: 15px; max-width: 88ch; }
+  .masthead { border-bottom: 1px solid var(--line); padding-bottom: 18px; margin-bottom: 24px; }
+  .facts { display: flex; flex-wrap: wrap; gap: 12px 36px; margin: 18px 0 0; padding: 0; }
+  .facts div { min-width: 148px; }
+  .facts dt { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--dimmer); }
+  .facts dd { margin: 2px 0 0; font-family: var(--mono); font-size: 12.5px; }
+  .verdict { border: 1px solid #1d3a26; background: var(--green-bg); border-radius: 10px; padding: 16px 18px; margin: 22px 0 0; }
+  .verdict h2 { margin: 0 0 6px; font-size: 15px; color: #c9e9d2; }
+  .verdict p { color: #d8ecdd; margin: 0 0 8px; }
+  .verdict p:last-child { margin: 0; }
+  .box { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 13px 15px; margin: 14px 0; font-size: 13px; color: var(--dim); }
+  .box b { color: var(--text); }
+  .box.warn { border-color: #4a3a12; background: var(--amber-bg); color: #f0d9a8; }
+  .box.warn b { color: #ffe6b0; }
+  .box.bad { border-color: #5a2424; background: var(--red-bg); color: #ffc9c4; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; margin: 12px 0 6px; font-size: 12.5px; }
+  th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--dimmer); font-weight: 600; border-bottom: 1px solid var(--line); padding: 7px 8px 7px 0; vertical-align: bottom; }
+  td { border-bottom: 1px solid var(--line-soft); padding: 8px 8px 8px 0; vertical-align: top; color: #cfd6e2; overflow-wrap: anywhere; }
+  tr:last-child td { border-bottom: 0; }
+  td.num, th.num { text-align: right; font-family: var(--mono); padding-right: 12px; }
+  td.name { font-family: var(--mono); font-size: 12px; color: var(--text); }
+  .yes { color: #7ee2a0; }
+  .no { color: #ff9c94; }
+  .part { color: #f0c674; }
+  .wrap { overflow-x: auto; }
+  figure { margin: 16px 0 6px; }
+  figure img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 10px; }
+  figcaption { color: var(--dim); font-size: 12.5px; margin-top: 8px; max-width: 96ch; }
+  figcaption b { color: var(--text); }
+  .score { font-family: var(--mono); }
+  .score b { color: var(--text); }
+  ul, ol { margin: 0 0 12px; padding-left: 22px; max-width: 96ch; }
+  li { margin: 0 0 6px; color: #cfd6e2; }
+  li b { color: var(--text); }
+  .tag { display: inline-block; font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; color: var(--dim); vertical-align: 1px; }
+  .tag.rec { border-color: #1d3a26; color: #9fe0b4; }
+  footer { border-top: 1px solid var(--line); margin-top: 44px; padding-top: 14px; color: var(--dimmer); font-size: 12px; }
+  @media print {
+    body { background: #fff; color: #111; max-width: none; }
+    h1, h2, h3, td, th, li, p, figcaption { color: #111; }
+    .verdict, .box, table, figure img { border-color: #999; background: #fff; }
+    a { color: #0645ad; }
+  }
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <h1>Which free renderer should draw the pipeline flow?</h1>
+  <p class="lede">Five free, no-build-step libraries and the rail the panel already ships, measured on one real
+  definition — seven stages of <code>sefl-review-loop</code> — and on the thirteen-stage bundle, in a browser, at
+  <code>1280×900</code>. Two of them are also pages you can open and press.</p>
+  <dl class="facts">
+    <div><dt>measured against</dt><dd>5e84586 · 1.12.3</dd></div>
+    <div><dt>definition</dt><dd>sefl-review-loop · 7 stages</dd></div>
+    <div><dt>library-free baseline</dt><dd>public/pipeline-flow.js · 568 lines</dd></div>
+    <div><dt>demos</dt><dd><a href="demos/mermaid-flow.html">mermaid</a> · <a href="demos/cytoscape-flow.html">cytoscape</a></dd></div>
+  </dl>
+</header>
+
+<section class="verdict">
+  <h2>Recommendation: mermaid, loaded only when the flow opens</h2>
+  <p><b>mermaid</b> (MIT) is the one candidate that is current <i>and</i> renders real DOM nodes: a click target, a tab
+  stop, an accessible name and something the panel's own browser gates can read. It draws the whole seven-stage
+  definition from about seven lines of text, which is what "cleaner" means here — roughly 123 of the renderer's 568
+  lines and 100 of its 126 stylesheet lines stop existing.</p>
+  <p><b>You pay for it three times:</b> 2.57 MB (the copy already in <code>tools/vendor</code>, at 11.4.1, carrying nine
+  advisories) or 5.54 MB for the clean 12.3.0; a drawing <b>1.53× wider</b> than the current rail at seven stages; and a
+  render that is asynchronous, so every per-node mark is post-processing of an SVG the library hands back.</p>
+  <p><b>Runner-up, one point behind:</b> dagre-d3 — the same DOM guarantees, smaller and denser, but its newest release is
+  from 2019 and it ships a d3 whose <code>d3-color</code> carries an unfixed ReDoS advisory. <b>Do not</b> take the
+  canvas option for this dialog: it is the fastest and the only one that fits seven stages in the card, and it has no
+  DOM at all.</p>
+</section>
+
+<h2><span class="n">1.</span>What the drawing has to do</h2>
+
+<p>The brief names ten constraints. Two more come from the repository itself, and they are the ones that decide the
+question — so they are numbered here with the others and scored in §3.</p>
+
+<div class="wrap">
+<table>
+  <colgroup><col style="width:9%"><col style="width:61%"><col style="width:30%"></colgroup>
+  <thead><tr><th>id</th><th>constraint</th><th>where it comes from</th></tr></thead>
+  <tbody>
+    <tr><td class="name">C1</td><td>1 to 13 stages, left to right, in one row.</td><td><code>pipelines.seed.json</code> (1–7); <code>pipeline-bundle.seed.json</code> (13)</td></tr>
+    <tr><td class="name">C2</td><td>A gate sits <i>between</i> two stages and is the exit check that ends the one on its left.</td><td><code>public/pipeline-flow.js</code> <code>exitGate()</code>/<code>notchHtml()</code></td></tr>
+    <tr><td class="name">C3</td><td>Loop-back arcs, dashed and labelled, with a cap when the record carries one.</td><td><code>lib/pipeline-bundle.js</code> handoffs <code>kind:"loop"</code></td></tr>
+    <tr><td class="name">C4</td><td>Labels at 11 px or more, as painted.</td><td>brief; <code>docs/reviews/pipeline-dialog-density-round.html</code></td></tr>
+    <tr><td class="name">C5</td><td>Click a stage to open it.</td><td>brief</td></tr>
+    <tr><td class="name">C6</td><td>Dark theme, the panel's own tokens.</td><td><code>public/style.css</code> <code>:root</code></td></tr>
+    <tr><td class="name">C7</td><td>Plain script tags: no build step, no module graph, no network.</td><td>the panel is served as files</td></tr>
+    <tr><td class="name">C8</td><td>A CSP that does not need <code>unsafe-eval</code>, and no remote fetch.</td><td>brief</td></tr>
+    <tr><td class="name">C9</td><td>Bundle size, and a licence that can be vendored.</td><td>brief; <code>tools/vendor/mermaid.min.js</code> is the precedent</td></tr>
+    <tr><td class="name">C10</td><td>How much of <code>public/pipeline-flow.js</code>'s 568 lines go away.</td><td>brief</td></tr>
+    <tr><td class="name">C11</td><td><b>The picture stays in the DOM</b> — the four marks, the gate states and the aria names are asserted by <code>test/pipeline-flow.test.js</code> and eight browser tools.</td><td><code>docs/reviews/pipeline-flow-architecture.md</code> §2, §4</td></tr>
+    <tr><td class="name">C12</td><td><b>It fits a 1120 px card</b>, because the modal is a dialog and not a page.</td><td><code>.pmodal-card</code> at <code>public/style.css:4214</code></td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>One thing the brief assumes that the data does not say: <b>a definition carries no loop.</b> <code>sefl-review-loop</code>'s
+<code>next</code> is null and each stage ends on an exit check; the round trip that actually happens — a reviewer asks for
+changes, the work is answered, the head is reviewed again — is in the prompts, not in a field. Both demos draw it as one
+dashed edge from <code>approve</code> back to <code>address</code>, labelled <i>another review round</i>, so C3 is
+exercised; the thirteen-stage view of the bundle uses its own three real <code>loop</code> handoffs, caps and all.</p>
+
+<h2><span class="n">2.</span>The five, measured</h2>
+
+<p>Everything below was taken in this session from a checkout at <code>5e84586</code>, in Chromium at
+<code>1280×900</code>, loading each candidate from <code>file://</code> with plain script tags. Sizes are the exact bytes of
+the file a page would have to load; "published" is the package's latest release date on npm; "advisories" is a query
+against OSV for the exact version measured. The two pages with demos were measured as committed pages, not as sketches.</p>
+
+<h3>What it costs to own</h3>
+<div class="wrap">
+<table>
+  <colgroup><col style="width:13%"><col style="width:12%"><col style="width:9%"><col style="width:11%"><col style="width:15%"><col style="width:12%"><col style="width:28%"></colgroup>
+  <thead><tr><th>option</th><th>measured</th><th>licence</th><th>published</th><th class="num">bytes</th><th class="num">advisories</th><th>how a page loads it</th></tr></thead>
+  <tbody>
+    <tr><td class="name">mermaid</td><td>11.4.1 vendored<br>12.3.0 latest</td><td>MIT</td><td>2026-11-03</td><td class="num">2,571,900<br>5,537,838</td><td class="num">9 on 11.4.1<br>0 on 12.3.0</td><td>one <code>&lt;script&gt;</code>; the 11.x copy is already at <code>tools/vendor/mermaid.min.js</code></td></tr>
+    <tr><td class="name">dagre-d3</td><td>0.6.4 + d3 5.16.0</td><td>MIT</td><td>2019-12-03</td><td class="num">973,495</td><td class="num">0 on itself</td><td>two <code>&lt;script&gt;</code> tags; the bundle does not export the <code>d3</code> it needs, so d3 is a second file</td></tr>
+    <tr><td class="name">cytoscape</td><td>3.30.2 + cytoscape-dagre 2.5.0 + dagre 0.8.5</td><td>MIT</td><td>2026-10-15<br><span style="color:var(--dimmer)">(3.34.4 latest)</span></td><td class="num">669,772</td><td class="num">0</td><td>three <code>&lt;script&gt;</code> tags; a canvas needs no CSS of yours</td></tr>
+    <tr><td class="name">elkjs</td><td>0.9.3</td><td>EPL-2.0 or GPL-3.0</td><td>2026-10-28<br><span style="color:var(--dimmer)">(0.12.1 latest)</span></td><td class="num">1,606,238</td><td class="num">0</td><td>one <code>&lt;script&gt;</code>; <b>layout only</b> — the painter is yours</td></tr>
+    <tr><td class="name">graphviz</td><td>@hpcc-js/wasm 2.36.0</td><td>Apache-2.0</td><td>2026-10-21</td><td class="num">820,997</td><td class="num">0</td><td>one <code>&lt;script&gt;</code> with the WASM inlined as base64, so <code>file://</code> works</td></tr>
+  </tbody>
+</table>
+</div>
+<p style="color:var(--dim);font-size:12.5px">The two advisory rows are the interesting ones. mermaid 11.4.1 carries nine
+moderate/low advisories — DoS in XY and Gantt charts, CSS injection through <code>classDef</code>, XSS in sequence and
+architecture labels — and every one of them is fixed in 12.3.0. dagre-d3's own package is clean, but the d3 5.16.0 it
+bundles contains <code>d3-color</code> 1.4.1, which carries GHSA-36jr-mh4h-2g58; the
+fix ships only in <code>d3-color</code> 3, which d3 5 cannot use.</p>
+
+<h3>What it draws — the same seven stages, then thirteen</h3>
+<div class="wrap">
+<table>
+  <colgroup><col style="width:14%"><col style="width:16%"><col style="width:16%"><col style="width:13%"><col style="width:12%"><col style="width:14%"><col style="width:15%"></colgroup>
+  <thead><tr><th>option</th><th>7 stages, drawn</th><th>13 stages, drawn</th><th>smallest label painted</th><th>click→open</th><th>gate sits on</th><th>text in the DOM</th></tr></thead>
+  <tbody>
+    <tr><td class="name">incumbent</td><td><b>1086 px</b>, fits the card</td><td>1560 px, 474 past</td><td>11 px</td><td class="no">no — cards are read-only</td><td>a notch in the gap, 7 for 7</td><td class="yes">yes, 7 nodes</td></tr>
+    <tr><td class="name">mermaid</td><td>1668 px, <b>542 past</b></td><td>2925 px, 1800 past</td><td><b>11 px</b></td><td class="yes">yes, after ~20 lines of wiring</td><td>an edge label — it takes 40–60 px of gap</td><td class="yes">yes, <code>g.node</code></td></tr>
+    <tr><td class="name">cytoscape</td><td><b>1137 px</b> at 0.96×, fits</td><td>2139 px at 0.51× → <b>6.1 px</b></td><td>11.5 px node / 10.5 px gate</td><td class="yes">yes, native <code>tap</code></td><td>an edge label</td><td class="no">0 characters — one <code>&lt;canvas&gt;</code></td></tr>
+    <tr><td class="name">dagre-d3</td><td>1578 px, 458 past</td><td>1558 px*</td><td>11 px</td><td class="yes">yes, <code>g.node</code></td><td>an edge label</td><td class="yes">yes, <code>g.node</code></td></tr>
+    <tr><td class="name">elkjs</td><td>1626 px, 506 past</td><td>3078 px*</td><td>11 px</td><td class="part">only what you paint</td><td>an edge label you place</td><td class="yes">yes, your own <code>&lt;g&gt;</code></td></tr>
+    <tr><td class="name">graphviz</td><td>1889 px, 769 past</td><td>2899 px*</td><td>11 px</td><td class="no">no — one static SVG string</td><td>an edge label that overlaps the nodes</td><td class="yes">yes, but inert</td></tr>
+  </tbody>
+</table>
+</div>
+<p style="color:var(--dim);font-size:12.5px">* The thirteen-stage probes for dagre-d3, elkjs and graphviz label the bundle's
+stages by id (<code>S0</code>…<code>S12</code>) because the bundle carries no titles, so those three are lower bounds;
+mermaid and cytoscape were measured on the committed demo pages, whose 13-stage view also uses ids. The seven-stage column
+is the fair one: same definition, same titles, same exit checks. "Painted" means font-size × the scale the drawing is
+actually rendered at — a 12 px label in a drawing squeezed to 0.51 is 6.1 px, which is the number a reader sees.</p>
+
+<figure>
+  <img src="assets/incumbent-7-stage.png" alt="The current rail drawing seven stages in 1086 pixels">
+  <figcaption><b>The baseline.</b> <code>public/pipeline-flow.js</code> at 5e84586: seven columns in 1086 px, a notch in
+  each gap, the exit check printed under the title, and 11 px text. No dependency, no scroll, and no click — the cards are
+  read-only.</figcaption>
+</figure>
+
+<figure>
+  <img src="assets/mermaid-7-stage.png" alt="mermaid drawing the same seven stages, scrolled to the first four">
+  <figcaption><b>mermaid, the recommendation.</b> The same seven stages at 1668 px: the picture is 1.53× the rail; where the rail
+  spends a notch in the gap, mermaid spends a labelled edge. The status line under the drawing is read from
+  the painted DOM at load — 11 px labels, 542 px past the card, 4 of 7 stages in view.</figcaption>
+</figure>
+
+<figure>
+  <img src="assets/mermaid-7-stage-loop.png" alt="The same mermaid drawing scrolled right, showing the dashed loop arc">
+  <figcaption><b>The loop, in mermaid.</b> Scrolled to the end: the dashed arc runs from <i>Wait for the approval at the
+  head</i> back to <i>Answer the review</i>, labelled. mermaid routes it without help — this is the one constraint that
+  costs nothing in the library and roughly 40 lines of <code>calc()</code> arithmetic in the rail.</figcaption>
+</figure>
+
+<figure>
+  <img src="assets/cytoscape-7-stage.png" alt="cytoscape drawing the same seven stages, fitted into the card">
+  <figcaption><b>The canvas option.</b> The same definition, fitted: 1137 px in a 1126 px box at 0.96×, so it is the only
+  candidate that fits seven stages. The status line reports the cost — 11.5 px node labels but 10.5 px gate labels, and
+  "DOM text in the drawing: 0 chars". The list of buttons under the picture is the keyboard path a canvas does not
+  provide.</figcaption>
+</figure>
+
+<figure>
+  <img src="assets/mermaid-13-stage.png" alt="mermaid drawing the thirteen-stage bundle with its three loop arcs">
+  <figcaption><b>Thirteen stages, mermaid.</b> 2925 px and still 11 px: the picture scrolls, and the loop arcs of the bundle
+  (S9→S8, S10→S9, S12→S11, each with its real cap) are drawn without help. 1800 px of it is past the card.</figcaption>
+</figure>
+
+<figure>
+  <img src="assets/cytoscape-13-stage.png" alt="cytoscape drawing thirteen stages with shrunken labels">
+  <figcaption><b>Thirteen stages, canvas.</b> The same bundle, fitted — and the fit is the whole story: zoom 0.51 turns the
+  12 px label into 6.1 px and the gate labels into 5.6 px, with nothing erroring and the shape intact. This is the state a
+  reader would have to notice for themselves.</figcaption>
+</figure>
+
+<h3>The scorecard</h3>
+<p>The weights are a judgement and are written down so they can be argued with: <b>×3</b> for what the repository cannot
+give up (C11 DOM, C5 click, C10 what it deletes, C4 the 1–13 range at 11 px, and being maintained), <b>×2</b> for bytes,
+<b>×1</b> for the rest. Each cell is 0–5; the total is out of 90.</p>
+
+<div class="wrap">
+<table>
+  <colgroup><col style="width:15%"><col style="width:9%"><col style="width:9%"><col style="width:11%"><col style="width:9%"><col style="width:9%"><col style="width:9%"><col style="width:9%"><col style="width:9%"><col style="width:11%"></colgroup>
+  <thead><tr><th>option</th><th class="num">DOM ×3</th><th class="num">click ×3</th><th class="num">deletes ×3</th><th class="num">1–13 ×3</th><th class="num">kept ×3</th><th class="num">bytes ×2</th><th class="num">no-build</th><th class="num">loops</th><th class="num">total /90</th></tr></thead>
+  <tbody>
+    <tr><td class="name">mermaid <span class="tag rec">rec</span></td><td class="num">5</td><td class="num">4</td><td class="num">5</td><td class="num">5</td><td class="num">3</td><td class="num">1</td><td class="num">5</td><td class="num">5</td><td class="num score"><b>78</b></td></tr>
+    <tr><td class="name">dagre-d3</td><td class="num">5</td><td class="num">5</td><td class="num">5</td><td class="num">5</td><td class="num">1</td><td class="num">3</td><td class="num">4</td><td class="num">4</td><td class="num score">77</td></tr>
+    <tr><td class="name">cytoscape</td><td class="num">1</td><td class="num">5</td><td class="num">5</td><td class="num">2</td><td class="num">5</td><td class="num">4</td><td class="num">5</td><td class="num">4</td><td class="num score">71</td></tr>
+    <tr><td class="name">elkjs</td><td class="num">5</td><td class="num">3</td><td class="num">2</td><td class="num">5</td><td class="num">5</td><td class="num">1</td><td class="num">5</td><td class="num">3</td><td class="num score">70</td></tr>
+    <tr><td class="name">graphviz</td><td class="num">3</td><td class="num">0</td><td class="num">3</td><td class="num">5</td><td class="num">5</td><td class="num">2</td><td class="num">4</td><td class="num">3</td><td class="num score">59</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>mermaid and dagre-d3 are one point apart, and that gap is not the reason for the choice — the maintenance line is. A
+package whose newest release is from 2019, that cannot take a current d3 and whose drawing is version-frozen is a dependency you
+adopt once and can never move; a package on a release train is one you can bump for the next advisory. If you would
+rather have 600 KB than a maintainer, dagre-d3 is the pick and the rest of this page still applies to it.</p>
+
+<h2><span class="n">3.</span>What adopting mermaid would cost</h2>
+
+<p>The honest number is not "one file". The renderer is two-thirds domain vocabulary that a library cannot replace, and the
+tests and browser tools read the markup the renderer emits, so every one of them moves too.</p>
+
+<div class="wrap">
+<table>
+  <colgroup><col style="width:30%"><col style="width:9%"><col style="width:61%"></colgroup>
+  <thead><tr><th>file</th><th class="num">lines</th><th>what moves</th></tr></thead>
+  <tbody>
+    <tr><td class="name">public/pipeline-flow.js</td><td class="num">568</td><td><b>≈123 out</b> — <code>notchHtml</code>, <code>stageHtml</code>, the arc constants, <code>pointAt</code>/<code>centreOf</code>/<code>cssPoint</code>, <code>layout</code>, <code>arcsHtml</code>, <code>markup</code>. <b>≈90 in</b> — build the diagram text from the normalised shape, render, then wire ids, marks, focus and aria onto the returned SVG.</td></tr>
+    <tr><td class="name">public/style.css</td><td class="num">126</td><td>the <code>.pflow*</code> block at <code>4079–4204</code>: the grid, the notch, the arc lanes and the fit arithmetic are replaced by ~20 lines of SVG/node styling. Theme tokens stay.</td></tr>
+    <tr><td class="name">test/pipeline-flow.test.js</td><td class="num">272</td><td>assertions on a markup string become assertions on a rendered node; <code>markup()</code> no longer exists as a pure function.</td></tr>
+    <tr><td class="name">test/pipeline-modal.test.js</td><td class="num">169</td><td>the mount and repaint path — a library renders asynchronously, so "the drawing is there after paint()" becomes a wait.</td></tr>
+    <tr><td class="name">test/pipeline-truth.test.js</td><td class="num">347</td><td>the mark vocabulary read out of the DOM.</td></tr>
+    <tr><td class="name">tools/verify-pipeline-flow.mjs</td><td class="num">376</td><td rowspan="4">four browser gates and a capture tool read <code>.pflow-node</code>, <code>.pflow-notch</code>, <code>data-mark</code> and <code>data-pos</code>; every selector moves to the SVG's classes or to the post-processed attributes, and the fit/scroll measurements have to be re-derived because mermaid has no fit.</td></tr>
+    <tr><td class="name">tools/verify-pipeline-flow-usability.mjs</td><td class="num">609</td></tr>
+    <tr><td class="name">tools/verify-pipeline-flow-visible.mjs</td><td class="num">776</td></tr>
+    <tr><td class="name">tools/verify-pipeline-dialog-size.mjs</td><td class="num">389</td></tr>
+    <tr><td class="name">tools/capture-pipeline-flow.mjs</td><td class="num">548</td><td>the screenshots the docs quote.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p><b>Ten files: 3,486 lines of test and tool that name the flow, and 223 lines of the renderer and its stylesheet.</b> The file itself shrinks by only about 33 lines — what changes is that the 123 lines of geometry stop being ours.
+What does <i>not</i> move: the three adapters (≈111 lines), <code>marksFor</code>/<code>ranFrom</code> (≈56), the gate
+vocabulary and its aria sentences (≈78) and the legend/count/status band (≈98) — about 343 of the 568. That split is the
+finding: a library replaces the drawing, not the meaning.</p>
+
+<div class="box">
+  <b>And the bump is not free either.</b> The vendored copy is 11.4.1, which carries nine advisories; 12.3.0 clears them
+  and is 5,537,838 bytes — 2.15× the file already in the tree. The demo pages run the vendored 11.4.1 (they add no bytes),
+  and both were also run against 12.3.0 before this page was written: the same seven nodes, the same 11 px labels, the same
+  click. The one difference that matters is that mermaid changed its node id between the two majors, which is the fourth
+  trap in §6.
+</div>
+
+<h2><span class="n">4.</span>See it</h2>
+
+<p>Two pages, both standalone, both rendering <a href="demos/pipeline-definition.js">the same definition</a> — the real
+<code>sefl-review-loop</code> out of <code>pipelines.seed.json</code>, seven stages, an exit check between each, one dashed
+review round trip. Open them side by side:</p>
+
+<ul>
+  <li><a href="demos/mermaid-flow.html"><b>demos/mermaid-flow.html</b></a> — the recommendation, on the vendored mermaid.
+  Press <i>13 · the bundle</i> to see the other end of the range, then Tab into the drawing and press Enter.</li>
+  <li><a href="demos/cytoscape-flow.html"><b>demos/cytoscape-flow.html</b></a> — the canvas option. Press <i>1:1</i> next to
+  <i>fit</i> and watch the painted label size change in the status line.</li>
+</ul>
+
+<p>Both print their own measurements from the painted DOM under the drawing — width, the smallest label actually rendered,
+how much is past the card, how many stages are in view. Those are the numbers in §2; a page that computes them cannot
+quietly disagree with the table.</p>
+
+<h2><span class="n">5.</span>What it does not fix</h2>
+
+<ul>
+  <li><b>A library will not decide what the reader is meant to read.</b> The four marks, the five gate states, the
+  <code>aria-current</code> step, the loop cap printed from fields rather than parsed out of a sentence, and the provenance
+  that says which rule drew the marks — all of that is domain vocabulary and it stays in the file, library or not.</li>
+  <li><b>It does not make the flow narrower.</b> mermaid is 1.53× the rail at seven stages and 1.9× at thirteen. The
+  current drawing is dense because it is a grid of columns; a graph renderer lays out a graph.</li>
+  <li><b>It does not make the flow keyboard-operable by itself.</b> mermaid's nodes carry no tabindex, no role and no
+  accessible name; the demo adds them in about twenty lines of post-processing, which is the tax on C5 and C11.</li>
+  <li><b>It does not remove the async gap.</b> <code>mermaid.render</code> returns a promise, so a position change is a
+  render you have to sequence — the modal's current "replace the element" path becomes "render, then wire, then mark".</li>
+  <li><b>It does not fix the rest of the dialog.</b> The card width, the fit press, the scroll count and the legend are the
+  modal's own; only the drawing moves.</li>
+</ul>
+
+<h2><span class="n">6.</span>Method, and the traps the first version of each probe fell into</h2>
+
+<p>A probe per candidate in a scratch directory, all loaded from <code>file://</code> in Chromium at 1280×900, driven by
+Playwright; the two committed pages driven the same way for the numbers in §2. The baseline was measured by rendering
+<code>public/pipeline-flow.js</code> with the stylesheet block lifted verbatim out of <code>public/style.css</code>
+(<code>4079–4204</code>) into a 1120 px card — the same code the panel runs, not a redrawing of it.</p>
+
+<p>Seven defects in this list were produced by the measurement itself, and each one is a reason a naive adoption looks fine
+and is not:</p>
+
+<ol>
+  <li><b>mermaid scales its own SVG to the container.</b> With the default <code>useMaxWidth</code>, seven stages in a
+  1126 px card come back with 12 px labels painted at <b>6.5 px</b> — and the computed font-size is still 12 px, so a
+  stylesheet reading says the labels are fine. The demo resets the SVG to its viewBox and reports font-size × scale.</li>
+  <li><b>The drawing is a flex item, so it shrinks.</b> Even with the viewBox size applied, a <code>&lt;svg&gt;</code>
+  inside a flex row was painted at <b>0.59×</b> until it got <code>flex: 0 0 auto</code>. Two independent ways to lose the
+  same 8 px.</li>
+  <li><b>mermaid measures a label before CSS sees it.</b> A <code>max-width</code> on the HTML label wraps the text
+  visually and does not narrow the node — the string has to carry the break. The demo wraps at 18 characters itself, which
+  is what took the seven-stage drawing from 1874 px to 1668 px.</li>
+  <li><b>mermaid changed its node id between 11 and 12.</b> 11 writes <code>flowchart-n_pr-2</code>; 12 prefixes the render
+  id (<code>pflow_1-flowchart-n_pr-2</code>). The only per-node hook mermaid offers is that id, so a post-processing
+  integration is coupled to the major version — the demo matches the tail with a regex and was verified on both.</li>
+  <li><b>cytoscape's <code>fit</code> is a trap of the same shape.</b> It renders 12 px labels at <b>6.1 px</b> at thirteen
+  stages (zoom 0.51) and nothing errors. The demo prints the product and offers a 1:1 press.</li>
+  <li><b>dagre-d3's <code>setGraph()</code> replaces the graph's label object.</b> Calling it a second time to set
+  <code>labelType</code> drops <code>rankdir: "LR"</code> and the drawing comes back <b>257×732, vertical</b>, with no
+  error.</li>
+  <li><b>Graphviz reserves no room for an edge label.</b> With <code>label=</code> on an edge the text is painted across
+  the node it points at (<i>br-comments</i> over <i>Wait for the reviewer</i>); <code>xlabel=</code> is the spelling that
+  works, and the library still has no hit testing.</li>
+</ol>
+
+<p>Two of the four objections in the repository's own review — <code>docs/reviews/pipeline-flow-architecture.md</code> §5,
+"no per-node state API … not keyboard-operable" — do not survive the probe: both are ~20 lines of post-processing, and the
+demo does them. The other two — 2.5 MB for one dialog, and an asynchronous render — are real and are priced in §3.</p>
+
+<h2><span class="n">7.</span>Sources and open questions</h2>
+
+<div class="wrap">
+<table>
+  <colgroup><col style="width:26%"><col style="width:44%"><col style="width:14%"><col style="width:16%"></colgroup>
+  <thead><tr><th>source</th><th>what it establishes</th><th>kind</th><th>checked</th></tr></thead>
+  <tbody>
+    <tr><td>npm registry, <code>mermaid</code>, <code>dagre-d3</code>, <code>cytoscape</code>, <code>cytoscape-dagre</code>, <code>dagre</code>, <code>elkjs</code>, <code>@hpcc-js/wasm</code></td><td>version, licence and last publish date per package</td><td>lookup</td><td>2026-11-05</td></tr>
+    <tr><td>OSV (<code>api.osv.dev/v1/query</code>)</td><td>advisories for the exact versions measured, including <code>d3-color</code> 1.4.1</td><td>lookup</td><td>2026-11-05</td></tr>
+    <tr><td><code>pipelines.seed.json</code>, <code>pipeline-bundle.seed.json</code></td><td>the seven-stage definition and the thirteen-stage bundle, read once into <code>demos/pipeline-definition.js</code></td><td>repo</td><td>at 5e84586</td></tr>
+    <tr><td><code>public/pipeline-flow.js</code>, <code>public/style.css</code> <code>4079–4204</code></td><td>the baseline drawing and its stylesheet block, rendered as committed</td><td>repo</td><td>at 5e84586</td></tr>
+    <tr><td><code>docs/reviews/pipeline-flow-architecture.md</code></td><td>the earlier verdict, the DOM/gate constraint (C11) and the pixel defects this page does not re-litigate</td><td>repo</td><td>at 5e84586</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3>Open questions</h3>
+<ul>
+  <li><b>Which mermaid?</b> 11.4.1 costs nothing new and carries nine advisories that do not touch the flowchart path we
+  use; 12.3.0 is clean and is 5.54 MB. That is the panel owner's call, not this page's — the recommendation is the library,
+  and the version is a cost line.</li>
+  <li><b>Is a 1.53× wider drawing acceptable in the dialog?</b> The modal scrolls today at thirteen stages, so the
+  mechanism exists; whether the reader tolerates scroll at seven is a judgement no measurement settles.</li>
+  <li><b>Does the panel want the flow drawn at all, or read as a list?</b> The rail is dense because it is a table with
+  connectors; a graph is a diagram. If the reader's answer is "I read the stage names", the cheapest change is no library.</li>
+</ul>
+
+<footer>
+  <p>Measured at <code>5e84586</code> (1.12.3). The two demo pages, their vendored files and the screenshots are in
+  <code>docs/research/demos/</code> and <code>docs/research/assets/</code>; the baseline probe and the shootout scripts were
+  scratch files and are not committed — §6 says exactly how each number was taken so it can be taken again.</p>
+</footer>
+
+</body>
+</html>
