@@ -267,6 +267,28 @@ const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
 const build = createBuild({ publicDir: PUBLIC_DIR, log });
 const buildAtBoot = await build.current();
 
+// The folder a panel with no named scan roots looks at: its own parent, so a bare clone is immediately useful and an
+// emptied list still shows a board instead of nothing. Settings → Board writes `scanRoots`; this is what an empty
+// list means, and the tab says so rather than leaving a blank board unexplained.
+const DEFAULT_SCAN_ROOT = path.dirname(HERE);
+
+// The one normalisation every root goes through — config.json, the write route and discovery all have to agree on
+// what "the same folder" is, or a list saved with a trailing slash and checked without one is two roots.
+const normRoot = (p) => String(p || "").trim().replace(/\\/g, "/").replace(/\/+$/, "");
+
+// Which roots the board actually walks, and which the file names. `scanRoots` is the EFFECTIVE list every reader in
+// this file already uses (discovery, the clone and new-project routes, the boot sweep), so nothing downstream has to
+// learn about the fallback; `scanRootsConfigured` is what config.json says (possibly empty) and `scanRootsFallback`
+// is the fact the settings tab needs in order to explain an empty list. Declared above loadConfig's CALL, which is
+// the only order that matters: the function body reads them when it runs, not when it is defined.
+function applyScanRoots(cfg, roots) {
+  const configured = (Array.isArray(roots) ? roots : []).map(normRoot).filter(Boolean);
+  cfg.scanRootsConfigured = configured;
+  cfg.scanRootsFallback = configured.length === 0;
+  cfg.scanRoots = configured.length ? configured : [DEFAULT_SCAN_ROOT];
+  return cfg;
+}
+
 // How many of a project's worktrees its chart draws on first paint. The top-N projection itself is the client's
 // (public/app.js `chartTopOrder`: last activity newest first, then by name), because that is where the rows and their
 // activity live; this is only the number, kept in the panel's own config.json so it survives a restart and applies
@@ -294,27 +316,6 @@ function collapseAfterSecondsFrom(value) {
   const n = Number(value);
   if (!Number.isFinite(n) || n < 0) return COLLAPSE_AFTER_DEFAULT;
   return Math.min(COLLAPSE_AFTER_MAX, Math.round(n));
-}
-
-// The folder a panel with no named scan roots looks at: its own parent, so a bare clone is immediately useful and an
-// emptied list still shows a board instead of nothing. Settings → Board writes `scanRoots`; this is what an empty
-// list means, and the tab says so rather than leaving a blank board unexplained.
-const DEFAULT_SCAN_ROOT = path.dirname(HERE);
-
-// The one normalisation every root goes through — config.json, the write route and discovery all have to agree on
-// what "the same folder" is, or a list saved as `C:/Projects/` and checked as `C:\Projects` is two roots.
-const normRoot = (p) => String(p || "").trim().replace(/\\/g, "/").replace(/\/+$/, "");
-
-// Which roots the board actually walks, and which the file names. `scanRoots` is the EFFECTIVE list every reader in
-// this file already uses (discovery, the clone and new-project routes, the boot sweep), so nothing downstream has to
-// learn about the fallback; `scanRootsConfigured` is what config.json says (possibly empty) and `scanRootsFallback`
-// is the fact the settings tab needs in order to explain an empty list.
-function applyScanRoots(cfg, roots) {
-  const configured = (Array.isArray(roots) ? roots : []).map(normRoot).filter(Boolean);
-  cfg.scanRootsConfigured = configured;
-  cfg.scanRootsFallback = configured.length === 0;
-  cfg.scanRoots = configured.length ? configured : [DEFAULT_SCAN_ROOT];
-  return cfg;
 }
 
 async function loadConfig() {
@@ -1178,7 +1179,7 @@ async function readScanRootsBody(body) {
     if (!given) continue; // a blank row in the list is not an error, it is a row nobody filled in
     const p = normRoot(given);
     if (!path.isAbsolute(p)) {
-      return { error: `${given} is not an absolute path — name the whole folder, like C:/Projects` };
+      return { error: `${given} is not an absolute path — name the whole folder, starting at the drive or the root` };
     }
     let st;
     try {
@@ -5190,7 +5191,7 @@ const server = createServer(async (req, res) => {
       );
       let projects = null;
       try {
-        projects = (await registry.refresh()).length;
+        projects = (await registry.refresh({ after: true })).length;
       } catch (e) {
         log(`discovery after the scan-roots write failed: ${String((e && e.message) || e)}`);
       }
