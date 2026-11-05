@@ -1,8 +1,8 @@
 # The assistant session fence
 
 **Status:** research note, landed as one doc set. Two things are measured and reproduced below: the
-`unknown` run status the panel has no word for (§5), and the revived-flag mismatch that makes the
-panel word a fence wrongly (§6). The endpoint-by-endpoint measurement of the call that lifts the
+`unknown` run status the panel has no word for (§4), and the revived-flag mismatch that makes the
+panel word a fence wrongly (§5). The endpoint-by-endpoint measurement of the call that lifts the
 fence is in [`gateway-fence-endpoints.md`](gateway-fence-endpoints.md) — that file is the raw request
 evidence, this one is the account.
 
