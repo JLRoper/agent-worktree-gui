@@ -758,6 +758,16 @@ free-text row for questions that offer choices; an open-ended question always ke
 keeps its **Send answer** button). Answered, it reads `✓ answered: …`; a question answered elsewhere, withdrawn or
 expired leaves `· question closed without an answer here`.
 
+**A question whose run has already ended is not answered — it says so.** A run can end while its question is still
+drawn: a stop, a failed turn, the gateway dropping it. Answering then used to collapse the box with
+`✓ answered: …` even though no turn was left to read the answer, because the gateway's clarify route accepts the
+answer and resolves the prompt anyway. The panel now reads the run's own status first: when it is `cancelled`,
+`failed`, `completed` or `interrupted`, the box **stays** and reads
+`the run had already ended (cancelled) — the answer was not delivered` in its warn line, the question is not
+cleared, and the card settles on the run's own status on the next sweep — the sweep is the reconciliation pass, so a
+run the gateway has already ended never leaves a card reading `running` (LIVE, blocking sends to its thread) for
+more than one tick. The jobs log carries the reason beside the run id.
+
 **The dock.** Approvals that do not come over a run's own stream (a selected approval transport, the legacy CLI
 contract) land in a stack pinned bottom-right, with a `▾` that folds it and one card per request naming the agent,
 the command and `expires in Ns`. Answering there sends the choice within the host's list; an expiry means the command
