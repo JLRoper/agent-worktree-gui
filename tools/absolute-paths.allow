@@ -60,6 +60,7 @@ docs/plan/deliverables-handback.md | 19 | plan: the tree it was written against,
 docs/pushing-to-a-remote.md | 1 | doc: the example or the tree it walks the reader through, as it was
 docs/queue-park-release.md | 9 | state record: the files it read on this machine, as they were
 docs/queue-tab-review.md | 2 | state record: the files it read on this machine, as they were
+docs/reports/deliverables-open-audit-2026-11-05.md | 34 | measurement record: the recorded targets and the route's own bodies are the evidence, kept exactly as the store and the route returned them
 docs/reviews/lanes-and-modules.md | 1 | review record: the checkout it read, as it was
 docs/reviews/pipeline-flow-usability-ledger.md | 1 | review record: the checkout it read, as it was
 docs/reviews/pipeline-flow-usability-round/ledger.json | 1 | review record: the checkout it read, as it was
