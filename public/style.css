@@ -4252,6 +4252,10 @@ body.pipew-open { overflow: hidden; }
    its own track — 15 px of scrollbar-producing decoration, and the notch it labelled was clipped away (round 5A's
    finding 1). */
 .pflow-link::before { content: ""; position: absolute; left: -3px; top: -2px; width: 6px; height: 5px; border-left: 1px solid var(--line); }
+/* A connector the document hands an artifact across is THICK: the picture says which edge carries something, not
+   merely that two stages are adjacent. 3 px at `top: 18px` keeps the line's centre where the hairline's was. */
+.pflow-link[data-handoff] { top: 18px; height: 3px; background: var(--dim); }
+.pflow-link[data-handoff]::before { border-left-color: var(--dim); }
 .pflow-notch { position: absolute; left: 50%; top: -7px; width: 3px; height: 15px; margin-left: -1.5px; border-radius: 2px; background: var(--amber); box-shadow: 0 0 0 2px var(--panel); cursor: help; }
 .pflow-node[data-mark="done"] .pflow-notch { background: #6f8f5a; }
 .pflow-node[data-mark="not-reached"] .pflow-notch { background: #4a5568; }
@@ -4270,6 +4274,34 @@ body.pipew-open { overflow: hidden; }
   border-radius: 12px 12px 0 0;
 }
 .pflow-arc-label { position: absolute; top: -15px; left: 50%; transform: translateX(-50%); padding: 0 5px; border-radius: 4px; background: var(--panel); color: #b9a2e0; font-size: 11px; line-height: 14px; white-space: nowrap; }
+/* ---- the artifact view: the document's artifacts, on a lane under the track ----------------------------------------
+   Two bands: the chips, then a bus of hairlines under them. A chip sits on a boundary — the gap after the column that
+   writes it — and its route runs along the bus to the column that reads it. The three edge kinds the document already
+   distinguishes are the three styles: thin for an `inputs.read`, thick for a handoff, dashed for the `external_inputs`
+   boundary. Everything is written in the track's own `--pflow-n` / `--pflow-gap`, so nothing is measured and a resize
+   costs no script. The layer is the track's box (the same ceiling, centred the same way), or a percentage of it would
+   not be a percentage of the track. */
+.pflow-artifacts { position: relative; margin-top: 16px; max-width: calc(var(--pflow-n) * var(--pflow-maxw) + (var(--pflow-n) - 1) * var(--pflow-gap)); margin-inline: auto; }
+.pflow-artifact { position: absolute; bottom: 0; transform: translateX(-50%); max-width: calc(var(--pflow-minw) + var(--pflow-gap) - 8px); padding: 0 5px; border: 1px solid var(--line); border-radius: 5px; background: var(--panel); color: var(--pflow-ink-quiet); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; line-height: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* At either end of the track a centred chip would hang outside the drawing; aligned to the edge it cannot. */
+.pflow-artifact[data-side="left"], .pflow-artifact[data-side="right"] { transform: none; }
+.pflow-artifact[data-kind="handoff"] { border-color: #3f4d61; color: var(--dim); }
+.pflow-artifact[data-kind="external"] { border-style: dashed; border-color: var(--amber); color: #d8b26a; }
+.pflow-artifact[data-kind="missing"] { border-style: dashed; border-color: var(--red); color: #ff9a9a; }
+.pflow-artifact-edge { position: absolute; bottom: 0; border-top: 1px solid var(--pflow-ink-quiet); color: var(--pflow-ink-quiet); }
+.pflow-artifact-edge[data-edge="handoff"] { border-top-width: 3px; border-color: var(--dim); color: var(--dim); }
+.pflow-artifact-edge[data-edge="external"] { border-top-style: dashed; border-color: var(--amber); color: var(--amber); }
+/* The route's own ends: a riser from the bus up to the chip that starts it, and a 4 px square under every column it
+   reaches, so a long read ends ON the column it points at rather than somewhere beneath it. */
+.pflow-artifact-edge::before { content: ""; position: absolute; left: -1px; bottom: 1px; width: 1px; height: 5px; background: currentColor; }
+.pflow-artifact-dot { position: absolute; width: 4px; height: 4px; border-radius: 2px; background: var(--dim); transform: translateX(-2px); }
+.pflow-artifact-dot[data-edge="external"] { background: var(--amber); }
+.pflow-artifact-key { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11px; color: var(--pflow-ink-quiet); }
+.pflow-artifact-key-item { display: inline-flex; align-items: center; gap: 5px; }
+.pflow-artifact-key-item i { width: 14px; height: 0; border-top: 1px solid currentColor; }
+.pflow-artifact-key-item[data-edge="handoff"] i { border-top-width: 3px; }
+.pflow-artifact-key-item[data-edge="external"] i { border-top-style: dashed; color: var(--amber); }
+.pflow-artifact-key-item[data-edge="missing"] i { border-top-style: dashed; color: var(--red); }
 .pflow-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11px; color: var(--dim); }
 .pflow-key { display: inline-flex; align-items: center; gap: 5px; }
 .pflow-key i { width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); }

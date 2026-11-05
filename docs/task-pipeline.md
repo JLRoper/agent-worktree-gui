@@ -42,6 +42,12 @@ record keeps the ledger of them:
       "status": "done", "settledAt": "…",
       "tree": { "path": "…", "branch": "…", "head": "1c9f0aa", "dirty": 0 },
       "artifact": { "id": "finding", "path": "ledger/G58.json", "present": true, "sha256": "3d0e91…" },
+      "inputs": [
+        { "artifact": "review", "path": "ledger/G58.review.json", "sha256": "8ac1f0…", "present": true,
+          "writer": "review-agent", "edge": "H-10", "via": "handoff" },
+        { "artifact": "finding", "path": "ledger/G58.json", "sha256": "3d0e91…", "present": true,
+          "writer": "fixer", "edge": null, "via": "earlier" }
+      ],
       "decision": { "by": "panel", "trigger": "stage-settled", "code": null, "fact": { "kind": "run-status", "status": "done" }, "reason": "stage S8 of poc-to-uat settled — the run finished" } }
   ]
 }
@@ -62,6 +68,26 @@ record keeps the ledger of them:
   stage ids in order, each handoff's ends/kind/cap, and each gate's anchor/artifact/kind. Editing a prompt or a title
   does not move it; editing the graph does, and the row parks `pipeline-changed` rather than being driven against a
   graph it did not enter under.
+- **`inputs` is the manifest of what the stage was handed**: one entry per artifact the document says it reads, with
+  the id, the document's path, the sha256 the file had when the stage started, whether it was there, the writer the
+  document names, and the edge it arrived by (`H-10` for a handoff, `null` for a read and for the earlier visit's
+  own artifact). It is written with the entry when the START is asked for — the moment the INPUTS block is resolved —
+  because that is what the stage started with, and a later reading of the tree cannot reconstruct it.
+
+### The input manifest, read back
+
+`stageInputsOf(task, { stage, visit, worktree })` (`lib/task-pipeline-drive.js`) reads one stage run's manifest.
+Two rules make it useful after the fact:
+
+- **the stored hash stays.** `sha256` is what the stage was handed; re-hashing the file on a read would answer a
+  different question, and would lose the only number that says *what* the stage started with.
+- **`present` is re-resolved against the tree.** A file deleted after the stage started reads `present: false` beside
+  the stored hash, and its id appears in `missing`. `present: null` means the document gave the artifact no path (an
+  external input) — unknown, never a zero-length file and never "missing".
+
+A stage run written before this field existed answers `entries: []` — nothing recorded — and a record with no stage
+run at all answers `null`. The manifest is capped at 24 entries per run; `inputsDropped` counts what the cap refused
+so a short manifest does not read as a complete one.
 
 ## Three answers, and no fourth
 
@@ -229,6 +255,8 @@ has actually landed — the same bar every other row has.
 |---|---|---|
 | `pipelineRun.visits` | a stage is entered (assign, move, loop) | never within the same pipeline; a new pipeline starts a new record |
 | `pipelineRun.stageRuns` | a start is asked for; filled at the link and at the settle | trimmed to 30 by the writer, `runsDropped` counts the loss |
+| `pipelineRun.stageRuns[].inputs` | the start is asked for (the INPUTS block's own resolution) | trimmed with its stage run |
+| `pipelineRun.stageRuns[].inputsDropped` | only when the 24-entry cap refused one | trimmed with its stage run |
 | `pipelineRun.tree` | the tree is cut | never by the pipeline — the reader deletes the tree, the record keeps the path |
 | `pipelineRun.route` | a stage is entered | re-stamped by the reader's `route` release |
 | `pipelineRun.crossings` | an edge is crossed | reset by the reader's `cap` release; a new pipeline starts a new record |
@@ -240,6 +268,30 @@ longer than one tick (a gateway probe, a `git worktree add`, the start), and wit
 start the same stage twice. It is written with the row BEFORE the start is attempted, and a start still unlinked after
 three minutes is asked for again. A start the spawner refuses parks the row with the refusal instead: a stage that
 cannot be started is a decision, not a retry.
+
+## The artifact view on the flow
+
+The flow the modal draws (`public/pipeline-flow.js`) puts the document's artifacts BETWEEN the stages: one node per
+artifact the document already names as an input — a handoff's `artifact`, a stage's `inputs.read[]`, the document's
+`external_inputs` — placed on the boundary after the column that writes it, or on the document's left edge when it
+comes from outside. Nothing is added to the bundle to say so; the view is derived, and the three edge kinds the
+document already distinguishes are the three marks:
+
+| what the document says | the mark |
+|---|---|
+| a handoff carries an artifact from one stage to the next | the connector is **thick** |
+| a stage's `inputs.read[]` names an artifact written further back | a **thin** line from the node to the column that reads it |
+| the artifact is in `external_inputs` — this document does not write it | the node and its line are **dashed**, on the document's own boundary |
+
+A read naming an artifact no stage writes and `external_inputs` does not declare is drawn as a node marked **missing**
+(the word is painted, and the key names it) rather than dropped: a drawing that loses a read certifies a graph the
+document does not have. A pipeline with no artifacts draws no layer and no key — the same rule the marks' legend
+follows.
+
+The node count and every position come from the document's own fields, in the track's own `calc()` (no measurement, no
+`ResizeObserver`), so the picture agrees with the sequence it is drawn against at every width. `flow.artifacts` is the
+list the markup is built from, which is what the tests read; `data-artifacts` on the root says how many the drawing
+holds.
 
 ## The bundle, and the seed
 
