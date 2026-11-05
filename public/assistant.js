@@ -917,17 +917,27 @@
     const off = state.assistant?.enabled === false;
     const rec = sessionById(id);
     const role = rec?.roleName ? ` It runs the <b>${esc(rec.roleName)}</b> role.` : "";
+    // A role with a standing wake says so here: the interval is part of the job, not a hidden setting, and this is
+    // the first thing the assistant's own tab shows. 0 is "no cadence" and says nothing.
+    const cadence = Number(rec?.wakeEveryMinutes) > 0 ? ` It wakes every <b>${Number(rec.wakeEveryMinutes)} minutes</b>.` : "";
+    const director = rec?.roleId === "assistant-director";
     return `<div class="as-intro">
       <p><b>✧ ${esc(rec?.name || "Assistant")}</b> reads this board and nothing else: the agents' cards, the approvals and its own
-      scratchpad. It has no terminal of its own.${role}</p>
-      <ul>
+      scratchpad. It has no terminal of its own.${role}${cadence}</p>
+      ${director
+        ? `<ul>
+        <li>“Who is stuck?” — every assistant's queue, with a dead run, a stale park and startable work marked.</li>
+        <li>It files a row into another assistant's queue, or messages that assistant, and says which one it chose and why.</li>
+        <li>It never starts a worker: that is the owning assistant's job, and this one only routes.</li>
+      </ul>`
+        : `<ul>
         <li>“What is going on?” — a digest of the live agents.</li>
         <li>“Keep an eye on the deploy one, and tell me if it stalls.”</li>
         <li>“Create a worktree for the docs and have an agent write them.” — it proposes the worker, and you
         confirm with one click.</li>
         <li>It answers a worker only when your standing rules cover the question; otherwise it drafts and waits
         for your click.</li>
-      </ul>
+      </ul>`}
       ${off ? `<p class="as-hint">It is switched off in Settings — turn it on there to start.</p>` : ""}
       <div class="as-first">
         <!-- A chipbox like every other prompt box (board/paste-chips.js): a long paste collapses in place
@@ -1760,7 +1770,7 @@
         if (roleFor !== id) return;
         roleText = String(d.charter?.text ?? "");
         roleMtime = Number.isFinite(Number(d.charter?.mtime)) ? Number(d.charter.mtime) : null;
-        roleInfo = { role: d.role, sameAsRole: Boolean(d.sameAsRole), charter: d.charter, target: d.target };
+        roleInfo = { role: d.role, sameAsRole: Boolean(d.sameAsRole), charter: d.charter, target: d.target, wakeEveryMinutes: Number(d.wakeEveryMinutes) || 0 };
         roleRoles = Array.isArray(d.roles) ? d.roles : [];
         // The read is the assistant's COPY, and the box says so. Any pending question or typed draft belongs to the
         // text that read replaces, so both go with it.
@@ -1861,6 +1871,7 @@
           <button id="btn-as-new-assistant" type="button" class="primary" title="make the next assistant from this role: its own thread, its own rules and its own copy of the charter text — Assistant #1 is not touched">New assistant from this role</button>
         </div>
         ${role ? `<div class="as-help"><b>${esc(role.name)}</b> — ${esc(role.description || "(no remit written yet)")}</div>` : ""}
+        ${roleInfo?.wakeEveryMinutes ? `<div class="as-help" data-as-rolewake><b>Standing wake: every ${esc(String(roleInfo.wakeEveryMinutes))} minutes.</b> The panel's own sentry starts this assistant's turn on that clock, reads every assistant's queue and files the next action with the one that should carry it. The interval is stored in this assistant's settings file; it is not a second timer.</div>` : ""}
         <div class="as-charter-meta">
           <code class="as-charter-path" title="${esc(c.path || "")}">${esc(c.path || "…")}</code>
           <span class="as-hint">${when}</span>

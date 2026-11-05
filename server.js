@@ -3290,6 +3290,13 @@ const server = createServer(async (req, res) => {
     // to belong to the panel's one assistant. `assistantId` says WHICH assistant's role and charter this is —
     // #1 by default, so every old caller keeps meaning the assistant the panel has always had.
     //
+    // The library's read, by the name the brief uses (`GET /api/roles`). Metadata only: name, one line of remit and
+    // the charter's size — never the text. The Role tab fetches the one charter it is showing through
+    // /api/assistant/role/charter, and a list that carried six 20 KB bodies would be 120 KB on every poll.
+    if (route === "/api/roles" && req.method === "GET") {
+      return sendJson(res, 200, { roles: assistant.rolesList(), count: assistant.roles.length });
+    }
+    //
     // This is the one assistant route that carries charter TEXT, and it is fetched when the Role tab opens:
     // the polled state above carries sizes and paths only. The cap (413) and the stale save (409) are the same
     // two refusals the charter route raises, because a role's charter and an assistant's copy are written by the
