@@ -3125,12 +3125,109 @@
     return rows.length ? "" : `<div class="as-help" ${at}>(empty — this assistant is carrying nothing)</div>`;
   }
 
-  // The board's own table, over the trees THIS assistant owns. It is not a second table: the header and every row
-  // come from app.js's own `chartHeaderHtml`/`rowHtml`, so a column the reader hides on the board is hidden here too,
-  // the row's actions (⟳, ✕, lock, rename) are the board's actions, and the cells cannot drift from the board's.
-  // The owner column is FORCED on here: this tab exists to say "these trees are mine", and a table that dropped the
-  // column would say it only in its title. A filtered row set means what it says — the rows whose resolved owner is
-  // this assistant, in project-then-name order so the table does not reshuffle itself on every scan.
+  // ---- the worktrees sub-tab: one card per project ------------------------------------------------
+  //
+  // The board's own table, over the trees THIS assistant owns, grouped into the board's own project cards. It is
+  // not a second table: the header and every row come from app.js's own `chartHeaderHtml`/`rowHtml`, so a column
+  // the reader hides on the board is hidden here too, the row's actions (⟳, ✕, lock, rename) are the board's
+  // actions, and the cells cannot drift from the board's. The owner column is FORCED on here: this tab exists to
+  // say "these trees are mine", and a table that dropped the column would say it only in its title.
+  //
+  // The fold is THIS pane's own record. `wm.expandedProjects` is the board's project fold — written by the board's
+  // own toggle and read by its renderer — so sharing it would make one press move both surfaces and neither fold
+  // would mean what it says. A record that cannot be read is an empty one, which is the first visit: every card
+  // starts collapsed.
+  const WT_GROUPS_KEY = "wm.assistantWorktreeGroups";
+  let wtGroupsOpen = null;
+  function wtGroupSet() {
+    if (wtGroupsOpen) return wtGroupsOpen;
+    try {
+      const raw = JSON.parse(localStorage.getItem(WT_GROUPS_KEY) || "[]");
+      wtGroupsOpen = new Set(Array.isArray(raw) ? raw.map(String) : []);
+    } catch {
+      wtGroupsOpen = new Set();
+    }
+    return wtGroupsOpen;
+  }
+  function saveWtGroups() {
+    try {
+      localStorage.setItem(WT_GROUPS_KEY, JSON.stringify([...wtGroupSet()]));
+    } catch {
+      /* a browser that refuses the write keeps the fold for this page only */
+    }
+  }
+
+  // The project a tree belongs to, exactly as the board names it: everything before `/.worktrees/`, reduced to
+  // its directory name (a tree at `<repo>/.worktrees/x` belongs to `<repo>`). A tree with no
+  // `.worktrees` segment has no parent to read, so it falls back to the row's own project field.
+  function treeProjectName(row) {
+    const tree = String(row?.path || "").replace(/\\/g, "/");
+    const at = tree.toLowerCase().indexOf("/.worktrees/");
+    if (at > 0) {
+      const leaf = tree.slice(0, at).split("/").filter(Boolean).pop() || "";
+      if (leaf) return leaf;
+    }
+    return String(row?.project || "").trim();
+  }
+
+  // How many of a project's trees have an agent ON THEM right now — `live` is a run in progress, `parked` is one
+  // waiting on the reader. Read from the job list the float already holds (the freshest answer there is), and from
+  // the row's own panel signal when no job is known. A tree with neither adds nothing to either count.
+  function groupAgentCounts(rows) {
+    let live = 0;
+    let parked = 0;
+    const jobs = state.jobs instanceof Map ? [...state.jobs.values()] : [];
+    for (const row of rows) {
+      const want = normPath(row.path).toLowerCase();
+      let l = false;
+      let p = false;
+      for (const j of jobs) {
+        const at = normPath(j.ownerPath || j.worktreePath || "").toLowerCase();
+        if (!at || at !== want) continue;
+        const status = String(j.status || "").toLowerCase();
+        if (status === "waiting" || status === "waiting_for_approval") p = true;
+        else if (QUEUE_LIVE.has(status)) l = true;
+        if (l && p) break;
+      }
+      if (!l && !p) {
+        const running = Number(row.panelAgent?.running ?? row.signals?.panel?.running ?? 0) || 0;
+        l = running > 0;
+      }
+      if (l) live += 1;
+      if (p) parked += 1;
+    }
+    return { live, parked };
+  }
+
+  // The row the board draws, plus the board's own opener attribute ON THE ROW: `data-open-row` is what the board's
+  // ⧉ badge carries, and here it makes the whole row that press. Nothing else about the markup moves.
+  function wtRowHtml(row) {
+    const key = keyOf(row.project, row.path);
+    const html = rowHtml(row, true);
+    return html.startsWith("<tr ") ? html.replace("<tr ", `<tr data-open-row="${esc(key)}" `) : html;
+  }
+
+  // One card per project, in the board's own panel shape: `section.project` with its `project-head` (the chevron,
+  // the name, the counts) and the table in the body. The `collapsed` class is the board's own rule, so the body is
+  // hidden by the same CSS the board's projects use rather than a second fold implementation.
+  function wtGroupHtml(name, rows) {
+    const open = wtGroupSet().has(name);
+    const { live, parked } = groupAgentCounts(rows);
+    const trees = `${rows.length} tree${rows.length === 1 ? "" : "s"}`;
+    const agents = [live ? `${live} live` : "", parked ? `${parked} parked` : ""].filter(Boolean).join(" · ");
+    const line = `${trees}${agents ? ` · ${agents}` : ""}`;
+    const title = `${open ? "fold" : "open"} ${name} — ${line} in one table; a click on a tree opens its board row and centres the window on it`;
+    return `<section class="project as-wtgroup${open ? "" : " collapsed"}" data-as-wtgroup-card="${esc(name)}">
+      <div class="project-head" data-as-wtgroup="${esc(name)}" role="button" tabindex="0" aria-expanded="${open ? "true" : "false"}" title="${esc(title)}">
+        <span class="chev">${open ? "\u25be" : "\u25b8"}</span>
+        <h2>${esc(name)}</h2>
+        <span class="as-wtgroup-count">${esc(line)}</span>
+        <span class="spacer"></span>
+      </div>
+      <div class="wt-scroll as-worktrees-table"><table><thead><tr>${chartHeaderHtml(true)}</tr></thead><tbody>${rows.map(wtRowHtml).join("")}</tbody></table></div>
+    </section>`;
+  }
+
   function renderAssistantWorktrees(id = activeSessionId(), force = false) {
     const host = hostFor(id, "worktrees");
     if (!host || !state.assistant) return;
@@ -3138,16 +3235,68 @@
     const rows = [...state.rows.values()]
       .filter((r) => r && String(r.assistant?.id || "") === String(id))
       .sort((a, b) => String(a.project || "").localeCompare(String(b.project || "")) || String(a.name || "").localeCompare(String(b.name || "")));
+    // The project for a tree is read from its path, not from the row's field: a tree cut outside its project's
+    // `.worktrees` folder still belongs to the project the board scanned, and the two readings agree for every
+    // tree the panel cuts itself. The card order is the project name, so a repaint never reshuffles the pane.
+    const groups = new Map();
+    for (const row of rows) {
+      const name = treeProjectName(row) || "(no project)";
+      if (!groups.has(name)) groups.set(name, []);
+      groups.get(name).push(row);
+    }
+    const cards = [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
     const table = rows.length
-      ? `<div class="wt-scroll as-worktrees-table"><table><thead><tr>${chartHeaderHtml(true)}</tr></thead><tbody>${rows.map((r) => rowHtml(r, true)).join("")}</tbody></table></div>`
+      ? `<div class="as-wtgroups">${cards.map(([name, list]) => wtGroupHtml(name, list)).join("")}</div>`
       : `<div class="as-help">No worktrees are owned by ${esc(rec?.name || "this assistant")} yet. A tree a SPAWN by this assistant cuts is stamped its own; the reader can also set an owner by hand from the board's row.</div>`;
     const locked = rows.filter((r) => r.lock?.locked).length;
     host.innerHTML = `
       <div class="as-group">
         <h4>Its worktrees — ${esc(rec?.name || "this assistant")}'s own</h4>
-        <div class="as-help">The board's own table over the rows this assistant owns, owner column included. ${rows.length} tree${rows.length === 1 ? "" : "s"}${locked ? ` · ${locked} locked` : ""}. Every action is the board's own: ⟳ reconciles the row, ✕ removes the tree, the padlocks lock it. A SPAWN Assistant #2 wrote stamps the tree it cut as #2's; a tree the reader cut stays Assistant #1's.</div>
+        <div class="as-help">The board's own table over the rows this assistant owns, one card per project. ${rows.length} tree${rows.length === 1 ? "" : "s"} in ${cards.length} project${cards.length === 1 ? "" : "s"}${locked ? ` · ${locked} locked` : ""}. Every action is the board's own: ⟳ reconciles the row, ✕ removes the tree, the padlocks lock it — and a click on a tree opens its board row and centres the window on it. A SPAWN Assistant #2 wrote stamps the tree it cut as #2's; a tree the reader cut stays Assistant #1's.</div>
         ${table}
       </div>`;
+  }
+
+  // A group header is a fold, not a navigation: the card's own class carries the state (the board's `collapsed`
+  // rule), and the record is written so the next render — and the next page load — agrees with what is on screen.
+  function toggleWtGroup(name) {
+    const open = wtGroupSet();
+    if (open.has(name)) open.delete(name);
+    else open.add(name);
+    saveWtGroups();
+    const view = state.assistantView;
+    if (view && view.subTab === "worktrees" && isAssistant(view.assistant)) renderAssistantWorktrees(view.assistant, true);
+  }
+
+  // A tree press from this pane is the BOARD's press: unfold its project, open the row through the same
+  // `openAgentsBlock` the row's ⧉ badge uses (which is what paints the agents block), and then — AFTER that
+  // repaint, never before it — centre the window on the row. `keyOf` is the board's own key and the row carries it
+  // as `data-open-row`. A row that carries a thread opens that agent too. The float is left exactly as it is: it
+  // may cover part of the board, but closing it would take the reader's pane away under the click they just made.
+  function openTreeOnBoard(key) {
+    const row = [...state.rows.values()].find((r) => keyOf(r.project, r.path) === key);
+    if (!row) return false;
+    const project = state.projects.get(row.project);
+    const root = project ? rootOf(project) : "";
+    if (root && state.collapsedRoots.has(root)) toggleRoot(root);
+    if (!state.expandedProjects.has(row.project)) toggleProject(row.project);
+    // A chart holds its rows past the top N back, so a tree the reader picked here can be one the board is not
+    // drawing. That is the board's own "show the rest" press, not a second way to open a project: without it the
+    // row exists in state and nowhere on screen, and the press would land on nothing.
+    if (rowTopHidden(row)) toggleShowOld(row.project);
+    if (!state.expanded.has(key)) openAgentsBlock(key);
+    if (row.thread) openAgentThread(row.thread);
+    const land = () => {
+      const tr = document.querySelector(`#projects tr.row[data-key="${CSS.escape(key)}"]`);
+      if (!tr) return;
+      programmaticScroll();
+      tr.scrollIntoView({ block: "center", behavior: "auto" });
+      refreshAnchorBaseline();
+    };
+    requestAnimationFrame(land);
+    setTimeout(land, 120);
+    setTimeout(land, 400);
+    return true;
   }
 
   function renderAssistantQueue(id = activeSessionId(), force = false) {
@@ -4280,6 +4429,37 @@
     if (!target || (e.target.closest && e.target.closest("button"))) return;
     e.preventDefault();
     openAgentTurn(target.dataset.asQopen);
+  });
+
+  // ---- the worktrees pane: the project cards and their rows ---------------------------------------
+  // Delegated on the float, not bound per row: the pane is rebuilt on every snapshot, and a listener on a row that
+  // was replaced is a press that does nothing. A card's head is its fold (the same `role=button` contract the queue's
+  // sub-rows honour); a tree row is the board's own opener, so a press on it does exactly what the board's ⧉ badge
+  // does — the row's own controls keep their presses.
+  as$("assistant")?.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " " && e.key !== "Spacebar") return;
+    const head = e.target && e.target.closest ? e.target.closest("[data-as-wtgroup]") : null;
+    if (!head) return;
+    e.preventDefault();
+    toggleWtGroup(head.dataset.asWtgroup);
+  });
+  as$("assistant")?.addEventListener("click", (e) => {
+    const head = e.target.closest("[data-as-wtgroup]");
+    if (head) {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleWtGroup(head.dataset.asWtgroup);
+      return;
+    }
+    const tr = e.target.closest(".as-wtgroup tr[data-open-row]");
+    if (!tr) return;
+    // Every control on the row (⟳, ✕, the padlocks, the rename, the PR link) keeps its own press; the ⧉ badge is
+    // itself a `data-open-row` button, so it is the one exception and opens the tree like the row around it.
+    const control = e.target.closest("button, a, input, select, textarea, label, summary");
+    if (control && !control.matches("[data-open-row]")) return;
+    e.preventDefault();
+    e.stopPropagation();
+    openTreeOnBoard(tr.dataset.openRow);
   });
 
   as$("assistant")?.addEventListener("click", async (e) => {

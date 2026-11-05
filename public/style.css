@@ -3800,6 +3800,24 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 .as-group input[type="text"] { font-family: var(--mono); font-size: 11px; min-width: 250px; flex: 1 1 250px; }
 .as-group .as-help { font-size: 10.5px; color: var(--dimmer); line-height: 1.4; }
 
+/* ---- the worktrees sub-tab: one board project card per project ------------------------------------
+   The card IS the board's `.project` (its background, outline and the `collapsed` body rule), narrowed to the
+   pane: the cards stack with a small gap, the head is the fold handle, and the table keeps its own horizontal
+   scroll so a wide chart is reachable instead of clipped by the card. */
+.as-wtgroups { display: flex; flex-direction: column; gap: 10px; }
+.as-wtgroups > .as-wtgroup { margin-bottom: 0; }
+.as-wtgroups > .as-wtgroup > .project-head {
+  gap: 8px; padding: 7px 10px; cursor: pointer; user-select: none;
+  border-radius: 9px;
+}
+.as-wtgroups > .as-wtgroup:not(.collapsed) > .project-head { border-radius: 9px 9px 0 0; }
+.as-wtgroups > .as-wtgroup > .project-head:hover .chev { color: var(--text); }
+.as-wtgroups .project-head h2 { font-size: 12.5px; }
+.as-wtgroup-count { font-family: var(--mono); font-size: 10.5px; color: var(--dim); }
+.as-wtgroups .wt-scroll { overflow-x: auto; }
+.as-wtgroups tr.row { cursor: pointer; }
+.as-wtgroups tr.row:hover td { background: var(--row-rest-bg, #1a2230); }
+
 /* ---- the Bridge tab: one agent, no worktree, no queue ------------------------------------------------
    Four sections in one pane. The rows are a label/value grid so a path, a pid and a timestamp all line up;
    state is carried by BOTH a dot and a word, never colour alone (the same rule the alerts list follows). */
