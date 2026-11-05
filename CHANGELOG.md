@@ -4,16 +4,47 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.28.1 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.28.3 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-322 releases from v0.1.0 (2026-10-20) to v1.28.1 (2026-11-05), 1121 commits between the tags. Every release is anchored by an
+324 releases from v0.1.0 (2026-10-20) to v1.28.3 (2026-11-05), 1129 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.28.3 — 2026-11-05 · 6 commits
+
+[`caebf19`](https://github.com/JLRoper/agent-worktree-gui/commit/caebf19467a7ea65e0d6aa67146138e82e3a79c3) · [compare v1.28.2...v1.28.3](https://github.com/JLRoper/agent-worktree-gui/compare/v1.28.2...v1.28.3)
+
+### Fixed
+
+- fix: a row left queued over a settled stage advances, instead of running that stage again ([`7e97af4`](https://github.com/JLRoper/agent-worktree-gui/commit/7e97af428d2fb1e9ec7855cd9cecf32675405d47))
+
+### Docs & tests
+
+- docs: the backlog record names the tip it landed on, and the third move under the walk ([`86072cf`](https://github.com/JLRoper/agent-worktree-gui/commit/86072cf267d3e58215c2064acac8febfe02b8c65))
+- docs: render the changelog — 322 releases ([`5849647`](https://github.com/JLRoper/agent-worktree-gui/commit/5849647cbfa2bdf921ee413c7d5361c9158fb4ab))
+- docs: route the 24-stage POC-breaking rounds through the panel's executor ([`f983a9f`](https://github.com/JLRoper/agent-worktree-gui/commit/f983a9f3b86dc58f0c0c6cdc90e5537cbb08a09a))
+- docs: the report says what it measured, not that it measured everything ([`7d4f875`](https://github.com/JLRoper/agent-worktree-gui/commit/7d4f8757c11761b439c4e3ad3fb4c60af4492d3e))
+
+### Other
+
+- chore: 1.28.3 — the version this landing carries ([`caebf19`](https://github.com/JLRoper/agent-worktree-gui/commit/caebf19467a7ea65e0d6aa67146138e82e3a79c3))
+
+## v1.28.2 — 2026-11-05 · 2 commits
+
+[`942f86d`](https://github.com/JLRoper/agent-worktree-gui/commit/942f86df8a058f0e4548e6db22f91e567b3f4ed5) · [compare v1.28.1...v1.28.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.28.1...v1.28.2)
+
+### Docs & tests
+
+- test: two scan folders are two cards, folding and unfolding on their own ([`122dba2`](https://github.com/JLRoper/agent-worktree-gui/commit/122dba27cb5616afa1c99bd051e765ff81d3c4ab))
+
+### Other
+
+- chore: 1.28.2 — the version this landing carries ([`942f86d`](https://github.com/JLRoper/agent-worktree-gui/commit/942f86df8a058f0e4548e6db22f91e567b3f4ed5))
 
 ## v1.28.1 — 2026-11-05 · 3 commits
 
