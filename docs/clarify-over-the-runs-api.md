@@ -13,16 +13,27 @@ anything. This file is the answer both investigations converged on, with the cod
 the one thing that has to change, and what the panel does until it does.
 
 **Short version.** The panel's half of the contract ships in this repo and is complete. The
-gateway's half is *code*, and the stock build installed here does not have it: there is no
-`POST /v1/runs/{run_id}/clarify` and no clarify callback on an API run's agent, so the tool is offered
-to the model and refuses at dispatch. No `hermes config set` can supply a route — but the missing half
-is four edits, and this box carries them as a local patch
-(`%LOCALAPPDATA%\hermes\patches\clarify-runs-api.patch`). Measured 2026-10-26 on a second
-gateway: an agent's question parks the run, `clarify.request` arrives with its choices and prompt id,
-the answer is posted to the route, and the turn ends holding it. The earlier conclusion — that this
-needed an upstream install and could not be an edit — was wrong. `lib/clarify.js` still records what it
-OBSERVES (a refusal on a run's stream means the build cannot deliver a question, a `clarify.request`
-means it can), so a build without the patch keeps telling agents to ask in prose.
+gateway's half is *code*: a clarify callback on an API run's agent, and a route to answer the prompt
+(`POST /v1/runs/{run_id}/clarify`). Which of the two a build has is a fact about the BUILD, and it is
+not the same on every box:
+
+- the **stock 0.22.2 build** carries neither. The tool is offered to the model and refuses at
+  dispatch with the sentence above. No `hermes config set` can supply a route — but the missing half
+  is four edits, and a box that needs it carries them as a local patch
+  (`%LOCALAPPDATA%\hermes\patches\clarify-runs-api.patch`).
+- the **build the gateway on this box runs** (measured 2026-11-05 — see "Measured on the gateway this
+  panel runs" below) carries both. A real run parked on a question, the answer POSTed to the route
+  returned `{"status": "resolved"}`, and the turn finished holding it. It still advertises **no**
+  clarify feature in `/v1/capabilities`, which is why the panel probes the ROUTE rather than reading
+  the flag.
+- a build with the route and **no** callback is the trap: the endpoint answers, the tool still
+  refuses. A refusal observed on a run's stream outranks a present route, and the panel goes back to
+  the prose path.
+
+`lib/clarify.js` therefore records what is PROVED — a `clarify.request` on a run's stream, the tool's
+refusal, or the route's own answer to a probe — and the sentence a run's input carries is conditional
+on it: call the tool and stay parked when the build can deliver a question, ask in prose and end the
+turn when it cannot, say nothing at all when the build is unknown.
 
 ## The two gates, and which one is shut
 
@@ -35,7 +46,58 @@ Gate 1 alone is a trap: it puts `clarify` in the schema, so the model calls it, 
 refuses every call. That is exactly the observed refusal, and it is why the panel's own docs used to
 promise a box the gateway could not draw.
 
-## What the installed build actually contains (read, not inferred)
+## Measured on the gateway this panel runs (2026-11-05)
+
+Not inferred from a commit, and not from the capabilities flag — from the routes, with a real run. The
+gateway was the one the panel is pointed at (`127.0.0.1:8642`), authenticated with its own key, and
+every step below is a call the panel itself makes.
+
+| step | what was sent | what came back |
+| --- | --- | --- |
+| is it advertised? | `GET /v1/capabilities` | 200, and **no** `clarify` key at all — the flag says nothing about this build |
+| start a run | `POST /v1/runs` with an input that asks the agent to call `clarify` once | `202 {"run_id": "run_b75c…", "status": "started"}` |
+| the question | `GET /v1/runs/{id}/events` | `tool.started clarify`, then `clarify.request` with `prompt_id: "baa5c75f8d"`, `execution_generation: 1`, the choices, and the question |
+| answer it | `POST /v1/runs/{id}/clarify` with `{"request_id": "baa5c75f8d", "execution_generation": 1, "answer": "blue"}` | `200 {"run_id": …, "status": "resolved", "prompt_id": "baa5c75f8d"}` |
+| the turn held it | `GET /v1/runs/{id}` | `{"status": "completed", "output": "The answer I was given was \"blue\"."}` |
+
+Two facts from that transcript are worth keeping:
+
+- **The body is exactly three fields.** `respond_run` refuses anything else with
+  `400 invalid_params`: a POST carrying only `{"answer": …}` — which is what a hand-written probe is
+  likely to send — is rejected even when the prompt id is right. The panel sends all three
+  (`lib/jobs.js` `answerQuestion`, from the prompt's own `execution_generation`).
+- **The route can be probed without starting anything.** POSTing `{}` to
+  `/v1/runs/<a-made-up-id>/clarify` answers `404` with the gateway's own envelope —
+  `{"error": {"message": "Run not found: …", "code": "run_not_found"}}` — while a path that is not a
+  route answers `404: Not Found` as plain text. That difference is the whole probe, and it is what
+  `lib/clarify.js` reads (`probeClarifyRoute`): one request, no run created, no prompt answered.
+
+## Asking again, and one entry per question
+
+A run parked on a question emits nothing at all, so a question nobody answers would otherwise sit on
+the board looking exactly as it did an hour earlier. The panel re-asks on its own clock — the first
+repeat an hour after the question parked, then once an hour (`CLARIFY_REASK_AFTER_MS` /
+`CLARIFY_REASK_EVERY_MS`, `lib/assistant/config.js`) — and every surface keeps ONE entry:
+
+- `Jobs.reaskQuestion` bumps `reasks` and `lastAskedAt` on the question record and writes one dim line
+  on the card. Nothing is posted to the gateway: the run is still parked on that prompt, and posting
+  the question again would be a second question.
+- the alert is found by its existing key and edited in place (`asks`, `at`, `detail`), never re-fired
+  — `fired()` would return `null` for an open key anyway, which is why the count lives on the record.
+- `waitsOf` is keyed on the question's own `key` (`j.question.key`, written when the prompt arrived),
+  so the room's message stays one message; the Element channel copies the count onto it and sends
+  nothing.
+- the page's HUMAN rotation keys a question on `(kind, turn, request id)`, and the count is not part
+  of that key — so a re-ask updates the row the reader already has.
+
+The reader-facing description is in `docs/using-the-board.md` ("A question nobody answers is asked
+again — hourly, as one entry").
+
+## What a stock build actually contains (read, not inferred)
+
+The checkout read for this section is the 0.22.2 box this doc was first written against
+(`<HERMES_HOME>/hermes-agent`, `HEAD` `d923a5eb48`, "Release 0.22.2"). The build the panel on THIS box
+runs is a later tree that carries the route — measured above.
 
 Installed checkout: `C:/Users/Jacob/AppData/Local/hermes/hermes-agent`, `HEAD` = `d923a5eb48`
 ("Release 0.22.2"), which is the tree the gateway on `:8642` runs
@@ -110,35 +172,45 @@ could not be traced here — this checkout is a partial clone whose promisor rem
 this; the tree is.** Check a build by what it contains, which is what
 `tools/check-gateway-clarify.mjs` does.
 
-Upstream is not the only route to it: the local patch below gives this build the same contract, which is
-what this box runs.
+Upstream is not the only route to it: the local patch below gives a stock build the same contract.
 
 ## What the panel does about it (this repo's half)
 
 Shipped here, and all of it observable on the board:
 
-- `lib/clarify.js` — records what the gateway has actually *proved*: a `clarify.request` event means
-  the round trip works, the refusal text in a `clarify` tool result means it does not. An unknown
-  build claims nothing. The record is keyed to the gateway version, so installing a build with the
-  route clears it without a panel restart.
+- `lib/clarify.js` — records what the gateway has actually *proved*, in two records that answer two
+  different questions:
+  - `available` — the ROUND TRIP: a `clarify.request` event means the callback is bound and the route
+    answers; the refusal text in a `clarify` tool result means the callback is not.
+  - `route` — the ENDPOINT, settled by `probeClarifyRoute`: one POST to
+    `/v1/runs/<made-up id>/clarify`, whose `run_not_found` envelope means the route is there and
+    whose bare 404 means it is not. It creates nothing and answers nothing.
+  - `instruction()` is the conditional sentence a run's input carries: call the tool and stay parked
+    when either proof says the build can deliver a question (and no refusal has been seen), ask in
+    prose and end the turn when it cannot, and nothing at all when the build is unknown. A refusal
+    outranks a present route, because an endpoint with no callback delivers nothing.
+  - the record is keyed to the gateway version, so an upgrade clears both without a panel restart.
 - `lib/jobs.js` —
+  - `create()` proves the route *before* it composes the body (`proveClarifyRoute`, memoised for
+    `CLARIFY_PROBE_MS` per gateway build), so the very first turn of a fresh build already carries the
+    right sentence. This covers the board assistant's own turn and every worker alike — they post
+    through this one body;
   - `consume()` detects the refusal on the run's stream, writes one dim line on that turn's card
     ("this gateway build cannot deliver a clarify question…"), logs it once, and marks the job;
-  - `create()` appends one sentence to the run's own input once the refusal has been observed: ask
-    in prose and end the turn. This covers the board assistant's own turn and every worker alike —
-    they post through this one body;
+  - `reaskQuestion()` bumps the count on a question nobody answered (see "Asking again" above);
   - `previewRequest()` shows the same input in a dry run, so a preview is a preview;
-  - `probe()`/`transportInfo()` carry `capabilities.clarify`, and the job summary carries
-    `clarifyUnavailable` so it survives a restart.
-- `lib/assistant.js` — journals the fact once (it owns the journal) and exposes `clarify` in its
-  `state()`, so the page can say *why* agents ask in prose instead of drawing a box that can never
-  appear.
-- `public/app.js` and the question box are unchanged: when a `clarify.request` does arrive, the box
-  works exactly as documented in the README.
+  - `probe()`/`transportInfo()` carry `capabilities.clarify` and the whole `clarify` record, and the
+    job summary carries `clarifyUnavailable` so it survives a restart.
+- `lib/assistant.js` — journals the fact once (it owns the journal), exposes `clarify` in its
+  `state()`, re-asks a parked question on the hourly clock, and keeps the room's message count in
+  step. The `question` rule's alert is the entry the reader answers from the assistant panel.
+- `public/app.js` — the question box says how often the panel has asked again (`↻ asked again N×`),
+  and the HUMAN rotation keys a question so a re-ask can never add a row.
 
-So a question still reaches the reader on this build — as a prose question at the end of a turn,
-which the board's `question` rule already escalates with the choices it can read. What is lost is the
-*parked* question: the box, the choices as buttons, and the turn waiting for the answer.
+So a question reaches the reader either way. On a build with the route it is the *parked* question —
+the box, the choices as buttons, and the turn waiting for the answer. On a build without it, it is a
+prose question at the end of a turn, which the board's `question` rule escalates with the choices it
+can read, and the run has stopped by then: that is the difference the instruction exists to make.
 
 ## What the reader has to do (a patch, then a restart)
 
@@ -185,19 +257,28 @@ The panel needs no restart — `public/**` is read from disk per request, and no
 ## Verifying this without a gateway
 
 ```bash
-node tools/verify-clarify.mjs          # 30 checks, all offline, against a stub Runs API
+node tools/verify-clarify.mjs          # 52 checks, all offline, against a stub Runs API
 node tools/check-gateway-clarify.mjs   # read-only: one GET, and with --probe one OPTIONS per route
 ```
 
-`check-gateway-clarify.mjs` reads `features.run_clarify_response` first: a patched gateway answers
-`VERDICT the clarify route is present` (exit 0) on one GET, and a stock one still reads ABSENT (exit 1).
-Its `--probe` half is a cross-check only. Measured on this box, `OPTIONS` answers **403 for the clarify
-route and for its own approval control** — an auth layer answers before the router — so the probe settles
-nothing there, and the script now says exactly that instead of a bare "undecided".
+`check-gateway-clarify.mjs` reads `features.run_clarify_response` first: a gateway that advertises it
+answers `VERDICT the clarify route is present` (exit 0) on one GET, and one that does not still reads
+ABSENT (exit 1). Its `--probe` half is a cross-check only. Measured on this box, `OPTIONS` answers
+**403 for the clarify route and for its own approval control** — an auth layer answers before the
+router — so `--probe` settles nothing there, and the script says exactly that instead of a bare
+"undecided". That is the limit of the READ-ONLY check: it can only read the flag, and the build
+measured below has the route while advertising nothing. The panel's own probe is the one that asks
+the route (`lib/clarify.js` `probeClarifyRoute`), and it is the answer the instruction uses.
 
 `verify-clarify.mjs` drives the shipped `lib/clarify.js` and `lib/jobs.js` against a stub Runs API on
 an ephemeral loopback port — no real gateway, no worker started — and checks the whole chain in
-order: nothing claimed before anything is observed; a refusal on a run's stream flips the record and
-says so on the card; the *next* run's body carries the instruction; a `clarify.request` on a later
-run flips it back; and the hint then stops appearing. The positive control is in the same script, so
-"the hint is gone" cannot be explained by the mechanism never running.
+order: nothing claimed before anything is observed or probed; a probe settles the route and the very
+first body carries the matching sentence; a refusal on a run's stream flips the record to prose and
+says so on the card; a `clarify.request` on a later run flips it back; and a second panel instance
+against the same stub WITH the route added tells its first run to call the tool instead. The positive
+control is in the same script, so "the sentence is gone" cannot be explained by the mechanism never
+running.
+
+`node --test test/clarify-reask.test.js` is the other half: a real parked run (stub gateway, the
+stream parsed by `lib/jobs.js`), the hour driven by a rewritten timestamp rather than a sleep, and the
+assertions that the count rises on ONE alert and ONE wait while the key never moves.
