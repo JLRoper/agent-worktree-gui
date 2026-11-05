@@ -759,8 +759,10 @@ those files; a reader may weigh it differently without the round being wrong.</p
 </div>
 
 <div class="verdict">
-  <h4>Re-run, 2026-11-05 08:50 UTC</h4>
-  <p>The harness was run again on this checkout, into a scratch directory, leaving the ledgers below untouched. Each
+  <h4>Re-run, 2026-11-05 08:45–08:47 UTC</h4>
+  <p>The harness was run again on this checkout, into a scratch directory, leaving the ledgers below untouched. Both
+  rounds finished at 08:46:41 UTC or earlier (the ledgers' own <code>finishedAt</code>:
+  <code>08:46:11.960Z</code> and <code>08:46:40.964Z</code>). Each
   round rebuilt its own fixture repository, so the fixture's seed commit differs (it was <code>3cca959</code> when
   the ledgers below were written and <code>9d98d4a</code> this time); the work did not. The bundle
   <code>sha256</code> was the same, the observed sequence was the same nine stage runs, the crossings were the same
