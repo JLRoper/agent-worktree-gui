@@ -157,6 +157,23 @@ newest first, so the folder itself is the history and a render whose hash no lon
 stale. `node tools/verify-pipelines-viz.mjs` re-renders into a temp file and asserts the picture still matches the
 JSON.
 
+### 1.7 The library at a glance
+
+`public/pipeline-map.html` puts the whole library on one page: the seven definitions and the thirteen-stage studio
+bundle, each stage a node whose first line is its ordinal and title and whose second line names who runs it, with
+the exit check or gate on the arrow that leaves it. It is built from both seed files by
+`node tools/render-pipeline-map.mjs`, which inlines `tools/vendor/mermaid.min.js` — the page opens with no network
+at all. `node tools/verify-pipeline-map.mjs` re-checks the committed page: 8 cards, 36 stage nodes, the bundle's
+three carried loops and `sefl-review-loop`'s one inferred edge, both layouts, 11 px labels and zero console errors.
+
+A catalogue stage has no role field, so its second line is **derived** from the stage's own prompt by a closed rule
+table in the renderer; every derived line carries the rule id and the exact phrase, which the page's inspector
+shows and the verifier re-checks against the prompt. A bundle stage is not derived: it prints the name and kind of
+its own `owner.role`, plus the count of the bundle's other roles on that stage. The two layouts are the
+horizontal one (one mermaid flowchart per definition, at its natural 1:1 size, scrolling rather than shrinking) and
+book mode (the same chain cut into rows of 2, 3 or 4 stages, with the row break drawn as a carriage return and
+cross-row loop-backs in the left margin). Both keep every painted label at 11 px or more.
+
 ---
 
 ## 2. Per-project defaults, beside `remoteBranchPolicy`
