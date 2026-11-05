@@ -7,3 +7,17 @@ __pycache__/
 data/aa-rating-pages.json
 /PROMPT.md
 /.shots/
+
+# Matrix bridge (matrix-bridge/README.md): credentials and runtime state — never committed.
+bridge.env
+.venv/
+matrix-bridge/ca-bundle.pem
+matrix-bridge/store/
+matrix-bridge/outbox.txt
+matrix-bridge/outbox.sent
+matrix-bridge/bridge_live.log
+matrix-bridge/bridge_run.log
+matrix-bridge/restart_launcher.log
+matrix-bridge/restart_report.txt
+matrix-bridge/restart_verify.txt
+matrix-bridge/*.pid
