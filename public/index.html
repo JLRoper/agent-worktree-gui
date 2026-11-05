@@ -839,6 +839,9 @@
        writers, copy/motion and scroll. Loaded BEFORE app.js (app.js's boot IIFE calls its renderers, and
        app.js reads its top-level consts by bare name); it declares only, so that order costs nothing. -->
   <script src="/board/console.js"></script>
+  <!-- The DELIVERABLES list's two narrowings — the text filter and the kind chips — as pure answers. app.js reads
+       them by name at paint time (`window.wtDeliverKinds`), and test/deliver-kinds.test.js imports this same file. -->
+  <script src="/core/deliver-kinds.js"></script>
   <script src="/app.js"></script>
   <!-- The update check. Loaded after app.js because it reads that file's `state`, `turnLive` and
        the banner helpers by name — at call time, never at load, so nothing here waits on boot. -->

@@ -15304,6 +15304,11 @@ const deliver = {
   cap: DELIVER_DEFAULT_CAP,
   kept: 0,
   filter: "",
+  // The kinds the reader switched OFF with the header's chips. Default empty is ALL ON, and this is page state, not
+  // list state: paintDeliverRows re-reads it on every repaint (the list re-renders on each deliverable frame) and
+  // never writes it, which is what keeps a switched-off kind switched off through a repaint. It narrows the VIEW
+  // only — the store's rows stay where they are and come back the moment the chip is pressed again.
+  kindsOff: [],
   active: 0,       // index into the FILTERED rows, which is what the combobox drives
   agesTimer: null,
   why: {},         // seq → the refusal the click was given, said under that row and nowhere else
@@ -15327,6 +15332,7 @@ function deliverPopEl() {
     <div class="dl-head">
       <span class="dl-count" id="dl-count">deliverables — newest first</span>
       <input id="dl-filter" class="dl-filter" type="search" autocomplete="off" spellcheck="false" placeholder="filter…" role="combobox" aria-label="filter deliverables" aria-autocomplete="list" aria-controls="dl-list" aria-expanded="true" />
+      <div class="dl-kinds" id="dl-kinds" role="group" aria-label="which kinds to show" hidden>${deliverKindChipsHtml()}</div>
       <button id="dl-close" type="button" class="dl-close" title="close (Esc)">✕</button>
     </div>
     <div class="dl-body" id="dl-list" role="listbox" aria-label="deliverables"></div>
@@ -15339,6 +15345,10 @@ function deliverPopEl() {
     const t = e.target;
     if (t.closest?.("[data-dl-retry]")) return void deliverFetch();
     if (t.closest?.("#dl-close")) return closeDeliverPop({ focus: true });
+    // A kind chip narrows the view and nothing else: no route, no store write, no row touched. Pressing it again
+    // puts the kind back. It is a real button, so Space and Enter do exactly what the mouse does.
+    const chip = t.closest?.("[data-dl-kind]");
+    if (chip) return void toggleDeliverKind(chip.dataset.dlKind);
     // The row's ONE opener, and it never falls through to the row's agent: a press on Open opens the deliverable,
     // whatever the row click means.
     const openControl = t.closest?.("[data-dl-open]");
@@ -15359,11 +15369,76 @@ function deliverPopEl() {
     paintDeliverRows();
   });
   filter.addEventListener("keydown", deliverKeydown);
-  // Tab is the way out: a header popover must not trap focus. Everything else is the filter's own handler.
+  // Tab is the way OUT of the popover, but it is also the way ACROSS its header: the chips are real buttons and a
+  // control a keyboard cannot reach is not a control. So Tab walks the header's own stops (filter → chips → close)
+  // and closes the popover only when it would leave from either edge; from a row's own control the browser keeps
+  // Tab, and nothing here traps focus.
   pop.addEventListener("keydown", (e) => {
-    if (e.key === "Tab") closeDeliverPop();
+    if (e.key !== "Tab") return;
+    const stops = deliverTabStops();
+    const at = stops.indexOf(document.activeElement);
+    if (at < 0) return;
+    const edge = e.shiftKey ? at === 0 : at === stops.length - 1;
+    if (edge) closeDeliverPop({ focus: true });
   });
   return pop;
+}
+
+// One chip per kind, in DELIVER_KINDS order, each a real button with aria-pressed. The chips are built ONCE with the
+// popover and only ever have their attributes and `hidden` repainted, so a press survives every list repaint — and
+// focus never leaves the chip the reader just pressed.
+function deliverKindChipsHtml() {
+  const K = window.wtDeliverKinds;
+  return K.KINDS.map(
+    (kind) => `<button type="button" class="dl-kind" data-dl-kind="${esc(kind)}" aria-pressed="true" aria-label="${esc(kind)}" hidden title="${esc(K.chipTitle(kind, []))}"><span class="dl-kind-glyph" aria-hidden="true">${K.GLYPH[kind]}</span></button>`,
+  ).join("");
+}
+
+// The header's tab order: the search box, the chips that are actually on screen, then close. A hidden chip is not a
+// stop (a display:none button cannot take focus), which is why the dead ones are filtered out here rather than
+// relied on to be skipped.
+function deliverTabStops() {
+  const pop = deliver.el;
+  if (!pop) return [];
+  return [pop.querySelector("#dl-filter"), ...pop.querySelectorAll("[data-dl-kind]"), pop.querySelector("#dl-close")].filter(
+    (el) => el && !el.hidden,
+  );
+}
+
+// A chip press: flip that kind in the page's own off-list, then repaint. `kindsOff` is assigned ONCE here and read by
+// the paint, so the state is the input to every repaint instead of a thing the repaint rebuilds.
+function toggleDeliverKind(kind) {
+  if (!kind) return;
+  const off = new Set(deliver.kindsOff);
+  if (off.has(kind)) off.delete(kind);
+  else off.add(kind);
+  // Canonical order, so a repaint and a reopened popover read the same list.
+  deliver.kindsOff = window.wtDeliverKinds.KINDS.filter((k) => off.has(k));
+  deliver.active = 0;
+  paintDeliverRows();
+  // The chip the reader pressed keeps the focus through the repaint (nothing re-creates it).
+  deliver.el?.querySelector(`[data-dl-kind="${CSS.escape(kind)}"]`)?.focus({ preventScroll: true });
+}
+
+// Which chips are on screen, and which way each is pressed. A kind with no row in this popup has no chip — hidden,
+// never greyed — and the group itself is hidden when not one kind has a row (an empty store), so the header does not
+// carry an empty control.
+function paintDeliverKinds(present) {
+  const pop = deliver.el;
+  if (!pop) return;
+  const K = window.wtDeliverKinds;
+  const group = pop.querySelector("#dl-kinds");
+  const shown = K.KINDS.filter((kind) => present.includes(kind));
+  if (group) group.hidden = shown.length === 0;
+  for (const chip of pop.querySelectorAll("[data-dl-kind]")) {
+    const kind = chip.dataset.dlKind;
+    const on = shown.includes(kind);
+    const off = K.isOff(kind, deliver.kindsOff);
+    chip.hidden = !on;
+    chip.setAttribute("aria-pressed", off ? "false" : "true");
+    chip.classList.toggle("is-off", off);
+    chip.title = K.chipTitle(kind, deliver.kindsOff);
+  }
 }
 
 // The anchor is the header button, and the top bar is sticky, so its rect is the same wherever the page has
@@ -15580,13 +15655,10 @@ function deliverHookStream() {
 }
 
 // The store writes itself newest-first and this file does not re-order it; the filter narrows by what the reader
-// can see — title, target, agent, project.
+// can see — title, target, agent, project — AND by the kinds still switched on. Both narrowings are core/deliver-kinds'
+// own pure answers, so the text and the chips compose by intersection and neither can win over the other.
 function deliverList() {
-  const q = deliver.filter.trim().toLowerCase();
-  if (!q) return deliver.entries;
-  return deliver.entries.filter((e) =>
-    [e.title, e.target, e.agent, e.project].some((v) => String(v ?? "").toLowerCase().includes(q)),
-  );
+  return window.wtDeliverKinds.visible(deliver.entries, { query: deliver.filter, off: deliver.kindsOff });
 }
 
 async function deliverFetch({ quiet = false } = {}) {
@@ -15651,9 +15723,16 @@ function paintDeliverRows({ keepScroll = false } = {}) {
 
   const rows = deliverList();
   const kept = deliver.kept || deliver.entries.length;
-  head.textContent = deliver.filter.trim()
-    ? `${rows.length} of ${kept} — newest first`
-    : `${kept} ${kept === 1 ? "deliverable" : "deliverables"} — newest first`;
+  // The chips first: which ones exist, and which way each is pressed, is part of what the head SAYS — a count that
+  // named a kind the header had just hidden would be the page arguing with itself.
+  paintDeliverKinds(window.wtDeliverKinds.presentKinds(deliver.entries));
+  head.textContent = window.wtDeliverKinds.countText({
+    shown: rows.length,
+    total: kept,
+    query: deliver.filter,
+    off: deliver.kindsOff,
+    entries: deliver.entries,
+  });
 
   if (!deliver.entries.length) {
     body.innerHTML = `<div class="dl-empty">Nothing has been delivered yet.</div>
@@ -15663,7 +15742,7 @@ function paintDeliverRows({ keepScroll = false } = {}) {
     return;
   }
   if (!rows.length) {
-    body.innerHTML = `<div class="dl-empty">nothing matches “${esc(deliver.filter.trim())}”.</div>`;
+    body.innerHTML = `<div class="dl-empty">${esc(window.wtDeliverKinds.emptyText({ query: deliver.filter, off: deliver.kindsOff }))}</div>`;
     foot.hidden = true;
     return;
   }

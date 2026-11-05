@@ -27,6 +27,10 @@
 //   2. the harvest seam put the DELIVER line in the store, and the real GET serves it with kind, title and age
 //   3. the list is newest-first, with the glyph by kind, the target, the agent, the project and the age
 //   4. the filter narrows, Esc clears it, Esc again closes and puts focus back on the button; End reaches the oldest
+//   4b. the KIND chips: one per kind that has rows, ALL ON by default, a real button with aria-pressed reached by Tab
+//      and pressed by Enter; a chip narrows the same list the text filter does (both compose), the head reports the
+//      filtered set and names the kinds left on, the state survives a repaint, a kind with no rows has no chip at all,
+//      and no chip writes the store
 //   5. a title click POSTs the recorded seq ONLY — a request the panel answers 404 because the file is gone — and the
 //      row then says `gone` (missingAt, stamped by the real route)
 //   6. an unknown seq answers 404 and opens nothing; a restored file answers 200 and clears `gone`
@@ -428,7 +432,7 @@ try {
     await page.keyboard.type("probe");
     await page.waitForFunction(() => document.querySelectorAll(".dl-row").length === 1, null, { timeout: 5_000 });
     eq("the filter narrows to the one report", await page.evaluate(() => document.querySelector(".dl-row .dl-name").textContent.trim()), "The 200-row probe report");
-    eq("the head says how many of how many", await page.evaluate(() => document.getElementById("dl-count").textContent.trim()), "1 of 200 — newest first");
+    eq("the head says how many of how many, and which kinds", await page.evaluate(() => document.getElementById("dl-count").textContent.trim()), "1 of 200 · link file image");
     await page.keyboard.press("Escape");
     await page.waitForFunction(() => document.querySelectorAll(".dl-row").length === 200, null, { timeout: 5_000 });
     eq("Esc clears the filter first", await page.evaluate(() => document.getElementById("dl-filter").value), "");
@@ -437,6 +441,83 @@ try {
     await page.keyboard.press("Escape");
     await page.waitForSelector("#deliver-pop[hidden]", { state: "attached", timeout: 5_000 });
     ok("Esc again closes it and focus returns to the button", await page.evaluate(() => document.getElementById("deliver-pop").hidden === true && document.activeElement?.id === "btn-deliver"));
+
+    // ---- 4b. the KIND chips: one per kind present, ALL ON by default, keyboard reachable, composing with the filter --
+    await page.keyboard.press("d");
+    await page.waitForSelector("#deliver-pop:not([hidden])", { timeout: 5_000 });
+    await page.waitForFunction(() => document.querySelectorAll(".dl-row").length === 200, null, { timeout: 15_000 });
+    const headText = () => page.evaluate(() => document.getElementById("dl-count").textContent.trim());
+    const chipState = () =>
+      page.evaluate(() =>
+        [...document.querySelectorAll("#dl-kinds [data-dl-kind]")].map((c) => ({
+          kind: c.dataset.dlKind,
+          tag: c.tagName,
+          type: c.getAttribute("type"),
+          pressed: c.getAttribute("aria-pressed"),
+          label: c.getAttribute("aria-label"),
+          hidden: c.hidden,
+          drawn: c.getBoundingClientRect().width > 0,
+          glyph: (c.textContent || "").trim(),
+        })),
+      );
+    const chips = await chipState();
+    eq("one chip per kind that has rows, in the store's order", chips.map((c) => c.kind), ["link", "file", "image"]);
+    ok("every chip is a real button", chips.every((c) => c.tag === "BUTTON" && c.type === "button"), chips.map((c) => c.tag).join(" "));
+    eq("…all ON by default", chips.map((c) => c.pressed), ["true", "true", "true"]);
+    ok("…each carries its own mark and a name an AT can read", chips.every((c) => c.glyph.length > 0 && /^(link|file|image)$/.test(c.label || "")), JSON.stringify(chips.map((c) => [c.glyph, c.label])));
+    ok("…and is drawn, not hidden — this store holds all three", chips.every((c) => c.hidden === false && c.drawn), JSON.stringify(chips.map((c) => [c.kind, c.hidden, c.drawn])));
+    eq("all on: the head says the plain total", await headText(), "200 deliverables — newest first");
+
+    // Keyboard: the chips are real buttons, so Tab reaches them and Enter presses them. Tab out of the header still closes.
+    await page.click("#dl-filter");
+    await page.keyboard.press("Tab");
+    eq("Tab from the search box reaches the first chip", await page.evaluate(() => document.activeElement?.dataset?.dlKind || ""), "link");
+    await page.keyboard.press("Enter");
+    await page.waitForFunction(() => document.querySelectorAll(".dl-row").length === 199, null, { timeout: 5_000 });
+    eq("Enter on a chip hides that kind", await page.evaluate(() => document.querySelector('[data-dl-kind="link"]').getAttribute("aria-pressed")), "false");
+    eq("…the head reports the filtered set, and names what is left", await headText(), "199 of 200 · file image");
+    await page.keyboard.press("Enter");
+    await page.waitForFunction(() => document.querySelectorAll(".dl-row").length === 200, null, { timeout: 5_000 });
+    eq("…and Enter again puts it back", await page.evaluate(() => document.querySelector('[data-dl-kind="link"]').getAttribute("aria-pressed")), "true");
+
+    // The mouse is the same press, and the text filter composes with it rather than replacing it.
+    await page.click('[data-dl-kind="image"]');
+    await page.waitForFunction(() => document.querySelectorAll(".dl-row").length === 199, null, { timeout: 5_000 });
+    eq("a click hides the image, and the head counts the filtered set", await headText(), "199 of 200 · link file");
+    await page.click("#dl-filter");
+    await page.keyboard.type("dock");
+    await page.waitForFunction(() => /nothing matches/.test(document.getElementById("dl-list").textContent), null, { timeout: 5_000 });
+    ok(
+      "the chips compose with the text filter: a word only the hidden kind matches finds nothing",
+      await page.evaluate(() => /nothing matches “dock”/.test(document.getElementById("dl-list").textContent) && document.querySelectorAll(".dl-row").length === 0),
+    );
+    eq("…and the head still counts the same 200, naming the kinds left on", await headText(), "0 of 200 · link file");
+    await page.click('[data-dl-kind="image"]');
+    await page.waitForFunction(() => document.querySelectorAll(".dl-row").length === 1, null, { timeout: 5_000 });
+    eq("…putting the kind back, with the word still typed, finds its one row", await page.evaluate(() => document.querySelector(".dl-row .dl-name").textContent.trim()), "The dock overlapping the console");
+    eq("…and the head now counts over all three kinds", await headText(), "1 of 200 · link file image");
+    await page.keyboard.press("Escape");
+    await page.waitForFunction(() => document.querySelectorAll(".dl-row").length === 200, null, { timeout: 5_000 });
+
+    // A REPAINT: this is the paint a `deliverable` frame runs, and the state has to survive it.
+    await page.click('[data-dl-kind="image"]');
+    await page.waitForFunction(() => document.querySelectorAll(".dl-row").length === 199, null, { timeout: 5_000 });
+    const countBeforeRepaint = await headText();
+    await page.evaluate(() => deliverFetch({ quiet: true }));
+    eq("a repaint keeps the kind switched off", await page.evaluate(() => document.querySelector('[data-dl-kind="image"]').getAttribute("aria-pressed")), "false");
+    eq("…the rows stay filtered", await page.evaluate(() => document.querySelectorAll(".dl-row").length), 199);
+    eq("…and the head still reports the filtered set", await headText(), countBeforeRepaint);
+    ok("no row was touched by a chip: the store still holds all 200", await page.evaluate(async () => (await (await fetch("/api/deliverables")).json()).kept === 200));
+    const kindsShot = path.join(SHOT_DIR, "deliverables-kind-chips.png");
+    await page.locator("#deliver-pop").screenshot({ path: kindsShot });
+    console.log(`SHOT  ${kindsShot}`);
+    await page.click('[data-dl-kind="image"]');
+    await page.waitForFunction(() => document.querySelectorAll(".dl-row").length === 200, null, { timeout: 5_000 });
+    eq("…and the chip restores the whole list", await headText(), "200 deliverables — newest first");
+    // Leave the popover SHUT and all kinds on, which is the state phase 5 expects to reopen from.
+    await page.keyboard.press("Escape");
+    await page.waitForSelector("#deliver-pop[hidden]", { state: "attached", timeout: 5_000 });
+
 
     // ---- 5. the title click is a REAL request, by seq only, and the 404 lands ----------------------
     await page.keyboard.press("d");
@@ -482,6 +563,11 @@ try {
     ok("an empty store says nothing has been delivered yet", await page.evaluate(() => /Nothing has been delivered yet\./.test(document.getElementById("dl-list").textContent)));
     ok("…documents the grammar, so a reader can tell an agent by hand", await page.evaluate(() => /DELIVER file C:\/path\/to\/report\.html \| The report/.test(document.querySelector(".dl-hint code")?.textContent || "")));
     ok("…and shows no cap line", await page.evaluate(() => document.getElementById("dl-foot").hidden === true));
+    const emptyChips = await page.evaluate(() =>
+      [...document.querySelectorAll("#dl-kinds [data-dl-kind]")].map((c) => ({ kind: c.dataset.dlKind, hidden: c.hidden, drawn: c.getBoundingClientRect().width > 0 })),
+    );
+    ok("a kind with no rows gets NO chip — hidden, never greyed", emptyChips.length === 3 && emptyChips.every((c) => c.hidden && !c.drawn), JSON.stringify(emptyChips));
+    ok("…and the group is hidden, so the header carries no empty control", await page.evaluate(() => document.getElementById("dl-kinds").hidden === true));
     const empty = await getJson(emptyPanel.base);
     eq("the empty store's envelope is still the plan's shape", { version: empty.body?.version, cap: empty.body?.cap, kept: empty.body?.kept }, { version: 1, cap: 200, kept: 0 });
     const emptySeen = await seenJson(42, emptyPanel.base);
