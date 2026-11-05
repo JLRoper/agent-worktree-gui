@@ -103,7 +103,7 @@ test("assigning writes one record with the clock it was given, and leaves the ca
   const out = assignTaskPipeline(tasks, 7, { pipeline: "poc-to-uat", stage: "S2", source: source(), at: AT });
   assert.ok(out);
   assert.equal(out.changed, true);
-  assert.deepEqual(out.task.pipelineRun, { pipeline: "poc-to-uat", stage: "S2", enteredAt: "2026-11-03T15:00:00.000Z" });
+  assert.deepEqual(out.task.pipelineRun, { pipeline: "poc-to-uat", stage: "S2", enteredAt: "2026-11-03T15:00:00.000Z", visits: { S2: 1 } });
   assert.equal(tasks[0].pipelineRun, null, "the caller's record is not mutated");
   assert.deepEqual(tasks[1], { id: 8, title: "unassigned work" }, "another task is untouched");
   assert.equal(out.tasks.length, 2);
@@ -123,10 +123,10 @@ test("a different stage is a new entry and gets the new stamp", () => {
   const later = new Date("2026-11-03T18:00:00.000Z");
   const moved = assignTaskPipeline(first.tasks, 7, { pipeline: "poc-to-uat", stage: "S3", source: source(), at: later });
   assert.equal(moved.changed, true);
-  assert.deepEqual(moved.task.pipelineRun, { pipeline: "poc-to-uat", stage: "S3", enteredAt: "2026-11-03T18:00:00.000Z" });
+  assert.deepEqual(moved.task.pipelineRun, { pipeline: "poc-to-uat", stage: "S3", enteredAt: "2026-11-03T18:00:00.000Z", visits: { S2: 1, S3: 1 } });
   // A move to another pipeline is the same transition, not a special case.
   const other = assignTaskPipeline(moved.tasks, 7, { pipeline: "triage", stage: "S1", source: source(), at: later });
-  assert.deepEqual(other.task.pipelineRun, { pipeline: "triage", stage: "S1", enteredAt: "2026-11-03T18:00:00.000Z" });
+  assert.deepEqual(other.task.pipelineRun, { pipeline: "triage", stage: "S1", enteredAt: "2026-11-03T18:00:00.000Z", visits: { S1: 1 } });
 });
 
 test("re-pressing the same stage on a stamp the window cannot read REPAIRS it, rather than doing nothing", () => {
@@ -136,7 +136,7 @@ test("re-pressing the same stage on a stamp the window cannot read REPAIRS it, r
     const broken = { id: 7, title: "t", pipelineRun: { pipeline: "poc-to-uat", stage: "S2", enteredAt: stamp } };
     const out = assignTaskPipeline([broken], 7, { pipeline: "poc-to-uat", stage: "S2", source: source(), at: AT });
     assert.equal(out.changed, true, `stamp ${JSON.stringify(stamp)} is rewritten`);
-    assert.deepEqual(out.task.pipelineRun, { pipeline: "poc-to-uat", stage: "S2", enteredAt: "2026-11-03T15:00:00.000Z" });
+    assert.deepEqual(out.task.pipelineRun, { pipeline: "poc-to-uat", stage: "S2", enteredAt: "2026-11-03T15:00:00.000Z", visits: { S2: 1 } });
   }
 });
 test("clearing is the default path: pipelineRun null, and clearing nothing changes nothing", () => {

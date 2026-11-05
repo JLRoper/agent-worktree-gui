@@ -63,7 +63,7 @@ test("a task assigned from the seed reads its stage, its position of 13 and its 
     at: AT,
   });
   assert.equal(assigned.changed, true);
-  assert.deepEqual(assigned.task.pipelineRun, { pipeline: "poc-to-uat", stage: "S7", enteredAt: "2026-11-03T15:00:00.000Z" });
+  assert.deepEqual(assigned.task.pipelineRun, { pipeline: "poc-to-uat", stage: "S7", enteredAt: "2026-11-03T15:00:00.000Z", visits: { S7: 1 } });
 
   const view = resolveTaskPipeline(assigned.task, { bundle: source.bundle, now: new Date("2026-11-03T17:15:00.000Z") });
   assert.equal(view.mode, "pipeline");
