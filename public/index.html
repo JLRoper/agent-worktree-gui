@@ -609,9 +609,13 @@
         <div id="pipeline-editor" class="pipeline-editor" hidden></div>
       </div>
       <div class="settings-group" id="settings-panel-bundles" data-settings-group="bundles" role="tabpanel" aria-labelledby="settings-tab-bundles" hidden>
-        <div class="settings-row" id="bundle-summary-row" title="What this read covers: the studio bundle file this panel reads — its pipelines in order, its name, and the loader's own refusal when the file is missing or bad. Read only; a task's pipeline window is where a stage is assigned.">
+        <div class="settings-row" id="bundle-summary-row" title="What this read covers: the studio bundle file this panel reads — its pipelines in order, its name, and the loader's own refusal when the file is missing or bad. A task's pipeline window is where a stage is assigned.">
           <span>Pipeline bundles <span class="settings-info">ⓘ</span></span>
           <span class="settings-unit mono"><span id="bundle-summary">reading…</span> <button type="button" data-bundle-refresh title="re-read the bundle and every assistant's queue now — a bundle re-exported or a task moved in another window is picked up here without closing Settings">re-read</button></span>
+        </div>
+        <div class="settings-row" id="bundle-import-row" title="Import a studio export into the bundle this panel already reads. The import APPENDS by pipeline id: the pipelines already in the file are kept, and the incoming ones are added. A pipeline id the bundle already holds is refused by name and nothing is written — a duplicate id would make a task record's pipeline ambiguous.">
+          <span>Import a studio export <span class="settings-info">ⓘ</span></span>
+          <span class="settings-unit mono"><input type="file" id="bundle-import-file" accept=".json,application/json" hidden><button type="button" data-bundle-import title="choose the JSON the studio exported — it is appended to this bundle by pipeline id, never swapped in for what is there">choose a file…</button> <span id="bundle-import-note" role="status" aria-live="polite"></span></span>
         </div>
         <div class="settings-preview mono" id="bundle-source">…</div>
         <div id="bundle-list"></div>

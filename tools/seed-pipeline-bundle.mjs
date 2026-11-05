@@ -58,10 +58,13 @@ if (existsSync(target) && !force) {
 }
 
 copyFileSync(source, target);
-const pipeline = loaded.bundle.pipelines[0];
+const pipelines = loaded.bundle.pipelines;
+const describe = (pipeline) =>
+  `  ${pipeline.id}: ${pipeline.stages.length} stages ${pipeline.order[0]}..${pipeline.order[pipeline.order.length - 1]}, ` +
+  `${pipeline.gates.length} gate${pipeline.gates.length === 1 ? "" : "s"}, ${pipeline.handoffs.length} handoff${pipeline.handoffs.length === 1 ? "" : "s"}`;
 process.stdout.write(
   `seed-pipeline-bundle: wrote ${target}\n` +
-    `  ${loaded.bundle.name}: ${pipeline.stages.length} stages ${pipeline.order[0]}..${pipeline.order[pipeline.order.length - 1]}, ` +
-    `${pipeline.gates.length} gates, ${pipeline.handoffs.length} handoffs\n` +
-    `  from ${source} — the studio's export, read by the panel's own loader\n`,
+    `  ${loaded.bundle.name}: ${pipelines.length} pipelines\n` +
+    pipelines.map(describe).join("\n") +
+    `\n  from ${source} — read by the panel's own loader\n`,
 );
