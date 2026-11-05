@@ -1,0 +1,4267 @@
+{
+  "generatedAt": "2026-11-05T23:02:19.655Z",
+  "document": {
+    "route": "document",
+    "source": {
+      "yaml": "<factory>\\docs\\pipeline\\language\\examples\\starters\\poc-breaking-rounds.yaml",
+      "sha256": "bfeaba29b06f84c30e03cd49a7c2ef7c8faadef5d4ead6173b7ec6b1f7ff3951",
+      "lines": 3075,
+      "bytes": 131640
+    },
+    "document": {
+      "stages": 24,
+      "handoffs": 42,
+      "gates": 4,
+      "loop_edges": [
+        {
+          "id": "H-200-191",
+          "from": "S200",
+          "to": "S191",
+          "cap": "3 rounds, then a person reads the blocking set"
+        }
+      ]
+    },
+    "terminal": {
+      "kind": "settle-dropped",
+      "code": "pipeline-settle-unwritten",
+      "reason": "the last stage S203 ran (job job-document-10 reads done) and the driver settled it in memory, but the row is still running and S203's stage run still reads status null after 3 consecutive passes — the settle was never written",
+      "stage": "S203",
+      "after": 10,
+      "job": "job-document-10"
+    },
+    "row": {
+      "state": "running",
+      "stage": "S203",
+      "visits": {
+        "S180": 1,
+        "S181": 1,
+        "S191": 1,
+        "S192": 1,
+        "S198": 1,
+        "S199": 1,
+        "S200": 1,
+        "S201": 1,
+        "S202": 1,
+        "S203": 1
+      },
+      "crossings": {
+        "H-180-181": 1,
+        "H-181-191": 1,
+        "H-191-192": 1,
+        "H-192-198": 1,
+        "H-198-199": 1,
+        "H-199-200": 1,
+        "H-200-201": 1,
+        "H-201-202": 1,
+        "H-202-203": 1
+      },
+      "tree": {
+        "path": "<repo>/.worktrees/you-write-one-brief-from-795d6f",
+        "branch": "wtgui/you-write-one-brief-from-795d6f",
+        "startSha": "2a17625",
+        "cutAt": "2026-11-05T22:50:27.191Z",
+        "by": "panel"
+      },
+      "stageRuns": 10
+    },
+    "stageRuns": [
+      {
+        "id": "poc-breaking-rounds/S180#1",
+        "stage": "S180",
+        "visit": 1,
+        "enteredAt": "2026-11-05T22:50:27.194Z",
+        "settledAt": "2026-11-05T22:50:32.732Z",
+        "thread": "document-01",
+        "job": "job-document-01",
+        "status": "done",
+        "via": null,
+        "commit": "170a7f3a2af8059d7feb38943b89503864af540a",
+        "tree": {
+          "path": "<repo>/.worktrees/you-write-one-brief-from-795d6f",
+          "branch": "wtgui/you-write-one-brief-from-795d6f",
+          "head": "170a7f3",
+          "dirty": 0
+        },
+        "artifact": {
+          "id": "episode-brief",
+          "path": "out/{{run_id}}/episode-brief.json",
+          "present": true,
+          "sha256": "ef067aea182d8527d542a130b78bf698cd0ff01eccfec5bb9363764436322131",
+          "bytes": null,
+          "commit": "170a7f3a2af8059d7feb38943b89503864af540a",
+          "blob": null,
+          "blobSha256": null,
+          "unchanged": false,
+          "uncommitted": true
+        },
+        "inputs": [],
+        "inputsDropped": 0,
+        "decision": {
+          "code": null,
+          "by": "panel",
+          "trigger": "stage-settled",
+          "reason": "poc-breaking-rounds · S180 settled — the run finished",
+          "fact": {
+            "kind": "run-status",
+            "status": "done",
+            "detail": "{\"ok\":true,\"stage\":\"S180\",\"visit\":1,\"round\":1,\"artifact\":\"out/run-1/episode-brief.json\",\"sha256\":\"ef067aea182d8527d542a130b78bf698cd0ff01eccfec5bb9363764436322131\",\"bytes\":160,\"commit\":\"170a7f3a2af8059d7feb38943b89503864af540a\"}",
+            "stage": "S180",
+            "pipeline": "poc-breaking-rounds",
+            "thread": "document-01"
+          }
+        }
+      },
+      {
+        "id": "poc-breaking-rounds/S181#1",
+        "stage": "S181",
+        "visit": 1,
+        "enteredAt": "2026-11-05T22:50:32.732Z",
+        "settledAt": "2026-11-05T22:50:38.325Z",
+        "thread": "document-02",
+        "job": "job-document-02",
+        "status": "done",
+        "via": null,
+        "commit": "7df8a986b28c939bdd0092c42bebf36c893b1ce9",
+        "tree": {
+          "path": "<repo>/.worktrees/you-write-one-brief-from-795d6f",
+          "branch": "wtgui/you-write-one-brief-from-795d6f",
+          "head": "7df8a98",
+          "dirty": 0
+        },
+        "artifact": {
+          "id": "site-ranking",
+          "path": "out/{{run_id}}/site-ranking.json",
+          "present": true,
+          "sha256": "8d91b8f81c86be42af07374aed0bf8f223a9f125ffd2f9fa83c0fd2b3e0e7820",
+          "bytes": null,
+          "commit": "7df8a986b28c939bdd0092c42bebf36c893b1ce9",
+          "blob": null,
+          "blobSha256": null,
+          "unchanged": false,
+          "uncommitted": true
+        },
+        "inputs": [
+          {
+            "artifact": "episode-brief",
+            "path": "out/{{run_id}}/episode-brief.json",
+            "present": true,
+            "sha256": "ef067aea182d8527d542a130b78bf698cd0ff01eccfec5bb9363764436322131",
+            "edge": "H-180-181",
+            "via": "handoff",
+            "commit": "170a7f3a2af8059d7feb38943b89503864af540a"
+          }
+        ],
+        "inputsDropped": 0,
+        "decision": {
+          "code": null,
+          "by": "panel",
+          "trigger": "gate-record",
+          "reason": "gate G50 crossed by <repo>\\.worktrees\\you-write-one-brief-from-795d6f\\ledger\\gates\\G50-{{run_id}}.json",
+          "fact": {
+            "kind": "gate",
+            "gate": "G50",
+            "path": "<repo>\\.worktrees\\you-write-one-brief-from-795d6f\\ledger\\gates\\G50-{{run_id}}.json",
+            "present": true,
+            "stage": "S181",
+            "pipeline": "poc-breaking-rounds"
+          }
+        }
+      },
+      {
+        "id": "poc-breaking-rounds/S191#1",
+        "stage": "S191",
+        "visit": 1,
+        "enteredAt": "2026-11-05T22:50:43.064Z",
+        "settledAt": "2026-11-05T22:50:48.226Z",
+        "thread": "document-03",
+        "job": "job-document-03",
+        "status": "done",
+        "via": null,
+        "commit": "7a5caeaa4266ef074028fdaeed102d32fbd2f4c4",
+        "tree": {
+          "path": "<repo>/.worktrees/you-write-one-brief-from-795d6f",
+          "branch": "wtgui/you-write-one-brief-from-795d6f",
+          "head": "7a5caea",
+          "dirty": 0
+        },
+        "artifact": {
+          "id": "round-brief",
+          "path": "out/{{run_id}}/r{{round}}/round-brief.json",
+          "present": true,
+          "sha256": "ea429fd4477e6efd1d8a883ad6806bb95041c4b5a4f7369d26ebf16912117981",
+          "bytes": null,
+          "commit": "7a5caeaa4266ef074028fdaeed102d32fbd2f4c4",
+          "blob": null,
+          "blobSha256": null,
+          "unchanged": false,
+          "uncommitted": true
+        },
+        "inputs": [
+          {
+            "artifact": "site-ranking",
+            "path": "out/{{run_id}}/site-ranking.json",
+            "present": true,
+            "sha256": "8d91b8f81c86be42af07374aed0bf8f223a9f125ffd2f9fa83c0fd2b3e0e7820",
+            "edge": "H-181-191",
+            "via": "handoff",
+            "commit": "7df8a986b28c939bdd0092c42bebf36c893b1ce9"
+          }
+        ],
+        "inputsDropped": 0,
+        "decision": {
+          "code": null,
+          "by": "panel",
+          "trigger": "stage-settled",
+          "reason": "poc-breaking-rounds · S191 settled — the run finished",
+          "fact": {
+            "kind": "run-status",
+            "status": "done",
+            "detail": "{\"ok\":true,\"stage\":\"S191\",\"visit\":1,\"round\":1,\"artifact\":\"out/run-1/r1/round-brief.json\",\"sha256\":\"ea429fd4477e6efd1d8a883ad6806bb95041c4b5a4f7369d26ebf16912117981\",\"bytes\":160,\"commit\":\"7a5caeaa4266ef074028fdaeed102d32fbd2f4c4\"}",
+            "stage": "S191",
+            "pipeline": "poc-breaking-rounds",
+            "thread": "document-03"
+          }
+        }
+      },
+      {
+        "id": "poc-breaking-rounds/S192#1",
+        "stage": "S192",
+        "visit": 1,
+        "enteredAt": "2026-11-05T22:50:48.226Z",
+        "settledAt": "2026-11-05T22:50:53.582Z",
+        "thread": "document-04",
+        "job": "job-document-04",
+        "status": "done",
+        "via": null,
+        "commit": "73bc6cb56b371ca38ad562adc0fd297bd7e318a2",
+        "tree": {
+          "path": "<repo>/.worktrees/you-write-one-brief-from-795d6f",
+          "branch": "wtgui/you-write-one-brief-from-795d6f",
+          "head": "73bc6cb",
+          "dirty": 0
+        },
+        "artifact": {
+          "id": "q1-records",
+          "path": "out/{{run_id}}/r{{round}}/Q1/records.jsonl",
+          "present": true,
+          "sha256": "0b4379f5dfbfca94c9d5391b940d7305599bb8ab3c512f96dd64efdd990cb158",
+          "bytes": null,
+          "commit": "73bc6cb56b371ca38ad562adc0fd297bd7e318a2",
+          "blob": null,
+          "blobSha256": null,
+          "unchanged": false,
+          "uncommitted": true
+        },
+        "inputs": [
+          {
+            "artifact": "round-brief",
+            "path": "out/{{run_id}}/r{{round}}/round-brief.json",
+            "present": true,
+            "sha256": "ea429fd4477e6efd1d8a883ad6806bb95041c4b5a4f7369d26ebf16912117981",
+            "edge": "H-191-192",
+            "via": "handoff",
+            "commit": "7a5caeaa4266ef074028fdaeed102d32fbd2f4c4"
+          }
+        ],
+        "inputsDropped": 0,
+        "decision": {
+          "code": null,
+          "by": "panel",
+          "trigger": "stage-settled",
+          "reason": "poc-breaking-rounds · S192 settled — the run finished",
+          "fact": {
+            "kind": "run-status",
+            "status": "done",
+            "detail": "{\"ok\":true,\"stage\":\"S192\",\"visit\":1,\"round\":1,\"artifact\":\"out/run-1/r1/Q1/records.jsonl\",\"sha256\":\"0b4379f5dfbfca94c9d5391b940d7305599bb8ab3c512f96dd64efdd990cb158\",\"bytes\":160,\"commit\":\"73bc6cb56b371ca38ad562adc0fd297bd7e318a2\"}",
+            "stage": "S192",
+            "pipeline": "poc-breaking-rounds",
+            "thread": "document-04"
+          }
+        }
+      },
+      {
+        "id": "poc-breaking-rounds/S198#1",
+        "stage": "S198",
+        "visit": 1,
+        "enteredAt": "2026-11-05T22:50:53.582Z",
+        "settledAt": "2026-11-05T22:50:58.992Z",
+        "thread": "document-05",
+        "job": "job-document-05",
+        "status": "done",
+        "via": null,
+        "commit": "23cc45c4451585646800dd859cdcd60d5655da23",
+        "tree": {
+          "path": "<repo>/.worktrees/you-write-one-brief-from-795d6f",
+          "branch": "wtgui/you-write-one-brief-from-795d6f",
+          "head": "23cc45c",
+          "dirty": 0
+        },
+        "artifact": {
+          "id": "combined-artefact",
+          "path": "out/{{run_id}}/r{{round}}/combined.json",
+          "present": true,
+          "sha256": "bbf1d733c17c722c39142fdd778db0127ec6e46ee246292e7afc3046843134bd",
+          "bytes": null,
+          "commit": "23cc45c4451585646800dd859cdcd60d5655da23",
+          "blob": null,
+          "blobSha256": null,
+          "unchanged": false,
+          "uncommitted": true
+        },
+        "inputs": [
+          {
+            "artifact": "q1-records",
+            "path": "out/{{run_id}}/r{{round}}/Q1/records.jsonl",
+            "present": true,
+            "sha256": "0b4379f5dfbfca94c9d5391b940d7305599bb8ab3c512f96dd64efdd990cb158",
+            "edge": "H-192-198",
+            "via": "handoff",
+            "commit": "73bc6cb56b371ca38ad562adc0fd297bd7e318a2"
+          }
+        ],
+        "inputsDropped": 0,
+        "decision": {
+          "code": null,
+          "by": "panel",
+          "trigger": "stage-settled",
+          "reason": "poc-breaking-rounds · S198 settled — the run finished",
+          "fact": {
+            "kind": "run-status",
+            "status": "done",
+            "detail": "{\"ok\":true,\"stage\":\"S198\",\"visit\":1,\"round\":1,\"artifact\":\"out/run-1/r1/combined.json\",\"sha256\":\"bbf1d733c17c722c39142fdd778db0127ec6e46ee246292e7afc3046843134bd\",\"bytes\":160,\"commit\":\"23cc45c4451585646800dd859cdcd60d5655da23\"}",
+            "stage": "S198",
+            "pipeline": "poc-breaking-rounds",
+            "thread": "document-05"
+          }
+        }
+      },
+      {
+        "id": "poc-breaking-rounds/S199#1",
+        "stage": "S199",
+        "visit": 1,
+        "enteredAt": "2026-11-05T22:50:58.992Z",
+        "settledAt": "2026-11-05T22:51:04.482Z",
+        "thread": "document-06",
+        "job": "job-document-06",
+        "status": "done",
+        "via": null,
+        "commit": "7dabdefcfc6c46acc86e622a44a84e5a10fea7aa",
+        "tree": {
+          "path": "<repo>/.worktrees/you-write-one-brief-from-795d6f",
+          "branch": "wtgui/you-write-one-brief-from-795d6f",
+          "head": "7dabdef",
+          "dirty": 0
+        },
+        "artifact": {
+          "id": "critique-record",
+          "path": "out/{{run_id}}/r{{round}}/critique.json",
+          "present": true,
+          "sha256": "560a0954aa65334bddb4facf6141d2a77fbcd90089357d807f67354d70488db6",
+          "bytes": null,
+          "commit": "7dabdefcfc6c46acc86e622a44a84e5a10fea7aa",
+          "blob": null,
+          "blobSha256": null,
+          "unchanged": false,
+          "uncommitted": true
+        },
+        "inputs": [
+          {
+            "artifact": "combined-artefact",
+            "path": "out/{{run_id}}/r{{round}}/combined.json",
+            "present": true,
+            "sha256": "bbf1d733c17c722c39142fdd778db0127ec6e46ee246292e7afc3046843134bd",
+            "edge": "H-198-199",
+            "via": "handoff",
+            "commit": "23cc45c4451585646800dd859cdcd60d5655da23"
+          }
+        ],
+        "inputsDropped": 0,
+        "decision": {
+          "code": null,
+          "by": "panel",
+          "trigger": "stage-settled",
+          "reason": "poc-breaking-rounds · S199 settled — the run finished",
+          "fact": {
+            "kind": "run-status",
+            "status": "done",
+            "detail": "{\"ok\":true,\"stage\":\"S199\",\"visit\":1,\"round\":1,\"artifact\":\"out/run-1/r1/critique.json\",\"sha256\":\"560a0954aa65334bddb4facf6141d2a77fbcd90089357d807f67354d70488db6\",\"bytes\":160,\"commit\":\"7dabdefcfc6c46acc86e622a44a84e5a10fea7aa\"}",
+            "stage": "S199",
+            "pipeline": "poc-breaking-rounds",
+            "thread": "document-06"
+          }
+        }
+      },
+      {
+        "id": "poc-breaking-rounds/S200#1",
+        "stage": "S200",
+        "visit": 1,
+        "enteredAt": "2026-11-05T22:51:04.482Z",
+        "settledAt": "2026-11-05T22:51:08.259Z",
+        "thread": "document-07",
+        "job": "job-document-07",
+        "status": "done",
+        "via": null,
+        "commit": "76a2a0e5ac130e3db74ba4ee640843a2aa88582d",
+        "tree": {
+          "path": "<repo>/.worktrees/you-write-one-brief-from-795d6f",
+          "branch": "wtgui/you-write-one-brief-from-795d6f",
+          "head": "76a2a0e",
+          "dirty": 0
+        },
+        "artifact": {
+          "id": "verdict",
+          "path": "out/{{run_id}}/r{{round}}/verdict.json",
+          "present": true,
+          "sha256": "5e27900bae7107122ac6a60136f0f653113842f9a87797ae8f34187d1bdd7130",
+          "bytes": null,
+          "commit": "76a2a0e5ac130e3db74ba4ee640843a2aa88582d",
+          "blob": null,
+          "blobSha256": null,
+          "unchanged": false,
+          "uncommitted": true
+        },
+        "inputs": [
+          {
+            "artifact": "critique-record",
+            "path": "out/{{run_id}}/r{{round}}/critique.json",
+            "present": true,
+            "sha256": "560a0954aa65334bddb4facf6141d2a77fbcd90089357d807f67354d70488db6",
+            "edge": "H-199-200",
+            "via": "handoff",
+            "commit": "7dabdefcfc6c46acc86e622a44a84e5a10fea7aa"
+          }
+        ],
+        "inputsDropped": 0,
+        "decision": {
+          "code": null,
+          "by": "panel",
+          "trigger": "gate-record",
+          "reason": "gate G51 crossed by <repo>\\.worktrees\\you-write-one-brief-from-795d6f\\ledger\\gates\\G51-{{run_id}}-r{{round}}.json",
+          "fact": {
+            "kind": "gate",
+            "gate": "G51",
+            "path": "<repo>\\.worktrees\\you-write-one-brief-from-795d6f\\ledger\\gates\\G51-{{run_id}}-r{{round}}.json",
+            "present": true,
+            "stage": "S200",
+            "pipeline": "poc-breaking-rounds"
+          }
+        }
+      },
+      {
+        "id": "poc-breaking-rounds/S201#1",
+        "stage": "S201",
+        "visit": 1,
+        "enteredAt": "2026-11-05T22:51:11.529Z",
+        "settledAt": "2026-11-05T22:51:18.325Z",
+        "thread": "document-08",
+        "job": "job-document-08",
+        "status": "done",
+        "via": null,
+        "commit": "4a144979962bdd648b8a2fed8bc0abebc9d853d2",
+        "tree": {
+          "path": "<repo>/.worktrees/you-write-one-brief-from-795d6f",
+          "branch": "wtgui/you-write-one-brief-from-795d6f",
+          "head": "4a14497",
+          "dirty": 0
+        },
+        "artifact": {
+          "id": "authored-decisions",
+          "path": "out/{{run_id}}/r{{round}}/authored-decisions.json",
+          "present": true,
+          "sha256": "3d2e56f8a2c4f09ea5b0de714eaf78c8275a065ff3d8b1e111eed5cb1ce9f6d0",
+          "bytes": null,
+          "commit": "4a144979962bdd648b8a2fed8bc0abebc9d853d2",
+          "blob": null,
+          "blobSha256": null,
+          "unchanged": false,
+          "uncommitted": true
+        },
+        "inputs": [
+          {
+            "artifact": "verdict",
+            "path": "out/{{run_id}}/r{{round}}/verdict.json",
+            "present": true,
+            "sha256": "5e27900bae7107122ac6a60136f0f653113842f9a87797ae8f34187d1bdd7130",
+            "edge": "H-200-201",
+            "via": "handoff",
+            "commit": "76a2a0e5ac130e3db74ba4ee640843a2aa88582d"
+          }
+        ],
+        "inputsDropped": 0,
+        "decision": {
+          "code": null,
+          "by": "panel",
+          "trigger": "stage-settled",
+          "reason": "poc-breaking-rounds · S201 settled — the run finished",
+          "fact": {
+            "kind": "run-status",
+            "status": "done",
+            "detail": "{\"ok\":true,\"stage\":\"S201\",\"visit\":1,\"round\":1,\"artifact\":\"out/run-1/r1/authored-decisions.json\",\"sha256\":\"3d2e56f8a2c4f09ea5b0de714eaf78c8275a065ff3d8b1e111eed5cb1ce9f6d0\",\"bytes\":160,\"commit\":\"4a144979962bdd648b8a2fed8bc0abebc9d853d2\"}",
+            "stage": "S201",
+            "pipeline": "poc-breaking-rounds",
+            "thread": "document-08"
+          }
+        }
+      },
+      {
+        "id": "poc-breaking-rounds/S202#1",
+        "stage": "S202",
+        "visit": 1,
+        "enteredAt": "2026-11-05T22:51:18.325Z",
+        "settledAt": "2026-11-05T22:51:26.341Z",
+        "thread": "document-09",
+        "job": "job-document-09",
+        "status": "done",
+        "via": null,
+        "commit": "327a3ae8956d4037008b29eb9279a0892aab9371",
+        "tree": {
+          "path": "<repo>/.worktrees/you-write-one-brief-from-795d6f",
+          "branch": "wtgui/you-write-one-brief-from-795d6f",
+          "head": "327a3ae",
+          "dirty": 0
+        },
+        "artifact": {
+          "id": "score-record",
+          "path": "out/{{run_id}}/r{{round}}/score.json",
+          "present": true,
+          "sha256": "1f300ee11150fed109217d82c671777b90e1884c046f38e7dfa5affcdc6b5286",
+          "bytes": null,
+          "commit": "327a3ae8956d4037008b29eb9279a0892aab9371",
+          "blob": null,
+          "blobSha256": null,
+          "unchanged": false,
+          "uncommitted": true
+        },
+        "inputs": [
+          {
+            "artifact": "authored-decisions",
+            "path": "out/{{run_id}}/r{{round}}/authored-decisions.json",
+            "present": true,
+            "sha256": "3d2e56f8a2c4f09ea5b0de714eaf78c8275a065ff3d8b1e111eed5cb1ce9f6d0",
+            "edge": "H-201-202",
+            "via": "handoff",
+            "commit": "4a144979962bdd648b8a2fed8bc0abebc9d853d2"
+          }
+        ],
+        "inputsDropped": 0,
+        "decision": {
+          "code": null,
+          "by": "panel",
+          "trigger": "gate-record",
+          "reason": "gate G52 crossed by <repo>\\.worktrees\\you-write-one-brief-from-795d6f\\ledger\\gates\\G52-{{run_id}}-r{{round}}.json",
+          "fact": {
+            "kind": "gate",
+            "gate": "G52",
+            "path": "<repo>\\.worktrees\\you-write-one-brief-from-795d6f\\ledger\\gates\\G52-{{run_id}}-r{{round}}.json",
+            "present": true,
+            "stage": "S202",
+            "pipeline": "poc-breaking-rounds"
+          }
+        }
+      },
+      {
+        "id": "poc-breaking-rounds/S203#1",
+        "stage": "S203",
+        "visit": 1,
+        "enteredAt": "2026-11-05T22:51:31.520Z",
+        "settledAt": null,
+        "thread": "document-10",
+        "job": "job-document-10",
+        "status": null,
+        "via": null,
+        "commit": "d51d8e9f5099b49e2ee934a11184df58584ab7f1",
+        "tree": {
+          "path": "<repo>/.worktrees/you-write-one-brief-from-795d6f",
+          "branch": "wtgui/you-write-one-brief-from-795d6f",
+          "head": "d51d8e9",
+          "dirty": 0
+        },
+        "artifact": null,
+        "inputs": [
+          {
+            "artifact": "score-record",
+            "path": "out/{{run_id}}/r{{round}}/score.json",
+            "present": true,
+            "sha256": "1f300ee11150fed109217d82c671777b90e1884c046f38e7dfa5affcdc6b5286",
+            "edge": "H-202-203",
+            "via": "handoff",
+            "commit": "327a3ae8956d4037008b29eb9279a0892aab9371"
+          }
+        ],
+        "inputsDropped": 0,
+        "decision": null
+      }
+    ],
+    "cuts": [
+      {
+        "repoDir": "<repo>",
+        "prompt": "You write one brief from the plan. You pin what the plan names and you do not re-pin the export to what is on disk today; a plan that names a method the criteria do not know stops at ESCALATE-AMBIGUIT",
+        "branch": "wtgui/you-write-one-brief-from-795d6f",
+        "path": "<repo>/.worktrees/you-write-one-brief-from-795d6f",
+        "from": "HEAD",
+        "at": "2026-11-05T22:50:27.190Z"
+      }
+    ],
+    "parks": [
+      {
+        "step": 4,
+        "stage": "S181",
+        "visit": 1,
+        "code": "pipeline-gate",
+        "reason": "gate G50 follows stage S181 and declares a decision record at <repo>\\.worktrees\\you-write-one-brief-from-795d6f\\ledger\\gates\\G50-{{run_id}}.json — the code does not decide it, and the record has not been written",
+        "waitingFor": {
+          "kind": "gate",
+          "gate": "G50",
+          "path": "ledger/gates/G50-{{run_id}}.json",
+          "stage": "S181",
+          "since": "2026-11-05T22:50:38.325Z"
+        },
+        "crossings": {
+          "H-180-181": 1
+        }
+      },
+      {
+        "step": 10,
+        "stage": "S200",
+        "visit": 1,
+        "code": "pipeline-gate",
+        "reason": "gate G51 follows stage S200 and declares a decision record at <repo>\\.worktrees\\you-write-one-brief-from-795d6f\\ledger\\gates\\G51-{{run_id}}-r{{round}}.json — the code does not decide it, and the record has not been written",
+        "waitingFor": {
+          "kind": "gate",
+          "gate": "G51",
+          "path": "ledger/gates/G51-{{run_id}}-r{{round}}.json",
+          "stage": "S200",
+          "since": "2026-11-05T22:51:08.259Z"
+        },
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 1,
+          "H-192-198": 1,
+          "H-198-199": 1,
+          "H-199-200": 1
+        }
+      },
+      {
+        "step": 13,
+        "stage": "S202",
+        "visit": 1,
+        "code": "pipeline-gate",
+        "reason": "gate G52 follows stage S202 and declares a decision record at <repo>\\.worktrees\\you-write-one-brief-from-795d6f\\ledger\\gates\\G52-{{run_id}}-r{{round}}.json — the code does not decide it, and the record has not been written",
+        "waitingFor": {
+          "kind": "gate",
+          "gate": "G52",
+          "path": "ledger/gates/G52-{{run_id}}-r{{round}}.json",
+          "stage": "S202",
+          "since": "2026-11-05T22:51:26.341Z"
+        },
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 1,
+          "H-192-198": 1,
+          "H-198-199": 1,
+          "H-199-200": 1,
+          "H-200-201": 1,
+          "H-201-202": 1
+        }
+      }
+    ],
+    "gates": [
+      {
+        "gate": "G50",
+        "path": "ledger/gates/G50-run-1.json",
+        "at": "2026-11-05T22:50:43.063Z",
+        "step": 4,
+        "sha256": "99058cc570c7fad1a21236deb45b4ffac13099ab842eac4a1fdf77c4d09c0b8a",
+        "round": 1
+      },
+      {
+        "gate": "G51",
+        "path": "ledger/gates/G51-run-1-r1.json",
+        "at": "2026-11-05T22:51:11.528Z",
+        "step": 10,
+        "sha256": "e8036c4cf5ee6e26a93db1fabaf45732f6d4846ce581aaaf0b4abe3641c3334d",
+        "round": 1
+      },
+      {
+        "gate": "G52",
+        "path": "ledger/gates/G52-run-1-r1.json",
+        "at": "2026-11-05T22:51:31.519Z",
+        "step": 13,
+        "sha256": "f9ac96c27ee9cca2625d1dee6afc5367824bccd41ee37c91ace1a9fc20adec57",
+        "round": 1
+      }
+    ],
+    "releases": [],
+    "comparisons": [],
+    "steps": [
+      {
+        "step": 1,
+        "state": "queued",
+        "stage": "S180",
+        "visit": 1,
+        "crossings": {},
+        "thread": null,
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 2,
+        "state": "running",
+        "stage": "S180",
+        "visit": 1,
+        "crossings": {},
+        "thread": "document-01",
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 3,
+        "state": "running",
+        "stage": "S181",
+        "visit": 1,
+        "crossings": {
+          "H-180-181": 1
+        },
+        "thread": "document-02",
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 4,
+        "state": "parked",
+        "stage": "S181",
+        "visit": 1,
+        "crossings": {
+          "H-180-181": 1
+        },
+        "thread": null,
+        "live": false,
+        "gate": "pipeline-gate",
+        "reason": "gate G50 follows stage S181 and declares a decision record at <repo>\\.worktrees\\you-write-one-brief-from-795d6f\\ledger\\gates\\G50-{{run_id}}.json — the code does not decide it, and the record has not been written"
+      },
+      {
+        "step": 5,
+        "state": "running",
+        "stage": "S191",
+        "visit": 1,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1
+        },
+        "thread": "document-03",
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 6,
+        "state": "running",
+        "stage": "S192",
+        "visit": 1,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 1
+        },
+        "thread": "document-04",
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 7,
+        "state": "running",
+        "stage": "S198",
+        "visit": 1,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 1,
+          "H-192-198": 1
+        },
+        "thread": "document-05",
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 8,
+        "state": "running",
+        "stage": "S199",
+        "visit": 1,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 1,
+          "H-192-198": 1,
+          "H-198-199": 1
+        },
+        "thread": "document-06",
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 9,
+        "state": "running",
+        "stage": "S200",
+        "visit": 1,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 1,
+          "H-192-198": 1,
+          "H-198-199": 1,
+          "H-199-200": 1
+        },
+        "thread": "document-07",
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 10,
+        "state": "parked",
+        "stage": "S200",
+        "visit": 1,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 1,
+          "H-192-198": 1,
+          "H-198-199": 1,
+          "H-199-200": 1
+        },
+        "thread": null,
+        "live": false,
+        "gate": "pipeline-gate",
+        "reason": "gate G51 follows stage S200 and declares a decision record at <repo>\\.worktrees\\you-write-one-brief-from-795d6f\\ledger\\gates\\G51-{{run_id}}-r{{round}}.json — the code does not decide it, and the record has not been written"
+      },
+      {
+        "step": 11,
+        "state": "running",
+        "stage": "S201",
+        "visit": 1,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 1,
+          "H-192-198": 1,
+          "H-198-199": 1,
+          "H-199-200": 1,
+          "H-200-201": 1
+        },
+        "thread": "document-08",
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 12,
+        "state": "running",
+        "stage": "S202",
+        "visit": 1,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 1,
+          "H-192-198": 1,
+          "H-198-199": 1,
+          "H-199-200": 1,
+          "H-200-201": 1,
+          "H-201-202": 1
+        },
+        "thread": "document-09",
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 13,
+        "state": "parked",
+        "stage": "S202",
+        "visit": 1,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 1,
+          "H-192-198": 1,
+          "H-198-199": 1,
+          "H-199-200": 1,
+          "H-200-201": 1,
+          "H-201-202": 1
+        },
+        "thread": null,
+        "live": false,
+        "gate": "pipeline-gate",
+        "reason": "gate G52 follows stage S202 and declares a decision record at <repo>\\.worktrees\\you-write-one-brief-from-795d6f\\ledger\\gates\\G52-{{run_id}}-r{{round}}.json — the code does not decide it, and the record has not been written"
+      },
+      {
+        "step": 14,
+        "state": "running",
+        "stage": "S203",
+        "visit": 1,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 1,
+          "H-192-198": 1,
+          "H-198-199": 1,
+          "H-199-200": 1,
+          "H-200-201": 1,
+          "H-201-202": 1,
+          "H-202-203": 1
+        },
+        "thread": "document-10",
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 15,
+        "state": "running",
+        "stage": "S203",
+        "visit": 1,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 1,
+          "H-192-198": 1,
+          "H-198-199": 1,
+          "H-199-200": 1,
+          "H-200-201": 1,
+          "H-201-202": 1,
+          "H-202-203": 1
+        },
+        "thread": null,
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 16,
+        "state": "running",
+        "stage": "S203",
+        "visit": 1,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 1,
+          "H-192-198": 1,
+          "H-198-199": 1,
+          "H-199-200": 1,
+          "H-200-201": 1,
+          "H-201-202": 1,
+          "H-202-203": 1
+        },
+        "thread": null,
+        "live": false,
+        "gate": null,
+        "reason": null
+      }
+    ],
+    "stages_visited": 10,
+    "stages_declared": 24,
+    "one_tree": true,
+    "worktrees": [
+      "<repo>",
+      "<repo>/.worktrees/you-write-one-brief-from-795d6f"
+    ]
+  },
+  "loop": {
+    "route": "loop",
+    "source": {
+      "yaml": "<factory>\\docs\\pipeline\\language\\examples\\starters\\poc-breaking-rounds.yaml",
+      "sha256": "bfeaba29b06f84c30e03cd49a7c2ef7c8faadef5d4ead6173b7ec6b1f7ff3951",
+      "lines": 3075,
+      "bytes": 131640
+    },
+    "document": {
+      "stages": 24,
+      "handoffs": 40,
+      "gates": 4,
+      "loop_edges": [
+        {
+          "id": "H-200-191",
+          "from": "S200",
+          "to": "S191",
+          "cap": "3 rounds, then a person reads the blocking set"
+        }
+      ]
+    },
+    "terminal": {
+      "kind": "parked",
+      "code": "pipeline-cap",
+      "reason": "the loop H-200-191 (S200 → S191) is at its cap of 3 rounds — 3 crossings already taken, so the row stops here for a decision",
+      "stage": "S200"
+    },
+    "row": {
+      "state": "parked",
+      "stage": "S200",
+      "visits": {
+        "S180": 1,
+        "S181": 1,
+        "S191": 7,
+        "S192": 7,
+        "S198": 7,
+        "S199": 7,
+        "S200": 7
+      },
+      "crossings": {
+        "H-180-181": 1,
+        "H-181-191": 1,
+        "H-191-192": 7,
+        "H-192-198": 7,
+        "H-198-199": 7,
+        "H-199-200": 7,
+        "H-200-191": 3
+      },
+      "tree": {
+        "path": "<repo>/.worktrees/you-write-one-brief-from-ea1976",
+        "branch": "wtgui/you-write-one-brief-from-ea1976",
+        "startSha": "5a92dfd",
+        "cutAt": "2026-11-05T22:55:59.314Z",
+        "by": "panel"
+      },
+      "stageRuns": 30
+    },
+    "stageRuns": [
+      {
+        "id": "poc-breaking-rounds/S192#2",
+        "stage": "S192",
+        "visit": 2,
+        "enteredAt": "2026-11-05T22:56:59.981Z",
+        "settledAt": "2026-11-05T22:57:08.440Z",
+        "thread": "loop-09",
+        "job": "job-loop-09",
+        "status": "done",
+        "via": null,
+        "commit": "2a88552afc2345192c1f4da5254ddc48aa7672e5",
+        "tree": {
+          "path": "<repo>/.worktrees/you-write-one-brief-from-ea1976",
+          "branch": "wtgui/you-write-one-brief-from-ea1976",
+          "head": "2a88552",
+          "dirty": 0
+        },
+        "artifact": {
+          "id": "q1-records",
+          "path": "out/{{run_id}}/r{{round}}/Q1/records.jsonl",
+          "present": true,
+          "sha256": "0b4379f5dfbfca94c9d5391b940d7305599bb8ab3c512f96dd64efdd990cb158",
+          "bytes": null,
+          "commit": "2a88552afc2345192c1f4da5254ddc48aa7672e5",
+          "blob": null,
+          "blobSha256": null,
+          "unchanged": true,
+          "uncommitted": true
+        },
+        "inputs": [
+          {
+            "artifact": "round-brief",
+            "path": "out/{{run_id}}/r{{round}}/round-brief.json",
+            "present": true,
+            "sha256": "ea429fd4477e6efd1d8a883ad6806bb95041c4b5a4f7369d26ebf16912117981",
+            "edge": "H-191-192",
+            "via": "handoff",
+            "commit": "1484acbd013f12da3e1803d01b8ca21ca00542de"
+          },
+          {
+            "artifact": "q1-records",
+            "path": "out/{{run_id}}/r{{round}}/Q1/records.jsonl",
+            "present": true,
+            "sha256": "0b4379f5dfbfca94c9d5391b940d7305599bb8ab3c512f96dd64efdd990cb158",
+            "edge": null,
+            "via": "earlier",
+            "commit": "2d686895432cbed6a7ee49c065f7b3f733fc1b8b"
+          }
+        ],
+        "inputsDropped": 0,
+        "decision": {
+          "code": null,
+          "by": "panel",
+          "trigger": "stage-settled",
+          "reason": "stage S192 settled — its artifact q1-records (out/{{run_id}}/r{{round}}/Q1/records.jsonl) is unchanged from the visit that produced it",
+          "fact": {
+            "kind": "artifact",
+            "id": "q1-records",
+            "path": "out/{{run_id}}/r{{round}}/Q1/records.jsonl",
+            "present": true,
+            "sha256": "0b4379f5dfbfca94c9d5391b940d7305599bb8ab3c512f96dd64efdd990cb158",
+            "commit": "2a88552afc2345192c1f4da5254ddc48aa7672e5",
+            "uncommitted": true,
+            "unchanged": true,
+            "stage": "S192",
+            "pipeline": "poc-breaking-rounds"
+          }
+        }
+      },
+      {
+        "id": "poc-breaking-rounds/S198#2",
+        "stage": "S198",
+        "visit": 2,
+        "enteredAt": "2026-11-05T22:57:08.440Z",
+        "settledAt": "2026-11-05T22:57:15.013Z",
+        "thread": "loop-10",
+        "job": "job-loop-10",
+        "status": "done",
+        "via": null,
+        "commit": "b60382266f1769d4474b3ea4d0dab3817964bbd2",
+        "tree": {
+          "path": "<repo>/.worktrees/you-write-one-brief-from-ea1976",
+          "branch": "wtgui/you-write-one-brief-from-ea1976",
+          "head": "b603822",
+          "dirty": 0
+        },
+        "artifact": {
+          "id": "combined-artefact",
+          "path": "out/{{run_id}}/r{{round}}/combined.json",
+          "present": true,
+          "sha256": "bbf1d733c17c722c39142fdd778db0127ec6e46ee246292e7afc3046843134bd",
+          "bytes": null,
+          "commit": "b60382266f1769d4474b3ea4d0dab3817964bbd2",
+          "blob": null,
+          "blobSha256": null,
+          "unchanged": true,
+          "uncommitted": true
+        },
+        "inputs": [
+          {
+            "artifact": "q1-records",
+            "path": "out/{{run_id}}/r{{round}}/Q1/records.jsonl",
+            "present": true,
+            "sha256": "0b4379f5dfbfca94c9d5391b940d7305599bb8ab3c512f96dd64efdd990cb158",
+            "edge": "H-192-198",
+            "via": "handoff",
+            "commit": "2a88552afc2345192c1f4da5254ddc48aa7672e5"
+          },
+          {
+            "artifact": "combined-artefact",
+            "path": "out/{{run_id}}/r{{round}}/combined.json",
+            "present": true,
+            "sha256": "bbf1d733c17c722c39142fdd778db0127ec6e46ee246292e7afc3046843134bd",
+            "edge": null,
+            "via": "earlier",
+            "commit": "077f5a86cda0e4a7a3a260f4bd35e6f5c7e34e15"
+          }
+        ],
+        "inputsDropped": 0,
+        "decision": {
+          "code": null,
+          "by": "panel",
+          "trigger": "stage-settled",
+          "reason": "stage S198 settled — its artifact combined-artefact (out/{{run_id}}/r{{round}}/combined.json) is unchanged from the visit that produced it",
+          "fact": {
+            "kind": "artifact",
+            "id": "combined-artefact",
+            "path": "out/{{run_id}}/r{{round}}/combined.json",
+            "present": true,
+            "sha256": "bbf1d733c17c722c39142fdd778db0127ec6e46ee246292e7afc3046843134bd",
+            "commit": "b60382266f1769d4474b3ea4d0dab3817964bbd2",
+            "uncommitted": true,
+            "unchanged": true,
+            "stage": "S198",
+            "pipeline": "poc-breaking-rounds"
+          }
+        }
+      },
+      {
+        "id": "poc-breaking-rounds/S199#2",
+        "stage": "S199",
+        "visit": 2,
+        "enteredAt": "2026-11-05T22:57:15.013Z",
+        "settledAt": "2026-11-05T22:57:22.969Z",
+        "thread": "loop-11",
+        "job": "job-loop-11",
+        "status": "done",
+        "via": null,
+        "commit": "aa23f7085f8e528a33bc366bd594a547726897cc",
+        "tree": {
+          "path": "<repo>/.worktrees/you-write-one-brief-from-ea1976",
+          "branch": "wtgui/you-write-one-brief-from-ea1976",
+          "head": "aa23f70",
+          "dirty": 0
+        },
+        "artifact": {
+          "id": "critique-record",
+          "path": "out/{{run_id}}/r{{round}}/critique.json",
+          "present": true,
+          "sha256": "560a0954aa65334bddb4facf6141d2a77fbcd90089357d807f67354d70488db6",
+          "bytes": null,
+          "commit": "aa23f7085f8e528a33bc366bd594a547726897cc",
+          "blob": null,
+          "blobSha256": null,
+          "unchanged": true,
+          "uncommitted": true
+        },
+        "inputs": [
+          {
+            "artifact": "combined-artefact",
+            "path": "out/{{run_id}}/r{{round}}/combined.json",
+            "present": true,
+            "sha256": "bbf1d733c17c722c39142fdd778db0127ec6e46ee246292e7afc3046843134bd",
+            "edge": "H-198-199",
+            "via": "handoff",
+            "commit": "b60382266f1769d4474b3ea4d0dab3817964bbd2"
+          },
+          {
+            "artifact": "critique-record",
+            "path": "out/{{run_id}}/r{{round}}/critique.json",
+            "present": true,
+            "sha256": "560a0954aa65334bddb4facf6141d2a77fbcd90089357d807f67354d70488db6",
+            "edge": null,
+            "via": "earlier",
+            "commit": "c1ceb0e780b8be091d8b6ad2a5f6ff9f238f7652"
+          }
+        ],
+        "inputsDropped": 0,
+        "decision": {
+          "code": null,
+          "by": "panel",
+          "trigger": "stage-settled",
+          "reason": "stage S199 settled — its artifact critique-record (out/{{run_id}}/r{{round}}/critique.json) is unchanged from the visit that produced it",
+          "fact": {
+            "kind": "artifact",
+            "id": "critique-record",
+            "path": "out/{{run_id}}/r{{round}}/critique.json",
+            "present": true,
+            "sha256": "560a0954aa65334bddb4facf6141d2a77fbcd90089357d807f67354d70488db6",
+            "commit": "aa23f7085f8e528a33bc366bd594a547726897cc",
+            "uncommitted": true,
+            "unchanged": true,
+            "stage": "S199",
+            "pipeline": "poc-breaking-rounds"
+          }
+        }
+      },
+      {
+        "id": "poc-breaking-rounds/S200#2",
+        "stage": "S200",
+        "visit": 2,
+        "enteredAt": "2026-11-05T22:57:22.969Z",
+        "settledAt": "2026-11-05T22:57:30.897Z",
+        "thread": "loop-12",
+        "job": "job-loop-12",
+        "status": "done",
+        "via": null,
+        "commit": "0fea0ac63b72fb1be140070f7d04752663515522",
+        "tree": {
+          "path": "<repo>/.worktrees/you-write-one-brief-from-ea1976",
+          "branch": "wtgui/you-write-one-brief-from-ea1976",
+          "head": "0fea0ac",
+          "dirty": 0
+        },
+        "artifact": {
+          "id": "verdict",
+          "path": "out/{{run_id}}/r{{round}}/verdict.json",
+          "present": true,
+          "sha256": "5e27900bae7107122ac6a60136f0f653113842f9a87797ae8f34187d1bdd7130",
+          "bytes": null,
+          "commit": "0fea0ac63b72fb1be140070f7d04752663515522",
+          "blob": null,
+          "blobSha256": null,
+          "unchanged": true,
+          "uncommitted": true
+        },
+        "inputs": [
+          {
+            "artifact": "critique-record",
+            "path": "out/{{run_id}}/r{{round}}/critique.json",
+            "present": true,
+            "sha256": "560a0954aa65334bddb4facf6141d2a77fbcd90089357d807f67354d70488db6",
+            "edge": "H-199-200",
+            "via": "handoff",
+            "commit": "aa23f7085f8e528a33bc366bd594a547726897cc"
+          },
+          {
+            "artifact": "verdict",
+            "path": "out/{{run_id}}/r{{round}}/verdict.json",
+            "present": true,
+            "sha256": "5e27900bae7107122ac6a60136f0f653113842f9a87797ae8f34187d1bdd7130",
+            "edge": null,
+            "via": "earlier",
+            "commit": "fe8531704eec4cd1ebbbc68dc1894339220ff984"
+          }
+        ],
+        "inputsDropped": 0,
+        "decision": {
+          "code": null,
+          "by": "panel",
+          "trigger": "stage-settled",
+          "reason": "stage S200 settled — its artifact verdict (out/{{run_id}}/r{{round}}/verdict.json) is unchanged from the visit that produced it",
+          "fact": {
+            "kind": "artifact",
+            "id": "verdict",
+            "path": "out/{{run_id}}/r{{round}}/verdict.json",
+            "present": true,
+            "sha256": "5e27900bae7107122ac6a60136f0f653113842f9a87797ae8f34187d1bdd7130",
+            "commit": "0fea0ac63b72fb1be140070f7d04752663515522",
+            "uncommitted": true,
+            "unchanged": true,
+            "stage": "S200",
+            "pipeline": "poc-breaking-rounds"
+          }
+        }
+      },
+      {
+        "id": "poc-breaking-rounds/S191#3",
+        "stage": "S191",
+        "visit": 3,
+        "enteredAt": "2026-11-05T22:57:30.897Z",
+        "settledAt": "2026-11-05T22:57:38.951Z",
+        "thread": "loop-13",
+        "job": "job-loop-13",
+        "status": "done",
+        "via": null,
+        "commit": "f3eecf5de196b6399efe4284e3a0c3bdffb7bb1e",
+        "tree": {
+          "path": "<repo>/.worktrees/you-write-one-brief-from-ea1976",
+          "branch": "wtgui/you-write-one-brief-from-ea1976",
+          "head": "f3eecf5",
+          "dirty": 0
+        },
+        "artifact": {
+          "id": "round-brief",
+          "path": "out/{{run_id}}/r{{round}}/round-brief.json",
+          "present": true,
+          "sha256": "ea429fd4477e6efd1d8a883ad6806bb95041c4b5a4f7369d26ebf16912117981",
+          "bytes": null,
+          "commit": "f3eecf5de196b6399efe4284e3a0c3bdffb7bb1e",
+          "blob": null,
+          "blobSha256": null,
+          "unchanged": true,
+          "uncommitted": true
+        },
+        "inputs": [
+          {
+            "artifact": "verdict",
+            "path": "out/{{run_id}}/r{{round}}/verdict.json",
+            "present": true,
+            "sha256": "5e27900bae7107122ac6a60136f0f653113842f9a87797ae8f34187d1bdd7130",
+            "edge": "H-200-191",
+            "via": "handoff",
+            "commit": "0fea0ac63b72fb1be140070f7d04752663515522"
+          },
+          {
+            "artifact": "round-brief",
+            "path": "out/{{run_id}}/r{{round}}/round-brief.json",
+            "present": true,
+            "sha256": "ea429fd4477e6efd1d8a883ad6806bb95041c4b5a4f7369d26ebf16912117981",
+            "edge": null,
+            "via": "earlier",
+            "commit": "1484acbd013f12da3e1803d01b8ca21ca00542de"
+          }
+        ],
+        "inputsDropped": 0,
+        "decision": {
+          "code": null,
+          "by": "panel",
+          "trigger": "stage-settled",
+          "reason": "stage S191 settled — its artifact round-brief (out/{{run_id}}/r{{round}}/round-brief.json) is unchanged from the visit that produced it",
+          "fact": {
+            "kind": "artifact",
+            "id": "round-brief",
+            "path": "out/{{run_id}}/r{{round}}/round-brief.json",
+            "present": true,
+            "sha256": "ea429fd4477e6efd1d8a883ad6806bb95041c4b5a4f7369d26ebf16912117981",
+            "commit": "f3eecf5de196b6399efe4284e3a0c3bdffb7bb1e",
+            "uncommitted": true,
+            "unchanged": true,
+            "stage": "S191",
+            "pipeline": "poc-breaking-rounds"
+          }
+        }
+      },
+      {
+        "id": "poc-breaking-rounds/S192#3",
+        "stage": "S192",
+        "visit": 3,
+        "enteredAt": "2026-11-05T22:57:38.951Z",
+        "settledAt": "2026-11-05T22:57:46.090Z",
+        "thread": "loop-14",
+        "job": "job-loop-14",
+        "status": "done",
+        "via": null,
+        "commit": "2a88c63a4fa6d3b9ede8d4ffb54ade58c90e0cf1",
+        "tree": {
+          "path": "<repo>/.worktrees/you-write-one-brief-from-ea1976",
+          "branch": "wtgui/you-write-one-brief-from-ea1976",
+          "head": "2a88c63",
+          "dirty": 0
+        },
+        "artifact": {
+          "id": "q1-records",
+          "path": "out/{{run_id}}/r{{round}}/Q1/records.jsonl",
+          "present": true,
+          "sha256": "0b4379f5dfbfca94c9d5391b940d7305599bb8ab3c512f96dd64efdd990cb158",
+          "bytes": null,
+          "commit": "2a88c63a4fa6d3b9ede8d4ffb54ade58c90e0cf1",
+          "blob": null,
+          "blobSha256": null,
+          "unchanged": true,
+          "uncommitted": true
+        },
+        "inputs": [
+          {
+            "artifact": "round-brief",
+            "path": "out/{{run_id}}/r{{round}}/round-brief.json",
+            "present": true,
+            "sha256": "ea429fd4477e6efd1d8a883ad6806bb95041c4b5a4f7369d26ebf16912117981",
+            "edge": "H-191-192",
+            "via": "handoff",
+            "commit": "f3eecf5de196b6399efe4284e3a0c3bdffb7bb1e"
+          },
+          {
+            "artifact": "q1-records",
+            "path": "out/{{run_id}}/r{{round}}/Q1/records.jsonl",
+            "present": true,
+            "sha256": "0b4379f5dfbfca94c9d5391b940d7305599bb8ab3c512f96dd64efdd990cb158",
+            "edge": null,
+            "via": "earlier",
+            "commit": "2a88552afc2345192c1f4da5254ddc48aa7672e5"
+          }
+        ],
+        "inputsDropped": 0,
+        "decision": {
+          "code": null,
+          "by": "panel",
+          "trigger": "stage-settled",
+          "reason": "stage S192 settled — its artifact q1-records (out/{{run_id}}/r{{round}}/Q1/records.jsonl) is unchanged from the visit that produced it",
+          "fact": {
+            "kind": "artifact",
+            "id": "q1-records",
+            "path": "out/{{run_id}}/r{{round}}/Q1/records.jsonl",
+            "present": true,
+            "sha256": "0b4379f5dfbfca94c9d5391b940d7305599bb8ab3c512f96dd64efdd990cb158",
+            "commit": "2a88c63a4fa6d3b9ede8d4ffb54ade58c90e0cf1",
+            "uncommitted": true,
+            "unchanged": true,
+            "stage": "S192",
+            "pipeline": "poc-breaking-rounds"
+          }
+        }
+      },
+      {
+        "id": "poc-breaking-rounds/S198#3",
+        "stage": "S198",
+        "visit": 3,
+        "enteredAt": "2026-11-05T22:57:46.090Z",
+        "settledAt": "2026-11-05T22:57:56.121Z",
+        "thread": "loop-15",
+        "job": "job-loop-15",
+        "status": "done",
+        "via": null,
+        "commit": "b5d48222044c462fb67794f24f52f8f7ab3b7caa",
+        "tree": {
+          "path": "<repo>/.worktrees/you-write-one-brief-from-ea1976",
+          "branch": "wtgui/you-write-one-brief-from-ea1976",
+          "head": "b5d4822",
+          "dirty": 0
+        },
+        "artifact": {
+          "id": "combined-artefact",
+          "path": "out/{{run_id}}/r{{round}}/combined.json",
+          "present": true,
+          "sha256": "bbf1d733c17c722c39142fdd778db0127ec6e46ee246292e7afc3046843134bd",
+          "bytes": null,
+          "commit": "b5d48222044c462fb67794f24f52f8f7ab3b7caa",
+          "blob": null,
+          "blobSha256": null,
+          "unchanged": true,
+          "uncommitted": true
+        },
+        "inputs": [
+          {
+            "artifact": "q1-records",
+            "path": "out/{{run_id}}/r{{round}}/Q1/records.jsonl",
+            "present": true,
+            "sha256": "0b4379f5dfbfca94c9d5391b940d7305599bb8ab3c512f96dd64efdd990cb158",
+            "edge": "H-192-198",
+            "via": "handoff",
+            "commit": "2a88c63a4fa6d3b9ede8d4ffb54ade58c90e0cf1"
+          },
+          {
+            "artifact": "combined-artefact",
+            "path": "out/{{run_id}}/r{{round}}/combined.json",
+            "present": true,
+            "sha256": "bbf1d733c17c722c39142fdd778db0127ec6e46ee246292e7afc3046843134bd",
+            "edge": null,
+            "via": "earlier",
+            "commit": "b60382266f1769d4474b3ea4d0dab3817964bbd2"
+          }
+        ],
+        "inputsDropped": 0,
+        "decision": {
+          "code": null,
+          "by": "panel",
+          "trigger": "stage-settled",
+          "reason": "stage S198 settled — its artifact combined-artefact (out/{{run_id}}/r{{round}}/combined.json) is unchanged from the visit that produced it",
+          "fact": {
+            "kind": "artifact",
+            "id": "combined-artefact",
+            "path": "out/{{run_id}}/r{{round}}/combined.json",
+            "present": true,
+            "sha256": "bbf1d733c17c722c39142fdd778db0127ec6e46ee246292e7afc3046843134bd",
+            "commit": "b5d48222044c462fb67794f24f52f8f7ab3b7caa",
+            "uncommitted": true,
+            "unchanged": true,
+            "stage": "S198",
+            "pipeline": "poc-breaking-rounds"
+          }
+        }
+      },
+      {
+        "id": "poc-breaking-rounds/S199#3",
+        "stage": "S199",
+        "visit": 3,
+        "enteredAt": "2026-11-05T22:57:56.121Z",
+        "settledAt": "2026-11-05T22:58:07.979Z",
+        "thread": "loop-16",
+        "job": "job-loop-16",
+        "status": "done",
+        "via": null,
+        "commit": "7a3c86703e4c2c2ce7718ad92f9c6058a59f027a",
+        "tree": {
+          "path": "<repo>/.worktrees/you-write-one-brief-from-ea1976",
+          "branch": "wtgui/you-write-one-brief-from-ea1976",
+          "head": "7a3c867",
+          "dirty": 0
+        },
+        "artifact": {
+          "id": "critique-record",
+          "path": "out/{{run_id}}/r{{round}}/critique.json",
+          "present": true,
+          "sha256": "560a0954aa65334bddb4facf6141d2a77fbcd90089357d807f67354d70488db6",
+          "bytes": null,
+          "commit": "7a3c86703e4c2c2ce7718ad92f9c6058a59f027a",
+          "blob": null,
+          "blobSha256": null,
+          "unchanged": true,
+          "uncommitted": true
+        },
+        "inputs": [
+          {
+            "artifact": "combined-artefact",
+            "path": "out/{{run_id}}/r{{round}}/combined.json",
+            "present": true,
+            "sha256": "bbf1d733c17c722c39142fdd778db0127ec6e46ee246292e7afc3046843134bd",
+            "edge": "H-198-199",
+            "via": "handoff",
+            "commit": "b5d48222044c462fb67794f24f52f8f7ab3b7caa"
+          },
+          {
+            "artifact": "critique-record",
+            "path": "out/{{run_id}}/r{{round}}/critique.json",
+            "present": true,
+            "sha256": "560a0954aa65334bddb4facf6141d2a77fbcd90089357d807f67354d70488db6",
+            "edge": null,
+            "via": "earlier",
+            "commit": "aa23f7085f8e528a33bc366bd594a547726897cc"
+          }
+        ],
+        "inputsDropped": 0,
+        "decision": {
+          "code": null,
+          "by": "panel",
+          "trigger": "stage-settled",
+          "reason": "stage S199 settled — its artifact critique-record (out/{{run_id}}/r{{round}}/critique.json) is unchanged from the visit that produced it",
+          "fact": {
+            "kind": "artifact",
+            "id": "critique-record",
+            "path": "out/{{run_id}}/r{{round}}/critique.json",
+            "present": true,
+            "sha256": "560a0954aa65334bddb4facf6141d2a77fbcd90089357d807f67354d70488db6",
+            "commit": "7a3c86703e4c2c2ce7718ad92f9c6058a59f027a",
+            "uncommitted": true,
+            "unchanged": true,
+            "stage": "S199",
+            "pipeline": "poc-breaking-rounds"
+          }
+        }
+      },
+      {
+        "id": "poc-breaking-rounds/S200#3",
+        "stage": "S200",
+        "visit": 3,
+        "enteredAt": "2026-11-05T22:58:07.979Z",
+        "settledAt": "2026-11-05T22:58:16.574Z",
+        "thread": "loop-17",
+        "job": "job-loop-17",
+        "status": "done",
+        "via": null,
+        "commit": "4af884b5ce68f7299d0655e5e6ce5001fe6fa5c7",
+        "tree": {
+          "path": "<repo>/.worktrees/you-write-one-brief-from-ea1976",
+          "branch": "wtgui/you-write-one-brief-from-ea1976",
+          "head": "4af884b",
+          "dirty": 0
+        },
+        "artifact": {
+          "id": "verdict",
+          "path": "out/{{run_id}}/r{{round}}/verdict.json",
+          "present": true,
+          "sha256": "5e27900bae7107122ac6a60136f0f653113842f9a87797ae8f34187d1bdd7130",
+          "bytes": null,
+          "commit": "4af884b5ce68f7299d0655e5e6ce5001fe6fa5c7",
+          "blob": null,
+          "blobSha256": null,
+          "unchanged": true,
+          "uncommitted": true
+        },
+        "inputs": [
+          {
+            "artifact": "critique-record",
+            "path": "out/{{run_id}}/r{{round}}/critique.json",
+            "present": true,
+            "sha256": "560a0954aa65334bddb4facf6141d2a77fbcd90089357d807f67354d70488db6",
+            "edge": "H-199-200",
+            "via": "handoff",
+            "commit": "7a3c86703e4c2c2ce7718ad92f9c6058a59f027a"
+          },
+          {
+            "artifact": "verdict",
+            "path": "out/{{run_id}}/r{{round}}/verdict.json",
+            "present": true,
+            "sha256": "5e27900bae7107122ac6a60136f0f653113842f9a87797ae8f34187d1bdd7130",
+            "edge": null,
+            "via": "earlier",
+            "commit": "0fea0ac63b72fb1be140070f7d04752663515522"
+          }
+        ],
+        "inputsDropped": 0,
+        "decision": {
+          "code": null,
+          "by": "panel",
+          "trigger": "stage-settled",
+          "reason": "stage S200 settled — its artifact verdict (out/{{run_id}}/r{{round}}/verdict.json) is unchanged from the visit that produced it",
+          "fact": {
+            "kind": "artifact",
+            "id": "verdict",
+            "path": "out/{{run_id}}/r{{round}}/verdict.json",
+            "present": true,
+            "sha256": "5e27900bae7107122ac6a60136f0f653113842f9a87797ae8f34187d1bdd7130",
+            "commit": "4af884b5ce68f7299d0655e5e6ce5001fe6fa5c7",
+            "uncommitted": true,
+            "unchanged": true,
+            "stage": "S200",
+            "pipeline": "poc-breaking-rounds"
+          }
+        }
+      },
+      {
+        "id": "poc-breaking-rounds/S191#4",
+        "stage": "S191",
+        "visit": 4,
+        "enteredAt": "2026-11-05T22:58:16.574Z",
+        "settledAt": "2026-11-05T22:58:24.050Z",
+        "thread": "loop-18",
+        "job": "job-loop-18",
+        "status": "done",
+        "via": null,
+        "commit": "bae68c630f3abdfea2d1193214d514430991b7ef",
+        "tree": {
+          "path": "<repo>/.worktrees/you-write-one-brief-from-ea1976",
+          "branch": "wtgui/you-write-one-brief-from-ea1976",
+          "head": "bae68c6",
+          "dirty": 0
+        },
+        "artifact": {
+          "id": "round-brief",
+          "path": "out/{{run_id}}/r{{round}}/round-brief.json",
+          "present": true,
+          "sha256": "ea429fd4477e6efd1d8a883ad6806bb95041c4b5a4f7369d26ebf16912117981",
+          "bytes": null,
+          "commit": "bae68c630f3abdfea2d1193214d514430991b7ef",
+          "blob": null,
+          "blobSha256": null,
+          "unchanged": true,
+          "uncommitted": true
+        },
+        "inputs": [
+          {
+            "artifact": "verdict",
+            "path": "out/{{run_id}}/r{{round}}/verdict.json",
+            "present": true,
+            "sha256": "5e27900bae7107122ac6a60136f0f653113842f9a87797ae8f34187d1bdd7130",
+            "edge": "H-200-191",
+            "via": "handoff",
+            "commit": "4af884b5ce68f7299d0655e5e6ce5001fe6fa5c7"
+          },
+          {
+            "artifact": "round-brief",
+            "path": "out/{{run_id}}/r{{round}}/round-brief.json",
+            "present": true,
+            "sha256": "ea429fd4477e6efd1d8a883ad6806bb95041c4b5a4f7369d26ebf16912117981",
+            "edge": null,
+            "via": "earlier",
+            "commit": "f3eecf5de196b6399efe4284e3a0c3bdffb7bb1e"
+          }
+        ],
+        "inputsDropped": 0,
+        "decision": {
+          "code": null,
+          "by": "panel",
+          "trigger": "stage-settled",
+          "reason": "stage S191 settled — its artifact round-brief (out/{{run_id}}/r{{round}}/round-brief.json) is unchanged from the visit that produced it",
+          "fact": {
+            "kind": "artifact",
+            "id": "round-brief",
+            "path": "out/{{run_id}}/r{{round}}/round-brief.json",
+            "present": true,
+            "sha256": "ea429fd4477e6efd1d8a883ad6806bb95041c4b5a4f7369d26ebf16912117981",
+            "commit": "bae68c630f3abdfea2d1193214d514430991b7ef",
+            "uncommitted": true,
+            "unchanged": true,
+            "stage": "S191",
+            "pipeline": "poc-breaking-rounds"
+          }
+        }
+      },
+      {
+        "id": "poc-breaking-rounds/S192#4",
+        "stage": "S192",
+        "visit": 4,
+        "enteredAt": "2026-11-05T22:58:24.050Z",
+        "settledAt": "2026-11-05T22:58:30.451Z",
+        "thread": "loop-19",
+        "job": "job-loop-19",
+        "status": "done",
+        "via": null,
+        "commit": "bf08871288f29bf83f595bf5e36d5e8654917f4a",
+        "tree": {
+          "path": "<repo>/.worktrees/you-write-one-brief-from-ea1976",
+          "branch": "wtgui/you-write-one-brief-from-ea1976",
+          "head": "bf08871",
+          "dirty": 0
+        },
+        "artifact": {
+          "id": "q1-records",
+          "path": "out/{{run_id}}/r{{round}}/Q1/records.jsonl",
+          "present": true,
+          "sha256": "0b4379f5dfbfca94c9d5391b940d7305599bb8ab3c512f96dd64efdd990cb158",
+          "bytes": null,
+          "commit": "bf08871288f29bf83f595bf5e36d5e8654917f4a",
+          "blob": null,
+          "blobSha256": null,
+          "unchanged": true,
+          "uncommitted": true
+        },
+        "inputs": [
+          {
+            "artifact": "round-brief",
+            "path": "out/{{run_id}}/r{{round}}/round-brief.json",
+            "present": true,
+            "sha256": "ea429fd4477e6efd1d8a883ad6806bb95041c4b5a4f7369d26ebf16912117981",
+            "edge": "H-191-192",
+            "via": "handoff",
+            "commit": "bae68c630f3abdfea2d1193214d514430991b7ef"
+          },
+          {
+            "artifact": "q1-records",
+            "path": "out/{{run_id}}/r{{round}}/Q1/records.jsonl",
+            "present": true,
+            "sha256": "0b4379f5dfbfca94c9d5391b940d7305599bb8ab3c512f96dd64efdd990cb158",
+            "edge": null,
+            "via": "earlier",
+            "commit": "2a88c63a4fa6d3b9ede8d4ffb54ade58c90e0cf1"
+          }
+        ],
+        "inputsDropped": 0,
+        "decision": {
+          "code": null,
+          "by": "panel",
+          "trigger": "stage-settled",
+          "reason": "stage S192 settled — its artifact q1-records (out/{{run_id}}/r{{round}}/Q1/records.jsonl) is unchanged from the visit that produced it",
+          "fact": {
+            "kind": "artifact",
+            "id": "q1-records",
+            "path": "out/{{run_id}}/r{{round}}/Q1/records.jsonl",
+            "present": true,
+            "sha256": "0b4379f5dfbfca94c9d5391b940d7305599bb8ab3c512f96dd64efdd990cb158",
+            "commit": "bf08871288f29bf83f595bf5e36d5e8654917f4a",
+            "uncommitted": true,
+            "unchanged": true,
+            "stage": "S192",
+            "pipeline": "poc-breaking-rounds"
+          }
+        }
+      },
+      {
+        "id": "poc-breaking-rounds/S198#4",
+        "stage": "S198",
+        "visit": 4,
+        "enteredAt": "2026-11-05T22:58:30.451Z",
+        "settledAt": "2026-11-05T22:58:36.697Z",
+        "thread": "loop-20",
+        "job": "job-loop-20",
+        "status": "done",
+        "via": null,
+        "commit": "e0beee772748588f16c1cd0518057e0f410e8f59",
+        "tree": {
+          "path": "<repo>/.worktrees/you-write-one-brief-from-ea1976",
+          "branch": "wtgui/you-write-one-brief-from-ea1976",
+          "head": "e0beee7",
+          "dirty": 0
+        },
+        "artifact": {
+          "id": "combined-artefact",
+          "path": "out/{{run_id}}/r{{round}}/combined.json",
+          "present": true,
+          "sha256": "bbf1d733c17c722c39142fdd778db0127ec6e46ee246292e7afc3046843134bd",
+          "bytes": null,
+          "commit": "e0beee772748588f16c1cd0518057e0f410e8f59",
+          "blob": null,
+          "blobSha256": null,
+          "unchanged": true,
+          "uncommitted": true
+        },
+        "inputs": [
+          {
+            "artifact": "q1-records",
+            "path": "out/{{run_id}}/r{{round}}/Q1/records.jsonl",
+            "present": true,
+            "sha256": "0b4379f5dfbfca94c9d5391b940d7305599bb8ab3c512f96dd64efdd990cb158",
+            "edge": "H-192-198",
+            "via": "handoff",
+            "commit": "bf08871288f29bf83f595bf5e36d5e8654917f4a"
+          },
+          {
+            "artifact": "combined-artefact",
+            "path": "out/{{run_id}}/r{{round}}/combined.json",
+            "present": true,
+            "sha256": "bbf1d733c17c722c39142fdd778db0127ec6e46ee246292e7afc3046843134bd",
+            "edge": null,
+            "via": "earlier",
+            "commit": "b5d48222044c462fb67794f24f52f8f7ab3b7caa"
+          }
+        ],
+        "inputsDropped": 0,
+        "decision": {
+          "code": null,
+          "by": "panel",
+          "trigger": "stage-settled",
+          "reason": "stage S198 settled — its artifact combined-artefact (out/{{run_id}}/r{{round}}/combined.json) is unchanged from the visit that produced it",
+          "fact": {
+            "kind": "artifact",
+            "id": "combined-artefact",
+            "path": "out/{{run_id}}/r{{round}}/combined.json",
+            "present": true,
+            "sha256": "bbf1d733c17c722c39142fdd778db0127ec6e46ee246292e7afc3046843134bd",
+            "commit": "e0beee772748588f16c1cd0518057e0f410e8f59",
+            "uncommitted": true,
+            "unchanged": true,
+            "stage": "S198",
+            "pipeline": "poc-breaking-rounds"
+          }
+        }
+      },
+      {
+        "id": "poc-breaking-rounds/S199#4",
+        "stage": "S199",
+        "visit": 4,
+        "enteredAt": "2026-11-05T22:58:36.697Z",
+        "settledAt": "2026-11-05T22:58:42.424Z",
+        "thread": "loop-20",
+        "job": "job-loop-20",
+        "status": "done",
+        "via": null,
+        "commit": "ca968b62506d3fd0b31ce0bfa024138cc4120a7e",
+        "tree": {
+          "path": "<repo>/.worktrees/you-write-one-brief-from-ea1976",
+          "branch": "wtgui/you-write-one-brief-from-ea1976",
+          "head": "ca968b6",
+          "dirty": 0
+        },
+        "artifact": {
+          "id": "critique-record",
+          "path": "out/{{run_id}}/r{{round}}/critique.json",
+          "present": true,
+          "sha256": "560a0954aa65334bddb4facf6141d2a77fbcd90089357d807f67354d70488db6",
+          "bytes": null,
+          "commit": "ca968b62506d3fd0b31ce0bfa024138cc4120a7e",
+          "blob": null,
+          "blobSha256": null,
+          "unchanged": true,
+          "uncommitted": true
+        },
+        "inputs": [
+          {
+            "artifact": "combined-artefact",
+            "path": "out/{{run_id}}/r{{round}}/combined.json",
+            "present": true,
+            "sha256": "bbf1d733c17c722c39142fdd778db0127ec6e46ee246292e7afc3046843134bd",
+            "edge": "H-198-199",
+            "via": "handoff",
+            "commit": "e0beee772748588f16c1cd0518057e0f410e8f59"
+          },
+          {
+            "artifact": "critique-record",
+            "path": "out/{{run_id}}/r{{round}}/critique.json",
+            "present": true,
+            "sha256": "560a0954aa65334bddb4facf6141d2a77fbcd90089357d807f67354d70488db6",
+            "edge": null,
+            "via": "earlier",
+            "commit": "7a3c86703e4c2c2ce7718ad92f9c6058a59f027a"
+          }
+        ],
+        "inputsDropped": 0,
+        "decision": {
+          "code": null,
+          "by": "panel",
+          "trigger": "stage-settled",
+          "reason": "stage S199 settled — its artifact critique-record (out/{{run_id}}/r{{round}}/critique.json) is unchanged from the visit that produced it",
+          "fact": {
+            "kind": "artifact",
+            "id": "critique-record",
+            "path": "out/{{run_id}}/r{{round}}/critique.json",
+            "present": true,
+            "sha256": "560a0954aa65334bddb4facf6141d2a77fbcd90089357d807f67354d70488db6",
+            "commit": "ca968b62506d3fd0b31ce0bfa024138cc4120a7e",
+            "uncommitted": true,
+            "unchanged": true,
+            "stage": "S199",
+            "pipeline": "poc-breaking-rounds"
+          }
+        }
+      },
+      {
+        "id": "poc-breaking-rounds/S200#4",
+        "stage": "S200",
+        "visit": 4,
+        "enteredAt": "2026-11-05T22:58:42.424Z",
+        "settledAt": "2026-11-05T22:58:49.642Z",
+        "thread": "loop-20",
+        "job": "job-loop-20",
+        "status": "done",
+        "via": null,
+        "commit": "9f6c711845b84abda4a1ef9b301d0381ebcd3073",
+        "tree": {
+          "path": "<repo>/.worktrees/you-write-one-brief-from-ea1976",
+          "branch": "wtgui/you-write-one-brief-from-ea1976",
+          "head": "9f6c711",
+          "dirty": 0
+        },
+        "artifact": {
+          "id": "verdict",
+          "path": "out/{{run_id}}/r{{round}}/verdict.json",
+          "present": true,
+          "sha256": "5e27900bae7107122ac6a60136f0f653113842f9a87797ae8f34187d1bdd7130",
+          "bytes": null,
+          "commit": "9f6c711845b84abda4a1ef9b301d0381ebcd3073",
+          "blob": null,
+          "blobSha256": null,
+          "unchanged": true,
+          "uncommitted": true
+        },
+        "inputs": [
+          {
+            "artifact": "critique-record",
+            "path": "out/{{run_id}}/r{{round}}/critique.json",
+            "present": true,
+            "sha256": "560a0954aa65334bddb4facf6141d2a77fbcd90089357d807f67354d70488db6",
+            "edge": "H-199-200",
+            "via": "handoff",
+            "commit": "ca968b62506d3fd0b31ce0bfa024138cc4120a7e"
+          },
+          {
+            "artifact": "verdict",
+            "path": "out/{{run_id}}/r{{round}}/verdict.json",
+            "present": true,
+            "sha256": "5e27900bae7107122ac6a60136f0f653113842f9a87797ae8f34187d1bdd7130",
+            "edge": null,
+            "via": "earlier",
+            "commit": "4af884b5ce68f7299d0655e5e6ce5001fe6fa5c7"
+          }
+        ],
+        "inputsDropped": 0,
+        "decision": {
+          "code": null,
+          "by": "reader",
+          "trigger": "cap",
+          "reason": "the cap on H-200-191 was released by the reader — 3 crossings were counted, and the count is now zero",
+          "fact": {
+            "kind": "cap-release",
+            "edge": "H-200-191",
+            "from": "S200",
+            "to": "S191",
+            "was": 3
+          }
+        }
+      },
+      {
+        "id": "poc-breaking-rounds/S200#4",
+        "stage": "S200",
+        "visit": 4,
+        "enteredAt": "2026-11-05T22:58:52.731Z",
+        "settledAt": "2026-11-05T22:58:57.381Z",
+        "thread": "loop-20",
+        "job": "job-loop-20",
+        "status": "done",
+        "via": null,
+        "commit": "9f6c711845b84abda4a1ef9b301d0381ebcd3073",
+        "tree": {
+          "path": "<repo>/.worktrees/you-write-one-brief-from-ea1976",
+          "branch": "wtgui/you-write-one-brief-from-ea1976",
+          "head": "9f6c711",
+          "dirty": 0
+        },
+        "artifact": {
+          "id": "verdict",
+          "path": "out/{{run_id}}/r{{round}}/verdict.json",
+          "present": true,
+          "sha256": "5e27900bae7107122ac6a60136f0f653113842f9a87797ae8f34187d1bdd7130",
+          "bytes": null,
+          "commit": "9f6c711845b84abda4a1ef9b301d0381ebcd3073",
+          "blob": null,
+          "blobSha256": null,
+          "unchanged": true,
+          "uncommitted": true
+        },
+        "inputs": [
+          {
+            "artifact": "critique-record",
+            "path": "out/{{run_id}}/r{{round}}/critique.json",
+            "present": true,
+            "sha256": "560a0954aa65334bddb4facf6141d2a77fbcd90089357d807f67354d70488db6",
+            "edge": "H-199-200",
+            "via": "handoff",
+            "commit": "ca968b62506d3fd0b31ce0bfa024138cc4120a7e"
+          },
+          {
+            "artifact": "verdict",
+            "path": "out/{{run_id}}/r{{round}}/verdict.json",
+            "present": true,
+            "sha256": "5e27900bae7107122ac6a60136f0f653113842f9a87797ae8f34187d1bdd7130",
+            "edge": null,
+            "via": "earlier",
+            "commit": "4af884b5ce68f7299d0655e5e6ce5001fe6fa5c7"
+          }
+        ],
+        "inputsDropped": 0,
+        "decision": {
+          "code": null,
+          "by": "panel",
+          "trigger": "stage-settled",
+          "reason": "stage S200 settled — its artifact verdict (out/{{run_id}}/r{{round}}/verdict.json) is unchanged from the visit that produced it",
+          "fact": {
+            "kind": "artifact",
+            "id": "verdict",
+            "path": "out/{{run_id}}/r{{round}}/verdict.json",
+            "present": true,
+            "sha256": "5e27900bae7107122ac6a60136f0f653113842f9a87797ae8f34187d1bdd7130",
+            "commit": "9f6c711845b84abda4a1ef9b301d0381ebcd3073",
+            "uncommitted": true,
+            "unchanged": true,
+            "stage": "S200",
+            "pipeline": "poc-breaking-rounds"
+          }
+        }
+      },
+      {
+        "id": "poc-breaking-rounds/S191#5",
+        "stage": "S191",
+        "visit": 5,
+        "enteredAt": "2026-11-05T22:58:57.381Z",
+        "settledAt": "2026-11-05T22:59:04.837Z",
+        "thread": "loop-20",
+        "job": "job-loop-20",
+        "status": "done",
+        "via": null,
+        "commit": "a4528ca98c79497f330df32ac3ebca2d25105d72",
+        "tree": {
+          "path": "<repo>/.worktrees/you-write-one-brief-from-ea1976",
+          "branch": "wtgui/you-write-one-brief-from-ea1976",
+          "head": "a4528ca",
+          "dirty": 0
+        },
+        "artifact": {
+          "id": "round-brief",
+          "path": "out/{{run_id}}/r{{round}}/round-brief.json",
+          "present": true,
+          "sha256": "ea429fd4477e6efd1d8a883ad6806bb95041c4b5a4f7369d26ebf16912117981",
+          "bytes": null,
+          "commit": "a4528ca98c79497f330df32ac3ebca2d25105d72",
+          "blob": null,
+          "blobSha256": null,
+          "unchanged": true,
+          "uncommitted": true
+        },
+        "inputs": [
+          {
+            "artifact": "verdict",
+            "path": "out/{{run_id}}/r{{round}}/verdict.json",
+            "present": true,
+            "sha256": "5e27900bae7107122ac6a60136f0f653113842f9a87797ae8f34187d1bdd7130",
+            "edge": "H-200-191",
+            "via": "handoff",
+            "commit": "9f6c711845b84abda4a1ef9b301d0381ebcd3073"
+          },
+          {
+            "artifact": "round-brief",
+            "path": "out/{{run_id}}/r{{round}}/round-brief.json",
+            "present": true,
+            "sha256": "ea429fd4477e6efd1d8a883ad6806bb95041c4b5a4f7369d26ebf16912117981",
+            "edge": null,
+            "via": "earlier",
+            "commit": "bae68c630f3abdfea2d1193214d514430991b7ef"
+          }
+        ],
+        "inputsDropped": 0,
+        "decision": {
+          "code": null,
+          "by": "panel",
+          "trigger": "stage-settled",
+          "reason": "stage S191 settled — its artifact round-brief (out/{{run_id}}/r{{round}}/round-brief.json) is unchanged from the visit that produced it",
+          "fact": {
+            "kind": "artifact",
+            "id": "round-brief",
+            "path": "out/{{run_id}}/r{{round}}/round-brief.json",
+            "present": true,
+            "sha256": "ea429fd4477e6efd1d8a883ad6806bb95041c4b5a4f7369d26ebf16912117981",
+            "commit": "a4528ca98c79497f330df32ac3ebca2d25105d72",
+            "uncommitted": true,
+            "unchanged": true,
+            "stage": "S191",
+            "pipeline": "poc-breaking-rounds"
+          }
+        }
+      },
+      {
+        "id": "poc-breaking-rounds/S192#5",
+        "stage": "S192",
+        "visit": 5,
+        "enteredAt": "2026-11-05T22:59:04.837Z",
+        "settledAt": "2026-11-05T22:59:12.054Z",
+        "thread": "loop-20",
+        "job": "job-loop-20",
+        "status": "done",
+        "via": null,
+        "commit": "e68d6d709261471b971af0a69e680e03e50e6ca2",
+        "tree": {
+          "path": "<repo>/.worktrees/you-write-one-brief-from-ea1976",
+          "branch": "wtgui/you-write-one-brief-from-ea1976",
+          "head": "e68d6d7",
+          "dirty": 0
+        },
+        "artifact": {
+          "id": "q1-records",
+          "path": "out/{{run_id}}/r{{round}}/Q1/records.jsonl",
+          "present": true,
+          "sha256": "0b4379f5dfbfca94c9d5391b940d7305599bb8ab3c512f96dd64efdd990cb158",
+          "bytes": null,
+          "commit": "e68d6d709261471b971af0a69e680e03e50e6ca2",
+          "blob": null,
+          "blobSha256": null,
+          "unchanged": true,
+          "uncommitted": true
+        },
+        "inputs": [
+          {
+            "artifact": "round-brief",
+            "path": "out/{{run_id}}/r{{round}}/round-brief.json",
+            "present": true,
+            "sha256": "ea429fd4477e6efd1d8a883ad6806bb95041c4b5a4f7369d26ebf16912117981",
+            "edge": "H-191-192",
+            "via": "handoff",
+            "commit": "a4528ca98c79497f330df32ac3ebca2d25105d72"
+          },
+          {
+            "artifact": "q1-records",
+            "path": "out/{{run_id}}/r{{round}}/Q1/records.jsonl",
+            "present": true,
+            "sha256": "0b4379f5dfbfca94c9d5391b940d7305599bb8ab3c512f96dd64efdd990cb158",
+            "edge": null,
+            "via": "earlier",
+            "commit": "bf08871288f29bf83f595bf5e36d5e8654917f4a"
+          }
+        ],
+        "inputsDropped": 0,
+        "decision": {
+          "code": null,
+          "by": "panel",
+          "trigger": "stage-settled",
+          "reason": "stage S192 settled — its artifact q1-records (out/{{run_id}}/r{{round}}/Q1/records.jsonl) is unchanged from the visit that produced it",
+          "fact": {
+            "kind": "artifact",
+            "id": "q1-records",
+            "path": "out/{{run_id}}/r{{round}}/Q1/records.jsonl",
+            "present": true,
+            "sha256": "0b4379f5dfbfca94c9d5391b940d7305599bb8ab3c512f96dd64efdd990cb158",
+            "commit": "e68d6d709261471b971af0a69e680e03e50e6ca2",
+            "uncommitted": true,
+            "unchanged": true,
+            "stage": "S192",
+            "pipeline": "poc-breaking-rounds"
+          }
+        }
+      },
+      {
+        "id": "poc-breaking-rounds/S198#5",
+        "stage": "S198",
+        "visit": 5,
+        "enteredAt": "2026-11-05T22:59:12.054Z",
+        "settledAt": "2026-11-05T22:59:14.702Z",
+        "thread": "loop-20",
+        "job": "job-loop-20",
+        "status": "done",
+        "via": null,
+        "commit": "8e1e9a2d671a089d09e42baeda7f2bdf40431b67",
+        "tree": {
+          "path": "<repo>/.worktrees/you-write-one-brief-from-ea1976",
+          "branch": "wtgui/you-write-one-brief-from-ea1976",
+          "head": "8e1e9a2",
+          "dirty": 0
+        },
+        "artifact": {
+          "id": "combined-artefact",
+          "path": "out/{{run_id}}/r{{round}}/combined.json",
+          "present": true,
+          "sha256": "bbf1d733c17c722c39142fdd778db0127ec6e46ee246292e7afc3046843134bd",
+          "bytes": null,
+          "commit": "8e1e9a2d671a089d09e42baeda7f2bdf40431b67",
+          "blob": null,
+          "blobSha256": null,
+          "unchanged": true,
+          "uncommitted": true
+        },
+        "inputs": [
+          {
+            "artifact": "q1-records",
+            "path": "out/{{run_id}}/r{{round}}/Q1/records.jsonl",
+            "present": true,
+            "sha256": "0b4379f5dfbfca94c9d5391b940d7305599bb8ab3c512f96dd64efdd990cb158",
+            "edge": "H-192-198",
+            "via": "handoff",
+            "commit": "e68d6d709261471b971af0a69e680e03e50e6ca2"
+          },
+          {
+            "artifact": "combined-artefact",
+            "path": "out/{{run_id}}/r{{round}}/combined.json",
+            "present": true,
+            "sha256": "bbf1d733c17c722c39142fdd778db0127ec6e46ee246292e7afc3046843134bd",
+            "edge": null,
+            "via": "earlier",
+            "commit": "e0beee772748588f16c1cd0518057e0f410e8f59"
+          }
+        ],
+        "inputsDropped": 0,
+        "decision": {
+          "code": null,
+          "by": "panel",
+          "trigger": "stage-settled",
+          "reason": "stage S198 settled — its artifact combined-artefact (out/{{run_id}}/r{{round}}/combined.json) is unchanged from the visit that produced it",
+          "fact": {
+            "kind": "artifact",
+            "id": "combined-artefact",
+            "path": "out/{{run_id}}/r{{round}}/combined.json",
+            "present": true,
+            "sha256": "bbf1d733c17c722c39142fdd778db0127ec6e46ee246292e7afc3046843134bd",
+            "commit": "8e1e9a2d671a089d09e42baeda7f2bdf40431b67",
+            "uncommitted": true,
+            "unchanged": true,
+            "stage": "S198",
+            "pipeline": "poc-breaking-rounds"
+          }
+        }
+      },
+      {
+        "id": "poc-breaking-rounds/S199#5",
+        "stage": "S199",
+        "visit": 5,
+        "enteredAt": "2026-11-05T22:59:14.702Z",
+        "settledAt": "2026-11-05T22:59:20.443Z",
+        "thread": "loop-20",
+        "job": "job-loop-20",
+        "status": "done",
+        "via": null,
+        "commit": "1a7439f593a0ddfc938d1a6291db6db860276533",
+        "tree": {
+          "path": "<repo>/.worktrees/you-write-one-brief-from-ea1976",
+          "branch": "wtgui/you-write-one-brief-from-ea1976",
+          "head": "1a7439f",
+          "dirty": 0
+        },
+        "artifact": {
+          "id": "critique-record",
+          "path": "out/{{run_id}}/r{{round}}/critique.json",
+          "present": true,
+          "sha256": "560a0954aa65334bddb4facf6141d2a77fbcd90089357d807f67354d70488db6",
+          "bytes": null,
+          "commit": "1a7439f593a0ddfc938d1a6291db6db860276533",
+          "blob": null,
+          "blobSha256": null,
+          "unchanged": true,
+          "uncommitted": true
+        },
+        "inputs": [
+          {
+            "artifact": "combined-artefact",
+            "path": "out/{{run_id}}/r{{round}}/combined.json",
+            "present": true,
+            "sha256": "bbf1d733c17c722c39142fdd778db0127ec6e46ee246292e7afc3046843134bd",
+            "edge": "H-198-199",
+            "via": "handoff",
+            "commit": "8e1e9a2d671a089d09e42baeda7f2bdf40431b67"
+          },
+          {
+            "artifact": "critique-record",
+            "path": "out/{{run_id}}/r{{round}}/critique.json",
+            "present": true,
+            "sha256": "560a0954aa65334bddb4facf6141d2a77fbcd90089357d807f67354d70488db6",
+            "edge": null,
+            "via": "earlier",
+            "commit": "ca968b62506d3fd0b31ce0bfa024138cc4120a7e"
+          }
+        ],
+        "inputsDropped": 0,
+        "decision": {
+          "code": null,
+          "by": "panel",
+          "trigger": "stage-settled",
+          "reason": "stage S199 settled — its artifact critique-record (out/{{run_id}}/r{{round}}/critique.json) is unchanged from the visit that produced it",
+          "fact": {
+            "kind": "artifact",
+            "id": "critique-record",
+            "path": "out/{{run_id}}/r{{round}}/critique.json",
+            "present": true,
+            "sha256": "560a0954aa65334bddb4facf6141d2a77fbcd90089357d807f67354d70488db6",
+            "commit": "1a7439f593a0ddfc938d1a6291db6db860276533",
+            "uncommitted": true,
+            "unchanged": true,
+            "stage": "S199",
+            "pipeline": "poc-breaking-rounds"
+          }
+        }
+      },
+      {
+        "id": "poc-breaking-rounds/S200#5",
+        "stage": "S200",
+        "visit": 5,
+        "enteredAt": "2026-11-05T22:59:20.443Z",
+        "settledAt": "2026-11-05T22:59:27.878Z",
+        "thread": "loop-20",
+        "job": "job-loop-20",
+        "status": "done",
+        "via": null,
+        "commit": "acb2f3fe1943fdcd24ccb0ead4bae3f4dc540786",
+        "tree": {
+          "path": "<repo>/.worktrees/you-write-one-brief-from-ea1976",
+          "branch": "wtgui/you-write-one-brief-from-ea1976",
+          "head": "acb2f3f",
+          "dirty": 0
+        },
+        "artifact": {
+          "id": "verdict",
+          "path": "out/{{run_id}}/r{{round}}/verdict.json",
+          "present": true,
+          "sha256": "5e27900bae7107122ac6a60136f0f653113842f9a87797ae8f34187d1bdd7130",
+          "bytes": null,
+          "commit": "acb2f3fe1943fdcd24ccb0ead4bae3f4dc540786",
+          "blob": null,
+          "blobSha256": null,
+          "unchanged": true,
+          "uncommitted": true
+        },
+        "inputs": [
+          {
+            "artifact": "critique-record",
+            "path": "out/{{run_id}}/r{{round}}/critique.json",
+            "present": true,
+            "sha256": "560a0954aa65334bddb4facf6141d2a77fbcd90089357d807f67354d70488db6",
+            "edge": "H-199-200",
+            "via": "handoff",
+            "commit": "1a7439f593a0ddfc938d1a6291db6db860276533"
+          },
+          {
+            "artifact": "verdict",
+            "path": "out/{{run_id}}/r{{round}}/verdict.json",
+            "present": true,
+            "sha256": "5e27900bae7107122ac6a60136f0f653113842f9a87797ae8f34187d1bdd7130",
+            "edge": null,
+            "via": "earlier",
+            "commit": "9f6c711845b84abda4a1ef9b301d0381ebcd3073"
+          }
+        ],
+        "inputsDropped": 0,
+        "decision": {
+          "code": null,
+          "by": "panel",
+          "trigger": "stage-settled",
+          "reason": "stage S200 settled — its artifact verdict (out/{{run_id}}/r{{round}}/verdict.json) is unchanged from the visit that produced it",
+          "fact": {
+            "kind": "artifact",
+            "id": "verdict",
+            "path": "out/{{run_id}}/r{{round}}/verdict.json",
+            "present": true,
+            "sha256": "5e27900bae7107122ac6a60136f0f653113842f9a87797ae8f34187d1bdd7130",
+            "commit": "acb2f3fe1943fdcd24ccb0ead4bae3f4dc540786",
+            "uncommitted": true,
+            "unchanged": true,
+            "stage": "S200",
+            "pipeline": "poc-breaking-rounds"
+          }
+        }
+      },
+      {
+        "id": "poc-breaking-rounds/S191#6",
+        "stage": "S191",
+        "visit": 6,
+        "enteredAt": "2026-11-05T22:59:27.878Z",
+        "settledAt": "2026-11-05T22:59:31.237Z",
+        "thread": "loop-20",
+        "job": "job-loop-20",
+        "status": "done",
+        "via": null,
+        "commit": "76df9c5ef473a2e7dc13f5dac4ead02a0c9115bf",
+        "tree": {
+          "path": "<repo>/.worktrees/you-write-one-brief-from-ea1976",
+          "branch": "wtgui/you-write-one-brief-from-ea1976",
+          "head": "76df9c5",
+          "dirty": 0
+        },
+        "artifact": {
+          "id": "round-brief",
+          "path": "out/{{run_id}}/r{{round}}/round-brief.json",
+          "present": true,
+          "sha256": "ea429fd4477e6efd1d8a883ad6806bb95041c4b5a4f7369d26ebf16912117981",
+          "bytes": null,
+          "commit": "76df9c5ef473a2e7dc13f5dac4ead02a0c9115bf",
+          "blob": null,
+          "blobSha256": null,
+          "unchanged": true,
+          "uncommitted": true
+        },
+        "inputs": [
+          {
+            "artifact": "verdict",
+            "path": "out/{{run_id}}/r{{round}}/verdict.json",
+            "present": true,
+            "sha256": "5e27900bae7107122ac6a60136f0f653113842f9a87797ae8f34187d1bdd7130",
+            "edge": "H-200-191",
+            "via": "handoff",
+            "commit": "acb2f3fe1943fdcd24ccb0ead4bae3f4dc540786"
+          },
+          {
+            "artifact": "round-brief",
+            "path": "out/{{run_id}}/r{{round}}/round-brief.json",
+            "present": true,
+            "sha256": "ea429fd4477e6efd1d8a883ad6806bb95041c4b5a4f7369d26ebf16912117981",
+            "edge": null,
+            "via": "earlier",
+            "commit": "a4528ca98c79497f330df32ac3ebca2d25105d72"
+          }
+        ],
+        "inputsDropped": 0,
+        "decision": {
+          "code": null,
+          "by": "panel",
+          "trigger": "stage-settled",
+          "reason": "stage S191 settled — its artifact round-brief (out/{{run_id}}/r{{round}}/round-brief.json) is unchanged from the visit that produced it",
+          "fact": {
+            "kind": "artifact",
+            "id": "round-brief",
+            "path": "out/{{run_id}}/r{{round}}/round-brief.json",
+            "present": true,
+            "sha256": "ea429fd4477e6efd1d8a883ad6806bb95041c4b5a4f7369d26ebf16912117981",
+            "commit": "76df9c5ef473a2e7dc13f5dac4ead02a0c9115bf",
+            "uncommitted": true,
+            "unchanged": true,
+            "stage": "S191",
+            "pipeline": "poc-breaking-rounds"
+          }
+        }
+      },
+      {
+        "id": "poc-breaking-rounds/S192#6",
+        "stage": "S192",
+        "visit": 6,
+        "enteredAt": "2026-11-05T22:59:31.237Z",
+        "settledAt": "2026-11-05T22:59:36.793Z",
+        "thread": "loop-20",
+        "job": "job-loop-20",
+        "status": "done",
+        "via": null,
+        "commit": "c95f2d199dbc9706d2cbfd65d37f119111afb5f1",
+        "tree": {
+          "path": "<repo>/.worktrees/you-write-one-brief-from-ea1976",
+          "branch": "wtgui/you-write-one-brief-from-ea1976",
+          "head": "c95f2d1",
+          "dirty": 0
+        },
+        "artifact": {
+          "id": "q1-records",
+          "path": "out/{{run_id}}/r{{round}}/Q1/records.jsonl",
+          "present": true,
+          "sha256": "0b4379f5dfbfca94c9d5391b940d7305599bb8ab3c512f96dd64efdd990cb158",
+          "bytes": null,
+          "commit": "c95f2d199dbc9706d2cbfd65d37f119111afb5f1",
+          "blob": null,
+          "blobSha256": null,
+          "unchanged": true,
+          "uncommitted": true
+        },
+        "inputs": [
+          {
+            "artifact": "round-brief",
+            "path": "out/{{run_id}}/r{{round}}/round-brief.json",
+            "present": true,
+            "sha256": "ea429fd4477e6efd1d8a883ad6806bb95041c4b5a4f7369d26ebf16912117981",
+            "edge": "H-191-192",
+            "via": "handoff",
+            "commit": "76df9c5ef473a2e7dc13f5dac4ead02a0c9115bf"
+          },
+          {
+            "artifact": "q1-records",
+            "path": "out/{{run_id}}/r{{round}}/Q1/records.jsonl",
+            "present": true,
+            "sha256": "0b4379f5dfbfca94c9d5391b940d7305599bb8ab3c512f96dd64efdd990cb158",
+            "edge": null,
+            "via": "earlier",
+            "commit": "e68d6d709261471b971af0a69e680e03e50e6ca2"
+          }
+        ],
+        "inputsDropped": 0,
+        "decision": {
+          "code": null,
+          "by": "panel",
+          "trigger": "stage-settled",
+          "reason": "stage S192 settled — its artifact q1-records (out/{{run_id}}/r{{round}}/Q1/records.jsonl) is unchanged from the visit that produced it",
+          "fact": {
+            "kind": "artifact",
+            "id": "q1-records",
+            "path": "out/{{run_id}}/r{{round}}/Q1/records.jsonl",
+            "present": true,
+            "sha256": "0b4379f5dfbfca94c9d5391b940d7305599bb8ab3c512f96dd64efdd990cb158",
+            "commit": "c95f2d199dbc9706d2cbfd65d37f119111afb5f1",
+            "uncommitted": true,
+            "unchanged": true,
+            "stage": "S192",
+            "pipeline": "poc-breaking-rounds"
+          }
+        }
+      },
+      {
+        "id": "poc-breaking-rounds/S198#6",
+        "stage": "S198",
+        "visit": 6,
+        "enteredAt": "2026-11-05T22:59:36.793Z",
+        "settledAt": "2026-11-05T22:59:43.580Z",
+        "thread": "loop-20",
+        "job": "job-loop-20",
+        "status": "done",
+        "via": null,
+        "commit": "2a8fab2ace8ddbed450995ae227d3e931243ae4f",
+        "tree": {
+          "path": "<repo>/.worktrees/you-write-one-brief-from-ea1976",
+          "branch": "wtgui/you-write-one-brief-from-ea1976",
+          "head": "2a8fab2",
+          "dirty": 0
+        },
+        "artifact": {
+          "id": "combined-artefact",
+          "path": "out/{{run_id}}/r{{round}}/combined.json",
+          "present": true,
+          "sha256": "bbf1d733c17c722c39142fdd778db0127ec6e46ee246292e7afc3046843134bd",
+          "bytes": null,
+          "commit": "2a8fab2ace8ddbed450995ae227d3e931243ae4f",
+          "blob": null,
+          "blobSha256": null,
+          "unchanged": true,
+          "uncommitted": true
+        },
+        "inputs": [
+          {
+            "artifact": "q1-records",
+            "path": "out/{{run_id}}/r{{round}}/Q1/records.jsonl",
+            "present": true,
+            "sha256": "0b4379f5dfbfca94c9d5391b940d7305599bb8ab3c512f96dd64efdd990cb158",
+            "edge": "H-192-198",
+            "via": "handoff",
+            "commit": "c95f2d199dbc9706d2cbfd65d37f119111afb5f1"
+          },
+          {
+            "artifact": "combined-artefact",
+            "path": "out/{{run_id}}/r{{round}}/combined.json",
+            "present": true,
+            "sha256": "bbf1d733c17c722c39142fdd778db0127ec6e46ee246292e7afc3046843134bd",
+            "edge": null,
+            "via": "earlier",
+            "commit": "8e1e9a2d671a089d09e42baeda7f2bdf40431b67"
+          }
+        ],
+        "inputsDropped": 0,
+        "decision": {
+          "code": null,
+          "by": "panel",
+          "trigger": "stage-settled",
+          "reason": "stage S198 settled — its artifact combined-artefact (out/{{run_id}}/r{{round}}/combined.json) is unchanged from the visit that produced it",
+          "fact": {
+            "kind": "artifact",
+            "id": "combined-artefact",
+            "path": "out/{{run_id}}/r{{round}}/combined.json",
+            "present": true,
+            "sha256": "bbf1d733c17c722c39142fdd778db0127ec6e46ee246292e7afc3046843134bd",
+            "commit": "2a8fab2ace8ddbed450995ae227d3e931243ae4f",
+            "uncommitted": true,
+            "unchanged": true,
+            "stage": "S198",
+            "pipeline": "poc-breaking-rounds"
+          }
+        }
+      },
+      {
+        "id": "poc-breaking-rounds/S199#6",
+        "stage": "S199",
+        "visit": 6,
+        "enteredAt": "2026-11-05T22:59:43.580Z",
+        "settledAt": "2026-11-05T22:59:48.577Z",
+        "thread": "loop-20",
+        "job": "job-loop-20",
+        "status": "done",
+        "via": null,
+        "commit": "800d1b53fe9e745bc23d3a7af350bf7e07348a4e",
+        "tree": {
+          "path": "<repo>/.worktrees/you-write-one-brief-from-ea1976",
+          "branch": "wtgui/you-write-one-brief-from-ea1976",
+          "head": "800d1b5",
+          "dirty": 0
+        },
+        "artifact": {
+          "id": "critique-record",
+          "path": "out/{{run_id}}/r{{round}}/critique.json",
+          "present": true,
+          "sha256": "560a0954aa65334bddb4facf6141d2a77fbcd90089357d807f67354d70488db6",
+          "bytes": null,
+          "commit": "800d1b53fe9e745bc23d3a7af350bf7e07348a4e",
+          "blob": null,
+          "blobSha256": null,
+          "unchanged": true,
+          "uncommitted": true
+        },
+        "inputs": [
+          {
+            "artifact": "combined-artefact",
+            "path": "out/{{run_id}}/r{{round}}/combined.json",
+            "present": true,
+            "sha256": "bbf1d733c17c722c39142fdd778db0127ec6e46ee246292e7afc3046843134bd",
+            "edge": "H-198-199",
+            "via": "handoff",
+            "commit": "2a8fab2ace8ddbed450995ae227d3e931243ae4f"
+          },
+          {
+            "artifact": "critique-record",
+            "path": "out/{{run_id}}/r{{round}}/critique.json",
+            "present": true,
+            "sha256": "560a0954aa65334bddb4facf6141d2a77fbcd90089357d807f67354d70488db6",
+            "edge": null,
+            "via": "earlier",
+            "commit": "1a7439f593a0ddfc938d1a6291db6db860276533"
+          }
+        ],
+        "inputsDropped": 0,
+        "decision": {
+          "code": null,
+          "by": "panel",
+          "trigger": "stage-settled",
+          "reason": "stage S199 settled — its artifact critique-record (out/{{run_id}}/r{{round}}/critique.json) is unchanged from the visit that produced it",
+          "fact": {
+            "kind": "artifact",
+            "id": "critique-record",
+            "path": "out/{{run_id}}/r{{round}}/critique.json",
+            "present": true,
+            "sha256": "560a0954aa65334bddb4facf6141d2a77fbcd90089357d807f67354d70488db6",
+            "commit": "800d1b53fe9e745bc23d3a7af350bf7e07348a4e",
+            "uncommitted": true,
+            "unchanged": true,
+            "stage": "S199",
+            "pipeline": "poc-breaking-rounds"
+          }
+        }
+      },
+      {
+        "id": "poc-breaking-rounds/S200#6",
+        "stage": "S200",
+        "visit": 6,
+        "enteredAt": "2026-11-05T22:59:48.577Z",
+        "settledAt": "2026-11-05T22:59:54.850Z",
+        "thread": "loop-20",
+        "job": "job-loop-20",
+        "status": "done",
+        "via": null,
+        "commit": "d369f00f6d5b0da768228122bdd8488b651776e3",
+        "tree": {
+          "path": "<repo>/.worktrees/you-write-one-brief-from-ea1976",
+          "branch": "wtgui/you-write-one-brief-from-ea1976",
+          "head": "d369f00",
+          "dirty": 0
+        },
+        "artifact": {
+          "id": "verdict",
+          "path": "out/{{run_id}}/r{{round}}/verdict.json",
+          "present": true,
+          "sha256": "5e27900bae7107122ac6a60136f0f653113842f9a87797ae8f34187d1bdd7130",
+          "bytes": null,
+          "commit": "d369f00f6d5b0da768228122bdd8488b651776e3",
+          "blob": null,
+          "blobSha256": null,
+          "unchanged": true,
+          "uncommitted": true
+        },
+        "inputs": [
+          {
+            "artifact": "critique-record",
+            "path": "out/{{run_id}}/r{{round}}/critique.json",
+            "present": true,
+            "sha256": "560a0954aa65334bddb4facf6141d2a77fbcd90089357d807f67354d70488db6",
+            "edge": "H-199-200",
+            "via": "handoff",
+            "commit": "800d1b53fe9e745bc23d3a7af350bf7e07348a4e"
+          },
+          {
+            "artifact": "verdict",
+            "path": "out/{{run_id}}/r{{round}}/verdict.json",
+            "present": true,
+            "sha256": "5e27900bae7107122ac6a60136f0f653113842f9a87797ae8f34187d1bdd7130",
+            "edge": null,
+            "via": "earlier",
+            "commit": "acb2f3fe1943fdcd24ccb0ead4bae3f4dc540786"
+          }
+        ],
+        "inputsDropped": 0,
+        "decision": {
+          "code": null,
+          "by": "panel",
+          "trigger": "stage-settled",
+          "reason": "stage S200 settled — its artifact verdict (out/{{run_id}}/r{{round}}/verdict.json) is unchanged from the visit that produced it",
+          "fact": {
+            "kind": "artifact",
+            "id": "verdict",
+            "path": "out/{{run_id}}/r{{round}}/verdict.json",
+            "present": true,
+            "sha256": "5e27900bae7107122ac6a60136f0f653113842f9a87797ae8f34187d1bdd7130",
+            "commit": "d369f00f6d5b0da768228122bdd8488b651776e3",
+            "uncommitted": true,
+            "unchanged": true,
+            "stage": "S200",
+            "pipeline": "poc-breaking-rounds"
+          }
+        }
+      },
+      {
+        "id": "poc-breaking-rounds/S191#7",
+        "stage": "S191",
+        "visit": 7,
+        "enteredAt": "2026-11-05T22:59:54.850Z",
+        "settledAt": "2026-11-05T23:00:02.400Z",
+        "thread": "loop-20",
+        "job": "job-loop-20",
+        "status": "done",
+        "via": null,
+        "commit": "905c5dcc0cd9345ecf723a6391cf05cdadf8fa4c",
+        "tree": {
+          "path": "<repo>/.worktrees/you-write-one-brief-from-ea1976",
+          "branch": "wtgui/you-write-one-brief-from-ea1976",
+          "head": "905c5dc",
+          "dirty": 0
+        },
+        "artifact": {
+          "id": "round-brief",
+          "path": "out/{{run_id}}/r{{round}}/round-brief.json",
+          "present": true,
+          "sha256": "ea429fd4477e6efd1d8a883ad6806bb95041c4b5a4f7369d26ebf16912117981",
+          "bytes": null,
+          "commit": "905c5dcc0cd9345ecf723a6391cf05cdadf8fa4c",
+          "blob": null,
+          "blobSha256": null,
+          "unchanged": true,
+          "uncommitted": true
+        },
+        "inputs": [
+          {
+            "artifact": "verdict",
+            "path": "out/{{run_id}}/r{{round}}/verdict.json",
+            "present": true,
+            "sha256": "5e27900bae7107122ac6a60136f0f653113842f9a87797ae8f34187d1bdd7130",
+            "edge": "H-200-191",
+            "via": "handoff",
+            "commit": "d369f00f6d5b0da768228122bdd8488b651776e3"
+          },
+          {
+            "artifact": "round-brief",
+            "path": "out/{{run_id}}/r{{round}}/round-brief.json",
+            "present": true,
+            "sha256": "ea429fd4477e6efd1d8a883ad6806bb95041c4b5a4f7369d26ebf16912117981",
+            "edge": null,
+            "via": "earlier",
+            "commit": "76df9c5ef473a2e7dc13f5dac4ead02a0c9115bf"
+          }
+        ],
+        "inputsDropped": 0,
+        "decision": {
+          "code": null,
+          "by": "panel",
+          "trigger": "stage-settled",
+          "reason": "stage S191 settled — its artifact round-brief (out/{{run_id}}/r{{round}}/round-brief.json) is unchanged from the visit that produced it",
+          "fact": {
+            "kind": "artifact",
+            "id": "round-brief",
+            "path": "out/{{run_id}}/r{{round}}/round-brief.json",
+            "present": true,
+            "sha256": "ea429fd4477e6efd1d8a883ad6806bb95041c4b5a4f7369d26ebf16912117981",
+            "commit": "905c5dcc0cd9345ecf723a6391cf05cdadf8fa4c",
+            "uncommitted": true,
+            "unchanged": true,
+            "stage": "S191",
+            "pipeline": "poc-breaking-rounds"
+          }
+        }
+      },
+      {
+        "id": "poc-breaking-rounds/S192#7",
+        "stage": "S192",
+        "visit": 7,
+        "enteredAt": "2026-11-05T23:00:02.400Z",
+        "settledAt": "2026-11-05T23:00:08.573Z",
+        "thread": "loop-20",
+        "job": "job-loop-20",
+        "status": "done",
+        "via": null,
+        "commit": "a18fe73a73f88a52ecd3a26b88c6c4202d10c2ec",
+        "tree": {
+          "path": "<repo>/.worktrees/you-write-one-brief-from-ea1976",
+          "branch": "wtgui/you-write-one-brief-from-ea1976",
+          "head": "a18fe73",
+          "dirty": 0
+        },
+        "artifact": {
+          "id": "q1-records",
+          "path": "out/{{run_id}}/r{{round}}/Q1/records.jsonl",
+          "present": true,
+          "sha256": "0b4379f5dfbfca94c9d5391b940d7305599bb8ab3c512f96dd64efdd990cb158",
+          "bytes": null,
+          "commit": "a18fe73a73f88a52ecd3a26b88c6c4202d10c2ec",
+          "blob": null,
+          "blobSha256": null,
+          "unchanged": true,
+          "uncommitted": true
+        },
+        "inputs": [
+          {
+            "artifact": "round-brief",
+            "path": "out/{{run_id}}/r{{round}}/round-brief.json",
+            "present": true,
+            "sha256": "ea429fd4477e6efd1d8a883ad6806bb95041c4b5a4f7369d26ebf16912117981",
+            "edge": "H-191-192",
+            "via": "handoff",
+            "commit": "905c5dcc0cd9345ecf723a6391cf05cdadf8fa4c"
+          },
+          {
+            "artifact": "q1-records",
+            "path": "out/{{run_id}}/r{{round}}/Q1/records.jsonl",
+            "present": true,
+            "sha256": "0b4379f5dfbfca94c9d5391b940d7305599bb8ab3c512f96dd64efdd990cb158",
+            "edge": null,
+            "via": "earlier",
+            "commit": "c95f2d199dbc9706d2cbfd65d37f119111afb5f1"
+          }
+        ],
+        "inputsDropped": 0,
+        "decision": {
+          "code": null,
+          "by": "panel",
+          "trigger": "stage-settled",
+          "reason": "stage S192 settled — its artifact q1-records (out/{{run_id}}/r{{round}}/Q1/records.jsonl) is unchanged from the visit that produced it",
+          "fact": {
+            "kind": "artifact",
+            "id": "q1-records",
+            "path": "out/{{run_id}}/r{{round}}/Q1/records.jsonl",
+            "present": true,
+            "sha256": "0b4379f5dfbfca94c9d5391b940d7305599bb8ab3c512f96dd64efdd990cb158",
+            "commit": "a18fe73a73f88a52ecd3a26b88c6c4202d10c2ec",
+            "uncommitted": true,
+            "unchanged": true,
+            "stage": "S192",
+            "pipeline": "poc-breaking-rounds"
+          }
+        }
+      },
+      {
+        "id": "poc-breaking-rounds/S198#7",
+        "stage": "S198",
+        "visit": 7,
+        "enteredAt": "2026-11-05T23:00:08.573Z",
+        "settledAt": "2026-11-05T23:00:14.931Z",
+        "thread": "loop-20",
+        "job": "job-loop-20",
+        "status": "done",
+        "via": null,
+        "commit": "60dbecec9dce0556e27cc2315cfa76bfec534b9c",
+        "tree": {
+          "path": "<repo>/.worktrees/you-write-one-brief-from-ea1976",
+          "branch": "wtgui/you-write-one-brief-from-ea1976",
+          "head": "60dbece",
+          "dirty": 0
+        },
+        "artifact": {
+          "id": "combined-artefact",
+          "path": "out/{{run_id}}/r{{round}}/combined.json",
+          "present": true,
+          "sha256": "bbf1d733c17c722c39142fdd778db0127ec6e46ee246292e7afc3046843134bd",
+          "bytes": null,
+          "commit": "60dbecec9dce0556e27cc2315cfa76bfec534b9c",
+          "blob": null,
+          "blobSha256": null,
+          "unchanged": true,
+          "uncommitted": true
+        },
+        "inputs": [
+          {
+            "artifact": "q1-records",
+            "path": "out/{{run_id}}/r{{round}}/Q1/records.jsonl",
+            "present": true,
+            "sha256": "0b4379f5dfbfca94c9d5391b940d7305599bb8ab3c512f96dd64efdd990cb158",
+            "edge": "H-192-198",
+            "via": "handoff",
+            "commit": "a18fe73a73f88a52ecd3a26b88c6c4202d10c2ec"
+          },
+          {
+            "artifact": "combined-artefact",
+            "path": "out/{{run_id}}/r{{round}}/combined.json",
+            "present": true,
+            "sha256": "bbf1d733c17c722c39142fdd778db0127ec6e46ee246292e7afc3046843134bd",
+            "edge": null,
+            "via": "earlier",
+            "commit": "2a8fab2ace8ddbed450995ae227d3e931243ae4f"
+          }
+        ],
+        "inputsDropped": 0,
+        "decision": {
+          "code": null,
+          "by": "panel",
+          "trigger": "stage-settled",
+          "reason": "stage S198 settled — its artifact combined-artefact (out/{{run_id}}/r{{round}}/combined.json) is unchanged from the visit that produced it",
+          "fact": {
+            "kind": "artifact",
+            "id": "combined-artefact",
+            "path": "out/{{run_id}}/r{{round}}/combined.json",
+            "present": true,
+            "sha256": "bbf1d733c17c722c39142fdd778db0127ec6e46ee246292e7afc3046843134bd",
+            "commit": "60dbecec9dce0556e27cc2315cfa76bfec534b9c",
+            "uncommitted": true,
+            "unchanged": true,
+            "stage": "S198",
+            "pipeline": "poc-breaking-rounds"
+          }
+        }
+      },
+      {
+        "id": "poc-breaking-rounds/S199#7",
+        "stage": "S199",
+        "visit": 7,
+        "enteredAt": "2026-11-05T23:00:14.931Z",
+        "settledAt": "2026-11-05T23:00:22.193Z",
+        "thread": "loop-20",
+        "job": "job-loop-20",
+        "status": "done",
+        "via": null,
+        "commit": "c61fb3b27d2b5a56b7f6a10be9dd964bdd04248d",
+        "tree": {
+          "path": "<repo>/.worktrees/you-write-one-brief-from-ea1976",
+          "branch": "wtgui/you-write-one-brief-from-ea1976",
+          "head": "c61fb3b",
+          "dirty": 0
+        },
+        "artifact": {
+          "id": "critique-record",
+          "path": "out/{{run_id}}/r{{round}}/critique.json",
+          "present": true,
+          "sha256": "560a0954aa65334bddb4facf6141d2a77fbcd90089357d807f67354d70488db6",
+          "bytes": null,
+          "commit": "c61fb3b27d2b5a56b7f6a10be9dd964bdd04248d",
+          "blob": null,
+          "blobSha256": null,
+          "unchanged": true,
+          "uncommitted": true
+        },
+        "inputs": [
+          {
+            "artifact": "combined-artefact",
+            "path": "out/{{run_id}}/r{{round}}/combined.json",
+            "present": true,
+            "sha256": "bbf1d733c17c722c39142fdd778db0127ec6e46ee246292e7afc3046843134bd",
+            "edge": "H-198-199",
+            "via": "handoff",
+            "commit": "60dbecec9dce0556e27cc2315cfa76bfec534b9c"
+          },
+          {
+            "artifact": "critique-record",
+            "path": "out/{{run_id}}/r{{round}}/critique.json",
+            "present": true,
+            "sha256": "560a0954aa65334bddb4facf6141d2a77fbcd90089357d807f67354d70488db6",
+            "edge": null,
+            "via": "earlier",
+            "commit": "800d1b53fe9e745bc23d3a7af350bf7e07348a4e"
+          }
+        ],
+        "inputsDropped": 0,
+        "decision": {
+          "code": null,
+          "by": "panel",
+          "trigger": "stage-settled",
+          "reason": "stage S199 settled — its artifact critique-record (out/{{run_id}}/r{{round}}/critique.json) is unchanged from the visit that produced it",
+          "fact": {
+            "kind": "artifact",
+            "id": "critique-record",
+            "path": "out/{{run_id}}/r{{round}}/critique.json",
+            "present": true,
+            "sha256": "560a0954aa65334bddb4facf6141d2a77fbcd90089357d807f67354d70488db6",
+            "commit": "c61fb3b27d2b5a56b7f6a10be9dd964bdd04248d",
+            "uncommitted": true,
+            "unchanged": true,
+            "stage": "S199",
+            "pipeline": "poc-breaking-rounds"
+          }
+        }
+      },
+      {
+        "id": "poc-breaking-rounds/S200#7",
+        "stage": "S200",
+        "visit": 7,
+        "enteredAt": "2026-11-05T23:00:22.193Z",
+        "settledAt": "2026-11-05T23:00:29.658Z",
+        "thread": "loop-20",
+        "job": "job-loop-20",
+        "status": "done",
+        "via": null,
+        "commit": "a17e1a69b533c4f91bc8b7856ff937b53a0dbcd1",
+        "tree": {
+          "path": "<repo>/.worktrees/you-write-one-brief-from-ea1976",
+          "branch": "wtgui/you-write-one-brief-from-ea1976",
+          "head": "a17e1a6",
+          "dirty": 0
+        },
+        "artifact": {
+          "id": "verdict",
+          "path": "out/{{run_id}}/r{{round}}/verdict.json",
+          "present": true,
+          "sha256": "5e27900bae7107122ac6a60136f0f653113842f9a87797ae8f34187d1bdd7130",
+          "bytes": null,
+          "commit": "a17e1a69b533c4f91bc8b7856ff937b53a0dbcd1",
+          "blob": null,
+          "blobSha256": null,
+          "unchanged": true,
+          "uncommitted": true
+        },
+        "inputs": [
+          {
+            "artifact": "critique-record",
+            "path": "out/{{run_id}}/r{{round}}/critique.json",
+            "present": true,
+            "sha256": "560a0954aa65334bddb4facf6141d2a77fbcd90089357d807f67354d70488db6",
+            "edge": "H-199-200",
+            "via": "handoff",
+            "commit": "c61fb3b27d2b5a56b7f6a10be9dd964bdd04248d"
+          },
+          {
+            "artifact": "verdict",
+            "path": "out/{{run_id}}/r{{round}}/verdict.json",
+            "present": true,
+            "sha256": "5e27900bae7107122ac6a60136f0f653113842f9a87797ae8f34187d1bdd7130",
+            "edge": null,
+            "via": "earlier",
+            "commit": "d369f00f6d5b0da768228122bdd8488b651776e3"
+          }
+        ],
+        "inputsDropped": 0,
+        "decision": {
+          "code": "pipeline-cap",
+          "by": "panel",
+          "trigger": "cap",
+          "reason": "the loop H-200-191 (S200 → S191) is at its cap of 3 rounds — 3 crossings already taken, so the row stops here for a decision",
+          "fact": {
+            "kind": "cap",
+            "edge": "H-200-191",
+            "from": "S200",
+            "to": "S191",
+            "text": "3 rounds, then a person reads the blocking set",
+            "used": 3,
+            "limit": 3,
+            "stage": "S200",
+            "pipeline": "poc-breaking-rounds"
+          }
+        }
+      }
+    ],
+    "cuts": [
+      {
+        "repoDir": "<repo>",
+        "prompt": "You write one brief from the plan. You pin what the plan names and you do not re-pin the export to what is on disk today; a plan that names a method the criteria do not know stops at ESCALATE-AMBIGUIT",
+        "branch": "wtgui/you-write-one-brief-from-ea1976",
+        "path": "<repo>/.worktrees/you-write-one-brief-from-ea1976",
+        "from": "HEAD",
+        "at": "2026-11-05T22:55:59.313Z"
+      }
+    ],
+    "parks": [
+      {
+        "step": 4,
+        "stage": "S181",
+        "visit": 1,
+        "code": "pipeline-gate",
+        "reason": "gate G50 follows stage S181 and declares a decision record at <repo>\\.worktrees\\you-write-one-brief-from-ea1976\\ledger\\gates\\G50-{{run_id}}.json — the code does not decide it, and the record has not been written",
+        "waitingFor": {
+          "kind": "gate",
+          "gate": "G50",
+          "path": "ledger/gates/G50-{{run_id}}.json",
+          "stage": "S181",
+          "since": "2026-11-05T22:56:10.313Z"
+        },
+        "crossings": {
+          "H-180-181": 1
+        }
+      },
+      {
+        "step": 10,
+        "stage": "S200",
+        "visit": 1,
+        "code": "pipeline-gate",
+        "reason": "gate G51 follows stage S200 and declares a decision record at <repo>\\.worktrees\\you-write-one-brief-from-ea1976\\ledger\\gates\\G51-{{run_id}}-r{{round}}.json — the code does not decide it, and the record has not been written",
+        "waitingFor": {
+          "kind": "gate",
+          "gate": "G51",
+          "path": "ledger/gates/G51-{{run_id}}-r{{round}}.json",
+          "stage": "S200",
+          "since": "2026-11-05T22:56:47.708Z"
+        },
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 1,
+          "H-192-198": 1,
+          "H-198-199": 1,
+          "H-199-200": 1
+        }
+      },
+      {
+        "step": 26,
+        "stage": "S200",
+        "visit": 4,
+        "code": "pipeline-cap",
+        "reason": "the loop H-200-191 (S200 → S191) is at its cap of 3 rounds — 3 crossings already taken, so the row stops here for a decision",
+        "waitingFor": {
+          "kind": "cap",
+          "edge": "H-200-191",
+          "from": "S200",
+          "to": "S191",
+          "limit": 3,
+          "used": 3,
+          "stage": "S200",
+          "since": "2026-11-05T22:58:49.642Z"
+        },
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 4,
+          "H-192-198": 4,
+          "H-198-199": 4,
+          "H-199-200": 4,
+          "H-200-191": 3
+        }
+      },
+      {
+        "step": 43,
+        "stage": "S200",
+        "visit": 7,
+        "code": "pipeline-cap",
+        "reason": "the loop H-200-191 (S200 → S191) is at its cap of 3 rounds — 3 crossings already taken, so the row stops here for a decision",
+        "waitingFor": {
+          "kind": "cap",
+          "edge": "H-200-191",
+          "from": "S200",
+          "to": "S191",
+          "limit": 3,
+          "used": 3,
+          "stage": "S200",
+          "since": "2026-11-05T23:00:29.658Z"
+        },
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 7,
+          "H-192-198": 7,
+          "H-198-199": 7,
+          "H-199-200": 7,
+          "H-200-191": 3
+        }
+      }
+    ],
+    "gates": [
+      {
+        "gate": "G50",
+        "path": "ledger/gates/G50-run-1.json",
+        "at": "2026-11-05T22:56:14.272Z",
+        "step": 4,
+        "sha256": "99058cc570c7fad1a21236deb45b4ffac13099ab842eac4a1fdf77c4d09c0b8a",
+        "round": 1
+      },
+      {
+        "gate": "G51",
+        "path": "ledger/gates/G51-run-1-r1.json",
+        "at": "2026-11-05T22:56:53.287Z",
+        "step": 10,
+        "sha256": "e8036c4cf5ee6e26a93db1fabaf45732f6d4846ce581aaaf0b4abe3641c3334d",
+        "round": 1
+      }
+    ],
+    "releases": [
+      {
+        "edge": "H-200-191",
+        "from": "S200",
+        "to": "S191",
+        "limit": 3,
+        "used": 3,
+        "at": "2026-11-05T22:58:52.726Z",
+        "ok": true,
+        "error": null,
+        "crossingsAfter": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 4,
+          "H-192-198": 4,
+          "H-198-199": 4,
+          "H-199-200": 4,
+          "H-200-191": 0
+        },
+        "stageAfter": "S200",
+        "stateAfter": "queued"
+      }
+    ],
+    "comparisons": [
+      {
+        "stage": "S192",
+        "from": 2,
+        "to": 3,
+        "same_sha256": true,
+        "before": "0b4379f5dfbfca94c9d5391b940d7305599bb8ab3c512f96dd64efdd990cb158",
+        "after": "0b4379f5dfbfca94c9d5391b940d7305599bb8ab3c512f96dd64efdd990cb158",
+        "same_blob": false
+      },
+      {
+        "stage": "S192",
+        "from": 3,
+        "to": 4,
+        "same_sha256": true,
+        "before": "0b4379f5dfbfca94c9d5391b940d7305599bb8ab3c512f96dd64efdd990cb158",
+        "after": "0b4379f5dfbfca94c9d5391b940d7305599bb8ab3c512f96dd64efdd990cb158",
+        "same_blob": false
+      },
+      {
+        "stage": "S192",
+        "from": 4,
+        "to": 5,
+        "same_sha256": true,
+        "before": "0b4379f5dfbfca94c9d5391b940d7305599bb8ab3c512f96dd64efdd990cb158",
+        "after": "0b4379f5dfbfca94c9d5391b940d7305599bb8ab3c512f96dd64efdd990cb158",
+        "same_blob": false
+      },
+      {
+        "stage": "S192",
+        "from": 5,
+        "to": 6,
+        "same_sha256": true,
+        "before": "0b4379f5dfbfca94c9d5391b940d7305599bb8ab3c512f96dd64efdd990cb158",
+        "after": "0b4379f5dfbfca94c9d5391b940d7305599bb8ab3c512f96dd64efdd990cb158",
+        "same_blob": false
+      },
+      {
+        "stage": "S192",
+        "from": 6,
+        "to": 7,
+        "same_sha256": true,
+        "before": "0b4379f5dfbfca94c9d5391b940d7305599bb8ab3c512f96dd64efdd990cb158",
+        "after": "0b4379f5dfbfca94c9d5391b940d7305599bb8ab3c512f96dd64efdd990cb158",
+        "same_blob": false
+      },
+      {
+        "stage": "S198",
+        "from": 2,
+        "to": 3,
+        "same_sha256": true,
+        "before": "bbf1d733c17c722c39142fdd778db0127ec6e46ee246292e7afc3046843134bd",
+        "after": "bbf1d733c17c722c39142fdd778db0127ec6e46ee246292e7afc3046843134bd",
+        "same_blob": false
+      },
+      {
+        "stage": "S198",
+        "from": 3,
+        "to": 4,
+        "same_sha256": true,
+        "before": "bbf1d733c17c722c39142fdd778db0127ec6e46ee246292e7afc3046843134bd",
+        "after": "bbf1d733c17c722c39142fdd778db0127ec6e46ee246292e7afc3046843134bd",
+        "same_blob": false
+      },
+      {
+        "stage": "S198",
+        "from": 4,
+        "to": 5,
+        "same_sha256": true,
+        "before": "bbf1d733c17c722c39142fdd778db0127ec6e46ee246292e7afc3046843134bd",
+        "after": "bbf1d733c17c722c39142fdd778db0127ec6e46ee246292e7afc3046843134bd",
+        "same_blob": false
+      },
+      {
+        "stage": "S198",
+        "from": 5,
+        "to": 6,
+        "same_sha256": true,
+        "before": "bbf1d733c17c722c39142fdd778db0127ec6e46ee246292e7afc3046843134bd",
+        "after": "bbf1d733c17c722c39142fdd778db0127ec6e46ee246292e7afc3046843134bd",
+        "same_blob": false
+      },
+      {
+        "stage": "S198",
+        "from": 6,
+        "to": 7,
+        "same_sha256": true,
+        "before": "bbf1d733c17c722c39142fdd778db0127ec6e46ee246292e7afc3046843134bd",
+        "after": "bbf1d733c17c722c39142fdd778db0127ec6e46ee246292e7afc3046843134bd",
+        "same_blob": false
+      },
+      {
+        "stage": "S199",
+        "from": 2,
+        "to": 3,
+        "same_sha256": true,
+        "before": "560a0954aa65334bddb4facf6141d2a77fbcd90089357d807f67354d70488db6",
+        "after": "560a0954aa65334bddb4facf6141d2a77fbcd90089357d807f67354d70488db6",
+        "same_blob": false
+      },
+      {
+        "stage": "S199",
+        "from": 3,
+        "to": 4,
+        "same_sha256": true,
+        "before": "560a0954aa65334bddb4facf6141d2a77fbcd90089357d807f67354d70488db6",
+        "after": "560a0954aa65334bddb4facf6141d2a77fbcd90089357d807f67354d70488db6",
+        "same_blob": false
+      },
+      {
+        "stage": "S199",
+        "from": 4,
+        "to": 5,
+        "same_sha256": true,
+        "before": "560a0954aa65334bddb4facf6141d2a77fbcd90089357d807f67354d70488db6",
+        "after": "560a0954aa65334bddb4facf6141d2a77fbcd90089357d807f67354d70488db6",
+        "same_blob": false
+      },
+      {
+        "stage": "S199",
+        "from": 5,
+        "to": 6,
+        "same_sha256": true,
+        "before": "560a0954aa65334bddb4facf6141d2a77fbcd90089357d807f67354d70488db6",
+        "after": "560a0954aa65334bddb4facf6141d2a77fbcd90089357d807f67354d70488db6",
+        "same_blob": false
+      },
+      {
+        "stage": "S199",
+        "from": 6,
+        "to": 7,
+        "same_sha256": true,
+        "before": "560a0954aa65334bddb4facf6141d2a77fbcd90089357d807f67354d70488db6",
+        "after": "560a0954aa65334bddb4facf6141d2a77fbcd90089357d807f67354d70488db6",
+        "same_blob": false
+      },
+      {
+        "stage": "S200",
+        "from": 2,
+        "to": 3,
+        "same_sha256": true,
+        "before": "5e27900bae7107122ac6a60136f0f653113842f9a87797ae8f34187d1bdd7130",
+        "after": "5e27900bae7107122ac6a60136f0f653113842f9a87797ae8f34187d1bdd7130",
+        "same_blob": false
+      },
+      {
+        "stage": "S200",
+        "from": 3,
+        "to": 4,
+        "same_sha256": true,
+        "before": "5e27900bae7107122ac6a60136f0f653113842f9a87797ae8f34187d1bdd7130",
+        "after": "5e27900bae7107122ac6a60136f0f653113842f9a87797ae8f34187d1bdd7130",
+        "same_blob": false
+      },
+      {
+        "stage": "S200",
+        "from": 4,
+        "to": 4,
+        "same_sha256": true,
+        "before": "5e27900bae7107122ac6a60136f0f653113842f9a87797ae8f34187d1bdd7130",
+        "after": "5e27900bae7107122ac6a60136f0f653113842f9a87797ae8f34187d1bdd7130",
+        "same_blob": false
+      },
+      {
+        "stage": "S200",
+        "from": 4,
+        "to": 5,
+        "same_sha256": true,
+        "before": "5e27900bae7107122ac6a60136f0f653113842f9a87797ae8f34187d1bdd7130",
+        "after": "5e27900bae7107122ac6a60136f0f653113842f9a87797ae8f34187d1bdd7130",
+        "same_blob": false
+      },
+      {
+        "stage": "S200",
+        "from": 5,
+        "to": 6,
+        "same_sha256": true,
+        "before": "5e27900bae7107122ac6a60136f0f653113842f9a87797ae8f34187d1bdd7130",
+        "after": "5e27900bae7107122ac6a60136f0f653113842f9a87797ae8f34187d1bdd7130",
+        "same_blob": false
+      },
+      {
+        "stage": "S200",
+        "from": 6,
+        "to": 7,
+        "same_sha256": true,
+        "before": "5e27900bae7107122ac6a60136f0f653113842f9a87797ae8f34187d1bdd7130",
+        "after": "5e27900bae7107122ac6a60136f0f653113842f9a87797ae8f34187d1bdd7130",
+        "same_blob": false
+      },
+      {
+        "stage": "S191",
+        "from": 3,
+        "to": 4,
+        "same_sha256": true,
+        "before": "ea429fd4477e6efd1d8a883ad6806bb95041c4b5a4f7369d26ebf16912117981",
+        "after": "ea429fd4477e6efd1d8a883ad6806bb95041c4b5a4f7369d26ebf16912117981",
+        "same_blob": false
+      },
+      {
+        "stage": "S191",
+        "from": 4,
+        "to": 5,
+        "same_sha256": true,
+        "before": "ea429fd4477e6efd1d8a883ad6806bb95041c4b5a4f7369d26ebf16912117981",
+        "after": "ea429fd4477e6efd1d8a883ad6806bb95041c4b5a4f7369d26ebf16912117981",
+        "same_blob": false
+      },
+      {
+        "stage": "S191",
+        "from": 5,
+        "to": 6,
+        "same_sha256": true,
+        "before": "ea429fd4477e6efd1d8a883ad6806bb95041c4b5a4f7369d26ebf16912117981",
+        "after": "ea429fd4477e6efd1d8a883ad6806bb95041c4b5a4f7369d26ebf16912117981",
+        "same_blob": false
+      },
+      {
+        "stage": "S191",
+        "from": 6,
+        "to": 7,
+        "same_sha256": true,
+        "before": "ea429fd4477e6efd1d8a883ad6806bb95041c4b5a4f7369d26ebf16912117981",
+        "after": "ea429fd4477e6efd1d8a883ad6806bb95041c4b5a4f7369d26ebf16912117981",
+        "same_blob": false
+      }
+    ],
+    "steps": [
+      {
+        "step": 1,
+        "state": "queued",
+        "stage": "S180",
+        "visit": 1,
+        "crossings": {},
+        "thread": null,
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 2,
+        "state": "running",
+        "stage": "S180",
+        "visit": 1,
+        "crossings": {},
+        "thread": "loop-01",
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 3,
+        "state": "running",
+        "stage": "S181",
+        "visit": 1,
+        "crossings": {
+          "H-180-181": 1
+        },
+        "thread": "loop-02",
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 4,
+        "state": "parked",
+        "stage": "S181",
+        "visit": 1,
+        "crossings": {
+          "H-180-181": 1
+        },
+        "thread": null,
+        "live": false,
+        "gate": "pipeline-gate",
+        "reason": "gate G50 follows stage S181 and declares a decision record at <repo>\\.worktrees\\you-write-one-brief-from-ea1976\\ledger\\gates\\G50-{{run_id}}.json — the code does not decide it, and the record has not been written"
+      },
+      {
+        "step": 5,
+        "state": "running",
+        "stage": "S191",
+        "visit": 1,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1
+        },
+        "thread": "loop-03",
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 6,
+        "state": "running",
+        "stage": "S192",
+        "visit": 1,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 1
+        },
+        "thread": "loop-04",
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 7,
+        "state": "running",
+        "stage": "S198",
+        "visit": 1,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 1,
+          "H-192-198": 1
+        },
+        "thread": "loop-05",
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 8,
+        "state": "running",
+        "stage": "S199",
+        "visit": 1,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 1,
+          "H-192-198": 1,
+          "H-198-199": 1
+        },
+        "thread": "loop-06",
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 9,
+        "state": "running",
+        "stage": "S200",
+        "visit": 1,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 1,
+          "H-192-198": 1,
+          "H-198-199": 1,
+          "H-199-200": 1
+        },
+        "thread": "loop-07",
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 10,
+        "state": "parked",
+        "stage": "S200",
+        "visit": 1,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 1,
+          "H-192-198": 1,
+          "H-198-199": 1,
+          "H-199-200": 1
+        },
+        "thread": null,
+        "live": false,
+        "gate": "pipeline-gate",
+        "reason": "gate G51 follows stage S200 and declares a decision record at <repo>\\.worktrees\\you-write-one-brief-from-ea1976\\ledger\\gates\\G51-{{run_id}}-r{{round}}.json — the code does not decide it, and the record has not been written"
+      },
+      {
+        "step": 11,
+        "state": "running",
+        "stage": "S191",
+        "visit": 2,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 1,
+          "H-192-198": 1,
+          "H-198-199": 1,
+          "H-199-200": 1,
+          "H-200-191": 1
+        },
+        "thread": "loop-08",
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 12,
+        "state": "running",
+        "stage": "S192",
+        "visit": 2,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 2,
+          "H-192-198": 1,
+          "H-198-199": 1,
+          "H-199-200": 1,
+          "H-200-191": 1
+        },
+        "thread": "loop-09",
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 13,
+        "state": "running",
+        "stage": "S198",
+        "visit": 2,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 2,
+          "H-192-198": 2,
+          "H-198-199": 1,
+          "H-199-200": 1,
+          "H-200-191": 1
+        },
+        "thread": "loop-10",
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 14,
+        "state": "running",
+        "stage": "S199",
+        "visit": 2,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 2,
+          "H-192-198": 2,
+          "H-198-199": 2,
+          "H-199-200": 1,
+          "H-200-191": 1
+        },
+        "thread": "loop-11",
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 15,
+        "state": "running",
+        "stage": "S200",
+        "visit": 2,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 2,
+          "H-192-198": 2,
+          "H-198-199": 2,
+          "H-199-200": 2,
+          "H-200-191": 1
+        },
+        "thread": "loop-12",
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 16,
+        "state": "running",
+        "stage": "S191",
+        "visit": 3,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 2,
+          "H-192-198": 2,
+          "H-198-199": 2,
+          "H-199-200": 2,
+          "H-200-191": 2
+        },
+        "thread": "loop-13",
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 17,
+        "state": "running",
+        "stage": "S192",
+        "visit": 3,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 3,
+          "H-192-198": 2,
+          "H-198-199": 2,
+          "H-199-200": 2,
+          "H-200-191": 2
+        },
+        "thread": "loop-14",
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 18,
+        "state": "running",
+        "stage": "S198",
+        "visit": 3,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 3,
+          "H-192-198": 3,
+          "H-198-199": 2,
+          "H-199-200": 2,
+          "H-200-191": 2
+        },
+        "thread": "loop-15",
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 19,
+        "state": "running",
+        "stage": "S199",
+        "visit": 3,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 3,
+          "H-192-198": 3,
+          "H-198-199": 3,
+          "H-199-200": 2,
+          "H-200-191": 2
+        },
+        "thread": "loop-16",
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 20,
+        "state": "running",
+        "stage": "S200",
+        "visit": 3,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 3,
+          "H-192-198": 3,
+          "H-198-199": 3,
+          "H-199-200": 3,
+          "H-200-191": 2
+        },
+        "thread": "loop-17",
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 21,
+        "state": "running",
+        "stage": "S191",
+        "visit": 4,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 3,
+          "H-192-198": 3,
+          "H-198-199": 3,
+          "H-199-200": 3,
+          "H-200-191": 3
+        },
+        "thread": "loop-18",
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 22,
+        "state": "running",
+        "stage": "S192",
+        "visit": 4,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 4,
+          "H-192-198": 3,
+          "H-198-199": 3,
+          "H-199-200": 3,
+          "H-200-191": 3
+        },
+        "thread": "loop-19",
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 23,
+        "state": "running",
+        "stage": "S198",
+        "visit": 4,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 4,
+          "H-192-198": 4,
+          "H-198-199": 3,
+          "H-199-200": 3,
+          "H-200-191": 3
+        },
+        "thread": "loop-20",
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 24,
+        "state": "running",
+        "stage": "S199",
+        "visit": 4,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 4,
+          "H-192-198": 4,
+          "H-198-199": 4,
+          "H-199-200": 3,
+          "H-200-191": 3
+        },
+        "thread": null,
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 25,
+        "state": "running",
+        "stage": "S200",
+        "visit": 4,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 4,
+          "H-192-198": 4,
+          "H-198-199": 4,
+          "H-199-200": 4,
+          "H-200-191": 3
+        },
+        "thread": null,
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 26,
+        "state": "parked",
+        "stage": "S200",
+        "visit": 4,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 4,
+          "H-192-198": 4,
+          "H-198-199": 4,
+          "H-199-200": 4,
+          "H-200-191": 3
+        },
+        "thread": null,
+        "live": false,
+        "gate": "pipeline-cap",
+        "reason": "the loop H-200-191 (S200 → S191) is at its cap of 3 rounds — 3 crossings already taken, so the row stops here for a decision"
+      },
+      {
+        "step": 27,
+        "state": "running",
+        "stage": "S200",
+        "visit": 4,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 4,
+          "H-192-198": 4,
+          "H-198-199": 4,
+          "H-199-200": 4,
+          "H-200-191": 0
+        },
+        "thread": null,
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 28,
+        "state": "running",
+        "stage": "S191",
+        "visit": 5,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 4,
+          "H-192-198": 4,
+          "H-198-199": 4,
+          "H-199-200": 4,
+          "H-200-191": 1
+        },
+        "thread": null,
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 29,
+        "state": "running",
+        "stage": "S192",
+        "visit": 5,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 5,
+          "H-192-198": 4,
+          "H-198-199": 4,
+          "H-199-200": 4,
+          "H-200-191": 1
+        },
+        "thread": null,
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 30,
+        "state": "running",
+        "stage": "S198",
+        "visit": 5,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 5,
+          "H-192-198": 5,
+          "H-198-199": 4,
+          "H-199-200": 4,
+          "H-200-191": 1
+        },
+        "thread": null,
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 31,
+        "state": "running",
+        "stage": "S199",
+        "visit": 5,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 5,
+          "H-192-198": 5,
+          "H-198-199": 5,
+          "H-199-200": 4,
+          "H-200-191": 1
+        },
+        "thread": null,
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 32,
+        "state": "running",
+        "stage": "S200",
+        "visit": 5,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 5,
+          "H-192-198": 5,
+          "H-198-199": 5,
+          "H-199-200": 5,
+          "H-200-191": 1
+        },
+        "thread": null,
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 33,
+        "state": "running",
+        "stage": "S191",
+        "visit": 6,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 5,
+          "H-192-198": 5,
+          "H-198-199": 5,
+          "H-199-200": 5,
+          "H-200-191": 2
+        },
+        "thread": null,
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 34,
+        "state": "running",
+        "stage": "S192",
+        "visit": 6,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 6,
+          "H-192-198": 5,
+          "H-198-199": 5,
+          "H-199-200": 5,
+          "H-200-191": 2
+        },
+        "thread": null,
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 35,
+        "state": "running",
+        "stage": "S198",
+        "visit": 6,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 6,
+          "H-192-198": 6,
+          "H-198-199": 5,
+          "H-199-200": 5,
+          "H-200-191": 2
+        },
+        "thread": null,
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 36,
+        "state": "running",
+        "stage": "S199",
+        "visit": 6,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 6,
+          "H-192-198": 6,
+          "H-198-199": 6,
+          "H-199-200": 5,
+          "H-200-191": 2
+        },
+        "thread": null,
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 37,
+        "state": "running",
+        "stage": "S200",
+        "visit": 6,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 6,
+          "H-192-198": 6,
+          "H-198-199": 6,
+          "H-199-200": 6,
+          "H-200-191": 2
+        },
+        "thread": null,
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 38,
+        "state": "running",
+        "stage": "S191",
+        "visit": 7,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 6,
+          "H-192-198": 6,
+          "H-198-199": 6,
+          "H-199-200": 6,
+          "H-200-191": 3
+        },
+        "thread": null,
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 39,
+        "state": "running",
+        "stage": "S192",
+        "visit": 7,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 7,
+          "H-192-198": 6,
+          "H-198-199": 6,
+          "H-199-200": 6,
+          "H-200-191": 3
+        },
+        "thread": null,
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 40,
+        "state": "running",
+        "stage": "S198",
+        "visit": 7,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 7,
+          "H-192-198": 7,
+          "H-198-199": 6,
+          "H-199-200": 6,
+          "H-200-191": 3
+        },
+        "thread": null,
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 41,
+        "state": "running",
+        "stage": "S199",
+        "visit": 7,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 7,
+          "H-192-198": 7,
+          "H-198-199": 7,
+          "H-199-200": 6,
+          "H-200-191": 3
+        },
+        "thread": null,
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 42,
+        "state": "running",
+        "stage": "S200",
+        "visit": 7,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 7,
+          "H-192-198": 7,
+          "H-198-199": 7,
+          "H-199-200": 7,
+          "H-200-191": 3
+        },
+        "thread": null,
+        "live": false,
+        "gate": null,
+        "reason": null
+      },
+      {
+        "step": 43,
+        "state": "parked",
+        "stage": "S200",
+        "visit": 7,
+        "crossings": {
+          "H-180-181": 1,
+          "H-181-191": 1,
+          "H-191-192": 7,
+          "H-192-198": 7,
+          "H-198-199": 7,
+          "H-199-200": 7,
+          "H-200-191": 3
+        },
+        "thread": null,
+        "live": false,
+        "gate": "pipeline-cap",
+        "reason": "the loop H-200-191 (S200 → S191) is at its cap of 3 rounds — 3 crossings already taken, so the row stops here for a decision"
+      }
+    ],
+    "stages_visited": 7,
+    "stages_declared": 24,
+    "one_tree": true,
+    "worktrees": [
+      "<repo>",
+      "<repo>/.worktrees/you-write-one-brief-from-ea1976"
+    ]
+  },
+  "same_document": true,
+  "checks": {
+    "document_one_tree": true,
+    "loop_one_tree": true,
+    "document_stages_visited": 10,
+    "document_stages_declared": 24,
+    "document_cap_crossings": 0,
+    "loop_cap_crossings": 3,
+    "loop_cap_park": true,
+    "loop_cap_released": true,
+    "loop_gate_parks": 2,
+    "loop_artifact_visits_differ": false,
+    "document_last_stage_settled": false
+  }
+}

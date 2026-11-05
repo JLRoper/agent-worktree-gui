@@ -1,0 +1,9 @@
+{
+  "pipeline": "poc-breaking-rounds",
+  "stage": "S191",
+  "visit": 4,
+  "round": 4,
+  "run": "run-1",
+  "seat": "pipeline-exec-stage-seat",
+  "outputs": []
+}

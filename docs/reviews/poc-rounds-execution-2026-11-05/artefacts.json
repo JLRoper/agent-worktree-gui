@@ -1,0 +1,159 @@
+{
+  "tree": "<repo>/.worktrees/you-write-one-brief-from-ea1976",
+  "run_id": "run-1",
+  "stages": {
+    "S191": [
+      {
+        "round": 1,
+        "file": "out/run-1/r1/round-brief.json",
+        "sha256": "ea429fd4477e6efd1d8a883ad6806bb95041c4b5a4f7369d26ebf16912117981",
+        "bytes": 160,
+        "kept": "artefacts/S191-r1-round-brief.json"
+      },
+      {
+        "round": 2,
+        "file": "out/run-1/r2/round-brief.json",
+        "sha256": "34c16f91f35c0708495c399753bd66da4062ebc8afe62ad78244844604a483e3",
+        "bytes": 160,
+        "kept": "artefacts/S191-r2-round-brief.json"
+      },
+      {
+        "round": 3,
+        "file": "out/run-1/r3/round-brief.json",
+        "sha256": "aad7a5aabbd53d2f1c2f5a61b7d6b2c0efd5a7594a021c64a4b0e9c09bb08a96",
+        "bytes": 160,
+        "kept": "artefacts/S191-r3-round-brief.json"
+      },
+      {
+        "round": 4,
+        "file": "out/run-1/r4/round-brief.json",
+        "sha256": "c6df3cea401c82a11d72372833b5b5a80d978bae90aaa7d5ab6d10fa05c8be17",
+        "bytes": 160,
+        "kept": "artefacts/S191-r4-round-brief.json"
+      },
+      {
+        "round": 5,
+        "file": "out/run-1/r5/round-brief.json",
+        "sha256": "e2545d8b4acf01497820688703ef4b3d29c60475129e7315a9e29eea1b194712",
+        "bytes": 160,
+        "kept": "artefacts/S191-r5-round-brief.json"
+      },
+      {
+        "round": 6,
+        "file": "out/run-1/r6/round-brief.json",
+        "sha256": "00f3d3449b79408fe5860e0a2fb937fec54a93d23b9d8f5763b58f8aef74a4cf",
+        "bytes": 160,
+        "kept": "artefacts/S191-r6-round-brief.json"
+      },
+      {
+        "round": 7,
+        "file": "out/run-1/r7/round-brief.json",
+        "sha256": "6d06b80d7d404a024f4e7483452d5b259b7843566600ed5f570609c19628dcf9",
+        "bytes": 160,
+        "kept": "artefacts/S191-r7-round-brief.json"
+      }
+    ],
+    "S192": [
+      {
+        "round": 1,
+        "file": "out/run-1/r1/Q1/records.jsonl",
+        "sha256": "0b4379f5dfbfca94c9d5391b940d7305599bb8ab3c512f96dd64efdd990cb158",
+        "bytes": 160,
+        "kept": "artefacts/S192-r1-Q1-records.jsonl"
+      },
+      {
+        "round": 2,
+        "file": "out/run-1/r2/Q1/records.jsonl",
+        "sha256": "f6fd4472017f850e6d6427f42daee1dfd3ac48d1dfe89655409afd0ed1c54f73",
+        "bytes": 160,
+        "kept": "artefacts/S192-r2-Q1-records.jsonl"
+      },
+      {
+        "round": 3,
+        "file": "out/run-1/r3/Q1/records.jsonl",
+        "sha256": "31d7a8003002390f5b651661888dc0d6d0a5ec8e6f606488436fc497a4a6df26",
+        "bytes": 160,
+        "kept": "artefacts/S192-r3-Q1-records.jsonl"
+      },
+      {
+        "round": 4,
+        "file": "out/run-1/r4/Q1/records.jsonl",
+        "sha256": "93ae7cf9fcbc9e75dcd4a1c43889411ab63db9e3a7172c1cf72835488e8d5a8c",
+        "bytes": 160,
+        "kept": "artefacts/S192-r4-Q1-records.jsonl"
+      },
+      {
+        "round": 5,
+        "file": "out/run-1/r5/Q1/records.jsonl",
+        "sha256": "3ad93de6d56b95f9806ac3cd3b2662bfece4bb60e1403af88fa30e317211ee2d",
+        "bytes": 160,
+        "kept": "artefacts/S192-r5-Q1-records.jsonl"
+      },
+      {
+        "round": 6,
+        "file": "out/run-1/r6/Q1/records.jsonl",
+        "sha256": "9134e1c763ad8dd7f75e2cc93369c1eadac3a8783212b1a96aa22a03c1f8ce59",
+        "bytes": 160,
+        "kept": "artefacts/S192-r6-Q1-records.jsonl"
+      },
+      {
+        "round": 7,
+        "file": "out/run-1/r7/Q1/records.jsonl",
+        "sha256": "f25371ec1beffd46611de43f01e57e60c2b7a968d01f0c5225e4f5bce37d3c8c",
+        "bytes": 160,
+        "kept": "artefacts/S192-r7-Q1-records.jsonl"
+      }
+    ],
+    "S200": [
+      {
+        "round": 1,
+        "file": "out/run-1/r1/verdict.json",
+        "sha256": "5e27900bae7107122ac6a60136f0f653113842f9a87797ae8f34187d1bdd7130",
+        "bytes": 160,
+        "kept": "artefacts/S200-r1-verdict.json"
+      },
+      {
+        "round": 2,
+        "file": "out/run-1/r2/verdict.json",
+        "sha256": "f32d62df7bb5ce761af9c1bf17a3f272909c6cb148e661ec6c3119717eced08d",
+        "bytes": 160,
+        "kept": "artefacts/S200-r2-verdict.json"
+      },
+      {
+        "round": 3,
+        "file": "out/run-1/r3/verdict.json",
+        "sha256": "4660825ae7003456811934469abbc421a90cfca18ad68563e7b5c843a3a25d84",
+        "bytes": 160,
+        "kept": "artefacts/S200-r3-verdict.json"
+      },
+      {
+        "round": 4,
+        "file": "out/run-1/r4/verdict.json",
+        "sha256": "8489f92312183a9d242223180ac1c6e44402817379be1fcd65c558f622fa7506",
+        "bytes": 160,
+        "kept": "artefacts/S200-r4-verdict.json"
+      },
+      {
+        "round": 5,
+        "file": "out/run-1/r5/verdict.json",
+        "sha256": "ec7d3c8c6482f712e25516917ffdf24c1f24edc11058b66331baac73dee0e7af",
+        "bytes": 160,
+        "kept": "artefacts/S200-r5-verdict.json"
+      },
+      {
+        "round": 6,
+        "file": "out/run-1/r6/verdict.json",
+        "sha256": "54693cc84966627c79c32415b3acf96e7b6602dbbcb3c02c276179b8e2e6a193",
+        "bytes": 160,
+        "kept": "artefacts/S200-r6-verdict.json"
+      },
+      {
+        "round": 7,
+        "file": "out/run-1/r7/verdict.json",
+        "sha256": "a4198321b15cab78561b2d3b69ba5dd0ffe1b39d9f13b3b3751d8c2bab3c352f",
+        "bytes": 160,
+        "kept": "artefacts/S200-r7-verdict.json"
+      }
+    ]
+  }
+}
