@@ -171,6 +171,97 @@ test("a stage that was just asked for is not asked for again until its run links
   assert.equal(retried.tasks[0].pipelineRun.stageRuns.filter((r) => r.stage === "S2").length, 1, "one entry per visit");
 });
 
+// A row can stand in `queued` OVER a stage whose run has already settled: the reader requeued it, a restart lost the
+// link, or a settle was written on a pass that could not move the row. The settle is a fact on the row's own ledger,
+// and re-running the stage is the one move that never advances the graph — so the driver reads it exactly as it reads
+// a `running` row whose run has just ended.
+test("a row left queued over a settled stage advances on the next pass instead of running that stage again", (t) => {
+  const dir = tree(t, { artifacts: [1] });
+  const settled = row({
+    worktree: dir,
+    state: "queued",
+    reason: "back in the queue",
+    pipelineRun: {
+      pipeline: "two",
+      stage: "S1",
+      enteredAt: "2026-11-03T15:00:00.000Z",
+      visits: { S1: 1 },
+      stageRuns: [
+        { id: "two/S1#1", stage: "S1", visit: 1, at: "2026-11-03T15:00:00.000Z", thread: "T1", job: "j1", status: "done", decision: null },
+      ],
+    },
+  });
+
+  const out = drive([settled]);
+  assert.equal(out.changed.length, 1);
+  assert.equal(out.changed[0].from, "queued", "the row was already in the queue; the move is forward, not out of it");
+  assert.equal(out.changed[0].to, "queued");
+  assert.equal(out.changed[0].stage, "S2");
+
+  const task = out.tasks[0];
+  assert.equal(task.pipelineRun.stage, "S2", "the graph's next stage, not the one that already ran");
+  assert.equal(task.pipelineRun.crossings.h1, 1);
+  assert.deepEqual(task.pipelineRun.visits, { S1: 1, S2: 1 }, "no second visit to the stage that settled");
+  assert.equal(out.starts.length, 1);
+  assert.equal(out.starts[0].stage, "S2", "the next stage is started, and the settled one is not asked for again");
+  const firstRun = task.pipelineRun.stageRuns.find((r) => r.stage === "S1");
+  assert.equal(firstRun.decision.trigger, "stage-settled", "the settle was READ: the entry now carries its decision");
+  assert.equal(firstRun.status, "done");
+});
+
+test("a queued row whose current stage never started is not advanced: it is started in place", (t) => {
+  const dir = tree(t, { artifacts: [] });
+  const fresh = row({
+    worktree: dir,
+    state: "queued",
+    pipelineRun: {
+      pipeline: "two",
+      stage: "S2",
+      enteredAt: "2026-11-03T15:00:00.000Z",
+      visits: { S1: 1, S2: 1 },
+      stageRuns: [
+        { id: "two/S1#1", stage: "S1", visit: 1, at: "2026-11-03T15:00:00.000Z", thread: "T1", job: "j1", status: "done", decision: { by: "panel", trigger: "stage-settled", code: null, at: CLOCK, fact: {}, reason: "already read" } },
+      ],
+    },
+  });
+
+  const out = drive([fresh]);
+  assert.equal(out.tasks[0].pipelineRun.stage, "S2", "there is no settle at S2 to read, so the row does not move");
+  assert.equal(out.starts.length, 1);
+  assert.equal(out.starts[0].stage, "S2");
+});
+
+test("a queued row over a settled stage still parks on the cap it has reached", (t) => {
+  const looped = bundleOf(
+    pipeline({
+      stages: [stage(1), stage(2)],
+      handoffs: [{ id: "h-back", from: "S2", to: "S1", artifact: "artifact-2", kind: "loop", cap: "1 round" }],
+    }),
+  );
+  const dir = tree(t, { artifacts: [2] });
+  const leftover = row({
+    worktree: dir,
+    state: "queued",
+    pipelineRun: {
+      pipeline: "two",
+      stage: "S2",
+      enteredAt: "2026-11-03T15:00:00.000Z",
+      visits: { S1: 1, S2: 1 },
+      crossings: { "h-back": 1 },
+      stageRuns: [
+        { id: "two/S2#1", stage: "S2", visit: 1, at: "2026-11-03T15:00:00.000Z", thread: "T1", job: "j1", status: "done", decision: null },
+      ],
+    },
+  });
+
+  const out = drive([leftover], { bundle: looped });
+  assert.equal(out.tasks[0].state, "parked", "the settle is read, and what it reads is a cap");
+  assert.equal(out.changed[0].to, "parked");
+  assert.equal(out.tasks[0].pipelineRun.waitingFor.kind, "cap");
+  assert.equal(out.tasks[0].pipelineRun.waitingFor.edge, "h-back");
+  assert.equal(out.starts.length, 0, "a capped loop is not started: the park is the answer");
+});
+
 test("a capped loop advances below its cap and stops AT it, recording the edge the release needs", (t) => {
   const looped = bundleOf(
     pipeline({
