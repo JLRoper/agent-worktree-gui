@@ -1,11 +1,18 @@
 // A gateway build that has the `clarify` toolset but not the Runs API half of the contract offers
 // the tool to the model and then refuses every call with the tool's own message ("Clarify tool is
 // not available in this execution context"). This proves the panel's answer to that, through the
-// SHIPPED classes: the refusal is observed on a run's stream, the capability is recorded, and the
-// next turn's body — the assistant's own turn and every worker alike, they post through one body —
-// tells the run to ask in prose instead of spending a call that can only fail. Then the positive
-// control: a `clarify.request` on a later run proves the round trip works, and the record clears, so
-// the hint stops appearing. An unknown build is never lectured.
+// SHIPPED classes: the ROUTE is probed before a run's body is composed, and the sentence that body
+// carries is conditional on the answer —
+//
+//   no answer endpoint            -> "ask it in prose and end the turn", on the very first run;
+//   an endpoint that answers      -> "call the tool and stay parked", so a worker does not stop;
+//   a refusal seen on a stream    -> the prose sentence, because a route with no callback delivers
+//                                    nothing (the refusal outranks a present route);
+//   nothing observed or probed    -> no sentence at all, which is the behaviour this panel had.
+//
+// The earlier version of this gate asserted that a `clarify.request` made the prompt say NOTHING.
+// That was true while the panel could only learn "broken": with a probe it can also learn "works",
+// and the point of the positive sentence is a worker that parks instead of ending its turn.
 //
 //   node tools/verify-clarify.mjs
 //
@@ -74,7 +81,44 @@ const fresh = () => createClarifyCapability();
   // A bridged clarify arrives with a server prefix.
   check("mcp__server__clarify is recognised", isClarifyTool("mcp__github__clarify"), true);
   check("a clarify.request is the proof it works", cap.observeEvent({ event: "clarify.request", prompt_id: "p", question: "?" }), true);
-  check("...and then the prompt says nothing", cap.instruction(), "");
+  check("...and the prompt now says to call the tool", /call the clarify tool/.test(cap.instruction()), true);
+  check("...and stops telling it to ask in prose", /ask it in prose/.test(cap.instruction()), false);
+}
+
+{
+  // The route probe: the other half of the evidence, and the one that makes the instruction
+  // conditional BEFORE any run has asked anything. A fresh record claims nothing; a probe settles it.
+  const cap = fresh();
+  check("a fresh record has no route verdict", cap.state().route, null);
+  check("...and still says nothing in a prompt", cap.instruction(), "");
+
+  const up = fresh();
+  check("a probed-present route changes the answer", up.noteRoute({ present: true, evidence: "HTTP 404 run_not_found" }), true);
+  check("...and is recorded", up.state().route, true);
+  check("...and the run is told to call the tool", /call the clarify tool/.test(up.instruction()), true);
+  check("...and not to end its turn on the question", /Do not end your turn on the question in prose/.test(up.instruction()), true);
+  check("...and the same verdict twice is not a second change", up.noteRoute({ present: true }), false);
+
+  const down = fresh();
+  down.noteRoute({ present: false, evidence: "HTTP 404 no envelope" });
+  check("a probed-absent route is recorded", down.state().route, false);
+  check("...and the run is told to ask in prose", /ask it in prose/.test(down.instruction()), true);
+
+  // A route with no callback: the endpoint answers, the TOOL refuses. The refusal is the stronger
+  // evidence — the run must not be sent at a tool that cannot deliver.
+  const stuck = fresh();
+  stuck.noteRoute({ present: true });
+  stuck.observeEvent({ event: "tool.completed", tool: "clarify", error: true, preview: CLARIFY_REFUSAL });
+  check("a refusal outranks a present route", /ask it in prose/.test(stuck.instruction()), true);
+  check("...and the tool is still named as off limits", /Do not call the clarify tool/.test(stuck.instruction()), true);
+
+  // An upgrade is a different build: both records clear, in either direction.
+  const v = fresh();
+  v.noteRoute({ present: true });
+  v.noteVersion("build-a");
+  v.noteVersion("build-b");
+  check("a version change clears the route record", v.state().route, null);
+  check("...and the prompt goes quiet again", v.instruction(), "");
 }
 
 check("previewRequest carries the hint when given one", /in prose/.test(previewRequest({ prompt: "x", clarifyInstruction: "ask it in prose" }).body.input), true);
@@ -96,6 +140,11 @@ const scripts = {
 };
 
 const bodies = [];
+// Whether this stub build carries the answer route. It is flipped between the two panel instances
+// below, which is the only way to prove the instruction is CONDITIONAL: same panel, same stub, one
+// route added. A build without it answers the panel's probe with a bare 404 (no envelope); a build
+// with it answers the way the real gateway does for a run id that does not exist.
+let routePresent = false;
 const server = createServer((req, res) => {
   const url = new URL(req.url, "http://127.0.0.1");
   const json = (code, obj) => {
@@ -103,7 +152,17 @@ const server = createServer((req, res) => {
     res.end(JSON.stringify(obj));
   };
   if (url.pathname === "/v1/capabilities") {
+    // Deliberately NO clarify feature flag: the route's presence is what the panel must read, and the
+    // build this was measured against advertises nothing while answering the route.
     return json(200, { object: "hermes.api_server.capabilities", version: "stub-build-1", features: { run_submission: true, run_events_sse: true } });
+  }
+  const clarify = /^\/v1\/runs\/([^/]+)\/clarify$/.exec(url.pathname);
+  if (clarify && req.method === "POST") {
+    if (!routePresent) {
+      res.writeHead(404, { "Content-Type": "text/plain" });
+      return res.end("404: Not Found");
+    }
+    return json(404, { error: { message: `Run not found: ${clarify[1]}`, type: "invalid_request_error", code: "run_not_found" } });
   }
   const events = /^\/v1\/runs\/([^/]+)\/events$/.exec(url.pathname);
   if (events) {
@@ -153,10 +212,13 @@ try {
   const spawn = async (thread) =>
     jobs.create({ prompt: `turn for ${thread}`, thread, existing: true, worktree: false, anchorCwd: false, cwd: scratch });
 
-  // 1. Nothing observed yet: the panel behaves exactly as it did before this check existed.
+  // 1. This build has no answer endpoint, and the panel knows it BEFORE the first turn: the probe
+  //    answered with a bare 404, so the run is told to ask in prose without a failed call first.
   const j1 = await spawn("t1");
   check("run 1 posts a body", bodies.length, 1);
-  check("...with no clarify hint while the build is unproven", /ask it in prose/.test(bodies[0].input), false);
+  check("the route probe settled the build first", jobs.transportInfo().clarify.route, false);
+  check("...so run 1 is told to ask in prose", /ask it in prose/.test(bodies[0].input), true);
+  check("...and is never told to call the tool", /comes back into this same turn/.test(bodies[0].input), false);
 
   await settle(jobs, j1.id);
   check("the refusal on run 1's stream was recorded", jobs.transportInfo().clarify.available, false);
@@ -176,8 +238,37 @@ try {
   // 3. Positive control: the hint stops appearing once the build has proved itself.
   const j3 = await spawn("t3");
   check("run 3 posts a body", bodies.length, 3);
-  check("...with the hint gone again", /ask it in prose/.test(bodies[2].input), false);
+  check("...with the prose hint gone again", /ask it in prose/.test(bodies[2].input), false);
   await settle(jobs, j3.id);
+
+  // 4. The other build: the SAME stub with the answer route added, a fresh panel instance (its probe
+  //    memo is per instance, which is what makes this a different build rather than a cached answer).
+  //    No run here ever calls clarify — and the first body still tells the worker to call it. That is
+  //    the whole feature: a worker that needs a decision parks with a question instead of stopping.
+  routePresent = true;
+  const jobs2 = new Jobs({
+    config: {
+      apiServer: { url: base, key: "test-key" },
+      jobsFile: path.join(scratch, "jobs2.json"),
+      defaultCwd: scratch,
+    },
+  });
+  try {
+    const j4 = await jobs2.create({ prompt: "turn for t4", thread: "t4", existing: true, worktree: false, anchorCwd: false, cwd: scratch });
+    check("a build with the route proves it before the body", jobs2.transportInfo().clarify.route, true);
+    check("run 4 posts a body", bodies.length, 4);
+    check("...and it is told to CALL the tool", /call the clarify tool/.test(bodies[3].input), true);
+    check("...and to stay parked rather than end the turn", /Do not end your turn on the question in prose/.test(bodies[3].input), true);
+    check("...and NOT to ask in prose", /ask it in prose/.test(bodies[3].input), false);
+    check("...and nothing is claimed about a refusal", jobs2.transportInfo().clarify.available, null);
+    await settle(jobs2, j4.id);
+  } finally {
+    clearTimeout(jobs2.persistTimer);
+    for (const j of jobs2.list() || []) {
+      clearTimeout(j.timer);
+      clearTimeout(j.poller);
+    }
+  }
 } finally {
   server.close();
   // The store writes on a timer and each run holds its own; stop those before the scratch directory is
