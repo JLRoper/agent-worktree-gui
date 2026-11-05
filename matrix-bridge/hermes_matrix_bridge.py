@@ -23,12 +23,15 @@ from __future__ import annotations
 import argparse
 import asyncio
 import atexit
+import json
 import logging
 import os
 import re
 import shutil
 import sys
 import time
+import urllib.error
+import urllib.request
 from collections import deque
 from pathlib import Path
 
@@ -81,6 +84,14 @@ OUTBOX_PATH     = Path(os.environ.get("BRIDGE_OUTBOX", "") or
                        (Path(__file__).resolve().parent / "outbox.txt"))
 OUTBOX_DRAIN    = float(os.environ.get("OUTBOX_DRAIN", "5"))   # poll gap, seconds
 
+# The panel that owns the policy and the reminder list. The panel hands this to the child it spawns, derived
+# from the port it actually bound; the default is the panel's own default port, for a foreground run. The
+# token is ONLY for a panel on another host — a loopback request is the panel's own exemption, so it stays
+# empty on the normal install and is never echoed by --self-test.
+PANEL_URL       = os.environ.get("WTGUI_PANEL_URL", "http://127.0.0.1:7331").rstrip("/")
+PANEL_TOKEN     = os.environ.get("WTGUI_PANEL_TOKEN", "")
+PANEL_TIMEOUT   = float(os.environ.get("WTGUI_PANEL_TIMEOUT", "5"))
+
 # ─────────────────────────────────────────────────────────────────────────────
 
 LOG = logging.getLogger("bridge")
@@ -110,15 +121,131 @@ def find_hermes() -> str | None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 2. CORE INFERENCE — shell out to the local Hermes CLI
+# 2. THE PANEL'S POLICY AND REMINDERS — read on EVERY turn, never cached
+# ─────────────────────────────────────────────────────────────────────────────
+# The reader edits tone, quiet hours and routing in the panel's Bridge tab (POST /api/matrix/policy) and expects
+# the next message to obey. So the policy is fetched ONCE PER TURN and appended to that turn's prompt, and no
+# copy of it is kept here between turns: a module-level cache would obey words the reader had already changed.
+#
+# The reminder list (GET /api/matrix/reminders) is the bridge's OWN — not an assistant's watches, and not a task
+# queue. It is read the same way, from the same panel, and carried in the same preamble the panel builds. The
+# payload also carries the assistants' watches as a READ-ONLY projection; the bridge may mention one, and it has
+# no code path that writes one, which is deliberate — a watch is a thread plus a state and wake, and none of
+# that is the bridge's to do.
+#
+# A FAILED FETCH IS NOT SWALLOWED. `fetch_policy` returns `ok: False` with the reason instead of raising, the
+# prompt says the policy is missing, and `reply_with_context` puts the failure at the TOP of the reply that goes
+# to the phone. Answering on the last policy the process saw would look exactly like obeying the current one.
+PANEL_POLICY_ROUTE = "/api/matrix/policy"
+PANEL_REMINDERS_ROUTE = "/api/matrix/reminders"
+
+
+def panel_reason(exc: Exception) -> str:
+    """One line naming why a panel fetch failed — safe to put in a chat reply."""
+    text = " ".join(f"{type(exc).__name__}: {exc}".split())
+    return text[:240] or "no reason given"
+
+
+def panel_get(route: str) -> dict:
+    """One GET against the panel. Raises on any failure; each caller decides what its turn does about it."""
+    if not PANEL_URL:
+        raise RuntimeError("WTGUI_PANEL_URL is empty — there is no panel to read the policy from")
+    url = f"{PANEL_URL}{route}"
+    headers = {"Accept": "application/json"}
+    if PANEL_TOKEN:
+        headers["x-panel-token"] = PANEL_TOKEN
+    request = urllib.request.Request(url, headers=headers)
+    with urllib.request.urlopen(request, timeout=PANEL_TIMEOUT) as response:
+        status = int(getattr(response, "status", 200) or 200)
+        raw = response.read()
+    if status != 200:
+        raise RuntimeError(f"HTTP {status} from {url}")
+    return json.loads(raw.decode("utf-8") or "{}")
+
+
+def _stamp() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%S")
+
+
+def fetch_policy(opener=None) -> dict:
+    """The panel's policy, fetched NOW. `text` is the preamble the panel built, verbatim."""
+    get = opener or panel_get
+    try:
+        payload = get(PANEL_POLICY_ROUTE) or {}
+        text = str(payload.get("preamble") or "")
+        if not text:
+            # An older panel (before `preamble` rode on the payload) still serves `text`. The heading here is
+            # the panel's wording; the panel's own build is preferred whenever it is present.
+            body = str(payload.get("text") or "").strip()
+            if body:
+                text = ("## How the reader wants the Matrix bridge to speak to them\n\n"
+                        f"{body}\n")
+        return {"ok": True, "text": text, "error": None, "source": payload.get("source"),
+                "chars": len(text), "at": _stamp()}
+    except Exception as exc:                                    # noqa: BLE001 — a turn runs without it
+        return {"ok": False, "text": "", "error": panel_reason(exc), "source": None,
+                "chars": 0, "at": _stamp()}
+
+
+def fetch_reminders(opener=None) -> dict:
+    """The bridge's own reminders plus the assistants' watches, as the panel projects them."""
+    get = opener or panel_get
+    try:
+        payload = get(PANEL_REMINDERS_ROUTE) or {}
+        return {"ok": True, "text": str(payload.get("preamble") or ""), "error": None,
+                "reminders": len(payload.get("reminders") or []),
+                "watches": len(payload.get("watches") or []),
+                "watchesReadOnly": bool(payload.get("watchesReadOnly", True)),
+                "at": _stamp()}
+    except Exception as exc:                                    # noqa: BLE001 — a turn runs without it
+        return {"ok": False, "text": "", "error": panel_reason(exc), "reminders": 0, "watches": 0,
+                "watchesReadOnly": True, "at": _stamp()}
+
+
+def turn_context(opener=None) -> dict:
+    """Everything the next turn carries from the panel, read at the moment the turn starts.
+
+    There is no memo and no module-level copy: two calls are two fetches. `opener` is injectable so a test can
+    prove that with a counter, and so a caller can hand in its own transport without a second code path.
+    """
+    return {"policy": fetch_policy(opener), "reminders": fetch_reminders(opener), "at": _stamp()}
+
+
+def reply_with_context(answer: str, context: dict | None) -> str:
+    """The bridge's words around the model's — where a failed fetch becomes visible on the phone."""
+    if not context:
+        return answer
+    policy = context.get("policy") or {}
+    reminders = context.get("reminders") or {}
+    notes = []
+    if policy.get("ok") is False:
+        notes.append(
+            f"⚠ I could not read the panel policy this turn ({policy.get('error')}) — this answer runs WITHOUT "
+            "your tone, quiet-hours and routing instructions. Check that the panel is running, then send again."
+        )
+    if reminders.get("ok") is False:
+        notes.append(f"⚠ I could not read your reminders either ({reminders.get('error')}).")
+    if not notes:
+        return answer
+    return "\n".join(notes) + "\n\n" + answer
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 3. CORE INFERENCE — shell out to the local Hermes CLI
 # ─────────────────────────────────────────────────────────────────────────────
 
 _SESSION_LINE = re.compile(r"^\s*session_id:\s*\S+\s*$", re.MULTILINE)
 _ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
 
 
-def build_prompt(text: str, history: list[tuple[str, str]]) -> str:
-    """One-shot Hermes has no memory of prior turns, so replay recent context."""
+def build_prompt(text: str, history: list[tuple[str, str]], context: dict | None = None) -> str:
+    """One-shot Hermes has no memory of prior turns, so replay recent context.
+
+    `context` is THIS turn's panel read (`turn_context`): the policy preamble the reader saved, and the
+    reminder/watches preamble the panel built. It is passed in rather than fetched here so the same object can
+    be judged afterwards — a failed fetch has to reach the reply, and a function that swallowed its own failure
+    could not tell the caller about it.
+    """
     parts = [
         "You are Hermes, answering over a Matrix chat bridge from the user's phone (Element X).",
         "Reply conversationally in plain text: no tables, no ANSI, no 'session_id' footer.",
@@ -131,6 +258,25 @@ def build_prompt(text: str, history: list[tuple[str, str]]) -> str:
         f"ack: finish the work and put the full result in your final answer. The bridge waits",
         f"up to {int(HERMES_TIMEOUT // 60)} minutes for that answer and sends it when you exit.",
     ]
+    if context:
+        policy = context.get("policy") or {}
+        reminders = context.get("reminders") or {}
+        if policy.get("ok") and str(policy.get("text") or "").strip():
+            # The reader's own words, verbatim and ahead of everything else: this is the instruction the panel
+            # saved, and it outranks the style lines above wherever they disagree.
+            parts += ["", str(policy["text"]).rstrip()]
+        elif policy.get("ok") is False:
+            parts += [
+                "",
+                "## THE PANEL POLICY COULD NOT BE READ THIS TURN",
+                f"The fetch failed: {policy.get('error')}",
+                "Answer WITHOUT the reader's tone, quiet-hours and routing instructions, and SAY SO in your reply "
+                "rather than pretending you followed them.",
+            ]
+        if reminders.get("ok") and str(reminders.get("text") or "").strip():
+            parts += ["", str(reminders["text"]).rstrip()]
+        elif reminders.get("ok") is False:
+            parts += ["", f"(The reminder list and the watches could not be read this turn: {reminders.get('error')}.)"]
     if history:
         parts.append("[recent conversation, oldest first]")
         for role, msg in history:
@@ -141,13 +287,18 @@ def build_prompt(text: str, history: list[tuple[str, str]]) -> str:
     return "\n".join(parts)
 
 
-async def ask_hermes(text: str, history: list[tuple[str, str]] | None = None) -> str:
-    """Send one prompt to Hermes and return the cleaned answer."""
+async def ask_hermes(text: str, history: list[tuple[str, str]] | None = None,
+                     context: dict | None = None) -> str:
+    """Send one prompt to Hermes and return the cleaned answer.
+
+    The panel read rides into the prompt here and the failure notice rides out on the answer: every return path
+    below goes through `reply_with_context`, so no answer can quietly omit a policy it could not read.
+    """
     binary = find_hermes()
     if not binary:
         raise RuntimeError("Hermes CLI not found; set HERMES_BIN in bridge.env")
 
-    cmd = [binary, "chat", "-q", build_prompt(text, history or []), "--oneshot", "-Q"]
+    cmd = [binary, "chat", "-q", build_prompt(text, history or [], context), "--oneshot", "-Q"]
     if HERMES_TOOLSETS:
         cmd += ["-t", HERMES_TOOLSETS]
 
@@ -167,8 +318,11 @@ async def ask_hermes(text: str, history: list[tuple[str, str]] | None = None) ->
     except asyncio.TimeoutError:
         proc.kill()
         await proc.wait()
-        return (f"(Hermes hit the {int(HERMES_TIMEOUT)}s wall and was stopped mid-task. "
-                "Say 'retry' or tell me to pick it up again.)")
+        return reply_with_context(
+            f"(Hermes hit the {int(HERMES_TIMEOUT)}s wall and was stopped mid-task. "
+            "Say 'retry' or tell me to pick it up again.)",
+            context,
+        )
 
     out = _ANSI.sub("", raw_out.decode("utf-8", "replace")).strip()
     err = _ANSI.sub("", raw_err.decode("utf-8", "replace")).strip()
@@ -176,8 +330,8 @@ async def ask_hermes(text: str, history: list[tuple[str, str]] | None = None) ->
 
     if not out:
         tail = "\n".join(err.splitlines()[-6:]) or f"exit code {proc.returncode}"
-        return f"(Hermes returned nothing — {tail})"
-    return out
+        return reply_with_context(f"(Hermes returned nothing — {tail})", context)
+    return reply_with_context(out, context)
 
 
 def chunk_text(text: str, limit: int = MAX_REPLY_CHARS) -> list[str]:
@@ -202,7 +356,7 @@ def chunk_text(text: str, limit: int = MAX_REPLY_CHARS) -> list[str]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 3. MATRIX CLIENT
+# 4. MATRIX CLIENT
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _pid_alive(pid: int) -> bool:
@@ -398,7 +552,10 @@ async def worker() -> None:
             await client.room_typing(room_id, True, timeout=TYPING_TIMEOUT)
             typing_task = asyncio.create_task(keep_typing(room_id))
             t0 = time.time()
-            answer = await ask_hermes(text, list(HISTORY))
+            # Read the panel NOW, once for this turn: the policy the reader may have saved a second ago, and the
+            # reminder list it keeps. `turn_context` has no cache, so the next message reads the panel again.
+            context = turn_context()
+            answer = await ask_hermes(text, list(HISTORY), context)
             elapsed = time.time() - t0
             HISTORY.append(("User", text))
             HISTORY.append(("Hermes", answer))
@@ -580,6 +737,8 @@ def self_test() -> int:
         ("HOMESERVER", HOMESERVER), ("USERNAME", USERNAME),
         ("PASSWORD", "set" if PASSWORD and "CHANGE_ME" not in PASSWORD else "MISSING"),
         ("ROOM_ID", ROOM_ID), ("DEVICE_ID", DEVICE_ID), ("STORE_DIR", STORE_DIR),
+        # The URL only, never the token: this output is pasted into tickets. --self-test still contacts nothing.
+        ("PANEL_URL", PANEL_URL or "MISSING — no policy can be read"),
     ):
         print(f"  {key:<11}= {val}")
     if "CHANGE_ME" in PASSWORD:

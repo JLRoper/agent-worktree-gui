@@ -61,6 +61,11 @@ import { MatrixBridge, matrixBlock, matrixConfig, matrixPatchFrom } from "./lib/
 // The Bridge tab's policy: one markdown file in the panel's state folder, served at /api/matrix/policy and
 // carried into the bridge turn by the next reader. It is NOT bridge.env and never sits beside the script.
 import { MatrixPolicyStore, matrixPolicyTemplate } from "./lib/matrix-policy.js";
+// The bridge's OWN reminders, and the assistants' watches as a READ-ONLY projection of them. The list is the
+// panel's (`matrix-reminders.json`); the bridge reads it over GET and carries it into the turn, and the POST route
+// here can add, complete, re-word and delete a reminder but can never write a watch (lib/matrix-reminders.js
+// `apply` refuses those keys before it touches the file).
+import { MatrixRemindersStore } from "./lib/matrix-reminders.js";
 import { readPermissions } from "./lib/gateway-permissions.js";
 import {
   approvalState, writeApprovalTimeout, APPROVAL_TIMEOUT_MIN, APPROVAL_TIMEOUT_MAX,
@@ -1111,6 +1116,14 @@ const matrixPolicy = new MatrixPolicyStore({
   file: statePaths(config).matrixPolicyFile,
   env: process.env,
   template: matrixPolicyTemplate(),
+});
+
+// The bridge's reminders, beside that policy and distinct from it: the policy is how it speaks, this is what it
+// was asked to remember. `watches` is a GETTER over the Assistant's own list, so the read-only view is current on
+// every request; nothing in this store can write it, and the route refuses a body that asks it to.
+const matrixReminders = new MatrixRemindersStore({
+  file: statePaths(config).matrixRemindersFile,
+  watches: () => assistant?.watches || [],
 });
 
 // ---- the Element room: every wait on a person, over the bridge above -----------------------------------------
@@ -3023,6 +3036,9 @@ const server = createServer(async (req, res) => {
         bridge: matrixBridge.state(),
         element: element.state(),
         policy: matrixPolicy.payload(),
+        // The bridge's reminders and the read-only watches view ride in the same answer, so the pane draws the
+        // connection, the policy and the list it keeps from one moment instead of four.
+        reminders: matrixReminders.payload(),
         gateway: jobs.transportInfo(),
       });
     }
@@ -3046,6 +3062,35 @@ const server = createServer(async (req, res) => {
       } catch (e) {
         const code = (e && e.code) === "policy-too-long" ? 413 : (e && e.code) === "policy-stale" ? 409 : 400;
         return sendJson(res, code, { error: String((e && e.message) || e), ...matrixPolicy.payload() });
+      }
+    }
+
+    // The bridge's OWN reminder list, beside the policy and deliberately a different file: the policy is how the
+    // bridge speaks, these are things the reader asked it to remember. Distinct from an assistant's watches, which
+    // are a THREAD plus a state and wake an assistant — a reminder has neither. GET is one answer: the reminders,
+    // their counts, and the assistants' watches as a READ-ONLY projection (`watchesReadOnly`, and `readOnly` on
+    // every row). POST is the page's write — add, complete, reopen, re-word, delete — and `MatrixRemindersStore.apply`
+    // refuses any body naming a watch field BEFORE it touches the file, so this route can never become a second
+    // writer for lib/assistant.js's list. 413 the list is full · 404 that id is gone · 400 every other refusal,
+    // the read-only one included: a bad body is not a missing permission.
+    if (route === "/api/matrix/reminders" && req.method === "GET") {
+      return sendJson(res, 200, matrixReminders.payload());
+    }
+
+    if (route === "/api/matrix/reminders" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => null);
+      if (!body || typeof body !== "object" || Array.isArray(body)) {
+        return sendJson(res, 400, {
+          ...matrixReminders.payload(),
+          error: 'send a JSON object — { "text": "…" } to add, { id, done: true } to complete, { id, remove: true } to delete',
+        });
+      }
+      try {
+        return sendJson(res, 200, matrixReminders.apply(body));
+      } catch (e) {
+        const code = (e && e.code) === "reminders-full" ? 413 : (e && e.code) === "reminder-not-found" ? 404 : 400;
+        return sendJson(res, code, { ...matrixReminders.payload(), error: String((e && e.message) || e) });
       }
     }
 

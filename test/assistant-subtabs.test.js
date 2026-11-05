@@ -263,7 +263,7 @@ test("the top row is the assistant and the panel's panes, and the session's row 
   assert.match(float, /The panel's per-rule escalation table and the sentry's clock are in the Watchdog tab/);
   assert.match(float, /data-as-tab="watchdog"/, "the panel's own tab is in the float's row");
   assert.match(float, /data-as-tab="bridge"/, "the Matrix/Element bridge, which is nobody's session, is in the float's row too");
-  assert.match(float, /data-pane="bridge" id="as-bridge"/, "and it has a pane of its own for its four sections");
+  assert.match(float, /data-pane="bridge" id="as-bridge"/, "and it has a pane of its own for its sections");
   // The counts live on the sub-tabs the selected assistant's lists are on, not on a panel-wide tab above them.
   assert.match(float, /data-as-subtab="alerts"[\s\S]*?id="as-alert-n"/, "the alert count is on the Alerts sub-tab");
   assert.match(float, /data-as-subtab="watches"[\s\S]*?id="as-watch-n"/, "the watch count is on the Watches sub-tab");
