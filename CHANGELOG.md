@@ -17,17 +17,17 @@ has no tag.
 
 ## v1.17.2 — 2026-11-05 · 4 commits
 
-[`fa294b7`](https://github.com/JLRoper/agent-worktree-gui/commit/fa294b7c3ab61be86cae1c94a84177c91297fced) · [compare v1.17.1...v1.17.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.17.1...v1.17.2)
+[`75dc3a8`](https://github.com/JLRoper/agent-worktree-gui/commit/75dc3a8e659b523af5215733a62b66a7cb8e5332) · [compare v1.17.1...v1.17.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.17.1...v1.17.2)
 
 ### Docs & tests
 
 - docs: the proof reproduces against the panel, not a scratch script ([`dc5d4ca`](https://github.com/JLRoper/agent-worktree-gui/commit/dc5d4ca6983ef19b0e5954783fbff42f8ac3ee54))
 - docs: render the changelog's missing v1.17.1 section ([`f30f6d2`](https://github.com/JLRoper/agent-worktree-gui/commit/f30f6d226aff9c13f86bef637de10237078218af))
-- docs: the changelog lands with the bump, not after the merge ([`b7f2185`](https://github.com/JLRoper/agent-worktree-gui/commit/b7f2185b48485d8ad5f5db82c9e9f3bbadee4a6d))
+- docs: the changelog lands with the bump, not after the merge ([`bb90adb`](https://github.com/JLRoper/agent-worktree-gui/commit/bb90adb32c6b74ef512156251df2c0fd7fc33d77))
 
 ### Other
 
-- chore: 1.17.2 — the version this landing carries ([`fa294b7`](https://github.com/JLRoper/agent-worktree-gui/commit/fa294b7c3ab61be86cae1c94a84177c91297fced))
+- chore: 1.17.2 — the version this landing carries ([`75dc3a8`](https://github.com/JLRoper/agent-worktree-gui/commit/75dc3a8e659b523af5215733a62b66a7cb8e5332))
 
 ## v1.17.1 — 2026-11-05 · 6 commits
 
