@@ -1,0 +1,700 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The pipeline flow dialog, read at four lengths</title>
+
+<style>
+  :root {
+    --bg: #0e1116; --panel: #151a21; --panel2: #1b212a; --line: #2a3340; --text: #e6e9ef; --dim: #9aa5b4;
+    --dimmer: #6f7a89; --green: #7ee787; --red: #ff9c94; --amber: #f0c674; --blue: #9ecbff; --purple: #c8a6ff;
+    --mono: ui-monospace, "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+    --ui: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body { margin: 0; color: var(--text); font: 15px/1.62 var(--ui); }
+  .wrap { max-width: 1640px; margin: 0 auto; padding: 30px 24px 72px; }
+  p, ul, ol, nav, pre, .tw, .lead, .verdict, .warn, .right, .box { max-width: 1120px; }
+  a { color: var(--blue); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  h1 { font-size: 27px; line-height: 1.22; margin: 4px 0 8px; letter-spacing: -0.2px; }
+  h2 { font-size: 19px; margin: 44px 0 12px; padding-top: 16px; border-top: 1px solid var(--line); }
+  h3 { font-size: 15.5px; margin: 26px 0 8px; color: var(--blue); }
+  h4 { font-size: 12px; margin: 18px 0 6px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.07em; }
+  p { margin: 9px 0; }
+  ul, ol { margin: 8px 0 8px 22px; padding: 0; }
+  li { margin: 5px 0; }
+  code, .mono { font-family: var(--mono); font-size: 12.8px; }
+  code { background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+  .kicker { color: var(--dimmer); font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; }
+  .sub { color: var(--dim); font-size: 16px; margin: 0 0 14px; max-width: 980px; }
+  .meta { color: var(--dim); font-size: 12.5px; }
+  .meta code { font-size: 12px; }
+  .anchor { font-family: var(--mono); font-size: 12.2px; color: var(--purple); background: #1d1826;
+            border: 1px solid #3d3352; border-radius: 4px; padding: 0 5px; white-space: nowrap; }
+  nav { margin: 18px 0 8px; padding: 12px 16px; background: var(--panel); border: 1px solid var(--line);
+        border-radius: 8px; font-size: 13px; line-height: 1.9; }
+  nav b { color: var(--dimmer); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.1em; }
+  nav a { margin: 0 10px 0 0; white-space: nowrap; }
+  .lead { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--blue);
+          border-radius: 8px; padding: 14px 18px; margin: 18px 0; }
+  .lead p { margin: 7px 0; }
+  .verdict { background: #13261a; border: 1px solid #2f5f38; border-left: 4px solid var(--green);
+             border-radius: 8px; padding: 13px 18px; margin: 18px 0; }
+  .verdict h4 { color: var(--green); margin: 0 0 4px; }
+  .warn { background: #2a2414; border: 1px solid #5c4d22; border-left: 4px solid var(--amber);
+          border-radius: 8px; padding: 12px 18px; margin: 16px 0; }
+  .warn h4 { color: var(--amber); margin: 0 0 4px; }
+  .right { background: #16211b; border: 1px solid #2f4a38; border-left: 4px solid #7ee787;
+           border-radius: 8px; padding: 13px 18px; margin: 18px 0; }
+  .right h4 { color: #7ee787; margin: 0 0 4px; }
+  .box { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 18px; margin: 14px 0; }
+  .tw { overflow-x: auto; margin: 10px 0 16px; border: 1px solid var(--line); border-radius: 8px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { background: var(--panel2); color: var(--dim); font-weight: 600; font-size: 12px;
+       text-transform: uppercase; letter-spacing: 0.05em; }
+  tr:last-child td { border-bottom: 0; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.q { white-space: nowrap; color: var(--dim); font-weight: 600; width: 132px; }
+  table.ann td:nth-child(2), table.ann th:nth-child(2) { width: 36%; }
+  table.ann td:nth-child(3), table.ann th:nth-child(3) { width: 20%; }
+  table.ann td:nth-child(4), table.ann th:nth-child(4) { width: 26%; }
+  .good { color: var(--green); font-weight: 600; }
+  .bad { color: var(--red); font-weight: 600; }
+  .may { color: var(--amber); }
+  .dim { color: var(--dim); }
+  .small { font-size: 12.5px; }
+  .shots { display: grid; grid-template-columns: 1fr; gap: 18px; margin: 12px 0 8px; }
+  figure { margin: 8px 0 0; }
+  figure img { display: block; width: auto; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; background: #0b0e12; }
+  figcaption { color: var(--dim); font-size: 12.5px; margin-top: 6px; max-width: 1120px; }
+  figcaption b { color: var(--text); font-weight: 600; }
+  .pair { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start; }
+  .pair figure { margin: 0; width: 340px; }
+  @media (max-width: 900px) { .pair { display: block; } .pair figure { margin-bottom: 18px; } }
+  pre { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px;
+        overflow-x: auto; font-family: var(--mono); font-size: 12.5px; line-height: 1.7; }
+  footer { margin-top: 54px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--dimmer); font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="kicker">agent-worktree-gui · readability audit · the pipeline flow dialog</div>
+<h1>The row is legible; the four things a chain must say are not on it</h1>
+<p class="sub">Eight captures of the flow dialog at one, two, seven and thirteen stages — at 1280×800 and 1824×900 —
+annotated for what the eye lands on, what the picture cannot tell you about order, loop-back, a gate and the live
+stage, and the exact element responsible for each. Two further shots show what the same renderer says when it is
+given a task's record.</p>
+<p class="meta">
+  Branch <code>wtgui/capture-the-pipeline-fea-ba1c90</code>, cut from <code>main</code> at
+  <code>4651ace</code> (<code>1.12.2</code>) · measured 2026-11-04 22:59 EST (2026-11-05 03:59 UTC) ·
+  harness <code>tools/capture-pipeline-readability.mjs</code> · 10 PNGs + <code>capture.json</code> ·
+  headless Chromium via Playwright, <code>deviceScaleFactor 1</code> (1 PNG px = 1 CSS px) ·
+  throwaway panel with its own config, stores and catalogue, board assistant off, gateway dead ·
+  dark palette only (the panel pins one).
+</p>
+
+<nav>
+  <b>on this page</b>
+  <a href="#answer">The answer</a>
+  <a href="#method">Method</a>
+  <a href="#one">1 stage</a>
+  <a href="#two">2 stages</a>
+  <a href="#seven">7 stages</a>
+  <a href="#thirteen">13 stages</a>
+  <a href="#position">The other mode</a>
+  <a href="#right">What it gets right</a>
+  <a href="#findings">Findings</a>
+  <a href="#change">What I would change</a>
+  <a href="#reproduce">Reproduce</a>
+  <a href="#limits">Limits</a>
+</nav>
+
+<h2 id="answer">The answer</h2>
+<div class="lead">
+  <p><strong>The drawing succeeds at the thing a row of tiles is for.</strong> A reader can sweep one, two, seven or
+  thirteen stages left to right without a legend lesson: 13 px titles at 5.94:1, a 96 px column floor, 7 stages in an
+  846 px card at both widths, 13 stages in a 1578 px card at 1824 with all 13 tiles and all 13 notches in view. At
+  1280 the thirteen-stage card is 1229 px and hides 3 of 13, and it says so in a sentence built from the painted
+  rects — “showing stages 1–10 of 13 — 3 of 13 stages and 3 of 13 notches out of view” — with the <code>fit</code>
+  press beside it.</p>
+  <p><strong>What it cannot say is the set of facts that makes the row a pipeline rather than a list.</strong>
+  Order is carried by an 11 px ordinal and a 1 px hairline, not by an edge; loop-back is never drawn in a definition
+  at all — the 7-stage definition is literally named “SEFL review loop” and is drawn as a straight chain, because
+  <code>fromDefinition</code> passes <code>loops: []</code>; a gate is a 3 × 15 px notch at <strong>2.37:1</strong>
+  with no visible label, and its meaning exists only in a <code>title</code> and an <code>aria-label</code>; and the
+  definition dialog has no live stage to show — every one of its 13 tiles is <code>not reached</code>, and the mark
+  that would say otherwise is an 8 px dot whose fill is <strong>1.04:1</strong>.</p>
+  <p><strong>Two defects are visible without measuring.</strong> At two stages the header wraps and the ✕ lands at
+  the left edge of a second row, under the title (<code>x 480.0</code> against <code>x 776.2</code> at one stage), growing
+  the header to 39% of a 205 px card. At thirteen stages the one meta line is clamped at two lines in 6 of 13 tiles,
+  and the clamp cuts the path, so <code>file-exists path=ledger/change-log.json</code> reads
+  <code>file-exists path=ledger…</code> — the half that tells you which file is the half that disappears.</p>
+</div>
+
+<div class="warn">
+  <h4>The base moved while this page was written</h4>
+  <p>The captures measure <code>4651ace</code> (1.12.2). <code>origin/main</code> has since moved to
+  <code>5e84586</code> (1.12.3), and the drawing's own files are unchanged across that move:
+  <code>git diff --stat 4651ace 5e84586 -- public/pipeline-flow.js public/pipeline-modal.js public/index.html</code>
+  is empty, and the only <code>public/app.js</code> and <code>public/style.css</code> hunks are the reply-queue chip
+  work (app.js hunks 4179–5166, style.css:2430) — nowhere near <code>openPipelineFlow</code> (app.js:17396) or the
+  <code>.pflow</code> block (style.css:4056–4237). The numbers describe the code this page lands on; a later landing
+  that touches those rules should re-run the harness rather than edit the prose.</p>
+</div>
+
+<h2 id="method">Method</h2>
+<p>One harness, <code>tools/capture-pipeline-readability.mjs</code>, boots a throwaway panel of this checkout (its own
+<code>PANEL_CONFIG</code>, <code>pipelines.json</code>, data dir and ephemeral port; assistant off; API server pointed
+at a dead port) and drives the real dialog through Settings → Pipeline → a definition → <em>open the flow</em>. It
+photographs the card — not a cropped element — at 1280×800 and 1824×900 and reads every number below from the page's
+own DOM. Nothing under <code>public/</code>, <code>lib/</code> or the shipped gates is touched; this is a capture, not
+a judge.</p>
+
+<h3>The fixtures</h3>
+<div class="tw">
+<table>
+  <tr><th>shot pair</th><th>definition</th><th class="num">stages</th><th>exit checks</th><th>next</th><th>why this one</th></tr>
+  <tr><td>01 · one</td><td><code>local</code> — “Local work”</td><td class="num">1</td>
+      <td><code>commits min=1</code></td><td>end of the chain</td>
+      <td>the shortest card the dialog can draw; the case with no connector at all</td></tr>
+  <tr><td>02 · two</td><td><code>sefl-investigate</code> — “SEFL investigation”</td><td class="num">2</td>
+      <td><code>commits min=1</code>, <code>file-exists path=docs/investigation.md</code> (clamped)</td>
+      <td><code>sefl-review-loop</code></td>
+      <td>the shipped definition whose <code>next</code> names another pipeline — a chain fact with no edge</td></tr>
+  <tr><td>03 · seven</td><td><code>sefl-review-loop</code> — “SEFL review loop”</td><td class="num">7</td>
+      <td><code>branch-name</code>, <code>pushed</code>, <code>pr-open</code>, <code>pr-comments</code>,
+          <code>pushed</code>, <code>pr-approved</code>, <code>pr-merged</code></td>
+      <td>end of the chain</td>
+      <td>a name that promises a loop, and a drawing that cannot draw one</td></tr>
+  <tr><td>04 · thirteen</td><td><code>acceptance-thirteen</code> — “POC to UAT”</td><td class="num">13</td>
+      <td>six shapes: <code>commits</code>, <code>file-exists</code>, <code>clean</code>, <code>command</code>,
+          <code>pushed</code></td><td>end of the chain</td>
+      <td>the long case; the studio's own seed re-expressed in the panel's schema</td></tr>
+</table>
+</div>
+<p class="small dim">The three short definitions are read out of the tree's own <code>pipelines.seed.json</code> rather
+than transcribed. The thirteen-stage one is the Pipeline Studio's seed (<code>poc-to-uat</code>, titles, writers and
+artifacts) with ids made slugs because the catalogue refuses <code>S0</code>; the panel's definition schema has no
+<code>artifact</code> field, so those fields are inert and each card's one meta line is its exit check — which is what
+the definition dialog draws anyway.</p>
+
+<h3>What the numbers mean</h3>
+<ul>
+  <li><strong>Ink</strong> — text-box area × (WCAG contrast − 1), summed per element group. It is a proxy for visual
+  weight, not an eye-tracking fixation: it says which words occupy the most contrast-weighted area, and the report
+  names it as such. Rects come from a <code>Range</code> over the text, not from a flex container's full-width box.</li>
+  <li><strong>Contrast</strong> — the text colour over the first <em>opaque</em> ancestor, walked in the page; the
+  panel's surfaces are layered and several colours are <code>rgba</code>.</li>
+  <li><strong>Lines</strong> — a text box's height ÷ its own computed <code>line-height</code>. “Clamped” means
+  <code>scrollHeight &gt; clientHeight</code>, i.e. the two-line clamp is hiding words.</li>
+  <li><strong>Fit</strong> — <code>scrollWidth</code> against <code>clientWidth</code>, plus how many tiles and
+  notches are <em>fully</em> inside the scroller at rest. The count sentence is quoted from the element, not
+  recomputed here.</li>
+</ul>
+
+<h3>What was not measured</h3>
+<p>No eye tracking, no colour-blindness simulation, no zoomed text, no hover/focus capture (the notch's tooltip is
+quoted from its <code>title</code> attribute), and one palette — the panel pins its own colours, so a
+<code>prefers-color-scheme</code> pair would be byte-identical rather than informative. The two position-mode shots
+are the bundle adapter opened through the page's own <code>PipelineModal.open</code>, not a queue row's press; they
+are evidence of what the renderer can draw, not of route A's caller.</p>
+
+<h2 id="one">1 stage — <code>local</code></h2>
+<div class="pair">
+  <figure>
+    <a href="pipeline-readability-audit/01-one-1280.png"><img src="pipeline-readability-audit/01-one-1280.png"
+      alt="The one-stage pipeline dialog at 1280 by 800: a 340 px card with the title Local work, a facts row in two lines, one 322 px stage tile reading 1 Work in this tree with commits min=1, and the legend not reached 1 stage."></a>
+    <figcaption><b>01 · 1280×800.</b> 340 × 184.2 px card. Header 58.8 px (32%), drawing 51% of the card.</figcaption>
+  </figure>
+  <figure>
+    <a href="pipeline-readability-audit/01-one-1824.png"><img src="pipeline-readability-audit/01-one-1824.png"
+      alt="The same one-stage dialog at 1824 by 900, identical in size and content, centred further right."></a>
+    <figcaption><b>02 · 1824×900.</b> The same 340 × 184.2 px card at x = 742 instead of x = 470. Every measured
+    value below the position is identical.</figcaption>
+  </figure>
+</div>
+<div class="tw">
+<table class="ann">
+  <tr><th>question</th><th>1280×800</th><th>1824×900</th><th>element responsible</th></tr>
+  <tr><td class="q">Eye lands on</td>
+      <td>The dialog title “Local work” — 13 px/700 at <strong>13.01:1</strong>, 65.8 × 18.8 px at the card's
+      top-left. Then the facts row, which is 46% of the card's ink because it wraps to two lines at 340 px.</td>
+      <td>Same. The card is centred at x = 742, so the same two objects sit 272 px further right with the same
+      type.</td>
+      <td><span class="anchor">.pmodal-title</span> <span class="anchor">public/style.css:4218</span>;
+          <span class="anchor">.pmodal-facts</span> <span class="anchor">public/style.css:4227</span></td></tr>
+  <tr><td class="q">Order</td>
+      <td>Present but trivial: one tile and the ordinal “1” (11 px/600 at 5.94:1). There is no connector because
+      there is no next stage; the card's width, not an edge, says where the sequence stops.</td>
+      <td>Same drawing; the single-column track is 322 px wide at both.</td>
+      <td><span class="anchor">.pflow-n</span> <span class="anchor">public/style.css:4129</span>;
+          <span class="anchor">stageHtml</span> <span class="anchor">public/pipeline-flow.js:335</span></td></tr>
+  <tr><td class="q">Loop-back</td>
+      <td>Nothing to loop to. The only statement about continuation is the fact <code>next end of the chain</code> —
+      an 11 px label at 3.35:1 and a 12 px value at 13.01:1, in the header, not on the track.</td>
+      <td>Same.</td>
+      <td><span class="anchor">.pmodal-facts</span> <span class="anchor">public/style.css:4227</span>;
+          <span class="anchor">openPipelineFlow</span> <span class="anchor">public/app.js:17414</span></td></tr>
+  <tr><td class="q">Gate meaning</td>
+      <td>One notch, 3 × 15 px, <code>#4a5568</code> at <strong>2.37:1</strong> against the tile — below the 3:1
+      non-text floor — on the tile's closing edge. Its meaning is <code>title="gate exit:work · commits — exit check
+      commits — min=1"</code> (51 chars) and an 111-char <code>aria-label</code>. The tile's floor prints
+      <code>commits min=1</code> at 11 px/5.94:1, which is the one visible half of the gate.</td>
+      <td>Same.</td>
+      <td><span class="anchor">.pflow-notch</span> <span class="anchor">public/style.css:4156</span>;
+          <span class="anchor">notchHtml</span> <span class="anchor">public/pipeline-flow.js:291–296</span></td></tr>
+  <tr><td class="q">Which stage is live</td>
+      <td>None is: the definition dialog has no position, so every tile is <code>data-mark="not-reached"</code>, its
+      title is painted <code>#8b96a5</code> (5.94:1), and the mark is an 8 px dot whose fill is
+      <strong>1.04:1</strong>. The legend says “not reached 1 stage” at 11 px/6.78:1 — the only sentence that
+      nothing has run.</td>
+      <td>Same.</td>
+      <td><span class="anchor">.pflow-dot</span> <span class="anchor">public/style.css:4130</span>;
+          <span class="anchor">.pflow-node[data-mark="not-reached"] .pflow-title</span>
+          <span class="anchor">public/style.css:4143</span>;
+          <span class="anchor">marksFor</span> <span class="anchor">public/pipeline-flow.js:215–232</span></td></tr>
+</table>
+</div>
+<p><strong>Shot note.</strong> This is the most readable case in the set and also the least typical: a 322 px column
+gives “Work in this tree” 300 px of line, and the detail line sits on the tile's floor. The header is 32% of the card
+because the facts row wraps at 340 px — the close control still keeps the first row (x = 776), so the wrap costs a
+line rather than moving a control.</p>
+
+<h2 id="two">2 stages — <code>sefl-investigate</code></h2>
+<div class="pair">
+  <figure>
+    <a href="pipeline-readability-audit/02-two-1280.png"><img src="pipeline-readability-audit/02-two-1280.png"
+      alt="The two-stage pipeline dialog at 1280: the header wraps to three rows, the close button sits at the left of the second row, two 148 px tiles read 1 Probe and 2 Conclude, with a 26 px connector and two notches."></a>
+    <figcaption><b>03 · 1280×800.</b> 340 × 205 px card. Header 79.6 px (39%) — the largest header share in the
+    audit. The ✕ is at <code>x 480, y 72.8</code>.</figcaption>
+  </figure>
+  <figure>
+    <a href="pipeline-readability-audit/02-two-1824.png"><img src="pipeline-readability-audit/02-two-1824.png"
+      alt="The same two-stage dialog at 1824, identical, centred further right."></a>
+    <figcaption><b>04 · 1824×900.</b> The same card and the same wrapped header at x = 742. The width does not
+    repair the wrap: it is the card's 340 px, not the window's.</figcaption>
+  </figure>
+</div>
+<div class="tw">
+<table class="ann">
+  <tr><th>question</th><th>1280×800</th><th>1824×900</th><th>element responsible</th></tr>
+  <tr><td class="q">Eye lands on</td>
+      <td>“SEFL investigation” (13 px/700 at 13.01:1, 110.8 × 18.8 px) — and immediately under it the ✕ at
+      <code>x 480, y 72.8</code>, on the second row's left edge. The contrast of a control where a title's baseline
+      was is the first thing the audit did not expect.</td>
+      <td>Same two objects; the ✕ is still at the left of row two. The card is centred at x = 742.</td>
+      <td><span class="anchor">.pmodal-bar</span> <span class="anchor">public/style.css:4216</span>;
+          <span class="anchor">.pmodal-close</span> <span class="anchor">public/style.css:4225</span></td></tr>
+  <tr><td class="q">Order</td>
+      <td>Two tiles, one 26 × 1 px connector at <code>#212730</code>, and a 6 × 5 px corner bracket at the
+      connector's left end — a tick, not an arrowhead. The ordinals “1” and “2” are the reliable direction cue.</td>
+      <td>Same drawing; columns are 148 px at both widths, so the two tiles do not narrow or widen with the
+      window.</td>
+      <td><span class="anchor">.pflow-link</span> <span class="anchor">public/style.css:4150</span>;
+          <span class="anchor">.pflow-link::before</span> <span class="anchor">public/style.css:4155</span></td></tr>
+  <tr><td class="q">Loop-back</td>
+      <td>None drawn. The chain continues to <code>sefl-review-loop</code>, and that fact is the brightest value in
+      the header — 12 px mono at 13.01:1 — but it is a sentence, not an edge; the track ends at stage 2 with a
+      closing notch.</td>
+      <td>Same.</td>
+      <td><span class="anchor">openPipelineFlow</span> <span class="anchor">public/app.js:17414</span>;
+          <span class="anchor">fromDefinition</span> <span class="anchor">public/pipeline-flow.js:145–149</span></td></tr>
+  <tr><td class="q">Gate meaning</td>
+      <td>Two notches, both <code>#4a5568</code> at 2.37:1, both <code>data-state="open"</code>. The visible half is
+      again the tile's floor: <code>commits min=1</code> and <code>file-exists path=docs/investigation.md</code> —
+      the second is clamped at two lines and the path is the part cut, so the painted text ends
+      <code>path=docs/investigat…</code>.</td>
+      <td>Same.</td>
+      <td><span class="anchor">.pflow-art</span> <span class="anchor">public/style.css:4128</span>;
+          <span class="anchor">stageDetail</span> <span class="anchor">public/pipeline-flow.js:302–315</span></td></tr>
+  <tr><td class="q">Which stage is live</td>
+      <td>Neither: both <code>not-reached</code>, both dots 1.04:1. The legend says “not reached 2 stages”.</td>
+      <td>Same.</td>
+      <td><span class="anchor">.pflow-dot</span> <span class="anchor">public/style.css:4130</span>;
+          <span class="anchor">legendHtml</span> <span class="anchor">public/pipeline-flow.js:423–437</span></td></tr>
+</table>
+</div>
+<p><strong>Shot note.</strong> The wrap is arithmetic: the kicker is 166.3 px, the title 110.8 px and the close
+23.8 px; with the 8 px gaps that is 316.9 px of a 320 px inner row, and the 2.7 px spacer left over is too small for
+the close's 8 px gap, so <code>.pmodal-bar</code>'s <code>flex-wrap: wrap</code> puts the ✕ on the next line at the
+left edge. The close has no automatic margin and the title cannot shrink (<code>flex: 0 0 auto</code>), so the one
+control that must stay findable moves.</p>
+
+<h2 id="seven">7 stages — <code>sefl-review-loop</code></h2>
+<div class="shots">
+  <figure>
+    <a href="pipeline-readability-audit/03-seven-1280.png"><img src="pipeline-readability-audit/03-seven-1280.png"
+      alt="The seven-stage SEFL review loop dialog at 1280: seven 96 px tiles from Name the branch to Merge, each with an exit check on its floor, and seven small notches between and after the tiles."></a>
+    <figcaption><b>05 · 1280×800.</b> 846 × 168.8 px card. Header 43.4 px (26%), drawing 47% of the card. All 7
+    stages and 7 notches inside an 828 px scroller; the count row is hidden.</figcaption>
+  </figure>
+  <figure>
+    <a href="pipeline-readability-audit/03-seven-1824.png"><img src="pipeline-readability-audit/03-seven-1824.png"
+      alt="The same seven-stage dialog at 1824, identical in size at 846 px, centred."></a>
+    <figcaption><b>06 · 1824×900.</b> The same 846 px card at x = 489 instead of x = 217. Columns are 96 px at both
+    widths; the extra 544 px of window becomes margin, not a wider tile.</figcaption>
+  </figure>
+</div>
+<div class="tw">
+<table class="ann">
+  <tr><th>question</th><th>1280×800</th><th>1824×900</th><th>element responsible</th></tr>
+  <tr><td class="q">Eye lands on</td>
+      <td>The stripe: seven equal tiles at 96 px, then the first title “Name the branch”. Ink is split almost evenly
+      — stage titles 28%, header facts 26%, exit-check lines 24% — so there is no single object with a clear claim
+      to the first fixation beyond reading order.</td>
+      <td>Same stripe, same split; the card is centred and the drawing does not reflow.</td>
+      <td><span class="anchor">.pflow-track</span> <span class="anchor">public/style.css:4082</span>;
+          <span class="anchor">.pflow-title</span> <span class="anchor">public/style.css:4125</span></td></tr>
+  <tr><td class="q">Order</td>
+      <td>Six 26 px connectors and seven ordinals; titles wrap to 1–3 lines within the same row (“Wait for the
+      approval at the head” is 3, “Merge” is 1), and <code>align-items: stretch</code> keeps all seven tiles the
+      same height. Order reads; the direction is a hairline plus the numbers.</td>
+      <td>Same.</td>
+      <td><span class="anchor">.pflow-track</span> <span class="anchor">public/style.css:4082</span>;
+          <span class="anchor">.pflow-link</span> <span class="anchor">public/style.css:4150</span></td></tr>
+  <tr><td class="q">Loop-back</td>
+      <td><strong>Nothing.</strong> The definition is named “SEFL review loop”, its stages are a straight chain, and
+      the only statement about what follows is <code>next end of the chain</code>. A reader looking for the review
+      loop finds no arc, no return edge and no occurrence of the word “loop” in the drawing. The renderer can draw
+      one — the position shots below do — but <code>fromDefinition</code> never passes any.</td>
+      <td>Same absence; the extra width only adds margin.</td>
+      <td><span class="anchor">fromDefinition</span> <span class="anchor">public/pipeline-flow.js:145–149</span>
+          (<code>loops: []</code>); the absent <span class="anchor">.pflow-arc</span>
+          <span class="anchor">public/style.css:4163</span></td></tr>
+  <tr><td class="q">Gate meaning</td>
+      <td>Seven notches, all <code>#4a5568</code> at 2.37:1, all <code>data-state="open"</code>. The floor lines are
+      the exit checks — <code>branch-name</code>, <code>pushed</code>, <code>pr-open</code>, … — but stage 1's line
+      is clamped: the regex sentence is cut after two lines, so the reader gets the pattern without its branch
+      placeholder.</td>
+      <td>Same; one of seven lines clamped.</td>
+      <td><span class="anchor">.pflow-notch</span> <span class="anchor">public/style.css:4156</span>;
+          <span class="anchor">.pflow-art</span> <span class="anchor">public/style.css:4128</span></td></tr>
+  <tr><td class="q">Which stage is live</td>
+      <td>None: seven <code>not-reached</code> tiles, seven dots at 1.04:1, and the legend “not reached 7 stages”
+      (11 px/6.78:1). The kicker “PIPELINE FLOW · DEFINITION” at 11 px/3.35:1 is the only thing that says this is a
+      definition and not a run — and it is the dimmest text in the card.</td>
+      <td>Same.</td>
+      <td><span class="anchor">.pmodal-kicker</span> <span class="anchor">public/style.css:4217</span>;
+          <span class="anchor">legendHtml</span> <span class="anchor">public/pipeline-flow.js:423–437</span></td></tr>
+</table>
+</div>
+<p><strong>Shot note.</strong> This is the shot where the name and the picture disagree most: “SEFL review loop” over
+a straight chain that ends in “end of the chain”. Nothing in the visible drawing is wrong — a definition really is a
+chain — but the one word a reader brings to it, <em>loop</em>, has no counterpart on the canvas.</p>
+
+<h2 id="thirteen">13 stages — <code>acceptance-thirteen</code></h2>
+<div class="shots">
+  <figure>
+    <a href="pipeline-readability-audit/04-thirteen-1280.png"><img src="pipeline-readability-audit/04-thirteen-1280.png"
+      alt="The thirteen-stage dialog at 1280: ten 96 px tiles visible from Intake and charter to Rewrite to green, a clipped right edge, the count sentence showing stages 1 to 10 of 13, a fit button, and the legend not reached 13 stages."></a>
+    <figcaption><b>07 · 1280×800.</b> 1228.8 × 202.1 px card. Scroller 1211 / 1560, 349 px hidden. 10 of 13 stages
+    and 10 of 13 notches fully in view; the count row appears and adds 23 px of card.</figcaption>
+  </figure>
+  <figure>
+    <a href="pipeline-readability-audit/04-thirteen-1824.png"><img src="pipeline-readability-audit/04-thirteen-1824.png"
+      alt="The same thirteen-stage dialog at 1824: a 1578 px card with all thirteen 96 px tiles visible from Intake and charter to UAT sign-off, no count row."></a>
+    <figcaption><b>08 · 1824×900.</b> 1578 × 179.1 px card. 13 of 13 stages and 13 of 13 notches in a 1560 px
+    scroller; no count, no fit press. Columns are still 96 px.</figcaption>
+  </figure>
+</div>
+<div class="tw">
+<table class="ann">
+  <tr><th>question</th><th>1280×800</th><th>1824×900</th><th>element responsible</th></tr>
+  <tr><td class="q">Eye lands on</td>
+      <td>The visible stripe of ten tiles, then the count row — the only sentence in a drawing of fragments
+      (“showing stages 1–10 of 13 — 3 of 13 stages and 3 of 13 notches out of view”, 11 px/6.78:1, 8% of ink). Ink
+      is 35% exit-check lines, 29% stage titles, 16% header facts: the meta line outweighs the names.</td>
+      <td>The full thirteen-tile stripe; ink is 38% exit-check lines and 31% stage titles. The dialog title “POC to
+      UAT” is the only text at 13.01:1 — 71 × 18.8 px — while every stage title is 5.94:1.</td>
+      <td><span class="anchor">.pflow-count</span> <span class="anchor">public/style.css:4189</span>;
+          <span class="anchor">.pflow-art</span> <span class="anchor">public/style.css:4128</span>;
+          <span class="anchor">.pmodal-title</span> <span class="anchor">public/style.css:4218</span></td></tr>
+  <tr><td class="q">Order</td>
+      <td>Twelve connectors and thirteen ordinals; the clip is clean — tile 10 ends at 1228.6, the scroller at
+      1245.4, tile 11 starts at 1254.6 — so no tile is cut mid-word, and the count's “1–10” is the only place the
+      visible range is stated.</td>
+      <td>Twelve connectors and thirteen ordinals, all visible; the row reads in one sweep.</td>
+      <td><span class="anchor">.pflow-link</span> <span class="anchor">public/style.css:4150</span>;
+          <span class="anchor">countText</span> <span class="anchor">public/pipeline-flow.js:447–459</span></td></tr>
+  <tr><td class="q">Loop-back</td>
+      <td>None, and none possible from this fixture: <code>next end of the chain</code>, no arc, no return edge.</td>
+      <td>Same.</td>
+      <td><span class="anchor">fromDefinition</span> <span class="anchor">public/pipeline-flow.js:145–149</span></td></tr>
+  <tr><td class="q">Gate meaning</td>
+      <td>Thirteen notches, all <code>#4a5568</code> at 2.37:1, all <code>data-state="open"</code>; 0.2% of the
+      card's ink. Their aria names run 111–145 characters and lead with “no decision record is declared”, while the
+      hover titles run 51–86 and lead with the check (“exit check file-exists — path=…”). The visible card floor
+      carries a two-line clamp, and 6 of the 13 are hiding text.</td>
+      <td>Same thirteen notches and the same 6 clamped lines; the wider card does not lengthen the columns, so the
+      clamp is identical.</td>
+      <td><span class="anchor">.pflow-notch</span> <span class="anchor">public/style.css:4156</span>;
+          <span class="anchor">gateAria</span> <span class="anchor">public/pipeline-flow.js:274–285</span>;
+          <span class="anchor">.pflow-art</span> <span class="anchor">public/style.css:4128</span></td></tr>
+  <tr><td class="q">Which stage is live</td>
+      <td>None: all 13 <code>not-reached</code>; the legend says “not reached 13 stages” (11 px/6.78:1). Thirteen
+      8 px dots at 1.04:1 are the only per-stage mark and they read as bullets.</td>
+      <td>Same.</td>
+      <td><span class="anchor">.pflow-dot</span> <span class="anchor">public/style.css:4130</span>;
+          <span class="anchor">.pflow-legend</span> <span class="anchor">public/style.css:4174</span></td></tr>
+</table>
+</div>
+<p><strong>Shot note.</strong> The two widths are one drawing: 96 px columns, 26 px gaps, the same titles and the
+same wrapped lines. What changes is how much of it the card can hold — 1229 px of card clips at tile 10, 1578 px
+holds all thirteen — and whether the count row is owed. That is a good responsive decision: the drawing does not
+reflow, so a reader does not learn a second layout at 1824. The cost is that at 1280 the right edge is a hard cut with
+16.8 px of empty scroller after tile 10, and nothing but the 11 px sentence says the chain continues.</p>
+
+<h2 id="position">The other mode — the same seven stages with a record</h2>
+<p>These two shots are the control for the four questions. The same renderer, given a bundle with one capped loop and
+a position record, draws the loop-back as an arc and marks the live stage — so the gaps above are the definition
+adapter's and the caller's, not the drawing's inability.</p>
+<div class="shots">
+  <figure>
+    <a href="pipeline-readability-audit/09-seven-position-1280.png"><img src="pipeline-readability-audit/09-seven-position-1280.png"
+      alt="The position-mode seven-stage dialog at 1280: a purple arc labelled 2 of 3 rounds running from stage 5 back over stage 1, green dots on stages 1 to 4, a blue dot and blue tile on stage 5, hollow dots on 6 and 7, and a legend counting done 4, current 1, not reached 2."></a>
+    <figcaption><b>09 · 1280×800, position.</b> 846 × 227.1 px card. One arc, 488 × 22 px, label “2 of 3 rounds” at
+    11 px <code>#b9a2e0</code>; current tile at <code>#141f2c</code>, border <code>#2b5480</code>.</figcaption>
+  </figure>
+  <figure>
+    <a href="pipeline-readability-audit/09-seven-position-1824.png"><img src="pipeline-readability-audit/09-seven-position-1824.png"
+      alt="The same position-mode dialog at 1824, identical at 846 px wide, centred."></a>
+    <figcaption><b>10 · 1824×900, position.</b> The same 846 px card; the arc and the marks are identical, centred
+    at x = 489.</figcaption>
+  </figure>
+</div>
+<div class="tw">
+<table class="ann">
+  <tr><th>question</th><th>1280×800</th><th>1824×900</th><th>element responsible</th></tr>
+  <tr><td class="q">Eye lands on</td>
+      <td>The arc label “2 of 3 rounds” — the only purple text in the card, above the row — then the blue current
+      tile (“Answer the review”), the only tile with a blue border and a lit dot.</td>
+      <td>Same. The arc is 488 px wide at both widths because the columns and gaps are the same.</td>
+      <td><span class="anchor">.pflow-arc-label</span> <span class="anchor">public/style.css:4173</span>;
+          <span class="anchor">.pflow-node[data-mark="current"]</span> <span class="anchor">public/style.css:4136</span></td></tr>
+  <tr><td class="q">Order</td>
+      <td>Seven tiles, six connectors, and one drawn back edge: the arc leaves “Answer the review” (stage 5) and
+      re-enters “Name the branch” (stage 1), running over stages 1–5 in its own 22 px lane. This is the one shot in
+      the audit where order is a graph rather than a list.</td>
+      <td>Same.</td>
+      <td><span class="anchor">.pflow-arc</span> <span class="anchor">public/style.css:4163</span>;
+          <span class="anchor">arcsHtml</span> <span class="anchor">public/pipeline-flow.js:394–421</span></td></tr>
+  <tr><td class="q">Loop-back</td>
+      <td>Drawn and labelled, once: <code>H-10</code>, “2 of 3 rounds”, with the cap as a sentence because the
+      bundle carries a sentence rather than numeric <code>limit</code>/<code>used</code>. The arc is legible as a
+      bracket over the five stages it spans.</td>
+      <td>Same.</td>
+      <td><span class="anchor">.pflow-arc</span> <span class="anchor">public/style.css:4163</span>;
+          <span class="anchor">arcsHtml</span> <span class="anchor">public/pipeline-flow.js:394–421</span></td></tr>
+  <tr><td class="q">Gate meaning</td>
+      <td>Two gates, two states, two colours: <code>G1</code> after “Wait for the reviewer” is
+      <code>data-state="answered"</code> and painted <code>#6f8f5a</code> (4.88:1); <code>G2</code> after “Wait for
+      the approval at the head” is <code>ahead</code> and painted <code>#4a5568</code> (2.37:1). The meaning is
+      still only in the aria/title, and the detail line is painted inside the <em>preceding</em> tile:
+      “review green → decisions/review.json” sits on stage 4's floor, although the gate is on the connector after
+      it. The same gate is drawn twice, in two places, with no link between them.</td>
+      <td>Same.</td>
+      <td><span class="anchor">.pflow-notch</span> <span class="anchor">public/style.css:4156</span>;
+          <span class="anchor">stageDetail</span> <span class="anchor">public/pipeline-flow.js:302–315</span>;
+          <span class="anchor">stageHtml</span> <span class="anchor">public/pipeline-flow.js:329</span></td></tr>
+  <tr><td class="q">Which stage is live</td>
+      <td>Stage 5, on four channels: blue dot <code>#58a6ff</code> (5.28:1 for the green done dot; the current dot's
+      ring is stronger), tile background <code>#141f2c</code> vs <code>#13181f</code>, border
+      <code>#2b5480</code> vs <code>#212730</code>, and title <code>#e6e9ef</code>/600 vs <code>#9aa4b2</code>/500.
+      The legend says “done 4 stages · current 1 stage · not reached 2 stages”.</td>
+      <td>Same.</td>
+      <td><span class="anchor">.pflow-node[data-mark="current"]</span>
+          <span class="anchor">public/style.css:4136–4138</span>;
+          <span class="anchor">marksFor</span> <span class="anchor">public/pipeline-flow.js:215–232</span></td></tr>
+</table>
+</div>
+<p><strong>Shot note.</strong> The arc is the strongest thing the renderer does: 488 px of purple over five columns,
+with a label that is a fact. Two things keep it from being the answer to the definition dialog: no definition can
+reach it, and the gate the arc is about is drawn twice — once as an unlabelled 3 px notch on the connector, once as a
+11 px sentence on the preceding tile's floor.</p>
+
+<h2 id="right">What the current design gets right</h2>
+<div class="right">
+  <h4>Not a one-sided brief</h4>
+  <p>The drawing earns its keep at every length measured here. It is a row, not a diagram, so thirteen stages read in
+  one sweep; the columns hold a 96 px floor, so a title is never squeezed into a strip; the card sizes to its drawing
+  (340 → 846 → 1578 px) instead of to the window, so one stage is a small panel and thirteen get the width they need;
+  every tile in a row is the same height with its detail pinned to the floor (<code>align-items: stretch</code>), so
+  seven titles of one, two and three lines still form a table rather than a ragged strip; the stage title is 13 px at
+  5.94:1 and the ordinal 11 px at 5.94:1, both above AA for their size; the count under the drawing is a measurement
+  of the painted rects, not a constant — 10 of 13 at 1280, 13 of 13 at 1824 — and it appears only when something is
+  actually out of view, with the <code>fit</code> press beside it; the gate notch is positioned by the same grid
+  custom properties as the column it follows, so it cannot drift from the tile; the legend counts the marks the
+  drawing actually carries and gives each one its noun; and the same 96 px drawing is used at both widths, so the
+  difference between 1280 and 1824 is how much of it you see, not a second layout to learn. None of that is undone by
+  the findings below: they are about what the row does not say, and one header that wraps.</p>
+</div>
+
+<h2 id="findings">Findings</h2>
+<div class="tw">
+<table>
+  <tr><th class="num">#</th><th>severity</th><th>finding</th><th>evidence</th><th>where</th></tr>
+  <tr><td class="num">F1</td><td class="bad">high</td>
+      <td><strong>The gate mark is the least visible object in the drawing, and its meaning is not on it.</strong>
+      A gate is a 3 × 15 px bar at 2.37:1 in every edit-mode shot — below the 3:1 non-text floor — with no label,
+      no icon and no visible state. It is 0.2% of the card's ink at thirteen stages.</td>
+      <td>Notch 3 × 15, <code>#4a5568</code>, 2.37:1; all 13 <code>data-state="open"</code>; titles 51–86 chars,
+      aria 111–145 chars; 0.2% of 402,575 ink units.</td>
+      <td><span class="anchor">public/style.css:4156</span>;
+          <span class="anchor">public/pipeline-flow.js:291–296</span></td></tr>
+  <tr><td class="num">F2</td><td class="bad">high</td>
+      <td><strong>A definition can never show a loop-back, and its name can promise one.</strong>
+      <code>fromDefinition</code> passes <code>loops: []</code>; the 7-stage “SEFL review loop” is drawn as a
+      straight chain ending in “end of the chain”. The renderer draws loops in position mode, so this is an adapter
+      gap, not a renderer one.</td>
+      <td>0 arcs in 8 edit-mode shots; 1 arc (488 × 22, “2 of 3 rounds”) in the position pair;
+      <code>fromDefinition</code> at line 148.</td>
+      <td><span class="anchor">public/pipeline-flow.js:145–149</span></td></tr>
+  <tr><td class="num">F3</td><td class="may">medium-high</td>
+      <td><strong>In edit mode a stage's title and its meta line are the same colour, two pixels apart in size.</strong>
+      Every tile is <code>not-reached</code>, so the title falls to <code>--pflow-ink-quiet</code>; the exit check is
+      painted the same token. At 13 stages the meta line is 35–38% of the ink and the names 29–31%, so the machine
+      sentence outweighs the human one.</td>
+      <td>Title 13 px/5.94:1 and detail 11 px/5.94:1 on every edit-mode tile; ink shares from
+      <code>capture.json</code>.</td>
+      <td><span class="anchor">public/style.css:4125</span>,
+          <span class="anchor">4128</span>, <span class="anchor">4143</span></td></tr>
+  <tr><td class="num">F4</td><td class="may">medium</td>
+      <td><strong>The two-stage header wraps the ✕ to the left of a second row.</strong> At 340 px the kicker, title
+      and close exceed the inner row by 2.7 px; <code>flex-wrap</code> moves the close to <code>x 480.0</code> from
+      <code>x 776.2</code>, under the title, and the header grows to 79.6 px — 39% of a 205 px card.</td>
+      <td>Close rect: <code>{x:480.0, y:72.8}</code> at 2 stages vs <code>{x:776.2, y:52}</code> at 1; bar 79.6 vs
+      43.4 px.</td>
+      <td><span class="anchor">public/style.css:4216</span>,
+          <span class="anchor">4225</span></td></tr>
+  <tr><td class="num">F5</td><td class="may">medium</td>
+      <td><strong>The <code>not-reached</code> dot is invisible, so thirteen unrun stages look like a bullet
+      list.</strong> The dot's fill is 1.04:1 against its tile and its 1 px border is <code>--line</code>; the only
+      mark that a tile is “not reached” is a ring you cannot see. The legend carries the fact instead.</td>
+      <td>Dot 8 × 8, fill <code>#171c24</code>, 1.04:1; border <code>#212730</code>; 13 of 13 in every edit-mode
+      shot.</td>
+      <td><span class="anchor">public/style.css:4130</span>,
+          <span class="anchor">4143</span></td></tr>
+  <tr><td class="num">F6</td><td class="may">medium</td>
+      <td><strong>The one meta line is clamped at two lines, and the clamp cuts the path.</strong> 6 of 13 tiles at
+      thirteen stages and 1 of 7 at seven stages hide text; the visible half is
+      <code>file-exists path=ledger…</code>, so the file is the part lost.</td>
+      <td><code>scrollHeight &gt; clientHeight</code> on 6/13 and 1/7; longest value
+      <code>branch-name pattern=^…</code> clamped to two lines.</td>
+      <td><span class="anchor">public/style.css:4128</span>;
+          <span class="anchor">public/pipeline-flow.js:329</span></td></tr>
+  <tr><td class="num">F7</td><td class="may">medium</td>
+      <td><strong>A gate's detail is painted inside the preceding stage's tile, so it reads as that stage's
+      output.</strong> In position mode “review green → decisions/review.json” sits on stage 4's floor while the gate
+      is on the connector after stage 4; the same gate is also an unlabelled notch on that connector. Two
+      representations, no link.</td>
+      <td>Card 4 detail text and notch <code>G1</code> on the same edge; 1 tile + 1 notch for one gate.</td>
+      <td><span class="anchor">public/pipeline-flow.js:302–315</span>,
+          <span class="anchor">329</span></td></tr>
+  <tr><td class="num">F8</td><td class="dim">low</td>
+      <td><strong>The kicker and the fact labels are 3.35:1 at 11 px</strong> — below the 4.5:1 AA floor for normal
+      text. They are the words that tell a reader this is a definition, not a run.</td>
+      <td>Kicker <code>#6b7482</code> on <code>#1d232b</code> = 3.35:1; fact label <code>&lt;i&gt;</code> same
+      token.</td>
+      <td><span class="anchor">public/style.css:4217</span>,
+          <span class="anchor">4229</span></td></tr>
+  <tr><td class="num">F9</td><td class="dim">low</td>
+      <td><strong>At 1280 the thirteen-stage drawing hides three stages</strong> — but it says so, the clip is clean
+      (no tile cut mid-word) and the fit press is offered. This is a trade the design made deliberately; the
+      finding is only that the right edge carries no other cue.</td>
+      <td>Scroller 1211 / 1560, 349 hidden; count “showing stages 1–10 of 13 — 3 of 13 stages and 3 of 13 notches
+      out of view”; tile 11 starts at 1254.6, scroller ends at 1245.4.</td>
+      <td><span class="anchor">public/pipeline-flow.js:447–459</span>;
+          <span class="anchor">public/style.css:4187</span></td></tr>
+</table>
+</div>
+
+<h2 id="change">What I would change, in order</h2>
+<ol>
+  <li><strong>Make the gate a visible object, not a hairline tick.</strong> Give
+  <span class="anchor">.pflow-notch</span> a 9 × 9 px rotated square (or a 10 px flag), and map the
+  <code>data-state</code> the renderer already writes to colour — <code>open</code>/<code>ahead</code>
+  <code>#8b96a5</code> (6.05:1), <code>waiting</code> <code>#d29922</code>, <code>answered</code>/<code>closing</code>
+  <code>#6f8f5a</code> — so the five states stop sharing one grey. Add the state word as <code>::after</code> on
+  hover/focus, because the <code>title</code> is invisible in a screenshot and to touch.</li>
+  <li><strong>Restore the title's rank in edit mode.</strong> Add <code>data-mode="definition"</code> to the
+  <code>.pflow</code> element and, under it, paint <code>.pflow-title</code> at <code>var(--text)</code>; leave the
+  ordinal and the exit-check line at <code>--pflow-ink-quiet</code>. The four marks still read in position mode, and
+  the definition becomes a list of names rather than a list of two equal greys.</li>
+  <li><strong>Stop the header wrapping the close.</strong> Either let the title shrink
+  (<code>.pmodal-title { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space:
+  nowrap }</code>) or give the close <code>margin-left: auto</code> and keep the first row non-wrapping; the facts
+  row is already <code>flex: 0 0 100%</code> and can be the only thing that wraps.</li>
+  <li><strong>Say what follows the row.</strong> When <code>def.next</code> is set, draw a 26 px stub with an arrow
+  and the id at the track's right edge — the same width as a connector — instead of leaving the fact in 11 px text.
+  When it is not, print “a definition is a chain — loops appear on a task's record” once in the legend, so the
+  absence of an arc is named rather than inferred.</li>
+  <li><strong>Either retire the edit-mode dot or make it readable.</strong> A 1.04:1 fill is not a mark. Drop the dot
+  when every stage is <code>not-reached</code> (the legend already says so), or give it a 2 px ring at
+  <code>#8b96a5</code>.</li>
+  <li><strong>Protect the path from the clamp.</strong> Raise <span class="anchor">.pflow-art</span> to three lines at
+  the current 100 px floor, or middle-ellipsize it so the basename survives:
+  <code>file-exists …/change-log.json</code> is more useful than <code>file-exists path=ledger…</code>.</li>
+  <li><strong>Separate the gate's sentence from the stage's floor.</strong> Move the gate detail into the notch's
+  lane (or prefix it with “gate” and give it the notch's colour), so “review green → decisions/review.json” is not
+  read as something stage 4 writes.</li>
+</ol>
+
+<h2 id="reproduce">Reproduce</h2>
+<pre>node tools/capture-pipeline-readability.mjs --shots docs/reviews/pipeline-readability-audit</pre>
+<p>It boots its own panel, writes the ten PNGs and <code>capture.json</code> beside them, and exits 0. The panel
+address is printed on the first line; the run takes about twelve seconds. Pass <code>--root</code> to point it at
+another checkout (a <code>git archive</code> of <code>main</code>, for a before/after). The ledger holds every number
+quoted here: per shot, the card and bar rects, the scroller, every tile's rect and computed style, every notch's
+state and both of its names, the arc geometry, the ink groups and the PNG's SHA-256.</p>
+
+<div class="tw">
+<table>
+  <tr><th>file</th><th class="num">bytes</th><th>sha256 (first 12)</th></tr>
+  <tr><td><code>01-one-1280.png</code></td><td class="num">9,206</td><td><code>86a312200e54</code></td></tr>
+  <tr><td><code>01-one-1824.png</code></td><td class="num">9,194</td><td><code>f856708176b4</code></td></tr>
+  <tr><td><code>02-two-1280.png</code></td><td class="num">13,114</td><td><code>f60adc181c0f</code></td></tr>
+  <tr><td><code>02-two-1824.png</code></td><td class="num">12,960</td><td><code>05e20346353b</code></td></tr>
+  <tr><td><code>03-seven-1280.png</code></td><td class="num">20,700</td><td><code>6bccaa322cd4</code></td></tr>
+  <tr><td><code>03-seven-1824.png</code></td><td class="num">20,698</td><td><code>b65b419a5c72</code></td></tr>
+  <tr><td><code>04-thirteen-1280.png</code></td><td class="num">29,360</td><td><code>6e7d5af0c14f</code></td></tr>
+  <tr><td><code>04-thirteen-1824.png</code></td><td class="num">30,472</td><td><code>be25093130b5</code></td></tr>
+  <tr><td><code>09-seven-position-1280.png</code></td><td class="num">27,559</td><td><code>39a0a01e9f37</code></td></tr>
+  <tr><td><code>09-seven-position-1824.png</code></td><td class="num">27,590</td><td><code>bdf53bbc18f7</code></td></tr>
+  <tr><td><code>capture.json</code></td><td class="num">108,980</td><td>the ledger: 10 records, every number above</td></tr>
+</table>
+</div>
+
+<h2 id="limits">Limits</h2>
+<ul>
+  <li><strong>Ink is not a fixation study.</strong> It is contrast-weighted text area, useful for ranking what the
+  page makes heavy, and quoted only as such. No eye tracker was involved.</li>
+  <li><strong>One palette.</strong> The panel pins its own colours; a light scheme would be a second design, not a
+  comparison. The measured surfaces are the panel's resting values, before the Settings → Panel contrast scale.</li>
+  <li><strong>The definition fixture's artifacts are inert.</strong> A definition has no <code>artifact</code> field,
+  so the thirteen-stage cards print their exit checks, not “writes …”. That is the shipped behaviour.</li>
+  <li><strong>The position shots are the bundle adapter, not a queue row.</strong> They were opened through
+  <code>PipelineModal.open</code> with the same arguments a caller passes; they prove what the renderer can draw,
+  not what route A's caller supplies.</li>
+  <li><strong>No hover, focus or motion state was captured.</strong> The notch's tooltip is quoted from its
+  <code>title</code>; the current dot's breathe animation is off in the position shots' effect because the capture
+  waits for layout, but the mark is a static colour too.</li>
+  <li><strong>These numbers are for the commit they name, not the rebased tip.</strong> The captures measure
+  <code>4651ace</code> (1.12.2); the branch was then rebased onto <code>5e84586</code> (1.12.3) and the path check
+  above proves the drawing's files did not move. A later landing that changes
+  <code>public/pipeline-flow.js</code>, <code>pipeline-modal.js</code> or the <code>.pflow*</code> rules makes the page
+  stale — re-run the harness rather than editing the prose.</li>
+</ul>
+
+<footer>
+  Captured with <code>tools/capture-pipeline-readability.mjs</code> · 10 PNGs at
+  <code>deviceScaleFactor 1</code> · ledger <code>capture.json</code> · page written 2026-11-04 23:00 EST ·
+  agent-worktree-gui <code>1.12.2</code>.
+</footer>
+</div>
+</body>
+</html>
