@@ -1,0 +1,5203 @@
+{
+ "startedAt": "2026-11-05T03:59:01.730Z",
+ "tree": ".",
+ "head": "4651ace",
+ "version": "1.12.2",
+ "viewports": [
+  {
+   "width": 1280,
+   "height": 800
+  },
+  {
+   "width": 1824,
+   "height": 900
+  }
+ ],
+ "fixtures": [
+  {
+   "key": "one",
+   "id": "local",
+   "title": "Local work",
+   "stages": 1,
+   "kind": "local",
+   "next": null
+  },
+  {
+   "key": "two",
+   "id": "sefl-investigate",
+   "title": "SEFL investigation",
+   "stages": 2,
+   "kind": "investigation",
+   "next": "sefl-review-loop"
+  },
+  {
+   "key": "seven",
+   "id": "sefl-review-loop",
+   "title": "SEFL review loop",
+   "stages": 7,
+   "kind": "turnover",
+   "next": null
+  },
+  {
+   "key": "thirteen",
+   "id": "acceptance-thirteen",
+   "title": "POC to UAT",
+   "stages": 13,
+   "kind": "turnover",
+   "next": null
+  }
+ ],
+ "shots": [
+  {
+   "file": "01-one-1280.png",
+   "fixture": "one",
+   "defId": "local",
+   "viewport": {
+    "w": 1280,
+    "h": 800
+   },
+   "mode": "edit",
+   "stages": 1,
+   "card": {
+    "x": 470,
+    "y": 48,
+    "w": 340,
+    "h": 184.2,
+    "right": 810,
+    "bottom": 232.2
+   },
+   "bar": {
+    "x": 471,
+    "y": 49,
+    "w": 338,
+    "h": 58.8,
+    "right": 809,
+    "bottom": 107.8
+   },
+   "barItems": [
+    {
+     "cls": "pmodal-kicker",
+     "text": "pipeline flow · definition",
+     "rect": {
+      "x": 480,
+      "y": 54,
+      "w": 166.3,
+      "h": 15.9,
+      "right": 646.3,
+      "bottom": 70
+     }
+    },
+    {
+     "cls": "pmodal-title",
+     "text": "Local work",
+     "rect": {
+      "x": 654.3,
+      "y": 52.6,
+      "w": 65.8,
+      "h": 18.8,
+      "right": 720.1,
+      "bottom": 71.4
+     }
+    },
+    {
+     "cls": "spacer",
+     "text": "",
+     "rect": {
+      "x": 728.1,
+      "y": 62,
+      "w": 40.1,
+      "h": 0,
+      "right": 768.2,
+      "bottom": 62
+     }
+    },
+    {
+     "cls": "pmodal-status mono",
+     "text": "",
+     "rect": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "right": 0,
+      "bottom": 0
+     }
+    },
+    {
+     "cls": "pmodal-close",
+     "text": "✕",
+     "rect": {
+      "x": 776.2,
+      "y": 52,
+      "w": 23.8,
+      "h": 20,
+      "right": 800,
+      "bottom": 72
+     }
+    },
+    {
+     "cls": "pmodal-facts",
+     "text": "pipeline localkind localstages 1next end of the ",
+     "rect": {
+      "x": 480,
+      "y": 74,
+      "w": 320,
+      "h": 29.8,
+      "right": 800,
+      "bottom": 103.8
+     }
+    }
+   ],
+   "body": {
+    "x": 471,
+    "y": 107.8,
+    "w": 338,
+    "h": 123.4,
+    "right": 809,
+    "bottom": 231.2
+   },
+   "flow": {
+    "x": 479,
+    "y": 109.8,
+    "w": 322,
+    "h": 119.4,
+    "right": 801,
+    "bottom": 229.2
+   },
+   "track": {
+    "x": 479,
+    "y": 109.8,
+    "w": 322,
+    "h": 100,
+    "right": 801,
+    "bottom": 209.8
+   },
+   "fit": "0",
+   "marksFrom": "index",
+   "position": "",
+   "scroller": {
+    "clientW": 322,
+    "scrollW": 322,
+    "scrollLeft": 0,
+    "hiddenPx": 0
+   },
+   "visibleStages": 1,
+   "visibleNotches": 1,
+   "colW": 322,
+   "gap": null,
+   "count": {
+    "shown": false,
+    "text": "all 1 stage and 1 notch in view",
+    "size": 11,
+    "contrast": 5.7
+   },
+   "fitButton": {
+    "shown": false,
+    "text": "fit",
+    "size": 11
+   },
+   "legend": {
+    "text": "not reached 1 stage",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "15.95px",
+    "color": "#9aa4b2",
+    "bg": "#171c24",
+    "contrast": 6.78,
+    "count": 1
+   },
+   "title": {
+    "text": "Local work",
+    "size": 13,
+    "weight": "700",
+    "lineHeight": "18.85px",
+    "color": "#e6e9ef",
+    "bg": "#1d232b",
+    "contrast": 13.01
+   },
+   "kicker": {
+    "text": "pipeline flow · definition",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "15.95px",
+    "color": "#6b7482",
+    "bg": "#1d232b",
+    "contrast": 3.35
+   },
+   "facts": {
+    "text": "pipeline localkind localstages 1next end of the chain",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "13.2px",
+    "color": "#9aa4b2",
+    "bg": "#1d232b",
+    "contrast": 6.27
+   },
+   "factLabel": {
+    "text": "pipeline",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "13.2px",
+    "color": "#6b7482",
+    "bg": "#1d232b",
+    "contrast": 3.35
+   },
+   "factValue": {
+    "text": "local",
+    "size": 12,
+    "weight": "500",
+    "lineHeight": "14.4px",
+    "color": "#e6e9ef",
+    "bg": "#1d232b",
+    "contrast": 13.01
+   },
+   "closeButton": {
+    "text": "✕",
+    "size": 12,
+    "weight": "400",
+    "lineHeight": "16px",
+    "color": "#9aa4b2",
+    "bg": "#13181f",
+    "contrast": 7.07
+   },
+   "stageTitle": {
+    "text": "1 Work in this tree",
+    "size": 13,
+    "weight": "500",
+    "lineHeight": "17.55px",
+    "color": "#8b96a5",
+    "bg": "#13181f",
+    "contrast": 5.94,
+    "lines": 1
+   },
+   "ordinal": {
+    "text": "1",
+    "size": 11,
+    "weight": "600",
+    "lineHeight": "13.75px",
+    "color": "#8b96a5",
+    "bg": "#13181f",
+    "contrast": 5.94
+   },
+   "detail": {
+    "text": "commits min=1",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "13.75px",
+    "color": "#8b96a5",
+    "bg": "#13181f",
+    "contrast": 5.94,
+    "lines": 1
+   },
+   "dot": {
+    "color": "#171c24",
+    "w": 8,
+    "h": 8,
+    "contrast": 1.04
+   },
+   "notchStyle": {
+    "color": "#4a5568",
+    "w": 3,
+    "h": 15,
+    "contrast": 2.37
+   },
+   "marks": [
+    "not-reached"
+   ],
+   "notches": [
+    {
+     "state": "open",
+     "gate": "exit:work",
+     "name": "commits",
+     "color": "#4a5568",
+     "ariaLen": 112,
+     "titleLen": 53,
+     "aria": "gate exit:work · commits — after Work in this tree — no decision record is declared (exit check commits — min=1)",
+     "title": "gate exit:work · commits — exit check commits — min=1"
+    }
+   ],
+   "arcs": [],
+   "link": null,
+   "notchStates": {
+    "open": {
+     "count": 1,
+     "color": "#4a5568"
+    }
+   },
+   "cards": [
+    {
+     "pos": "1",
+     "id": "work",
+     "mark": "not-reached",
+     "title": "1 Work in this tree",
+     "titleLines": 1,
+     "titleWords": 5,
+     "words": 7,
+     "detail": "commits min=1",
+     "detailLines": 1,
+     "detailClamped": false,
+     "rect": {
+      "x": 479,
+      "y": 109.8,
+      "w": 322,
+      "h": 100,
+      "right": 801,
+      "bottom": 209.8
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    }
+   ],
+   "areas": {
+    "card": 62618,
+    "drawing": 32200,
+    "chrome": 5600,
+    "scrollClip": 32200
+   },
+   "ink": {
+    "barTitle": 13437,
+    "barKicker": 5862,
+    "barFacts": 45743,
+    "stageTitles": 8513,
+    "ordinals": 389,
+    "details": 5049,
+    "notches": 62,
+    "dots": 3,
+    "legend": 21072,
+    "status": 0
+   },
+   "page": {
+    "bodyBg": "#10141a",
+    "colorScheme": "normal"
+   },
+   "pageErrors": [],
+   "sha256": "86a312200e54"
+  },
+  {
+   "file": "02-two-1280.png",
+   "fixture": "two",
+   "defId": "sefl-investigate",
+   "viewport": {
+    "w": 1280,
+    "h": 800
+   },
+   "mode": "edit",
+   "stages": 2,
+   "card": {
+    "x": 470,
+    "y": 48,
+    "w": 340,
+    "h": 205,
+    "right": 810,
+    "bottom": 253
+   },
+   "bar": {
+    "x": 471,
+    "y": 49,
+    "w": 338,
+    "h": 79.6,
+    "right": 809,
+    "bottom": 128.6
+   },
+   "barItems": [
+    {
+     "cls": "pmodal-kicker",
+     "text": "pipeline flow · definition",
+     "rect": {
+      "x": 480,
+      "y": 53.5,
+      "w": 166.3,
+      "h": 15.9,
+      "right": 646.3,
+      "bottom": 69.4
+     }
+    },
+    {
+     "cls": "pmodal-title",
+     "text": "SEFL investigation",
+     "rect": {
+      "x": 654.3,
+      "y": 52,
+      "w": 110.8,
+      "h": 18.8,
+      "right": 765.1,
+      "bottom": 70.8
+     }
+    },
+    {
+     "cls": "spacer",
+     "text": "",
+     "rect": {
+      "x": 773.1,
+      "y": 61.4,
+      "w": 26.9,
+      "h": 0,
+      "right": 800,
+      "bottom": 61.4
+     }
+    },
+    {
+     "cls": "pmodal-status mono",
+     "text": "",
+     "rect": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "right": 0,
+      "bottom": 0
+     }
+    },
+    {
+     "cls": "pmodal-close",
+     "text": "✕",
+     "rect": {
+      "x": 480,
+      "y": 72.8,
+      "w": 23.8,
+      "h": 20,
+      "right": 503.8,
+      "bottom": 92.8
+     }
+    },
+    {
+     "cls": "pmodal-facts",
+     "text": "pipeline sefl-investigatekind investigationstage",
+     "rect": {
+      "x": 480,
+      "y": 94.8,
+      "w": 320,
+      "h": 29.8,
+      "right": 800,
+      "bottom": 124.6
+     }
+    }
+   ],
+   "body": {
+    "x": 471,
+    "y": 128.6,
+    "w": 338,
+    "h": 123.4,
+    "right": 809,
+    "bottom": 252
+   },
+   "flow": {
+    "x": 479,
+    "y": 130.6,
+    "w": 322,
+    "h": 119.4,
+    "right": 801,
+    "bottom": 250
+   },
+   "track": {
+    "x": 479,
+    "y": 130.6,
+    "w": 322,
+    "h": 100,
+    "right": 801,
+    "bottom": 230.6
+   },
+   "fit": "0",
+   "marksFrom": "index",
+   "position": "",
+   "scroller": {
+    "clientW": 322,
+    "scrollW": 322,
+    "scrollLeft": 0,
+    "hiddenPx": 0
+   },
+   "visibleStages": 2,
+   "visibleNotches": 2,
+   "colW": 148,
+   "gap": 26,
+   "count": {
+    "shown": false,
+    "text": "all 2 stages and 2 notches in view",
+    "size": 11,
+    "contrast": 5.7
+   },
+   "fitButton": {
+    "shown": false,
+    "text": "fit",
+    "size": 11
+   },
+   "legend": {
+    "text": "not reached 2 stages",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "15.95px",
+    "color": "#9aa4b2",
+    "bg": "#171c24",
+    "contrast": 6.78,
+    "count": 1
+   },
+   "title": {
+    "text": "SEFL investigation",
+    "size": 13,
+    "weight": "700",
+    "lineHeight": "18.85px",
+    "color": "#e6e9ef",
+    "bg": "#1d232b",
+    "contrast": 13.01
+   },
+   "kicker": {
+    "text": "pipeline flow · definition",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "15.95px",
+    "color": "#6b7482",
+    "bg": "#1d232b",
+    "contrast": 3.35
+   },
+   "facts": {
+    "text": "pipeline sefl-investigatekind investigationstages 2next sefl-review-loop",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "13.2px",
+    "color": "#9aa4b2",
+    "bg": "#1d232b",
+    "contrast": 6.27
+   },
+   "factLabel": {
+    "text": "pipeline",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "13.2px",
+    "color": "#6b7482",
+    "bg": "#1d232b",
+    "contrast": 3.35
+   },
+   "factValue": {
+    "text": "sefl-investigate",
+    "size": 12,
+    "weight": "500",
+    "lineHeight": "14.4px",
+    "color": "#e6e9ef",
+    "bg": "#1d232b",
+    "contrast": 13.01
+   },
+   "closeButton": {
+    "text": "✕",
+    "size": 12,
+    "weight": "400",
+    "lineHeight": "16px",
+    "color": "#9aa4b2",
+    "bg": "#13181f",
+    "contrast": 7.07
+   },
+   "stageTitle": {
+    "text": "1 Probe",
+    "size": 13,
+    "weight": "500",
+    "lineHeight": "17.55px",
+    "color": "#8b96a5",
+    "bg": "#13181f",
+    "contrast": 5.94,
+    "lines": 1
+   },
+   "ordinal": {
+    "text": "1",
+    "size": 11,
+    "weight": "600",
+    "lineHeight": "13.75px",
+    "color": "#8b96a5",
+    "bg": "#13181f",
+    "contrast": 5.94
+   },
+   "detail": {
+    "text": "commits min=1",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "13.75px",
+    "color": "#8b96a5",
+    "bg": "#13181f",
+    "contrast": 5.94,
+    "lines": 1
+   },
+   "dot": {
+    "color": "#171c24",
+    "w": 8,
+    "h": 8,
+    "contrast": 1.04
+   },
+   "notchStyle": {
+    "color": "#4a5568",
+    "w": 3,
+    "h": 15,
+    "contrast": 2.37
+   },
+   "marks": [
+    "not-reached",
+    "not-reached"
+   ],
+   "notches": [
+    {
+     "state": "open",
+     "gate": "exit:probe",
+     "name": "commits",
+     "color": "#4a5568",
+     "ariaLen": 101,
+     "titleLen": 54,
+     "aria": "gate exit:probe · commits — after Probe — no decision record is declared (exit check commits — min=1)",
+     "title": "gate exit:probe · commits — exit check commits — min=1"
+    },
+    {
+     "state": "open",
+     "gate": "exit:conclude",
+     "name": "file-exists",
+     "color": "#4a5568",
+     "ariaLen": 136,
+     "titleLen": 86,
+     "aria": "gate exit:conclude · file-exists — after Conclude — no decision record is declared (exit check file-exists — path=docs/investigation.md)",
+     "title": "gate exit:conclude · file-exists — exit check file-exists — path=docs/investigation.md"
+    }
+   ],
+   "arcs": [],
+   "link": {
+    "w": 26,
+    "h": 1,
+    "color": "#212730",
+    "headW": 6,
+    "headH": 5,
+    "headBorder": "rgb(33, 39, 48)"
+   },
+   "notchStates": {
+    "open": {
+     "count": 2,
+     "color": "#4a5568"
+    }
+   },
+   "cards": [
+    {
+     "pos": "1",
+     "id": "probe",
+     "mark": "not-reached",
+     "title": "1 Probe",
+     "titleLines": 1,
+     "titleWords": 2,
+     "words": 4,
+     "detail": "commits min=1",
+     "detailLines": 1,
+     "detailClamped": false,
+     "rect": {
+      "x": 479,
+      "y": 130.6,
+      "w": 148,
+      "h": 100,
+      "right": 627,
+      "bottom": 230.6
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    },
+    {
+     "pos": "2",
+     "id": "conclude",
+     "mark": "not-reached",
+     "title": "2 Conclude",
+     "titleLines": 1,
+     "titleWords": 2,
+     "words": 4,
+     "detail": "file-exists path=docs/investigation.md",
+     "detailLines": 2,
+     "detailClamped": true,
+     "rect": {
+      "x": 653,
+      "y": 130.6,
+      "w": 148,
+      "h": 100,
+      "right": 801,
+      "bottom": 230.6
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    }
+   ],
+   "areas": {
+    "card": 69705,
+    "drawing": 29645,
+    "chrome": 5600,
+    "scrollClip": 32200
+   },
+   "ink": {
+    "barTitle": 22621,
+    "barKicker": 5862,
+    "barFacts": 64497,
+    "stageTitles": 8164,
+    "ordinals": 779,
+    "details": 27190,
+    "notches": 123,
+    "dots": 5,
+    "legend": 22268,
+    "status": 0
+   },
+   "page": {
+    "bodyBg": "#10141a",
+    "colorScheme": "normal"
+   },
+   "pageErrors": [],
+   "sha256": "f60adc181c0f"
+  },
+  {
+   "file": "03-seven-1280.png",
+   "fixture": "seven",
+   "defId": "sefl-review-loop",
+   "viewport": {
+    "w": 1280,
+    "h": 800
+   },
+   "mode": "edit",
+   "stages": 7,
+   "card": {
+    "x": 217,
+    "y": 48,
+    "w": 846,
+    "h": 168.8,
+    "right": 1063,
+    "bottom": 216.8
+   },
+   "bar": {
+    "x": 218,
+    "y": 49,
+    "w": 844,
+    "h": 43.4,
+    "right": 1062,
+    "bottom": 92.4
+   },
+   "barItems": [
+    {
+     "cls": "pmodal-kicker",
+     "text": "pipeline flow · definition",
+     "rect": {
+      "x": 227,
+      "y": 54,
+      "w": 166.3,
+      "h": 15.9,
+      "right": 393.3,
+      "bottom": 70
+     }
+    },
+    {
+     "cls": "pmodal-title",
+     "text": "SEFL review loop",
+     "rect": {
+      "x": 401.3,
+      "y": 52.6,
+      "w": 102.7,
+      "h": 18.8,
+      "right": 504,
+      "bottom": 71.4
+     }
+    },
+    {
+     "cls": "spacer",
+     "text": "",
+     "rect": {
+      "x": 512,
+      "y": 62,
+      "w": 509.2,
+      "h": 0,
+      "right": 1021.2,
+      "bottom": 62
+     }
+    },
+    {
+     "cls": "pmodal-status mono",
+     "text": "",
+     "rect": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "right": 0,
+      "bottom": 0
+     }
+    },
+    {
+     "cls": "pmodal-close",
+     "text": "✕",
+     "rect": {
+      "x": 1029.2,
+      "y": 52,
+      "w": 23.8,
+      "h": 20,
+      "right": 1053,
+      "bottom": 72
+     }
+    },
+    {
+     "cls": "pmodal-facts",
+     "text": "pipeline sefl-review-loopkind turnoverstages 7ne",
+     "rect": {
+      "x": 227,
+      "y": 74,
+      "w": 826,
+      "h": 14.4,
+      "right": 1053,
+      "bottom": 88.4
+     }
+    }
+   ],
+   "body": {
+    "x": 218,
+    "y": 92.4,
+    "w": 844,
+    "h": 123.4,
+    "right": 1062,
+    "bottom": 215.8
+   },
+   "flow": {
+    "x": 226,
+    "y": 94.4,
+    "w": 828,
+    "h": 119.4,
+    "right": 1054,
+    "bottom": 213.8
+   },
+   "track": {
+    "x": 226,
+    "y": 94.4,
+    "w": 828,
+    "h": 100,
+    "right": 1054,
+    "bottom": 194.4
+   },
+   "fit": "0",
+   "marksFrom": "index",
+   "position": "",
+   "scroller": {
+    "clientW": 828,
+    "scrollW": 828,
+    "scrollLeft": 0,
+    "hiddenPx": 0
+   },
+   "visibleStages": 7,
+   "visibleNotches": 7,
+   "colW": 96,
+   "gap": 26,
+   "count": {
+    "shown": false,
+    "text": "all 7 stages and 7 notches in view",
+    "size": 11,
+    "contrast": 5.7
+   },
+   "fitButton": {
+    "shown": false,
+    "text": "fit",
+    "size": 11
+   },
+   "legend": {
+    "text": "not reached 7 stages",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "15.95px",
+    "color": "#9aa4b2",
+    "bg": "#171c24",
+    "contrast": 6.78,
+    "count": 1
+   },
+   "title": {
+    "text": "SEFL review loop",
+    "size": 13,
+    "weight": "700",
+    "lineHeight": "18.85px",
+    "color": "#e6e9ef",
+    "bg": "#1d232b",
+    "contrast": 13.01
+   },
+   "kicker": {
+    "text": "pipeline flow · definition",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "15.95px",
+    "color": "#6b7482",
+    "bg": "#1d232b",
+    "contrast": 3.35
+   },
+   "facts": {
+    "text": "pipeline sefl-review-loopkind turnoverstages 7next end of the chain",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "13.2px",
+    "color": "#9aa4b2",
+    "bg": "#1d232b",
+    "contrast": 6.27
+   },
+   "factLabel": {
+    "text": "pipeline",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "13.2px",
+    "color": "#6b7482",
+    "bg": "#1d232b",
+    "contrast": 3.35
+   },
+   "factValue": {
+    "text": "sefl-review-loop",
+    "size": 12,
+    "weight": "500",
+    "lineHeight": "14.4px",
+    "color": "#e6e9ef",
+    "bg": "#1d232b",
+    "contrast": 13.01
+   },
+   "closeButton": {
+    "text": "✕",
+    "size": 12,
+    "weight": "400",
+    "lineHeight": "16px",
+    "color": "#9aa4b2",
+    "bg": "#13181f",
+    "contrast": 7.07
+   },
+   "stageTitle": {
+    "text": "1 Name the branch",
+    "size": 13,
+    "weight": "500",
+    "lineHeight": "17.55px",
+    "color": "#8b96a5",
+    "bg": "#13181f",
+    "contrast": 5.94,
+    "lines": 2
+   },
+   "ordinal": {
+    "text": "1",
+    "size": 11,
+    "weight": "600",
+    "lineHeight": "13.75px",
+    "color": "#8b96a5",
+    "bg": "#13181f",
+    "contrast": 5.94
+   },
+   "detail": {
+    "text": "branch-name pattern=^\\d{8}_\\d{4}_[A-Z][A-Z0-9]+-\\d+_[a-z0-9._-]+$ branch={{branch}}",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "13.75px",
+    "color": "#8b96a5",
+    "bg": "#13181f",
+    "contrast": 5.94,
+    "lines": 2
+   },
+   "dot": {
+    "color": "#171c24",
+    "w": 8,
+    "h": 8,
+    "contrast": 1.04
+   },
+   "notchStyle": {
+    "color": "#4a5568",
+    "w": 3,
+    "h": 15,
+    "contrast": 2.37
+   },
+   "marks": [
+    "not-reached",
+    "not-reached",
+    "not-reached",
+    "not-reached",
+    "not-reached",
+    "not-reached",
+    "not-reached"
+   ],
+   "notches": [
+    {
+     "state": "open",
+     "gate": "exit:branch",
+     "name": "branch-name",
+     "color": "#4a5568",
+     "ariaLen": 186,
+     "titleLen": 129,
+     "aria": "gate exit:branch · branch-name — after Name the branch — no decision record is declared (exit check branch-name — pattern=^\\d{8}_\\d{4}_[A-Z][A-Z0-9]+-\\d+_[a-z0-9._-]+$ branch={{branch}})",
+     "title": "gate exit:branch · branch-name — exit check branch-name — pattern=^\\d{8}_\\d{4}_[A-Z][A-Z0-9]+-\\d+_[a-z0-9._-]+$ branch={{branch}}"
+    },
+    {
+     "state": "open",
+     "gate": "exit:push",
+     "name": "pushed",
+     "color": "#4a5568",
+     "ariaLen": 116,
+     "titleLen": 59,
+     "aria": "gate exit:push · pushed — after Push the branch — no decision record is declared (exit check pushed — no parameters)",
+     "title": "gate exit:push · pushed — exit check pushed — no parameters"
+    },
+    {
+     "state": "open",
+     "gate": "exit:pr",
+     "name": "pr-open",
+     "color": "#4a5568",
+     "ariaLen": 122,
+     "titleLen": 59,
+     "aria": "gate exit:pr · pr-open — after Open the pull request — no decision record is declared (exit check pr-open — no parameters)",
+     "title": "gate exit:pr · pr-open — exit check pr-open — no parameters"
+    },
+    {
+     "state": "open",
+     "gate": "exit:wait",
+     "name": "pr-comments",
+     "color": "#4a5568",
+     "ariaLen": 132,
+     "titleLen": 69,
+     "aria": "gate exit:wait · pr-comments — after Wait for the reviewer — no decision record is declared (exit check pr-comments — no parameters)",
+     "title": "gate exit:wait · pr-comments — exit check pr-comments — no parameters"
+    },
+    {
+     "state": "open",
+     "gate": "exit:address",
+     "name": "pushed",
+     "color": "#4a5568",
+     "ariaLen": 121,
+     "titleLen": 62,
+     "aria": "gate exit:address · pushed — after Answer the review — no decision record is declared (exit check pushed — no parameters)",
+     "title": "gate exit:address · pushed — exit check pushed — no parameters"
+    },
+    {
+     "state": "open",
+     "gate": "exit:approve",
+     "name": "pr-approved",
+     "color": "#4a5568",
+     "ariaLen": 147,
+     "titleLen": 72,
+     "aria": "gate exit:approve · pr-approved — after Wait for the approval at the head — no decision record is declared (exit check pr-approved — no parameters)",
+     "title": "gate exit:approve · pr-approved — exit check pr-approved — no parameters"
+    },
+    {
+     "state": "open",
+     "gate": "exit:merge",
+     "name": "pr-merged",
+     "color": "#4a5568",
+     "ariaLen": 113,
+     "titleLen": 66,
+     "aria": "gate exit:merge · pr-merged — after Merge — no decision record is declared (exit check pr-merged — no parameters)",
+     "title": "gate exit:merge · pr-merged — exit check pr-merged — no parameters"
+    }
+   ],
+   "arcs": [],
+   "link": {
+    "w": 26,
+    "h": 1,
+    "color": "#212730",
+    "headW": 6,
+    "headH": 5,
+    "headBorder": "rgb(33, 39, 48)"
+   },
+   "notchStates": {
+    "open": {
+     "count": 7,
+     "color": "#4a5568"
+    }
+   },
+   "cards": [
+    {
+     "pos": "1",
+     "id": "branch",
+     "mark": "not-reached",
+     "title": "1 Name the branch",
+     "titleLines": 2,
+     "titleWords": 4,
+     "words": 7,
+     "detail": "branch-name pattern=^\\d{8}_\\d{4}_[A-Z][A-Z0-9]+-\\d+_[a-z0-9._-]+$ branch={{branch}}",
+     "detailLines": 2,
+     "detailClamped": true,
+     "rect": {
+      "x": 226,
+      "y": 94.4,
+      "w": 96,
+      "h": 100,
+      "right": 322,
+      "bottom": 194.4
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    },
+    {
+     "pos": "2",
+     "id": "push",
+     "mark": "not-reached",
+     "title": "2 Push the branch",
+     "titleLines": 2,
+     "titleWords": 4,
+     "words": 5,
+     "detail": "pushed",
+     "detailLines": 1,
+     "detailClamped": false,
+     "rect": {
+      "x": 348,
+      "y": 94.4,
+      "w": 96,
+      "h": 100,
+      "right": 444,
+      "bottom": 194.4
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    },
+    {
+     "pos": "3",
+     "id": "pr",
+     "mark": "not-reached",
+     "title": "3 Open the pull request",
+     "titleLines": 2,
+     "titleWords": 5,
+     "words": 6,
+     "detail": "pr-open",
+     "detailLines": 1,
+     "detailClamped": false,
+     "rect": {
+      "x": 470,
+      "y": 94.4,
+      "w": 96,
+      "h": 100,
+      "right": 566,
+      "bottom": 194.4
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    },
+    {
+     "pos": "4",
+     "id": "wait",
+     "mark": "not-reached",
+     "title": "4 Wait for the reviewer",
+     "titleLines": 2,
+     "titleWords": 5,
+     "words": 6,
+     "detail": "pr-comments",
+     "detailLines": 1,
+     "detailClamped": false,
+     "rect": {
+      "x": 592,
+      "y": 94.4,
+      "w": 96,
+      "h": 100,
+      "right": 688,
+      "bottom": 194.4
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    },
+    {
+     "pos": "5",
+     "id": "address",
+     "mark": "not-reached",
+     "title": "5 Answer the review",
+     "titleLines": 2,
+     "titleWords": 4,
+     "words": 5,
+     "detail": "pushed",
+     "detailLines": 1,
+     "detailClamped": false,
+     "rect": {
+      "x": 714,
+      "y": 94.4,
+      "w": 96,
+      "h": 100,
+      "right": 810,
+      "bottom": 194.4
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    },
+    {
+     "pos": "6",
+     "id": "approve",
+     "mark": "not-reached",
+     "title": "6 Wait for the approval at the head",
+     "titleLines": 3,
+     "titleWords": 8,
+     "words": 9,
+     "detail": "pr-approved",
+     "detailLines": 1,
+     "detailClamped": false,
+     "rect": {
+      "x": 836,
+      "y": 94.4,
+      "w": 96,
+      "h": 100,
+      "right": 932,
+      "bottom": 194.4
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    },
+    {
+     "pos": "7",
+     "id": "merge",
+     "mark": "not-reached",
+     "title": "7 Merge",
+     "titleLines": 1,
+     "titleWords": 2,
+     "words": 3,
+     "detail": "pr-merged",
+     "detailLines": 1,
+     "detailClamped": false,
+     "rect": {
+      "x": 958,
+      "y": 94.4,
+      "w": 96,
+      "h": 100,
+      "right": 1054,
+      "bottom": 194.4
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    }
+   ],
+   "areas": {
+    "card": 142789,
+    "drawing": 67470,
+    "chrome": 14399,
+    "scrollClip": 82800
+   },
+   "ink": {
+    "barTitle": 20975,
+    "barKicker": 5862,
+    "barFacts": 59559,
+    "stageTitles": 66531,
+    "ordinals": 2725,
+    "details": 55158,
+    "notches": 432,
+    "dots": 18,
+    "legend": 22268,
+    "status": 0
+   },
+   "page": {
+    "bodyBg": "#10141a",
+    "colorScheme": "normal"
+   },
+   "pageErrors": [],
+   "sha256": "6bccaa322cd4"
+  },
+  {
+   "file": "04-thirteen-1280.png",
+   "fixture": "thirteen",
+   "defId": "acceptance-thirteen",
+   "viewport": {
+    "w": 1280,
+    "h": 800
+   },
+   "mode": "edit",
+   "stages": 13,
+   "card": {
+    "x": 25.6,
+    "y": 48,
+    "w": 1228.8,
+    "h": 202.1,
+    "right": 1254.4,
+    "bottom": 250.1
+   },
+   "bar": {
+    "x": 26.6,
+    "y": 49,
+    "w": 1226.8,
+    "h": 43.4,
+    "right": 1253.4,
+    "bottom": 92.4
+   },
+   "barItems": [
+    {
+     "cls": "pmodal-kicker",
+     "text": "pipeline flow · definition",
+     "rect": {
+      "x": 35.6,
+      "y": 54,
+      "w": 166.3,
+      "h": 15.9,
+      "right": 201.9,
+      "bottom": 70
+     }
+    },
+    {
+     "cls": "pmodal-title",
+     "text": "POC to UAT",
+     "rect": {
+      "x": 209.9,
+      "y": 52.6,
+      "w": 71.1,
+      "h": 18.8,
+      "right": 281,
+      "bottom": 71.4
+     }
+    },
+    {
+     "cls": "spacer",
+     "text": "",
+     "rect": {
+      "x": 289,
+      "y": 62,
+      "w": 923.6,
+      "h": 0,
+      "right": 1212.6,
+      "bottom": 62
+     }
+    },
+    {
+     "cls": "pmodal-status mono",
+     "text": "",
+     "rect": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "right": 0,
+      "bottom": 0
+     }
+    },
+    {
+     "cls": "pmodal-close",
+     "text": "✕",
+     "rect": {
+      "x": 1220.6,
+      "y": 52,
+      "w": 23.8,
+      "h": 20,
+      "right": 1244.4,
+      "bottom": 72
+     }
+    },
+    {
+     "cls": "pmodal-facts",
+     "text": "pipeline acceptance-thirteenkind turnoverstages ",
+     "rect": {
+      "x": 35.6,
+      "y": 74,
+      "w": 1208.8,
+      "h": 14.4,
+      "right": 1244.4,
+      "bottom": 88.4
+     }
+    }
+   ],
+   "body": {
+    "x": 26.6,
+    "y": 92.4,
+    "w": 1226.8,
+    "h": 156.7,
+    "right": 1253.4,
+    "bottom": 249.1
+   },
+   "flow": {
+    "x": 34.6,
+    "y": 94.4,
+    "w": 1210.8,
+    "h": 152.7,
+    "right": 1245.4,
+    "bottom": 247.1
+   },
+   "track": {
+    "x": 34.6,
+    "y": 94.4,
+    "w": 1210.8,
+    "h": 110.3,
+    "right": 1245.4,
+    "bottom": 204.7
+   },
+   "fit": "0",
+   "marksFrom": "index",
+   "position": "",
+   "scroller": {
+    "clientW": 1211,
+    "scrollW": 1560,
+    "scrollLeft": 0,
+    "hiddenPx": 349
+   },
+   "visibleStages": 10,
+   "visibleNotches": 10,
+   "colW": 96,
+   "gap": 26,
+   "count": {
+    "shown": true,
+    "text": "showing stages 1–10 of 13 — 3 of 13 stages and 3 of 13 notches out of view",
+    "size": 11,
+    "contrast": 6.78
+   },
+   "fitButton": {
+    "shown": true,
+    "text": "fit",
+    "size": 11
+   },
+   "legend": {
+    "text": "not reached 13 stages",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "15.95px",
+    "color": "#9aa4b2",
+    "bg": "#171c24",
+    "contrast": 6.78,
+    "count": 1
+   },
+   "title": {
+    "text": "POC to UAT",
+    "size": 13,
+    "weight": "700",
+    "lineHeight": "18.85px",
+    "color": "#e6e9ef",
+    "bg": "#1d232b",
+    "contrast": 13.01
+   },
+   "kicker": {
+    "text": "pipeline flow · definition",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "15.95px",
+    "color": "#6b7482",
+    "bg": "#1d232b",
+    "contrast": 3.35
+   },
+   "facts": {
+    "text": "pipeline acceptance-thirteenkind turnoverstages 13next end of the chain",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "13.2px",
+    "color": "#9aa4b2",
+    "bg": "#1d232b",
+    "contrast": 6.27
+   },
+   "factLabel": {
+    "text": "pipeline",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "13.2px",
+    "color": "#6b7482",
+    "bg": "#1d232b",
+    "contrast": 3.35
+   },
+   "factValue": {
+    "text": "acceptance-thirteen",
+    "size": 12,
+    "weight": "500",
+    "lineHeight": "14.4px",
+    "color": "#e6e9ef",
+    "bg": "#1d232b",
+    "contrast": 13.01
+   },
+   "closeButton": {
+    "text": "✕",
+    "size": 12,
+    "weight": "400",
+    "lineHeight": "16px",
+    "color": "#9aa4b2",
+    "bg": "#13181f",
+    "contrast": 7.07
+   },
+   "stageTitle": {
+    "text": "1 Intake and charter",
+    "size": 13,
+    "weight": "500",
+    "lineHeight": "17.55px",
+    "color": "#8b96a5",
+    "bg": "#13181f",
+    "contrast": 5.94,
+    "lines": 2
+   },
+   "ordinal": {
+    "text": "1",
+    "size": 11,
+    "weight": "600",
+    "lineHeight": "13.75px",
+    "color": "#8b96a5",
+    "bg": "#13181f",
+    "contrast": 5.94
+   },
+   "detail": {
+    "text": "commits min=1",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "13.75px",
+    "color": "#8b96a5",
+    "bg": "#13181f",
+    "contrast": 5.94,
+    "lines": 2
+   },
+   "dot": {
+    "color": "#171c24",
+    "w": 8,
+    "h": 8,
+    "contrast": 1.04
+   },
+   "notchStyle": {
+    "color": "#4a5568",
+    "w": 3,
+    "h": 15,
+    "contrast": 2.37
+   },
+   "marks": [
+    "not-reached",
+    "not-reached",
+    "not-reached",
+    "not-reached",
+    "not-reached",
+    "not-reached",
+    "not-reached",
+    "not-reached",
+    "not-reached",
+    "not-reached",
+    "not-reached",
+    "not-reached",
+    "not-reached"
+   ],
+   "notches": [
+    {
+     "state": "open",
+     "gate": "exit:s0",
+     "name": "commits",
+     "color": "#4a5568",
+     "ariaLen": 111,
+     "titleLen": 51,
+     "aria": "gate exit:s0 · commits — after Intake and charter — no decision record is declared (exit check commits — min=1)",
+     "title": "gate exit:s0 · commits — exit check commits — min=1"
+    },
+    {
+     "state": "open",
+     "gate": "exit:s1",
+     "name": "file-exists",
+     "color": "#4a5568",
+     "ariaLen": 132,
+     "titleLen": 81,
+     "aria": "gate exit:s1 · file-exists — after POC build — no decision record is declared (exit check file-exists — path=ledger/change-log.json)",
+     "title": "gate exit:s1 · file-exists — exit check file-exists — path=ledger/change-log.json"
+    },
+    {
+     "state": "open",
+     "gate": "exit:s2",
+     "name": "file-exists",
+     "color": "#4a5568",
+     "ariaLen": 145,
+     "titleLen": 86,
+     "aria": "gate exit:s2 · file-exists — after Freeze and export — no decision record is declared (exit check file-exists — path=exports/poc-0007/crawl.json)",
+     "title": "gate exit:s2 · file-exists — exit check file-exists — path=exports/poc-0007/crawl.json"
+    },
+    {
+     "state": "open",
+     "gate": "exit:s3",
+     "name": "commits",
+     "color": "#4a5568",
+     "ariaLen": 109,
+     "titleLen": 51,
+     "aria": "gate exit:s3 · commits — after Reverse-engineer — no decision record is declared (exit check commits — min=3)",
+     "title": "gate exit:s3 · commits — exit check commits — min=3"
+    },
+    {
+     "state": "open",
+     "gate": "exit:s4",
+     "name": "file-exists",
+     "color": "#4a5568",
+     "ariaLen": 136,
+     "titleLen": 80,
+     "aria": "gate exit:s4 · file-exists — after Work breakdown — no decision record is declared (exit check file-exists — path=ledger/module-plan.md)",
+     "title": "gate exit:s4 · file-exists — exit check file-exists — path=ledger/module-plan.md"
+    },
+    {
+     "state": "open",
+     "gate": "exit:s5",
+     "name": "commits",
+     "color": "#4a5568",
+     "ariaLen": 114,
+     "titleLen": 51,
+     "aria": "gate exit:s5 · commits — after Instantiate the model — no decision record is declared (exit check commits — min=1)",
+     "title": "gate exit:s5 · commits — exit check commits — min=1"
+    },
+    {
+     "state": "open",
+     "gate": "exit:s6",
+     "name": "clean",
+     "color": "#4a5568",
+     "ariaLen": 117,
+     "titleLen": 55,
+     "aria": "gate exit:s6 · clean — after Implement per module — no decision record is declared (exit check clean — no parameters)",
+     "title": "gate exit:s6 · clean — exit check clean — no parameters"
+    },
+    {
+     "state": "open",
+     "gate": "exit:s7",
+     "name": "file-exists",
+     "color": "#4a5568",
+     "ariaLen": 148,
+     "titleLen": 81,
+     "aria": "gate exit:s7 · file-exists — after DAL review and SQL verify — no decision record is declared (exit check file-exists — path=ledger/dal/V-0004.json)",
+     "title": "gate exit:s7 · file-exists — exit check file-exists — path=ledger/dal/V-0004.json"
+    },
+    {
+     "state": "open",
+     "gate": "exit:s8",
+     "name": "commits",
+     "color": "#4a5568",
+     "ariaLen": 111,
+     "titleLen": 51,
+     "aria": "gate exit:s8 · commits — after Code review rounds — no decision record is declared (exit check commits — min=1)",
+     "title": "gate exit:s8 · commits — exit check commits — min=1"
+    },
+    {
+     "state": "open",
+     "gate": "exit:s9",
+     "name": "clean",
+     "color": "#4a5568",
+     "ariaLen": 113,
+     "titleLen": 55,
+     "aria": "gate exit:s9 · clean — after Rewrite to green — no decision record is declared (exit check clean — no parameters)",
+     "title": "gate exit:s9 · clean — exit check clean — no parameters"
+    },
+    {
+     "state": "open",
+     "gate": "exit:s10",
+     "name": "command",
+     "color": "#4a5568",
+     "ariaLen": 138,
+     "titleLen": 76,
+     "aria": "gate exit:s10 · command — after Playwright UI parity — no decision record is declared (exit check command — argv=node,tools/verify-ui.mjs)",
+     "title": "gate exit:s10 · command — exit check command — argv=node,tools/verify-ui.mjs"
+    },
+    {
+     "state": "open",
+     "gate": "exit:s11",
+     "name": "pushed",
+     "color": "#4a5568",
+     "ariaLen": 115,
+     "titleLen": 58,
+     "aria": "gate exit:s11 · pushed — after Delivery to UAT — no decision record is declared (exit check pushed — no parameters)",
+     "title": "gate exit:s11 · pushed — exit check pushed — no parameters"
+    },
+    {
+     "state": "open",
+     "gate": "exit:s12",
+     "name": "file-exists",
+     "color": "#4a5568",
+     "ariaLen": 136,
+     "titleLen": 82,
+     "aria": "gate exit:s12 · file-exists — after UAT sign-off — no decision record is declared (exit check file-exists — path=ledger/dod/V-0005.json)",
+     "title": "gate exit:s12 · file-exists — exit check file-exists — path=ledger/dod/V-0005.json"
+    }
+   ],
+   "arcs": [],
+   "link": {
+    "w": 26,
+    "h": 1,
+    "color": "#212730",
+    "headW": 6,
+    "headH": 5,
+    "headBorder": "rgb(33, 39, 48)"
+   },
+   "notchStates": {
+    "open": {
+     "count": 13,
+     "color": "#4a5568"
+    }
+   },
+   "cards": [
+    {
+     "pos": "1",
+     "id": "s0",
+     "mark": "not-reached",
+     "title": "1 Intake and charter",
+     "titleLines": 2,
+     "titleWords": 4,
+     "words": 6,
+     "detail": "commits min=1",
+     "detailLines": 2,
+     "detailClamped": false,
+     "rect": {
+      "x": 34.6,
+      "y": 94.4,
+      "w": 96,
+      "h": 110.3,
+      "right": 130.6,
+      "bottom": 204.7
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    },
+    {
+     "pos": "2",
+     "id": "s1",
+     "mark": "not-reached",
+     "title": "2 POC build",
+     "titleLines": 1,
+     "titleWords": 3,
+     "words": 5,
+     "detail": "file-exists path=ledger/change-log.json",
+     "detailLines": 2,
+     "detailClamped": true,
+     "rect": {
+      "x": 156.6,
+      "y": 94.4,
+      "w": 96,
+      "h": 110.3,
+      "right": 252.6,
+      "bottom": 204.7
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    },
+    {
+     "pos": "3",
+     "id": "s2",
+     "mark": "not-reached",
+     "title": "3 Freeze and export",
+     "titleLines": 2,
+     "titleWords": 4,
+     "words": 6,
+     "detail": "file-exists path=exports/poc-0007/crawl.json",
+     "detailLines": 2,
+     "detailClamped": true,
+     "rect": {
+      "x": 278.6,
+      "y": 94.4,
+      "w": 96,
+      "h": 110.3,
+      "right": 374.6,
+      "bottom": 204.7
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    },
+    {
+     "pos": "4",
+     "id": "s3",
+     "mark": "not-reached",
+     "title": "4 Reverse-engineer",
+     "titleLines": 2,
+     "titleWords": 2,
+     "words": 4,
+     "detail": "commits min=3",
+     "detailLines": 2,
+     "detailClamped": false,
+     "rect": {
+      "x": 400.6,
+      "y": 94.4,
+      "w": 96,
+      "h": 110.3,
+      "right": 496.6,
+      "bottom": 204.7
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    },
+    {
+     "pos": "5",
+     "id": "s4",
+     "mark": "not-reached",
+     "title": "5 Work breakdown",
+     "titleLines": 2,
+     "titleWords": 3,
+     "words": 5,
+     "detail": "file-exists path=ledger/module-plan.md",
+     "detailLines": 2,
+     "detailClamped": true,
+     "rect": {
+      "x": 522.6,
+      "y": 94.4,
+      "w": 96,
+      "h": 110.3,
+      "right": 618.6,
+      "bottom": 204.7
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    },
+    {
+     "pos": "6",
+     "id": "s5",
+     "mark": "not-reached",
+     "title": "6 Instantiate the model",
+     "titleLines": 3,
+     "titleWords": 4,
+     "words": 6,
+     "detail": "commits min=1",
+     "detailLines": 2,
+     "detailClamped": false,
+     "rect": {
+      "x": 644.6,
+      "y": 94.4,
+      "w": 96,
+      "h": 110.3,
+      "right": 740.6,
+      "bottom": 204.7
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    },
+    {
+     "pos": "7",
+     "id": "s6",
+     "mark": "not-reached",
+     "title": "7 Implement per module",
+     "titleLines": 3,
+     "titleWords": 4,
+     "words": 5,
+     "detail": "clean",
+     "detailLines": 1,
+     "detailClamped": false,
+     "rect": {
+      "x": 766.6,
+      "y": 94.4,
+      "w": 96,
+      "h": 110.3,
+      "right": 862.6,
+      "bottom": 204.7
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    },
+    {
+     "pos": "8",
+     "id": "s7",
+     "mark": "not-reached",
+     "title": "8 DAL review and SQL verify",
+     "titleLines": 3,
+     "titleWords": 6,
+     "words": 8,
+     "detail": "file-exists path=ledger/dal/V-0004.json",
+     "detailLines": 2,
+     "detailClamped": true,
+     "rect": {
+      "x": 888.6,
+      "y": 94.4,
+      "w": 96,
+      "h": 110.3,
+      "right": 984.6,
+      "bottom": 204.7
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    },
+    {
+     "pos": "9",
+     "id": "s8",
+     "mark": "not-reached",
+     "title": "9 Code review rounds",
+     "titleLines": 3,
+     "titleWords": 4,
+     "words": 6,
+     "detail": "commits min=1",
+     "detailLines": 2,
+     "detailClamped": false,
+     "rect": {
+      "x": 1010.6,
+      "y": 94.4,
+      "w": 96,
+      "h": 110.3,
+      "right": 1106.6,
+      "bottom": 204.7
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    },
+    {
+     "pos": "10",
+     "id": "s9",
+     "mark": "not-reached",
+     "title": "10 Rewrite to green",
+     "titleLines": 2,
+     "titleWords": 4,
+     "words": 5,
+     "detail": "clean",
+     "detailLines": 1,
+     "detailClamped": false,
+     "rect": {
+      "x": 1132.6,
+      "y": 94.4,
+      "w": 96,
+      "h": 110.3,
+      "right": 1228.6,
+      "bottom": 204.7
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    },
+    {
+     "pos": "11",
+     "id": "s10",
+     "mark": "not-reached",
+     "title": "11 Playwright UI parity",
+     "titleLines": 3,
+     "titleWords": 4,
+     "words": 6,
+     "detail": "command argv=node,tools/verify-ui.mjs",
+     "detailLines": 2,
+     "detailClamped": true,
+     "rect": {
+      "x": 1254.6,
+      "y": 94.4,
+      "w": 96,
+      "h": 110.3,
+      "right": 1350.6,
+      "bottom": 204.7
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": false
+    },
+    {
+     "pos": "12",
+     "id": "s11",
+     "mark": "not-reached",
+     "title": "12 Delivery to UAT",
+     "titleLines": 2,
+     "titleWords": 4,
+     "words": 5,
+     "detail": "pushed",
+     "detailLines": 1,
+     "detailClamped": false,
+     "rect": {
+      "x": 1376.6,
+      "y": 94.4,
+      "w": 96,
+      "h": 110.3,
+      "right": 1472.6,
+      "bottom": 204.7
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": false
+    },
+    {
+     "pos": "13",
+     "id": "s12",
+     "mark": "not-reached",
+     "title": "13 UAT sign-off",
+     "titleLines": 2,
+     "titleWords": 3,
+     "words": 5,
+     "detail": "file-exists path=ledger/dod/V-0005.json",
+     "detailLines": 2,
+     "detailClamped": true,
+     "rect": {
+      "x": 1498.6,
+      "y": 94.4,
+      "w": 96,
+      "h": 110.3,
+      "right": 1594.6,
+      "bottom": 204.7
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": false
+    }
+   ],
+   "areas": {
+    "card": 248371,
+    "drawing": 106380,
+    "chrome": 46483,
+    "scrollClip": 133604
+   },
+   "ink": {
+    "barTitle": 14509,
+    "barKicker": 5862,
+    "barFacts": 63508,
+    "stageTitles": 115911,
+    "ordinals": 6615,
+    "details": 139841,
+    "notches": 801,
+    "dots": 33,
+    "legend": 23467,
+    "status": 32028
+   },
+   "page": {
+    "bodyBg": "#10141a",
+    "colorScheme": "normal"
+   },
+   "pageErrors": [],
+   "sha256": "6e7d5af0c14f"
+  },
+  {
+   "file": "09-seven-position-1280.png",
+   "fixture": "seven",
+   "defId": "sefl-review-loop-bundle",
+   "viewport": {
+    "w": 1280,
+    "h": 800
+   },
+   "mode": "position",
+   "stages": 7,
+   "card": {
+    "x": 217,
+    "y": 48,
+    "w": 846,
+    "h": 227.1,
+    "right": 1063,
+    "bottom": 275.1
+   },
+   "bar": {
+    "x": 218,
+    "y": 49,
+    "w": 844,
+    "h": 43.4,
+    "right": 1062,
+    "bottom": 92.4
+   },
+   "barItems": [
+    {
+     "cls": "pmodal-kicker",
+     "text": "pipeline flow · position",
+     "rect": {
+      "x": 227,
+      "y": 54,
+      "w": 154.8,
+      "h": 15.9,
+      "right": 381.8,
+      "bottom": 70
+     }
+    },
+    {
+     "cls": "pmodal-title",
+     "text": "SEFL review loop",
+     "rect": {
+      "x": 389.8,
+      "y": 52.6,
+      "w": 102.7,
+      "h": 18.8,
+      "right": 492.5,
+      "bottom": 71.4
+     }
+    },
+    {
+     "cls": "pmodal-sub mono",
+     "text": "at the review",
+     "rect": {
+      "x": 500.5,
+      "y": 54,
+      "w": 78.6,
+      "h": 15.9,
+      "right": 579.2,
+      "bottom": 70
+     }
+    },
+    {
+     "cls": "spacer",
+     "text": "",
+     "rect": {
+      "x": 587.2,
+      "y": 62,
+      "w": 434,
+      "h": 0,
+      "right": 1021.2,
+      "bottom": 62
+     }
+    },
+    {
+     "cls": "pmodal-status mono",
+     "text": "",
+     "rect": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "right": 0,
+      "bottom": 0
+     }
+    },
+    {
+     "cls": "pmodal-close",
+     "text": "✕",
+     "rect": {
+      "x": 1029.2,
+      "y": 52,
+      "w": 23.8,
+      "h": 20,
+      "right": 1053,
+      "bottom": 72
+     }
+    },
+    {
+     "cls": "pmodal-facts",
+     "text": "pipeline sefl-review-loop-bundlekind turnoversta",
+     "rect": {
+      "x": 227,
+      "y": 74,
+      "w": 826,
+      "h": 14.4,
+      "right": 1053,
+      "bottom": 88.4
+     }
+    }
+   ],
+   "body": {
+    "x": 218,
+    "y": 92.4,
+    "w": 844,
+    "h": 181.7,
+    "right": 1062,
+    "bottom": 274.1
+   },
+   "flow": {
+    "x": 226,
+    "y": 94.4,
+    "w": 828,
+    "h": 177.7,
+    "right": 1054,
+    "bottom": 272.1
+   },
+   "track": {
+    "x": 226,
+    "y": 142.4,
+    "w": 828,
+    "h": 110.3,
+    "right": 1054,
+    "bottom": 252.7
+   },
+   "fit": "0",
+   "marksFrom": "record",
+   "position": "address",
+   "scroller": {
+    "clientW": 828,
+    "scrollW": 828,
+    "scrollLeft": 0,
+    "hiddenPx": 0
+   },
+   "visibleStages": 7,
+   "visibleNotches": 2,
+   "colW": 96,
+   "gap": 26,
+   "count": {
+    "shown": false,
+    "text": "all 7 stages and 2 notches in view",
+    "size": 11,
+    "contrast": 5.7
+   },
+   "fitButton": {
+    "shown": false,
+    "text": "fit",
+    "size": 11
+   },
+   "legend": {
+    "text": "not reached 2 stagescurrent 1 stagedone 4 stages",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "15.95px",
+    "color": "#9aa4b2",
+    "bg": "#171c24",
+    "contrast": 6.78,
+    "count": 3
+   },
+   "title": {
+    "text": "SEFL review loop",
+    "size": 13,
+    "weight": "700",
+    "lineHeight": "18.85px",
+    "color": "#e6e9ef",
+    "bg": "#1d232b",
+    "contrast": 13.01
+   },
+   "kicker": {
+    "text": "pipeline flow · position",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "15.95px",
+    "color": "#6b7482",
+    "bg": "#1d232b",
+    "contrast": 3.35
+   },
+   "facts": {
+    "text": "pipeline sefl-review-loop-bundlekind turnoverstages 7next end of the chain",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "13.2px",
+    "color": "#9aa4b2",
+    "bg": "#1d232b",
+    "contrast": 6.27
+   },
+   "factLabel": {
+    "text": "pipeline",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "13.2px",
+    "color": "#6b7482",
+    "bg": "#1d232b",
+    "contrast": 3.35
+   },
+   "factValue": {
+    "text": "sefl-review-loop-bundle",
+    "size": 12,
+    "weight": "500",
+    "lineHeight": "14.4px",
+    "color": "#e6e9ef",
+    "bg": "#1d232b",
+    "contrast": 13.01
+   },
+   "closeButton": {
+    "text": "✕",
+    "size": 12,
+    "weight": "400",
+    "lineHeight": "16px",
+    "color": "#9aa4b2",
+    "bg": "#13181f",
+    "contrast": 7.07
+   },
+   "stageTitle": {
+    "text": "1 Name the branch",
+    "size": 13,
+    "weight": "500",
+    "lineHeight": "17.55px",
+    "color": "#9aa4b2",
+    "bg": "#13181f",
+    "contrast": 7.07,
+    "lines": 2
+   },
+   "ordinal": {
+    "text": "1",
+    "size": 11,
+    "weight": "600",
+    "lineHeight": "13.75px",
+    "color": "#8b96a5",
+    "bg": "#13181f",
+    "contrast": 5.94
+   },
+   "detail": {
+    "lines": 0
+   },
+   "dot": {
+    "color": "#2ea043",
+    "w": 8,
+    "h": 8,
+    "contrast": 5.28
+   },
+   "notchStyle": {
+    "color": "#6f8f5a",
+    "w": 3,
+    "h": 15,
+    "contrast": 4.88
+   },
+   "marks": [
+    "done",
+    "done",
+    "done",
+    "done",
+    "current",
+    "not-reached",
+    "not-reached"
+   ],
+   "notches": [
+    {
+     "state": "answered",
+     "gate": "G1",
+     "name": "review green",
+     "color": "#6f8f5a",
+     "ariaLen": 94,
+     "titleLen": 100,
+     "aria": "gate G1 · review green — after Wait for the reviewer — decides decisions/review.json; answered",
+     "title": "gate G1 · review green — decides decisions/review.json (go, again) — on finding-set — decider reader"
+    },
+    {
+     "state": "ahead",
+     "gate": "G2",
+     "name": "head approved",
+     "color": "#4a5568",
+     "ariaLen": 115,
+     "titleLen": 98,
+     "aria": "gate G2 · head approved — after Wait for the approval at the head — decides decisions/approve.json; not yet crossed",
+     "title": "gate G2 · head approved — decides decisions/approve.json (go, no-go) — on verdict — decider reader"
+    }
+   ],
+   "arcs": [
+    {
+     "loop": "H-10",
+     "from": "address",
+     "to": "branch",
+     "cap": "2 of 3 rounds",
+     "label": "2 of 3 rounds",
+     "rect": {
+      "x": 274,
+      "y": 112.4,
+      "w": 488,
+      "h": 22,
+      "right": 762,
+      "bottom": 134.4
+     }
+    }
+   ],
+   "link": {
+    "w": 26,
+    "h": 1,
+    "color": "#212730",
+    "headW": 6,
+    "headH": 5,
+    "headBorder": "rgb(33, 39, 48)"
+   },
+   "notchStates": {
+    "answered": {
+     "count": 1,
+     "color": "#6f8f5a"
+    },
+    "ahead": {
+     "count": 1,
+     "color": "#4a5568"
+    }
+   },
+   "cards": [
+    {
+     "pos": "1",
+     "id": "branch",
+     "mark": "done",
+     "title": "1 Name the branch",
+     "titleLines": 2,
+     "titleWords": 4,
+     "words": 4,
+     "detail": "",
+     "detailLines": 0,
+     "detailClamped": false,
+     "rect": {
+      "x": 226,
+      "y": 142.4,
+      "w": 96,
+      "h": 110.3,
+      "right": 322,
+      "bottom": 252.7
+     },
+     "bg": "#13181f",
+     "border": "#24452c",
+     "titleColor": "#9aa4b2",
+     "titleWeight": "500",
+     "dotColor": "#2ea043",
+     "fullyVisible": true
+    },
+    {
+     "pos": "2",
+     "id": "push",
+     "mark": "done",
+     "title": "2 Push the branch",
+     "titleLines": 2,
+     "titleWords": 4,
+     "words": 4,
+     "detail": "",
+     "detailLines": 0,
+     "detailClamped": false,
+     "rect": {
+      "x": 348,
+      "y": 142.4,
+      "w": 96,
+      "h": 110.3,
+      "right": 444,
+      "bottom": 252.7
+     },
+     "bg": "#13181f",
+     "border": "#24452c",
+     "titleColor": "#9aa4b2",
+     "titleWeight": "500",
+     "dotColor": "#2ea043",
+     "fullyVisible": true
+    },
+    {
+     "pos": "3",
+     "id": "pr",
+     "mark": "done",
+     "title": "3 Open the pull request",
+     "titleLines": 2,
+     "titleWords": 5,
+     "words": 5,
+     "detail": "",
+     "detailLines": 0,
+     "detailClamped": false,
+     "rect": {
+      "x": 470,
+      "y": 142.4,
+      "w": 96,
+      "h": 110.3,
+      "right": 566,
+      "bottom": 252.7
+     },
+     "bg": "#13181f",
+     "border": "#24452c",
+     "titleColor": "#9aa4b2",
+     "titleWeight": "500",
+     "dotColor": "#2ea043",
+     "fullyVisible": true
+    },
+    {
+     "pos": "4",
+     "id": "wait",
+     "mark": "done",
+     "title": "4 Wait for the reviewer",
+     "titleLines": 2,
+     "titleWords": 5,
+     "words": 9,
+     "detail": "review green → decisions/review.json",
+     "detailLines": 2,
+     "detailClamped": true,
+     "rect": {
+      "x": 592,
+      "y": 142.4,
+      "w": 96,
+      "h": 110.3,
+      "right": 688,
+      "bottom": 252.7
+     },
+     "bg": "#13181f",
+     "border": "#24452c",
+     "titleColor": "#9aa4b2",
+     "titleWeight": "500",
+     "dotColor": "#2ea043",
+     "fullyVisible": true
+    },
+    {
+     "pos": "5",
+     "id": "address",
+     "mark": "current",
+     "title": "5 Answer the review",
+     "titleLines": 2,
+     "titleWords": 4,
+     "words": 4,
+     "detail": "",
+     "detailLines": 0,
+     "detailClamped": false,
+     "rect": {
+      "x": 714,
+      "y": 142.4,
+      "w": 96,
+      "h": 110.3,
+      "right": 810,
+      "bottom": 252.7
+     },
+     "bg": "#141f2c",
+     "border": "#2b5480",
+     "titleColor": "#e6e9ef",
+     "titleWeight": "600",
+     "dotColor": "#58a6ff",
+     "fullyVisible": true
+    },
+    {
+     "pos": "6",
+     "id": "approve",
+     "mark": "not-reached",
+     "title": "6 Wait for the approval at the head",
+     "titleLines": 3,
+     "titleWords": 8,
+     "words": 12,
+     "detail": "head approved → decisions/approve.json",
+     "detailLines": 2,
+     "detailClamped": true,
+     "rect": {
+      "x": 836,
+      "y": 142.4,
+      "w": 96,
+      "h": 110.3,
+      "right": 932,
+      "bottom": 252.7
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    },
+    {
+     "pos": "7",
+     "id": "merge",
+     "mark": "not-reached",
+     "title": "7 Merge",
+     "titleLines": 1,
+     "titleWords": 2,
+     "words": 2,
+     "detail": "",
+     "detailLines": 0,
+     "detailClamped": false,
+     "rect": {
+      "x": 958,
+      "y": 142.4,
+      "w": 96,
+      "h": 110.3,
+      "right": 1054,
+      "bottom": 252.7
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    }
+   ],
+   "areas": {
+    "card": 192148,
+    "drawing": 84977,
+    "chrome": 14399,
+    "scrollClip": 131109
+   },
+   "ink": {
+    "barTitle": 20975,
+    "barKicker": 5457,
+    "barFacts": 66470,
+    "stageTitles": 89393,
+    "ordinals": 2695,
+    "details": 27191,
+    "notches": 236,
+    "dots": 1459,
+    "legend": 54997,
+    "status": 0
+   },
+   "page": {
+    "bodyBg": "#10141a",
+    "colorScheme": "normal"
+   },
+   "pageErrors": [],
+   "sha256": "39a0a01e9f37"
+  },
+  {
+   "file": "01-one-1824.png",
+   "fixture": "one",
+   "defId": "local",
+   "viewport": {
+    "w": 1824,
+    "h": 900
+   },
+   "mode": "edit",
+   "stages": 1,
+   "card": {
+    "x": 742,
+    "y": 54,
+    "w": 340,
+    "h": 184.2,
+    "right": 1082,
+    "bottom": 238.2
+   },
+   "bar": {
+    "x": 743,
+    "y": 55,
+    "w": 338,
+    "h": 58.8,
+    "right": 1081,
+    "bottom": 113.8
+   },
+   "barItems": [
+    {
+     "cls": "pmodal-kicker",
+     "text": "pipeline flow · definition",
+     "rect": {
+      "x": 752,
+      "y": 60,
+      "w": 166.3,
+      "h": 15.9,
+      "right": 918.3,
+      "bottom": 76
+     }
+    },
+    {
+     "cls": "pmodal-title",
+     "text": "Local work",
+     "rect": {
+      "x": 926.3,
+      "y": 58.6,
+      "w": 65.8,
+      "h": 18.8,
+      "right": 992.1,
+      "bottom": 77.4
+     }
+    },
+    {
+     "cls": "spacer",
+     "text": "",
+     "rect": {
+      "x": 1000.1,
+      "y": 68,
+      "w": 40.1,
+      "h": 0,
+      "right": 1040.2,
+      "bottom": 68
+     }
+    },
+    {
+     "cls": "pmodal-status mono",
+     "text": "",
+     "rect": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "right": 0,
+      "bottom": 0
+     }
+    },
+    {
+     "cls": "pmodal-close",
+     "text": "✕",
+     "rect": {
+      "x": 1048.2,
+      "y": 58,
+      "w": 23.8,
+      "h": 20,
+      "right": 1072,
+      "bottom": 78
+     }
+    },
+    {
+     "cls": "pmodal-facts",
+     "text": "pipeline localkind localstages 1next end of the ",
+     "rect": {
+      "x": 752,
+      "y": 80,
+      "w": 320,
+      "h": 29.8,
+      "right": 1072,
+      "bottom": 109.8
+     }
+    }
+   ],
+   "body": {
+    "x": 743,
+    "y": 113.8,
+    "w": 338,
+    "h": 123.4,
+    "right": 1081,
+    "bottom": 237.2
+   },
+   "flow": {
+    "x": 751,
+    "y": 115.8,
+    "w": 322,
+    "h": 119.4,
+    "right": 1073,
+    "bottom": 235.2
+   },
+   "track": {
+    "x": 751,
+    "y": 115.8,
+    "w": 322,
+    "h": 100,
+    "right": 1073,
+    "bottom": 215.8
+   },
+   "fit": "0",
+   "marksFrom": "index",
+   "position": "",
+   "scroller": {
+    "clientW": 322,
+    "scrollW": 322,
+    "scrollLeft": 0,
+    "hiddenPx": 0
+   },
+   "visibleStages": 1,
+   "visibleNotches": 1,
+   "colW": 322,
+   "gap": null,
+   "count": {
+    "shown": false,
+    "text": "all 1 stage and 1 notch in view",
+    "size": 11,
+    "contrast": 5.7
+   },
+   "fitButton": {
+    "shown": false,
+    "text": "fit",
+    "size": 11
+   },
+   "legend": {
+    "text": "not reached 1 stage",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "15.95px",
+    "color": "#9aa4b2",
+    "bg": "#171c24",
+    "contrast": 6.78,
+    "count": 1
+   },
+   "title": {
+    "text": "Local work",
+    "size": 13,
+    "weight": "700",
+    "lineHeight": "18.85px",
+    "color": "#e6e9ef",
+    "bg": "#1d232b",
+    "contrast": 13.01
+   },
+   "kicker": {
+    "text": "pipeline flow · definition",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "15.95px",
+    "color": "#6b7482",
+    "bg": "#1d232b",
+    "contrast": 3.35
+   },
+   "facts": {
+    "text": "pipeline localkind localstages 1next end of the chain",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "13.2px",
+    "color": "#9aa4b2",
+    "bg": "#1d232b",
+    "contrast": 6.27
+   },
+   "factLabel": {
+    "text": "pipeline",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "13.2px",
+    "color": "#6b7482",
+    "bg": "#1d232b",
+    "contrast": 3.35
+   },
+   "factValue": {
+    "text": "local",
+    "size": 12,
+    "weight": "500",
+    "lineHeight": "14.4px",
+    "color": "#e6e9ef",
+    "bg": "#1d232b",
+    "contrast": 13.01
+   },
+   "closeButton": {
+    "text": "✕",
+    "size": 12,
+    "weight": "400",
+    "lineHeight": "16px",
+    "color": "#9aa4b2",
+    "bg": "#13181f",
+    "contrast": 7.07
+   },
+   "stageTitle": {
+    "text": "1 Work in this tree",
+    "size": 13,
+    "weight": "500",
+    "lineHeight": "17.55px",
+    "color": "#8b96a5",
+    "bg": "#13181f",
+    "contrast": 5.94,
+    "lines": 1
+   },
+   "ordinal": {
+    "text": "1",
+    "size": 11,
+    "weight": "600",
+    "lineHeight": "13.75px",
+    "color": "#8b96a5",
+    "bg": "#13181f",
+    "contrast": 5.94
+   },
+   "detail": {
+    "text": "commits min=1",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "13.75px",
+    "color": "#8b96a5",
+    "bg": "#13181f",
+    "contrast": 5.94,
+    "lines": 1
+   },
+   "dot": {
+    "color": "#171c24",
+    "w": 8,
+    "h": 8,
+    "contrast": 1.04
+   },
+   "notchStyle": {
+    "color": "#4a5568",
+    "w": 3,
+    "h": 15,
+    "contrast": 2.37
+   },
+   "marks": [
+    "not-reached"
+   ],
+   "notches": [
+    {
+     "state": "open",
+     "gate": "exit:work",
+     "name": "commits",
+     "color": "#4a5568",
+     "ariaLen": 112,
+     "titleLen": 53,
+     "aria": "gate exit:work · commits — after Work in this tree — no decision record is declared (exit check commits — min=1)",
+     "title": "gate exit:work · commits — exit check commits — min=1"
+    }
+   ],
+   "arcs": [],
+   "link": null,
+   "notchStates": {
+    "open": {
+     "count": 1,
+     "color": "#4a5568"
+    }
+   },
+   "cards": [
+    {
+     "pos": "1",
+     "id": "work",
+     "mark": "not-reached",
+     "title": "1 Work in this tree",
+     "titleLines": 1,
+     "titleWords": 5,
+     "words": 7,
+     "detail": "commits min=1",
+     "detailLines": 1,
+     "detailClamped": false,
+     "rect": {
+      "x": 751,
+      "y": 115.8,
+      "w": 322,
+      "h": 100,
+      "right": 1073,
+      "bottom": 215.8
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    }
+   ],
+   "areas": {
+    "card": 62618,
+    "drawing": 32200,
+    "chrome": 5600,
+    "scrollClip": 32200
+   },
+   "ink": {
+    "barTitle": 13437,
+    "barKicker": 5862,
+    "barFacts": 45743,
+    "stageTitles": 8513,
+    "ordinals": 389,
+    "details": 5049,
+    "notches": 62,
+    "dots": 3,
+    "legend": 21072,
+    "status": 0
+   },
+   "page": {
+    "bodyBg": "#10141a",
+    "colorScheme": "normal"
+   },
+   "pageErrors": [],
+   "sha256": "f856708176b4"
+  },
+  {
+   "file": "02-two-1824.png",
+   "fixture": "two",
+   "defId": "sefl-investigate",
+   "viewport": {
+    "w": 1824,
+    "h": 900
+   },
+   "mode": "edit",
+   "stages": 2,
+   "card": {
+    "x": 742,
+    "y": 54,
+    "w": 340,
+    "h": 205,
+    "right": 1082,
+    "bottom": 259
+   },
+   "bar": {
+    "x": 743,
+    "y": 55,
+    "w": 338,
+    "h": 79.6,
+    "right": 1081,
+    "bottom": 134.6
+   },
+   "barItems": [
+    {
+     "cls": "pmodal-kicker",
+     "text": "pipeline flow · definition",
+     "rect": {
+      "x": 752,
+      "y": 59.5,
+      "w": 166.3,
+      "h": 15.9,
+      "right": 918.3,
+      "bottom": 75.4
+     }
+    },
+    {
+     "cls": "pmodal-title",
+     "text": "SEFL investigation",
+     "rect": {
+      "x": 926.3,
+      "y": 58,
+      "w": 110.8,
+      "h": 18.8,
+      "right": 1037.1,
+      "bottom": 76.8
+     }
+    },
+    {
+     "cls": "spacer",
+     "text": "",
+     "rect": {
+      "x": 1045.1,
+      "y": 67.4,
+      "w": 26.9,
+      "h": 0,
+      "right": 1072,
+      "bottom": 67.4
+     }
+    },
+    {
+     "cls": "pmodal-status mono",
+     "text": "",
+     "rect": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "right": 0,
+      "bottom": 0
+     }
+    },
+    {
+     "cls": "pmodal-close",
+     "text": "✕",
+     "rect": {
+      "x": 752,
+      "y": 78.8,
+      "w": 23.8,
+      "h": 20,
+      "right": 775.8,
+      "bottom": 98.8
+     }
+    },
+    {
+     "cls": "pmodal-facts",
+     "text": "pipeline sefl-investigatekind investigationstage",
+     "rect": {
+      "x": 752,
+      "y": 100.8,
+      "w": 320,
+      "h": 29.8,
+      "right": 1072,
+      "bottom": 130.6
+     }
+    }
+   ],
+   "body": {
+    "x": 743,
+    "y": 134.6,
+    "w": 338,
+    "h": 123.4,
+    "right": 1081,
+    "bottom": 258
+   },
+   "flow": {
+    "x": 751,
+    "y": 136.6,
+    "w": 322,
+    "h": 119.4,
+    "right": 1073,
+    "bottom": 256
+   },
+   "track": {
+    "x": 751,
+    "y": 136.6,
+    "w": 322,
+    "h": 100,
+    "right": 1073,
+    "bottom": 236.6
+   },
+   "fit": "0",
+   "marksFrom": "index",
+   "position": "",
+   "scroller": {
+    "clientW": 322,
+    "scrollW": 322,
+    "scrollLeft": 0,
+    "hiddenPx": 0
+   },
+   "visibleStages": 2,
+   "visibleNotches": 2,
+   "colW": 148,
+   "gap": 26,
+   "count": {
+    "shown": false,
+    "text": "all 2 stages and 2 notches in view",
+    "size": 11,
+    "contrast": 5.7
+   },
+   "fitButton": {
+    "shown": false,
+    "text": "fit",
+    "size": 11
+   },
+   "legend": {
+    "text": "not reached 2 stages",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "15.95px",
+    "color": "#9aa4b2",
+    "bg": "#171c24",
+    "contrast": 6.78,
+    "count": 1
+   },
+   "title": {
+    "text": "SEFL investigation",
+    "size": 13,
+    "weight": "700",
+    "lineHeight": "18.85px",
+    "color": "#e6e9ef",
+    "bg": "#1d232b",
+    "contrast": 13.01
+   },
+   "kicker": {
+    "text": "pipeline flow · definition",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "15.95px",
+    "color": "#6b7482",
+    "bg": "#1d232b",
+    "contrast": 3.35
+   },
+   "facts": {
+    "text": "pipeline sefl-investigatekind investigationstages 2next sefl-review-loop",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "13.2px",
+    "color": "#9aa4b2",
+    "bg": "#1d232b",
+    "contrast": 6.27
+   },
+   "factLabel": {
+    "text": "pipeline",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "13.2px",
+    "color": "#6b7482",
+    "bg": "#1d232b",
+    "contrast": 3.35
+   },
+   "factValue": {
+    "text": "sefl-investigate",
+    "size": 12,
+    "weight": "500",
+    "lineHeight": "14.4px",
+    "color": "#e6e9ef",
+    "bg": "#1d232b",
+    "contrast": 13.01
+   },
+   "closeButton": {
+    "text": "✕",
+    "size": 12,
+    "weight": "400",
+    "lineHeight": "16px",
+    "color": "#9aa4b2",
+    "bg": "#13181f",
+    "contrast": 7.07
+   },
+   "stageTitle": {
+    "text": "1 Probe",
+    "size": 13,
+    "weight": "500",
+    "lineHeight": "17.55px",
+    "color": "#8b96a5",
+    "bg": "#13181f",
+    "contrast": 5.94,
+    "lines": 1
+   },
+   "ordinal": {
+    "text": "1",
+    "size": 11,
+    "weight": "600",
+    "lineHeight": "13.75px",
+    "color": "#8b96a5",
+    "bg": "#13181f",
+    "contrast": 5.94
+   },
+   "detail": {
+    "text": "commits min=1",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "13.75px",
+    "color": "#8b96a5",
+    "bg": "#13181f",
+    "contrast": 5.94,
+    "lines": 1
+   },
+   "dot": {
+    "color": "#171c24",
+    "w": 8,
+    "h": 8,
+    "contrast": 1.04
+   },
+   "notchStyle": {
+    "color": "#4a5568",
+    "w": 3,
+    "h": 15,
+    "contrast": 2.37
+   },
+   "marks": [
+    "not-reached",
+    "not-reached"
+   ],
+   "notches": [
+    {
+     "state": "open",
+     "gate": "exit:probe",
+     "name": "commits",
+     "color": "#4a5568",
+     "ariaLen": 101,
+     "titleLen": 54,
+     "aria": "gate exit:probe · commits — after Probe — no decision record is declared (exit check commits — min=1)",
+     "title": "gate exit:probe · commits — exit check commits — min=1"
+    },
+    {
+     "state": "open",
+     "gate": "exit:conclude",
+     "name": "file-exists",
+     "color": "#4a5568",
+     "ariaLen": 136,
+     "titleLen": 86,
+     "aria": "gate exit:conclude · file-exists — after Conclude — no decision record is declared (exit check file-exists — path=docs/investigation.md)",
+     "title": "gate exit:conclude · file-exists — exit check file-exists — path=docs/investigation.md"
+    }
+   ],
+   "arcs": [],
+   "link": {
+    "w": 26,
+    "h": 1,
+    "color": "#212730",
+    "headW": 6,
+    "headH": 5,
+    "headBorder": "rgb(33, 39, 48)"
+   },
+   "notchStates": {
+    "open": {
+     "count": 2,
+     "color": "#4a5568"
+    }
+   },
+   "cards": [
+    {
+     "pos": "1",
+     "id": "probe",
+     "mark": "not-reached",
+     "title": "1 Probe",
+     "titleLines": 1,
+     "titleWords": 2,
+     "words": 4,
+     "detail": "commits min=1",
+     "detailLines": 1,
+     "detailClamped": false,
+     "rect": {
+      "x": 751,
+      "y": 136.6,
+      "w": 148,
+      "h": 100,
+      "right": 899,
+      "bottom": 236.6
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    },
+    {
+     "pos": "2",
+     "id": "conclude",
+     "mark": "not-reached",
+     "title": "2 Conclude",
+     "titleLines": 1,
+     "titleWords": 2,
+     "words": 4,
+     "detail": "file-exists path=docs/investigation.md",
+     "detailLines": 2,
+     "detailClamped": true,
+     "rect": {
+      "x": 925,
+      "y": 136.6,
+      "w": 148,
+      "h": 100,
+      "right": 1073,
+      "bottom": 236.6
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    }
+   ],
+   "areas": {
+    "card": 69705,
+    "drawing": 29645,
+    "chrome": 5600,
+    "scrollClip": 32200
+   },
+   "ink": {
+    "barTitle": 22621,
+    "barKicker": 5862,
+    "barFacts": 64497,
+    "stageTitles": 8164,
+    "ordinals": 779,
+    "details": 27190,
+    "notches": 123,
+    "dots": 5,
+    "legend": 22268,
+    "status": 0
+   },
+   "page": {
+    "bodyBg": "#10141a",
+    "colorScheme": "normal"
+   },
+   "pageErrors": [],
+   "sha256": "05e20346353b"
+  },
+  {
+   "file": "03-seven-1824.png",
+   "fixture": "seven",
+   "defId": "sefl-review-loop",
+   "viewport": {
+    "w": 1824,
+    "h": 900
+   },
+   "mode": "edit",
+   "stages": 7,
+   "card": {
+    "x": 489,
+    "y": 54,
+    "w": 846,
+    "h": 168.8,
+    "right": 1335,
+    "bottom": 222.8
+   },
+   "bar": {
+    "x": 490,
+    "y": 55,
+    "w": 844,
+    "h": 43.4,
+    "right": 1334,
+    "bottom": 98.4
+   },
+   "barItems": [
+    {
+     "cls": "pmodal-kicker",
+     "text": "pipeline flow · definition",
+     "rect": {
+      "x": 499,
+      "y": 60,
+      "w": 166.3,
+      "h": 15.9,
+      "right": 665.3,
+      "bottom": 76
+     }
+    },
+    {
+     "cls": "pmodal-title",
+     "text": "SEFL review loop",
+     "rect": {
+      "x": 673.3,
+      "y": 58.6,
+      "w": 102.7,
+      "h": 18.8,
+      "right": 776,
+      "bottom": 77.4
+     }
+    },
+    {
+     "cls": "spacer",
+     "text": "",
+     "rect": {
+      "x": 784,
+      "y": 68,
+      "w": 509.2,
+      "h": 0,
+      "right": 1293.2,
+      "bottom": 68
+     }
+    },
+    {
+     "cls": "pmodal-status mono",
+     "text": "",
+     "rect": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "right": 0,
+      "bottom": 0
+     }
+    },
+    {
+     "cls": "pmodal-close",
+     "text": "✕",
+     "rect": {
+      "x": 1301.2,
+      "y": 58,
+      "w": 23.8,
+      "h": 20,
+      "right": 1325,
+      "bottom": 78
+     }
+    },
+    {
+     "cls": "pmodal-facts",
+     "text": "pipeline sefl-review-loopkind turnoverstages 7ne",
+     "rect": {
+      "x": 499,
+      "y": 80,
+      "w": 826,
+      "h": 14.4,
+      "right": 1325,
+      "bottom": 94.4
+     }
+    }
+   ],
+   "body": {
+    "x": 490,
+    "y": 98.4,
+    "w": 844,
+    "h": 123.4,
+    "right": 1334,
+    "bottom": 221.8
+   },
+   "flow": {
+    "x": 498,
+    "y": 100.4,
+    "w": 828,
+    "h": 119.4,
+    "right": 1326,
+    "bottom": 219.8
+   },
+   "track": {
+    "x": 498,
+    "y": 100.4,
+    "w": 828,
+    "h": 100,
+    "right": 1326,
+    "bottom": 200.4
+   },
+   "fit": "0",
+   "marksFrom": "index",
+   "position": "",
+   "scroller": {
+    "clientW": 828,
+    "scrollW": 828,
+    "scrollLeft": 0,
+    "hiddenPx": 0
+   },
+   "visibleStages": 7,
+   "visibleNotches": 7,
+   "colW": 96,
+   "gap": 26,
+   "count": {
+    "shown": false,
+    "text": "all 7 stages and 7 notches in view",
+    "size": 11,
+    "contrast": 5.7
+   },
+   "fitButton": {
+    "shown": false,
+    "text": "fit",
+    "size": 11
+   },
+   "legend": {
+    "text": "not reached 7 stages",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "15.95px",
+    "color": "#9aa4b2",
+    "bg": "#171c24",
+    "contrast": 6.78,
+    "count": 1
+   },
+   "title": {
+    "text": "SEFL review loop",
+    "size": 13,
+    "weight": "700",
+    "lineHeight": "18.85px",
+    "color": "#e6e9ef",
+    "bg": "#1d232b",
+    "contrast": 13.01
+   },
+   "kicker": {
+    "text": "pipeline flow · definition",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "15.95px",
+    "color": "#6b7482",
+    "bg": "#1d232b",
+    "contrast": 3.35
+   },
+   "facts": {
+    "text": "pipeline sefl-review-loopkind turnoverstages 7next end of the chain",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "13.2px",
+    "color": "#9aa4b2",
+    "bg": "#1d232b",
+    "contrast": 6.27
+   },
+   "factLabel": {
+    "text": "pipeline",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "13.2px",
+    "color": "#6b7482",
+    "bg": "#1d232b",
+    "contrast": 3.35
+   },
+   "factValue": {
+    "text": "sefl-review-loop",
+    "size": 12,
+    "weight": "500",
+    "lineHeight": "14.4px",
+    "color": "#e6e9ef",
+    "bg": "#1d232b",
+    "contrast": 13.01
+   },
+   "closeButton": {
+    "text": "✕",
+    "size": 12,
+    "weight": "400",
+    "lineHeight": "16px",
+    "color": "#9aa4b2",
+    "bg": "#13181f",
+    "contrast": 7.07
+   },
+   "stageTitle": {
+    "text": "1 Name the branch",
+    "size": 13,
+    "weight": "500",
+    "lineHeight": "17.55px",
+    "color": "#8b96a5",
+    "bg": "#13181f",
+    "contrast": 5.94,
+    "lines": 2
+   },
+   "ordinal": {
+    "text": "1",
+    "size": 11,
+    "weight": "600",
+    "lineHeight": "13.75px",
+    "color": "#8b96a5",
+    "bg": "#13181f",
+    "contrast": 5.94
+   },
+   "detail": {
+    "text": "branch-name pattern=^\\d{8}_\\d{4}_[A-Z][A-Z0-9]+-\\d+_[a-z0-9._-]+$ branch={{branch}}",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "13.75px",
+    "color": "#8b96a5",
+    "bg": "#13181f",
+    "contrast": 5.94,
+    "lines": 2
+   },
+   "dot": {
+    "color": "#171c24",
+    "w": 8,
+    "h": 8,
+    "contrast": 1.04
+   },
+   "notchStyle": {
+    "color": "#4a5568",
+    "w": 3,
+    "h": 15,
+    "contrast": 2.37
+   },
+   "marks": [
+    "not-reached",
+    "not-reached",
+    "not-reached",
+    "not-reached",
+    "not-reached",
+    "not-reached",
+    "not-reached"
+   ],
+   "notches": [
+    {
+     "state": "open",
+     "gate": "exit:branch",
+     "name": "branch-name",
+     "color": "#4a5568",
+     "ariaLen": 186,
+     "titleLen": 129,
+     "aria": "gate exit:branch · branch-name — after Name the branch — no decision record is declared (exit check branch-name — pattern=^\\d{8}_\\d{4}_[A-Z][A-Z0-9]+-\\d+_[a-z0-9._-]+$ branch={{branch}})",
+     "title": "gate exit:branch · branch-name — exit check branch-name — pattern=^\\d{8}_\\d{4}_[A-Z][A-Z0-9]+-\\d+_[a-z0-9._-]+$ branch={{branch}}"
+    },
+    {
+     "state": "open",
+     "gate": "exit:push",
+     "name": "pushed",
+     "color": "#4a5568",
+     "ariaLen": 116,
+     "titleLen": 59,
+     "aria": "gate exit:push · pushed — after Push the branch — no decision record is declared (exit check pushed — no parameters)",
+     "title": "gate exit:push · pushed — exit check pushed — no parameters"
+    },
+    {
+     "state": "open",
+     "gate": "exit:pr",
+     "name": "pr-open",
+     "color": "#4a5568",
+     "ariaLen": 122,
+     "titleLen": 59,
+     "aria": "gate exit:pr · pr-open — after Open the pull request — no decision record is declared (exit check pr-open — no parameters)",
+     "title": "gate exit:pr · pr-open — exit check pr-open — no parameters"
+    },
+    {
+     "state": "open",
+     "gate": "exit:wait",
+     "name": "pr-comments",
+     "color": "#4a5568",
+     "ariaLen": 132,
+     "titleLen": 69,
+     "aria": "gate exit:wait · pr-comments — after Wait for the reviewer — no decision record is declared (exit check pr-comments — no parameters)",
+     "title": "gate exit:wait · pr-comments — exit check pr-comments — no parameters"
+    },
+    {
+     "state": "open",
+     "gate": "exit:address",
+     "name": "pushed",
+     "color": "#4a5568",
+     "ariaLen": 121,
+     "titleLen": 62,
+     "aria": "gate exit:address · pushed — after Answer the review — no decision record is declared (exit check pushed — no parameters)",
+     "title": "gate exit:address · pushed — exit check pushed — no parameters"
+    },
+    {
+     "state": "open",
+     "gate": "exit:approve",
+     "name": "pr-approved",
+     "color": "#4a5568",
+     "ariaLen": 147,
+     "titleLen": 72,
+     "aria": "gate exit:approve · pr-approved — after Wait for the approval at the head — no decision record is declared (exit check pr-approved — no parameters)",
+     "title": "gate exit:approve · pr-approved — exit check pr-approved — no parameters"
+    },
+    {
+     "state": "open",
+     "gate": "exit:merge",
+     "name": "pr-merged",
+     "color": "#4a5568",
+     "ariaLen": 113,
+     "titleLen": 66,
+     "aria": "gate exit:merge · pr-merged — after Merge — no decision record is declared (exit check pr-merged — no parameters)",
+     "title": "gate exit:merge · pr-merged — exit check pr-merged — no parameters"
+    }
+   ],
+   "arcs": [],
+   "link": {
+    "w": 26,
+    "h": 1,
+    "color": "#212730",
+    "headW": 6,
+    "headH": 5,
+    "headBorder": "rgb(33, 39, 48)"
+   },
+   "notchStates": {
+    "open": {
+     "count": 7,
+     "color": "#4a5568"
+    }
+   },
+   "cards": [
+    {
+     "pos": "1",
+     "id": "branch",
+     "mark": "not-reached",
+     "title": "1 Name the branch",
+     "titleLines": 2,
+     "titleWords": 4,
+     "words": 7,
+     "detail": "branch-name pattern=^\\d{8}_\\d{4}_[A-Z][A-Z0-9]+-\\d+_[a-z0-9._-]+$ branch={{branch}}",
+     "detailLines": 2,
+     "detailClamped": true,
+     "rect": {
+      "x": 498,
+      "y": 100.4,
+      "w": 96,
+      "h": 100,
+      "right": 594,
+      "bottom": 200.4
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    },
+    {
+     "pos": "2",
+     "id": "push",
+     "mark": "not-reached",
+     "title": "2 Push the branch",
+     "titleLines": 2,
+     "titleWords": 4,
+     "words": 5,
+     "detail": "pushed",
+     "detailLines": 1,
+     "detailClamped": false,
+     "rect": {
+      "x": 620,
+      "y": 100.4,
+      "w": 96,
+      "h": 100,
+      "right": 716,
+      "bottom": 200.4
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    },
+    {
+     "pos": "3",
+     "id": "pr",
+     "mark": "not-reached",
+     "title": "3 Open the pull request",
+     "titleLines": 2,
+     "titleWords": 5,
+     "words": 6,
+     "detail": "pr-open",
+     "detailLines": 1,
+     "detailClamped": false,
+     "rect": {
+      "x": 742,
+      "y": 100.4,
+      "w": 96,
+      "h": 100,
+      "right": 838,
+      "bottom": 200.4
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    },
+    {
+     "pos": "4",
+     "id": "wait",
+     "mark": "not-reached",
+     "title": "4 Wait for the reviewer",
+     "titleLines": 2,
+     "titleWords": 5,
+     "words": 6,
+     "detail": "pr-comments",
+     "detailLines": 1,
+     "detailClamped": false,
+     "rect": {
+      "x": 864,
+      "y": 100.4,
+      "w": 96,
+      "h": 100,
+      "right": 960,
+      "bottom": 200.4
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    },
+    {
+     "pos": "5",
+     "id": "address",
+     "mark": "not-reached",
+     "title": "5 Answer the review",
+     "titleLines": 2,
+     "titleWords": 4,
+     "words": 5,
+     "detail": "pushed",
+     "detailLines": 1,
+     "detailClamped": false,
+     "rect": {
+      "x": 986,
+      "y": 100.4,
+      "w": 96,
+      "h": 100,
+      "right": 1082,
+      "bottom": 200.4
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    },
+    {
+     "pos": "6",
+     "id": "approve",
+     "mark": "not-reached",
+     "title": "6 Wait for the approval at the head",
+     "titleLines": 3,
+     "titleWords": 8,
+     "words": 9,
+     "detail": "pr-approved",
+     "detailLines": 1,
+     "detailClamped": false,
+     "rect": {
+      "x": 1108,
+      "y": 100.4,
+      "w": 96,
+      "h": 100,
+      "right": 1204,
+      "bottom": 200.4
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    },
+    {
+     "pos": "7",
+     "id": "merge",
+     "mark": "not-reached",
+     "title": "7 Merge",
+     "titleLines": 1,
+     "titleWords": 2,
+     "words": 3,
+     "detail": "pr-merged",
+     "detailLines": 1,
+     "detailClamped": false,
+     "rect": {
+      "x": 1230,
+      "y": 100.4,
+      "w": 96,
+      "h": 100,
+      "right": 1326,
+      "bottom": 200.4
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    }
+   ],
+   "areas": {
+    "card": 142789,
+    "drawing": 67470,
+    "chrome": 14399,
+    "scrollClip": 82800
+   },
+   "ink": {
+    "barTitle": 20975,
+    "barKicker": 5862,
+    "barFacts": 59559,
+    "stageTitles": 66531,
+    "ordinals": 2725,
+    "details": 55158,
+    "notches": 432,
+    "dots": 18,
+    "legend": 22268,
+    "status": 0
+   },
+   "page": {
+    "bodyBg": "#10141a",
+    "colorScheme": "normal"
+   },
+   "pageErrors": [],
+   "sha256": "b65b419a5c72"
+  },
+  {
+   "file": "04-thirteen-1824.png",
+   "fixture": "thirteen",
+   "defId": "acceptance-thirteen",
+   "viewport": {
+    "w": 1824,
+    "h": 900
+   },
+   "mode": "edit",
+   "stages": 13,
+   "card": {
+    "x": 123,
+    "y": 54,
+    "w": 1578,
+    "h": 179.1,
+    "right": 1701,
+    "bottom": 233.1
+   },
+   "bar": {
+    "x": 124,
+    "y": 55,
+    "w": 1576,
+    "h": 43.4,
+    "right": 1700,
+    "bottom": 98.4
+   },
+   "barItems": [
+    {
+     "cls": "pmodal-kicker",
+     "text": "pipeline flow · definition",
+     "rect": {
+      "x": 133,
+      "y": 60,
+      "w": 166.3,
+      "h": 15.9,
+      "right": 299.3,
+      "bottom": 76
+     }
+    },
+    {
+     "cls": "pmodal-title",
+     "text": "POC to UAT",
+     "rect": {
+      "x": 307.3,
+      "y": 58.6,
+      "w": 71.1,
+      "h": 18.8,
+      "right": 378.4,
+      "bottom": 77.4
+     }
+    },
+    {
+     "cls": "spacer",
+     "text": "",
+     "rect": {
+      "x": 386.4,
+      "y": 68,
+      "w": 1272.8,
+      "h": 0,
+      "right": 1659.2,
+      "bottom": 68
+     }
+    },
+    {
+     "cls": "pmodal-status mono",
+     "text": "",
+     "rect": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "right": 0,
+      "bottom": 0
+     }
+    },
+    {
+     "cls": "pmodal-close",
+     "text": "✕",
+     "rect": {
+      "x": 1667.2,
+      "y": 58,
+      "w": 23.8,
+      "h": 20,
+      "right": 1691,
+      "bottom": 78
+     }
+    },
+    {
+     "cls": "pmodal-facts",
+     "text": "pipeline acceptance-thirteenkind turnoverstages ",
+     "rect": {
+      "x": 133,
+      "y": 80,
+      "w": 1558,
+      "h": 14.4,
+      "right": 1691,
+      "bottom": 94.4
+     }
+    }
+   ],
+   "body": {
+    "x": 124,
+    "y": 98.4,
+    "w": 1576,
+    "h": 133.7,
+    "right": 1700,
+    "bottom": 232.1
+   },
+   "flow": {
+    "x": 132,
+    "y": 100.4,
+    "w": 1560,
+    "h": 129.7,
+    "right": 1692,
+    "bottom": 230.1
+   },
+   "track": {
+    "x": 132,
+    "y": 100.4,
+    "w": 1560,
+    "h": 110.3,
+    "right": 1692,
+    "bottom": 210.7
+   },
+   "fit": "0",
+   "marksFrom": "index",
+   "position": "",
+   "scroller": {
+    "clientW": 1560,
+    "scrollW": 1560,
+    "scrollLeft": 0,
+    "hiddenPx": 0
+   },
+   "visibleStages": 13,
+   "visibleNotches": 13,
+   "colW": 96,
+   "gap": 26,
+   "count": {
+    "shown": false,
+    "text": "all 13 stages and 13 notches in view",
+    "size": 11,
+    "contrast": 5.7
+   },
+   "fitButton": {
+    "shown": false,
+    "text": "fit",
+    "size": 11
+   },
+   "legend": {
+    "text": "not reached 13 stages",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "15.95px",
+    "color": "#9aa4b2",
+    "bg": "#171c24",
+    "contrast": 6.78,
+    "count": 1
+   },
+   "title": {
+    "text": "POC to UAT",
+    "size": 13,
+    "weight": "700",
+    "lineHeight": "18.85px",
+    "color": "#e6e9ef",
+    "bg": "#1d232b",
+    "contrast": 13.01
+   },
+   "kicker": {
+    "text": "pipeline flow · definition",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "15.95px",
+    "color": "#6b7482",
+    "bg": "#1d232b",
+    "contrast": 3.35
+   },
+   "facts": {
+    "text": "pipeline acceptance-thirteenkind turnoverstages 13next end of the chain",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "13.2px",
+    "color": "#9aa4b2",
+    "bg": "#1d232b",
+    "contrast": 6.27
+   },
+   "factLabel": {
+    "text": "pipeline",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "13.2px",
+    "color": "#6b7482",
+    "bg": "#1d232b",
+    "contrast": 3.35
+   },
+   "factValue": {
+    "text": "acceptance-thirteen",
+    "size": 12,
+    "weight": "500",
+    "lineHeight": "14.4px",
+    "color": "#e6e9ef",
+    "bg": "#1d232b",
+    "contrast": 13.01
+   },
+   "closeButton": {
+    "text": "✕",
+    "size": 12,
+    "weight": "400",
+    "lineHeight": "16px",
+    "color": "#9aa4b2",
+    "bg": "#13181f",
+    "contrast": 7.07
+   },
+   "stageTitle": {
+    "text": "1 Intake and charter",
+    "size": 13,
+    "weight": "500",
+    "lineHeight": "17.55px",
+    "color": "#8b96a5",
+    "bg": "#13181f",
+    "contrast": 5.94,
+    "lines": 2
+   },
+   "ordinal": {
+    "text": "1",
+    "size": 11,
+    "weight": "600",
+    "lineHeight": "13.75px",
+    "color": "#8b96a5",
+    "bg": "#13181f",
+    "contrast": 5.94
+   },
+   "detail": {
+    "text": "commits min=1",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "13.75px",
+    "color": "#8b96a5",
+    "bg": "#13181f",
+    "contrast": 5.94,
+    "lines": 2
+   },
+   "dot": {
+    "color": "#171c24",
+    "w": 8,
+    "h": 8,
+    "contrast": 1.04
+   },
+   "notchStyle": {
+    "color": "#4a5568",
+    "w": 3,
+    "h": 15,
+    "contrast": 2.37
+   },
+   "marks": [
+    "not-reached",
+    "not-reached",
+    "not-reached",
+    "not-reached",
+    "not-reached",
+    "not-reached",
+    "not-reached",
+    "not-reached",
+    "not-reached",
+    "not-reached",
+    "not-reached",
+    "not-reached",
+    "not-reached"
+   ],
+   "notches": [
+    {
+     "state": "open",
+     "gate": "exit:s0",
+     "name": "commits",
+     "color": "#4a5568",
+     "ariaLen": 111,
+     "titleLen": 51,
+     "aria": "gate exit:s0 · commits — after Intake and charter — no decision record is declared (exit check commits — min=1)",
+     "title": "gate exit:s0 · commits — exit check commits — min=1"
+    },
+    {
+     "state": "open",
+     "gate": "exit:s1",
+     "name": "file-exists",
+     "color": "#4a5568",
+     "ariaLen": 132,
+     "titleLen": 81,
+     "aria": "gate exit:s1 · file-exists — after POC build — no decision record is declared (exit check file-exists — path=ledger/change-log.json)",
+     "title": "gate exit:s1 · file-exists — exit check file-exists — path=ledger/change-log.json"
+    },
+    {
+     "state": "open",
+     "gate": "exit:s2",
+     "name": "file-exists",
+     "color": "#4a5568",
+     "ariaLen": 145,
+     "titleLen": 86,
+     "aria": "gate exit:s2 · file-exists — after Freeze and export — no decision record is declared (exit check file-exists — path=exports/poc-0007/crawl.json)",
+     "title": "gate exit:s2 · file-exists — exit check file-exists — path=exports/poc-0007/crawl.json"
+    },
+    {
+     "state": "open",
+     "gate": "exit:s3",
+     "name": "commits",
+     "color": "#4a5568",
+     "ariaLen": 109,
+     "titleLen": 51,
+     "aria": "gate exit:s3 · commits — after Reverse-engineer — no decision record is declared (exit check commits — min=3)",
+     "title": "gate exit:s3 · commits — exit check commits — min=3"
+    },
+    {
+     "state": "open",
+     "gate": "exit:s4",
+     "name": "file-exists",
+     "color": "#4a5568",
+     "ariaLen": 136,
+     "titleLen": 80,
+     "aria": "gate exit:s4 · file-exists — after Work breakdown — no decision record is declared (exit check file-exists — path=ledger/module-plan.md)",
+     "title": "gate exit:s4 · file-exists — exit check file-exists — path=ledger/module-plan.md"
+    },
+    {
+     "state": "open",
+     "gate": "exit:s5",
+     "name": "commits",
+     "color": "#4a5568",
+     "ariaLen": 114,
+     "titleLen": 51,
+     "aria": "gate exit:s5 · commits — after Instantiate the model — no decision record is declared (exit check commits — min=1)",
+     "title": "gate exit:s5 · commits — exit check commits — min=1"
+    },
+    {
+     "state": "open",
+     "gate": "exit:s6",
+     "name": "clean",
+     "color": "#4a5568",
+     "ariaLen": 117,
+     "titleLen": 55,
+     "aria": "gate exit:s6 · clean — after Implement per module — no decision record is declared (exit check clean — no parameters)",
+     "title": "gate exit:s6 · clean — exit check clean — no parameters"
+    },
+    {
+     "state": "open",
+     "gate": "exit:s7",
+     "name": "file-exists",
+     "color": "#4a5568",
+     "ariaLen": 148,
+     "titleLen": 81,
+     "aria": "gate exit:s7 · file-exists — after DAL review and SQL verify — no decision record is declared (exit check file-exists — path=ledger/dal/V-0004.json)",
+     "title": "gate exit:s7 · file-exists — exit check file-exists — path=ledger/dal/V-0004.json"
+    },
+    {
+     "state": "open",
+     "gate": "exit:s8",
+     "name": "commits",
+     "color": "#4a5568",
+     "ariaLen": 111,
+     "titleLen": 51,
+     "aria": "gate exit:s8 · commits — after Code review rounds — no decision record is declared (exit check commits — min=1)",
+     "title": "gate exit:s8 · commits — exit check commits — min=1"
+    },
+    {
+     "state": "open",
+     "gate": "exit:s9",
+     "name": "clean",
+     "color": "#4a5568",
+     "ariaLen": 113,
+     "titleLen": 55,
+     "aria": "gate exit:s9 · clean — after Rewrite to green — no decision record is declared (exit check clean — no parameters)",
+     "title": "gate exit:s9 · clean — exit check clean — no parameters"
+    },
+    {
+     "state": "open",
+     "gate": "exit:s10",
+     "name": "command",
+     "color": "#4a5568",
+     "ariaLen": 138,
+     "titleLen": 76,
+     "aria": "gate exit:s10 · command — after Playwright UI parity — no decision record is declared (exit check command — argv=node,tools/verify-ui.mjs)",
+     "title": "gate exit:s10 · command — exit check command — argv=node,tools/verify-ui.mjs"
+    },
+    {
+     "state": "open",
+     "gate": "exit:s11",
+     "name": "pushed",
+     "color": "#4a5568",
+     "ariaLen": 115,
+     "titleLen": 58,
+     "aria": "gate exit:s11 · pushed — after Delivery to UAT — no decision record is declared (exit check pushed — no parameters)",
+     "title": "gate exit:s11 · pushed — exit check pushed — no parameters"
+    },
+    {
+     "state": "open",
+     "gate": "exit:s12",
+     "name": "file-exists",
+     "color": "#4a5568",
+     "ariaLen": 136,
+     "titleLen": 82,
+     "aria": "gate exit:s12 · file-exists — after UAT sign-off — no decision record is declared (exit check file-exists — path=ledger/dod/V-0005.json)",
+     "title": "gate exit:s12 · file-exists — exit check file-exists — path=ledger/dod/V-0005.json"
+    }
+   ],
+   "arcs": [],
+   "link": {
+    "w": 26,
+    "h": 1,
+    "color": "#212730",
+    "headW": 6,
+    "headH": 5,
+    "headBorder": "rgb(33, 39, 48)"
+   },
+   "notchStates": {
+    "open": {
+     "count": 13,
+     "color": "#4a5568"
+    }
+   },
+   "cards": [
+    {
+     "pos": "1",
+     "id": "s0",
+     "mark": "not-reached",
+     "title": "1 Intake and charter",
+     "titleLines": 2,
+     "titleWords": 4,
+     "words": 6,
+     "detail": "commits min=1",
+     "detailLines": 2,
+     "detailClamped": false,
+     "rect": {
+      "x": 132,
+      "y": 100.4,
+      "w": 96,
+      "h": 110.3,
+      "right": 228,
+      "bottom": 210.7
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    },
+    {
+     "pos": "2",
+     "id": "s1",
+     "mark": "not-reached",
+     "title": "2 POC build",
+     "titleLines": 1,
+     "titleWords": 3,
+     "words": 5,
+     "detail": "file-exists path=ledger/change-log.json",
+     "detailLines": 2,
+     "detailClamped": true,
+     "rect": {
+      "x": 254,
+      "y": 100.4,
+      "w": 96,
+      "h": 110.3,
+      "right": 350,
+      "bottom": 210.7
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    },
+    {
+     "pos": "3",
+     "id": "s2",
+     "mark": "not-reached",
+     "title": "3 Freeze and export",
+     "titleLines": 2,
+     "titleWords": 4,
+     "words": 6,
+     "detail": "file-exists path=exports/poc-0007/crawl.json",
+     "detailLines": 2,
+     "detailClamped": true,
+     "rect": {
+      "x": 376,
+      "y": 100.4,
+      "w": 96,
+      "h": 110.3,
+      "right": 472,
+      "bottom": 210.7
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    },
+    {
+     "pos": "4",
+     "id": "s3",
+     "mark": "not-reached",
+     "title": "4 Reverse-engineer",
+     "titleLines": 2,
+     "titleWords": 2,
+     "words": 4,
+     "detail": "commits min=3",
+     "detailLines": 2,
+     "detailClamped": false,
+     "rect": {
+      "x": 498,
+      "y": 100.4,
+      "w": 96,
+      "h": 110.3,
+      "right": 594,
+      "bottom": 210.7
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    },
+    {
+     "pos": "5",
+     "id": "s4",
+     "mark": "not-reached",
+     "title": "5 Work breakdown",
+     "titleLines": 2,
+     "titleWords": 3,
+     "words": 5,
+     "detail": "file-exists path=ledger/module-plan.md",
+     "detailLines": 2,
+     "detailClamped": true,
+     "rect": {
+      "x": 620,
+      "y": 100.4,
+      "w": 96,
+      "h": 110.3,
+      "right": 716,
+      "bottom": 210.7
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    },
+    {
+     "pos": "6",
+     "id": "s5",
+     "mark": "not-reached",
+     "title": "6 Instantiate the model",
+     "titleLines": 3,
+     "titleWords": 4,
+     "words": 6,
+     "detail": "commits min=1",
+     "detailLines": 2,
+     "detailClamped": false,
+     "rect": {
+      "x": 742,
+      "y": 100.4,
+      "w": 96,
+      "h": 110.3,
+      "right": 838,
+      "bottom": 210.7
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    },
+    {
+     "pos": "7",
+     "id": "s6",
+     "mark": "not-reached",
+     "title": "7 Implement per module",
+     "titleLines": 3,
+     "titleWords": 4,
+     "words": 5,
+     "detail": "clean",
+     "detailLines": 1,
+     "detailClamped": false,
+     "rect": {
+      "x": 864,
+      "y": 100.4,
+      "w": 96,
+      "h": 110.3,
+      "right": 960,
+      "bottom": 210.7
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    },
+    {
+     "pos": "8",
+     "id": "s7",
+     "mark": "not-reached",
+     "title": "8 DAL review and SQL verify",
+     "titleLines": 3,
+     "titleWords": 6,
+     "words": 8,
+     "detail": "file-exists path=ledger/dal/V-0004.json",
+     "detailLines": 2,
+     "detailClamped": true,
+     "rect": {
+      "x": 986,
+      "y": 100.4,
+      "w": 96,
+      "h": 110.3,
+      "right": 1082,
+      "bottom": 210.7
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    },
+    {
+     "pos": "9",
+     "id": "s8",
+     "mark": "not-reached",
+     "title": "9 Code review rounds",
+     "titleLines": 3,
+     "titleWords": 4,
+     "words": 6,
+     "detail": "commits min=1",
+     "detailLines": 2,
+     "detailClamped": false,
+     "rect": {
+      "x": 1108,
+      "y": 100.4,
+      "w": 96,
+      "h": 110.3,
+      "right": 1204,
+      "bottom": 210.7
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    },
+    {
+     "pos": "10",
+     "id": "s9",
+     "mark": "not-reached",
+     "title": "10 Rewrite to green",
+     "titleLines": 2,
+     "titleWords": 4,
+     "words": 5,
+     "detail": "clean",
+     "detailLines": 1,
+     "detailClamped": false,
+     "rect": {
+      "x": 1230,
+      "y": 100.4,
+      "w": 96,
+      "h": 110.3,
+      "right": 1326,
+      "bottom": 210.7
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    },
+    {
+     "pos": "11",
+     "id": "s10",
+     "mark": "not-reached",
+     "title": "11 Playwright UI parity",
+     "titleLines": 3,
+     "titleWords": 4,
+     "words": 6,
+     "detail": "command argv=node,tools/verify-ui.mjs",
+     "detailLines": 2,
+     "detailClamped": true,
+     "rect": {
+      "x": 1352,
+      "y": 100.4,
+      "w": 96,
+      "h": 110.3,
+      "right": 1448,
+      "bottom": 210.7
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    },
+    {
+     "pos": "12",
+     "id": "s11",
+     "mark": "not-reached",
+     "title": "12 Delivery to UAT",
+     "titleLines": 2,
+     "titleWords": 4,
+     "words": 5,
+     "detail": "pushed",
+     "detailLines": 1,
+     "detailClamped": false,
+     "rect": {
+      "x": 1474,
+      "y": 100.4,
+      "w": 96,
+      "h": 110.3,
+      "right": 1570,
+      "bottom": 210.7
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    },
+    {
+     "pos": "13",
+     "id": "s12",
+     "mark": "not-reached",
+     "title": "13 UAT sign-off",
+     "titleLines": 2,
+     "titleWords": 3,
+     "words": 5,
+     "detail": "file-exists path=ledger/dod/V-0005.json",
+     "detailLines": 2,
+     "detailClamped": true,
+     "rect": {
+      "x": 1596,
+      "y": 100.4,
+      "w": 96,
+      "h": 110.3,
+      "right": 1692,
+      "bottom": 210.7
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    }
+   ],
+   "areas": {
+    "card": 282659,
+    "drawing": 138249,
+    "chrome": 27129,
+    "scrollClip": 172136
+   },
+   "ink": {
+    "barTitle": 14509,
+    "barKicker": 5862,
+    "barFacts": 63508,
+    "stageTitles": 115911,
+    "ordinals": 6615,
+    "details": 139841,
+    "notches": 801,
+    "dots": 33,
+    "legend": 23467,
+    "status": 0
+   },
+   "page": {
+    "bodyBg": "#10141a",
+    "colorScheme": "normal"
+   },
+   "pageErrors": [],
+   "sha256": "be25093130b5"
+  },
+  {
+   "file": "09-seven-position-1824.png",
+   "fixture": "seven",
+   "defId": "sefl-review-loop-bundle",
+   "viewport": {
+    "w": 1824,
+    "h": 900
+   },
+   "mode": "position",
+   "stages": 7,
+   "card": {
+    "x": 489,
+    "y": 54,
+    "w": 846,
+    "h": 227.1,
+    "right": 1335,
+    "bottom": 281.1
+   },
+   "bar": {
+    "x": 490,
+    "y": 55,
+    "w": 844,
+    "h": 43.4,
+    "right": 1334,
+    "bottom": 98.4
+   },
+   "barItems": [
+    {
+     "cls": "pmodal-kicker",
+     "text": "pipeline flow · position",
+     "rect": {
+      "x": 499,
+      "y": 60,
+      "w": 154.8,
+      "h": 15.9,
+      "right": 653.8,
+      "bottom": 76
+     }
+    },
+    {
+     "cls": "pmodal-title",
+     "text": "SEFL review loop",
+     "rect": {
+      "x": 661.8,
+      "y": 58.6,
+      "w": 102.7,
+      "h": 18.8,
+      "right": 764.5,
+      "bottom": 77.4
+     }
+    },
+    {
+     "cls": "pmodal-sub mono",
+     "text": "at the review",
+     "rect": {
+      "x": 772.5,
+      "y": 60,
+      "w": 78.6,
+      "h": 15.9,
+      "right": 851.2,
+      "bottom": 76
+     }
+    },
+    {
+     "cls": "spacer",
+     "text": "",
+     "rect": {
+      "x": 859.2,
+      "y": 68,
+      "w": 434,
+      "h": 0,
+      "right": 1293.2,
+      "bottom": 68
+     }
+    },
+    {
+     "cls": "pmodal-status mono",
+     "text": "",
+     "rect": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "right": 0,
+      "bottom": 0
+     }
+    },
+    {
+     "cls": "pmodal-close",
+     "text": "✕",
+     "rect": {
+      "x": 1301.2,
+      "y": 58,
+      "w": 23.8,
+      "h": 20,
+      "right": 1325,
+      "bottom": 78
+     }
+    },
+    {
+     "cls": "pmodal-facts",
+     "text": "pipeline sefl-review-loop-bundlekind turnoversta",
+     "rect": {
+      "x": 499,
+      "y": 80,
+      "w": 826,
+      "h": 14.4,
+      "right": 1325,
+      "bottom": 94.4
+     }
+    }
+   ],
+   "body": {
+    "x": 490,
+    "y": 98.4,
+    "w": 844,
+    "h": 181.7,
+    "right": 1334,
+    "bottom": 280.1
+   },
+   "flow": {
+    "x": 498,
+    "y": 100.4,
+    "w": 828,
+    "h": 177.7,
+    "right": 1326,
+    "bottom": 278.1
+   },
+   "track": {
+    "x": 498,
+    "y": 148.4,
+    "w": 828,
+    "h": 110.3,
+    "right": 1326,
+    "bottom": 258.7
+   },
+   "fit": "0",
+   "marksFrom": "record",
+   "position": "address",
+   "scroller": {
+    "clientW": 828,
+    "scrollW": 828,
+    "scrollLeft": 0,
+    "hiddenPx": 0
+   },
+   "visibleStages": 7,
+   "visibleNotches": 2,
+   "colW": 96,
+   "gap": 26,
+   "count": {
+    "shown": false,
+    "text": "all 7 stages and 2 notches in view",
+    "size": 11,
+    "contrast": 5.7
+   },
+   "fitButton": {
+    "shown": false,
+    "text": "fit",
+    "size": 11
+   },
+   "legend": {
+    "text": "not reached 2 stagescurrent 1 stagedone 4 stages",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "15.95px",
+    "color": "#9aa4b2",
+    "bg": "#171c24",
+    "contrast": 6.78,
+    "count": 3
+   },
+   "title": {
+    "text": "SEFL review loop",
+    "size": 13,
+    "weight": "700",
+    "lineHeight": "18.85px",
+    "color": "#e6e9ef",
+    "bg": "#1d232b",
+    "contrast": 13.01
+   },
+   "kicker": {
+    "text": "pipeline flow · position",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "15.95px",
+    "color": "#6b7482",
+    "bg": "#1d232b",
+    "contrast": 3.35
+   },
+   "facts": {
+    "text": "pipeline sefl-review-loop-bundlekind turnoverstages 7next end of the chain",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "13.2px",
+    "color": "#9aa4b2",
+    "bg": "#1d232b",
+    "contrast": 6.27
+   },
+   "factLabel": {
+    "text": "pipeline",
+    "size": 11,
+    "weight": "400",
+    "lineHeight": "13.2px",
+    "color": "#6b7482",
+    "bg": "#1d232b",
+    "contrast": 3.35
+   },
+   "factValue": {
+    "text": "sefl-review-loop-bundle",
+    "size": 12,
+    "weight": "500",
+    "lineHeight": "14.4px",
+    "color": "#e6e9ef",
+    "bg": "#1d232b",
+    "contrast": 13.01
+   },
+   "closeButton": {
+    "text": "✕",
+    "size": 12,
+    "weight": "400",
+    "lineHeight": "16px",
+    "color": "#9aa4b2",
+    "bg": "#13181f",
+    "contrast": 7.07
+   },
+   "stageTitle": {
+    "text": "1 Name the branch",
+    "size": 13,
+    "weight": "500",
+    "lineHeight": "17.55px",
+    "color": "#9aa4b2",
+    "bg": "#13181f",
+    "contrast": 7.07,
+    "lines": 2
+   },
+   "ordinal": {
+    "text": "1",
+    "size": 11,
+    "weight": "600",
+    "lineHeight": "13.75px",
+    "color": "#8b96a5",
+    "bg": "#13181f",
+    "contrast": 5.94
+   },
+   "detail": {
+    "lines": 0
+   },
+   "dot": {
+    "color": "#2ea043",
+    "w": 8,
+    "h": 8,
+    "contrast": 5.28
+   },
+   "notchStyle": {
+    "color": "#6f8f5a",
+    "w": 3,
+    "h": 15,
+    "contrast": 4.88
+   },
+   "marks": [
+    "done",
+    "done",
+    "done",
+    "done",
+    "current",
+    "not-reached",
+    "not-reached"
+   ],
+   "notches": [
+    {
+     "state": "answered",
+     "gate": "G1",
+     "name": "review green",
+     "color": "#6f8f5a",
+     "ariaLen": 94,
+     "titleLen": 100,
+     "aria": "gate G1 · review green — after Wait for the reviewer — decides decisions/review.json; answered",
+     "title": "gate G1 · review green — decides decisions/review.json (go, again) — on finding-set — decider reader"
+    },
+    {
+     "state": "ahead",
+     "gate": "G2",
+     "name": "head approved",
+     "color": "#4a5568",
+     "ariaLen": 115,
+     "titleLen": 98,
+     "aria": "gate G2 · head approved — after Wait for the approval at the head — decides decisions/approve.json; not yet crossed",
+     "title": "gate G2 · head approved — decides decisions/approve.json (go, no-go) — on verdict — decider reader"
+    }
+   ],
+   "arcs": [
+    {
+     "loop": "H-10",
+     "from": "address",
+     "to": "branch",
+     "cap": "2 of 3 rounds",
+     "label": "2 of 3 rounds",
+     "rect": {
+      "x": 546,
+      "y": 118.4,
+      "w": 488,
+      "h": 22,
+      "right": 1034,
+      "bottom": 140.4
+     }
+    }
+   ],
+   "link": {
+    "w": 26,
+    "h": 1,
+    "color": "#212730",
+    "headW": 6,
+    "headH": 5,
+    "headBorder": "rgb(33, 39, 48)"
+   },
+   "notchStates": {
+    "answered": {
+     "count": 1,
+     "color": "#6f8f5a"
+    },
+    "ahead": {
+     "count": 1,
+     "color": "#4a5568"
+    }
+   },
+   "cards": [
+    {
+     "pos": "1",
+     "id": "branch",
+     "mark": "done",
+     "title": "1 Name the branch",
+     "titleLines": 2,
+     "titleWords": 4,
+     "words": 4,
+     "detail": "",
+     "detailLines": 0,
+     "detailClamped": false,
+     "rect": {
+      "x": 498,
+      "y": 148.4,
+      "w": 96,
+      "h": 110.3,
+      "right": 594,
+      "bottom": 258.7
+     },
+     "bg": "#13181f",
+     "border": "#24452c",
+     "titleColor": "#9aa4b2",
+     "titleWeight": "500",
+     "dotColor": "#2ea043",
+     "fullyVisible": true
+    },
+    {
+     "pos": "2",
+     "id": "push",
+     "mark": "done",
+     "title": "2 Push the branch",
+     "titleLines": 2,
+     "titleWords": 4,
+     "words": 4,
+     "detail": "",
+     "detailLines": 0,
+     "detailClamped": false,
+     "rect": {
+      "x": 620,
+      "y": 148.4,
+      "w": 96,
+      "h": 110.3,
+      "right": 716,
+      "bottom": 258.7
+     },
+     "bg": "#13181f",
+     "border": "#24452c",
+     "titleColor": "#9aa4b2",
+     "titleWeight": "500",
+     "dotColor": "#2ea043",
+     "fullyVisible": true
+    },
+    {
+     "pos": "3",
+     "id": "pr",
+     "mark": "done",
+     "title": "3 Open the pull request",
+     "titleLines": 2,
+     "titleWords": 5,
+     "words": 5,
+     "detail": "",
+     "detailLines": 0,
+     "detailClamped": false,
+     "rect": {
+      "x": 742,
+      "y": 148.4,
+      "w": 96,
+      "h": 110.3,
+      "right": 838,
+      "bottom": 258.7
+     },
+     "bg": "#13181f",
+     "border": "#24452c",
+     "titleColor": "#9aa4b2",
+     "titleWeight": "500",
+     "dotColor": "#2ea043",
+     "fullyVisible": true
+    },
+    {
+     "pos": "4",
+     "id": "wait",
+     "mark": "done",
+     "title": "4 Wait for the reviewer",
+     "titleLines": 2,
+     "titleWords": 5,
+     "words": 9,
+     "detail": "review green → decisions/review.json",
+     "detailLines": 2,
+     "detailClamped": true,
+     "rect": {
+      "x": 864,
+      "y": 148.4,
+      "w": 96,
+      "h": 110.3,
+      "right": 960,
+      "bottom": 258.7
+     },
+     "bg": "#13181f",
+     "border": "#24452c",
+     "titleColor": "#9aa4b2",
+     "titleWeight": "500",
+     "dotColor": "#2ea043",
+     "fullyVisible": true
+    },
+    {
+     "pos": "5",
+     "id": "address",
+     "mark": "current",
+     "title": "5 Answer the review",
+     "titleLines": 2,
+     "titleWords": 4,
+     "words": 4,
+     "detail": "",
+     "detailLines": 0,
+     "detailClamped": false,
+     "rect": {
+      "x": 986,
+      "y": 148.4,
+      "w": 96,
+      "h": 110.3,
+      "right": 1082,
+      "bottom": 258.7
+     },
+     "bg": "#141f2c",
+     "border": "#2b5480",
+     "titleColor": "#e6e9ef",
+     "titleWeight": "600",
+     "dotColor": "#58a6ff",
+     "fullyVisible": true
+    },
+    {
+     "pos": "6",
+     "id": "approve",
+     "mark": "not-reached",
+     "title": "6 Wait for the approval at the head",
+     "titleLines": 3,
+     "titleWords": 8,
+     "words": 12,
+     "detail": "head approved → decisions/approve.json",
+     "detailLines": 2,
+     "detailClamped": true,
+     "rect": {
+      "x": 1108,
+      "y": 148.4,
+      "w": 96,
+      "h": 110.3,
+      "right": 1204,
+      "bottom": 258.7
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    },
+    {
+     "pos": "7",
+     "id": "merge",
+     "mark": "not-reached",
+     "title": "7 Merge",
+     "titleLines": 1,
+     "titleWords": 2,
+     "words": 2,
+     "detail": "",
+     "detailLines": 0,
+     "detailClamped": false,
+     "rect": {
+      "x": 1230,
+      "y": 148.4,
+      "w": 96,
+      "h": 110.3,
+      "right": 1326,
+      "bottom": 258.7
+     },
+     "bg": "#13181f",
+     "border": "#212730",
+     "titleColor": "#8b96a5",
+     "titleWeight": "500",
+     "dotColor": "#171c24",
+     "fullyVisible": true
+    }
+   ],
+   "areas": {
+    "card": 192148,
+    "drawing": 84977,
+    "chrome": 14399,
+    "scrollClip": 131109
+   },
+   "ink": {
+    "barTitle": 20975,
+    "barKicker": 5457,
+    "barFacts": 66470,
+    "stageTitles": 89393,
+    "ordinals": 2695,
+    "details": 27191,
+    "notches": 236,
+    "dots": 1459,
+    "legend": 54997,
+    "status": 0
+   },
+   "page": {
+    "bodyBg": "#10141a",
+    "colorScheme": "normal"
+   },
+   "pageErrors": [],
+   "sha256": "bdf53bbc18f7"
+  }
+ ],
+ "notes": [],
+ "errors": [],
+ "panel": "http://127.0.0.1:57741",
+ "finishedAt": "2026-11-05T03:59:13.235Z",
+ "shotCount": 10
+}
