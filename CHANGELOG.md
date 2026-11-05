@@ -4,29 +4,44 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.18.1 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.18.2 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-304 releases from v0.1.0 (2026-10-20) to v1.18.1 (2026-11-05), 1058 commits between the tags. Every release is anchored by an
+305 releases from v0.1.0 (2026-10-20) to v1.18.2 (2026-11-05), 1063 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
 
+## v1.18.2 — 2026-11-05 · 5 commits
+
+[`7e3172b`](https://github.com/JLRoper/agent-worktree-gui/commit/7e3172bcb58e9178899a6d870a422c452915e70e) · [compare v1.18.1...v1.18.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.18.1...v1.18.2)
+
+### Docs & tests
+
+- docs: render the changelog — 304 releases ([`d06b59c`](https://github.com/JLRoper/agent-worktree-gui/commit/d06b59c1d6239362308fdf9805c82476532bb5ae))
+- test: the driver runs a three-stage pipeline end to end, twice ([`f92f5f0`](https://github.com/JLRoper/agent-worktree-gui/commit/f92f5f07b18089964bd0617cba5e4a68a377dd97))
+- docs: the round separates its evidence from the tester's commentary ([`33268fa`](https://github.com/JLRoper/agent-worktree-gui/commit/33268face806266408339a8265d59cd356980e03))
+- docs: the re-run's provenance is the ran window, not the minute it was read ([`e17fe6b`](https://github.com/JLRoper/agent-worktree-gui/commit/e17fe6ba4e311dda26f5eb2673ced4a5bb846c53))
+
+### Other
+
+- chore: 1.18.2 — the version this landing carries ([`7e3172b`](https://github.com/JLRoper/agent-worktree-gui/commit/7e3172bcb58e9178899a6d870a422c452915e70e))
+
 ## v1.18.1 — 2026-11-05 · 3 commits
 
-[`c8d3ea8`](https://github.com/JLRoper/agent-worktree-gui/commit/c8d3ea8471dad4cc5dcfdd6ad39ae20b46899b29) · [compare v1.18.0...v1.18.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.18.0...v1.18.1)
+[`32b4ae7`](https://github.com/JLRoper/agent-worktree-gui/commit/32b4ae72b0dce2244aacfc28632557cb86a00699) · [compare v1.18.0...v1.18.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.18.0...v1.18.1)
 
 ### Docs & tests
 
 - docs: the changelog names v1.18.0 and the stage-run landing ([`d1f8df0`](https://github.com/JLRoper/agent-worktree-gui/commit/d1f8df0b294e9c88e94b059da10b1e5c94a9cdae))
-- docs: the bridge restart that proved outbound and could not prove inbound ([`0ad018c`](https://github.com/JLRoper/agent-worktree-gui/commit/0ad018c0cfdbe54588ef681745793dc436373858))
+- docs: the bridge restart that proved outbound and could not prove inbound ([`fec2d65`](https://github.com/JLRoper/agent-worktree-gui/commit/fec2d65c0479a6294ee6a9d0220c1a65649d7d0d))
 
 ### Other
 
-- chore: 1.18.1 — the version this landing carries ([`c8d3ea8`](https://github.com/JLRoper/agent-worktree-gui/commit/c8d3ea8471dad4cc5dcfdd6ad39ae20b46899b29))
+- chore: 1.18.1 — the version this landing carries ([`32b4ae7`](https://github.com/JLRoper/agent-worktree-gui/commit/32b4ae72b0dce2244aacfc28632557cb86a00699))
 
 ## v1.18.0 — 2026-11-05 · 4 commits
 
