@@ -84,10 +84,12 @@ notes it could not act on — and it writes nothing (`:52-54`, `:344-345`).
 wrote (`:140-182`). Found → the row goes back to `queued` and moves to the next stage in the same write; not found →
 nothing happens, which is the barrier.
 
-**Step 2 — a running row whose stage settled** (`:398-442`). Settled means: the row's current thread is not live
+**Step 2 — a row whose stage settled** (`:398-442`). Settled means: the row's current thread is not live
 (`isLive`), and the job store's last run for that thread says `done` (`:404-408`). A failed run parks the row
 (`:409-421`); a non-live thread with no job at all is left alone, because the facts do not support any move. The pass
-never starts anything.
+never starts anything. Since §7.10 the pass also reads a row left `queued` over a stage whose run already settled
+(`unreadSettle`): the same code, the same parks, and the one shape that would otherwise re-run a stage instead of
+advancing the graph.
 
 **Step 3 — the front of the queue starts a stage** (`:447-494`), only when the reader's switch is `auto`. "Front" is
 `byQueueOrder` over the queued and running rows (`:56-58`), so a pipeline row waits behind a row with no pipeline
@@ -628,6 +630,31 @@ A task can be handed to another assistant (`lib/assistant/queue.js` `reassignTas
 travels with it. The next stage is then started by the *other* assistant's `spawn` switch and, if it is not `auto`, the
 row advances and waits. The tree claim (§3.5) is global, so the move does not free the tree. This is the designed
 behaviour, not a failure — but it is the reason the switch is read per queue rather than stored on the row.
+
+### 7.10 A row left `queued` over a settled stage
+
+The driver's second pass reads a settle from the row's RUN: a `running` row whose thread is not live and whose last
+job says `done`. A row can stand in `queued` over the very same settle — the panel was killed between the queue write
+and the start, a requeue landed first, a pass wrote the move but never asked for the next start. Its stage run's entry
+already says `status: done`; what it does not carry is a `decision`, because the driver writes that when it READS the
+settle (§6.2).
+
+**Design:** the pass reads that row too. `unreadSettle(task)` is the predicate — the entry for the row's CURRENT
+stage and visit has `status: done` and no decision — and the rest of the pass is the same code, so a cap, a gate, a
+missing artifact and a refusal all still park it. The alternative reading ("the stage has not started, start it") is
+wrong for exactly this shape: it runs the stage a second time while the graph never moves, which is the boundary stall
+that needed a hand-start. A failed run is deliberately NOT this shape (its entry says `failed`, not `done`), so the
+retry path keeps owning a requeued failure.
+
+**Why it is safe against a duplicating run:** the row's stage run is the record of the visit, and a visit is only
+entered by `enterStage` (`lib/task-pipeline.js`). Reading the settle writes its decision on that same entry, so a
+second pass over the same row finds `decision` and does nothing. `visits[stage]` does not move — reading an order is
+not a second visit.
+
+**Measured:** `node tools/verify-pipeline-walk.mjs` walks the shipped small documents through `Assistant.sweepQueues`
+with a scripted seat and no hand-start (`docs/reviews/pipeline-walk/report.html`). The fourth walk leaves the row queued
+over a settled `probe`: the driver before this rule left it queued with no decision and never advanced; with the rule it
+enters `fix` and the row finishes.
 
 ---
 

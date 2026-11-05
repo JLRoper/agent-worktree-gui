@@ -1,0 +1,1551 @@
+{
+ "generatedAt": "2026-11-05T23:27:58.297Z",
+ "seed": "pipeline-bundle.seed.json",
+ "walks": [
+  {
+   "pipeline": "ping-pong",
+   "document": "ping-pong",
+   "title": "Ping-pong: draft and critique",
+   "stages": [
+    "draft",
+    "critique"
+   ],
+   "handoffs": [
+    {
+     "id": "H-01",
+     "from": "draft",
+     "to": "critique",
+     "kind": "sequence",
+     "cap": null
+    },
+    {
+     "id": "H-02",
+     "from": "critique",
+     "to": "draft",
+     "kind": "loop",
+     "cap": "3 rounds"
+    }
+   ],
+   "gates": [
+    {
+     "id": "G1",
+     "after": "critique",
+     "decision": null
+    }
+   ],
+   "tree": "<sandbox>/trees/walk-ping-pong",
+   "cuts": 1,
+   "starts": [
+    {
+     "pipeline": "ping-pong",
+     "stage": "draft",
+     "visit": 1,
+     "job": "job-1",
+     "thread": "walk-ping-pong-1",
+     "artifact": "ledger/ping-pong/draft.md",
+     "sha256": "b60c34e0fdff576af5cb5cf1fa47aad23b1845b220127134cce563a65aaeeec6"
+    },
+    {
+     "pipeline": "ping-pong",
+     "stage": "critique",
+     "visit": 1,
+     "job": "job-2",
+     "thread": "walk-ping-pong-2",
+     "artifact": "ledger/ping-pong/critique.md",
+     "sha256": "5ae3039ddcc1efec1d2f1979e45630444030d032cbee64a678b2b2aa36f6b153"
+    },
+    {
+     "pipeline": "ping-pong",
+     "stage": "draft",
+     "visit": 2,
+     "job": "job-3",
+     "thread": "walk-ping-pong-3",
+     "artifact": "ledger/ping-pong/draft.md",
+     "sha256": "dff5dcdbe6260a1f169b17ec80d6bdaffade074be15bba819c9ab27720b42b2e"
+    },
+    {
+     "pipeline": "ping-pong",
+     "stage": "critique",
+     "visit": 2,
+     "job": "job-4",
+     "thread": "walk-ping-pong-4",
+     "artifact": "ledger/ping-pong/critique.md",
+     "sha256": "a666b29124474332434c3c682db4b24110aee2992487e35b12d6cd4c95d04776"
+    },
+    {
+     "pipeline": "ping-pong",
+     "stage": "draft",
+     "visit": 3,
+     "job": "job-5",
+     "thread": "walk-ping-pong-5",
+     "artifact": "ledger/ping-pong/draft.md",
+     "sha256": "58c6b95907d50df2ec7d91cd0e56a8206cb24c266afbcda4b878ad25f89a79a9"
+    },
+    {
+     "pipeline": "ping-pong",
+     "stage": "critique",
+     "visit": 3,
+     "job": "job-6",
+     "thread": "walk-ping-pong-6",
+     "artifact": "ledger/ping-pong/critique.md",
+     "sha256": "3c0ee9c367389de4d248335ce79c0a537f6e9d96acd912f0cce9d17e4fd382d0"
+    },
+    {
+     "pipeline": "ping-pong",
+     "stage": "draft",
+     "visit": 4,
+     "job": "job-7",
+     "thread": "walk-ping-pong-7",
+     "artifact": "ledger/ping-pong/draft.md",
+     "sha256": "a9a600b9f90bd794647c49546b3d35d10d60ae42355f61107b3112bdbf05cd74"
+    },
+    {
+     "pipeline": "ping-pong",
+     "stage": "critique",
+     "visit": 4,
+     "job": "job-8",
+     "thread": "walk-ping-pong-8",
+     "artifact": "ledger/ping-pong/critique.md",
+     "sha256": "f7bcff38a1eabea0cfb24bab2b85e803172bcf30e5c4f8e19e1271e6cad76460"
+    }
+   ],
+   "seatVerdicts": [],
+   "row": {
+    "id": 1,
+    "state": "parked",
+    "stage": "critique",
+    "visits": {
+     "draft": 4,
+     "critique": 4
+    },
+    "crossings": {
+     "H-01": 4,
+     "H-02": 3
+    },
+    "waitingFor": {
+     "kind": "cap",
+     "edge": "H-02",
+     "from": "critique",
+     "to": "draft",
+     "limit": 3,
+     "used": 3,
+     "stage": "critique",
+     "since": "2026-11-05T12:00:10.000Z"
+    },
+    "reason": "the loop H-02 (critique → draft) is at its cap of 3 rounds — 3 crossings already taken, so the row stops here for a decision"
+   },
+   "stageRuns": [
+    {
+     "id": "ping-pong/draft#1",
+     "stage": "draft",
+     "visit": 1,
+     "thread": "walk-ping-pong-1",
+     "job": "job-1",
+     "status": "done",
+     "settledAt": "2026-11-05T12:00:03.000Z",
+     "artifact": {
+      "path": "ledger/ping-pong/draft.md",
+      "present": true,
+      "sha256": "b60c34e0fdff576af5cb5cf1fa47aad23b1845b220127134cce563a65aaeeec6"
+     },
+     "decision": {
+      "trigger": "stage-settled",
+      "code": null,
+      "by": "panel",
+      "reason": "ping-pong · draft settled — the run finished"
+     }
+    },
+    {
+     "id": "ping-pong/critique#1",
+     "stage": "critique",
+     "visit": 1,
+     "thread": "walk-ping-pong-2",
+     "job": "job-2",
+     "status": "done",
+     "settledAt": "2026-11-05T12:00:04.000Z",
+     "artifact": {
+      "path": "ledger/ping-pong/critique.md",
+      "present": true,
+      "sha256": "5ae3039ddcc1efec1d2f1979e45630444030d032cbee64a678b2b2aa36f6b153"
+     },
+     "decision": {
+      "trigger": "stage-settled",
+      "code": null,
+      "by": "panel",
+      "reason": "ping-pong · critique settled — the run finished"
+     }
+    },
+    {
+     "id": "ping-pong/draft#2",
+     "stage": "draft",
+     "visit": 2,
+     "thread": "walk-ping-pong-3",
+     "job": "job-3",
+     "status": "done",
+     "settledAt": "2026-11-05T12:00:05.000Z",
+     "artifact": {
+      "path": "ledger/ping-pong/draft.md",
+      "present": true,
+      "sha256": "dff5dcdbe6260a1f169b17ec80d6bdaffade074be15bba819c9ab27720b42b2e"
+     },
+     "decision": {
+      "trigger": "stage-settled",
+      "code": null,
+      "by": "panel",
+      "reason": "ping-pong · draft settled — the run finished"
+     }
+    },
+    {
+     "id": "ping-pong/critique#2",
+     "stage": "critique",
+     "visit": 2,
+     "thread": "walk-ping-pong-4",
+     "job": "job-4",
+     "status": "done",
+     "settledAt": "2026-11-05T12:00:06.000Z",
+     "artifact": {
+      "path": "ledger/ping-pong/critique.md",
+      "present": true,
+      "sha256": "a666b29124474332434c3c682db4b24110aee2992487e35b12d6cd4c95d04776"
+     },
+     "decision": {
+      "trigger": "stage-settled",
+      "code": null,
+      "by": "panel",
+      "reason": "ping-pong · critique settled — the run finished"
+     }
+    },
+    {
+     "id": "ping-pong/draft#3",
+     "stage": "draft",
+     "visit": 3,
+     "thread": "walk-ping-pong-5",
+     "job": "job-5",
+     "status": "done",
+     "settledAt": "2026-11-05T12:00:07.000Z",
+     "artifact": {
+      "path": "ledger/ping-pong/draft.md",
+      "present": true,
+      "sha256": "58c6b95907d50df2ec7d91cd0e56a8206cb24c266afbcda4b878ad25f89a79a9"
+     },
+     "decision": {
+      "trigger": "stage-settled",
+      "code": null,
+      "by": "panel",
+      "reason": "ping-pong · draft settled — the run finished"
+     }
+    },
+    {
+     "id": "ping-pong/critique#3",
+     "stage": "critique",
+     "visit": 3,
+     "thread": "walk-ping-pong-6",
+     "job": "job-6",
+     "status": "done",
+     "settledAt": "2026-11-05T12:00:08.000Z",
+     "artifact": {
+      "path": "ledger/ping-pong/critique.md",
+      "present": true,
+      "sha256": "3c0ee9c367389de4d248335ce79c0a537f6e9d96acd912f0cce9d17e4fd382d0"
+     },
+     "decision": {
+      "trigger": "stage-settled",
+      "code": null,
+      "by": "panel",
+      "reason": "ping-pong · critique settled — the run finished"
+     }
+    },
+    {
+     "id": "ping-pong/draft#4",
+     "stage": "draft",
+     "visit": 4,
+     "thread": "walk-ping-pong-7",
+     "job": "job-7",
+     "status": "done",
+     "settledAt": "2026-11-05T12:00:09.000Z",
+     "artifact": {
+      "path": "ledger/ping-pong/draft.md",
+      "present": true,
+      "sha256": "a9a600b9f90bd794647c49546b3d35d10d60ae42355f61107b3112bdbf05cd74"
+     },
+     "decision": {
+      "trigger": "stage-settled",
+      "code": null,
+      "by": "panel",
+      "reason": "ping-pong · draft settled — the run finished"
+     }
+    },
+    {
+     "id": "ping-pong/critique#4",
+     "stage": "critique",
+     "visit": 4,
+     "thread": "walk-ping-pong-8",
+     "job": "job-8",
+     "status": "done",
+     "settledAt": "2026-11-05T12:00:10.000Z",
+     "artifact": {
+      "path": "ledger/ping-pong/critique.md",
+      "present": true,
+      "sha256": "f7bcff38a1eabea0cfb24bab2b85e803172bcf30e5c4f8e19e1271e6cad76460"
+     },
+     "decision": {
+      "trigger": "cap",
+      "code": "pipeline-cap",
+      "by": "panel",
+      "reason": "the loop H-02 (critique → draft) is at its cap of 3 rounds — 3 crossings already taken, so the row stops here for a decision"
+     }
+    }
+   ],
+   "journal": [
+    {
+     "at": "2026-11-05T23:26:32.978Z",
+     "kind": "queue",
+     "text": "Assistant #1: added #1 walk ping-pong — by reader"
+    },
+    {
+     "at": "2026-11-05T23:26:32.983Z",
+     "kind": "queue",
+     "text": "Assistant #1: #1 walk ping-pong → pipeline ping-pong at draft (entered 2026-11-05T12:00:00.000Z) — by reader"
+    },
+    {
+     "at": "2026-11-05T23:26:32.994Z",
+     "kind": "pipeline",
+     "text": "#1 walk ping-pong — tree cut at <sandbox>\\trees\\walk-ping-pong (branch wtgui/walk-ping-pong), no worker started"
+    },
+    {
+     "at": "2026-11-05T23:26:35.053Z",
+     "kind": "pipeline",
+     "text": "#1 walk ping-pong — starting draft (1 of 2) of ping-pong in <sandbox>\\trees\\walk-ping-pong"
+    },
+    {
+     "at": "2026-11-05T23:26:35.056Z",
+     "kind": "queue",
+     "text": "#1 walk ping-pong — linked to walk-ping-pong-1 in <sandbox>/trees/walk-ping-pong by the SPAWN that cut it"
+    },
+    {
+     "at": "2026-11-05T23:26:38.831Z",
+     "kind": "queue",
+     "text": "#1 walk ping-pong — running → queued at critique by the panel: stage draft settled — moved to critique (2 of 2) of ping-pong"
+    },
+    {
+     "at": "2026-11-05T23:26:38.832Z",
+     "kind": "pipeline",
+     "text": "#1 walk ping-pong — starting critique (2 of 2) of ping-pong in <sandbox>\\trees\\walk-ping-pong"
+    },
+    {
+     "at": "2026-11-05T23:26:38.834Z",
+     "kind": "queue",
+     "text": "#1 walk ping-pong — linked to walk-ping-pong-2 in <sandbox>/trees/walk-ping-pong by the SPAWN that cut it"
+    },
+    {
+     "at": "2026-11-05T23:26:43.685Z",
+     "kind": "queue",
+     "text": "#1 walk ping-pong — running → queued at draft by the panel: stage critique settled — moved to draft (1 of 2) of ping-pong"
+    },
+    {
+     "at": "2026-11-05T23:26:43.686Z",
+     "kind": "pipeline",
+     "text": "#1 walk ping-pong — starting draft (1 of 2) of ping-pong in <sandbox>\\trees\\walk-ping-pong — visit 2"
+    },
+    {
+     "at": "2026-11-05T23:26:43.692Z",
+     "kind": "queue",
+     "text": "#1 walk ping-pong — linked to walk-ping-pong-3 in <sandbox>/trees/walk-ping-pong by the SPAWN that cut it"
+    },
+    {
+     "at": "2026-11-05T23:26:50.966Z",
+     "kind": "queue",
+     "text": "#1 walk ping-pong — running → queued at critique by the panel: stage draft settled — moved to critique (2 of 2) of ping-pong"
+    },
+    {
+     "at": "2026-11-05T23:26:50.966Z",
+     "kind": "pipeline",
+     "text": "#1 walk ping-pong — starting critique (2 of 2) of ping-pong in <sandbox>\\trees\\walk-ping-pong — visit 2"
+    },
+    {
+     "at": "2026-11-05T23:26:50.969Z",
+     "kind": "queue",
+     "text": "#1 walk ping-pong — linked to walk-ping-pong-4 in <sandbox>/trees/walk-ping-pong by the SPAWN that cut it"
+    },
+    {
+     "at": "2026-11-05T23:26:58.720Z",
+     "kind": "queue",
+     "text": "#1 walk ping-pong — running → queued at draft by the panel: stage critique settled — moved to draft (1 of 2) of ping-pong"
+    },
+    {
+     "at": "2026-11-05T23:26:58.720Z",
+     "kind": "pipeline",
+     "text": "#1 walk ping-pong — starting draft (1 of 2) of ping-pong in <sandbox>\\trees\\walk-ping-pong — visit 3"
+    },
+    {
+     "at": "2026-11-05T23:26:58.723Z",
+     "kind": "queue",
+     "text": "#1 walk ping-pong — linked to walk-ping-pong-5 in <sandbox>/trees/walk-ping-pong by the SPAWN that cut it"
+    },
+    {
+     "at": "2026-11-05T23:27:06.520Z",
+     "kind": "queue",
+     "text": "#1 walk ping-pong — running → queued at critique by the panel: stage draft settled — moved to critique (2 of 2) of ping-pong"
+    },
+    {
+     "at": "2026-11-05T23:27:06.520Z",
+     "kind": "pipeline",
+     "text": "#1 walk ping-pong — starting critique (2 of 2) of ping-pong in <sandbox>\\trees\\walk-ping-pong — visit 3"
+    },
+    {
+     "at": "2026-11-05T23:27:06.522Z",
+     "kind": "queue",
+     "text": "#1 walk ping-pong — linked to walk-ping-pong-6 in <sandbox>/trees/walk-ping-pong by the SPAWN that cut it"
+    },
+    {
+     "at": "2026-11-05T23:27:12.419Z",
+     "kind": "queue",
+     "text": "#1 walk ping-pong — running → queued at draft by the panel: stage critique settled — moved to draft (1 of 2) of ping-pong"
+    },
+    {
+     "at": "2026-11-05T23:27:12.419Z",
+     "kind": "pipeline",
+     "text": "#1 walk ping-pong — starting draft (1 of 2) of ping-pong in <sandbox>\\trees\\walk-ping-pong — visit 4"
+    },
+    {
+     "at": "2026-11-05T23:27:12.421Z",
+     "kind": "queue",
+     "text": "#1 walk ping-pong — linked to walk-ping-pong-7 in <sandbox>/trees/walk-ping-pong by the SPAWN that cut it"
+    },
+    {
+     "at": "2026-11-05T23:27:16.778Z",
+     "kind": "queue",
+     "text": "#1 walk ping-pong — running → queued at critique by the panel: stage draft settled — moved to critique (2 of 2) of ping-pong"
+    },
+    {
+     "at": "2026-11-05T23:27:16.778Z",
+     "kind": "pipeline",
+     "text": "#1 walk ping-pong — starting critique (2 of 2) of ping-pong in <sandbox>\\trees\\walk-ping-pong — visit 4"
+    },
+    {
+     "at": "2026-11-05T23:27:16.780Z",
+     "kind": "queue",
+     "text": "#1 walk ping-pong — linked to walk-ping-pong-8 in <sandbox>/trees/walk-ping-pong by the SPAWN that cut it"
+    },
+    {
+     "at": "2026-11-05T23:27:19.973Z",
+     "kind": "queue",
+     "text": "#1 walk ping-pong — running → parked at critique by the panel: the loop H-02 (critique → draft) is at its cap of 3 rounds — 3 crossings already taken, so the row stops here for a decision"
+    }
+   ],
+   "steps": [
+    {
+     "step": 1,
+     "state": "queued",
+     "stage": "draft",
+     "stageRun": null,
+     "visits": {
+      "draft": 1
+     },
+     "crossings": {},
+     "started": 0,
+     "from": "queued"
+    },
+    {
+     "step": 2,
+     "state": "running",
+     "stage": "draft",
+     "stageRun": "ping-pong/draft#1",
+     "visits": {
+      "draft": 1
+     },
+     "crossings": {},
+     "started": 1,
+     "from": "queued"
+    },
+    {
+     "step": 3,
+     "state": "running",
+     "stage": "critique",
+     "stageRun": "ping-pong/critique#1",
+     "visits": {
+      "draft": 1,
+      "critique": 1
+     },
+     "crossings": {
+      "H-01": 1
+     },
+     "started": 2,
+     "from": "running"
+    },
+    {
+     "step": 4,
+     "state": "running",
+     "stage": "draft",
+     "stageRun": "ping-pong/draft#2",
+     "visits": {
+      "draft": 2,
+      "critique": 1
+     },
+     "crossings": {
+      "H-01": 1,
+      "H-02": 1
+     },
+     "started": 3,
+     "from": "running"
+    },
+    {
+     "step": 5,
+     "state": "running",
+     "stage": "critique",
+     "stageRun": "ping-pong/critique#2",
+     "visits": {
+      "draft": 2,
+      "critique": 2
+     },
+     "crossings": {
+      "H-01": 2,
+      "H-02": 1
+     },
+     "started": 4,
+     "from": "running"
+    },
+    {
+     "step": 6,
+     "state": "running",
+     "stage": "draft",
+     "stageRun": "ping-pong/draft#3",
+     "visits": {
+      "draft": 3,
+      "critique": 2
+     },
+     "crossings": {
+      "H-01": 2,
+      "H-02": 2
+     },
+     "started": 5,
+     "from": "running"
+    },
+    {
+     "step": 7,
+     "state": "running",
+     "stage": "critique",
+     "stageRun": "ping-pong/critique#3",
+     "visits": {
+      "draft": 3,
+      "critique": 3
+     },
+     "crossings": {
+      "H-01": 3,
+      "H-02": 2
+     },
+     "started": 6,
+     "from": "running"
+    },
+    {
+     "step": 8,
+     "state": "running",
+     "stage": "draft",
+     "stageRun": "ping-pong/draft#4",
+     "visits": {
+      "draft": 4,
+      "critique": 3
+     },
+     "crossings": {
+      "H-01": 3,
+      "H-02": 3
+     },
+     "started": 7,
+     "from": "running"
+    },
+    {
+     "step": 9,
+     "state": "running",
+     "stage": "critique",
+     "stageRun": "ping-pong/critique#4",
+     "visits": {
+      "draft": 4,
+      "critique": 4
+     },
+     "crossings": {
+      "H-01": 4,
+      "H-02": 3
+     },
+     "started": 8,
+     "from": "running"
+    },
+    {
+     "step": 10,
+     "state": "parked",
+     "stage": "critique",
+     "stageRun": "ping-pong/critique#4",
+     "visits": {
+      "draft": 4,
+      "critique": 4
+     },
+     "crossings": {
+      "H-01": 4,
+      "H-02": 3
+     },
+     "started": 8,
+     "from": "running"
+    }
+   ]
+  },
+  {
+   "pipeline": "probe-fix",
+   "document": "probe-fix",
+   "title": "Probe, then fix",
+   "stages": [
+    "probe",
+    "fix"
+   ],
+   "handoffs": [
+    {
+     "id": "H-01",
+     "from": "probe",
+     "to": "fix",
+     "kind": "sequence",
+     "cap": null
+    }
+   ],
+   "gates": [],
+   "tree": "<sandbox>/trees/walk-probe-fix",
+   "cuts": 1,
+   "starts": [
+    {
+     "pipeline": "probe-fix",
+     "stage": "probe",
+     "visit": 1,
+     "job": "job-1",
+     "thread": "walk-probe-fix-1",
+     "artifact": "ledger/probe-fix/report.md",
+     "sha256": "005b2809fde58b69946ed381f3ede20cc58b20a312d7de13e4d83ed57f28a788"
+    },
+    {
+     "pipeline": "probe-fix",
+     "stage": "fix",
+     "visit": 1,
+     "job": "job-2",
+     "thread": "walk-probe-fix-2",
+     "artifact": "ledger/probe-fix/patch.diff",
+     "sha256": "c1efdbdb7728ffc5e359f3b07a01517173ca8838f233b754679f43a4e52d4984"
+    }
+   ],
+   "seatVerdicts": [],
+   "row": {
+    "id": 1,
+    "state": "done",
+    "stage": "fix",
+    "visits": {
+     "probe": 1,
+     "fix": 1
+    },
+    "crossings": {
+     "H-01": 1
+    },
+    "waitingFor": null,
+    "reason": "PR reads MERGED"
+   },
+   "stageRuns": [
+    {
+     "id": "probe-fix/probe#1",
+     "stage": "probe",
+     "visit": 1,
+     "thread": "walk-probe-fix-1",
+     "job": "job-1",
+     "status": "done",
+     "settledAt": "2026-11-05T12:00:03.000Z",
+     "artifact": {
+      "path": "ledger/probe-fix/report.md",
+      "present": true,
+      "sha256": "005b2809fde58b69946ed381f3ede20cc58b20a312d7de13e4d83ed57f28a788"
+     },
+     "decision": {
+      "trigger": "stage-settled",
+      "code": null,
+      "by": "panel",
+      "reason": "probe-fix · probe settled — the run finished"
+     }
+    },
+    {
+     "id": "probe-fix/fix#1",
+     "stage": "fix",
+     "visit": 1,
+     "thread": "walk-probe-fix-2",
+     "job": "job-2",
+     "status": "done",
+     "settledAt": "2026-11-05T12:00:04.000Z",
+     "artifact": {
+      "path": "ledger/probe-fix/patch.diff",
+      "present": true,
+      "sha256": "c1efdbdb7728ffc5e359f3b07a01517173ca8838f233b754679f43a4e52d4984"
+     },
+     "decision": {
+      "trigger": "stage-settled",
+      "code": null,
+      "by": "panel",
+      "reason": "probe-fix · fix settled — the run finished"
+     }
+    }
+   ],
+   "journal": [
+    {
+     "at": "2026-11-05T23:27:20.020Z",
+     "kind": "queue",
+     "text": "Assistant #1: added #1 walk probe-fix — by reader"
+    },
+    {
+     "at": "2026-11-05T23:27:20.028Z",
+     "kind": "queue",
+     "text": "Assistant #1: #1 walk probe-fix → pipeline probe-fix at probe (entered 2026-11-05T12:00:00.000Z) — by reader"
+    },
+    {
+     "at": "2026-11-05T23:27:20.046Z",
+     "kind": "pipeline",
+     "text": "#1 walk probe-fix — tree cut at <sandbox>\\trees\\walk-probe-fix (branch wtgui/walk-probe-fix), no worker started"
+    },
+    {
+     "at": "2026-11-05T23:27:20.762Z",
+     "kind": "pipeline",
+     "text": "#1 walk probe-fix — starting probe (1 of 2) of probe-fix in <sandbox>\\trees\\walk-probe-fix"
+    },
+    {
+     "at": "2026-11-05T23:27:20.765Z",
+     "kind": "queue",
+     "text": "#1 walk probe-fix — linked to walk-probe-fix-1 in <sandbox>/trees/walk-probe-fix by the SPAWN that cut it"
+    },
+    {
+     "at": "2026-11-05T23:27:24.729Z",
+     "kind": "queue",
+     "text": "#1 walk probe-fix — running → queued at fix by the panel: stage probe settled — moved to fix (2 of 2) of probe-fix"
+    },
+    {
+     "at": "2026-11-05T23:27:24.729Z",
+     "kind": "pipeline",
+     "text": "#1 walk probe-fix — starting fix (2 of 2) of probe-fix in <sandbox>\\trees\\walk-probe-fix"
+    },
+    {
+     "at": "2026-11-05T23:27:24.732Z",
+     "kind": "queue",
+     "text": "#1 walk probe-fix — linked to walk-probe-fix-2 in <sandbox>/trees/walk-probe-fix by the SPAWN that cut it"
+    },
+    {
+     "at": "2026-11-05T23:27:26.067Z",
+     "kind": "queue",
+     "text": "#1 walk probe-fix — done by the panel: PR reads MERGED"
+    }
+   ],
+   "steps": [
+    {
+     "step": 1,
+     "state": "queued",
+     "stage": "probe",
+     "stageRun": null,
+     "visits": {
+      "probe": 1
+     },
+     "crossings": {},
+     "started": 0,
+     "from": "queued"
+    },
+    {
+     "step": 2,
+     "state": "running",
+     "stage": "probe",
+     "stageRun": "probe-fix/probe#1",
+     "visits": {
+      "probe": 1
+     },
+     "crossings": {},
+     "started": 1,
+     "from": "queued"
+    },
+    {
+     "step": 3,
+     "state": "running",
+     "stage": "fix",
+     "stageRun": "probe-fix/fix#1",
+     "visits": {
+      "probe": 1,
+      "fix": 1
+     },
+     "crossings": {
+      "H-01": 1
+     },
+     "started": 2,
+     "from": "running"
+    },
+    {
+     "step": 4,
+     "state": "done",
+     "stage": "fix",
+     "stageRun": "probe-fix/fix#1",
+     "visits": {
+      "probe": 1,
+      "fix": 1
+     },
+     "crossings": {
+      "H-01": 1
+     },
+     "started": 2,
+     "from": "running"
+    }
+   ]
+  },
+  {
+   "pipeline": "author-review-revise",
+   "document": "author-review-revise",
+   "title": "Author, review, revise",
+   "stages": [
+    "author",
+    "review",
+    "revise"
+   ],
+   "handoffs": [
+    {
+     "id": "H-01",
+     "from": "author",
+     "to": "review",
+     "kind": "sequence",
+     "cap": null
+    },
+    {
+     "id": "H-02",
+     "from": "review",
+     "to": "author",
+     "kind": "loop",
+     "cap": "2 rejects"
+    },
+    {
+     "id": "H-03",
+     "from": "review",
+     "to": "revise",
+     "kind": "sequence",
+     "cap": null
+    }
+   ],
+   "gates": [
+    {
+     "id": "G1",
+     "after": "review",
+     "decision": {
+      "path": "ledger/author-review/verdict.json",
+      "routes": {
+       "accept": "H-03",
+       "reject": "H-02"
+      }
+     }
+    }
+   ],
+   "tree": "<sandbox>/trees/walk-author-review-revise",
+   "cuts": 1,
+   "starts": [
+    {
+     "pipeline": "author-review-revise",
+     "stage": "author",
+     "visit": 1,
+     "job": "job-1",
+     "thread": "walk-author-review-revise-1",
+     "artifact": "ledger/author-review/manuscript.md",
+     "sha256": "b95ada25d38a631c9f87b8f9b93b94d2557cf72f8853cdaedad43c7c3c7c16b6"
+    },
+    {
+     "pipeline": "author-review-revise",
+     "stage": "review",
+     "visit": 1,
+     "job": "job-2",
+     "thread": "walk-author-review-revise-2",
+     "artifact": "ledger/author-review/review.md",
+     "sha256": "dc0228cb6e2d0464d5a08b88dd3ff8106b88f6bc9716af72daca3f249cc36201"
+    },
+    {
+     "pipeline": "author-review-revise",
+     "stage": "author",
+     "visit": 2,
+     "job": "job-3",
+     "thread": "walk-author-review-revise-3",
+     "artifact": "ledger/author-review/manuscript.md",
+     "sha256": "a4d863efc705388a45f40c19ca83c8a7e7fa31e6ed6638a55bcf3b3a40038e2c"
+    },
+    {
+     "pipeline": "author-review-revise",
+     "stage": "review",
+     "visit": 2,
+     "job": "job-4",
+     "thread": "walk-author-review-revise-4",
+     "artifact": "ledger/author-review/review.md",
+     "sha256": "2341134a08c508d801e04cd6df6f8da2bc331a92a6107f862de4fe34549504fe"
+    },
+    {
+     "pipeline": "author-review-revise",
+     "stage": "author",
+     "visit": 3,
+     "job": "job-5",
+     "thread": "walk-author-review-revise-5",
+     "artifact": "ledger/author-review/manuscript.md",
+     "sha256": "130d69e2a38006babbc0af98b8869d9357fa5aea1fe577b10b1a68831f9d74ba"
+    },
+    {
+     "pipeline": "author-review-revise",
+     "stage": "review",
+     "visit": 3,
+     "job": "job-6",
+     "thread": "walk-author-review-revise-6",
+     "artifact": "ledger/author-review/review.md",
+     "sha256": "5bddf0eeceab27f4b687e9fee7511ee46d76aea68f526e1982105edbf838692d"
+    },
+    {
+     "pipeline": "author-review-revise",
+     "stage": "revise",
+     "visit": 1,
+     "job": "job-7",
+     "thread": "walk-author-review-revise-7",
+     "artifact": "ledger/author-review/revision.md",
+     "sha256": "668371d5940dbee176d2e77ccaeeebb4fee27c84b9b0cae78f4115f28889c2d8"
+    }
+   ],
+   "seatVerdicts": [
+    {
+     "stage": "review",
+     "visit": 1,
+     "gate": "G1",
+     "outcome": "reject",
+     "file": "ledger/author-review/verdict.json"
+    },
+    {
+     "stage": "review",
+     "visit": 2,
+     "gate": "G1",
+     "outcome": "reject",
+     "file": "ledger/author-review/verdict.json"
+    },
+    {
+     "stage": "review",
+     "visit": 3,
+     "gate": "G1",
+     "outcome": "accept",
+     "file": "ledger/author-review/verdict.json"
+    }
+   ],
+   "row": {
+    "id": 1,
+    "state": "done",
+    "stage": "revise",
+    "visits": {
+     "author": 3,
+     "review": 3,
+     "revise": 1
+    },
+    "crossings": {
+     "H-01": 3,
+     "H-02": 2,
+     "H-03": 1
+    },
+    "waitingFor": null,
+    "reason": "PR reads MERGED"
+   },
+   "stageRuns": [
+    {
+     "id": "author-review-revise/author#1",
+     "stage": "author",
+     "visit": 1,
+     "thread": "walk-author-review-revise-1",
+     "job": "job-1",
+     "status": "done",
+     "settledAt": "2026-11-05T12:00:03.000Z",
+     "artifact": {
+      "path": "ledger/author-review/manuscript.md",
+      "present": true,
+      "sha256": "b95ada25d38a631c9f87b8f9b93b94d2557cf72f8853cdaedad43c7c3c7c16b6"
+     },
+     "decision": {
+      "trigger": "stage-settled",
+      "code": null,
+      "by": "panel",
+      "reason": "author-review-revise · author settled — the run finished"
+     }
+    },
+    {
+     "id": "author-review-revise/review#1",
+     "stage": "review",
+     "visit": 1,
+     "thread": "walk-author-review-revise-2",
+     "job": "job-2",
+     "status": "done",
+     "settledAt": "2026-11-05T12:00:04.000Z",
+     "artifact": {
+      "path": "ledger/author-review/review.md",
+      "present": true,
+      "sha256": "dc0228cb6e2d0464d5a08b88dd3ff8106b88f6bc9716af72daca3f249cc36201"
+     },
+     "decision": {
+      "trigger": "stage-settled",
+      "code": null,
+      "by": "panel",
+      "reason": "author-review-revise · review settled — the run finished"
+     }
+    },
+    {
+     "id": "author-review-revise/author#2",
+     "stage": "author",
+     "visit": 2,
+     "thread": "walk-author-review-revise-3",
+     "job": "job-3",
+     "status": "done",
+     "settledAt": "2026-11-05T12:00:05.000Z",
+     "artifact": {
+      "path": "ledger/author-review/manuscript.md",
+      "present": true,
+      "sha256": "a4d863efc705388a45f40c19ca83c8a7e7fa31e6ed6638a55bcf3b3a40038e2c"
+     },
+     "decision": {
+      "trigger": "stage-settled",
+      "code": null,
+      "by": "panel",
+      "reason": "author-review-revise · author settled — the run finished"
+     }
+    },
+    {
+     "id": "author-review-revise/review#2",
+     "stage": "review",
+     "visit": 2,
+     "thread": "walk-author-review-revise-4",
+     "job": "job-4",
+     "status": "done",
+     "settledAt": "2026-11-05T12:00:06.000Z",
+     "artifact": {
+      "path": "ledger/author-review/review.md",
+      "present": true,
+      "sha256": "2341134a08c508d801e04cd6df6f8da2bc331a92a6107f862de4fe34549504fe"
+     },
+     "decision": {
+      "trigger": "stage-settled",
+      "code": null,
+      "by": "panel",
+      "reason": "author-review-revise · review settled — the run finished"
+     }
+    },
+    {
+     "id": "author-review-revise/author#3",
+     "stage": "author",
+     "visit": 3,
+     "thread": "walk-author-review-revise-5",
+     "job": "job-5",
+     "status": "done",
+     "settledAt": "2026-11-05T12:00:07.000Z",
+     "artifact": {
+      "path": "ledger/author-review/manuscript.md",
+      "present": true,
+      "sha256": "130d69e2a38006babbc0af98b8869d9357fa5aea1fe577b10b1a68831f9d74ba"
+     },
+     "decision": {
+      "trigger": "stage-settled",
+      "code": null,
+      "by": "panel",
+      "reason": "author-review-revise · author settled — the run finished"
+     }
+    },
+    {
+     "id": "author-review-revise/review#3",
+     "stage": "review",
+     "visit": 3,
+     "thread": "walk-author-review-revise-6",
+     "job": "job-6",
+     "status": "done",
+     "settledAt": "2026-11-05T12:00:08.000Z",
+     "artifact": {
+      "path": "ledger/author-review/review.md",
+      "present": true,
+      "sha256": "5bddf0eeceab27f4b687e9fee7511ee46d76aea68f526e1982105edbf838692d"
+     },
+     "decision": {
+      "trigger": "stage-settled",
+      "code": null,
+      "by": "panel",
+      "reason": "author-review-revise · review settled — the run finished"
+     }
+    },
+    {
+     "id": "author-review-revise/revise#1",
+     "stage": "revise",
+     "visit": 1,
+     "thread": "walk-author-review-revise-7",
+     "job": "job-7",
+     "status": "done",
+     "settledAt": "2026-11-05T12:00:09.000Z",
+     "artifact": {
+      "path": "ledger/author-review/revision.md",
+      "present": true,
+      "sha256": "668371d5940dbee176d2e77ccaeeebb4fee27c84b9b0cae78f4115f28889c2d8"
+     },
+     "decision": {
+      "trigger": "stage-settled",
+      "code": null,
+      "by": "panel",
+      "reason": "author-review-revise · revise settled — the run finished"
+     }
+    }
+   ],
+   "journal": [
+    {
+     "at": "2026-11-05T23:27:26.088Z",
+     "kind": "queue",
+     "text": "Assistant #1: added #1 walk author-review-revise — by reader"
+    },
+    {
+     "at": "2026-11-05T23:27:26.090Z",
+     "kind": "queue",
+     "text": "Assistant #1: #1 walk author-review-revise → pipeline author-review-revise at author (entered 2026-11-05T12:00:00.000Z) — by reader"
+    },
+    {
+     "at": "2026-11-05T23:27:26.095Z",
+     "kind": "pipeline",
+     "text": "#1 walk author-review-revise — tree cut at <sandbox>\\trees\\walk-author-review-revise (branch wtgui/walk-author-review-revise), no worker started"
+    },
+    {
+     "at": "2026-11-05T23:27:28.498Z",
+     "kind": "pipeline",
+     "text": "#1 walk author-review-revise — starting author (1 of 3) of author-review-revise in <sandbox>\\trees\\walk-author-review-revise"
+    },
+    {
+     "at": "2026-11-05T23:27:28.501Z",
+     "kind": "queue",
+     "text": "#1 walk author-review-revise — linked to walk-author-review-revise-1 in <sandbox>/trees/walk-author-review-revise by the SPAWN that cut it"
+    },
+    {
+     "at": "2026-11-05T23:27:32.114Z",
+     "kind": "queue",
+     "text": "#1 walk author-review-revise — running → queued at review by the panel: stage author settled — moved to review (2 of 3) of author-review-revise"
+    },
+    {
+     "at": "2026-11-05T23:27:32.114Z",
+     "kind": "pipeline",
+     "text": "#1 walk author-review-revise — starting review (2 of 3) of author-review-revise in <sandbox>\\trees\\walk-author-review-revise"
+    },
+    {
+     "at": "2026-11-05T23:27:32.116Z",
+     "kind": "queue",
+     "text": "#1 walk author-review-revise — linked to walk-author-review-revise-2 in <sandbox>/trees/walk-author-review-revise by the SPAWN that cut it"
+    },
+    {
+     "at": "2026-11-05T23:27:37.272Z",
+     "kind": "queue",
+     "text": "#1 walk author-review-revise — running → queued at author by the panel: stage review settled — moved to author (1 of 3) of author-review-revise"
+    },
+    {
+     "at": "2026-11-05T23:27:37.272Z",
+     "kind": "pipeline",
+     "text": "#1 walk author-review-revise — starting author (1 of 3) of author-review-revise in <sandbox>\\trees\\walk-author-review-revise — visit 2"
+    },
+    {
+     "at": "2026-11-05T23:27:37.274Z",
+     "kind": "queue",
+     "text": "#1 walk author-review-revise — linked to walk-author-review-revise-3 in <sandbox>/trees/walk-author-review-revise by the SPAWN that cut it"
+    },
+    {
+     "at": "2026-11-05T23:27:41.556Z",
+     "kind": "queue",
+     "text": "#1 walk author-review-revise — running → queued at review by the panel: stage author settled — moved to review (2 of 3) of author-review-revise"
+    },
+    {
+     "at": "2026-11-05T23:27:41.556Z",
+     "kind": "pipeline",
+     "text": "#1 walk author-review-revise — starting review (2 of 3) of author-review-revise in <sandbox>\\trees\\walk-author-review-revise — visit 2"
+    },
+    {
+     "at": "2026-11-05T23:27:41.559Z",
+     "kind": "queue",
+     "text": "#1 walk author-review-revise — linked to walk-author-review-revise-4 in <sandbox>/trees/walk-author-review-revise by the SPAWN that cut it"
+    },
+    {
+     "at": "2026-11-05T23:27:46.773Z",
+     "kind": "queue",
+     "text": "#1 walk author-review-revise — running → queued at author by the panel: stage review settled — moved to author (1 of 3) of author-review-revise"
+    },
+    {
+     "at": "2026-11-05T23:27:46.773Z",
+     "kind": "pipeline",
+     "text": "#1 walk author-review-revise — starting author (1 of 3) of author-review-revise in <sandbox>\\trees\\walk-author-review-revise — visit 3"
+    },
+    {
+     "at": "2026-11-05T23:27:46.776Z",
+     "kind": "queue",
+     "text": "#1 walk author-review-revise — linked to walk-author-review-revise-5 in <sandbox>/trees/walk-author-review-revise by the SPAWN that cut it"
+    },
+    {
+     "at": "2026-11-05T23:27:50.777Z",
+     "kind": "queue",
+     "text": "#1 walk author-review-revise — running → queued at review by the panel: stage author settled — moved to review (2 of 3) of author-review-revise"
+    },
+    {
+     "at": "2026-11-05T23:27:50.777Z",
+     "kind": "pipeline",
+     "text": "#1 walk author-review-revise — starting review (2 of 3) of author-review-revise in <sandbox>\\trees\\walk-author-review-revise — visit 3"
+    },
+    {
+     "at": "2026-11-05T23:27:50.780Z",
+     "kind": "queue",
+     "text": "#1 walk author-review-revise — linked to walk-author-review-revise-6 in <sandbox>/trees/walk-author-review-revise by the SPAWN that cut it"
+    },
+    {
+     "at": "2026-11-05T23:27:52.624Z",
+     "kind": "queue",
+     "text": "#1 walk author-review-revise — running → queued at revise by the panel: stage review settled — moved to revise (3 of 3) of author-review-revise"
+    },
+    {
+     "at": "2026-11-05T23:27:52.624Z",
+     "kind": "pipeline",
+     "text": "#1 walk author-review-revise — starting revise (3 of 3) of author-review-revise in <sandbox>\\trees\\walk-author-review-revise"
+    },
+    {
+     "at": "2026-11-05T23:27:52.626Z",
+     "kind": "queue",
+     "text": "#1 walk author-review-revise — linked to walk-author-review-revise-7 in <sandbox>/trees/walk-author-review-revise by the SPAWN that cut it"
+    },
+    {
+     "at": "2026-11-05T23:27:53.356Z",
+     "kind": "queue",
+     "text": "#1 walk author-review-revise — done by the panel: PR reads MERGED"
+    }
+   ],
+   "steps": [
+    {
+     "step": 1,
+     "state": "queued",
+     "stage": "author",
+     "stageRun": null,
+     "visits": {
+      "author": 1
+     },
+     "crossings": {},
+     "started": 0,
+     "from": "queued"
+    },
+    {
+     "step": 2,
+     "state": "running",
+     "stage": "author",
+     "stageRun": "author-review-revise/author#1",
+     "visits": {
+      "author": 1
+     },
+     "crossings": {},
+     "started": 1,
+     "from": "queued"
+    },
+    {
+     "step": 3,
+     "state": "running",
+     "stage": "review",
+     "stageRun": "author-review-revise/review#1",
+     "visits": {
+      "author": 1,
+      "review": 1
+     },
+     "crossings": {
+      "H-01": 1
+     },
+     "started": 2,
+     "from": "running"
+    },
+    {
+     "step": 4,
+     "state": "running",
+     "stage": "author",
+     "stageRun": "author-review-revise/author#2",
+     "visits": {
+      "author": 2,
+      "review": 1
+     },
+     "crossings": {
+      "H-01": 1,
+      "H-02": 1
+     },
+     "started": 3,
+     "from": "running"
+    },
+    {
+     "step": 5,
+     "state": "running",
+     "stage": "review",
+     "stageRun": "author-review-revise/review#2",
+     "visits": {
+      "author": 2,
+      "review": 2
+     },
+     "crossings": {
+      "H-01": 2,
+      "H-02": 1
+     },
+     "started": 4,
+     "from": "running"
+    },
+    {
+     "step": 6,
+     "state": "running",
+     "stage": "author",
+     "stageRun": "author-review-revise/author#3",
+     "visits": {
+      "author": 3,
+      "review": 2
+     },
+     "crossings": {
+      "H-01": 2,
+      "H-02": 2
+     },
+     "started": 5,
+     "from": "running"
+    },
+    {
+     "step": 7,
+     "state": "running",
+     "stage": "review",
+     "stageRun": "author-review-revise/review#3",
+     "visits": {
+      "author": 3,
+      "review": 3
+     },
+     "crossings": {
+      "H-01": 3,
+      "H-02": 2
+     },
+     "started": 6,
+     "from": "running"
+    },
+    {
+     "step": 8,
+     "state": "running",
+     "stage": "revise",
+     "stageRun": "author-review-revise/revise#1",
+     "visits": {
+      "author": 3,
+      "review": 3,
+      "revise": 1
+     },
+     "crossings": {
+      "H-01": 3,
+      "H-02": 2,
+      "H-03": 1
+     },
+     "started": 7,
+     "from": "running"
+    },
+    {
+     "step": 9,
+     "state": "done",
+     "stage": "revise",
+     "stageRun": "author-review-revise/revise#1",
+     "visits": {
+      "author": 3,
+      "review": 3,
+      "revise": 1
+     },
+     "crossings": {
+      "H-01": 3,
+      "H-02": 2,
+      "H-03": 1
+     },
+     "started": 7,
+     "from": "running"
+    }
+   ]
+  },
+  {
+   "pipeline": "probe-fix:leftover",
+   "document": "probe-fix",
+   "title": "Probe, then fix",
+   "stages": [
+    "probe",
+    "fix"
+   ],
+   "handoffs": [
+    {
+     "id": "H-01",
+     "from": "probe",
+     "to": "fix",
+     "kind": "sequence",
+     "cap": null
+    }
+   ],
+   "gates": [],
+   "tree": "<sandbox>/trees/walk-probe-fix",
+   "cuts": 1,
+   "starts": [
+    {
+     "pipeline": "probe-fix",
+     "stage": "probe",
+     "visit": 1,
+     "job": "job-1",
+     "thread": "walk-probe-fix-1",
+     "artifact": "ledger/probe-fix/report.md",
+     "sha256": "005b2809fde58b69946ed381f3ede20cc58b20a312d7de13e4d83ed57f28a788"
+    },
+    {
+     "pipeline": "probe-fix",
+     "stage": "fix",
+     "visit": 1,
+     "job": "job-2",
+     "thread": "walk-probe-fix-2",
+     "artifact": "ledger/probe-fix/patch.diff",
+     "sha256": "c1efdbdb7728ffc5e359f3b07a01517173ca8838f233b754679f43a4e52d4984"
+    }
+   ],
+   "seatVerdicts": [],
+   "row": {
+    "id": 1,
+    "state": "done",
+    "stage": "fix",
+    "visits": {
+     "probe": 1,
+     "fix": 1
+    },
+    "crossings": {
+     "H-01": 1
+    },
+    "waitingFor": null,
+    "reason": "PR reads MERGED"
+   },
+   "stageRuns": [
+    {
+     "id": "probe-fix/probe#1",
+     "stage": "probe",
+     "visit": 1,
+     "thread": "walk-probe-fix-1",
+     "job": "job-1",
+     "status": "done",
+     "settledAt": "2026-11-05T12:00:03.000Z",
+     "artifact": {
+      "path": "ledger/probe-fix/report.md",
+      "present": true,
+      "sha256": "005b2809fde58b69946ed381f3ede20cc58b20a312d7de13e4d83ed57f28a788"
+     },
+     "decision": {
+      "trigger": "stage-settled",
+      "code": null,
+      "by": "panel",
+      "reason": "probe-fix · probe settled — the run finished"
+     }
+    },
+    {
+     "id": "probe-fix/fix#1",
+     "stage": "fix",
+     "visit": 1,
+     "thread": "walk-probe-fix-2",
+     "job": "job-2",
+     "status": "done",
+     "settledAt": "2026-11-05T12:00:04.000Z",
+     "artifact": {
+      "path": "ledger/probe-fix/patch.diff",
+      "present": true,
+      "sha256": "c1efdbdb7728ffc5e359f3b07a01517173ca8838f233b754679f43a4e52d4984"
+     },
+     "decision": {
+      "trigger": "stage-settled",
+      "code": null,
+      "by": "panel",
+      "reason": "probe-fix · fix settled — the run finished"
+     }
+    }
+   ],
+   "journal": [
+    {
+     "at": "2026-11-05T23:27:53.394Z",
+     "kind": "queue",
+     "text": "Assistant #1: added #1 walk probe-fix — by reader"
+    },
+    {
+     "at": "2026-11-05T23:27:53.398Z",
+     "kind": "queue",
+     "text": "Assistant #1: #1 walk probe-fix → pipeline probe-fix at probe (entered 2026-11-05T12:00:00.000Z) — by reader"
+    },
+    {
+     "at": "2026-11-05T23:27:53.402Z",
+     "kind": "pipeline",
+     "text": "#1 walk probe-fix — tree cut at <sandbox>\\trees\\walk-probe-fix (branch wtgui/walk-probe-fix), no worker started"
+    },
+    {
+     "at": "2026-11-05T23:27:53.918Z",
+     "kind": "pipeline",
+     "text": "#1 walk probe-fix — starting probe (1 of 2) of probe-fix in <sandbox>\\trees\\walk-probe-fix"
+    },
+    {
+     "at": "2026-11-05T23:27:53.920Z",
+     "kind": "queue",
+     "text": "#1 walk probe-fix — linked to walk-probe-fix-1 in <sandbox>/trees/walk-probe-fix by the SPAWN that cut it"
+    },
+    {
+     "at": "2026-11-05T23:27:56.368Z",
+     "kind": "queue",
+     "text": "#1 walk probe-fix — queued → queued at fix by the panel: stage probe settled — moved to fix (2 of 2) of probe-fix"
+    },
+    {
+     "at": "2026-11-05T23:27:56.368Z",
+     "kind": "pipeline",
+     "text": "#1 walk probe-fix — starting fix (2 of 2) of probe-fix in <sandbox>\\trees\\walk-probe-fix"
+    },
+    {
+     "at": "2026-11-05T23:27:56.370Z",
+     "kind": "queue",
+     "text": "#1 walk probe-fix — linked to walk-probe-fix-2 in <sandbox>/trees/walk-probe-fix by the SPAWN that cut it"
+    },
+    {
+     "at": "2026-11-05T23:27:58.277Z",
+     "kind": "queue",
+     "text": "#1 walk probe-fix — done by the panel: PR reads MERGED"
+    }
+   ],
+   "steps": [
+    {
+     "step": 1,
+     "state": "queued",
+     "stage": "probe",
+     "stageRun": null,
+     "visits": {
+      "probe": 1
+     },
+     "crossings": {},
+     "started": 0,
+     "from": "queued"
+    },
+    {
+     "step": 2,
+     "state": "running",
+     "stage": "probe",
+     "stageRun": "probe-fix/probe#1",
+     "visits": {
+      "probe": 1
+     },
+     "crossings": {},
+     "started": 1,
+     "from": "queued"
+    },
+    {
+     "step": 3,
+     "state": "running",
+     "stage": "fix",
+     "stageRun": "probe-fix/fix#1",
+     "visits": {
+      "probe": 1,
+      "fix": 1
+     },
+     "crossings": {
+      "H-01": 1
+     },
+     "started": 2,
+     "from": "queued"
+    },
+    {
+     "step": 4,
+     "state": "done",
+     "stage": "fix",
+     "stageRun": "probe-fix/fix#1",
+     "visits": {
+      "probe": 1,
+      "fix": 1
+     },
+     "crossings": {
+      "H-01": 1
+     },
+     "started": 2,
+     "from": "running"
+    }
+   ]
+  }
+ ]
+}
