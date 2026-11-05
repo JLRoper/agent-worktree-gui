@@ -104,6 +104,15 @@ test("scan roots: a folder added from the settings is written, re-scanned, and d
   assert.match(dup.json.error, /already in the list/i);
   assert.ok(dup.json.error.includes("extra"), `the refusal names the folder: ${dup.json.error}`);
 
+  // The same folder spelled with doubled slashes is the same folder: the normaliser collapses them before the
+  // duplicate check, so adding that spelling again is refused rather than growing a second entry — two entries would
+  // draw two cards for one folder and walk it twice.
+  const doubled = extra.replace(/[\\/]/g, "//");
+  const dup2 = await post(base, ROUTE, { body: { roots: [panel.repos, extra, doubled] } });
+  assert.equal(dup2.status, 400, `a doubled-slash spelling is the same folder: ${dup2.text}`);
+  assert.match(dup2.json.error, /already in the list/i);
+  assert.ok(!added.json.scanRootsConfigured.some((p) => p.includes("//")), "no stored root carries a doubled slash");
+
   // A file is refused BY NAME — the sentence has to be about that entry, not about the list.
   const file = path.join(panel.dir, "not-a-folder.txt");
   writeFileSync(file, "this is a file\n", "utf8");

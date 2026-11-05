@@ -273,8 +273,14 @@ const buildAtBoot = await build.current();
 const DEFAULT_SCAN_ROOT = path.dirname(HERE);
 
 // The one normalisation every root goes through — config.json, the write route and discovery all have to agree on
-// what "the same folder" is, or a list saved with a trailing slash and checked without one is two roots.
-const normRoot = (p) => String(p || "").trim().replace(/\\/g, "/").replace(/\/+$/, "");
+// what "the same folder" is, or a list saved with a trailing slash and checked without one is two roots. Repeated
+// slashes are collapsed too (a typed path can carry `//`), EXCEPT a leading `//`, which is a UNC share and not a typo.
+const normRoot = (p) =>
+  String(p || "")
+    .trim()
+    .replace(/\\/g, "/")
+    .replace(/\/{2,}/g, (m, at) => (at === 0 ? "//" : "/"))
+    .replace(/\/+$/, "");
 
 // Which roots the board actually walks, and which the file names. `scanRoots` is the EFFECTIVE list every reader in
 // this file already uses (discovery, the clone and new-project routes, the boot sweep), so nothing downstream has to
