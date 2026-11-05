@@ -17,6 +17,8 @@
 //                                                            watches are dropped and the projection reads `cancelled`
 //   E. incomplete  200 ok false, verdict incomplete        — a failed resolve leaves the store fenced, so nothing local
 //                                                            is cleared and the watches survive
+//   F. fallback    200 ok, verdict clean                   — a row NO card names, named by the store's own `request_id`
+//                                                            and verified by a GET, then resolved on that run id
 //
 // No real gateway is asked to settle a real admission, and the store the reset reads is the sandbox's own file — not
 // the box's live ~/.hermes/state.db.
@@ -156,6 +158,35 @@ try {
   answer("incomplete: the watch it kept is still there", (await watchesNow()).length, 1);
   answer("incomplete: the store is still fenced", unknownRows(stateDb), ["adm_3", "adm_4"]);
   answer("incomplete: the second press did reach the gateway", gateway.posts() - beforeIncomplete, 1);
+
+  // ---- F. fallback: a row no card names, named by the store's own request_id ------------------------------
+  // The live shape from the design's §1.1: the admission's run is on no card, but the store's `request_id` is a run
+  // id the gateway still answers for. The route must name it, verify it, and resolve THAT run — never a guess.
+  setRow(stateDb, "adm_3");
+  setRow(stateDb, "adm_4");
+  insertRows(stateDb, [{ admissionId: "adm_fb", requestId: "run_fb", threadId: THREAD, generation: 63, ownerEpoch: 18 }]);
+  gateway.state.runs.run_fb = { run_id: "run_fb", status: "unknown", admission_id: "adm_fb", execution_generation: 63, pending_controls: [] };
+  const beforeFallback = gateway.posts();
+  const fbDry = await post(panel.base, resetRoute, { token, body: { dryRun: true } });
+  answer("fallback: dry run status", fbDry.status, 200);
+  answer("fallback: verdict", fbDry.json?.verdict, "clearable");
+  answer("fallback: one row", fbDry.json?.clear?.admissions?.length, 1);
+  const fbRow = fbDry.json?.clear?.admissions?.[0] || {};
+  answer("fallback: the run is the store's request id", fbRow.runId, "run_fb");
+  answer("fallback: no card names it", fbRow.card, null);
+  answer("fallback: the admission", fbRow.admissionId, "adm_fb");
+  answer("fallback: the generation is the GET's", fbRow.executionGeneration, 63);
+  answer("fallback: the evidence says how it was named", fbRow.evidence?.namedBy, "store-request-id");
+  answer("fallback: the dry run sent no POST", gateway.posts() - beforeFallback, 0);
+
+  const fbReal = await post(panel.base, resetRoute, { token, body: { reason: "prove: fallback" } });
+  answer("fallback: real status", fbReal.status, 200);
+  answer("fallback: ok", fbReal.json?.ok, true);
+  answer("fallback: verdict", fbReal.json?.verdict, "clean");
+  answer("fallback: the resolve path is the store's run id", gateway.state.resolveCalls.at(-1)?.runId, "run_fb");
+  answer("fallback: the paired body", gateway.state.resolveCalls.at(-1)?.body, { admission_id: "adm_fb", execution_generation: 63 });
+  answer("fallback: the receipt says how it was named", fbReal.json?.receipts?.[0]?.namedBy, "store-request-id");
+  answer("fallback: the store row settled", unknownRows(stateDb), []);
 } finally {
   const log = await box.stop();
   if (v.failures) console.log(`\npanel log (tail):\n${log.split("\n").slice(-25).join("\n")}`);

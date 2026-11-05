@@ -118,12 +118,13 @@ comments). The design needs it recorded at `adoptRun`/`poll` time, from the same
 yields the generation. Until that lands, every reset clear costs one extra GET per candidate — which
 is fine, and is what the dry run does anyway.
 
-**What reset cannot name.** The endpoint can settle an admission only through the run that owns it.
-The panel's cards are the only place run ids exist: the durable store's `session_admissions` has
-`admission_id`, `target_session_id` and `generation`, but no run id (there is no runs table — a run
-lives in one gateway process's memory, which is why `stopStaleRuns` stamps the pid). An admission
-with no card naming a run cannot be resolved from here at all, and the store's own row is enough to
-keep the session fenced.
+**What reset cannot name — and the fallback that names it.** The endpoint can settle an admission only
+through the run that owns it, and the run id has to come from somewhere verified. The panel's cards are
+the first source. The durable store's `session_admissions` row also carries `request_id`, and on this
+install that value **is** a run id (`run_…`) the gateway still answers for — so a row no card names can
+still be named by `GET /v1/runs/{request_id}`, accepted only when that answer reads `status: "unknown"`
+**and** the row's own `admission_id`. A 404, any other status, or another admission leaves the row
+unnameable, and the store's own row is then enough to keep the session fenced.
 
 This is not hypothetical. Reading the live store read-only on this box at design time:
 
@@ -320,10 +321,16 @@ The dry run is the real enumeration with the mutating call removed:
 4. `GET /v1/runs/{runId}` for each candidate, to learn `status`, `admission_id`,
    `execution_generation` — from the gateway, never from the card's cache;
 5. cross-reference (2) and (4): a store row with a card that still answers `unknown` is **clearable**;
-   a card whose run answers something terminal is **already settled**; a store row with no card is
-   **unnameable**;
-6. list `pendingWake` entries for this assistant, and `watches` it owns;
-7. count what is kept (queue rows, notes/rules lengths, charter chars/sha).
+   a card whose run answers something terminal is **already settled**;
+6. **the fallback naming path**, for a store row no card names: `GET /v1/runs/{row.request_id}` — the
+   admission store records the run id the turn was admitted under. The row is **clearable** only when
+   that answer reads `status: "unknown"` **and** carries the row's own `admission_id`; a 404, any other
+   status, or another admission leaves the row **unnameable**, with the refusal recorded on the row.
+   The name is verified, never guessed, and the resolve still re-reads the run before it posts. A
+   fallback run that is executing is the `assistant_live` refusal; a `queued` one is listed in
+   `block.queued` and never blocks;
+7. list `pendingWake` entries for this assistant, and `watches` it owns;
+8. count what is kept (queue rows, notes/rules lengths, charter chars/sha).
 
 No POST is sent. A GET has no side effect, so a dry run cannot clear anything.
 
@@ -406,11 +413,13 @@ gateway's answer:
 | 404 | `assistant-unknown` | `:id` is not in the roster (the same code the queue routes use) |
 | 405 | — | any method but POST |
 | 409 | `assistant_live` | a run is executing |
-| 409 | `fence_unclearable` | every unknown row on the session is unnameable — there is nothing this endpoint can do, and clearing the watches would be a lie |
+| 409 | `fence_unclearable` | every unknown row on the session is unnameable after both the card and the store's `request_id` were refused — there is nothing left this endpoint can do, and clearing the watches would be a lie |
 | 409 | `reset_in_progress` | a second reset for the same assistant is already running (single-flight; the gateway resolve is idempotent, the local clearing is not) |
 
-`fence_unclearable` is the honest refusal that keeps §5.3's invariant. It carries the admission ids
-and generations it could not name, so the reader (or a future gateway route) has the rows.
+`fence_unclearable` is the honest refusal that keeps §5.3's invariant. It fires only after both naming
+paths have failed, and each row carries its `admission_id`, `generation`, the `requestId` that was tried
+and a `refusal` (`not_found`, `not_unknown`, `admission_mismatch`, `no_request_id`) so the reader — or a
+future gateway route — can see why the run-keyed resolve was not attempted.
 
 ### 3.7 Order of operations
 
