@@ -12,7 +12,11 @@
 //   wrong-commit  the tag exists but resolves to another commit — the anchor points at the wrong history
 //   lightweight   the tag exists at the right commit but carries no message; an annotated tag records the
 //                 version, its date and a line of why, and survives a clone as an object of its own
-//   orphan-tag    a v<major>.<minor>.<patch> tag names a version package.json never held
+//   orphan-tag    a v<major>.<minor>.<patch> tag names a version package.json never held — read at the commit
+//                 the tag names, so the finding is about that commit and not about the ref's history. A tag for
+//                 a version this ref has not carried yet, at a commit whose package.json DOES declare it, is a
+//                 pre-landing anchor held by its branch and is not a finding: the branch carries the tag so this
+//                 gate can read it, and the landing moves it onto the commit main carries.
 // A version that goes BACKWARDS in history is reported too: the tag would still exist, but no reader could
 // order the two.
 //
@@ -76,6 +80,20 @@ export function checkReleaseTags({ versions, transitions = versions, orphanTags 
     }
   }
   for (const t of orphanTags) {
+    // `declares` is what package.json at the tagged commit says (tools/release-history.mjs). A tag whose own
+    // commit carries the number anchors a version this ref has not landed yet — held on a branch, not a false
+    // claim. It is still a tag, so a message-less one is reported: held does not excuse a lightweight anchor.
+    if (t.declares === true) {
+      if (t.annotated === false) {
+        findings.push({
+          kind: "lightweight",
+          version: t.version,
+          sha: t.commit,
+          message: `${t.name} is a lightweight tag at ${String(t.commit).slice(0, 10)} — recreate it with git tag -a ${t.name} ${String(t.commit).slice(0, 10)} -m "${t.name}"`,
+        });
+      }
+      continue;
+    }
     findings.push({
       kind: "orphan-tag",
       version: t.version,
@@ -129,6 +147,8 @@ function main(argv) {
     return 2;
   }
   const findings = checkReleaseTags(history);
+  // The tags the walk cannot judge: a live branch's pre-landing anchor, honest about its own commit.
+  const held = history.orphanTags.filter((t) => t.declares === true);
   const first = versions[0];
   const last = versions[versions.length - 1];
 
@@ -140,6 +160,7 @@ function main(argv) {
       from: first ? first.version : null,
       to: last ? last.version : null,
       findings,
+      held: held.map((t) => ({ name: t.name, version: t.version, commit: t.commit })),
       ok: findings.length === 0,
     }, null, 2));
     return findings.length ? 1 : 0;
@@ -151,6 +172,14 @@ function main(argv) {
       (first ? ` (v${first.version} .. v${last.version})` : "") +
       `, ${tagged} tagged and annotated at the commit that first declared them`,
   );
+  if (held.length) {
+    const shown = held.slice(0, 6).map((t) => `${t.name}@${String(t.commit).slice(0, 8)}`).join(", ");
+    console.log(
+      `  ${held.length} tag${held.length === 1 ? "" : "s"} name a version ${opt.ref} does not carry yet, ` +
+        `each at a commit whose package.json declares it (held on a branch): ${shown}` +
+        (held.length > 6 ? `, and ${held.length - 6} more` : ""),
+    );
+  }
   if (findings.length) {
     const shown = opt.limit ? findings.slice(0, opt.limit) : findings;
     for (const f of shown) console.log(`  ${f.kind.padEnd(12)} ${f.message}`);
