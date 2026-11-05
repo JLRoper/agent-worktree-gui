@@ -44,6 +44,7 @@
     "verify:pipeline-flow": "node tools/verify-pipeline-flow.mjs",
     "verify:pipeline-dialog": "node tools/verify-pipeline-dialog-size.mjs",
     "verify:bundles-tab": "node tools/verify-bundles-tab.mjs",
+    "verify:pipeline-catalogue": "node tools/verify-pipeline-catalogue.mjs",
     "verify:settings-skills": "node tools/verify-settings-skills.mjs",
     "verify:new-project": "node tools/verify-new-project.mjs",
     "verify:banner-timeout": "node tools/verify-banner-timeout.mjs",
