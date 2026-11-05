@@ -54,7 +54,8 @@ const ledger = {
   at: new Date().toISOString(),
   tree: ".",
   live: LIVE,
-  document: DOCUMENT,
+  // A landing is read on another machine: the document is named by its file, never by the folder it sat in here.
+  document: DOCUMENT ? path.basename(DOCUMENT) : null,
   panel: { base: null },
   cases: [],
   notes: [],
@@ -106,7 +107,7 @@ if (DOCUMENT) {
     process.exit(2);
   }
   ledger.studioDocument = {
-    file: DOCUMENT,
+    file: path.basename(DOCUMENT),
     bytes: studioBytes.length,
     sha256: sha(studioBytes),
     id: String((studioDoc.project && studioDoc.project.id) || studioDoc.id || ""),
