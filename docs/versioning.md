@@ -37,35 +37,33 @@ It tags every version in `package.json`'s history that has none, at the commit t
 and sends only the tags it created. An already-anchored version is counted and skipped, so a second run creates
 nothing and exits 0 — it never duplicates a tag, and it will not rewrite a pushed one.
 
-## The changelog lands with the bump
+## The changelog lands at the merged tip, in the landing's own last step
 
-A PR that bumps `package.json` renders `CHANGELOG.md` in the same PR. The number is the promise and the changelog
-is the account of it: one branch is one revertable unit, and a render that lands later is a follow-up nobody owns.
-Both gates are executable, and both run before the push:
+A landing renders `CHANGELOG.md` once, at the merged tip, after the merge — never on the branch, and never as a
+follow-up row. Every section links the shas of the commits it lists, and a rebase or squash merge re-creates the
+branch's commits on `main` with new ones: a section written on the branch names commits the reader cannot follow,
+and the merged tip is red the moment it lands. The order is the rule, and it is one motion:
 
-    node tools/changelog.mjs --check    # exit 1 unless CHANGELOG.md is what this branch's history renders
-    node tools/land.mjs --check         # exit 1 when the base the PR lands into is stale at its merge base
+    node tools/version.mjs apply <level>   # 1. the bump, on the branch; the tag anchors that commit
+    git push -u origin <branch>            # 2. the branch and its pull request
+    gh pr merge <n> --rebase --admin       # 3. the merge — this is what rewrites the shas
+    npm run land                           # 4. at the merged tip: render, commit only CHANGELOG.md, push, prove
+    npm run land:check                     # 5. "changelog: CHANGELOG.md is current — N releases"
 
-The first must be green, with the render committed as its own `docs: render the changelog …` commit — never folded
-into the bump it describes. The second must not be red: a base already missing a release cannot be repaired by a
-section added on top of it, so render every missing section in this PR. One render emits them all.
+`node tools/land.mjs` renders from the base's own history (the shas the merge produced, never the branch's), refuses
+a branch, a dirty tree or a base that moved, commits the render as its own docs commit (no version, no tag), pushes
+the base with it, and proves itself by re-rendering (`land: CHANGELOG.md is current — N releases, nothing to render`
+on a second run). A landing is not finished while the tip reads red: that reading is the landing's own failure to
+fix, not a follow-up row's job.
+
+A branch that carries a bump reads red under `npm run changelog:check` until the merge — the section it would add
+names the bump commit's pre-merge sha. That red is expected, and rendering on the branch to clear it is the defect
+this section exists to stop.
 
 A render that is the whole PR — a housekeeping commit that catches the file up — spends no number and creates no
 tag: it lands at the base's own version.
 
-**A section rendered on a branch is re-checked at the merged tip.** Every section links the shas of the commits it
-lists, and a rebase or squash merge re-creates them. The branch render is the file the gate read and the PR carries;
-it is not the landing's last word:
-
-    git fetch origin main && git checkout -B main origin/main
-    node tools/land.mjs --check         # a section names a sha main does not carry
-    npm run land                        # re-render, commit only CHANGELOG.md, push, prove
-
-`node tools/land.mjs` re-renders from the base's own history, refuses a branch, a dirty tree or a base that moved,
-commits the render as its own docs commit (no version, no tag), pushes the base with it, and proves itself by
-re-rendering (`land: CHANGELOG.md is current — N releases, nothing to render` on a second run). That is the repair
-the merge made necessary, not a second landing: the section now names the shas `main` carries. The working proof is
-one ancestry test per sha the newest section links:
+The working proof is one ancestry test per sha the newest section links:
 
     git merge-base --is-ancestor <sha> origin/main
 
@@ -137,9 +135,9 @@ Nothing new for a user and nothing broken for anyone:
 | `node tools/version.mjs apply <patch\|minor\|major>` | writes the new version to `package.json` — the one place it lives — and prints old and new. Run by the landing agent, deliberately; never by `check` and never by a hook. |
 | `node tools/verify-version-tags.mjs` | the anchor's gate: walks `git log -p --follow -- package.json` and fails when a version that first appeared at a commit has no annotated `v<version>` tag there, when the tag points at another commit, when it is lightweight, or when it names a version `package.json` never held. `npm run verify:version-tags`. It exits 2, never a vacuous pass, when the walk comes back empty. |
 | `node tools/changelog.mjs` | renders `CHANGELOG.md` from the commits between consecutive tags, newest first, grouped by the conventional-commit prefix; `--since v<version>` prints only what came after the build a tab is running, and `--check` fails when the file is stale. `npm run changelog`, `npm run changelog:check`. |
-| `node tools/land.mjs` | **the merged-tip re-check and repair**, run on the base branch after the merge: re-renders the changelog from the base's own history (the shas the merge made), commits only `CHANGELOG.md` as a docs commit, pushes the base with the render, and proves itself by re-rendering. `--check` renders in memory and exits 1 when the base is stale or a section names a sha the base lacks (writes nothing); `--render` writes the file only, for a branch preview. Refuses on a branch, a dirty tree, or a base that moved. Idempotent: a second run commits nothing and leaves the tree clean. `npm run land`, `npm run land:check`. |
+| `node tools/land.mjs` | **the landing's last step**, run on the base branch after the merge: re-renders the changelog from the base's own history (the shas the merge made), commits only `CHANGELOG.md` as a docs commit, pushes the base with the render, and proves itself by re-rendering. `--check` renders in memory and exits 1 when the base is stale or a section names a sha the base lacks (writes nothing); `--render` writes the file only, for a branch preview. Refuses on a branch, a dirty tree, or a base that moved. Idempotent: a second run commits nothing and leaves the tree clean. `npm run land`, `npm run land:check`. |
 | `.githooks/pre-push` | makes forgetting impossible: it runs `check`, so a push cannot carry a bump-worthy branch with no bump. |
-| the merge prompt (`lib/merge-prompt.js`) | tells the landing agent to decide the level from the diff, run `apply`, and state the level and the reason in the PR body and the commit. It makes `npm run land` PHASE 4 — the merged-tip re-check above — so a landing cannot finish with a stale changelog and a remembered second step is not part of the pipeline. |
+| the merge prompt (`lib/merge-prompt.js`) | tells the landing agent to decide the level from the diff, run `apply`, and state the level and the reason in the PR body and the commit. It makes the render PHASE 4, at the merged tip after the merge, so a landing cannot finish with a stale changelog and a remembered second step is not part of the pipeline. |
 
 The prefixes `suggest` reads are the ordinary ones: `feat:` → minor, `fix:`/`docs:`/`test:`/`chore:` → patch,
 `!` after the type (or a `BREAKING CHANGE:` line in the body) → major. A commit with no prefix it can read is

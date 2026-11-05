@@ -274,12 +274,15 @@ test("the bitbucket doctrine reaches the merge prompt: four sections, one review
   assert.match(prompt, /pull-requests\/<id>/);
 });
 
-test("the github doctrine is the github one: a PR this run opens, and no push to main", () => {
+test("the github doctrine is the github one: a PR this run opens, merges, and renders at the merged tip", () => {
   const prompt = mergePrompt({ project: "agent-worktree-gui", worktree: "C:/t", root: "C:/p", branch: "wtgui/x-1a2b3c", base: "main", remote: "origin", ahead: 2, host: { id: "github", kind: "github", base: "https://github.com", text: renderProse(seed.hosts.github.landing, { main: "main", branch: "wtgui/x-1a2b3c" }), pullUrl: null } });
   assert.match(prompt, /LANDING - where this branch lands \(host: github/);
   assert.match(prompt, /gh pr create --base main --head wtgui\/x-1a2b3c/);
-  assert.match(prompt, /never a push to main/);
-  assert.match(prompt, /leave it OPEN/);
+  assert.match(prompt, /never a push of the branch to main/);
+  assert.match(prompt, /gh pr merge <n> --rebase --admin/);
+  assert.match(prompt, /must read MERGED/);
+  assert.match(prompt, /npm run land/);
+  assert.match(prompt, /not a follow-up row/);
   assert.ok(!/code_review_java/.test(prompt), "the bitbucket doctrine leaked into a github prompt");
 });
 
