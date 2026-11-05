@@ -296,6 +296,27 @@ function collapseAfterSecondsFrom(value) {
   return Math.min(COLLAPSE_AFTER_MAX, Math.round(n));
 }
 
+// The folder a panel with no named scan roots looks at: its own parent, so a bare clone is immediately useful and an
+// emptied list still shows a board instead of nothing. Settings → Board writes `scanRoots`; this is what an empty
+// list means, and the tab says so rather than leaving a blank board unexplained.
+const DEFAULT_SCAN_ROOT = path.dirname(HERE);
+
+// The one normalisation every root goes through — config.json, the write route and discovery all have to agree on
+// what "the same folder" is, or a list saved as `C:/Projects/` and checked as `C:\Projects` is two roots.
+const normRoot = (p) => String(p || "").trim().replace(/\\/g, "/").replace(/\/+$/, "");
+
+// Which roots the board actually walks, and which the file names. `scanRoots` is the EFFECTIVE list every reader in
+// this file already uses (discovery, the clone and new-project routes, the boot sweep), so nothing downstream has to
+// learn about the fallback; `scanRootsConfigured` is what config.json says (possibly empty) and `scanRootsFallback`
+// is the fact the settings tab needs in order to explain an empty list.
+function applyScanRoots(cfg, roots) {
+  const configured = (Array.isArray(roots) ? roots : []).map(normRoot).filter(Boolean);
+  cfg.scanRootsConfigured = configured;
+  cfg.scanRootsFallback = configured.length === 0;
+  cfg.scanRoots = configured.length ? configured : [DEFAULT_SCAN_ROOT];
+  return cfg;
+}
+
 async function loadConfig() {
   // A fresh clone may have no config.json yet: start on defaults and say so, rather than dying.
   let cfg;
@@ -303,9 +324,11 @@ async function loadConfig() {
     cfg = JSON.parse(await readFile(CONFIG_PATH, "utf8"));
   } catch (e) {
     log(`no readable config.json (${String((e && e.message) || e)}) — using defaults`);
-    // Default to the folder the panel itself sits in, so a bare clone is immediately useful.
-    cfg = { scanRoots: [path.dirname(HERE)] };
+    // Default to the folder the panel itself sits in, so a bare clone is immediately useful. Written as an empty
+    // list so the fallback is one code path: an unreadable file and an emptied list mean the same board.
+    cfg = {};
   }
+  applyScanRoots(cfg, cfg.scanRoots);
   cfg.port = Number(cfg.port) || 7331;
   // Loopback by default. This panel can now spawn agents, so binding it to the LAN
   // would be unauthenticated remote code execution.
@@ -1083,6 +1106,14 @@ const settingsOut = () => ({
   defaultCwd: config.defaultCwd,
   worktreeSource: String(config.discovery?.worktreeSource || "git").toLowerCase(),
   scanMode: config.scanMode === "visible" ? "visible" : "all",
+  // Which folders the board scans, as config.json states them, plus whether the fallback is the one in force. It
+  // travels with every snapshot for the same reason the column list does: the Settings list is drawn from this fact,
+  // and a tab opened before another browser (or a hand edit) moved it has to agree with the file.
+  scanRootsConfigured: config.scanRootsConfigured || [],
+  scanRootsFallback: config.scanRootsFallback === true,
+  // The folder an empty list means, named rather than derived on the page: the Settings tab says which folder is
+  // scanned instead, and a page that worked it out for itself could name a different one after a move.
+  scanRootsFallbackPath: DEFAULT_SCAN_ROOT,
   scanVisible: scheduler ? scheduler.visibilityReport() : null,
   // Whether a branch may exist on a remote at all. It travels with every snapshot because the Settings row, the
   // spawn card's default and the permission box all read the same fact — and the guard's own copy of it is written
@@ -1103,6 +1134,69 @@ const settingsOut = () => ({
   releaseProjects: (registry?.projects || []).filter((p) => releasesEnabled(p)).map((p) => p.name),
   spawnEnabled: true,
 });
+
+// ---- which folders the board scans ------------------------------------------------------------------------------
+// `scanRoots` is the one setting the board is literally made of: every git repo under these folders is a project, and
+// the page draws one card per folder. Until this route existed it could only be changed by editing config.json and
+// restarting, which is why the board could only ever draw the one card the file happened to name.
+//
+// The answer carries BOTH lists on purpose. `scanRoots` is what discovery walks (the fallback included), while
+// `scanRootsConfigured` is what the file says and `scanRootsFallback` says the file names none — an empty board with
+// no explanation reads as a bug, and the Settings tab needs the second pair to say which folder is being scanned
+// instead. `scanRootsDetail` is per-row existence, so a folder that has been moved or deleted since it was added says
+// so in the list rather than vanishing into a silent empty card.
+async function scanRootsOut() {
+  const detail = [];
+  for (const p of config.scanRootsConfigured || []) {
+    let exists = false;
+    try {
+      exists = (await stat(p)).isDirectory();
+    } catch {
+      exists = false;
+    }
+    detail.push({ path: p, exists });
+  }
+  return {
+    scanRoots: config.scanRoots || [],
+    scanRootsConfigured: config.scanRootsConfigured || [],
+    scanRootsFallback: config.scanRootsFallback === true,
+    scanRootsFallbackPath: DEFAULT_SCAN_ROOT,
+    scanRootsDetail: detail,
+  };
+}
+
+// Every entry is checked, not just the new one: the route REPLACES the list, so a body is the whole truth about what
+// the board will scan. Each refusal names the entry it is about — "invalid scan root" over a list of five folders
+// leaves the reader guessing which one, and the reader here is a person typing paths.
+async function readScanRootsBody(body) {
+  const raw = body?.roots;
+  if (!Array.isArray(raw)) return { error: "roots must be an array of folder paths (send [] to scan the panel's own parent folder)" };
+  const out = [];
+  const seen = new Map();
+  for (const entry of raw) {
+    const given = String(entry ?? "").trim();
+    if (!given) continue; // a blank row in the list is not an error, it is a row nobody filled in
+    const p = normRoot(given);
+    if (!path.isAbsolute(p)) {
+      return { error: `${given} is not an absolute path — name the whole folder, like C:/Projects` };
+    }
+    let st;
+    try {
+      st = await stat(p);
+    } catch {
+      return { error: `no such folder: ${given}` };
+    }
+    if (!st.isDirectory()) return { error: `${given} is not a folder — it is a file, and only folders can be scanned` };
+    // Windows paths are case-insensitive and both slash forms are in use on this box, so "the same folder" is the
+    // normalised, lowercased path. A duplicate is refused rather than silently collapsed: the list is short enough to
+    // read, and a row that quietly disappears when the reader adds it again is worse than a sentence.
+    const key = p.toLowerCase();
+    if (seen.has(key)) return { error: `${given} is already in the list (as ${seen.get(key)})` };
+    seen.set(key, p);
+    out.push(p);
+  }
+  return { roots: out };
+}
 
 // The Matrix bridge the Gateway tab owns. One instance, constructed once: the pid file, the log and the last
 // `--self-test` are facts about THIS process's child, so a second object would be a second truth. Its boot spawn
@@ -2643,7 +2737,7 @@ const server = createServer(async (req, res) => {
     if (route === "/api/config") {
       return sendJson(res, 200, {
         ...settingsOut(),
-        scanRoots: config.scanRoots || [],
+        ...(await scanRootsOut()),
         projects: registry.projects.map((p) => ({ name: p.name, path: p.path, remote: p.remote, mainBranch: p.mainBranch, activityAt: p.activityAt || null })),
       });
     }
@@ -5069,6 +5163,39 @@ const server = createServer(async (req, res) => {
       log(`scan mode: ${mode}`);
       broadcast({ type: "snapshot", data: snapshot() });
       return sendJson(res, 200, { ok: true, mode, settings: settingsOut() });
+    }
+
+    // Which folders the board scans, as a WRITE. The body is the whole list (`{ roots: [...] }`), because the tab
+    // edits a list rather than adding to a file behind the reader's back: remove a folder and it stops being scanned.
+    // Every entry must be an absolute path to an existing folder, duplicates are refused, and an empty list is allowed
+    // — it means the fallback (the folder this panel sits in), which the answer names so the page can say so.
+    //
+    // Discovery is re-run BEFORE the answer goes out. That is the half that makes the list useful without a restart:
+    // the project registry walks the new roots, the store learns the projects under them, and the snapshot broadcast
+    // after it repaints the board with one card per folder. A discovery that throws is logged, not turned into a 500:
+    // the file is already written, and the next sweep will read it.
+    if (route === "/api/settings/scan-roots" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const checked = await readScanRootsBody(body);
+      if (checked.error) return sendJson(res, 400, { error: checked.error, ...(await scanRootsOut()) });
+      try {
+        await patchPanelConfig({ scanRoots: checked.roots });
+      } catch (e) {
+        return sendJson(res, 500, { error: `could not write config.json: ${String((e && e.message) || e)}`, ...(await scanRootsOut()) });
+      }
+      applyScanRoots(config, checked.roots);
+      log(
+        `scan roots: ${config.scanRootsConfigured.length ? config.scanRootsConfigured.join(", ") : `(none named — scanning ${DEFAULT_SCAN_ROOT})`}`,
+      );
+      let projects = null;
+      try {
+        projects = (await registry.refresh()).length;
+      } catch (e) {
+        log(`discovery after the scan-roots write failed: ${String((e && e.message) || e)}`);
+      }
+      broadcast({ type: "snapshot", data: snapshot() });
+      return sendJson(res, 200, { ok: true, projects, ...(await scanRootsOut()) });
     }
 
     // Whether an agent may take its own tree off this disk once the work has landed: Settings → Board → Agents

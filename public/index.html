@@ -256,6 +256,17 @@
 
       <div class="settings-group" id="settings-panel-board" data-settings-group="board" role="tabpanel" aria-labelledby="settings-tab-board" hidden>
 
+        <div class="settings-row" id="scan-roots-row" title="The folders the board scans. Every git repository checked out directly under one of these folders is a project, and each folder is ONE expandable card on the board holding its own projects. A folder must be an absolute path to a folder that exists — a file, a path that is not there, or a relative path is refused with a sentence naming it, and the same folder twice is refused too. Written into this panel's config.json (scanRoots), so it applies to every browser and survives a restart; the board re-discovers as soon as you add or remove one, so nothing needs a restart. With the list empty the board scans the folder this panel's own checkout sits in — that is what a fresh clone does — and the line under the list names it, so a blank list explains the board instead of leaving it unexplained.">
+          <span>Folders the board scans <span class="settings-info">ⓘ</span></span>
+          <span class="settings-unit mono" id="scan-roots-count">…</span>
+        </div>
+        <div class="settings-roots" id="scan-roots"></div>
+        <div class="settings-roots-add">
+          <input type="text" id="scan-root-input" class="mono" placeholder="C:/Projects — an absolute folder path" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" spellcheck="false" title="the absolute path of a folder to scan — Enter adds it">
+          <button type="button" id="btn-scan-root-add" title="add this folder to the list and re-discover its projects">Add folder</button>
+        </div>
+        <div class="settings-preview mono" id="scan-roots-preview">…</div>
+
         <div class="settings-row" id="board-now-row" title="Read the board now, instead of waiting for the clock. Refresh now re-reads every worktree row of the projects in view — the same cheap pass the board runs every few seconds, so a row that already matches stays exactly as it is. Fetch remotes runs git fetch --prune in every project (the one routine gesture here that touches git refs) and then re-reads the rows; each project's answer arrives on its own as the fetch lands. Both say in the banner what they started, because neither moves anything on screen until a read comes back.">
           <span>Read now <span class="settings-info">ⓘ</span></span>
           <span class="settings-act">

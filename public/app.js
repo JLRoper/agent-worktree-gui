@@ -288,6 +288,10 @@ const state = {
   // carried the prompt and the plugin's long-poll feed was simply never used.
   approvalsSeen: { at: 0, count: -1, ids: [] },
   scanRoots: [],
+  // path (lowercased) -> { exists } as /api/config last answered. The folders list in Settings → Board draws one row
+  // per configured root and says whether that folder is still there, which the server has to stat for; it is kept
+  // here rather than in `settings` because it is a fact about the disk, not about the setting.
+  scanRootsDetail: new Map(),
   pollGap: new Map(), // key -> observed seconds between that row's scans, smoothed
   lastScanAt: new Map(), // key -> ms of the previous scan we rendered
   turnOpen: new Map(), // job id -> whether that turn's body is expanded (default: only the newest)
@@ -639,6 +643,11 @@ function projectOfTree(p) {
 // `roots` is a parameter so a pure reader (the collapse tiers' selector) can answer from the state it was handed
 // instead of whatever the module happens to hold; every page caller keeps the live list by omitting it.
 function rootOf(project, roots = state.scanRoots) {
+  // Discovery tags every project with the root it was found under (`root`), so this is the server's answer rather
+  // than a guess from the path. The path match below stays for the records that have no tag: a project config.json
+  // names directly (discovery never walks it under a root) and a project read from an older discovery cache.
+  const tagged = normPath(project && project.root);
+  if (tagged) return tagged;
   const raw = normPath(project.path);
   const lower = raw.toLowerCase();
   if (!lower) return "(unknown folder)";
@@ -815,8 +824,15 @@ function applyRootFilter(root) {
   }
   const empty = sec.querySelector("[data-root-empty]");
   if (empty) {
-    empty.classList.toggle("is-on", Boolean(q) && shown === 0);
-    empty.textContent = q ? `no project in this folder matches \u201c${rootFilterValue(root).trim()}\u201d` : "";
+    // A folder with nothing in it is not an error — a root the reader has just named holds no repo yet — so the card
+    // says which of the two cases it is instead of drawing a bare header over nothing.
+    const typed = rootFilterValue(root).trim();
+    empty.classList.toggle("is-on", typed ? shown === 0 : sections.length === 0);
+    empty.textContent = typed
+      ? `no project in this folder matches \u201c${typed}\u201d`
+      : sections.length === 0
+        ? "no git repo in this folder yet — a repository checked out directly under it appears here on the next read"
+        : "";
   }
   const clear = sec.querySelector("[data-root-search-clear]");
   if (clear) clear.classList.toggle("is-on", Boolean(q));
@@ -10679,6 +10695,12 @@ function projectActivity(p) {
   return best;
 }
 
+// A folder's place on the board is its busiest project's activity. A folder with no project yet (a root the reader
+// just named, or one whose repos were all moved away) has none: it sorts last, and its card says it is empty.
+function folderActivity(list) {
+  return list && list[0] ? projectActivity(list[0]) : 0;
+}
+
 // "Touched" is deliberately wider than sort order: a commit, a file edit, or any life evidence
 // observed in one of its worktrees. A month-old checkout that an agent is working in right now is
 // touched; a merged tree nobody has opened since spring is not.
@@ -12174,7 +12196,15 @@ function renderAll() {
   // Wrap every project in its folder accordion: one group per scan root, and a sibling group
   // for any project that lives outside all of them (so nothing is filed under a folder it is
   // not actually in). Groups are ordered by their most recently active project.
+  //
+  // Every configured root gets a card even when discovery has found nothing under it yet: the folder the reader just
+  // named in Settings → Board has to appear, saying it holds no repo, instead of the list changing and the board not.
+  // An empty group sorts last (activity 0) and its own card says why it is empty.
   const groups = new Map();
+  for (const root of state.scanRoots || []) {
+    const key = normPath(root);
+    if (key) groups.set(key, []);
+  }
   for (const p of projects) {
     const root = rootOf(p);
     if (!groups.has(root)) groups.set(root, []);
@@ -12198,7 +12228,7 @@ function renderAll() {
   beginDomMove();
   $("projects").innerHTML =
     [...groups.entries()]
-      .sort((a, b) => projectActivity(b[1][0]) - projectActivity(a[1][0]) || a[0].localeCompare(b[0]))
+      .sort((a, b) => folderActivity(b[1]) - folderActivity(a[1]) || a[0].localeCompare(b[0]))
       .map(([root, list]) => rootSection(root, list))
       .join("") || '<p class="empty">No git repos found under scanRoots.</p>';
   // Every tbody on the page was just replaced, so an open confirmation row is detached now. Forget it
@@ -12268,6 +12298,16 @@ function applySnapshot(data) {
   // sections on screen are still valid and a full re-render would be pure cost.
   const beforeSig = [...state.projects.keys()].sort().join("|");
   state.settings = data.settings || state.settings;
+  // The folders list is drawn from `settings`, which every snapshot carries: repaint only when the list actually
+  // moved (a settings write in another tab, a hand-edited config), so a board ticking every few seconds does not
+  // rebuild the rows — or stat the folders — for nothing.
+  {
+    const rootsSig = `${(state.settings?.scanRootsConfigured || []).join("|")}#${state.settings?.scanRootsFallback === true}`;
+    if (rootsSig !== state.scanRootsSig) {
+      state.scanRootsSig = rootsSig;
+      void refreshScanRootsAnswer();
+    }
+  }
   // The panel's own two folders and their sizes. A snapshot is the only thing that carries them, so the Settings
   // row repaints from here as well as from its own presses — the clean's answer, a boot that migrated, a job event.
   if (data.paths) {
@@ -19692,6 +19732,150 @@ $("scan-mode")?.addEventListener("change", async (e) => {
   }
 });
 
+// ---- the folders the board scans ---------------------------------------------------------------
+// One row per folder the panel walks — the path, whether it is still there, and a ✕ — with an input that adds one.
+// The list is this panel's own config.json (`scanRoots`) written through POST /api/settings/scan-roots, which
+// re-discovers BEFORE it answers: adding a folder puts its repos on the board without a restart, and the board draws
+// one expandable card per folder with that folder's path as the title.
+//
+// An EMPTY list is legal and is the fallback: the folder this panel's own checkout sits in. The line under the list
+// says so and names the folder, because a blank list over a board that still shows projects is otherwise a mystery.
+function scanRootsConfigured() {
+  const list = state.settings?.scanRootsConfigured;
+  return Array.isArray(list) ? list.map((p) => String(p || "")).filter(Boolean) : [];
+}
+
+// The sentence for an empty list: which folder is being scanned instead. The server names it (it is the one that
+// derived the fallback), and the page only has to say it in the reader's terms.
+function scanRootsFallbackSentence() {
+  const p = String(state.settings?.scanRootsFallbackPath || "");
+  return p
+    ? `no folder named — the board scans ${p}, the folder this panel's own checkout sits in`
+    : "no folder named — the board scans the folder this panel's own checkout sits in";
+}
+
+function paintScanRoots(note = "", bad = false) {
+  const list = scanRootsConfigured();
+  const holder = $("scan-roots");
+  if (holder) {
+    holder.innerHTML = list.length
+      ? list
+          .map((p) => {
+            const d = state.scanRootsDetail.get(p.toLowerCase());
+            const exists = d ? d.exists : null;
+            const chip = exists == null ? "" : `<span class="settings-root-chip${exists ? "" : " bad"}">${exists ? "exists" : "missing"}</span>`;
+            return `<div class="settings-root" data-scan-root="${esc(p)}">
+              <span class="mono settings-root-path" title="${esc(p)}">${esc(p)}</span>${chip}
+              <button type="button" class="settings-root-x" data-scan-root-remove="${esc(p)}" title="stop scanning ${esc(p)} — the projects under it leave the board">\u2715</button>
+            </div>`;
+          })
+          .join("")
+      : `<div class="settings-root-empty">no folder named</div>`;
+  }
+  const count = $("scan-roots-count");
+  if (count) count.textContent = list.length ? `${list.length} folder${list.length === 1 ? "" : "s"}` : "fallback";
+  const preview = $("scan-roots-preview");
+  if (preview) {
+    preview.textContent = bad
+      ? `NOT SAVED — ${note}`
+      : note
+        ? note
+        : state.settings?.scanRootsFallback
+          ? `${scanRootsFallbackSentence()} · set in config.json (scanRoots), so it applies to every browser and survives a restart`
+          : `one card per folder on the board · set in config.json (scanRoots), so it applies to every browser and survives a restart`;
+    preview.classList.toggle("bad", bad);
+  }
+}
+
+// What the server answered about the list: what config.json says, whether the fallback is in force, which folder that
+// is, what discovery walks, and per-row existence. Every one of those travels in the answer so the tab never has to
+// guess a folder's state from a path it typed.
+function applyScanRootsAnswer(d) {
+  if (!d) return;
+  if (Array.isArray(d.scanRootsConfigured)) {
+    state.settings = {
+      ...(state.settings || {}),
+      scanRootsConfigured: d.scanRootsConfigured.map((p) => String(p || "")).filter(Boolean),
+      scanRootsFallback: d.scanRootsFallback === true,
+      scanRootsFallbackPath: d.scanRootsFallbackPath || state.settings?.scanRootsFallbackPath || "",
+    };
+  }
+  if (Array.isArray(d.scanRoots)) state.scanRoots = d.scanRoots.map((p) => String(p || "")).filter(Boolean);
+  if (Array.isArray(d.scanRootsDetail)) {
+    state.scanRootsDetail = new Map(d.scanRootsDetail.map((x) => [String(x.path || "").toLowerCase(), { exists: Boolean(x.exists) }]));
+  }
+}
+
+// A `settings` event (or a snapshot) from another browser can move the list, and whether each folder still exists is
+// the server's to stat: one cheap read of /api/config refills both, rather than the tab inferring a folder's state.
+async function refreshScanRootsAnswer() {
+  try {
+    const cfg = await apiFetch("/api/config").then((r) => r.json());
+    applyScanRootsAnswer(cfg);
+    paintScanRoots();
+  } catch {
+    /* the list keeps what it had; the next settings event tries again */
+  }
+}
+
+async function saveScanRoots(next) {
+  const preview = $("scan-roots-preview");
+  if (preview) {
+    preview.textContent = "saving, then re-scanning the folders…";
+    preview.classList.remove("bad");
+  }
+  try {
+    const r = await apiFetch(
+      "/api/settings/scan-roots",
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ roots: next }) },
+      { timeoutMs: 60000 },
+    );
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    applyScanRootsAnswer(d);
+    paintScanRoots();
+    const n = Array.isArray(d.scanRootsConfigured) ? d.scanRootsConfigured.length : 0;
+    showBanner(
+      n
+        ? `folders scanned: ${n} — ${d.projects == null ? "re-reading the board" : `${d.projects} project${d.projects === 1 ? "" : "s"} found`}`
+        : `folders scanned: none named — ${d.scanRootsFallbackPath || "the panel's own parent folder"}`,
+    );
+    // The board is drawn from the snapshot the route broadcasts; this repaint is the page that asked for it, so it
+    // does not have to wait for the round trip.
+    renderAll();
+    return true;
+  } catch (err) {
+    paintScanRoots(String((err && err.message) || err), true);
+    return false;
+  }
+}
+
+async function addScanRootFromInput() {
+  const input = $("scan-root-input");
+  const typed = String(input?.value || "").trim();
+  if (!typed) {
+    paintScanRoots("type the path of a folder to add", true);
+    return;
+  }
+  // The server decides whether it is a folder, whether it is absolute and whether it is already listed; the page only
+  // sends the list it means and shows the sentence it gets back.
+  const ok = await saveScanRoots([...scanRootsConfigured(), typed]);
+  if (ok && input) input.value = "";
+}
+
+$("btn-scan-root-add")?.addEventListener("click", () => void addScanRootFromInput());
+$("scan-root-input")?.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  void addScanRootFromInput();
+});
+$("scan-roots")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-scan-root-remove]");
+  if (!btn) return;
+  const gone = String(btn.dataset.scanRootRemove || "").toLowerCase();
+  void saveScanRoots(scanRootsConfigured().filter((p) => p.toLowerCase() !== gone));
+});
+
 // ---- whether an agent may clean up after itself ------------------------------------------------
 // The panel's own switch (config.json `agentCleanup`, POST /api/settings/cleanup): a veto ABOVE every project's own
 // `releaseWorktrees` grant, and the reason the row says which projects that grant names — "on" alone would read as
@@ -20280,6 +20464,7 @@ function applySettings(settings) {
   if (scanMode) scanMode.value = state.settings.scanMode === "visible" ? "visible" : "all";
   paintRemotePolicy();
   paintChartColumns();
+  paintScanRoots();
   paintCollapseAfterSetting();
   if ((state.settings.hiddenColumns || []).join(",") !== colsBefore) renderAll();
 }
@@ -20639,6 +20824,9 @@ startVisibilityReporting();
     const cfg = await apiFetch("/api/config").then((r) => r.json());
     state.settings = cfg;
     state.scanRoots = Array.isArray(cfg.scanRoots) ? cfg.scanRoots : [];
+    // The folders list's own half of that answer: what config.json says, the fallback's folder, and whether each
+    // listed folder is still on disk.
+    applyScanRootsAnswer(cfg);
     $("f-worktree").textContent = cfg.worktreeSeconds;
     $("f-slow").textContent = cfg.slowSeconds;
     paintConfigLine();
@@ -20654,6 +20842,7 @@ startVisibilityReporting();
     paintTopSetting();
     paintCollapseAfterSetting();
     paintChartColumns();
+    paintScanRoots();
     paintRemotePolicy();
     paintAgentCleanup();
     void refreshRemoteGuards();
