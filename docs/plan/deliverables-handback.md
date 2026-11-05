@@ -517,8 +517,18 @@ A fixed-position panel anchored under the button, in the shape `.artifacts-pop` 
 - `position: fixed`, right-aligned under `#btn-deliver`, above the board (`z-index: 60`), closed on an outside click,
   on Esc, on a second press of the button, and on a board repaint that removes the button (it never is).
 - `width: min(560px, 92vw)`, `max-height: min(70vh, 640px)`, `overflow-y: auto`.
-- A **sticky head**: `17 deliverables — newest first`, a filter input (`filter…`, autofocus), and `✕`.
+- A **sticky head**: `17 deliverables — newest first`, a filter input (`filter…`, autofocus), one chip per kind, and
+  `✕`.
 - The list, then a footer (§5.5).
+
+The head carries **one kind chip per kind** — `🔗 link`, `📄 file`, `🖼 image`, the store's `DELIVER_KINDS` — beside the
+filter, because the two are the same narrowing done two ways. All three start pressed (`aria-pressed="true"`): a press
+hides that kind from the VIEW and changes nothing in the store, and a second press puts it back. A kind with **no rows
+in this list** has no chip — hidden, never greyed — so the header never offers a control that cannot do anything. The
+chips are page state (`deliver.kindsOff`) that the paint READS: the header is built once and the whole list re-renders
+on every `deliverable` frame, so a state that the paint rebuilt would snap back to all-on mid-scroll. While anything
+is narrowed the head says the filtered set — `12 of 30 · link file image`, `199 of 200 · link file` — and names the
+kinds still on, so the numbers and the chips never disagree.
 
 A row:
 
@@ -560,7 +570,7 @@ Focus lands in the filter input when the popover opens; the list is driven as a 
 | `Enter` | open the **target** of the active row |
 | `Alt+Enter` | open the **agent** of the active row (the row click) |
 | `Esc` | clear the filter if it has text; otherwise close and put focus back on `#btn-deliver` |
-| `Tab` | close (do not trap focus in a header popover) |
+| `Tab` | move across the head's own controls — filter → chips → `✕` — so every chip is reachable; from either edge it closes the popover and returns focus to `#btn-deliver` (it never traps focus) |
 | typing / `Backspace` | filter by title, target, agent or project (case-insensitive substring); the active row resets to the first |
 
 `aria-expanded` on the button, `aria-label` on the popover, and the active row carries `aria-selected="true"`.
@@ -571,8 +581,9 @@ Focus lands in the filter input when the popover opens; the list is driven as a 
   nothing but a scroll-position bug. The cap (§4.4) is what keeps that true; without it, "every deliverable" grows
   without limit and the popover becomes a second job store.
 - **Day separators** (`TODAY`, `YESTERDAY`, `2026-11-01`) as non-interactive rows, so a long scroll has landmarks.
-- **The filter is the answer to the 200th row**, not scrolling: `markdown` narrows to the three reports that mention it
-  in title, path or agent.
+- **The filter and the kind chips are the answer to the 200th row**, not scrolling: `markdown` narrows to the three
+  reports that mention it in title, path or agent, and the chips narrow the same list to the kinds left on. They
+  compose by intersection — a word and a kind both have to match — so neither can widen what the other narrowed.
 - **The head and filter are sticky**; only the rows scroll.
 - **A delivery that lands while the popover is open** arrives as one SSE `deliverable` event (§7.1); the page re-fetches
   the list, restores `scrollTop` and the active `seq`, and does not steal focus. If the new entry is the active one it

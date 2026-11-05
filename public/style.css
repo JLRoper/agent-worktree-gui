@@ -2081,7 +2081,11 @@ tr.row-confirm .btn-del-yes:hover { background: #3a1d22; }
   border-bottom: 1px solid var(--line);
   background: #12161d;
 }
-.deliver-pop .dl-count { flex: none; font: 11px/1.4 var(--ui); color: var(--dim); }
+.deliver-pop .dl-count {
+  flex: 0 1 auto; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font: 11px/1.4 var(--ui); color: var(--dim);
+}
 .deliver-pop .dl-filter {
   flex: 1 1 auto; min-width: 80px;
   padding: 3px 7px;
@@ -2090,6 +2094,23 @@ tr.row-confirm .btn-del-yes:hover { background: #3a1d22; }
   font: 11px/1.5 var(--mono);
 }
 .deliver-pop .dl-filter:focus { outline: none; border-color: #3b5680; box-shadow: 0 0 0 2px #24466a66; }
+/* One chip per KIND, beside the search box: a real button, pressed by default, and the only control that narrows by
+   kind. The `[hidden]` rule below is load-bearing — an author `display` beats the UA's rule for the attribute, so a
+   kind with no row would otherwise draw a dead chip instead of no chip at all. */
+.deliver-pop .dl-kinds { flex: none; display: flex; align-items: center; gap: 2px; }
+.deliver-pop .dl-kinds[hidden], .deliver-pop .dl-kind[hidden] { display: none; }
+.deliver-pop .dl-kind {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 21px; padding: 0;
+  border: 1px solid var(--line); border-radius: 5px;
+  background: #0c0f14; color: var(--text);
+  font: 12px/1 var(--ui); cursor: pointer;
+}
+.deliver-pop .dl-kind:hover { border-color: #3b5680; background: #1b2029; }
+.deliver-pop .dl-kind:focus-visible { outline: none; border-color: #3b5680; box-shadow: 0 0 0 2px #24466a66; }
+/* Pressed = this kind is IN the list. Off is dimmed rather than removed, because the chip is the way back. */
+.deliver-pop .dl-kind[aria-pressed="false"] { opacity: .45; border-color: #222a36; background: #0a0d12; }
+.deliver-pop .dl-kind-glyph { line-height: 1; }
 .deliver-pop .dl-close {
   flex: none; padding: 1px 7px;
   font: 11px/1.6 var(--ui); color: var(--dimmer);
