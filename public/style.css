@@ -2430,6 +2430,9 @@ button.tq-send:disabled, button.tq-choice:disabled { opacity: .55; cursor: defau
    edge — nothing about the line moves when it becomes a textarea. */
 .ghost-prompt { cursor: text; border-radius: 5px; }
 .ghost-prompt:hover, .ghost-prompt:focus-visible { background: rgba(255, 212, 121, .07); outline: 1px dashed #4a4353; outline-offset: 2px; }
+/* The files a held reply carries, under its text: the composer's chip skin, with no × — they are the entry's
+   now, and the entry's own × is what gives them back. */
+.ghost-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 5px; }
 /* The in-place editor the held text becomes: the same ghost block, undimmed, holding a box and its two actions. An
    edit is not a send, so neither control here is drawn like a send. */
 .ghost-turn.editing { opacity: 1; }

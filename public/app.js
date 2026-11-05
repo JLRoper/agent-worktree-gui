@@ -4179,20 +4179,29 @@ function turnPrompts(thread) {
 
 // A reply typed while the agent is still working: hold it and start it the moment that turn ends, so
 // Hermes never sees a second session on the same thread at once (which it answers with "busy").
-function queueReply(thread, text) {
+function queueReply(thread, text, attachments = []) {
   const q = state.replyQueue.get(thread) || [];
   // `at` is this entry's identity — the × and the drain both key on it — so two replies held in the same
   // millisecond still get one each: the stamp is nudged until it is unique within this thread's queue.
   let at = Date.now();
   while (q.some((entry) => entry && entry.at === at)) at += 1;
-  q.push({ text, at });
+  // The files travel WITH the entry. They leave the composer's staged set in the same breath: a chip that
+  // stayed there would attach the same file to the next message as well, and a send would carry it twice.
+  const files = (Array.isArray(attachments) ? attachments : []).filter((a) => a && a.path);
+  q.push({ text, at, attachments: files });
   state.replyQueue.set(thread, q);
+  if (files.length) {
+    const held = new Set(files.map((a) => a.path));
+    setAttachments(thread, attachmentsFor(thread).filter((a) => !held.has(a.path)));
+    renderChips(thread);
+  }
   renderConversation(thread);
 }
 
 // One press of Queue reply, from the button or from Enter: hold what the box holds and send it when the thread
 // is free, instead of steering the turn that is running now. The draft is cleared BEFORE queueReply, which
 // rebuilds the card - the rebuild would otherwise put the text back into the new box from the saved draft.
+// The staged files are read before either happens: they are the held reply's now, not the composer's.
 function queueReplyFromBox(thread) {
   const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
   // readBox, not box.value: what is held is what the agent would receive, a chip being the text it holds.
@@ -4201,12 +4210,13 @@ function queueReplyFromBox(thread) {
     if (box) box.focus();
     return false;
   }
+  const files = attachmentsFor(thread);
   state.replyDrafts[thread] = "";
   if (box) {
     writeBox(box, "");
     clearBoxDraft(box);
   } else clearBoxDraft(`reply:${thread}`);
-  queueReply(thread, text);
+  queueReply(thread, text, files);
   document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`)?.focus();
   return true;
 }
@@ -4262,8 +4272,13 @@ function ghostTurnHtml(thread, q, edit, freeToSend) {
   // edited: the removal closes the editor with it).
   const head = (when, editing) =>
     `<div class="ghost-turn${editing ? " editing" : ""}"><div class="ghost-head mono"><span class="ghost-badge">queued</span><span class="queue-ago" data-queued-at="${q.at}">${fmtDur(Date.now() - q.at)}</span><span class="dimmer">${when}</span><button class="ghost-cancel" type="button" data-queue-cancel="${esc(thread)}" data-queue-cancel-at="${q.at}" title="cancel this queued reply — it will not be sent, and if the reply box is empty its text comes back as your draft" aria-label="cancel this queued reply for ${esc(thread)}">✕</button></div>`;
+  // The entry's own files, under its text: the same chip the composer drew, opening the same path. They are
+  // drawn from the ENTRY, never from the composer, so a file staged later cannot appear in this bubble.
+  const chips = q.attachments?.length
+    ? `<div class="ghost-chips">${attachmentChipsFor(q.attachments)}</div>`
+    : "";
   if (!edit || edit.at !== q.at) {
-    return `${head("sends when the current turn finishes", false)}<div class="ghost-prompt" data-edit-queued-open="${q.at}" data-edit-thread="${esc(thread)}" role="button" tabindex="0" title="click to edit this held reply">${linkifyText(q.text)}</div></div>`;
+    return `${head("sends when the current turn finishes", false)}<div class="ghost-prompt" data-edit-queued-open="${q.at}" data-edit-thread="${esc(thread)}" role="button" tabindex="0" title="click to edit this held reply">${linkifyText(q.text)}</div>${chips}</div>`;
   }
   // An editor is open on this entry, so the line above it cannot keep promising a send: while the reader is in the
   // box this reply is held, and the card says which hold it is — still waiting for the turn and its subagents, or free
@@ -4271,7 +4286,7 @@ function ghostTurnHtml(thread, q, edit, freeToSend) {
   const when = freeToSend
     ? "the turn has finished — this held reply waits for your edit; save and it goes"
     : "editing — it is not sent while you edit it; save sends it, Escape leaves it as it was";
-  return `${head(when, true)}<div class="ghost-edit" data-edit-for="${q.at}"><textarea class="ghost-edit-box mono" data-edit-queued="${q.at}" data-edit-thread="${esc(thread)}" rows="2" spellcheck="false" aria-label="edit this held reply">${esc(edit.text)}</textarea><div class="ghost-edit-actions mono"><button class="btn-edit-save" type="button" data-edit-save="${q.at}" data-edit-thread="${esc(thread)}" title="save this edit — the held reply becomes this text (Enter)">Save</button><button class="btn-edit-cancel" type="button" data-edit-cancel="${q.at}" data-edit-thread="${esc(thread)}" title="leave this held reply exactly as it was (Escape)">Cancel</button></div></div></div>`;
+  return `${head(when, true)}<div class="ghost-edit" data-edit-for="${q.at}"><textarea class="ghost-edit-box mono" data-edit-queued="${q.at}" data-edit-thread="${esc(thread)}" rows="2" spellcheck="false" aria-label="edit this held reply">${esc(edit.text)}</textarea><div class="ghost-edit-actions mono"><button class="btn-edit-save" type="button" data-edit-save="${q.at}" data-edit-thread="${esc(thread)}" title="save this edit — the held reply becomes this text (Enter)">Save</button><button class="btn-edit-cancel" type="button" data-edit-cancel="${q.at}" data-edit-thread="${esc(thread)}" title="leave this held reply exactly as it was (Escape)">Cancel</button></div></div>${chips}</div>`;
 }
 
 // Open the editor on one held reply, named by its own `at`. The text it opens on is remembered, so Escape, Cancel and
@@ -4469,12 +4484,17 @@ function cancelQueuedReply(thread, at) {
   // answer decides whether the cancelled reply can come back as a draft.
   const backToDraft = Boolean(box && !readBox(box).trim() && entry.text);
   if (backToDraft) state.replyDrafts[thread] = entry.text;
+  // The entry's files come back to the composer the same way its text does — only into an empty box, so a file
+  // staged since is never joined by one from a reply the reader took back.
+  const back = backToDraft && entry.attachments?.length ? addAttachments(thread, entry.attachments) : 0;
   renderConversation(thread);
   // After the repaint: a rebuild replaces the card and the warnline with it, so the note goes in last.
   const warn = document.querySelector(`[data-reply-warn="${CSS.escape(thread)}"]`);
   if (warn) {
     warn.textContent = backToDraft
-      ? "that queued reply is cancelled — the text is back in the box as your draft"
+      ? back
+        ? `that queued reply is cancelled — the text and its ${back === 1 ? "file are" : `${back} files are`} back in the box`
+        : "that queued reply is cancelled — the text is back in the box as your draft"
       : "that queued reply is cancelled";
   }
   return "cancelled";
@@ -4528,7 +4548,9 @@ async function drainReplyQueue(thread) {
   markReplySent(thread, entry);
   renderConversation(thread);
   try {
-    await sendReply(thread, entry.text);
+    // The entry's OWN files travel with the send. The composer's staged set belongs to a later message and is
+    // neither read nor cleared here.
+    await sendReply(thread, entry.text, entry.attachments || []);
   } catch {
     /* sendReply reports its own errors */
   }
@@ -5041,12 +5063,16 @@ function rememberAddAgentCaret(input) {
   a.end = a.start;
 }
 
-async function sendReply(thread, preset = null) {
+async function sendReply(thread, preset = null, presetAttachments = null) {
   const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
   // The one place a box's text is read. A chip serializes back to the text it swallowed, IN PLACE: quotes
   // the reader put around it and the prose on either side arrive in the order they are on screen.
   const typed = String(preset ?? (box ? readBox(box) : "")).trim();
-  const attached = attachmentBlock(thread);
+  // A queued reply hands its OWN files in: the block is built from those, and the composer's staged set is a
+  // later message's — never read, never cleared here. A box send passes null and the staged set is its own.
+  const held = Array.isArray(presetAttachments);
+  const files = held ? presetAttachments : attachmentsFor(thread);
+  const attached = attachmentBlockFor(files);
   if (!typed && !attached) return false;
   const text = typed + attached;
   // The typed part only: the attachment block is panel-added, and recalling it would duplicate the files.
@@ -5060,12 +5086,12 @@ async function sendReply(thread, preset = null) {
     const r = await apiFetch(toAssistant ? "/api/assistant/say" : "/api/agents/reply", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(toAssistant ? { text, assistantId: toAssistant.id } : { thread, text, attachments: attachmentsFor(thread) }),
+      body: JSON.stringify(toAssistant ? { text, assistantId: toAssistant.id } : { thread, text, attachments: files }),
     });
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
     state.replyDrafts[thread] = "";
-    clearAttachments(thread);
+    if (!held) clearAttachments(thread);
     // A sent reply ends the history walk: the next Up starts from the newest prompt again.
     state.replyNav.delete(thread);
     state.justSent.set(thread, { text: typed, at: Date.now() });
@@ -5140,14 +5166,17 @@ async function steerTurn(thread, id, text, btn = null) {
       if (reason === "past_boundary") {
         // A GENUINE 409: the run exists and is already past its last tool boundary, so this text cannot land in it and
         // no later press will land either. Hold it as the reply the reader asked for — the same hold the Queue reply
-        // press makes — and say it was held, so nobody is left thinking the instruction was lost.
+        // press makes — and say it was held, so nobody is left thinking the instruction was lost. The staged files are
+        // read BEFORE the box is cleared and held ON the entry: the drain sends those, not whatever is staged by then,
+        // and the text stays the reader's words (the block would be a second copy of the paths).
+        const files = attachmentsFor(thread);
         state.replyDrafts[thread] = "";
         const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
         if (box) {
           writeBox(box, "");
           clearBoxDraft(box);
         }
-        queueReply(thread, typed || attached);
+        queueReply(thread, typed, files);
         // After the repaint queueReply causes: it replaces the card, and the old warnline with it.
         const heldWarn = document.querySelector(`[data-reply-warn="${CSS.escape(thread)}"]`);
         if (heldWarn) heldWarn.textContent = `steer held — ${why}; your text is queued and goes out as the next turn on this thread.`;

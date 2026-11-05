@@ -46,13 +46,25 @@ function setAttachments(ctx, list) {
   }
 }
 
+// One chip, as both the composer and a held reply draw it. `ctx` names the set a press may take the file
+// off; a held reply passes null, because its files are the entry's now and its × is what gives them back.
+function attachmentChipHtml(a, ctx = null) {
+  const x =
+    ctx == null
+      ? ""
+      : `<button type="button" class="chip-x" data-chip-remove="${esc(a.path)}" data-chip-ctx="${esc(ctx)}" title="remove this attachment">\u00d7</button>`;
+  return `<span class="attach-chip mono" data-open-path="${esc(a.path)}" title="open ${esc(a.path)} in Notepad++">[${esc(a.name)}]${x}</span>`;
+}
+
 function attachmentChipsHtml(ctx) {
   return attachmentsFor(ctx)
-    .map(
-      (a) =>
-        `<span class="attach-chip mono" data-open-path="${esc(a.path)}" title="open ${esc(a.path)} in Notepad++">[${esc(a.name)}]<button type="button" class="chip-x" data-chip-remove="${esc(a.path)}" data-chip-ctx="${esc(ctx)}" title="remove this attachment">\u00d7</button></span>`,
-    )
+    .map((a) => attachmentChipHtml(a, ctx))
     .join("");
+}
+
+// The same chip row for a list that is not a composer set: a queued entry's own attachments.
+function attachmentChipsFor(list) {
+  return (list || []).map((a) => attachmentChipHtml(a, null)).join("");
 }
 
 function renderChips(ctx) {
@@ -65,8 +77,8 @@ function renderChips(ctx) {
 }
 
 // What the agent actually receives: the chip stays a chip, the path travels with the message.
-function attachmentBlock(ctx) {
-  return attachmentsFor(ctx)
+function attachmentBlockFor(list) {
+  return (list || [])
     .map((a) => {
       const how = /^image\//.test(String(a.type)) ? "use vision_analyze on it" : "read_file it";
       return `\n\nAttachment: ${a.path} (${a.type || "unknown type"}, ${fmtBytes(a.bytes)}) — ${how} before answering.`;
@@ -74,9 +86,30 @@ function attachmentBlock(ctx) {
     .join("");
 }
 
+function attachmentBlock(ctx) {
+  return attachmentBlockFor(attachmentsFor(ctx));
+}
+
 function clearAttachments(ctx) {
   setAttachments(ctx, []);
   renderChips(ctx);
+}
+
+// Put files back on a composer set, one chip per file: a path that is already staged is not added a
+// second time, so a cancel can never turn one file into two chips.
+function addAttachments(ctx, list) {
+  const have = attachmentsFor(ctx);
+  const seen = new Set(have.map((a) => a.path));
+  const add = [];
+  for (const a of list || []) {
+    if (!a || !a.path || seen.has(a.path)) continue;
+    seen.add(a.path);
+    add.push(a);
+  }
+  if (!add.length) return 0;
+  setAttachments(ctx, [...have, ...add]);
+  renderChips(ctx);
+  return add.length;
 }
 
 async function attachFiles(files, box) {
@@ -147,6 +180,7 @@ window.WMApp = window.WMApp || {};
 window.WMApp.board = window.WMApp.board || {};
 // Published for the later steps of the split; nothing reads it yet.
 window.WMApp.board.attachments = {
-  attachmentsFor, setAttachments, attachmentChipsHtml, renderChips, attachmentBlock, clearAttachments,
+  attachmentsFor, setAttachments, attachmentChipHtml, attachmentChipsHtml, attachmentChipsFor,
+  renderChips, attachmentBlock, attachmentBlockFor, clearAttachments, addAttachments,
   attachFiles, attachTarget,
 };
