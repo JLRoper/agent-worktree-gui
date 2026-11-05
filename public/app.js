@@ -12298,6 +12298,9 @@ function applySnapshot(data) {
   if (data.remoteWrites) applyRemoteWrites(data.remoteWrites);
   // The assistant's scratchpad, alerts and thread id travel with the snapshot (assistant.js owns the panel).
   if (data.assistant && typeof applyAssistant === "function") applyAssistant(data.assistant);
+  // The reset control's select is drawn from that same roster, so a snapshot is when a newly created assistant
+  // becomes a choice here. It keeps the reader's current pick; with one assistant the select stays hidden.
+  if (typeof paintResetRow === "function") paintResetRow();
   // A snapshot refreshes what it carries; it does not retract rows. Only an explicit "drop"
   // event retires a worktree, so a snapshot arriving mid-scan can never blank the table.
   const incomingProjects = data.projects || [];
@@ -18152,6 +18155,9 @@ function toggleSettings(open = null) {
   // The agent-cleanup row reads the last snapshot again on every open, so a switch another tab moved is what the
   // panel shows rather than what this tab last saw.
   paintAgentCleanup();
+  // The reset control names WHICH assistant it acts on, and the roster can have grown since the last snapshot was
+  // painted (another tab creates one), so it is read again on every visit — keeping the assistant already chosen.
+  paintResetRow();
   // Read the gateway's window every time the panel opens: it can be changed from a CLI, and the
   // panel is not the owner of that value.
   void loadApprovalSetting();
@@ -18646,6 +18652,319 @@ async function refreshModels() {
     if (btn) btn.disabled = false;
   }
 }
+
+// ---- the assistant reset: a dry run, then one real clear ---------------------------------------
+// The third control in the Settings gateway restart row (POST /api/assistants/:id/reset, lib/assistant/reset.js).
+// It is a control-plane repair, not a chat action: it settles the unknown admission that fences ONE assistant's
+// session through the gateway, then drops that assistant's queued wakes and the watches it owns. It keeps the queue,
+// the scratchpad, the charter and the thread — and it never starts a run.
+//
+// Two presses, the same shape `clearProviderKey` uses: the FIRST reads a dry run and paints every row it would
+// clear, the SECOND sends the real call. The dry run is the confirmation — a window.confirm cannot show rows — and
+// it stays armed for ten seconds rather than four because there is a list to read, not one word. A REFUSAL disarms
+// the button: a 409 assistant_live / fence_unclearable refuses before it mutates anything, so a second press could
+// only get the same answer.
+//
+// Five copy states, each painted from the route's own answer (no sentence is composed before a request):
+//   dry run   200, ok, dryRun true            — one line per admission, watch and wake, then the keeps line
+//   blocked   409 assistant_live              — a run of this assistant's is still executing
+//   refused   409 fence_unclearable           — every unknown row is unnameable; nothing local is cleared
+//   success   200, ok, dryRun false           — the receipt's outcome, then the resume path
+//   incomplete 200, ok false, verdict incomplete — the store is still fenced; the resume path again
+// The last two name `hermes --resume <thread>` with the real thread id: a fence the panel cannot move can only be
+// entered from a terminal, and the copy has to say so where the reader is standing.
+let resetArmTimer = null;
+let resetBusy = false;
+
+const resetPlural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+const resetSpan = (ms) => {
+  const m = Math.max(0, Math.round(Number(ms) / 60_000));
+  if (!Number.isFinite(m)) return "";
+  if (m < 1) return "under a minute";
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  return `${h}h ${m % 60}m`;
+};
+
+// The roster the select is drawn from, with Assistant #1 as the fallback the float itself uses before the first
+// /api/assistant answer lands — the control never says "reset" without saying whose.
+function resetRoster() {
+  const list = state.assistant?.assistants;
+  if (Array.isArray(list) && list.length) return list;
+  return [{ id: "assistant-1", name: "Assistant #1", threadId: state.assistantThread || "panel-assistant" }];
+}
+
+function resetChosen() {
+  const sel = $("reset-assistant");
+  const roster = resetRoster();
+  const id = String(sel?.value || "");
+  return roster.find((a) => String(a.id) === id) || roster[0] || null;
+}
+
+function resetDisarm() {
+  clearTimeout(resetArmTimer);
+  resetArmTimer = null;
+  const btn = $("btn-reset-assistant");
+  if (!btn) return;
+  btn.dataset.armed = "";
+  btn.textContent = "Reset assistant";
+  btn.classList.remove("dirty");
+}
+
+// The select, its options and the button's title. The select is HIDDEN while there is one assistant — the button's
+// title and the preview still name it, so nothing is lost — and the chosen id survives a repaint of the roster.
+//
+// The options are rebuilt only when the ROSTER itself changed: a snapshot arrives every few seconds, and replacing a
+// <select>'s children under the reader closes the dropdown they have open. A new title is safe to write every time.
+let resetRosterSig = "";
+function paintResetRow() {
+  const sel = $("reset-assistant");
+  const btn = $("btn-reset-assistant");
+  if (!sel || !btn) return;
+  const roster = resetRoster();
+  const sig = roster.map((a) => `${a.id}:${a.name}:${a.threadId}`).join("|");
+  if (sig !== resetRosterSig) {
+    resetRosterSig = sig;
+    const wanted = String(sel.value || "");
+    sel.textContent = "";
+    for (const a of roster) {
+      const opt = document.createElement("option");
+      opt.value = String(a.id);
+      opt.textContent = String(a.name || a.id);
+      opt.title = `${a.name || a.id} · ${a.threadId || ""}`;
+      sel.appendChild(opt);
+    }
+    sel.value = roster.some((a) => String(a.id) === wanted) ? wanted : String(roster[0].id);
+  }
+  sel.hidden = roster.length < 2;
+  const rec = roster.find((a) => String(a.id) === sel.value) || roster[0];
+  btn.title =
+    `Reset ${rec.name} — settle its gateway turn (the unknown admission that fences ${rec.threadId ?? "its session"}), ` +
+    `drop its queued wakes and the watches it owns. Keeps its queue, scratchpad, charter and thread. ` +
+    `Two presses: the first shows a dry run, row by row, of exactly what it would clear.`;
+  if (btn.dataset.armed !== "1") btn.textContent = "Reset assistant";
+}
+
+// The dry run's rows, one per thing it would clear — the whole point of the state is that a count cannot be checked
+// against the store. `clear.admissions` names the run, admission, generation, card and how long the run has been
+// unknown; `clear.watches` and `clear.wakes` are the local half.
+function resetDryLines(d, now) {
+  const who = `${d.assistant?.name || "this assistant"}${d.assistant?.threadId ? ` · ${d.assistant.threadId}` : ""}`;
+  const clear = d.clear || {};
+  const admissions = Array.isArray(clear.admissions) ? clear.admissions : [];
+  const watches = Array.isArray(clear.watches) ? clear.watches : [];
+  const wakes = Array.isArray(clear.wakes) ? clear.wakes : [];
+  const unnameable = Array.isArray(d.block?.unnameable) ? d.block.unnameable : [];
+  const queued = Array.isArray(d.block?.queued) ? d.block.queued : [];
+  const unreadable = Array.isArray(d.block?.unreadable) ? d.block.unreadable : [];
+  const keep = d.keep || {};
+  const lines = [who];
+  if (!admissions.length && !watches.length && !wakes.length) {
+    lines.push(d.verdict === "clean" ? "nothing is fenced. Nothing to clear." : "nothing this endpoint can clear.");
+  }
+  if (admissions.length) {
+    lines.push(`would clear ${resetPlural(admissions.length, "admission", "admissions")}:`);
+    for (const a of admissions) {
+      const bits = [`run ${a.runId}`, `admission ${a.admissionId}`];
+      bits.push(a.executionGeneration == null ? "generation null" : `generation ${a.executionGeneration}`);
+      if (a.card?.id) bits.push(`card ${a.card.id}${a.card.status ? ` ${a.card.status}` : ""}`);
+      const answers = Array.isArray(a.evidence?.answers) ? a.evidence.answers : [];
+      const first = answers.length ? Number(answers[0][0]) : NaN;
+      if (Number.isFinite(first)) bits.push(`unknown for ${resetSpan(now - first)}`);
+      lines.push(`  · ${bits.join(" · ")}`);
+    }
+  }
+  if (watches.length) {
+    const own = watches.filter((w) => w.thread && w.thread === d.assistant?.threadId).length;
+    const where = watches.length === 1 ? "" : ` (${own} on its own turn, ${watches.length - own} on workers)`;
+    lines.push(`would drop ${resetPlural(watches.length, "watch", "watches")}${where}:`);
+    for (const w of watches) lines.push(`  · ${w.thread} — ${w.title}${w.state ? ` (${w.state})` : ""}`);
+  }
+  if (wakes.length) {
+    lines.push(`would drop ${resetPlural(wakes.length, "queued wake", "queued wakes")}:`);
+    for (const w of wakes) {
+      const age = Number.isFinite(Number(w.ageMs)) ? `, queued ${resetSpan(w.ageMs)} ago` : "";
+      lines.push(`  · ${w.reason || "(no reason)"}${w.rule ? ` (rule ${w.rule}${age})` : age ? ` (${age.slice(2)})` : ""}`);
+    }
+  }
+  const q = keep.queue?.rows ?? 0;
+  const s = keep.scratchpad || {};
+  const c = keep.charter || {};
+  lines.push(`keeps: ${resetPlural(q, "queue row", "queue rows")} · ${s.notes ?? 0} notes · ${s.rules ?? 0} rules · charter ${c.chars ?? 0} chars`);
+  if (unnameable.length) {
+    const rows = unnameable.map((a) => `admission ${a.admissionId} · generation ${a.generation} · seq ${a.seq}`);
+    lines.push(
+      `blocked: ${resetPlural(unnameable.length, "admission", "admissions")} no card here names (${rows.join("; ")}) — ` +
+        `this endpoint can settle an admission only through the run that owns it, so it will clear nothing local and report incomplete.`,
+    );
+  }
+  if (unreadable.length) {
+    const rows = unreadable.map((r) => `run ${r.runId}${r.code ? ` (${r.code})` : ""}`);
+    lines.push(`unreadable: ${resetPlural(unreadable.length, "card", "cards")} whose run the gateway did not answer — ${rows.join("; ")}`);
+  }
+  if (queued.length) {
+    lines.push(`also: ${resetPlural(queued.length, "turn", "turns")} queued behind the fence will start when it clears (generation ${queued.map((q) => (q.executionGeneration == null ? "null" : q.executionGeneration)).join(", ")}).`);
+  }
+  // With nothing to clear there is no second press to ask for: the same sentence over an empty list would invite the
+  // reader to confirm a reset that clears nothing.
+  if (admissions.length || watches.length || wakes.length || unnameable.length) {
+    lines.push(
+      d.verdict === "blocked"
+        ? `press again to reset — it will settle what it can and report incomplete. The rest needs a terminal: hermes --resume ${d.assistant?.threadId || "this session"}`
+        : "press again to reset. The settled turn is reported interrupted and is not replayed — resend it if you still want it.",
+    );
+  }
+  return lines;
+}
+
+// The five copy states, from the route's answer. `kind` is what a probe asserts on; `bad` is whether the preview
+// is painted as a refusal, which is the panel's own class and not a claim about the gateway.
+function resetCopyView(body, status, now = Date.now()) {
+  const d = body && typeof body === "object" ? body : {};
+  const code = String(d.code || "");
+  const err = String(d.error || "").trim();
+  const who = d.assistant?.name || "the assistant";
+  const thread = d.assistant?.threadId || d.thread || "this session";
+  const resume = `hermes --resume ${thread}`;
+
+  if (status === 409 && code === "assistant_live") {
+    return {
+      kind: "blocked",
+      bad: true,
+      lines: [err || `not reset — ${who} has a run still executing.`, "nothing was cleared — the reset refuses before it mutates anything. Press again once that turn has ended."],
+    };
+  }
+  if (status === 409 && code === "fence_unclearable") {
+    const rows = (Array.isArray(d.admissions) ? d.admissions : []).map(
+      (a) => `  · admission ${a.admissionId} · generation ${a.generation} · seq ${a.seq} · owner epoch ${a.ownerEpoch}`,
+    );
+    return { kind: "refused", bad: true, lines: [err || `not reset — the fence on ${thread} is held by an admission no card here names.`, ...(rows.length ? ["the admissions it could not name:", ...rows] : [])] };
+  }
+  if (status === 200 && d.dryRun === true && d.ok === true) {
+    return { kind: "dry", bad: d.verdict === "blocked", lines: resetDryLines(d, now) };
+  }
+  if (status === 200 && d.ok === true) {
+    const cleared = d.cleared || {};
+    const admissions = Array.isArray(cleared.admissions) ? cleared.admissions : [];
+    const watches = Array.isArray(cleared.watches) ? cleared.watches : [];
+    const wakes = Array.isArray(cleared.wakes) ? cleared.wakes : [];
+    const receipt = (Array.isArray(d.receipts) ? d.receipts.find((r) => r.ok)?.receipt : null) || {};
+    const outcome = receipt.outcome || "interrupted";
+    const keep = d.kept || {};
+    const q = keep.queue?.rows ?? 0;
+    const s = keep.scratchpad || {};
+    const c = keep.charter || {};
+    return {
+      kind: "success",
+      bad: false,
+      lines: [
+        `reset — ${who}: ${resetPlural(admissions.length, "admission", "admissions")} settled (${outcome}; the projection now reads cancelled), ` +
+          `${resetPlural(watches.length, "watch", "watches")} dropped, ${resetPlural(wakes.length, "wake", "wakes")} dropped. ` +
+          `Kept ${resetPlural(q, "queue row", "queue rows")}, the scratchpad (${s.notes ?? 0} notes, ${s.rules ?? 0} rules) and the charter (${c.chars ?? 0} chars).`,
+        "If a panel turn is still refused with 409 permission_denied, the session is the CLI's:",
+        `continue it with ${resume}`,
+        "the settled turn is reported interrupted and is not replayed — resend it if you still want it.",
+      ],
+    };
+  }
+  if (status === 200 && d.ok === false && String(d.verdict || "") === "incomplete") {
+    return {
+      kind: "incomplete",
+      bad: true,
+      lines: [
+        err || `reset INCOMPLETE — the session ${thread} is still fenced, so nothing local was cleared.`,
+        `still fenced — a terminal is the only way into that session now: ${resume}`,
+        "resume reopens the conversation; it does not replay the lost turn, so send that prompt again.",
+      ],
+    };
+  }
+  return { kind: "error", bad: true, lines: [`reset NOT DONE — ${err || `the panel answered HTTP ${status}`}`] };
+}
+
+function paintResetPreview(body, status) {
+  const preview = $("reset-preview");
+  if (!preview) return null;
+  const view = resetCopyView(body, status, Date.now());
+  preview.textContent = view.lines.join("\n");
+  preview.classList.toggle("bad", view.bad);
+  return view;
+}
+
+// The press. First: arm, read the dry run, paint it. Second: disarm, send the real call, paint the outcome. Only
+// THIS button disables for the length of its own request; the two restart buttons beside it stay pressable.
+async function resetAssistant(btn) {
+  const rec = resetChosen();
+  const preview = $("reset-preview");
+  if (!rec || resetBusy) return;
+  const armed = btn?.dataset.armed === "1";
+  if (!armed) {
+    resetDisarm();
+    if (btn) {
+      btn.dataset.armed = "1";
+      btn.textContent = `reset ${rec.name}?`;
+      btn.classList.add("dirty");
+      btn.disabled = true;
+    }
+    resetBusy = true;
+    resetArmTimer = setTimeout(() => resetDisarm(), 10_000);
+    if (preview) {
+      preview.textContent = `reading a dry run for ${rec.name}…`;
+      preview.classList.remove("bad");
+    }
+    try {
+      const r = await apiFetch(`/api/assistants/${encodeURIComponent(rec.id)}/reset`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dryRun: true, reason: `reader pressed "Reset ${rec.name}" in Settings → Gateway` }),
+      });
+      const d = await r.json().catch(() => ({}));
+      paintResetPreview(d, r.status);
+      // A refusal is final for this arm: the route refuses before it mutates anything, so the second press would
+      // ask the same question and get the same answer.
+      if (!r.ok || !d.ok) resetDisarm();
+    } catch (e) {
+      if (preview) {
+        preview.textContent = `reset NOT READ — ${e.message}`;
+        preview.classList.add("bad");
+      }
+      resetDisarm();
+    } finally {
+      resetBusy = false;
+      if (btn) btn.disabled = false;
+    }
+    return;
+  }
+
+  resetDisarm();
+  resetBusy = true;
+  if (btn) btn.disabled = true;
+  if (preview) {
+    preview.textContent = `resetting ${rec.name}…`;
+    preview.classList.remove("bad");
+  }
+  try {
+    const r = await apiFetch(`/api/assistants/${encodeURIComponent(rec.id)}/reset`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason: `reader pressed "Reset ${rec.name}" in Settings → Gateway` }),
+    });
+    const d = await r.json().catch(() => ({}));
+    const view = paintResetPreview(d, r.status);
+    if (view?.kind === "success") showBanner(`reset: ${rec.name}`);
+    else if (view?.kind === "incomplete") showBanner(`reset incomplete: ${rec.name}`);
+    else if (view?.kind === "blocked" || view?.kind === "refused") showBanner(`reset refused: ${rec.name}`);
+  } catch (e) {
+    if (preview) {
+      preview.textContent = `reset NOT DONE — ${e.message}`;
+      preview.classList.add("bad");
+    }
+  } finally {
+    resetBusy = false;
+    if (btn) btn.disabled = false;
+    paintResetRow();
+  }
+}
+// ---- end the assistant reset
 
 // ---- the approval window -------------------------------------------------------------------
 // approvals.timeout is not a panel preference like the fonts above it. The gate that waits for a
@@ -20045,6 +20364,13 @@ $("provider-profile-name")?.addEventListener("keydown", (e) => {
 // Two controls, two handlers, one target each: nothing here reaches both processes in one action.
 $("btn-restart-gateway")?.addEventListener("click", (e) => void restartFromSettings("gateway", e.currentTarget));
 $("btn-restart-panel")?.addEventListener("click", (e) => void restartFromSettings("panel", e.currentTarget));
+// The reset's two presses. Changing the assistant disarms a press armed for the previous one: the confirm copy and
+// the armed label belong to the assistant they were produced for.
+$("btn-reset-assistant")?.addEventListener("click", (e) => void resetAssistant(e.currentTarget));
+$("reset-assistant")?.addEventListener("change", () => {
+  resetDisarm();
+  paintResetRow();
+});
 $("btn-provider-default-url")?.addEventListener("click", () => {
   const url = $("provider-url");
   if (url) url.value = url.placeholder || "https://openrouter.ai/api/v1";
