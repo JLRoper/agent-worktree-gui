@@ -952,8 +952,9 @@ small watchdog outside it (every 10 s): a cleared timer is restarted, and a pass
 than three intervals. The same call handles the assistant's own turn, which the sentry deliberately never looks at
 — if it has produced no output for four quiet-windows (5 min minimum) it is stopped and the assistant is woken with
 that fact, because `assistantLive()` would otherwise hold every future wake behind a hung turn. On boot the panel
-also checks its own last turn: if the restart cut one in half (`jobs.load()` marks it `interrupted`), it is woken
-once to say where it got to; a clean restart costs nothing. **Settings → How it behaves** shows the clock, the last
+also checks its own last turn: if the restart cut one in half (the boot reconcile settles it `interrupted`), it is
+woken once to say where it got to; a turn the gateway still holds is re-attached instead and spends no resume, and
+a clean restart costs nothing. **Settings → How it behaves** shows the clock, the last
 pass and whether that boot resumed anything.
 
 **It can create worktrees.** `assistant.spawn` (also in its Settings tab) has its own ladder, because cutting a

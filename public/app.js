@@ -1465,6 +1465,9 @@ const PULSE_SILENT_SECONDS = 20; // past this, "thinking 2s" would be a lie: it 
 function livePulse(j) {
   // A held turn (the gateway's 429 cap) has no run yet; its own head already says what it is waiting for.
   if (!j || !j.live || !turnLive(j) || isWaiting(j)) return null;
+  // A card the restart restored but the panel has NOT re-attached yet: it is live on the board, and this panel is
+  // holding no stream to judge. "no events yet" would blame the gateway for a silence nobody was listening to.
+  if (j.restoredPending) return null;
   const now = Date.now();
   const started = Number(j.live.startedAt) || Date.parse(j.startedAt || "") || now;
   const last = Number(j.live.lastEventAt) || null;
