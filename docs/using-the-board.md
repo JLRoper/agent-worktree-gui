@@ -54,6 +54,24 @@ answer control. A permission box starts on **Deny**, deliberately: a stray key c
 - The red badge is how many questions are waiting on you. Zero leaves no badge at all.
 - A question that is answered, expires or whose turn ends drops out of the rotation as you go.
 
+#### A question nobody answers is asked again — hourly, as one entry
+
+A worker parked on a `clarify` question has stopped emitting anything: no event, no turn to end. It is the one
+waiting state on the board that is invisible by its own silence, so the panel keeps asking on its own clock — not
+on a turn, and not on every sweep:
+
+- an hour after the question parked, the panel **asks again**; while it stays unanswered, once an hour after that;
+- the question is the SAME one. Its box gains `↻ asked again N× · still unanswered`, its alert gains
+  `↻ asked again N×` and moves back to the top of the list, and `HUMAN`'s title says how many open questions have
+  been asked again. Nothing is re-posted to the gateway — the run is still parked on that prompt, and posting the
+  question again would be a second question;
+- there is **one entry per question**, everywhere: one alert, one room message, one row in the rotation. The count
+  is a field on the entry (`reasks` on the question, `asks` on the alert), never part of its identity — which is why
+  an ignored question is overwritten in place instead of piling up;
+- the wake is your **question** rule's setting: at `alert` (its default) the entry is raised and counted quietly; at
+  `wake`/`act` the assistant also gets one reminder an hour, which the hourly budget cannot refuse;
+- answering closes it: the next sweep finds no question and there is nothing left to raise.
+
 The old **NOT-RUNNING** rotation, and its `Alt+Right` / `Alt+Left` steps, are gone. The stopped-agent pills on the
 cards are unchanged: the amber `not-running` pill still resumes that agent, and the green **▶** on a worktree row still
 probes every stopped agent in it.
