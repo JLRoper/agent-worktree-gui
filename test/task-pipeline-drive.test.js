@@ -583,20 +583,31 @@ test("stagePrompt is the stage's instruction plus the row, and the inputs only w
   assert.match(prompt, /the reader's words/);
   assert.doesNotMatch(prompt, /INPUTS/, "with no record there is nothing resolved to hand on");
 
-  // With the record and the tree facts, the block is paths, hashes and facts — never a summary.
+  // With the record and the tree facts, the block is paths, hashes and facts — never a summary. The writer's settled
+  // run carries the PIN, and the block names it INSTEAD OF a branch: the commit, the blob, and where to read it.
+  const writer = {
+    id: "two/S1#1",
+    stage: "S1",
+    visit: 1,
+    at: CLOCK,
+    status: "done",
+    commit: "a".repeat(40),
+    artifact: { id: "artifact-1", path: "out/1.json", present: true, sha256: "b".repeat(64), commit: "a".repeat(40), blob: "c".repeat(40), blobSha256: "d".repeat(64) },
+  };
   const withInputs = stagePrompt(
     { id: 7, title: "carry it", detail: "" },
     bundle.pipelines[0],
     bundle.pipelines[0].stages[1],
     {
-      run: { pipeline: "two", stage: "S2", enteredAt: CLOCK, via: "h1", visits: { S1: 1, S2: 1 }, tree: { path: dir, branch: "wtgui/x-abc123" } },
+      run: { pipeline: "two", stage: "S2", enteredAt: CLOCK, via: "h1", visits: { S1: 1, S2: 1 }, tree: { path: dir, branch: "wtgui/x-abc123" }, stageRuns: [writer] },
       tree: { path: dir, branch: "wtgui/x-abc123" },
       facts: { head: "1c9f0aa", dirty: 2 },
     },
   );
   assert.match(withInputs, /\nINPUTS\n/);
-  assert.match(withInputs, /handed on {3}artifact-1 {3}out\/1\.json {3}sha256 [0-9a-f]{12}… {3}writer worker-1/);
-  assert.match(withInputs, /\(S1 → S2, handoff h1, sequence\)/);
+  assert.match(withInputs, /handed on {3}artifact-1 {3}out\/1\.json {3}commit a{12} {3}blob c{12} {3}sha256 d{12}… {3}writer worker-1/);
+  assert.match(withInputs, /\(S1 → S2, handoff h1, sequence; read it at a{12}:out\/1\.json\)/, "the block says where to read the pinned blob");
+  assert.doesNotMatch(withInputs, /handed on[^\n]*branch/, "the handoff is never named by a branch");
   assert.match(withInputs, /tree {8}.*wtgui\/x-abc123/);
   assert.match(withInputs, /HEAD 1c9f0aa {3}2 uncommitted files/);
   assert.doesNotMatch(withInputs, /summary/i);
