@@ -17,18 +17,18 @@ has no tag.
 
 ## v1.18.2 — 2026-11-05 · 5 commits
 
-[`7e3172b`](https://github.com/JLRoper/agent-worktree-gui/commit/7e3172bcb58e9178899a6d870a422c452915e70e) · [compare v1.18.1...v1.18.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.18.1...v1.18.2)
+[`af73988`](https://github.com/JLRoper/agent-worktree-gui/commit/af73988f715c657b014628cb39c033fbf6f47135) · [compare v1.18.1...v1.18.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.18.1...v1.18.2)
 
 ### Docs & tests
 
 - docs: render the changelog — 304 releases ([`d06b59c`](https://github.com/JLRoper/agent-worktree-gui/commit/d06b59c1d6239362308fdf9805c82476532bb5ae))
-- test: the driver runs a three-stage pipeline end to end, twice ([`f92f5f0`](https://github.com/JLRoper/agent-worktree-gui/commit/f92f5f07b18089964bd0617cba5e4a68a377dd97))
-- docs: the round separates its evidence from the tester's commentary ([`33268fa`](https://github.com/JLRoper/agent-worktree-gui/commit/33268face806266408339a8265d59cd356980e03))
-- docs: the re-run's provenance is the ran window, not the minute it was read ([`e17fe6b`](https://github.com/JLRoper/agent-worktree-gui/commit/e17fe6ba4e311dda26f5eb2673ced4a5bb846c53))
+- test: the driver runs a three-stage pipeline end to end, twice ([`81d251f`](https://github.com/JLRoper/agent-worktree-gui/commit/81d251f1cf83b566febc15797303e30636f19d0b))
+- docs: the round separates its evidence from the tester's commentary ([`d31831f`](https://github.com/JLRoper/agent-worktree-gui/commit/d31831f2dfc702468f895ba5dbe116d0f9e086ed))
+- docs: the re-run's provenance is the ran window, not the minute it was read ([`ff6eff8`](https://github.com/JLRoper/agent-worktree-gui/commit/ff6eff885140a7f88b259be6e8e1d451ae8449ce))
 
 ### Other
 
-- chore: 1.18.2 — the version this landing carries ([`7e3172b`](https://github.com/JLRoper/agent-worktree-gui/commit/7e3172bcb58e9178899a6d870a422c452915e70e))
+- chore: 1.18.2 — the version this landing carries ([`af73988`](https://github.com/JLRoper/agent-worktree-gui/commit/af73988f715c657b014628cb39c033fbf6f47135))
 
 ## v1.18.1 — 2026-11-05 · 3 commits
 
