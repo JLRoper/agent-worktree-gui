@@ -9,8 +9,8 @@
 // carries both rows and the pane nesting, `public/assistant.js` the one {assistant, subTab} record behind them,
 // `public/style.css` the row and the pass-through panes. What is driven:
 //
-//   1. the top row is three buttons — "Assistant #1" first, and Role and Watchdog, no Settings and none of the four
-//      lists — and the second row is a separate row BELOW it (measured, not read from the markup) holding eight:
+//   1. the top row is four buttons — "Assistant #1" first, then Role, Watchdog and Bridge, no Settings and none of
+//      the four lists — and the second row is a separate row BELOW it (measured, not read from the markup) holding eight:
 //      Chat, Settings, Queue, Worktrees, Alerts, Watches, Messages, Scratchpad;
 //   2. Settings is the second row's second tab and nothing else: pressing it shows #as-settings and hides #as-chat,
 //      with #as-settings inside the assistant's own pane rather than beside it, and the pane still renders its
@@ -235,8 +235,8 @@ async function browserPhase(pw) {
   // The row carries the sessions and the panel's TWO panes: Role is a library every assistant picks from, and the
   // watchdog is the panel's sentry. Alerts, Watches, Messages and Scratchpad are NOT here — they moved inside the
   // assistant, onto the row under this one.
-  check("the float's own row", top.map((t) => t.tab), ["assistant-1", "role", "watchdog"]);
-  check("…labelled", top.map((t) => t.label), ["Assistant #1", "Role", "Watchdog"]);
+  check("the float's own row", top.map((t) => t.tab), ["assistant-1", "role", "watchdog", "bridge"]);
+  check("…labelled", top.map((t) => t.label), ["Assistant #1", "Role", "Watchdog", "Bridge"]);
   ok(
     "no top-level Alerts, Watches, Messages or Scratchpad tab is left",
     !top.some((t) => ["alerts", "watches", "messages", "pad"].includes(t.tab)),
@@ -360,8 +360,8 @@ async function browserPhase(pw) {
   ok("…and the session's row is gone with the session", !(await visible("#as-subtabs")));
   const roleOpts = () => page.$$eval("#as-role-pick option", (els) => els.map((e) => ({ id: e.value, name: e.textContent.trim(), on: e.selected })));
   const roleOptsNow = await roleOpts();
-  check("the picker offers the seeded role", roleOptsNow.map((o) => o.id), ["agent-manager"]);
-  check("…named", roleOptsNow.map((o) => o.name), ["Agent Manager"]);
+  check("the picker offers the seeded roles", roleOptsNow.map((o) => o.id), ["agent-manager", "assistant-director"]);
+  check("…named", roleOptsNow.map((o) => o.name), ["Agent Manager", "Assistant Director"]);
   ok("…and it is the one this assistant runs", roleOptsNow[0].on);
   await page.waitForFunction(() => !document.querySelector("#as-role-text").readOnly, null, { timeout: 10_000 });
   const roleTextOf = (id) => page.locator(id).evaluate((el) => el.value);
@@ -631,9 +631,15 @@ async function movedPanesPhase(pw) {
     await page.waitForSelector("#job-prompt", { state: "visible", timeout: 20_000 });
     await page.locator("#btn-assistant").click();
     await page.waitForSelector("#assistant", { state: "visible" });
+    // The float paints Assistant #1 from the page's own default and the rest from /api/assistant: read the row
+    // before that answer lands and the seeded #2 and #3 are simply not there yet.
+    await waitFor(
+      async () => (await page.$$eval("#as-tabs button", (els) => els.map((el) => el.dataset.asTab))).includes("assistant-3"),
+      { timeoutMs: 20_000, what: "the seeded assistants' tabs" },
+    );
 
     const top = await page.$$eval("#as-tabs button", (els) => els.map((el) => el.dataset.asTab));
-    check("the float's row on the seeded panel", top, ["assistant-1", "assistant-2", "assistant-3", "role", "watchdog"]);
+    check("the float's row on the seeded panel", top, ["assistant-1", "assistant-2", "assistant-3", "role", "watchdog", "bridge"]);
     ok("no top-level Alerts/Watches/Messages/Pad tab on it", !top.some((t) => ["alerts", "watches", "messages", "pad"].includes(t)), JSON.stringify(top));
 
     const panesOf = async (id) =>
@@ -735,6 +741,279 @@ async function movedPanesPhase(pw) {
   }
 }
 
+// ---- the worktrees pane: one card per project, folded, and a tree press that lands on the board -----
+//
+// A THIRD panel, seeded before it boots with three repositories and REAL worktrees under each. Nothing here is
+// painted into the page: the rows are the scanner's own, every tree is Assistant #1's by default, and two jobs are
+// stamped onto trees in beta-repo so the card's live/parked counts have something true to read. What is driven:
+// every card starts collapsed, a press opens only that card, the record survives a reload, and a press on a tree
+// opens its board row, paints its agents block and leaves the row centred in the viewport — with the float left open.
+async function worktreeGroupsPhase(pw) {
+  const dir3 = mkdtempSync(path.join(tmpdir(), "wtgui-subtabs-groups-"));
+  const root3 = path.join(dir3, "scan-root");
+  const home3 = path.join(dir3, "hermes-home");
+  const cfg3 = path.join(dir3, "panel");
+  const logs3 = path.join(cfg3, "logs");
+  for (const d of [root3, home3, cfg3, logs3]) mkdirSync(d, { recursive: true });
+
+  const repos = { "alpha-repo": 3, "beta-repo": 16, "gamma-repo": 5 };
+  const trees = {};
+  for (const [name, n] of Object.entries(repos)) {
+    const repo = path.join(root3, name);
+    mkdirSync(repo, { recursive: true });
+    git(repo, ["init", "-q", "-b", "main"]);
+    writeFileSync(path.join(repo, "README.md"), `# ${name}\n`, "utf8");
+    git(repo, ["add", "."]);
+    git(repo, ["-c", "user.name=verify", "-c", "user.email=verify@localhost", "commit", "-q", "-m", "first"]);
+    const slug = name.replace(/-repo$/, "");
+    trees[name] = [];
+    for (let i = 1; i <= n; i += 1) {
+      const tree = path.join(repo, ".worktrees", `${slug}-${i}`).replace(/\\/g, "/");
+      const made = git(repo, ["worktree", "add", "-q", "-b", `${slug}-wt-${i}`, tree, "main"]);
+      if (!made.ok) throw new Error(`could not cut ${tree}: ${made.err || made.out}`);
+      trees[name].push(tree);
+    }
+  }
+
+  const now = Date.now();
+  const before = (min) => new Date(now - min * 60_000).toISOString();
+  // Two agents on beta-repo's trees: one running, one parked on a question. The card's head reads them from the
+  // job list the float already holds, so the counts are the panel's own answer rather than a fixture.
+  writeFileSync(
+    path.join(logs3, "jobs.json"),
+    JSON.stringify({
+      savedAt: new Date().toISOString(),
+      jobs: [
+        { id: "seed-live", thread: "seed-live-thread", status: "running", startedAt: before(9), prompt: "GROUPS-LIVE", ownerPath: trees["beta-repo"][0], lines: [] },
+        { id: "seed-park", thread: "seed-park-thread", status: "waiting_for_approval", startedAt: before(8), prompt: "GROUPS-PARK", ownerPath: trees["beta-repo"][1], lines: [] },
+      ],
+    }),
+    "utf8",
+  );
+
+  const port3 = await freePort();
+  const cfgPath3 = path.join(cfg3, "config.json");
+  writeFileSync(
+    cfgPath3,
+    `${JSON.stringify(
+      {
+        port: port3,
+        host: "127.0.0.1",
+        scanRoots: [root3],
+        defaultCwd: root3,
+        jobsFile: path.join(logs3, "jobs.json"),
+        assistantFile: path.join(logs3, "assistant.json"),
+        assistantsFile: path.join(logs3, "assistants.json"),
+        projectsCacheFile: path.join(logs3, "projects.json"),
+        treeNamesFile: path.join(logs3, "tree-names.json"),
+        apiServer: { url: "http://127.0.0.1:9", key: "sandbox-key" },
+        assistant: { enabled: false, autonomy: "draft", seconds: 3600, maxWakesPerHour: 0 },
+        refreshSeconds: 3,
+        worktreeSeconds: 2,
+        midSeconds: 3600,
+        dormantSeconds: 3600,
+        slowSeconds: 3600,
+        fetchSeconds: 3600,
+        threads: 2,
+      },
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
+  const base3 = `http://127.0.0.1:${port3}`;
+  const log3 = [];
+  const child = spawn(process.execPath, ["server.js"], {
+    cwd: ROOT,
+    env: { ...process.env, PANEL_CONFIG: cfgPath3, HERMES_HOME: home3, PANEL_TOKEN: "" },
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
+  });
+  child.stdout.on("data", (d) => log3.push(...String(d).split(/\r?\n/).filter(Boolean)));
+  child.stderr.on("data", (d) => log3.push(...String(d).split(/\r?\n/).filter(Boolean)));
+  let browser = null;
+  try {
+    const up = await waitFor(async () => (await fetch(`${base3}/api/state`)).ok, { timeoutMs: 40_000, what: "the groups panel to answer" });
+    if (!up) throw new Error(`the groups panel never came up on ${base3}\n${log3.slice(-15).join("\n")}`);
+    const stateNow = async () => (await fetch(`${base3}/api/state`)).json();
+    const countOf = (s, name) => ((s.projects || []).find((p) => p.name === name)?.worktrees || []).length;
+    const scanned = await waitFor(
+      async () => {
+        const s = await stateNow();
+        return countOf(s, "alpha-repo") === 4 && countOf(s, "beta-repo") === 17 && countOf(s, "gamma-repo") === 6;
+      },
+      { timeoutMs: 120_000, what: "the three projects and their 27 rows to be scanned" },
+    );
+    ok("the sandbox scanned every project and every tree", scanned, "4 + 17 + 6 rows in /api/state (each project's own checkout included)");
+    const seeded = await stateNow();
+    const owners = (seeded.projects || []).flatMap((p) => (p.worktrees || []).map((r) => r.assistant?.id || ""));
+    ok("…and every row is Assistant #1's, so this pane has all 27", owners.length === 27 && owners.every((id) => id === "assistant-1"), JSON.stringify([...new Set(owners)]));
+
+    browser = await pw.chromium.launch({ headless: true });
+    // A short viewport on purpose: the board has to be able to SCROLL for a centred row to be a measurement rather
+    // than a clamp at the top of a page that already fits.
+    const context = await browser.newContext({ viewport: { width: 1400, height: 620 } });
+    const page = await context.newPage();
+    page.setDefaultTimeout(10_000);
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(`pageerror: ${String((e && e.message) || e)}`));
+    page.on("console", (m) => {
+      if (m.type() === "error") pageErrors.push(`console.error: ${m.text()}`);
+    });
+    await page.goto(base3, { waitUntil: "domcontentloaded" });
+    await page.waitForSelector("#job-prompt", { state: "visible", timeout: 20_000 });
+    await page.locator("#btn-assistant").click();
+    await page.waitForSelector("#assistant", { state: "visible" });
+    // The float paints its panes from the assistant's own answer, so the sub-tab row can be pressed before that
+    // answer lands. Wait for the session pane first, then press; if the pane is still empty (a repaint landed between
+    // the press and the rows), press once more rather than failing on a race.
+    await page.waitForSelector("#as-assistant-1:not(.hidden)", { timeout: 20_000 });
+    await page.click('#as-subtabs [data-as-subtab="worktrees"]');
+    let paneUp = await waitFor(async () => (await page.locator("#as-worktrees .as-wtgroup").count()) > 0, {
+      timeoutMs: 12_000,
+      what: "the grouped worktrees pane",
+    });
+    if (!paneUp) {
+      await page.click('#as-subtabs [data-as-subtab="worktrees"]');
+      paneUp = await waitFor(async () => (await page.locator("#as-worktrees .as-wtgroup").count()) > 0, {
+        timeoutMs: 12_000,
+        what: "the grouped worktrees pane, second press",
+      });
+    }
+    ok("the grouped pane renders", paneUp);
+    if (!paneUp) {
+      const diag = await page.evaluate(() => ({
+        view: localStorage.getItem("wm.assistantView"),
+        pane: (document.getElementById("as-worktrees")?.innerText || "").slice(0, 300),
+        groups: document.querySelectorAll("#as-worktrees .as-wtgroup").length,
+      }));
+      console.log(`      pane diagnostics: ${JSON.stringify(diag)}`);
+      console.log(`      page errors: ${JSON.stringify(pageErrors)}`);
+      throw new Error("the worktrees pane never drew a project card");
+    }
+
+    const store = (key) => page.evaluate((k) => localStorage.getItem(k), key);
+    const groups = () =>
+      page.$$eval("#as-worktrees .as-wtgroup", (els) =>
+        els.map((el) => {
+          const table = el.querySelector(".as-worktrees-table");
+          return {
+            name: el.dataset.asWtgroupCard,
+            collapsed: el.classList.contains("collapsed"),
+            rows: el.querySelectorAll("tbody tr.row").length,
+            head: (el.querySelector(".project-head")?.innerText || "").replace(/\s+/g, " ").trim(),
+            tables: table ? 1 : 0,
+            painted: Boolean(table && table.offsetParent),
+            openers: [...el.querySelectorAll("tbody tr.row")].every((tr) => String(tr.dataset.openRow || "").includes("::")),
+          };
+        }),
+      );
+
+    console.log("\n== the worktrees pane: one card per project, all folded ==");
+    const first = await groups();
+    check("one card per project, in name order", first.map((g) => g.name), ["alpha-repo", "beta-repo", "gamma-repo"]);
+    check("…holding every row the flat table used to show (each project's own checkout included)", first.map((g) => g.rows), [4, 17, 6]);
+    ok("every card starts collapsed", first.every((g) => g.collapsed), JSON.stringify(first.map((g) => g.collapsed)));
+    ok("…and no table is painted under a closed card", first.every((g) => !g.painted), JSON.stringify(first.map((g) => g.painted)));
+    ok("…with the table still in the markup, so nothing the table shows is lost", first.every((g) => g.tables === 1 && g.rows > 0));
+    ok("every row carries the board's own opener key", first.every((g) => g.openers));
+    ok("the head says how many trees the project holds", first.every((g, i) => g.head.includes(`${[4, 17, 6][i]} trees`)), JSON.stringify(first.map((g) => g.head)));
+    // The counts are read from the job list the float holds, so the gate asks that list what to expect rather than
+    // pinning a number: the store reconciles a seeded `running` job to `interrupted` when no process is behind it,
+    // and the parked one stays parked. What is asserted is that the head agrees with the answer.
+    const jobsNow = (await (await fetch(`${base3}/api/jobs`)).json()).jobs || [];
+    const statusOf = (thread) => String(jobsNow.find((j) => j.thread === thread)?.status || "").toLowerCase();
+    const liveN = ["seed-live-thread"].filter((t) => ["running", "starting", "queued"].includes(statusOf(t))).length;
+    const parkN = ["seed-park-thread"].filter((t) => ["waiting", "waiting_for_approval"].includes(statusOf(t))).length;
+    const wantCounts = [liveN ? `${liveN} live` : "", parkN ? `${parkN} parked` : ""].filter(Boolean).join(" · ");
+    ok("…and beta's head counts the agents the job list reports on its trees", wantCounts ? first[1].head.includes(wantCounts) : !/live|parked/.test(first[1].head), `${first[1].head} (jobs say ${wantCounts || "none"})`);
+    ok("…with the parked seed still parked", parkN === 1, `parked ${parkN}, live ${liveN}`);
+    check("the pane's own record is not written on a first render", await store("wm.assistantWorktreeGroups"), null);
+    check("…and the board's project fold was not touched", await store("wm.expandedProjects"), null);
+
+    console.log("\n== a press opens that card and only that card ==");
+    await page.click('#as-worktrees [data-as-wtgroup="alpha-repo"]');
+    await waitFor(async () => (await groups()).filter((g) => !g.collapsed).length === 1, { timeoutMs: 10_000, what: "alpha-repo to open" });
+    const afterAlpha = await groups();
+    check("only alpha-repo is open", afterAlpha.map((g) => g.collapsed), [false, true, true]);
+    ok("…its table is painted with its four rows", afterAlpha[0].painted && afterAlpha[0].rows === 4, JSON.stringify(afterAlpha[0]));
+    check("…recorded under this pane's own key", JSON.parse(await store("wm.assistantWorktreeGroups")), ["alpha-repo"]);
+    check("…and the board's project fold is still untouched", await store("wm.expandedProjects"), null);
+
+    console.log("\n== the fold survives a reload ==");
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.waitForSelector("#assistant", { state: "visible", timeout: 20_000 });
+    await page.waitForSelector("#as-worktrees .as-wtgroup", { timeout: 20_000 });
+    const afterReload = await groups();
+    check("alpha-repo is still open, the other two still closed", afterReload.map((g) => g.collapsed), [false, true, true]);
+    check("…and the record is what the page left", JSON.parse(await store("wm.assistantWorktreeGroups")), ["alpha-repo"]);
+
+    console.log("\n== a tree press opens its board row and centres the window on it ==");
+    await page.click('#as-worktrees [data-as-wtgroup="beta-repo"]');
+    await waitFor(async () => (await groups()).find((g) => g.name === "beta-repo")?.collapsed === false, { timeoutMs: 10_000, what: "beta-repo to open" });
+    check("opening a second card leaves the first one open", (await groups()).map((g) => g.collapsed), [false, false, true]);
+
+    const beta = page.locator('#as-worktrees .as-wtgroup[data-as-wtgroup-card="beta-repo"]');
+    const target = beta.locator("tbody tr.row").nth(11);
+    const key = await target.getAttribute("data-key");
+    const opener = await target.getAttribute("data-open-row");
+    check("the row's opener is the board's own key for it", opener, key);
+    ok("the board's beta project is closed before the press", await page.locator('section.project[data-project="beta-repo"]').evaluate((el) => el.classList.contains("collapsed")));
+    await target.locator(".row-name").click();
+    const landed = await waitFor(async () => (await page.locator(`#projects tr.row[data-key="${key}"].expanded`).count()) === 1, {
+      timeoutMs: 10_000,
+      what: "the board row to open",
+    });
+    ok("the press opens the matching board row", landed, key);
+    ok("…and its agents block is painted", (await page.locator(`#projects tr.detail[data-detail="${key}"] .agents-block`).count()) === 1);
+    ok("…with the project itself unfolded", !(await page.locator('section.project[data-project="beta-repo"]').evaluate((el) => el.classList.contains("collapsed"))));
+    // The land() re-asserts on the next frame, then at 120 ms and 400 ms: measure after the last one, or the number
+    // is the first pass's guess rather than what the reader is left looking at.
+    await sleep(700);
+    const geo = await page.evaluate((k) => {
+      const tr = document.querySelector(`#projects tr.row[data-key="${CSS.escape(k)}"]`);
+      if (!tr) return null;
+      const r = tr.getBoundingClientRect();
+      return { top: Math.round(r.top), bottom: Math.round(r.bottom), mid: Math.round((r.top + r.bottom) / 2), vh: window.innerHeight, y: Math.round(window.scrollY) };
+    }, key);
+    ok("the row is fully inside the viewport", Boolean(geo) && geo.top >= -1 && geo.bottom <= geo.vh + 1, JSON.stringify(geo));
+    ok("…and centred in it", Boolean(geo) && Math.abs(geo.mid - geo.vh / 2) <= 60, `row mid ${geo?.mid} vs viewport mid ${geo?.vh / 2}`);
+    ok("the float is left open — it is not closed to make room", await page.locator("#assistant").isVisible());
+    const labels = await page.$$eval("#as-subtabs button", (els) => els.map((e) => e.innerText.trim()));
+    ok("the session's sub-tabs still carry their counts", labels.includes("Alerts 0") && labels.includes("Watches 0"), JSON.stringify(labels));
+    check("no page errors in the groups phase", pageErrors, []);
+    if (process.env.PANEL_VERIFY_ARTIFACTS) {
+      try {
+        mkdirSync(process.env.PANEL_VERIFY_ARTIFACTS, { recursive: true });
+        await page.screenshot({ path: path.join(process.env.PANEL_VERIFY_ARTIFACTS, "worktree-groups-open.png") });
+      } catch {
+        /* a screenshot is not a check */
+      }
+    }
+  } finally {
+    if (browser) {
+      try {
+        await browser.close();
+      } catch {
+        /* already gone */
+      }
+    }
+    try {
+      child.kill();
+    } catch {
+      /* already gone */
+    }
+    await waitFor(() => child.exitCode !== null || child.signalCode !== null, { timeoutMs: 15_000, what: "the groups panel to exit" });
+    if (process.env.VERIFY_KEEP !== "1") {
+      try {
+        rmSync(dir3, { recursive: true, force: true, maxRetries: 5 });
+      } catch (e) {
+        console.log(`      (could not remove ${dir3}: ${String((e && e.message) || e)})`);
+      }
+    }
+  }
+}
+
 // ---- the phases ----------------------------------------------------------------------------------
 try {
   console.log("== the sandbox ==");
@@ -779,6 +1058,8 @@ try {
     await browserPhase(pw);
     console.log("\n== the four moved lists, on #2 and #3 ==");
     await movedPanesPhase(pw);
+    console.log("\n== the worktrees pane, one card per project ==");
+    await worktreeGroupsPhase(pw);
   }
 
   console.log("\n== summary ==");
