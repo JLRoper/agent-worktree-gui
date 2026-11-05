@@ -68,9 +68,18 @@
 
   // ---- the three adapters -----------------------------------------------------------------------------------------
   // One normalised shape is what the drawing reads:
-  //   { id, title, kind, stages: [{id, title, gate, artifact}], loops: [{from, to, cap, id, artifact}] }
+  //   { id, title, kind, stages: [{id, title, gate, artifact, reads}], loops: [{from, to, cap, id, artifact}],
+  //     externals: [{artifact, source, reason}], artifacts: [ … the artifact view … ] }
   // A gate is `{id, name, title, artifact, decider, decision}` — `decision` null for a definition's exit check, which
   // has parameters rather than a decision artifact.
+  //
+  // `artifacts` is the ARTIFACT VIEW: one node per artifact the document already names as an input somewhere — a
+  // stage's `inputs.read[]`, a handoff's `artifact`, the document's `external_inputs` — carrying the stage that writes
+  // it, the stages that read it, and the edge each arrival came by. Nothing new is added to the document to say it:
+  // the view is derived, so the drawing cannot claim an artifact the document does not hold. The one thing it can add
+  // is `missing` — a read naming an artifact no stage writes and no external input declares — and that node is drawn
+  // and marked rather than dropped, because a drawing that silently loses a read certifies a graph the document does
+  // not have.
   function exitGate(stage) {
     const exit = isObject(stage) && isObject(stage.exit) ? stage.exit : null;
     const check = text(exit && exit.check);
@@ -97,27 +106,145 @@
     };
   }
 
-  function loopsOf(handoffs) {
-    // An already-normalised loop carries no `kind` (it was decided when the shape was read); a bundle handoff carries
-    // one and only `loop` is drawn. Anything else — a `sequence` or a `return` edge — is a join, not a cap.
-    //
-    // `limit` and `used` are carried only when a READER put whole numbers there: the limit from `capOf`, the count from
-    // the record's own crossings. They are never parsed out of `cap`, because "2 of 3 rounds" reads back as a cap of 2
-    // and the drawing would then bound the loop with the label that was describing it.
+  // Every edge the document draws, of any kind — not only the loops the arcs above the track show. The artifact view
+  // needs the sequence edges too: they are what carries an artifact from one column to the next, and a drawing that
+  // knew only the loops would paint the rail's own handoffs as thin reads.
+  //
+  // `limit` and `used` are carried only when a READER put whole numbers there: the limit from `capOf`, the count from
+  // the record's own crossings. They are never parsed out of `cap`, because "2 of 3 rounds" reads back as a cap of 2
+  // and the drawing would then bound the loop with the label that was describing it.
+  function handoffsOf(handoffs) {
+    // One edge per id: a window model can name the same loop twice (its own `loops` list and the joining
+    // `handoffOut` on a stage row), and two arcs for one edge is a second, contradicting drawing.
+    const seen = new Set();
     return (Array.isArray(handoffs) ? handoffs : [])
-      .filter((h) => isObject(h) && (!h.kind || text(h.kind) === "loop") && text(h.from) && text(h.to))
+      .filter((h) => isObject(h) && text(h.from) && text(h.to))
       .map((h, index) => ({
-        id: text(h.id) || `loop-${index + 1}`,
+        id: text(h.id) || `edge-${index + 1}`,
         from: text(h.from),
         to: text(h.to),
         cap: text(h.cap),
         artifact: text(h.artifact) || null,
+        kind: text(h.kind) || null,
         limit: whole(h.limit),
         used: whole(h.used),
-      }));
+      }))
+      .filter((edge) => {
+        if (seen.has(edge.id)) return false;
+        seen.add(edge.id);
+        return true;
+      });
   }
 
-  function normalize({ id = "", title = "", kind = "", stages = [], gates = [], loops = [] } = {}) {
+  // The arcs: only a loop is drawn as one. An already-normalised loop carries no `kind` (it was decided when the shape
+  // was read); a bundle handoff carries one, and anything else — a `sequence` or a `return` edge — is a join, not a cap.
+  function loopsOf(edges) {
+    return (Array.isArray(edges) ? edges : []).filter((edge) => !edge.kind || edge.kind === "loop");
+  }
+
+  // A read arrives as the document writes it (`{artifact, location, sha256}`) or as a bare id in a hand-authored
+  // fixture. One reader, so neither adapter has to know which it was given, and an entry with no artifact id names
+  // nothing a drawing could place and is dropped rather than drawn as an empty chip.
+  function readOf(entry) {
+    if (typeof entry === "string") return text(entry) ? { artifact: text(entry), location: null, sha256: null } : null;
+    if (!isObject(entry)) return null;
+    const artifact = text(entry.artifact);
+    return artifact ? { artifact, location: text(entry.location) || null, sha256: text(entry.sha256) || null } : null;
+  }
+
+  function externalOf(entry) {
+    if (typeof entry === "string") return text(entry) ? { artifact: text(entry), source: null, reason: null } : null;
+    if (!isObject(entry)) return null;
+    const artifact = text(entry.artifact);
+    return artifact ? { artifact, source: text(entry.source) || null, reason: text(entry.reason) || null } : null;
+  }
+
+  // The three ways an artifact arrives at a stage, in the order a reader needs them: a handoff is the rail's own
+  // promise (the previous stage passed it on), `read` is a stage fetching one written further back, and `external` is
+  // the document saying it does not write this one at all.
+  const EDGE = Object.freeze({ HANDOFF: "handoff", READ: "read", EXTERNAL: "external" });
+
+  // ---- the artifact view -------------------------------------------------------------------------------------------
+  // One node per artifact that is somebody's INPUT, derived from the document's own fields. The node sits at the
+  // boundary after the column that writes it (the gap between stages — where a handoff happens), or on the document's
+  // left boundary when it comes from outside, or at its first reader when nothing declares it at all. `edges` are the
+  // arrivals, so the drawing can style each one: thick for a handoff, thin for a read, dashed for the boundary.
+  function artifactView(stages, handoffs, externals) {
+    const at = new Map(stages.map((stage, index) => [text(stage.id), index]));
+    const writer = new Map();
+    for (const [index, stage] of stages.entries()) if (stage.artifact) writer.set(text(stage.artifact), index);
+    const outside = new Map(externals.map((entry) => [entry.artifact, entry]));
+    const nodes = new Map();
+    const nodeOf = (id) => {
+      if (!nodes.has(id)) {
+        const index = writer.has(id) ? writer.get(id) : null;
+        const external = index == null && outside.has(id);
+        nodes.set(id, {
+          id,
+          writer: index == null ? null : text(stages[index].id),
+          writerIndex: index,
+          external,
+          missing: index == null && !external,
+          source: external ? outside.get(id).source : null,
+          edges: [],
+        });
+      }
+      return nodes.get(id);
+    };
+
+    // 1. Every handoff: it IS an edge, and the artifact it carries is an input of the stage it enters.
+    for (const handoff of handoffs) {
+      const artifact = text(handoff.artifact);
+      const to = at.get(text(handoff.to));
+      if (!artifact || to == null) continue;
+      const node = nodeOf(artifact);
+      // A handoff the loader let through always names an artifact a stage here writes; a fixture handed straight to
+      // the renderer may not, and inventing a thick edge out of nothing would be a claim about the graph.
+      if (node.missing) continue;
+      node.edges.push({ to, toStage: text(handoff.to), edge: text(handoff.id), kind: EDGE.HANDOFF });
+    }
+
+    // 2. Every declared read. A stage reading the artifact it writes is not an edge; a read already carried by a
+    // handoff into the same stage is that handoff (the thicker, better-supported claim), not a second one.
+    for (const [index, stage] of stages.entries()) {
+      for (const read of stage.reads || []) {
+        const node = nodeOf(read.artifact);
+        if (node.writerIndex === index) continue;
+        if (node.edges.some((edge) => edge.to === index)) continue;
+        node.edges.push({
+          to: index,
+          toStage: text(stage.id),
+          edge: null,
+          kind: node.external ? EDGE.EXTERNAL : EDGE.READ,
+          location: read.location || null,
+        });
+      }
+    }
+
+    // 3. An external input nothing reads yet is still the document's input: it gets a node (with no destination)
+    // rather than disappearing because no stage happened to name it.
+    for (const entry of externals) nodeOf(entry.artifact);
+
+    // Where each node sits, and which lane. A missing node has no origin to point at, so it sits at its first
+    // reader's column.
+    const anchored = [...nodes.values()].map((node) => ({
+      ...node,
+      boundary: node.writerIndex != null ? node.writerIndex + 1 : node.external ? 0 : node.edges.length ? node.edges[0].to : 0,
+    }));
+    // The left boundary is a COLUMN of chips, not a lane: a chip aligned to the canvas's left edge is as wide as a
+    // column, and the chip on the first boundary is centred on that edge — in one lane the two overlap. So the
+    // boundary's chips take the lowest lanes and every chip with an origin starts above them.
+    const base = anchored.filter((node) => node.boundary === 0).length;
+    const used = new Map();
+    const placed = anchored.map((node) => {
+      const seen = used.get(node.boundary) || 0;
+      used.set(node.boundary, seen + 1);
+      return { ...node, lane: seen + (node.boundary === 0 ? 0 : base) };
+    });
+    return placed.sort((a, b) => a.boundary - b.boundary || a.lane - b.lane || a.id.localeCompare(b.id));
+  }
+
+  function normalize({ id = "", title = "", kind = "", stages = [], gates = [], handoffs = [], loops = [], externals = [] } = {}) {
     const list = (Array.isArray(stages) ? stages : []).filter(isObject);
     const byAfter = new Map();
     for (const raw of Array.isArray(gates) ? gates : []) {
@@ -126,19 +253,32 @@
       if (gate) byAfter.set(text(raw.after), gate);
     }
     const ids = new Set(list.map((s) => text(s.id)));
+    const rows = list.map((raw, index) => ({
+      id: text(raw.id),
+      title: text(raw.title) || text(raw.id) || `stage ${index + 1}`,
+      gate: byAfter.get(text(raw.id)) || (isObject(raw.gate) ? raw.gate : null),
+      artifact: text(raw.artifact && raw.artifact.id ? raw.artifact.id : raw.artifact) || null,
+      reads: (Array.isArray(raw.reads) ? raw.reads : []).map(readOf).filter(Boolean),
+    }));
+    // Every edge the document draws, then the loops among them (an arc is a loop and nothing else). `loops` stays an
+    // accepted alias because a window model hands its loops over under that name.
+    const edges = handoffsOf(handoffs.length ? handoffs : loops);
+    // A loop whose ends are not both stages this pipeline holds is not drawable: it is dropped rather than invented
+    // between two neighbours, because an arc between the wrong stages is a claim about the sequence.
+    const drawn = loopsOf(edges).filter((loop) => ids.has(loop.from) && ids.has(loop.to) && loop.from !== loop.to);
+    const boundary = (Array.isArray(externals) ? externals : []).map(externalOf).filter(Boolean);
     return {
       id: text(id),
       title: text(title),
       kind: text(kind),
-      stages: list.map((raw, index) => ({
-        id: text(raw.id),
-        title: text(raw.title) || text(raw.id) || `stage ${index + 1}`,
-        gate: byAfter.get(text(raw.id)) || (isObject(raw.gate) ? raw.gate : null),
-        artifact: text(raw.artifact && raw.artifact.id ? raw.artifact.id : raw.artifact) || null,
-      })),
-      // A loop whose ends are not both stages this pipeline holds is not drawable: it is dropped rather than
-      // invented between two neighbours, because an arc between the wrong stages is a claim about the sequence.
-      loops: loopsOf(loops).filter((loop) => ids.has(loop.from) && ids.has(loop.to) && loop.from !== loop.to),
+      stages: rows,
+      // Every edge, and the loops among them. Both are carried so this normalised shape can be handed back to
+      // `normalize` (which `markup` does) and come out the same: a flow that kept only the loops would have its
+      // sequence handoffs — the ones that make a connector thick — silently dropped on the second pass.
+      handoffs: edges,
+      loops: drawn,
+      externals: boundary,
+      artifacts: artifactView(rows, edges, boundary),
     };
   }
 
@@ -148,6 +288,9 @@
     return normalize({ id: d.id, title: d.title, kind: d.kind, stages, gates: [], loops: [] });
   }
 
+  // `pipeline` may be the studio's own document (whose stages carry `inputs.read` and whose root carries
+  // `external_inputs`) or the panel's normalised reading of it (`stages[].reads`, `externalInputs`) — the catalogue
+  // route and the tests hand over different ones, and both say the same thing. One reader accepts either.
   function fromBundle(pipeline) {
     const p = isObject(pipeline) ? pipeline : {};
     return normalize({
@@ -155,10 +298,17 @@
       title: p.title,
       kind: p.kind,
       stages: Array.isArray(p.stages)
-        ? p.stages.map((stage) => ({ id: stage && stage.id, title: stage && stage.title, artifact: stage && stage.artifact }))
+        ? p.stages.map((stage) => ({
+            id: stage && stage.id,
+            title: stage && stage.title,
+            artifact: stage && stage.artifact,
+            reads: Array.isArray(stage && stage.reads) ? stage.reads : isObject(stage && stage.inputs) ? stage.inputs.read : [],
+          }))
         : [],
       gates: p.gates,
-      loops: p.handoffs,
+      // Every handoff, not only the loops: a sequence edge is the artifact's ride from one column to the next.
+      handoffs: p.handoffs,
+      externals: Array.isArray(p.externalInputs) ? p.externalInputs : p.external_inputs,
     });
   }
 
@@ -168,13 +318,21 @@
     return normalize({
       id: m.pipeline && m.pipeline.id,
       title: m.pipeline && m.pipeline.title,
-      stages: rows.map((stage) => ({ id: stage && stage.id, title: stage && stage.title, artifact: stage && stage.artifact, gate: stage && stage.gateEnding })),
+      stages: rows.map((stage) => ({
+        id: stage && stage.id,
+        title: stage && stage.title,
+        artifact: stage && stage.artifact,
+        reads: Array.isArray(stage && stage.reads) ? stage.reads : [],
+        gate: stage && stage.gateEnding,
+      })),
+      externals: Array.isArray(m.externalInputs) ? m.externalInputs : m.external_inputs,
       gates: [],
       // `model.loops` is the window's own reading of every loop, with the limit and the count already on it; the
-      // per-row `handoffOut` is the older shape and only carries the edge that joins two neighbours. Preferring the
-      // first keeps a loop the sequence edge shadows (S9 → S8 on the seed) in the drawing, which is a claim about the
-      // graph the picture is supposed to make.
-      loops: Array.isArray(m.loops) ? m.loops : rows.map((stage) => stage && stage.handoffOut).filter(Boolean),
+      // per-row `handoffOut` is the older shape and only carries the edge that joins two neighbours. Both are handed
+      // over: the loops keep a back edge the sequence edge shadows (S9 → S8 on the seed), and the sequence edges are
+      // what carries an artifact from one column to the next. `handoffsOf` de-duplicates by id, so the same edge
+      // named twice is still drawn once.
+      handoffs: [...(Array.isArray(m.loops) ? m.loops : []), ...rows.map((stage) => stage && stage.handoffOut).filter(Boolean)],
     });
   }
 
@@ -319,10 +477,14 @@
   // dropped — and nothing hangs past the last column. The stub that used to sit here was 18 px of decorative line at
   // `left: 100%`, which widened the drawing past its own track and pushed the one notch it labelled outside the
   // scroller (round 5A's finding 1: scrollWidth 1109 against clientWidth 1094 at seven stages).
-  function stageHtml(stage, index, count, mark, { position = null, currentIndex = -1 } = {}) {
+  function stageHtml(stage, index, count, mark, { position = null, currentIndex = -1, handoff = null } = {}) {
     const last = index === count - 1;
     const gate = stage.gate;
-    const link = last ? "" : `<span class="pflow-link" aria-hidden="true"></span>`;
+    // The connector after this stage IS the handoff, when the document hands an artifact across it: `data-handoff`
+    // names the edge and the stylesheet draws it thick. A connector with no artifact is the plain hairline.
+    const link = last
+      ? ""
+      : `<span class="pflow-link" aria-hidden="true"${handoff ? ` data-handoff="${esc(handoff.edge || "")}" data-artifact="${esc(handoff.artifact)}"` : ""}></span>`;
     const state = gate ? gateStateOf(gate, { index, count, currentIndex, position }) : null;
     const notch = gate ? notchHtml(gate, { state, name: gateAria(gate, stage, state, position), last }) : "";
     const detail = stageDetail(stage);
@@ -418,6 +580,138 @@
           </div>`;
       })
       .join("");
+  }
+
+  // ---- the artifact view, drawn -----------------------------------------------------------------------------------
+  // A lane UNDER the track, in two bands: the CHIPS (one per artifact, on the boundary the document draws it at — the
+  // gap after the column that writes it, the canvas's left edge for an external input, the first reader for one
+  // nothing declares), and a BUS of hairlines below them. A line runs from the chip's boundary to the column that
+  // reads it, with a riser at its own end and a dot under the reader's column; the three kinds the document already
+  // distinguishes get the three styles — thin for a read, thick for a handoff, dashed for the document's own boundary.
+  //
+  // The bus exists because a line drawn at the chips' own height runs THROUGH every chip between its ends and reads as
+  // a rail joining them. Below the chips it is the artifact's own route and nothing else's. Lines are packed into
+  // lanes by their span, so two that do not overlap share a lane and the band stays shallow.
+  //
+  // Nothing here is measured. A boundary is `k` columns and `k - 1` gaps from the canvas's left edge (the arcs'
+  // arithmetic, for the same reason: a run of columns is a run of gaps), so the chips and lines are written in the
+  // track's own `calc()` and a resize costs no script and no ResizeObserver.
+  const CHIP_LANE = 18;
+  const BUS_LANE = 7;
+
+  const boundaryPoint = (k) => (k <= 0 ? pointAt(0, 0) : pointAt(k, k - 1));
+  const boundarySpan = (a, b) => (a <= 0 ? pointAt(b, Math.max(0, b - 1)) : pointAt(b - a, b - a));
+
+  // What the chip is, in one sentence: its id, who writes it, and which stage reads it by which edge. The accessible
+  // name and the tooltip are the SAME string, so a reader who can hover and a reader who cannot are told the same
+  // thing.
+  function chipTitle(node) {
+    const parts = [node.id];
+    if (node.writer) parts.push(`written by ${node.writer}`);
+    if (node.external) parts.push(`from outside this document${node.source ? ` (${node.source})` : ""}`);
+    if (node.missing) parts.push("missing — no stage in this document writes it and external_inputs does not declare it");
+    const readers = node.edges.map((edge) => `${edge.toStage}${edge.kind === EDGE.HANDOFF && edge.edge ? ` by ${edge.edge}` : ""}`);
+    if (readers.length) parts.push(`read by ${readers.join(", ")}`);
+    return parts.join(" — ");
+  }
+
+  // The node's own kind, for the palette and the key: a missing node wins, then the boundary, then whichever edge
+  // the document supports most strongly (a handoff is an edge the studio drew; a read is the stage's own list).
+  function nodeKind(node) {
+    if (node.missing) return "missing";
+    if (node.external) return EDGE.EXTERNAL;
+    return node.edges.some((edge) => edge.kind === EDGE.HANDOFF) ? EDGE.HANDOFF : EDGE.READ;
+  }
+
+  // Every route a reading column is on, ONE per artifact and edge kind: a fan-out to four stages is one line with a
+  // dot at each column it reaches, not four nested lines that paint over each other. A reader at the node's own
+  // boundary is the chip's neighbour (a zero-width line says nothing) and a reader BEHIND the node is a loop the arc
+  // above the track already draws — neither is a line here.
+  function busOf(nodes) {
+    const routes = [];
+    for (const node of nodes) {
+      const forward = node.edges.filter((edge) => edge.to > node.boundary);
+      for (const kind of [EDGE.HANDOFF, EDGE.READ, EDGE.EXTERNAL]) {
+        const readers = forward.filter((edge) => edge.kind === kind);
+        if (!readers.length) continue;
+        routes.push({ node, kind, from: node.boundary, to: Math.max(...readers.map((edge) => edge.to)), readers });
+      }
+    }
+    // Greedy by start: a lane holds the routes whose spans do not overlap, so two independent artifacts share a lane
+    // and the band stays shallow.
+    const lanes = [];
+    return routes
+      .sort((a, b) => a.from - b.from || a.to - b.to)
+      .map((route) => {
+        let lane = 0;
+        while (lane < lanes.length && lanes[lane] > route.from) lane += 1;
+        lanes[lane] = route.to;
+        return { ...route, lane };
+      });
+  }
+
+  function artifactsHtml(flow) {
+    const count = flow.stages.length;
+    const nodes = flow.artifacts;
+    if (!nodes.length || !count) return "";
+    const chipLanes = Math.max(...nodes.map((node) => node.lane)) + 1;
+    const routes = busOf(nodes);
+    const busLanes = routes.length ? Math.max(...routes.map((route) => route.lane)) + 1 : 0;
+    const busHeight = busLanes * BUS_LANE;
+    const at = (node, edge) => `bottom:${edge.lane * BUS_LANE}px;left:${cssPoint(boundaryPoint(node.boundary), count)};width:${cssPoint(boundarySpan(node.boundary, edge.to), count)}`;
+    const lines = routes
+      .map((route) => {
+        const handoff = route.readers.find((edge) => edge.edge);
+        const said = `${route.node.id} — read by ${route.readers.map((edge) => edge.toStage).join(", ")}${handoff ? ` (handed on by ${handoff.edge})` : ""}`;
+        return `<span class="pflow-artifact-edge" data-edge="${route.kind}" data-artifact="${esc(route.node.id)}" data-to="${esc(route.readers[route.readers.length - 1].toStage)}"${handoff ? ` data-handoff="${esc(handoff.edge)}"` : ""} style="${at(route.node, { lane: route.lane, to: route.to })}" title="${esc(said)}" aria-hidden="true"></span>`;
+      })
+      .join("");
+    // A dot under every column the route reaches: the reader's end, and each earlier reader on the way.
+    const dots = routes
+      .flatMap((route) =>
+        route.readers.map(
+          (edge) =>
+            `<i class="pflow-artifact-dot" data-edge="${route.kind}" data-artifact="${esc(route.node.id)}" data-to="${esc(edge.toStage)}" aria-hidden="true" style="bottom:${route.lane * BUS_LANE}px;left:${cssPoint(boundaryPoint(edge.to), count)}"></i>`,
+        ),
+      )
+      .join("");
+    const chips = nodes
+      .map((node) => {
+        // A chip centred on boundary 0 or on the track's closing edge would hang outside the drawing; at either end
+        // it is aligned to the edge instead, so nothing widens the drawing past its own track.
+        const side = node.boundary <= 0 ? "left" : node.boundary >= count ? "right" : "centre";
+        const where = side === "right" ? "right:0" : `left:${cssPoint(boundaryPoint(node.boundary), count)}`;
+        const reads = node.edges.map((edge) => edge.toStage);
+        const said = chipTitle(node);
+        const bottom = busHeight + node.lane * CHIP_LANE;
+        return `<span class="pflow-artifact" role="note" data-artifact="${esc(node.id)}" data-at="${node.boundary}" data-side="${side}" data-kind="${nodeKind(node)}"${node.missing ? ' data-missing="1"' : ""}${node.writer ? ` data-writer="${esc(node.writer)}"` : ""}${reads.length ? ` data-reads="${esc(reads.join(" "))}"` : ""} style="bottom:${bottom}px;${where}" title="${esc(said)}" aria-label="${esc(said)}">${esc(node.missing ? `${node.id} — missing` : node.id)}</span>`;
+      })
+      .join("");
+    const height = busHeight + chipLanes * CHIP_LANE + 2;
+    return `<div class="pflow-artifacts" data-pflow-artifacts="${nodes.length}" data-art-bus="${busLanes}" aria-label="artifacts, and the edge each arrives by" style="height:${height}px">${lines}${dots}${chips}</div>`;
+  }
+
+  // The key explains the three styles the picture uses, and only the ones it uses: a pipeline with no artifact draws
+  // no key, the same rule the marks' legend follows.
+  const ART_WORDS = Object.freeze({
+    [EDGE.READ]: "read — thin",
+    [EDGE.HANDOFF]: "handoff — thick",
+    [EDGE.EXTERNAL]: "external — dashed",
+    missing: "missing — nothing writes it",
+  });
+
+  function artifactsKeyHtml(flow) {
+    if (!flow.artifacts.length) return "";
+    const kinds = new Set();
+    for (const node of flow.artifacts) {
+      kinds.add(nodeKind(node));
+      for (const edge of node.edges) kinds.add(edge.kind);
+    }
+    const order = [EDGE.READ, EDGE.HANDOFF, EDGE.EXTERNAL, "missing"].filter((kind) => kinds.has(kind));
+    if (!order.length) return "";
+    return `<div class="pflow-artifact-key" data-pflow-artifact-key>${order
+      .map((kind) => `<span class="pflow-artifact-key-item" data-edge="${kind}"><i aria-hidden="true"></i>${ART_WORDS[kind]}</span>`)
+      .join("")}</div>`;
   }
 
   function legendHtml(marks) {
@@ -530,17 +824,28 @@
     // Which rule drew the marks, in the DOM: `record` when the position carried evidence, `index` when it did not. A
     // reader (and a test) can see that the fallback is the weaker claim without having to reproduce it.
     const from = ranFrom(f.stages, position, f.loops) ? "record" : "index";
-    return `<div class="pflow" data-flow-id="${esc(f.id)}" data-flow-stages="${count}" data-motion="${motion ? "on" : "off"}" data-fit="${fit ? "1" : "0"}" data-position="${esc((current && current.id) || "")}" data-refused="${esc((refused && refused.id) || "")}" data-marks-from="${from}" style="--pflow-n:${count};--pflow-pad:${pad}px">
+    // The handoff across the gap after each stage — the artifact the connector carries, when the document draws one
+    // there. Read from the artifact view rather than a second pass over the handoffs, so the thick connector and the
+    // chip that names it cannot disagree about which edge they are.
+    const handoffAfter = (index) => {
+      const node = f.artifacts.find((n) => n.writerIndex === index && n.edges.some((edge) => edge.kind === EDGE.HANDOFF && edge.to === index + 1));
+      if (!node) return null;
+      const edge = node.edges.find((e) => e.kind === EDGE.HANDOFF && e.to === index + 1);
+      return { artifact: node.id, edge: edge.edge };
+    };
+    return `<div class="pflow" data-flow-id="${esc(f.id)}" data-flow-stages="${count}" data-artifacts="${f.artifacts.length}" data-motion="${motion ? "on" : "off"}" data-fit="${fit ? "1" : "0"}" data-position="${esc((current && current.id) || "")}" data-refused="${esc((refused && refused.id) || "")}" data-marks-from="${from}" style="--pflow-n:${count};--pflow-pad:${pad}px">
       <div class="pflow-scroll" aria-describedby="${esc(`pflow-count-${f.id || "flow"}`)}">
         <div class="pflow-canvas">
           ${f.lanes ? `<div class="pflow-arcs">${arcsHtml(f, position)}</div>` : ""}
           <ol class="pflow-track" start="1" aria-label="${esc(`${f.title || f.id || "pipeline"} — ${count} stage${count === 1 ? "" : "s"} left to right`)}">${f.stages
-            .map((stage, index) => stageHtml(stage, index, count, marks[index].mark, { position, currentIndex }))
+            .map((stage, index) => stageHtml(stage, index, count, marks[index].mark, { position, currentIndex, handoff: handoffAfter(index) }))
             .join("")}</ol>
+          ${artifactsHtml(f)}
         </div>
       </div>
       ${statusHtml(f, fit)}
       ${legendHtml(marks)}
+      ${artifactsKeyHtml(f)}
     </div>`;
   }
 
