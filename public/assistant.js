@@ -36,10 +36,11 @@
   // shape once, and this key is never written again.
   const TAB_KEY = "wm.assistantTab";
   // The panes that belong to the PANEL, not to one assistant. Role is a library every assistant picks a role from,
-  // and the watchdog is the panel's own sentry — neither is one session's to own, so both stay on the float's row.
-  // Everything else that used to be here (alerts, watches, messages, the pad) is a session's OWN: it moved into
-  // SUBTABS, where each pane is filled for the assistant whose tab it sits in.
-  const LISTS = ["role", "watchdog"];
+  // the watchdog is the panel's own sentry, and the Bridge is the panel's one Matrix/Element agent — none is one
+  // session's to own, so all three stay on the float's row. Everything else that used to be here (alerts, watches,
+  // messages, the pad) is a session's OWN: it moved into SUBTABS, where each pane is filled for the assistant whose
+  // tab it sits in.
+  const LISTS = ["role", "watchdog", "bridge"];
   // What a session holds: the card you talk to, how it behaves, the work it is carrying (its queue, its trees) and
   // what it has seen and said (its alerts, watches, messages, pad). Every one of these renders for the ACTIVE
   // session through paneIdFor, so #2's Alerts is #2's list rather than a panel-wide one wearing #2's name.
@@ -902,6 +903,7 @@
       else pinChatToBottom();
     } else if (view.assistant === "role") renderAssistantRole();
     else if (view.assistant === "watchdog") renderWatchdog();
+    else if (view.assistant === "bridge") renderBridge();
   }
 
   // ---- chat: the assistant as one of the agents -------------------------------------------------
@@ -2236,6 +2238,274 @@
     for (const d of host.querySelectorAll?.("details.as-rule-thresholds") || []) {
       d.addEventListener("toggle", () => rememberThresholdOpen(d));
     }
+  }
+
+  // ---- the bridge: one agent, no worktree, no queue ------------------------------------------------
+  //
+  // The Matrix/Element bridge is not a session: it has no thread, no worktree and no queue of its own. It is ONE
+  // agent for the panel, so its tab sits beside Role and Watchdog rather than inside an assistant. It talks to the
+  // reader on their phone and files work into assistants' queues; what this pane owns is what the reader needs to
+  // trust it: the process (pid, liveness, the bridge.env PATH — never a value from that file), the room and its
+  // senders, the last messages each way, the policy the reader writes for it, and the failures worth acting on.
+  //
+  // The pane is painted from GET /api/matrix/status, one answer carrying the bridge, the Element channel, the
+  // policy and a fresh gateway probe. That is deliberate: four sections drawn from four requests would disagree
+  // about the moment they describe. The policy box is the one editable thing; its draft lives outside the DOM so a
+  // poll cannot take the reader's words, and the mtime it read travels with the save.
+  const BRIDGE_POLL_MS = 15_000;
+  const BRIDGE_MSG_N = 10;
+  const BRIDGE_TEXT_CLIP = 280;
+  let bridgeData = null;
+  let bridgeErr = "";
+  let bridgeAt = 0;
+  let bridgeTried = false;
+  let bridgeLoading = false;
+  let bridgeDraft = null; // the text typed in the policy box; null while it still holds the loaded text
+  let bridgeSavedNote = "";
+  let bridgePolicyMtime = null;
+
+  const bridgeWhen = (iso) => {
+    const t = Date.parse(iso);
+    if (!Number.isFinite(t)) return "—";
+    return `${esc(relTime(iso))} ago · ${esc(new Date(t).toLocaleString())}`;
+  };
+  const bridgeClip = (s, n = BRIDGE_TEXT_CLIP) => {
+    const text = String(s == null ? "" : s);
+    return text.length > n ? `${text.slice(0, n - 1)}…` : text;
+  };
+  const bridgeDot = (kind) => `<span class="as-bridge-dot is-${esc(kind)}" aria-hidden="true"></span>`;
+
+  // The health verdict, in one place, because the Connection row and the Alerts row must not disagree. It is
+  // ordered by what blocks the bridge first: a missing script cannot be fixed by starting it, and a stale pid is
+  // not a running process. An empty room is a refusal, not an assumption — the bridge would launch into nothing.
+  function bridgeHealth(b = {}) {
+    if (!b.scriptPath) return { kind: "bad", label: "not configured", detail: "no bridge script is set — matrix.scriptPath names it in Settings → Gateway" };
+    if (!b.scriptPresent) return { kind: "bad", label: "script missing", detail: `no bridge script at ${b.scriptPath}` };
+    if (!b.pythonPath) return { kind: "bad", label: "no interpreter", detail: "matrix.pythonPath is empty, so there is nothing to run the script with" };
+    if (!b.pythonPresent) return { kind: "bad", label: "interpreter missing", detail: `no interpreter at ${b.pythonPath}` };
+    if (!b.credentialsPresent) return { kind: "bad", label: "bridge.env missing", detail: `no bridge.env at ${b.envPath || "(the script's folder)"} — the bridge would refuse to log in` };
+    if (!b.roomId) return { kind: "bad", label: "no room", detail: "matrix.roomId is empty, so a start would launch the bridge into nothing" };
+    // A live process is the answer, even if the BOOT spawn failed earlier: the reader may have started it by hand
+    // since, and the boot record is history rather than the state of the bridge now.
+    if (b.running) return { kind: "ok", label: "alive", detail: `pid ${b.pid}` };
+    if (b.boot && b.boot.error) return { kind: "bad", label: "auto-start failed", detail: String(b.boot.error) };
+    if (b.stalePid) return { kind: "warn", label: "stopped, stale pid", detail: `pid ${b.stalePid} is a record whose process is gone — a stale record is not a running bridge` };
+    return { kind: "warn", label: "stopped", detail: "no live pid is recorded; Start it in Settings → Gateway" };
+  }
+
+  async function loadBridge(force = false) {
+    if (bridgeLoading) return;
+    if (!force && bridgeTried && Date.now() - bridgeAt < BRIDGE_POLL_MS) return;
+    bridgeLoading = true;
+    bridgeTried = true;
+    try {
+      const r = await apiFetch("/api/matrix/status");
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+      bridgeData = d;
+      // The mtime travels with the SAVE as the guard the reader's text was read against. A poll must not quietly
+      // refresh it while a draft is in the box: that would let the draft save over a file another writer changed
+      // since it was loaded, which is exactly the lost edit the 409 exists to prevent.
+      if (bridgeDraft === null) bridgePolicyMtime = d.policy?.mtime ?? null;
+      bridgeErr = "";
+    } catch (err) {
+      bridgeErr = String((err && err.message) || err);
+    } finally {
+      bridgeLoading = false;
+      bridgeAt = Date.now();
+      if (state.assistantView?.assistant === "bridge") renderBridge();
+    }
+  }
+
+  async function refreshBridge() {
+    bridgeSavedNote = "";
+    await loadBridge(true);
+    // The press leaves the caret on this button, inside the pane: the unforced paint in `loadBridge` declines while
+    // anything in the pane holds the focus, so the answer the press asked for is drawn here, explicitly.
+    renderBridge(true);
+  }
+
+  // The draft is the reader's; the loaded text is the server's. A poll may replace the latter but never the former,
+  // and "Reload from disk" is the only press that drops a draft.
+  function bridgeBoxText() {
+    return bridgeDraft !== null ? bridgeDraft : String(bridgeData?.policy?.text ?? "");
+  }
+
+  function bridgePolicyPaint() {
+    const cap = Number(bridgeData?.policy?.cap) || 0;
+    const size = bridgeBoxText().length;
+    const el = document.querySelector("[data-as-bridge-size]");
+    if (el) {
+      el.textContent = cap ? `${size}/${cap} chars` : `${size} chars`;
+      el.classList.toggle("is-bad", Boolean(cap && size > cap));
+    }
+    const save = as$("btn-as-bridge-policy-save");
+    if (save) save.disabled = Boolean(cap && size > cap) || !bridgeData;
+  }
+
+  async function saveBridgePolicy(button) {
+    if (!bridgeData) return;
+    const text = String(document.querySelector("#as-bridge-policy-text")?.value ?? "");
+    if (button) button.disabled = true;
+    try {
+      const d = await asPost("/api/matrix/policy", { text, expectMtime: bridgePolicyMtime });
+      bridgeData = { ...bridgeData, policy: d };
+      bridgePolicyMtime = d.mtime ?? null;
+      bridgeDraft = null;
+      bridgeSavedNote = `saved — ${d.chars}/${d.cap} characters, source ${d.source}`;
+      setErr("as-bridge-policy-err", "");
+      renderBridge(true);
+    } catch (err) {
+      // A refusal (stale, too long, a write failure) keeps the reader's text in the box: the draft is theirs, and
+      // replacing it with the old file is how a save gets pressed twice with the wrong copy.
+      setErr("as-bridge-policy-err", String((err && err.message) || err));
+      bridgeSavedNote = "";
+      if (button) button.disabled = false;
+    }
+  }
+
+  function bridgeMessageHtml(m, dir) {
+    const out = dir === "out";
+    const status = out ? String(m.status || "?") : (m.bridgeAt ? `read ${m.bridgeAt}` : "read");
+    const bad = out && Boolean(m.applyError || (m.send && m.send.ok === false) || ["unsent", "held"].includes(m.status));
+    const when = out ? m.sentAt || m.at || m.editedAt : m.at;
+    const n = out && m.n ? ` · wait ${esc(String(m.n))}` : "";
+    const failure = bad
+      ? `<div class="as-bridge-fail">${esc(m.send?.error || m.applyError || "NOT DELIVERED — the bridge refused the message")}</div>`
+      : "";
+    const clipped = m.clipped && !out ? `<div class="as-hint">clipped — this pane keeps a recent-events view, never the room's transcript</div>` : "";
+    return `<div class="as-bridge-msg is-${dir}${bad ? " is-bad" : ""}">
+      <div class="as-bridge-msg-head"><b>${out ? "OUT" : "IN"}</b><span>${esc(status)}${n}</span><span class="as-ago">${bridgeWhen(when)}</span></div>
+      <div class="as-bridge-msg-text">${esc(bridgeClip(m.text))}</div>${failure}${clipped}
+    </div>`;
+  }
+
+  function renderBridge(force = false) {
+    const host = as$("as-bridge");
+    if (!host) return;
+    // A poll must never take the reader's caret out of the policy box. The reader's own press (Reload, Save,
+    // Refresh) is forced and lands where they are looking.
+    if (!force && typingInside("#as-bridge")) return;
+    if (!bridgeTried) {
+      host.innerHTML = `<div class="as-empty">reading the bridge…</div>`;
+      void loadBridge();
+      return;
+    }
+    if (!bridgeData) {
+      host.innerHTML = `<div class="as-empty">could not read the bridge: ${esc(bridgeErr || "no answer")} <button type="button" id="btn-as-bridge-refresh">Refresh</button></div>`;
+      return;
+    }
+    const b = bridgeData.bridge || {};
+    const el = bridgeData.element || {};
+    const gw = bridgeData.gateway || {};
+    const policy = bridgeData.policy || {};
+    const activity = el.activity || {};
+    const health = bridgeHealth(b);
+    const allow = b.senderAllowList || {};
+    const allowText = allow.mode === "room"
+      ? allow.roomId
+        ? `any member of ${allow.roomId}`
+        : "no room set — nobody can reach it"
+      : (Array.isArray(allow.senders) && allow.senders.length ? allow.senders.join(", ") : "none configured");
+    const allowKind = allow.roomId ? (allow.mode === "room" ? "" : "ok") : "bad";
+    const row = (label, value, kind = "", title = "") =>
+      `<div class="as-bridge-row"><span class="as-bridge-k">${esc(label)}</span><span class="as-bridge-v${kind ? ` is-${esc(kind)}` : ""}"${title ? ` title="${esc(title)}"` : ""}>${value}</span></div>`;
+
+    // CONNECTION. The pid is the live one, never the pid file's contents; the env row is the PATH and a boolean,
+    // never a value from the file. "Last successful" reads the channel's own records, so a held or failed message
+    // cannot be shown as a send.
+    const connection = `<section class="as-bridge-sec" data-as-bridge-sec="connection" id="as-bridge-connection">
+      <h5>Connection <span class="as-hint">the process, the room, and what last went each way</span></h5>
+      <div class="as-bridge-rows">
+        ${row("process", `${bridgeDot(health.kind)}<b>${esc(health.label)}</b>${b.running ? ` · pid ${esc(String(b.pid))}` : ""}`, health.kind === "ok" ? "ok" : health.kind, health.detail)}
+        ${row("pid", b.running ? esc(String(b.pid)) : b.stalePid ? `stale ${esc(String(b.stalePid))} — that process is gone` : "none running", b.running ? "ok" : b.stalePid ? "warn" : "", b.running ? "the OS says this pid is alive; the pid file is not the answer" : "no live process is recorded")}
+        ${row("bridge.env", `<code>${esc(b.envPath || "(no script configured — no path to show)")}</code> · ${b.credentialsPresent ? "present" : "MISSING"}`, b.credentialsPresent ? "" : "bad", "the PATH only. The panel never opens this file, so no password can reach this page, a route or a log line.")}
+        ${row("room", b.roomId ? esc(b.roomId) : "NO ROOM SET — Start refuses until matrix.roomId names one", b.roomId ? "" : "bad", "MATRIX_ROOM_ID: the one room the bridge serves")}
+        ${row("sender allow-list", esc(allowText), allowKind, allow.detail || "the bridge serves one room and obeys any member of it; there is no per-sender list")}
+        ${row("last successful send", activity.lastSentAt ? `${bridgeWhen(activity.lastSentAt)}${activity.lastSentN ? ` · wait ${esc(String(activity.lastSentN))}` : ""}` : "none recorded since this panel started", "", "a message the bridge actually took, from the channel's own send record")}
+        ${row("last successful receive", activity.lastReceivedAt ? bridgeWhen(activity.lastReceivedAt) : "none recorded since this panel started", "", "the last line the panel read from the bridge's own log")}
+      </div>
+    </section>`;
+
+    // MESSAGES. Newest ten each way, clipped, and nothing more: the store caps both directions, so this pane is
+    // structurally incapable of drawing a room transcript. A failed send is red and names the refusal.
+    const inbound = (Array.isArray(el.inbound) ? el.inbound : []).slice(0, BRIDGE_MSG_N);
+    const outbound = (Array.isArray(el.messages) ? el.messages : []).slice(0, BRIDGE_MSG_N);
+    const messages = `<section class="as-bridge-sec" data-as-bridge-sec="messages" id="as-bridge-messages">
+      <h5>Messages <span class="as-hint">the last ${BRIDGE_MSG_N} each way · failures highlighted · never the room's transcript</span></h5>
+      <div class="as-bridge-grouphead">Inbound <span class="as-hint">${el.counts?.inbound ?? 0} read since this panel started</span></div>
+      ${inbound.length ? inbound.map((m) => bridgeMessageHtml(m, "in")).join("") : `<div class="as-empty">nothing received since this panel started</div>`}
+      <div class="as-bridge-grouphead">Outbound <span class="as-hint">${el.counts?.failed ?? 0} failure${(el.counts?.failed ?? 0) === 1 ? "" : "s"} on record</span></div>
+      ${outbound.length ? outbound.map((m) => bridgeMessageHtml(m, "out")).join("") : `<div class="as-empty">nothing sent from this panel yet</div>`}
+    </section>`;
+
+    // POLICY. The whole textarea is the file; the path, the source and the size are the reader's evidence for what
+    // a turn would carry. Panel text wins over the environment default — the precedence is the server's, and this
+    // line says which side of it is in force.
+    const boxText = bridgeBoxText();
+    const cap = Number(policy.cap) || 0;
+    const over = Boolean(cap && boxText.length > cap);
+    const sourceLine = policy.saved && !policy.panelChars
+      ? `a saved policy that is empty — ${policy.source === "env" ? `${esc(policy.envVar || "WTGUI_MATRIX_POLICY")} is in force` : "the template is in force"}`
+      : policy.source === "panel"
+        ? `your saved copy · ${esc(String(policy.panelChars || boxText.length))} chars on disk`
+        : policy.source === "env"
+          ? `${esc(policy.envVar || "WTGUI_MATRIX_POLICY")} is in force — no panel text has been saved`
+          : "the panel's template — nothing saved yet";
+    const policySec = `<section class="as-bridge-sec" data-as-bridge-sec="policy" id="as-bridge-policy">
+      <h5>Policy <span class="as-hint">how you want to be spoken to · saved in the panel, injected into the bridge turn</span></h5>
+      <div class="as-help">Tone, when it may ping your phone, quiet hours, and which assistant to route to. Your text
+      here wins over <code>WTGUI_MATRIX_POLICY</code> (the environment default); a save replaces the whole file. The
+      bridge's credentials do not belong anywhere on this page — the path above is all the panel knows about them.</div>
+      <div class="as-charter-meta">
+        <code class="as-charter-path" title="${esc(policy.path || "")}">${esc(policy.path || "…")}</code>
+        <span class="as-hint">${esc(sourceLine)}</span>
+        <span class="as-hint" data-as-bridge-size>${boxText.length}/${cap || "?"} chars</span>
+        <span class="as-hint">${policy.mtimeIso ? `last written ${esc(relTime(policy.mtimeIso))} ago` : "not saved yet"}</span>
+      </div>
+      <textarea class="as-note-box as-charter-box as-bridge-policy-box" id="as-bridge-policy-text" rows="12" spellcheck="false" placeholder="how the bridge should speak to you…">${esc(boxText)}</textarea>
+      ${over ? `<div class="as-ask is-bad" role="status"><b>${boxText.length.toLocaleString()} characters</b> — ${(boxText.length - cap).toLocaleString()} over the ${cap.toLocaleString()}-character cap. The panel refuses a save this size: shorten it first.</div>` : ""}
+      <div class="as-actions">
+        <button id="btn-as-bridge-policy-save" type="button" class="primary"${bridgeData && !over ? "" : " disabled"}>Save policy</button>
+        <button id="btn-as-bridge-policy-reload" type="button" title="read the file again and drop anything typed in the box">Reload from disk</button>
+        <span class="as-hint" data-as-bridge-note>${esc(bridgeSavedNote)}</span>
+        <span class="as-err" id="as-bridge-policy-err"></span>
+      </div>
+      <div class="as-help">Stored in the panel's state folder, served at <code>GET /api/matrix/policy</code> for the
+      bridge turn to carry. Nothing here is sent to the room by pressing Save.</div>
+    </section>`;
+
+    // ALERTS. Three questions, in the order they block: is the bridge healthy, can the panel reach the gateway a
+    // turn would run on, and has anything it sent failed? A quiet row says so rather than leaving a section blank.
+    const gatewayKind = gw.reachable === true ? "ok" : gw.reachable === false ? "bad" : "warn";
+    const gatewayDetail = gw.reachable === true
+      ? `reachable at ${gw.url || "the gateway"}${gw.checkedAt ? ` · checked ${esc(relTime(new Date(gw.checkedAt).toISOString()))} ago` : ""}`
+      : gw.reachable === false
+        ? String(gw.error || "the gateway did not answer")
+        : "not checked yet";
+    const failures = Array.isArray(el.failures) ? el.failures : [];
+    const failureRows = failures.length
+      ? failures.map((f) => `<div class="as-bridge-alert is-bad">${bridgeDot("bad")}<b>${esc(String(f.kind || "send"))} failed</b><span>${esc(f.error || "no reason recorded")}${f.n ? ` · wait ${esc(String(f.n))}` : ""}</span><span class="as-ago">${bridgeWhen(f.at)}</span></div>`).join("")
+      : `<div class="as-bridge-alert is-ok">${bridgeDot("ok")}<b>no send failures</b><span>nothing has failed to leave since this panel started</span></div>`;
+    const alerts = `<section class="as-bridge-sec" data-as-bridge-sec="alerts" id="as-bridge-alerts">
+      <h5>Alerts <span class="as-hint">bridge health · gateway reachability · send failures</span></h5>
+      <div class="as-bridge-alert is-${esc(health.kind)}">${bridgeDot(health.kind)}<b>bridge ${esc(health.label)}</b><span>${esc(health.detail)}</span></div>
+      <div class="as-bridge-alert is-${esc(gatewayKind)}">${bridgeDot(gatewayKind)}<b>gateway ${gatewayKind === "ok" ? "reachable" : gatewayKind === "bad" ? "unreachable" : "not checked"}</b><span>${esc(gatewayDetail)}</span></div>
+      ${failureRows}
+    </section>`;
+
+    host.innerHTML = `
+      <div class="as-bridge-head">
+        <div>
+          <h4>Bridge</h4>
+          <div class="as-help">The Matrix/Element bridge is an agent with <b>no worktree and no queue</b>: it talks to
+          you on your phone and files work into assistants' queues. Its four sections are connection, messages, the
+          policy you write for it, and alerts — there is no queue section, because the queue belongs to the
+          assistants it files into.</div>
+        </div>
+        <button type="button" id="btn-as-bridge-refresh" title="read the bridge, the room, the policy and the gateway again">Refresh</button>
+      </div>
+      ${connection}${messages}${policySec}${alerts}`;
   }
 
   // ONE ASSISTANT'S OWN SETTINGS.
@@ -3928,6 +4198,29 @@
     // Tabs are buttons too and are handled above, in their own rows; ignore a second pass here.
     if (t.dataset.asTab || t.dataset.asSubtab) return;
 
+    // The Bridge tab's three presses. Refresh re-reads everything and keeps a policy draft; Reload is the one
+    // press that drops a draft and reads the file again; Save sends the box with the mtime the page read.
+    if (t.id === "btn-as-bridge-refresh") {
+      t.disabled = true;
+      try {
+        await refreshBridge();
+      } finally {
+        t.disabled = false;
+      }
+      return;
+    }
+    if (t.id === "btn-as-bridge-policy-reload") {
+      bridgeDraft = null;
+      bridgeSavedNote = "";
+      await loadBridge(true);
+      renderBridge(true);
+      return;
+    }
+    if (t.id === "btn-as-bridge-policy-save") {
+      await saveBridgePolicy(t);
+      return;
+    }
+
     // The Alerts pane's scope: this assistant's own list, or the whole board. The choice belongs to the PANE the chip
     // sits in (`data-as-alertfor`), so widening #2's list to All leaves #1's exactly as it was; the sub-tab's count and
     // the header badges follow the SELECTED assistant, which renderAssistant() repaints. The board's spawn strip is
@@ -4418,6 +4711,18 @@
   // A draft with no confident text starts with Send disabled (there is nothing to send); the moment the reader
   // writes an answer the button has to come alive, or the alert reads "write one" and then refuses it.
   as$("assistant")?.addEventListener("input", (e) => {
+    // The Bridge policy box: remember the draft outside the DOM (a poll paints it back, never over it) and repaint
+    // the size and the Save button in place. A full render here would rebuild the textarea and take the caret.
+    const bridgeBox = e.target.closest?.("#as-bridge-policy-text");
+    if (bridgeBox) {
+      const loaded = String(bridgeData?.policy?.text ?? "");
+      bridgeDraft = bridgeBox.value === loaded ? null : bridgeBox.value;
+      bridgeSavedNote = "";
+      const note = document.querySelector("[data-as-bridge-note]");
+      if (note) note.textContent = "";
+      bridgePolicyPaint();
+      return;
+    }
     // The charter box: remember the draft outside the DOM (a repaint paints it back) and repaint the cap, the
     // provenance line and Save in place. No full render here — it would take the caret out of a 20 KB document.
     const charter = e.target.closest?.("#as-role-text");
@@ -4886,6 +5191,16 @@
   });
 
   // ---- boot ------------------------------------------------------------------------------------
+
+  // The Bridge tab's own clock. Only while that tab is on screen and the caret is not in its policy box: the process,
+  // the room and the gateway are not in the board's SSE events, so this is the one pane that has to ask. `loadBridge`
+  // keeps its own 15 s guard, so a repaint that lands here between ticks costs nothing.
+  setInterval(() => {
+    if (!state.assistantOpen) return;
+    if (state.assistantView?.assistant !== "bridge") return;
+    if (typingInside("#as-bridge")) return;
+    void loadBridge();
+  }, BRIDGE_POLL_MS);
 
   // app.js's boot fills state from the first snapshot and connects the stream; this restores the frame in the
   // same breath, so a reload opens on the panel the reader left open — in the mode that assistant's file asked for.

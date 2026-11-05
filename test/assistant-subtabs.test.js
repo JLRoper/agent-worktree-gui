@@ -6,9 +6,9 @@
 // settings-groups.test.js does — sliced out of public/assistant.js and run against a stub document and a stub
 // localStorage. What it pins:
 //
-//   1. the top row is the assistant plus the PANEL's two panes (Role, Watchdog) — "Assistant #1" where "Chat" was, no
-//      Settings beside it, and no Alerts/Watches/Messages/Pad either — and the session's row is the very next row in
-//      the markup, carrying Chat, Settings, Queue, Worktrees and then the four lists;
+//   1. the top row is the assistant plus the PANEL's three panes (Role, Watchdog, Bridge) — "Assistant #1" where
+//      "Chat" was, no Settings beside it, and no Alerts/Watches/Messages/Pad either — and the session's row is the
+//      very next row in the markup, carrying Chat, Settings, Queue, Worktrees and then the four lists;
 //   2. the markup and the code agree on every name: LISTS is the panel's panes in the row's order, SUBTABS are the
 //      second row's, and the SESSIONS are not a constant at all — they are the records the server sends;
 //   3. every one of a session's eight panes is inside the session's own pane, so the lists moved down a level rather
@@ -230,7 +230,7 @@ const page = ({
 };
 
 test("the top row is the assistant and the panel's panes, and the session's row is the very next row", () => {
-  assert.deepEqual(topRow.map((t) => t.key), ["assistant-1", "role", "watchdog"], "the float's own row");
+  assert.deepEqual(topRow.map((t) => t.key), ["assistant-1", "role", "watchdog", "bridge"], "the float's own row");
   assert.equal(topRow[0].label, "Assistant #1", "the tab that was Chat is titled Assistant #1");
   assert.ok(
     !topRow.some((t) => t.key === "chat" || t.key === "settings"),
@@ -262,13 +262,15 @@ test("the top row is the assistant and the panel's panes, and the session's row 
   assert.match(float, /data-as-subtab="settings" title="this assistant's own settings/);
   assert.match(float, /The panel's per-rule escalation table and the sentry's clock are in the Watchdog tab/);
   assert.match(float, /data-as-tab="watchdog"/, "the panel's own tab is in the float's row");
+  assert.match(float, /data-as-tab="bridge"/, "the Matrix/Element bridge, which is nobody's session, is in the float's row too");
+  assert.match(float, /data-pane="bridge" id="as-bridge"/, "and it has a pane of its own for its four sections");
   // The counts live on the sub-tabs the selected assistant's lists are on, not on a panel-wide tab above them.
   assert.match(float, /data-as-subtab="alerts"[\s\S]*?id="as-alert-n"/, "the alert count is on the Alerts sub-tab");
   assert.match(float, /data-as-subtab="watches"[\s\S]*?id="as-watch-n"/, "the watch count is on the Watches sub-tab");
 });
 
 test("every pane of a session is inside the session's pane, so the four lists moved down a level too", () => {
-  assert.deepEqual(panes.map((p) => p.key), ["assistant-1", "role", "watchdog"], "the float's top-level panes");
+  assert.deepEqual(panes.map((p) => p.key), ["assistant-1", "role", "watchdog", "bridge"], "the float's top-level panes");
   assert.ok(!panes.some((p) => p.key === "chat" || p.key === "settings"), "neither sub-tab is a top-level pane");
   assert.ok(
     !panes.some((p) => ["alerts", "watches", "messages", "pad"].includes(p.key)),

@@ -3694,6 +3694,52 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 /* The working-dir field is a path: monospace, and wide enough to read one without scrolling it. */
 .as-group input[type="text"] { font-family: var(--mono); font-size: 11px; min-width: 250px; flex: 1 1 250px; }
 .as-group .as-help { font-size: 10.5px; color: var(--dimmer); line-height: 1.4; }
+
+/* ---- the Bridge tab: one agent, no worktree, no queue ------------------------------------------------
+   Four sections in one pane. The rows are a label/value grid so a path, a pid and a timestamp all line up;
+   state is carried by BOTH a dot and a word, never colour alone (the same rule the alerts list follows). */
+.as-bridge-head { display: flex; align-items: flex-start; gap: 10px; justify-content: space-between; margin-bottom: 8px; }
+.as-bridge-head h4 { margin: 0 0 4px; font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--dimmer); }
+.as-bridge-head .as-help { max-width: 46em; }
+.as-bridge-head button { flex: 0 0 auto; }
+.as-bridge-sec { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 8px; }
+.as-bridge-sec:first-of-type { border-top: 0; margin-top: 0; padding-top: 0; }
+.as-bridge-sec h5 { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin: 0 0 6px; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--dimmer); }
+.as-bridge-sec h5 .as-hint { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.as-bridge-rows { display: flex; flex-direction: column; }
+.as-bridge-row { display: grid; grid-template-columns: minmax(84px, 34%) minmax(0, 1fr); gap: 2px 10px; padding: 4px 0; border-bottom: 1px solid #20262f; font-size: 11.5px; }
+.as-bridge-row:last-child { border-bottom: 0; }
+.as-bridge-k { color: var(--dimmer); }
+.as-bridge-v { min-width: 0; overflow-wrap: anywhere; }
+.as-bridge-v code { font-family: var(--mono); font-size: 10.5px; color: var(--dim); word-break: break-all; }
+.as-bridge-v.is-bad { color: #ffb4ac; }
+.as-bridge-v.is-warn { color: var(--amber); }
+.as-bridge-v.is-ok { color: #7ee787; }
+.as-bridge-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--dimmer); margin-right: 5px; vertical-align: middle; flex: 0 0 auto; }
+.as-bridge-dot.is-ok { background: #3fb950; box-shadow: 0 0 0 2px #3fb95022; }
+.as-bridge-dot.is-warn { background: var(--amber); }
+.as-bridge-dot.is-bad { background: var(--red); }
+.as-bridge-grouphead { display: flex; align-items: baseline; gap: 7px; margin: 8px 0 4px; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--dimmer); }
+.as-bridge-grouphead:first-of-type { margin-top: 0; }
+.as-bridge-msg { border-left: 2px solid #2a3240; padding: 4px 0 4px 8px; margin-bottom: 6px; }
+.as-bridge-msg.is-in { border-left-color: var(--blue); }
+.as-bridge-msg.is-out { border-left-color: #8b949e; }
+.as-bridge-msg.is-bad { border-left-color: var(--red); background: var(--red-bg); border-radius: 0 6px 6px 0; padding-right: 6px; }
+.as-bridge-msg-head { display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; font-family: var(--mono); font-size: 9.5px; color: var(--dimmer); text-transform: uppercase; letter-spacing: .05em; }
+.as-bridge-msg-head b { color: var(--dim); font-weight: 500; }
+.as-bridge-msg-head .as-ago { margin-left: auto; }
+.as-bridge-msg-text { margin-top: 2px; font-size: 11.5px; line-height: 1.4; color: var(--dim); white-space: pre-wrap; overflow-wrap: anywhere; }
+.as-bridge-msg.is-bad .as-bridge-msg-text { color: #ffb4ac; }
+.as-bridge-fail { margin-top: 3px; font-size: 10.5px; color: #ff9f97; overflow-wrap: anywhere; }
+.as-bridge-policy-box { min-height: 210px; font-size: 11px; line-height: 1.5; }
+.as-bridge-alert { display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; padding: 5px 0; border-bottom: 1px solid #20262f; font-size: 11.5px; }
+.as-bridge-alert:last-child { border-bottom: 0; }
+.as-bridge-alert b { color: var(--text); font-weight: 500; }
+.as-bridge-alert span:not(.as-bridge-dot):not(.as-ago) { color: var(--dim); flex: 1 1 220px; min-width: 0; overflow-wrap: anywhere; }
+.as-bridge-alert.is-bad b { color: #ffb4ac; }
+.as-bridge-alert.is-warn b { color: var(--amber); }
+.as-bridge-alert.is-ok b { color: #7ee787; }
+.as-bridge-alert .as-ago { margin-left: auto; }
 .as-rule-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; border-bottom: 1px solid #20262f; font-size: 11.5px; }
 .as-rule-row:last-child { border-bottom: 0; }
 /* The group now ends on two help lines rather than a row, so the last row above them gives up its divider the
