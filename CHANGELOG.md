@@ -4,16 +4,46 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.21.1 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.23.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-312 releases from v0.1.0 (2026-10-20) to v1.21.1 (2026-11-05), 1088 commits between the tags. Every release is anchored by an
+314 releases from v0.1.0 (2026-10-20) to v1.23.0 (2026-11-05), 1095 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.23.0 — 2026-11-05 · 4 commits
+
+[`5d8b1cf`](https://github.com/JLRoper/agent-worktree-gui/commit/5d8b1cf218dd8f142d8bce6a666d54e6d8694f32) · [compare v1.22.0...v1.23.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.22.0...v1.23.0)
+
+### Added
+
+- feat: the bundle ships several pipelines, and an import appends by id ([`9e16975`](https://github.com/JLRoper/agent-worktree-gui/commit/9e169753867921b3aacae3af2f12f41ef386c4ec))
+
+### Docs & tests
+
+- test: prove the bundle's several pipelines and its appending import end to end ([`444c4e3`](https://github.com/JLRoper/agent-worktree-gui/commit/444c4e3bc6ead05a29f62c9548d75ced47b0a070))
+
+### Other
+
+- Keep the new remotes test off this machine's folders ([`b275b1f`](https://github.com/JLRoper/agent-worktree-gui/commit/b275b1f5b81138050be1c6479e678bf2796aa33b))
+- chore: 1.23.0 — the version this landing carries ([`5d8b1cf`](https://github.com/JLRoper/agent-worktree-gui/commit/5d8b1cf218dd8f142d8bce6a666d54e6d8694f32))
+
+## v1.22.0 — 2026-11-05 · 3 commits
+
+[`88664a8`](https://github.com/JLRoper/agent-worktree-gui/commit/88664a81b01dd117f93d5fd319c196bd3fde3f0f) · [compare v1.21.1...v1.22.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.21.1...v1.22.0)
+
+### Docs & tests
+
+- docs: render the changelog — 312 releases ([`e29fb7e`](https://github.com/JLRoper/agent-worktree-gui/commit/e29fb7eba346ebcc798f985386f94de84850a073))
+
+### Other
+
+- Give every remote its own allow-push-without-asking switch ([`cb512d2`](https://github.com/JLRoper/agent-worktree-gui/commit/cb512d2de097b56fca2882e9c7b38e14ca733387))
+- chore: 1.22.0 — the version this landing carries ([`88664a8`](https://github.com/JLRoper/agent-worktree-gui/commit/88664a81b01dd117f93d5fd319c196bd3fde3f0f))
 
 ## v1.21.1 — 2026-11-05 · 2 commits
 
