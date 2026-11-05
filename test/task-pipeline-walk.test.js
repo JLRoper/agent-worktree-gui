@@ -27,7 +27,9 @@ import { currentThread, readQueueFile, writeQueueFile } from "../lib/assistant/q
 
 const T0 = Date.parse("2026-11-05T12:00:00.000Z");
 const iso = (ms) => new Date(ms).toISOString();
-const PROJECT = { name: "agent-worktree-gui", path: "C:/ProjectDevelopment/agent-worktree-gui" };
+// The registry entry the panel cuts in. The seat below performs the cut itself, so the path is this test file's own
+// checkout — never a folder on the machine that wrote it (`tools/absolute-paths.mjs`).
+const PROJECT = { name: "agent-worktree-gui", path: path.resolve(import.meta.dirname, "..") };
 const SEED = path.resolve(import.meta.dirname, "..", "pipeline-bundle.seed.json");
 
 function harness(t, { pipelines = null } = {}) {
