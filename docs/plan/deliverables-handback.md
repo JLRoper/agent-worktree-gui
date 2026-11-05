@@ -514,9 +514,20 @@ that owned it landed as `f55fecb`.
 A fixed-position panel anchored under the button, in the shape `.artifacts-pop` already uses
 (`public/style.css:1942`) — the panel's own idiom for a list that hangs off a control:
 
-- `position: fixed`, right-aligned under `#btn-deliver`, above the board (`z-index: 60`), closed on an outside click,
+- `position: fixed`, anchored under `#btn-deliver`, above the board (`z-index: 60`), closed on an outside click,
   on Esc, on a second press of the button, and on a board repaint that removes the button (it never is).
-- `width: min(560px, 92vw)`, `max-height: min(70vh, 640px)`, `overflow-y: auto`.
+- `width: min(560px, 92vw)`, `max-height: min(70vh, 640px)`, `overflow-y: auto` — the size it OPENS at. It is a
+  window, not a fixed sheet: the reader drags it by the **head** (never by the body, so text still selects and the
+  list still scrolls) and resizes it by the **corner grip**. Min 320×180, max 900×820, and every gesture is
+  clamped so no part of the panel leaves the viewport; the margin on every side is 8 px.
+- **The first-paint rectangle is computed, not nudged.** `deliverPosition()` measures the button and the panel's own
+  box in VISUAL px (`getBoundingClientRect`, `window.innerWidth`) and divides by the page zoom only when it writes
+  `style.left/top/width/height`, which are LAYOUT lengths — mixing those two units is what used to open the panel
+  off the right edge (and below the foot of the window) at any page zoom above 100%. The height is capped to the
+  room below the button, and the whole rectangle is re-clamped on `resize`, size included.
+- **The rectangle is remembered in `localStorage`** (`wtgui.deliverables.rect`) when the reader drags or resizes it,
+  and restored on the next open only while it still fits the window. One that no longer fits is DROPPED, not
+  quietly clamped, so that open is the default under the button.
 - A **sticky head**: `17 deliverables — newest first`, a filter input (`filter…`, autofocus), one chip per kind, and
   `✕`.
 - The list, then a footer (§5.5).
