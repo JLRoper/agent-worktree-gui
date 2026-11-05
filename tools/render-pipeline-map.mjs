@@ -108,10 +108,20 @@ function compactExit(exit) {
 function readJson(file, what) {
   if (!existsSync(file)) throw new Error(`${what} is not there: ${path.relative(REPO, file)}`);
   try {
-    return JSON.parse(readFileSync(file, "utf8"));
+    return JSON.parse(readFileSync(file, "utf8").split(String.fromCharCode(13, 10)).join(String.fromCharCode(10)));
   } catch (e) {
     throw new Error(`${path.basename(file)} is not JSON: ${String((e && e.message) || e)}`);
   }
+}
+
+// The page quotes each source with its sha256. That identity must survive a checkout: core.autocrlf turns a
+// committed LF blob into CRLF in the working tree, and a raw read would make the page stale on the next clone
+// (or fresh on one and stale on another). Every source is read, and hashed, as its LF-normalized bytes — the
+// git blob's bytes — and the footer says so.
+function readSource(file) {
+  const raw = readFileSync(file);
+  const text = raw.toString("utf8").split(String.fromCharCode(13, 10)).join(String.fromCharCode(10));
+  return { buf: Buffer.from(text, "utf8"), text };
 }
 
 function build() {
@@ -273,7 +283,7 @@ function build() {
 
 function sourceRow(file, rel, role) {
   if (!existsSync(file)) return { file: rel, role, exists: false, bytes: 0, sha256: "" };
-  const buf = readFileSync(file);
+  const buf = readSource(file).buf;
   return { file: rel, role, exists: true, bytes: buf.length, sha256: sha256(buf) };
 }
 
@@ -466,7 +476,7 @@ function html(model, vendor) {
 <footer>
   <p><b>What this page is.</b> One self-contained artefact rendered from <code>pipelines.seed.json</code> and <code>pipeline-bundle.seed.json</code> by <code>tools/render-pipeline-map.mjs</code>; its own script is <code>public/pipeline-map.js</code>. Every node, edge and loop is read from the JSON — nothing about a stage's role, its exit or its loop is typed into this page by hand. The one exception is named in the legend and on the card: <code>sefl-review-loop</code> is iterative only in its prompts, so its round trip is an inference.</p>
   <p>The derivation is a closed table: each catalogue stage's second line carries a rule id and the exact phrase from its prompt that chose it; the inspector shows the phrase, and <code>tools/verify-pipeline-map.mjs</code> re-checks it against the seed. A bundle stage is not derived at all — it prints the name and kind of its own <code>owner.role</code>, plus the count of other roles the bundle assigns to that stage.</p>
-  <p><b>Source ledger.</b> The four files this page was built from, with their sha256:</p>
+  <p><b>Source ledger.</b> The four files this page was built from, with their sha256 over LF-normalized bytes (the git blob's bytes, so a CRLF checkout does not make this ledger stale):</p>
   <table style="border-collapse:collapse;font:11.5px var(--mono);color:var(--dim);margin-top:6px">
     <thead><tr><th style="text-align:left;padding:3px 14px 3px 0">file</th><th style="text-align:left;padding:3px 14px 3px 0">role</th><th style="text-align:right;padding:3px 14px 3px 0">bytes</th><th style="text-align:left;padding:3px 0">sha256 (first 16)</th></tr></thead>
     <tbody>
@@ -514,7 +524,7 @@ async function main() {
   if (!existsSync(VENDOR)) {
     throw new UsageError(`no vendored mermaid at ${VENDOR_REL} — this page inlines it, it is not fetched at open time`);
   }
-  const vendor = readFileSync(VENDOR, "utf8");
+  const vendor = readSource(VENDOR).text;
   const model = build();
   const page = html(model, vendor);
 
