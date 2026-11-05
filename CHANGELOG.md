@@ -11,25 +11,54 @@ Pass that version here and read only what came after it:
 npm run changelog -- --since v0.80.0
 ```
 
-294 releases from v0.1.0 (2026-10-20) to v1.16.0 (2026-11-05), 1016 commits between the tags. Every release is anchored by an
+296 releases from v0.1.0 (2026-10-20) to v1.16.0 (2026-11-05), 1022 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
 
 ## v1.16.0 — 2026-11-05 · 3 commits
 
-[`4798950`](https://github.com/JLRoper/agent-worktree-gui/commit/4798950da22bb65150d33aa0d0b97096d6a5e098) · [compare v1.15.0...v1.16.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.15.0...v1.16.0)
+[`34aa132`](https://github.com/JLRoper/agent-worktree-gui/commit/34aa132b6ecbefec92f47ab019f4555ccd682494) · [compare v1.15.2...v1.16.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.15.2...v1.16.0)
 
 ### Added
 
-- feat: the Assistant Director — a 20-minute cross-queue pass with two powers ([`f4a74df`](https://github.com/JLRoper/agent-worktree-gui/commit/f4a74df4e16d99f1f24150ebe8a8279e3874ce41))
+- feat: the Assistant Director — a 20-minute cross-queue pass with two powers ([`2a01e7c`](https://github.com/JLRoper/agent-worktree-gui/commit/2a01e7c4da9398bedbf42fd0477503f6456f0193))
 
 ### Docs & tests
 
-- docs: the Assistant Director's proof — the running panel, the tab and the suite ([`51fec06`](https://github.com/JLRoper/agent-worktree-gui/commit/51fec06154ddd3e729b14b1988e16a66a5acb394))
+- docs: the Assistant Director's proof — the running panel, the tab and the suite ([`dc124bc`](https://github.com/JLRoper/agent-worktree-gui/commit/dc124bc5676cd0f60450fc27347a1b3522ae0639))
 
 ### Other
 
-- chore: 1.16.0 — the version this landing carries ([`4798950`](https://github.com/JLRoper/agent-worktree-gui/commit/4798950da22bb65150d33aa0d0b97096d6a5e098))
+- chore: 1.16.0 — the version this landing carries ([`34aa132`](https://github.com/JLRoper/agent-worktree-gui/commit/34aa132b6ecbefec92f47ab019f4555ccd682494))
+
+## v1.15.2 — 2026-11-05 · 4 commits
+
+[`659d73e`](https://github.com/JLRoper/agent-worktree-gui/commit/659d73eb4e90451c160efef702dd963c708c8207) · [compare v1.15.1...v1.15.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.15.1...v1.15.2)
+
+### Added
+
+- feat: the settings name the folders the board scans, and each one is its own card ([`287deb3`](https://github.com/JLRoper/agent-worktree-gui/commit/287deb34958d5edf523ff64c696eff4655708701))
+
+### Docs & tests
+
+- test: the scan-roots route, its two refusals, the fallback and the per-folder card ([`d84e185`](https://github.com/JLRoper/agent-worktree-gui/commit/d84e1850be6242595dad23e04649f37f7f4cb695))
+
+### Other
+
+- chore: the new copy stays relative, and out of the collapse normaliser's slice ([`e76b4dc`](https://github.com/JLRoper/agent-worktree-gui/commit/e76b4dcb1289717911557cd3648651f27e68c6ef))
+- chore: 1.15.2 — the version this landing carries ([`659d73e`](https://github.com/JLRoper/agent-worktree-gui/commit/659d73eb4e90451c160efef702dd963c708c8207))
+
+## v1.15.1 — 2026-11-05 · 2 commits
+
+[`bf39bb9`](https://github.com/JLRoper/agent-worktree-gui/commit/bf39bb98b22cf072948f69c2ca14bb3f24635510) · [compare v1.15.0...v1.15.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.15.0...v1.15.1)
+
+### Docs & tests
+
+- docs: design the stage run, the tree a loop-back reuses, and the park's record ([`f02c18c`](https://github.com/JLRoper/agent-worktree-gui/commit/f02c18c7be7ea509fa755a879d73da70a9e3adb5))
+
+### Other
+
+- chore: 1.15.1 — the version this landing carries ([`bf39bb9`](https://github.com/JLRoper/agent-worktree-gui/commit/bf39bb98b22cf072948f69c2ca14bb3f24635510))
 
 ## v1.15.0 — 2026-11-05 · 1 commit
 
