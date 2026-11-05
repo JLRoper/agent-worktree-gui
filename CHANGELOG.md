@@ -4,16 +4,29 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.12.2 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.12.3 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-282 releases from v0.1.0 (2026-10-20) to v1.12.2 (2026-11-04), 985 commits between the tags. Every release is anchored by an
+283 releases from v0.1.0 (2026-10-20) to v1.12.3 (2026-11-04), 988 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.12.3 — 2026-11-04 · 3 commits
+
+[`dc16bcc`](https://github.com/JLRoper/agent-worktree-gui/commit/dc16bccab190f16da02ac37e46a43f730b87c0c1) · [compare v1.12.2...v1.12.3](https://github.com/JLRoper/agent-worktree-gui/compare/v1.12.2...v1.12.3)
+
+### Fixed
+
+- fix: a queued reply carries its own attachments and sends exactly those ([`f05494d`](https://github.com/JLRoper/agent-worktree-gui/commit/f05494d369d49c3330028d5fb1d5d4eef109b919))
+
+### Other
+
+- Render the changelog for v1.12.0, v1.12.1 and v1.12.2 ([`d882d0c`](https://github.com/JLRoper/agent-worktree-gui/commit/d882d0c9d80d28f454048ae8d58bc5cef9dd1667))
+- chore: 1.12.3 — the version this landing carries ([`dc16bcc`](https://github.com/JLRoper/agent-worktree-gui/commit/dc16bccab190f16da02ac37e46a43f730b87c0c1))
 
 ## v1.12.2 — 2026-11-04 · 2 commits
 
