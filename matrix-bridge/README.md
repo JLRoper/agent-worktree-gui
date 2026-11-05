@@ -41,6 +41,12 @@ It does five things:
 5. **Owns one instance**: `MATRIX_STORE_DIR/bridge.pid` is a lock. A second copy pointed at the same store
    exits with `Another bridge is already running (pid N). Stop it first.` — two clients sharing one Olm
    store corrupt it.
+6. **Obeys the panel, per turn**: before each inference it fetches `GET /api/matrix/policy` and
+   `GET /api/matrix/reminders` from the panel (see §10), appends the two preambles to the prompt, and sends
+   nothing from a cache — an edit in the Bridge tab is in force on the next message. A failed fetch is
+   printed at the TOP of the reply (`⚠ I could not read the panel policy this turn …`) instead of the bot
+   silently running on the last text it saw. The reminder list is the bridge's OWN; the assistants' watches
+   ride in the same answer as a READ-ONLY view, and the bridge has no code path that writes one.
 
 Every launch also posts the fixed line `Hermes is online and ready!` to the room, and prints
 `Bridge live. Send a message from Element X. Ctrl-C to stop.` once it is syncing.
@@ -143,6 +149,9 @@ another directory, never paste it into a ticket or a chat. It is covered by `.gi
 | `BRIDGE_HISTORY_TURNS` | no | `12` | How many previous turns are replayed as context. |
 | `BRIDGE_OUTBOX` | no | `outbox.txt` beside the script | File polled for one-line status messages; renamed to `outbox.sent` after delivery. |
 | `OUTBOX_DRAIN` | no | `5` | Seconds between outbox polls. |
+| `WTGUI_PANEL_URL` | no | `http://127.0.0.1:7331` | Base URL of the panel whose policy and reminder list the bridge reads on every turn. The panel sets it for the child it spawns, from the port it bound; set it for a foreground run on another port. |
+| `WTGUI_PANEL_TOKEN` | no | empty | Only for a panel on ANOTHER host. A loopback request needs no token. It is a credential — leave empty on a normal install and never commit a filled copy. |
+| `WTGUI_PANEL_TIMEOUT` | no | `5` | Seconds one panel GET may take before the turn runs without it (and says so in its reply). |
 | `LOCALAPPDATA` | OS-set | — | Read only to auto-detect `hermes.exe` on Windows. Do not put it in `bridge.env`. |
 
 Format rules, from the loader in `hermes_matrix_bridge.py`:
@@ -394,7 +403,7 @@ Caveats, because these helpers predate the module layout:
 
 | Script | Runs as | What it does |
 | --- | --- | --- |
-| `hermes_matrix_bridge.py` | long-lived process | Logs in, joins `MATRIX_ROOM_ID`, runs each room message through the Hermes CLI, posts replies, drains the outbox, refreshes typing, enforces the single-instance pid lock. Modes: default run, `--self-test`, `--rooms`, `--once "text"`. |
+| `hermes_matrix_bridge.py` | long-lived process | Logs in, joins `MATRIX_ROOM_ID`, fetches the panel's policy and reminder list per turn, runs each room message through the Hermes CLI, posts replies, drains the outbox, refreshes typing, enforces the single-instance pid lock. Modes: default run, `--self-test`, `--rooms`, `--once "text"`. |
 | `restart_bridge.py` | detached child of `start_restart.py` | Waits `delay` seconds, kills every bridge process it can find, removes the legacy pid file, starts a fresh detached bridge writing to `bridge_live.log`, and appends to `restart_report.txt`. |
 | `start_restart.py` | short-lived launcher | Takes an optional delay (default 30), fires `restart_bridge.py` detached with that delay, writes `restart_launcher.log`, prints the helper's pid, and exits. This is the command a turn uses when it needs a restart without killing its own reply. |
 | `verify_restart.py` | detached witness | Sleeps 120 seconds, then writes `restart_verify.txt`: the legacy pid file's contents, whether `outbox.txt` still exists, and the last 25 lines of `bridge_live.log`. It changes nothing else. |
@@ -454,13 +463,22 @@ What the Gateway tab does:
 
 The assistant float's **Bridge** tab is the reader's other view of the same process, and it does not run a
 second copy of any of the above. It reads `GET /api/matrix/status` — the bridge state above, the Element
-channel's recent inbound/outbound records, the policy, and a fresh gateway probe — and draws four sections:
-connection (pid, live/dead, the PATH of `bridge.env`, the room and its sender rule, last send/receive),
-messages (the newest ten each way, failures highlighted, never a full transcript), policy, and alerts (bridge
-health, gateway reachability, send failures). The policy is one markdown file in the panel's state folder,
-served at `GET`/`POST /api/matrix/policy` and injected into the bridge turn; its text wins over the
-`WTGUI_MATRIX_POLICY` environment default. It is not a variable in `bridge.env`, and the panel still never
-reads that file.
+channel's recent inbound/outbound records, the policy, the bridge's reminder list, and a fresh gateway probe —
+and draws six sections: connection (pid, live/dead, the PATH of `bridge.env`, the room and its sender rule, last
+send/receive), messages (the newest ten each way, failures highlighted, never a full transcript), policy,
+reminders, the assistants' watches (read-only), and alerts (bridge health, gateway reachability, send failures).
+
+- **Policy** is one markdown file in the panel's state folder, served at `GET`/`POST /api/matrix/policy`. The
+  bridge fetches it on EVERY turn and appends the answer's `preamble` to the prompt, so an edit is in force on
+  the next message with no restart. Its text wins over the `WTGUI_MATRIX_POLICY` environment default. It is not
+  a variable in `bridge.env`, and the panel still never reads that file.
+- **Reminders** are the bridge's OWN list, in `matrix-reminders.json`, served at `GET`/`POST
+  /api/matrix/reminders`. They are deliberately not an assistant's watches: a reminder has no thread and wakes
+  nobody, and the bridge keeps NO task queue — work it files belongs to an assistant's queue. The panel is the
+  only writer; the bridge reads the list per turn.
+- **Watches** are projected from the assistants for reading only (`watchesReadOnly`, `readOnly` on every row).
+  `POST /api/matrix/reminders` refuses any body naming a watch field before it touches the file, so the bridge
+  can mention a watch on the phone and can never create, complete or delete one.
 
 The bridge does not need the panel to run, and the panel does not need the bridge to run. If you install
 the module in a new checkout, update the `matrix` block (Gateway tab → Save, or `config.json`) to the new
@@ -484,6 +502,7 @@ module can land without disturbing the running endpoint.
 | The panel's Gateway tab says the gateway is unreachable | that is the **Hermes gateway**, not the Matrix bridge | Check the panel's Hermes gateway/`API_SERVER_KEY` setup. The bridge shells out to the Hermes CLI and does not use the gateway. |
 | Nothing is posted from `outbox.txt` | file is empty, was already delivered (renamed `outbox.sent`), or the send failed | Put non-empty text in the configured `BRIDGE_OUTBOX`; check the log for `outbox send failed` — the file is left in place on failure. `.sent` is the normal success state. |
 | A reply is missing, or the bot types forever | Hermes inference failed or exceeded `HERMES_TIMEOUT` | Run `--once "hello"` to test the CLI locally; raise `HERMES_TIMEOUT` if the turn is legitimately long; check the log for the worker exception. |
+| Every reply starts with `⚠ I could not read the panel policy this turn` | the panel is not running, or `WTGUI_PANEL_URL` names the wrong port/host | Start the panel, check `curl <WTGUI_PANEL_URL>/api/matrix/policy` answers, and send again — nothing is cached, so the next turn picks the policy up. |
 | An old message gets no reply after a restart | events from before the process started are skipped by design | Send the message after `Bridge live.` appears. |
 | `undecryptable event` warnings | the sender's device is not trusted / keys were lost with the store | Keep `MATRIX_DEVICE_ID` and `MATRIX_STORE_DIR` stable; re-verify the bot's device in Element if the store was deleted. |
 

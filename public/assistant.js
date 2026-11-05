@@ -2249,9 +2249,10 @@
   // senders, the last messages each way, the policy the reader writes for it, and the failures worth acting on.
   //
   // The pane is painted from GET /api/matrix/status, one answer carrying the bridge, the Element channel, the
-  // policy and a fresh gateway probe. That is deliberate: four sections drawn from four requests would disagree
-  // about the moment they describe. The policy box is the one editable thing; its draft lives outside the DOM so a
-  // poll cannot take the reader's words, and the mtime it read travels with the save.
+  // policy, the bridge's OWN reminder list (with the assistants' watches as a read-only projection) and a fresh
+  // gateway probe. That is deliberate: six sections drawn from six requests would disagree about the moment they
+  // describe. The policy box and the reminder list are the editable things — the bridge's own, never an
+  // assistant's watches — and the policy draft lives outside the DOM so a poll cannot take the reader's words.
   const BRIDGE_POLL_MS = 15_000;
   const BRIDGE_MSG_N = 10;
   const BRIDGE_TEXT_CLIP = 280;
@@ -2475,6 +2476,52 @@
       bridge turn to carry. Nothing here is sent to the room by pressing Save.</div>
     </section>`;
 
+    // REMINDERS. The bridge's OWN list — not an assistant's watches. The panel stores it (POST
+    // /api/matrix/reminders), the bridge reads it on every turn, and completing one stamps the row rather than
+    // moving a card between states. There is no queue section here by design: work the bridge files belongs to an
+    // assistant's queue, and a second queue would be a place for a job to disappear into.
+    const rem = bridgeData.reminders || {};
+    const remList = Array.isArray(rem.reminders) ? rem.reminders : [];
+    const openRem = remList.filter((r) => !r.doneAt);
+    const doneRem = remList.filter((r) => r.doneAt);
+    const reminderRow = (r) => `<div class="as-bridge-reminder${r.doneAt ? " is-done" : ""}">
+      <button type="button" class="as-bridge-check" data-as-bridge-reminder="${esc(r.id)}" data-as-bridge-act="${r.doneAt ? "open" : "done"}" title="${r.doneAt ? "reopen this reminder" : "mark this reminder done"}">${r.doneAt ? "✓" : "○"}</button>
+      <span class="as-bridge-reminder-text">${esc(r.text)}</span>
+      ${r.due ? `<span class="as-hint">due ${esc(r.due)}</span>` : ""}
+      <button type="button" class="as-bridge-remove" data-as-bridge-reminder="${esc(r.id)}" data-as-bridge-act="remove" title="delete this reminder">×</button>
+    </div>`;
+    const remindersSec = `<section class="as-bridge-sec" data-as-bridge-sec="reminders" id="as-bridge-reminders">
+      <h5>Reminders <span class="as-hint">the bridge's own list · ${openRem.length} open · ${doneRem.length} done · never a queue</span></h5>
+      <div class="as-help">Not an assistant's watch: a reminder has no thread and wakes nobody, and the bridge keeps
+      <b>no task queue</b> of its own — work it files goes into an assistant's queue. The bridge reads this list on
+      every turn at <code>GET /api/matrix/reminders</code>; the panel is the only writer.</div>
+      <div class="as-bridge-reminders">${remList.length ? [...openRem, ...doneRem].map(reminderRow).join("") : `<div class="as-empty">nothing on the list</div>`}</div>
+      <div class="as-actions">
+        <input type="text" id="as-bridge-reminder-text" class="as-bridge-reminder-input" placeholder="remind me to…" maxlength="500" />
+        <input type="text" id="as-bridge-reminder-due" class="as-bridge-reminder-due" placeholder="when (optional)" />
+        <button type="button" id="btn-as-bridge-reminder-add">Add reminder</button>
+        <span class="as-err" id="as-bridge-reminder-err"></span>
+      </div>
+    </section>`;
+
+    // WATCHES. The assistants' list, projected by the panel and READ ONLY on this page: the bridge may mention one
+    // on the phone, and neither the page nor the bridge may create, complete or delete one. There is no control in
+    // this section on purpose — an edit belongs in the assistant's own Watches sub-tab, where the owner is known.
+    const watchList = Array.isArray(rem.watches) ? rem.watches : [];
+    const watchesSec = `<section class="as-bridge-sec" data-as-bridge-sec="watches" id="as-bridge-watches">
+      <h5>Watches <span class="as-hint">the assistants' own · READ ONLY here · ${watchList.length} shown</span></h5>
+      <div class="as-help">${esc(rem.watchesNote || "the assistants' watches are read-only here — the bridge may mention one, never write one")}.
+      A watch names a thread and wakes the assistant that owns it; the bridge only gets to read the projection.</div>
+      <div class="as-bridge-rows">${watchList.length
+        ? watchList.map((w) => row(
+          esc(w.assistantId || "assistant-1"),
+          `${bridgeDot(w.state === "done" ? "ok" : "warn")}${esc(w.title || "(no title)")}${w.state ? ` · ${esc(w.state)}` : ""}${w.thread ? ` · <code>${esc(w.thread)}</code>` : ""}`,
+          "",
+          "read-only — the bridge cannot write this",
+        )).join("")
+        : `<div class="as-empty">no assistant is watching anything right now</div>`}</div>
+    </section>`;
+
     // ALERTS. Three questions, in the order they block: is the bridge healthy, can the panel reach the gateway a
     // turn would run on, and has anything it sent failed? A quiet row says so rather than leaving a section blank.
     const gatewayKind = gw.reachable === true ? "ok" : gw.reachable === false ? "bad" : "warn";
@@ -2499,13 +2546,13 @@
         <div>
           <h4>Bridge</h4>
           <div class="as-help">The Matrix/Element bridge is an agent with <b>no worktree and no queue</b>: it talks to
-          you on your phone and files work into assistants' queues. Its four sections are connection, messages, the
-          policy you write for it, and alerts — there is no queue section, because the queue belongs to the
-          assistants it files into.</div>
+          you on your phone and files work into assistants' queues. Its sections are connection, messages, the
+          policy you write for it, the reminders it keeps, the assistants' watches it may mention (read-only), and
+          alerts — there is no queue section, because the queue belongs to the assistants it files into.</div>
         </div>
-        <button type="button" id="btn-as-bridge-refresh" title="read the bridge, the room, the policy and the gateway again">Refresh</button>
+        <button type="button" id="btn-as-bridge-refresh" title="read the bridge, the room, the policy, the reminders and the gateway again">Refresh</button>
       </div>
-      ${connection}${messages}${policySec}${alerts}`;
+      ${connection}${messages}${policySec}${remindersSec}${watchesSec}${alerts}`;
   }
 
   // ONE ASSISTANT'S OWN SETTINGS.
@@ -4198,7 +4245,45 @@
     // Tabs are buttons too and are handled above, in their own rows; ignore a second pass here.
     if (t.dataset.asTab || t.dataset.asSubtab) return;
 
-    // The Bridge tab's three presses. Refresh re-reads everything and keeps a policy draft; Reload is the one
+    // The reminder list's own presses: add, complete or reopen one, delete one. Each answer is the WHOLE list, so
+    // the pane repaints from one truth rather than splicing a row in locally and drifting from the file.
+    if (t.id === "btn-as-bridge-reminder-add") {
+      const text = String(document.querySelector("#as-bridge-reminder-text")?.value || "").trim();
+      const due = String(document.querySelector("#as-bridge-reminder-due")?.value || "").trim();
+      if (!text) {
+        setErr("as-bridge-reminder-err", "a reminder needs some text");
+        return;
+      }
+      t.disabled = true;
+      try {
+        const d = await asPost("/api/matrix/reminders", due ? { text, due } : { text });
+        bridgeData = { ...bridgeData, reminders: d };
+        setErr("as-bridge-reminder-err", "");
+        renderBridge(true);
+      } catch (err) {
+        setErr("as-bridge-reminder-err", String((err && err.message) || err));
+        t.disabled = false;
+      }
+      return;
+    }
+    if (t.dataset.asBridgeReminder) {
+      const id = t.dataset.asBridgeReminder;
+      const act = t.dataset.asBridgeAct;
+      if (!id || !act) return;
+      t.disabled = true;
+      try {
+        const d = await asPost("/api/matrix/reminders", act === "remove" ? { id, remove: true } : { id, done: act === "done" });
+        bridgeData = { ...bridgeData, reminders: d };
+        setErr("as-bridge-reminder-err", "");
+        renderBridge(true);
+      } catch (err) {
+        setErr("as-bridge-reminder-err", String((err && err.message) || err));
+        if (t.isConnected) t.disabled = false;
+      }
+      return;
+    }
+
+    // The Bridge tab's three policy presses. Refresh re-reads everything and keeps a policy draft; Reload is the one
     // press that drops a draft and reads the file again; Save sends the box with the mtime the page read.
     if (t.id === "btn-as-bridge-refresh") {
       t.disabled = true;

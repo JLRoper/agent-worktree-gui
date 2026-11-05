@@ -157,4 +157,8 @@ test("textForTurn is the effective text, and an empty policy injects nothing", a
   store.save("- be brief");
   assert.equal(store.textForTurn(), "- be brief");
   assert.match(matrixPolicyPreamble(store.textForTurn()), /^## How the reader wants the Matrix bridge to speak to them\n\n- be brief\n$/);
+  // The payload carries that same preamble verbatim: the bridge appends ONE shape, built here, rather than a
+  // Python copy of the heading that could drift from this one.
+  assert.equal(store.payload().preamble, matrixPolicyPreamble(store.textForTurn()));
+  assert.match(store.payload().preamble, /^- be brief\n$/m);
 });
