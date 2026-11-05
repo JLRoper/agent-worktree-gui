@@ -97,6 +97,7 @@ test("the instruction a run carries is conditional on both halves of the evidenc
 async function stubGateway(t, { routePresent = true, park = "run_1", refuse = null } = {}) {
   const bodies = [];
   const openStreams = new Set();
+  let probes = 0;
   const server = createServer((req, res) => {
     const url = new URL(req.url, "http://127.0.0.1");
     const json = (code, obj) => {
@@ -110,6 +111,7 @@ async function stubGateway(t, { routePresent = true, park = "run_1", refuse = nu
     }
     const clarify = /^\/v1\/runs\/([^/]+)\/clarify$/.exec(url.pathname);
     if (clarify && req.method === "POST") {
+      probes += 1;
       if (!routePresent) {
         res.writeHead(404, { "Content-Type": "text/plain" });
         return res.end("404: Not Found");
@@ -151,7 +153,7 @@ async function stubGateway(t, { routePresent = true, park = "run_1", refuse = nu
     server.closeAllConnections?.();
     server.close();
   });
-  return { base, bodies };
+  return { base, bodies, probes: () => probes };
 }
 
 const until = async (fn, what, ms = 5000) => {
@@ -202,6 +204,7 @@ async function panel(t, { routePresent = true, park = "run_1", refuse = null } =
     jobs,
     assistant,
     bodies: gw.bodies,
+    probes: gw.probes,
     dir,
     at: (ms) => {
       clock = ms;
@@ -326,6 +329,16 @@ test("the HUMAN list keys a question without its count, so a re-ask updates the 
   assert.match(region, /key: humanQuestionKey\(/, "the rotation's row carries the stable key");
   assert.match(region, /reasks: Math\.max\(0, Number\(ask\?\.reasks\) \|\| 0\)/, "…and the count rides on the row, outside the key");
   assert.doesNotMatch(region, /key: `${kind}:\$\{t\.id\}/, "the inline key string is gone — one builder, one answer");
+});
+
+test("a burst of runs probes the route once, and every body is the same sentence", async (t) => {
+  const { jobs, bodies, dir, probes } = await panel(t);
+  // Six workers started together: the memo is only written once the probe answers, so this is the
+  // in-flight guard rather than the clock that keeps it to one request.
+  await Promise.all(["b1", "b2", "b3", "b4", "b5", "b6"].map((thread) => spawn(jobs, dir, thread)));
+  assert.equal(probes(), 1, "one probe of one build, however many runs start at once");
+  assert.equal(bodies.length, 6);
+  for (const body of bodies) assert.match(body.input, /call the clarify tool/, "and every run carries the proved sentence");
 });
 
 // ── the prose path, on a build with no route ──────────────────────────────────────────────────
