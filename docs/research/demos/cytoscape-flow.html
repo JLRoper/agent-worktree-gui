@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cytoscape.js — the seven-stage SEFL review loop</title>
+<!--
+  Demo B of docs/research/pipeline-renderer-options.html: the React-free canvas option, drawn.
+
+  cytoscape 3.30.2 + cytoscape-dagre 2.5.0 + dagre 0.8.5, vendored beside this file. All MIT. Three plain
+  <script> tags; no build step, no module graph, no network.
+
+  It draws the same seven-stage `sefl-review-loop` from pipeline-definition.js as mermaid-flow.html, with the same
+  exit-check labels on the connectors and the same dashed review round trip. It is here because canvas is the
+  option that looks best in a benchmark and costs the most somewhere else: text, focus and the accessibility tree.
+
+  The page states that cost rather than hiding it. The drawing is one <canvas>: there are no nodes in the DOM to
+  focus, name or read, so the keyboard path is a separate list of buttons under the picture and a screen reader
+  gets that list, not the graph. The status line prints the painted label size as font-size × zoom, because
+  cytoscape's `fit` lays the graph out to the container and a 12 px label at 0.72 zoom is painted at 8.6 px.
+-->
+<style>
+  :root {
+    --bg: #0f1115; --panel: #161a21; --panel-2: #1b2029; --line: #262c37; --line-soft: #1f242e;
+    --text: #e6e9ef; --dim: #9aa4b2; --dimmer: #6b7482;
+    --amber: #d29922; --green: #2ea043; --blue: #4a90d9;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body { margin: 0; padding: 28px 26px 60px; background: var(--bg); color: var(--text); font: 14px/1.55 var(--ui); max-width: 1180px; }
+  h1 { font-size: 22px; line-height: 1.2; margin: 0 0 6px; letter-spacing: -0.01em; }
+  .lede { color: var(--dim); max-width: 92ch; margin: 0 0 4px; }
+  .prov { color: var(--dimmer); font-family: var(--mono); font-size: 11.5px; margin: 8px 0 0; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 18px 0 12px; }
+  .bar .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--dimmer); }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+  .seg button { appearance: none; border: 0; background: transparent; color: var(--dim); font: 12px var(--mono); padding: 5px 11px; cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button[aria-pressed="true"] { background: var(--panel-2); color: var(--text); }
+  .seg button:focus-visible, a:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  .card { border: 1px solid var(--line); border-radius: 10px; background: #12151b; }
+  .canvas { height: 380px; }
+  .status { display: flex; flex-wrap: wrap; gap: 4px 18px; border-top: 1px solid var(--line-soft); padding: 8px 12px; font: 11.5px var(--mono); color: var(--dim); }
+  .status b { color: var(--text); font-weight: 600; }
+  .status .warn { color: var(--amber); }
+  #detail { margin-top: 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); padding: 14px 16px; min-height: 92px; }
+  #detail h2 { font-size: 14px; margin: 0 0 2px; }
+  #detail .meta { font: 11.5px var(--mono); color: var(--amber); margin: 0 0 8px; }
+  #detail p { margin: 0; color: var(--dim); font-size: 13px; max-width: 96ch; }
+  #detail .hint { color: var(--dimmer); font-size: 12.5px; }
+  .keys { margin-top: 12px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  .keys h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--dimmer); margin: 0 0 8px; }
+  .keys ol { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0; padding: 0; }
+  .keys button { appearance: none; border: 1px solid var(--line); background: var(--panel-2); color: var(--dim); font: 11.5px var(--mono); padding: 4px 9px; border-radius: 6px; cursor: pointer; }
+  .keys button[aria-current="step"] { border-color: var(--blue); color: var(--text); }
+  .keys button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  footer { margin-top: 26px; color: var(--dimmer); font-size: 12px; border-top: 1px solid var(--line); padding-top: 12px; }
+  footer code { font-family: var(--mono); font-size: 11.5px; color: var(--dim); }
+</style>
+</head>
+<body>
+<header>
+  <h1>The seven-stage SEFL review loop, drawn on a canvas</h1>
+  <p class="lede">The comparison page: <a href="cytoscape-flow.html">cytoscape.js</a> rendering the same
+  <code>sefl-review-loop</code> as <a href="mermaid-flow.html">the mermaid page</a> — seven stages, an exit check on the
+  connector after each, one dashed review round trip. Tap a stage to open it.</p>
+  <p class="prov">cytoscape 3.30.2 · cytoscape-dagre 2.5.0 · dagre 0.8.5 · MIT · vendored beside this page · no build step · rendered <span id="clock">at load</span></p>
+</header>
+
+<div class="bar">
+  <span class="label">stages drawn</span>
+  <div class="seg" role="group" aria-label="how many stages to draw">
+    <button type="button" data-n="1" aria-pressed="false">1</button>
+    <button type="button" data-n="7" aria-pressed="true">7 · the definition</button>
+    <button type="button" data-n="13" aria-pressed="false">13 · the bundle</button>
+  </div>
+  <span class="label">then tap a stage</span>
+  <span class="label">scale</span>
+  <div class="seg" role="group" aria-label="how the drawing is scaled">
+    <button type="button" data-zoom="fit" aria-pressed="true">fit</button>
+    <button type="button" data-zoom="1" aria-pressed="false">1:1</button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="canvas" id="draw" role="img" aria-label="pipeline flow — the same stages, in order, are listed as buttons below the drawing"></div>
+  <div class="status" id="status"></div>
+</div>
+
+<div class="keys">
+  <h2>the keyboard path canvas does not give you</h2>
+  <ol id="keys"></ol>
+</div>
+
+<section id="detail" aria-live="polite">
+  <p class="hint">Tap a stage — or press one of the buttons above — to open it here.</p>
+</section>
+
+<footer>
+  <p><b>Why this page is the comparison and not the recommendation.</b> cytoscape is faster, smaller than mermaid and
+  actively maintained, and its dagre layout routes the loop cleanly. But the drawing is one <code>&lt;canvas&gt;</code>:
+  nothing in it has a name, a role, a tab stop or a DOM node, so the keyboard path and the accessible list under the
+  picture are a second, separate implementation that has to be kept in step with the picture by hand — and the
+  panel's own browser gates read DOM nodes.</p>
+  <p>The status line prints the painted label size as <code>font-size × zoom</code>: cytoscape fits the graph to its
+  container by default, so a 12 px label can be painted at 8.6 px without anything looking wrong.</p>
+</footer>
+
+<script src="vendor/cytoscape.min.js"></script>
+<script src="vendor/dagre.min.js"></script>
+<script src="vendor/cytoscape-dagre.js"></script>
+<script src="pipeline-definition.js"></script>
+<script>
+(function () {
+  "use strict";
+  const DATA = window.PIPELINE_DEMO;
+  const statusEl = document.getElementById("status");
+  const detail = document.getElementById("detail");
+  const keys = document.getElementById("keys");
+  const clock = document.getElementById("clock");
+  let current = null;
+  const HINT = '<p class="hint">Tap a stage — or press one of the buttons above — to open it here.</p>';
+
+  try { cytoscape.use(window.cytoscapeDagre); } catch (e) { /* the UMD registers itself in 2.5.0 */ }
+
+  function view(n) {
+    if (n === 13) {
+      const w = DATA.wide;
+      return { id: w.id, title: w.title, stages: w.stages, loops: w.loops };
+    }
+    const st = DATA.def.stages.slice(0, n === 1 ? 1 : DATA.def.stages.length);
+    return { id: DATA.def.id, title: DATA.def.title, stages: st, loops: n === 1 ? [] : DATA.loops };
+  }
+
+  const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const NODE_W = 132, NODE_H = 50;
+
+  function elements(v) {
+    const els = [];
+    v.stages.forEach((s, i) => els.push({ data: { id: "n_" + s.id, label: `${i + 1} · ${s.title}${s.artifact ? " · " + s.artifact : ""}`, stage: s.id } }));
+    for (let i = 0; i < v.stages.length; i++) {
+      const check = v.stages[i].gate && v.stages[i].gate.check;
+      if (i + 1 >= v.stages.length) continue;
+      els.push({ data: { id: "e_" + v.stages[i].id, source: "n_" + v.stages[i].id, target: "n_" + v.stages[i + 1].id, label: check || "", gate: check || "" } });
+    }
+    for (const loop of v.loops || []) {
+      if (!v.stages.some((s) => s.id === loop.from) || !v.stages.some((s) => s.id === loop.to)) continue;
+      els.push({ data: { id: "loop_" + loop.id, source: "n_" + loop.from, target: "n_" + loop.to, label: loop.label || "loop", loop: "1" } });
+    }
+    return els;
+  }
+
+  const style = [
+    { selector: "node", style: {
+      shape: "round-rectangle", width: NODE_W, height: NODE_H,
+      "background-color": "#1b2029", "border-color": "#39414f", "border-width": 1,
+      label: "data(label)", color: "#e6e9ef",
+      "font-family": "ui-monospace, SFMono-Regular, Consolas, monospace", "font-size": 12.5,
+      "text-wrap": "wrap", "text-max-width": NODE_W - 14, "text-valign": "center", "text-halign": "center", "line-height": 1.3,
+    } },
+    { selector: "node[data-mark='current']", style: { "border-color": "#4a90d9", "border-width": 2 } },
+    { selector: "node[data-mark='done']", style: { "border-color": "#2ea043" } },
+    { selector: "edge", style: {
+      width: 1.4, "line-color": "#5b6675", "target-arrow-color": "#5b6675", "target-arrow-shape": "triangle",
+      "arrow-scale": 0.7, "curve-style": "bezier",
+      label: "data(label)", "font-size": 11.5, color: "#d29922", "font-family": "ui-monospace, Consolas, monospace",
+      "text-background-color": "#12151b", "text-background-opacity": 1, "text-background-padding": "2px", "text-rotation": "none",
+    } },
+    // A back edge needs its own curve or dagre's straight line runs back through the nodes it just drew.
+    { selector: "edge[loop='1']", style: { "line-style": "dashed", "curve-style": "unbundled-bezier", "control-point-distances": -86, "control-point-weights": 0.5 } },
+  ];
+
+  let cy = null;
+  let v = null;
+
+  function build(n) {
+    v = view(n);
+    current = current && v.stages.some((s) => s.id === current) ? current : null;
+    if (cy) { cy.destroy(); cy = null; }
+    document.getElementById("draw").innerHTML = "";
+    cy = cytoscape({
+      container: document.getElementById("draw"),
+      elements: elements(v),
+      style,
+      layout: { name: "dagre", rankDir: "LR", nodeSep: 22, rankSep: 34, animate: false, fit: true, padding: 20 },
+      wheelSensitivity: 0.2,
+      maxZoom: 3, minZoom: 0.2,
+    });
+    cy.on("tap", "node", (ev) => select(ev.target.data("stage")));
+    cy.on("mouseover", "node", () => { document.getElementById("draw").style.cursor = "pointer"; });
+    cy.on("mouseout", "node", () => { document.getElementById("draw").style.cursor = "default"; });
+    // Deliberate: the demo hands back the instance. A reader (or a check) can ask it what it drew without
+    // reading pixels, which is the only handle a canvas gives you.
+    window.cy = cy;
+    paintKeys();
+    if (current) select(current);
+    else {
+      // Same rule as the mermaid page: a panel left over from the previous view would state a stage count the
+      // drawing no longer has.
+      detail.innerHTML = HINT;
+      measure();
+    }
+    clock.textContent = new Date().toISOString().replace("T", " ").slice(0, 19) + " UTC";
+    return cy;
+  }
+
+  function paintKeys() {
+    keys.innerHTML = "";
+    v.stages.forEach((s, i) => {
+      const li = document.createElement("li");
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = `${i + 1} ${s.title}`;
+      b.dataset.stage = s.id;
+      if (s.id === current) b.setAttribute("aria-current", "step");
+      b.addEventListener("click", () => select(s.id));
+      li.appendChild(b);
+      keys.appendChild(li);
+    });
+  }
+
+  function marks() {
+    const at = v.stages.findIndex((s) => s.id === current);
+    return v.stages.map((s, i) => (at < 0 ? "not-reached" : i === at ? "current" : i < at ? "done" : "not-reached"));
+  }
+
+  function select(id) {
+    current = id;
+    const index = v.stages.findIndex((s) => s.id === id);
+    if (index < 0) return;
+    const stage = v.stages[index];
+    const m = marks();
+    v.stages.forEach((s, i) => {
+      const node = cy.getElementById("n_" + s.id);
+      node.data("data-mark", m[i]);
+      if (m[i] === "current") node.select(); else node.unselect();
+    });
+    cy.edges().unselect();
+    for (const b of keys.querySelectorAll("button")) {
+      if (b.dataset.stage === id) b.setAttribute("aria-current", "step"); else b.removeAttribute("aria-current");
+    }
+    detail.innerHTML = `<h2>${index + 1}. ${esc(stage.title)}</h2>
+      <p class="meta">${esc(v.id)} · stage ${index + 1} of ${v.stages.length} · ends on exit <b>${esc(stage.gate && stage.gate.check || "—")}</b>${
+        stage.gate && Object.keys(stage.gate.params || {}).length
+          ? " · " + Object.entries(stage.gate.params).map(([k, val]) => `${esc(k)}=<code>${esc(Array.isArray(val) ? val.join(",") : val)}</code>`).join(" ")
+          : ""}</p>
+      <p>${esc(stage.prompt)}</p>`;
+    measure();
+  }
+
+  function measure() {
+    if (!cy) return;
+    const zoom = cy.zoom();
+    const painted = Math.round(12 * zoom * 10) / 10;
+    const labels = Math.round(11 * zoom * 10) / 10;
+    const ext = cy.elements().boundingBox();
+    const text = cy.container().innerText; // always empty: the picture is a canvas
+    statusEl.innerHTML = [
+      `<span>drawn <b>${Math.round(ext.w)} × ${Math.round(ext.h)} px</b> in a <b>${Math.round(cy.width())} × ${Math.round(cy.height())}</b> box</span>`,
+      `<span>zoom <b>${Math.round(zoom * 100) / 100}</b></span>`,
+      `<span>node label painted at <b class="${painted < 11 ? "warn" : ""}">${painted} px</b>, gate label at <b class="${labels < 11 ? "warn" : ""}">${labels} px</b></span>`,
+      `<span>${cy.nodes().length} stages · ${cy.edges().length} edges</span>`,
+      `<span>DOM text in the drawing: <b>${text.trim().length} chars</b></span>`,
+    ].join("");
+  }
+
+  for (const btn of document.querySelectorAll(".seg button[data-n]")) {
+    btn.addEventListener("click", () => {
+      for (const b of document.querySelectorAll(".seg button[data-n]")) b.setAttribute("aria-pressed", String(b === btn));
+      build(Number(btn.dataset.n));
+    });
+  }
+  // Fit is cytoscape's default and it is the trap: at thirteen stages it turns a 12 px label into 4.8 px. The
+  // control is here so the reader can see the difference rather than take it on trust.
+  for (const btn of document.querySelectorAll(".seg button[data-zoom]")) {
+    btn.addEventListener("click", () => {
+      for (const b of document.querySelectorAll(".seg button[data-zoom]")) b.setAttribute("aria-pressed", String(b === btn));
+      if (!cy) return;
+      if (btn.dataset.zoom === "fit") cy.fit(undefined, 24);
+      else { cy.zoom(1); cy.center(); }
+      measure();
+    });
+  }
+  window.addEventListener("resize", () => { if (cy) { cy.resize(); cy.fit(undefined, 24); measure(); } });
+
+  build(7);
+})();
+</script>
+</body>
+</html>

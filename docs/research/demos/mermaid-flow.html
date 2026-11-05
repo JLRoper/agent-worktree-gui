@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mermaid — the seven-stage SEFL review loop</title>
+<!--
+  Demo A of docs/research/pipeline-renderer-options.html. The recommendation, drawn.
+
+  mermaid 11.4.1, the copy this repository already vendors at tools/vendor/mermaid.min.js — this page adds no
+  library of its own. Licence MIT. Loaded by a plain <script> tag; no build step, no module graph, no network.
+
+  What the page proves, because the report claims it:
+    1. seven stages left to right, the real `sefl-review-loop` from pipelines.seed.json;
+    2. an exit check between every pair of stages (an edge label, which is where a gate sits in a flowchart);
+    3. a loop-back arc, dashed, from `approve` to `address` — the review round trip;
+    4. labels at 11 px or more, printed from the painted DOM by the status line, not typed into this file;
+    5. click-to-open a stage, and the same reachable with Tab and Enter — mermaid renders no focusable node, so
+       the page adds tabindex/role/aria-label to every `g.node` after the render (the post-processing hook);
+    6. 1, 7 and 13 stages, the range the panel's own modal promises, using the real 13-stage bundle at 13.
+  The status line is computed from the drawing at load: a number on this page that is wrong is wrong in front
+  of the reader, which is the only reason to print one.
+-->
+<style>
+  :root {
+    --bg: #0f1115; --panel: #161a21; --panel-2: #1b2029; --line: #262c37; --line-soft: #1f242e;
+    --text: #e6e9ef; --dim: #9aa4b2; --dimmer: #6b7482;
+    --amber: #d29922; --green: #2ea043; --blue: #4a90d9;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body { margin: 0; padding: 28px 26px 60px; background: var(--bg); color: var(--text); font: 14px/1.55 var(--ui); max-width: 1180px; }
+  h1 { font-size: 22px; line-height: 1.2; margin: 0 0 6px; letter-spacing: -0.01em; }
+  .lede { color: var(--dim); max-width: 92ch; margin: 0 0 4px; }
+  .prov { color: var(--dimmer); font-family: var(--mono); font-size: 11.5px; margin: 8px 0 0; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 18px 0 12px; }
+  .bar .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--dimmer); }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+  .seg button { appearance: none; border: 0; background: transparent; color: var(--dim); font: 12px var(--mono); padding: 5px 11px; cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button[aria-pressed="true"] { background: var(--panel-2); color: var(--text); }
+  .seg button:focus-visible, a:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  .card { border: 1px solid var(--line); border-radius: 10px; background: #12151b; }
+  .scroll { overflow-x: auto; padding: 12px 10px; }
+  .status { display: flex; flex-wrap: wrap; gap: 4px 18px; border-top: 1px solid var(--line-soft); padding: 8px 12px; font: 11.5px var(--mono); color: var(--dim); }
+  .status b { color: var(--text); font-weight: 600; }
+  .status .warn { color: var(--amber); }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 10px 2px 0; font-size: 12px; color: var(--dim); }
+  .key { display: inline-flex; align-items: center; gap: 6px; }
+  .key i { width: 9px; height: 9px; border-radius: 2px; border: 1px solid var(--line); display: inline-block; }
+  .key[data-mark="current"] i { background: var(--blue); border-color: var(--blue); }
+  .key[data-mark="not-reached"] i { background: var(--panel-2); }
+  .key[data-mark="done"] i { background: var(--green); border-color: var(--green); }
+  #detail { margin-top: 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); padding: 14px 16px; min-height: 92px; }
+  #detail h2 { font-size: 14px; margin: 0 0 2px; }
+  #detail .meta { font: 11.5px var(--mono); color: var(--amber); margin: 0 0 8px; }
+  #detail p { margin: 0; color: var(--dim); font-size: 13px; max-width: 96ch; }
+  #detail .hint { color: var(--dimmer); font-size: 12.5px; }
+  footer { margin-top: 26px; color: var(--dimmer); font-size: 12px; border-top: 1px solid var(--line); padding-top: 12px; }
+  footer code { font-family: var(--mono); font-size: 11.5px; color: var(--dim); }
+
+  /* the drawing itself: the panel's own dark tokens, and text that is never allowed below 11 px */
+  #draw { display: flex; justify-content: flex-start; }
+  /* flex:0 0 auto matters: the drawing is a flex item, and without it the SVG is SHRUNK to the card's width
+     and every label is painted at 0.59 of its declared size — the exact defect the status line reports. */
+  #draw svg { max-width: none !important; height: auto; display: block; flex: 0 0 auto; }
+  #draw .node rect, #draw .label-container { fill: var(--panel-2) !important; stroke: #39414f !important; }
+  #draw .node .label foreignObject div, #draw .node .label span, #draw .node text { color: var(--text) !important; fill: var(--text) !important; font: 12px/1.35 var(--mono) !important; }
+  #draw .edgeLabel foreignObject div, #draw .edgeLabel span, #draw .edgeLabel p { color: var(--amber) !important; background: #12151b !important; font: 11px var(--mono) !important; }
+  #draw .edgePath path, #draw .flowchart-link { stroke: #5b6675 !important; stroke-width: 1.4px !important; }
+  #draw marker path { fill: #5b6675 !important; stroke: #5b6675 !important; }
+  #draw .node { cursor: pointer; }
+  #draw .node:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; border-radius: 6px; }
+  #draw .node[data-mark="current"] rect, #draw .node[aria-current="step"] rect { stroke: var(--blue) !important; stroke-width: 2px !important; }
+  #draw .node[data-mark="done"] rect { stroke: var(--green) !important; }
+  #draw .node[data-mark="refused"] rect { stroke: #e5534b !important; }
+  #draw .loop path { stroke-dasharray: 4 3; }
+</style>
+</head>
+<body>
+<header>
+  <h1>The seven-stage SEFL review loop, drawn by mermaid</h1>
+  <p class="lede">The recommendation in <a href="../pipeline-renderer-options.html">pipeline-renderer-options.html</a>,
+  rendering the same definition as <a href="dagre-d3-flow.html">the dagre-d3 page</a> — <code>sefl-review-loop</code> out of
+  <code>pipelines.seed.json</code>, seven stages, an exit check on the connector after each, one dashed review round trip.</p>
+  <p class="prov">mermaid 11.4.1 · MIT · <span id="src">tools/vendor/mermaid.min.js</span> · no build step · rendered <span id="clock">at load</span></p>
+</header>
+
+<div class="bar">
+  <span class="label">stages drawn</span>
+  <div class="seg" role="group" aria-label="how many stages to draw">
+    <button type="button" data-n="1" aria-pressed="false">1</button>
+    <button type="button" data-n="7" aria-pressed="true">7 · the definition</button>
+    <button type="button" data-n="13" aria-pressed="false">13 · the bundle</button>
+  </div>
+  <span class="label">then press a stage</span>
+</div>
+
+<div class="card">
+  <div class="scroll" id="scroll"><div id="draw" aria-live="polite">rendering…</div></div>
+  <div class="status" id="status"></div>
+</div>
+<div class="legend" id="legend">
+  <span class="key" data-mark="current"><i></i>current stage</span>
+  <span class="key" data-mark="done"><i></i>ran before it</span>
+  <span class="key" data-mark="not-reached"><i></i>not reached</span>
+</div>
+
+<section id="detail" aria-live="polite">
+  <p class="hint">Press a stage — or Tab to one and press Enter — to open it here. The drawing marks it current and the
+  panel under it says what the stage asks a worker to do and which exit check ends it.</p>
+</section>
+
+<footer>
+  <p><b>What this page is.</b> mermaid, not a mermaid-shaped drawing: the diagram is seven lines of text built from
+  <code>pipeline-definition.js</code>, and every interaction on top of it — the click, the Tab stop, the mark, the
+  accessible name — is post-processing the SVG mermaid handed back. That is the cost of the recommendation, and this
+  page exists to show it rather than hide it.</p>
+  <p>The status line reads the painted DOM: the drawing's width, the smallest label actually rendered, how much of it
+  is past the card's edge. Change the window width and nothing recalculates until you press a stage-count button —
+  mermaid re-renders the whole diagram, it does not re-lay it out.</p>
+</footer>
+
+<script src="../../../tools/vendor/mermaid.min.js"></script>
+<script src="pipeline-definition.js"></script>
+<script>
+(function () {
+  "use strict";
+  const DATA = window.PIPELINE_DEMO;
+  const draw = document.getElementById("draw");
+  const scroll = document.getElementById("scroll");
+  const statusEl = document.getElementById("status");
+  const detail = document.getElementById("detail");
+  const clock = document.getElementById("clock");
+  let count = 7;
+  let current = null;
+  const HINT = '<p class="hint">Press a stage — or Tab to one and press Enter — to open it here. The drawing marks it current and the panel under it says what the stage asks a worker to do and which exit check ends it.</p>';
+
+  // The definition at 7, the real 13-stage bundle at 13, and the first stage alone at 1 — one function, so the
+  // three views cannot disagree about what a stage is.
+  function view(n) {
+    if (n === 13) {
+      const w = DATA.wide;
+      return { id: w.id, title: w.title, stages: w.stages, loops: w.loops };
+    }
+    const st = DATA.def.stages.slice(0, n === 1 ? 1 : DATA.def.stages.length);
+    return { id: DATA.def.id, title: DATA.def.title, stages: st, loops: n === 1 ? [] : DATA.loops };
+  }
+
+  // A flowchart needs an id that is not the stage id if the stage id is not a legal node name; it is here, so the
+  // node id IS the stage id and the click hook never has to guess.
+  const nodeId = (sid) => "n_" + String(sid).replace(/[^A-Za-z0-9_]/g, "_");
+  // The ONE per-node hook mermaid gives back is the DOM id, and its shape is version-coupled: 11 writes
+  // `flowchart-<id>-<n>`, 12 prefixes the render id as well (`pflow_1-flowchart-<id>-0`). So the read is a regex
+  // over the tail, not a fixed prefix strip — the check that this page still works on both 11.4.1 and 12.3.0 is
+  // in the report's method section.
+  const stageOfNode = (node) => {
+    const id = String((node && node.id) || "");
+    const m = id.match(/flowchart-(.+?)-\d+$/);
+    return m ? m[1] : "";
+  };
+  const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  // Greedy word wrap for a flowchart label. It runs on the ESCAPED text, so a title carrying & or < still measures
+  // and breaks by the characters a reader sees.
+  function wrap(text, width) {
+    const out = [];
+    let line = "";
+    for (const word of String(text).split(/\s+/)) {
+      if (!word) continue;
+      if (line && (line + " " + word).length > width) { out.push(line); line = word; }
+      else line = line ? line + " " + word : word;
+    }
+    if (line) out.push(line);
+    return out;
+  }
+
+  function source(v) {
+    const lines = ["flowchart LR"];
+    // A <br> keeps the ordinal on its own line so the title can wrap under it at 96 px without the number
+    // colliding with the first word — the same thing the panel's own card does with a separate <span>.
+    v.stages.forEach((s, i) => {
+      // mermaid measures a label BEFORE any stylesheet sees it, so a max-width in CSS cannot wrap it — the node is
+      // laid out from the unwrapped text and the text is then clipped inside it. The wrap has to be in the string,
+      // which is why this is a helper and not a rule: 18 characters a line is what keeps the seven-stage chain
+      // inside a 1140 px card instead of 1874 px.
+      const art = s.artifact ? ` · ${esc(s.artifact)}` : "";
+      const label = wrap(`${esc(s.title)}${art}`, 18).join("<br>");
+      lines.push(`  ${nodeId(s.id)}["<b>${i + 1}</b> · ${label}"]`);
+    });
+    for (let i = 0; i < v.stages.length; i++) {
+      const check = v.stages[i].gate && v.stages[i].gate.check;
+      if (i + 1 < v.stages.length) {
+        lines.push(check ? `  ${nodeId(v.stages[i].id)} -->|"${esc(check)}"| ${nodeId(v.stages[i + 1].id)}` : `  ${nodeId(v.stages[i].id)} --> ${nodeId(v.stages[i + 1].id)}`);
+      }
+    }
+    for (const loop of v.loops || []) {
+      if (!v.stages.some((s) => s.id === loop.from) || !v.stages.some((s) => s.id === loop.to)) continue;
+      lines.push(`  ${nodeId(loop.from)} -.->|"${esc(loop.label || "loop")}"| ${nodeId(loop.to)}`);
+    }
+    return lines.join("\n");
+  }
+
+  const config = {
+    startOnLoad: false,
+    securityLevel: "strict",
+    theme: "dark",
+    // useMaxWidth:false is not a preference. With the default (true) mermaid scales the whole SVG to the container,
+    // and seven stages in a 1140 px card come back with 12 px labels painted at about 5 px. The drawing keeps its
+    // natural size and the card scrolls instead.
+    flowchart: { htmlLabels: true, curve: "basis", nodeSpacing: 26, rankSpacing: 46, padding: 6, useMaxWidth: false },
+    themeVariables: {
+      fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace',
+      fontSize: "12px",
+      primaryColor: "#1b2029", primaryTextColor: "#e6e9ef", primaryBorderColor: "#39414f",
+      lineColor: "#5b6675", tertiaryColor: "#161a21", background: "#12151b",
+    },
+  };
+  mermaid.initialize(config);
+
+  function markOf(index, v) {
+    if (current == null) return "not-reached";
+    const at = v.stages.findIndex((s) => s.id === current);
+    if (at < 0) return "not-reached";
+    if (index === at) return "current";
+    return index < at ? "done" : "not-reached";
+  }
+
+  // Every interaction the report claims, added to the SVG after mermaid hands it back. mermaid renders no
+  // tabindex, no role, no aria-current and no per-node hook beyond the DOM id it sanitises from ours — so this is
+  // the hook, and it is about twenty lines.
+  function wire(v) {
+    const svg = draw.querySelector("svg");
+    if (!svg) return;
+    for (const node of svg.querySelectorAll("g.node")) {
+      const sid = stageOfNode(node);
+      const index = v.stages.findIndex((s) => nodeId(s.id) === sid);
+      if (index < 0) continue;
+      const stage = v.stages[index];
+      const mark = markOf(index, v);
+      node.setAttribute("data-stage", stage.id);
+      node.setAttribute("data-mark", mark);
+      node.setAttribute("tabindex", "0");
+      node.setAttribute("role", "button");
+      node.setAttribute("aria-label", `stage ${index + 1} of ${v.stages.length}: ${stage.title} — ${mark}${stage.gate && stage.gate.check ? `, ends on ${stage.gate.check}` : ""}`);
+      if (mark === "current") node.setAttribute("aria-current", "step");
+      const open = (ev) => { if (ev) ev.preventDefault(); select(stage.id, index, v); };
+      node.addEventListener("click", open);
+      node.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); open(ev); }
+      });
+    }
+    // The dashed round trip gets a class so the stylesheet can dash it without a style attribute.
+    for (const edge of svg.querySelectorAll("g.edgePath, g.flowchart-link")) {
+      const cls = String(edge.getAttribute("class") || "");
+      if (cls.indexOf("loop") >= 0) edge.classList.add("loop");
+    }
+  }
+
+  function select(id, index, v) {
+    current = id;
+    const stage = v.stages[index];
+    detail.innerHTML = `<h2>${index + 1}. ${esc(stage.title)}</h2>
+      <p class="meta">${esc(v.id)} · stage ${index + 1} of ${v.stages.length} · ends on exit <b>${esc(stage.gate && stage.gate.check || "—")}</b>${
+        stage.gate && Object.keys(stage.gate.params || {}).length
+          ? " · " + Object.entries(stage.gate.params).map(([k, val]) => `${esc(k)}=<code>${esc(Array.isArray(val) ? val.join(",") : val)}</code>`).join(" ")
+          : ""}</p>
+      <p>${esc(stage.prompt)}</p>`;
+    for (const node of draw.querySelectorAll("g.node")) {
+      const sid = stageOfNode(node);
+      const i = v.stages.findIndex((s) => nodeId(s.id) === sid);
+      if (i < 0) continue;
+      const mark = markOf(i, v);
+      node.setAttribute("data-mark", mark);
+      if (mark === "current") node.setAttribute("aria-current", "step"); else node.removeAttribute("aria-current");
+    }
+    measure(v);
+  }
+
+  // ---- the honest status line ----------------------------------------------------------------------------------
+  // Everything here is read off the painted drawing. `smallest` is a getComputedStyle on the elements that carry a
+  // text node, so a stylesheet that quietly drops the label to 9 px changes this number rather than hiding.
+  function measure(v) {
+    const svg = draw.querySelector("svg");
+    if (!svg) { statusEl.textContent = "nothing drawn"; return; }
+    const r = svg.getBoundingClientRect();
+    const card = scroll.getBoundingClientRect();
+    const vb = svg.viewBox && svg.viewBox.baseVal && svg.viewBox.baseVal.width ? svg.viewBox.baseVal.width : r.width;
+    // Painted = the font-size the stylesheet declares × the scale the SVG is actually drawn at. A 12 px label in a
+    // 1783 px drawing squeezed into a 1106 px card is painted at 7.4 px, and only the product says so.
+    const scale = vb ? r.width / vb : 1;
+    const hidden = Math.max(0, Math.round(r.width - card.width));
+    let smallest = null;
+    for (const el of svg.querySelectorAll("foreignObject div, text, span.nodeLabel, .edgeLabel span, .edgeLabel p")) {
+      const hasText = [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());
+      if (!hasText) continue;
+      const px = parseFloat(getComputedStyle(el).fontSize);
+      if (!px) continue;
+      if (smallest == null || px < smallest) smallest = px;
+    }
+    const painted = smallest == null ? null : Math.round(smallest * scale * 10) / 10;
+    const nodes = [...svg.querySelectorAll("g.node")];
+    const inView = nodes.filter((n) => {
+      const b = n.getBoundingClientRect();
+      return b.left >= card.left - 0.5 && b.right <= card.right + 0.5;
+    }).length;
+    statusEl.innerHTML = [
+      `<span>drawn <b>${Math.round(vb)} × ${Math.round(r.height / (scale || 1))} px</b> at <b>${Math.round(scale * 100) / 100}×</b></span>`,
+      `<span>smallest label painted at <b class="${painted != null && painted < 11 ? "warn" : ""}">${painted == null ? "?" : painted} px</b></span>`,
+      `<span>${hidden ? `<b class="warn">${hidden} px</b> past the card` : "fits the card"}</span>`,
+      `<span>${inView} of ${nodes.length} stages in view</span>`,
+      `<span>${v.stages.length} stages · ${(v.loops || []).length} loop${(v.loops || []).length === 1 ? "" : "s"}</span>`,
+    ].join("");
+  }
+
+  let seq = 0;
+  async function drawView(n) {
+    count = n;
+    const v = view(n);
+    const run = ++seq;
+    draw.innerHTML = '<span style="color:#6b7482;font:12px ui-monospace">rendering…</span>';
+    let svgText;
+    try {
+      svgText = (await mermaid.render("pflow_" + run, source(v))).svg;
+    } catch (err) {
+      draw.innerHTML = `<pre style="color:#ffb4ab;font:12px ui-monospace;white-space:pre-wrap">mermaid refused this diagram:\n${esc(err && err.message || err)}</pre>`;
+      return;
+    }
+    if (run !== seq) return; // a second press outran this render; its drawing is the one to show
+    draw.innerHTML = svgText;
+    // mermaid sets `max-width` and `width:100%` on its own <svg>, which SCALES the whole picture into the card:
+    // the 12 px label keeps its CSS font-size while being painted at 12 × (card ÷ natural) — 7.4 px in this card.
+    // Taking the viewBox as the size is what makes the labels really be 11 px and the card scroll instead.
+    const svg = draw.querySelector("svg");
+    if (svg && svg.viewBox && svg.viewBox.baseVal && svg.viewBox.baseVal.width) {
+      const vb = svg.viewBox.baseVal;
+      svg.removeAttribute("style");
+      svg.setAttribute("width", String(Math.ceil(vb.width)));
+      svg.setAttribute("height", String(Math.ceil(vb.height)));
+      svg.style.maxWidth = "none";
+    }
+    wire(v);
+    if (current && !v.stages.some((s) => s.id === current)) current = null;
+    if (current) select(current, v.stages.findIndex((s) => s.id === current), v);
+    else {
+      // A view that does not hold the open stage must not leave the previous one's prose under the picture: a panel
+      // saying "stage 4 of 7" beside a 13-stage drawing is the drawing disagreeing with itself.
+      detail.innerHTML = HINT;
+      measure(v);
+    }
+    clock.textContent = new Date().toISOString().replace("T", " ").slice(0, 19) + " UTC";
+  }
+
+  for (const btn of document.querySelectorAll(".seg button")) {
+    btn.addEventListener("click", () => {
+      for (const b of document.querySelectorAll(".seg button")) b.setAttribute("aria-pressed", String(b === btn));
+      drawView(Number(btn.dataset.n));
+    });
+  }
+
+  drawView(7).then(() => {
+    // A load-time self-check the page prints for a reader who scrolls to the bottom: if it ever reads "no",
+    // the page is broken and says so instead of looking plausible.
+    const svg = draw.querySelector("svg");
+    const nodes = svg ? svg.querySelectorAll("g.node").length : 0;
+    const focusable = svg ? svg.querySelectorAll("g.node[tabindex='0']").length : 0;
+    document.getElementById("src").textContent = "tools/vendor/mermaid.min.js";
+    if (nodes !== 7 || focusable !== 7) {
+      document.getElementById("detail").innerHTML = `<p class="hint" style="color:#ffb4ab">self-check failed: ${nodes} nodes, ${focusable} focusable — expected 7 and 7.</p>`;
+    }
+  });
+})();
+</script>
+</body>
+</html>
