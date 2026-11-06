@@ -1766,10 +1766,14 @@ async function tickPipelineWaits({ now = Date.now() } = {}) {
       readReview: readReviewForPipelineWait,
       wake: wakePipelineThread,
       promptValues: pipelinePromptValues,
+      // The second kind of wait: a stage's own run, held in the book by the cut. The sweep reads the job store and, once
+      // the run is no longer live, hands the row to the ONE advance seam — the assistant's pipeline driver, the same one
+      // the queue tick runs, so the graph rules (a cap, a gate, a refusal) are never re-implemented here.
+      advance: (item) => (assistant && typeof assistant.advancePipelineTree === "function" ? assistant.advancePipelineTree(item.tree) : { ok: false, error: "no pipeline driver is attached — the hold was cleared and nothing advanced" }),
     });
     if (out.checked || out.errors.length) {
       log(
-        `pipeline waits: ${out.checked} due — ${out.advanced} advanced, ${out.woke} woke, ${out.rescheduled} rescheduled, ${out.closed} closed, ${out.refused} refused` +
+        `pipeline waits: ${out.checked} due — ${out.advanced} advanced, ${out.woke} woke, ${out.held} held, ${out.rescheduled} rescheduled, ${out.closed} closed, ${out.refused} refused` +
           `${out.errors.length ? `, ${out.errors.length} error(s): ${out.errors.map((e) => e.error).join("; ")}` : ""}`,
       );
     }
