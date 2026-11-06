@@ -194,6 +194,13 @@ the attempt, and a stage whose start was refused has to leave the refusal somewh
 `thread` and `job` are filled at the link (the panel knows them only then), and its `decision` is written whenever the
 driver makes one about that entry.
 
+**A stage run settles on ITS thread.** The entry's own `thread` — written at the link, when the worker was cut — is the
+run whose status settles the stage; `currentThread` is the fallback for an entry that is already settled or never got a
+thread. Reading the row's newest thread alone was the 24-stage run's third defect: the row's `threads[]` is capped
+(`TASK_THREADS_MAX`), the cap used to drop the newest one, and `currentThread` froze on `loop-20` — so 19 stage runs
+settled on a finished job while their own workers were still running. The cap keeps the newest twenty now, but the
+settle does not depend on that: the ledger already names the attempt.
+
 `stageRuns` is capped at 30 entries, newest last; the cap is applied by the **writer** (`lib/task-pipeline.js`), not by
 the queue's schema, because `pickTask` carries `pipelineRun` verbatim (`lib/assistant/queue.js:436-438`) and will not
 clip inside it. A dropped entry increments `pipelineRun.runsDropped`, which is the one number the cap must not lose.
@@ -440,6 +447,13 @@ visits recorded one hash while seven files sat on disk, and the pin was taken ag
 cannot resolve - so every committed round read as `uncommitted`. The record therefore carries both: `path` is the
 declaration, `file` is what it resolved to, and the blob is taken from `file`.
 
+**The same rule makes a gate a question asked again each round.** A gate that declares one record per round
+(`ledger/gates/G51-{{run_id}}-r{{round}}.json`) is asked for THIS visit's file, on every pass — the settle's ask, and
+the parked row's re-ask alike. Without the round filled in, the first-sorted fallback found r1's file in every later
+round: G51 was crossed 11 times on round 1's decision while the document waited for a new one each round. A round with
+no record yet parks on the declaration (so the next pass fills that round again); a round's own record is the only
+thing that releases it.
+
 ---
 
 ## 6. The decision: park or start, and what a person can read afterwards
@@ -631,6 +645,11 @@ the gate or the person reading it.
 The ledger is capped by its writer (§2.2), because `pickTask` carries `pipelineRun` verbatim. A row evicted at the task
 cap takes its stage runs with it — which is correct (the row is gone) and worth knowing before anyone goes looking for
 the history of a row that is no longer in the file.
+
+`TASK_THREADS_MAX` 20 caps `threads[]`, and it keeps the **newest** twenty: the last entry is the run carrying the row
+(`currentThread`), so the entry the cap drops is the oldest of the later ones, never the current run — the first entry
+(the legacy `thread`) stays first. Capping the other way froze `currentThread` on the twentieth for the rest of a long
+row's life, which is how 19 stage runs settled on `loop-20` (see §2.2).
 
 ### 7.9 A row moved between assistants mid-run
 
