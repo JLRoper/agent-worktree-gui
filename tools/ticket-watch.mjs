@@ -567,9 +567,13 @@ async function main() {
   return cmdCheck();
 }
 
+// The exit code is set, not forced: `process.exit()` straight after a piped stdout write can abort the write on
+// Windows (a libuv handle-closing assertion), and a cron log would lose the report it was told to record.
 main()
-  .then((code) => process.exit(code || 0))
+  .then((code) => {
+    process.exitCode = code || 0;
+  })
   .catch((err) => {
     process.stderr.write(`ticket-watch: ${String((err && err.message) || err)}\n`);
-    process.exit(1);
+    process.exitCode = 1;
   });
