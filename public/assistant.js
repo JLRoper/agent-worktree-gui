@@ -2807,6 +2807,38 @@
   let queueDrag = null;
   let queueDragEnded = 0;
   const queueDropNotes = new Map(); // assistantId -> the sentence a blocked drop left on the pane
+  // How much of the list the pane draws. A queue holds up to 200 tasks and the pane is rebuilt on every board tick and
+  // after every action, so drawing the whole history is a page nobody reads and a DOM the poll keeps paying for. The
+  // window lives HERE, outside the painter, keyed by assistant: a repaint reads it back instead of starting at 20 again.
+  const QUEUE_FIRST = 20;
+  const QUEUE_MORE = 50;
+  const queueShown = new Map(); // assistantId -> how many of the newest tasks the pane draws
+  const queueWindowOf = (id) => {
+    const n = Number(queueShown.get(String(id)));
+    return Number.isFinite(n) && n >= QUEUE_FIRST ? n : QUEUE_FIRST;
+  };
+  // Ids are handed out in order, so the highest ids ARE the newest tasks. The window is a SET of ids rather than the
+  // first N rows: the pane's own bucket/`order` sort still decides where each row is drawn, and loading more adds the
+  // next-newest slice without re-ordering the rows already on screen.
+  const queueWindowIds = (rows, shown) =>
+    new Set(
+      (Array.isArray(rows) ? rows : [])
+        .slice()
+        .sort((a, b) => Number(b.id) - Number(a.id))
+        .slice(0, shown)
+        .map((t) => String(t.id)),
+    );
+  // The window's rows in DRAWING order. The active buckets keep `queueSorted`'s order (a queued card's drag position is
+  // the reader's), and the finished bucket reads newest first: its useful end is the latest work, and "Load 50 more" then
+  // appends older rows UNDER the ones on screen instead of inserting them out of sight above.
+  const queueWindowRows = (sorted, shown) => {
+    const ids = queueWindowIds(sorted, shown);
+    const visible = (Array.isArray(sorted) ? sorted : []).filter((t) => ids.has(String(t.id)));
+    return [
+      ...visible.filter((t) => t.state !== "done"),
+      ...visible.filter((t) => t.state === "done").sort((a, b) => Number(b.id) - Number(a.id)),
+    ];
+  };
 
   const queueMark = (state) => (state === "done" ? "✓" : state === "parked" ? "⏸" : state === "running" ? "●" : "○");
   const queueStateName = (state) => (state === "running" ? "running" : state === "parked" ? "parked" : state === "done" ? "done" : "queued");
@@ -3293,6 +3325,16 @@
     return rows.length ? "" : `<div class="as-help" ${at}>(empty — this assistant is carrying nothing)</div>`;
   }
 
+  // The one control under the list. It appends the next-newest slice of the tasks the window is still hiding, and it
+  // RETIRES at the end of the list: with nothing hidden there is no control to draw, not a disabled button that costs a
+  // line forever. The count in the note is the truth the label does not spell out when fewer than 50 are left.
+  function queueMoreHtml(id, hidden) {
+    const left = Number(hidden) || 0;
+    if (left <= 0) return "";
+    const more = Math.min(QUEUE_MORE, left);
+    return `<div class="as-qmore"><button type="button" class="as-qmore-btn" data-as-qact="more" data-as-qown="${esc(id)}" title="append the next ${more} older task${more === 1 ? "" : "s"} - the list opens at the newest ${QUEUE_FIRST}, and this control goes away when every task is shown">Load ${more} more</button><span class="as-qmore-note">${left} older task${left === 1 ? "" : "s"} not shown</span></div>`;
+  }
+
   // ---- the worktrees sub-tab: one card per project ------------------------------------------------
   //
   // The board's own table, over the trees THIS assistant owns, grouped into the board's own project cards. It is
@@ -3496,6 +3538,10 @@
     // The pane's order: state bucket first, then the reader's `order` (the place a card was dragged to), then id.
     const sorted = queueSorted(rows);
     const byId = new Map(sorted.map((t) => [Number(t.id), t]));
+    // The window: the newest ids the reader has asked for, drawn in the pane's own order. `hidden` is what the one
+    // control under the list appends from, and it retires when it reaches zero.
+    const visible = queueWindowRows(sorted, queueWindowOf(id));
+    const hidden = sorted.length - visible.length;
     const dropNote = queueDropNotes.get(id) || "";
     host.innerHTML = `
       <div class="as-group as-qpane">
@@ -3529,7 +3575,8 @@
         </details>
         ${queueStateHtml(pane, { id, n, view, rows: sorted })}
         ${dropNote ? `<div class="as-qdrop" data-as-qdrop="${esc(id)}" role="status">${esc(dropNote)}</div>` : ""}
-        ${sorted.map((t) => queueTaskHtml(id, t, queueJobs.byThread, byId, state.assistant?.alerts || [])).join("")}
+        ${visible.map((t) => queueTaskHtml(id, t, queueJobs.byThread, byId, state.assistant?.alerts || [])).join("")}
+        ${queueMoreHtml(id, hidden)}
       </div>`;
   }
 
@@ -5513,6 +5560,15 @@
       } finally {
         t.disabled = false;
       }
+      return;
+    }
+    if (action === "more") {
+      // Append the next slice and repaint from the cache: the window is client-side, so this press owes no route.
+      // `queueShown` lives outside the painter, which is why the next board tick repaints the same rows. The paint is
+      // FORCED because the press leaves the caret on this button, inside the pane: the unforced guard exists to keep a
+      // poll from taking a draft out of a text field, and a focused button is not a draft.
+      queueShown.set(own, queueWindowOf(own) + QUEUE_MORE);
+      renderAssistantQueue(own, true);
       return;
     }
     if (action === "pipeline") {
