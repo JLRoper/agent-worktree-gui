@@ -26,6 +26,9 @@
 
   const BUILTIN = JSON.parse(document.getElementById("pipeline-map-data").textContent);
   let DATA = BUILTIN;
+  // The built-in model carries `bundles[]` (every pipeline in the bundle file). An imported document may still
+  // carry the older single `bundle` — the importer's own model shape — so both are read here, in one place.
+  const bundlesOf = (d) => (Array.isArray(d.bundles) ? d.bundles : d.bundle ? [d.bundle] : []);
   const importer = window.wtPipelineImport;
   const SVG_NS = "http://www.w3.org/2000/svg";
   const cardsEl = document.getElementById("cards");
@@ -122,14 +125,15 @@
   function summary() {
     const m = DATA.meta || {};
     const builtin = DATA === BUILTIN;
-    const loops = DATA.pipelines.reduce((n, p) => n + p.loops.length, 0) + (DATA.bundle ? DATA.bundle.loops.length : 0);
-    const carried = DATA.pipelines.reduce((n, p) => n + p.loops.filter((l) => l.source === "data").length, 0) + (DATA.bundle ? DATA.bundle.loops.filter((l) => l.source === "data").length : 0);
+    const bundles = bundlesOf(DATA);
+    const loops = DATA.pipelines.reduce((n, p) => n + p.loops.length, 0) + bundles.reduce((n, b) => n + b.loops.length, 0);
+    const carried = DATA.pipelines.reduce((n, p) => n + p.loops.filter((l) => l.source === "data").length, 0) + bundles.reduce((n, b) => n + b.loops.filter((l) => l.source === "data").length, 0);
     const inferred = loops - carried;
     const stats = [
       [m.totalPipelines, builtin ? "catalogue definitions" : `${m.totalPipelines === 1 ? "definition" : "definitions"} in this document`],
       [m.totalStages, builtin ? "catalogue stage nodes" : `stage node${m.totalStages === 1 ? "" : "s"} in this document`],
     ];
-    if (DATA.bundle) stats.push([m.bundleStages, "bundle stage nodes"], [m.totalStages + m.bundleStages, "stage nodes, total"]);
+    if (bundles.length) stats.push([m.bundleStages, `bundle stage nodes · ${bundles.length} pipeline${bundles.length === 1 ? "" : "s"}`], [m.totalStages + m.bundleStages, "stage nodes, total"]);
     stats.push(
       [loops, `loop-backs · ${carried} carried, ${inferred} inferred`],
       [DATA.pipelines.filter((p) => p.next).length, "chains between definitions"],
@@ -200,18 +204,21 @@
       cardsEl.appendChild(el);
       cards.push({ item: p, el, isBundle: false });
     });
-    if (!DATA.bundle) return;
-    const stages = DATA.bundle.stages.length;
-    const gates = (DATA.bundle.gates || []).length;
+    const bundles = bundlesOf(DATA);
+    if (!bundles.length) return;
+    const stages = bundles.reduce((n, b) => n + b.stages.length, 0);
+    const gates = bundles.reduce((n, b) => n + (b.gates || []).length, 0);
     const head = document.createElement("h2");
     head.className = "pm-section";
-    head.textContent = `The studio bundle — ${stages} stage${stages === 1 ? "" : "s"}, ${gates} gate${gates === 1 ? "" : "s"}`;
+    head.textContent = `The bundle file — ${bundles.length} pipeline${bundles.length === 1 ? "" : "s"}, ${stages} stage${stages === 1 ? "" : "s"}, ${gates} gate${gates === 1 ? "" : "s"}`;
     head.style.cssText = "font-size:17px;margin:28px 0 10px;letter-spacing:-0.1px";
     cardsEl.appendChild(head);
-    const el = cardShell(DATA.bundle, DATA.pipelines.length + 1, true);
-    el.querySelector(".pm-card-head .pm-idx").textContent = "B";
-    cardsEl.appendChild(el);
-    cards.push({ item: DATA.bundle, el, isBundle: true });
+    bundles.forEach((b, i) => {
+      const el = cardShell(b, DATA.pipelines.length + i + 1, true);
+      el.querySelector(".pm-card-head .pm-idx").textContent = i === 0 ? "B" : `B${i + 1}`;
+      cardsEl.appendChild(el);
+      cards.push({ item: b, el, isBundle: true });
+    });
   }
 
   // ---- mermaid ----------------------------------------------------------------------------------------------------
@@ -578,7 +585,7 @@
       sha256: "",
       bytes: 0,
       stages: BUILTIN.meta.totalStages + BUILTIN.meta.bundleStages,
-      cards: BUILTIN.pipelines.length + 1,
+      cards: BUILTIN.pipelines.length + bundlesOf(BUILTIN).length,
       at: BUILTIN.meta.generatedAt,
       note: "",
     };
@@ -599,10 +606,13 @@
     if (prov.kind === "built-in") {
       const seeds = (BUILTIN.meta.sources || []).filter((s) => /(^|\/)(pipelines|pipeline-bundle)\.seed\.json$/.test(s.file));
       const named = seeds.map((s) => `<code>${esc(s.file)}</code> sha256 <code class="sha">${esc(s.sha256)}</code>`).join(" · ");
-      // The bundle file may hold more than the studio's own pipeline; the count is named rather than left out, so this
-      // page cannot read as "the bundle is one pipeline" after the file grew a list.
-      const others = Number(BUILTIN.meta.bundlePipelines) > 1 ? ` (the first of <b>${BUILTIN.meta.bundlePipelines}</b> pipelines the bundle file holds — the others are read in a task's pipeline window)` : "";
-      provenanceEl.innerHTML = `<span class="pv-tag">built in</span>this page was rendered from ${named || "its own seeds"} — <b>${BUILTIN.meta.totalPipelines}</b> definitions and the <b>${BUILTIN.meta.bundleStages}</b>-stage studio bundle${others}. Nothing on this screen was fetched.`;
+      // Every pipeline in the bundle file is drawn, so the line names the count and the stages rather than calling
+      // the file "the studio bundle" — a page that drew one of four would be a picture of a library that is not there.
+      const bundles = bundlesOf(BUILTIN);
+      const bundleLine = bundles.length
+        ? ` and <b>${bundles.length}</b> bundle pipeline${bundles.length === 1 ? "" : "s"} (<b>${BUILTIN.meta.bundleStages}</b> stages, the studio's <b>${BUILTIN.meta.studioStages}</b> among them)`
+        : "";
+      provenanceEl.innerHTML = `<span class="pv-tag">built in</span>this page was rendered from ${named || "its own seeds"} — <b>${BUILTIN.meta.totalPipelines}</b> definitions${bundleLine}. Nothing on this screen was fetched.`;
       return;
     }
     const label = (importer && importer.SHAPES[prov.shape]) || "a document";
@@ -639,7 +649,7 @@
   // stage would be drawn by it as a sequence that is not in the document — a row break where no handoff exists — so
   // the control is disabled and says why rather than offering a picture that lies.
   function bookAllowed() {
-    return DATA.pipelines.every((p) => {
+    return DATA.pipelines.concat(bundlesOf(DATA)).every((p) => {
       const stages = p.stages;
       const edges = p.edges || [];
       if (stages.length < 2) return true;
