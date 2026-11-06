@@ -22,7 +22,10 @@ import { sliceBetween, sliceRegion } from "../tools/panel-testkit.mjs";
 
 const source = readFileSync(new URL("../public/app.js", import.meta.url), "utf8").replaceAll("\r\n", "\n");
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
-const config = JSON.parse(readFileSync(new URL("../config.json", import.meta.url), "utf8"));
+// config.json is the reader's own file and is not tracked (config.example.json is the shipped template), so a
+// fresh clone carries no config.json: the shipped example is what every clone has, and a checkout that does carry
+// its own config.json is tested against that instead.
+const config = JSON.parse(readFileSync(new URL("../config.example.json", import.meta.url), "utf8"));
 const serverSource = readFileSync(new URL("../server.js", import.meta.url), "utf8").replaceAll("\r\n", "\n");
 
 // ---- the shipped region, in a page-shaped context ----------------------------------------------------------------
@@ -270,10 +273,10 @@ test("the Agents card owns the cards no row claims, and the assistant is never a
 });
 
 // ---- the setting: config.json, the server's normaliser, and the Board tab's field ----------------------------------
-test("config.json carries collapseAfterSeconds beside the cadences, at 30", () => {
+test("the shipped example carries collapseAfterSeconds beside the cadences, at 30", () => {
   const keys = Object.keys(config);
   const at = keys.indexOf("collapseAfterSeconds");
-  assert.ok(at > 0, "config.json names the key");
+  assert.ok(at > 0, "the example names the key");
   assert.equal(config.collapseAfterSeconds, 30, "the shipped default is 30 s");
   assert.ok(keys.indexOf("slowSeconds") < at, "it sits after the scan cadences");
   assert.ok(at < keys.indexOf("fetchSeconds"), "…and before the fetch cadence");

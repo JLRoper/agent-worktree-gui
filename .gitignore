@@ -21,3 +21,6 @@ matrix-bridge/restart_launcher.log
 matrix-bridge/restart_report.txt
 matrix-bridge/restart_verify.txt
 matrix-bridge/*.pid
+
+# The reader's own config: machine paths and their board. config.example.json is the template.
+config.json
