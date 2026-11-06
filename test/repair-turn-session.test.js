@@ -10,7 +10,9 @@
 // `unknown_execution`, and a run id the gateway still answers `queued` with no generation — open a NEW session (same
 // tree, same prompt) and say so on the card. A repair on a healthy session still continues it, so a retry after a
 // timeout is not a cold start. And a run the gateway admitted but never claimed is written off the way an `unknown`
-// run is: the card takes the gateway's own word, and NO stop is sent, because the old id is left where it is.
+// run is: the card takes the gateway's own word, and NO stop is sent, because the old id is left where it is —
+// for a card that cannot re-post its request (one the store restored). A card that still holds its body replaces
+// the session on that answer instead: test/session-replace-on-unknown.test.js.
 import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
@@ -188,7 +190,7 @@ test("the replacement is not repeated: the next turn continues the session the r
   assert.equal(card.sessionReplaced, null, "one replacement per lost session, not one per turn");
 });
 
-test("a sweep writes off a run the gateway admits and never claims — twice, and without a stop", async (t) => {
+test("a card with no request to re-post is written off when the gateway admits and never claims — twice, and without a stop", async (t) => {
   const { jobs, logs, dir, gw } = await panel(t, { runs: { [OLD_RUN]: { status: "queued", execution_generation: null } } });
   const card = {
     id: "job-wedged",
