@@ -4,16 +4,49 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.30.3 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.30.6 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-328 releases from v0.1.0 (2026-10-20) to v1.30.3 (2026-11-05), 1143 commits between the tags. Every release is anchored by an
+331 releases from v0.1.0 (2026-10-20) to v1.30.6 (2026-11-05), 1149 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.30.6 — 2026-11-05 · 2 commits
+
+[`b326a2f`](https://github.com/JLRoper/agent-worktree-gui/commit/b326a2f4034e008f210819bc13622310a1afa67d) · [compare v1.30.5...v1.30.6](https://github.com/JLRoper/agent-worktree-gui/compare/v1.30.5...v1.30.6)
+
+### Fixed
+
+- fix: the panel's chrome is not text, and its console still is ([`37f06d8`](https://github.com/JLRoper/agent-worktree-gui/commit/37f06d8b45a83d3c43833b162bbb2ecf25601888))
+
+### Other
+
+- chore: 1.30.6 — the version this landing carries ([`b326a2f`](https://github.com/JLRoper/agent-worktree-gui/commit/b326a2f4034e008f210819bc13622310a1afa67d))
+
+## v1.30.5 — 2026-11-05 · 1 commit
+
+[`a1421c0`](https://github.com/JLRoper/agent-worktree-gui/commit/a1421c002888beb5cc92b1342a6f99a8f266a0f8) · [compare v1.30.4...v1.30.5](https://github.com/JLRoper/agent-worktree-gui/compare/v1.30.4...v1.30.5)
+
+### Fixed
+
+- fix: the two push selects ride the remote-mapping row, not their own band ([`a1421c0`](https://github.com/JLRoper/agent-worktree-gui/commit/a1421c002888beb5cc92b1342a6f99a8f266a0f8))
+
+## v1.30.4 — 2026-11-05 · 3 commits
+
+[`3db5e28`](https://github.com/JLRoper/agent-worktree-gui/commit/3db5e284b2c39385bb05e6675f92b5f9f39f08b3) · [compare v1.30.3...v1.30.4](https://github.com/JLRoper/agent-worktree-gui/compare/v1.30.3...v1.30.4)
+
+### Docs & tests
+
+- docs: render the changelog — 328 releases ([`208620a`](https://github.com/JLRoper/agent-worktree-gui/commit/208620a5dadb1432eac3bfb00e5d04b3f43b656f))
+
+### Other
+
+- settings: optym-integration-multi asks before a new branch is pushed ([`222a0b5`](https://github.com/JLRoper/agent-worktree-gui/commit/222a0b500a383591d5d950cf31d75c454fadf149))
+- chore: 1.30.4 — the version this landing carries ([`3db5e28`](https://github.com/JLRoper/agent-worktree-gui/commit/3db5e284b2c39385bb05e6675f92b5f9f39f08b3))
 
 ## v1.30.3 — 2026-11-05 · 2 commits
 
