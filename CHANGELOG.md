@@ -4,16 +4,36 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.38.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.40.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-342 releases from v0.1.0 (2026-10-20) to v1.38.0 (2026-11-06), 1195 commits between the tags. Every release is anchored by an
+343 releases from v0.1.0 (2026-10-20) to v1.40.0 (2026-11-06), 1199 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.40.0 — 2026-11-06 · 4 commits
+
+[`9774a03`](https://github.com/JLRoper/agent-worktree-gui/commit/9774a03eb160dcaa84903297e2042417ccdb7645) · [compare v1.38.0...v1.40.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.38.0...v1.40.0)
+
+### Added
+
+- feat: every rendered report ends with a provenance card ([`a9089b0`](https://github.com/JLRoper/agent-worktree-gui/commit/a9089b01455ca39fefa8d0c12d9d58ecc5d38f46))
+
+### Fixed
+
+- fix: the perf audit's own paths are recorded, so the push gate can pass ([`0706653`](https://github.com/JLRoper/agent-worktree-gui/commit/07066538eacbb04ce91763c65a69a4aa62afcbfa))
+
+### Docs & tests
+
+- docs: render the changelog — 342 releases ([`8e4f203`](https://github.com/JLRoper/agent-worktree-gui/commit/8e4f203b8f417df0a51f27b695755ec5d114aa64))
+
+### Other
+
+- chore: 1.40.0 - the version this landing carries ([`9774a03`](https://github.com/JLRoper/agent-worktree-gui/commit/9774a03eb160dcaa84903297e2042417ccdb7645))
 
 ## v1.38.0 — 2026-11-06 · 5 commits
 
