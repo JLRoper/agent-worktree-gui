@@ -159,12 +159,21 @@ JSON.
 
 ### 1.7 The library at a glance
 
-`public/pipeline-map.html` puts the whole library on one page: the seven definitions and the thirteen-stage studio
-bundle, each stage a node whose first line is its ordinal and title and whose second line names who runs it, with
-the exit check or gate on the arrow that leaves it. It is built from both seed files by
-`node tools/render-pipeline-map.mjs`, which inlines `tools/vendor/mermaid.min.js` — the page opens with no network
-at all. `node tools/verify-pipeline-map.mjs` re-checks the committed page: 8 cards, 36 stage nodes, the bundle's
-three carried loops and `sefl-review-loop`'s one inferred edge, both layouts, 11 px labels and zero console errors.
+`public/pipeline-map.html` puts the whole library on one page: the seven catalogue definitions and the four pipelines
+the bundle file carries (the thirteen-stage studio export among them), each stage a node whose first line is its
+ordinal and title and whose second line names who runs it, with the exit check or gate on the arrow that leaves it.
+It is built from both seed files by `node tools/render-pipeline-map.mjs`, which inlines
+`tools/vendor/mermaid.min.js` — the page opens with no network at all. `node tools/verify-pipeline-map.mjs`
+re-checks the committed page: 11 cards, 43 stage nodes, the bundle's carried loops and `sefl-review-loop`'s one
+inferred edge, both layouts, 11 px labels and no console errors.
+
+The panel names that page in the two places a reader is already looking at a pipeline: the **Pipeline map** row under
+**Settings → Pipeline**, and the `map ↗` control in the pipeline flow dialog's header — in BOTH of the dialog's
+modes, because it draws one pipeline of the library the map draws whole. Both are anchors carrying
+`target="_blank" rel="noopener"`, so following one opens its own tab and the panel (and the Settings tab a reader is
+editing in) stays where it was: a link that navigated the panel away would lose the draft behind the dialog.
+`test/pipeline-map-link.test.js` pins the two doors, their scoping and the page's own title, and
+`tools/verify-pipeline-flow.mjs` follows one of them in a browser to that title and its eleven cards.
 
 A catalogue stage has no role field, so its second line is **derived** from the stage's own prompt by a closed rule
 table in the renderer; every derived line carries the rule id and the exact phrase, which the page's inspector

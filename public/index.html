@@ -592,6 +592,10 @@
           <span class="settings-unit mono" id="pipeline-summary">reading…</span>
         </div>
         <div class="settings-preview mono" id="pipeline-source">…</div>
+        <div class="settings-row" id="pipeline-map-row" title="The whole library on ONE page: every catalogue definition and every pipeline in the bundle file, drawn as a map — each stage a node with its ordinal, title and who runs it, and the exit check or gate on the arrow that leaves it. It is a generated page (npm run render:pipeline-map) of the two seed files this panel ships, so it shows the library as written, not a draft open in the editor. Opens in its own tab, so the panel stays on the tab you are editing in.">
+          <span>Pipeline map <span class="settings-info">ⓘ</span></span>
+          <span class="settings-unit mono"><a class="settings-link" id="pipeline-map-open" href="/pipeline-map.html" target="_blank" rel="noopener" title="open the map in a new tab — every definition and every bundle pipeline on one page, each stage's role and exit check with it">open the map ↗</a></span>
+        </div>
         <div class="settings-row" id="pipeline-pick-row" title="The pipeline this tab edits: one definition at a time, chosen here. The editor below is that definition's title, kind, description, next and every stage's prompt and exit check; Save validates the whole document before it writes. The flow button draws the definition as a left-to-right sequence — each stage's exit check is the notch on the connector after it.">
           <span>Pipeline <span class="settings-info">ⓘ</span></span>
           <select id="pipeline-select" aria-label="the pipeline to edit"></select>

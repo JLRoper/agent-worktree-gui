@@ -21,6 +21,9 @@
 //   the modal      Escape closes it and leaves the Settings window open (one Esc, one surface); Tab cycles inside the
 //                  card; a press on the backdrop closes it, a press inside does not; focus returns to the press that
 //                  opened it.
+//   the map        Settings > Pipeline's row and the dialog's header bar both name `public/pipeline-map.html`, and the
+//                  dialog's control is FOLLOWED in this browser: the new tab's own title and its eleven cards are the
+//                  proof, not the href.
 //   reduced motion A second browser context asks for `prefers-reduced-motion: reduce`: the same drawing arrives with
 //                  `data-motion="off"` and no animation on the current stage's mark.
 //
@@ -195,7 +198,7 @@ const openQueueFlow = async (page) => {
 
 let browserRun = null;
 try {
-  browserRun = await withBrowser(async ({ page, pageErrors, consoleErrors }) => {
+  browserRun = await withBrowser(async ({ page, context, pageErrors, consoleErrors }) => {
     page.setDefaultTimeout(20_000);
     await page.goto(panel.base, { waitUntil: "domcontentloaded" });
     await page.waitForSelector("#job-prompt", { state: "visible", timeout: 30_000 });
@@ -235,6 +238,58 @@ try {
     check(edit.locked, "the page behind it is locked");
     check(edit.focusInCard, "the dialog took the caret", edit.active);
     await page.screenshot({ path: path.join(SHOTS, "edit-mode.png") });
+
+    // ---- 1b. the map: both doors, and one of them followed ---------------------------------------------------
+    // The page `public/pipeline-map.html` drew the whole library and the panel named it nowhere; these two controls
+    // are the doors. The proof is not the href: it is a real press, a new tab, and the page's OWN title.
+    console.log("\n== the map: a control on both pipeline surfaces, and a real page behind it ==");
+    const inBar = await page.evaluate(() => {
+      const card = document.getElementById("pipeline-modal-card");
+      const bar = card && card.querySelector(".pmodal-bar");
+      const a = card && card.querySelector("[data-pm-map]");
+      if (!a || !bar || !bar.contains(a)) return null;
+      return { href: a.getAttribute("href"), target: a.getAttribute("target"), rel: a.getAttribute("rel"), text: (a.textContent || "").trim() };
+    });
+    check(Boolean(inBar), "the flow dialog's header bar carries a map control", JSON.stringify(inBar));
+    check(inBar && inBar.href === "/pipeline-map.html", "and it names the page", inBar && inBar.href);
+    check(inBar && inBar.target === "_blank" && /\bnoopener\b/.test(inBar.rel || ""), "in its own tab, with no window.opener", inBar && `${inBar.target} ${inBar.rel}`);
+    check(inBar && /map/i.test(inBar.text), "and the words on it say map", inBar && inBar.text);
+
+    // The Settings row, behind the dialog: the same page with a door of its own.
+    const mapRow = await page.evaluate(() => {
+      const a = document.getElementById("pipeline-map-open");
+      if (!a) return null;
+      const panel = a.closest('[data-settings-group="pipeline"]');
+      const others = [...document.querySelectorAll("[data-settings-group]")].filter(
+        (p) => p !== panel && p.querySelector('a[href="/pipeline-map.html"]'),
+      ).length;
+      return { href: a.getAttribute("href"), target: a.getAttribute("target"), rel: a.getAttribute("rel"), inPipeline: Boolean(panel), others, text: (a.textContent || "").trim() };
+    });
+    check(Boolean(mapRow), "Settings > Pipeline carries the map row", JSON.stringify(mapRow));
+    check(mapRow && mapRow.href === "/pipeline-map.html" && mapRow.inPipeline, "the same page, in the panel that owns the catalogue", mapRow && `${mapRow.href} in pipeline=${mapRow.inPipeline}`);
+    check(mapRow && mapRow.target === "_blank" && /\bnoopener\b/.test(mapRow.rel || ""), "also in its own tab, with no window.opener", mapRow && `${mapRow.target} ${mapRow.rel}`);
+    check(mapRow && mapRow.others === 0, "and no other settings tab offers it", mapRow && String(mapRow.others));
+
+    // FOLLOW the dialog's control. `context` is this harness's own browser context, so the press's new tab is a
+    // page this run can read — the assertion is the page's title and its cards, never the href it was built with.
+    const [mapTab] = await Promise.all([context.waitForEvent("page", { timeout: 20_000 }), page.click("#pipeline-modal-card [data-pm-map]")]);
+    await mapTab.waitForSelector(".pm-card", { timeout: 30_000 });
+    const mapPage = await mapTab.evaluate(() => ({
+      title: document.title,
+      h1: (document.querySelector("h1")?.textContent || "").trim(),
+      cards: document.querySelectorAll(".pm-card").length,
+      generated: document.querySelector('meta[name="wtgui-generated"]')?.getAttribute("content") || "",
+    }));
+    check(/^Every pipeline the panel can put a tree on/.test(mapPage.title), "following it lands on the page's own title", mapPage.title);
+    check(mapPage.cards >= 11, "and the page draws the pipelines it says it draws", `${mapPage.cards} cards, generated ${mapPage.generated}`);
+    const panelStill = await page.evaluate(() => ({
+      path: location.pathname,
+      modal: !document.getElementById("pipeline-modal").hidden,
+      mode: document.getElementById("pipeline-modal").dataset.mode,
+    }));
+    check(panelStill.path === "/" && panelStill.modal && panelStill.mode === "edit", "the panel's own tab still holds the dialog — the map took a tab of its own", JSON.stringify(panelStill));
+    await mapTab.close();
+    await page.screenshot({ path: path.join(SHOTS, "map-control.png") });
 
     // One Esc, one surface: the dialog closes and Settings stays open.
     await page.keyboard.press("Escape");
@@ -288,6 +343,8 @@ try {
     check(pos.arcAboveTrack, "and it is drawn above the track, not over the stages");
     check(/2 rounds/.test(pos.note) === false, "the cap is on the arc, not repeated in the note");
     check(pos.preview, "the position preview is offered");
+    const posMap = await page.evaluate(() => document.querySelector("#pipeline-modal-card [data-pm-map]")?.getAttribute("href") || "");
+    check(posMap === "/pipeline-map.html", "the same header carries the map in position mode too — it draws one pipeline of the library", posMap);
     equal("the preview lists every stage", pos.stageOptions, ["S0", "S1", "S2", "S3", "S4"]);
     await page.screenshot({ path: path.join(SHOTS, "position-mode.png") });
 

@@ -161,13 +161,22 @@
     // element itself is kept (setStatus() writes to it) and moved up into the bar, where it costs nothing while empty.
     // The facts moved into the header band for the same reason: they are one line of 11 px type about the thing the
     // title names, and as a body row they cost a gap and a padding on both sides of themselves.
+    //
+    // The MAP is the one control here that leaves the dialog. It is in the bar, in BOTH modes, because the map draws
+    // the whole library this dialog draws one member of — a definition in edit mode, a task's pipeline in position
+    // mode — and it is an `<a target="_blank">`, so the press opens its own tab and the panel (and the Settings tab
+    // the reader is editing in) stays where it was. No click handler of this dialog may swallow it: the card's own
+    // `click` listener stops PROPAGATION only, never the default, so the browser's navigation still happens.
     return `<div class="pmodal-bar">
         <span class="pmodal-kicker">${esc(kicker)}</span>
         <b class="pmodal-title" id="${TITLE_ID}">${esc(state.title || "pipeline")}</b>
         ${state.subtitle ? `<span class="pmodal-sub mono">${esc(state.subtitle)}</span>` : ""}
         <span class="spacer"></span>
         <span class="pmodal-status mono" data-pm-status role="status" aria-live="polite">${esc(state.status || "")}</span>
-        <button type="button" class="pmodal-close" data-pm-close title="close (Esc) — focus goes back to the control that opened this" aria-label="close the pipeline flow">✕</button>
+        <span class="pmodal-actions">
+          <a class="pmodal-map" data-pm-map href="/pipeline-map.html" target="_blank" rel="noopener" title="open the pipeline map in a new tab — every definition and every bundle pipeline the panel can put a tree on, drawn on one page with each stage's role and exit check. This dialog draws one of them.">map ↗</a>
+          <button type="button" class="pmodal-close" data-pm-close title="close (Esc) — focus goes back to the control that opened this" aria-label="close the pipeline flow">✕</button>
+        </span>
         ${factsHtml(state.facts)}
       </div>
       <div class="pmodal-body">${body}</div>`;

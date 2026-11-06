@@ -413,6 +413,11 @@ thead th,
 .release-notes .release-state.bad { border-color: #57262a; color: #ff9c94; }
 .release-notes-raw { margin-left: auto; font-size: 10.5px; color: var(--dimmer); text-decoration: none; }
 .release-notes-raw:hover { color: var(--text); text-decoration: underline; }
+/* A row's link out of the panel (the pipeline map): the same quiet mono as the unit beside it, with a dotted rule
+   that says "this leaves" rather than "this is a number". */
+.settings-link { color: var(--dim); text-decoration: none; border-bottom: 1px dotted var(--line); padding-bottom: 1px; }
+.settings-link:hover { color: var(--text); border-bottom-color: #8fb8ff; }
+.settings-link:focus-visible { outline: 2px solid #4a90d9; outline-offset: 2px; }
 /* The Matrix bridge's log tail: a `pre` so its own line breaks are the log's, capped and scrolling so forty
    lines never grow the tab, and wrapping so one long line cannot push the panel sideways. */
 #matrix-log { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 168px; overflow: auto; font: 11px/1.5 var(--mono); color: var(--dim); }
@@ -4501,6 +4506,14 @@ body.pipew-open { overflow: hidden; }
 .pmodal-status:empty { display: none; }
 .pmodal-close { flex: 0 0 auto; border: 1px solid var(--line); background: var(--surface); color: var(--dim); border-radius: 6px; padding: 1px 6px; font: inherit; font-size: 12px; line-height: 16px; cursor: pointer; }
 .pmodal-close:hover { color: var(--text); border-color: #8fb8ff; }
+/* The bar's two ACTIONS are one flex item: `map ↗` sits beside ✕ and a narrow card (two stages is a 340 px panel)
+   wraps them TOGETHER instead of dropping the close control onto a line of its own under the title. */
+.pmodal-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; margin-left: auto; }
+/* The map door: the same small control as ✕, one step quieter, because it leaves the dialog instead of closing it.
+   It is a real anchor (target="_blank"), so a middle-click and a copy-the-address both work. */
+.pmodal-map { flex: 0 0 auto; border: 1px solid var(--line); background: var(--surface); color: var(--dim); border-radius: 6px; padding: 1px 6px; font-size: 11px; line-height: 16px; text-decoration: none; }
+.pmodal-map:hover { color: var(--text); border-color: #8fb8ff; }
+.pmodal-map:focus-visible { outline: 2px solid #4a90d9; outline-offset: 2px; }
 .pmodal-facts { flex: 0 0 100%; display: flex; flex-wrap: wrap; gap: 1px 12px; font-size: 11px; line-height: 1.2; color: var(--dim); }
 .pmodal-facts > * { flex: 0 0 auto; white-space: nowrap; }
 .pmodal-facts i { color: var(--dimmer); font-style: normal; }
