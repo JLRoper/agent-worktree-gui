@@ -9,10 +9,11 @@
 // no way to tell which was in force, and no way to say "publish a turnover branch freely, ask about anything else".
 //
 // WHAT IS DRIVEN, on a sandbox panel and headless Chromium:
-//   * every project card's grey host/remote bar carries TWO selects, each offering exactly the four values, with the
-//     server's resolved value selected;
-//   * the bar FLEX-WRAPS: at 1400 it is one row, at 520 it is more rows, the controls stay inside the card, and the
-//     bar never scrolls horizontally — a menu that overflows the card is a menu the reader cannot read;
+//   * the two selects ride the grey remote-mapping row the host chip opens (`.host-form`), each offering exactly the
+//     four values, with the server's resolved value selected — and the card's host/remote bar above it carries NONE,
+//     so the band they used to sit on is gone;
+//   * that row FLEX-WRAPS: it fits at 1400, takes more rows at 520, the controls stay inside the card, and the row
+//     never scrolls horizontally — a menu that overflows the card is a menu the reader cannot read;
 //   * Settings → Repo is a tab labelled Repo, with a section per remote repository (git.sefl.com/IT, git.sefl.com/SA,
 //     github/JLRoper, any other remote, no remote at all), each holding both defaults and a force-override toggle;
 //   * turning the force-override on DISABLES that repository's card selects, with a one-line note that names the
@@ -122,73 +123,93 @@ try {
           }
           renderAll();
         });
+      await page.waitForFunction(() => document.querySelectorAll("section.project[data-project]").length >= 5, null, { timeout: 40_000 });
       await expandAll();
-      // The board re-renders while discovery settles, and a half-built render can leave a duplicate strip behind: wait
-      // for ENOUGH VISIBLE controls rather than for one node, which a re-render would remove under the wait.
-      await page.waitForFunction((n) => [...document.querySelectorAll("[data-push-controls]")].filter((c) => c.getClientRects().length > 0).length >= n, REPOS.length, { timeout: 30_000 });
-      await sleep(800);
+      await page.waitForFunction(
+        () => [...document.querySelectorAll("section.project[data-project]")].every((s) => !s.classList.contains("collapsed")),
+        null,
+        { timeout: 20_000 },
+      );
+      await sleep(500);
 
-      const read = () =>
-        page.evaluate(() => {
-          const out = [];
-          for (const meta of document.querySelectorAll("section.project .project-head.meta-line")) {
-            const sec = meta.closest("section.project");
-            const controls = meta.querySelector("[data-push-controls]");
-            const selects = controls ? [...controls.querySelectorAll("select")] : [];
-            const host = meta.querySelector(".btn-host");
-            const box = meta.getBoundingClientRect();
-            const cb = controls ? controls.getBoundingClientRect() : null;
-            out.push({
-              project: sec ? sec.dataset.project : "",
-              selectCount: selects.length,
-              kinds: selects.map((s) => s.dataset.pushKind),
-              values: selects.map((s) => s.value),
-              options: selects.map((s) => [...s.options].map((o) => o.value)),
-              disabled: selects.map((s) => s.disabled),
-              note: controls?.querySelector(".push-repo-note")?.textContent || "",
-              flexWrap: getComputedStyle(meta).flexWrap,
-              meta: { scrollWidth: meta.scrollWidth, clientWidth: meta.clientWidth, height: Math.round(box.height), right: box.right, left: box.left },
-              hostTop: host ? Math.round(host.getBoundingClientRect().top) : null,
-              controlsTop: cb ? Math.round(cb.top) : null,
-              controlsRight: cb ? cb.right : null,
-              controlsLeft: cb ? cb.left : null,
-            });
-          }
-          // A render in flight can leave a duplicate card behind for a frame: the LAST occurrence is the one the
-          // page settled on, so that is the row this gate reads.
-          return [...new Map(out.map((row) => [row.project, row])).values()];
-        });
+      // The two selects ride the grey remote-mapping row, which the host chip draws one project at a time: the page
+      // keeps ONE editor open (`state.hostPanel`), so a card is read by opening its row first. The propose call reads
+      // the project's own remote, so the row is read once it carries a proposal (or the reason there is none).
+      const openRow = async (name) => {
+        const open = await page.evaluate((n) => Boolean(document.querySelector(`[data-host-form="${CSS.escape(n)}"]`)), name);
+        if (!open) await page.click(`section.project[data-project="${name}"] .btn-host`);
+        await page.waitForFunction(
+          (n) => {
+            const f = document.querySelector(`[data-host-form="${CSS.escape(n)}"]`);
+            return Boolean(f && f.querySelector("[data-push-controls]") && /proposed from|no proposal/.test(f.querySelector("[data-host-line]")?.textContent || ""));
+          },
+          name,
+          { timeout: 20_000 },
+        );
+        await sleep(150);
+      };
 
-      const wide = await read();
-      same("one card per project is drawn", wide.map((r) => r.project).sort(), REPOS.map((r) => r.name).sort());
-      ok("every card carries exactly two push selects", wide.every((r) => r.selectCount === 2), wide.map((r) => `${r.project}:${r.selectCount}`).join(" "));
-      same("the two selects are NEW and EXISTING", [...new Set(wide.flatMap((r) => r.kinds))], ["new", "existing"]);
+      // One card's mapping row. `inRow` is the placement claim (the selects' own ancestor is the row) and `onBar` the
+      // retired one (the host/remote bar above it), so a select that drifted back up there fails the gate.
+      const readCard = (name) =>
+        page.evaluate((n) => {
+          const sec = document.querySelector(`section.project[data-project="${CSS.escape(n)}"]`);
+          const form = sec ? sec.querySelector("[data-host-form]") : null;
+          const controls = form ? form.querySelector("[data-push-controls]") : null;
+          const selects = controls ? [...controls.querySelectorAll("select")] : [];
+          const meta = sec ? sec.querySelector(".project-head.meta-line") : null;
+          const f = form ? form.getBoundingClientRect() : null;
+          const cb = controls ? controls.getBoundingClientRect() : null;
+          return {
+            project: n,
+            inRow: Boolean(controls && form.contains(controls)),
+            onBar: Boolean(meta && meta.querySelector("[data-push-controls]")),
+            selectCount: selects.length,
+            kinds: selects.map((s) => s.dataset.pushKind),
+            values: selects.map((s) => s.value),
+            options: selects.map((s) => [...s.options].map((o) => o.value)),
+            disabled: selects.map((s) => s.disabled),
+            note: controls?.querySelector(".push-repo-note")?.textContent || "",
+            rowWrap: form ? getComputedStyle(form).flexWrap : "",
+            row: f ? { scrollWidth: form.scrollWidth, clientWidth: form.clientWidth, height: Math.round(f.height), right: f.right, left: f.left } : null,
+            controlsBox: cb ? { left: cb.left, right: cb.right, top: Math.round(cb.top) } : null,
+          };
+        }, name);
+
+      const cards = [];
+      for (const r of REPOS) {
+        await openRow(r.name);
+        cards.push(await readCard(r.name));
+      }
+      same("one card per project is drawn", cards.map((r) => r.project).sort(), REPOS.map((r) => r.name).sort());
+      ok("the two selects are inside the grey remote-mapping row on every card", cards.every((r) => r.inRow), cards.map((r) => `${r.project}:${r.inRow}`).join(" "));
+      ok("and NONE is left on the card's host/remote bar — the separate band is gone", cards.every((r) => r.onBar === false), cards.map((r) => `${r.project}:${r.onBar}`).join(" "));
+      ok("every card carries exactly two push selects", cards.every((r) => r.selectCount === 2), cards.map((r) => `${r.project}:${r.selectCount}`).join(" "));
+      same("the two selects are NEW and EXISTING", [...new Set(cards.flatMap((r) => r.kinds))], ["new", "existing"]);
       same(
         "each select offers the four values, in one order",
-        [...new Set(wide.flatMap((r) => r.options.map((o) => o.join(","))))],
+        [...new Set(cards.flatMap((r) => r.options.map((o) => o.join(","))))],
         ["allow-all,allow-name-gate,always-ask,never"],
       );
-      ok("the shipped answer is always-ask on both controls", wide.every((r) => r.values.every((v) => v === "always-ask")), wide.map((r) => r.values.join("/")).join(" "));
-      ok("every card's bar is a wrapping flex row", wide.every((r) => r.flexWrap === "wrap"), wide.map((r) => `${r.project}:${r.flexWrap}`).join(" "));
-      ok("and no card's bar scrolls sideways at 1400", wide.every((r) => r.meta.scrollWidth - r.meta.clientWidth <= 1), wide.map((r) => `${r.project}:${r.meta.scrollWidth}/${r.meta.clientWidth}`).join(" "));
-      ok("both selects are editable while no force-override is on", wide.every((r) => r.disabled.every((d) => d === false)));
-      ok("and no card carries the disabled note", wide.every((r) => r.note === ""));
+      ok("the shipped answer is always-ask on both controls", cards.every((r) => r.values.every((v) => v === "always-ask")), cards.map((r) => r.values.join("/")).join(" "));
+      ok("the mapping row is a wrapping flex row", cards.every((r) => r.rowWrap === "wrap"), cards.map((r) => `${r.project}:${r.rowWrap}`).join(" "));
+      ok("and no card's row scrolls sideways at 1400", cards.every((r) => r.row.scrollWidth - r.row.clientWidth <= 1), cards.map((r) => `${r.project}:${r.row.scrollWidth}/${r.row.clientWidth}`).join(" "));
+      ok("both selects are editable while no force-override is on", cards.every((r) => r.disabled.every((d) => d === false)));
+      ok("and no card carries the disabled note", cards.every((r) => r.note === ""));
       await shot("cards-wide");
 
-      // ---- the bar at a narrow width: more rows, still inside the card --------------------------------
+      // ---- the row at a narrow width: more rows, still inside the card --------------------------------
+      await openRow("gh-app");
+      const wideRow = await readCard("gh-app");
       await page.setViewportSize({ width: 520, height: 900 });
       await sleep(400);
-      const narrow = await read();
-      const wrapped = narrow.filter((n) => {
-        const w = wide.find((x) => x.project === n.project);
-        return w && n.meta.height > w.meta.height;
-      });
-      ok("at 520 the bars grow taller — the controls drop to another line", wrapped.length >= narrow.length - 1, `${wrapped.length}/${narrow.length} grew`);
-      ok("no bar overflows the viewport at 520", narrow.every((r) => r.meta.scrollWidth - r.meta.clientWidth <= 1), narrow.map((r) => `${r.project}:${r.meta.scrollWidth}/${r.meta.clientWidth}`).join(" "));
+      const narrowRow = await readCard("gh-app");
+      ok("at 520 the row grows taller — the controls take more rows", narrowRow.row.height > wideRow.row.height, `${wideRow.row.height} -> ${narrowRow.row.height}`);
+      ok("no row overflows the viewport at 520", narrowRow.row.scrollWidth - narrowRow.row.clientWidth <= 1, `${narrowRow.row.scrollWidth}/${narrowRow.row.clientWidth}`);
       ok(
         "every control stays inside the card",
-        narrow.every((r) => r.controlsLeft >= r.meta.left - 1 && r.controlsRight <= r.meta.right + 1),
-        narrow.map((r) => `${r.project}:${Math.round(r.controlsLeft)}..${Math.round(r.controlsRight)} in ${Math.round(r.meta.left)}..${Math.round(r.meta.right)}`).join(" "),
+        narrowRow.controlsBox.left >= narrowRow.row.left - 1 && narrowRow.controlsBox.right <= narrowRow.row.right + 1,
+        `${Math.round(narrowRow.controlsBox.left)}..${Math.round(narrowRow.controlsBox.right)} in ${Math.round(narrowRow.row.left)}..${Math.round(narrowRow.row.right)}`,
       );
       await shot("cards-narrow");
 
@@ -198,9 +219,13 @@ try {
         document.documentElement.style.zoom = "1.6";
       });
       await sleep(400);
-      const zoomed = await read();
-      ok("at 160% zoom no bar overflows either", zoomed.every((r) => r.meta.scrollWidth - r.meta.clientWidth <= 1), zoomed.map((r) => `${r.project}:${r.meta.scrollWidth}/${r.meta.clientWidth}`).join(" "));
-      ok("at 160% zoom every control is still inside its card", zoomed.every((r) => r.controlsRight <= r.meta.right + 1 && r.controlsLeft >= r.meta.left - 1));
+      const zoomedRow = await readCard("gh-app");
+      ok("at 160% zoom no row overflows either", zoomedRow.row.scrollWidth - zoomedRow.row.clientWidth <= 1, `${zoomedRow.row.scrollWidth}/${zoomedRow.row.clientWidth}`);
+      ok(
+        "at 160% zoom every control is still inside its card",
+        zoomedRow.controlsBox.right <= zoomedRow.row.right + 1 && zoomedRow.controlsBox.left >= zoomedRow.row.left - 1,
+        `${Math.round(zoomedRow.controlsBox.left)}..${Math.round(zoomedRow.controlsBox.right)} in ${Math.round(zoomedRow.row.left)}..${Math.round(zoomedRow.row.right)}`,
+      );
       await page.evaluate(() => {
         document.documentElement.style.zoom = "";
       });
@@ -243,30 +268,24 @@ try {
         if (d && !d.open) d.open = true;
       });
       await page.click('[data-push-force="git.sefl.com/IT"]');
+      // The drawer covers the right-hand end of every card row, so it is closed before a card is read: the setting is
+      // stored server-side, and the card paints from it either way.
+      await page.keyboard.press("Escape");
+      await page.waitForFunction(() => document.getElementById("settings")?.classList.contains("hidden"), null, { timeout: 10_000 });
       const forcedOk = await waitFor(async () => {
-        const rows = await page.evaluate(() =>
-          [...document.querySelectorAll("[data-push-controls]")].map((el) => ({
-            project: el.dataset.pushControls,
-            disabled: [...el.querySelectorAll("select")].map((s) => s.disabled),
-            note: el.querySelector(".push-repo-note")?.textContent || "",
-          })),
-        );
-        const it = rows.find((r) => r.project === "it-app");
-        return Boolean(it && it.disabled.every(Boolean) && /repo setting in force/.test(it.note));
+        await openRow("it-app");
+        const row = await readCard("it-app");
+        return Boolean(row.disabled.length === 2 && row.disabled.every(Boolean) && /repo setting in force/.test(row.note));
       }, { what: "the IT card's selects to disable with a note" });
       ok("force-override disables that repository's card selects AND says why", forcedOk);
-      const afterForce = await page.evaluate(() =>
-        [...document.querySelectorAll("[data-push-controls]")].map((el) => ({
-          project: el.dataset.pushControls,
-          disabled: [...el.querySelectorAll("select")].map((s) => s.disabled),
-          note: el.querySelector(".push-repo-note")?.textContent || "",
-          title: el.querySelector(".push-repo-note")?.getAttribute("title") || "",
-        })),
-      );
-      const it = afterForce.find((r) => r.project === "it-app");
-      const sa = afterForce.find((r) => r.project === "sa-app");
-      ok("the note names the repository in its tooltip", /git\.sefl\.com\/IT/.test(it?.title || ""), (it?.title || "").slice(0, 120));
-      ok("another repository's card selects stay editable", sa && sa.disabled.every((d) => d === false) && sa.note === "", JSON.stringify(sa));
+      const it = await page.evaluate(() => {
+        const c = document.querySelector('[data-host-form="it-app"] [data-push-controls]');
+        return { disabled: [...c.querySelectorAll("select")].map((s) => s.disabled), note: c.querySelector(".push-repo-note")?.textContent || "", title: c.querySelector(".push-repo-note")?.getAttribute("title") || "" };
+      });
+      ok("the note names the repository in its tooltip", /git\.sefl\.com\/IT/.test(it.title || ""), (it.title || "").slice(0, 120));
+      await openRow("sa-app");
+      const sa = await readCard("sa-app");
+      ok("another repository's card selects stay editable", sa.disabled.every((d) => d === false) && sa.note === "", JSON.stringify({ disabled: sa.disabled, note: sa.note }));
       await shot("force-on");
 
       // ---- a card select saves, and survives a reload --------------------------------------------------
@@ -274,34 +293,41 @@ try {
       await page.keyboard.press("Escape");
       await page.waitForFunction(() => document.getElementById("settings")?.classList.contains("hidden"), null, { timeout: 10_000 });
       const before = await page.evaluate(() => {
-        const s = document.querySelector('[data-push-controls="sa-app"] select[data-push-kind="existing"]');
+        const s = document.querySelector('[data-host-form="sa-app"] select[data-push-kind="existing"]');
         return s ? s.value : "";
       });
       same("the SA card starts on the shipped answer", before, "always-ask");
-      await page.selectOption('[data-push-controls="sa-app"] select[data-push-kind="existing"]', "allow-name-gate");
+      await page.selectOption('[data-host-form="sa-app"] select[data-push-kind="existing"]', "allow-name-gate");
       const savedOk = await waitFor(async () => {
         const cfg = await (await fetch(`${panel.base}/api/config`)).json();
         return cfg.pushPermissions?.projects?.["sa-app"]?.existingBranches === "allow-name-gate";
       }, { what: "the card's change to reach config.json" });
       ok("a card select POSTs and the server stores it", savedOk);
       const stored = await page.evaluate(() => {
-        const s = document.querySelector('[data-push-controls="sa-app"] select[data-push-kind="existing"]');
+        const s = document.querySelector('[data-host-form="sa-app"] select[data-push-kind="existing"]');
         return s ? s.value : "";
       });
       same("the select keeps the value the server accepted", stored, "allow-name-gate");
       await page.reload({ waitUntil: "domcontentloaded" });
       await page.waitForSelector("section.project", { timeout: 40_000 });
+      await page.waitForFunction(() => document.querySelectorAll("section.project[data-project]").length >= 5, null, { timeout: 40_000 });
       await expandAll();
-      await page.waitForFunction((n) => [...document.querySelectorAll("[data-push-controls]")].filter((c) => c.getClientRects().length > 0).length >= n, REPOS.length, { timeout: 30_000 });
-      await sleep(600);
+      await page.waitForFunction(
+        () => [...document.querySelectorAll("section.project[data-project]")].every((s) => !s.classList.contains("collapsed")),
+        null,
+        { timeout: 20_000 },
+      );
+      await sleep(500);
+      await openRow("sa-app");
       const afterReload = await page.evaluate(() => {
-        const s = document.querySelector('[data-push-controls="sa-app"] select[data-push-kind="existing"]');
+        const s = document.querySelector('[data-host-form="sa-app"] select[data-push-kind="existing"]');
         return s ? s.value : "";
       });
       same("the saved value survives a reload", afterReload, "allow-name-gate");
       // The IT project is still under its force-override after the reload, so its selects render disabled again.
+      await openRow("it-app");
       const reloadedIt = await page.evaluate(() => {
-        const s = document.querySelector('[data-push-controls="it-app"] select[data-push-kind="new"]');
+        const s = document.querySelector('[data-host-form="it-app"] select[data-push-kind="new"]');
         return s ? s.disabled : null;
       });
       ok("the force-override survives the reload too", reloadedIt === true, String(reloadedIt));

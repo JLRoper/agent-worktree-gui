@@ -10984,10 +10984,13 @@ function hostPanelHtml(name) {
   const opts = ids.length ? ids.map((id) => `<option value="${esc(id)}"${id === panel.host ? " selected" : ""}>${esc(id)}</option>`).join("") : `<option value="">(no host records)</option>`;
   return `<div class="host-form" data-host-form="${esc(name)}">
       <span class="mono host-line${panel.error ? " clone-err" : ""}" data-host-line>${esc(panel.line || "")}</span>
+      ${pushControlsHtml(name)}
+      <span class="host-fields">
       <label class="host-field">host <select data-host-select="${esc(name)}"${panel.busy ? " disabled" : ""}>${opts}</select></label>
       <label class="host-field">coordinates <input type="text" class="mono" data-host-coords="${esc(name)}" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" spellcheck="false" placeholder="owner/repo or PROJECT/slug" value="${esc(panel.coords || "")}"${panel.busy ? " disabled" : ""}></label>
       <button type="button" data-host-save="${esc(name)}"${panel.busy ? " disabled" : ""}>Use this mapping</button>
       <button type="button" data-host-cancel="${esc(name)}">Cancel</button>
+      </span>
     </div>`;
 }
 
@@ -11109,7 +11112,7 @@ function projectSection(name) {
     </div>
     <div class="project-head meta-line">
       <span class="mono dim">${mainLine}</span><span class="spacer"></span>${board}${tip}
-      <span class="dimmer mono">${p.fetchNote ? esc(p.fetchNote) + " · " : ""}fetched ${relTime(p.fetchedAt)} ago</span>${hostChipHtml(name)}${pushControlsHtml(name)}
+      <span class="dimmer mono">${p.fetchNote ? esc(p.fetchNote) + " · " : ""}fetched ${relTime(p.fetchedAt)} ago</span>${hostChipHtml(name)}
     </div>
     ${hostPanelHtml(name)}
     <div class="wt-scroll">
@@ -20742,9 +20745,11 @@ $("btn-guard-install")?.addEventListener("click", (e) => {
 // is in force, and where each value came from. This half only draws and posts. A page that re-derived precedence
 // could disagree with the guard that refuses the push, which is the failure the single resolver exists to prevent.
 //
-// The card's two selects sit in the grey host/remote bar, to the right of the host chip. When the project's
-// repository carries a force-override they render DISABLED with a one-line note naming it: a select that looks
-// editable and is not is a lie, and a note is the only honest way to show a control somebody else owns.
+// The card's two selects ride the grey remote-mapping row: between that row's line and its `host` field, so the pair
+// is read beside the remote it governs instead of on a band of its own. The row is drawn while the host chip's editor
+// is open, so the selects appear with the mapping. When the project's repository carries a force-override they render
+// DISABLED with a one-line note naming it: a select that looks editable and is not is a lie, and a note is the only
+// honest way to show a control somebody else owns.
 const PUSH_FALLBACK = {
   choices: ["allow-all", "allow-name-gate", "always-ask", "never"],
   labels: {
