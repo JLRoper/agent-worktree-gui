@@ -101,10 +101,11 @@ const finish = async (code) => {
 
 // ---- the reading -------------------------------------------------------------------------------------------------
 // Every number comes from the painted page, in CSS pixels. "Drawn area" is the UNION of the boxes that carry the
-// drawing — stage cards, their notches, loop arcs, the legend, the count row — each clipped to the scroller's client
-// box (a stage the browser is hiding is not drawn) and to the card. "Dialog area" is the card's own box. A card that
-// keeps a fixed 1120 px frame around a one-stage picture scores low; a card that shrinks with the picture scores
-// roughly the same at one stage as at thirteen, which is the whole point of the round.
+// drawing - stage cards, their marks (the dot rides outside its tile's top edge) and notches, loop arcs, the legend,
+// the count row - each clipped to the scroller's client box (a stage the browser is hiding is not drawn) and to the
+// card. "Dialog area" is the card's own box. A card that keeps a fixed 1120 px frame around a one-stage picture
+// scores low; a card that shrinks with the picture scores roughly the same at one stage as at thirteen, which is the
+// whole point of the round.
 const measure = (page) =>
   page.evaluate(() => {
     const norm = (s) => String(s ?? "").replace(/\s+/g, " ").trim();
@@ -142,7 +143,7 @@ const measure = (page) =>
     const track = rect(card.querySelector(".pflow-track"));
     const nodes = [...card.querySelectorAll(".pflow-node")];
     const ink = [];
-    for (const el of card.querySelectorAll(".pflow-node, .pflow-notch, .pflow-arc")) {
+    for (const el of card.querySelectorAll(".pflow-node, .pflow-dot, .pflow-notch, .pflow-arc")) {
       const inside = clipTo(rect(el), scrollBox);
       const box = inside && clipTo(inside, cardBox);
       if (box) ink.push(box);

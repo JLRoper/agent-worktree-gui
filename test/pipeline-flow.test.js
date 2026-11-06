@@ -6,8 +6,8 @@
 // What this pins:
 //
 //   - the sequence reads left to right, one column per stage in the order the document holds;
-//   - every gate is a NOTCH on the connector after its stage — including the gate that ends the last stage, which
-//     sits on the track's own closing edge rather than on a stub past it;
+//   - every gate is a NOTCH on the closing edge of the stage it ends, drawn inside that stage's own box (no inline
+//     position, nothing hung in the gap), so the gate that ends the last stage is on the track's closing edge too;
 //   - a capped loop is ONE arc above the track, labelled with its cap and nothing else: no handoff id, no stage id
 //     and no stage title reaches the drawing, and two loops that meet on a stage are on different lanes;
 //   - the four marks — not reached, current, done, refused — are `data-mark` on the stage, and the legend counts them;
@@ -57,7 +57,7 @@ test("a bundle pipeline reads left to right, every stage in the document's own o
   assert.deepEqual(nodes.map((n) => n.pos), nodes.map((_, i) => i + 1), "positions ascend 1..n");
 });
 
-test("every gate is a notch on the connector after its stage, and the last stage's gate sits on the closing edge", () => {
+test("every gate is a notch on the closing edge of the stage it ends, drawn inside that stage's own box", () => {
   const flow = fromBundle(SEED_BUNDLE);
   const { notches } = flowOf(markup(flow, null));
   assert.deepEqual(
@@ -72,17 +72,20 @@ test("every gate is a notch on the connector after its stage, and the last stage
   );
   const afterLast = flow.stages.find((s) => s.id === SEED_BUNDLE.stages[SEED_BUNDLE.stages.length - 1].id);
   assert.ok(afterLast.gate && afterLast.gate.id === "G4", "the gate after the final stage is carried, not dropped");
-  // The last gate is a notch ON the track's closing edge — no stub hanging off the last column. The stub was 18 px at
-  // `left: 100%`: it widened the drawing past its own track (scrollWidth 1109 vs clientWidth 1094 at seven stages) and
-  // put the one notch it labelled outside the scroller, so a reader saw no notch at all after the last stage.
+  // The notch is placed by the STYLESHEET, inside the tile it belongs to, and carries no inline geometry: a notch
+  // hung in the gap after its stage is in the one band of the drawing no element owns, so a scroller or a card edge
+  // can slice it - and the wrapped shape had to re-aim it in script for a row's last tile. Inside the tile it needs
+  // no measurement at all. The 18 px stub that used to sit past the last column widened the drawing past its own
+  // track (scrollWidth 1109 against clientWidth 1094 at seven stages), so nothing hangs past the last column either.
   const html = markup(flow, null);
   assert.doesNotMatch(html, /pflow-link is-end/, "nothing is drawn past the last column");
-  const styles = [...html.matchAll(/<span class="pflow-notch"[^>]*style="left:([^;]*);/g)].map((m) => m[1]);
-  assert.equal(styles[styles.length - 1], "calc(100% - 1.5px)", "and the closing gate's notch ends at the column's right edge");
-  assert.ok(
-    styles.slice(0, -1).every((s) => s === "calc(100% + var(--pflow-gap) / 2)"),
-    "every other notch still sits at the middle of its gap",
-  );
+  assert.doesNotMatch(html, /class="pflow-notch"[^>]*style=/, "a notch carries no inline position");
+  const css = readFileSync(new URL("../public/style.css", import.meta.url), "utf8").replaceAll(String.fromCharCode(13), "");
+  const rule = /\.pflow-notch \{ ([^}]*)\}/.exec(css)?.[1] || "";
+  assert.match(rule, /left: 100%/, "the notch starts at the column's own trailing edge");
+  assert.match(rule, /margin-left: -3px/, "and is pulled back by its own width, so its whole box is inside the column");
+  assert.match(rule, /width: 3px; height: 15px;/, "a 3 px bar");
+  assert.doesNotMatch(rule, /calc\(100% \+/, "nothing places a notch out in the gap");
 });
 
 test("a capped loop is one arc, labelled only with its cap", () => {
