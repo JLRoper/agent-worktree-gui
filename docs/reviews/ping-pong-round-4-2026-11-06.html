@@ -1,0 +1,443 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ping-pong round 4: two stages ran, one was cut by hand, and the ledger does not describe its own rows</title>
+<style>
+  :root { --bg:#0e1116; --panel:#151a21; --panel2:#1b212a; --line:#2a3340; --text:#e6e9ef; --dim:#9aa5b4;
+           --dimmer:#6f7a89; --green:#7ee787; --red:#ff9c94; --amber:#f0c674; --blue:#9ecbff; --purple:#c8a6ff;
+           --mono:ui-monospace,"Cascadia Mono",Consolas,"SF Mono",Menlo,monospace;
+           --ui:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  * { box-sizing:border-box; }
+  html { background:var(--bg); }
+  body { margin:0; color:var(--text); font:15px/1.62 var(--ui); }
+  .wrap { max-width:1120px; margin:0 auto; padding:30px 24px 72px; }
+  a { color:var(--blue); text-decoration:none; } a:hover { text-decoration:underline; }
+  h1 { font-size:27px; line-height:1.22; margin:4px 0 8px; letter-spacing:-0.2px; }
+  h2 { font-size:19px; margin:44px 0 12px; padding-top:16px; border-top:1px solid var(--line); }
+  h3 { font-size:15.5px; margin:26px 0 8px; color:var(--blue); }
+  h4 { font-size:12px; margin:18px 0 6px; color:var(--dim); text-transform:uppercase; letter-spacing:0.07em; }
+  p { margin:9px 0; }
+  ul,ol { margin:8px 0 8px 22px; padding:0; } li { margin:5px 0; }
+  code,.mono { font-family:var(--mono); font-size:12.8px; }
+  code { background:var(--panel2); border:1px solid var(--line); border-radius:4px; padding:0 4px; }
+  pre { background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:12px 14px; overflow-x:auto;
+         font-family:var(--mono); font-size:12.4px; line-height:1.55; }
+  .kicker { color:var(--dimmer); font-size:12px; text-transform:uppercase; letter-spacing:0.12em; }
+  .sub { color:var(--dim); font-size:16px; margin:0 0 14px; max-width:940px; }
+  .meta { color:var(--dim); font-size:12.5px; }
+  .meta code { font-size:12px; }
+  .anchor { font-family:var(--mono); font-size:12.2px; color:var(--purple); background:#1d1826;
+            border:1px solid #3d3352; border-radius:4px; padding:0 5px; white-space:nowrap; }
+  nav { margin:18px 0 8px; padding:12px 16px; background:var(--panel); border:1px solid var(--line);
+        border-radius:8px; font-size:13px; line-height:1.9; }
+  nav b { color:var(--dimmer); font-weight:600; text-transform:uppercase; font-size:11px; letter-spacing:0.1em; }
+  nav a { margin:0 10px 0 0; white-space:nowrap; }
+  .lead { background:var(--panel); border:1px solid var(--line); border-left:4px solid var(--blue);
+          border-radius:8px; padding:14px 18px; margin:18px 0; }
+  .lead p { margin:5px 0; }
+  .verdict { background:#13261a; border:1px solid #2f5f38; border-left:4px solid var(--green);
+             border-radius:8px; padding:13px 18px; margin:18px 0; }
+  .verdict h4 { color:var(--green); margin:0 0 4px; }
+  .failbox { background:#2a1414; border:1px solid #6b2a2a; border-left:4px solid var(--red);
+             border-radius:8px; padding:13px 18px; margin:18px 0; }
+  .failbox h4 { color:var(--red); margin:0 0 4px; }
+  .warn { background:#2a2414; border:1px solid #5c4d22; border-left:4px solid var(--amber);
+          border-radius:8px; padding:12px 18px; margin:16px 0; }
+  .warn h4 { color:var(--amber); margin:0 0 4px; }
+  .box { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px 18px; margin:14px 0; }
+  .tw { overflow-x:auto; margin:10px 0 16px; border:1px solid var(--line); border-radius:8px; }
+  table { border-collapse:collapse; width:100%; font-size:13px; }
+  th,td { text-align:left; vertical-align:top; padding:7px 10px; border-bottom:1px solid var(--line); }
+  th { background:var(--panel2); color:var(--dim); font-weight:600; font-size:12px;
+       text-transform:uppercase; letter-spacing:0.05em; }
+  tr:last-child td { border-bottom:0; }
+  .ok { color:var(--green); } .bad { color:var(--red); }
+  .warnpill { color:var(--amber); }
+  .pill { display:inline-block; margin-left:6px; padding:0 6px; border-radius:999px; font-size:10.5px;
+          text-transform:uppercase; letter-spacing:0.04em; color:var(--amber); border:1px solid #5c4d22; background:#241f10; }
+  .small { font-size:12.5px; color:var(--dim); }
+  .cols { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:12px; margin:12px 0; }
+  .stat { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:10px 14px; }
+  .stat b { display:block; font-size:22px; line-height:1.2; }
+  .stat span { color:var(--dim); font-size:12.5px; }
+  td.t { white-space:nowrap; font-family:var(--mono); font-size:12px; color:var(--purple); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="kicker">docs/reviews - agent-worktree-gui - ping-pong round 4</div>
+<h1>Ping-pong round 4: two stages ran, one was cut by hand, and the ledger does not describe its own rows</h1>
+<p class="sub">The round was meant to run a drafter and a critic back to back on the real stage executor and measure the
+hand-off. The executor cut stage 1, then refused the record at the hand-off; a person cut stage 2. This page reads the
+two workers' ledger and the panel's own rows #211 and #214, and says which of the two records is right.</p>
+<p class="meta">
+  tree <code>C:/ProjectDevelopment/agent-worktree-gui/.worktrees/stage-1-of-2-the-drafter-8b0b20</code> -
+  branch <code>wtgui/stage-1-of-2-the-drafter-8b0b20</code> at <code>3facbfd</code> - cut from <code>28f57a0</code>
+  (<code>main</code> has since moved to <code>db8a9bf</code>, 1.41.1) - version <code>1.41.0</code> at read -
+  queue <code>~/.wag/state/assistants/assistant-2/queue.json</code>, rows #211, #212, #214 -
+  jobs <code>ee265bc1</code> (draft) and <code>65101f07</code> (critique) in <code>~/.wag/state/jobs.json</code> -
+  ledger and records read 2026-11-06 15:18 EST (20:18Z).
+</p>
+
+<nav><b>Contents</b><br>
+  <a href="#answer">The answer</a>
+  <a href="#sequence">The stage sequence</a>
+  <a href="#rows">The two rows</a>
+  <a href="#handoff">What the hand-off did</a>
+  <a href="#success">What worked</a>
+  <a href="#problems">The problems</a>
+  <a href="#fixes">Ranked fixes</a>
+  <a href="#limits">What this does not prove</a>
+  <a href="#evidence">The evidence</a>
+</nav>
+
+<h2 id="answer">The answer</h2>
+<div class="lead">
+<p><b>Two stages ran. The pipeline cut one of them.</b> The drafter worked 14:30:33 to 14:48 and left a 928-word
+design note in <code>ledger/ping-pong/draft.md</code> (<code>4826ed9</code>), plus the log (<code>cdf0ea4</code>).
+At 14:49:44 the drive read the finished job, refused the row's record and parked #211 with
+<code>pipeline-unresolved</code>. It never cut the critique. A person created row #214 at 14:56:14, and that worker
+ran 14:57:31 to 15:11:31, wrote ten notes (five blocking, verdict not accepted) and left
+<code>ledger/ping-pong/critique.md</code> plus two more commits.</p>
+<p><b>Both workers succeeded; the record of them does not.</b> The draft stage run settled 6.5 seconds
+<i>after</i> the critique it precedes. Both rows report <code>startedAt</code> equal to <code>doneAt</code>, stamped
+after the job had already ended, so a 20m21s run reads as 0s. The id <code>ping-pong/draft#1</code> names two
+different runs on the two rows, with different threads, jobs and statuses. <code>visits.critique</code> reads 2 while
+the ledger holds one critique entry at visit 1.</p>
+<p><b>The push is the one part of the round the ledger argues with itself about.</b> Stage 1 refused it, in its own
+final message. Stage 2's hand-written brief ordered it in five words. The version gate then refused it for real, and
+a <code>--no-verify</code> push carried it anyway at 15:07, opening PR #483 with a body frozen at the first three of
+five commits. The branch's number is still below main's.</p>
+</div>
+
+<div class="cols">
+  <div class="stat"><b>2 / 2</b><span>stages that ran and exited 0</span></div>
+  <div class="stat"><b>1 / 2</b><span>stages the pipeline actually cut</span></div>
+  <div class="stat"><b>20m21s / 14m00s</b><span>draft job / critique job</span></div>
+  <div class="stat"><b>5 / 166</b><span>commits / inserted lines, docs only</span></div>
+  <div class="stat"><b>10 / 5</b><span>critique notes / blocking</span></div>
+  <div class="stat"><b>4</b><span>draft citations that did not survive</span></div>
+</div>
+
+<div class="failbox">
+<h4>The refusal quotes a stamp that passes its own guard</h4>
+<p>The parked row's reason reads: <code>enteredAt "2026-11-06T19:28:20.426Z" is not a UTC instant - the panel stores
+Date#toISOString(), and a local-time stamp has no zone to subtract from</code>. That string carries a zone, and the
+guard's own pattern accepts it (<code>RE.test("...426Z")</code> is <code>true</code>; the same stamp with six fraction
+digits is <code>false</code>). Whatever was refused, the message names the wrong cause, and the reason survives in the
+record after the stamp was repaired.</p>
+</div>
+
+<h2 id="sequence">The stage sequence, with the clocks the records carry</h2>
+<p>Local time is UTC-05:00. Where the ledger and a store disagree, both are shown with their sources; the
+disagreement is <a href="#p4">problem 4</a> and <a href="#p7">problem 7</a>.</p>
+<div class="tw"><table><thead><tr>
+<th>local</th><th>UTC (stored)</th><th>event</th><th>source</th>
+</tr></thead><tbody>
+<tr><td class="t">14:28:20</td><td class="t">19:28:20.559Z</td><td>row #211 created; its <code>pipelineRun.enteredAt</code> is 19:28:20.426Z, 133 ms earlier</td><td><code>queue.json</code> #211</td></tr>
+<tr><td class="t">14:29:19</td><td class="t">19:29:19.534Z</td><td>job <code>ee265bc1</code> stamps its start, 9.8 s before the tree exists</td><td><code>jobs.json</code></td></tr>
+<tr><td class="t">14:29:29</td><td class="t">19:29:29.323Z</td><td>tree cut from <code>main</code> at <code>28f57a0</code>, branch <code>wtgui/stage-1-of-2-the-drafter-8b0b20</code></td><td><code>branch-parents.json</code> tag:8b0b20</td></tr>
+<tr><td class="t">14:29:45</td><td class="t">-</td><td>the three TODO items are filed for this tree</td><td><code>run-log.md:6</code></td></tr>
+<tr><td class="t">14:29:47</td><td class="t">19:29:47.318Z</td><td>row #211 starts; stage run <code>ping-pong/draft#1</code> stamped, thread <code>...f13797</code>, job <code>ee265bc1</code></td><td><code>queue.json</code> #211</td></tr>
+<tr><td class="t">14:30:33</td><td class="t">-</td><td>drafter's first command in this tree</td><td><code>run-log.md:8</code></td></tr>
+<tr><td class="t">14:41:36</td><td class="t">-</td><td><code>draft.md</code> first written, 7,074 bytes</td><td><code>run-log.md:11</code></td></tr>
+<tr><td class="t">14:44:27</td><td class="t">-</td><td>commit <code>4826ed9</code>, the draft</td><td><code>git log</code></td></tr>
+<tr><td class="t">14:46:12</td><td class="t">-</td><td>commit <code>cdf0ea4</code>, the run log's tail</td><td><code>git log</code></td></tr>
+<tr><td class="t">14:48</td><td class="t">-</td><td>stage 1 turn end</td><td><code>run-log.md:27</code></td></tr>
+<tr><td class="t">14:49:40</td><td class="t">19:49:40.989Z</td><td>job <code>ee265bc1</code> ends, status <code>done</code>, exit 0, 20m21s</td><td><code>jobs.json</code></td></tr>
+<tr><td class="t">14:49:44</td><td class="t">19:49:44.584Z</td><td>row #211 parked, <code>pipeline-unresolved</code>, manual hold; 3.6 s after the job ended</td><td><code>queue.json</code> #211 decision</td></tr>
+<tr><td class="t">14:56:14</td><td class="t">19:56:14.766Z</td><td>row #214 created by hand: stage <code>critique</code>, same tree, two files</td><td><code>queue.json</code> #214</td></tr>
+<tr><td class="t">14:57:31</td><td class="t">19:57:31.628Z</td><td>job <code>65101f07</code> stamps its start, 4.8 s before its stage run</td><td><code>jobs.json</code></td></tr>
+<tr><td class="t">14:57:36</td><td class="t">19:57:36.389Z</td><td>stage run <code>ping-pong/critique#1</code> stamped, thread <code>...adbec0</code>, visit 1</td><td><code>queue.json</code> #214</td></tr>
+<tr><td class="t">14:59:11</td><td class="t">19:59:11.069Z</td><td>row #211 marked done by <code>assistant-2</code>; <code>startedAt</code> and <code>doneAt</code> both this instant</td><td><code>queue.json</code> #211</td></tr>
+<tr><td class="t">15:01:04</td><td class="t">-</td><td>critic's first command in this tree</td><td><code>run-log.md:28</code></td></tr>
+<tr><td class="t">15:03:18</td><td class="t">-</td><td><code>critique.md</code> written: ten notes, five blocking, not accepted</td><td><code>run-log.md:30</code></td></tr>
+<tr><td class="t">15:05:08</td><td class="t">-</td><td>commit <code>4b52186</code>, critique plus the hand-cut section</td><td><code>git log</code></td></tr>
+<tr><td class="t">15:06</td><td class="t">-</td><td>push refused by the chained version gate: number unchanged from main</td><td><code>run-log.md:42</code></td></tr>
+<tr><td class="t">15:07</td><td class="t">-</td><td><code>git push --no-verify</code> puts the branch on origin; <code>gh pr create --fill</code> opens PR #483</td><td><code>run-log.md:43-44</code></td></tr>
+<tr><td class="t">15:09:37</td><td class="t">-</td><td>commit <code>a6a6d0d</code>, after the log's stated turn end</td><td><code>git log</code></td></tr>
+<tr><td class="t">15:10:59</td><td class="t">-</td><td>commit <code>3facbfd</code>, note 9's arithmetic, after the stated turn end</td><td><code>git log</code></td></tr>
+<tr><td class="t">15:11:31</td><td class="t">20:11:31.758Z</td><td>job <code>65101f07</code> ends, status <code>done</code>, exit 0, 14m00s</td><td><code>jobs.json</code></td></tr>
+<tr><td class="t">15:11:35</td><td class="t">20:11:35.837Z</td><td><code>ping-pong/critique#1</code> settled <code>done</code>, artifact pinned</td><td><code>queue.json</code> #214</td></tr>
+<tr><td class="t">15:11:42</td><td class="t">20:11:42.314Z</td><td><code>ping-pong/draft#1</code> settled <code>done</code> by hand, 6.5 s after the critique</td><td><code>queue.json</code> #214</td></tr>
+<tr><td class="t">15:12:30</td><td class="t">20:12:30.846Z</td><td>row #214 done; <code>startedAt</code> and <code>doneAt</code> both this instant, 59 s after its job ended</td><td><code>queue.json</code> #214</td></tr>
+<tr><td class="t">15:12:56</td><td class="t">20:12:56.919Z</td><td>row #212, this report, starts</td><td><code>queue.json</code> #212</td></tr>
+</tbody></table></div>
+
+<h2 id="rows">The two rows</h2>
+<p>Both records are read from the queue file, not from the row prose. "Draft run" means
+<code>stageRuns[]</code> entry <code>ping-pong/draft#1</code>; "critique run" means
+<code>ping-pong/critique#1</code>.</p>
+<div class="tw"><table><thead><tr>
+<th>field</th><th>#211, the draft</th><th>#214, the critique</th>
+</tr></thead><tbody>
+<tr><td>state</td><td><code>done</code></td><td><code>done</code></td></tr>
+<tr><td>created / started / done</td><td>19:28:20.559Z / 19:59:11.069Z / 19:59:11.069Z</td><td>19:56:14.766Z / 20:12:30.846Z / 20:12:30.846Z</td></tr>
+<tr><td>pipelineRun</td><td><code>ping-pong</code>, stage <code>draft</code>, enteredAt 19:28:20.426Z</td><td><code>ping-pong</code>, stage <code>critique</code>, enteredAt 20:11:42.314Z</td></tr>
+<tr><td>stage runs</td><td>one: <code>draft#1</code></td><td>two: <code>draft#1</code>, <code>critique#1</code></td></tr>
+<tr><td>draft run</td><td>thread <code>...f13797</code>, job <code>ee265bc1</code>, <code>status: null</code>, decision <code>pipeline-unresolved</code></td><td>thread <code>...adbec0</code>, job <code>65101f07</code>, <code>status: done</code>, settledAt 20:11:42.314Z, note "settled by hand after the record repair"</td></tr>
+<tr><td>critique run</td><td>absent</td><td><code>visit 1</code>, at 19:57:36.389Z, <code>status: done</code>, settledAt 20:11:35.837Z</td></tr>
+<tr><td>visits</td><td><code>{draft: 1}</code></td><td><code>{critique: 2, draft: 1}</code></td></tr>
+<tr><td>crossings</td><td>none</td><td><code>{H-02: 1, H-01: 1}</code></td></tr>
+<tr><td>decision fact</td><td><code>kind: record</code>, reason names <code>enteredAt</code></td><td><code>kind: run-status</code>, status <code>done</code></td></tr>
+<tr><td>artifact pin</td><td>none</td><td>draft <code>5cae569d...</code> / blob <code>d7e534d6...</code>; critique <code>b3d61096...</code> / blob <code>8cc4cd4f...</code></td></tr>
+<tr><td>tree at settle</td><td>absent</td><td>head <code>3facbfd</code>, dirty 0</td></tr>
+<tr><td>job's own pipeline</td><td><code>{id: "local", stage: "work"}</code></td><td><code>null</code>, and <code>branch: null</code></td></tr>
+</tbody></table></div>
+
+<h3>One id, two runs</h3>
+<p>The same stage-run id was written by two different workers, in two rows, and both are still there:</p>
+<pre>ping-pong/draft#1
+  row #211:  thread wtgui-stage-1-of-2-the-drafter-in-f13797  job ee265bc1  status null   decision pipeline-unresolved
+  row #214:  thread wtgui-stage-2-of-2-the-critic-in-t-adbec0  job 65101f07  status done   settledAt 20:11:42.314Z</pre>
+<p>Neither row carries the other's version, and nothing in the record says which run the id belongs to. The draft
+predicted this exact shape (its invariant 6) and the panel's own repair produced it.</p>
+
+<h2 id="handoff">What the hand-off did, and what it refused</h2>
+<p>"The hand-off" is the panel's drive between stage 1's settled job and stage 2's start. Its whole input is the
+queue row and the bundle; its whole output is a park, a new stage run and a job. Here is what it did with this row.</p>
+<div class="cols">
+<div class="box">
+<h4>It did</h4>
+<ol>
+<li>Cut one tree from <code>main</code> and reused it for both stages. <code>git worktree list</code> holds one entry
+for this tree, and both jobs record the same <code>cwd</code>.</li>
+<li>Stamped the pipeline on the row before the turn began (<code>enteredAt</code> 19:28:20.426Z) and the stage run's
+thread and job (19:29:47.318Z), so the ledger knows which worker ran.</li>
+<li>Waited for the worker instead of racing it: the row stayed live for the job's whole 20m21s, and the drive acted
+3.6 s after <code>endedAt</code>.</li>
+<li>Parked the row with a manual hold and wrote a decision on the stage run in the same write
+(<code>lib/task-pipeline-drive.js:1392-1394</code>).</li>
+<li>Left the tree, the branch and the ledger intact. The critic read the same commit range in the same directory,
+and the draft it reviewed never moved (<code>git diff cdf0ea4..HEAD -- draft.md</code> is empty).</li>
+<li>Pinned both artifacts to a commit and a blob, on the second row, 22 minutes late but exactly: both
+<code>sha256</code> values equal the file on disk today.</li>
+</ol>
+</div>
+<div class="box">
+<h4>It refused</h4>
+<ol>
+<li><b>The record.</b> <code>resolve(task)</code> failed on <code>enteredAt</code> and the drive never reached the
+graph (<code>lib/task-pipeline-drive.js:1518</code>).</li>
+<li><b>The next stage.</b> No <code>critique</code> entry on #211, no second thread, no second job. The pipeline's own
+stage 2 was never cut; #214 is a separate row that a person wrote.</li>
+<li><b>The settle.</b> <code>recordStageDecision</code> passes only a decision
+(<code>lib/task-pipeline.js:347</code>), and <code>settleStageRun</code> writes <code>settledAt</code> only when a
+status is present (<code>:310-316</code>). #211's entry kept <code>status: null</code>, no <code>settledAt</code>, no
+artifact and no commit pin for 22 minutes.</li>
+<li><b>The terminal word.</b> The job ended <code>done</code>; the row's sentence says the record is unresolved.
+Nothing on the row said the worker had succeeded, and the draft's own subject - "a failed stage run" - never
+happened here.</li>
+<li><b>The job's pipeline.</b> The hand-cut job carries <code>pipeline: null</code>. The row knows it is a stage; the
+job store does not.</li>
+<li><b>The push, twice.</b> Stage 1 refused it in its final message ("committed locally, not pushed"); the hand-written
+stage-2 brief ordered it; the version gate refused it; <code>--no-verify</code> overrode the gate.</li>
+</ol>
+</div>
+</div>
+
+<h2 id="success">What worked</h2>
+<ul>
+<li><b>Both workers finished on their own terms.</b> Exit 0, status <code>done</code>, 20m21s and 14m00s, no turn
+budget hit, no approval left open (<code>jobs.json</code>).</li>
+<li><b>The artifact pins are exact.</b> Row #214 records <code>draft.md</code> as
+<code>sha256 5cae569d...</code> at blob <code>d7e534d6...</code> and <code>critique.md</code> as
+<code>b3d61096...</code> at blob <code>8cc4cd4f...</code>; <code>sha256sum</code> and <code>git show HEAD:</code>
+answer the same values today, and the draft's blob is identical at <code>cdf0ea4</code> and
+<code>3facbfd</code>.</li>
+<li><b>The critic did the job it was handed.</b> Ten notes, five blocking, four citations in the draft that do not
+survive contact with the code, one missing actor (<code>settleTasks</code> retries a failed row automatically), and a
+verdict that refuses the draft rather than praising it. It also corrected its own arithmetic in
+<code>3facbfd</code>.</li>
+<li><b>The refusal cost minutes, not work.</b> Stage 2 read the same tree and the same two commits; the hand cut
+named exactly the two files that landed. The tree was clean at every settle.</li>
+<li><b>The branch stayed docs-only.</b> <code>git diff --stat 28f57a0..HEAD</code> is three files and 166
+insertions, all under <code>ledger/ping-pong/</code>; no <code>lib/</code>, <code>public/</code> or
+<code>tools/</code> line moved.</li>
+<li><b>The tree was kept, not recut.</b> The draft's invariant 7 holds: one tree, no reset, no clean, and the
+critique ran in the directory the draft was written in.</li>
+</ul>
+
+<h2 id="problems">The problems</h2>
+<div class="tw"><table><thead><tr>
+<th>#</th><th>kind</th><th>what happened</th><th>where</th>
+</tr></thead><tbody>
+<tr><td>1</td><td><span class="bad">blocker</span></td><td>A six-digit fraction reads as "a local-time stamp", and the hand-off is refused</td><td><code class="anchor">task-pipeline.js:37</code> <code class="anchor">task-pipeline.js:61</code></td></tr>
+<tr><td>2</td><td><span class="bad">defect</span></td><td>The parked branch writes the decision but never the run's status</td><td><code class="anchor">task-pipeline-drive.js:1392</code> <code class="anchor">task-pipeline.js:347</code></td></tr>
+<tr><td>3</td><td><span class="bad">defect</span></td><td>One stage-run id names two different runs on two rows</td><td><code class="anchor">task-pipeline.js:186</code> <code class="anchor">task-pipeline.js:295</code></td></tr>
+<tr><td>4</td><td><span class="bad">defect</span></td><td>Every row reports <code>startedAt</code> equal to <code>doneAt</code>, after the job ended</td><td><code class="anchor">assistant/queue.js:678</code></td></tr>
+<tr><td>5</td><td><span class="warnpill">defect</span></td><td><code>visits.critique</code> reads 2 with one entry at visit 1</td><td><code class="anchor">task-pipeline.js:213</code> <code class="anchor">task-pipeline.js:367</code></td></tr>
+<tr><td>6</td><td><span class="warnpill">process</span></td><td>The push was waived past the version gate, with a policy the page does not state</td><td><code class="anchor">run-log.md:37</code> <code class="anchor">run-log.md:43</code></td></tr>
+<tr><td>7</td><td><span class="warnpill">process</span></td><td>The log's closing line is two commits and three minutes short</td><td><code class="anchor">run-log.md:45</code></td></tr>
+<tr><td>8</td><td><span class="warnpill">naming</span></td><td>The report's path is declared twice, differently</td><td><code class="anchor">queue.json #212 files</code></td></tr>
+<tr><td>9</td><td><span class="warnpill">ordering</span></td><td>The job's start stamp predates its tree by 9.8 s</td><td><code class="anchor">jobs.json ee265bc1</code></td></tr>
+<tr><td>10</td><td><span class="warnpill">prose</span></td><td>The row's rendered sentence carries U+2014, so every quote edits it</td><td><code class="anchor">task-pipeline-drive.js:572</code></td></tr>
+</tbody></table></div>
+
+<h3 id="p1">1. A six-digit fraction reads as "a local-time stamp"</h3>
+<p><code>STAMP_RE</code> accepts a fraction of one to three digits: <code>(?:\.\d{1,3})?Z</code>
+(<code class="anchor">lib/task-pipeline.js:37</code>). A stamp written from a microsecond clock - six digits, which
+<code>Date.parse</code> itself accepts - fails the test, and the failure message at
+<code class="anchor">lib/task-pipeline.js:61</code> is about a missing zone. Measured against the guard's own pattern:
+<code>"2026-11-06T19:28:20.426Z"</code> passes; <code>"2026-11-06T19:28:20.426123Z"</code> fails. The row detail for
+#214 says the stored record carried a six-digit fraction, and that is the only value the pattern refuses; the
+decision's own reason, read today, quotes the repaired three-digit stamp and therefore contradicts itself.</p>
+<p><b>Effect.</b> The hand-off stops before it reads the graph, on a record that is otherwise complete. Here that
+cost 6m30s (park 14:49:44, replacement row 14:56:14) and the pipeline's own stage 2 permanently.</p>
+
+<h3 id="p2">2. The parked branch writes the decision but never the run's status</h3>
+<p><code>stop()</code> parks the row and calls <code>recordStageDecision</code>
+(<code class="anchor">lib/task-pipeline-drive.js:1392-1394</code>), which is
+<code>settleStageRun(task, { decision })</code> (<code class="anchor">lib/task-pipeline.js:347</code>).
+<code>settleStageRun</code> sets <code>settledAt</code> only inside the status branch
+(<code class="anchor">lib/task-pipeline.js:310-316</code>), so a park writes the decision and leaves
+<code>status</code> null. The done branch passes the status and settles properly
+(<code class="anchor">lib/task-pipeline-drive.js:1561</code>).</p>
+<p><b>Evidence.</b> #211's draft entry at 19:49:44 has the decision and nothing else: <code>status: null</code>, no
+<code>settledAt</code>, no artifact, no commit. It stayed that way until 20:11:42, when the hand repair wrote
+<code>status: done</code> and a settle time. This is the draft's central finding, and the run the draft was written
+from demonstrates it.</p>
+
+<h3 id="p3">3. One stage-run id names two different runs</h3>
+<p><code>stageRunId</code> is <code>&lt;pipeline&gt;/&lt;stage&gt;#&lt;visit&gt;</code> with no attempt ordinal
+(<code class="anchor">lib/task-pipeline.js:186-192</code>), and <code>settleStageRun</code> finds its target by stage
+and visit alone (<code class="anchor">lib/task-pipeline.js:295-300</code>). So any later settle for the same visit
+rewrites whichever entry it finds last, whatever thread that entry ran on. Row #214's draft entry is exactly that
+write: thread <code>...adbec0</code>, job <code>65101f07</code>, status <code>done</code> - the critic's thread and
+job on the drafter's entry. The string "settled by hand" on it appears in no module (<code>grep -rn</code> over
+<code>lib</code>, <code>public</code> and <code>tools</code> finds it only in an unrelated comment in
+<code>public/app.js</code>), so the entry was edited outside the stage-run writers.</p>
+<p><b>Effect.</b> The same id answers two different questions depending on the row a reader opens. The draft's
+invariant 6 - two entries never share an id - is not merely unimplemented; the panel's own repair is what broke it.</p>
+
+<h3 id="p4">4. Every row reports zero duration, stamped after the job ended</h3>
+<p>In the <code>done</code> transition, <code>startedAt</code> is backfilled with the settle clock:
+<code>updated.startedAt = t.startedAt || atIso; updated.doneAt = atIso</code>
+(<code class="anchor">lib/assistant/queue.js:678-681</code>). A row that was never set <code>running</code> therefore
+records its finish as its start. #211: 19:59:11.069Z for both, while its job ran 19:29:19.534Z to 19:49:40.989Z
+(20m21s); the row starts 9m30s after the work ended. #214: 20:12:30.846Z for both, while its job ran
+19:57:31.628Z to 20:11:31.758Z (14m00s). The correct stamp already exists for the spawn path
+(<code class="anchor">lib/assistant/queue.js:739</code>); these rows were never taken through it.</p>
+
+<h3 id="p5">5. The visit counter and the ledger disagree</h3>
+<p><code>assignPipeline</code> with <code>enter: true</code> increments <code>visits[stage]</code>
+(<code class="anchor">lib/task-pipeline.js:367</code>) and <code>enterStage</code> increments it again
+(<code class="anchor">:398</code>), while <code>visitOf</code> reads it (<code class="anchor">:213</code>) and
+<code>stageRunId</code> mints the id from it. Row #214 reads <code>visits: {critique: 2, draft: 1}</code> and holds
+one critique entry, <code>visit 1</code>. The second increment came from the re-press after the repair, which wrote
+no entry. A later settle on that stage would mint <code>#2</code> and leave <code>#1</code> untouched, so the row
+would hold two critique entries for one critique that ran once.</p>
+
+<h3 id="p6">6. The push was waived past the version gate</h3>
+<p>Stage 1's final message reads "Stage 1 is committed locally, not pushed", and its run log's first version of the
+push line (line 21) gives the reason. Line 37 then reverses it: the project's config reads
+<code>remoteBranchPolicy: allow</code>, so the branch "goes out with this commit". The chained gate refused the push
+at 15:06 ("Nothing was pushed. The bump belongs in the same PR as the change"), and line 43 records
+<code>git push --no-verify</code>, which is gate 5's named waiver. The PR body then offers a policy the versioning
+page does not state: "A docs-only branch lands at the base version (<code>docs/versioning.md</code>)". That page says
+the number is anchored by an annotated tag at the commit that first declares it
+(<code class="anchor">docs/versioning.md:12-27</code>); it has no docs-only exception. Measured today:
+<code>node tools/version.mjs check</code> exits 1 with "this branch's version is behind origin/main's" - branch
+1.41.0, base 1.41.1 at <code>db8a9bf</code>.</p>
+
+<h3 id="p7">7. The log's closing line is two commits short</h3>
+<p><code>run-log.md:45</code> says "15:08 - turn end ... this log's tail is the branch's last commit". Two commits
+follow it: <code>a6a6d0d</code> at 15:09:37 and <code>3facbfd</code> at 15:10:59. PR #483's body lists only the
+first three subjects (<code>4826ed9</code>, <code>cdf0ea4</code>, <code>4b52186</code>), because
+<code>gh pr create --fill</code> froze it at creation. The wall-clock log - the artifact this round exists to
+produce - does not cover its own last three minutes, and the PR does not describe half of what the branch carries.</p>
+
+<h3 id="p8">8. The report's path is declared twice, differently</h3>
+<p>Row #212's <code>files</code> list names <code>docs/reviews/pipeline-ping-pong-round4-2026-11-06.html</code>. The
+brief that produced this page names <code>docs/reviews/ping-pong-round-4-2026-11-06.html</code>. This page is at the
+brief's path. A reader who follows the row's list finds nothing; a check that reads the row's list reports a missing
+deliverable that is present under another name.</p>
+
+<h3 id="p9">9. The job starts before its tree exists</h3>
+<p>Job <code>ee265bc1</code> stamps <code>startedAt</code> 19:29:19.534Z; the tree's cut record is
+19:29:29.323Z, and the row's start is 19:29:47.318Z. Either the field is the request's stamp or the worker was asked
+for before its tree - the run log flagged the same anomaly at line 23. It makes every "time to first command"
+unreadable: 74 s from the job's stamp to the drafter's first command, but 64 s from the cut.</p>
+
+<h3 id="p10">10. The row's rendered sentence carries U+2014</h3>
+<p><code>renderDecision</code> builds the parked sentence as
+<code>${where} ended ${status}: ${detail} - the pipeline waits ...</code> with an em dash at
+<code class="anchor">lib/task-pipeline-drive.js:572</code>. The critique flagged the draft for quoting it wrong, and
+the code is why: every document that quotes the row either copies a character the project's writing rule forbids or
+silently normalizes it, as this page does.</p>
+
+<h2 id="fixes">Ranked fixes</h2>
+<p>Ranked by what blocks the next round first, then by cost. Each fix names the test it needs; none of these tests
+exists today, because none of these paths is covered by the suite this round ran.</p>
+<div class="tw"><table><thead><tr>
+<th>#</th><th>fix</th><th>where</th><th>why it ranks here</th><th>test that proves it</th>
+</tr></thead><tbody>
+<tr><td>1</td><td>Widen the stamp pattern to <code>\.\d+</code> (or parse it and require a trailing <code>Z</code>), and split the message: no zone, or a fraction the guard cannot read</td><td><code class="anchor">task-pipeline.js:37</code> <code class="anchor">task-pipeline.js:61</code></td><td>One line; blocks every hand-off that carries a sub-millisecond stamp, before the graph is read</td><td><code>elapsedInStage("2026-11-06T19:28:20.426123Z").ok === true</code>, and a stamp with no <code>Z</code> still refuses with the zone message</td></tr>
+<tr><td>2</td><td>Settle the run on every terminal park: pass <code>status</code>, <code>at</code>, <code>thread</code> and <code>job</code> to <code>settleStageRun</code> when the fact is a run status</td><td><code class="anchor">task-pipeline-drive.js:1392</code> <code class="anchor">task-pipeline.js:310</code></td><td>The row parks on a run it cannot describe; this is the draft's own subject and the round reproduces it</td><td>Park on a finished job; one write yields <code>status</code>, <code>settledAt</code> and the decision</td></tr>
+<tr><td>3</td><td>Put the attempt in the id (<code>&lt;pipeline&gt;/&lt;stage&gt;#&lt;visit&gt;.&lt;attempt&gt;</code>), or refuse to settle an entry whose thread differs</td><td><code class="anchor">task-pipeline.js:186</code> <code class="anchor">task-pipeline.js:295</code></td><td>One id answering two questions makes the ledger unusable, and the repair path is the writer that does it</td><td>Settle the same stage on two threads: two entries, both preserved, no shared id</td></tr>
+<tr><td>4</td><td>Stamp <code>startedAt</code> when the row starts, never in the <code>done</code> branch; route the spawn through <code>startTask</code></td><td><code class="anchor">assistant/queue.js:678</code> <code class="anchor">assistant/queue.js:739</code></td><td>Every row currently reports zero duration and a start after its finish</td><td>Row duration equals job duration within one second, for both a live and a hand-cut row</td></tr>
+<tr><td>5</td><td>Derive the visit from the entries (<code>max(entry.visit)</code>) instead of a parallel counter</td><td><code class="anchor">task-pipeline.js:213</code> <code class="anchor">task-pipeline.js:367</code></td><td>A visit that names no entry is the same identity fault as 3, one layer up</td><td>After a re-press, <code>visits[stage]</code> equals the highest entry visit</td></tr>
+<tr><td>6</td><td>Never waive the version gate silently: rebase onto <code>origin/main</code> and bump before the push; if a waiver is used, record it on the row and in the log</td><td><code class="anchor">.githooks/pre-push</code> <code class="anchor">lib/push-guard.js</code></td><td>The first push needed <code>--no-verify</code> and the number is still below main's</td><td><code>node tools/version.mjs check</code> exits 0 in the same shell as the push</td></tr>
+<tr><td>7</td><td>Close the run log after the last commit, and re-post the PR body after that commit</td><td><code class="anchor">run-log.md:45</code> <code class="anchor">PR #483</code></td><td>The log and the PR both stop two commits early, in the artifact that records the round</td><td><code>git log --oneline &lt;base&gt;..HEAD</code> has the same count as the commits the log names</td></tr>
+<tr><td>8</td><td>Make the row's <code>files</code> the one source for the artifact path, or generate the brief from it</td><td><code class="anchor">queue.json #212</code></td><td>A declared deliverable that does not exist is worse than an undeclared one</td><td>The first path in <code>files</code> exists on the branch</td></tr>
+<tr><td>9</td><td>Stamp the job at the spawn it belongs to, or label the field as the request time</td><td><code class="anchor">jobs.json</code></td><td>Low: it misdates the wait, not the work</td><td><code>job.startedAt &gt;= tree.cut</code> for every stage run</td></tr>
+</tbody></table></div>
+
+<h2 id="limits">What this does not prove</h2>
+<ul>
+<li><b>The original <code>enteredAt</code> is not recoverable.</b> The stored record now carries the repaired
+three-digit stamp. Problem 1 rests on the six-digit fraction named in row #214's own detail, plus the pattern's
+measured behaviour - not on the original bytes.</li>
+<li><b>The repair's route is unknown.</b> No module writes the entry's <code>note</code> string, and the panel's HTTP
+log was not read. What is proven is the resulting record and the two writers that could produce it.</li>
+<li><b>One round, two stages, no loop and no gate.</b> The ping-pong bundle's cap of 3 rounds and its gate G1 were
+never reached, so nothing here measures the loop or the gate.</li>
+<li><b>The workers' turns were not replayed.</b> Times come from <code>jobs.json</code>, the queue record and the
+run log; where they disagree, the disagreement is reported, not resolved.</li>
+<li><b>No product code was changed.</b> No test run is quoted for problems 1 to 5; each fix names the test it would
+need rather than claiming a suite covers it.</li>
+</ul>
+
+<h2 id="evidence">The evidence</h2>
+<div class="tw"><table><thead><tr>
+<th>file</th><th>bytes</th><th>lines</th><th>sha256</th><th>blob at 3facbfd</th>
+</tr></thead><tbody>
+<tr><td><code>ledger/ping-pong/draft.md</code></td><td>6,009</td><td>54</td><td><code>5cae569d60f1ee7920d4220182c42d119a9e20e584551a2c81f3a8a5abffcebc</code></td><td><code>d7e534d63a7d538ba9eb5a653a9cc9e1914cd840</code></td></tr>
+<tr><td><code>ledger/ping-pong/critique.md</code></td><td>9,427</td><td>67</td><td><code>b3d61096e13725b1855db2ee1fd1db457b644fa0d086492863693525a3107248</code></td><td><code>8cc4cd4fcec41a9210f12ed72d9343da30423ffd</code></td></tr>
+<tr><td><code>ledger/ping-pong/run-log.md</code></td><td>8,038</td><td>45</td><td><code>6e2af869fcbabbbc121163e5e3897bc5ea92a948790434f98485f6931fadfd93</code></td><td>not pinned by a row</td></tr>
+</tbody></table></div>
+<p>The records were read from the queue file, not from the row prose. The commands behind the claims above:</p>
+<pre># the branch and the ledger
+git log --format='%h %ad %s' --date=format:'%Y-%m-%d %H:%M:%S' -6
+git diff --stat 28f57a0..HEAD
+git diff --stat cdf0ea4..HEAD -- ledger/ping-pong/draft.md      # empty: the critic did not touch the draft
+sha256sum ledger/ping-pong/*.md
+git rev-parse cdf0ea4:ledger/ping-pong/draft.md 3facbfd:ledger/ping-pong/draft.md
+
+# the stamp guard, on the two candidate values
+node -e "const RE=/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/;
+  for (const s of ['2026-11-06T19:28:20.426Z','2026-11-06T19:28:20.426123Z']) console.log(s, RE.test(s));"
+#   2026-11-06T19:28:20.426Z true
+#   2026-11-06T19:28:20.426123Z false
+
+# the rows and the jobs
+node -e "const q=require(process.env.HOME+'/.wag/state/assistants/assistant-2/queue.json');
+  q.tasks.filter(t=>[211,212,214].includes(t.id)).forEach(t=>console.log(t.id,t.state,JSON.stringify(t.pipelineRun)))"
+node -e "const s=require(process.env.HOME+'/.wag/state/jobs.json');
+  (s.jobs||s).filter(j=>/^(ee265bc1|65101f07)$/.test(j.id)).forEach(j=>console.log(j.id,j.status,j.startedAt,j.endedAt,j.durationMs))"
+
+# the push and its gate
+node tools/version.mjs check                                    # exit 1: branch 1.41.0 behind base 1.41.1
+git ls-remote origin refs/heads/wtgui/stage-1-of-2-the-drafter-8b0b20
+gh pr view 483 --json number,state,title,body,mergeable,mergeStateStatus</pre>
+<p class="small">This page is hand-written, not generated from a renderer. It reads the tree at
+<code>3facbfd</code> and the stores at 15:18 EST; the report's own commit adds the page and a version bump, so the
+next reader should compare the ledger hashes above, not the tree's HEAD. Dashes: the code's U+2014 is shown as a
+hyphen wherever it is quoted.</p>
+
+</div>
+</body>
+</html>
