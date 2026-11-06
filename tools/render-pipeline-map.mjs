@@ -35,6 +35,8 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { REPORT_FOOTER_CSS, reportFooter, resolveReportProvenance } from "../lib/report-footer.js";
+
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, "..");
 const SEED = path.join(REPO, "pipelines.seed.json");
@@ -315,7 +317,7 @@ function sourceRow(file, rel, role) {
 // ---- the page ------------------------------------------------------------------------------------------------------
 const escHtml = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-function html(model, vendor) {
+function html(model, vendor, provenance) {
   if (!/globalThis\.mermaid|window\.mermaid/.test(vendor)) throw new Error(`${VENDOR_REL} does not set window.mermaid`);
   if (/<\/script/i.test(vendor)) throw new Error(`${VENDOR_REL} contains "</script" — it cannot be inlined verbatim`);
   const data = JSON.stringify(model).replace(/</g, "\\u003c");
@@ -468,6 +470,7 @@ function html(model, vendor) {
     .pm-card-head { flex-wrap: wrap; }
     #inspector { left: 12px; right: 12px; width: auto; }
   }
+${REPORT_FOOTER_CSS}
 </style>
 </head>
 <body>
@@ -538,6 +541,7 @@ function html(model, vendor) {
   </table>
   <p style="margin-top:10px">No run state is drawn: this is the catalogue and the bundle file's pipelines, not a task's position. The pipeline modal's four marks belong to a record, and this page deliberately does not invent one.</p>
 </footer>
+${reportFooter(provenance)}
 </div>
 
 <script id="pipeline-map-data" type="application/json">${data}</script>
@@ -580,7 +584,13 @@ async function main() {
   }
   const vendor = readSource(VENDOR).text;
   const model = build();
-  const page = html(model, vendor);
+  const provenance = resolveReportProvenance({
+    repo: REPO,
+    title: "Every pipeline the panel can put a tree on",
+    source: "node tools/render-pipeline-map.mjs reading pipelines.seed.json and pipeline-bundle.seed.json",
+    now: new Date(model.meta.generatedAt),
+  });
+  const page = html(model, vendor, provenance);
 
   if (opts.check) {
     if (!existsSync(opts.out)) throw new Error(`${path.relative(REPO, opts.out)} is not there — run the renderer`);
