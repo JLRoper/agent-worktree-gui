@@ -4,16 +4,34 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.40.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.40.1 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-343 releases from v0.1.0 (2026-10-20) to v1.40.0 (2026-11-06), 1199 commits between the tags. Every release is anchored by an
+344 releases from v0.1.0 (2026-10-20) to v1.40.1 (2026-11-06), 1204 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.40.1 — 2026-11-06 · 5 commits
+
+[`0be4c06`](https://github.com/JLRoper/agent-worktree-gui/commit/0be4c06c4b54007888da864ec91b755fbea174b3) · [compare v1.40.0...v1.40.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.40.0...v1.40.1)
+
+### Fixed
+
+- fix: a stuck bundle scan cannot wedge the UI, and one silence is one quiet alert ([`3cdbe0c`](https://github.com/JLRoper/agent-worktree-gui/commit/3cdbe0c4798ee2a44d241100c804fe066bdad784))
+
+### Docs & tests
+
+- docs: the pipeline map names the commit it was rendered from ([`ad89ade`](https://github.com/JLRoper/agent-worktree-gui/commit/ad89ade512b7aea0ef71ec1aa9c1f2795a76207d))
+- docs: render the changelog — 343 releases ([`af37152`](https://github.com/JLRoper/agent-worktree-gui/commit/af371528601ba658656fe412931546513bf92407))
+- docs: name the audit's scratch folder relatively, not as a path on one machine ([`57efb74`](https://github.com/JLRoper/agent-worktree-gui/commit/57efb747bd929e4dceb3f6213f2ac12d9a76b32d))
+
+### Other
+
+- chore: 1.40.1 — the version this landing carries ([`0be4c06`](https://github.com/JLRoper/agent-worktree-gui/commit/0be4c06c4b54007888da864ec91b755fbea174b3))
 
 ## v1.40.0 — 2026-11-06 · 4 commits
 
