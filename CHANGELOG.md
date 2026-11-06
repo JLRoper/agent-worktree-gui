@@ -4,16 +4,30 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.41.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.41.1 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-345 releases from v0.1.0 (2026-10-20) to v1.41.0 (2026-11-06), 1211 commits between the tags. Every release is anchored by an
+346 releases from v0.1.0 (2026-10-20) to v1.41.1 (2026-11-06), 1215 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.41.1 — 2026-11-06 · 4 commits
+
+[`db8a9bf`](https://github.com/JLRoper/agent-worktree-gui/commit/db8a9bfcdfbb8538c91e722fcdc280f7e4fc0db2) · [compare v1.41.0...v1.41.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.41.0...v1.41.1)
+
+### Docs & tests
+
+- docs: the landing of the stage hold - the rebase, the gates, the three named red tests ([`28f57a0`](https://github.com/JLRoper/agent-worktree-gui/commit/28f57a0cc342d39d4ffe61c3a03434ee68716a2f))
+- docs: render the changelog — 345 releases ([`c28111e`](https://github.com/JLRoper/agent-worktree-gui/commit/c28111e09fbd262a2ae08c8cd523103eeb00c9ef))
+- docs: measure the board's refresh loop, the modal and the forced layout ([`90c352c`](https://github.com/JLRoper/agent-worktree-gui/commit/90c352cfc4eafeb1640e30b23187b074954a0b40))
+
+### Other
+
+- chore: 1.41.1 — the version this landing carries ([`db8a9bf`](https://github.com/JLRoper/agent-worktree-gui/commit/db8a9bfcdfbb8538c91e722fcdc280f7e4fc0db2))
 
 ## v1.41.0 — 2026-11-06 · 7 commits
 
