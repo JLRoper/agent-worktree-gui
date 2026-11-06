@@ -38,6 +38,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { Assistant } from "../lib/assistant.js";
+import { Jobs } from "../lib/jobs.js";
+import { PipelineRecords, cutPipeline } from "../lib/pipelines.js";
 import { readQueueFile, writeQueueFile } from "../lib/assistant/queue.js";
 import { REPORT_FOOTER_CSS, reportFooter, resolveReportProvenance } from "../lib/report-footer.js";
 
@@ -71,7 +73,7 @@ const wanted = (ONLY ? ONLY.split(",").map((s) => s.trim()) : ["ping-pong", "pro
 // One Assistant, one queue row, one scripted seat, and the panel's own sweep between every stage. The seat's own
 // decisions (which band of `author-review-revise` to write) are recorded in the ledger beside the row's, so the report
 // can say who decided what.
-async function walk(pipelineId, { leftover = false } = {}) {
+async function walk(pipelineId, { leftover = false, timer = false, restartAt = 0 } = {}) {
   const doc = { bundleVersion: 1, name: pipelineId, pipelines: seed.pipelines.filter((p) => p.id === pipelineId) };
   if (!doc.pipelines.length) throw new Error(`the seed holds no pipeline "${pipelineId}"`);
   const tree = doc.pipelines[0];
@@ -80,6 +82,25 @@ async function walk(pipelineId, { leftover = false } = {}) {
   writeFileSync(bundleFile, JSON.stringify(doc));
   const state = { board: [], started: [], cuts: [], prompts: [], verdicts: [], tree: path.join(dir, "trees", `walk-${pipelineId}`), clock: CLOCK };
   let jobNo = 0;
+  // THE WAIT BOOK, for the timer walk. It is the panel's own book, on a real file: `holdPipelineStageRun` is what the
+  // cut writes and `sweepPipelineWaits` is what the panel's ticker runs. The driver walk above needs none of it.
+  const recordsFile = path.join(dir, "pipeline-records.json");
+  let records = timer ? new PipelineRecords({ file: recordsFile }) : null;
+  let book = null;
+  let holds = [];
+  const newBook = () => {
+    const made = new Jobs({ config: { jobsFile: path.join(dir, "jobs.json"), defaultCwd: dir }, onLog: () => {} });
+    made.pipelineRecords = records;
+    // The card's own answer, from the seat's board: the panel's store would hold the same objects after a restart.
+    made.get = (id) => state.board.find((j) => String(j.id) === String(id)) || null;
+    const write = made.holdPipelineStageRun.bind(made);
+    made.holdPipelineStageRun = (args) => {
+      holds.push({ stage: args.stage, visit: args.visit, job: args.job, pipeline: args.pipeline });
+      return write(args);
+    };
+    return made;
+  };
+  if (timer) book = newBook();
   const jobs = {
     list: () => state.board,
     firstOfThread: (thread) => state.board.find((j) => j.thread === thread) || null,
@@ -88,49 +109,57 @@ async function walk(pipelineId, { leftover = false } = {}) {
     create: async (opts) => ({ id: "job-created", ...opts }),
     answerQuestion: async () => ({ ok: true }),
     stop: async () => ({ ok: true }),
-    get: () => null,
+    get: (id) => state.board.find((j) => String(j.id) === String(id)) || null,
     clarify: { state: () => null },
+    // The book, seen through the store the Assistant holds: the hold is written where the sweep will read it, and the
+    // driver is told which rows the book owns.
+    ...(timer ? { pipelineRecordFor: (t) => records.get(t, { fresh: true }), holdPipelineStageRun: (args) => book.holdPipelineStageRun(args) } : {}),
     makeWorktree: async (repoDir, prompt) => {
       state.cuts.push({ repoDir, prompt });
       mkdirSync(state.tree, { recursive: true });
+      // A cut writes the tree's LOCAL rung before the first turn exists (lib/jobs.js `recordCutPipeline`); the hold then
+      // rides on that record. The stub makes the same write, because the book is the point of this walk.
+      if (timer && !records.get(state.tree, { fresh: true })) records.set(state.tree, cutPipeline({ at: new Date(state.clock).toISOString() }));
       return { path: state.tree, branch: `wtgui/walk-${pipelineId}`, startSha: null };
     },
   };
-  const assistant = new Assistant({
-    config: { jobsFile: path.join(dir, "jobs.json"), assistantFile: path.join(dir, "assistant.json"), defaultCwd: dir, pipelineBundleFile: bundleFile },
-    jobs,
-    getProjects: () => [PROJECT],
-    // The landing rule, satisfied up front: this walk is about the graph, not about the merge a real tree would earn.
-    getRows: () => [{ path: state.tree, verdict: "MERGED" }],
-    spawner: async (spec) => {
-      const found = /\(([\w.-]+)\/([\w.-]+)\)(?:, visit (\d+))?/.exec(spec.prompt);
-      if (!found) throw new Error(`the stage prompt names no stage: ${spec.prompt.slice(0, 160)}`);
-      const [, pipeline, id, visit] = found;
-      const stage = tree.stages.find((s) => s.id === id);
-      if (!stage || !stage.artifact) throw new Error(`${pipeline}/${id} declares no artifact`);
-      const file = path.join(spec.target, stage.artifact.path);
-      mkdirSync(path.dirname(file), { recursive: true });
-      const body = `${pipeline}/${id} visit ${visit}\nwritten by the seat at ${new Date(state.clock).toISOString()}\n`;
-      writeFileSync(file, body);
-      // The seat's gate decision: the reviewer rejects twice, then accepts. Written where the gate's document says
-      // the record lives, because that file — not a press — is what crosses a gate (§6.1).
-      const gate = (tree.gates || []).find((g) => g.after === id && g.decision);
-      if (gate) {
-        const outcome = Number(visit) >= 3 ? "accept" : "reject";
-        const record = path.join(spec.target, gate.decision.path);
-        mkdirSync(path.dirname(record), { recursive: true });
-        writeFileSync(record, `${JSON.stringify({ outcome, gate: gate.id, at: new Date(state.clock).toISOString() }, null, 1)}\n`);
-        state.verdicts.push({ stage: id, visit: Number(visit), gate: gate.id, outcome, file: gate.decision.path });
-      }
-      jobNo += 1;
-      const job = { id: `job-${jobNo}`, thread: `walk-${pipelineId}-${jobNo}`, cwd: spec.target, worktreePath: spec.target, status: "running", startedAt: new Date(state.clock).toISOString() };
-      state.started.push({ pipeline, stage: id, visit: Number(visit), job: job.id, thread: job.thread, artifact: stage.artifact.path, sha256: sha256(body) });
-      state.prompts.push(spec.prompt);
-      state.board.push(job);
-      return job;
-    },
-    now: () => state.clock,
-  });
+  const makeAssistant = () =>
+    new Assistant({
+      config: { jobsFile: path.join(dir, "jobs.json"), assistantFile: path.join(dir, "assistant.json"), defaultCwd: dir, pipelineBundleFile: bundleFile },
+      jobs,
+      getProjects: () => [PROJECT],
+      // The landing rule, satisfied up front: this walk is about the graph, not about the merge a real tree would earn.
+      getRows: () => [{ path: state.tree, verdict: "MERGED" }],
+      spawner: async (spec) => {
+        const found = /\(([\w.-]+)\/([\w.-]+)\)(?:, visit (\d+))?/.exec(spec.prompt);
+        if (!found) throw new Error(`the stage prompt names no stage: ${spec.prompt.slice(0, 160)}`);
+        const [, pipeline, id, visit] = found;
+        const stage = tree.stages.find((s) => s.id === id);
+        if (!stage || !stage.artifact) throw new Error(`${pipeline}/${id} declares no artifact`);
+        const file = path.join(spec.target, stage.artifact.path);
+        mkdirSync(path.dirname(file), { recursive: true });
+        const body = `${pipeline}/${id} visit ${visit}\nwritten by the seat at ${new Date(state.clock).toISOString()}\n`;
+        writeFileSync(file, body);
+        // The seat's gate decision: the reviewer rejects twice, then accepts. Written where the gate's document says
+        // the record lives, because that file — not a press — is what crosses a gate (§6.1).
+        const gate = (tree.gates || []).find((g) => g.after === id && g.decision);
+        if (gate) {
+          const outcome = Number(visit) >= 3 ? "accept" : "reject";
+          const record = path.join(spec.target, gate.decision.path);
+          mkdirSync(path.dirname(record), { recursive: true });
+          writeFileSync(record, `${JSON.stringify({ outcome, gate: gate.id, at: new Date(state.clock).toISOString() }, null, 1)}\n`);
+          state.verdicts.push({ stage: id, visit: Number(visit), gate: gate.id, outcome, file: gate.decision.path });
+        }
+        jobNo += 1;
+        const job = { id: `job-${jobNo}`, thread: `walk-${pipelineId}-${jobNo}`, cwd: spec.target, worktreePath: spec.target, status: "running", startedAt: new Date(state.clock).toISOString() };
+        state.started.push({ pipeline, stage: id, visit: Number(visit), job: job.id, thread: job.thread, artifact: stage.artifact.path, sha256: sha256(body) });
+        state.prompts.push(spec.prompt);
+        state.board.push(job);
+        return job;
+      },
+      now: () => state.clock,
+    });
+  let assistant = makeAssistant();
   assistant.settings.spawn = "auto";
 
   const added = assistant.queueMutate("assistant-1", "add", { title: `walk ${pipelineId}`, project: PROJECT.name });
@@ -177,12 +206,46 @@ async function walk(pipelineId, { leftover = false } = {}) {
     }
     const before = rowOf();
     state.clock += 1000;
-    assistant.sweepQueues();
+    // THE RESTART, mid-wait: a fresh book and a fresh Assistant over the same FILES, between the settle and the pass that
+    // reads it. Nothing of the first process is in memory afterwards, so the hold the next tick acts on can only have
+    // come out of the book — and the stage is started once, not twice.
+    if (timer && restartAt && step === restartAt) {
+      state.restart = {
+        at: step,
+        stage: before && before.pipelineRun ? before.pipelineRun.stage : null,
+        visit: before && before.pipelineRun ? (before.pipelineRun.visits || {})[before.pipelineRun.stage] : null,
+        started: state.started.length,
+        holds: holds.length,
+      };
+      records = new PipelineRecords({ file: recordsFile });
+      book = newBook();
+      assistant = makeAssistant();
+      assistant.settings.spawn = "auto";
+    }
+    let out = null;
+    if (timer) {
+      if (state.started.length === 0) {
+        // Nothing has been cut yet, so there is no run to hold: this is the panel's ordinary queue tick — the tree is cut
+        // on one pass and its first stage started on the next — and it is the only one this walk takes.
+        assistant.sweepQueues();
+      } else {
+        out = await book.sweepPipelineWaits({
+          now: state.clock,
+          readReview: () => ({ ok: false, why: "a hold reads the job store, not the host" }),
+          wake: () => ({ ok: true }),
+          advance: () => assistant.advancePipelineTree(state.tree),
+        });
+      }
+    } else {
+      assistant.sweepQueues();
+    }
+    await tick();
     await tick();
     await tick();
     const row = rowOf();
     steps.push({
       step,
+      mode: timer ? (state.started.length === 0 ? "queue" : "timer") : "queue",
       state: row.state,
       stage: row.pipelineRun ? row.pipelineRun.stage : null,
       stageRun: row.pipelineRun && (row.pipelineRun.stageRuns || []).length ? row.pipelineRun.stageRuns.at(-1).id : null,
@@ -190,12 +253,22 @@ async function walk(pipelineId, { leftover = false } = {}) {
       crossings: row.pipelineRun ? row.pipelineRun.crossings || {} : {},
       started: state.started.length,
       from: before ? before.state : null,
+      held: out ? out.held : null,
+      advanced: out ? out.advanced : null,
+      checked: out ? out.checked : null,
     });
     if (row.state === "parked" || row.state === "done") break;
   }
   const row = rowOf();
   const ledger = {
-    pipeline: leftover ? `${pipelineId}:leftover` : pipelineId,
+    pipeline: leftover ? `${pipelineId}:leftover` : timer ? `${pipelineId}:timer` : pipelineId,
+    // The clock the row walked on. `queue` is the panel's ordinary dispatch; `timer` is the wait book's own tick, with the
+    // assistant's queue untouched between boundaries — the point of the timer walk.
+    mode: timer ? "timer" : "queue",
+    // Every hold the CUT wrote: the row's stage and the run it named. A timer walk must write one per boundary, and the
+    // restart's hold must be the one the fresh book acted on.
+    holds: timer ? holds : [],
+    restart: timer && restartAt ? state.restart || null : null,
     document: pipelineId,
     title: tree.title,
     stages: tree.stages.map((s) => s.id),
@@ -232,6 +305,7 @@ async function walk(pipelineId, { leftover = false } = {}) {
   };
   clearTimeout(assistant.persistTimer);
   if (assistant.timer) clearInterval(assistant.timer);
+  if (book) clearTimeout(book.persistTimer);
   if (!KEEP) rmSync(dir, { recursive: true, force: true });
   // Every string in the ledger is scrubbed of this run's sandbox: the journal lines quote the tree, and a committed
   // file must not name a folder on the machine that wrote it (`tools/absolute-paths.mjs`).
@@ -247,6 +321,32 @@ async function walk(pipelineId, { leftover = false } = {}) {
 // seed graph. A walk that only matches itself would prove nothing.
 function expectWalk(ledger) {
   const stages = ledger.starts.map((s) => s.stage);
+  if (ledger.pipeline === "ping-pong:timer") {
+    // THE TIMER WALK: after the panel's ordinary dispatch cut the tree and started the first stage, every boundary was
+    // crossed by `sweepPipelineWaits` alone — no `Assistant.sweepQueues()` between them, and the assistant's queue file
+    // was written only by the advance the wait book asked for.
+    const timerSteps = (ledger.steps || []).filter((s) => s.mode === "timer");
+    check(ledger.cuts === 1, "the timer walk cuts one tree and every stage runs in it", `${ledger.cuts} cut(s)`);
+    check(stages.join(",") === "draft,critique,draft,critique,draft,critique,draft,critique", "the panel's TIMER alone walks draft ⇄ critique through three visits, with the queue untouched", stages.join(","));
+    check(timerSteps.filter((s) => s.advanced).length === 8, "every boundary after the first start — seven stage moves and the cap park — was an advance the wait book made", `${timerSteps.filter((s) => s.advanced).length} timer advance(s)`);
+    check(ledger.holds.length === 8, "the cut wrote a hold for every run, and each one names its run", `${ledger.holds.length} hold(s)`);
+    check(ledger.holds.every((h) => h.stage && h.job), "every hold names a stage AND the job that works it", JSON.stringify(ledger.holds[0] || null));
+    check(JSON.stringify(ledger.starts.map((s) => s.visit)) === JSON.stringify([1, 1, 2, 2, 3, 3, 4, 4]), "each entry is its own numbered visit", JSON.stringify(ledger.starts.map((s) => s.visit)));
+    check(JSON.stringify(ledger.row.visits) === JSON.stringify({ draft: 4, critique: 4 }), "three loop rounds enter each stage four times", JSON.stringify(ledger.row.visits));
+    check(Number(ledger.row.crossings["H-02"]) === 3, "the back edge was crossed its cap's three times", JSON.stringify(ledger.row.crossings));
+    check(ledger.row.state === "parked" && ledger.row.waitingFor && ledger.row.waitingFor.kind === "cap", "a cap still stops the timer's walk", ledger.row.state);
+    check(/at its cap of 3 rounds/.test(String(ledger.row.reason)), "and the park names the cap and the edge", ledger.row.reason);
+    // The restart: a fresh book and a fresh Assistant over the same files, mid-wait.
+    const restart = ledger.restart;
+    check(Boolean(restart) && restart.at > 1, "the walk restarted mid-wait, from the files alone", restart ? `at step ${restart.at}, stage ${restart.stage}` : "no restart");
+    if (restart) {
+      const after = ledger.starts.slice(restart.started);
+      check(after.length === ledger.starts.length - restart.started, "the restarted panel started every remaining stage once", `${after.length} start(s) after the restart`);
+      check(new Set(after.map((s) => `${s.stage}#${s.visit}`)).size === after.length, "and no stage was started twice across the restart", after.map((s) => `${s.stage}#${s.visit}`).join(","));
+      check(ledger.holds.length - restart.holds === after.length, "every start after the restart wrote its own hold", `${ledger.holds.length - restart.holds} hold(s) after, ${after.length} start(s)`);
+    }
+    return;
+  }
   if (ledger.pipeline.endsWith(":leftover")) {
     // The row was left `queued` over a stage whose run had settled. Re-running that stage is the stall; reading the
     // settle off the ledger and moving to the graph's next stage is the fix.
@@ -301,6 +401,9 @@ function report(ledgers, provenance) {
       // The leftover walk says what it left on disk and what the next sweep did with it, from the ledger's own starts.
       const first = l.starts[0];
       const second = l.starts[1];
+      const timerLine = l.mode === "timer"
+        ? `<p class="order"><b>The timer:</b> after the panel's ordinary dispatch cut the tree and started <code>${esc(first ? first.stage : "?")}</code>, every later boundary was crossed by <code>sweepPipelineWaits</code> alone — each stage held in the book, keyed to its run (${l.holds.length} holds). The walk restarted mid-wait at step ${esc(String(l.restart ? l.restart.at : "—"))} (stage <code>${esc(l.restart ? l.restart.stage : "—")}</code>) with a fresh book and a fresh Assistant over the same files: ${esc(String((l.starts || []).length - (l.restart ? l.restart.started : 0)))} stage start(s) after it, and none of them twice.</p>`
+        : "";
       const leftoverLine = l.pipeline.endsWith(":leftover")
         ? `<p class="order"><b>Leftover:</b> the row was written <code>queued</code> over <code>${esc(first ? first.stage : "?")}</code> after its run settled; the next sweep read the settle off the ledger and started <code>${esc(second ? second.stage : "?")}</code>. <code>${esc(first ? first.stage : "")}</code> was started once.</p>`
         : "";
@@ -310,6 +413,7 @@ function report(ledgers, provenance) {
   <p class="order"><b>Started, in order:</b> ${l.starts.map((s) => `${esc(s.stage)}#${s.visit}`).join(" → ")}</p>
   <p class="order"><b>Visits:</b> <code>${esc(JSON.stringify(l.row.visits))}</code> &nbsp; <b>Crossings:</b> <code>${esc(JSON.stringify(l.row.crossings))}</code> &nbsp; <b>Waits on:</b> ${waits}</p>
   ${leftoverLine}
+  ${timerLine}
   <p class="reason">${esc(l.row.reason || "")}</p>
   <table><thead><tr><th>stage run</th><th>status</th><th>thread</th><th>artifact</th><th>sha256</th><th>decision</th></tr></thead><tbody>${runs}</tbody></table>
 </section>`;
@@ -332,6 +436,7 @@ ${REPORT_FOOTER_CSS}
 <h1>A pipeline walks by itself</h1>
 <p class="meta">Shipped documents driven through <code>Assistant.sweepQueues</code> — the panel's own clock — with a scripted seat and <b>no hand-start</b>. Generated by <code>node tools/verify-pipeline-walk.mjs</code> at ${esc(new Date().toISOString())}.</p>
 <p class="order"><b>The case this change is about</b> is the fourth walk. A row can be left <code>queued</code> over a stage whose run has already settled — a restart between the settle and the pass that reads it, a requeue, a killed pass. On the driver before this change that row stayed <code>queued</code> on <code>probe</code> with no decision on its stage run and never advanced (measured: 17 / 20 checks, all three red ones in that walk). The driver now reads the settle off the row's own ledger and moves to the graph's next stage.</p>
+<p class="order"><b>The fifth walk is the same document on the panel's other clock.</b> The cut writes a HOLD on the tree's pipeline record (<code>pipelineWait.kind: "run"</code>), keyed to the run; <code>sweepPipelineWaits</code> reads that run's status and, when it has settled, hands the row to the one advance seam. The assistant's queue is not swept between boundaries — and the walk is restarted mid-wait, from the files alone.</p>
 ${rows}
 <p class="note">Each start above was asked for by <code>driveTaskPipelines</code> on the sweep that settled the stage before it: the seat is handed the stage prompt and its tree, writes the stage's declared artifact, and returns the job a gateway would return. The cap, the gate's routed verdict, the artifact gate and the landing rule are read from <code>pipeline-bundle.seed.json</code>, not restated here. Ledger: <code>ledger.json</code> beside this page.</p>
 ${reportFooter(provenance)}
@@ -345,13 +450,16 @@ const SCENARIOS = [
   { id: "probe-fix" },
   { id: "author-review-revise" },
   { id: "probe-fix", leftover: true },
+  // The wait book's own clock: the same ping-pong document, walked by `sweepPipelineWaits` after the panel's ordinary
+  // dispatch started the first stage — and restarted mid-wait, from the files.
+  { id: "ping-pong", timer: true, restartAt: 6 },
 ];
 const ledgers = [];
 try {
   const chosen = ONLY ? SCENARIOS.filter((s) => wanted.includes(s.id)) : SCENARIOS;
   if (!chosen.length) throw new Error(`no scenario matches --only ${JSON.stringify(ONLY)}`);
   for (const scenario of chosen) {
-    const ledger = await walk(scenario.id, { leftover: Boolean(scenario.leftover) });
+    const ledger = await walk(scenario.id, { leftover: Boolean(scenario.leftover), timer: Boolean(scenario.timer), restartAt: Number(scenario.restartAt) || 0 });
     ledgers.push(ledger);
     expectWalk(ledger);
   }
