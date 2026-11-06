@@ -1777,6 +1777,73 @@ function turnBody(turn, copy = "") {
 // thing in both, and the reader asked for the same box rather than a lookalike.
 const APPROVAL_CHOICE_LABEL = { once: "Allow once", session: "Allow for this session", always: "Always allow", deny: "Deny" };
 
+// One answer per question, shared by every box that draws it. A permission can be open as a run card
+// (`turn-approval`) and as a dock card (`.approval`), and a clarify question can be drawn on the worktree
+// session and in the assistant session; both copies carry the gateway's request id, so the flight is keyed
+// on that id rather than on the card, the turn or the button. The entry exists from the press until the
+// answer settles: every other press is refused, and every copy is greyed together.
+const approvalFlights = new Map(); // `request:<id>` | `id:<id>` -> { id, requestId, choice, at }
+function approvalFlightKey(id, requestId) {
+  const rid = String(requestId || "").trim();
+  return rid ? `request:${rid}` : `id:${String(id || "")}`;
+}
+function approvalInFlight(id, requestId) {
+  return approvalFlights.get(approvalFlightKey(id, requestId)) || null;
+}
+
+// Every box that draws this approval, on every surface: the board card and the pinned copy of the same turn are
+// two boxes for one request, and both carry the gateway's request id. A record with no id falls back to the
+// turn, which is the finest identity it has.
+function approvalCardsFor(id, requestId) {
+  const rid = String(requestId || "").trim();
+  const turn = String(id || "");
+  const cards = new Set();
+  for (const el of document.querySelectorAll("[data-approve]")) {
+    const same = rid ? String(el.dataset.request || "") === rid : String(el.dataset.approve || "") === turn;
+    if (!same) continue;
+    const card = el.closest(".turn-approval");
+    if (card) cards.add(card);
+  }
+  return cards;
+}
+
+// Grey (or un-grey) every copy of one approval at the press, before any round trip: `disabled` on the button
+// itself is what a stale pointerup and a repaint that has not run yet both see, and the flight line says what
+// is happening without waiting for the next snapshot.
+function paintApprovalFlight(id, requestId, mode) {
+  const sending = mode === "sending";
+  for (const card of approvalCardsFor(id, requestId)) {
+    card.classList.toggle("is-sending", sending);
+    if (sending) card.setAttribute("aria-busy", "true");
+    else card.removeAttribute("aria-busy");
+    for (const el of card.querySelectorAll("button")) el.disabled = sending;
+    const line = card.querySelector("[data-ta-flight]");
+    if (line) line.hidden = !sending;
+  }
+}
+
+// The route accepted the answer: clear every copy now rather than waiting for the next snapshot, and record the
+// decision the way the server did. Both renderers are called because the board card and the assistant's floating
+// chat are separate surfaces - a clear that only reaches one leaves the other offering a request that is over.
+function applyApprovalAnswered(turnId, requestId, choice) {
+  const rid = String(requestId || "").trim();
+  const threads = new Set();
+  for (const j of state.jobs.values()) {
+    const a = j.approval;
+    const same = rid ? a && String(a.requestId || "") === rid : j.id === turnId;
+    if (!same) continue;
+    j.approvalDone = { choice: String(choice || ""), command: a.command || "", at: new Date().toISOString(), here: true };
+    j.approval = null;
+    threads.add(j.thread || j.id);
+  }
+  if (!threads.size && turnId) threads.add(turnId);
+  for (const thread of threads) {
+    renderConversation(thread);
+    if (assistantSessionFor(thread) && typeof window.__assistantRenderChat === "function") window.__assistantRenderChat(thread);
+  }
+  paintHumanButton();
+}
+
 // The permission box itself: the amber raised box, its head, the thing being asked about, the choices, and a
 // deadline the page's own 1s clock counts down. Extracted from approvalPrompt() when the remote-write permission
 // arrived, so the two questions cannot drift into two designs. Everything that differs is a parameter: which
@@ -1799,14 +1866,22 @@ function permissionBoxHtml({
   note = "",
   titles = null,
   extra = "",
+  // Can this panel send an answer for this request at all? False for a turn with no run, a record with no
+  // permitted choice, and a request the gateway has proved it no longer holds: the box then draws the note
+  // instead of choices, because a button that can only be refused is worse than no button.
+  answerable = true,
 }) {
   const left = deadline ? deadline - Date.now() : 0;
+  const canSend = !closed && answerable;
+  // A press has already gone out for this request: every copy of the box greys its choices at once, so a
+  // second box (the dock's copy, or this card after a repaint) cannot send a second, different answer.
+  const sending = canSend && Boolean(approvalInFlight(id, requestId));
   const buttons =
     `<div class="ta-actions">` +
     choices
       .map(
         (c) =>
-          `<button class="btn-approve${c === "deny" ? " btn-deny" : ""}" data-approve="${esc(id)}" data-choice="${esc(c)}" data-request="${esc(requestId)}" data-until="${deadline || ""}"${extra} type="button" title="${esc((titles && titles[c]) || APPROVAL_CHOICE_LABEL[c] || c)}">${esc(APPROVAL_CHOICE_LABEL[c] || c)}</button>`,
+          `<button class="btn-approve${c === "deny" ? " btn-deny" : ""}" data-approve="${esc(id)}" data-choice="${esc(c)}" data-request="${esc(requestId)}" data-until="${deadline || ""}"${extra} type="button"${sending ? " disabled" : ""} title="${esc((titles && titles[c]) || APPROVAL_CHOICE_LABEL[c] || c)}">${esc(APPROVAL_CHOICE_LABEL[c] || c)}</button>`,
       )
       .join("") +
     `</div>`;
@@ -1817,12 +1892,13 @@ function permissionBoxHtml({
       : `<div class="ta-foot${closed ? " is-over" : left <= 20_000 ? " is-low" : ""}" data-approval-until="${deadline}" data-approval-window="${windowMs}" title="time left before this question is denied and the writer is told so">` +
         `<div class="ta-timer"><span style="width:${Math.max(0, Math.min(100, (left / windowMs) * 100)).toFixed(2)}%"></span></div>` +
         `<span class="ta-left mono">${closed ? "expired" : `~${fmtLeft(left)} left`}</span></div>`;
-  return `<div class="turn-approval${closed ? " is-expired" : ""}" ${forAttr}>
+  return `<div class="turn-approval${closed ? " is-expired" : ""}${sending ? " is-sending" : ""}" ${forAttr}>
     <div class="ta-head mono">${closed ? esc(closedHead) : head}</div>
     <pre class="ta-cmd mono">${esc(command || "(no command text)")}</pre>
     ${note}
-    ${closed ? closedNote : buttons}
-    ${closed ? "" : foot}
+    <div class="ta-note mono is-sending" data-ta-flight${sending ? "" : " hidden"}>sending your answer...</div>
+    ${canSend ? buttons : closed ? closedNote : approvalUnanswerableNote()}
+    ${canSend ? foot : ""}
   </div>`;
 }
 
@@ -1846,6 +1922,10 @@ function approvalPrompt(turn, copy = "") {
   const deadline = Number(approval.deadline) || 0;
   const windowMs = (Number(approval.timeoutSeconds) || 0) * 1000;
   const closed = Boolean(deadline) && deadline - Date.now() <= 0;
+  // The panel's own verdict on whether those buttons can lead anywhere: it needs a run to post to, at least
+  // one choice the host allowed, and a request its reconcile has not found gone. A page talking to a panel
+  // that predates the field gets `undefined`, which is why only an explicit false closes the box.
+  const answerable = Boolean(turn.runId) && approval.answerable !== false && choices.length > 0;
   return permissionBoxHtml({
     id: turn.id,
     requestId: approval.requestId || "",
@@ -1856,6 +1936,7 @@ function approvalPrompt(turn, copy = "") {
     deadline,
     windowMs,
     closed,
+    answerable,
     closedNote: approvalClosedNote(),
     titles: {
       once: "allow this command (once)",
@@ -1874,17 +1955,28 @@ function approvalClosedNote() {
   return `<div class="ta-note mono">the gateway stopped waiting and denied it; the agent carried on without this command</div>`;
 }
 
+// There is a box on screen that this panel cannot send an answer for: the turn has no run to post to, the
+// gateway allowed no choice, or its own reconcile found the gateway no longer holds the request. The honest
+// thing is the record without the buttons: the panel is not the surface that can settle this one.
+function approvalUnanswerableNote() {
+  return `<div class="ta-note mono">this panel cannot answer this request: it has no line to the run that asked, so no choice is offered here</div>`;
+}
+
 // Once answered the box collapses to one line: what was decided, about what. An approval nobody answered gets its
 // own line — the gateway denied the command when its window ran out, and "✓ approved" for that would be a lie.
 function approvalDecided(turn) {
   const done = turn.approvalDone;
   if (!done || turn.approval) return "";
   if (done.expired) {
-    const why =
-      done.reason === "withdrawn"
+    // A press that lost the race is not the same event as a box nobody touched. The reader DID answer; the
+    // gateway had already let the request go, and the record says which of the two happened.
+    const why = done.clicked
+      ? "your answer reached the gateway after it had already let this request go: its window closed, another surface answered it, or the run was stopped"
+      : done.reason === "withdrawn"
         ? "the gateway had already let this request go (its window closed, another surface answered it, or the run was stopped)"
         : `no answer reached the gateway inside its waiting window${Number(done.waitedSeconds) ? ` (${fmtLeft(Number(done.waitedSeconds) * 1000)} unanswered)` : ""}`;
-    return `<div class="turn-approval-done mono is-expired" title="${esc(why)}${done.command ? ` — ${esc(String(done.command))}` : ""}">✕ not answered here${done.command ? `: ${esc(String(done.command).slice(0, 140))}` : ""}</div>`;
+    const head = done.clicked ? "✕ your answer arrived too late" : "✕ not answered here";
+    return `<div class="turn-approval-done mono is-expired" title="${esc(why)}${done.command ? ` - ${esc(String(done.command))}` : ""}">${head}${done.command ? `: ${esc(String(done.command).slice(0, 140))}` : ""}</div>`;
   }
   const denied = String(done.choice || "").toLowerCase() === "deny";
   const verb = denied ? "denied" : `approved ${done.choice || ""}`.trim();
@@ -1901,7 +1993,17 @@ function approvalDecided(turn) {
 // selection to that is the same bug as losing a draft.
 const questionPicks = new Map(); // `${turnId}${copy}` -> Set(choice index)
 const questionDrafts = new Map(); // `${turnId}${copy}` -> typed answer
-const questionSending = new Set(); // `${turnId}` while a POST is in flight
+// One answer per QUESTION, not one per click and not one per card. The key is the gateway's request id when
+// the prompt names one, so two copies of the same question (the worktree session and the assistant session)
+// share a single flight; a prompt with no id falls back to the turn, which is the finest identity it has.
+const questionFlights = new Map(); // questionFlightKey() -> { turnId, requestId, at } while a POST is in flight
+function questionFlightKey(turnId, requestId) {
+  const rid = String(requestId || "").trim();
+  return rid ? `request:${rid}` : `turn:${turnId || ""}`;
+}
+function questionInFlight(turnId, requestId) {
+  return questionFlights.get(questionFlightKey(turnId, requestId)) || null;
+}
 const RECOMMENDED_RE = /^(.*?)\s*\(Recommended\)$/;
 
 // The tool marks its best choice by suffixing the label; the card draws that as a chip. The chip goes BEFORE
@@ -2012,13 +2114,16 @@ function questionPrompt(turn, copy = "") {
   const multi = Boolean(q.multiSelect) && choices.length > 0;
   const picks = questionPicks.get(key) || new Set();
   const draft = questionDrafts.get(key) || "";
+  // An answer for THIS question is already on its way: every copy of the box greys every control, so a
+  // second click on either surface cannot send a second answer for the same request id.
+  const sending = Boolean(questionInFlight(turn.id, q.requestId));
   const rows = choices
     .map((c, i) =>
       multi
         ? `<label class="tq-choice is-multi${picks.has(i) ? " on" : ""}" data-qvalue="${esc(c)}" title="tick the answers you want, then send them">
-      <input type="checkbox" data-qpick="1" data-qturn="${esc(turn.id)}" data-qcopy="${esc(copy)}" data-qindex="${i}"${picks.has(i) ? " checked" : ""}>
+      <input type="checkbox" data-qpick="1" data-qturn="${esc(turn.id)}" data-qcopy="${esc(copy)}" data-qindex="${i}"${picks.has(i) ? " checked" : ""}${sending ? " disabled" : ""}>
       <span class="tq-box" aria-hidden="true"></span>${questionHead(c)}</label>`
-        : `<button type="button" class="tq-choice" data-qanswer="${esc(turn.id)}" data-qcopy="${esc(copy)}" data-qrequest="${esc(q.requestId || "")}" data-qvalue="${esc(c)}" title="send this answer — the agent carries on with it">
+        : `<button type="button" class="tq-choice" data-qanswer="${esc(turn.id)}" data-qcopy="${esc(copy)}" data-qrequest="${esc(q.requestId || "")}" data-qvalue="${esc(c)}"${sending ? " disabled" : ""} title="send this answer — the agent carries on with it">
       <span class="tq-box" aria-hidden="true"></span>${questionHead(c)}</button>`,
     )
     .join("");
@@ -2035,10 +2140,10 @@ function questionPrompt(turn, copy = "") {
       : choices.length
         ? "click a choice above, or type your own answer · Enter sends"
         : "type your answer · Enter sends, Shift+Enter adds a line";
-  const sendBtn = `<button type="button" class="tq-send" data-qsend="${esc(turn.id)}" data-qcopy="${esc(copy)}" data-qrequest="${esc(q.requestId || "")}"${questionSending.has(turn.id) ? " disabled" : ""}>Send answer</button>`;
+  const sendBtn = `<button type="button" class="tq-send" data-qsend="${esc(turn.id)}" data-qcopy="${esc(copy)}" data-qrequest="${esc(q.requestId || "")}"${sending ? " disabled" : ""}>Send answer</button>`;
   const answerRow = showTyped
     ? `<div class="tq-other-row">
-      <textarea class="tq-other" data-qother="${esc(turn.id)}" data-qcopy="${esc(copy)}" rows="2" placeholder="or type your own answer" title="anything you type here is sent as your answer, in your own words">${esc(draft)}</textarea>
+      <textarea class="tq-other" data-qother="${esc(turn.id)}" data-qcopy="${esc(copy)}" rows="2" placeholder="or type your own answer" title="anything you type here is sent as your answer, in your own words"${sending ? " disabled" : ""}>${esc(draft)}</textarea>
       ${sendBtn}
     </div>`
     : multi
@@ -2063,12 +2168,12 @@ function questionPrompt(turn, copy = "") {
   const again = reasks
     ? `<span class="tq-again" title="the panel asks again once an hour while this stays unanswered — nothing else about the question has changed">↻ asked again ${reasks}× · still unanswered</span>`
     : "";
-  return `<div class="turn-question" data-question-for="${esc(turn.id)}${esc(copy)}">
-    <div class="tq-head mono">❓ waiting on you — the agent is parked until you answer</div>
+  return `<div class="turn-question${sending ? " is-sending" : ""}" data-question-for="${esc(turn.id)}${esc(copy)}"${sending ? ' aria-busy="true"' : ""}>
+    <div class="tq-head mono">${sending ? "⏳ sending your answer — the agent is being released" : "❓ waiting on you — the agent is parked until you answer"}</div>
     ${again}
     <div class="tq-question">${esc(q.question || "(no question text)")}</div>
     ${rows ? `<div class="tq-choices${multi ? " is-multi" : ""}">${rows}</div>` : ""}
-    <div class="tq-note mono">${esc(note)}</div>
+    <div class="tq-note mono${sending ? " is-sending" : ""}" data-qnote="${esc(note)}">${esc(sending ? "sending your answer, one moment..." : note)}</div>
     ${answerRow}
     ${clock}
     <div class="tq-warn mono" data-qwarn="${esc(turn.id)}${esc(copy)}"></div>
@@ -2113,14 +2218,86 @@ function questionAnswered(turn) {
   return `<div class="turn-question-done mono" title="${esc(text)}">✓ answered: ${esc(text.length > 220 ? `${text.slice(0, 220)}…` : text)}</div>`;
 }
 
+// Every card that draws this question, on every surface. The gateway's request id is the identity that
+// both the worktree session and the assistant session carry, so a match there is the same question even
+// when the two cards are drawn from different turns; a prompt with no id is matched on its turn instead.
+function questionCardsFor(turnId, requestId) {
+  const rid = String(requestId || "").trim();
+  const cards = new Set();
+  if (rid) {
+    for (const el of document.querySelectorAll("[data-qrequest]")) {
+      if (String(el.dataset.qrequest || "") !== rid) continue;
+      const card = el.closest(".turn-question");
+      if (card) cards.add(card);
+    }
+  }
+  const turn = String(turnId || "");
+  if (turn) {
+    for (const el of document.querySelectorAll("[data-question-for]")) {
+      if (!String(el.dataset.questionFor || "").startsWith(turn)) continue;
+      cards.add(el);
+    }
+  }
+  return cards;
+}
+
+// Grey (or un-grey) every control on every copy of one question, and say what is happening. `disabled`
+// is set on the element itself as well as through the class, so a repaint that has not run yet and a
+// pointerup that lands on a stale button both see a control that cannot send.
+function paintQuestionFlight(turnId, requestId, mode, text = "") {
+  const sending = mode === "sending";
+  for (const card of questionCardsFor(turnId, requestId)) {
+    card.classList.toggle("is-sending", sending);
+    if (sending) card.setAttribute("aria-busy", "true");
+    else card.removeAttribute("aria-busy");
+    for (const el of card.querySelectorAll("button, textarea, input")) el.disabled = sending;
+    // The note is where "sending" is SAID, and it is set here as well as at render time: a press repaints nothing,
+    // so a card waiting for the next snapshot would otherwise show dead controls with no reason for them.
+    const note = card.querySelector("[data-qnote]");
+    if (note) note.textContent = sending ? "sending your answer, one moment..." : note.dataset.qnote || "";
+    const warn = card.querySelector("[data-qwarn]");
+    if (warn) warn.textContent = sending ? "" : mode === "error" ? text : "";
+  }
+}
+
+// The answer was accepted: clear every copy NOW rather than waiting for the next snapshot. The job records
+// are updated first, so any repaint from any host agrees with the cards, then each affected thread is drawn
+// again. The board card is `renderConversation`; the assistant's floating chat is its own renderer, and
+// calling both is what makes two surfaces clear together - `renderConversation` only reaches the board.
+function applyQuestionAnswered(turnId, requestId, answer) {
+  const rid = String(requestId || "").trim();
+  const threads = new Set();
+  for (const j of state.jobs.values()) {
+    const q = j.question;
+    const same = rid ? q && String(q.requestId || "") === rid : j.id === turnId;
+    if (!same) continue;
+    j.questionDone = { answer: String(answer ?? ""), at: new Date().toISOString(), here: true };
+    j.question = null;
+    threads.add(j.thread || j.id);
+  }
+  if (!threads.size && turnId) threads.add(turnId);
+  for (const thread of threads) {
+    renderConversation(thread);
+    if (assistantSessionFor(thread) && typeof window.__assistantRenderChat === "function") window.__assistantRenderChat(thread);
+  }
+  paintHumanButton();
+}
+
+function forgetQuestionScratch(turnId) {
+  for (const k of [...questionPicks.keys()]) if (k.startsWith(turnId)) questionPicks.delete(k);
+  for (const k of [...questionDrafts.keys()]) if (k.startsWith(turnId)) questionDrafts.delete(k);
+}
+
 // Answer a question a run is parked on. One path for a clicked choice, a typed answer and a multi-select
 // batch, so there is exactly one place that posts and one place that reports a refusal.
 async function answerRunQuestion(turnId, answer, requestId, box) {
-  if (questionSending.has(turnId)) return;
-  questionSending.add(turnId);
-  const warn = box ? box.querySelector(`[data-qwarn]`) : null;
-  const buttons = box ? [...box.querySelectorAll("button.tq-choice, button.tq-send")] : [];
-  for (const b of buttons) b.disabled = true;
+  const key = questionFlightKey(turnId, requestId);
+  // One answer per question, not one per click: the first press owns the flight, and the click that often
+  // follows a pointerup - or a second choice on either surface - is refused until the POST settles. A
+  // refusal clears it, so the reader can answer again.
+  if (questionFlights.has(key)) return;
+  questionFlights.set(key, { turnId, requestId: String(requestId || ""), at: Date.now() });
+  paintQuestionFlight(turnId, requestId, "sending");
   try {
     const card = box?.closest(".job");
     const res = await apiFetch("/api/jobs/answer", {
@@ -2131,20 +2308,18 @@ async function answerRunQuestion(turnId, answer, requestId, box) {
     const out = await res.json().catch(() => ({}));
     if (!res.ok || !out.ok) {
       const text = out.error || `could not answer (HTTP ${res.status})`;
-      if (warn) warn.textContent = text;
-      else if (card) showBanner(`answer: ${text}`);
-      for (const b of buttons) b.disabled = false;
-      questionSending.delete(turnId);
+      paintQuestionFlight(turnId, requestId, "error", text);
+      if (!questionCardsFor(turnId, requestId).size && card) showBanner(`answer: ${text}`);
       return;
     }
-    // The job event that follows clears the box; drop the reader's scratch state with it.
-    for (const k of [...questionPicks.keys()]) if (k.startsWith(turnId)) questionPicks.delete(k);
-    for (const k of [...questionDrafts.keys()]) if (k.startsWith(turnId)) questionDrafts.delete(k);
+    // The route said ok, so the question is settled server side: clear the box here and now, on every
+    // surface, instead of leaving a dead card until the next snapshot or job event arrives.
+    forgetQuestionScratch(turnId);
+    applyQuestionAnswered(turnId, requestId, out.answer ?? answer);
   } catch (err) {
-    if (warn) warn.textContent = `could not answer: ${err.message}`;
-    for (const b of buttons) b.disabled = false;
+    paintQuestionFlight(turnId, requestId, "error", `could not answer: ${err.message}`);
   } finally {
-    questionSending.delete(turnId);
+    questionFlights.delete(key);
   }
 }
 
@@ -5447,10 +5622,15 @@ async function clearThread(btn) {
 async function answerRunApproval(approveBtn) {
   const id = approveBtn.dataset.approve;
   const choice = approveBtn.dataset.choice;
+  const requestId = approveBtn.dataset.request || "";
   // The same box, the same four choices, two questions: a run parked on a gateway approval, or a write parked on
   // the panel's own remote-write permission (lib/remote-writes.js). The button is identical, so the ROUTE is
   // decided by which record the id belongs to — never by a second kind of button.
   if (state.rwPending.has(id)) return answerRemoteWrite(id, choice, approveBtn);
+  // One answer per request, whichever copy was pressed: the second press (the pinned card, or the click that
+  // follows a pointerup) is refused while the first is still on its way, so the gateway never sees two answers
+  // and the transcript never records the loser's 409 over the winner's decision.
+  if (approvalInFlight(id, requestId)) return;
   if (approvalAlreadySent(id, choice)) return;
   noteApprovalSent(id, choice);
   const card = approveBtn.closest(".job");
@@ -5465,7 +5645,9 @@ async function answerRunApproval(approveBtn) {
     approvalSent.delete(approvalKey(id, choice));
     return;
   }
-  approveBtn.disabled = true;
+  const key = approvalFlightKey(id, requestId);
+  approvalFlights.set(key, { id, requestId, choice, at: Date.now() });
+  paintApprovalFlight(id, requestId, "sending");
   try {
     const res = await apiFetch("/api/jobs/approve", {
       method: "POST",
@@ -5476,15 +5658,23 @@ async function answerRunApproval(approveBtn) {
     if (!res.ok || !out.ok) {
       // The panel answers "gone" when the gateway no longer holds the request: the box goes, and the reason is
       // left where the reader is looking rather than on a prompt that can never be answered.
+      paintApprovalFlight(id, requestId, "error");
       if (out.gone) closeApprovalCard(approveBtn.closest(".turn-approval"));
       if (warn) warn.textContent = out.error || `approval failed (HTTP ${res.status})`;
-      approveBtn.disabled = false;
       approvalSent.delete(approvalKey(id, choice));
+      return;
     }
+    // Accepted: the box goes on every surface now, and the decision is written the way the server wrote it,
+    // instead of waiting for a snapshot that may be a repaint behind.
+    applyApprovalAnswered(id, requestId, out.choice || choice);
   } catch (err) {
+    paintApprovalFlight(id, requestId, "error");
     if (warn) warn.textContent = `approval failed: ${err.message}`;
-    approveBtn.disabled = false;
     approvalSent.delete(approvalKey(id, choice));
+  } finally {
+    // Only this press could have taken the key: a second one was refused above, so removing it here cannot
+    // clear another answer in flight.
+    approvalFlights.delete(key);
   }
 }
 
@@ -6031,7 +6221,12 @@ async function answerApproval(id, choice, btn) {
 async function answerRemoteWrite(id, choice, btn) {
   const box = btn?.closest(".turn-approval");
   const req = state.rwPending.get(id) || null;
-  btn?.closest(".ta-actions")?.querySelectorAll("button").forEach((b) => (b.disabled = true));
+  // The same single flight as a run approval: this box can be drawn on the dock and on the card, and its id is
+  // the request id the panel gave it.
+  if (approvalInFlight(id, id)) return;
+  const key = approvalFlightKey(id, id);
+  approvalFlights.set(key, { id, requestId: id, choice, at: Date.now() });
+  paintApprovalFlight(id, id, "sending");
   try {
     const res = await apiFetch("/api/remote-write/answer", {
       method: "POST",
@@ -6062,9 +6257,11 @@ async function answerRemoteWrite(id, choice, btn) {
           : `remote write allowed ${choice}${req?.branch ? ` (${req.branch})` : ""} — the waiting push is going ahead`,
     );
   } catch (e) {
-    btn?.closest(".ta-actions")?.querySelectorAll("button").forEach((b) => (b.disabled = false));
+    paintApprovalFlight(id, id, "error");
     box?.classList.add("is-error");
     showBanner(`could not answer that permission request: ${e.message}`);
+  } finally {
+    approvalFlights.delete(key);
   }
 }
 
