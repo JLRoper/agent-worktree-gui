@@ -4,16 +4,31 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.32.6 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.34.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-336 releases from v0.1.0 (2026-10-20) to v1.32.6 (2026-11-05), 1171 commits between the tags. Every release is anchored by an
+337 releases from v0.1.0 (2026-10-20) to v1.34.0 (2026-11-05), 1176 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.34.0 — 2026-11-05 · 5 commits
+
+[`cf5bf58`](https://github.com/JLRoper/agent-worktree-gui/commit/cf5bf582a1eff4125333bf56e80e8a464f67009d) · [compare v1.32.6...v1.34.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.32.6...v1.34.0)
+
+### Docs & tests
+
+- docs: how a version bump is chosen, declared, and lost by lanes ([`ad05dea`](https://github.com/JLRoper/agent-worktree-gui/commit/ad05dea4a4d1467aeb82591a23fc40d05824d0c3))
+- docs: render the changelog — 336 releases ([`1ab80bd`](https://github.com/JLRoper/agent-worktree-gui/commit/1ab80bdd298149a60f157e119de484d72a4d134e))
+- docs: 48h version forensics — 62 red landings, 55 batched releases, 4 unlanded tags ([`e4db6d8`](https://github.com/JLRoper/agent-worktree-gui/commit/e4db6d8e2324ece8898d740d8995f62e68ec02bc))
+- docs: what the four version gates refuse, and the one command each incident would have met ([`9147cee`](https://github.com/JLRoper/agent-worktree-gui/commit/9147cee6749c31f7a3acbe2b04f90725b77c1c0b))
+
+### Other
+
+- assistant: the EXITED chip on a queue card re-attaches its assistant ([`cf5bf58`](https://github.com/JLRoper/agent-worktree-gui/commit/cf5bf582a1eff4125333bf56e80e8a464f67009d))
 
 ## v1.32.6 — 2026-11-05 · 9 commits
 
