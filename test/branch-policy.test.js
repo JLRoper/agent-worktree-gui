@@ -149,13 +149,14 @@ test("a project's own policy overrides the global, and the global defaults to lo
   const policyFile = readFileSync(guardPaths(common).policy, "utf8").trim();
   assert.equal(policyFile, "allow", "the guard's own copy of the policy is the project's, not the global local-only");
 
-  // …and this checkout's own config.json declares exactly that shape: a local-only global with these two repos
-  // explicitly allowed, because a blanket deny would break their landing path (push a branch, open a PR).
-  const cfg = JSON.parse(readFileSync(path.join(ROOT, "config.json"), "utf8"));
-  assert.equal(policyFrom(cfg.remoteBranchPolicy), "local-only", "config.json's global is local-only");
+  // …and the shipped example declares exactly that shape: a local-only global with these two repos explicitly
+  // allowed, because a blanket deny would break their landing path (push a branch, open a PR). config.json is the
+  // reader's own file and is untracked; config.example.json is the copy every clone carries.
+  const cfg = JSON.parse(readFileSync(path.join(ROOT, "config.example.json"), "utf8"));
+  assert.equal(policyFrom(cfg.remoteBranchPolicy), "local-only", "the example's global is local-only");
   for (const name of ["agent-worktree-gui", "heroes-js"]) {
     const entry = (cfg.projects || []).find((p) => p.name === name);
-    assert.ok(entry, `config.json carries an explicit ${name} entry`);
+    assert.ok(entry, `the example carries an explicit ${name} entry`);
     assert.equal(entry.remoteBranchPolicy, "allow", `${name} stays allowed to push a branch and open a PR`);
   }
 });

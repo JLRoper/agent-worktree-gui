@@ -218,3 +218,4 @@ tools/verify-two-folder-cards.mjs | 5 | fixture: the real review folder this har
 tools/verify-wake-ladder.mjs | 1 | fixture: a fake drive path the probe compares against — nothing opens it
 tools/verify-whole-tool-stream.mjs | 1 | probe: the tree this script was last run against, kept as its default argument
 tools/verify_cli_session_limit.py | 1 | probe: the tree this script was last run against, kept as its default argument
+config.example.json | 6 | template: the shipped copy of the reader config.json, whose folders are this machine's examples
