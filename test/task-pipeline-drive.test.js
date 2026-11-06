@@ -24,7 +24,9 @@
 // with an id (`<pipeline>/<stage>#<visit>`), the row's tree is cut once and every stage reuses it, a decision is a
 // structured fact rendered once, and `unresolved` PARKS rather than sitting still.
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -100,6 +102,26 @@ function tree(t, { artifacts = [] } = {}) {
   const dir = mkdtempSync(path.join(tmpdir(), "wag-drive-"));
   if (artifacts.length) mkdirSync(path.join(dir, "out"), { recursive: true });
   for (const n of artifacts) writeFileSync(path.join(dir, "out", `${n}.json`), JSON.stringify({ stage: n }));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  return dir;
+}
+
+// A tree holding one ROUND's artifact per entry — `out/run-1/r1/round-brief.json`, r2, r3 — each COMMITTED, because
+// the pin this file tests is a blob at a commit, not a hash of the checkout. It is the shape the 24-stage document
+// declares: the path carries `{{run_id}}` and `{{round}}`, and the stage writes a different file every round.
+function roundTree(t, rounds) {
+  const dir = mkdtempSync(path.join(tmpdir(), "wag-rounds-"));
+  const git = (...args) => execFileSync("git", ["-C", dir, ...args], { encoding: "utf8", windowsHide: true });
+  git("init", "-q", "-b", "main");
+  git("config", "user.email", ["round", "example.invalid"].join(String.fromCharCode(64)));
+  git("config", "user.name", "Round");
+  for (const n of rounds) {
+    const rel = `out/run-1/r${n}/round-brief.json`;
+    mkdirSync(path.dirname(path.join(dir, ...rel.split("/"))), { recursive: true });
+    writeFileSync(path.join(dir, ...rel.split("/")), `${JSON.stringify({ stage: "S1", round: n, visit: n }, null, 2)}\n`);
+    git("add", "--", rel);
+    git("commit", "-q", "-m", `S1 visit ${n} (round ${n}): ${rel}`);
+  }
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   return dir;
 }
@@ -584,6 +606,76 @@ test("a stage that settles with its artifact records its presence and hash, and 
   assert.equal(second.artifact.present, true);
   assert.equal(second.artifact.unchanged, true, "identical bytes on a loop back are a visible fact, not a park");
   assert.match(second.decision.reason, /unchanged/);
+});
+
+// The 24-stage run's defect, in one test. A stage whose declared path carries `{{run_id}}` and `{{round}}` writes a
+// different file every round; the matcher used to take the first `r*` that sorted, so every visit recorded r1's hash
+// while r1..r7 sat in the tree, and the pin was taken against the declaration — a path git cannot resolve, which
+// recorded committed work as `uncommitted`. The assertions below all fail on that shape.
+test("a round artifact is the file that visit wrote, never the first r* that sorts", (t) => {
+  const dir = roundTree(t, [1, 2, 3]);
+  const declared = "out/{{run_id}}/r{{round}}/round-brief.json";
+  const at = (rel) => path.join(dir, ...rel.split("/"));
+  const hashOf = (n) => createHash("sha256").update(readFileSync(at(`out/run-1/r${n}/round-brief.json`))).digest("hex");
+  const blobOf = (rel) => execFileSync("git", ["-C", dir, "rev-parse", `HEAD:./${rel}`], { encoding: "utf8", windowsHide: true }).trim();
+  const roundOne = hashOf(1);
+  const two = bundleOf(
+    pipeline({ stages: [{ ...stage(1), artifact: { id: "artifact-1", path: declared, schema: "out/1", writer: "worker-1" } }, stage(2)] }),
+  );
+  // S1 has settled twice already, on the record the old shape wrote: the declaration, and r1's hash for both visits.
+  const run = {
+    pipeline: "two",
+    stage: "S1",
+    enteredAt: CLOCK,
+    visits: { S1: 3, S2: 1 },
+    tree: { path: dir, branch: "b", startSha: "a" },
+    stageRuns: [1, 2].map((visit) => ({
+      id: `two/S1#${visit}`,
+      stage: "S1",
+      visit,
+      at: CLOCK,
+      thread: "T0",
+      status: "done",
+      artifact: { id: "artifact-1", path: declared, present: true, sha256: roundOne },
+    })),
+  };
+  const out = drive([row({ worktree: dir, pipelineRun: run })], { bundle: two });
+  const third = out.tasks[0].pipelineRun.stageRuns.find((r) => r.visit === 3);
+
+  assert.equal(third.artifact.path, declared, "the record keeps the document's declaration");
+  assert.notEqual(third.artifact.sha256, roundOne, "the old shape recorded round 1's hash against every visit");
+  assert.equal(third.artifact.sha256, hashOf(3), "the hash is the bytes of the file this round wrote");
+  assert.equal(third.artifact.file, "out/run-1/r3/round-brief.json", "the file is the round's own, not the first r* that sorts");
+  assert.equal(third.artifact.unchanged || false, false, "r3 is not r2: a round that wrote new bytes is not 'unchanged'");
+  assert.equal(third.artifact.blob, blobOf("out/run-1/r3/round-brief.json"), "the pin names the blob of the file the round wrote");
+  assert.equal(third.artifact.uncommitted || false, false, "committed work pinned against its declaration reads as uncommitted");
+
+  // The handoff is the same file: the next stage is told to read r3, and is handed a pin it can resolve.
+  assert.equal(out.starts.length, 1);
+  assert.match(out.starts[0].prompt, /out\/run-1\/r3\/round-brief\.json/, "the next stage is handed the file this visit wrote");
+  assert.doesNotMatch(out.starts[0].prompt, /\{\{round\}\}/, "and never the unsubstituted pattern");
+});
+
+test("the artifact matcher fills the round it knows, and keeps the one-segment match for a hole it does not", (t) => {
+  const dir = roundTree(t, [1, 2, 3]);
+  const declared = "out/{{run_id}}/r{{round}}/round-brief.json";
+  const hashOf = (n) => createHash("sha256").update(readFileSync(path.join(dir, "out", "run-1", `r${n}`, "round-brief.json"))).digest("hex");
+
+  assert.equal(
+    artifactOf({ id: "artifact-1", path: declared }, { worktree: dir }).sha256,
+    hashOf(1),
+    "with no round the matcher's own rule stands: one segment, first in sort order",
+  );
+  assert.equal(
+    artifactOf({ id: "artifact-1", path: declared }, { worktree: dir, values: { round: 3 } }).sha256,
+    hashOf(3),
+    "a round the caller knows is a literal, not a match",
+  );
+  assert.equal(
+    artifactOf({ id: "artifact-1", path: declared }, { worktree: dir, values: { round: 3 } }).file,
+    "out/run-1/r3/round-brief.json",
+    "and the resolution names the file, so a pin can be taken against it",
+  );
 });
 
 test("a routing change between two passes parks pipeline-changed, and a prompt-only change does not", (t) => {
