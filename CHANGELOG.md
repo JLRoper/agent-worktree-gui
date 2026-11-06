@@ -4,16 +4,45 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.30.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.30.3 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-326 releases from v0.1.0 (2026-10-20) to v1.30.0 (2026-11-05), 1137 commits between the tags. Every release is anchored by an
+328 releases from v0.1.0 (2026-10-20) to v1.30.3 (2026-11-05), 1143 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.30.3 — 2026-11-05 · 2 commits
+
+[`811799c`](https://github.com/JLRoper/agent-worktree-gui/commit/811799c671ee14ecedb69f52fedee9e0689b3793) · [compare v1.30.2...v1.30.3](https://github.com/JLRoper/agent-worktree-gui/compare/v1.30.2...v1.30.3)
+
+### Fixed
+
+- fix: a restored run is asked about before it is written off ([`b7225f1`](https://github.com/JLRoper/agent-worktree-gui/commit/b7225f1824a2afd7ee1d96fbd3b1b3956ae2eefe))
+
+### Other
+
+- chore: 1.30.3 — the version this landing carries ([`811799c`](https://github.com/JLRoper/agent-worktree-gui/commit/811799c671ee14ecedb69f52fedee9e0689b3793))
+
+## v1.30.2 — 2026-11-05 · 4 commits
+
+[`c1bba49`](https://github.com/JLRoper/agent-worktree-gui/commit/c1bba49a65d974efbd5af0fa737d338e40565800) · [compare v1.30.0...v1.30.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.30.0...v1.30.2)
+
+### Fixed
+
+- fix: the version-tag gate reads the tag's own commit before calling it an orphan ([`b0e2dc9`](https://github.com/JLRoper/agent-worktree-gui/commit/b0e2dc9870701858f467362ef2c30073854601da))
+
+### Docs & tests
+
+- docs: render the changelog — 326 releases ([`588ed19`](https://github.com/JLRoper/agent-worktree-gui/commit/588ed19b2b6fa155d7960a1ed4d1601b00195b77))
+- docs: the v1.28.0 orphan was a pre-landing anchor — PR #445 rewrote its commit and the tag moved 41 s later ([`6056a1a`](https://github.com/JLRoper/agent-worktree-gui/commit/6056a1a9a686575e514d58d559f7b4121c677ee8))
+
+### Other
+
+- chore: 1.30.2 — the version this landing carries ([`c1bba49`](https://github.com/JLRoper/agent-worktree-gui/commit/c1bba49a65d974efbd5af0fa737d338e40565800))
 
 ## v1.30.0 — 2026-11-05 · 3 commits
 
