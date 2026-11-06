@@ -36,6 +36,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { resolveLayout } from "../lib/paths.js";
+import { REPORT_FOOTER_CSS, reportFooter, resolveReportProvenance } from "../lib/report-footer.js";
 import {
   DEFAULT_SEED_FILE,
   KIND_RANK,
@@ -396,7 +397,7 @@ function contentsSection(definitions) {
   return `<nav id="contents"><h3>In this render</h3><ol>${items}</ol></nav>`;
 }
 
-function page({ definitions, doc, sources, configFile, version, generatedAt, vendor }) {
+function page({ definitions, doc, sources, configFile, version, generatedAt, vendor, provenance }) {
   const seed = sources.find((s) => s.role === "seed");
   const live = sources.find((s) => s.role === "live");
   const body = [
@@ -425,6 +426,7 @@ function page({ definitions, doc, sources, configFile, version, generatedAt, ven
       <p>Mermaid ${esc(MERMAID_VERSION)} inlined from <code>${esc(VENDOR_REL)}</code> — <span class="hash">${esc(sha256(vendor))}</span> (${esc(bytes(Buffer.byteLength(vendor)))}). No CDN, no font fetch, no network at open time.</p>
       <p>Sources of truth: <code>pipelines.seed.json</code>, the reader's <code>pipelines.json</code> (over it, per id), and <code>docs/pipelines.md</code> for why any of this exists.</p>
     </footer>`,
+    reportFooter(provenance),
     `<script id="mermaid-vendor">\n${vendor}\n</script>`,
     `<script>${BOOTSTRAP}</script>`,
   ].join("\n");
@@ -444,7 +446,7 @@ function page({ definitions, doc, sources, configFile, version, generatedAt, ven
 <meta name="wtgui-source-live-sha256" content="${esc(live && live.sha256 ? live.sha256 : "")}">
 <meta name="wtgui-mermaid" content="${esc(MERMAID_VERSION)}">
 <meta name="wtgui-mermaid-sha256" content="${esc(sha256(vendor))}">
-<style>${STYLE}</style>
+<style>${STYLE}${REPORT_FOOTER_CSS}</style>
 </head>
 <body>
 ${body}
@@ -503,7 +505,7 @@ function listRenders(dir) {
   return renders.sort((a, b) => versionCompare(b.version, a.version) || String(b.generatedAt).localeCompare(String(a.generatedAt)) || b.mtime - a.mtime);
 }
 
-function indexPage(renders, { version, generatedAt }) {
+function indexPage(renders, { version, generatedAt, provenance }) {
   const rows = renders
     .map((render) => `<tr>
         <td><a href="${esc(render.name)}"><code>v${esc(render.version)}</code></a></td>
@@ -530,7 +532,7 @@ function indexPage(renders, { version, generatedAt }) {
 <meta name="generator" content="tools/render-pipelines.mjs">
 <meta name="wtgui-generated-at" content="${esc(generatedAt)}">
 <meta name="wtgui-pipelines-version" content="${esc(version)}">
-<style>${STYLE}</style>
+<style>${STYLE}${REPORT_FOOTER_CSS}</style>
 </head>
 <body>
 <header class="masthead">
@@ -550,6 +552,7 @@ function indexPage(renders, { version, generatedAt }) {
 <footer>
   <p>Written by <code>tools/render-pipelines.mjs</code>; the render itself is <code>pipelines-&lt;version&gt;.html</code>. Re-run <code>npm run render:pipelines</code> after a catalogue change, and after a version bump, so the newest release has its own picture.</p>
 </footer>
+${reportFooter(provenance)}
 </body>
 </html>
 `;
@@ -673,7 +676,13 @@ async function main() {
   const { doc, definitions } = loadCatalogue({ seedFile: seed.file, liveFile: live.exists ? live.file : null });
   const sources = [seed, live];
 
-  const html = page({ definitions, doc, sources, configFile, version, generatedAt, vendor });
+  const provenance = resolveReportProvenance({
+    repo: REPO,
+    title: `Pipeline catalogue - v${version}`,
+    source: "node tools/render-pipelines.mjs reading pipelines.seed.json and the panel's pipelines.json",
+    now: new Date(generatedAt),
+  });
+  const html = page({ definitions, doc, sources, configFile, version, generatedAt, vendor, provenance });
   const dir = opts.dir ? path.resolve(opts.dir) : VIZ_DIR;
   const target = opts.out ? path.resolve(opts.out) : path.join(dir, `pipelines-${version}.html`);
   mkdirSync(path.dirname(target), { recursive: true });
@@ -684,7 +693,16 @@ async function main() {
   if (opts.index) {
     const renders = listRenders(dir);
     const indexPath = path.join(dir, INDEX_NAME);
-    const indexHtml = indexPage(renders, { version, generatedAt });
+    const indexHtml = indexPage(renders, {
+      version,
+      generatedAt,
+      provenance: resolveReportProvenance({
+        repo: REPO,
+        title: "Pipeline renders - index",
+        source: "node tools/render-pipelines.mjs reading the render folder",
+        now: new Date(generatedAt),
+      }),
+    });
     writeFileSync(indexPath, indexHtml, "utf8");
     indexed = { file: indexPath, renders: renders.length, bytes: statSync(indexPath).size };
   }

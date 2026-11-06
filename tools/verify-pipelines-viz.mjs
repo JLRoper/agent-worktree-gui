@@ -195,7 +195,10 @@ try {
   same("exactly two <script> elements: the bundle and its bootstrap", (html.match(/<script/gi) || []).length, 2);
   const outsideScripts = html.replace(/<script[\s\S]*?<\/script>/gi, "");
   ok("no script, stylesheet, image or import points at a URL", !/<script[^>]+src=/i.test(html) && !/<link\b/i.test(outsideScripts) && !/<img\b/i.test(outsideScripts) && !/@import/i.test(outsideScripts) && !/url\(\s*['"]?(?:https?:)?\/\//i.test(html));
-  ok("no attribute loads anything over the network", !/\b(?:src|href)\s*=\s*["'](?:https?:)?\/\//i.test(html));
+  // A `<a href="https://...">` is a click the reader chooses, not a load: the provenance card links the
+  // commit the page was rendered from, and that is the one URL this page may carry. Everything that LOADS
+  // (a script src, a stylesheet link) still has to be local, which is what the offline claim is about.
+  ok("no attribute loads anything over the network", !/\bsrc\s*=\s*["'](?:https?:)?\/\//i.test(html) && !/<link\b[^>]*\bhref\s*=\s*["'](?:https?:)?\/\//i.test(html));
   ok("the page still carries the diagram SOURCE, so it reads with scripting off", stageGraphs.every((block) => block.text.includes("-->")));
 
   // 5. the source hashes, and what they identify
