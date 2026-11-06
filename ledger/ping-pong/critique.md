@@ -50,7 +50,7 @@ Line 20 requires the run's own word, "quoted, not flattened to `error`"; the chi
 
 **9. The 600-char clip eats the half of the sentence the park depends on.**
 *Sentence:* "how much of the last message the row can hold (its reason is clipped to 600, `lib/assistant/queue.js:50`)".
-600 (`TASK_REASON_MAX`) is the clip on the composed sentence, and `clip` cuts the tail (`:70-73`). The fixed parts come to 103 characters, so about 497 of message fits; a longer message silently removes "the pipeline waits for a decision rather than re-running the stage", which is the clause invariants 3 and 10 rest on. The note files this as an open question; it is a defect.
+600 (`TASK_REASON_MAX`) is the clip on the composed sentence, and `clip` cuts the tail (`:70-73`); `setTaskState` applies it (`:687-692`). The fixed parts come to 101 characters, so 499 of message fits; a longer message silently removes "the pipeline waits for a decision rather than re-running the stage", which is the clause the row's own claim rests on. The note files this as an open question; it is a defect.
 *Fix:* clip the detail before composing, to a named constant such as `RUN_DETAIL_MAX`, and state that the tail is never clipped.
 
 **10. "The last run" is the job store, not the ledger.**
