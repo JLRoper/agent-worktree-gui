@@ -5223,7 +5223,8 @@ const server = createServer(async (req, res) => {
       const r = await jobs.approve(String(body.id || ""), body.choice, body.requestId ?? body.request_id);
       // 409 for "there is nothing to answer any more" — the gateway's own verdict on a prompt it has let go, and
       // the panel's on one whose window closed (`gone`), so a client can tell it from a malformed request.
-      return sendJson(res, r.ok ? 200 : r.gone || r.code === "approval_not_pending" ? 409 : 400, r);
+      // `answer_in_flight` is a conflict too: the first press owns the answer, and this one changed nothing.
+      return sendJson(res, r.ok ? 200 : r.gone || r.code === "approval_not_pending" || r.code === "answer_in_flight" ? 409 : 400, r);
     }
 
     // Answer a question the agent's `clarify` tool is blocked on. Same fence as an approval: the
@@ -5233,7 +5234,9 @@ const server = createServer(async (req, res) => {
       if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       const r = await jobs.answerQuestion(String(body.id || ""), body.answer, body.requestId ?? body.request_id);
-      return sendJson(res, r.ok ? 200 : r.code === "approval_not_pending" ? 409 : 400, r);
+      // `answer_in_flight` is the single-flight fence refusing a second press for a question the first one is
+      // already answering: a conflict, not a malformed body.
+      return sendJson(res, r.ok ? 200 : r.code === "approval_not_pending" || r.code === "answer_in_flight" ? 409 : 400, r);
     }
 
     // ---- reviving a conversation the panel no longer has a card for -------------------------
