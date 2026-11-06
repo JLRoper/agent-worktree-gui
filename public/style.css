@@ -4345,6 +4345,17 @@ body.pipew-open { overflow: hidden; }
    C8 states ("legibility for overview"), and it is a press rather than a resize: a reader who wants the 96 px
    columns back presses the control again. Nothing else re-lays out. */
 .pflow[data-fit="1"] { --pflow-gap: 12px; --pflow-minw: 56px; }
+/* The NARROW shape, for a card that cannot give a column a readable width. The track WRAPS into rows of the 96 px
+   columns in reading order (the ordinals carry the sequence across the break) instead of squeezing thirteen stages into
+   thirteen slivers. The arcs and the artifact bus are horizontal devices - a lane above one row and a bus under it -
+   so they are put away with it, and the last tile on a row loses its connector stub: there is no next column to join.
+   The modal decides the shape from the share one row would give a column (pipeline-modal.js, wrapRows), so a drawing
+   that fits never wraps and a narrow one never shrinks its type. */
+.pflow[data-wrap="1"] .pflow-track { grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 22px var(--pflow-gap); max-width: none; }
+.pflow[data-wrap="1"] .pflow-canvas { padding-top: 0; }
+.pflow[data-wrap="1"] .pflow-arcs,
+.pflow[data-wrap="1"] .pflow-artifacts { display: none; }
+.pflow[data-wrap="1"] .pflow-node[data-row-end="1"] .pflow-link { display: none; }
 /* No padding inside the scroller: horizontal padding counts toward scrollWidth (it produced a scrollbar under a
    drawing that fitted, by 4 px), and vertical padding was a band under the drawing that held nothing. The body's own
    8 px across and 2 px above and below is the frame. */
@@ -4356,11 +4367,12 @@ body.pipew-open { overflow: hidden; }
   grid-template-columns: repeat(var(--pflow-n, 1), minmax(var(--pflow-minw), 1fr));
   gap: var(--pflow-gap);
   /* The track is the ONE width policy: `1fr` columns that share what the card gives them, a 96 px floor so a title is
-     never squeezed into a strip (below it the track scrolls instead) and a 400 px ceiling so a two-stage drawing is not
-     two billboards. `max-width` is that ceiling in the same custom properties the grid and the arcs use, and
-     `margin: 0 auto` CENTRES the capped track — so a short sequence is a centred drawing rather than a small island
-     against the left edge with 599 px of empty card to its right (round 5A's finding 3). This is
-     `clamp(96, (usable - (n - 1) * gap) / n, 400)` evaluated by the grid itself at whatever width the card is. */
+     never squeezed into a strip, and a 400 px ceiling so a two-stage drawing is not two billboards. `max-width` is that
+     ceiling in the same custom properties the grid and the arcs use, and `margin: 0 auto` CENTRES the capped track - so
+     a short sequence is a centred drawing rather than a small island against the left edge with 599 px of empty card to
+     its right (round 5A's finding 3). This is `clamp(96, (usable - (n - 1) * gap) / n, 400)` evaluated by the grid
+     itself at whatever width the card is. A card so narrow that even the compact 56 px row cannot fit does not squeeze
+     this row: it takes the wrapped shape below, where every stage keeps its readable width. */
   max-width: calc(var(--pflow-n) * var(--pflow-maxw) + (var(--pflow-n) - 1) * var(--pflow-gap));
   margin: 0 auto;
   padding: 0;
@@ -4498,12 +4510,25 @@ body.pipew-open { overflow: hidden; }
    track's own policy — n columns at the 96 px floor plus n-1 26 px gaps plus the body's 16 px of horizontal padding
    and 2 px of border — so a definition that fits is a card that fits, and only a drawing wider than 96vw scrolls.
    `--pflow-card-n` is set by PipelineModal.paint() from the flow it is drawing. */
-.pmodal-card { display: flex; flex-direction: column; width: min(max(340px, calc(var(--pflow-card-n, 1) * 96px + (var(--pflow-card-n, 1) - 1) * 26px + 18px)), 96vw); max-height: 86vh; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 18px 44px #000b; overflow: hidden; outline: none; }
+.pmodal-card { display: flex; flex-direction: column; width: min(max(340px, calc(var(--pflow-card-n, 1) * 96px + (var(--pflow-card-n, 1) - 1) * 26px + 18px)), 96vw); max-height: 86vh; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 18px 44px #000b; overflow: hidden; outline: none; position: relative; }
+/* The reader can move and size it: the BAR is the handle (a press on one of its own controls is that control) and the
+   CORNER grip is the size. `position: relative` above is what the grip is placed against; once a gesture has run, the
+   modal writes `position: fixed` and a left/top/width/height on the card, and these flex rules stop deciding anything.
+   `is-dragging` is on for the length of a gesture only, so a drag never selects the header's text. */
+.pmodal-card.is-dragging { user-select: none; }
+.pmodal-card.is-dragging .pmodal-bar { cursor: grabbing; }
+/* The corner grip. It is inside the card's own clipped box (a grip outside it would be a control the reader cannot
+   see), takes no Tab stop and no accessible name, and is the only way the card's SIZE changes. */
+.pmodal-resize { position: absolute; right: 0; bottom: 0; width: 16px; height: 16px; cursor: nwse-resize; touch-action: none; }
+.pmodal-resize::before, .pmodal-resize::after { content: ""; position: absolute; right: 3px; bottom: 3px; border-right: 1px solid var(--dimmer); border-bottom: 1px solid var(--dimmer); }
+.pmodal-resize::before { width: 9px; height: 9px; }
+.pmodal-resize::after { width: 4px; height: 4px; }
+.pmodal-resize:hover::before, .pmodal-resize:hover::after { border-color: var(--text); }
 /* The header is ONE band of two rows, not a bar plus a facts strip: the kicker, the title and the single close control
    share the first row; the facts — what the definition is, its kind, its stage count and its next gate — are the second
    row, full width. Wrapping to the next line was the old header's way of turning a 300 px title into a 40 px band, and
    the facts' own band then cost the drawing another 30 px of card. */
-.pmodal-bar { display: flex; align-items: center; gap: 2px 8px; flex-wrap: wrap; padding: 3px 9px 3px; background: var(--panel-2); border-bottom: 1px solid var(--line); }
+.pmodal-bar { display: flex; align-items: center; gap: 2px 8px; flex-wrap: wrap; padding: 3px 9px 3px; background: var(--panel-2); border-bottom: 1px solid var(--line); cursor: grab; touch-action: none; }
 .pmodal-kicker { flex: 0 1 auto; min-width: 0; font-size: 11px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--dimmer); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pmodal-title { flex: 0 0 auto; font-size: 13px; color: var(--text); }
 .pmodal-sub { flex: 0 0 auto; font-size: 11px; color: var(--dim); }
@@ -4529,7 +4554,7 @@ body.pipew-open { overflow: hidden; }
 /* The body's padding is the drawing's frame and nothing more: 16 px across (it is in the card's width arithmetic), 2 px
    above and below. It used to be 12 px all round plus a 10 px gap under a facts strip — 40 px of frame for a card whose
    drawing was 130 px tall. */
-.pmodal-body { padding: 2px 8px 2px; display: flex; flex-direction: column; gap: 5px; overflow: auto; }
+.pmodal-body { padding: 2px 8px 2px; display: flex; flex-direction: column; gap: 5px; overflow: auto; min-height: 0; }
 .pmodal-note { font-size: 11.5px; line-height: 1.5; color: var(--dim); }
 .pmodal-empty { padding: 10px; border: 1px dashed var(--line); border-radius: 8px; color: var(--dimmer); font-size: 11.5px; }
 .pmodal-preview { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 4px; border-top: 1px solid var(--line); font-size: 11px; color: var(--dim); }
