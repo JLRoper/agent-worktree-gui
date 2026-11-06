@@ -417,7 +417,15 @@ is the evidence that the panel's own path made one request and the hand-driven r
 Both scripts clean up their stub, temp store and intervals in a `finally` block, so neither leaves a
 listener or a file behind.
 
-## 8. The shape of the fix (not built here)
+## 8. The shape of the fix (the admission fence's half was built on 2026-11-06)
+
+> **Built since:** the admission fence - `queued` with `execution_generation: null`, nothing ever claimed - is now
+> answered by `Jobs.replaceLostSession()` in `lib/jobs.js`: the card replaces its session and re-posts the same
+> request once, instead of being written off, so a turn that never started is not lost. The `status: unknown` run
+> (this section's `resolve-unknown` half) is still written off as described below: that run may have executed, so
+> re-posting it would duplicate work, and the reader's retry is the repair. The measurement that forced the
+> admission half, and the re-used turn number that hid it from the repair path, are in
+> `docs/landing-session-replace-on-unknown-2026-11-06.md`.
 
 The fence itself is right. The gateway cannot know whether a turn that ran under a dead owner
 finished; making the caller say so is the correct design. What is missing is the panel's half of the
