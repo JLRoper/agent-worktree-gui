@@ -4,16 +4,34 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.43.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.43.1 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-349 releases from v0.1.0 (2026-10-20) to v1.43.0 (2026-11-06), 1230 commits between the tags. Every release is anchored by an
+350 releases from v0.1.0 (2026-10-20) to v1.43.1 (2026-11-06), 1235 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.43.1 — 2026-11-06 · 5 commits
+
+[`3b97f69`](https://github.com/JLRoper/agent-worktree-gui/commit/3b97f691b1acb8697c74f70f81fa125fe5ebaa88) · [compare v1.43.0...v1.43.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.43.0...v1.43.1)
+
+### Fixed
+
+- fix: the gateway's unknown_execution replaces the session instead of ending the turn ([`34b52a9`](https://github.com/JLRoper/agent-worktree-gui/commit/34b52a95a5daccb3332d40e33abad555abc0401a))
+
+### Docs & tests
+
+- docs: render the changelog — 349 releases ([`047ad82`](https://github.com/JLRoper/agent-worktree-gui/commit/047ad82acb9348e189ffac368c7d5ec823d77af2))
+- test: the fence is answered with a new session, on all three assistant sessions ([`8756144`](https://github.com/JLRoper/agent-worktree-gui/commit/87561448356ce5696ab37952d78985630af3dc12))
+- docs: the landing of the session replacement - six turns, two mechanisms, the proof ([`bc904cb`](https://github.com/JLRoper/agent-worktree-gui/commit/bc904cbdf668bf1f0d108a8300ab4fa89c1bbfe2))
+
+### Other
+
+- chore: 1.43.1 — the version this landing carries ([`3b97f69`](https://github.com/JLRoper/agent-worktree-gui/commit/3b97f691b1acb8697c74f70f81fa125fe5ebaa88))
 
 ## v1.43.0 — 2026-11-06 · 2 commits
 
