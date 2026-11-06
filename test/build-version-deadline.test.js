@@ -58,6 +58,7 @@ test("a scan that wedges after a good read keeps serving the last good bundle", 
     retryAfterMs: 40,
     bundleReader: (publicDir) => (wedged ? HANG() : readBundle(publicDir)),
   });
+  t.after(() => build.close());
 
   const first = await build.current();
   assert.match(first.version, /^[0-9a-f]{12}$/, "the healthy read gives a real version");
@@ -86,6 +87,7 @@ test("a stat that never answers cannot stop the page being served either", async
       return wedged ? HANG() : stat(target);
     },
   });
+  t.after(() => build.close());
 
   const first = await build.current();
   assert.match(first.version, /^[0-9a-f]{12}$/, "the healthy read gives a real version");
@@ -103,6 +105,7 @@ test("a stat that never answers cannot stop the page being served either", async
 test("a healthy build still reads, moves on an edit and reports the same payload", async (t) => {
   const dir = await fixture(t);
   const build = createBuild({ publicDir: dir, log: () => {} });
+  t.after(() => build.close());
   const first = await build.current();
   const second = await build.current();
   assert.equal(second.computedAt, first.computedAt, "an unchanged bundle is still not re-read");

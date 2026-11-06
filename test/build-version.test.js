@@ -5,7 +5,7 @@
 // rather than assumed.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, rm, utimes, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -108,6 +108,7 @@ test("a running panel notices an edit under public/ and moves the build", async 
   const dir = await fixture(t);
   const lines = [];
   const build = createBuild({ publicDir: dir, log: (line) => lines.push(line) });
+  t.after(() => build.close());
 
   const first = await build.current();
   assert.equal(first.bootedAt, build.bootedAt, "the boot time is fixed at construction");
@@ -131,4 +132,31 @@ test("the shell the server holds is the file, not the rewritten copy", async (t)
   const bundle = await readBundle(dir);
   assert.equal(bundle.html, await readFile(path.join(dir, "index.html"), "utf8"), "the meta and ?v= are added per response, never written back");
   assert.equal(bundle.files["index.html"], hashBytes(Buffer.from(INDEX)), "and the shell's hash is of its raw bytes");
+});
+
+test("an unchanged bundle is not statted again — the watcher decides when to look", async (t) => {
+  const dir = await fixture(t);
+  let calls = 0;
+  const build = createBuild({
+    publicDir: dir,
+    log: () => {},
+    stat: (target) => {
+      calls += 1;
+      return stat(target);
+    },
+  });
+  t.after(() => build.close());
+
+  await build.current(); // the first read stamps every file it holds
+  const stamped = calls;
+  assert.ok(stamped > 0, "the first read stats the files it stamps");
+  await build.current();
+  await build.current();
+  assert.equal(calls, stamped, "a watched bundle nothing has touched costs no stat at all");
+
+  await writeFile(path.join(dir, "style.css"), ":root { color: green }\n");
+  await new Promise((r) => setTimeout(r, 50)); // the watcher's event is what re-arms the sweep
+  const next = await build.current();
+  assert.ok(calls > stamped, "an edit puts the sweep back to work");
+  assert.match(next.version, /^[0-9a-f]{12}$/);
 });
