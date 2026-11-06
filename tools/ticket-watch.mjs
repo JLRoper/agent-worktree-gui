@@ -1,12 +1,14 @@
 #!/usr/bin/env node
-// tools/ticket-watch.mjs — watch SR/DMR tickets and put a decision card in front of the reader when one moves.
+// tools/ticket-watch.mjs — watch SR/DMR tickets, wake the assistant that owns the list, and leave the judgement to it.
 //
 //   node tools/ticket-watch.mjs add SR-242996 --note "DEV firewall rule, waiting on Greene"
 //   node tools/ticket-watch.mjs add SR-242997 --assistant assistant-3
 //   node tools/ticket-watch.mjs list
 //   node tools/ticket-watch.mjs remove SR-242996 --assistant assistant-3
+//   node tools/ticket-watch.mjs seed                  # the four Optym SRs, from ticket-watch.seed.json
+//   node tools/ticket-watch.mjs show SR-242996       # the ticket, for the agent's judgement
 //   node tools/ticket-watch.mjs check                 # one poll, every assistant's list
-//   node tools/ticket-watch.mjs check --dry-run       # say what would be raised, write nothing
+//   node tools/ticket-watch.mjs check --dry-run       # say what moved, write nothing, wake nobody
 //   node tools/ticket-watch.mjs check --fixture f.json --assistant assistant-3
 //
 // WHAT ONE POLL DOES, per watched key:
@@ -14,26 +16,29 @@
 //   1. GET https://jira.sefl.com/rest/api/2/issue/<KEY>?fields=summary,status,assignee,updated,comment with
 //      `Authorization: Bearer $JIRA_API_TOKEN` (an exported shell variable — never a file, never a flag: a token
 //      in argv is a token in the process list);
-//   2. diff it against the entry's `lastSeen` and classify the three events (a new comment, a status change, an
-//      assignee change — lib/ticket-watch.js owns the diff and the addressed-to-the-reader test);
-//   3. for each event, POST /api/assistant/queue {action:"add"} carrying the key, what changed, the comment's
-//      author and time, and the four options — then POST /api/ticket-watch/wake, which is the panel's OWN
-//      `assistant.wake` behind a door (the ladder tools/verify-wake-ladder.mjs drives; there is no second wake
-//      path here and the panel starts no second turn from a script);
-//   4. write `lastSeen` ONLY after the rows and the wake landed, so a failure retries the raise instead of
-//      forgetting it. A row already in the queue for the same event is SKIPPED by its `ticket-event:` marker,
-//      so a retry cannot write a second card for one comment.
+//   2. diff it against the entry's `lastSeen` and classify the three movements (a new comment, a status change, an
+//      assignee change). lib/ticket-watch.js owns the diff; it decides NOTHING about whether a movement matters —
+//      there is no "addressed to the reader" test, no severity and no option list anywhere in this path;
+//   3. POST /api/ticket-watch/wake with the ticket key and every movement in neutral words. That route is the
+//      panel's OWN `assistant.wake` behind a door (the ladder tools/verify-wake-ladder.mjs drives; there is no
+//      second wake path here and this script starts no turn itself). The assistant reads the ticket, judges it,
+//      and raises a clarify card only when the reader has a decision to make — see docs/ticket-watch.md;
+//   4. write `lastSeen` ONLY after the wake landed, so a failure retries the report instead of forgetting it.
 //
-// IDEMPOTENCE is the acceptance bar: a second `check` with nothing moved on Jira classifies zero events, makes no
-// HTTP call to the panel at all, and writes no file (the `lastSeen` snapshot is identical, so the file is left
-// untouched). `--json` prints the per-ticket verdicts for a cron log.
+// NOTHING IS PUT IN FRONT OF THE READER BY THIS POLLER. It writes no queue row and no card: a movement is news for
+// the assistant, and the assistant decides whether the reader should see anything at all.
+//
+// IDEMPOTENCE is the acceptance bar: a second `check` with nothing moved on Jira classifies zero movements, makes
+// no HTTP call to the panel at all, and writes no file (the `lastSeen` snapshot is identical, so the file is left
+// byte for byte as it was). `--json` prints the per-ticket verdicts for a cron log.
 //
 // NOTHING IS EVER WRITTEN TO JIRA. There is no POST, PUT or DELETE to jira.sefl.com in this file: the only Jira
 // requests are GETs of the issue and, for a ticket with more comments than one page returns, its comment list.
 //
 // State: state/assistants/<assistantId>/tickets.json beside that assistant's queue. The state directory resolves
 // through lib/paths.js — the same function the panel boots with — so `WAG_HOME`, `--state-dir` and the default
-// `~/.wag` mean here exactly what they mean there.
+// `~/.wag` mean here exactly what they mean there. `seed` reads the four Optym SRs out of `ticket-watch.seed.json`
+// at the repo root, so a fresh machine can reproduce the list without typing four keys and four notes.
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -42,11 +47,9 @@ import {
   WATCH_VERSION,
   addTicket,
   classifyTicket,
-  eventMarker,
-  normReader,
+  movementLine,
   readTicketFile,
   removeTicket,
-  ticketRowFor,
   ticketsPathFor,
   wakeTextFor,
   writeTicketFile,
@@ -58,32 +61,34 @@ const JIRA_BASE_DEFAULT = "https://jira.sefl.com";
 const PANEL_PORT_DEFAULT = 7331;
 const FETCH_TIMEOUT_MS = 20_000;
 
-const USAGE = `ticket-watch — watch Jira SR/DMR tickets and card the reader when one moves
+const USAGE = `ticket-watch — watch Jira SR/DMR tickets, wake the assistant, leave the judgement to it
 
   node tools/ticket-watch.mjs add <KEY> [--note "why"] [--assistant <id>]
   node tools/ticket-watch.mjs list [--assistant <id>] [--json]
   node tools/ticket-watch.mjs remove <KEY> [--assistant <id>]
+  node tools/ticket-watch.mjs seed [--assistant <id>] [--file <seed.json>]
+  node tools/ticket-watch.mjs show <KEY> [--comments <n>] [--json]
   node tools/ticket-watch.mjs check [--assistant <id>] [--dry-run] [--fixture <file>] [--json]
 
 Options
-  --assistant <id>   which assistant's list (default: assistant-1 for add/remove/list, EVERY list for check)
+  --assistant <id>   which assistant's list (default: assistant-1 for add/remove/list/seed, EVERY list for check)
   --state-dir <dir>  the panel's state directory (default: lib/paths.js — WAG_HOME, else ~/.wag, /state)
   --panel <url>      the panel base URL (default: PANEL_URL, else http://127.0.0.1:<config.json port>)
-  --reader <name>    the reader's Jira display name (default: TICKET_READER, else "Roper, Jacob")
-  --mention <token>  the reader's mention token, without [~ ] (default: TICKET_MENTION, else "Roper")
   --jira <url>       Jira base URL (default: JIRA_BASE_URL, else ${JIRA_BASE_DEFAULT})
+  --file <seed.json> the seed to load (default: ticket-watch.seed.json at the repo root)
+  --comments <n>     how many comments \`show\` prints, newest last (default: 6)
   --fixture <file>   read issue payloads from a JSON file instead of Jira (a test seam; never used by cron)
-  --dry-run          say what would be raised and write nothing
+  --dry-run          say what moved and write nothing, wake nobody
   --json             print a machine-readable summary
 
-Environment: JIRA_API_TOKEN (required for a live check), PANEL_TOKEN (only for a non-loopback panel),
-             JIRA_BASE_URL, PANEL_URL, TICKET_READER, TICKET_MENTION, WAG_HOME.
-Exit: 0 ok · 1 a ticket or a raise failed · 2 a usage error.`;
+Environment: JIRA_API_TOKEN (required for a live check or show), PANEL_TOKEN (only for a non-loopback panel),
+             JIRA_BASE_URL, PANEL_URL, WAG_HOME.
+Exit: 0 ok · 1 a ticket or a wake failed · 2 a usage error.`;
 
 // ---- arguments ------------------------------------------------------------------------------------------------
 function parseArgs(argv) {
   const out = { _: [], flags: {} };
-  const takesValue = new Set(["--note", "--assistant", "--state-dir", "--panel", "--reader", "--mention", "--jira", "--fixture", "--now"]);
+  const takesValue = new Set(["--note", "--assistant", "--state-dir", "--panel", "--jira", "--fixture", "--file", "--comments", "--now"]);
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
     if (a === "--help" || a === "-h") {
@@ -123,7 +128,7 @@ if (flag("help")) {
   process.exit(0);
 }
 const command = String(args._[0] || "").trim();
-if (!["add", "list", "remove", "check"].includes(command)) {
+if (!["add", "list", "remove", "seed", "show", "check"].includes(command)) {
   process.stderr.write(`${USAGE}\n`);
   process.exit(command ? 2 : 0);
 }
@@ -172,11 +177,6 @@ function panelBase() {
   return `http://127.0.0.1:${port}`;
 }
 
-const READER = normReader({
-  displayName: flag("reader") || process.env.TICKET_READER || undefined,
-  mention: flag("mention") || process.env.TICKET_MENTION || undefined,
-});
-
 function jiraBase() {
   return String(flag("jira") || process.env.JIRA_BASE_URL || JIRA_BASE_DEFAULT).replace(/\/+$/, "");
 }
@@ -219,7 +219,7 @@ async function fetchIssue(key) {
   const token = process.env.JIRA_API_TOKEN;
   if (!token) fail("JIRA_API_TOKEN is not exported in this shell — the watch cannot read Jira without it");
   const base = jiraBase();
-  const url = `${base}/rest/api/2/issue/${encodeURIComponent(key)}?fields=summary,status,assignee,updated,comment`;
+  const url = `${base}/rest/api/2/issue/${encodeURIComponent(key)}?fields=summary,description,status,assignee,updated,comment`;
   let res;
   try {
     res = await fetch(url, {
@@ -335,40 +335,96 @@ function cmdRemove() {
   process.stdout.write(`${String(key).toUpperCase()} removed from ${id}'s watch list (${out.doc.tickets.length} left · ${file})\n`);
 }
 
-/** Raise one ticket's events: a queue row per event, then ONE wake naming every row. */
-async function raise(id, entry, events) {
-  const view = await panel(`/api/assistant/queue?assistantId=${encodeURIComponent(id)}`);
-  const tasks = Array.isArray(view?.queue?.tasks) ? view.queue.tasks : [];
-  const byMarker = new Map();
-  for (const t of tasks) {
-    const m = /ticket-event: (\S+)/.exec(String(t?.detail || ""));
-    if (m) byMarker.set(m[1], t);
+function cmdSeed() {
+  const id = requireAssistant(flag("assistant") || "assistant-1");
+  const file = flag("file") ? path.resolve(flag("file")) : path.join(ROOT, "ticket-watch.seed.json");
+  let parsed;
+  try {
+    parsed = JSON.parse(readFileSync(file, "utf8"));
+  } catch (err) {
+    fail(`could not read the seed ${file}: ${String((err && err.message) || err)}`, 2);
   }
-  const rows = [];
-  let addedCount = 0;
-  for (const event of events) {
-    const marker = eventMarker(event);
-    const id2 = marker.replace(/^ticket-event: /, "");
-    const already = byMarker.get(id2);
-    if (already) {
-      rows.push({ id: already.id, event, skipped: true });
-      continue;
+  const list = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.tickets) ? parsed.tickets : null;
+  if (!list) fail(`${file} has no tickets list`, 2);
+  const target = loadList(id);
+  let doc = target.doc;
+  let added = 0;
+  let noted = 0;
+  for (const t of list) {
+    let out;
+    try {
+      out = addTicket(doc, { key: t?.key, note: t?.note || "" });
+    } catch (err) {
+      fail(`${file}: ${String((err && err.message) || err)}`, 2);
     }
-    const row = ticketRowFor(event, { note: entry.note });
-    const out = await panel("/api/assistant/queue", {
-      method: "POST",
-      body: { assistantId: id, action: "add", title: row.title, detail: row.detail, by: "ticket-watch" },
-    });
-    const taskId = out?.task?.id;
-    if (!taskId) throw new Error(`the queue answered without a task id for ${marker}`);
-    rows.push({ id: taskId, event, skipped: false });
-    addedCount += 1;
+    doc = out.doc;
+    if (out.added) added += 1;
+    else if (out.changed) noted += 1;
   }
-  const wake = await panel("/api/ticket-watch/wake", {
-    method: "POST",
-    body: { assistantId: id, text: wakeTextFor({ key: entry.key, summary: events[0]?.summary || "", rows, events }) },
+  const wrote = added + noted > 0;
+  if (wrote) writeTicketFile(target.file, doc);
+  process.stdout.write(
+    `seeded ${id}'s watch list from ${file}: ${added} added, ${noted} note${noted === 1 ? "" : "s"} updated, ${doc.tickets.length} watched${wrote ? "" : " (nothing to write)"}\n`,
+  );
+  for (const t of doc.tickets) process.stdout.write(`  ${t.key}${t.note ? `  ${t.note}` : ""}\n`);
+}
+
+/** The ticket, for the assistant's judgement: fields, description and the last few comments, with their ids. */
+async function cmdShow() {
+  const key = args._[1];
+  if (!key) fail("usage: show <KEY> [--comments <n>]", 2);
+  const wanted = String(key).toUpperCase();
+  let issue;
+  try {
+    issue = await fetchIssue(wanted);
+  } catch (err) {
+    fail(String((err && err.message) || err), 1);
+  }
+  const f = issue.fields || {};
+  const comments = Array.isArray(f.comment?.comments) ? f.comment.comments.slice().sort((a, b) => (Number(a?.id) || 0) - (Number(b?.id) || 0)) : [];
+  const n = Math.max(1, Number(flag("comments")) || 6);
+  const shown = comments.slice(-n);
+  if (flag("json")) {
+    process.stdout.write(
+      `${JSON.stringify({ key: issue.key || wanted, summary: f.summary || "", status: f.status?.name || null, assignee: f.assignee?.displayName || null, updated: f.updated || null, description: f.description || "", comments: shown }, null, 1)}\n`,
+    );
+    return 0;
+  }
+  const lines = [`${issue.key || wanted} - ${f.summary || "(no summary)"}`];
+  lines.push(
+    `status: ${f.status?.name || "none"} · assignee: ${f.assignee?.displayName || "unassigned"} · updated: ${f.updated || "(not given)"} · ${comments.length} comment${comments.length === 1 ? "" : "s"}`,
+  );
+  if (String(f.description || "").trim()) {
+    lines.push("");
+    lines.push(String(f.description).trim());
+  }
+  if (shown.length) {
+    lines.push("");
+    lines.push(`Last ${shown.length} comment${shown.length === 1 ? "" : "s"} (oldest first):`);
+    for (const c of shown) {
+      lines.push("");
+      lines.push(`#${c.id} ${c.author?.displayName || "someone"} ${String(c.created || "").replace("T", " ").slice(0, 19)}`);
+      lines.push(String(c.body || "").trim());
+    }
+  }
+  process.stdout.write(`${lines.join("\n")}\n`);
+  return 0;
+}
+
+/**
+ * Report one ticket's movements: ONE wake naming the key and every movement, and nothing else. No queue row, no
+ * card, no options - the assistant that receives this reads the ticket and decides whether the reader sees
+ * anything. The text is built by the module so the CLI and the test cannot drift apart on its words.
+ */
+async function wake(id, entry, events) {
+  const text = wakeTextFor({
+    key: entry.key,
+    summary: events[0]?.summary || "",
+    events,
+    browse: `${jiraBase()}/browse/${entry.key}`,
   });
-  return { rows, addedCount, wake };
+  const answer = await panel("/api/ticket-watch/wake", { method: "POST", body: { assistantId: id, text } });
+  return { text, wake: answer };
 }
 
 async function cmdCheck() {
@@ -376,10 +432,10 @@ async function cmdCheck() {
   const ids = wanted ? [wanted] : assistantIds();
   const fixture = flag("fixture") ? loadFixture(flag("fixture")) : null;
   const dryRun = Boolean(flag("dryRun"));
-  const report = { stateDir: STATE_DIR, panel: panelBase(), dryRun, fixture: flag("fixture") || null, tickets: [], rows: 0, wakes: 0, writes: 0, errors: [] };
+  const report = { stateDir: STATE_DIR, panel: panelBase(), dryRun, fixture: flag("fixture") || null, tickets: [], movements: 0, wakes: 0, writes: 0, errors: [] };
 
   if (!ids.length) {
-    process.stdout.write(`no assistant directories under ${ASSISTANT_DIR} — nothing to check\n`);
+    process.stdout.write(`no assistant directories under ${ASSISTANT_DIR} - nothing to check\n`);
     return 0;
   }
 
@@ -394,7 +450,7 @@ async function cmdCheck() {
     if (!out.doc.tickets.length) continue;
     let dirty = false;
     for (const entry of out.doc.tickets) {
-      const line = { assistantId: id, key: entry.key, baseline: false, events: [], rows: [], wake: null, error: null };
+      const line = { assistantId: id, key: entry.key, baseline: false, events: [], wake: null, error: null };
       let issue;
       try {
         issue = fixture ? fixture.get(entry.key) : await fetchIssue(entry.key);
@@ -407,10 +463,11 @@ async function cmdCheck() {
         continue;
       }
       // A fixture entry may carry only `fields`; the issue's own key is the entry's.
-      const classified = classifyTicket(entry, { ...issue, key: issue.key || entry.key }, { reader: READER });
+      const classified = classifyTicket(entry, { ...issue, key: issue.key || entry.key });
       line.baseline = classified.baseline;
-      // Where the snapshot lands when this ticket raises nothing (or raises successfully): the LAST write of the
-      // loop below stores it. A raise that fails leaves it out, so the next check tries the same events again.
+      // Where the snapshot lands when this ticket has nothing to report (or reported successfully): the LAST write
+      // of the loop below stores it. A wake that fails leaves it out, so the next check reports the same movement
+      // again rather than forgetting it.
       const at = out.doc.tickets.findIndex((t) => t.key === entry.key);
       const adopt = () => {
         if (at >= 0 && classified.changed) {
@@ -430,19 +487,19 @@ async function cmdCheck() {
         report.tickets.push(line);
         continue;
       }
-      line.events = classified.events.map((e) => ({ kind: e.kind, id: e.id, addressed: e.addressed ?? null, why: e.why || null, from: e.from ?? null, to: e.to ?? null }));
+      line.events = classified.events.map((e) => ({ kind: e.kind, what: movementLine(e), id: e.id, from: e.from ?? null, to: e.to ?? null }));
+      report.movements += line.events.length;
       if (dryRun) {
         report.tickets.push(line);
         continue;
       }
       try {
-        const raised = await raise(id, entry, classified.events);
-        line.rows = raised.rows.map((r) => ({ id: r.id, skipped: r.skipped, kind: r.event.kind }));
-        line.wake = raised.wake?.queued === false ? { refused: raised.wake.refused } : { queued: true, pending: raised.wake?.pending ?? null };
-        report.rows += raised.addedCount;
-        report.wakes += raised.wake?.queued === false ? 0 : 1;
-        // lastSeen moves ONLY once the rows and the wake landed: a failure below retries the raise, and the
-        // `ticket-event:` marker keeps the retry from writing a second card.
+        const reported = await wake(id, entry, classified.events);
+        line.wakeText = reported.text;
+        line.wake = reported.wake?.queued === false ? { refused: reported.wake.refused } : { queued: true, pending: reported.wake?.pending ?? null };
+        report.wakes += reported.wake?.queued === false ? 0 : 1;
+        // lastSeen moves ONLY once the wake landed: a failure below reports the same movement on the next check
+        // instead of swallowing it.
         adopt();
       } catch (err) {
         line.error = String((err && err.message) || err);
@@ -451,61 +508,51 @@ async function cmdCheck() {
       }
       report.tickets.push(line);
     }
-    // Written once per assistant, and only when a fact moved. A second check with nothing changed leaves the
-    // file's bytes (and its mtime) exactly as they were.
+    // Written once per assistant, and only when a tracked fact moved. A second check with nothing changed leaves
+    // the file's bytes (and its mtime) exactly as they were.
     if (dirty && !dryRun) {
       writeTicketFile(file, out.doc);
       report.writes += 1;
     }
   }
 
-  const { raisedCount } = countReport(report);
   if (flag("json")) {
-    process.stdout.write(`${JSON.stringify({ ...report, version: WATCH_VERSION, raised: raisedCount }, null, 1)}\n`);
+    process.stdout.write(`${JSON.stringify({ ...report, version: WATCH_VERSION }, null, 1)}\n`);
   } else {
     printReport(report, dryRun);
   }
   return report.errors.length ? 1 : 0;
 }
 
-function countReport(report) {
-  let raisedCount = 0;
-  for (const t of report.tickets) if (!t.baseline && (t.rows.length || t.events.length)) raisedCount += t.rows.length || t.events.length;
-  return { raisedCount };
-}
-
 function printReport(report, dryRun) {
   const rows = [];
   for (const t of report.tickets) {
     if (t.error) rows.push(`${t.key.padEnd(12)} ERROR ${t.error}`);
-    else if (t.baseline) rows.push(`${t.key.padEnd(12)} baseline — ${t.note}`);
+    else if (t.baseline) rows.push(`${t.key.padEnd(12)} baseline - ${t.note}`);
     else if (!t.events.length) rows.push(`${t.key.padEnd(12)} nothing moved`);
     else {
-      const what = t.events
-        .map((e) =>
-          e.kind === "comment"
-            ? `comment #${e.id}${e.addressed ? ` · addressed (${e.why})` : " · not addressed"}`
-            : e.kind === "status"
-              ? `status ${e.from || "none"} → ${e.to || "none"}`
-              : `assignee ${e.from || "unassigned"} → ${e.to || "unassigned"}`,
-        )
-        .join("; ");
-      const did = dryRun ? "would raise" : t.rows.length ? `card ${t.rows.map((r) => `#${r.id}${r.skipped ? " (already queued)" : ""}`).join(", ")}` : "raised nothing";
-      const woke = t.wake ? (t.wake.queued ? " · assistant woken" : ` · wake refused (${t.wake.refused})`) : "";
-      rows.push(`${t.key.padEnd(12)} ${what} — ${did}${woke}`);
+      const what = t.events.map((e) => e.what).join("; ");
+      const did = dryRun
+        ? "would wake the assistant"
+        : t.wake
+          ? t.wake.queued
+            ? "assistant woken"
+            : `wake refused (${t.wake.refused})`
+          : "woke nobody";
+      rows.push(`${t.key.padEnd(12)} ${what} - ${did}`);
     }
   }
-  if (!rows.length) process.stdout.write(`nothing watched yet — add a key with: node tools/ticket-watch.mjs add <KEY> --assistant <id>\n`);
+  if (!rows.length) process.stdout.write(`nothing watched yet - add a key with: node tools/ticket-watch.mjs add <KEY> --assistant <id>\n`);
   else process.stdout.write(`${rows.join("\n")}\n`);
   if (dryRun) {
-    process.stdout.write(`\nDRY RUN — nothing was written and nobody was woken.\n`);
+    process.stdout.write(`\nDRY RUN - nothing was written, nobody was woken.\n`);
     return;
   }
-  if (!report.rows && !report.writes && !report.errors.length) {
-    process.stdout.write(`\nnothing moved: no queue row, no wake, no write.\n`);
+  if (!report.movements && !report.writes && !report.errors.length) {
+    process.stdout.write(`\nnothing moved: no movement, no wake, no write.\n`);
     return;
   }
-  const bits = [`${report.rows} queue row${report.rows === 1 ? "" : "s"}`, `${report.wakes} wake${report.wakes === 1 ? "" : "s"}`];
+  const bits = [`${report.movements} movement${report.movements === 1 ? "" : "s"}`, `${report.wakes} wake${report.wakes === 1 ? "" : "s"}`];
   if (report.writes) bits.push(`${report.writes} list write${report.writes === 1 ? "" : "s"}`);
   if (report.errors.length) bits.push(`${report.errors.length} error${report.errors.length === 1 ? "" : "s"}`);
   process.stdout.write(`\n${bits.join(", ")}.\n`);
@@ -515,6 +562,8 @@ async function main() {
   if (command === "add") return cmdAdd(), 0;
   if (command === "list") return cmdList(), 0;
   if (command === "remove") return cmdRemove(), 0;
+  if (command === "seed") return cmdSeed(), 0;
+  if (command === "show") return cmdShow();
   return cmdCheck();
 }
 
