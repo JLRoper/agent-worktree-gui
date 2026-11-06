@@ -2601,6 +2601,20 @@
     const escList = ((a.escalateTo || {})[id] || []).filter((x) => x !== id);
     const escOthers = assistantIds().filter((x) => x !== id && !escList.includes(x));
     const rules = Array.isArray(rec?.rules) ? rec.rules : [];
+    // THE ROLE THIS ASSISTANT RUNS. The list is the server's own library (`state.assistant.roles`, the same meta the
+    // Role tab's picker draws) and the current value is the RECORD's `roleId` — not a page copy, so two tabs cannot
+    // disagree about the job. A library with no rows still shows the role the record names rather than an empty box.
+    const roles = Array.isArray(a.roles) ? a.roles : [];
+    const roleNow = String(rec?.roleId || "");
+    const roleNameNow = String(rec?.roleName || "");
+    const roleOptions = roles.length
+      ? roles.map((r) => `<option value="${esc(r.id)}"${r.id === roleNow ? " selected" : ""}>${esc(r.name)}</option>`).join("")
+      : `<option value="${esc(roleNow)}">${esc(roleNameNow || "(no role)")}</option>`;
+    // The line under the row: the save's "press Restart" sentence or the restart's own account of what it rebuilt.
+    // Kept on the pane's own element (not in a page map) so a repaint of the markup keeps it, a panel reload drops it
+    // with the server-side send records it describes, and the function sliced by test/assistant-thresholds.js needs no
+    // outer helper it cannot see.
+    const roleRestartNote = String((host.dataset && host.dataset.roleRestartNote) || "");
     host.innerHTML = `
       ${heldBanner(agg, owned)}
       <div class="as-group">
@@ -2621,6 +2635,23 @@
         sends a reply the assistant itself wrote with a TO line; auto also sends anything a standing rule drafted.
         Creating a worktree has its own switch — nothing runs until the card is clicked. An approval is never answered
         from here at any setting.</div>
+      </div>
+      <div class="as-group" data-as-rolepanel="${esc(id)}">
+        <h4>The role it runs <span class="as-hint" data-as-rolename>${esc(roleNameNow || "(no role)")}</span></h4>
+        <div class="as-help">The role is the job this assistant's turns are told they are doing. Picking one writes
+        <code>roleId</code> on this assistant's own record — the same field the <b>Role</b> tab's picker writes, and
+        nothing else: the charter text stays this assistant's own copy until the Role tab adopts a role's. <b>Restart
+        role</b> is the press that applies it to the next turn: it rebuilds THIS assistant's turn context from the role
+        now on the record, so the charter, the board digest and the queue digest go in full again under the new role.
+        It does not restart the panel, the gateway, or any other assistant's context.</div>
+        <div class="as-line">
+          <label title="the role THIS assistant's turns run — saving it writes this assistant's record and changes no other assistant">role
+            <select data-as-setrole="${esc(id)}" title="the job this assistant's turns are told they are doing — picking saves the choice; Restart role applies it to the next turn">${roleOptions}</select></label>
+          <button type="button" data-as-rolerestart="${esc(id)}" title="rebuild this assistant's NEXT turn from the role on its record — the full charter, board and queue again; the panel and the gateway are not restarted">Restart role</button>
+          <button type="button" data-as-roleopen="${esc(id)}" title="open the panel-level Role tab, editing this assistant's charter and role">Open Role tab</button>
+          <span class="as-hint" data-as-rolestatus="${esc(id)}">${esc(roleRestartNote)}</span>
+        </div>
+        <div class="as-err" id="as-rolesave-err-${esc(n)}"></div>
       </div>
       <div class="as-group">
         <h4>How this assistant's pane is drawn</h4>
@@ -4985,6 +5016,41 @@
       return;
     }
 
+    // The Settings role row's two presses. Restart is a turn-context rebuild on the server for THIS id only — it
+    // drops that assistant's session send records, so its next turn carries the full charter under the role its
+    // record now holds. Nothing here restarts the panel or calls the gateway, and the line under the row says exactly
+    // what was rebuilt. Open Role tab is the panel-level tab, pointed at this assistant, for the charter itself.
+    if (t.dataset.asRolerestart) {
+      const own = t.dataset.asRolerestart;
+      const n = String(own).replace(/^assistant-/, "");
+      t.disabled = true;
+      try {
+        const d = await asPost("/api/assistant/role/restart", { assistantId: own });
+        const who = d.target?.name || "this assistant";
+        const roleName = d.role?.name || "its role";
+        const again = Array.isArray(d.cleared) && d.cleared.length ? `, and the ${d.cleared.join(", the ")} go in full again` : ". Nothing had been sent yet this session, so its next turn is already a first turn";
+        const pane = hostFor(own, "settings");
+        if (pane) {
+          pane.dataset.roleRestartNote = `Restarted ${who}'s turn context${d.live ? " (a turn was already running; the rebuild is its next one)" : ""} — its next turn is built from the ${roleName} role${again}. The panel and the gateway were not restarted.`;
+        }
+        setErr(`as-rolesave-err-${n}`, "");
+      } catch (err) {
+        setErr(`as-rolesave-err-${n}`, err.message);
+      } finally {
+        t.disabled = false;
+      }
+      renderAssistantSettings(own, true);
+      return;
+    }
+
+    if (t.dataset.asRoleopen) {
+      // The panel-level Role tab edits one assistant's charter; point it at the assistant whose Settings was on
+      // screen, then switch the view. `setView` persists the record, so a reload lands on the same tab.
+      roleTarget = t.dataset.asRoleopen;
+      setView({ assistant: "role" });
+      return;
+    }
+
     if (t.dataset.asAddrule) {
       // `data-as-addrule` lowercases to `dataset.asAddrule` — reading `asAddRule` was always undefined, so the press
       // fell through to the branches below it and added nothing.
@@ -5167,6 +5233,29 @@
       }
       // Either way the pane is repainted from the stored value: a failed save puts the select back rather than
       // leaving the control claiming a mode the file never took.
+      renderAssistantSettings(own, true);
+      return;
+    }
+    if (el.dataset.asSetrole) {
+      // THE ROLE PICKER in Settings. It writes the assistant's own record through the role route — the same field and
+      // the same writer the Role tab's picker uses, never a page-side copy — and it deliberately does NOT adopt the
+      // role's charter: replacing the reader's copy is the Role tab's own press, behind its own question.
+      const own = el.dataset.asSetrole;
+      const roleId = String(el.value || "");
+      const n = String(own).replace(/^assistant-/, "");
+      el.disabled = true;
+      try {
+        const d = await asPost("/api/assistant/role/pick", { assistantId: own, roleId, adopt: false });
+        // The answer carries the whole assistant state (asPost applied it), so the repaint below reads the role the
+        // server actually stored — a refused pick cannot leave the select claiming a job the record never took.
+        const pane = hostFor(own, "settings");
+        if (pane) pane.dataset.roleRestartNote = `Saved — ${d.target?.name || "this assistant"} runs the ${d.role?.name || "picked"} role. Press Restart role to rebuild its next turn from it.`;
+        setErr(`as-rolesave-err-${n}`, "");
+      } catch (err) {
+        setErr(`as-rolesave-err-${n}`, err.message);
+      } finally {
+        el.disabled = false;
+      }
       renderAssistantSettings(own, true);
       return;
     }
