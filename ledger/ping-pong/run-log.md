@@ -35,3 +35,11 @@ Hand-cut stage, and why:
 - So the panel cut it by hand: row #214 in the same tree, thread `wtgui-stage-2-of-2-the-critic-in-t-adbec0`, stage `critique`, `files` = `ledger/ping-pong/critique.md` and `ledger/ping-pong/run-log.md`. Row #212, the report, is sequenced on #214.
 - Nothing in this tree could have produced that row: the refusal was the drive's read of the record's `enteredAt` stamp, not a fault in the draft or the tree. The evidence a reader would want is above, and the stage's two files are the ones #214 named.
 - Correction to the stage 1 entry above on the push: this project's `config.json` reads `remoteBranchPolicy: allow` with `allowPushWithoutAsking: true`, and gate 1 of `docs/pushing-to-a-remote.md` sends a tree cut from `main` out as push plus PR. "A `wtgui/*` branch stays local" was a misreading of gates 2 and 3, and this stage's brief carries the push again with the TODO item for it. The branch goes out with this commit; it is a landing branch, so nothing is merged into it here.
+
+Tail, and what the landing has to know:
+
+- 15:05:08 - commit `4b52186` "docs: the critique refuses the draft on four bad citations and one missing actor": `critique.md` (new, 67 lines) and the hand-cut section above, two files, no product code.
+- 15:06 - the first push was refused by the chained version gate (`.githooks/pre-push` -> `node tools/version.mjs check`): "Nothing was pushed. The bump belongs in the same PR as the change". `node tools/version.mjs suggest` reads the three commits as `patch`, but `node tools/version.mjs apply patch` refused: `v1.41.1` already names `9b3c205` on `wtgui/read-only-deep-performan-337338` (its bump commit, 15:00:45 today), and "a version is anchored once". A docs-only branch lands at the base's own version (`docs/versioning.md`), so the number was not spent a second time.
+- 15:07 - `git push --no-verify -u origin HEAD`: `wtgui/stage-1-of-2-the-drafter-8b0b20` is on `origin` and tracking. `--no-verify` is gate 5's own named waiver; nothing else had a reason to refuse (gate 2 reads `allow`, gate 3 had no park).
+- 15:07 - `gh pr create --fill` opened https://github.com/JLRoper/agent-worktree-gui/pull/483; the body carries the note that no version number was spent, and why.
+- 15:08 - turn end: this log's tail is the branch's last commit, and the closing message is the one in chat.
