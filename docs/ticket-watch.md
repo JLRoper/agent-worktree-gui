@@ -93,9 +93,10 @@ and does not write anything to Jira; if the decision is "reply to Greene", the c
 
 ## The worked example: two movements, one card and one not
 
-Both movements below are real. They were delivered by one live `check` against `https://jira.sefl.com` on
-2026-11-06, with the list copied to a scratch state directory and SR-243582's comment mark rewound so a comment that
-had already happened was delivered as a movement. Jira was only read.
+Both movements below are real, and both were delivered by a live `check` against `https://jira.sefl.com` on
+2026-11-06, through a pass-through proxy that recorded every request method. The list was a scratch copy of the
+four SRs, and the ticket's comment mark was rewound to the comment before the one being delivered, so a comment
+that had already happened was reported as a movement. Jira was only read: all 18 requests the run made were GETs.
 
 ### A movement that leaves the reader a decision
 
@@ -109,23 +110,23 @@ the choices: test and reply, ask which change he made, or close as working.
 
 ### A movement that correctly produced no card
 
-SR-243582, comment 4224462 from Roper, Jacob, 966 characters. The wake the poller sent was, in full, the same shape
+SR-243583, comment 4224463 from Roper, Jacob, 984 characters. The wake the poller sent was, in full, the same shape
 as the one above:
 
-    Ticket watch: SR-243582 moved - Firewall outgoing - k3s UAT nodes to Optym Azure Event Hubs TCP 5671.
+    Ticket watch: SR-243583 moved - Firewall outgoing - k3s QA nodes to Optym Azure Event Hubs TCP 5671.
     What moved:
-    - new comment #4224462 from Roper, Jacob at 2026-11-05 18:39:50, 966 characters
-    Read the ticket: node tools/ticket-watch.mjs show SR-243582   (https://jira.sefl.com/browse/SR-243582)
+    - new comment #4224463 from Roper, Jacob at 2026-11-05 18:39:58, 984 characters
+    Read the ticket: node tools/ticket-watch.mjs show SR-243583   (https://jira.sefl.com/browse/SR-243583)
     ...
 
-The ticket, as `show SR-243582` printed it, is Waiting for Customer and assigned to Roth, Chris. The comment is the
-reader's own record of the test he ran from the UAT cluster: two pods, `PASS - CONNECTED`, `Verify return code: 0
+The ticket, as `show SR-243583` printed it, is Waiting for Customer and assigned to Roth, Chris. The comment is the
+reader's own record of the test he ran from the QA cluster: two pods, `PASS - CONNECTED`, `Verify return code: 0
 (ok)`, with the control on 443 and the DNS resolution. Nothing in it asks the reader anything and nothing has been
 left for him to decide: he wrote it, he already knows the answer, and the ticket is waiting on Chris.
 
 Questions 1 to 3 all fail, question 4 applies. **No card.** The poller still woke the assistant, because waking on
 movement is the poller's job; the judgement that this movement needed nothing from the reader is the assistant's,
-made from the ticket rather than from a keyword.
+made from the ticket rather than from a keyword. The assistant's queue stayed empty (`tasks: 0`).
 
 This pair is the point of the split: a mention (`[~Roper]`, in the SR-242996 comment) and a non-mention both produce
 the same wake, and the poller is not the thing that decides between them.
@@ -177,15 +178,19 @@ the same movement again.
 
 ## Verification
 
-Two proofs, both run from this worktree on 2026-11-06:
+Three proofs, all run from this worktree on 2026-11-06:
 
 - `test/ticket-watch.test.js` (part of `npm test`): 15 tests, no server and no Jira. Pins the list, the baseline, the
   three classes, the identical event shape for a comment that names the reader and one that does not, the wake's
   words, idempotence, the route's refusals, and the seed.
-- a live probe against the real panel (`tools/panel-testkit.mjs` boots `server.js`) and a fixture with one issue
-  carrying a new comment, a status change and an assignee change: 14/14 checks. All three classes fire from one poll,
-  the report reads `movements=3 wakes=1 writes=1`, the reader's queue stays empty (`tasks: 0`), the second check reads
-  `movements=0 wakes=0 writes=0` with the list's sha256 unchanged, and a second check pointed at a dead panel URL
-  still exits 0 because it makes no HTTP call at all.
-- a live probe against `https://jira.sefl.com` with the four real SRs: 11/11 checks, the two movements above
-  delivered and woken, nothing in the reader's queue, and the second live check silent with identical bytes.
+- a probe against the real panel (`tools/panel-testkit.mjs` boots `server.js`) with a stub Jira that records every
+  request method and refuses anything but GET: 18/18 checks. The baseline writes four snapshots and wakes nobody;
+  one poll then reports a comment, a status change and an assignee change on one ticket (`movements=3 wakes=1`), the
+  assistant is woken once, and the reader's queue stays empty (`tasks: 0`); a second, unchanged check reads
+  `movements=0 wakes=0 writes=0` with the list's sha256 unchanged, makes no panel call at all (it is pointed at a
+  dead panel URL and still exits 0), and every one of the 17 Jira requests it made was a GET.
+- a live probe against `https://jira.sefl.com` with the four real SRs through a pass-through proxy that recorded the
+  method of every request: 14/14 checks. The four baselines write and wake nobody, the second check is silent with
+  identical bytes and no panel call, all 18 requests are GETs, the reader's own QA note on SR-243583 (comment
+  4224463) is reported and correctly produces no card (`tasks: 0`), and Greene's question on SR-242996 (comment
+  4225070) is reported in exactly the same words for the assistant to judge.
