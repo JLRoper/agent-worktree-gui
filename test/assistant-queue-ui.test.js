@@ -170,14 +170,16 @@ test("one sub-row per agent, each with its own mark and the card's own pill", ()
   // The mark is the RUN's, so the task being parked does not turn its live agent into a parked one.
   const marks = [...html.matchAll(/<span class="as-agent-mark is-([a-z]+)" aria-hidden="true">(.)<\/span>/g)].map((m) => `${m[1]}:${m[2]}`);
   assert.deepEqual(marks, ["running:●", "done:✓", "queued:○", "queued:○", "parked:⏸", "queued:○"]);
-  // …and the pill is the card's own: classes and words, one run at a time.
-  const pills = [...html.matchAll(/<span class="([^"]*pill[^"]*)"[^>]*>(running|complete|exited|not-running)<\/span>/g)].map((m) => `${m[1]}|${m[2]}`);
+  // …and the pill is the card's own: classes and words, one run at a time. A STOPPED run's chip is a button now (the
+  // re-attach press), so the match reads both tags — the word and the classes are unchanged, which is the point.
+  const pills = [...html.matchAll(/<(span|button)[^>]*class="([^"]*pill[^"]*)"[^>]*>(running|complete|exited|not-running)/g)].map((m) => `${m[1]}|${m[2]}|${m[3]}`);
   assert.deepEqual(pills, [
-    "pill pill-running|running",
-    "pill pill-notrunning is-failed|exited",
-    "pill pill-notrunning|not-running",
-    "pill pill-running|running",
-    "pill pill-notrunning|not-running",
+    "span|pill pill-running|running",
+    "button|pill pill-complete|complete",
+    "button|pill pill-notrunning is-failed pill-reattach|exited",
+    "button|pill pill-notrunning pill-reattach|not-running",
+    "span|pill pill-running|running",
+    "button|pill pill-notrunning pill-reattach|not-running",
   ], "the words and classes are the card's own, in record order");
   // COMPLETE is the card's BUTTON (`button.pill-complete`), not a span.
   assert.ok(/<button type="button" class="pill pill-complete"/.test(html), "a done run wears button.pill-complete");
