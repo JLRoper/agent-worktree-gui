@@ -4344,7 +4344,12 @@ body.pipew-open { overflow: hidden; }
    know how wide its neighbour is. The arcs above the track are positioned in CSS calc from --pflow-n (columns),
    --pflow-i/--pflow-j (the two stage indexes) and the same --pflow-gap the track uses — no measurement, no resize
    handler, and an arc cannot drift from the stage it joins. */
-.pflow { --pflow-gap: 26px; --pflow-minw: 96px; --pflow-maxw: 400px; --pflow-ink-quiet: #8b96a5; --pflow-min-h: 100px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pflow { --pflow-gap: 26px; --pflow-minw: 96px; --pflow-maxw: 400px; --pflow-ink-quiet: #8b96a5; --pflow-min-h: 100px; --pflow-head: 8px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+/* The tile row's HEADROOM: 8 px of the scroller's own top that the tiles do not start in. The marks (`--pflow-dot`)
+   sit 5 px above a tile's top edge, so a track that began at the scroller's edge had the top of every dot - and the
+   tile's 1 px top border and rounded corners - sliced flat by `overflow-y: hidden` (the 3285x472 capture: a row of
+   half-circles above the tiles). The drawing owns this band outright: it is padding on the canvas, outside every
+   tile, so it costs no stage a pixel and cannot be mistaken for one. */
 /* `fit`: the SAME grid one step narrower, for a definition too long for the card at the readable floor. Thirteen
    columns at 56 px with a 12 px gap are 872 px of content in a 1090 px track — the whole chain visible, the titles
    wrapped instead of the reader losing four stages off the edge. This is the deliberate trade the integration plan's
@@ -4358,15 +4363,15 @@ body.pipew-open { overflow: hidden; }
    The modal decides the shape from the share one row would give a column (pipeline-modal.js, wrapRows), so a drawing
    that fits never wraps and a narrow one never shrinks its type. */
 .pflow[data-wrap="1"] .pflow-track { grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 22px var(--pflow-gap); max-width: none; }
-.pflow[data-wrap="1"] .pflow-canvas { padding-top: 0; }
+.pflow[data-wrap="1"] .pflow-canvas { padding-top: var(--pflow-head); }
 .pflow[data-wrap="1"] .pflow-arcs,
 .pflow[data-wrap="1"] .pflow-artifacts { display: none; }
 .pflow[data-wrap="1"] .pflow-node[data-row-end="1"] .pflow-link { display: none; }
-/* No padding inside the scroller: horizontal padding counts toward scrollWidth (it produced a scrollbar under a
-   drawing that fitted, by 4 px), and vertical padding was a band under the drawing that held nothing. The body's own
-   8 px across and 2 px above and below is the frame. */
+/* No horizontal padding inside the scroller: horizontal padding counts toward scrollWidth (it produced a scrollbar
+   under a drawing that fitted, by 4 px). The canvas carries the row's top headroom instead (--pflow-head), which is
+   vertical only, and the body's own 8 px across and 2 px above and below is the frame. */
 .pflow-scroll { overflow-x: auto; overflow-y: hidden; padding: 0; }
-.pflow-canvas { position: relative; padding-top: var(--pflow-pad, 0px); min-width: 100%; }
+.pflow-canvas { position: relative; padding-top: calc(var(--pflow-pad, 0px) + var(--pflow-head)); min-width: 100%; }
 .pflow-track {
   position: relative;
   display: grid;
@@ -4422,24 +4427,29 @@ body.pipew-open { overflow: hidden; }
 .pflow-node[data-mark="refused"] .pflow-title { color: #ff9a9a; }
 /* The connector: the whole gap between two columns, with the gate's notch crossing its middle. `top: 19px` is the
    middle of the stage card's title line (10 px of padding + half of the 17.6 px line), so the hairline meets the
-   title it joins rather than floating below it — the notch's inline top is 19 px for the same reason. */
+   title it joins rather than floating below it - the notch straddles the same line (its own `top: 11.5px`). */
 .pflow-link { position: absolute; top: 19px; left: 100%; width: var(--pflow-gap); height: 1px; background: var(--line); }
-/* There is no end stub: a gate after the LAST stage draws its notch ON the track's closing edge (pipeline-flow.js, the
-   inline `left`), so nothing hangs past the last column. The 18 px stub that used to live here widened the drawing past
-   its own track — 15 px of scrollbar-producing decoration, and the notch it labelled was clipped away (round 5A's
-   finding 1). */
+/* There is no end stub: every gate draws its notch on its own stage's closing edge (pipeline-flow.js writes the
+   notch with no position at all; `.pflow-notch` below owns it), so nothing hangs past the last column. The 18 px
+   stub that used to live here widened the drawing past its own track - 15 px of scrollbar-producing decoration, and
+   the notch it labelled was clipped away (round 5A's finding 1). */
 .pflow-link::before { content: ""; position: absolute; left: -3px; top: -2px; width: 6px; height: 5px; border-left: 1px solid var(--line); }
 /* A connector the document hands an artifact across is THICK: the picture says which edge carries something, not
    merely that two stages are adjacent. 3 px at `top: 18px` keeps the line's centre where the hairline's was. */
 .pflow-link[data-handoff] { top: 18px; height: 3px; background: var(--dim); }
 .pflow-link[data-handoff]::before { border-left-color: var(--dim); }
-.pflow-notch { position: absolute; left: 50%; top: -7px; width: 3px; height: 15px; margin-left: -1.5px; border-radius: 2px; background: var(--amber); box-shadow: 0 0 0 2px var(--panel); cursor: help; }
+/* The gate's notch: a 3 px bar whose whole box, and its 2 px halo, sit INSIDE the column it belongs to - the
+   trailing edge, `left: 100%` pulled back by its own width. It straddles the connector's hairline (`top: 11.5px` is
+   half of the 15 px bar above the link's 19 px line) instead of hanging below it, so it reads as one notch crossing
+   the line. Nothing about this position is measured, so it cannot be cut at any window shape: the tile's box is
+   inside the scroller, and the notch is inside the tile's box. */
+.pflow-notch { position: absolute; left: 100%; top: 11.5px; width: 3px; height: 15px; margin-left: -3px; border-radius: 2px; background: var(--amber); box-shadow: 0 0 0 2px var(--panel); cursor: help; }
 .pflow-node[data-mark="done"] .pflow-notch { background: #6f8f5a; }
 .pflow-node[data-mark="not-reached"] .pflow-notch { background: #4a5568; }
 /* A capped loop: one arc above the track, in its own lane, and the cap is the only word on it. */
 /* The arcs layer is the track's own box: the same ceiling, centred the same way, so a percentage of it IS a percentage
    of the track in both regimes — capped (a centred short track) and overflowing (a long one). */
-.pflow-arcs { position: absolute; left: 0; right: 0; top: 0; height: var(--pflow-pad, 0px); width: 100%; max-width: calc(var(--pflow-n) * var(--pflow-maxw) + (var(--pflow-n) - 1) * var(--pflow-gap)); margin-inline: auto; pointer-events: none; }
+.pflow-arcs { position: absolute; left: 0; right: 0; top: var(--pflow-head); height: var(--pflow-pad, 0px); width: 100%; max-width: calc(var(--pflow-n) * var(--pflow-maxw) + (var(--pflow-n) - 1) * var(--pflow-gap)); margin-inline: auto; pointer-events: none; }
 .pflow-arc {
   position: absolute;
   top: calc(18px + var(--pflow-lane, 0) * 26px);
@@ -4519,7 +4529,8 @@ body.pipew-open { overflow: hidden; }
 .pmodal-card { display: flex; flex-direction: column; width: min(max(340px, calc(var(--pflow-card-n, 1) * 96px + (var(--pflow-card-n, 1) - 1) * 26px + 18px)), 96vw); max-height: 86vh; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 18px 44px #000b; overflow: hidden; outline: none; position: relative; }
 /* The reader can move and size it: the BAR is the handle (a press on one of its own controls is that control) and the
    CORNER grip is the size. `position: relative` above is what the grip is placed against; once a gesture has run, the
-   modal writes `position: fixed` and a left/top/width/height on the card, and these flex rules stop deciding anything.
+   modal writes `position: fixed`, a left/top/width, and a max-height on the card - the HEIGHT still follows the
+   content, so the reader's number is the room the body may grow into, never a box drawn around an empty field.
    `is-dragging` is on for the length of a gesture only, so a drag never selects the header's text. */
 .pmodal-card.is-dragging { user-select: none; }
 .pmodal-card.is-dragging .pmodal-bar { cursor: grabbing; }

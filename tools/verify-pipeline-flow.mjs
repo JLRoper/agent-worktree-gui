@@ -26,6 +26,11 @@
 //                  proof, not the href.
 //   reduced motion A second browser context asks for `prefers-reduced-motion: reduce`: the same drawing arrives with
 //                  `data-motion="off"` and no animation on the current stage's mark.
+//   the frame      A card that has been RESIZED is as tall as its content - the drag writes a `max-height` and no
+//                  `height`, so the empty field of card background the 3285x472 capture showed under the legend is
+//                  gone; the tile row keeps 8 px of headroom under the scroller's top edge, so the tiles' top border
+//                  and every mark are whole; and every gate's notch is drawn INSIDE the tile it ends, so no window
+//                  shape can slice it. The three are measured at 640x480 and at 1825x262 - the capture's own shape.
 //
 // The console error count is printed as a count, and any page error fails the run. Exit: 0 held, 1 a check failed,
 // 2 the run did not measure what it claims (no Playwright, no rows, no dialog).
@@ -444,6 +449,73 @@ try {
           style: card.getAttribute("style") || "",
         };
       });
+    // The FRAME of the drawing, measured where the three reported defects lived: the card's own height against the
+    // last row it painted (an empty field below the legend), the scroller's top edge against the tiles (a clipped
+    // top border and half marks), and every gate's notch against the tile that owns it (a notch hung in the gap).
+    const readFrame = () =>
+      page.evaluate(() => {
+        const card = document.getElementById("pipeline-modal-card");
+        if (!card) return null;
+        const scroll = card.querySelector(".pflow-scroll");
+        const sb = scroll.getBoundingClientRect();
+        const nodes = [...card.querySelectorAll(".pflow-node")];
+        const rect = (el) => {
+          const b = el.getBoundingClientRect();
+          return { x: b.left, y: b.top, w: b.width, h: b.height, right: b.right, bottom: b.bottom };
+        };
+        const painted = [...card.querySelectorAll(".pflow-node, .pflow-legend, .pflow-status, .pflow-artifact-key")].filter((el) => el.getBoundingClientRect().height > 0);
+        const lastPainted = Math.max(...painted.map((el) => el.getBoundingClientRect().bottom));
+        const body = card.querySelector(".pmodal-body");
+        return {
+          vw: innerWidth,
+          vh: innerHeight,
+          card: rect(card),
+          cardStyle: card.getAttribute("style") || "",
+          cardMax: getComputedStyle(card).maxHeight,
+          cardHeight: getComputedStyle(card).height,
+          body: { sh: body.scrollHeight, ch: body.clientHeight, oy: getComputedStyle(body).overflowY },
+          emptyField: +(card.getBoundingClientRect().bottom - lastPainted).toFixed(1),
+          scroll: { top: sb.top, bottom: sb.bottom, left: sb.left, right: sb.right, sw: scroll.scrollWidth, cw: scroll.clientWidth },
+          // Above the tallest tile's own top edge: the band the scroller clips if the row has no headroom.
+          headroom: +Math.min(...nodes.map((n) => n.getBoundingClientRect().top - sb.top)).toFixed(1),
+          // How much of the worst mark sits above the scroller's top edge. 0 is a whole dot.
+          markCut: +Math.max(0, ...nodes.map((n) => sb.top - (n.querySelector(".pflow-dot")?.getBoundingClientRect().top ?? sb.top))).toFixed(1),
+          notches: nodes.flatMap((n) =>
+            [...n.querySelectorAll(".pflow-notch")].map((notch) => {
+              const nr = notch.getBoundingClientRect();
+              const tr = n.getBoundingClientRect();
+              return {
+                stage: n.dataset.stage,
+                gate: notch.dataset.gate,
+                inside: nr.left >= tr.left - 0.5 && nr.right <= tr.right + 0.5 && nr.top >= tr.top - 0.5 && nr.bottom <= tr.bottom + 0.5,
+                outX: +Math.max(0, tr.left - nr.left, nr.right - tr.right).toFixed(1),
+                outY: +Math.max(0, tr.top - nr.top, nr.bottom - tr.bottom).toFixed(1),
+              };
+            }),
+          ),
+          wrap: card.querySelector(".pflow")?.dataset.wrap,
+        };
+      });
+
+    // The three defects, as three measurements. `where` names the window shape so a failure points at one.
+    const checkFrame = (where, m) => {
+      const outside = m.notches.filter((n) => !n.inside);
+      check(
+        outside.length === 0,
+        `${where}: every gate notch is drawn inside the tile it ends - nothing hangs in the gap to be cut`,
+        `${m.notches.length} notches, ${outside.length} outside${outside.length ? ` (${outside.map((n) => `${n.stage}:${n.gate} by ${n.outX}x${n.outY} px`).join(", ")})` : ""}`,
+      );
+      check(m.headroom >= 6, `${where}: the tile row keeps headroom under the scroller's top edge`, `${m.headroom} px above the tallest tile (the marks overhang 5 px)`);
+      check(m.markCut === 0, `${where}: no stage's mark is sliced by the scroller`, `worst mark cut ${m.markCut} px`);
+    };
+    // A card that has been RESIZED is as tall as its content: the empty field under its last row is the frame's own
+    // 2 px of padding, and its inline geometry carries a max-height, never a height.
+    const checkFollowsContent = (where, m) => {
+      check(m.emptyField <= 4, `${where}: the resized card's height stops at its content - no empty field under the legend`, `${m.emptyField} px below the last painted row (card ${Math.round(m.card.h)} px, body ${m.body.ch}/${m.body.sh})`);
+      check(!/(^|;)\s*height:/.test(m.cardStyle), `${where}: the card carries no pinned height`, m.cardStyle || "(no inline geometry)");
+      check(/max-height:\s*\d+px/.test(m.cardStyle), `${where}: the resize wrote the ceiling the body may grow into`, m.cardStyle || "(no inline geometry)");
+    };
+
     const gesture = async (handle, dx, dy) => {
       const at = await page.$eval(handle, (el) => {
         const b = el.getBoundingClientRect();
@@ -469,6 +541,9 @@ try {
     check(small.scroll.sw <= small.scroll.cw + 1, "the drawing needs no horizontal scroll - no stage is behind a bar", `${small.scroll.sw} <= ${small.scroll.cw}`);
     equal("no stage is clipped by the card or the window", { inCard: small.clipped, offWindow: small.offWindow }, { inCard: [], offWindow: [] });
     check(small.statusHidden, "and no count row is offered over a drawing that holds all thirteen");
+    // The three defects the 3285x472 capture reported, measured on this drawing: no notch outside its tile, the row's
+    // headroom under the scroller's edge, and every mark whole.
+    checkFrame("640x480", await readFrame());
     await page.screenshot({ path: path.join(SHOTS, "small-window.png") });
 
     // The corner grip resizes, and the header bar drags: both are the reader's frame, and both are measured on the
@@ -484,6 +559,13 @@ try {
     check(dragged.body.overflowY === "auto", "and the rows below the fold scroll inside the card rather than being cut off", `body ${dragged.body.ch}/${dragged.body.sh} px, overflow-y ${dragged.body.overflowY}`);
     await page.screenshot({ path: path.join(SHOTS, "small-window-resized.png") });
 
+    // Growing it is the defect the capture showed: the card used to be pinned to the new rectangle, so every pixel the
+    // drawing did not ask for was an empty field of the card's own background. Now the drag sets a ceiling and the
+    // card stops at its content.
+    await gesture("#pipeline-modal-card [data-pm-resize]", 40, 150);
+    checkFollowsContent("640x480 after growing the card", await readFrame());
+    await page.screenshot({ path: path.join(SHOTS, "small-window-grown.png") });
+
     // A fresh open is the stylesheet's card again: the place and size belong to the drawing the reader was looking at.
     await page.keyboard.press("Escape");
     await page.waitForFunction(() => document.getElementById("pipeline-modal").hidden === true, null, { timeout: 5_000 });
@@ -493,6 +575,37 @@ try {
     const again = await readSmall();
     check(!/left:|top:|width:/.test(again.style), "a fresh open is the stylesheet's centred card again", again.style || "(no inline geometry)");
     await page.keyboard.press("Escape");
+    await page.waitForFunction(() => document.getElementById("pipeline-modal").hidden === true, null, { timeout: 5_000 });
+
+    // ---- 7. the wide, short window: the reader's own shape -------------------------------------------------------
+    // 1825x262 CSS px is the 3285x472 capture at its own device pixel ratio: a card as wide as the window allows, a
+    // short glass, one row of thirteen columns. All three defects were reported at this shape, and they are the same
+    // three measurements taken again - a drawing whose legend is followed by a field of nothing, a row of half marks
+    // along the scroller's edge, and a notch hanging in a gap.
+    console.log("\n== a wide, short window: the capture's own shape ==");
+    await page.setViewportSize({ width: 1825, height: 262 });
+    await page.waitForTimeout(220);
+    await openSettingsGroup(page, "pipeline");
+    await page.waitForFunction(() => !/reading/.test(document.getElementById("pipeline-summary")?.textContent || ""), null, { timeout: 20_000 });
+    await page.selectOption("#pipeline-select", THIRTEEN.id);
+    await page.waitForSelector("#pipeline-editor:not([hidden]) .pipeline-stage", { timeout: 15_000 });
+    await page.click("#pipeline-flow-open");
+    await page.waitForSelector("#pipeline-modal:not([hidden]) .pflow-node");
+    await page.waitForTimeout(240);
+    const wide = await readFrame();
+    equal("the thirteen-stage definition is one row at 1825x262, not a wrapped stack", wide.wrap, "0");
+    check(wide.card.bottom <= wide.vh - 6, "and the card sits inside the short window", `card bottom ${Math.round(wide.card.bottom)} of ${wide.vh}`);
+    check(wide.emptyField <= 4, "the card is exactly as tall as its drawing - no empty field under the legend", `${wide.emptyField} px below the last painted row (card ${Math.round(wide.card.h)} px)`);
+    checkFrame("1825x262", wide);
+    await page.screenshot({ path: path.join(SHOTS, "wide-short.png") });
+    // Growing it here is the capture's own sequence: at this shape the drawing is a third of the card's height, so a
+    // pinned height is a field of the card's background under the legend. The grip sets a ceiling now, and the card
+    // still stops at its content.
+    await gesture("#pipeline-modal-card [data-pm-resize]", 30, 60);
+    checkFollowsContent("1825x262 after growing the card", await readFrame());
+    await page.screenshot({ path: path.join(SHOTS, "wide-short-grown.png") });
+    await page.keyboard.press("Escape");
+    await page.waitForFunction(() => document.getElementById("pipeline-modal").hidden === true, null, { timeout: 5_000 });
 
     out.pageErrors.push(...pageErrors);
     out.consoleErrors.push(...consoleErrors);

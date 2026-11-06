@@ -208,3 +208,52 @@ test("a card too narrow for a readable row wraps the drawing instead of clipping
   assert.match(css, /\.pflow\[data-wrap="1"\] \.pflow-node\[data-row-end="1"\] \.pflow-link \{ display: none; \}/, "a row's last tile keeps no connector");
   assert.match(css, /\.pflow\[data-wrap="1"\] \.pflow-arcs,/, "the horizontal arc lane is put away with the row");
 });
+
+// ---- the card's frame: three defects a 3285x472 capture reported --------------------------------------------------
+// All three are GEOMETRY, so each one is pinned here as the rule it now follows and exercised for real in
+// tools/verify-pipeline-flow.mjs (640x480 and a wide short window).
+
+test("the card's height follows its content, and a resize sets the ceiling the body may grow into", () => {
+  // The card used to be PINNED to the rectangle a resize left: a six-stage drawing 177 px tall sat in a card 329 px
+  // tall, and the 152 px between the legend and the card's own bottom edge was an empty grey field, because nothing
+  // paints the room a drawing did not ask for. `height` is cleared now and the gesture's number is `max-height`, so
+  // the card is exactly as tall as its content and the reader's drag says how far it may grow before it scrolls.
+  const paint = source.slice(source.indexOf("function paintCard("), source.indexOf("// Back to the stylesheet's own card"));
+  assert.ok(paint.length > 200, "paintCard is in the source");
+  assert.match(paint, /card\.style\.height = ""/, "the card is as tall as its content");
+  assert.match(paint, /card\.style\.maxHeight = `\$\{Math\.round\(g\.h \/ z\)\}px`/, "and the drag's height is the ceiling it may grow into");
+  assert.doesNotMatch(paint, /card\.style\.height = `/, "no pinned height");
+  // The body takes the room the ceiling leaves and scrolls inside it, rather than the card growing past it.
+  assert.match(css, /\.pmodal-body \{[^}]*overflow: auto;[^}]*min-height: 0; \}/, "the body scrolls inside the card");
+  assert.match(/\.pmodal-card \{[^}]*max-height: 86vh;/.exec(css)?.[0] || "", /86vh/, "and the stylesheet's own card is still capped by the window");
+  // A fresh open (and a double-press on the bar) drops the ceiling with the place and the width.
+  assert.match(source, /for \(const prop of \["position", "margin", "left", "top", "width", "height", "maxHeight"\]\) card\.style\[prop\] = "";/, "resetCard clears the ceiling too");
+});
+
+test("the tile row keeps headroom above the tiles, so no mark and no top border is cut by the scroller", () => {
+  // The marks sit 5 px above a tile's top edge and the scroller clips its own top (`overflow-y: hidden`), so a track
+  // that began at the scroller's edge had the top of every dot, each tile's 1 px top border and its rounded corners
+  // sliced flat - the row of half-circles above the tiles in the 3285x472 capture. The canvas owns 8 px of band.
+  assert.match(css, /--pflow-head: 8px/, "one number, a real style length");
+  assert.match(css, /\.pflow-canvas \{ position: relative; padding-top: calc\(var\(--pflow-pad, 0px\) \+ var\(--pflow-head\)\);/, "the track starts below it, and below the loop lanes when there are any");
+  assert.match(css, /\.pflow\[data-wrap="1"\] \.pflow-canvas \{ padding-top: var\(--pflow-head\); \}/, "the wrapped rows keep it too");
+  assert.match(css, /\.pflow-arcs \{[^}]*top: var\(--pflow-head\);/, "the loop lanes move down with the track they join");
+  assert.match(css, /\.pflow-dot \{ position: absolute; top: -5px;/, "the mark still overhangs the tile's top edge - which is why the band exists");
+});
+
+test("a gate's notch is drawn inside the tile it belongs to, so no window shape can cut it", () => {
+  // `wrapRows` used to re-aim every notch on every read: the middle of the connector gap for a row, the tile's own
+  // right edge at a row end. A gap belongs to no element - it is the band between two tiles - so a scroller that
+  // clipped the flow's top, or a card narrower than the last column, sliced the notch that hung there. The sheet owns
+  // the position now, inside the tile's box, and the script re-aims nothing.
+  const wrap = source.slice(source.indexOf("function wrapRows("), source.indexOf("function readView("));
+  assert.ok(wrap.length > 100, "wrapRows is in the source");
+  assert.doesNotMatch(wrap, /notch\.style/, "no notch is re-aimed at runtime");
+  assert.match(wrap, /nodes\[i\]\.dataset\.rowEnd = "1"/, "a row's last tile is still marked, so its connector stub is dropped");
+  const rule = /\.pflow-notch \{ ([^}]*)\}/.exec(css)?.[1] || "";
+  assert.match(rule, /left: 100%;/, "the notch starts at the column's own trailing edge");
+  assert.match(rule, /margin-left: -3px;/, "pulled back by its own width: inside the tile's box, not in the gap");
+  assert.doesNotMatch(rule, /left: calc\(100% \+/, "and never out in the gap");
+  assert.match(rule, /top: 11\.5px; width: 3px; height: 15px;/, "a 3x15 bar straddling the connector's line instead of hanging below it");
+  assert.match(css, /\.pflow-link \{ position: absolute; top: 19px;/, "the connector's hairline is at 19 px, which the notch centres on");
+});

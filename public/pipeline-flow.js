@@ -442,15 +442,15 @@
     return `${head} — decides ${path || "a record"}; not yet crossed`;
   }
 
-  // The notch, as its own element in the gap. The connector keeps `aria-hidden` (it is a hairline), and the notch sits
-  // beside it rather than inside it: the name used to be written on a span whose whole ancestor was hidden, which is the
-  // same as not writing it. The position restates what `left: 50%` of the connector meant, in the column's own
-  // coordinates, because the connector is no longer its parent.
-  function notchHtml(gate, { state, name, last }) {
-    // The last gate's notch sits ON the closing edge: its 3 px end at the column's right edge, so the notch is inside
-    // the track (and the scroller) instead of 9 px past it on a stub.
-    const at = last ? "calc(100% - 1.5px)" : "calc(100% + var(--pflow-gap) / 2)";
-    return `<span class="pflow-notch" role="note" data-gate="${esc(gate.id || "")}" data-gate-name="${esc(gate.name || "")}" data-state="${esc(state)}" aria-label="${esc(name)}" title="${esc(gateTitle(gate))}" style="left:${at};top:19px"></span>`;
+  // The notch is drawn INSIDE the tile it belongs to, on the column's trailing edge. The stylesheet owns that
+  // position (`.pflow-notch` is 3 px at `left: 100%` with `margin-left: -3px`, so the whole box sits within the
+  // column) and `top: 11.5px` straddles the connector's hairline, so the bar reads as a notch crossing the line
+  // rather than the lower half of one. It used to hang in the GAP after its stage, which is the one band of the
+  // drawing no element owns: a card resized to a short window clipped the flow's top edge and the notch showed as
+  // a cut stub, and the wrapped shape had to re-aim it in script (public/pipeline-modal.js) for a row's last tile.
+  // One position, in the sheet, cannot be cut at any window shape and needs no measurement.
+  function notchHtml(gate, { state, name }) {
+    return `<span class="pflow-notch" role="note" data-gate="${esc(gate.id || "")}" data-gate-name="${esc(gate.name || "")}" data-state="${esc(state)}" aria-label="${esc(name)}" title="${esc(gateTitle(gate))}"></span>`;
   }
 
   // The one line a stage card prints under its title: what the stage writes, or the gate/exit check that ends it. It
@@ -474,9 +474,11 @@
 
   // A gate after the LAST stage has no next column to reach: its notch is drawn ON the track's closing edge, so the
   // check that ends the whole pipeline (a UAT sign-off) is still a notch on the track rather than a fact the drawing
-  // dropped — and nothing hangs past the last column. The stub that used to sit here was 18 px of decorative line at
-  // `left: 100%`, which widened the drawing past its own track and pushed the one notch it labelled outside the
-  // scroller (round 5A's finding 1: scrollWidth 1109 against clientWidth 1094 at seven stages).
+  // dropped - and nothing hangs past the last column. That is now the position of EVERY gate's notch (the closing
+  // edge of the stage it ends), which is why no notch can be cut by the scroller. The stub that used to sit here was
+  // 18 px of decorative line at `left: 100%`, which widened the drawing past its own track and pushed the one notch
+  // it labelled outside the scroller (round 5A's finding 1: scrollWidth 1109 against clientWidth 1094 at seven
+  // stages).
   function stageHtml(stage, index, count, mark, { position = null, currentIndex = -1, handoff = null } = {}) {
     const last = index === count - 1;
     const gate = stage.gate;
@@ -486,7 +488,7 @@
       ? ""
       : `<span class="pflow-link" aria-hidden="true"${handoff ? ` data-handoff="${esc(handoff.edge || "")}" data-artifact="${esc(handoff.artifact)}"` : ""}></span>`;
     const state = gate ? gateStateOf(gate, { index, count, currentIndex, position }) : null;
-    const notch = gate ? notchHtml(gate, { state, name: gateAria(gate, stage, state, position), last }) : "";
+    const notch = gate ? notchHtml(gate, { state, name: gateAria(gate, stage, state, position) }) : "";
     const detail = stageDetail(stage);
     const line = detail ? `<span class="pflow-art mono" data-detail="${detail.kind}" title="${esc(detail.title)}">${esc(detail.text)}</span>` : "";
     // `aria-current="step"` is the one thing a screen reader needs to find the row's place, and it is a fact about the

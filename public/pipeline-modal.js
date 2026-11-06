@@ -77,7 +77,8 @@
     fit: false,
     // Where the READER put this card, and the gesture in flight. `rect` is a VISUAL rectangle (the unit a pointer
     // arrives in) and null while the stylesheet still centres a card sized to its drawing; once they have dragged or
-    // resized it, the card is a fixed box and the flow lays itself out in the room that box gives it.
+    // resized it, the card sits at the reader's corner, is as wide as they made it, and its height is CAPPED by
+    // `h` while the drawing inside decides how much of that room to use.
     rect: null,
     gesture: null,
     flowWatch: null,
@@ -260,18 +261,17 @@
     const wrap = shape.nodes.length > 1 && shape.compactShare < PFLOW_COMPACT;
     const said = wrap ? "1" : "0";
     if (flowEl.dataset.wrap !== said) flowEl.dataset.wrap = said;
-    // Last on its line: the next tile starts a new one, or there is no next tile.
+    // Last on its line: the next tile starts a new one, or there is no next tile. That is the ONLY thing this pass has
+    // to know about the row: the stylesheet drops the connector stub on a row's last tile, and a gate's notch is
+    // already drawn inside the tile it ends (`.pflow-notch`, `left: 100%` pulled back by its own width), so a wrapped
+    // row needs no notch re-aimed into a gap that is not there - the measured 6 px of scroller overflow that came with
+    // re-aiming it is gone with the re-aiming.
     const nodes = shape.nodes;
     for (let i = 0; i < nodes.length; i += 1) {
       const next = nodes[i + 1];
       const ends = !next || Math.abs(next.offsetTop - nodes[i].offsetTop) > 1;
       if (ends) nodes[i].dataset.rowEnd = "1";
       else delete nodes[i].dataset.rowEnd;
-      // A gate's notch lives in the CONNECTOR after its stage. At a row end there is no connector, so it is moved onto
-      // the tile's own right edge (the position the renderer already gives the drawing's last gate) instead of hanging
-      // in a gap that is not there - which measured 6 px of scroller overflow and a scrollbar under a drawing that fits.
-      const notch = nodes[i].querySelector(".pflow-notch");
-      if (notch && notch.style) notch.style.left = ends ? "calc(100% - 1.5px)" : "calc(100% + var(--pflow-gap) / 2)";
     }
     return wrap;
   }
@@ -373,6 +373,11 @@
   // Write a VISUAL rectangle back as style lengths, each divided by the zoom once. `position: fixed` takes the card out
   // of the backdrop's centring flex, so left/top are the reader's own numbers and the flow inside re-lays out in the
   // width they chose (the grid's columns are a share of it, never a fixed strip).
+  //
+  // The HEIGHT is a ceiling, never a box: the card follows its own content and the reader's drag says how tall the
+  // body may grow before it scrolls. A pinned height was an empty grey field - the card's own background, three
+  // lines under a legend that ends the drawing (the 3285x472 capture) - because nothing paints the room a drawing
+  // did not ask for. So `height` is cleared and `max-height` carries the gesture's number.
   function paintCard(g, doc = document) {
     const card = doc.getElementById(CARD_ID);
     if (!card || !card.style) return;
@@ -382,8 +387,8 @@
     card.style.left = `${Math.round(g.x / z)}px`;
     card.style.top = `${Math.round(g.y / z)}px`;
     card.style.width = `${Math.round(g.w / z)}px`;
-    card.style.height = `${Math.round(g.h / z)}px`;
-    card.style.maxHeight = "none";
+    card.style.height = "";
+    card.style.maxHeight = `${Math.round(g.h / z)}px`;
   }
 
   // Back to the stylesheet's own card: centred, sized from the drawing it holds. A double-press on the bar does this,
