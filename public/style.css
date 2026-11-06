@@ -4017,6 +4017,12 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 .as-qpane .as-qcounts { flex: 1 1 auto; min-width: 0; font-size: 10.5px; font-weight: 400; letter-spacing: .02em; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .as-qpane .as-qquiet { flex: none; background: transparent; border: 1px solid var(--line); border-radius: 5px; color: var(--dim); font-size: 10.5px; padding: 2px 7px; }
 .as-qpane .as-qquiet:hover { color: var(--text); border-color: #3a4553; }
+/* The window's one control, under the last row: a quiet button in the pane's own vocabulary, with the count of what is
+   still hidden beside it. It is not drawn at all at the end of the list (`queueMoreHtml` returns ""). */
+.as-qpane .as-qmore { display: flex; align-items: baseline; gap: 8px; margin: 2px 0 8px; }
+.as-qpane .as-qmore-btn { flex: none; background: transparent; border: 1px solid var(--line); border-radius: 6px; color: var(--dim); font-size: 10.5px; padding: 3px 10px; }
+.as-qpane .as-qmore-btn:hover { color: var(--text); border-color: #3a4553; background: #232936; }
+.as-qpane .as-qmore-note { min-width: 0; font-size: 10.5px; color: var(--dimmer); }
 /* The explainer and the add form are DISCLOSURES: closed, each is one line; opened, each is what it was. The summary
    is the only height the resting pane spends on prose, and it says what is behind it. */
 .as-qpane .as-qhelp, .as-qpane .as-qadd { margin: 0 0 5px; }

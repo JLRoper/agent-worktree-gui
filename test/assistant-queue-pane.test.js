@@ -85,7 +85,7 @@ function pane({ read }) {
     "activeSessionId",
     "isAssistant",
     `${region}
-return { renderAssistantQueue, loadQueue, queuePaneState, queueStateHtml, queueCache, queueInflight, queueJobs };`,
+return { renderAssistantQueue, loadQueue, queuePaneState, queueStateHtml, queueCache, queueInflight, queueJobs, queueShown, queueWindowOf, queueWindowIds, queueWindowRows, queueMoreHtml };`,
   )(
     esc,
     () => ["assistant-1", "assistant-2"],
@@ -255,4 +255,49 @@ test("the qline's Pipeline button is the quiet class beside Refresh, and presses
   assert.match(body, /e\.stopPropagation\(\);/, "the press stops before app.js's outside-click closer");
   assert.match(body, /toggleSettings\(true\);/, "and opens a closed Settings");
   assert.match(body, /selectSettingsTab\("pipeline"\);/, "on the Pipeline tab, with the tab strip's own call");
+});
+
+// The window: a queue can hold 200 tasks and the pane is repainted on every board tick and after every action, so it
+// opens at the newest 20 and appends 50 per press. The count lives OUTSIDE the painter - that is the whole point: a
+// repaint that started at 20 again would throw the reader back to the newest slice on the next tick.
+test("the pane opens on the newest 20, appends 50 per press, and retires the control at the end", async () => {
+  const tasks = Array.from({ length: 120 }, (_, i) => ({ id: i + 1, title: `task ${i + 1}`, state: "done", files: [] }));
+  const { api, host } = pane({ read: async () => reply({ queue: view({ tasks, counts: { total: 120, done: 120 } }), assistant: {} }) });
+  const render = () => api.renderAssistantQueue("assistant-1");
+  const rows = () => [...host().innerHTML.matchAll(/data-as-qrow="(\d+)"/g)].map((m) => Number(m[1]));
+  api.renderAssistantQueue("assistant-1", true);
+  await api.queueInflight.get("assistant-1");
+  assert.equal(rows().length, 20, "twenty rows on open");
+  assert.deepEqual([...rows()].sort((a, b) => a - b), Array.from({ length: 20 }, (_, i) => 101 + i), "and they are the NEWEST twenty ids");
+  assert.deepEqual(rows().slice(0, 3), [120, 119, 118], "the finished history reads newest first");
+  assert.deepEqual(rows().slice(-2), [102, 101], "down to the oldest row the window carries");
+  assert.match(host().innerHTML, /data-as-qact="more"[^>]*>Load 50 more</, "one control appends the next slice");
+  assert.match(host().innerHTML, /100 older tasks not shown/, "and says how much it is still hiding");
+  // The press the delegated handler makes: 50 more, from the same cache. `queueShown` is the record a repaint reads.
+  const press = () => {
+    api.queueShown.set("assistant-1", api.queueWindowOf("assistant-1") + 50);
+    render();
+  };
+  render();
+  render();
+  assert.equal(rows().length, 20, "a repaint that is not the press keeps the window");
+  press();
+  assert.equal(rows().length, 70, "one press appends fifty");
+  assert.deepEqual(rows().slice(0, 2), [120, 119], "the rows already on screen keep their place");
+  assert.deepEqual(rows().slice(-2), [52, 51], "and the fifty older tasks land under them");
+  render();
+  assert.equal(rows().length, 70, "and the next repaint keeps them");
+  press();
+  assert.equal(rows().length, 120, "the second press reaches the end of the list");
+  assert.doesNotMatch(host().innerHTML, /data-as-qact="more"/, "the control retires at the end");
+  render();
+  assert.equal(rows().length, 120, "and the retirement survives a repaint");
+  assert.doesNotMatch(host().innerHTML, /data-as-qact="more"/, "with no control back");
+});
+
+test("the more press is the delegated handler's own window write, not a route", () => {
+  const handler = assistant.slice(assistant.indexOf('if (action === "more")'), assistant.indexOf('if (action === "pipeline")'));
+  assert.match(handler, /queueShown\.set\(own, queueWindowOf\(own\) \+ QUEUE_MORE\)/, "the press grows the stored window");
+  assert.match(handler, /renderAssistantQueue\(own, true\)/, "and forces a repaint past the focused button it was pressed on");
+  assert.doesNotMatch(handler, /apiFetch|queueAct|await /, "the press itself owes no request and no state write");
 });
