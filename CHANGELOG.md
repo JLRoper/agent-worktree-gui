@@ -4,16 +4,35 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.41.1 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.41.2 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-346 releases from v0.1.0 (2026-10-20) to v1.41.1 (2026-11-06), 1215 commits between the tags. Every release is anchored by an
+347 releases from v0.1.0 (2026-10-20) to v1.41.2 (2026-11-06), 1224 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.41.2 — 2026-11-06 · 9 commits
+
+[`3405a78`](https://github.com/JLRoper/agent-worktree-gui/commit/3405a78a94d0f917a40857daccff045eb3b41301) · [compare v1.41.1...v1.41.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.41.1...v1.41.2)
+
+### Docs & tests
+
+- docs: render the changelog — 346 releases ([`b0e7981`](https://github.com/JLRoper/agent-worktree-gui/commit/b0e79812025cc102e6a35f1ed9bf559ed6bee57b))
+- docs: a failed stage run reads as failed on its pipeline row ([`81fb6b6`](https://github.com/JLRoper/agent-worktree-gui/commit/81fb6b6b5ef72cace6ce19583eb3a4b08d63f730))
+- docs: the ping-pong run log closes with the hand-off state ([`7b41af2`](https://github.com/JLRoper/agent-worktree-gui/commit/7b41af2edd7649618fd51a96f35c37a30641a94f))
+- docs: the critique refuses the draft on four bad citations and one missing actor ([`4bb7819`](https://github.com/JLRoper/agent-worktree-gui/commit/4bb78193981a33e91e5c8252f9f0a72e87589e20))
+- docs: the ping-pong log closes with the push and the number it did not spend ([`c9361b7`](https://github.com/JLRoper/agent-worktree-gui/commit/c9361b72bc645ed51f602837e0bdc5875df7c529))
+- docs: the critique counts the sentence it says is clipped ([`723a802`](https://github.com/JLRoper/agent-worktree-gui/commit/723a802d83b7c65d5fbadf4fc2ea7dae8f944860))
+- docs: the round report reads both rows and refuses the hand-off ([`0774aac`](https://github.com/JLRoper/agent-worktree-gui/commit/0774aacd89afe2fee80f2bc5e7a1b293f71025d9))
+- docs: the report dates its gate reading to the commit it measured ([`76b8507`](https://github.com/JLRoper/agent-worktree-gui/commit/76b85073c368fd00347f4376b8adb797a23e1a76))
+
+### Other
+
+- chore: 1.41.2 - the version this landing carries ([`3405a78`](https://github.com/JLRoper/agent-worktree-gui/commit/3405a78a94d0f917a40857daccff045eb3b41301))
 
 ## v1.41.1 — 2026-11-06 · 4 commits
 
