@@ -4,16 +4,41 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.43.1 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.43.3 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-350 releases from v0.1.0 (2026-10-20) to v1.43.1 (2026-11-06), 1235 commits between the tags. Every release is anchored by an
+352 releases from v0.1.0 (2026-10-20) to v1.43.3 (2026-11-06), 1240 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.43.3 — 2026-11-06 · 2 commits
+
+[`b1e293f`](https://github.com/JLRoper/agent-worktree-gui/commit/b1e293f8f9f16823b07328389e5fb4c8f30bdac2) · [compare v1.43.2...v1.43.3](https://github.com/JLRoper/agent-worktree-gui/compare/v1.43.2...v1.43.3)
+
+### Fixed
+
+- fix: a stage run settles on its own thread, and a gate is asked again each round ([`2474319`](https://github.com/JLRoper/agent-worktree-gui/commit/2474319fd6d8e235916acf26c0fae4ba5ab53ce3))
+
+### Other
+
+- chore: 1.43.3 — the version this landing carries ([`b1e293f`](https://github.com/JLRoper/agent-worktree-gui/commit/b1e293f8f9f16823b07328389e5fb4c8f30bdac2))
+
+## v1.43.2 — 2026-11-06 · 3 commits
+
+[`99bae7e`](https://github.com/JLRoper/agent-worktree-gui/commit/99bae7e28edb941666d098c565a52fd235012aa1) · [compare v1.43.1...v1.43.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.43.1...v1.43.2)
+
+### Docs & tests
+
+- docs: render the changelog — 350 releases ([`e1ed037`](https://github.com/JLRoper/agent-worktree-gui/commit/e1ed037c98fbf4d8063cba5740474a7ac9b6ed60))
+
+### Other
+
+- Stop a second press from answering a question or a permission twice ([`1c3be5a`](https://github.com/JLRoper/agent-worktree-gui/commit/1c3be5a13d481c48b7ef9386d4f3a560de4aa889))
+- chore: 1.43.2 — the version this landing carries ([`99bae7e`](https://github.com/JLRoper/agent-worktree-gui/commit/99bae7e28edb941666d098c565a52fd235012aa1))
 
 ## v1.43.1 — 2026-11-06 · 5 commits
 
