@@ -28,16 +28,20 @@ import {
   WAIT_CLAIM_GRACE_MS,
   WAIT_FIRST_MS,
   WAIT_MAX_MS,
+  HOLD_OWNER_MS,
   advanceStage,
   claimWait,
+  isRunWait,
   observeBitbucketPr,
   observeGithubPr,
   readReviewExit,
   renderPrompt,
   reviewWaitFor,
   settleWait,
+  stageRunWaitFor,
   waitDueAt,
   waitIsDue,
+  waitKind,
   PipelineRecords,
 } from "../lib/pipelines.js";
 
@@ -440,6 +444,116 @@ test("the host payloads normalise into one observation: GitHub's reviews and Bit
   assert.equal(observeGithubPr(null).ok, false);
   assert.equal(observeBitbucketPr({ state: "OPEN" }, null).ok, false);
   assert.equal(observeGithubPr({ reviews: [] }).ok, false, "no state is not an open PR");
+});
+
+// ---- §6.7 the HOLD: the stage's own run, in the same book ---------------------------------------------------------
+// The second kind of wait. The reviewer's wait is a clock; a hold is the stage's own worker, and its answer is the job
+// store's. These pin the model, the registration, the one advance seam and the compare-and-set that keeps two owners
+// from moving one stage.
+test("a hold names its stage AND its run, and a wait with no run is not a hold", () => {
+  const hold = stageRunWaitFor("draft", { pipeline: "ping-pong", visit: 2, thread: THREAD, job: "job-7", branch: BRANCH, at: iso(T0) });
+  assert.equal(hold.kind, "run");
+  assert.equal(isRunWait(hold), true);
+  assert.equal(hold.stage, "draft");
+  assert.equal(hold.visit, 2);
+  assert.equal(hold.job, "job-7");
+  assert.equal(hold.thread, THREAD);
+  assert.equal(hold.settledAt, null, "the settle stamps it; the cut does not pretend the run has ended");
+
+  assert.equal(stageRunWaitFor("", { job: "job-7" }), null, "a hold with no stage holds nothing");
+  assert.equal(stageRunWaitFor("draft", { visit: 1 }), null, "a hold that names no run is not a hold");
+  assert.equal(waitKind(waitRecord()), "review", "a record written before the kinds existed is the reviewer's");
+  assert.equal(isRunWait(waitRecord()), false);
+  // A hold's clock is the run, not the calendar: it is worth one job-store read on every tick.
+  assert.equal(waitIsDue(hold, { now: T0 }), true);
+  assert.equal(waitIsDue(hold, { now: T0 - 10 * HOUR }), true);
+});
+
+test("the cut writes the hold; a live run keeps it, and the settle hands the row to the advance seam exactly once", async (t) => {
+  const { records, jobs } = board(t, { wait: null });
+  const card = { id: "job-7", thread: THREAD, status: "running" };
+  jobs.jobs.set(card.id, card);
+  const never = () => {
+    throw new Error("a hold reads the job store, never the host");
+  };
+  const calls = [];
+  const advance = (item) => {
+    calls.push(item);
+    return { ok: true, moved: true, from: "draft", to: "critique", state: "queued" };
+  };
+
+  const written = jobs.holdPipelineStageRun({ tree: TREE, pipeline: "ping-pong", stage: "draft", visit: 1, thread: THREAD, job: card.id, at: iso(T0) });
+  assert.equal(written.kind, "run");
+  assert.equal(written.job, "job-7");
+  const book = records.get(TREE, { fresh: true });
+  assert.equal(book.pipelineWait.kind, "run", "the hold is in the DURABLE book, not on a card");
+  assert.equal(book.pipelineWait.stage, "draft");
+  assert.equal(book.pipelineWait.job, "job-7", "and it is keyed to the run, not to the stage alone");
+
+  const heldSweep = await jobs.sweepPipelineWaits({ now: T0 + 60_000, readReview: never, wake: () => ({ ok: true }), advance });
+  assert.equal(heldSweep.held, 1, "a live run keeps the hold");
+  assert.equal(calls.length, 0, "nothing is advanced while the worker is still working");
+  assert.equal(records.get(TREE, { fresh: true }).pipelineWait.job, "job-7");
+
+  // The run ends. The settle stamps the hold (the driver's fallback runs from that stamp, not from the cut), and the
+  // panel's timer is the one that reads it.
+  card.status = "done";
+  jobs.stampPipelineHold({ id: "job-7", thread: THREAD, worktreePath: TREE }, { now: T0 + 2 * 60_000 });
+  assert.equal(records.get(TREE, { fresh: true }).pipelineWait.settledAt, iso(T0 + 2 * 60_000));
+
+  const out = await jobs.sweepPipelineWaits({ now: T0 + 3 * 60_000, readReview: never, wake: () => ({ ok: true }), advance });
+  assert.equal(out.advanced, 1);
+  assert.equal(calls.length, 1, "one settle is one advance");
+  assert.equal(calls[0].stage, "draft");
+  assert.equal(calls[0].wait.job, "job-7");
+  assert.equal(records.get(TREE, { fresh: true }).pipelineWait, undefined, "the hold is gone with the advance");
+
+  // The hold WAS the claim: a second tick a minute later finds nothing to advance.
+  const again = await jobs.sweepPipelineWaits({ now: T0 + 4 * 60_000, readReview: never, wake: () => ({ ok: true }), advance });
+  assert.deepEqual({ checked: again.checked, advanced: again.advanced }, { checked: 0, advanced: 0 });
+  assert.equal(calls.length, 1, "the stage is started once, never twice");
+});
+
+test("a hold whose card the store no longer has is still the timer's to advance, and the seam is required", async (t) => {
+  const { records, jobs } = board(t, { wait: null });
+  const never = () => {
+    throw new Error("a hold reads the job store, never the host");
+  };
+  jobs.holdPipelineStageRun({ tree: TREE, pipeline: "ping-pong", stage: "draft", visit: 1, thread: THREAD, job: "job-gone", at: iso(T0) });
+
+  // No advance seam: the hold is KEPT and the sweep says why. Clearing it here would delete the row's only record of the
+  // condition and advance nothing.
+  const refused = await jobs.sweepPipelineWaits({ now: T0 + 60_000, readReview: never, wake: () => ({ ok: true }) });
+  assert.equal(refused.errors.length, 1);
+  assert.match(refused.errors[0].error, /advance seam/);
+  assert.equal(records.get(TREE, { fresh: true }).pipelineWait.job, "job-gone", "the hold survives a tick that cannot act on it");
+
+  // A card the 80-job ring dropped (a restart) is not a live run: the timer hands the row over and the seam decides.
+  const out = await jobs.sweepPipelineWaits({ now: T0 + 120_000, readReview: never, wake: () => ({ ok: true }), advance: () => ({ ok: true, moved: true, from: "draft", to: "critique", state: "queued" }) });
+  assert.equal(out.advanced, 1);
+  assert.equal(records.get(TREE, { fresh: true }).pipelineWait, undefined);
+});
+
+test("a newer hold is never cleared by a sweep that read the older one", async (t) => {
+  const { records, jobs } = board(t, { wait: null });
+  // The hold in force is the NEXT stage's cut: a sweep that read `draft` must not clear it.
+  jobs.holdPipelineStageRun({ tree: TREE, pipeline: "ping-pong", stage: "critique", visit: 1, thread: "t2", job: "job-2", at: iso(T0 + 1000) });
+  assert.equal(jobs.clearPipelineHold(TREE, { job: "job-1", stage: "draft", visit: 1 }), null);
+  assert.equal(records.get(TREE, { fresh: true }).pipelineWait.stage, "critique", "the newer hold is untouched");
+  const cleared = jobs.clearPipelineHold(TREE, { job: "job-2", stage: "critique", visit: 1 });
+  assert.equal(cleared.cleared, true);
+  assert.equal(records.get(TREE, { fresh: true }).pipelineWait, undefined);
+});
+
+test("the hold is read back out of the file, so a restart waits on the same run rather than starting the stage", (t) => {
+  const { dir, records, jobs } = board(t, { wait: null });
+  jobs.holdPipelineStageRun({ tree: TREE, pipeline: "ping-pong", stage: "draft", visit: 1, thread: THREAD, job: "job-9", at: iso(T0) });
+  // A second book over the same file is a restarted panel: nothing of the first process is in memory here.
+  const restarted = new PipelineRecords({ file: path.join(dir, "pipeline-records.json") });
+  const back = restarted.get(TREE, { fresh: true });
+  assert.equal(back.pipelineWait.kind, "run");
+  assert.equal(back.pipelineWait.job, "job-9");
+  assert.equal(back.pipelineWait.settledAt, null, "a restart between the cut and the settle sees a live hold");
 });
 
 // ---- §6.6 the seed's own review loop is the shape this was built for ---------------------------------------------

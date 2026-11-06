@@ -30,6 +30,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { setTaskState, settleTasks } from "../lib/assistant/queue.js";
+import { HOLD_OWNER_MS } from "../lib/pipelines.js";
 import { parseBundle } from "../lib/pipeline-bundle.js";
 import {
   DRIVE_FAULTS,
@@ -229,6 +230,31 @@ test("a queued row whose current stage never started is not advanced: it is star
   assert.equal(out.tasks[0].pipelineRun.stage, "S2", "there is no settle at S2 to read, so the row does not move");
   assert.equal(out.starts.length, 1);
   assert.equal(out.starts[0].stage, "S2");
+});
+
+test("the wait book owns the advance while it holds the row, and the driver is the fallback", (t) => {
+  const dir = tree(t, { artifacts: [1] });
+  const at = (ms) => new Date(Date.parse(CLOCK) + ms);
+  const hold = (over = {}) => ({ kind: "run", stage: "S1", visit: 1, pipeline: "two", thread: "T1", job: "j1", at: CLOCK, settledAt: CLOCK, ...over });
+
+  // Held, inside the first-refusal window: the timer's to move, so this pass does nothing at all.
+  const held = drive([row({ worktree: dir })], { waitFor: () => hold(), at: at(60_000) });
+  assert.equal(held.changed.length, 0, "a held row is not this pass's to advance");
+  assert.equal(held.tasks[0].pipelineRun.stage, "S1", "and it is not moved either");
+  assert.equal(held.starts.length, 0);
+
+  // The SAME hold past the window — a panel whose ticker died — and the driver takes the row back: a hold is a clock,
+  // not a lock.
+  const late = drive([row({ worktree: dir })], { waitFor: () => hold(), at: at(HOLD_OWNER_MS + 60_000) });
+  assert.equal(late.changed.length, 1, "past the window the fallback advances the row");
+  assert.equal(late.tasks[0].pipelineRun.stage, "S2");
+  assert.equal(late.starts.length, 1);
+
+  // A hold for another stage or another visit is the next stage's cut, not this row's: it does not hold this settle.
+  const otherStage = drive([row({ worktree: dir })], { waitFor: () => hold({ stage: "S2" }), at: at(60_000) });
+  assert.equal(otherStage.tasks[0].pipelineRun.stage, "S2", "a hold naming S2 does not hold the settle of S1");
+  const otherVisit = drive([row({ worktree: dir })], { waitFor: () => hold({ visit: 2 }), at: at(60_000) });
+  assert.equal(otherVisit.tasks[0].pipelineRun.stage, "S2", "and neither does one naming a later visit of the same stage");
 });
 
 test("a queued row over a settled stage still parks on the cap it has reached", (t) => {
