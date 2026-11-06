@@ -886,10 +886,10 @@ button.btn-plus:hover { background: #1f4a2a; color: #d6ffe0; border-color: #3fb9
    select in the form whose value is read before spawning. */
 .form select#job-model { min-width: 210px; max-width: 460px; }
 .project.armed { box-shadow: 0 0 0 2px #2ea04380; transition: box-shadow .2s; }
-/* The card's grey host/remote bar WRAPS on purpose: the two push controls sit to the right of the host chip, and at a
-   high zoom (or a narrow window) they must drop to a second line instead of pushing the chip or the fetched stamp
-   off the card's right edge. The selects are compact for the same reason — the empty space beside the chip is the
-   only room there is, and it is not much. */
+/* The card's grey host/remote bar WRAPS on purpose: at a high zoom (or a narrow window) the fetched stamp and the
+   host chip drop to a second line instead of pushing each other off the card's right edge.
+   The two push controls are NOT on this bar any more: they ride the grey remote-mapping row (`.host-form`, drawn by
+   the host chip), between that row's line and its `host` field — see `.host-form .push-controls` below. */
 .project-head.meta-line { padding-top: 6px; padding-bottom: 6px; flex-wrap: wrap; row-gap: 6px; }
 .push-controls { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
 .push-field { display: inline-flex; align-items: center; gap: 3px; font: 10.5px var(--mono); color: var(--dimmer); text-transform: uppercase; letter-spacing: .03em; white-space: nowrap; }
@@ -3294,9 +3294,21 @@ button.btn-host:focus-visible { outline: 1px solid #7fb2e8; outline-offset: 1px;
   border-bottom: 1px solid var(--line);
   font: 11.5px var(--mono);
 }
-.host-form .host-line { color: var(--dim); flex: 1 1 320px; min-width: 200px; }
+/* The row is THREE items: the line, the two push selects, and one cluster holding the mapping fields. Laid out flat,
+   the line's text was squeezed into a ~430px column beside the controls at 1600 and its last field (Cancel) was left
+   behind at 1341. As two clusters the split happens at each item's own width: at 1954 all three share one row; at 1600
+   and 1341 the sentence and its two selects share the first line (the position the reader marked) and the mapping
+   fields wrap beneath; at 1150 the selects join the fields on the second line. */
+.host-form .host-line { color: var(--dim); flex: 1 1 auto; max-width: max-content; min-width: 200px; }
+.host-form .host-fields { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex: 0 1 auto; min-width: 0; margin-left: auto; }
 .host-form .host-line.clone-err { color: var(--red); }
 .host-form .host-field { display: flex; gap: 5px; align-items: center; color: var(--dimmer); white-space: nowrap; }
+/* The two push selects ride this row. They keep the card's compact 10.5px scale — the row's own `select` rule is a
+   size up and would spend the room the mapping fields need — and sit between the line and the `host` field, so the
+   pair is read next to the remote it governs. `flex: 0 0 auto` keeps both selects whole: the row wraps the cluster,
+   never a label inside it. */
+.host-form .push-controls { flex: 0 0 auto; }
+.host-form .push-select { max-width: 168px; padding: 1px 3px; font: 10.5px var(--mono); }
 .host-form select,
 .host-form input {
   background: var(--surface);
