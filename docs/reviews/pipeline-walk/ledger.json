@@ -1,9 +1,12 @@
 {
- "generatedAt": "2026-11-05T23:27:58.297Z",
+ "generatedAt": "2026-11-06T00:42:36.896Z",
  "seed": "pipeline-bundle.seed.json",
  "walks": [
   {
    "pipeline": "ping-pong",
+   "mode": "queue",
+   "holds": [],
+   "restart": null,
    "document": "ping-pong",
    "title": "Ping-pong: draft and critique",
    "stages": [
@@ -298,137 +301,137 @@
    ],
    "journal": [
     {
-     "at": "2026-11-05T23:26:32.978Z",
+     "at": "2026-11-06T00:41:00.302Z",
      "kind": "queue",
      "text": "Assistant #1: added #1 walk ping-pong — by reader"
     },
     {
-     "at": "2026-11-05T23:26:32.983Z",
+     "at": "2026-11-06T00:41:00.308Z",
      "kind": "queue",
      "text": "Assistant #1: #1 walk ping-pong → pipeline ping-pong at draft (entered 2026-11-05T12:00:00.000Z) — by reader"
     },
     {
-     "at": "2026-11-05T23:26:32.994Z",
+     "at": "2026-11-06T00:41:00.322Z",
      "kind": "pipeline",
      "text": "#1 walk ping-pong — tree cut at <sandbox>\\trees\\walk-ping-pong (branch wtgui/walk-ping-pong), no worker started"
     },
     {
-     "at": "2026-11-05T23:26:35.053Z",
+     "at": "2026-11-06T00:41:01.191Z",
      "kind": "pipeline",
      "text": "#1 walk ping-pong — starting draft (1 of 2) of ping-pong in <sandbox>\\trees\\walk-ping-pong"
     },
     {
-     "at": "2026-11-05T23:26:35.056Z",
+     "at": "2026-11-06T00:41:01.196Z",
      "kind": "queue",
      "text": "#1 walk ping-pong — linked to walk-ping-pong-1 in <sandbox>/trees/walk-ping-pong by the SPAWN that cut it"
     },
     {
-     "at": "2026-11-05T23:26:38.831Z",
+     "at": "2026-11-06T00:41:04.362Z",
      "kind": "queue",
      "text": "#1 walk ping-pong — running → queued at critique by the panel: stage draft settled — moved to critique (2 of 2) of ping-pong"
     },
     {
-     "at": "2026-11-05T23:26:38.832Z",
+     "at": "2026-11-06T00:41:04.362Z",
      "kind": "pipeline",
      "text": "#1 walk ping-pong — starting critique (2 of 2) of ping-pong in <sandbox>\\trees\\walk-ping-pong"
     },
     {
-     "at": "2026-11-05T23:26:38.834Z",
+     "at": "2026-11-06T00:41:04.366Z",
      "kind": "queue",
      "text": "#1 walk ping-pong — linked to walk-ping-pong-2 in <sandbox>/trees/walk-ping-pong by the SPAWN that cut it"
     },
     {
-     "at": "2026-11-05T23:26:43.685Z",
+     "at": "2026-11-06T00:41:09.143Z",
      "kind": "queue",
      "text": "#1 walk ping-pong — running → queued at draft by the panel: stage critique settled — moved to draft (1 of 2) of ping-pong"
     },
     {
-     "at": "2026-11-05T23:26:43.686Z",
+     "at": "2026-11-06T00:41:09.143Z",
      "kind": "pipeline",
      "text": "#1 walk ping-pong — starting draft (1 of 2) of ping-pong in <sandbox>\\trees\\walk-ping-pong — visit 2"
     },
     {
-     "at": "2026-11-05T23:26:43.692Z",
+     "at": "2026-11-06T00:41:09.145Z",
      "kind": "queue",
      "text": "#1 walk ping-pong — linked to walk-ping-pong-3 in <sandbox>/trees/walk-ping-pong by the SPAWN that cut it"
     },
     {
-     "at": "2026-11-05T23:26:50.966Z",
+     "at": "2026-11-06T00:41:12.546Z",
      "kind": "queue",
      "text": "#1 walk ping-pong — running → queued at critique by the panel: stage draft settled — moved to critique (2 of 2) of ping-pong"
     },
     {
-     "at": "2026-11-05T23:26:50.966Z",
+     "at": "2026-11-06T00:41:12.546Z",
      "kind": "pipeline",
      "text": "#1 walk ping-pong — starting critique (2 of 2) of ping-pong in <sandbox>\\trees\\walk-ping-pong — visit 2"
     },
     {
-     "at": "2026-11-05T23:26:50.969Z",
+     "at": "2026-11-06T00:41:12.549Z",
      "kind": "queue",
      "text": "#1 walk ping-pong — linked to walk-ping-pong-4 in <sandbox>/trees/walk-ping-pong by the SPAWN that cut it"
     },
     {
-     "at": "2026-11-05T23:26:58.720Z",
+     "at": "2026-11-06T00:41:16.991Z",
      "kind": "queue",
      "text": "#1 walk ping-pong — running → queued at draft by the panel: stage critique settled — moved to draft (1 of 2) of ping-pong"
     },
     {
-     "at": "2026-11-05T23:26:58.720Z",
+     "at": "2026-11-06T00:41:16.991Z",
      "kind": "pipeline",
      "text": "#1 walk ping-pong — starting draft (1 of 2) of ping-pong in <sandbox>\\trees\\walk-ping-pong — visit 3"
     },
     {
-     "at": "2026-11-05T23:26:58.723Z",
+     "at": "2026-11-06T00:41:16.996Z",
      "kind": "queue",
      "text": "#1 walk ping-pong — linked to walk-ping-pong-5 in <sandbox>/trees/walk-ping-pong by the SPAWN that cut it"
     },
     {
-     "at": "2026-11-05T23:27:06.520Z",
+     "at": "2026-11-06T00:41:20.696Z",
      "kind": "queue",
      "text": "#1 walk ping-pong — running → queued at critique by the panel: stage draft settled — moved to critique (2 of 2) of ping-pong"
     },
     {
-     "at": "2026-11-05T23:27:06.520Z",
+     "at": "2026-11-06T00:41:20.696Z",
      "kind": "pipeline",
      "text": "#1 walk ping-pong — starting critique (2 of 2) of ping-pong in <sandbox>\\trees\\walk-ping-pong — visit 3"
     },
     {
-     "at": "2026-11-05T23:27:06.522Z",
+     "at": "2026-11-06T00:41:20.698Z",
      "kind": "queue",
      "text": "#1 walk ping-pong — linked to walk-ping-pong-6 in <sandbox>/trees/walk-ping-pong by the SPAWN that cut it"
     },
     {
-     "at": "2026-11-05T23:27:12.419Z",
+     "at": "2026-11-06T00:41:23.591Z",
      "kind": "queue",
      "text": "#1 walk ping-pong — running → queued at draft by the panel: stage critique settled — moved to draft (1 of 2) of ping-pong"
     },
     {
-     "at": "2026-11-05T23:27:12.419Z",
+     "at": "2026-11-06T00:41:23.591Z",
      "kind": "pipeline",
      "text": "#1 walk ping-pong — starting draft (1 of 2) of ping-pong in <sandbox>\\trees\\walk-ping-pong — visit 4"
     },
     {
-     "at": "2026-11-05T23:27:12.421Z",
+     "at": "2026-11-06T00:41:23.595Z",
      "kind": "queue",
      "text": "#1 walk ping-pong — linked to walk-ping-pong-7 in <sandbox>/trees/walk-ping-pong by the SPAWN that cut it"
     },
     {
-     "at": "2026-11-05T23:27:16.778Z",
+     "at": "2026-11-06T00:41:27.781Z",
      "kind": "queue",
      "text": "#1 walk ping-pong — running → queued at critique by the panel: stage draft settled — moved to critique (2 of 2) of ping-pong"
     },
     {
-     "at": "2026-11-05T23:27:16.778Z",
+     "at": "2026-11-06T00:41:27.781Z",
      "kind": "pipeline",
      "text": "#1 walk ping-pong — starting critique (2 of 2) of ping-pong in <sandbox>\\trees\\walk-ping-pong — visit 4"
     },
     {
-     "at": "2026-11-05T23:27:16.780Z",
+     "at": "2026-11-06T00:41:27.784Z",
      "kind": "queue",
      "text": "#1 walk ping-pong — linked to walk-ping-pong-8 in <sandbox>/trees/walk-ping-pong by the SPAWN that cut it"
     },
     {
-     "at": "2026-11-05T23:27:19.973Z",
+     "at": "2026-11-06T00:41:29.024Z",
      "kind": "queue",
      "text": "#1 walk ping-pong — running → parked at critique by the panel: the loop H-02 (critique → draft) is at its cap of 3 rounds — 3 crossings already taken, so the row stops here for a decision"
     }
@@ -436,6 +439,7 @@
    "steps": [
     {
      "step": 1,
+     "mode": "queue",
      "state": "queued",
      "stage": "draft",
      "stageRun": null,
@@ -444,10 +448,14 @@
      },
      "crossings": {},
      "started": 0,
-     "from": "queued"
+     "from": "queued",
+     "held": null,
+     "advanced": null,
+     "checked": null
     },
     {
      "step": 2,
+     "mode": "queue",
      "state": "running",
      "stage": "draft",
      "stageRun": "ping-pong/draft#1",
@@ -456,10 +464,14 @@
      },
      "crossings": {},
      "started": 1,
-     "from": "queued"
+     "from": "queued",
+     "held": null,
+     "advanced": null,
+     "checked": null
     },
     {
      "step": 3,
+     "mode": "queue",
      "state": "running",
      "stage": "critique",
      "stageRun": "ping-pong/critique#1",
@@ -471,10 +483,14 @@
       "H-01": 1
      },
      "started": 2,
-     "from": "running"
+     "from": "running",
+     "held": null,
+     "advanced": null,
+     "checked": null
     },
     {
      "step": 4,
+     "mode": "queue",
      "state": "running",
      "stage": "draft",
      "stageRun": "ping-pong/draft#2",
@@ -487,10 +503,14 @@
       "H-02": 1
      },
      "started": 3,
-     "from": "running"
+     "from": "running",
+     "held": null,
+     "advanced": null,
+     "checked": null
     },
     {
      "step": 5,
+     "mode": "queue",
      "state": "running",
      "stage": "critique",
      "stageRun": "ping-pong/critique#2",
@@ -503,10 +523,14 @@
       "H-02": 1
      },
      "started": 4,
-     "from": "running"
+     "from": "running",
+     "held": null,
+     "advanced": null,
+     "checked": null
     },
     {
      "step": 6,
+     "mode": "queue",
      "state": "running",
      "stage": "draft",
      "stageRun": "ping-pong/draft#3",
@@ -519,10 +543,14 @@
       "H-02": 2
      },
      "started": 5,
-     "from": "running"
+     "from": "running",
+     "held": null,
+     "advanced": null,
+     "checked": null
     },
     {
      "step": 7,
+     "mode": "queue",
      "state": "running",
      "stage": "critique",
      "stageRun": "ping-pong/critique#3",
@@ -535,10 +563,14 @@
       "H-02": 2
      },
      "started": 6,
-     "from": "running"
+     "from": "running",
+     "held": null,
+     "advanced": null,
+     "checked": null
     },
     {
      "step": 8,
+     "mode": "queue",
      "state": "running",
      "stage": "draft",
      "stageRun": "ping-pong/draft#4",
@@ -551,10 +583,14 @@
       "H-02": 3
      },
      "started": 7,
-     "from": "running"
+     "from": "running",
+     "held": null,
+     "advanced": null,
+     "checked": null
     },
     {
      "step": 9,
+     "mode": "queue",
      "state": "running",
      "stage": "critique",
      "stageRun": "ping-pong/critique#4",
@@ -567,10 +603,14 @@
       "H-02": 3
      },
      "started": 8,
-     "from": "running"
+     "from": "running",
+     "held": null,
+     "advanced": null,
+     "checked": null
     },
     {
      "step": 10,
+     "mode": "queue",
      "state": "parked",
      "stage": "critique",
      "stageRun": "ping-pong/critique#4",
@@ -583,12 +623,18 @@
       "H-02": 3
      },
      "started": 8,
-     "from": "running"
+     "from": "running",
+     "held": null,
+     "advanced": null,
+     "checked": null
     }
    ]
   },
   {
    "pipeline": "probe-fix",
+   "mode": "queue",
+   "holds": [],
+   "restart": null,
    "document": "probe-fix",
    "title": "Probe, then fix",
    "stages": [
@@ -686,47 +732,47 @@
    ],
    "journal": [
     {
-     "at": "2026-11-05T23:27:20.020Z",
+     "at": "2026-11-06T00:41:29.067Z",
      "kind": "queue",
      "text": "Assistant #1: added #1 walk probe-fix — by reader"
     },
     {
-     "at": "2026-11-05T23:27:20.028Z",
+     "at": "2026-11-06T00:41:29.069Z",
      "kind": "queue",
      "text": "Assistant #1: #1 walk probe-fix → pipeline probe-fix at probe (entered 2026-11-05T12:00:00.000Z) — by reader"
     },
     {
-     "at": "2026-11-05T23:27:20.046Z",
+     "at": "2026-11-06T00:41:29.073Z",
      "kind": "pipeline",
      "text": "#1 walk probe-fix — tree cut at <sandbox>\\trees\\walk-probe-fix (branch wtgui/walk-probe-fix), no worker started"
     },
     {
-     "at": "2026-11-05T23:27:20.762Z",
+     "at": "2026-11-06T00:41:30.901Z",
      "kind": "pipeline",
      "text": "#1 walk probe-fix — starting probe (1 of 2) of probe-fix in <sandbox>\\trees\\walk-probe-fix"
     },
     {
-     "at": "2026-11-05T23:27:20.765Z",
+     "at": "2026-11-06T00:41:30.904Z",
      "kind": "queue",
      "text": "#1 walk probe-fix — linked to walk-probe-fix-1 in <sandbox>/trees/walk-probe-fix by the SPAWN that cut it"
     },
     {
-     "at": "2026-11-05T23:27:24.729Z",
+     "at": "2026-11-06T00:41:33.242Z",
      "kind": "queue",
      "text": "#1 walk probe-fix — running → queued at fix by the panel: stage probe settled — moved to fix (2 of 2) of probe-fix"
     },
     {
-     "at": "2026-11-05T23:27:24.729Z",
+     "at": "2026-11-06T00:41:33.242Z",
      "kind": "pipeline",
      "text": "#1 walk probe-fix — starting fix (2 of 2) of probe-fix in <sandbox>\\trees\\walk-probe-fix"
     },
     {
-     "at": "2026-11-05T23:27:24.732Z",
+     "at": "2026-11-06T00:41:33.244Z",
      "kind": "queue",
      "text": "#1 walk probe-fix — linked to walk-probe-fix-2 in <sandbox>/trees/walk-probe-fix by the SPAWN that cut it"
     },
     {
-     "at": "2026-11-05T23:27:26.067Z",
+     "at": "2026-11-06T00:41:34.536Z",
      "kind": "queue",
      "text": "#1 walk probe-fix — done by the panel: PR reads MERGED"
     }
@@ -734,6 +780,7 @@
    "steps": [
     {
      "step": 1,
+     "mode": "queue",
      "state": "queued",
      "stage": "probe",
      "stageRun": null,
@@ -742,10 +789,14 @@
      },
      "crossings": {},
      "started": 0,
-     "from": "queued"
+     "from": "queued",
+     "held": null,
+     "advanced": null,
+     "checked": null
     },
     {
      "step": 2,
+     "mode": "queue",
      "state": "running",
      "stage": "probe",
      "stageRun": "probe-fix/probe#1",
@@ -754,10 +805,14 @@
      },
      "crossings": {},
      "started": 1,
-     "from": "queued"
+     "from": "queued",
+     "held": null,
+     "advanced": null,
+     "checked": null
     },
     {
      "step": 3,
+     "mode": "queue",
      "state": "running",
      "stage": "fix",
      "stageRun": "probe-fix/fix#1",
@@ -769,10 +824,14 @@
       "H-01": 1
      },
      "started": 2,
-     "from": "running"
+     "from": "running",
+     "held": null,
+     "advanced": null,
+     "checked": null
     },
     {
      "step": 4,
+     "mode": "queue",
      "state": "done",
      "stage": "fix",
      "stageRun": "probe-fix/fix#1",
@@ -784,12 +843,18 @@
       "H-01": 1
      },
      "started": 2,
-     "from": "running"
+     "from": "running",
+     "held": null,
+     "advanced": null,
+     "checked": null
     }
    ]
   },
   {
    "pipeline": "author-review-revise",
+   "mode": "queue",
+   "holds": [],
+   "restart": null,
    "document": "author-review-revise",
    "title": "Author, review, revise",
    "stages": [
@@ -1084,122 +1149,122 @@
    ],
    "journal": [
     {
-     "at": "2026-11-05T23:27:26.088Z",
+     "at": "2026-11-06T00:41:34.566Z",
      "kind": "queue",
      "text": "Assistant #1: added #1 walk author-review-revise — by reader"
     },
     {
-     "at": "2026-11-05T23:27:26.090Z",
+     "at": "2026-11-06T00:41:34.570Z",
      "kind": "queue",
      "text": "Assistant #1: #1 walk author-review-revise → pipeline author-review-revise at author (entered 2026-11-05T12:00:00.000Z) — by reader"
     },
     {
-     "at": "2026-11-05T23:27:26.095Z",
+     "at": "2026-11-06T00:41:34.575Z",
      "kind": "pipeline",
      "text": "#1 walk author-review-revise — tree cut at <sandbox>\\trees\\walk-author-review-revise (branch wtgui/walk-author-review-revise), no worker started"
     },
     {
-     "at": "2026-11-05T23:27:28.498Z",
+     "at": "2026-11-06T00:41:35.735Z",
      "kind": "pipeline",
      "text": "#1 walk author-review-revise — starting author (1 of 3) of author-review-revise in <sandbox>\\trees\\walk-author-review-revise"
     },
     {
-     "at": "2026-11-05T23:27:28.501Z",
+     "at": "2026-11-06T00:41:35.738Z",
      "kind": "queue",
      "text": "#1 walk author-review-revise — linked to walk-author-review-revise-1 in <sandbox>/trees/walk-author-review-revise by the SPAWN that cut it"
     },
     {
-     "at": "2026-11-05T23:27:32.114Z",
+     "at": "2026-11-06T00:41:38.025Z",
      "kind": "queue",
      "text": "#1 walk author-review-revise — running → queued at review by the panel: stage author settled — moved to review (2 of 3) of author-review-revise"
     },
     {
-     "at": "2026-11-05T23:27:32.114Z",
+     "at": "2026-11-06T00:41:38.025Z",
      "kind": "pipeline",
      "text": "#1 walk author-review-revise — starting review (2 of 3) of author-review-revise in <sandbox>\\trees\\walk-author-review-revise"
     },
     {
-     "at": "2026-11-05T23:27:32.116Z",
+     "at": "2026-11-06T00:41:38.028Z",
      "kind": "queue",
      "text": "#1 walk author-review-revise — linked to walk-author-review-revise-2 in <sandbox>/trees/walk-author-review-revise by the SPAWN that cut it"
     },
     {
-     "at": "2026-11-05T23:27:37.272Z",
+     "at": "2026-11-06T00:41:39.825Z",
      "kind": "queue",
      "text": "#1 walk author-review-revise — running → queued at author by the panel: stage review settled — moved to author (1 of 3) of author-review-revise"
     },
     {
-     "at": "2026-11-05T23:27:37.272Z",
+     "at": "2026-11-06T00:41:39.825Z",
      "kind": "pipeline",
      "text": "#1 walk author-review-revise — starting author (1 of 3) of author-review-revise in <sandbox>\\trees\\walk-author-review-revise — visit 2"
     },
     {
-     "at": "2026-11-05T23:27:37.274Z",
+     "at": "2026-11-06T00:41:39.828Z",
      "kind": "queue",
      "text": "#1 walk author-review-revise — linked to walk-author-review-revise-3 in <sandbox>/trees/walk-author-review-revise by the SPAWN that cut it"
     },
     {
-     "at": "2026-11-05T23:27:41.556Z",
+     "at": "2026-11-06T00:41:44.514Z",
      "kind": "queue",
      "text": "#1 walk author-review-revise — running → queued at review by the panel: stage author settled — moved to review (2 of 3) of author-review-revise"
     },
     {
-     "at": "2026-11-05T23:27:41.556Z",
+     "at": "2026-11-06T00:41:44.514Z",
      "kind": "pipeline",
      "text": "#1 walk author-review-revise — starting review (2 of 3) of author-review-revise in <sandbox>\\trees\\walk-author-review-revise — visit 2"
     },
     {
-     "at": "2026-11-05T23:27:41.559Z",
+     "at": "2026-11-06T00:41:44.517Z",
      "kind": "queue",
      "text": "#1 walk author-review-revise — linked to walk-author-review-revise-4 in <sandbox>/trees/walk-author-review-revise by the SPAWN that cut it"
     },
     {
-     "at": "2026-11-05T23:27:46.773Z",
+     "at": "2026-11-06T00:41:47.484Z",
      "kind": "queue",
      "text": "#1 walk author-review-revise — running → queued at author by the panel: stage review settled — moved to author (1 of 3) of author-review-revise"
     },
     {
-     "at": "2026-11-05T23:27:46.773Z",
+     "at": "2026-11-06T00:41:47.484Z",
      "kind": "pipeline",
      "text": "#1 walk author-review-revise — starting author (1 of 3) of author-review-revise in <sandbox>\\trees\\walk-author-review-revise — visit 3"
     },
     {
-     "at": "2026-11-05T23:27:46.776Z",
+     "at": "2026-11-06T00:41:47.486Z",
      "kind": "queue",
      "text": "#1 walk author-review-revise — linked to walk-author-review-revise-5 in <sandbox>/trees/walk-author-review-revise by the SPAWN that cut it"
     },
     {
-     "at": "2026-11-05T23:27:50.777Z",
+     "at": "2026-11-06T00:41:52.187Z",
      "kind": "queue",
      "text": "#1 walk author-review-revise — running → queued at review by the panel: stage author settled — moved to review (2 of 3) of author-review-revise"
     },
     {
-     "at": "2026-11-05T23:27:50.777Z",
+     "at": "2026-11-06T00:41:52.187Z",
      "kind": "pipeline",
      "text": "#1 walk author-review-revise — starting review (2 of 3) of author-review-revise in <sandbox>\\trees\\walk-author-review-revise — visit 3"
     },
     {
-     "at": "2026-11-05T23:27:50.780Z",
+     "at": "2026-11-06T00:41:52.190Z",
      "kind": "queue",
      "text": "#1 walk author-review-revise — linked to walk-author-review-revise-6 in <sandbox>/trees/walk-author-review-revise by the SPAWN that cut it"
     },
     {
-     "at": "2026-11-05T23:27:52.624Z",
+     "at": "2026-11-06T00:41:56.100Z",
      "kind": "queue",
      "text": "#1 walk author-review-revise — running → queued at revise by the panel: stage review settled — moved to revise (3 of 3) of author-review-revise"
     },
     {
-     "at": "2026-11-05T23:27:52.624Z",
+     "at": "2026-11-06T00:41:56.100Z",
      "kind": "pipeline",
      "text": "#1 walk author-review-revise — starting revise (3 of 3) of author-review-revise in <sandbox>\\trees\\walk-author-review-revise"
     },
     {
-     "at": "2026-11-05T23:27:52.626Z",
+     "at": "2026-11-06T00:41:56.103Z",
      "kind": "queue",
      "text": "#1 walk author-review-revise — linked to walk-author-review-revise-7 in <sandbox>/trees/walk-author-review-revise by the SPAWN that cut it"
     },
     {
-     "at": "2026-11-05T23:27:53.356Z",
+     "at": "2026-11-06T00:41:57.297Z",
      "kind": "queue",
      "text": "#1 walk author-review-revise — done by the panel: PR reads MERGED"
     }
@@ -1207,6 +1272,7 @@
    "steps": [
     {
      "step": 1,
+     "mode": "queue",
      "state": "queued",
      "stage": "author",
      "stageRun": null,
@@ -1215,10 +1281,14 @@
      },
      "crossings": {},
      "started": 0,
-     "from": "queued"
+     "from": "queued",
+     "held": null,
+     "advanced": null,
+     "checked": null
     },
     {
      "step": 2,
+     "mode": "queue",
      "state": "running",
      "stage": "author",
      "stageRun": "author-review-revise/author#1",
@@ -1227,10 +1297,14 @@
      },
      "crossings": {},
      "started": 1,
-     "from": "queued"
+     "from": "queued",
+     "held": null,
+     "advanced": null,
+     "checked": null
     },
     {
      "step": 3,
+     "mode": "queue",
      "state": "running",
      "stage": "review",
      "stageRun": "author-review-revise/review#1",
@@ -1242,10 +1316,14 @@
       "H-01": 1
      },
      "started": 2,
-     "from": "running"
+     "from": "running",
+     "held": null,
+     "advanced": null,
+     "checked": null
     },
     {
      "step": 4,
+     "mode": "queue",
      "state": "running",
      "stage": "author",
      "stageRun": "author-review-revise/author#2",
@@ -1258,10 +1336,14 @@
       "H-02": 1
      },
      "started": 3,
-     "from": "running"
+     "from": "running",
+     "held": null,
+     "advanced": null,
+     "checked": null
     },
     {
      "step": 5,
+     "mode": "queue",
      "state": "running",
      "stage": "review",
      "stageRun": "author-review-revise/review#2",
@@ -1274,10 +1356,14 @@
       "H-02": 1
      },
      "started": 4,
-     "from": "running"
+     "from": "running",
+     "held": null,
+     "advanced": null,
+     "checked": null
     },
     {
      "step": 6,
+     "mode": "queue",
      "state": "running",
      "stage": "author",
      "stageRun": "author-review-revise/author#3",
@@ -1290,10 +1376,14 @@
       "H-02": 2
      },
      "started": 5,
-     "from": "running"
+     "from": "running",
+     "held": null,
+     "advanced": null,
+     "checked": null
     },
     {
      "step": 7,
+     "mode": "queue",
      "state": "running",
      "stage": "review",
      "stageRun": "author-review-revise/review#3",
@@ -1306,10 +1396,14 @@
       "H-02": 2
      },
      "started": 6,
-     "from": "running"
+     "from": "running",
+     "held": null,
+     "advanced": null,
+     "checked": null
     },
     {
      "step": 8,
+     "mode": "queue",
      "state": "running",
      "stage": "revise",
      "stageRun": "author-review-revise/revise#1",
@@ -1324,10 +1418,14 @@
       "H-03": 1
      },
      "started": 7,
-     "from": "running"
+     "from": "running",
+     "held": null,
+     "advanced": null,
+     "checked": null
     },
     {
      "step": 9,
+     "mode": "queue",
      "state": "done",
      "stage": "revise",
      "stageRun": "author-review-revise/revise#1",
@@ -1342,12 +1440,18 @@
       "H-03": 1
      },
      "started": 7,
-     "from": "running"
+     "from": "running",
+     "held": null,
+     "advanced": null,
+     "checked": null
     }
    ]
   },
   {
    "pipeline": "probe-fix:leftover",
+   "mode": "queue",
+   "holds": [],
+   "restart": null,
    "document": "probe-fix",
    "title": "Probe, then fix",
    "stages": [
@@ -1445,47 +1549,47 @@
    ],
    "journal": [
     {
-     "at": "2026-11-05T23:27:53.394Z",
+     "at": "2026-11-06T00:41:57.349Z",
      "kind": "queue",
      "text": "Assistant #1: added #1 walk probe-fix — by reader"
     },
     {
-     "at": "2026-11-05T23:27:53.398Z",
+     "at": "2026-11-06T00:41:57.351Z",
      "kind": "queue",
      "text": "Assistant #1: #1 walk probe-fix → pipeline probe-fix at probe (entered 2026-11-05T12:00:00.000Z) — by reader"
     },
     {
-     "at": "2026-11-05T23:27:53.402Z",
+     "at": "2026-11-06T00:41:57.353Z",
      "kind": "pipeline",
      "text": "#1 walk probe-fix — tree cut at <sandbox>\\trees\\walk-probe-fix (branch wtgui/walk-probe-fix), no worker started"
     },
     {
-     "at": "2026-11-05T23:27:53.918Z",
+     "at": "2026-11-06T00:41:58.695Z",
      "kind": "pipeline",
      "text": "#1 walk probe-fix — starting probe (1 of 2) of probe-fix in <sandbox>\\trees\\walk-probe-fix"
     },
     {
-     "at": "2026-11-05T23:27:53.920Z",
+     "at": "2026-11-06T00:41:58.699Z",
      "kind": "queue",
      "text": "#1 walk probe-fix — linked to walk-probe-fix-1 in <sandbox>/trees/walk-probe-fix by the SPAWN that cut it"
     },
     {
-     "at": "2026-11-05T23:27:56.368Z",
+     "at": "2026-11-06T00:42:01.013Z",
      "kind": "queue",
      "text": "#1 walk probe-fix — queued → queued at fix by the panel: stage probe settled — moved to fix (2 of 2) of probe-fix"
     },
     {
-     "at": "2026-11-05T23:27:56.368Z",
+     "at": "2026-11-06T00:42:01.013Z",
      "kind": "pipeline",
      "text": "#1 walk probe-fix — starting fix (2 of 2) of probe-fix in <sandbox>\\trees\\walk-probe-fix"
     },
     {
-     "at": "2026-11-05T23:27:56.370Z",
+     "at": "2026-11-06T00:42:01.016Z",
      "kind": "queue",
      "text": "#1 walk probe-fix — linked to walk-probe-fix-2 in <sandbox>/trees/walk-probe-fix by the SPAWN that cut it"
     },
     {
-     "at": "2026-11-05T23:27:58.277Z",
+     "at": "2026-11-06T00:42:02.041Z",
      "kind": "queue",
      "text": "#1 walk probe-fix — done by the panel: PR reads MERGED"
     }
@@ -1493,6 +1597,7 @@
    "steps": [
     {
      "step": 1,
+     "mode": "queue",
      "state": "queued",
      "stage": "probe",
      "stageRun": null,
@@ -1501,10 +1606,14 @@
      },
      "crossings": {},
      "started": 0,
-     "from": "queued"
+     "from": "queued",
+     "held": null,
+     "advanced": null,
+     "checked": null
     },
     {
      "step": 2,
+     "mode": "queue",
      "state": "running",
      "stage": "probe",
      "stageRun": "probe-fix/probe#1",
@@ -1513,10 +1622,14 @@
      },
      "crossings": {},
      "started": 1,
-     "from": "queued"
+     "from": "queued",
+     "held": null,
+     "advanced": null,
+     "checked": null
     },
     {
      "step": 3,
+     "mode": "queue",
      "state": "running",
      "stage": "fix",
      "stageRun": "probe-fix/fix#1",
@@ -1528,10 +1641,14 @@
       "H-01": 1
      },
      "started": 2,
-     "from": "queued"
+     "from": "queued",
+     "held": null,
+     "advanced": null,
+     "checked": null
     },
     {
      "step": 4,
+     "mode": "queue",
      "state": "done",
      "stage": "fix",
      "stageRun": "probe-fix/fix#1",
@@ -1543,7 +1660,678 @@
       "H-01": 1
      },
      "started": 2,
-     "from": "running"
+     "from": "running",
+     "held": null,
+     "advanced": null,
+     "checked": null
+    }
+   ]
+  },
+  {
+   "pipeline": "ping-pong:timer",
+   "mode": "timer",
+   "holds": [
+    {
+     "stage": "draft",
+     "visit": 1,
+     "job": "job-1",
+     "pipeline": "ping-pong"
+    },
+    {
+     "stage": "critique",
+     "visit": 1,
+     "job": "job-2",
+     "pipeline": "ping-pong"
+    },
+    {
+     "stage": "draft",
+     "visit": 2,
+     "job": "job-3",
+     "pipeline": "ping-pong"
+    },
+    {
+     "stage": "critique",
+     "visit": 2,
+     "job": "job-4",
+     "pipeline": "ping-pong"
+    },
+    {
+     "stage": "draft",
+     "visit": 3,
+     "job": "job-5",
+     "pipeline": "ping-pong"
+    },
+    {
+     "stage": "critique",
+     "visit": 3,
+     "job": "job-6",
+     "pipeline": "ping-pong"
+    },
+    {
+     "stage": "draft",
+     "visit": 4,
+     "job": "job-7",
+     "pipeline": "ping-pong"
+    },
+    {
+     "stage": "critique",
+     "visit": 4,
+     "job": "job-8",
+     "pipeline": "ping-pong"
+    }
+   ],
+   "restart": {
+    "at": 6,
+    "stage": "critique",
+    "visit": 2,
+    "started": 4,
+    "holds": 4
+   },
+   "document": "ping-pong",
+   "title": "Ping-pong: draft and critique",
+   "stages": [
+    "draft",
+    "critique"
+   ],
+   "handoffs": [
+    {
+     "id": "H-01",
+     "from": "draft",
+     "to": "critique",
+     "kind": "sequence",
+     "cap": null
+    },
+    {
+     "id": "H-02",
+     "from": "critique",
+     "to": "draft",
+     "kind": "loop",
+     "cap": "3 rounds"
+    }
+   ],
+   "gates": [
+    {
+     "id": "G1",
+     "after": "critique",
+     "decision": null
+    }
+   ],
+   "tree": "<sandbox>/trees/walk-ping-pong",
+   "cuts": 1,
+   "starts": [
+    {
+     "pipeline": "ping-pong",
+     "stage": "draft",
+     "visit": 1,
+     "job": "job-1",
+     "thread": "walk-ping-pong-1",
+     "artifact": "ledger/ping-pong/draft.md",
+     "sha256": "b60c34e0fdff576af5cb5cf1fa47aad23b1845b220127134cce563a65aaeeec6"
+    },
+    {
+     "pipeline": "ping-pong",
+     "stage": "critique",
+     "visit": 1,
+     "job": "job-2",
+     "thread": "walk-ping-pong-2",
+     "artifact": "ledger/ping-pong/critique.md",
+     "sha256": "5ae3039ddcc1efec1d2f1979e45630444030d032cbee64a678b2b2aa36f6b153"
+    },
+    {
+     "pipeline": "ping-pong",
+     "stage": "draft",
+     "visit": 2,
+     "job": "job-3",
+     "thread": "walk-ping-pong-3",
+     "artifact": "ledger/ping-pong/draft.md",
+     "sha256": "dff5dcdbe6260a1f169b17ec80d6bdaffade074be15bba819c9ab27720b42b2e"
+    },
+    {
+     "pipeline": "ping-pong",
+     "stage": "critique",
+     "visit": 2,
+     "job": "job-4",
+     "thread": "walk-ping-pong-4",
+     "artifact": "ledger/ping-pong/critique.md",
+     "sha256": "a666b29124474332434c3c682db4b24110aee2992487e35b12d6cd4c95d04776"
+    },
+    {
+     "pipeline": "ping-pong",
+     "stage": "draft",
+     "visit": 3,
+     "job": "job-5",
+     "thread": "walk-ping-pong-5",
+     "artifact": "ledger/ping-pong/draft.md",
+     "sha256": "58c6b95907d50df2ec7d91cd0e56a8206cb24c266afbcda4b878ad25f89a79a9"
+    },
+    {
+     "pipeline": "ping-pong",
+     "stage": "critique",
+     "visit": 3,
+     "job": "job-6",
+     "thread": "walk-ping-pong-6",
+     "artifact": "ledger/ping-pong/critique.md",
+     "sha256": "3c0ee9c367389de4d248335ce79c0a537f6e9d96acd912f0cce9d17e4fd382d0"
+    },
+    {
+     "pipeline": "ping-pong",
+     "stage": "draft",
+     "visit": 4,
+     "job": "job-7",
+     "thread": "walk-ping-pong-7",
+     "artifact": "ledger/ping-pong/draft.md",
+     "sha256": "a9a600b9f90bd794647c49546b3d35d10d60ae42355f61107b3112bdbf05cd74"
+    },
+    {
+     "pipeline": "ping-pong",
+     "stage": "critique",
+     "visit": 4,
+     "job": "job-8",
+     "thread": "walk-ping-pong-8",
+     "artifact": "ledger/ping-pong/critique.md",
+     "sha256": "f7bcff38a1eabea0cfb24bab2b85e803172bcf30e5c4f8e19e1271e6cad76460"
+    }
+   ],
+   "seatVerdicts": [],
+   "row": {
+    "id": 1,
+    "state": "parked",
+    "stage": "critique",
+    "visits": {
+     "draft": 4,
+     "critique": 4
+    },
+    "crossings": {
+     "H-01": 4,
+     "H-02": 3
+    },
+    "waitingFor": {
+     "kind": "cap",
+     "edge": "H-02",
+     "from": "critique",
+     "to": "draft",
+     "limit": 3,
+     "used": 3,
+     "stage": "critique",
+     "since": "2026-11-05T12:00:10.000Z"
+    },
+    "reason": "the loop H-02 (critique → draft) is at its cap of 3 rounds — 3 crossings already taken, so the row stops here for a decision"
+   },
+   "stageRuns": [
+    {
+     "id": "ping-pong/draft#1",
+     "stage": "draft",
+     "visit": 1,
+     "thread": "walk-ping-pong-1",
+     "job": "job-1",
+     "status": "done",
+     "settledAt": "2026-11-05T12:00:03.000Z",
+     "artifact": {
+      "path": "ledger/ping-pong/draft.md",
+      "present": true,
+      "sha256": "b60c34e0fdff576af5cb5cf1fa47aad23b1845b220127134cce563a65aaeeec6"
+     },
+     "decision": {
+      "trigger": "stage-settled",
+      "code": null,
+      "by": "panel",
+      "reason": "ping-pong · draft settled — the run finished"
+     }
+    },
+    {
+     "id": "ping-pong/critique#1",
+     "stage": "critique",
+     "visit": 1,
+     "thread": "walk-ping-pong-2",
+     "job": "job-2",
+     "status": "done",
+     "settledAt": "2026-11-05T12:00:04.000Z",
+     "artifact": {
+      "path": "ledger/ping-pong/critique.md",
+      "present": true,
+      "sha256": "5ae3039ddcc1efec1d2f1979e45630444030d032cbee64a678b2b2aa36f6b153"
+     },
+     "decision": {
+      "trigger": "stage-settled",
+      "code": null,
+      "by": "panel",
+      "reason": "ping-pong · critique settled — the run finished"
+     }
+    },
+    {
+     "id": "ping-pong/draft#2",
+     "stage": "draft",
+     "visit": 2,
+     "thread": "walk-ping-pong-3",
+     "job": "job-3",
+     "status": "done",
+     "settledAt": "2026-11-05T12:00:05.000Z",
+     "artifact": {
+      "path": "ledger/ping-pong/draft.md",
+      "present": true,
+      "sha256": "dff5dcdbe6260a1f169b17ec80d6bdaffade074be15bba819c9ab27720b42b2e"
+     },
+     "decision": {
+      "trigger": "stage-settled",
+      "code": null,
+      "by": "panel",
+      "reason": "ping-pong · draft settled — the run finished"
+     }
+    },
+    {
+     "id": "ping-pong/critique#2",
+     "stage": "critique",
+     "visit": 2,
+     "thread": "walk-ping-pong-4",
+     "job": "job-4",
+     "status": "done",
+     "settledAt": "2026-11-05T12:00:06.000Z",
+     "artifact": {
+      "path": "ledger/ping-pong/critique.md",
+      "present": true,
+      "sha256": "a666b29124474332434c3c682db4b24110aee2992487e35b12d6cd4c95d04776"
+     },
+     "decision": {
+      "trigger": "stage-settled",
+      "code": null,
+      "by": "panel",
+      "reason": "ping-pong · critique settled — the run finished"
+     }
+    },
+    {
+     "id": "ping-pong/draft#3",
+     "stage": "draft",
+     "visit": 3,
+     "thread": "walk-ping-pong-5",
+     "job": "job-5",
+     "status": "done",
+     "settledAt": "2026-11-05T12:00:07.000Z",
+     "artifact": {
+      "path": "ledger/ping-pong/draft.md",
+      "present": true,
+      "sha256": "58c6b95907d50df2ec7d91cd0e56a8206cb24c266afbcda4b878ad25f89a79a9"
+     },
+     "decision": {
+      "trigger": "stage-settled",
+      "code": null,
+      "by": "panel",
+      "reason": "ping-pong · draft settled — the run finished"
+     }
+    },
+    {
+     "id": "ping-pong/critique#3",
+     "stage": "critique",
+     "visit": 3,
+     "thread": "walk-ping-pong-6",
+     "job": "job-6",
+     "status": "done",
+     "settledAt": "2026-11-05T12:00:08.000Z",
+     "artifact": {
+      "path": "ledger/ping-pong/critique.md",
+      "present": true,
+      "sha256": "3c0ee9c367389de4d248335ce79c0a537f6e9d96acd912f0cce9d17e4fd382d0"
+     },
+     "decision": {
+      "trigger": "stage-settled",
+      "code": null,
+      "by": "panel",
+      "reason": "ping-pong · critique settled — the run finished"
+     }
+    },
+    {
+     "id": "ping-pong/draft#4",
+     "stage": "draft",
+     "visit": 4,
+     "thread": "walk-ping-pong-7",
+     "job": "job-7",
+     "status": "done",
+     "settledAt": "2026-11-05T12:00:09.000Z",
+     "artifact": {
+      "path": "ledger/ping-pong/draft.md",
+      "present": true,
+      "sha256": "a9a600b9f90bd794647c49546b3d35d10d60ae42355f61107b3112bdbf05cd74"
+     },
+     "decision": {
+      "trigger": "stage-settled",
+      "code": null,
+      "by": "panel",
+      "reason": "ping-pong · draft settled — the run finished"
+     }
+    },
+    {
+     "id": "ping-pong/critique#4",
+     "stage": "critique",
+     "visit": 4,
+     "thread": "walk-ping-pong-8",
+     "job": "job-8",
+     "status": "done",
+     "settledAt": "2026-11-05T12:00:10.000Z",
+     "artifact": {
+      "path": "ledger/ping-pong/critique.md",
+      "present": true,
+      "sha256": "f7bcff38a1eabea0cfb24bab2b85e803172bcf30e5c4f8e19e1271e6cad76460"
+     },
+     "decision": {
+      "trigger": "cap",
+      "code": "pipeline-cap",
+      "by": "panel",
+      "reason": "the loop H-02 (critique → draft) is at its cap of 3 rounds — 3 crossings already taken, so the row stops here for a decision"
+     }
+    }
+   ],
+   "journal": [
+    {
+     "at": "2026-11-06T00:42:02.085Z",
+     "kind": "queue",
+     "text": "Assistant #1: added #1 walk ping-pong — by reader"
+    },
+    {
+     "at": "2026-11-06T00:42:02.088Z",
+     "kind": "queue",
+     "text": "Assistant #1: #1 walk ping-pong → pipeline ping-pong at draft (entered 2026-11-05T12:00:00.000Z) — by reader"
+    },
+    {
+     "at": "2026-11-06T00:42:02.095Z",
+     "kind": "pipeline",
+     "text": "#1 walk ping-pong — tree cut at <sandbox>\\trees\\walk-ping-pong (branch wtgui/walk-ping-pong), no worker started"
+    },
+    {
+     "at": "2026-11-06T00:42:04.183Z",
+     "kind": "pipeline",
+     "text": "#1 walk ping-pong — starting draft (1 of 2) of ping-pong in <sandbox>\\trees\\walk-ping-pong"
+    },
+    {
+     "at": "2026-11-06T00:42:04.186Z",
+     "kind": "queue",
+     "text": "#1 walk ping-pong — linked to walk-ping-pong-1 in <sandbox>/trees/walk-ping-pong by the SPAWN that cut it"
+    },
+    {
+     "at": "2026-11-06T00:42:07.350Z",
+     "kind": "queue",
+     "text": "#1 walk ping-pong — running → queued at critique by the panel: stage draft settled — moved to critique (2 of 2) of ping-pong"
+    },
+    {
+     "at": "2026-11-06T00:42:07.350Z",
+     "kind": "pipeline",
+     "text": "#1 walk ping-pong — starting critique (2 of 2) of ping-pong in <sandbox>\\trees\\walk-ping-pong"
+    },
+    {
+     "at": "2026-11-06T00:42:07.353Z",
+     "kind": "queue",
+     "text": "#1 walk ping-pong — linked to walk-ping-pong-2 in <sandbox>/trees/walk-ping-pong by the SPAWN that cut it"
+    },
+    {
+     "at": "2026-11-06T00:42:10.307Z",
+     "kind": "queue",
+     "text": "#1 walk ping-pong — running → queued at draft by the panel: stage critique settled — moved to draft (1 of 2) of ping-pong"
+    },
+    {
+     "at": "2026-11-06T00:42:10.307Z",
+     "kind": "pipeline",
+     "text": "#1 walk ping-pong — starting draft (1 of 2) of ping-pong in <sandbox>\\trees\\walk-ping-pong — visit 2"
+    },
+    {
+     "at": "2026-11-06T00:42:10.311Z",
+     "kind": "queue",
+     "text": "#1 walk ping-pong — linked to walk-ping-pong-3 in <sandbox>/trees/walk-ping-pong by the SPAWN that cut it"
+    },
+    {
+     "at": "2026-11-06T00:42:18.720Z",
+     "kind": "queue",
+     "text": "#1 walk ping-pong — running → queued at draft by the panel: stage critique settled — moved to draft (1 of 2) of ping-pong"
+    },
+    {
+     "at": "2026-11-06T00:42:18.720Z",
+     "kind": "pipeline",
+     "text": "#1 walk ping-pong — starting draft (1 of 2) of ping-pong in <sandbox>\\trees\\walk-ping-pong — visit 3"
+    },
+    {
+     "at": "2026-11-06T00:42:18.723Z",
+     "kind": "queue",
+     "text": "#1 walk ping-pong — linked to walk-ping-pong-5 in <sandbox>/trees/walk-ping-pong by the SPAWN that cut it"
+    },
+    {
+     "at": "2026-11-06T00:42:24.063Z",
+     "kind": "queue",
+     "text": "#1 walk ping-pong — running → queued at critique by the panel: stage draft settled — moved to critique (2 of 2) of ping-pong"
+    },
+    {
+     "at": "2026-11-06T00:42:24.063Z",
+     "kind": "pipeline",
+     "text": "#1 walk ping-pong — starting critique (2 of 2) of ping-pong in <sandbox>\\trees\\walk-ping-pong — visit 3"
+    },
+    {
+     "at": "2026-11-06T00:42:24.065Z",
+     "kind": "queue",
+     "text": "#1 walk ping-pong — linked to walk-ping-pong-6 in <sandbox>/trees/walk-ping-pong by the SPAWN that cut it"
+    },
+    {
+     "at": "2026-11-06T00:42:29.148Z",
+     "kind": "queue",
+     "text": "#1 walk ping-pong — running → queued at draft by the panel: stage critique settled — moved to draft (1 of 2) of ping-pong"
+    },
+    {
+     "at": "2026-11-06T00:42:29.148Z",
+     "kind": "pipeline",
+     "text": "#1 walk ping-pong — starting draft (1 of 2) of ping-pong in <sandbox>\\trees\\walk-ping-pong — visit 4"
+    },
+    {
+     "at": "2026-11-06T00:42:29.150Z",
+     "kind": "queue",
+     "text": "#1 walk ping-pong — linked to walk-ping-pong-7 in <sandbox>/trees/walk-ping-pong by the SPAWN that cut it"
+    },
+    {
+     "at": "2026-11-06T00:42:33.950Z",
+     "kind": "queue",
+     "text": "#1 walk ping-pong — running → queued at critique by the panel: stage draft settled — moved to critique (2 of 2) of ping-pong"
+    },
+    {
+     "at": "2026-11-06T00:42:33.950Z",
+     "kind": "pipeline",
+     "text": "#1 walk ping-pong — starting critique (2 of 2) of ping-pong in <sandbox>\\trees\\walk-ping-pong — visit 4"
+    },
+    {
+     "at": "2026-11-06T00:42:33.954Z",
+     "kind": "queue",
+     "text": "#1 walk ping-pong — linked to walk-ping-pong-8 in <sandbox>/trees/walk-ping-pong by the SPAWN that cut it"
+    },
+    {
+     "at": "2026-11-06T00:42:36.847Z",
+     "kind": "queue",
+     "text": "#1 walk ping-pong — running → parked at critique by the panel: the loop H-02 (critique → draft) is at its cap of 3 rounds — 3 crossings already taken, so the row stops here for a decision"
+    }
+   ],
+   "steps": [
+    {
+     "step": 1,
+     "mode": "queue",
+     "state": "queued",
+     "stage": "draft",
+     "stageRun": null,
+     "visits": {
+      "draft": 1
+     },
+     "crossings": {},
+     "started": 0,
+     "from": "queued",
+     "held": null,
+     "advanced": null,
+     "checked": null
+    },
+    {
+     "step": 2,
+     "mode": "timer",
+     "state": "running",
+     "stage": "draft",
+     "stageRun": "ping-pong/draft#1",
+     "visits": {
+      "draft": 1
+     },
+     "crossings": {},
+     "started": 1,
+     "from": "queued",
+     "held": null,
+     "advanced": null,
+     "checked": null
+    },
+    {
+     "step": 3,
+     "mode": "timer",
+     "state": "running",
+     "stage": "critique",
+     "stageRun": "ping-pong/critique#1",
+     "visits": {
+      "draft": 1,
+      "critique": 1
+     },
+     "crossings": {
+      "H-01": 1
+     },
+     "started": 2,
+     "from": "running",
+     "held": 0,
+     "advanced": 1,
+     "checked": 1
+    },
+    {
+     "step": 4,
+     "mode": "timer",
+     "state": "running",
+     "stage": "draft",
+     "stageRun": "ping-pong/draft#2",
+     "visits": {
+      "draft": 2,
+      "critique": 1
+     },
+     "crossings": {
+      "H-01": 1,
+      "H-02": 1
+     },
+     "started": 3,
+     "from": "running",
+     "held": 0,
+     "advanced": 1,
+     "checked": 1
+    },
+    {
+     "step": 5,
+     "mode": "timer",
+     "state": "running",
+     "stage": "critique",
+     "stageRun": "ping-pong/critique#2",
+     "visits": {
+      "draft": 2,
+      "critique": 2
+     },
+     "crossings": {
+      "H-01": 2,
+      "H-02": 1
+     },
+     "started": 4,
+     "from": "running",
+     "held": 0,
+     "advanced": 1,
+     "checked": 1
+    },
+    {
+     "step": 6,
+     "mode": "timer",
+     "state": "running",
+     "stage": "draft",
+     "stageRun": "ping-pong/draft#3",
+     "visits": {
+      "draft": 3,
+      "critique": 2
+     },
+     "crossings": {
+      "H-01": 2,
+      "H-02": 2
+     },
+     "started": 5,
+     "from": "running",
+     "held": 0,
+     "advanced": 1,
+     "checked": 1
+    },
+    {
+     "step": 7,
+     "mode": "timer",
+     "state": "running",
+     "stage": "critique",
+     "stageRun": "ping-pong/critique#3",
+     "visits": {
+      "draft": 3,
+      "critique": 3
+     },
+     "crossings": {
+      "H-01": 3,
+      "H-02": 2
+     },
+     "started": 6,
+     "from": "running",
+     "held": 0,
+     "advanced": 1,
+     "checked": 1
+    },
+    {
+     "step": 8,
+     "mode": "timer",
+     "state": "running",
+     "stage": "draft",
+     "stageRun": "ping-pong/draft#4",
+     "visits": {
+      "draft": 4,
+      "critique": 3
+     },
+     "crossings": {
+      "H-01": 3,
+      "H-02": 3
+     },
+     "started": 7,
+     "from": "running",
+     "held": 0,
+     "advanced": 1,
+     "checked": 1
+    },
+    {
+     "step": 9,
+     "mode": "timer",
+     "state": "running",
+     "stage": "critique",
+     "stageRun": "ping-pong/critique#4",
+     "visits": {
+      "draft": 4,
+      "critique": 4
+     },
+     "crossings": {
+      "H-01": 4,
+      "H-02": 3
+     },
+     "started": 8,
+     "from": "running",
+     "held": 0,
+     "advanced": 1,
+     "checked": 1
+    },
+    {
+     "step": 10,
+     "mode": "timer",
+     "state": "parked",
+     "stage": "critique",
+     "stageRun": "ping-pong/critique#4",
+     "visits": {
+      "draft": 4,
+      "critique": 4
+     },
+     "crossings": {
+      "H-01": 4,
+      "H-02": 3
+     },
+     "started": 8,
+     "from": "running",
+     "held": 0,
+     "advanced": 1,
+     "checked": 1
     }
    ]
   }
