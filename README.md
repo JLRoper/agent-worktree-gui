@@ -836,6 +836,15 @@ binds it is [docs/hermes-run-cwd.md](docs/hermes-run-cwd.md) — prepared for re
 Nothing the assistant does depends on it — it reads the board and starts workers, and a worker's own tree
 comes from the `cd` line the spawn wrapper carries.
 
+**Its name is its own.** Every assistant, #1 included, has a **Settings** sub-tab of its own tab, and the first
+row there renames it: a box seeded with the current name, **Save name** and **Cancel**. The save writes the
+`name` field on that assistant's RECORD (`assistants.json`, the store its role and rules live in) through the same
+`POST /api/assistant/settings` the knobs use, and the tab label and the float's header repaint from the answer with
+no reload. The id (`assistant-2`, `assistant-3`, ...) never changes, which is why a rename moves nothing else: the
+queue path, the thread, the charter path and the state directory are all derived from it. The text is trimmed,
+capped at 40 characters, and an empty or whitespace-only name is refused with a line rather than saved as a no-op;
+two assistants may share a name, because the id is what tells them apart.
+
 **The charter.** The rules and the scratchpad are short and clipped (each rule to 200 characters, and only
 the last twelve ride along); the Hermes memory file has a character budget of its own. What neither holds is
 the *reasoning* — why a convention exists, what was learned the hard way, what is still unanswered — so that

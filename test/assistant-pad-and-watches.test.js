@@ -220,6 +220,24 @@ test("the reader's own add is stamped for the tab it was made from, and #1's rec
   assert.equal(assistant.watchOwnerOf(bogus), PRIMARY_ASSISTANT);
 });
 
+test("an overdue watch files its notice, stamped with the watch's owner", async (t) => {
+  const { assistant, rows } = await panel(t);
+  const id = assistant.createAssistant({ roleId: "agent-manager", name: "Reviewer" }).created.id;
+  // A run still live on the watched thread: `checkWatches` files an OVERDUE notice for a live turn whose deadline
+  // was set by the clock, and that branch used to reference a `const` declared inside the FINISHED branch — every
+  // overdue watch threw `noticeFor is not defined` and filed nothing.
+  rows.push({ id: "run-overdue", thread: "wtgui-worker-overdue", status: "running", startedAt: iso() });
+  const watch = assistant.addWatch({ thread: "wtgui-worker-overdue", title: "the deploy finishes", minutes: 5, assistantId: id }, "reader");
+  watch.at = new Date(Date.now() - 10 * 60_000).toISOString();
+
+  assistant.checkWatches(rows);
+
+  const notice = assistant.alerts.find((a) => /^watch overdue: /.test(String(a.title || "")));
+  assert.ok(notice, "an overdue watch files its notice");
+  assert.match(notice.title, /^watch overdue: the deploy finishes/);
+  assert.equal(notice.assistantId, id, "and the notice is stamped with the assistant the watch is");
+});
+
 test("legacy watches are resolved from the thread at read time, and the store is not rewritten", async (t) => {
   const legacy = [
     { id: "w1", thread: ASSISTANT_THREAD, title: "legacy on #1's own thread", at: iso(1), by: "reader", state: "watching" },

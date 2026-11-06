@@ -79,6 +79,7 @@
     "verify:worktree-row-actions": "node tools/verify-worktree-row-actions.mjs",
     "verify:role-pick-charter": "node tools/verify-role-pick-charter.mjs",
     "verify:assistant-director": "node tools/verify-assistant-director.mjs",
+    "verify:assistant-rename": "node tools/verify-assistant-rename.mjs",
     "seed:pipeline-bundle": "node tools/seed-pipeline-bundle.mjs",
     "test": "node --test --test-concurrency=4 test/*.test.js",
     "test:e2e:task-window": "node --test --test-reporter=spec test/e2e/task-window.spec.mjs",
