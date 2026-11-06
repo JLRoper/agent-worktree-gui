@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 // tools/render-pipeline-map.mjs — every pipeline the panel can put a tree on, as ONE page.
 //
-// WHY. The catalogue (pipelines.seed.json) is seven definitions and the studio bundle
-// (pipeline-bundle.seed.json) is thirteen more stages; the Pipeline tab draws one definition at a time and a
-// definition has no role field, no loop field and no page that says what the library looks like together. This
-// renderer reads BOTH seed files — not a transcription of them — and writes one self-contained page whose nodes are
-// the stages, whose arrows are the exit checks and gates, whose dashed edges are the loops the data carries (plus
-// the one inference the SEFL review definition needs), and whose second line names who runs each stage.
+// WHY. The catalogue (pipelines.seed.json) is seven definitions and the bundle file (pipeline-bundle.seed.json)
+// holds four more pipelines — the studio's thirteen-stage POC-to-UAT export beside three small ones; the Pipeline
+// tab draws one definition at a time and a definition has no role field, no loop field and no page that says what
+// the library looks like together. This renderer reads BOTH seed files — not a transcription of them — and writes
+// one self-contained page whose nodes are the stages, whose arrows are the exit checks and gates, whose dashed
+// edges are the loops the data carries (plus the one inference the SEFL review definition needs), and whose second
+// line names who runs each stage. EVERY pipeline in the bundle file is drawn: the page must not read as "the
+// bundle is one pipeline" when the file holds four.
 //
 // THE PAGE IS ONE FILE AND IT OPENS OFFLINE. tools/vendor/mermaid.min.js (11.4.1) is inlined verbatim; the
 // page loads only its own sibling script, public/pipeline-map.js. No CDN, no font fetch, no API.
@@ -16,10 +18,11 @@
 // which the page shows in its inspector and the verifier re-checks against the prompt. A bundle stage has an
 // owner.role and a roles[] entry, so its line is ASSIGNED, not derived: the owner's own name and kind.
 //
-// LOOPS. The bundle's handoffs[] with kind:"loop" are the loops the data carries (H-10, H-12, H-15, caps and all).
-// A catalogue definition has no loops field; sefl-review-loop is iterative in its prompts only (next: null), so it
-// gets ONE dashed edge from approve back to address, marked `inferred` and explained in the page's legend and in
-// that card's loop list. If a live pipelines.json ever carries a `loops` array, it is read as source:"data".
+// LOOPS. Each bundle pipeline's handoffs[] with kind:"loop" are the loops the data carries (the studio's H-10,
+// H-12, H-15, plus ping-pong's capped round and author-review-revise's capped reject edge). A catalogue definition
+// has no loops field; sefl-review-loop is iterative in its prompts only (next: null), so it gets ONE dashed edge
+// from approve back to address, marked `inferred` and explained in the page's legend and in that card's loop list.
+// If a live pipelines.json ever carries a `loops` array, it is read as source:"data".
 //
 //   node tools/render-pipeline-map.mjs                 write public/pipeline-map.html (the committed page)
 //   node tools/render-pipeline-map.mjs --out <file>    write another file
@@ -126,28 +129,25 @@ function readSource(file) {
   return { buf: Buffer.from(text, "utf8"), text };
 }
 
-function build() {
-  const seed = readJson(SEED, "the pipeline catalogue");
-  // The bundle file is the panel's multi-pipeline wrapper (`{bundleVersion, name, pipelines: [...]}`); a bare studio
-  // document is still read, because a reader may point this renderer at an older export. This page draws the STUDIO
-  // bundle — the 13-stage POC-to-UAT pipeline — and says how many other pipelines the same file holds, because the
-  // task pipeline window and Settings > Bundles are where those are read.
-  const bundleFile = readJson(BUNDLE, "the studio bundle");
-  const bundleList = Array.isArray(bundleFile.pipelines) ? bundleFile.pipelines.filter((p) => p && typeof p === "object") : [bundleFile];
-  if (!bundleList.length) throw new Error("pipeline-bundle.seed.json holds no pipeline");
-  const bundle = bundleList.find((p) => (p.id || (p.project && p.project.id)) === "poc-to-uat") || bundleList[0];
-  if (!Array.isArray(bundle.stages) || !Array.isArray(bundle.roles)) throw new Error("pipeline-bundle.seed.json's studio pipeline has no stages[]/roles[]");
-  if (!Array.isArray(seed.pipelines)) throw new Error("pipelines.seed.json has no pipelines[]");
+// One bundle pipeline, normalised. The studio export names its id and title under `project`; the small pipelines
+// carry `id`/`title` at the top level. Both shapes are read here, and a stage's owner is looked up in that
+// pipeline's own roles[] — a bundle stage is ASSIGNED a role, never derived from a prompt.
+function bundleOf(def, index) {
+  const id = oneLine(def.id || (def.project && def.project.id)) || `bundle-${index + 1}`;
+  const title = oneLine(def.title || (def.project && def.project.name)) || id;
+  const description = oneLine(def.description || (def.project && def.project.description));
+  if (!Array.isArray(def.stages) || !def.stages.length) throw new Error(`bundle pipeline ${id} has no stages[]`);
+  if (!Array.isArray(def.roles)) throw new Error(`bundle pipeline ${id} has no roles[]`);
 
-  const roleById = new Map(bundle.roles.filter((r) => r && r.id).map((r) => [r.id, r]));
-  const bundleStages = bundle.stages.map((st, i) => {
+  const roleById = new Map(def.roles.filter((r) => r && r.id).map((r) => [r.id, r]));
+  const stages = def.stages.map((st, i) => {
     const owner = roleById.get(st.owner && st.owner.role);
-    if (!owner) throw new Error(`bundle stage ${st.id} names owner.role ${JSON.stringify(st.owner && st.owner.role)}, which roles[] does not hold`);
-    const others = bundle.roles.filter((r) => r.stage === st.id && r.id !== owner.id);
+    if (!owner) throw new Error(`bundle stage ${id}/${st.id} names owner.role ${JSON.stringify(st.owner && st.owner.role)}, which roles[] does not hold`);
+    const others = def.roles.filter((r) => r.stage === st.id && r.id !== owner.id);
     return {
       id: st.id,
       ordinal: i + 1,
-      title: oneLine(st.name || st.id),
+      title: oneLine(st.name || st.title || st.id),
       role: {
         source: "assigned",
         ownerId: owner.id,
@@ -164,8 +164,7 @@ function build() {
     };
   });
 
-  const gateById = new Map((bundle.gates || []).map((g) => [g.id, g]));
-  const gates = (bundle.gates || []).map((g) => ({
+  const gates = (def.gates || []).map((g) => ({
     id: g.id,
     after: g.after,
     name: oneLine(g.name),
@@ -178,10 +177,11 @@ function build() {
     mayNotRead: (g.may_not_read || []).map(oneLine),
   }));
   const gateAfter = new Map(gates.map((g) => [g.after, g]));
+  const order = new Map(stages.map((s, i) => [s.id, i]));
 
-  // The bundle's sequence edges are its handoffs[] of kind "sequence"; a loop handoff is drawn as the dashed arc.
-  const seq = (bundle.handoffs || []).filter((h) => h && h.kind === "sequence" && h.from && h.to);
-  const bundleEdges = seq.slice().sort((a, b) => Number(String(a.from).replace(/\D/g, "")) - Number(String(b.from).replace(/\D/g, ""))).map((h) => {
+  // The sequence edges are handoffs[] of kind "sequence", in stage order; a loop handoff is drawn as the dashed arc.
+  const seq = (def.handoffs || []).filter((h) => h && h.kind === "sequence" && h.from && h.to);
+  const edges = seq.slice().sort((a, b) => (order.get(a.from) ?? 0) - (order.get(b.from) ?? 0)).map((h) => {
     const g = gateAfter.get(h.from);
     return {
       from: h.from,
@@ -191,7 +191,7 @@ function build() {
       gate: g ? g.id : null,
     };
   });
-  const bundleLoops = (bundle.handoffs || []).filter((h) => h && h.kind === "loop" && h.from && h.to).map((h) => ({
+  const loops = (def.handoffs || []).filter((h) => h && h.kind === "loop" && h.from && h.to).map((h) => ({
     id: h.id || "",
     from: h.from,
     to: h.to,
@@ -201,6 +201,25 @@ function build() {
     source: "data",
     note: oneLine(h.note),
   }));
+
+  return { id, title, description, stages, gates, edges, loops };
+}
+
+function build() {
+  const seed = readJson(SEED, "the pipeline catalogue");
+  // The bundle file is the panel's multi-pipeline wrapper (`{bundleVersion, name, pipelines: [...]}`); a bare studio
+  // document is still read, because a reader may point this renderer at an older export. EVERY pipeline in the file
+  // is drawn — the studio's 13-stage POC-to-UAT export first, then the small ones — because the panel ships all of
+  // them and a page that drew one would be a picture of a library that no longer exists.
+  const bundleFile = readJson(BUNDLE, "the bundle file");
+  const bundleList = Array.isArray(bundleFile.pipelines) ? bundleFile.pipelines.filter((p) => p && typeof p === "object") : [bundleFile];
+  if (!bundleList.length) throw new Error("pipeline-bundle.seed.json holds no pipeline");
+  if (!Array.isArray(seed.pipelines)) throw new Error("pipelines.seed.json has no pipelines[]");
+
+  const bundles = bundleList.map(bundleOf);
+  const studio = bundles.find((b) => b.id === "poc-to-uat") || bundles[0];
+  const bundleStages = bundles.reduce((n, b) => n + b.stages.length, 0);
+  const bundleLoops = bundles.reduce((n, b) => n + b.loops.length, 0);
 
   const pipelines = seed.pipelines.map((def, pi) => {
     const stages = def.stages.map((st, i) => ({
@@ -265,15 +284,16 @@ function build() {
       generatedAt: new Date().toISOString(),
       totalPipelines: pipelines.length,
       totalStages: pipelines.reduce((n, p) => n + p.stages.length, 0),
-      bundleStages: bundleStages.length,
-      totalLoops: pipelines.reduce((n, p) => n + p.loops.length, 0) + bundleLoops.length,
-      // How many pipelines the bundle FILE holds. Only the studio's is drawn on this page; the others are read in the
-      // task pipeline window and Settings > Bundles, and saying the number here is what keeps this line honest.
-      bundlePipelines: bundleList.length,
+      // Every stage in the bundle file, and the studio's own count beside it: the page draws all four pipelines, so
+      // one number for "the bundle" would be a lie about three of them.
+      bundleStages,
+      studioStages: studio.stages.length,
+      totalLoops: pipelines.reduce((n, p) => n + p.loops.length, 0) + bundleLoops,
+      bundlePipelines: bundles.length,
       roleRules: ROLE_RULES.map((r) => ({ id: r.id, label: r.label, why: r.why })),
       sources: [
         sourceRow(SEED, "pipelines.seed.json", "the catalogue of definitions"),
-        sourceRow(BUNDLE, "pipeline-bundle.seed.json", "the studio bundle"),
+        sourceRow(BUNDLE, "pipeline-bundle.seed.json", "the bundle file's pipelines"),
         sourceRow(VENDOR, VENDOR_REL, "mermaid, inlined"),
         sourceRow(SCRIPT, SCRIPT_REL, "this page's own script"),
         sourceRow(IMPORT, IMPORT_REL, "the importer a document is read through"),
@@ -281,15 +301,7 @@ function build() {
       mermaidVersion: MERMAID_VERSION,
     },
     pipelines,
-    bundle: {
-      id: "poc-to-uat",
-      title: oneLine(bundle.project && bundle.project.name) || "POC to UAT",
-      description: oneLine(bundle.project && bundle.project.description),
-      stages: bundleStages,
-      gates,
-      edges: bundleEdges,
-      loops: bundleLoops,
-    },
+    bundles,
   };
   return model;
 }
@@ -463,7 +475,7 @@ function html(model, vendor) {
 <header>
   <p class="kicker">agent-worktree-gui · the pipeline library</p>
   <h1>Every pipeline the panel can put a tree on, drawn</h1>
-  <p class="lede">${meta.totalPipelines} catalogue definitions and the ${meta.bundleStages}-stage studio bundle, each stage a node: <b>its ordinal and title</b>, <b>who runs it</b> on the second line, and the <b>exit check or gate</b> on the arrow that leaves it. Solid arrows are the chain; dashed violet arrows are loops the data carries, with their cap; the one amber dashed arrow is an <b>inference</b>, named where it is drawn. It can also draw <b>a document it did not build</b> — a file, or <code>?doc=&lt;url|path&gt;</code> — and names that source and its sha256 above the cards. Mermaid ${escHtml(meta.mermaidVersion)} is inlined below — this page opens with no network at all.</p>
+  <p class="lede">${meta.totalPipelines} catalogue definitions and ${meta.bundlePipelines} bundle pipelines (${meta.bundleStages} stages, the studio's ${meta.studioStages} among them), each stage a node: <b>its ordinal and title</b>, <b>who runs it</b> on the second line, and the <b>exit check or gate</b> on the arrow that leaves it. Solid arrows are the chain; dashed violet arrows are loops the data carries, with their cap; the one amber dashed arrow is an <b>inference</b>, named where it is drawn. It can also draw <b>a document it did not build</b> — a file, or <code>?doc=&lt;url|path&gt;</code> — and names that source and its sha256 above the cards. Mermaid ${escHtml(meta.mermaidVersion)} is inlined below — this page opens with no network at all.</p>
   <p class="sources">version ${escHtml(meta.version)} · generated ${escHtml(meta.generatedAt.replace("T", " ").slice(0, 19))} UTC · sources: ${meta.sources.map((s) => `<code>${escHtml(s.file)}</code> ${escHtml(s.sha256.slice(0, 12))}`).join(" · ")}</p>
 </header>
 
@@ -524,7 +536,7 @@ function html(model, vendor) {
         ${srcRows}
     </tbody>
   </table>
-  <p style="margin-top:10px">No run state is drawn: this is the catalogue and the bundle, not a task's position. The pipeline modal's four marks belong to a record, and this page deliberately does not invent one.</p>
+  <p style="margin-top:10px">No run state is drawn: this is the catalogue and the bundle file's pipelines, not a task's position. The pipeline modal's four marks belong to a record, and this page deliberately does not invent one.</p>
 </footer>
 </div>
 
@@ -588,14 +600,14 @@ async function main() {
       const named = current.match(new RegExp(`${src.file.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*</code></td><td>[^<]*</td><td class="num">[^<]*</td><td><code>([0-9a-f]{16})`));
       if (named && !src.sha256.startsWith(named[1])) throw new Error(`the committed page names a stale ${src.file} — run node tools/render-pipeline-map.mjs`);
     }
-    if (!opts.quiet) console.log(`current — ${model.pipelines.length} definitions, ${model.meta.totalStages} stages, 13 bundle stages, ${model.meta.totalLoops} loops`);
+    if (!opts.quiet) console.log(`current — ${model.pipelines.length} definitions, ${model.meta.totalStages} stages, ${model.meta.bundlePipelines} bundle pipelines (${model.meta.bundleStages} stages), ${model.meta.totalLoops} loops`);
     return 0;
   }
 
   writeFileSync(opts.out, page);
   if (!opts.quiet) {
     console.log(`wrote ${path.relative(REPO, opts.out)} — ${bytes(Buffer.byteLength(page))} bytes`);
-    console.log(`  ${model.pipelines.length} definitions, ${model.meta.totalStages} stage nodes; bundle ${model.meta.bundleStages} stage nodes; ${model.meta.totalLoops} loops (${model.bundle.loops.length} carried, ${model.pipelines.reduce((n, p) => n + p.loops.filter((l) => l.source === "inferred").length, 0)} inferred)`);
+    console.log(`  ${model.pipelines.length} definitions, ${model.meta.totalStages} stage nodes; ${model.meta.bundlePipelines} bundle pipelines, ${model.meta.bundleStages} stage nodes; ${model.meta.totalLoops} loops (${model.bundles.reduce((n, b) => n + b.loops.length, 0)} carried, ${model.pipelines.reduce((n, p) => n + p.loops.filter((l) => l.source === "inferred").length, 0)} inferred)`);
     console.log(`  sources: ${model.meta.sources.map((s) => `${s.file} ${s.sha256.slice(0, 12)}`).join(", ")}`);
   }
   return 0;

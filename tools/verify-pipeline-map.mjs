@@ -5,7 +5,8 @@
 // loads mermaid from an INLINE copy of tools/vendor/mermaid.min.js. This harness does not re-render a fixture: it
 // reads the committed page, drives it in Chromium, and asserts the four things the brief names:
 //
-//   1. every definition and the bundle render, with the right node count — 7 + 1 cards, 23 + 13 stage nodes;
+//   1. every definition and every bundle pipeline renders, with the right node count — 7 + 4 cards, 23 + 20 stage
+//      nodes (the studio's 13 among them);
 //   2. every node is two lines: ordinal + title, then a role line — `derived:` for a catalogue stage, `role:` for
 //      a bundle stage — and every derived line's evidence is a substring of that stage's own prompt;
 //   3. the loop-backs: the bundle's three carried loops (caps included) and sefl-review-loop's ONE inferred edge,
@@ -39,6 +40,9 @@ const EXPECT = [
   ["github-force-merge", 6],
   ["sefl-review-loop", 7],
   ["poc-to-uat", 13],
+  ["ping-pong", 2],
+  ["probe-fix", 2],
+  ["author-review-revise", 3],
 ];
 
 const failures = [];
@@ -84,10 +88,14 @@ if (!DATA) {
 }
 
 const roleRules = new Map(DATA.meta.roleRules.map((r) => [r.id, r]));
+const BUNDLES = Array.isArray(DATA.bundles) ? DATA.bundles : DATA.bundle ? [DATA.bundle] : [];
+const STUDIO = BUNDLES.find((b) => b.id === "poc-to-uat");
 check(DATA.pipelines.length === 7, `seven catalogue definitions in the data (${DATA.pipelines.length})`);
 check(DATA.meta.totalStages === 23, `23 catalogue stage nodes in the data (${DATA.meta.totalStages})`);
-check(DATA.bundle.stages.length === 13, `13 bundle stage nodes in the data (${DATA.bundle.stages.length})`);
-check(DATA.bundle.gates.length === 5, `5 bundle gates in the data (${DATA.bundle.gates.length})`);
+check(BUNDLES.length === 4, `four bundle pipelines in the data (${BUNDLES.map((b) => b.id).join(", ")})`);
+check(BUNDLES.reduce((n, b) => n + b.stages.length, 0) === 20, `20 bundle stage nodes in the data (${BUNDLES.reduce((n, b) => n + b.stages.length, 0)})`);
+check(!!STUDIO && STUDIO.stages.length === 13, `the studio bundle still carries its 13 stage nodes (${STUDIO ? STUDIO.stages.length : "missing"})`);
+check(!!STUDIO && STUDIO.gates.length === 5, `the studio bundle still carries its 5 gates (${STUDIO ? STUDIO.gates.length : "missing"})`);
 
 // Every derived role names a rule in the closed table, and its evidence is literally in the prompt.
 let derivedOk = true;
@@ -105,18 +113,24 @@ check(derivedOk, "every catalogue role is derived from a known rule, with its ph
 
 let assignedOk = true;
 const assignedBad = [];
-for (const stage of DATA.bundle.stages) {
-  if (stage.role.source !== "assigned") { assignedOk = false; assignedBad.push(`${stage.id}: source ${stage.role.source}`); continue; }
-  if (!stage.role.owner || !stage.role.kind) { assignedOk = false; assignedBad.push(`${stage.id}: no owner/kind`); continue; }
-  if (!stage.role.label.startsWith("role: ")) { assignedOk = false; assignedBad.push(`${stage.id}: label ${JSON.stringify(stage.role.label)}`); }
+for (const bundle of BUNDLES) {
+  for (const stage of bundle.stages) {
+    if (stage.role.source !== "assigned") { assignedOk = false; assignedBad.push(`${bundle.id}/${stage.id}: source ${stage.role.source}`); continue; }
+    if (!stage.role.owner || !stage.role.kind) { assignedOk = false; assignedBad.push(`${bundle.id}/${stage.id}: no owner/kind`); continue; }
+    if (!stage.role.label.startsWith("role: ")) { assignedOk = false; assignedBad.push(`${bundle.id}/${stage.id}: label ${JSON.stringify(stage.role.label)}`); }
+  }
 }
 check(assignedOk, "every bundle role is the owner's own name and kind (assigned, not derived)", assignedBad.join("\n"));
 
-const carried = DATA.bundle.loops.filter((l) => l.source === "data");
+const carried = STUDIO.loops.filter((l) => l.source === "data");
 const inferred = DATA.pipelines.flatMap((p) => p.loops).filter((l) => l.source === "inferred");
-check(carried.length === 3 && carried.every((l) => l.cap), `the bundle carries its three capped loops (${carried.map((l) => l.id).join(", ")})`);
+check(carried.length === 3 && carried.every((l) => l.cap), `the studio bundle carries its three capped loops (${carried.map((l) => l.id).join(", ")})`);
+const smallLoops = BUNDLES.filter((b) => b.id !== "poc-to-uat").flatMap((b) => b.loops);
+check(smallLoops.length === 2 && smallLoops.every((l) => l.source === "data" && l.cap), `the small bundle pipelines carry their two capped loops (${smallLoops.map((l) => `${l.from}→${l.to}`).join(", ")})`);
 check(inferred.length === 1 && inferred[0].from === "approve" && inferred[0].to === "address", "sefl-review-loop carries exactly one inferred loop, approve → address", JSON.stringify(inferred));
 check(/inference/i.test(markup) && /declares no loop/i.test(markup), "the page's legend and copy name the inferred edge as an inference, not a field");
+
+const modelOfCard = (id) => DATA.pipelines.find((p) => p.id === id) || BUNDLES.find((b) => b.id === id);
 
 let browserHalf = null;
 try {
@@ -181,7 +195,7 @@ try {
       if (card.min < 11) { rowCounts = false; rowCountsBad.push(`${id}: smallest label ${card.min}px`); }
       if (card.roleLines.length !== n) { rowCounts = false; rowCountsBad.push(`${id}: ${card.roleLines.length} nodes with a role, expected ${n}`); }
     }
-    check(rowCounts, "row layout draws every stage of all seven pipelines and the bundle at 11 px or more", rowCountsBad.join("\n"));
+    check(rowCounts, "row layout draws every stage of all seven definitions and all four bundle pipelines at 11 px or more", rowCountsBad.join("\n"));
     check(row.cards[0].min >= 11, `row layout's smallest painted label is ${row.cards[0].min} px`);
 
     // two lines: ordinal + title, then the role. Every node in both the catalogue and the bundle.
@@ -199,7 +213,7 @@ try {
     let hover = true;
     const hoverBad = [];
     for (const card of row.cards) {
-      const model = card.id === "poc-to-uat" ? DATA.bundle : DATA.pipelines.find((p) => p.id === card.id);
+      const model = modelOfCard(card.id);
       for (const role of card.roleLines) {
         const stage = model.stages.find((s) => s.id === role.id);
         if (!stage) { hover = false; hoverBad.push(`${card.id}/${role.id}: no stage`); continue; }
@@ -216,7 +230,7 @@ try {
     let loopsOk = true;
     const loopsBad = [];
     for (const card of row.cards) {
-      const model = card.id === "poc-to-uat" ? DATA.bundle : DATA.pipelines.find((p) => p.id === card.id);
+      const model = modelOfCard(card.id);
       if (card.loopCount !== (model.loops || []).length) { loopsOk = false; loopsBad.push(`${card.id}: ${card.loopCount} loop paths, expected ${(model.loops || []).length}`); }
       for (const loop of model.loops || []) {
         if (!card.loops.includes(loop.source)) { loopsOk = false; loopsBad.push(`${card.id}/${loop.id}: no ${loop.source} path`); }
@@ -227,7 +241,7 @@ try {
     const bundleCard = row.cards.find((c) => c.id === "poc-to-uat");
     check(carried.every((l) => row.cards.find((c) => c.id === "poc-to-uat").loopText.some((t) => t.includes(l.id))), "the bundle's three loop edges carry H-10/H-12/H-15 labels", JSON.stringify(row.cards.find((c) => c.id === "poc-to-uat").loopText));
     check(/3 rounds \(P-50\)/.test(bundleCard.loopsList) && /2 re-deliveries/.test(bundleCard.loopsList), "the bundle's caps are printed in its loop list (3 rounds (P-50), 2 re-deliveries)");
-    check(DATA.bundle.gates.every((g) => bundleCard.gatesList.includes(g.id)) && /13 UAT sign-off/.test(bundleCard.gatesList), "the bundle's five gates are listed, including G4 after stage 13", bundleCard.gatesList.slice(0, 280));
+    check(STUDIO.gates.every((g) => bundleCard.gatesList.includes(g.id)) && /13 UAT sign-off/.test(bundleCard.gatesList), "the studio bundle's five gates are listed, including G4 after stage 13", bundleCard.gatesList.slice(0, 280));
 
     // one inferred edge, amber, exactly one, in the definition named in the legend.
     const review = row.cards.find((c) => c.id === "sefl-review-loop");
@@ -315,7 +329,7 @@ try {
 }
 
 if (browserHalf) {
-  check(browserHalf.cards === 8 && browserHalf.nodes === 36, `36 stage nodes across 8 cards (${browserHalf.nodes} across ${browserHalf.cards})`);
+  check(browserHalf.cards === 11 && browserHalf.nodes === 43, `43 stage nodes across 11 cards (${browserHalf.nodes} across ${browserHalf.cards})`);
 }
 
 if (failures.length) {
