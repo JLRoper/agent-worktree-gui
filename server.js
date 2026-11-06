@@ -360,7 +360,8 @@ async function loadConfig() {
   // would be unauthenticated remote code execution.
   cfg.host = cfg.host || "127.0.0.1";
   // The token that gates writes from other machines comes from the ENVIRONMENT, never from this file.
-  // config.json is tracked by git, so a secret in it is a secret in the repository and in every clone of it.
+  // config.json is the reader's own file, but a secret written into a settings file sits in plain text in every
+  // copy of it (a backup, a pasted config) — PANEL_TOKEN is the one place the token lives.
   // PANEL_TOKEN is read once, at boot; if it is missing or empty there is simply no token, and authorised()
   // then REFUSES every non-loopback write rather than letting one through — the door closes when the variable
   // is absent, it does not open. A leftover "token" key in the file is ignored, loudly, so an old secret cannot
