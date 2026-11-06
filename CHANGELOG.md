@@ -4,16 +4,33 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.43.3 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.43.4 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-352 releases from v0.1.0 (2026-10-20) to v1.43.3 (2026-11-06), 1240 commits between the tags. Every release is anchored by an
+353 releases from v0.1.0 (2026-10-20) to v1.43.4 (2026-11-06), 1244 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.43.4 — 2026-11-06 · 4 commits
+
+[`53c8f4e`](https://github.com/JLRoper/agent-worktree-gui/commit/53c8f4e419ac729b560836f149bb76008ebc5335) · [compare v1.43.3...v1.43.4](https://github.com/JLRoper/agent-worktree-gui/compare/v1.43.3...v1.43.4)
+
+### Fixed
+
+- fix: the flow card's height follows its drawing, and nothing at the tile top is cut ([`61652bf`](https://github.com/JLRoper/agent-worktree-gui/commit/61652bf18540b6d9fbbfed54e0282d927e400362))
+
+### Docs & tests
+
+- docs: the landing record names both driver defects and the six red tests ([`a301ab6`](https://github.com/JLRoper/agent-worktree-gui/commit/a301ab6b4f756cf68f0aaf6f7c6739df5cab1a80))
+- docs: render the changelog — 352 releases ([`6469f59`](https://github.com/JLRoper/agent-worktree-gui/commit/6469f59188db77beace4cd0fb8f4c9d5ef16097f))
+
+### Other
+
+- chore: 1.43.4 - the version this landing carries ([`53c8f4e`](https://github.com/JLRoper/agent-worktree-gui/commit/53c8f4e419ac729b560836f149bb76008ebc5335))
 
 ## v1.43.3 — 2026-11-06 · 2 commits
 
