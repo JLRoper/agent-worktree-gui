@@ -47,7 +47,7 @@ The three do not name the same chooser. §5 is what falls out of that.
 |---|---|---|
 | 73–77 | `TYPES` | the scale as code: `feat` → minor, every other prefix (`fix`, `docs`, `test`, `chore`, `refactor`, `perf`, `style`, `build`, `ci`, `revert`) → patch |
 | 81–98 | `baseCandidates()` | the base ref, in order: `$VERSION_BASE`, each remote's own HEAD symref, remote-tracking refs sorted with `endsWith("/main")` first, then `main`, `master` |
-| 100–108 | `resolveBase()` | the first candidate that resolves to a commit; no base is not a guess, it is a refusal at 327 |
+| 100–108 | `resolveBase()` | the first candidate that resolves to a commit; when none does, `check` refuses (327–339) and `suggest` says there is nothing to compare against (276–279) |
 | 112–120 | `branchCommits()` | `git log <base>..HEAD`, tip first — the same set the prompt shows |
 | 124–141 | `classify()` | `!` or a `BREAKING CHANGE:` body line → major; a known prefix → its `TYPES` level; anything else → `null` with "nothing here says which level it is" |
 | 143–152 | `overall()` | the highest rank wins; unclassified commits are counted, never folded into patch |
@@ -120,9 +120,10 @@ The three do not name the same chooser. §5 is what falls out of that.
 
 ## 4. The landing brief
 
-`lib/branch-policy.js:45–59` is the whole paragraph. The landing-branch arm (53–59) reads:
+`lib/branch-policy.js:45–59` is the whole paragraph. The landing-branch arm (53–59) reads, with its
+interpolations shown as placeholders:
 
-> `LANDING: this worktree (…) is on `<branch>`, cut from `<parent>` — a landing branch, so do not merge into it. When the work is done, commit on `<branch>`, push it and open a pull request: `git push -u <remote> HEAD` then `gh pr create --fill`.`
+> LANDING: this worktree (`<tree>`) is on `<branch>`, cut from `<parent>` — a landing branch, so do not merge into it. When the work is done, commit on `<branch>`, push it and open a pull request: `git push -u <remote> HEAD` then `gh pr create --fill`.
 
 | line | point | what it says about the version |
 |---|---|---|
@@ -154,9 +155,10 @@ job. A run in a tree cut from `main` gets none of the three sentences — only t
 
 **S2 — a docs-only branch cannot pass the gate, by design.** `version.mjs:397–404` allows an equal number
 only when the branch adds **no** commits; one docs commit at the base's number is refused (406–414). Yet
-`docs/versioning.md` says "a render … spends no version", and `tools/land.mjs:346` says a version-free
-landing "is refused by .githooks/pre-push **on purpose** — push it deliberately with `--no-verify` and say
-why in the PR". The documented no-number landing and the gate that enforces numbers meet only at the bypass.
+`docs/versioning.md:67` says a render "spends no number and creates no tag", and `tools/land.mjs:346` says
+"A landing that spends no version (a docs-only merge) is refused by .githooks/pre-push on purpose — push it
+deliberately with `git push <remote> <base> --no-verify` and say why in the PR". The documented no-number
+landing and the gate that enforces numbers meet only at the bypass.
 
 **S3 — the anchor is shared with branches that have not landed.** `apply` creates `v<next>` on the branch
 (524–529) so the branch's own gate can read it, and refuses any number whose tag exists anywhere (476–483).
@@ -165,7 +167,7 @@ Parallel landings from one base therefore collide by construction: at the time o
 `e52a88c` on `wtgui/let-each-assistant-be-re-b279a4`. The next patch and the next minor from this base are
 both taken by work that has not landed (§6).
 
-**S4 — `apply` bumps the working number, `check` compares HEAD, and neither one reads the base.**
+**S4 — `apply` bumps the working number and never reads the base; `check` compares HEAD against it.**
 `modeApply` reads `readWorking()` (459–468) and calls `nextVersion` (469); `versionAt(base)` exists (189–193)
 and is called from `modeCheck` only (342). On a branch cut before the base moved, `apply patch` writes a
 number relative to the **stale** one, and `check` then refuses it as "behind" (413). The refusal's advice —
@@ -189,16 +191,15 @@ that keeps the level a judgement rather than a gate.
 
 **S8 — suffixes compare as equal and bump as absent.** `semver()` (204–207) matches the first three numbers
 and ignores `-rc.1`; `nextVersion()` (217–224) requires a plain three-part and strips `[-+].*`. `1.2.3-rc.1`
-therefore compares equal to `1.2.3` and `apply patch` from it yields `1.2.4`. No tag in this repo carries a
-suffix today; the behaviour is latent.
+therefore compares equal to `1.2.3` and `apply patch` from it yields `1.2.4`. None of the 341 tags in this
+clone carries such a suffix; the behaviour is latent.
 
 **S9 — the base is whichever ref sorts first.** `baseCandidates()` (81–98) ranks remote-tracking refs by
 `endsWith("/main")`, so a remote branch named `<anything>/main` ranks with `origin/main` and is separated
 only by `localeCompare`; the local `main` is reached only when no remote ref resolves. At this commit the
-local `main` was `603617b` and `origin/main` `f6f0c2f`, and `check` correctly reported `base origin/main
-1.32.1 (f6f0c2f)`.
+local `main` was `603617b` and `origin/main` `f6f0c2f`, and `check` correctly reported `base origin/main 1.32.1 (f6f0c2f)`.
 
-**S10 — the PR is counted as an eleventh commit.** `modeSuggest` appends the PR's title and body as one more
+**S10 — the PR is counted as one more commit.** `modeSuggest` appends the PR's title and body as one more
 entry (289). With `gh pr create --fill` the title is usually the branch's own subject, so one change can be
 classified twice; the level is a max so the answer does not move, but the "N of M commits could not be
 classified" denominator (309–312) counts the PR as a commit.
@@ -232,9 +233,33 @@ version apply: package.json would declare 1.32.2, and v1.32.2 already names e0ef
 
 `node tools/version.mjs check` (after the document's commit):
 
-PENDING_CHECK_AFTER_COMMIT
+```
+version check: refused — 1 commit is about to land with no version bump
 
-So this lane's disposition: the document is committed **alone**, no number is spent, and the branch is pushed
+  branch  1.32.1  (HEAD's package.json)
+  base    origin/main  1.32.1  (f6f0c2f)
+
+  commits this branch adds:
+    e8c754e9  patch docs: trace every version point in the panel's own automation
+
+  the tool would suggest: patch  (advice — the level is the landing agent's judgement)
+
+  a version that does not move with its change tells a reader nothing moved, and the squash merge puts
+  this branch's own subjects into main's history. Fix it in the same PR as the change:
+
+    node tools/version.mjs apply patch
+
+  apply writes the number, commits it as its own commit and tags that commit. State the level and the reason
+  in the PR body. The scale is docs/versioning.md.
+  (git push --no-verify bypasses this check, and a local hook only ever binds its own author.)
+```
+
+The `e8c754e9` in that output is the branch commit the gate read; the landing's rebase re-creates it on
+`main` under a new sha, so it is quoted as the evidence for that reading, not as a pointer that survives the
+merge.
+
+So this lane's disposition: the document is committed with nothing else in it — the first commit carries the
+trace, the second folds this refusal into the same file — no number is spent, and the branch is pushed
 with `git push --no-verify` — the disposition `tools/land.mjs:346` names for a landing that spends no version,
 and the only one available here: the two numbers the scale would pick from this base (1.32.2, 1.33.0) are
 already anchored on branches that have not landed, and moving or deleting someone else's tag is not this
