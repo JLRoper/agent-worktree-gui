@@ -198,6 +198,34 @@ button:disabled { opacity: .5; cursor: default; }
 button.primary { background: #1d3a57; border-color: #2b5480; color: #cfe6ff; }
 button.primary:hover { background: #24466a; }
 
+/* ---- the panel's CHROME is not text --------------------------------------------------------------
+   A press that starts on the page's own furniture — the status strip, a section header, a column
+   header, a tab label or a counter chip — must not paint a selection over it. Measured before this
+   rule: dragging across the status strip selected "v1.29.0 · 1 project(s) · cheap fields every …", and
+   dragging from the New agent header (already `user-select: none` through `.project-head[data-toggle-fixed]`)
+   reached PAST it and selected the sticky topbar's wording instead, which is the worst shape of it —
+   the reader aims at the board and the header goes blue.
+
+   The list is named container by container on purpose: never `body`, never `*`. Everything a reader
+   copies lives OUTSIDE these boxes — console lines, tool output, file paths, diffs, commit SHAs and an
+   agent's report keep the browser's own selection. `user-select` is a selection rule only, so a button
+   inside any of these still takes its press, its `:hover` background and its `:focus-visible` ring
+   exactly as before.
+
+   Not repeated here because they already carried it: `.project-head[data-toggle-project]` and
+   `.project-head[data-toggle-fixed]` (the fold heads), `.as-bar` (the assistant's title row) and
+   `.settings-tab` (a Settings tab label). `.project-head.meta-line` is deliberately NOT chrome: it
+   prints the main branch, both tips' commit SHAs and the fetch note, and those stay copyable. */
+.topbar,
+.spawn-strip-head,
+.ap-dock-head,
+thead th,
+.settings-tabs,
+.as-tabs button,
+.as-subtabs button,
+.chips,
+.chip { user-select: none; }
+
 /* The banner FLOATS under the sticky topbar instead of sitting in the page. A message that appears must not move
    the board under the reader's hands, so the layer is `position: fixed` and takes no height from the flow. Its top
    is the topbar's MEASURED height (the header wraps to a second row on a narrow window, so it is never a constant)
