@@ -533,6 +533,45 @@ ends, the panel records a re-check on the tree:
 The result, in one line: **a 30-minute wait costs wakes and not a parked run** — nothing at all if the reviewer is
 quiet, one short turn when they answer, and never a run that has to stay alive to remember what it was waiting for.
 
+### The second kind of wait: the stage's own run
+
+A stage can be waiting on one other thing, and it is not the reviewer: its own worker. The record carries both kinds,
+and `kind` is what tells them apart (`lib/pipelines.js` `waitKind`; a record written before the kinds existed reads as
+the reviewer's, because that is the only wait the panel could write then).
+
+```json
+{
+  "pipelineWait": {
+    "kind": "run", "pipeline": "ping-pong", "stage": "draft", "visit": 2,
+    "job": "job-7", "thread": "wtgui/hold-a-pipeline-row-…", "branch": "wtgui/hold-a-pipeline-row-…",
+    "at": "2026-11-05T18:20:04.115Z", "settledAt": null
+  }
+}
+```
+
+- **The CUT writes it, keyed to the run.** `linkSpawnTask` links the worker to the queue row and then writes the hold
+  (`lib/jobs.js` `holdPipelineStageRun`): the stage the row stands on, and the job and thread working it. A hold that
+  names neither a job nor a thread is not written at all — there would be nothing to wait on.
+- **It is a clock, not a lock.** A hold is due on every tick; the tick's answer is one job-store read
+  (`this.get(wait.job)`), not a host call. A live card keeps the hold (`held` in the sweep's summary). A card that has
+  ended — or one the 80-job ring no longer has — makes the hold due, and the sweep does exactly one thing with it.
+- **One owner for the advance.** `sweepPipelineWaits` clears the hold with a compare-and-set and hands the row to the
+  `advance` seam, which the server wires to `Assistant.advancePipelineTree` — the same `driveTaskPipelines` pass the
+  queue tick runs. So the graph rules are never re-implemented here: a **cap**, a **gate-REVISE park**, a **missing
+  artifact** and a **refusal** all still stop the walk, and the sweep reports the driver's own sentence.
+- **The driver is the fallback, never the second owner.** `driveTaskPipelines` leaves a row alone while the book holds
+  it on that stage and visit (`heldByBook`), because two passes moving one stage is the double-advance this exists to
+  prevent. Past `HOLD_OWNER_MS` (3 minutes) from the settle, the driver takes the row back: a panel whose ticker died
+  must not leave a settled row waiting for a clock nobody restarts.
+- **It survives a restart by construction.** The hold is on the tree's durable record, and the sweep reads the book
+  itself, so a panel restarted between the settle and the tick resumes the wait instead of starting the stage twice —
+  the update is a conditional clear, and the hold is the claim.
+
+The two kinds are one ticker and one function: `sweepPipelineWaits` branches on `kind`, and a run hold never reaches
+`readReviewExit`, `renderPrompt` or `wake`. Proved on the shipped `ping-pong` document by
+`node tools/verify-pipeline-walk.mjs` (the `ping-pong:timer` walk: eight starts, seven stage moves and the cap park,
+every boundary after the first start crossed by the timer alone, and a restart mid-wait that starts nothing twice).
+
 ---
 
 ## 7. What exists to plug into

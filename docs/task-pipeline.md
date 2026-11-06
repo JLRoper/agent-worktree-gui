@@ -180,6 +180,39 @@ queue's own tick — asks `lib/task-pipeline-drive.js` three questions about eve
   stage run; the row parks on the rendered sentence. `unresolved` **parks** — it is a fact about a written record, not
   an empty state, and leaving the row sitting still was the old behaviour.
 
+### The hold: the row's live stage, in the panel's own wait book
+
+A stage that has a worker is a row waiting on that run, and the panel says so in the book it already keeps for the
+reviewer's wait (`docs/pipelines.md` §6): the tree's pipeline record carries
+
+```json
+"pipelineWait": { "kind": "run", "pipeline": "poc-to-uat", "stage": "S8", "visit": 2, "job": "job-4f2a", "thread": "carry the form", "at": "…" }
+```
+
+written at the CUT (`lib/assistant.js` `linkSpawnTask` → `lib/jobs.js` `holdPipelineStageRun`) — the same write that
+links the worker to the row, so the row's condition is durable from the first instant of the run rather than inferred
+from a thread nobody wrote down.
+
+- **The panel owns the advance; the driver is the fallback.** `sweepPipelineWaits` is the panel's own ticker: it reads
+  the run's status from the job store (no host call, no run held open) and, once the run is no longer live, clears the
+  hold and calls the one advance seam — `Assistant.advancePipelineTree`, which runs the SAME `driveTaskPipelines` pass
+  the queue tick runs. Every rule below still stops the walk, because the driver is what decides: a cap, a gate's
+  refusal to route, a missing artifact, a tree claimed by another row, a failed run.
+- **Why the hold exists at all.** `driveTaskPipelines` leaves a row alone while the book holds it (`heldByBook`): two
+  passes moving one stage is the double-advance this rule prevents. A hold is a clock, not a lock — past
+  `HOLD_OWNER_MS` (3 minutes) from the settle the driver takes the row back, so a panel whose ticker died cannot
+  strand a settled row.
+- **A restart resumes the wait.** The hold is on the tree's durable record and the sweep reads the book itself; the
+  advance is a conditional clear, so two panels, two ticks, or a restart between the settle and the tick start the
+  stage once. A card the 80-job ring no longer has is not a live run: the seam reads the row's own ledger and decides.
+- **Nothing is parked by the hold.** The row still reads `running` while its stage works — the hold is the durable
+  fact behind that word, not a second state a reader has to learn. A settled stage moves the row exactly as it did
+  before: `queued` at the next stage, with the start asked for when the reader's `spawn` switch is `auto`.
+
+Proved end to end on the shipped `ping-pong` document by `node tools/verify-pipeline-walk.mjs`: its `ping-pong:timer`
+walk starts the row once through the ordinary queue tick, then crosses every later boundary on `sweepPipelineWaits`
+alone — three loop rounds, the cap park, and a restart mid-wait that starts no stage twice.
+
 Unattended starts are the assistant's own switch (`spawn`, in Settings → Assistant): **`auto`** is "start it at once"
 and is the only value the driver starts a stage under. `ask` and `off` still let a settled row advance — the work is
 not lost, it simply waits for a person, which is what those two settings say.
