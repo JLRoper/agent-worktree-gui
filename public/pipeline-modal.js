@@ -36,6 +36,15 @@
   const TITLE_ID = "pipeline-modal-title";
   const TABBABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
   const MODES = ["edit", "position"];
+  // ---- the card as a window ----------------------------------------------------------------------------------------
+  // The bar drags the card and the corner grip resizes it. Both are POINTER gestures in VISUAL px (what a pointer
+  // arrives in), and every length written back as a style is a LAYOUT px: Settings > Display's page zoom scales the
+  // page (`documentElement.style.zoom`), so the two are the same unit only at 100%. This is the arithmetic the
+  // deliverables popover already uses, and the reason a drag used to land a panel somewhere the reader did not aim.
+  const PM_MARGIN = 8;   // the card never touches a viewport edge
+  const PM_MIN_W = 320;  // narrower than this and a stage tile is a smear of wrapped letters
+  const PM_MIN_H = 160;
+  const PM_SLOP = 3;     // a press that moves less than this is a press on the bar, not a drag
 
   const esc = (value) =>
     String(value ?? "")
@@ -66,6 +75,11 @@
     // data attribute, and the modal remembers it across a re-render (a position change, a motion change) so a
     // press is not undone by the next frame.
     fit: false,
+    // Where the READER put this card, and the gesture in flight. `rect` is a VISUAL rectangle (the unit a pointer
+    // arrives in) and null while the stylesheet still centres a card sized to its drawing; once they have dragged or
+    // resized it, the card is a fixed box and the flow lays itself out in the room that box gives it.
+    rect: null,
+    gesture: null,
     flowWatch: null,
   };
 
@@ -179,7 +193,8 @@
         </span>
         ${factsHtml(state.facts)}
       </div>
-      <div class="pmodal-body">${body}</div>`;
+      <div class="pmodal-body">${body}</div>
+      <span class="pmodal-resize" data-pm-resize aria-hidden="true" title="drag to resize this card"></span>`;
   }
 
   function paint(doc = document) {
@@ -211,15 +226,69 @@
   // notch is read against the scroller's own box, so the number a reader sees is the number the browser clipped. The
   // same pass decides whether the control has anything to do — a drawing that fits does not offer it, and the row is
   // hidden rather than printing "all 3 stages in view" under a picture that obviously holds them.
+  //
+  // It also decides the SHAPE, because the card is a window now: the reader can drag it narrower, and the window can be
+  // small. Two shapes, one rule each:
+  //
+  //   one row  the drawing is a row of the readable 96 px columns; when they do not fit, the row scrolls and the status
+  //            row says how many stages are out and offers the compact 56 px row (the `fit` press that was already here).
+  //   wrapped  not even the compact row fits - a card ~880 px or narrower for thirteen stages. A single row that narrow
+  //            gives each column ~34 px, which turns "Stage 1 - intake" into a stack of single letters: every stage is on
+  //            screen and none can be read. So the track wraps into ROWS of the 96 px columns instead
+  //            (`.pflow[data-wrap="1"]` in public/style.css): every stage stays on screen, at full type size. The row
+  //            ends are marked because only the laid-out page knows which tile is last on its line - a connector stub
+  //            after it would point into the row below.
+  //
+  // Nothing is measured with a canvas or a font metric: two subtractions on the scroller's own client width.
+  const PFLOW_COMPACT = 56; // the compact column the `fit` press draws (--pflow-minw under [data-fit="1"])
+
+  function shapeOf(flowEl) {
+    const scroll = flowEl.querySelector(".pflow-scroll");
+    const nodes = [...flowEl.querySelectorAll(".pflow-node")];
+    if (!scroll || !nodes.length || !scroll.clientWidth) return null;
+    const n = nodes.length;
+    const width = scroll.clientWidth;
+    return {
+      nodes,
+      // What the compact row (12 px gaps, the `fit` press's own shape) would leave a column. It is the narrowest the
+      // drawing can be while it is still a row, so it is the shape's own floor: below it, the drawing wraps.
+      compactShare: (width - (n - 1) * 12) / n,
+    };
+  }
+
+  function wrapRows(flowEl, shape) {
+    const wrap = shape.nodes.length > 1 && shape.compactShare < PFLOW_COMPACT;
+    const said = wrap ? "1" : "0";
+    if (flowEl.dataset.wrap !== said) flowEl.dataset.wrap = said;
+    // Last on its line: the next tile starts a new one, or there is no next tile.
+    const nodes = shape.nodes;
+    for (let i = 0; i < nodes.length; i += 1) {
+      const next = nodes[i + 1];
+      const ends = !next || Math.abs(next.offsetTop - nodes[i].offsetTop) > 1;
+      if (ends) nodes[i].dataset.rowEnd = "1";
+      else delete nodes[i].dataset.rowEnd;
+      // A gate's notch lives in the CONNECTOR after its stage. At a row end there is no connector, so it is moved onto
+      // the tile's own right edge (the position the renderer already gives the drawing's last gate) instead of hanging
+      // in a gap that is not there - which measured 6 px of scroller overflow and a scrollbar under a drawing that fits.
+      const notch = nodes[i].querySelector(".pflow-notch");
+      if (notch && notch.style) notch.style.left = ends ? "calc(100% - 1.5px)" : "calc(100% + var(--pflow-gap) / 2)";
+    }
+    return wrap;
+  }
+
   function readView(doc) {
     const flowEl = doc.querySelector("[data-pm-flow] .pflow");
     const count = flowEl && flowEl.querySelector("[data-pflow-count]");
     if (!flowEl || !count || !global.PipelineFlow || typeof global.PipelineFlow.viewCount !== "function") return;
+    const shape = shapeOf(flowEl);
+    if (!shape) return;
+    const wrap = wrapRows(flowEl, shape);
     const said = global.PipelineFlow.viewCount(flowEl);
     if (!said) return;
     count.textContent = said.text;
     count.dataset.out = String(said.stages.out + said.notches.out);
-    const show = said.overflow || state.fit;
+    // A wrapped drawing shows every stage, so it owes the reader no count and no press; the row is for a row.
+    const show = !wrap && (said.overflow || state.fit);
     for (const selector of ["[data-pflow-status]", "[data-pflow-fit]"]) {
       const el = flowEl.querySelector(selector);
       if (el) el.hidden = !show;
@@ -269,6 +338,114 @@
     });
   }
 
+  // ---- the card's geometry: VISUAL px in, LAYOUT px out ------------------------------------------------------------
+  // `getComputedStyle(document.documentElement).zoom` is the page zoom Settings > Display writes, and it is the factor
+  // between a pointer's visual px and a style's layout px. Reading it at gesture time (never caching it) means a zoom
+  // change between two drags is answered by the second drag's own arithmetic.
+  function zoomOf(doc) {
+    try {
+      const z = parseFloat(doc.defaultView?.getComputedStyle?.(doc.documentElement)?.zoom);
+      return Number.isFinite(z) && z > 0 ? z : 1;
+    } catch {
+      return 1;
+    }
+  }
+
+  function roomOf(doc) {
+    const win = doc.defaultView || global;
+    const vw = Math.max(1, Math.round(win?.innerWidth || 1));
+    const vh = Math.max(1, Math.round(win?.innerHeight || 1));
+    return { z: zoomOf(doc), vw, vh, roomW: Math.max(1, vw - PM_MARGIN * 2), roomH: Math.max(1, vh - PM_MARGIN * 2) };
+  }
+
+  // A VISUAL rectangle clamped: the size first (the reader's floor, then the room this window has), then the place, so
+  // a card that no longer fits is SHRUNK into the window instead of hanging off an edge. `max: false` is the DRAG's
+  // rule: dragging must never also resize the card.
+  function clampCard(g, { max = true, doc = document } = {}) {
+    const { vw, vh, roomW, roomH } = roomOf(doc);
+    const w = max ? Math.min(Math.max(Math.round(g.w), PM_MIN_W), roomW) : Math.min(Math.round(g.w), roomW);
+    const h = max ? Math.min(Math.max(Math.round(g.h), PM_MIN_H), roomH) : Math.min(Math.round(g.h), roomH);
+    const x = Math.min(Math.max(Math.round(g.x), PM_MARGIN), Math.max(PM_MARGIN, vw - w - PM_MARGIN));
+    const y = Math.min(Math.max(Math.round(g.y), PM_MARGIN), Math.max(PM_MARGIN, vh - h - PM_MARGIN));
+    return { x, y, w, h };
+  }
+
+  // Write a VISUAL rectangle back as style lengths, each divided by the zoom once. `position: fixed` takes the card out
+  // of the backdrop's centring flex, so left/top are the reader's own numbers and the flow inside re-lays out in the
+  // width they chose (the grid's columns are a share of it, never a fixed strip).
+  function paintCard(g, doc = document) {
+    const card = doc.getElementById(CARD_ID);
+    if (!card || !card.style) return;
+    const { z } = roomOf(doc);
+    card.style.position = "fixed";
+    card.style.margin = "0";
+    card.style.left = `${Math.round(g.x / z)}px`;
+    card.style.top = `${Math.round(g.y / z)}px`;
+    card.style.width = `${Math.round(g.w / z)}px`;
+    card.style.height = `${Math.round(g.h / z)}px`;
+    card.style.maxHeight = "none";
+  }
+
+  // Back to the stylesheet's own card: centred, sized from the drawing it holds. A double-press on the bar does this,
+  // and every open starts here, so a place chosen for another definition is not inherited by this one.
+  function resetCard(doc = document) {
+    const card = doc.getElementById(CARD_ID);
+    state.rect = null;
+    state.gesture = null;
+    if (!card || !card.style) return;
+    for (const prop of ["position", "margin", "left", "top", "width", "height", "maxHeight"]) card.style[prop] = "";
+    card.classList.remove("is-dragging");
+  }
+
+  // The press that starts a gesture. Only the BAR drags (a press on one of its controls is that control, and the body
+  // is never a handle, so its text stays selectable and the drawing keeps scrolling), and only the CORNER resizes.
+  function gestureStart(e, kind, doc) {
+    const card = doc.getElementById(CARD_ID);
+    if (!state.open || !card || e.button !== 0) return;
+    const box = card.getBoundingClientRect();
+    state.gesture = { kind, id: e.pointerId, x: e.clientX, y: e.clientY, moved: false, rect: { x: box.left, y: box.top, w: box.width, h: box.height } };
+    // The first press pins the size the card already has, so a drag can never resize it and a resize can never move
+    // it by accident: both gestures then work from one rectangle.
+    state.rect = { ...state.gesture.rect };
+    card.setPointerCapture?.(e.pointerId);
+    e.preventDefault?.(); // a drag is not a text selection
+  }
+
+  function gestureMove(e, doc) {
+    const g = state.gesture;
+    if (!g || g.id !== e.pointerId) return;
+    const dx = e.clientX - g.x;
+    const dy = e.clientY - g.y;
+    if (!g.moved && Math.abs(dx) + Math.abs(dy) < PM_SLOP) return;
+    g.moved = true;
+    doc.getElementById(CARD_ID)?.classList.add("is-dragging");
+    const next =
+      g.kind === "drag"
+        ? clampCard({ x: g.rect.x + dx, y: g.rect.y + dy, w: g.rect.w, h: g.rect.h }, { max: false, doc })
+        : clampCard({ x: g.rect.x, y: g.rect.y, w: g.rect.w + dx, h: g.rect.h + dy }, { doc });
+    state.rect = next;
+    paintCard(next, doc);
+    // The card just changed the room the drawing has: re-decide the shape and the count on every frame of the gesture,
+    // so a resize never leaves the flow in the shape of a width it no longer has.
+    readView(doc);
+  }
+
+  function gestureEnd(e, doc) {
+    const g = state.gesture;
+    if (!g) return;
+    if (e && g.id !== e.pointerId) return;
+    state.gesture = null;
+    doc.getElementById(CARD_ID)?.classList?.remove("is-dragging");
+  }
+
+  // A window resize answers the card the same way: the rectangle it had is re-clamped into the room that is left.
+  function rehomeCard(doc) {
+    if (!state.rect) return;
+    const next = clampCard(state.rect, { doc });
+    state.rect = next;
+    paintCard(next, doc);
+  }
+
   function restore(doc) {
     const from = state.opener;
     const again =
@@ -297,6 +474,8 @@
       // The next open may be a shorter definition, and paint() sets this again from the flow it is given; clearing it
       // here keeps an empty card from carrying the last drawing's width while the next one is still loading.
       card.style?.setProperty?.("--pflow-card-n", "1");
+      // The place and size the reader chose belong to the definition they were looking at, not to the next one.
+      resetCard(doc);
     }
     doc.body?.classList?.remove("pipeline-modal-open");
     Object.assign(state, {
@@ -353,6 +532,8 @@
     host.hidden = false;
     host.setAttribute("data-mode", mode);
     host.setAttribute("data-motion", state.motion ? "on" : "off");
+    // Every open is the stylesheet's card: centred, sized from the drawing it is about to hold.
+    resetCard(doc);
     paint(doc);
     wire(doc);
     watchMotion(doc);
@@ -456,6 +637,32 @@
     // bound on the CARD, not as a capture stop on document: capture at document runs BEFORE the button's own handler
     // and a stop there is the press never arriving at all.
     doc.getElementById(CARD_ID)?.addEventListener("click", (e) => e.stopPropagation?.());
+    // ---- the card as a window ---------------------------------------------------------------------------------------
+    // Bound on the CARD, once: the element outlives every repaint (paint() replaces its innerHTML, not the node), so a
+    // listener here is not rebuilt under a gesture. The bar drags, the corner resizes, and a double-press on the bar
+    // puts the card back where the stylesheet had it.
+    const card = doc.getElementById(CARD_ID);
+    card?.addEventListener?.("pointerdown", (e) => {
+      if (!state.open || e.button !== 0) return;
+      if (e.target?.closest?.("[data-pm-resize]")) {
+        gestureStart(e, "resize", doc);
+        return;
+      }
+      const bar = e.target?.closest?.(".pmodal-bar");
+      if (!bar || e.target.closest?.("button, a, select, input, textarea, label")) return;
+      gestureStart(e, "drag", doc);
+    });
+    card?.addEventListener?.("dblclick", (e) => {
+      if (e.target?.closest?.("button, a, select, input, textarea, label")) return;
+      if (!e.target?.closest?.(".pmodal-bar")) return;
+      resetCard(doc);
+    });
+    const win = doc.defaultView;
+    win?.addEventListener?.("pointermove", (e) => gestureMove(e, doc));
+    win?.addEventListener?.("pointerup", (e) => gestureEnd(e, doc));
+    win?.addEventListener?.("pointercancel", (e) => gestureEnd(e, doc));
+    // A window that shrinks under a card the reader placed re-clamps it, so the bar is never off the glass.
+    win?.addEventListener?.("resize", () => rehomeCard(doc));
   }
 
   function watchMotion(doc) {

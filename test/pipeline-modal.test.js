@@ -167,3 +167,44 @@ test("the Pipeline tab has the dropdown, the editor and the control that opens t
   assert.match(assistant, /data-as-qflow=/, "a queue row carries the position-mode press");
   assert.match(assistant, /mode: "position"/, "and it opens the modal in position mode");
 });
+
+test("the card is a window: its bar drags it and its corner grip resizes it", () => {
+  // The grip is part of the card's own markup and lives inside the clipped box, so it cannot be a control drawn off
+  // the card's edge. It takes no Tab stop and no accessible name (it is a pointer affordance, `aria-hidden`).
+  assert.match(source, /class="pmodal-resize" data-pm-resize aria-hidden="true"/, "the card carries its corner grip");
+  assert.match(css, /\.pmodal-resize \{ position: absolute; right: 0; bottom: 0; width: 16px; height: 16px; cursor: nwse-resize;/, "anchored to the corner, with the corner's cursor");
+  // The bar is the only drag handle, and a press on one of its controls is that control: the close button and the map
+  // link must still be presses, not the start of a gesture.
+  assert.match(source, /const bar = e\.target\?\.closest\?\.\("\.pmodal-bar"\);/);
+  assert.match(source, /closest\?\.\("button, a, select, input, textarea, label"\)/, "a control inside the bar is not a handle");
+  assert.match(source, /addEventListener\?\.\("pointermove", \(e\) => gestureMove\(e, doc\)\)/);
+  assert.match(source, /addEventListener\?\.\("pointerup", \(e\) => gestureEnd\(e, doc\)\)/);
+  assert.match(source, /addEventListener\?\.\("pointercancel", \(e\) => gestureEnd\(e, doc\)\)/);
+  // A press that barely moves is a press on the bar, not a drag of the card.
+  assert.match(source, /const PM_SLOP = \d+;/, "a slop threshold, so a click is not a drag");
+});
+
+test("the gesture is VISUAL px in and LAYOUT px out, clamped to the window and reset per open", () => {
+  // Settings > Display's page zoom is the factor between a pointer's visual px and a style's layout px; writing one in
+  // the other's unit is how a dragged panel lands somewhere the reader did not aim.
+  assert.match(source, /getComputedStyle\?\.\(doc\.documentElement\)\?\.zoom/, "the page zoom is read, not assumed");
+  assert.match(source, /g\.x \/ z/, "a written x is divided by it");
+  assert.match(source, /function clampCard\(/, "one clamp serves both gestures");
+  assert.match(source, /const PM_MARGIN = \d+;/, "the card keeps a margin from every edge");
+  assert.match(source, /const PM_MIN_W = \d+;/, "and a floor the resize cannot go under");
+  assert.match(source, /addEventListener\?\.\("resize", \(\) => rehomeCard\(doc\)\)/, "a window that shrinks re-homes it");
+  // The place belongs to the drawing it was chosen for: close() and open() both reset it.
+  assert.ok((source.match(/resetCard\(doc\);/g) || []).length >= 2, "open() and close() both reset the card's geometry");
+});
+
+test("a card too narrow for a readable row wraps the drawing instead of clipping stages", () => {
+  // The rule: when the compact row would give a column less than its own 56 px floor, no single row can be read, so
+  // the track wraps into rows of the readable 96 px columns. The wrap has its own stylesheet shape, and the connector
+  // stub on the last tile of a row is dropped (there is no next column to join).
+  assert.match(source, /function wrapRows\(flowEl, shape\)/);
+  assert.match(source, /const PFLOW_COMPACT = 56;/, "the compact column is the threshold");
+  assert.match(source, /flowEl\.dataset\.wrap = said;/, "the shape is a data attribute, so the stylesheet owns it");
+  assert.match(css, /\.pflow\[data-wrap="1"\] \.pflow-track \{ grid-template-columns: repeat\(auto-fit, minmax\(96px, 1fr\)\);/, "the wrapped track keeps the readable column");
+  assert.match(css, /\.pflow\[data-wrap="1"\] \.pflow-node\[data-row-end="1"\] \.pflow-link \{ display: none; \}/, "a row's last tile keeps no connector");
+  assert.match(css, /\.pflow\[data-wrap="1"\] \.pflow-arcs,/, "the horizontal arc lane is put away with the row");
+});

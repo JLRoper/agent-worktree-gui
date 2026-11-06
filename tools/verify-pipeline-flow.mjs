@@ -100,6 +100,23 @@ mkdirSync(SHOTS, { recursive: true });
 const bundleFile = path.join(logs, "pipeline-bundle.json");
 writeFileSync(bundleFile, JSON.stringify(BUNDLE, null, 1), "utf8");
 
+// One long definition in the LIVE catalogue, beside the seed's own: thirteen stages is the length the drawer was built
+// for and the length a small window cannot hold as one row of readable columns. The seed keeps supplying its own
+// definitions (the server merges the live file over them), so the dropdown checks above still see the built-ins.
+const THIRTEEN = {
+  id: "acceptance-thirteen",
+  kind: "turnover",
+  title: "Acceptance thirteen",
+  description: "Thirteen stages, for the window that cannot draw them as one row.",
+  stages: Array.from({ length: 13 }, (_, i) => ({
+    id: `st${i + 1}`,
+    title: `Stage ${i + 1} - ${["intake", "scope", "shape", "build", "check", "review", "hand over", "archive", "audit", "sign off", "publish", "follow up", "close"][i]}`,
+    prompt: `Work stage ${i + 1}: read what arrived, produce the artifact, and stop when the exit check passes.`,
+    exit: i % 3 === 2 ? { check: "file-exists", path: `docs/stage-${i + 1}.md` } : { check: "commits", min: 1 },
+  })),
+};
+writeFileSync(path.join(dir, "pipelines.json"), JSON.stringify({ version: 1, note: "the flow harness's own definitions", pipelines: { [THIRTEEN.id]: THIRTEEN } }, null, 1), "utf8");
+
 const ENTERED = new Date(Date.now() - 2.5 * 3_600_000).toISOString();
 writeFileSync(
   path.join(logs, "assistants", "assistant-1", "queue.json"),
@@ -390,6 +407,91 @@ try {
     const still = await readModal(page);
     check(still.motion === "on", "the normal context draws with motion", still.motion);
     check(still.animation === "pflow-breathe", "and the current stage's mark animates", String(still.animation));
+    await page.keyboard.press("Escape");
+
+    // ---- 6. a small window: every stage readable, and the card is a window ------------------------------------------
+    // The reader's complaint this round answers: at a window a laptop can be shrunk to, a thirteen-stage definition was
+    // one row of columns wider than the card, with eight stages behind a scroll bar and a count under it. The card now
+    // drags and resizes, and a drawing that cannot be a readable row WRAPS into rows of readable columns, so the check
+    // is not "a count says how much is hidden" but "nothing is hidden, and the frame is the reader's".
+    console.log("\n== a small window: thirteen stages stay readable, and the card drags and resizes ==");
+    await page.setViewportSize({ width: 640, height: 480 });
+    await page.waitForTimeout(220);
+    const readSmall = () =>
+      page.evaluate(() => {
+        const card = document.getElementById("pipeline-modal-card");
+        const scroll = card.querySelector(".pflow-scroll");
+        const box = (el) => {
+          const b = el.getBoundingClientRect();
+          return { x: Math.round(b.left), y: Math.round(b.top), w: Math.round(b.width), h: Math.round(b.height), right: Math.round(b.right), bottom: Math.round(b.bottom) };
+        };
+        const cardBox = box(card);
+        const scrollBox = box(scroll);
+        const nodes = [...card.querySelectorAll(".pflow-node")].map((n) => ({ id: n.dataset.stage, ...box(n) }));
+        const body = card.querySelector(".pmodal-body");
+        return {
+          vw: innerWidth,
+          vh: innerHeight,
+          card: cardBox,
+          body: { sh: body.scrollHeight, ch: body.clientHeight, overflowY: getComputedStyle(body).overflowY },
+          scroll: { ...scrollBox, sw: scroll.scrollWidth, cw: scroll.clientWidth },
+          wrap: card.querySelector(".pflow")?.dataset.wrap,
+          rows: new Set(nodes.map((n) => n.y)).size,
+          nodes,
+          clipped: nodes.filter((n) => n.x < cardBox.x || n.right > cardBox.right || n.y < cardBox.y || n.bottom > cardBox.bottom).map((n) => n.id),
+          offWindow: nodes.filter((n) => n.x < 0 || n.right > innerWidth || n.y < 0 || n.bottom > innerHeight).map((n) => n.id),
+          statusHidden: Boolean(card.querySelector("[data-pflow-status]")?.hidden),
+          style: card.getAttribute("style") || "",
+        };
+      });
+    const gesture = async (handle, dx, dy) => {
+      const at = await page.$eval(handle, (el) => {
+        const b = el.getBoundingClientRect();
+        return { x: b.left + Math.min(10, b.width / 2), y: b.top + b.height / 2 };
+      });
+      await page.mouse.move(at.x, at.y);
+      await page.mouse.down();
+      await page.mouse.move(at.x + dx, at.y + dy, { steps: 8 });
+      await page.mouse.up();
+      await page.waitForTimeout(160);
+    };
+    await openSettingsGroup(page, "pipeline");
+    await page.waitForFunction(() => !/reading/.test(document.getElementById("pipeline-summary")?.textContent || ""), null, { timeout: 20_000 });
+    await page.selectOption("#pipeline-select", THIRTEEN.id);
+    await page.waitForSelector("#pipeline-editor:not([hidden]) .pipeline-stage", { timeout: 15_000 });
+    await page.click("#pipeline-flow-open");
+    await page.waitForSelector("#pipeline-modal:not([hidden]) .pflow-node");
+    await page.waitForTimeout(260);
+    const small = await readSmall();
+    equal("the thirteen-stage definition is drawn in rows at a 640x480 window", small.wrap, "1");
+    check(small.rows > 1, "and the rows are real rows, not one clipped line", `${small.rows} rows`);
+    equal("every stage of the definition is drawn", small.nodes.map((n) => n.id), THIRTEEN.stages.map((s) => s.id));
+    check(small.scroll.sw <= small.scroll.cw + 1, "the drawing needs no horizontal scroll - no stage is behind a bar", `${small.scroll.sw} <= ${small.scroll.cw}`);
+    equal("no stage is clipped by the card or the window", { inCard: small.clipped, offWindow: small.offWindow }, { inCard: [], offWindow: [] });
+    check(small.statusHidden, "and no count row is offered over a drawing that holds all thirteen");
+    await page.screenshot({ path: path.join(SHOTS, "small-window.png") });
+
+    // The corner grip resizes, and the header bar drags: both are the reader's frame, and both are measured on the
+    // card's own rect, not on a state variable.
+    await gesture("#pipeline-modal-card [data-pm-resize]", -160, -90);
+    const sized = await readSmall();
+    check(sized.card.w <= small.card.w - 140 && sized.card.h <= small.card.h - 70, "the corner grip resizes the card", `${small.card.w}x${small.card.h} -> ${sized.card.w}x${sized.card.h}`);
+    await gesture("#pipeline-modal-card .pmodal-bar", 40, 50);
+    const dragged = await readSmall();
+    equal("the header bar drags the card by the pointer's own travel", { dx: dragged.card.x - sized.card.x, dy: dragged.card.y - sized.card.y }, { dx: 40, dy: 50 });
+    check(dragged.card.x >= 0 && dragged.card.y >= 0 && dragged.card.right <= dragged.vw && dragged.card.bottom <= dragged.vh, "and it stays fully inside the window", JSON.stringify(dragged.card));
+    check(dragged.scroll.sw <= dragged.scroll.cw + 1, "no stage is behind a horizontal bar after the resize either", `${dragged.scroll.sw} <= ${dragged.scroll.cw}`);
+    check(dragged.body.overflowY === "auto", "and the rows below the fold scroll inside the card rather than being cut off", `body ${dragged.body.ch}/${dragged.body.sh} px, overflow-y ${dragged.body.overflowY}`);
+    await page.screenshot({ path: path.join(SHOTS, "small-window-resized.png") });
+
+    // A fresh open is the stylesheet's card again: the place and size belong to the drawing the reader was looking at.
+    await page.keyboard.press("Escape");
+    await page.waitForFunction(() => document.getElementById("pipeline-modal").hidden === true, null, { timeout: 5_000 });
+    await page.click("#pipeline-flow-open");
+    await page.waitForSelector("#pipeline-modal:not([hidden]) .pflow-node");
+    await page.waitForTimeout(160);
+    const again = await readSmall();
+    check(!/left:|top:|width:/.test(again.style), "a fresh open is the stylesheet's centred card again", again.style || "(no inline geometry)");
     await page.keyboard.press("Escape");
 
     out.pageErrors.push(...pageErrors);
