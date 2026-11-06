@@ -422,7 +422,7 @@ Five rules for it:
 
 | resolved | at | recorded on |
 |---|---|---|
-| the handoff out of the settled stage, and its artifact path | settle, before the move | the settling stage run: `artifact {id, path, present, sha256}` |
+| the handoff out of the settled stage, and its artifact path | settle, before the move | the settling stage run: `artifact {id, path, file, present, sha256}` |
 | the tree's COMMIT, the artifact's blob id and the sha256 of the blob's bytes | settle | the stage run's `commit`, and the artifact's `commit/blob/blobSha256` |
 | the artifact's `sha256` (files up to 1 MiB; larger files record `present` only, and say so) | settle | same |
 | the gate that ended the stage, and its decision path | settle | the park's `waitingFor`, and the next run's inputs block |
@@ -431,6 +431,14 @@ Five rules for it:
 A stage whose declared artifact is **absent at settle** does not advance: it parks with `pipeline-artifact` naming the
 path (§6.1). This is the design's one new hard gate, and it is what turns "one artifact, one writer" from a drawing into
 a check.
+
+**A hole the record can fill is not a match.** A declaration may carry `{{run_id}}` and `{{round}}`; the matcher fills
+the holes it knows before it falls back to matching one path segment (`fillHoles`, `artifactValues`). `{{round}}` is
+the visit the stage is in, so a loop body's seventh visit resolves `r7/…` and records r7's bytes. Matching instead of
+filling is what the 24-stage run exposed: `r{{round}}` matched r1 through r7, the first name that sorts won, seven
+visits recorded one hash while seven files sat on disk, and the pin was taken against the declaration - a path git
+cannot resolve - so every committed round read as `uncommitted`. The record therefore carries both: `path` is the
+declaration, `file` is what it resolved to, and the blob is taken from `file`.
 
 ---
 
