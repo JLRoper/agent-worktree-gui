@@ -1,40 +1,43 @@
 // The ticket watch, driven directly: no server, no Jira, no network. `lib/ticket-watch.js` owns the list, the diff
-// and the card's words, and every one of those is a function this file can hand an argument to — which is the whole
-// reason the Jira GET and the two HTTP calls live in tools/ticket-watch.mjs instead.
+// and the wake's words, and every one of those is a function this file can hand an argument to - which is the whole
+// reason the Jira GET and the HTTP call live in tools/ticket-watch.mjs instead.
 //
 // What this pins, in the order the brief lists it:
 //   1. the LIST: one file per assistant beside its queue, entries exactly `{key, note, addedAt, lastSeen}`, a
 //      re-add keeping the baseline, a corrupt file reported as an error rather than read as empty;
 //   2. the BASELINE: a key whose `lastSeen` is all nulls raises nothing, so adding a ticket is never a burst of
-//      cards about history the reader has already read;
-//   3. the three EVENT CLASSES: a new comment (and only a NEW one), a status change, an assignee change — with
+//      wakes about history the reader has already read;
+//   3. the three MOVEMENT CLASSES: a new comment (and only a NEW one), a status change, an assignee change - with
 //      "unassigned" a value rather than an absence;
-//   4. the ADDRESSED TEST, all four ways it can fire and the one way it cannot (the reader's own comment), each
-//      saying WHICH test fired rather than "new comment";
-//   5. the CARD: the key, what changed, the comment's author and time, and the four options in the row's `detail`;
-//   6. the WAKE DOOR: `POST /api/ticket-watch/wake` calls `assistant.wake(text, null, "ticket", {assistantId})` —
-//      the panel's own ladder, no second path — and carries a refusal (switched off) back as a value.
+//   4. MOVEMENT ONLY: two comments, one that names the reader and one that does not, produce the same event shape
+//      and the same wake words. The poller decides nothing about relevance, and there is no addressed test left to
+//      call;
+//   5. the WAKE: the ticket key, what moved, the command that reads the ticket, and the instruction to judge it -
+//      with no verdict and no options;
+//   6. IDEMPOTENCE: the same issue classified twice raises nothing the second time and marks no write;
+//   7. the WAKE DOOR: `POST /api/ticket-watch/wake` calls `assistant.wake(text, null, "ticket", {assistantId})` -
+//      the panel's own ladder, no second path - and carries a refusal (switched off) back as a value;
+//   8. the SEED: the four Optym SRs at the repo root, which is what `seed` loads.
 import assert from "node:assert/strict";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import {
-  OPTIONS,
+  MOVEMENT_KINDS,
   addTicket,
-  addressedTo,
   classifyTicket,
   createTicketWatchRoutes,
-  eventMarker,
+  isBaseline,
+  movementLine,
   readTicketFile,
   removeTicket,
-  ticketRowFor,
   ticketsPathFor,
   wakeTextFor,
   writeTicketFile,
 } from "../lib/ticket-watch.js";
 
-const READER = { displayName: "Roper, Jacob", mention: "Roper" };
 const AT = "2026-11-02T13:18:26.927-0500";
 
 const comment = (id, author, body, created = AT) => ({ id: String(id), author: { displayName: author }, body, created });
@@ -69,6 +72,7 @@ test("addTicket writes exactly {key, note, addedAt, lastSeen}, and a re-add keep
   assert.deepEqual(Object.keys(first.entry), ["key", "note", "addedAt", "lastSeen"]);
   assert.equal(first.entry.key, "SR-242996");
   assert.equal(first.added, true);
+  assert.equal(first.changed, true);
   assert.deepEqual(first.entry.lastSeen, { commentId: null, status: null, assignee: null, updated: null });
   assert.equal(first.entry.addedAt, at.toISOString());
 
@@ -77,9 +81,13 @@ test("addTicket writes exactly {key, note, addedAt, lastSeen}, and a re-add keep
   const withSeen = { ...first.doc, tickets: [{ ...first.entry, lastSeen: seen() }] };
   const again = addTicket(withSeen, { key: "SR-242996", note: "renamed note", at });
   assert.equal(again.added, false);
+  assert.equal(again.changed, true, "the note moved, so the file is worth writing");
   assert.equal(again.entry.note, "renamed note");
   assert.deepEqual(again.entry.lastSeen, seen());
   assert.equal(again.entry.addedAt, first.entry.addedAt);
+
+  const same = addTicket(again.doc, { key: "SR-242996", note: "renamed note", at });
+  assert.equal(same.changed, false, "re-seeding an unchanged list must not rewrite it");
 
   assert.throws(() => addTicket({ tickets: [] }, { key: "not-a-key" }), (e) => e.code === "ticket-key");
 });
@@ -114,128 +122,122 @@ test("removeTicket takes one key and leaves the rest", () => {
   assert.equal(removeTicket(out.doc, "SR-242996").removed, false);
 });
 
-// ---- 2/3. the baseline and the three event classes ------------------------------------------------------------
+// ---- 2/3. the baseline and the three movement classes ---------------------------------------------------------
 
 test("a key whose lastSeen is all nulls is a BASELINE: it raises nothing, even with comments on the ticket", () => {
-  const out = classifyTicket(seeded(), issue({ comments: [comment(4212127, "Greene, Ernest", "[~Roper] are you good to go?")] }), { reader: READER });
+  const out = classifyTicket(seeded(), issue({ comments: [comment(4212127, "Greene, Ernest", "[~Roper] are you good to go?")] }));
   assert.equal(out.baseline, true);
+  assert.equal(isBaseline(seeded()), true);
   assert.deepEqual(out.events, []);
   assert.equal(out.changed, true, "the baseline snapshot is written, so the NEXT check has something to diff against");
   assert.deepEqual(out.entry.lastSeen, { commentId: "4212127", status: "Waiting for Customer", assignee: "Greene, Ernest", updated: AT });
 });
 
-test("only a NEW comment is an event: the ones at or below lastSeen.commentId are history", () => {
+test("only a NEW comment is a movement: the ones at or below lastSeen.commentId are history", () => {
   const old = comment(4212127, "Greene, Ernest", "[~Roper] are you good to go?");
   const fresh = comment(4217187, "Roper, Jacob", "[~GREENE] the 5671 rule is working");
-  const none = classifyTicket(seeded({ lastSeen: seen() }), issue({ comments: [old] }), { reader: READER });
+  const none = classifyTicket(seeded({ lastSeen: seen() }), issue({ comments: [old] }));
   assert.deepEqual(none.events, []);
   assert.equal(none.changed, false);
 
-  const one = classifyTicket(seeded({ lastSeen: seen() }), issue({ comments: [old, fresh] }), { reader: READER });
+  const one = classifyTicket(seeded({ lastSeen: seen() }), issue({ comments: [old, fresh] }));
   assert.equal(one.events.length, 1);
   assert.equal(one.events[0].kind, "comment");
   assert.equal(one.events[0].id, "4217187");
   assert.equal(one.events[0].author, "Roper, Jacob");
+  assert.equal(one.events[0].length, fresh.body.length);
   assert.equal(one.entry.lastSeen.commentId, "4217187");
 });
 
-test("a status change and an assignee change are events, and losing the assignee is a value", () => {
-  const moved = classifyTicket(seeded({ lastSeen: seen() }), issue({ status: "In Progress", assignee: "Roth, Chris" }), { reader: READER });
+test("a status change and an assignee change are movements, and losing the assignee is a value", () => {
+  const moved = classifyTicket(seeded({ lastSeen: seen() }), issue({ status: "In Progress", assignee: "Roth, Chris" }));
   assert.deepEqual(moved.events.map((e) => [e.kind, e.from, e.to]), [
     ["status", "Waiting for Customer", "In Progress"],
     ["assignee", "Greene, Ernest", "Roth, Chris"],
   ]);
 
-  const dropped = classifyTicket(seeded({ lastSeen: seen() }), issue({ assignee: null }), { reader: READER });
+  const dropped = classifyTicket(seeded({ lastSeen: seen() }), issue({ assignee: null }));
   assert.deepEqual(dropped.events.map((e) => [e.kind, e.from, e.to]), [["assignee", "Greene, Ernest", null]]);
   assert.equal(dropped.entry.lastSeen.assignee, null);
 });
 
-test("classifying the same issue twice raises the events once", () => {
-  const withComment = issue({ comments: [comment(4217187, "Greene, Ernest", "[~Roper] ping")] });
-  const first = classifyTicket(seeded({ lastSeen: seen() }), withComment, { reader: READER });
-  assert.equal(first.events.length, 1);
-  const second = classifyTicket(first.entry, withComment, { reader: READER });
-  assert.deepEqual(second.events, []);
-  assert.equal(second.changed, false, "nothing moved, so nothing is written and the file keeps its bytes");
+test("the three classes are the only three, and every movement is one of them", () => {
+  assert.deepEqual([...MOVEMENT_KINDS], ["comment", "status", "assignee"]);
+  const all = classifyTicket(
+    seeded({ lastSeen: seen() }),
+    issue({ status: "In Progress", assignee: "Roth, Chris", comments: [comment(4217187, "Greene, Ernest", "ping")] }),
+  );
+  assert.deepEqual(all.events.map((e) => e.kind).sort(), ["assignee", "comment", "status"]);
 });
 
-// ---- 4. the addressed-to-the-reader test ----------------------------------------------------------------------
+// ---- 4. movement only: the poller does not judge ---------------------------------------------------------------
 
-test("a mention of [~Roper] is addressed, and the card says the mention is why", () => {
-  const out = addressedTo(comment(1, "Greene, Ernest", "[~Roper] give it a try now"), { reader: READER, status: "Waiting for Customer", assignee: "Greene, Ernest" });
-  assert.equal(out.addressed, true);
-  assert.match(out.why, /mentions \[~Roper\]/);
+test("a comment that names the reader and one that does not produce the SAME event shape and the SAME words", () => {
+  const named = classifyTicket(seeded({ lastSeen: seen() }), issue({ comments: [comment(4217187, "Greene, Ernest", "[~Roper] can you connect now?")] })).events[0];
+  const ignored = classifyTicket(seeded({ lastSeen: seen() }), issue({ comments: [comment(4217187, "Roth, Chris", "moving this to the queue")] })).events[0];
+
+  // The keys are identical and there is no verdict among them: no `addressed`, no `why`, no `options`, no severity.
+  assert.deepEqual(Object.keys(named).sort(), Object.keys(ignored).sort());
+  for (const banned of ["addressed", "why", "tests", "options", "severity"]) {
+    assert.equal(banned in named, false, `the event must carry no ${banned}`);
+  }
+  const shape = (line) => line.replace(/from .*? at /, "from <author> at ").replace(/, \d+ characters$/, ", <n> characters");
+  assert.equal(shape(movementLine(named)), shape(movementLine(ignored)), "the one line the assistant reads has the same wording for both");
+  assert.match(movementLine(named), /^new comment #4217187 from Greene, Ernest at 2026-11-02 13:18:26/);
+
+  // The wake text is the same too, apart from the author the movement itself names.
+  const text = wakeTextFor({ key: "SR-242996", summary: "Firewall", events: [named] });
+  assert.doesNotMatch(text, /addressed/i);
+  assert.doesNotMatch(text, /does not mention/i);
 });
 
-test("the reader's display name in the body is addressed", () => {
-  const out = addressedTo(comment(1, "Greene, Ernest", "Roper, Jacob — can you check the DEV namespace?"), { reader: READER, status: "In Progress", assignee: "Greene, Ernest" });
-  assert.equal(out.addressed, true);
-  assert.deepEqual(out.tests, ["names Roper, Jacob"]);
-});
+// ---- 5. the wake ------------------------------------------------------------------------------------------------
 
-test("a non-reader author on a Waiting for Customer ticket is addressed, and the test says so", () => {
-  const out = addressedTo(comment(1, "Roth, Chris", "any update?"), { reader: READER, status: "Waiting for Customer", assignee: "Roth, Chris" });
-  assert.equal(out.addressed, true);
-  assert.match(out.why, /Roth, Chris is not you and the ticket is Waiting for Customer/);
-});
-
-test("a non-reader author on a ticket ASSIGNED to the reader is addressed", () => {
-  const out = addressedTo(comment(1, "Roth, Chris", "any update?"), { reader: READER, status: "Product Specialist", assignee: "Roper, Jacob" });
-  assert.equal(out.addressed, true);
-  assert.match(out.why, /Roth, Chris is not you and the ticket is assigned to you/);
-});
-
-test("the reader's OWN comment is not addressed, and the card says which tests did not fire", () => {
-  const out = addressedTo(comment(1, "Roper, Jacob", "[~GREENE] the rule works, thanks"), { reader: READER, status: "Waiting for Customer", assignee: "Greene, Ernest" });
-  assert.equal(out.addressed, false);
-  assert.deepEqual(out.tests, []);
-  assert.match(out.why, /does not mention \[~Roper\]/);
-  assert.match(out.why, /is you/);
-});
-
-test("a stranger's comment on a ticket neither Waiting for Customer nor assigned to the reader is not addressed", () => {
-  const out = addressedTo(comment(1, "Roth, Chris", "moving this to the queue"), { reader: READER, status: "In Progress", assignee: "Roth, Chris" });
-  assert.equal(out.addressed, false);
-  assert.match(out.why, /is not you while the ticket is In Progress and assigned to Roth, Chris/);
-});
-
-// ---- 5. the card ----------------------------------------------------------------------------------------------
-
-test("the row carries the key, what changed, the author and time, and the four options", () => {
-  const event = classifyTicket(seeded({ lastSeen: seen() }), issue({ comments: [comment(4217187, "Greene, Ernest", "[~Roper] are you good to go?")] }), { reader: READER }).events[0];
-  const row = ticketRowFor(event, { note: "DEV firewall rule" });
-  assert.equal(row.title, "SR-242996 — new comment from Greene, Ernest");
-  assert.match(row.detail, /Ticket SR-242996 — Firewall outgoing/);
-  assert.match(row.detail, /Watch note: DEV firewall rule/);
-  assert.match(row.detail, /comment #4217187 by Greene, Ernest at 2026-11-02 13:18:26/);
-  assert.match(row.detail, /Addressed to you: yes — mentions \[~Roper\]/);
-  assert.match(row.detail, /Ticket now: Waiting for Customer · assigned to Greene, Ernest/);
-  assert.match(row.detail, new RegExp(`Options: ${OPTIONS.join(" · ")}`));
-  assert.ok(row.detail.includes(eventMarker(event)), "the marker is how a retry recognises its own row");
-  assert.ok(row.title.length <= 200 && row.detail.length <= 4000);
-});
-
-test("a status row says the move and needs no comment author", () => {
-  const event = classifyTicket(seeded({ lastSeen: seen() }), issue({ status: "In Progress" }), { reader: READER }).events[0];
-  const row = ticketRowFor(event);
-  assert.equal(row.title, "SR-242996 — status Waiting for Customer → In Progress");
-  assert.match(row.detail, /What changed: status Waiting for Customer → In Progress/);
-  assert.match(row.detail, /Options: reply · chase the assignee · close · snooze/);
-});
-
-test("the wake text names the rows, the four options, and that Jira is untouched", () => {
-  const events = classifyTicket(seeded({ lastSeen: seen() }), issue({ status: "In Progress", assignee: "Roth, Chris" }), { reader: READER }).events;
-  const text = wakeTextFor({ key: "SR-242996", summary: "Firewall outgoing", events, rows: [{ id: 12 }, { id: 13 }] });
-  assert.match(text, /^Ticket watch: SR-242996 moved/);
+test("the wake names the key, every movement, the command that reads the ticket and the judgement to make", () => {
+  const events = classifyTicket(seeded({ lastSeen: seen() }), issue({ status: "In Progress", assignee: "Roth, Chris" })).events;
+  const text = wakeTextFor({ key: "SR-242996", summary: "Firewall outgoing", events });
+  assert.match(text, /^Ticket watch: SR-242996 moved - Firewall outgoing\./);
   assert.match(text, /status Waiting for Customer → In Progress/);
   assert.match(text, /assignee Greene, Ernest → Roth, Chris/);
-  assert.match(text, /queue row #12, #13/);
-  assert.match(text, /reply, chase the assignee, close, snooze/);
+  assert.match(text, /node tools\/ticket-watch\.mjs show SR-242996/);
+  assert.match(text, /https:\/\/jira\.sefl\.com\/browse\/SR-242996/);
+  assert.match(text, /Reported as movement only/);
+  assert.match(text, /raise a clarify card only if the movement leaves the reader a decision to make/);
+  assert.match(text, /docs\/ticket-watch\.md/);
   assert.match(text, /Nothing has been written to Jira/);
+  assert.doesNotMatch(text, /queue row/, "the poller puts nothing in front of the reader");
 });
 
-// ---- 6. the wake door -----------------------------------------------------------------------------------------
+test("the wake clip holds and a comment movement names its id, author, time and size", () => {
+  const many = Array.from({ length: 40 }, (_, i) => ({ key: "SR-242996", kind: "comment", id: String(4217200 + i), summary: "x", at: AT, author: "Greene, Ernest", length: 12, excerpt: "hi" }));
+  const text = wakeTextFor({ key: "SR-242996", summary: "x", events: many });
+  assert.ok(text.length <= 4000);
+  assert.match(text, /new comment #4217200 from Greene, Ernest at 2026-11-02 13:18:26, 12 characters/);
+});
+
+// ---- 6. idempotence ---------------------------------------------------------------------------------------------
+
+test("classifying the same issue twice raises the movements once, and the second pass marks no write", () => {
+  const withComment = issue({ comments: [comment(4217187, "Greene, Ernest", "[~Roper] ping")] });
+  const first = classifyTicket(seeded({ lastSeen: seen() }), withComment);
+  assert.equal(first.events.length, 1);
+  assert.equal(first.changed, true);
+  const second = classifyTicket(first.entry, withComment);
+  assert.deepEqual(second.events, []);
+  assert.equal(second.changed, false, "nothing moved, so nothing is written and the file keeps its bytes");
+  assert.equal(second.snapshotMoved, false);
+});
+
+test("a Jira `updated` stamp that moves alone is not a write and never a wake", () => {
+  const later = issue({ updated: "2026-11-06T09:00:00.000-0500", comments: [comment(4212127, "Greene, Ernest", "hi")] });
+  const out = classifyTicket(seeded({ lastSeen: seen() }), later);
+  assert.deepEqual(out.events, []);
+  assert.equal(out.changed, false, "an untracked edit (a description, a link) must not rewrite the list");
+  assert.equal(out.snapshotMoved, true);
+  assert.equal(out.entry.lastSeen.updated, "2026-11-06T09:00:00.000-0500");
+});
+
+// ---- 7. the wake door -------------------------------------------------------------------------------------------
 
 function board({ enabled = true, assistants = [{ id: "assistant-1", name: "Assistant #1" }, { id: "assistant-3", name: "Assistant #3" }] } = {}) {
   const calls = [];
@@ -269,7 +271,7 @@ test("the door refuses what it cannot do, and the answer carries the reason", as
   const { assistant } = board();
   assert.equal((await post(assistant, { text: "x" })).answer.status, 400, "no assistant id");
   assert.equal((await post(assistant, { assistantId: "assistant-3" })).answer.status, 400, "no text");
-  assert.equal((await post(assistant, { assistantId: "assistant-9", text: "x" })).answer.status, 404, "an assistant this panel does not have — no fallback to #1");
+  assert.equal((await post(assistant, { assistantId: "assistant-9", text: "x" })).answer.status, 404, "an assistant this panel does not have - no fallback to #1");
   assert.equal((await post(assistant, { assistantId: "assistant-3", text: "x" }, { method: "GET" })).answer.status, 405);
   assert.equal((await post(assistant, { assistantId: "assistant-3", text: "x" }, { authorised: () => false })).answer.status, 403);
 
@@ -281,4 +283,15 @@ test("the door refuses what it cannot do, and the answer carries the reason", as
 
   const other = await post(assistant, {}, { route: "/api/assistant/queue" });
   assert.equal(other.handled, false, "another route's path is not this module's to answer");
+});
+
+// ---- 8. the seed ------------------------------------------------------------------------------------------------
+
+test("the seed carries the four Optym SRs, and addTicket accepts every one of them", () => {
+  const seed = JSON.parse(readFileSync(new URL("../ticket-watch.seed.json", import.meta.url), "utf8"));
+  assert.deepEqual(seed.tickets.map((t) => t.key), ["SR-242996", "SR-242997", "SR-243582", "SR-243583"]);
+  let doc = { version: 1, tickets: [] };
+  for (const t of seed.tickets) doc = addTicket(doc, { key: t.key, note: t.note }).doc;
+  assert.equal(doc.tickets.length, 4);
+  assert.ok(doc.tickets.every((t) => t.lastSeen.commentId === null), "a seeded key starts as a baseline");
 });

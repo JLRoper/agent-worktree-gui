@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "note": "The tickets assistant-3 watches: the four Optym Event Hubs firewall SRs. Load with `node tools/ticket-watch.mjs seed`.",
+  "reader": "Roper, Jacob",
+  "tickets": [
+    {
+      "key": "SR-242996",
+      "note": "Firewall: k3s DEV nodes -> Optym Azure Event Hubs TCP 5671"
+    },
+    {
+      "key": "SR-242997",
+      "note": "Firewall: k3s DEV/UAT/QA nodes -> Event Hubs 5671; assigned to me, DEV rule still missing"
+    },
+    {
+      "key": "SR-243582",
+      "note": "Firewall: k3s UAT nodes -> Event Hubs 5671; tested from UAT, waiting on Chris"
+    },
+    {
+      "key": "SR-243583",
+      "note": "Firewall: k3s QA nodes -> Event Hubs 5671; tested from QA, waiting on Chris"
+    }
+  ]
+}
