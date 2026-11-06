@@ -4,16 +4,46 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.34.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.36.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-337 releases from v0.1.0 (2026-10-20) to v1.34.0 (2026-11-05), 1176 commits between the tags. Every release is anchored by an
+339 releases from v0.1.0 (2026-10-20) to v1.36.0 (2026-11-06), 1183 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.36.0 — 2026-11-06 · 3 commits
+
+[`7947205`](https://github.com/JLRoper/agent-worktree-gui/commit/7947205bf994beee3444940e6d7c49554d9329bf) · [compare v1.35.1...v1.36.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.35.1...v1.36.0)
+
+### Added
+
+- feat: the ticket watch - a per-assistant list, three movement classes, one wake door ([`e24a551`](https://github.com/JLRoper/agent-worktree-gui/commit/e24a55113d5ee7ab21ea36811bb301b0bf027421))
+- feat: the ticket watch reports movement only and wakes the agent to judge it ([`f70527f`](https://github.com/JLRoper/agent-worktree-gui/commit/f70527fffc3259d35635a5dc9384d0374ec93c45))
+
+### Other
+
+- chore: 1.36.0 - the version this landing carries ([`7947205`](https://github.com/JLRoper/agent-worktree-gui/commit/7947205bf994beee3444940e6d7c49554d9329bf))
+
+## v1.35.1 — 2026-11-06 · 4 commits
+
+[`d591c90`](https://github.com/JLRoper/agent-worktree-gui/commit/d591c90f7c63c6edb554b200457fdbf9711721bb) · [compare v1.34.0...v1.35.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.34.0...v1.35.1)
+
+### Added
+
+- feat: an assistant is renamed from its own Settings ([`aac4ab0`](https://github.com/JLRoper/agent-worktree-gui/commit/aac4ab01522e57af8a55f4f912e25e967dfc9d9d))
+
+### Docs & tests
+
+- docs: render the changelog — 337 releases ([`ee1bb35`](https://github.com/JLRoper/agent-worktree-gui/commit/ee1bb353617129afde4e0e5872bf5c0681c0afa8))
+- docs: front-end CPU and time-waste audit of app.js and assistant.js ([`bf7332a`](https://github.com/JLRoper/agent-worktree-gui/commit/bf7332a460eab6f9cfa893abe319c6dbe4ee2331))
+
+### Other
+
+- chore: 1.35.1 - the version this landing carries ([`d591c90`](https://github.com/JLRoper/agent-worktree-gui/commit/d591c90f7c63c6edb554b200457fdbf9711721bb))
 
 ## v1.34.0 — 2026-11-05 · 5 commits
 
