@@ -9,7 +9,8 @@
 //      generations it could not name, and clearing nothing;
 //   4. the resolve body is built from a FRESH GET — the card's cached generation is a decoy — and the request is
 //      `POST /v1/runs/{run_id}/resolve-unknown` with exactly `{admission_id, execution_generation}`. The reset never
-//      calls `/stop` (the measured 409 `unknown_execution` path that leaves the fence standing).
+//      calls `/stop` on the FENCE (the measured 409 `unknown_execution` path that leaves it standing); it does call it
+//      once per QUEUED run behind the fence, to cancel the backlog a clear would otherwise replay all at once.
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -71,7 +72,7 @@ function settleDb(file, admissionId) {
 // A gateway with the two methods the route uses. `runs[runId]` is a function (or an array consumed in order) so a
 // test can make the enumeration's GET disagree with the fresh GET before the POST — which is exactly the stale
 // generation the design forbids trusting.
-function gatewayStub({ runs = {}, resolve = null } = {}) {
+function gatewayStub({ runs = {}, resolve = null, stop = null } = {}) {
   const calls = [];
   const queues = new Map();
   for (const [id, value] of Object.entries(runs)) queues.set(id, Array.isArray(value) ? value.slice() : [value]);
@@ -89,6 +90,11 @@ function gatewayStub({ runs = {}, resolve = null } = {}) {
       calls.push({ method: "POST", path: `/v1/runs/${runId}/resolve-unknown`, body });
       if (resolve) return resolve(runId, body);
       return { ok: true, status: 200, receipt: { run_id: runId, status: "terminal", outcome: "interrupted" } };
+    },
+    async stopRun(runId) {
+      calls.push({ method: "POST", path: `/v1/runs/${runId}/stop` });
+      if (stop) return stop(runId);
+      return { ok: true, status: 200, already: false, code: null, error: null };
     },
   };
 }
@@ -561,4 +567,52 @@ test("a queued fallback run is listed behind the fence and does not block a rese
   assert.deepEqual(out.body.block.queued, [{ runId: "run_queued_tail", executionGeneration: null, card: null }]);
   assert.equal(out.body.clear.admissions.length, 1, "the card-named row still clears");
   assert.equal(gateway.calls.filter((c) => c.method === "POST").length, 0);
+});
+
+test("the clear cancels the queued backlog before it resolves, and a refused cancel does not stop it", async (t) => {
+  const cards = [];
+  const { assistant, two, dbPath } = await board(t, {
+    rows: [{ admissionId: "adm_1", requestId: "run_1", threadId: "panel-assistant-2", generation: 1 }],
+    jobs: cards,
+  });
+  cards.push(
+    { id: "card_1", thread: two.threadId, runId: "run_1", status: "interrupted", startedAt: "2026-11-04T01:02:11Z" },
+    { id: "card_2", thread: two.threadId, runId: "run_2", status: "failed", startedAt: "2026-11-04T01:10:00Z" },
+    { id: "card_3", thread: two.threadId, runId: "run_3", status: "failed", startedAt: "2026-11-04T01:11:00Z" },
+  );
+  const gateway = gatewayStub({
+    runs: {
+      run_1: { run_id: "run_1", status: "unknown", admission_id: "adm_1", execution_generation: 7, pending_controls: [] },
+      run_2: { run_id: "run_2", status: "queued", admission_id: "adm_2", execution_generation: null, pending_controls: [] },
+      run_3: { run_id: "run_3", status: "queued", admission_id: "adm_3", execution_generation: null, pending_controls: [] },
+    },
+    stop: async (runId) =>
+      runId === "run_3"
+        ? { ok: false, status: 409, code: "stale_generation", error: "the run is starting", already: false }
+        : { ok: true, status: 200, already: false, code: null, error: null },
+    resolve: async (runId, body) => {
+      settleDb(dbPath, body.admission_id);
+      return { ok: true, status: 200, receipt: { run_id: runId, status: "terminal", outcome: "interrupted" } };
+    },
+  });
+  const out = await callReset({ assistant, id: two.id, body: { reason: "test" }, gateway, dbPath });
+
+  assert.equal(out.status, 200);
+  assert.equal(out.body.ok, true, "a refused cancel is reported, never a reason to leave the fence standing");
+  assert.equal(out.body.verdict, "clean");
+  assert.equal(out.body.cleared.admissions.length, 1);
+
+  const stops = gateway.calls.filter((c) => c.path.endsWith("/stop")).map((c) => c.path);
+  assert.deepEqual(stops, ["/v1/runs/run_2/stop", "/v1/runs/run_3/stop"], "one stop per queued run, and none on the fence");
+  const resolveAt = gateway.calls.findIndex((c) => c.path.endsWith("/resolve-unknown"));
+  const lastStopAt = gateway.calls.map((c) => c.path.endsWith("/stop")).lastIndexOf(true);
+  assert.ok(lastStopAt >= 0 && lastStopAt < resolveAt, "the backlog is cancelled BEFORE the head is resolved");
+
+  assert.equal(out.body.cleared.cancelled.length, 2);
+  assert.equal(out.body.cleared.cancelled[0].ok, true);
+  assert.equal(out.body.cleared.cancelled[0].runId, "run_2");
+  assert.equal(out.body.cleared.cancelled[1].ok, false);
+  assert.equal(out.body.cleared.cancelled[1].code, "stale_generation");
+  const journal = (assistant.journal || []).map((e) => String(e.text || "")).join("\n");
+  assert.match(journal, /1 queued turn\(s\) cancelled/, "the journal says how many stale turns the clear cancelled");
 });

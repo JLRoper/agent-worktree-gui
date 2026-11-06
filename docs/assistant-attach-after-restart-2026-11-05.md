@@ -2,7 +2,8 @@
 
 **Status:** measured on this box, 2026-11-06 (all times UTC; the gateway log writes local, UTC−5, and
 is quoted as `local → UTC` where it matters). The question was why Assistant #3's turns 24–28 all died
-in 3 s with `unknown_execution` while its siblings kept working.
+in 3 s with `unknown_execution` while its siblings kept working. §5 clears the live session and reports
+what the clear returned; §6 is the panel-side repair that shipped with this note.
 
 The answer is not about the assistant. It is about one row in one table.
 
@@ -19,8 +20,9 @@ So the set that "keeps working" is exactly the set of sessions with **no `unknow
 thing that decided membership on 2026-11-06 01:49:51Z was whether that session happened to have a run
 in flight when the gateway was killed. Assistant #1 and Assistant #3 were both on the wrong side of it.
 Assistant #1 came back at 02:04:36Z because the panel's **Reset assistant** control was run for it.
-Assistant #3 never was, so it has failed every turn since 01:51:00Z — 8 cards, 10 admitted turns, still
-fenced at 02:39Z while #1, #2, #4 and #5 answer normally.
+Assistant #3 never was: eight cards and eleven admitted turns later it was still fenced at 02:39Z. The
+three calls in §5 cleared it during this investigation, and its next turn answered in 14 s — the
+measurement is at the end of §5.
 
 The panel already has the call. What it does not have is any way for the failing card to say so.
 
@@ -252,8 +254,9 @@ for (rid,) in rows:
 PY
 ```
 
-Expected: ten `200`s and a session whose `queued` count is 0, with the `unknown` head untouched by all
-of them. This step was not executed here — the clear of #3 was left for the reader (§7).
+Measured on #3 at 02:50–02:51Z: eleven `200`s — the ten rows the dry run listed, plus one the panel
+admitted after it — and the session's `queued` count went to 0 with the `unknown` head untouched by all
+of them.
 
 3. **Resolve the head** with both values from the dry run, and nothing else (a third key is 400):
 
@@ -267,6 +270,18 @@ A 200 receipt reads `status: terminal, outcome: interrupted` — the lost turn i
 replayed. `409 stale_generation` means the generation moved; re-read the run and use the new value.
 `409 not_found` means the admission id does not belong to that run.
 
+The one issued for #3, verbatim:
+
+```json
+{"run_id":"run_ad29c07fc4564433b50366e05cd50745","admission_id":"5f7d266cf15e4588a228e0471f2c0a1b",
+ "ref":{"profile_id":"<hermes profile>","session_id":"panel-assistant-3"},"sequence":6556,
+ "status":"terminal","outcome":"interrupted","authority_epoch":22,"execution_generation":114}
+```
+
+and the run's own projection immediately before and after it: `status: "unknown"` → `status:
+"cancelled"` (`run_projection` maps the `interrupted` outcome to `cancelled`, so the receipt is the only
+place the word `interrupted` appears).
+
 4. **Prove it** — the next turn must complete, and the store must read zero:
 
 ```bash
@@ -276,36 +291,51 @@ python -c "import sqlite3,os;c=sqlite3.connect(os.path.expandvars(r'%LOCALAPPDAT
 In the panel, the same thing is one press: **Settings → Gateway → Reset assistant**, select the
 assistant, first press reads the dry run, second press sends it. It also drops that assistant's queued
 wakes and the watches it owns (9 watches for #3) and keeps its queue, scratchpad, charter and thread.
+As of this PR it cancels the queued backlog first, for the reason in step 2.
+
+The store for #3 read `terminal 143` and nothing else. The proof turn was posted through the panel
+(`POST /api/assistant/say`), so it is a real card: job `6bbbc1ab`, turn 10, run
+`run_b09154d6f72a4c95bd5ebd07c1a4a446` — **completed in 14.3 s, exit 0, output `BACK`**. Before the
+clear, the same session's turns died in 2.5–3.1 s with no output at all.
 
 **Do not use stop on the head.** `POST /v1/runs/{id}/stop` answers 409 `unknown_execution` on an
-`unknown` row and changes nothing; the panel's `stopRunAtGateway` currently treats *any* 409 as
-"already gone" (`lib/jobs.js:3539-3574`), so a stop on a fenced turn journals a success that did not
-happen.
+`unknown` row and changes nothing. The panel's `stopRunAtGateway` treated *any* 409 as "already gone"
+(`lib/jobs.js:3539-3574`), so a stop on a fenced turn journalled a success that never happened; as of
+this PR it reads the body and records `unknown_execution` as a refusal (`fence: true`), leaving every
+other 409 meaning what it did.
 
-## 6. What a repair would touch
+## 6. The repair
 
 The fence itself is right: the gateway genuinely cannot know whether a turn that ran under a dead owner
-finished, and making the caller acknowledge it is the correct design. What is missing is the panel's
+finished, and making the caller acknowledge it is the correct design. What was missing was the panel's
 half of that conversation.
 
-1. **Name it on the card.** In `settle()` (`lib/jobs.js:3310-3352`) a run whose error is
-   `unknown_execution` is not a failed turn — it is a fenced session, and it will fail identically
-   forever. The console should say so, with the one control that clears it, instead of `run failed`.
-   That is a copy/UX change and needs no gateway read: the string is already on the card.
-2. **Clear the backlog before the head.** `runReset` (`lib/assistant/reset.js:423-583`) resolves the
-   `unknown` rows and then immediately resumes the FIFO. It already enumerates the queued runs
-   (`block.queued`) and deliberately never refuses on them; it should cancel them before resolving, or
-   the clear fires every stale wake (measured: 10 on #3, 6 completed turns after #1's clear). One loop
-   over `enumerated.queued` with the same `gateway.getRun` → `POST …/stop` shape the rest of the module
-   already uses, and a line per cancellation in the receipt.
-3. **Stop calling a 409 success.** `stopRunAtGateway` (`lib/jobs.js:3539-3574`) marks `entry.ok = true;
-   entry.already = true` on every 409. It should read the body: `unknown_execution` is a refusal, not an
-   ending, and the journal currently says *"stop sent — HTTP 409 — already gone"* for a run that is not
-   gone (`docs/research/assistant-session-fence.md` §4).
-4. **Do not wake a fenced assistant.** `lib/assistant.js:2076` already computes the failure and routes
-   around it; the wake it drops should be *refused at enqueue* while the session is fenced (the same
-   `unknownAdmissions` read the reset already does), so the queue does not accumulate work that cannot
-   run — and the tab can carry a "fenced" chip instead of `EXITED`.
+**Built in this PR: 1, 2 and 3.** Each is small, in the module that already owns the behaviour, and
+pinned by a test. **Not built: 4 and 5** — both need a decision about what a fenced assistant's queue
+should do, and 5 is not this repo.
+
+1. **Name it on the card.** `settle()` (`lib/jobs.js`) now pushes `runFenceLine()`
+   (`lib/jobs/console-lines.js`) when a run ends with `unknown_execution`: the line says the session is
+   fenced, that a restart will not clear it, and where the control is. No gateway read — the string is
+   already on the card. Test: `test/unknown-fence.test.js` (the line names the session, the cause and
+   the control).
+2. **Clear the backlog before the head.** `runReset` (`lib/assistant/reset.js`) now cancels every queued
+   run the enumeration found (`block.queued`), through the gateway, **before** it resolves anything —
+   because clearing the head resumes the FIFO and would otherwise replay the whole backlog at once
+   (measured: 11 on #3, 6 completed turns after #1's clear). Each cancellation is its own receipt row;
+   a refused cancellation is reported and never holds the resolve; the journal gains
+   *"N queued turn(s) cancelled so the clear does not replay them"*. Test:
+   `test/assistant-reset.test.js` — stops first, resolve after, one stop per queued run, none on the
+   fence.
+3. **Stop calling a 409 success.** `stopRunAtGateway` (`lib/jobs.js`) now reads the body: 404 is the
+   state being asked for, `unknown_execution` is a refusal recorded as `fence: true` and journalled
+   `stop FAILED`, and every other 409 keeps its old "already stopping" meaning
+   (`docs/research/assistant-session-fence.md` §4). Test: `test/unknown-fence.test.js`.
+4. **Do not wake a fenced assistant** — not built. `lib/assistant.js:2076` already computes the failure
+   and routes around it; the wake it drops could be *refused at enqueue* while the session is fenced (the
+   same `unknownAdmissions` read the reset already does), so the queue stops accumulating work that
+   cannot run, and the tab can carry a "fenced" chip instead of `EXITED`. That changes what the wake
+   ladder does with a failed assistant, so it wants a decision, not a default.
 5. **Gateway side (not this repo):** `settle_recovered_unattended` settles a lost *automation* turn
    because no person can be asked to resend it. A panel API turn is a person's turn, so it is
    deliberately left standing — correct, but it means the client **must** implement the resolve. If the
@@ -319,10 +349,11 @@ half of that conversation.
 - The claim that #1's backlog ran after its 02:04:36Z clear rests on the generation order of its rows
   (2068–2074 sit below 2076, the turn that started 02:05:24Z) and on the fact that a card which had
   received a *result* could not have carried `unknown_execution`. It was not observed live.
-- The clear procedure in §5 was dry-run only. Nothing was resolved on `panel-assistant-3`, so its ten
-  queued rows are still there, waiting.
+- The clear procedure in §5 was run against the live session once, at 02:50–02:52Z, and is reported
+  with what it returned: 11 cancellations, one resolve receipt, one proof turn. It was not repeated, and
+  the other 32 fenced sessions on this box (workers, mostly) were left alone.
 - Line numbers are the gateway at `bf0203a794` (`%LOCALAPPDATA%\hermes\hermes-agent`) and the panel at
-  `f6f0c2f`.
+  `f6f0c2f` plus the changes in this PR.
 
 ## References
 
@@ -332,7 +363,7 @@ half of that conversation.
   `hermes_state_runtime.py` 211-217, 236-278.
 - Panel: `lib/jobs.js` 3331, 3539-3574 · `lib/jobs/console-lines.js` 209-212 · `lib/assistant.js` 2076,
   2816-2835 · `lib/assistant/reset.js` (whole) · `lib/assistant/reset-store.js` ·
-  `public/index.html:481`.
+  `public/index.html:481`. Tests: `test/unknown-fence.test.js`, `test/assistant-reset.test.js`.
 - Prior work this stands on: `docs/research/assistant-session-fence.md` (the id map, the `unknown`
   status, the store census), `docs/research/gateway-fence-endpoints.md` (the measured endpoint table),
   `docs/research/assistant-reset-design.md` (the reset's order).
