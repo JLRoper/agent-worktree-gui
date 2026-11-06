@@ -523,6 +523,25 @@ test("a second run APPENDS its thread: the first agent stays on the record, and 
   assert.deepEqual(blank.task.threads, ["T1", "T2"], "an empty edit cannot un-happen a run");
 });
 
+// The cap is a cap on HISTORY, never on the run carrying the row. A 24-stage pipeline starts 24 workers on one row,
+// and the row keeps the newest twenty: `currentThread` must be the 24th, not the 20th. The defect this pins is the
+// 24-stage run's third: the cap refused every thread after the twentieth, so `currentThread` froze on `loop-20` for
+// the rest of the row's life and 19 stage runs settled against a job that had already finished.
+test("the threads cap keeps the newest run: `currentThread` is the last agent, never the twentieth", () => {
+  const many = Array.from({ length: 24 }, (_, i) => `loop-${i + 1}`);
+  const task = pickTask({ id: 1, title: "24 stages", state: "running", thread: many[0], threads: many });
+  assert.equal(task.threads.length, 20, "the list is still capped");
+  assert.equal(task.thread, "loop-1", "the legacy first entry stays first");
+  assert.equal(currentThread(task), "loop-24", "the run carrying the row is the LAST one recorded");
+  assert.equal(task.threads.at(-1), "loop-24");
+  assert.equal(task.threads.includes("loop-2"), false, "the oldest of the later entries is the one the cap drops");
+  // A row already at the cap still takes the next run, and keeps naming it.
+  const linked = linkTaskRun([task], 1, { thread: "loop-25" });
+  assert.equal(currentThread(linked.task), "loop-25");
+  assert.equal(linked.task.threads.length, 20);
+  assert.equal(linked.task.thread, "loop-1", "the legacy field never moves");
+});
+
 test("a task with two agents is live while its CURRENT run is, even with the first one long gone", () => {
   const { tasks } = addTask([], { title: "second try", thread: "T-old" });
   const { tasks: two } = editTask(tasks, 1, { thread: "T-new" });

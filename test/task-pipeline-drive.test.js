@@ -449,6 +449,79 @@ test("a gate that declares a decision record is crossed only by that record", (t
   assert.equal(crossed.tasks[0].pipelineRun.stageRuns.at(-1).decision.trigger, "gate-record");
 });
 
+// The 24-stage run's THIRD defect, in one test. A row that has started more than twenty workers keeps the newest
+// twenty threads, and the stage's own ledger entry names the worker it was cut with. The settle must read THAT
+// thread: on the old shape `currentThread` had frozen on the twentieth, so a stage whose own worker was still
+// running settled against `loop-20`'s finished job and the row advanced under a live agent.
+test("a stage run settles on its own thread, never on the twentieth the list kept", (t) => {
+  const dir = tree(t, { artifacts: [1] });
+  const many = Array.from({ length: 24 }, (_, i) => `loop-${i + 1}`);
+  const run = {
+    pipeline: "two",
+    stage: "S1",
+    enteredAt: CLOCK,
+    // the entry the LINK writes: the worker this stage was cut with, and no status yet
+    stageRuns: [{ id: "two/S1#1", stage: "S1", visit: 1, at: CLOCK, thread: "loop-24", job: "j24", status: null, decision: null }],
+  };
+  const jobs = [
+    { id: "j20", thread: "loop-20", status: "done", startedAt: "2026-11-03T15:00:00.000Z", endedAt: "2026-11-03T15:20:00.000Z" },
+    { id: "j24", thread: "loop-24", status: "running", startedAt: "2026-11-03T15:40:00.000Z" },
+  ];
+  const out = drive([row({ worktree: dir, thread: many[0], threads: many, pipelineRun: run })], {
+    jobs,
+    isLive: (thr) => thr === "loop-24",
+  });
+
+  assert.equal(out.tasks[0].state, "running", "the stage's own worker is live: nothing settles");
+  assert.equal(out.tasks[0].pipelineRun.stage, "S1", "and the row does not advance under it");
+  assert.equal(out.tasks[0].pipelineRun.stageRuns.at(-1).status, null, "no settle is written against loop-20's finished job");
+  assert.equal(out.changed.length, 0);
+});
+
+// The 24-stage run's FOURTH defect, in one test. A gate that declares one record per round
+// (`G-{{run_id}}-r{{round}}.json`) is a question asked AGAIN each round: the old matcher filled no round, took the
+// first name that sorts, and read round 1's file in every later round — G51 was crossed 11 times on round 1's
+// decision. Round 2 has no record yet, so the row parks on round 2's own path and round 1's verdict moves nothing.
+test("a gate asks for its round's own record: round 1's file never answers round 2", (t) => {
+  const dir = tree(t, { artifacts: [2] });
+  mkdirSync(path.join(dir, "ledger", "gates"), { recursive: true });
+  writeFileSync(path.join(dir, "ledger", "gates", "G-run-1-r1.json"), JSON.stringify({ outcome: "again" }));
+  const looped = bundleOf(
+    pipeline({
+      gates: [
+        {
+          id: "G",
+          name: "The call",
+          after: "S2",
+          artifact: "artifact-2",
+          decider: "seat",
+          decision: { id: "d", path: "ledger/gates/G-{{run_id}}-r{{round}}.json", schema: "decision/1", writer: "seat", outcomes: ["again", "done"] },
+        },
+      ],
+      handoffs: [
+        { id: "h1", from: "S1", to: "S2", artifact: "artifact-1", kind: "sequence" },
+        { id: "h2", from: "S2", to: "S1", artifact: "artifact-2", kind: "loop", cap: "3 rounds" },
+      ],
+    }),
+  );
+  const run = { pipeline: "two", stage: "S2", enteredAt: CLOCK, visits: { S1: 2, S2: 2 } };
+  const jobs = [{ id: "j2", thread: "T2", status: "done", startedAt: "2026-11-03T15:50:00.000Z" }];
+
+  const stopped = drive([row({ worktree: dir, thread: "T1", threads: ["T1", "T2"], pipelineRun: run })], { bundle: looped, jobs, unattended: false });
+  assert.equal(stopped.tasks[0].state, "parked", "round 2's record is not on disk, so the gate is not crossed");
+  assert.equal(stopped.tasks[0].pipelineRun.stage, "S2", "round 1's verdict does not move round 2");
+  assert.equal(stopped.tasks[0].pipelineRun.waitingFor.gate, "G");
+  assert.match(stopped.tasks[0].pipelineRun.waitingFor.path, /\{\{round\}\}/, "the park names the DECLARATION, so every pass fills this round again");
+  assert.match(stopped.tasks[0].reason, /G-\{\{run_id\}\}-r2\.json/, "the sentence names THIS round's path");
+
+  // The round's own record arrives: the same gate, asked again, is answered for round 2.
+  writeFileSync(path.join(dir, "ledger", "gates", "G-run-1-r2.json"), JSON.stringify({ outcome: "again" }));
+  const crossed = drive(stopped.tasks, { bundle: looped, jobs: [], at: LATER, unattended: false });
+  assert.equal(crossed.tasks[0].state, "queued");
+  assert.equal(crossed.tasks[0].pipelineRun.stage, "S1", "round 2's own record releases it down the loop");
+  assert.equal(crossed.tasks[0].pipelineRun.stageRuns.at(-1).decision.trigger, "gate-record");
+});
+
 test("a failed run parks the row instead of re-running the stage", () => {
   const out = drive([row()], { jobs: [{ thread: "T1", status: "failed", finalMessage: "the build broke" }] });
 
