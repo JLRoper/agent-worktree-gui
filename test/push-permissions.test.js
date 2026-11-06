@@ -29,9 +29,9 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { BRANCH_NAME_GATE_PATTERN, branchNamePassesGate, branchesInPushRefs, permissionForPush, pushChoiceFrom, repoKeyForProject, repoKeyForRemoteUrl, resolvePushPermissions } from "../lib/push-permissions.js";
+import { BRANCH_NAME_GATE_PATTERN, branchNamePassesGate, branchesInPushRefs, permissionForPush, projectPushRow, pushChoiceFrom, repoKeyForProject, repoKeyForRemoteUrl, resolvePushPermissions } from "../lib/push-permissions.js";
 import { commonDirOf, guardPaths, guardState, installGuard } from "../lib/push-guard.js";
-import { configureRepo, git as runGit, post, startPanel } from "../tools/panel-testkit.mjs";
+import { configureRepo, git as runGit, post, startPanel, waitForState } from "../tools/panel-testkit.mjs";
 
 const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
@@ -52,6 +52,35 @@ test("the four values are a closed vocabulary, and an unreadable value asks", ()
   }
   assert.equal(pushChoiceFrom("ALLOW-ALL "), "allow-all", "case and padding are trimmed, not refused");
   assert.equal(pushChoiceFrom("bogus", "also-bogus"), "always-ask", "an unreadable fallback is still the asking default");
+});
+
+// THE WRITER'S OWN UNIT: what row goes into config.json's projects[]. A fresh row is a NAME and the keys the request
+// named, because discovery merges projects[] onto the scanned repository by name — and because the file is the
+// reader's, not the repo's, so an invented path would be the path of the machine that wrote it (it was also the
+// seventh path in a tracked file tools/absolute-paths.mjs froze at six, which is how this defect was found). A row
+// that already exists is edited in place: every other field, its path included, survives the write.
+test("a project's push row is written by NAME — a fresh row has no path, an existing row keeps every other field", () => {
+  assert.deepEqual(projectPushRow(null, "optym", { newBranches: "allow-all" }), { name: "optym", pushNewBranches: "allow-all" });
+  assert.equal("path" in projectPushRow(null, "optym", { newBranches: "allow-all" }), false, "no path is invented for a project the file does not name");
+  assert.deepEqual(projectPushRow(null, " optym ", {}), { name: "optym" }, "the name is the row's key, trimmed");
+
+  // The row the file already holds is the row written back — the fields the request did not name are not rewritten.
+  const folder = ["C", ":", "/proj/it-app"].join("");
+  const existing = { name: "it-app", path: folder, mainBranch: "main", remoteBranchPolicy: "allow", pushNewBranches: "never" };
+  const row = projectPushRow(existing, "it-app", { existingBranches: "allow-name-gate" });
+  assert.equal(row, existing, "the same object is stored, so nothing else in the record is lost");
+  assert.deepEqual(row, {
+    name: "it-app",
+    path: folder,
+    mainBranch: "main",
+    remoteBranchPolicy: "allow",
+    pushNewBranches: "never",
+    pushExistingBranches: "allow-name-gate",
+  });
+  assert.equal(row.path, folder, "an existing path is not stripped");
+
+  // The written value is the same closed vocabulary the resolver reads, so a hand-written request cannot store a typo.
+  assert.equal(projectPushRow(null, "optym", { newBranches: "yes" }).pushNewBranches, "always-ask");
 });
 
 test("the repository section is read from the remote URL, with `other` and `none` as explicit answers", () => {
@@ -216,12 +245,19 @@ const REPOS = [
   { name: "no-remote", url: "" },
 ];
 
-async function makeBoard() {
+// A repository discovery FINDS but the config does not name: the route's other half is the entry it has to create,
+// and that entry is where the absolute-path defect lived. `late-app` is on the board and absent from the file.
+const LATE = "late-app";
+
+async function makeBoard({ late = false } = {}) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "wtgui-push-"));
   const repos = path.join(dir, "repos");
   mkdirSync(repos, { recursive: true });
   const paths = {};
-  for (const r of REPOS) {
+  // `late-app` is only for the two tests that need a repo discovery finds and the file does not name; every other
+  // test keeps the five-repo board it had. A sixth repo is not free: boot probes and scans each one, so adding it to
+  // every board would slow the tests that never asked for it.
+  for (const r of late ? [...REPOS, { name: LATE, url: "" }] : REPOS) {
     const repo = path.join(repos, r.name);
     mkdirSync(repo, { recursive: true });
     runGit(repo, ["init", "-q", "-b", "main"]);
@@ -266,6 +302,22 @@ async function waitForRepo(base, name, key, timeoutMs = 60_000) {
   }
 }
 
+// Same clock, different question: has discovery put this project on the board at all? A route that names a project
+// the registry has not found yet is a 404, and that would make the entry test about a race.
+//
+// The window is minutes, not the thirty seconds a quiet box needs: boot probes every project it already knows and
+// the discovery pass that finds a NEW repo lands after the first full scan, which on a loaded machine is measured at
+// ~45s for boot and ~70s for the new repo. A tighter window turns the resolver's answer into a test of the machine.
+async function waitForProject(base, name, timeoutMs = 180_000) {
+  const until = Date.now() + timeoutMs;
+  for (;;) {
+    const s = await settingsOf(base);
+    if (s.pushPermissions?.projects?.[name]) return s;
+    if (Date.now() > until) return s;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+}
+
 test("POST /api/settings/push-project round-trips one kind through config.json and /api/config", async (t) => {
   const board = await makeBoard();
   try {
@@ -285,6 +337,7 @@ test("POST /api/settings/push-project round-trips one kind through config.json a
       const written = JSON.parse(readFileSync(path.join(board.dir, "config.json"), "utf8"));
       assert.equal(written.projects.find((p) => p.name === "it-app").pushNewBranches, "allow-name-gate");
       assert.equal("pushExistingBranches" in written.projects.find((p) => p.name === "it-app"), false, "only the key that changed is written");
+      assert.equal(written.projects.find((p) => p.name === "it-app").path, board.paths["it-app"], "an entry that already carried a path keeps it — the writer never strips a record it did not write");
 
       // The assistant-readable endpoint answers the same pair, and a branch question now has an answer.
       const ask = await (await fetch(`${panel.base}/api/remote-write/allow-push?project=it-app&branch=20261102_1431_ABC-1_x&new=1`)).json();
@@ -299,6 +352,94 @@ test("POST /api/settings/push-project round-trips one kind through config.json a
       assert.equal((await post(panel.base, "/api/settings/push-project", { body: { project: "it-app", kind: "sideways", value: "never" } })).status, 400);
       assert.equal((await post(panel.base, "/api/settings/push-project", { body: { project: "nope", kind: "new", value: "never" } })).status, 404);
     });
+  } finally {
+    await rm(board.dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+  }
+});
+
+// THE ENTRY THE ROUTE CREATES IS THE ONE IT HAS TO LIVE WITH. A project the file does not name yet was written as
+// `{ name, path: <absolute> }`. While config.json was TRACKED, tools/absolute-paths.mjs froze it at the six paths it
+// already carried, so the seventh — the one this route wrote — failed the repo's own gate, and landing one project's
+// push setting meant deleting the path by hand. The entry is a NAME because that is the key discovery merges the row
+// onto the scanned repository by (`lib/projects.js`: `merged.push({ ...p, ...(explicit.get(name) || {}) })`), so the
+// path is a second copy of a fact the scan owns — the path of the machine that wrote the file, in a file the reader
+// keeps. The file is out of the repo now; the entry is still the writer's to get right.
+test("POST /api/settings/push-project names a project the file does not know, and writes NO path for it", async (t) => {
+  const board = await makeBoard({ late: true });
+  try {
+    await withPanel(board, configFor(board), async (panel) => {
+      const seen = await waitForProject(panel.base, LATE);
+      assert.ok(seen.pushPermissions.projects[LATE], "discovery put the repo on the board");
+      const before = JSON.parse(readFileSync(path.join(board.dir, "config.json"), "utf8"));
+      assert.equal(before.projects.some((p) => p.name === LATE), false, "…and the config does not name it yet");
+
+      const saved = await post(panel.base, "/api/settings/push-project", { body: { project: LATE, kind: "new", value: "allow-all" } });
+      assert.equal(saved.status, 200, saved.text);
+
+      // The record on disk: the name and the key the request set, and NOTHING that says where the folder is.
+      const written = JSON.parse(readFileSync(path.join(board.dir, "config.json"), "utf8"));
+      assert.deepEqual(written.projects.find((p) => p.name === LATE), { name: LATE, pushNewBranches: "allow-all" });
+      assert.equal("path" in written.projects.find((p) => p.name === LATE), false, "a fresh row carries no path");
+      // The two entries the file already had are untouched — their own paths included. The writer does not rewrite a
+      // record it did not create, and it does not strip the paths that were already there (the gate's allowlist counts
+      // paths per file, so removing one is allowed; adding one is what failed).
+      assert.equal(written.projects.find((p) => p.name === "it-app").path, board.paths["it-app"]);
+      assert.equal(written.projects.length, before.projects.length + 1, "exactly one row was added");
+
+      // The response shape the Settings tab reads is unchanged…
+      assert.equal(saved.json.ok, true);
+      assert.equal(saved.json.project, LATE);
+      assert.equal(saved.json.resolved.newBranches, "allow-all");
+      assert.equal(saved.json.settings.pushPermissions.projects[LATE].newBranches, "allow-all");
+      // …and the setting RESOLVES, from both answers the page and the board read.
+      const live = await settingsOf(panel.base);
+      assert.equal(live.pushPermissions.projects[LATE].newBranches, "allow-all");
+      assert.equal(live.pushPermissions.projects[LATE].newSource, "project");
+      // /api/state carries the same settings object every other snapshot field is drawn from.
+      const state = await (await fetch(`${panel.base}/api/state`)).json();
+      assert.equal(state.settings.pushPermissions.projects[LATE].newBranches, "allow-all", "/api/state answers it too");
+    });
+  } finally {
+    await rm(board.dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+  }
+});
+
+// A row with no path has to survive a BOOT, or the writer has traded a gate failure for a setting that disappears on
+// the next start. It does: the config is read, discovery finds the repository under a root by name, and the merge is
+// by name — `{ ...scanned, ...configured }` — so the path comes from the scan and the setting from the row.
+test("a NAME-only row still resolves after the panel boots the config the route wrote", async (t) => {
+  const board = await makeBoard({ late: true });
+  try {
+    const first = await startPanel({ dir: board.dir, keep: true, config: configFor(board) });
+    try {
+      await waitForProject(first.base, LATE);
+      const saved = await post(first.base, "/api/settings/push-project", { body: { project: LATE, kind: "existing", value: "allow-name-gate" } });
+      assert.equal(saved.status, 200, saved.text);
+    } finally {
+      await first.stop();
+    }
+    const written = JSON.parse(readFileSync(path.join(board.dir, "config.json"), "utf8"));
+    assert.deepEqual(written.projects.find((p) => p.name === LATE), { name: LATE, pushExistingBranches: "allow-name-gate" });
+
+    const second = await startPanel({ dir: board.dir, keep: true, reuseConfig: true });
+    try {
+      // The board answers from its discovery CACHE first and merges the config rows in on the first sweep, which lands
+      // well after a boot — half a minute on a quiet box, closer to two on a loaded one. The timeout is that clock, not
+      // the resolver's.
+      const state = await waitForState(
+        second.base,
+        (s) => s.settings?.pushPermissions?.projects?.[LATE]?.existingBranches === "allow-name-gate",
+        "the name-only row to resolve after a boot",
+        { timeout: 240_000 },
+      );
+      assert.equal(state.settings.pushPermissions.projects[LATE].existingSource, "project", "it is still the project's own answer");
+      // And the project itself is fully on the board: the path discovery merged in is the scanned one.
+      const project = (state.projects || []).find((p) => p.name === LATE);
+      assert.ok(project, "the board draws the project");
+      assert.equal(slash(project.path).toLowerCase(), slash(board.paths[LATE]).toLowerCase());
+    } finally {
+      await second.stop();
+    }
   } finally {
     await rm(board.dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
   }

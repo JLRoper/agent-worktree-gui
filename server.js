@@ -59,6 +59,7 @@ import {
   PUSH_REPO_KEYS,
   DEFAULT_PUSH_CHOICE,
   pushChoiceFrom,
+  projectPushRow,
   resolvePushPermissions,
   pushModeFor,
   permissionForPush,
@@ -949,8 +950,18 @@ function guardReport() {
 //     `patchPanelConfig` can assign it;
 //   * `projects[].pushNewBranches` / `projects[].pushExistingBranches` — one project's own answer, inside an array
 //     element, which a top-level assignment would replace with a single object. A project the file does not name yet
-//     gets a minimal entry (its name and path) rather than a refusal: every project on the board is allowed a row
-//     here, discovered or configured, and the path is what the entry needs to survive a boot.
+//     gets a minimal entry — its NAME, and nothing else — rather than a refusal: every project on the board is allowed
+//     a row here, discovered or configured.
+//
+// WHY THE NEW ENTRY CARRIES NO PATH. A `projects[]` row is merged onto the scanned repository BY NAME
+// (lib/projects.js: `merged.push({ ...p, ...(explicit.get(name) || {}) })`), so discovery already supplies the path
+// of the folder it walked. A path written here is a second copy of that fact — and it is the path of ONE MACHINE, in
+// the reader's own config.json, which is meant to travel. It was also what broke this repo's gate: while config.json
+// was tracked, tools/absolute-paths.mjs froze it at the six paths it already carried, and the entry this route wrote
+// made the seventh, so landing one project's push setting meant deleting the path by hand. The file has since moved
+// out of the repo (config.example.json is the template), which makes the entry harmless rather than right.
+// An entry that already has a path keeps it: this writer only ever adds the two keys it was asked to set and never
+// rewrites the rest of the record.
 //
 // Both writers write atomically, apply the change to the in-memory config AND the registry record the page draws
 // from, then rewrite every installed guard's own copies and broadcast. A guard left reading the old answer is the
@@ -1012,13 +1023,13 @@ async function setProjectPushSetting(name, patch, { by = "reader" } = {}) {
   }
   const raw = await readPanelConfigFile();
   if (!Array.isArray(raw.projects)) raw.projects = [];
-  let entry = raw.projects.find((p) => p && p.name === name) || null;
-  if (!entry) {
-    entry = { name, path: cleanPath(project.path) };
-    raw.projects.push(entry);
-  }
-  if (patch.newBranches !== undefined) entry.pushNewBranches = pushChoiceFrom(patch.newBranches, DEFAULT_PUSH_CHOICE);
-  if (patch.existingBranches !== undefined) entry.pushExistingBranches = pushChoiceFrom(patch.existingBranches, DEFAULT_PUSH_CHOICE);
+  const existing = raw.projects.find((p) => p && p.name === name) || null;
+  // The row is built by ONE rule, in lib/push-permissions.js beside the four values it stores: a row the file already
+  // holds keeps every field it has and gains only the keys this request named; a row it does not hold is the project's
+  // NAME and those keys, and no path (the scan owns where the repository is, and config.json is gate-frozen at the
+  // paths it already carried).
+  const entry = projectPushRow(existing, name, patch);
+  if (!existing) raw.projects.push(entry);
   try {
     await writeConfigAtomic(`${JSON.stringify(raw, null, 2)}\n`);
   } catch (e) {
@@ -1029,7 +1040,9 @@ async function setProjectPushSetting(name, patch, { by = "reader" } = {}) {
   if (!Array.isArray(config.projects)) config.projects = [];
   let live = config.projects.find((p) => p && p.name === name) || null;
   if (!live) {
-    live = { name, path: cleanPath(project.path) };
+    // The same shape the file now carries, so the config in memory is the config a restart would boot: the row is a
+    // name discovery merges onto the repository it scanned, not a second claim about where that repository lives.
+    live = { name };
     config.projects.push(live);
   }
   if (patch.newBranches !== undefined) {
