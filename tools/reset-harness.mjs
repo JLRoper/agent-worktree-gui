@@ -86,6 +86,12 @@ export function makeGateway() {
     resolveCalls: [],
     stopCalls: [],
     capabilitiesCalls: 0,
+    // A run SUBMITTED by the panel (the wake a re-attach press starts), and the event streams still held open for
+    // them: a run that answers `running` and never settles is what keeps the card that just left EXITED on a live
+    // run, instead of it falling back to a terminal word the moment the stub replies.
+    submits: [],
+    streams: 0,
+    sockets: new Set(),
     failResolve: new Set(),
     settle: true,
     dbPath: null,
@@ -102,9 +108,36 @@ export function makeGateway() {
       state.capabilitiesCalls += 1;
       return send(200, { version: "stub", features: { run_submission: true, run_events_sse: true } });
     }
+    // A run submission. `jobs.create` reads `run_id` and nothing else, so the stub answers one and then keeps the
+    // run live: the GET below answers `running` and the run's own event stream is held open until the panel stops.
+    if (url.pathname === "/v1/runs" && req.method === "POST") {
+      let raw = "";
+      req.on("data", (c) => (raw += c));
+      req.on("end", () => {
+        let body = null;
+        try {
+          body = JSON.parse(raw);
+        } catch {
+          body = null;
+        }
+        const runId = `run_new_${state.submits.length + 1}`;
+        state.submits.push({ runId, body });
+        state.runs[runId] = { run_id: runId, status: "running", admission_id: null, execution_generation: 1, pending_controls: [] };
+        send(200, { run_id: runId, status: "created" });
+      });
+      return undefined;
+    }
     if (!runMatch) return send(404, { error: { code: "not_found", message: "no such route" } });
     const runId = decodeURIComponent(runMatch[1]);
     const action = runMatch[2] || "";
+    if (action === "/events" && req.method === "GET") {
+      state.streams += 1;
+      res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
+      res.write(": open\n\n");
+      state.sockets.add(req.socket);
+      req.socket.on("close", () => state.sockets.delete(req.socket));
+      return undefined;
+    }
     if (action === "/stop" && req.method === "POST") {
       state.stopCalls.push(runId);
       return send(409, { error: { code: "unknown_execution", message: "unknown_execution" } });
@@ -151,7 +184,18 @@ export function makeGateway() {
       resolve({
         state,
         url: `http://127.0.0.1:${port}`,
-        close: () => new Promise((r) => server.close(r)),
+        close: () => new Promise((r) => {
+          // A held-open event stream keeps `server.close` waiting; the run it belongs to is this stub's own, so the
+          // sockets go first and the close is not a five-minute hang on the gate's last line.
+          for (const s of state.sockets) {
+            try {
+              s.destroy();
+            } catch {
+              /* already gone */
+            }
+          }
+          server.close(r);
+        }),
         posts: () => state.resolveCalls.length,
       });
     });

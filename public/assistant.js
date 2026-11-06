@@ -2941,10 +2941,15 @@
       return { mark: waiting ? "⏸" : "●", markState: waiting ? "parked" : "running", word: "running", cls: "pill pill-running" };
     }
     if (status === "done") return { mark: "✓", markState: "done", word: "complete", cls: "pill pill-complete", button: true };
-    if (status === "failed") return { mark: "○", markState: "queued", word: "exited", cls: "pill pill-notrunning is-failed" };
+    // A stopped agent's chip is the pick-up CONTROL, not a word: `exited` after a failed run and `not-running` for
+    // anything else that is not going. Both are the same press the board's own card gives them (`button.pill-continue`
+    // on `.pill-notrunning`, `.is-failed` for a failure), because this row is that card's chip in a second place — and
+    // the press is where a wedged session is cleared. A LIVE run is deliberately not a control: there is nothing to
+    // re-attach, and a press on it could only start a second run over a turn that is already going.
+    if (status === "failed") return { mark: "○", markState: "queued", word: "exited", cls: "pill pill-notrunning is-failed", reattach: true };
     // A cancelled/interrupted/stopped run, and a thread the job store has never heard of, say the same thing to a
     // reader — nothing is running it now — and the card says the same word for both of them.
-    return { mark: "○", markState: "queued", word: "not-running", cls: "pill pill-notrunning" };
+    return { mark: "○", markState: "queued", word: "not-running", cls: "pill pill-notrunning", reattach: true };
   }
 
   // One sub-row per agent. The whole line is the opener — it carries the mark this RUN owns (not the task's) and the
@@ -2957,15 +2962,113 @@
     const named = label && label !== thread;
     const open = `data-as-qopen="${esc(thread)}" data-as-qid="${esc(String(t.id))}"`;
     const title = `open ${named ? `“${label}” ` : ""}(${thread})'s card and its current console turn — this agent's run is ${chip.word}, read from /api/jobs`;
+    // The stopped chip is a real <button>: that IS the role, the tab stop and the Enter/Space activation in one
+    // element, so no `role=`/`tabindex=` has to be written onto a span. The word stays the status and the ↻ is the
+    // glyph the board's own stopped pill already carries, so a reader who has pressed one recognises the other.
+    const reattachWhy =
+      chip.word === "exited"
+        ? `a failed run can leave the gateway's admission for this session unknown, and every later turn is refused until that is settled. This press settles it (POST /api/assistants/${id}/reset) and, only when something was cleared, starts one short turn on the same thread.`
+        : `press to check this assistant's session for a run the gateway never settled. Nothing wedged means nothing is started; something cleared means one short turn on the same thread.`;
     const pill = chip.button
       ? `<button type="button" class="pill pill-complete" ${open} title="${esc(`${title} — the run finished, so nothing here is being resumed`)}" aria-label="${esc(`${chip.word} — ${title}`)}">${chip.word}</button>`
-      : `<span class="${chip.cls}" title="${esc(`this agent's run is ${chip.word} — read from /api/jobs, not from the task record`)}">${chip.word}</span>`;
+      : chip.reattach
+        ? `<button type="button" class="${chip.cls} pill-reattach" data-as-qreattach="${esc(thread)}" data-as-qown="${esc(id)}" data-as-qid="${esc(String(t.id))}" title="${esc(`${chip.word} — re-attach this assistant: ${reattachWhy} Nothing here restarts the panel or the gateway.`)}" aria-label="${esc(`${chip.word} — re-attach this assistant on ${thread}`)}">${chip.word}<span class="pill-again" aria-hidden="true">↻</span></button>`
+        : `<span class="${chip.cls}" title="${esc(`this agent's run is ${chip.word} — read from /api/jobs, not from the task record`)}">${chip.word}</span>`;
     return `<div class="as-task-agent" role="button" tabindex="0" ${open} title="${esc(title)}" aria-label="${esc(title)}">
             <span class="as-agent-mark is-${esc(chip.markState)}" aria-hidden="true">${chip.mark}</span>
             <code class="as-task-agent-thread">${esc(thread)}</code>
             ${named ? `<span class="as-task-agent-label">${esc(label)}</span>` : ""}
             ${pill}
           </div>`;
+  }
+
+  // ---- the stopped chip's press: re-attach this assistant, then say what happened --------------------------------
+  //
+  // A card can read EXITED for a run the gateway never finished settling: the session's admission is still `unknown`,
+  // so the fence stands and the next turn is refused before it starts. `POST /api/assistants/:id/reset` is the call
+  // that settles that fence — the same one Settings' reset row makes — and this press adds only what that row cannot:
+  // one short turn on the same thread once the fence is gone, and the sentence on the card saying which of the three
+  // things happened.
+  //
+  // What it must never do, and does not: restart the panel or the gateway (no route here touches either), touch
+  // another assistant (every call carries THIS card's own id), or start a run when nothing was cleared — an idle
+  // assistant whose chip merely reads not-running has nothing to re-attach, and a turn there would be a second run
+  // over healthy work. A refusal is printed verbatim: a press that answers nothing is a press that lied.
+  const REATTACH_TEXT = "you were re-attached after an exit; continue";
+  const queueReattachNotes = new Map(); // `${assistantId}:${taskId}` -> { text, tone }
+  const queueReattachInFlight = new Set(); // assistant ids with a reset out: one press, one reset
+  const queueReattachKey = (own, id) => `${own}:${id}`;
+
+  // What the last press on this card answered, held per CARD so the repaint the answer asks for cannot erase it.
+  function queueReattachNoteHtml(own, id) {
+    const n = queueReattachNotes.get(queueReattachKey(own, id));
+    if (!n) return "";
+    return `<div class="as-task-note is-${esc(n.tone)}" role="status" title="${esc(n.text)}">${esc(n.text)}</div>`;
+  }
+
+  async function queueReattach(own, id, btn = null) {
+    const assistantId = String(own || "");
+    if (!assistantId) return;
+    const key = queueReattachKey(assistantId, id);
+    const note = (text, tone) => {
+      queueReattachNotes.set(key, { text, tone });
+    };
+    // A second press while the first is still out asks the SAME question, so it is answered from the flight already
+    // running rather than putting a second reset on the wire — the route's own single-flight would answer 409, and a
+    // 409 the reader caused by double-clicking is noise, not a verdict.
+    if (queueReattachInFlight.has(assistantId)) {
+      note("one reset is already running for this assistant — nothing was sent twice", "info");
+      renderAssistantQueue(assistantId);
+      return;
+    }
+    queueReattachInFlight.add(assistantId);
+    if (btn && btn.isConnected) {
+      btn.disabled = true;
+      btn.classList.add("is-starting");
+    }
+    try {
+      const answer = await asPost(`/api/assistants/${encodeURIComponent(assistantId)}/reset`, {
+        dryRun: false,
+        reason: "the reader pressed EXITED",
+      });
+      // A 200 that is not `ok` is the route's INCOMPLETE verdict (some rows settled, the fence still standing): its
+      // own sentence is the answer, exactly as a 4xx's is.
+      if (answer?.ok !== true) {
+        note(String(answer?.error || "the reset answered without a verdict — nothing here says what was cleared"), "bad");
+        return;
+      }
+      const cleared = Array.isArray(answer?.cleared?.admissions) ? answer.cleared.admissions.length : 0;
+      const wakes = Array.isArray(answer?.cleared?.wakes) ? answer.cleared.wakes.length : 0;
+      const watches = Array.isArray(answer?.cleared?.watches) ? answer.cleared.watches.length : 0;
+      if (!cleared) {
+        // Nothing was fenced. A turn here would start a run over a session that had nothing wrong with it, so the
+        // press reports the truth and stops — the one no-op this control is allowed to have, said out loud.
+        const also = wakes || watches ? ` — it did drop ${wakes} queued wake(s) and ${watches} watch(es)` : "";
+        note(`nothing was wedged${also} — no run was started`, "info");
+        return;
+      }
+      // The fence is gone. ONE short turn on this assistant's own thread; its run id is what the card says started.
+      try {
+        const turn = await asPost("/api/assistant/say", { text: REATTACH_TEXT, assistantId });
+        const run = String(turn?.job?.runId || turn?.job?.id || "");
+        note(`cleared ${cleared} wedged run(s), run ${run || "(no id yet)"} started`, "good");
+      } catch (err) {
+        // Cleared, but nothing started: claiming a run here would be a lie the reader would act on.
+        note(`cleared ${cleared} wedged run(s), but the wake was refused — ${String((err && err.message) || err)}`, "bad");
+      }
+    } catch (err) {
+      // The route's refusal, verbatim — its 409 `error` is written for the reader.
+      note(String((err && err.message) || err), "bad");
+    } finally {
+      queueReattachInFlight.delete(assistantId);
+      if (btn && btn.isConnected) {
+        btn.disabled = false;
+        btn.classList.remove("is-starting");
+      }
+      // The chip's word comes from /api/jobs and the note from the map above, so the repaint reads both again.
+      void loadQueueJobs();
+      renderAssistantQueue(assistantId);
+    }
   }
 
   // The row's pipeline press. It draws what the RECORD says — the contract's `pipelineRun` (lib/task-pipeline.js), as it
@@ -3122,6 +3225,7 @@
             </div>
             <div class="as-task-facts">${agents}${meta.length ? `<span class="as-task-meta">${meta.join(" · ")}</span>` : ""}<span class="as-task-pipeline">${queuePipelineChip(t, id)}${queueFlowButton(t, id)}</span></div>
             ${note}
+            ${queueReattachNoteHtml(id, t.id)}
           </div>
           <div class="as-task-actions">${acts.join("")}${move}${btn("delete", "✕", "Delete", "delete this task — a removed task leaves no ghost in the digest")}</div>
         </div>
@@ -4494,6 +4598,17 @@
   });
 
   as$("assistant")?.addEventListener("click", async (e) => {
+    // The stopped chip's press comes FIRST: the chip sits INSIDE the sub-row that carries `data-as-qopen`, so the
+    // opener lookup below would answer the row and open a card the reader did not ask to open. `stopPropagation` keeps
+    // the press from reaching the float's other handlers; the chip's own listener is this one, so the row's opener
+    // never sees it.
+    const reattachChip = e.target.closest("[data-as-qreattach]");
+    if (reattachChip) {
+      e.preventDefault();
+      e.stopPropagation();
+      await queueReattach(reattachChip.dataset.asQown, reattachChip.dataset.asQid, reattachChip);
+      return;
+    }
     // A queue row is a console row, so its whole body opens something — and the sub-rows are divs, not buttons, which
     // is why this is asked BEFORE the button lookup below. A sub-row opens THAT agent (its own thread); anywhere else
     // on the task's body opens the agent carrying it now. Controls keep their own presses: the check excludes every

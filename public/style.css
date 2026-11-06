@@ -1252,6 +1252,9 @@ button.pill-reattach {
 }
 button.pill-reattach .pill-again { font-size: 12px; line-height: 1; opacity: .8; }
 button.pill-reattach:hover { border-color: #6f5a1e; background: #33290f; }
+/* The failed chip stays RED on hover: `.pill.pill-notrunning.is-failed` outranks `button.pill-reattach:hover`, so
+   without this line the press turns back into an amber continue pill the moment the pointer lands on it. */
+button.pill-reattach.pill-notrunning.is-failed:hover { border-color: #7a3138; background: #341a1c; }
 button.pill-reattach:hover .pill-again { opacity: 1; }
 button.pill-reattach:focus-visible { outline: 2px solid #6b7b8f; outline-offset: 1px; }
 button.pill-reattach:disabled { cursor: progress; }
@@ -3971,6 +3974,11 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 .as-task-meta code { font-family: var(--mono); }
 .as-task-note { margin: 0 0 0 19px; font-size: 10.5px; color: #e0b341; line-height: 1.35; }
 .as-task-note.is-bad { color: var(--red); }
+/* The stopped chip's own answer. Green is the panel's "something happened and it worked" colour (the RUNNING pill and
+   a merged row use it); the dim one is the honest no-op — nothing was wedged, so nothing was started, and that is not a
+   failure to paint red. */
+.as-task-note.is-good { color: #7ee787; }
+.as-task-note.is-info { color: var(--dim); }
 /* Anchored at the card's bottom, over a hairline: the presses do not float up under a long title, and a reader
    scanning a column of cards finds them in the same place on every one. */
 .as-task-actions { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; margin: auto 0 0; padding: 7px 0 0 19px; border-top: 1px solid #1f2530; }
