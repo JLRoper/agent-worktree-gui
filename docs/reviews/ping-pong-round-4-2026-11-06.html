@@ -110,7 +110,8 @@ the ledger holds one critique entry at visit 1.</p>
 <p><b>The push is the one part of the round the ledger argues with itself about.</b> Stage 1 refused it, in its own
 final message. Stage 2's hand-written brief ordered it in five words. The version gate then refused it for real, and
 a <code>--no-verify</code> push carried it anyway at 15:07, opening PR #483 with a body frozen at the first three of
-five commits. The branch's number is still below main's.</p>
+five commits. At <code>3facbfd</code>, the commit this page measured, the branch's number was still below main's; the
+page's own branch then carried the patch bump rather than a second waiver.</p>
 </div>
 
 <div class="cols">
@@ -339,9 +340,9 @@ at 15:06 ("Nothing was pushed. The bump belongs in the same PR as the change"), 
 <code>git push --no-verify</code>, which is gate 5's named waiver. The PR body then offers a policy the versioning
 page does not state: "A docs-only branch lands at the base version (<code>docs/versioning.md</code>)". That page says
 the number is anchored by an annotated tag at the commit that first declares it
-(<code class="anchor">docs/versioning.md:12-27</code>); it has no docs-only exception. Measured today:
-<code>node tools/version.mjs check</code> exits 1 with "this branch's version is behind origin/main's" - branch
-1.41.0, base 1.41.1 at <code>db8a9bf</code>.</p>
+(<code class="anchor">docs/versioning.md:12-27</code>); it has no docs-only exception. Measured at <code>3facbfd</code>,
+before this branch's own bump: <code>node tools/version.mjs check</code> exits 1 with "this branch's version is
+behind origin/main's" - branch 1.41.0, base 1.41.1 at <code>db8a9bf</code>.</p>
 
 <h3 id="p7">7. The log's closing line is two commits short</h3>
 <p><code>run-log.md:45</code> says "15:08 - turn end ... this log's tail is the branch's last commit". Two commits
