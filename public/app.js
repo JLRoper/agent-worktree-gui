@@ -2230,6 +2230,23 @@ function originHtml(turn) {
   return ` <span class="turn-origin mono" title="${esc(title)}">\u21b3 ${esc(text)}</span>`;
 }
 
+// ---- session replaced ------------------------------------------------------------------------
+// A turn the panel had to move into a NEW gateway session, because the session its thread was on had been lost: the
+// gateway admitted the previous run and never executed it, so continuing that id would have queued for ever. The head
+// says so — the answer under this turn is a cold start, not a continuation of the conversation above it, and a reader
+// comparing the two needs to know which it is. Absent on every ordinary turn, warm retries included.
+function sessionReplacedHtml(turn) {
+  const r = turn && turn.sessionReplaced;
+  if (!r) return "";
+  const from = String(r.from || "");
+  const to = String(r.to || "");
+  if (!from || !to) return "";
+  const why = String(r.why || "");
+  const title = `the gateway lost session ${from}${why ? ` (${why})` : ""} — this turn starts ${to} in the same tree`;
+  return ` <span class="turn-origin mono" data-session-replaced="${esc(from)}" title="${esc(title)}">\u21ba new session</span>`;
+}
+// ---- end session replaced --------------------------------------------------------------------
+
 function turnHead(turn, index, open, copy = "", inline = false) {
   // The number the reader counts down the thread. Not `turn.turn`: that counter is trimmed with the store and can
   // repeat (a restarted board showed two "turn 6" and two "turn 7" in one card), while `index` is the turn's place in
@@ -2237,7 +2254,7 @@ function turnHead(turn, index, open, copy = "", inline = false) {
   const label = `turn ${index + 1}`;
   const pinned = state.pinnedTurns.has(turn.id);
   const state_ = turnStateText(turn);
-  return `<div class="turn-head mono dimmer" data-turn-head="${esc(turn.id)}" data-toggle-turn="${esc(turnKey(turn, copy))}" title="${open ? "collapse" : "expand"} this turn"><button type="button" class="btn-star${pinned ? " on" : ""}" data-star-turn="${esc(turn.id)}" title="${pinned ? "unpin this turn" : "pin this turn above the paged turns"}">${pinned ? "\u2605" : "\u2606"}</button><span class="chev">${open ? "\u25be" : "\u25b8"}</span> <span class="turn-text">${esc(label)} · ${esc(state_)}</span>${originHtml(turn)}${inlinePrompt(turn, inline)}</div>`;
+  return `<div class="turn-head mono dimmer" data-turn-head="${esc(turn.id)}" data-toggle-turn="${esc(turnKey(turn, copy))}" title="${open ? "collapse" : "expand"} this turn"><button type="button" class="btn-star${pinned ? " on" : ""}" data-star-turn="${esc(turn.id)}" title="${pinned ? "unpin this turn" : "pin this turn above the paged turns"}">${pinned ? "\u2605" : "\u2606"}</button><span class="chev">${open ? "\u25be" : "\u25b8"}</span> <span class="turn-text">${esc(label)} · ${esc(state_)}</span>${originHtml(turn)}${sessionReplacedHtml(turn)}${inlinePrompt(turn, inline)}</div>`;
 }
 
 function inlinePrompt(turn, inline) {
@@ -6936,11 +6953,16 @@ function retryableError(message) {
   const s = String(message || "");
   if (!s) return false;
   if (/did not answer within|timed out|timeout|ECONNRESET|ECONNREFUSED|EPIPE|socket hang up|network error|EAI_AGAIN|gateway accepted the request but returned no run_id/i.test(s)) return true;
+  // The gateway's word for a turn it admitted and never executed: the session it was posted to is fenced, and
+  // nothing about that run will ever settle. The retry is exactly the repair — it opens a NEW session for the
+  // thread — so this word has to offer the button, not hide it.
+  if (/unknown_execution/i.test(s)) return true;
   const http = /HTTP (\d{3})/.exec(s);
   if (http) return Number(http[1]) >= 500 || Number(http[1]) === 429;
   if (/rate limit|rate-limited|429|overloaded|temporarily unavailable/i.test(s)) return true;
   return false;
 }
+// ---- end retry
 
 // The last spawn that failed. Re-sent as-is: re-reading the form would let the reader's later edits silently
 // change what the retry means, and it is their prompt, not ours to rewrite.
