@@ -134,14 +134,19 @@
     const row = as$("as-tabs");
     const body = document.querySelector("#assistant .as-body");
     for (const rec of sessionRecords()) {
-      if (row && !document.querySelector(`#as-tabs [data-as-tab="${rec.id}"]`)) {
-        const b = document.createElement("button");
-        b.type = "button";
-        b.dataset.asTab = rec.id;
+      if (row) {
+        let b = document.querySelector(`#as-tabs [data-as-tab="${rec.id}"]`);
+        if (!b) {
+          b = document.createElement("button");
+          b.type = "button";
+          b.dataset.asTab = rec.id;
+          const firstList = [...row.querySelectorAll("[data-as-tab]")].find((x) => LISTS.includes(x.dataset.asTab));
+          row.insertBefore(b, firstList || null);
+        }
+        // Written on EVERY paint, not only when the button is created: a renamed assistant has to move its tab label
+        // in place. Creating it once and leaving the text alone is how a rename would need a page reload to show.
         b.title = `${rec.name} — a real agent thread of its own (${rec.threadId ?? ""}), running the role it picked`;
-        b.textContent = rec.name;
-        const firstList = [...row.querySelectorAll("[data-as-tab]")].find((x) => LISTS.includes(x.dataset.asTab));
-        row.insertBefore(b, firstList || null);
+        if (b.textContent !== rec.name) b.textContent = rec.name;
       }
       if (body && !document.getElementById(`as-${rec.id}`)) {
         const pane = document.createElement("section");
@@ -856,6 +861,14 @@
     if (modeEl) {
       modeEl.textContent = mode === "draft" ? "draft-only" : mode === "auto-safe" ? "auto-safe" : "auto";
       modeEl.className = `as-mode mono${mode === "auto" ? " is-auto" : mode === "auto-safe" ? " is-safe" : ""}`;
+    }
+    // The bar names the assistant the float is showing, from the same record the tab label is painted from — the two
+    // surfaces read one fact, so a rename lands in both on the same repaint.
+    const nameEl = as$("as-name");
+    if (nameEl) {
+      const shown = sessionById(selectedSessionId());
+      const label = shown?.name || "Assistant";
+      if (nameEl.textContent !== label) nameEl.textContent = label;
     }
     // The sub-tab's count is the alert count LESS the spawn cards: the spawn cards have their own strip and badge,
     // and a number that silently included them is how a card nobody started stayed invisible. Both counts are the
@@ -2615,7 +2628,27 @@
     // with the server-side send records it describes, and the function sliced by test/assistant-thresholds.js needs no
     // outer helper it cannot see.
     const roleRestartNote = String((host.dataset && host.dataset.roleRestartNote) || "");
+    // The rename row's own answer — "Saved…" or "that is already its name" — kept the same way: on the pane's element,
+    // so it survives this function's repaint and dies with a page reload that no longer needs it.
+    const nameNote = String((host.dataset && host.dataset.nameNote) || "");
     host.innerHTML = `
+      <div class="as-group" id="as-rename-${esc(n)}">
+        <h4>Its name</h4>
+        <div class="as-help">What this assistant is called on its tab and in this float's header. The <b>id</b> does not
+        change: it stays <code>${esc(id)}</code>, so a rename moves nothing — not its queue, not its thread, not its
+        charter and not its state directory. Duplicate names are fine; the id is what tells two apart.</div>
+        <div class="as-line">
+          <label>name <input type="text" id="as-name-text-${esc(n)}" data-as-namefor="${esc(id)}" spellcheck="false"
+            maxlength="40" value="${esc(rec?.name || "")}" placeholder="${esc(`Assistant #${n}`)}"
+            title="up to 40 characters — trimmed, and refused if it is only spaces"></label>
+          <button type="button" class="primary" data-as-namesave="${esc(id)}" title="save this name on ${esc(rec?.name || "this assistant")}'s record — the tab and the float's header repaint at once">Save name</button>
+          <button type="button" data-as-namecancel="${esc(id)}" title="put the stored name back in the box and leave the record alone">Cancel</button>
+        </div>
+        <div class="as-line">
+          <span class="as-hint" data-as-namestatus="${esc(id)}">${esc(nameNote)}</span>
+          <span class="as-err" id="as-name-err-${esc(n)}"></span>
+        </div>
+      </div>
       ${heldBanner(agg, owned)}
       <div class="as-group">
         <h4>${first ? "How it behaves" : `${esc(rec?.name || "Assistant")}'s settings — its own, not Assistant #1's`}</h4>
@@ -5163,6 +5196,59 @@
       // screen, then switch the view. `setView` persists the record, so a reload lands on the same tab.
       roleTarget = t.dataset.asRoleopen;
       setView({ assistant: "role" });
+      return;
+    }
+
+    // THE RENAME. Save posts the trimmed box to the SAME /api/assistant/settings route the knobs use, which writes the
+    // name on the assistant's RECORD; the answer's assistant state repaints the tab row and this pane, so the label
+    // moves with no reload. Empty is refused here (a visible line, no request) and again on the server; over 40 is
+    // capped by the input's own maxlength and by the server's cap.
+    if (t.dataset.asNamesave) {
+      const id = t.dataset.asNamesave;
+      const n = String(id).replace(/^assistant-/, "");
+      const box = as$(`as-name-text-${n}`);
+      const name = String(box?.value || "")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (!name) {
+        setErr(`as-name-err-${n}`, "a name cannot be empty — type one, or press Cancel to keep the current name");
+        box?.focus();
+        return;
+      }
+      t.disabled = true;
+      try {
+        const d = await asPost("/api/assistant/settings", { assistantId: id, name: name.slice(0, 40) });
+        const pane = hostFor(id, "settings");
+        const saved = d?.renamed?.target?.name || name;
+        if (pane) {
+          pane.dataset.nameNote = d?.renamed?.changed === false
+            ? `That is already its name — ${saved} is what its record holds.`
+            : `Saved — its tab and this float's header now read ${saved}. Its id, queue, thread, charter and state directory are unchanged.`;
+        }
+        setErr(`as-name-err-${n}`, "");
+        // asPost already applied the answer's assistant state (the tab row is repainted); this repaints the pane the
+        // reader is looking at so the input shows the stored name and the note explains the save.
+        renderAssistantSettings(id, true);
+      } catch (err) {
+        setErr(`as-name-err-${n}`, err.message);
+      } finally {
+        t.disabled = false;
+      }
+      return;
+    }
+
+    if (t.dataset.asNamecancel) {
+      // Cancel is a local undo of the box, nothing else: the record was never written, so the stored name is what the
+      // input is put back to.
+      const id = t.dataset.asNamecancel;
+      const n = String(id).replace(/^assistant-/, "");
+      const box = as$(`as-name-text-${n}`);
+      if (box) box.value = sessionById(id)?.name || "";
+      setErr(`as-name-err-${n}`, "");
+      const pane = hostFor(id, "settings");
+      if (pane) pane.dataset.nameNote = "";
+      const note = hostFor(id, "settings")?.querySelector(`[data-as-namestatus="${id}"]`);
+      if (note) note.textContent = "";
       return;
     }
 

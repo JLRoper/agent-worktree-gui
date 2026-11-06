@@ -3667,12 +3667,21 @@ const server = createServer(async (req, res) => {
       // Which assistant these knobs belong to. No `assistantId` means Assistant #1 — the route, the file and the
       // answer the page's own Settings pane has always posted to, unchanged; any other id is that assistant's own
       // profile file, beside its charter.
-      const { assistantId, id, ...patch } = body || {};
+      const { assistantId, id, name, ...patch } = body || {};
       try {
-        const settings = assistant.setSettingsFor(assistantId || id || undefined, patch);
-        return sendJson(res, 200, { settings, assistant: assistant.state() });
+        // A rename rides the SAME route the pane already posts its knobs to: the name belongs to the assistant's
+        // RECORD (the store create/pick-role own), not to its settings profile, and writing it here is what keeps one
+        // assistant settings tab from needing a second endpoint. It is checked FIRST, so a refused name leaves every
+        // knob in the body unwritten.
+        const renamed = name === undefined ? null : assistant.renameAssistant(assistantId || id || undefined, name);
+        // A rename-only POST must not rewrite (or, on a profile with an absent key, freeze) the knobs beside it.
+        const settings = Object.keys(patch).length
+          ? assistant.setSettingsFor(assistantId || id || undefined, patch)
+          : assistant.settingsFor(assistantId || id || undefined);
+        return sendJson(res, 200, { settings, renamed, assistant: assistant.state() });
       } catch (e) {
-        const code = (e && e.code) === "assistant-unknown" ? 404 : (e && e.code) === "profile-write-failed" ? 500 : 400;
+        const code =
+          (e && e.code) === "assistant-unknown" ? 404 : (e && e.code) === "profile-write-failed" ? 500 : 400;
         return sendJson(res, code, { error: String((e && e.message) || e) });
       }
     }

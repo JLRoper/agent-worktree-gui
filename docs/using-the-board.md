@@ -85,6 +85,18 @@ whichever assistant you are looking at. Its pill reads `on`/`off`, so the state 
 it holds are greyed and marked **held**, and switching it off puts your own values back exactly. Press it twice and the
 no-op note says so.
 
+### Renaming an assistant
+
+An assistant's own tab has its own **Settings** sub-tab, and the first row there is **Its name**: a text box seeded
+with the current name, **Save name** and **Cancel**. Save writes the name on that assistant's **record**, the same
+file its role and rules live in, and its tab label and the panel's header repaint at once, with no reload. Cancel
+puts the stored name back in the box and leaves the record alone.
+
+The name is trimmed, capped at 40 characters, and a name that is empty or only spaces is refused with a line under
+the box rather than silently ignored. Two assistants may share a name; what tells them apart is the id
+(`assistant-2`, `assistant-3`, ...), and a rename never changes it, so it moves nothing: not the assistant's queue,
+not its thread, not its charter file and not its state directory.
+
 ---
 
 ## Starting an agent
