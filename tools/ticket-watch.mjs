@@ -47,6 +47,7 @@ import {
   WATCH_VERSION,
   addTicket,
   classifyTicket,
+  isBaseline,
   movementLine,
   readTicketFile,
   removeTicket,
@@ -318,7 +319,14 @@ function cmdList() {
       process.stdout.write(`\n${current}\n`);
     }
     const seen = r.lastSeen || {};
-    const last = seen.commentId ? `last comment #${seen.commentId} ${seen.updated || ""}`.trim() : "baseline not taken yet";
+    // "Baseline not taken" is a fact about all three tracked fields, not about `commentId`: a ticket with no
+    // comments at all has a null commentId and a taken baseline, and calling it unread sends the reader to
+    // Jira for nothing.
+    const last = isBaseline(r)
+      ? "baseline not taken yet"
+      : seen.commentId
+        ? `last comment #${seen.commentId}${seen.updated ? ` ${seen.updated}` : ""}`
+        : `no comments${seen.updated ? ` · seen ${seen.updated}` : ""}`;
     process.stdout.write(`  ${r.key}  ${seen.status || "(no status yet)"} · ${seen.assignee || "unassigned"} · ${last}${r.note ? `  — ${r.note}` : ""}\n`);
   }
   process.stdout.write(`\n${rows.length} watched\n`);
