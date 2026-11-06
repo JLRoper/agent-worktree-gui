@@ -3571,6 +3571,19 @@ const server = createServer(async (req, res) => {
         return sendJson(res, (e && e.code) === "role-unknown" ? 404 : 400, { error: String((e && e.message) || e) });
       }
     }
+    // A restart of ONE assistant's turn context: its NEXT turn is rebuilt from the role its record already carries —
+    // the charter, the board digest and the queue digest go in full again — with no panel restart and no gateway call.
+    // A POST because it changes state, and the whole assistant state rides back so the pane repaints from one answer.
+    if (route === "/api/assistant/role/restart" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      try {
+        const out = assistant.restartRole(body.assistantId);
+        return sendJson(res, 200, { ...out, assistant: assistant.state() });
+      } catch (e) {
+        return sendJson(res, (e && e.code) === "assistant-unknown" ? 404 : 400, { error: String((e && e.message) || e) });
+      }
+    }
     // One assistant's own profile: the default role prompt it runs on and the escalation list it would hand a
     // subject to (stored; nothing acts on it yet). One route for both fields because they are one file beside that
     // assistant's charter — a save of either writes that file whole, and a field left out of the body keeps what the
