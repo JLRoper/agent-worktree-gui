@@ -55,6 +55,10 @@
       "defaultInvestigation": "github-investigate",
       "releaseWorktrees": true,
       "worktrees": null
+    },
+    {
+      "name": "optym-integration-multi",
+      "pushNewBranches": "always-ask"
     }
   ]
 }
