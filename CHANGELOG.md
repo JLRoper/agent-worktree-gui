@@ -4,16 +4,36 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.40.1 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.41.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-344 releases from v0.1.0 (2026-10-20) to v1.40.1 (2026-11-06), 1204 commits between the tags. Every release is anchored by an
+345 releases from v0.1.0 (2026-10-20) to v1.41.0 (2026-11-06), 1211 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.41.0 — 2026-11-06 · 7 commits
+
+[`0e820ff`](https://github.com/JLRoper/agent-worktree-gui/commit/0e820ffdab0da56f5d5ad8c3bb0f233d3f9ff7ec) · [compare v1.40.1...v1.41.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.40.1...v1.41.0)
+
+### Added
+
+- feat: a stage's run is held in the panel's wait book, and the timer advances it ([`a40372d`](https://github.com/JLRoper/agent-worktree-gui/commit/a40372dcbc7693c565054a0a05ffc280404ee48a))
+
+### Docs & tests
+
+- docs: render the changelog — 344 releases ([`9573d85`](https://github.com/JLRoper/agent-worktree-gui/commit/9573d852c25ac2e97b0c346355f138750555e61e))
+- docs: re-render the pipeline map at 1.40.1 ([`9dabb00`](https://github.com/JLRoper/agent-worktree-gui/commit/9dabb0044a6862b32308e0fd10b351ff6b3c3996))
+- test: the hold is written by the cut, kept while the run lives, and spent exactly once ([`b505bff`](https://github.com/JLRoper/agent-worktree-gui/commit/b505bffe9788ace636f83867f9fd52a08ffa4f8c))
+- test: the walk gate carries a timer walk, and a restart mid-wait ([`6c55c8b`](https://github.com/JLRoper/agent-worktree-gui/commit/6c55c8bff3813245bbd091405f99c19df9588680))
+- docs: the second kind of wait - the stage's own run ([`afb7b0b`](https://github.com/JLRoper/agent-worktree-gui/commit/afb7b0bb0b105e7dee6e7f3d9abb2d9adb86eaf5))
+
+### Other
+
+- chore: 1.41.0 - the version this landing carries ([`0e820ff`](https://github.com/JLRoper/agent-worktree-gui/commit/0e820ffdab0da56f5d5ad8c3bb0f233d3f9ff7ec))
 
 ## v1.40.1 — 2026-11-06 · 5 commits
 
