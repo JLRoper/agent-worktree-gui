@@ -140,6 +140,29 @@ test("elapsedInStage is a pure function of two instants", () => {
   assert.equal(elapsedInStage("2026-11-03T12:30:00.000Z", { now: "not a clock" }).ok, false);
 });
 
+test("a fraction of any length is a UTC instant, and only the fraction's refusal is about the fraction", () => {
+  // A hand-off from another tool can carry microseconds. The stamp IS a UTC instant, and the fraction's length is
+  // not a reason to refuse it: this is the stage-2 hand-off that read as "no zone" while its zone was right there.
+  const sub = elapsedInStage("2026-11-06T19:28:20.426123Z", { now: "2026-11-06T19:30:20.426123Z" });
+  assert.equal(sub.ok, true, sub.reason || "a six-digit fraction must parse");
+  assert.equal(sub.ms, 120_000);
+  assert.equal(sub.future, false);
+
+  // Short and long: the pattern bounds the digits' shape, not their count.
+  assert.equal(elapsedInStage("2026-11-06T19:28:20.4Z", { now: "2026-11-06T19:28:21.4Z" }).ms, 1_000);
+
+  // No Z: the refusal is still the zone's, and still says so.
+  const zoneless = elapsedInStage("2026-11-06 19:28:20.426123", { now: NOW });
+  assert.equal(zoneless.ok, false);
+  assert.match(zoneless.reason, /no zone/);
+
+  // With its Z, the zone is not the fault: the fraction is, and that is a DIFFERENT sentence.
+  const badFraction = elapsedInStage("2026-11-06T19:28:20.4x6123Z", { now: NOW });
+  assert.equal(badFraction.ok, false);
+  assert.match(badFraction.reason, /fraction after the seconds cannot be read/);
+  assert.doesNotMatch(badFraction.reason, /no zone/);
+});
+
 test("enterStage restarts the clock and leaves the record it was given alone", () => {
   const before = task();
   const after = enterStage(before, { stage: "S4", enteredAt: "2026-11-03T15:00:00.000Z" });
