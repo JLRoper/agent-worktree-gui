@@ -14,6 +14,18 @@ const HANG = () => new Promise(() => {});
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const HUNG = Symbol("hung");
 
+// A request is answered from the held bundle; the read it scheduled lands later. Poll for the
+// effect rather than requiring it in the same tick.
+const until = async (read, timeoutMs = 3000) => {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const value = await read();
+    if (value) return value;
+    if (Date.now() > deadline) throw new Error("the log line never arrived");
+    await sleep(10);
+  }
+};
+
 async function fixture(t) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "wtgui-build-deadline-"));
   await mkdir(path.join(dir, "core"), { recursive: true });
@@ -63,13 +75,15 @@ test("a scan that wedges after a good read keeps serving the last good bundle", 
   const first = await build.current();
   assert.match(first.version, /^[0-9a-f]{12}$/, "the healthy read gives a real version");
 
-  // A file moves, so the next request finds the bundle stale and starts a scan - which now wedges.
+  // A file moves, so the watcher owes the bundle a re-read — which now wedges. The request that
+  // follows is answered from the bundle already held, not from that read.
   wedged = true;
   await writeFile(path.join(dir, "style.css"), "body { margin: 1px; }\n");
   const answer = await Promise.race([build.current(), sleep(2000).then(() => HUNG)]);
 
   assert.notEqual(answer, HUNG, "a wedged re-read must not take the shell down");
   assert.equal(answer.version, first.version, "the last good bundle is what the browser gets");
+  await until(async () => said.some((l) => /did not answer within 120 ms/.test(l)), 2000);
   assert.match(said.join("\n"), /did not answer within 120 ms/, "with the reason in the log");
 });
 
@@ -111,7 +125,10 @@ test("a healthy build still reads, moves on an edit and reports the same payload
   assert.equal(second.computedAt, first.computedAt, "an unchanged bundle is still not re-read");
 
   await writeFile(path.join(dir, "app.js"), "console.log('app, edited');\n");
-  const third = await build.current();
+  const third = await until(async () => {
+    const b = await build.current();
+    return b.version !== first.version ? b : null;
+  });
   assert.notEqual(third.version, first.version, "an edit still moves the build");
   const info = await build.info();
   assert.equal(info.version, third.version, "and info() follows it");

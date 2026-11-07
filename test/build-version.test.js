@@ -11,6 +11,18 @@ import path from "node:path";
 import test from "node:test";
 import { createBuild, hashBytes, readBundle, rewriteShell, versionOf } from "../lib/build-version.js";
 
+// A build that a request cannot wait for: the work lands a turn (or a few) after the response, so
+// the cases that assert it happened poll for it instead of requiring it in the same tick.
+const until = async (read, timeoutMs = 3000) => {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const value = await read();
+    if (value) return value;
+    if (Date.now() > deadline) throw new Error("the build did not move in time");
+    await new Promise((r) => setTimeout(r, 10));
+  }
+};
+
 const INDEX = `<!DOCTYPE html>
 <html><head>
   <link rel="stylesheet" href="/style.css" />
@@ -115,7 +127,12 @@ test("a running panel notices an edit under public/ and moves the build", async 
   assert.equal((await build.current()).computedAt, first.computedAt, "an unchanged bundle is not re-read");
 
   await writeFile(path.join(dir, "style.css"), ":root { color: blue }\n");
-  const second = await build.current();
+  // The read happens behind the request that noticed the edit, not inside it: poll for the build
+  // the watcher's verdict produces, rather than requiring the very next call to have it.
+  const second = await until(async () => {
+    const b = await build.current();
+    return b.version !== first.version ? b : null;
+  });
   assert.notEqual(second.version, first.version, "the panel serves a new build without a restart");
   assert.ok(lines.some((l) => l.includes("static bundle changed on disk")), "and says so in the log");
   assert.equal(second.bootedAt, first.bootedAt, "a re-read is not a restart");
@@ -147,7 +164,7 @@ test("an unchanged bundle is not statted again — the watcher decides when to l
   });
   t.after(() => build.close());
 
-  await build.current(); // the first read stamps every file it holds
+  const before = await build.current(); // the first read stamps every file it holds
   const stamped = calls;
   assert.ok(stamped > 0, "the first read stats the files it stamps");
   await build.current();
@@ -155,8 +172,12 @@ test("an unchanged bundle is not statted again — the watcher decides when to l
   assert.equal(calls, stamped, "a watched bundle nothing has touched costs no stat at all");
 
   await writeFile(path.join(dir, "style.css"), ":root { color: green }\n");
-  await new Promise((r) => setTimeout(r, 50)); // the watcher's event is what re-arms the sweep
-  const next = await build.current();
+  // The watcher's event re-reads the bundle in the background; the request that follows it is
+  // served what is held until that read lands.
+  const next = await until(async () => {
+    const b = await build.current();
+    return b.version !== before.version ? b : null;
+  });
   assert.ok(calls > stamped, "an edit puts the sweep back to work");
   assert.match(next.version, /^[0-9a-f]{12}$/);
 });
