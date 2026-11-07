@@ -1,26 +1,32 @@
-// What one assistant turn appends to its thread, and what it costs per API call.
+// What one assistant turn appends to its thread, what it sends as system text, and what it costs per API call.
 //
 //   node tools/verify-append-tax.mjs
 //
 // HARNESS: LIVE GATE
-// The assistant's standing briefing used to ride in the run's INPUT as a user message: `jobs.create()` prepended
-// `Assistant.preamble()` to the question (`pre + anchored`), so every wake wrote ~18.5 KB into the thread's
-// transcript. That text is not paid once. Every later API call in the session re-reads it (as cache), and every
-// compaction re-ingests it as uncached input, which is the append tax.
+// The briefing is split in two, and the split is a caching rule:
 //
-// This tool measures the turn the panel actually creates, on a COPY of this box's live assistant state, and prints:
+//   * the STANDING half (role, rules, scratchpad, watches, projects, action grammar) is the run's `instructions`,
+//     which the gateway applies as an ephemeral system prompt and never writes into the transcript;
+//   * the MOVING half (the queue digest, the board in full or as its one-line marker, and the charter in full or as
+//     its marker) is appended to the turn's input.
 //
-//   * the turn's appended input (what `jobs.create()` would put in `input`), in bytes and in the gateway's own
-//     rough token estimate (ceil(UTF-8 bytes / 4), agent/model_metadata.py:CHARS_PER_TOKEN);
-//   * the standing text the turn sends as SYSTEM text (`instructions` on the run body), when the tree has that
-//     split; on a tree without it there is no system block and the whole briefing is appended;
-//   * the share of the briefing that rides in the transcript, over a run of sweep wakes;
-//   * this box's own store reading: uncached `input_tokens` per API call over the assistant threads (read-only).
+// A provider's prefix cache reuses only the bytes a request shares with the one before it, and the system text is the
+// head of the prompt. The board changes form every `digestSweepEveryNWakes` sweeps and the charter every
+// `CHARTER_RESEND_EVERY` turns, so while either sat in the system block the head changed on a schedule and every
+// token of the thread behind it was re-read uncached on those turns. What this tool gates is therefore BOTH halves of
+// that sentence: the system block is ONE CONSTANT STRING across a session, and the blocks that move are in the turn.
 //
-// It is a MEASUREMENT AND A GATE. On a tree that still appends the standing briefing it prints the before shape and
-// exits 1, which is where the before number comes from. On a tree that sends the standing blocks as system text and
-// keeps only the queue digest with the question, the same run prints the after shape and exits 0, and the turn's
-// appended input must be under half of the full briefing it used to carry.
+// It measures the turn the panel actually creates, on a COPY of this box's live assistant state, and prints:
+//
+//   * the system text the turn sends (`instructions` on the run body) and the text it appends to the thread, in bytes
+//     and in the gateway's own rough token estimate (ceil(UTF-8 bytes / 4), agent/model_metadata.py:CHARS_PER_TOKEN);
+//   * whether the system block is byte-identical on every wake of the run;
+//   * which moving block each turn carries, in which form;
+//   * this box's own store reading: uncached `input_tokens` and `cache_read_tokens` over the assistant threads.
+//
+// It is a MEASUREMENT AND A GATE. On a tree whose system block changes shape between wakes (a marker, a full board)
+// the last check fails and prints how many distinct system blocks eight wakes sent, which is where the before number
+// comes from. On a tree where the standing half is constant and the moving half rides the turn, every check passes.
 //
 // The live panel is never touched: the state is copied to a temp directory, the job store is a capture stub, and
 // no gateway is called. Nothing is written to ~/.wag.
@@ -91,9 +97,13 @@ try {
 
   // A sweep wake, eight times: the gate on the queue digest and the board digest is a COUNT, and one turn only ever
   // shows one side of it. The question is the median the audit measured (167 chars).
+  //
+  // The rule must be one of SWEEP_WAKE_RULES or every wake is an EVENT turn and the board is sent in full on all eight
+  // (`queuesweep`, the name this harness used to carry, is not in that set: the run it printed was eight full boards
+  // and described a board gate that never fired).
   const question = "Sweep your queue. Nothing needs a decision; say what you make of the board in one line.";
   for (let i = 0; i < 8; i += 1) {
-    await assistant.say(question, { origin: { kind: "assistant-wake", rule: "queuesweep", reason: "sweep" } });
+    await assistant.say(question, { origin: { kind: "assistant-wake", rule: "quiet", reason: "sweep" } });
   }
   if (created.length !== 8) throw new Error(`expected 8 created turns, got ${created.length}`);
 
@@ -103,7 +113,19 @@ try {
   const rows = created.map((body, i) => {
     const appended = body.preamble ? `${String(body.preamble).trim()}${sep}${body.prompt}` : String(body.prompt);
     const system = body.system ? String(body.system) : "";
-    return { turn: i + 1, appended: bytes(appended), system: bytes(system), hasDigest: /Your task queue \(/.test(appended), hasRules: /Standing rules/.test(appended) };
+    const board = /The board right now:\n\[Board unchanged/.test(appended) ? "marker" : /The board right now:/.test(appended) ? "full" : "none";
+    return {
+      turn: i + 1,
+      appended: bytes(appended),
+      system: bytes(system),
+      systemText: system,
+      hasDigest: /Your task queue \(/.test(appended),
+      // The panel's OWN line, anchored at a line start, so a charter that happens to quote a rules heading cannot be
+      // read as the standing block being appended. This flag is the proof that the standing half stays in `system`.
+      hasRules: /(^|\n)Standing rules \(written by the reader/.test(appended),
+      board,
+      hasCharter: /Charter — the long tier/.test(appended),
+    };
   });
 
   const ordinary = rows.slice(1); // turn 1 of a session carries the charter in full; every later sweep is the steady shape
@@ -114,10 +136,10 @@ try {
   const meanAppended = Math.round(rows.reduce((n, r) => n + r.appended, 0) / rows.length);
 
   console.log("");
-  console.log("  turn | appended to the thread | sent as system text | queue digest in the turn | rules in the turn");
+  console.log("  turn | appended to the thread | sent as system text | queue digest | board  | charter");
   for (const r of rows) {
     console.log(
-      `  ${String(r.turn).padStart(4)} | ${fmt(r.appended).padStart(21)} B | ${fmt(r.system).padStart(19)} B | ${r.hasDigest ? "yes" : "no ".padEnd(23)} | ${r.hasRules ? "yes" : "no"}`,
+      `  ${String(r.turn).padStart(4)} | ${fmt(r.appended).padStart(21)} B | ${fmt(r.system).padStart(19)} B | ${(r.hasDigest ? "yes" : "no").padEnd(12)} | ${r.board.padEnd(6)} | ${r.hasCharter ? "yes" : "no"}`,
     );
   }
   console.log("");
@@ -125,6 +147,8 @@ try {
   console.log(`  first turn of a session: ${fmt(first.appended)} B appended, ${fmt(first.system)} B as system text (the charter is sent whole)`);
   console.log(`  all eight turns: ${fmt(meanAppended)} B appended on average`);
   console.log(`  digest carried on ${rows.filter((r) => r.hasDigest).length} of ${rows.length} wakes`);
+  const distinctSystems = new Set(rows.map((r) => r.systemText));
+  console.log(`  distinct system blocks across ${rows.length} wakes: ${distinctSystems.size}${distinctSystems.size === 1 ? " (one constant string)" : ""}`);
   console.log(`  ordinary turn's appended share of its briefing: ${((avgAppended / fullBriefing) * 100).toFixed(1)}%`);
 
   // ---- the store's own figure: uncached input per API call on the assistant threads ----
@@ -154,7 +178,19 @@ try {
     hasSplit ? `${fmt(avgSystem)} B per turn as instructions` : "no system block on this tree: the whole briefing is appended",
   );
   check(
-    "the per-turn input is the queue digest with the question, not the standing text",
+    "the system block is one constant string across the session",
+    distinctSystems.size === 1,
+    distinctSystems.size === 1
+      ? `${fmt(avgSystem)} B, byte-identical on all ${rows.length} wakes`
+      : `${distinctSystems.size} distinct system blocks over ${rows.length} wakes: the head of the prompt moved, so nothing behind it can be cached`,
+  );
+  check(
+    "the board and the charter ride the turn, on every wake",
+    rows.every((r) => r.board !== "none" && r.hasCharter),
+    `${rows.filter((r) => r.board === "full").length} full boards, ${rows.filter((r) => r.board === "marker").length} markers, charter on ${rows.filter((r) => r.hasCharter).length} of ${rows.length}`,
+  );
+  check(
+    "the per-turn input is the moving text, not the standing text",
     rows.every((r) => !r.hasRules),
     rows.some((r) => r.hasRules) ? "the standing rules are still in the user message" : "the standing rules ride in the system block",
   );

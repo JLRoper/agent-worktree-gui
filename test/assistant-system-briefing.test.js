@@ -1,17 +1,18 @@
-// The append tax: the standing briefing is SYSTEM text, and a turn appends only its queue digest.
+// What a turn's two halves carry, and why the split falls where it does.
 //
-// Until this change every assistant turn wrote `Assistant.preamble()` into the run's INPUT: `jobs.create()` put it
-// ahead of the question (`pre + anchored`), so ~17 KB of text that had not changed was a new user message on the
-// thread every wake. Each of those messages is re-read by every later API call (as cache) and re-ingested by every
-// compaction (as uncached input), which is the tax this file is the contract for.
+// The standing blocks (role, rules, projects, action grammar) ride in the run's `system` field, which `jobs.create`
+// sends as `instructions` on POST /v1/runs. The gateway applies that as the run's ephemeral system prompt and never
+// writes it into the session's transcript.
 //
-// What replaces it:
-//   1. the standing blocks (role, rules, charter, projects, action grammar, the board) ride in the run's `system`
-//      field, which `jobs.create` sends as `instructions` on POST /v1/runs. The gateway applies that as the run's
-//      ephemeral system prompt and never writes it into the session's transcript;
-//   2. the per-turn input is the queue digest and the question, nothing else;
-//   3. the queue digest is gated one wake in two (`queueSweepEveryNWakes`, default 2) and the full board one sweep
-//      in four (`digestSweepEveryNWakes`, default 4). A wake that skips the digest appends nothing but its question.
+// The blocks that MOVE between turns — the queue digest, the board (its full digest or its one-line marker) and the
+// charter (its text or its marker) — ride the turn's input instead. That is a caching rule, not a tidiness one: a
+// provider's prefix cache reuses only the bytes a request shares with the one before it, and the system text is the
+// head of the prompt. While the board alternated full and marker every fourth sweep and the charter every twentieth
+// turn, the head changed on a schedule and every token of the thread behind it was re-read uncached on those turns.
+//
+// The invariant this file pins is therefore: `system` is the SAME STRING on every turn of a session, and everything
+// that moves is in `preamble`. It stops being true only when the reader edits a rule, the scratchpad, a watch or the
+// role — which is the honest boundary, because those edits change what the model is being told to do.
 //
 // `preamble()` still returns the WHOLE briefing, standing plus turn, for the page and the tests that ask for it. It is
 // what a turn would append if it were still a single message; `say()` no longer builds a turn that way.
@@ -93,7 +94,7 @@ async function panel(t, { settings = {}, rows = [makeRow()] } = {}) {
 
 const SWEEP = { kind: "assistant-wake", rule: "quiet", reason: "sweep" };
 
-test("the standing briefing is the run's system text, not its input", async (t) => {
+test("the standing briefing is the run's system text, and nothing that moves rides in it", async (t) => {
   const { assistant, created } = await panel(t, { settings: { queueSweepEveryNWakes: 1 } });
   await assistant.say(QUESTION, { origin: SWEEP });
   const [job] = created;
@@ -106,24 +107,28 @@ test("the standing briefing is the run's system text, not its input", async (t) 
     NOTE,
     "Standing rules (written by the reader",
     "Projects you can SPAWN in",
-    "The board right now:",
     "A restart re-attaches runs",
     "SPAWN ", // the action grammar
   ]) {
     assert.ok(job.system.includes(standing), `the system text carries: ${standing}`);
   }
-  assert.ok(job.system.includes("Charter — the long tier"), "and the charter block, whole on the first turn");
 
-  // The per-turn input is the digest and the question. None of the standing text is repeated there.
+  // …and the two blocks that move on a schedule are NOT in it: at the head of the prompt they would change the prefix
+  // and cost the cache for the whole thread behind them.
+  assert.ok(!job.system.includes("The board right now:"), "the board is not standing text");
+  assert.ok(!job.system.includes("Charter —"), "nor is the charter");
+
+  // The per-turn input is the digest, the board, the charter and the question. None of the standing text is repeated.
   assert.ok(job.preamble.includes("Your task queue (1 queued"), "the turn carries the queue digest");
+  assert.ok(job.preamble.includes("The board right now:"), "and the board");
+  assert.ok(job.preamble.includes("Charter — the long tier"), "and the charter, whole on the first turn");
   assert.ok(!job.preamble.includes("Standing rules (written by the reader"), "the rules are not appended to the thread");
   assert.ok(!job.preamble.includes(NOTE), "nor the scratchpad");
-  assert.ok(!job.preamble.includes("The board right now:"), "nor the board");
   assert.ok(!job.preamble.includes("Projects you can SPAWN in"), "nor the projects list");
   assert.ok(job.preamble.length < job.system.length / 2, "and the turn is less than half the standing text");
 });
 
-test("a wake that skips the digest appends nothing but its question", async (t) => {
+test("a wake that skips the digest appends the board and the charter and nothing else", async (t) => {
   const { assistant, created } = await panel(t);
   // Four wakes, N=2 (the default): the digest is due on the even ticks only.
   for (let i = 0; i < 4; i += 1) await assistant.say(QUESTION, { origin: SWEEP });
@@ -131,8 +136,13 @@ test("a wake that skips the digest appends nothing but its question", async (t) 
   const without = created.filter((job) => !job.preamble.includes("Your task queue ("));
 
   assert.equal(withDigest.length, 2, "two of four wakes carry the digest");
-  assert.equal(without.length, 2, "and two append nothing");
-  for (const job of without) assert.equal(job.preamble, "", "a skipped digest is an empty briefing, not a marker");
+  assert.equal(without.length, 2, "and two skip it");
+  for (const job of without) {
+    assert.ok(!job.preamble.includes("Your task queue is YOURS"), "the standing directive is never appended");
+    assert.ok(!job.preamble.includes(RULE), "nor the standing rules");
+    assert.match(job.preamble, /The board right now:/, "the skipped wake still says what the board is");
+    assert.match(job.preamble, /Charter — the long tier/, "and where the charter stands");
+  }
   for (const job of created) assert.ok(job.system.includes(RULE), "every wake still carries the standing text");
 });
 
@@ -168,9 +178,11 @@ test("preamble() is still the whole briefing, in the order a turn reads it", asy
   assert.ok(text.includes(RULE), "the rules are there");
   assert.ok(text.includes("Your task queue (1 queued"), "the digest is there");
   assert.ok(text.includes("The board right now:"), "the board is there");
+  assert.ok(text.includes("Charter — the long tier"), "and the charter");
   assert.ok(text.indexOf("Your task queue is YOURS") < text.indexOf("Your task queue (1 queued"), "the directive precedes the digest");
-  assert.ok(text.indexOf("Your task queue (1 queued") < text.indexOf("A restart re-attaches runs"), "and the digest precedes the standing rest");
-  assert.ok(text.indexOf("A restart re-attaches runs") < text.indexOf("The board right now:"), "the board comes after the queue block");
+  assert.ok(text.indexOf("Your task queue (1 queued") < text.indexOf("The board right now:"), "and the board follows the digest");
+  assert.ok(text.indexOf("The board right now:") < text.indexOf("Charter — the long tier"), "the charter follows the board");
+  assert.ok(text.indexOf("Charter — the long tier") < text.indexOf("A restart re-attaches runs"), "and the moving blocks precede the standing rest");
 });
 
 // The wire contract. `Assistant.say` builds the turn and `Jobs.create` posts it; the split is only real if the
@@ -217,7 +229,7 @@ async function stubGateway() {
   };
 }
 
-test("the POST carries the standing briefing as `instructions`, and the input is the digest and the question", async (t) => {
+test("the POST carries the standing briefing as `instructions`, and the moving blocks in the input", async (t) => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "wtgui-system-wire-"));
   const gw = await stubGateway();
   t.after(async () => {
@@ -260,21 +272,47 @@ test("the POST carries the standing briefing as `instructions`, and the input is
   assert.ok(body, "a run was posted to the stub");
 
   assert.ok(String(body.instructions || "").includes(RULE), "the standing rules ride on `instructions`");
+  assert.ok(!String(body.instructions || "").includes("The board right now:"), "the board does not");
+  assert.ok(!String(body.instructions || "").includes("Charter —"), "and neither does the charter");
   assert.ok(!String(body.input || "").includes(RULE), "and not in the run's input");
   assert.ok(String(body.input || "").includes("Your task queue (1 queued"), "the input carries the queue digest");
+  assert.ok(String(body.input || "").includes("The board right now:"), "and the board");
+  assert.ok(String(body.input || "").includes("Charter — the long tier"), "and the charter");
   assert.ok(String(body.input || "").includes(QUESTION), "and the question");
   assert.equal(body.session_id, "panel-assistant", "on the assistant's own thread");
 });
 
 // The charter's send counter is the trap this split creates: `say()` builds the turn half and the standing half in
-// one call, and a standing half rendered twice would record the full send and then withhold it from the SAME turn.
-// The first turn of a session must carry the file, and the second must carry the marker.
-test("the charter is sent whole on the first turn, though the turn half is built first", async (t) => {
+// one call, and a half rendered twice would record the full send and then withhold it from the SAME turn. The first
+// turn of a session must carry the file, and the second must carry the marker.
+test("the charter is sent whole on the first turn, and withheld on the second", async (t) => {
   const { assistant, created } = await panel(t);
   await assistant.say(QUESTION, { origin: SWEEP });
-  assert.match(created[0].system, /Charter — the long tier, read in full this turn/, "turn 1 carries the file");
-  assert.ok(created[0].system.includes("CHARTER-BODY: the append tax"), "the text itself, not only the label");
+  assert.match(created[0].preamble, /Charter — the long tier, read in full this turn/, "turn 1 carries the file");
+  assert.ok(created[0].preamble.includes("CHARTER-BODY: the append tax"), "the text itself, not only the label");
+  assert.ok(!created[0].system.includes("CHARTER-BODY"), "and the system block does not carry it too");
   await assistant.say(QUESTION, { origin: SWEEP });
-  assert.match(created[1].system, /Charter — the long tier is unchanged and withheld this turn/, "turn 2 carries the marker");
-  assert.ok(!created[1].system.includes("CHARTER-BODY: the append tax"), "and not the file again");
+  assert.match(created[1].preamble, /Charter — the long tier is unchanged and withheld this turn/, "turn 2 carries the marker");
+  assert.ok(!created[1].preamble.includes("CHARTER-BODY: the append tax"), "and not the file again");
+});
+
+// THE INVARIANT THE SPLIT EXISTS FOR, measured on the bytes a turn sends: eight sweep wakes of one session with
+// nothing edited send ONE system block, while the turn text moves as the board and the charter change form. A
+// provider's prefix cache can only reuse the thread behind text that did not move, so a system block that changes on
+// a schedule is a cache miss for every token behind it - which is what the board's fourth-wake digest and the
+// charter's twentieth-turn resend used to be.
+test("the system block is the same bytes on every wake of a session", async (t) => {
+  const { assistant, created } = await panel(t);
+  for (let i = 0; i < 8; i += 1) await assistant.say(QUESTION, { origin: SWEEP });
+
+  const systems = new Set(created.map((job) => job.system));
+  assert.equal(systems.size, 1, `${created.length} wakes sent ${systems.size} distinct system blocks`);
+  assert.ok(created[0].system.length > 1000, "and it is the whole standing briefing, not a stub");
+
+  const turns = new Set(created.map((job) => job.preamble));
+  assert.equal(turns.size > 1, true, "the turn text does move");
+  assert.equal(created.filter((job) => job.preamble.includes("- (no agents on the board)")).length, 3, "the board in full on its first sweep and every fourth after it");
+  assert.equal(created.filter((job) => job.preamble.includes("[Board unchanged")).length, 5, "and the marker on the other five");
+  assert.equal(created.filter((job) => job.preamble.includes("CHARTER-BODY: the append tax")).length, 1, "the charter whole once, on the first turn");
+  assert.equal(created.filter((job) => job.preamble.includes("unchanged and withheld this turn")).length, 7, "and the marker on the other seven");
 });
