@@ -4,16 +4,33 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.43.4 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.43.5 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-353 releases from v0.1.0 (2026-10-20) to v1.43.4 (2026-11-06), 1244 commits between the tags. Every release is anchored by an
+354 releases from v0.1.0 (2026-10-20) to v1.43.5 (2026-11-06), 1248 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.43.5 — 2026-11-06 · 4 commits
+
+[`cf6b52e`](https://github.com/JLRoper/agent-worktree-gui/commit/cf6b52e68d45b31b99ee9f51f8352fd291978b96) · [compare v1.43.4...v1.43.5](https://github.com/JLRoper/agent-worktree-gui/compare/v1.43.4...v1.43.5)
+
+### Fixed
+
+- fix: watch the bundle for edits instead of statting it on every request (#491) ([`468cf19`](https://github.com/JLRoper/agent-worktree-gui/commit/468cf19f4b928e0d13a57efec98e2190894bb257))
+- fix: the assistant's title row owns its own box, so the float's header is never clipped ([`b95f569`](https://github.com/JLRoper/agent-worktree-gui/commit/b95f56903f642927a234fba180db22027c3634ce))
+
+### Docs & tests
+
+- docs: render the changelog — 353 releases ([`0968632`](https://github.com/JLRoper/agent-worktree-gui/commit/0968632c4e8f14c0133256d3cdb42894d1ddabc4))
+
+### Other
+
+- chore: 1.43.5 — the version this landing carries ([`cf6b52e`](https://github.com/JLRoper/agent-worktree-gui/commit/cf6b52e68d45b31b99ee9f51f8352fd291978b96))
 
 ## v1.43.4 — 2026-11-06 · 4 commits
 
