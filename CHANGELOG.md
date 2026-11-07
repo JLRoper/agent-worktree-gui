@@ -4,16 +4,57 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.52.2 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.53.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-389 releases from v0.1.0 (2026-10-20) to v1.52.2 (2026-11-07), 1350 commits between the tags. Every release is anchored by an
+393 releases from v0.1.0 (2026-10-20) to v1.53.0 (2026-11-07), 1357 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.53.0 — 2026-11-07 · 1 commit
+
+[`d5872be`](https://github.com/JLRoper/agent-worktree-gui/commit/d5872bed570e424e772ed292a70c843ecd338d84) · [compare v1.52.5...v1.53.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.52.5...v1.53.0)
+
+### Added
+
+- feat: the four PDL pipelines in the Settings dropdown, drawn by the map ([`d5872be`](https://github.com/JLRoper/agent-worktree-gui/commit/d5872bed570e424e772ed292a70c843ecd338d84))
+
+## v1.52.5 — 2026-11-07 · 2 commits
+
+[`c0e9401`](https://github.com/JLRoper/agent-worktree-gui/commit/c0e94017e67d96fd80e92832799306d3b6644199) · [compare v1.52.4...v1.52.5](https://github.com/JLRoper/agent-worktree-gui/compare/v1.52.4...v1.52.5)
+
+### Fixed
+
+- fix: bound the tab's console buffers - what the server lists, a ceiling, no second copy ([`d8c45cb`](https://github.com/JLRoper/agent-worktree-gui/commit/d8c45cbf99a1799b51b7f17c36ac4713c8f319f4))
+
+### Other
+
+- chore: 1.52.5 — the version this landing carries ([`c0e9401`](https://github.com/JLRoper/agent-worktree-gui/commit/c0e94017e67d96fd80e92832799306d3b6644199))
+
+## v1.52.4 — 2026-11-07 · 2 commits
+
+[`28c0b47`](https://github.com/JLRoper/agent-worktree-gui/commit/28c0b47fb2009d93a0702822aac2b50ff98c5622) · [compare v1.52.3...v1.52.4](https://github.com/JLRoper/agent-worktree-gui/compare/v1.52.3...v1.52.4)
+
+### Fixed
+
+- fix(assistant): the system block is one constant string, so a provider can cache it ([`6ddce9f`](https://github.com/JLRoper/agent-worktree-gui/commit/6ddce9f159e403766e748780a2cc2e569cb4f62c))
+
+### Other
+
+- chore: 1.52.4 — the version this landing carries ([`28c0b47`](https://github.com/JLRoper/agent-worktree-gui/commit/28c0b47fb2009d93a0702822aac2b50ff98c5622))
+
+## v1.52.3 — 2026-11-07 · 2 commits
+
+[`db5307a`](https://github.com/JLRoper/agent-worktree-gui/commit/db5307a2a9a5610927b95c07fb4c2e5077087653) · [compare v1.52.2...v1.52.3](https://github.com/JLRoper/agent-worktree-gui/compare/v1.52.2...v1.52.3)
+
+### Docs & tests
+
+- docs: render the changelog — 389 releases ([`24296ef`](https://github.com/JLRoper/agent-worktree-gui/commit/24296ef86dbe0cba1ae53ec7ecdd3cf361f2aafa))
+- docs: triage every worktree - 77 released, 7 kept, two features landed ([`db5307a`](https://github.com/JLRoper/agent-worktree-gui/commit/db5307a2a9a5610927b95c07fb4c2e5077087653))
 
 ## v1.52.2 — 2026-11-07 · 3 commits
 
