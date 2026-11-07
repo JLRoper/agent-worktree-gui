@@ -19,15 +19,16 @@ The board lives in one `state` object (`public/app.js:60`). Per turn, the page k
 | job record | `state.jobs` | one entry per turn the server still lists | replaced wholesale on each snapshot; bounded only by what `/api/jobs` returns | `public/app.js:111`, `12882-12890`, `6747-6762` |
 | console buffer | `state.jobLines` | every `jobline` frame, one array per turn | **1,000 lines per turn**; no global cap; deleted only by the per-thread clear | `public/app.js:112`, `public/board/console.js:2690-2699`, `public/app.js:5643` |
 | reasoning blocks | `state.thinkCache` | one entry per turn whose reasoning was read | 60 blocks per read from the route; no client eviction | `public/app.js:6315`, `public/board/console.js:1888`, `lib/thinking.js:16` |
-| opened tool results | `state.toolStore` | reader-opened results | none | `public/app.js:210` |
+| opened tool results | `state.toolStore` | results for an open tool block, refreshed while its turn runs | **300 entries**, oldest evicted (`public/board/console.js:330`) | `public/app.js:210` |
 | opened fold rows | `state.foldRows` | reader-opened full results | none (a result can be 100 kB, the comment trades the ring buffer for it) | `public/app.js:244` |
-| expanded batch calls | `state.batchCalls` | expanded "+N commands" rows | none | `public/app.js:218` |
-| fold books | `state.toolGroupOpen`, `codeBoxOpen`, `callOpen`, `callFolded` | one key per opened box | none | `public/app.js:215`, `224`, `232`, `238` |
-| turn books | `state.turnOpen`, `turnCompact`, `turnPage`, `pinnedTurns` | one key per turn or pin | none | `public/app.js:308-318` |
+| expanded batch calls | `state.batchCalls` | expanded "+N commands" rows | **300 entries**, oldest evicted (`public/board/console.js:608`) | `public/app.js:218` |
+| fold books | `state.toolGroupOpen`, `codeBoxOpen`, `callOpen`, `callFolded` | one key per opened box | **500 entries each**, oldest evicted (`public/board/console.js:714`, `506`; `public/app.js:14470`, `14532`, `14589`) | `public/app.js:215`, `224`, `232`, `238` |
+| turn books | `state.turnOpen`, `turnCompact`, `turnPage`, `pinnedTurns` | one key per turn or pin | pruned to the turns the board still lists (`public/core/turn-fold.js:196-206`; `public/app.js:14081`) | `public/app.js:308-318` |
 | thinking books | `state.thinkOpen`, `thinkPinned`, `thinkScroll`, `thinkClosed` | one key per turn or block | none | `public/app.js:6316-6319` |
 
 Bounded structures, for contrast: `state.eventWindows` is capped at 400 timestamps per row (`public/app.js:54`, trimmed
-at `9535`), `state.spawnHistory` is trimmed at `4893`, `state.replySent` keeps the last 8 (`public/app.js:4710`).
+at `9535`), `state.spawnHistory` is trimmed at `4893`, `state.replySent` keeps the last 8 (`public/app.js:4710`). The
+result and fold books in the table are bounded too, at 300 and 500 entries; `jobLines` is the one with no global cap.
 
 ### The one with no ceiling
 
@@ -42,7 +43,8 @@ at `9535`), `state.spawnHistory` is trimmed at `4893`, `state.replySent` keeps t
 - `updateJob` (`public/app.js:6747-6762`) has the same one-way copy at line 6762.
 
 The per-turn cap is real and was reached in the cap probe below (exactly 1,000 lines), but there is no per-tab cap: 12
-sessions with 10 turns each is 120 turn arrays, and each one keeps up to its last 1,000 lines.
+sessions with 10 turns each is 120 driven turn arrays (240 with the assistant's wake turns, measured below), and each
+one keeps up to its last 1,000 lines.
 
 ### What a console line costs
 
@@ -59,8 +61,8 @@ Only the painted copy is bounded: a rebuild draws the last `TURN_WINDOW = 300` l
 
 ## 2. What `/api/jobs` returns per poll
 
-`GET /api/jobs` (`server.js:4649-4651`) answers `{ jobs: jobs.list(), transport, defaultCwd }`. `list()`
-(`lib/jobs.js:1399-1403`) maps every job in the store through `summary()` (`lib/jobs.js:1262-1377`), which carries about
+`GET /api/jobs` (`server.js:4655-4658`) answers `{ jobs: jobs.list(), transport, defaultCwd }`. `list()`
+(`lib/jobs.js:1399-1403`) maps every job in the store through `summary()` (`lib/jobs.js:1255-1377`), which carries about
 50 fields per turn: identity (`id`, `thread`, `turn`, `runId`, `sessionId`), state (`status`, `startedAt`, `endedAt`,
 `exitCode`, `error`, `waiting`, `runGone`), the place (`cwd`, `ownerPath`, `worktreePath`, `branch`, `projectPath`,
 `pipeline`, `tree`), the card's controls (`approval`, `approvalDone`, `question`, `questionDone`, `steerable`), the
@@ -70,11 +72,11 @@ Two consequences the page pays for on every poll:
 
 - **Nothing is retired.** The store keeps every non-running job until `/api/jobs/clear` or a restart, so `list()` is O(all
   turns ever). At the end of the run below, 241 jobs produced **2,278,911 bytes** of JSON, 9,456 bytes per turn.
-- **The same array rides `/api/state`.** `snapshot()` includes `jobs: jobs.list()` (`server.js:2808`), and the page's
+- **The same array rides `/api/state`.** `snapshot()` includes `jobs: jobs.list()` (`server.js:2809`), and the page's
   main poll is `/api/state` (`public/core/transport.js:90-100`, on the 30 s quiet-stream safety net at
   `public/app.js:15357-15360`). So every snapshot parses that same multi-megabyte job list, and `applySnapshot` replaces
   all 241 records with fresh copies. The retired objects are garbage, but the allocation is per poll, not per change.
-  The assistant's Queue pane also reads `/api/jobs` directly (`public/assistant.js:3632`).
+  The assistant's Queue pane also reads `/api/jobs` directly (`public/assistant.js:3688`).
 
 ## 3. How the numbers were taken
 
@@ -84,8 +86,9 @@ Two consequences the page pays for on every poll:
   `/v1/runs/<id>/events` (SSE, honouring `Last-Event-ID` so a reconnect never replays a line). Each turn POSTs
   `/api/agents` with `{ prompt, thread, cwd, existing: true }` against one throwaway git repo, so no worktree is cut and
   the turn runs in an existing tree. A normal turn streams 4 tool calls x (1 `tool.started` + 1 result header + 15
-  preview lines) + 4 prose lines + `run.completed`: **76 console lines**. The cap probe streams 30 calls x 40 preview
-  lines: **1,290 lines**.
+  preview lines) + 4 prose lines + `run.completed`, plus the panel's own `cmd` and init lines (and a workspace line on a
+  thread's first turn): **76 console lines at most**. The cap probe streams 30 calls x 40 shown preview lines, plus each
+  call's `tool.started`, result header and fold note: **1,290 lines**.
 - **Sessions and turns**: 12 sessions (`load-s01` ... `load-s12`), 10 turns each, then one cap-probe turn on `load-s01`:
   **121 driven turns**. The board's assistant was left on (its default), and it starts one wake turn per settled turn
   (`lib/assistant.js:3810`), so the server ended the run holding **241 job records in 13 threads**: 121 driven turns and
@@ -96,8 +99,8 @@ Two consequences the page pays for on every poll:
 - **Ports**: each was proved free before use (a connect that must be refused, then a bind that must succeed) and both
   were proved closed after teardown.
 - **Hard limit**: a 10 minute watchdog; the run finished in **8 min 37 s** (18:15:45Z to 18:24:22Z), so it never fired.
-- **No product code**: the only file this run adds is this document; the version bump and the one allowlist line are
-  the landing gate's, not the change.
+- **No product code**: the only file this run adds is this document; the version bump is the landing gate's, not the
+  change.
 
 ## 4. The numbers
 
@@ -144,7 +147,7 @@ paints 300 lines (`public/board/console.js:669`). The growth is in the JS arrays
 
 ### The cap, and the two caps that disagree
 
-The cap probe's turn streamed 1,290 lines. Its `jobLines` array stopped at exactly **1,000** (`clientLines`), so 290+
+The cap probe's turn streamed 1,290 lines. Its `jobLines` array stopped at exactly **1,000** (`clientLines`), so 290
 lines were dropped from the top. The same turn's record in `/api/jobs` carried 60 lines (`serverLines`), because the
 summary's tail is 60. The panel's own array is trimmed at 600 (`lib/jobs.js:75`), so between the two caps there is a
 window where **the page holds lines the server has already dropped** (up to 1,000 client-side against 600 server-side),
@@ -155,7 +158,7 @@ and it never learns they are gone: `jobLines.has()` keeps the client copy and th
 Two smaller runs tested what "the turns are gone" does to the page. Each ran 10 turns (19 job records including the
 assistant wakes), and each left the same tab open across the removal.
 
-**The reader's own "Clear finished"** (`public/index.html:717` -> `post("/api/jobs/clear")` at `public/app.js:13263`,
+**The reader's own "Clear finished"** (`public/index.html:723` -> `post("/api/jobs/clear")` at `public/app.js:13263`,
 which reaches `clearFinished()` in `lib/jobs.js:5209`):
 
 | | server jobs | page `state.jobs` | page `state.jobLines` | lines held | cards |
@@ -204,8 +207,9 @@ every commit.
 The growth is not a bug in a renderer; it is the shape of two stores that only ever add. Three facts decide it:
 
 1. **Per turn**: one `jobLines` array (up to 1,000 lines, measured 76 for a normal turn) plus one job record with a
-   60-line tail. The arrays are never dropped, so a tab's retained console grows with every turn it has ever seen, at
-   about 44 KB per turn (measured), regardless of whether the reader ever opens the card again. "Clear finished" does
+   60-line tail. The arrays are never dropped, so a tab's retained data grows with every turn it has ever seen, at
+   about 44 KB per driven turn (measured; about 22 KB per turn across all 241 turns, because each driven turn also
+   caused one assistant wake turn), regardless of whether the reader ever opens the card again. "Clear finished" does
    not release them either: measured, 19 buffers and 752 lines stayed after the press that emptied the board.
 2. **Per line**: about 155 bytes per retained line slot across both books, and a line is kept in both: the `jobLines`
    copy is capped at 1,000 while the record's 60-line copy is re-created from every snapshot. The client keeps a longer
