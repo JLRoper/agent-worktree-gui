@@ -4,16 +4,28 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.53.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.53.3 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-393 releases from v0.1.0 (2026-10-20) to v1.53.0 (2026-11-07), 1357 commits between the tags. Every release is anchored by an
+394 releases from v0.1.0 (2026-10-20) to v1.53.3 (2026-11-07), 1359 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.53.3 — 2026-11-07 · 2 commits
+
+[`91752da`](https://github.com/JLRoper/agent-worktree-gui/commit/91752da4e75cbaada00cc1def62ea384f48dd6ad) · [compare v1.53.0...v1.53.3](https://github.com/JLRoper/agent-worktree-gui/compare/v1.53.0...v1.53.3)
+
+### Fixed
+
+- fix: the Role tab carries the charter text, and Settings is the one place a role changes ([`91752da`](https://github.com/JLRoper/agent-worktree-gui/commit/91752da4e75cbaada00cc1def62ea384f48dd6ad))
+
+### Docs & tests
+
+- docs: render the changelog — 393 releases ([`be7a149`](https://github.com/JLRoper/agent-worktree-gui/commit/be7a149b262b9d1cc5d50d0659ea252089493cef))
 
 ## v1.53.0 — 2026-11-07 · 1 commit
 
