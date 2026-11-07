@@ -135,6 +135,7 @@ test/refresh-row.test.js | 3 | fixture: the tree the test builds or asserts on, 
 test/release-request.test.js | 13 | fixture: the tree the test builds or asserts on, named by hand so the comparison is readable
 test/remote-writes-review.test.js | 3 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
 test/restart-stop.test.js | 3 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/root-scan-chip.test.js | 2 | fixture: the fake project root the tier scan is handed, which must be a Windows-absolute shape to exercise the reader
 test/settle-wake.test.js | 2 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
 test/single-stream.test.js | 2 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
 test/skills.test.js | 4 | fixture: the tree the test builds or asserts on, named by hand so the comparison is readable
