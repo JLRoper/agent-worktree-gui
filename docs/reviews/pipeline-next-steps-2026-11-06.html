@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pipeline next steps: nine ranked fixes, none landed, and the two that killed stage 2</title>
+<style>
+  :root { --bg:#0e1116; --panel:#151a21; --panel2:#1b212a; --line:#2a3340; --text:#e6e9ef; --dim:#9aa5b4;
+           --dimmer:#6f7a89; --green:#7ee787; --red:#ff9c94; --amber:#f0c674; --blue:#9ecbff; --purple:#c8a6ff;
+           --mono:ui-monospace,"Cascadia Mono",Consolas,"SF Mono",Menlo,monospace;
+           --ui:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  * { box-sizing:border-box; }
+  html { background:var(--bg); }
+  body { margin:0; color:var(--text); font:15px/1.62 var(--ui); }
+  .wrap { max-width:1120px; margin:0 auto; padding:30px 24px 72px; }
+  a { color:var(--blue); text-decoration:none; } a:hover { text-decoration:underline; }
+  h1 { font-size:27px; line-height:1.22; margin:4px 0 8px; letter-spacing:-0.2px; }
+  h2 { font-size:19px; margin:44px 0 12px; padding-top:16px; border-top:1px solid var(--line); }
+  h3 { font-size:15.5px; margin:26px 0 8px; color:var(--blue); }
+  h4 { font-size:12px; margin:18px 0 6px; color:var(--dim); text-transform:uppercase; letter-spacing:0.07em; }
+  p { margin:9px 0; }
+  ul,ol { margin:8px 0 8px 22px; padding:0; } li { margin:5px 0; }
+  code,.mono { font-family:var(--mono); font-size:12.8px; }
+  code { background:var(--panel2); border:1px solid var(--line); border-radius:4px; padding:0 4px; }
+  pre { background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:12px 14px; overflow-x:auto;
+         font-family:var(--mono); font-size:12.4px; line-height:1.55; }
+  .kicker { color:var(--dimmer); font-size:12px; text-transform:uppercase; letter-spacing:0.12em; }
+  .sub { color:var(--dim); font-size:16px; margin:0 0 14px; max-width:940px; }
+  .meta { color:var(--dim); font-size:12.5px; }
+  .meta code { font-size:12px; }
+  .anchor { font-family:var(--mono); font-size:12.2px; color:var(--purple); background:#1d1826;
+            border:1px solid #3d3352; border-radius:4px; padding:0 5px; white-space:nowrap; }
+  nav { margin:18px 0 8px; padding:12px 16px; background:var(--panel); border:1px solid var(--line);
+        border-radius:8px; font-size:13px; line-height:1.9; }
+  nav b { color:var(--dimmer); font-weight:600; text-transform:uppercase; font-size:11px; letter-spacing:0.1em; }
+  nav a { margin:0 10px 0 0; white-space:nowrap; }
+  .lead { background:var(--panel); border:1px solid var(--line); border-left:4px solid var(--blue);
+          border-radius:8px; padding:14px 18px; margin:18px 0; }
+  .lead p { margin:6px 0; }
+  .failbox { background:#2a1414; border:1px solid #6b2a2a; border-left:4px solid var(--red);
+             border-radius:8px; padding:13px 18px; margin:18px 0; }
+  .failbox h4 { color:var(--red); margin:0 0 4px; }
+  .warn { background:#2a2414; border:1px solid #5c4d22; border-left:4px solid var(--amber);
+          border-radius:8px; padding:12px 18px; margin:16px 0; }
+  .warn h4 { color:var(--amber); margin:0 0 4px; }
+  .box { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px 18px; margin:14px 0; }
+  .fix { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:4px 18px 12px; margin:16px 0; }
+  .fix h3 { margin-top:16px; }
+  .tw { overflow-x:auto; margin:10px 0 16px; border:1px solid var(--line); border-radius:8px; }
+  table { border-collapse:collapse; width:100%; font-size:13px; }
+  th,td { text-align:left; vertical-align:top; padding:7px 10px; border-bottom:1px solid var(--line); }
+  th { background:var(--panel2); color:var(--dim); font-weight:600; font-size:12px;
+       text-transform:uppercase; letter-spacing:0.05em; }
+  tr:last-child td { border-bottom:0; }
+  .ok { color:var(--green); } .bad { color:var(--red); }
+  .warnpill { color:var(--amber); }
+  .pill { display:inline-block; margin-left:6px; padding:0 6px; border-radius:999px; font-size:10.5px;
+          text-transform:uppercase; letter-spacing:0.04em; color:var(--amber); border:1px solid #5c4d22; background:#241f10; }
+  .v { display:inline-block; padding:1px 8px; border-radius:999px; font-size:11px; font-weight:600;
+       text-transform:uppercase; letter-spacing:0.06em; white-space:nowrap; }
+  .v-open { color:var(--red); border:1px solid #6b2a2a; background:#2a1414; }
+  .v-landed { color:var(--green); border:1px solid #2f5f38; background:#13261a; }
+  .v-part { color:var(--amber); border:1px solid #5c4d22; background:#241f10; }
+  .small { font-size:12.5px; color:var(--dim); }
+  .cols { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:12px; margin:12px 0; }
+  .stat { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:10px 14px; }
+  .stat b { display:block; font-size:22px; line-height:1.2; }
+  .stat span { color:var(--dim); font-size:12.5px; }
+  td.t { white-space:nowrap; font-family:var(--mono); font-size:12px; color:var(--purple); }
+  td.n { white-space:nowrap; font-family:var(--mono); font-size:13px; color:var(--dim); }
+  .k { color:var(--dim); font-size:12px; text-transform:uppercase; letter-spacing:0.06em; margin:12px 0 2px; }
+  .k + p { margin-top:2px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="kicker">docs/reviews - agent-worktree-gui - pipeline next steps after ping-pong round 4</div>
+<h1>Pipeline next steps: nine ranked fixes, none landed, and the two that killed stage 2</h1>
+<p class="sub">Round 4 ranked nine fixes and handed them on. This page reads every one of them against the tree as it
+stands, names the test that would prove it, and says which two cut the pipeline's own second stage. Nothing in the
+verdict column is taken from the round-4 page: each was re-measured here, and the measurements are quoted.</p>
+<p class="meta">
+  tree <code>.worktrees/write-the-next-steps-rep-5f7597</code> (repo-relative) -
+  branch <code>wtgui/write-the-next-steps-rep-5f7597</code> -
+  measured at <code>main</code> = <code>1b03f0a</code>, <code>package.json</code> 1.43.6 -
+  round 4's record: <code>docs/reviews/ping-pong-round-4-2026-11-06.html</code>, PR #483 MERGED 20:42:27Z -
+  read 2026-11-06 20:54 EST (01:54Z).
+</p>
+
+<nav><b>Contents</b><br>
+  <a href="#answer">The one-page answer</a>
+  <a href="#nine">The nine at a glance</a>
+  <a href="#killed">Which two killed stage 2</a>
+  <a href="#fixes">The nine, in order</a>
+  <a href="#process">Process gaps</a>
+  <a href="#limits">What this does not prove</a>
+  <a href="#evidence">The evidence</a>
+</nav>
+
+<h2 id="answer">The one-page answer</h2>
+<div class="lead">
+<p><b>Nine fixes were ranked. None of the nine has landed.</b> Five are code (1 to 5) and four are process (6 to 9).
+Every code-level verdict below was produced by calling the module that owns the behaviour and printing what it
+returns today, not by reading the round-4 prose again.</p>
+<p><b>The two that killed stage 2 are fix 1 and fix 2.</b> Fix 1 is the stamp guard that refused stage 1's record
+before the drive read the graph, so the pipeline never cut its own second stage. Fix 2 is the park that writes a
+decision and no run status, so the run it parked on could not be read as finished by any later pass. Fix 1 is the
+trigger; fix 2 is why the refusal was unrecoverable. Details, with the measured output, are in
+<a href="#killed">the next section but one</a>.</p>
+<p><b>The suite is green and says nothing about any of this.</b> <code>test/task-pipeline.test.js</code> and
+<code>test/assistant-queue.test.js</code> pass 49 of 49 as the tree stands, and not one of the nine paths has a
+case. Worse, three existing cases pin the shape the fix would change: the visit counter, the reused stage-run id,
+and the retry that reuses an entry.</p>
+<p><b>The next commit is fixes 1 and 2 together.</b> They are one behaviour: a record the guard accepts, and a park
+that settles the run it parks on. Until both are in, the next ping-pong round reproduces the round-4 shape - a
+person cuts stage 2 by hand. Fixes 3 and 4 follow, because they are what makes the ledger readable afterwards.</p>
+<p class="small">Every line number in fixes 1 to 5 in round 4's table had moved by the time this page was written
+(the park moved 62 lines). This page gives the anchor as it stands, beside the function name, so a reader can find
+it after the next shift. The round-4 page's <code>sha256</code> column still verifies at <code>main</code>; its
+<code>blob at 3facbfd</code> column does not, because the rebase merge re-created those commits.</p>
+</div>
+
+<div class="cols">
+  <div class="stat"><b>0 / 9</b><span>ranked fixes that have landed</span></div>
+  <div class="stat"><b>5 + 4</b><span>code fixes / process fixes</span></div>
+  <div class="stat"><b>2</b><span>fixes that killed stage 2</span></div>
+  <div class="stat"><b>49 / 49</b><span>tests green, 0 covering the nine</span></div>
+  <div class="stat"><b>3</b><span>existing tests that pin the old shape</span></div>
+</div>
+
+<h2 id="nine">The nine at a glance</h2>
+<div class="tw"><table><thead><tr>
+<th>#</th><th>fix</th><th>where it lives now</th><th>test that proves it</th><th>verdict</th>
+</tr></thead><tbody>
+<tr><td class="n">1</td><td>Accept a sub-millisecond stamp, and split the refusal message</td><td><span class="anchor">task-pipeline.js:36</span> <span class="anchor">task-pipeline.js:56-62</span></td><td><code>elapsedInStage("...\.426123Z").ok === true</code>, a no-zone stamp still refused - <span class="bad">missing</span></td><td><span class="v v-open">open</span></td></tr>
+<tr><td class="n">2</td><td>Settle the run on every terminal park</td><td><span class="anchor">task-pipeline-drive.js:1454-1462</span> <span class="anchor">task-pipeline.js:287-313</span></td><td>Park on a finished job: one write yields status, settledAt and the decision - <span class="bad">missing</span></td><td><span class="v v-open">open</span></td></tr>
+<tr><td class="n">3</td><td>An attempt in the id, or refuse a settle on another thread</td><td><span class="anchor">task-pipeline.js:186-192</span> <span class="anchor">task-pipeline.js:292-301</span></td><td>Two threads, same visit: two entries, no shared id - <span class="bad">missing, and the opposite is pinned</span></td><td><span class="v v-open">open</span></td></tr>
+<tr><td class="n">4</td><td>Stamp <code>startedAt</code> when the row starts, never in <code>done</code></td><td><span class="anchor">assistant/queue.js:690-692</span> <span class="anchor">assistant/queue.js:746</span></td><td>Row duration equals job duration within 1 s, live and hand-cut - <span class="bad">missing</span></td><td><span class="v v-open">open</span></td></tr>
+<tr><td class="n">5</td><td>Derive the visit from the entries, not a parallel counter</td><td><span class="anchor">task-pipeline.js:210-213</span> <span class="anchor">task-pipeline.js:367</span> <span class="anchor">task-pipeline.js:398</span></td><td>After a re-press, <code>visits[stage]</code> = highest entry visit - <span class="bad">missing, and the opposite is pinned</span></td><td><span class="v v-open">open</span></td></tr>
+<tr><td class="n">6</td><td>Never waive the version gate silently; record a waiver if one is used</td><td><span class="anchor">.githooks/pre-push:21</span> <span class="anchor">tools/land.mjs:340</span></td><td><code>node tools/version.mjs check</code> exits 0 in the same shell as the push - <span class="warnpill">manual</span></td><td><span class="v v-open">open</span></td></tr>
+<tr><td class="n">7</td><td>Close the run log after the last commit, and re-post the PR body after it</td><td><span class="anchor">ledger/ping-pong/run-log.md:45</span> <span class="anchor">PR #483 body</span></td><td>The commit count equals the count the log names - <span class="warnpill">manual</span></td><td><span class="v v-open">open</span></td></tr>
+<tr><td class="n">8</td><td>Make the row's <code>files</code> the one source for the artifact path</td><td><span class="anchor">assistant/queue.js:427</span> <span class="anchor">assistant.js:7461</span></td><td>The first path in <code>files</code> exists on the branch - <span class="bad">missing</span></td><td><span class="v v-open">open</span></td></tr>
+<tr><td class="n">9</td><td>Stamp the job at the spawn it belongs to, or label the field</td><td><span class="anchor">jobs.js:2808</span> <span class="anchor">jobs.js:2857</span></td><td><code>job.startedAt &gt;= tree.cut</code> for every stage run - <span class="bad">missing, and unreachable today</span></td><td><span class="v v-open">open</span></td></tr>
+</tbody></table></div>
+<p class="small">Paths are relative to the repository root. <span class="anchor">assistant/queue.js</span> is
+<code>lib/assistant/queue.js</code>; <span class="anchor">assistant.js</span> is <code>lib/assistant.js</code>;
+<span class="anchor">jobs.js</span> is <code>lib/jobs.js</code>. <span class="anchor">task-pipeline.js</span> and
+<span class="anchor">task-pipeline-drive.js</span> are in <code>lib/</code>.</p>
+
+<h2 id="killed">Which two killed stage 2</h2>
+<p>Plainly: <b>fix 1 and fix 2</b>. The order matters, because only one of them is the trigger.</p>
+<div class="tw"><table><thead><tr>
+<th>fix</th><th>what it did in the round</th><th>the code that did it</th><th>today</th>
+</tr></thead><tbody>
+<tr>
+  <td class="n">1</td>
+  <td><b>The trigger.</b> The hand-off read stage 1's finished record, the stamp guard refused
+      <code>enteredAt</code>, <code>resolveTaskPipeline</code> returned unresolved, and the drive parked the row
+      before it ever reached the settle or the handoff. The pipeline's own stage 2 was never cut.</td>
+  <td><span class="anchor">task-pipeline.js:36</span> <span class="anchor">task-pipeline.js:56-62</span>
+      <span class="anchor">task-pipeline-drive.js:1481</span></td>
+  <td>Refused, identically. A six-digit fraction still fails the pattern and still gets the "no zone" sentence.</td>
+</tr>
+<tr>
+  <td class="n">2</td>
+  <td><b>Why it could not be recovered from.</b> The park wrote a decision through
+      <code>recordStageDecision</code>, which is <code>settleStageRun</code> with only a decision. Status stayed
+      null, so no later pass could read stage 1's run as finished and advance it: the repair had to be a person
+      writing <code>status: done</code> by hand, 22 minutes later, on a different row.</td>
+  <td><span class="anchor">task-pipeline-drive.js:1459</span> <span class="anchor">task-pipeline.js:287-313</span></td>
+  <td>Still null. The same call, unamended, returns <code>{"status":null,"settledAt":null,"hasDecision":true}</code>.</td>
+</tr>
+</tbody></table></div>
+<p>Why both, and not one: with only fix 2, stage 2 still does not run, because the guard refuses the record 60 lines
+earlier. With only fix 1, stage 2 runs, but the ledger still cannot say that the run it advanced from finished -
+which is the defect the draft was written to prove. The pair is what turns "a person cuts stage 2" into "the drive
+cuts stage 2".</p>
+
+<div class="failbox">
+<h4>The refusal names the wrong cause, and that is fix 1's second half</h4>
+<p>Two different inputs produce the same sentence today: a stamp with no zone at all, and a stamp whose fraction is
+too long. Measured this run, both print <code>is not a UTC instant - the panel stores Date#toISOString(), and a
+local-time stamp has no zone to subtract from</code>. The six-digit stamp carries a zone; the message names a cause
+that is not there. That is why the round-4 decision survives in the record reading as a contradiction.</p>
+</div>
+
+<h2 id="fixes">The nine, in priority order</h2>
+<p>Ranked as round 4 ranked them: what blocks the next round first, then cost. Each card carries the anchor as it
+stands, what the code does today with the measurement that shows it, and the test that would prove the fix. A test
+marked missing does not exist; where an existing case pins the old shape instead, it is named.</p>
+
+<div class="fix">
+<h3>1. Accept a sub-millisecond stamp, and split the refusal message <span class="v v-open">open</span></h3>
+<p class="k">Where</p>
+<p><span class="anchor">lib/task-pipeline.js:36</span> <code>STAMP_RE</code>, <span class="anchor">lib/task-pipeline.js:56-62</span>
+the guard, its message at <code>:61</code>. Round 4 cited <code>:37</code> and <code>:61</code>.</p>
+<p class="k">What the code does today</p>
+<pre>STAMP_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/
+
+"2026-11-06T19:28:20.426Z"      ok=true  ms=99574
+"2026-11-06T19:28:20.426123Z"   ok=false  is not a UTC instant ... has no zone to subtract from
+"2026-11-06 19:28:20"           ok=false  (the same sentence)</pre>
+<p class="k">Test that proves it</p>
+<p><code>elapsedInStage("2026-11-06T19:28:20.426123Z").ok === true</code>, and a stamp with no <code>Z</code> still
+refuses with the zone message. <b>Missing.</b> The nearest case, <code>test/task-pipeline.test.js:119</code>
+"elapsedInStage is a pure function of two instants", passes a three-digit stamp and a space-separated one. It cannot
+catch this, because it never tries a fraction the pattern refuses.</p>
+<p class="k">Why it ranks first</p>
+<p>One line of pattern, and it stops the hand-off before the graph is read. In round 4 that cost 6m30s and the
+pipeline's own stage 2.</p>
+</div>
+
+<div class="fix">
+<h3>2. Settle the run on every terminal park <span class="v v-open">open</span></h3>
+<p class="k">Where</p>
+<p><span class="anchor">lib/task-pipeline-drive.js:1454-1462</span> <code>stop()</code>, which parks the row and calls
+<code>recordStageDecision</code> at <code>:1459</code>; <span class="anchor">lib/task-pipeline.js:287-313</span>
+<code>settleStageRun</code>, which writes <code>settledAt</code> only inside the status branch at <code>:310-313</code>.</p>
+<p class="k">What the code does today</p>
+<pre>task = beginStageRun(task, { stage:"draft", thread:"thr-a", job:"job-a" })
+task = settleStageRun(task, { stage:"draft", decision:{ kind:"record", reason:"unresolved" } })
+entry = { status:null, settledAt:null, hasDecision:true }</pre>
+<p>One correction to round 4's wording, measured here: the <b>done</b> path already passes status, thread and job
+(<span class="anchor">lib/task-pipeline-drive.js:1640-1651</span>), so a run-status park is described correctly. What
+is still missing is the park that is <i>not</i> preceded by a run settle - the record fault at <code>:1481</code>,
+an absent artifact, a gate, a cap - and the round-4 case was exactly one of those.</p>
+<p class="k">Test that proves it</p>
+<p>Park on a finished job; one write yields <code>status</code>, <code>settledAt</code> and the decision.
+<b>Missing.</b> <code>test/task-pipeline-drive.test.js:636</code> "an assignment the bundle cannot resolve parks, and
+nothing is started" asserts the park and the reason, and says nothing about the entry's status.</p>
+<p class="k">Why it ranks second</p>
+<p>It is what makes the park readable afterwards. Without it, fixing 1 only moves the failure one layer down: the
+drive would advance on a run the ledger cannot describe.</p>
+</div>
+
+<div class="fix">
+<h3>3. Put the attempt in the id, or refuse to settle another thread's entry <span class="v v-open">open</span></h3>
+<p class="k">Where</p>
+<p><span class="anchor">lib/task-pipeline.js:186-192</span> <code>stageRunId</code>;
+<span class="anchor">lib/task-pipeline.js:292-301</span> <code>settleStageRun</code>'s lookup, which matches stage and
+visit and nothing else. Round 4 cited <code>:186</code> and <code>:295</code>.</p>
+<p class="k">What the code does today</p>
+<pre>stageRunId("ping-pong","draft",1) = "ping-pong/draft#1"      (no thread, no attempt)
+settle visit 1 on thr-drafter  then  settle visit 1 on thr-critic:
+  entries: 1   ids: ping-pong/draft#1
+  entry.thread = thr-critic   entry.job = job-critic</pre>
+<p>The second settle does not add an entry or refuse: it rewrites the first one. The id answers one question while
+the row answers another, which is the round-4 finding reproduced on the current module.</p>
+<p class="k">Test that proves it</p>
+<p>Settle the same stage on two threads: two entries, both preserved, no shared id. <b>Missing, and the opposite is
+pinned.</b> <code>test/task-pipeline.test.js:208</code> "a start creates the ledger entry, and a retry of the same
+visit reuses it rather than minting a second" states the reuse as correct, and
+<code>test/task-pipeline.test.js:172</code> asserts the id is <code>&lt;pipeline&gt;/&lt;stage&gt;#&lt;visit&gt;</code>
+with no attempt. A fix here changes both cases.</p>
+</div>
+
+<div class="fix">
+<h3>4. Stamp <code>startedAt</code> when the row starts, never in the <code>done</code> branch <span class="v v-open">open</span></h3>
+<p class="k">Where</p>
+<p><span class="anchor">lib/assistant/queue.js:690-692</span> the <code>done</code> transition;
+<span class="anchor">lib/assistant/queue.js:746</span> <code>linkTaskRun</code>, the writer that already stamps the
+first start correctly. Round 4 cited <code>:678-681</code> and <code>:739</code>.</p>
+<p class="k">What the code does today</p>
+<pre>updated.startedAt = t.startedAt || atIso;   // done branch
+updated.doneAt = atIso;
+
+queued -> done at 19:59:11.069Z:
+  {"startedAt":"2026-11-06T19:59:11.069Z","doneAt":"2026-11-06T19:59:11.069Z","equal":true}</pre>
+<p>A row that never went <code>running</code> records its finish as its start. The spawn path is not the problem:
+<code>linkTaskRun</code> stamps the same row at 19:29:47.318Z when it is linked. The hand-cut rows are the ones that
+never take that path, and they are the rows the round is about.</p>
+<p class="k">Test that proves it</p>
+<p>Row duration equals job duration within one second, for a live and a hand-cut row. <b>Missing.</b>
+<code>test/assistant-queue.test.js:133</code> asserts <code>doneAt</code> on a <code>running</code> to
+<code>done</code> row, where <code>startedAt</code> was already set - the one transition that cannot fail.</p>
+</div>
+
+<div class="fix">
+<h3>5. Derive the visit from the entries, not a parallel counter <span class="v v-open">open</span></h3>
+<p class="k">Where</p>
+<p><span class="anchor">lib/task-pipeline.js:210-213</span> <code>visitOf</code>,
+<span class="anchor">lib/task-pipeline.js:367</span> <code>assignPipeline</code> with <code>enter: true</code>,
+<span class="anchor">lib/task-pipeline.js:398</span> <code>enterStage</code>.</p>
+<p class="k">What the code does today</p>
+<pre>assignPipeline({ enter: true })  -> visits { critique: 1 }
+enterStage(stage: "critique")    -> visits { critique: 2 }, entries: 0</pre>
+<p>Two increments, no entry. The number the id is minted from is a counter that no ledger row has to agree with.</p>
+<p class="k">Test that proves it</p>
+<p>After a re-press, <code>visits[stage]</code> equals the highest entry visit. <b>Missing, and the opposite is
+pinned.</b> <code>test/task-pipeline.test.js:195</code> "entering a stage bumps that stage's visit and keeps every
+other count" asserts the double increment as the intended behaviour.</p>
+</div>
+
+<div class="fix">
+<h3>6. Never waive the version gate silently <span class="v v-open">open</span></h3>
+<p class="k">Where</p>
+<p><span class="anchor">.githooks/pre-push:21</span> documents <code>git push --no-verify</code> as the deliberate
+bypass; <span class="anchor">tools/land.mjs:340</span> uses that waiver for a docs-only render.
+<code>grep -rn "waiver" lib tools</code> returns prose only - no module records one on a row or in a run log.</p>
+<p class="k">What the code does today</p>
+<p>The gate itself works and refuses correctly. What is missing is the record: a push that skips it leaves nothing
+behind that a reader can find. Round 4's run log lines 43-44 are the example - the gate refused at 15:06, and
+<code>--no-verify</code> carried the branch at 15:07 with the waiver written in prose only, in a log that was then
+closed two commits early (fix 7).</p>
+<p class="k">Test that proves it</p>
+<p><code>node tools/version.mjs check</code> exits 0 in the same shell as the push. That is a manual acceptance, not a
+suite case. This landing meets it: 1.43.6 to 1.43.7, so the gate passes before the push (see
+<a href="#evidence">the evidence</a>).</p>
+</div>
+
+<div class="fix">
+<h3>7. Close the run log after the last commit, and re-post the PR body after it <span class="v v-open">open</span></h3>
+<p class="k">Where</p>
+<p><span class="anchor">ledger/ping-pong/run-log.md:45</span>, and PR #483's body.</p>
+<p class="k">What the code does today</p>
+<pre>run-log.md:45  "15:08 - turn end: this log's tail is the branch's last commit"
+git log on the merged branch:
+  bcac042 15:09:37  docs: the ping-pong log closes with the push and the number it did not spend
+  56cc6d4 15:10:59  docs: the critique counts the sentence it says is clipped</pre>
+<p>Two commits follow the line that says none do. The PR body has the same shape one layer out: <code>gh pr create
+--fill</code> wrote it at 15:07 and lists three of the five commits, because nothing re-posts it.</p>
+<p class="k">Test that proves it</p>
+<p><code>git log --oneline &lt;base&gt;..HEAD</code> has the same count as the commits the log names. <b>Manual, and
+missing.</b> Nothing in <code>tools/</code> or <code>lib/</code> re-posts a PR body or checks a log against the
+branch.</p>
+</div>
+
+<div class="fix">
+<h3>8. Make the row's <code>files</code> the one source for the artifact path <span class="v v-open">open</span></h3>
+<p class="k">Where</p>
+<p><span class="anchor">lib/assistant/queue.js:427</span> normalises <code>files</code>;
+<span class="anchor">lib/assistant.js:7461</span> reads <code>files[0]</code> as the lane, and the queue text prints
+the list. No writer and no gate checks that a listed path exists.</p>
+<p class="k">What the code does today</p>
+<pre>row #212 files = ["docs/reviews/pipeline-ping-pong-round4-2026-11-06.html"]
+on disk        =  docs/reviews/ping-pong-round-4-2026-11-06.html
+                   (the first path has never existed)</pre>
+<p>Read from the live queue file this run. The row still declares the missing path, so a reader who follows the row
+finds nothing, and a check that reads the row reports a missing deliverable that is present under another name.</p>
+<p class="k">Test that proves it</p>
+<p>The first path in <code>files</code> exists on the branch. <b>Missing.</b> This landing turns the same check on
+its own row: the row and the brief agree on <code>docs/reviews/pipeline-next-steps-2026-11-06.html</code>.</p>
+</div>
+
+<div class="fix">
+<h3>9. Stamp the job at the spawn it belongs to, or label the field <span class="v v-open">open</span></h3>
+<p class="k">Where</p>
+<p><span class="anchor">lib/jobs.js:2808</span> writes <code>startedAt: new Date().toISOString()</code> when the job
+record is built; <span class="anchor">lib/jobs.js:2857</span> cuts the tree with <code>makeWorktree</code>, 49 lines
+later in the same function.</p>
+<p class="k">What the code does today</p>
+<pre>j.startedAt = new Date().toISOString()        // :2808, before the tree exists
+...
+const made = await this.makeWorktree(...)     // :2857, the tree is cut here</pre>
+<p>So the start stamp precedes the cut by construction, not by an accident of timing. The field measures the
+request, and every "time to first command" computed from it is short by the cut.</p>
+<p class="k">Test that proves it</p>
+<p><code>job.startedAt &gt;= tree.cut</code> for every stage run. <b>Missing, and unreachable until the stamp
+moves</b> - the acceptance cannot pass while the write is above the cut.</p>
+</div>
+
+<h2 id="process">Process gaps</h2>
+<p>Four of the nine are about how a round records itself, not about the pipeline's behaviour. They are here, short,
+because they fail differently: no suite can catch them, and each one costs the next reader a search.</p>
+<div class="tw"><table><thead><tr>
+<th>gap</th><th>what it looks like</th><th>what would close it</th>
+</tr></thead><tbody>
+<tr><td><b>The waiver is silent</b><br><span class="small">fix 6</span></td>
+    <td>The gate refuses; <code>--no-verify</code> sends the branch; the only record is a sentence in a run log that
+        was itself edited afterwards. A PR body then offers a policy the versioning page does not state ("a docs-only
+        branch lands at the base version"), which sends the next reader to a rule that does not exist.</td>
+    <td>Write the waiver on the row and in the log at the moment of the push, or do not push. The gate's own refusal
+        line is the thing to quote, not to skip.</td></tr>
+<tr><td><b>The PR body freezes at creation</b><br><span class="small">fix 7</span></td>
+    <td><code>gh pr create --fill</code> writes once. Three commits landed after it in round 4 and the body still
+        lists three of five. The body is the record a reviewer reads first, and it is the least current artifact in
+        the landing.</td>
+    <td>Re-post the body after the last commit (<code>gh pr edit --body-file</code>), or create the PR after the
+        branch stops moving.</td></tr>
+<tr><td><b>The artifact path is declared twice</b><br><span class="small">fix 8</span></td>
+    <td>A row and a brief each name the deliverable, and they disagree. The row is the durable one and it is the
+        wrong one, so the check that reads the row reports a missing deliverable that exists.</td>
+    <td>One source: generate the brief from the row's <code>files</code>, or check the row's first path at
+        close.</td></tr>
+<tr><td><b>Line numbers rot in hours</b><br><span class="small">observed here</span></td>
+    <td>Every anchor in fixes 1 to 5 moved between round 4 and this page: the park by 62 lines, the queue's
+        <code>done</code> branch by 12, the guard by 1. A report that quotes only a line sends the next reader to the
+        wrong statement within a day.</td>
+    <td>Cite the function with the line ("<code>stop()</code> at 1454"), and grep the number once, after the last
+        rebase.</td></tr>
+<tr><td><b>The evidence table outlives its tip</b><br><span class="small">observed here</span></td>
+    <td>Round 4's <code>blob at 3facbfd</code> column does not resolve from <code>main</code>: the rebase merge
+        re-created those commits, so the shas in that column name objects no branch carries. The
+        <code>sha256</code> column does verify - all three files hash exactly as the page says, read as blobs at
+        <code>main</code>.</td>
+    <td>Pin the bytes (the hash) as the durable claim and treat a commit sha as a reading, not an anchor. This page
+        hashes blobs, not the CRLF working tree.</td></tr>
+</tbody></table></div>
+<p class="small">One more, about this page's own order: fix 9 is a stamp-order defect, not a process gap, even though
+round 4 ranked it last beside three process entries. It is in the nine above with the code.</p>
+
+<h2 id="limits">What this does not prove</h2>
+<ul>
+<li><b>No probe drove a pipeline end to end.</b> Fixes 1 to 5 were measured by calling the module that owns the
+behaviour (<code>elapsedInStage</code>, <code>settleStageRun</code>, <code>startTask</code>'s state writer,
+<code>visitOf</code>) and printing the result. The drive's own path was read, not run. The end-to-end instance of
+each failure is round 4's record, which this page did not re-run.</li>
+<li><b>Fix 2's scope is narrower than round 4's sentence suggests.</b> The done path already settles with a status;
+the open case is the park that has no run settle in front of it. That is stated per-card above, and it is the one
+place this page corrects the brief.</li>
+<li><b>Fixes 6 and 7 are manual acceptances.</b> There is no gate to run for either; the card names the check a
+person would run, and the tree is green on neither because neither exists.</li>
+<li><b>Fix 9's acceptance cannot pass yet.</b> <code>job.startedAt &gt;= tree.cut</code> is false by construction;
+the card says so rather than presenting an unattainable test as the bar.</li>
+<li><b>The suite reading is two files, not the whole suite.</b> 49 of 49 in <code>test/task-pipeline.test.js</code>
+and <code>test/assistant-queue.test.js</code>, the two files nearest these paths. That is the claim: green, and
+blind to the nine.</li>
+<li><b>This page changed no product code.</b> It is a record of measurements taken at <code>1b03f0a</code>, and its
+own branch carries the page plus the version bump.</li>
+</ul>
+
+<h2 id="evidence">The evidence</h2>
+<div class="tw"><table><thead><tr>
+<th>claim</th><th>command</th><th>output</th>
+</tr></thead><tbody>
+<tr><td>The nine verdicts</td><td><code>node &lt;scratch&gt;/probe.mjs</code></td>
+    <td>the five code blocks quoted above, verbatim</td></tr>
+<tr><td>The suite is green</td>
+    <td><code>node --test --test-concurrency=2 test/task-pipeline.test.js test/assistant-queue.test.js</code></td>
+    <td><code>tests 49 / pass 49 / fail 0</code></td></tr>
+<tr><td>Round 4's hashes still verify at main</td>
+    <td><code>for f in draft critique run-log; do git show main:ledger/ping-pong/$f.md | sha256sum; done</code></td>
+    <td><code>draft 5cae569d...</code> <code>critique b3d61096...</code> <code>run-log 6e2af869...</code>, all three
+        equal to the page's table</td></tr>
+<tr><td>Two commits follow the log's closing line</td>
+    <td><code>git log --format='%h %ad %s' --date=format:'%H:%M:%S' -6 origin/stage1</code></td>
+    <td><code>bcac042 15:09:37</code> and <code>56cc6d4 15:10:59</code> above the 15:08 line</td></tr>
+<tr><td>Row #212 still names a path that does not exist</td>
+    <td><code>node -e "const q=require(homedir()+'/.wag/state/assistants/assistant-2/queue.json');..."</code></td>
+    <td><code>files: ["docs/reviews/pipeline-ping-pong-round4-2026-11-06.html"]</code></td></tr>
+<tr><td>The anchors as they stand</td>
+    <td><code>grep -n "export function stageRunId" lib/task-pipeline.js</code>, and the same for <code>stop</code>,
+        <code>want === "done"</code>, <code>makeWorktree</code></td>
+    <td><code>186</code>, <code>1454</code>, <code>690</code>, <code>2857</code></td></tr>
+<tr><td>This landing passes the gate rather than waiving it</td>
+    <td><code>node tools/version.mjs check</code></td>
+    <td>exit 0 at 1.43.7, beside <code>origin/main</code> at 1.43.6</td></tr>
+</tbody></table></div>
+<p class="small">The probe is a read-only module import: it builds no queue file, cuts no tree, and writes nothing
+into the repository. It lives under the run's scratch directory, not in the tree. Dashes: the code's U+2014 in the
+refusal message is shown here as a hyphen wherever it is quoted. The relative <code>repo-relative</code> path in the
+meta line is deliberate: this page names no machine folder, because the repository's absolute-path gate refuses one.</p>
+
+</div>
+</body>
+</html>
