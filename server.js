@@ -427,7 +427,7 @@ async function loadConfig() {
   // the board does. The setting lives in this file so it survives a restart and applies to every browser.
   cfg.scanMode = String(cfg.scanMode || "all").toLowerCase() === "visible" ? "visible" : "all";
   // The two-tier gate (lib/tiers.js). A repo whose last commit is older than `tierDays` stops being polled: it
-  // is checked by four .git stats once an hour, staggered across the hour in `tierBuckets` slices of
+  // is checked by one signal read once an hour, staggered across the hour in `tierBuckets` slices of
   // `tierCheckSeconds` each, and a change (or the reader opening the project) promotes it for one full probe.
   // The knob that decides a repo is old, and the shape of its hour. They live in config.json so a test can run
   // the rotation on seconds instead of waiting for the wall clock; lib/tiers.js owns the arithmetic.
@@ -645,7 +645,7 @@ const registry = new ProjectRegistry({
   // lib/paths.js — it used to default to a path relative to the process cwd, which a sandbox then shared with the
   // live board while its own seeded rows stayed invisible.
   cacheFile: config.projectsCacheFile,
-  // Each repo's tier and the four mtimes its hourly gate compares. Beside the projects cache and outside every
+  // Each repo's tier and the signal its hourly gate compares. Beside the projects cache and outside every
   // checkout: it is state, and a restart must resume the hour rather than re-probe the old fleet.
   tierFile: config.tiersFile,
 });
