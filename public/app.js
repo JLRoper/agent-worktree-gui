@@ -11453,8 +11453,8 @@ function hostPanelHtml(name) {
   const opts = ids.length ? ids.map((id) => `<option value="${esc(id)}"${id === panel.host ? " selected" : ""}>${esc(id)}</option>`).join("") : `<option value="">(no host records)</option>`;
   return `<div class="host-form" data-host-form="${esc(name)}">
       <span class="mono host-line${panel.error ? " clone-err" : ""}" data-host-line>${esc(panel.line || "")}</span>
-      ${pushControlsHtml(name)}
       <span class="host-fields">
+      ${pushControlsHtml(name)}
       <label class="host-field">host <select data-host-select="${esc(name)}"${panel.busy ? " disabled" : ""}>${opts}</select></label>
       <label class="host-field">coordinates <input type="text" class="mono" data-host-coords="${esc(name)}" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" spellcheck="false" placeholder="owner/repo or PROJECT/slug" value="${esc(panel.coords || "")}"${panel.busy ? " disabled" : ""}></label>
       <button type="button" data-host-save="${esc(name)}"${panel.busy ? " disabled" : ""}>Use this mapping</button>
@@ -11510,7 +11510,7 @@ async function proposeHostMapping(name) {
       busy: false,
       error: !prop.ok,
       line: prop.ok
-        ? `proposed from ${prop.remoteUrl} → ${prop.host} · ${coords} — confirm to write it`
+        ? `${prop.remoteUrl} -> ${prop.host}`
         : `no proposal: ${prop.why || "unknown reason"}`,
     };
     repaintHostPanel(name);

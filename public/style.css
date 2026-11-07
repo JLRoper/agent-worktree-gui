@@ -3370,19 +3370,17 @@ button.btn-host:focus-visible { outline: 1px solid #7fb2e8; outline-offset: 1px;
   border-bottom: 1px solid var(--line);
   font: 11.5px var(--mono);
 }
-/* The row is THREE items: the line, the two push selects, and one cluster holding the mapping fields. Laid out flat,
-   the line's text was squeezed into a ~430px column beside the controls at 1600 and its last field (Cancel) was left
-   behind at 1341. As two clusters the split happens at each item's own width: at 1954 all three share one row; at 1600
-   and 1341 the sentence and its two selects share the first line (the position the reader marked) and the mapping
-   fields wrap beneath; at 1150 the selects join the fields on the second line. */
+/* The row is TWO items: the sentence and one cluster holding every control — the push pair first, then the mapping
+   fields. As one flex container the four controls wrap together, so a narrow row (150% zoom) moves the pair, host
+   and coordinates as a block instead of leaving the selects on the sentence's line. */
 .host-form .host-line { color: var(--dim); flex: 1 1 auto; max-width: max-content; min-width: 200px; }
-.host-form .host-fields { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex: 0 1 auto; min-width: 0; margin-left: auto; }
+.host-form .host-fields { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex: 1 1 auto; min-width: 0; margin-left: auto; }
 .host-form .host-line.clone-err { color: var(--red); }
 .host-form .host-field { display: flex; gap: 5px; align-items: center; color: var(--dimmer); white-space: nowrap; }
-/* The two push selects ride this row. They keep the card's compact 10.5px scale — the row's own `select` rule is a
-   size up and would spend the room the mapping fields need — and sit between the line and the `host` field, so the
-   pair is read next to the remote it governs. `flex: 0 0 auto` keeps both selects whole: the row wraps the cluster,
-   never a label inside it. */
+/* The two push selects are the first items in the mapping cluster, ahead of `host` and `coordinates`, so the pair is
+   read next to the remote it governs and wraps with the fields rather than on the sentence's line. They keep the
+   card's compact 10.5px scale — the row's own `select` rule is a size up and would spend the room the mapping fields
+   need — and `flex: 0 0 auto` keeps both selects whole: the cluster wraps, never a label inside the pair. */
 .host-form .push-controls { flex: 0 0 auto; }
 .host-form .push-select { max-width: 168px; padding: 1px 3px; font: 10.5px var(--mono); }
 .host-form select,
