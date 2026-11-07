@@ -4,16 +4,33 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.50.6 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.50.8 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-381 releases from v0.1.0 (2026-10-20) to v1.50.6 (2026-11-07), 1331 commits between the tags. Every release is anchored by an
+383 releases from v0.1.0 (2026-10-20) to v1.50.8 (2026-11-07), 1334 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.50.8 — 2026-11-07 · 1 commit
+
+[`2035cc3`](https://github.com/JLRoper/agent-worktree-gui/commit/2035cc377ae6aafb45ac3cda0b50e5777e94d9f0) · [compare v1.50.7...v1.50.8](https://github.com/JLRoper/agent-worktree-gui/compare/v1.50.7...v1.50.8)
+
+### Added
+
+- feat: a landed QUEUE row and the Director's outbound lines are dim thread lines ([`2035cc3`](https://github.com/JLRoper/agent-worktree-gui/commit/2035cc377ae6aafb45ac3cda0b50e5777e94d9f0))
+
+## v1.50.7 — 2026-11-07 · 2 commits
+
+[`5ad18dc`](https://github.com/JLRoper/agent-worktree-gui/commit/5ad18dc287f54633e606db248ef680f6cc446aa1) · [compare v1.50.6...v1.50.7](https://github.com/JLRoper/agent-worktree-gui/compare/v1.50.6...v1.50.7)
+
+### Docs & tests
+
+- docs: render the changelog - 381 releases ([`b699291`](https://github.com/JLRoper/agent-worktree-gui/commit/b699291f6ca54092b7713000ae8c4bc530f514dd))
+- docs: measure what a long-lived tab retains per turn ([`5ad18dc`](https://github.com/JLRoper/agent-worktree-gui/commit/5ad18dc287f54633e606db248ef680f6cc446aa1))
 
 ## v1.50.6 — 2026-11-07 · 5 commits
 
