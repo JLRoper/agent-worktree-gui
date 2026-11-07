@@ -13,6 +13,7 @@
     "absolute-paths": "node tools/absolute-paths.mjs",
     "absolute-paths:list": "node tools/absolute-paths.mjs --list",
     "branches": "node tools/merged-branches.mjs",
+    "panel-watch": "node tools/panel-watch.mjs check",
     "changelog": "node tools/changelog.mjs",
     "changelog:check": "node tools/changelog.mjs --check",
     "land": "node tools/land.mjs",
