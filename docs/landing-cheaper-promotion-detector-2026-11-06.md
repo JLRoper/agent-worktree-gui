@@ -166,7 +166,6 @@ The full suite is run at the final tip and its counts are quoted in the pull req
 
 ## Version
 
-Patch: `1.45.6`. No contract, no config key and no state file shape changes; the one durable shape that does
+Patch: `1.47.1`. No contract, no config key and no state file shape changes; the one durable shape that does
 change — a baseline in `tiers.json` — is handled by `TierBook.known()`, which re-seeds an old-shape baseline
-instead of promoting it. `1.45.5` is held by another branch in flight, so this landing takes the next free patch
-number.
+instead of promoting it. Main carried `1.47.0` when this landed, so the patch is the next free number.
