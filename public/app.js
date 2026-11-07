@@ -17469,6 +17469,10 @@ function initSettingsTabs() {
 // version the panel serves is marked so the reader can see where they are in the list. The answer carries its
 // own state — ok / empty / missing — and the last two are SAID in as many words: a file with no release
 // headings and no file at all are different things to a reader, and neither one is a blank box.
+//
+// A refresh that FAILS is a notice at the top of that list, not a replacement for it: `changelogIndex` keeps the
+// last good answer, and a later fetch that throws re-paints it under the red line. Losing the sections because a
+// second read failed is the same blank box by another route - the reader had the list a moment ago.
 const RELEASE_NOTES_ID = "release-notes";
 const RELEASE_NOTES_SOURCE_ID = "release-notes-source";
 const RELEASE_NOTES_ROW_ID = "release-notes-row";
@@ -17513,6 +17517,41 @@ function releaseNotesSectionHtml(section, serving, index) {
   );
 }
 
+// The list as the last good answer painted it: the sections, or the one line that says why there is no list (a
+// missing file, no headings, an answer with no releases). Extracted because a FAILED refresh re-paints this under
+// its notice: the two paths have to agree on what "the list" is, or a failure would quietly change it.
+function releaseNotesList(data) {
+  if (!data) return null;
+  const file = data.file || "CHANGELOG.md";
+  const where = data.path || file;
+  if (data.state === "missing") {
+    return {
+      html: `<div class="release-state bad">${esc(`${file} is missing — there is no file at the panel root (${where}). The panel is serving v${data.serving || "unknown"}; no release notes are on disk.`)}</div>`,
+      line: `${file} · not on disk`,
+      title: where,
+    };
+  }
+  if (data.state === "empty") {
+    return {
+      html: `<div class="release-state">${esc(`${file} is present (${changelogBytes(data.size)}, modified ${changelogWhen(data.mtime)}) but carries no "## vX.Y.Z — date · N commits" heading — there is nothing to list. The panel is serving v${data.serving || "unknown"}.`)}</div>`,
+      line: `${file} · modified ${changelogWhen(data.mtime)} · ${changelogBytes(data.size)}`,
+      title: where,
+    };
+  }
+  if (data.state !== "ok" || !Array.isArray(data.sections) || !data.sections.length) {
+    return {
+      html: `<div class="release-state bad">${esc(data.reason || `the panel answered ${file} with no releases and no reason`)}</div>`,
+      line: `${file} · no releases`,
+      title: where,
+    };
+  }
+  return {
+    html: data.sections.map((section, i) => releaseNotesSectionHtml(section, data.serving, i)).join(""),
+    line: `${file} · modified ${changelogWhen(data.mtime)} · ${changelogBytes(data.size)}`,
+    title: where,
+  };
+}
+
 function paintChangelog(error = null) {
   const list = document.getElementById(RELEASE_NOTES_ID);
   const source = document.getElementById(RELEASE_NOTES_SOURCE_ID);
@@ -17526,37 +17565,21 @@ function paintChangelog(error = null) {
     }
     if (row) row.classList.remove("search-hidden");
   };
-  if (error) return say(`<div class="release-state bad">${esc(`the panel could not answer for CHANGELOG.md — ${error}`)}</div>`, "CHANGELOG.md · not read");
-  const data = changelogIndex;
-  if (!data) return say(`<div class="release-state bad">${esc("the panel has not answered for CHANGELOG.md yet")}</div>`, "CHANGELOG.md · not read");
-  const file = data.file || "CHANGELOG.md";
-  const where = data.path || file;
-  if (data.state === "missing") {
+  const held = releaseNotesList(changelogIndex);
+  if (error) {
+    const notice = `<div class="release-state bad">${esc(`the panel could not answer for CHANGELOG.md — ${error}`)}</div>`;
+    // A failed refresh is news ABOUT the list, never a replacement for it: the notice goes at the top and every
+    // section the last good read painted stays under it. Only a failure with nothing rendered yet is a lone notice.
+    if (!held) return say(notice, "CHANGELOG.md · not read");
+    return say(`${notice}${held.html}`, `${held.line} · refresh failed`, held.title);
+  }
+  if (!held) {
     return say(
-      `<div class="release-state bad">${esc(`${file} is missing — there is no file at the panel root (${where}). The panel is serving v${data.serving || "unknown"}; no release notes are on disk.`)}</div>`,
-      `${file} · not on disk`,
-      where,
+      `<div class="release-state bad">${esc("the panel has not answered for CHANGELOG.md yet")}</div>`,
+      "CHANGELOG.md · not read",
     );
   }
-  if (data.state === "empty") {
-    return say(
-      `<div class="release-state">${esc(`${file} is present (${changelogBytes(data.size)}, modified ${changelogWhen(data.mtime)}) but carries no "## vX.Y.Z — date · N commits" heading — there is nothing to list. The panel is serving v${data.serving || "unknown"}.`)}</div>`,
-      `${file} · modified ${changelogWhen(data.mtime)} · ${changelogBytes(data.size)}`,
-      where,
-    );
-  }
-  if (data.state !== "ok" || !Array.isArray(data.sections) || !data.sections.length) {
-    return say(
-      `<div class="release-state bad">${esc(data.reason || `the panel answered ${file} with no releases and no reason`)}</div>`,
-      `${file} · no releases`,
-      where,
-    );
-  }
-  say(
-    data.sections.map((section, i) => releaseNotesSectionHtml(section, data.serving, i)).join(""),
-    `${file} · modified ${changelogWhen(data.mtime)} · ${changelogBytes(data.size)}`,
-    where,
-  );
+  return say(held.html, held.line, held.title);
 }
 
 async function loadChangelog() {
