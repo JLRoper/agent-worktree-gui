@@ -4,16 +4,30 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.44.1 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.44.2 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-359 releases from v0.1.0 (2026-10-20) to v1.44.1 (2026-11-06), 1263 commits between the tags. Every release is anchored by an
+360 releases from v0.1.0 (2026-10-20) to v1.44.2 (2026-11-06), 1267 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.44.2 — 2026-11-06 · 4 commits
+
+[`17184c6`](https://github.com/JLRoper/agent-worktree-gui/commit/17184c620678824a4f3d83deca5db968cc280000) · [compare v1.44.1...v1.44.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.44.1...v1.44.2)
+
+### Added
+
+- feat: the flow dialog opens on the map page's chart, read-only, by default ([`49c2998`](https://github.com/JLRoper/agent-worktree-gui/commit/49c299853efa832a870e5f87c91ef6b62561c89a))
+
+### Docs & tests
+
+- test: prove the dialog's preview against the page it copies ([`6040979`](https://github.com/JLRoper/agent-worktree-gui/commit/60409793cd1e5b7148c3cd8b5a7b4076e47ca6f3))
+- docs: render the changelog — 359 releases ([`daa0012`](https://github.com/JLRoper/agent-worktree-gui/commit/daa00125df6e85d0911ee08c2c3c01064db2bad9))
+- docs: what a panel turn sends, and what its two counters count ([`17184c6`](https://github.com/JLRoper/agent-worktree-gui/commit/17184c620678824a4f3d83deca5db968cc280000))
 
 ## v1.44.1 — 2026-11-06 · 2 commits
 
