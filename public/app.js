@@ -349,8 +349,36 @@ function assistantSessionFor(thread, board = state) {
 }
 
 // ---------------- agents ----------------
+// A turn's console buffer. A turn the tab has watched streaming has an array of its own in `state.jobLines`; a turn
+// it has not - a reload, a card for a turn that settled before this page opened - draws the record's own tail, which
+// is the same 60 lines a reload has always shown. Reading it from the record instead of copying it into a second
+// array is what keeps a settled turn's tail from being retained twice (measured: 60 extra line objects per turn on a
+// 240-turn board).
 function jobLines(id) {
-  return state.jobLines.get(id) || [];
+  const own = state.jobLines.get(id);
+  if (own) return own;
+  const rec = state.jobs.get(id);
+  return Array.isArray(rec?.lines) ? rec.lines : [];
+}
+
+// The per-turn caps bound ONE turn (public/board/console.js trims a buffer to 600, the number lib/jobs.js keeps), and
+// they say nothing about a tab that has watched hundreds of turns: every one of them keeps its array for the life of
+// the page. This is the ceiling on how many turn buffers the tab holds, newest first. A settled turn past it draws
+// its record's tail - exactly the console a reload gives it - so eviction costs nothing that a refresh would not
+// have cost anyway. A live turn is never evicted: its buffer is where the frames arriving now are going.
+const MAX_TURN_BUFFERS = 120;
+
+function trimJobLines() {
+  if (state.jobLines.size <= MAX_TURN_BUFFERS) return 0;
+  let dropped = 0;
+  for (const id of [...state.jobLines.keys()]) {
+    if (state.jobLines.size <= MAX_TURN_BUFFERS) break;
+    // Map order is the order the buffers were first written, which for a board is the order the turns started.
+    if (turnLive(state.jobs.get(id))) continue;
+    state.jobLines.delete(id);
+    dropped += 1;
+  }
+  return dropped;
 }
 
 // ---- minimize / expand a card -----------------------------------------------
@@ -6763,7 +6791,10 @@ function updateJob(j, { scroll = false } = {}) {
   const prevOwner = prev ? prev.ownerPath || null : null;
   const ownerChanged = (j.ownerPath || null) !== prevOwner;
   state.jobs.set(j.id, { ...prev, ...j });
-  if (!state.jobLines.has(j.id) && j.lines?.length) state.jobLines.set(j.id, j.lines.slice());
+  // No copy of `j.lines` into `state.jobLines` here: the record is what a turn without a buffer draws from
+  // (`jobLines()`), and the only writer that needs a buffer of its own is `recordJobLine` — which seeds it from
+  // this record for a turn that is still running. Copying it here retained the same 60 lines twice, once in the
+  // record `/api/state` just delivered and once in the array nothing ever shrank.
   // A turn that has stopped has no more frames coming, so whatever either display buffer still holds is released:
   // a resumed, interrupted or failed run settles without a `result` line, and its card must not sit mid-paragraph.
   if (statusChanged && !turnLive(j)) flushTypeStream(j.id);
@@ -12831,6 +12862,32 @@ function renderAll() {
   }
 }
 
+// The job half of a snapshot: the records the server still lists, and the console buffers that go with them.
+//
+// The whole store was replaced on every poll and `state.jobLines` was only ever ADDED to, so a turn the panel had
+// forgotten kept its buffer for the life of the tab. Measured on a real page (docs/console-memory-growth.md): after
+// the reader's own "Clear finished" emptied the board, all 19 buffers and all 752 lines stayed; the same held when
+// the panel was swapped for a fresh one with an empty store. A turn the server no longer lists has no record, no
+// card and no frames coming, so its buffer is released here.
+//
+// A turn that WAS live before this snapshot is kept even when the list has not caught up with it: a record that has
+// not arrived yet is not the same fact as a record that is gone, and dropping a running turn's buffer would empty a
+// console the run is still writing into. The next snapshot settles it.
+function applyJobSnapshot(jobs) {
+  const prev = new Map(state.jobs);
+  state.jobs.clear();
+  const listed = new Set();
+  for (const j of jobs) {
+    listed.add(j.id);
+    state.jobs.set(j.id, j);
+  }
+  for (const id of [...state.jobLines.keys()]) {
+    if (listed.has(id)) continue;
+    if (turnLive(prev.get(id))) continue;
+    state.jobLines.delete(id);
+  }
+}
+
 function applySnapshot(data) {
   // Captured before anything is mutated: if the set of projects is the same afterwards, the
   // sections on screen are still valid and a full re-render would be pure cost.
@@ -12884,11 +12941,7 @@ function applySnapshot(data) {
       : "";
   }
   if (data.jobs) {
-    state.jobs.clear();
-    for (const j of data.jobs) {
-      state.jobs.set(j.id, j);
-      if (!state.jobLines.has(j.id) && j.lines?.length) state.jobLines.set(j.id, j.lines.slice());
-    }
+    applyJobSnapshot(data.jobs);
     renderJobs();
     invalidatePanelMap();
   }
