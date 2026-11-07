@@ -106,13 +106,16 @@ test("the turn the panel creates is the one that carries it", async (t) => {
   await assistant.say("what are you carrying?", { assistantId: second });
   await assistant.say("and you?");
   assert.equal(created.length, 2);
-  // The thread each run was created on is the assistant whose preamble it carries, so the path can be checked per run.
+  // The thread each run was created on is the assistant whose briefing it carries, so the path can be checked per run.
+  // The directive is STANDING, so it is in the run's `system` text (POST `instructions`) rather than in the per-turn
+  // input; the digest, when the wake's gate carries one, is the only queue text appended to the question.
   const idOf = { "panel-assistant-2": second, [ASSISTANT_THREAD]: PRIMARY_ASSISTANT };
   for (const job of created) {
     const id = idOf[job.thread];
     assert.ok(id, `the run's thread is one of the two assistants: ${job.thread}`);
-    assert.ok(job.preamble.includes(OPENER), `${job.thread}'s run is handed the directive`);
-    assert.ok(job.preamble.includes(`/assistants/${id}/queue.json`), `${job.thread} is handed its own path`);
+    assert.ok(job.system.includes(OPENER), `${job.thread}'s run is handed the directive as system text`);
+    assert.ok(job.system.includes(`/assistants/${id}/queue.json`), `${job.thread} is handed its own path`);
+    assert.ok(!job.preamble.includes(OPENER), `${job.thread}'s per-turn input does not repeat the standing directive`);
   }
 });
 

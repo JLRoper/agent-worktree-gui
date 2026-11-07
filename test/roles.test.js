@@ -180,11 +180,13 @@ test("a turn for #2 is created on #2's thread with #2's preamble", async (t) => 
   await assistant.say("and for you?");
   assert.equal(created.length, 2);
   assert.equal(created[0].thread, "panel-assistant-2", "#2's turn runs on #2's thread");
-  assert.ok(created[0].preamble.includes("You are Assistant #2,"), "with #2's preamble");
-  assert.ok(!created[0].preamble.includes("FIRST-ONLY-TEXT"), "and not #1's charter");
+  // The briefing is sent as the run's SYSTEM text; the per-turn input is only the queue digest (when due). The claim
+  // this test makes is about WHOSE briefing it is, so it reads `system`.
+  assert.ok(created[0].system.includes("You are Assistant #2,"), "with #2's briefing");
+  assert.ok(!created[0].system.includes("FIRST-ONLY-TEXT"), "and not #1's charter");
   assert.equal(created[0].assistant, true, "still marked as an assistant turn, so no rule judges it a worker");
   assert.equal(created[1].thread, ASSISTANT_THREAD, "the default is still Assistant #1");
-  assert.ok(created[1].preamble.includes("FIRST-ONLY-TEXT"));
+  assert.ok(created[1].system.includes("FIRST-ONLY-TEXT"));
   assert.ok(assistant.isAssistantThread("panel-assistant-2") && assistant.isAssistantThread(ASSISTANT_THREAD));
   assert.ok(assistant.isOwnRun({ thread: "panel-assistant-2" }), "#2's run is the assistant's own, not a worker's");
   const digest = assistant.digest();
