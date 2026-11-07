@@ -55,6 +55,11 @@ function sandbox() {
   git(seed, ["commit", "-q", "-m", "Add the manifest so the version has one home"]);
   git(seed, ["remote", "add", "origin", remote]);
   git(seed, ["push", "-q", "-u", "origin", "main"]);
+  // The seed's own number is anchored, the way every version main carries is tagged at the commit that declared
+  // it. A later verify-version-tags reads an untagged declaration as a finding; this fixture is a repository,
+  // not a history with one hole in it.
+  git(seed, ["tag", "-a", "v1.0.0", "-m", "v1.0.0"]);
+  git(seed, ["push", "-q", "origin", "refs/tags/v1.0.0"]);
 
   const clone = (name) => {
     const dest = path.join(dir, name);
@@ -135,7 +140,9 @@ test("two lanes pick one number: the second is refused the claim and re-bumps un
     });
     const gateText = `${gate.stdout || ""}${gate.stderr || ""}`;
     assert.equal(gate.status, 0, gateText);
-    assert.match(gateText, /2 tags name a version origin\/main does not carry yet/, "both claims are held on branches");
+    // Three, not two: lane C's claim above is on the remote too, and the gate counts every held tag it can see.
+    assert.match(gateText, /3 tags name a version origin\/main does not carry yet/, "every claim is held on a branch");
+    assert.match(gateText, /v1\.0\.1@[0-9a-f]{8}, v1\.0\.2@[0-9a-f]{8}, v1\.0\.3@[0-9a-f]{8}/, "and each is named");
     assert.match(gateText, /PASS/);
   } finally {
     box.done();
@@ -172,10 +179,13 @@ test("a render spends no number, so there is nothing to claim", () => {
   try {
     const d = box.clone("render");
     commitFile(d, "CHANGELOG.md", "# Changes\n\n## v1.0.0\n\n- feat: the first release\n", "docs: render the changelog");
+    // What the remote carried before the run, because the seed's own v1.0.0 is anchored there: the claim is that a
+    // render adds nothing, not that a repository has no tags.
+    const before = remoteTags(d);
     const r = tool(d, ["claim"]);
     assert.equal(r.code, 0, `${r.out}${r.err}`);
     assert.match(r.out, /nothing to claim — this branch declares 1\.0\.0 and origin\/main carries 1\.0\.0/);
-    assert.equal(remoteTags(d).has("v1.0.0"), false, "no tag was pushed for a render");
+    assert.deepEqual([...remoteTags(d).keys()].sort(), [...before.keys()].sort(), "no tag was pushed for a render");
   } finally {
     box.done();
   }
