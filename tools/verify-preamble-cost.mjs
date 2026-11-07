@@ -98,7 +98,7 @@ try {
   ok("turn 2 carries the marker instead", MARKER.test(turn2), `${fmt(turn2.length)} chars`);
   ok("turn 2 does not carry the charter's text", !turn2.includes(BODY));
   ok("the marker's sha is the file's sha", MARKER.test(turn2) && turn2.includes(sha12(charter)));
-  ok("the short tier rides both turns", ["Standing rules (written by the reader", "Scratchpad"].every((s) => turn1.includes(s) && turn2.includes(s)));
+  ok("the short tier rides both turns", ["Standing rules (written by the reader", "Notes"].every((s) => turn1.includes(s) && turn2.includes(s)));
   ok("an ordinary turn is smaller than the first", saved > CHARTER_MAX_CHARS - 500, `${fmt(saved)} bytes`);
 
   const failed = checks.filter((c) => !c).length;

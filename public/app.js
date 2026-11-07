@@ -19991,7 +19991,7 @@ function paintResetRow() {
   const rec = roster.find((a) => String(a.id) === sel.value) || roster[0];
   btn.title =
     `Reset ${rec.name} — settle its gateway turn (the unknown admission that fences ${rec.threadId ?? "its session"}), ` +
-    `drop its queued wakes and the watches it owns. Keeps its queue, scratchpad, charter and thread. ` +
+    `drop its queued wakes and the watches it owns. Keeps its queue, notes, charter and thread. ` +
     `Two presses: the first shows a dry run, row by row, of exactly what it would clear.`;
   if (btn.dataset.armed !== "1") btn.textContent = "Reset assistant";
 }
@@ -20113,7 +20113,7 @@ function resetCopyView(body, status, now = Date.now()) {
       lines: [
         `reset — ${who}: ${resetPlural(admissions.length, "admission", "admissions")} settled (${outcome}; the projection now reads cancelled), ` +
           `${resetPlural(watches.length, "watch", "watches")} dropped, ${resetPlural(wakes.length, "wake", "wakes")} dropped. ` +
-          `Kept ${resetPlural(q, "queue row", "queue rows")}, the scratchpad (${s.notes ?? 0} notes, ${s.rules ?? 0} rules) and the charter (${c.chars ?? 0} chars).`,
+          `Kept ${resetPlural(q, "queue row", "queue rows")}, the notes (${s.notes ?? 0} notes, ${s.rules ?? 0} rules) and the charter (${c.chars ?? 0} chars).`,
         "If a panel turn is still refused with 409 permission_denied, the session is the CLI's:",
         `continue it with ${resume}`,
         "the settled turn is reported interrupted and is not replayed — resend it if you still want it.",

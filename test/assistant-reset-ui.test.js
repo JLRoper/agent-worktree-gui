@@ -235,7 +235,7 @@ test("success: the receipt's outcome, the projection's other word, and the resum
   assert.equal(view.kind, "success");
   assert.equal(view.bad, false);
   assert.match(view.lines[0], /^reset — Assistant #2: 1 admission settled \(interrupted; the projection now reads cancelled\), 2 watches dropped, 1 wake dropped\./);
-  assert.match(view.lines[0], /Kept 6 queue rows, the scratchpad \(1184 notes, 12 rules\) and the charter \(20431 chars\)\./);
+  assert.match(view.lines[0], /Kept 6 queue rows, the notes \(1184 notes, 12 rules\) and the charter \(20431 chars\)\./);
   assert.equal(view.lines[1], "If a panel turn is still refused with 409 permission_denied, the session is the CLI's:");
   assert.equal(view.lines[2], `continue it with hermes --resume ${THREAD}`);
   assert.ok(view.lines.some((l) => /not replayed — resend it if you still want it/.test(l)), "it says what resume does not do");

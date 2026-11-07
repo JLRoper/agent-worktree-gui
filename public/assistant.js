@@ -956,7 +956,7 @@
     const director = rec?.roleId === "assistant-director";
     return `<div class="as-intro">
       <p><b>✧ ${esc(rec?.name || "Assistant")}</b> reads this board and nothing else: the agents' cards, the approvals and its own
-      scratchpad. It has no terminal of its own.${role}${cadence}</p>
+      notes. It has no terminal of its own.${role}${cadence}</p>
       ${director
         ? `<ul>
         <li>“Who is stuck?” — every assistant's queue, with a dead run, a stale park and startable work marked.</li>
@@ -1519,11 +1519,14 @@
     if (!host || !state.assistant) return;
     if (!force && typingInside(`#${paneIdFor(id, "pad")}`)) return;
     const a = state.assistant;
-    const rules = a.rules || [];
     // Whose pad this is: the pane's own assistant. #1's notes are the string the polled state carries; every other
     // assistant's are its own notes.md, read when its pane is open.
     const who = id;
     const owner = sessionById(who);
+    // Its OWN standing rules: the server sends every assistant's list on its own record, so #2's pane shows #2's
+    // rules and the ✕ beside one names #2. `a.rules` is Assistant #1's list and is the fallback for a page whose
+    // first /api/assistant answer has not landed yet.
+    const rules = (Array.isArray(owner?.rules) ? owner.rules : a.rules) || [];
     const pad = padFor(who);
     const notesGroup = pad
       ? `<div class="as-group">
@@ -1537,13 +1540,13 @@
       </div>`
       : `<div class="as-group">
         <h4>Notes — read on every turn</h4>
-        <div class="as-help">reading ${esc(owner?.name || who)}'s pad…</div>
+        <div class="as-help">reading ${esc(owner?.name || who)}'s notes…</div>
       </div>`;
     host.innerHTML = `
       ${notesGroup}
       <div class="as-group">
         <h4>Standing rules — its only confident answers</h4>
-        ${rules.map((r) => `<div class="as-rule-row${r.by === "assistant" ? " is-by-assistant" : ""}"><span class="as-rule-name">${esc(r.text)}${r.by === "assistant" ? `<i class="as-rule-by" title="the assistant wrote this one; delete it if it is wrong">assistant</i>` : ""}</span><button type="button" data-as-unrule="${esc(r.id)}" title="remove this rule">✕</button></div>`).join("") || `<div class="as-help">None yet. A rule is an answer you have given once and do not want to give twice.</div>`}
+        ${rules.map((r) => `<div class="as-rule-row${r.by === "assistant" ? " is-by-assistant" : ""}"><span class="as-rule-name">${esc(r.text)}${r.by === "assistant" ? `<i class="as-rule-by" title="the assistant wrote this one; delete it if it is wrong">assistant</i>` : ""}</span><button type="button" data-as-unrule="${esc(r.id)}" data-as-rulefor="${esc(who)}" title="remove this rule">✕</button></div>`).join("") || `<div class="as-help">None yet. A rule is an answer you have given once and do not want to give twice.</div>`}
         <div class="as-form">
           <div class="as-line">
             <input id="${padId("as-rule-text", who)}" class="as-grow" placeholder="e.g. Deploy to QA, never PROD, from a worktree agent" />
@@ -1984,7 +1987,7 @@
         </div>
         <div class="as-help">A role is {name, description, charter text}: the job title, one line of what it is for, and the
         long tier of memory that job needs — injected in full on every one of this assistant's turns, the way the
-        standing rules and the scratchpad are. Each assistant carries its OWN copy, so editing Assistant #2's charter
+        standing rules and the notes are. Each assistant carries its OWN copy, so editing Assistant #2's charter
         never changes what Assistant #1 is told. Keep it inside the ${cap}-character cap: prune the OLDEST changelog
         entries first. The assistant adds one with a CHARTER: line at the end of a reply.</div>
       </div>
@@ -2331,7 +2334,7 @@
           <button type="button" id="btn-as-wake" title="ask the assistant what it sees — one turn">Ask what it sees</button>
           <span class="as-err" id="as-watchdog-err"></span>
         </div>
-        <div class="as-help">${a.sweeps.lastHour}/${a.sweeps.limit} sweep wakes in the last hour — events are never budgeted${a.wakePending ? ` · ${a.wakePending} queued behind the running turn` : ""} · scratchpad at ${esc(a.settings.model || "(gateway default model)")}</div>
+        <div class="as-help">${a.sweeps.lastHour}/${a.sweeps.limit} sweep wakes in the last hour — events are never budgeted${a.wakePending ? ` · ${a.wakePending} queued behind the running turn` : ""} · model at ${esc(a.settings.model || "(gateway default model)")}</div>
       </div>`;
     // Each threshold disclosure remembers itself. `toggle` does not bubble, and this repaint replaces the
     // elements rather than mutating them, so the listener goes on the new element every time.
@@ -2720,7 +2723,6 @@
     // to itself) and minus the assistants this one already names.
     const escList = ((a.escalateTo || {})[id] || []).filter((x) => x !== id);
     const escOthers = assistantIds().filter((x) => x !== id && !escList.includes(x));
-    const rules = Array.isArray(rec?.rules) ? rec.rules : [];
     // THE ROLE THIS ASSISTANT RUNS. The list is the server's own library (`state.assistant.roles`, the same meta the
     // Role tab's picker draws) and the current value is the RECORD's `roleId` — not a page copy, so two tabs cannot
     // disagree about the job. A library with no rows still shows the role the record names rather than an empty box.
@@ -2847,26 +2849,6 @@
           : `<div class="as-help">(empty — this assistant hands nothing to another one)</div>`}
         <div class="as-err" id="as-set-err"></div>
       </div>
-      ${first
-        ? ""
-        : `<div class="as-group">
-        <h4>${esc(rec?.name || "Assistant")}'s rules — its own, not Assistant #1's</h4>
-        <div class="as-help">These ride in THIS assistant's preamble, clipped the way every rule is. Adding or
-        removing one here never changes Assistant #1's standing rules.</div>
-        <div class="as-actions">
-          <input type="text" id="as-rules-text-${esc(n)}" class="as-grow" spellcheck="false" maxlength="400" placeholder="e.g. Ask before writing to a tree another agent owns">
-          <button type="button" class="primary" data-as-addrule="${esc(id)}">Add rule</button>
-          <span class="as-err" id="as-rules-err-${esc(n)}"></span>
-        </div>
-        ${rules.length
-          ? rules
-              .map(
-                (r) =>
-                  `<div class="as-rule-row"><span class="as-rule-name">${esc(r.text)}</span><button type="button" data-as-unrule="${esc(r.id)}" data-as-rulefor="${esc(id)}" title="remove this rule">✕</button></div>`,
-              )
-              .join("")
-          : `<div class="as-help">(none written down yet)</div>`}
-      </div>`}
       <div class="as-help">The pass clock, the command audit and the per-rule escalation table belong to the panel's
       one watchdog — they are in the <b>Watchdog</b> tab. This assistant's default role prompt is in the <b>Role</b> tab
       and the worktrees it owns are in its <b>Worktrees</b> tab. Its thread is
@@ -5031,17 +5013,15 @@
     }
 
     if (t.dataset.asUnrule) {
-      // A rule on another assistant's record names that assistant; #1's rules are the ones in the Scratchpad.
+      // A rule is one assistant's own: the row carries the assistant whose pane drew it, so #2's ✕ removes #2's rule
+      // and repaints #2's Notes pane. #1 keeps the ids and the route call every harness already drives.
       const forId = t.dataset.asRulefor || "";
       t.disabled = true;
       try {
         await asPost("/api/assistant/rule/remove", { id: t.dataset.asUnrule, ...(forId ? { assistantId: forId } : {}) });
-        // The pane that owns the rule is the one that repaints: #1's list is in the Scratchpad, another assistant's
-        // is in its own Settings.
-        if (forId) renderAssistantSettings(forId, true);
-        else renderAssistantPad(true);
+        renderAssistantPad(true, forId || selectedSessionId());
       } catch (err) {
-        setErr(forId ? `as-rules-err-${String(forId).replace(/^assistant-/, "")}` : padId("as-pad-err", selectedSessionId()), err.message);
+        setErr(forId ? padId("as-pad-err", forId) : padId("as-pad-err", selectedSessionId()), err.message);
       } finally {
         t.disabled = false;
       }
@@ -5108,13 +5088,14 @@
     }
 
     if (t.id === "btn-as-rule" || t.dataset.asPadrule) {
-      // The form belongs to the pane it sits in: `data-as-padrule` names that assistant, so #2's form reads #2's box.
+      // The form belongs to the pane it sits in: `data-as-padrule` names that assistant, so #2's form reads #2's box
+      // and the rule it adds lands on #2's own record.
       const who = isAssistant(t.dataset.asPadrule) ? t.dataset.asPadrule : selectedSessionId();
       const text = String(as$(padId("as-rule-text", who))?.value || "").trim();
       if (!text) return;
       t.disabled = true;
       try {
-        await asPost("/api/assistant/rule", { text });
+        await asPost("/api/assistant/rule", { text, assistantId: who });
         renderAssistantPad(true, who);
       } catch (err) {
         setErr(padId("as-pad-err", who), err.message);
@@ -5455,27 +5436,6 @@
       if (pane) pane.dataset.nameNote = "";
       const note = hostFor(id, "settings")?.querySelector(`[data-as-namestatus="${id}"]`);
       if (note) note.textContent = "";
-      return;
-    }
-
-    if (t.dataset.asAddrule) {
-      // `data-as-addrule` lowercases to `dataset.asAddrule` — reading `asAddRule` was always undefined, so the press
-      // fell through to the branches below it and added nothing.
-      const id = t.dataset.asAddrule;
-      const n = String(id).replace(/^assistant-/, "");
-      const box = as$(`as-rules-text-${n}`);
-      const text = String(box?.value || "").trim();
-      if (!text) return;
-      t.disabled = true;
-      try {
-        await asPost("/api/assistant/rule", { text, assistantId: id });
-        if (box) box.value = "";
-        renderAssistantSettings(id, true);
-      } catch (err) {
-        setErr(`as-rules-err-${n}`, err.message);
-      } finally {
-        t.disabled = false;
-      }
       return;
     }
 

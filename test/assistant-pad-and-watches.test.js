@@ -346,11 +346,19 @@ test("an assistant with nothing of its own says so", () => {
 
 // The pad region: #1 reads the state's string, an extra assistant reads its own file through the route. Each pane
 // has its own controls, so two pads can be on the page without answering for each other.
+// The two records' own standing rules: the pad's Standing rules section must read the SELECTED assistant's list, so
+// #2's pane shows #2's rule and the ✕ beside it names #2.
+const PAD_RULES = {
+  "assistant-1": [{ id: "r1", text: "deploy to QA, never PROD", by: "reader" }],
+  "assistant-2": [{ id: "r2", text: "ask before writing to a tree another agent owns", by: "reader" }],
+};
+
 function padPane({ who, notes, pad = null }) {
   const paneIdFor = (id, sub) => (id === "assistant-1" ? `as-${sub}` : `as-${sub}-${id.replace(/^assistant-/, "")}`);
   const hosts = new Map([paneIdFor("assistant-1", "pad"), paneIdFor("assistant-2", "pad")].map((id) => [id, { innerHTML: "" }]));
   const host = hosts.get(paneIdFor(who, "pad"));
   const state = { assistant: { notes, rules: [], journal: [] }, assistantView: { assistant: who, subTab: "pad" } };
+  const recordFor = (id) => ({ id, name: id === "assistant-1" ? "Assistant #1" : "Assistant #2", rules: PAD_RULES[id] || [] });
   const calls = [];
   const apiFetch = (url) => {
     calls.push(url);
@@ -370,7 +378,7 @@ function padPane({ who, notes, pad = null }) {
     "apiFetch",
     `${sliceRegion(page, "scratchpad")}
 return { renderAssistantPad, padInflight };`,
-  )(state, (id) => hosts.get(id) || null, esc, () => false, (id, sub) => hosts.get(paneIdFor(id, sub)) || null, paneIdFor, () => who, () => who, sessionById, "assistant-1", apiFetch);
+  )(state, (id) => hosts.get(id) || null, esc, () => false, (id, sub) => hosts.get(paneIdFor(id, sub)) || null, paneIdFor, () => who, () => who, recordFor, "assistant-1", apiFetch);
   api.renderAssistantPad(true, who);
   return { host, calls, api };
 }
@@ -387,7 +395,7 @@ test("the Pad tab shows the selected assistant's notes — and never another's",
     pad: { assistantId: "assistant-2", notes: "#2's own line", path: "C:/panel/state/assistants/assistant-2/notes.md", file: true, exists: true, chars: 13, cap: 8000, error: null },
   });
   // The first paint is the read, not #1's pad under #2's name.
-  assert.match(theirs.host.innerHTML, /reading Assistant #2's pad…/, "it says it is reading");
+  assert.match(theirs.host.innerHTML, /reading Assistant #2's notes…/, "it says it is reading");
   assert.doesNotMatch(theirs.host.innerHTML, /#1's own line/, "and does not draw the wrong assistant's pad meanwhile");
   assert.equal(theirs.calls.length, 1, "one read");
   assert.equal(theirs.calls[0], "/api/assistant/notes?assistantId=assistant-2", "for the assistant the tab is showing");
@@ -395,6 +403,26 @@ test("the Pad tab shows the selected assistant's notes — and never another's",
   assert.match(theirs.host.innerHTML, /#2's own line/, "the answer is #2's pad");
   assert.doesNotMatch(theirs.host.innerHTML, /#1's own line/, "and still not #1's");
   assert.match(theirs.host.innerHTML, /kept in this assistant's own notes\.md/, "the hint names the file it is kept in");
+});
+
+test("the Standing rules section is the selected assistant's own — and its ✕ names that assistant", () => {
+  const one = padPane({ who: "assistant-1", notes: "note one" });
+  assert.match(one.host.innerHTML, /deploy to QA, never PROD/, "#1's pane has #1's rule");
+  assert.doesNotMatch(one.host.innerHTML, /another agent owns/, "and not #2's");
+  assert.match(one.host.innerHTML, /data-as-unrule="r1" data-as-rulefor="assistant-1"/, "the ✕ names the assistant whose rule it is");
+
+  const two = padPane({
+    who: "assistant-2",
+    notes: "note one",
+    pad: { assistantId: "assistant-2", notes: "note two", path: "p", file: true, exists: true, error: null },
+  });
+  assert.match(two.host.innerHTML, /another agent owns/, "#2's pane has #2's rule");
+  assert.doesNotMatch(two.host.innerHTML, /deploy to QA, never PROD/, "and not #1's");
+  assert.match(two.host.innerHTML, /data-as-unrule="r2" data-as-rulefor="assistant-2"/, "the ✕ names #2");
+
+  // The Settings tab no longer carries a second rules list: the Notes tab is the one place rules are shown and added.
+  assert.match(page, /asPost\("\/api\/assistant\/rule", \{ text, assistantId: who \}\)/, "the pad's Add rule posts the assistant it sits in");
+  assert.doesNotMatch(page, /data-as-addrule|as-rules-text/, "and the Settings tab's own rules form is gone");
 });
 
 test("the routes and the two presses carry the assistant id", () => {

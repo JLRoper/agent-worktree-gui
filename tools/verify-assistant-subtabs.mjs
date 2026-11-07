@@ -11,7 +11,7 @@
 //
 //   1. the top row is four buttons — "Assistant #1" first, then Role, Watchdog and Bridge, no Settings and none of
 //      the four lists — and the second row is a separate row BELOW it (measured, not read from the markup) holding eight:
-//      Chat, Settings, Queue, Worktrees, Alerts, Watches, Messages, Scratchpad;
+//      Chat, Settings, Queue, Worktrees, Alerts, Watches, Messages, Notes;
 //   2. Settings is the second row's second tab and nothing else: pressing it shows #as-settings and hides #as-chat,
 //      with #as-settings inside the assistant's own pane rather than beside it, and the pane still renders its
 //      content (the "How it behaves" group);
@@ -25,9 +25,10 @@
 //      second row goes away with a panel-wide pane (Role) and comes back on the sub-tab it was left on, the two
 //      counts live on the moved list pills, and Ctrl+, still opens the board's own Settings panel over the float;
 //   7. the Role tab: the seeded role in its picker, Assistant #1's own charter in its box (not the role's copy),
-//      "New assistant from this role" adding Assistant #2 to the top row with its own pane and its own rules — and,
-//      the claim this feature exists for, #2's saved edit landing in its own file while #1's text and #1's charter
-//      file stay byte for byte what they were;
+//      "New assistant from this role" adding Assistant #2 to the top row with its own pane — its Settings with NO
+//      per-assistant rules block (that block is gone) and its Notes tab keeping Notes, Standing rules and Journal,
+//      where a rule added lands on #2's own record — and, the claim this feature exists for, #2's saved edit landing
+//      in its own file while #1's text and #1's charter file stay byte for byte what they were;
 //   8. a SECOND, seeded panel with #1, #2 and #3: each assistant's four panes hold ITS OWN pad, watches, alerts and
 //      messages (and none of another's), All widens a pane to everything and only that pane, and the counts on the
 //      sub-tabs are the selected assistant's;
@@ -233,12 +234,12 @@ async function browserPhase(pw) {
 
   const top = await rows();
   // The row carries the sessions and the panel's TWO panes: Role is a library every assistant picks from, and the
-  // watchdog is the panel's sentry. Alerts, Watches, Messages and Scratchpad are NOT here — they moved inside the
+  // watchdog is the panel's sentry. Alerts, Watches, Messages and Notes are NOT here — they moved inside the
   // assistant, onto the row under this one.
   check("the float's own row", top.map((t) => t.tab), ["assistant-1", "role", "watchdog", "bridge"]);
   check("…labelled", top.map((t) => t.label), ["Assistant #1", "Role", "Watchdog", "Bridge"]);
   ok(
-    "no top-level Alerts, Watches, Messages or Scratchpad tab is left",
+    "no top-level Alerts, Watches, Messages or Notes tab is left",
     !top.some((t) => ["alerts", "watches", "messages", "pad"].includes(t.tab)),
     JSON.stringify(top.map((t) => t.tab)),
   );
@@ -251,7 +252,7 @@ async function browserPhase(pw) {
   const sub = await subRows();
   // Eight sub-tabs: the session's card, settings, its queue and trees, and the four lists that used to be the float's.
   check("the session's own row", sub.map((s) => s.sub), ["chat", "settings", "queue", "worktrees", "alerts", "watches", "messages", "pad"]);
-  check("…labelled", sub.map((s) => s.label), ["Chat", "Settings", "Queue", "Worktrees", "Alerts 0", "Watches 0", "Messages", "Scratchpad"]);
+  check("…labelled", sub.map((s) => s.label), ["Chat", "Settings", "Queue", "Worktrees", "Alerts 0", "Watches 0", "Messages", "Notes"]);
   ok("Chat is the sub-tab on screen", sub.filter((s) => s.on).map((s) => s.sub).join() === "chat", JSON.stringify(sub.filter((s) => s.on)));
   ok("the second row is up with the session", await visible("#as-subtabs"));
   // innerText, not textContent: the spawn count beside the alert count is hidden unless it has something to say.
@@ -385,24 +386,31 @@ async function browserPhase(pw) {
   ok("…saying which assistant it is", /Assistant #2/.test(await page.locator("#as-chat-2").innerText()));
   ok("…and the session's row is back for it", await visible("#as-subtabs"));
 
-  // Its own rules, in its own Settings.
+  // Its own rules are on its NOTES tab now; the Settings tab's second rules block is gone.
   await page.click('#as-subtabs [data-as-subtab="settings"]');
   await page.waitForSelector("#as-settings-2:not(.hidden)");
   ok(
-    "Assistant #2's Settings is its own rules pane",
-    // Case-insensitive on purpose: the sheet uppercases a group's h4, and `innerText` reports what is painted.
-    await waitFor(async () => /its own, not Assistant #1's/i.test(await page.locator("#as-settings-2").innerText()), {
+    "Assistant #2's Settings carries no rules list of its own any more",
+    (await page.locator("#as-settings-2 [data-as-addrule], #as-settings-2 #as-rules-text-2").count()) === 0,
+    "the per-assistant rules block is gone from the bottom of the Settings tab",
+  );
+
+  await page.click('#as-subtabs [data-as-subtab="pad"]');
+  await page.waitForSelector("#as-pad-2:not(.hidden)");
+  ok(
+    "its Notes tab keeps the three sections",
+    await waitFor(async () => /Notes/i.test(await page.locator("#as-pad-2").innerText()) && /Standing rules/i.test(await page.locator("#as-pad-2").innerText()) && /Journal/i.test(await page.locator("#as-pad-2").innerText()), {
       timeoutMs: 10_000,
-      what: "#2's rules pane",
+      what: "#2's Notes pane to paint its three sections",
     }),
   );
-  await page.fill("#as-rules-text-2", "ask before writing to a tree another agent owns");
-  await page.click('[data-as-addrule="assistant-2"]');
+  await page.fill("#as-rule-text-2", "ask before writing to a tree another agent owns");
+  await page.click('[data-as-padrule="assistant-2"]');
   ok(
     "a rule added there lands on Assistant #2's own record",
     await waitFor(
-      async () => (await page.locator("#as-settings-2").innerText()).includes("another agent owns"),
-      { timeoutMs: 10_000, what: "the rule to appear in #2's pane" },
+      async () => (await page.locator("#as-pad-2").innerText()).includes("another agent owns"),
+      { timeoutMs: 10_000, what: "the rule to appear in #2's Notes pane" },
     ),
   );
   const both = await (await fetch(`${base}/api/assistant`)).json();
@@ -433,7 +441,7 @@ async function browserPhase(pw) {
   ok("proved: #2's edit did not change #1's injected text", !p1.includes("SECOND-ONLY-TEXT") && p2.includes("SECOND-ONLY-TEXT"));
 
   // Back to #1's Chat, where the rest of the run expects to be. The sub-tab record is ONE record for the float, so
-  // the reader arrives on the sub-tab #2 was left on (Settings): press Chat, then wait for the pane.
+  // the reader arrives on the sub-tab #2 was left on (Notes): press Chat, then wait for the pane.
   await page.click('#as-tabs [data-as-tab="assistant-1"]');
   await page.waitForSelector("#as-subtabs:not([hidden])");
   await page.click('#as-subtabs [data-as-subtab="chat"]');
