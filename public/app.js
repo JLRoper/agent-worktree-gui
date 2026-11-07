@@ -18367,6 +18367,60 @@ let pipelineFindings = [];
 // The closed vocabulary the exit select offers. It is read from the last answer rather than written here, so a
 // check added to lib/pipelines.js reaches the tab without a second copy going stale.
 let pipelineExitChecks = [];
+// The PDL pipeline the dropdown names, when the reader picked one. The bundle's pipelines are a different object from
+// the ladder (a ladder rung says what a tree may do with a branch; a PDL pipeline says which stages a task runs), so
+// the tab keeps one selection of each: `pipelineOpenId` is the ladder being edited, this is the PDL pipeline being
+// looked at. Both are offered by the one dropdown, PDL first, and only one of them is ever set.
+let pipelinePdlId = null;
+
+// The PDL pipelines this panel holds, from the same `pdl` block the queue's picker reads (lib/pipeline-source.js).
+// A refused or missing bundle is [] here: the list above the dropdown already prints the loader's own reason, and a
+// control that offered a pipeline the file does not hold would be the second answer this tab exists to remove.
+function pdlPipelines() {
+  const pdl = pipelinesIndex && pipelinesIndex.pdl;
+  return pdl && pdl.ok === true && Array.isArray(pdl.pipelines) ? pdl.pipelines : [];
+}
+
+function selectedPdlPipeline() {
+  if (!pipelinePdlId) return null;
+  return pdlPipelines().find((p) => p.id === pipelinePdlId) || null;
+}
+
+// The PDL selection's own sentence. The editor's status element is built INSIDE the ladder editor
+// (paintPipelineEditor), and a PDL pipeline closes that editor, so a note about a PDL selection needs its own row.
+function setPipelinePdlNote(text = "") {
+  const el = document.getElementById("pipeline-pdl-pick");
+  if (!el) return;
+  el.textContent = text || "";
+  el.hidden = !text;
+}
+
+function pdlPickNote(pdl) {
+  const stages = Array.isArray(pdl.stages) ? pdl.stages.length : 0;
+  const gates = Array.isArray(pdl.gates) ? pdl.gates.length : 0;
+  const handoffs = Array.isArray(pdl.handoffs) ? pdl.handoffs.length : 0;
+  return `PDL pipeline "${pdl.id}" — read-only here: ${stages} stage${stages === 1 ? "" : "s"}, ${gates} gate${gates === 1 ? "" : "s"}, ${handoffs} handoff${handoffs === 1 ? "" : "s"}. Open the flow to draw it.`;
+}
+
+// The map page draws a document it is handed. With a PDL pipeline selected it is handed this panel's own catalogue
+// route, so the page draws the pipelines this install actually holds (config.pipelineBundleFile) rather than the
+// shipped seed; with a ladder selected it stays the generated library page. Called from the paint AND from the press,
+// because the link's target follows the selection, not the last read.
+function paintPipelineMapLink() {
+  const mapLink = document.getElementById("pipeline-map-open");
+  if (!mapLink) return;
+  mapLink.href = pipelinePdlId ? "/pipeline-map.html?doc=/api/assistant/pipeline-catalogue" : "/pipeline-map.html";
+  mapLink.title = pipelinePdlId
+    ? "open the map in a new tab — it reads this panel's PDL catalogue and draws every pipeline in it, each stage's artifact, gate and handoff with it"
+    : "open the map in a new tab — every definition and every bundle pipeline on one page, each stage's role and exit check with it";
+}
+
+// The option's words: the tag first, because the two lists are one dropdown and the reader has to be able to tell
+// which kind of pipeline they are about to look at before they pick it.
+function pdlOptionLabel(pipeline) {
+  const stages = Array.isArray(pipeline.stages) ? pipeline.stages.length : 0;
+  return `PDL · ${pipeline.id} — ${pipeline.title || pipeline.id} (${stages} stage${stages === 1 ? "" : "s"})`;
+}
 
 async function loadPipelines() {
   if (pipelinesLoading) return pipelinesLoading;
@@ -18506,20 +18560,39 @@ function paintPipelines(error = null) {
   paintPdlPipelines(data.pdl);
   // The dropdown, and the definition it names. The open one is kept while it is still in the catalogue; when nothing
   // is open (or what was open was dropped) the first definition is selected, because the tab's job is to edit ONE.
+  // The dropdown is ONE control over two lists: the PDL pipelines a task runs on, tagged PDL and first, then the
+  // built-in ladders this tab edits. A PDL pipeline the bundle no longer holds is dropped from the selection, so the
+  // control can never name a pipeline the file does not carry.
+  const pdlList = pdlPipelines();
+  if (pipelinePdlId && !pdlList.some((p) => p.id === pipelinePdlId)) pipelinePdlId = null;
   const wanted = pipelineOpenId && pipelines[pipelineOpenId] ? pipelineOpenId : ids[0] || "";
   if (pick) {
-    pick.innerHTML = ids.length
-      ? ids.map((id) => `<option value="${esc(id)}"${id === wanted ? " selected" : ""}>${esc(pipelineOptionLabel(pipelines[id]))}</option>`).join("")
-      : `<option value="">(no pipeline is in force)</option>`;
-    pick.disabled = !ids.length;
-    if (pick.value !== wanted) pick.value = wanted;
+    const pdlOptions = pdlList.length
+      ? `<optgroup label="PDL pipelines">${pdlList.map((p) => `<option value="pdl:${esc(p.id)}"${p.id === pipelinePdlId ? " selected" : ""}>${esc(pdlOptionLabel(p))}</option>`).join("")}</optgroup>`
+      : "";
+    const ladderOptions = ids.length
+      ? `<optgroup label="built-in ladders">${ids.map((id) => `<option value="${esc(id)}"${!pipelinePdlId && id === wanted ? " selected" : ""}>${esc(pipelineOptionLabel(pipelines[id]))}</option>`).join("")}</optgroup>`
+      : "";
+    pick.innerHTML = pdlOptions + ladderOptions || `<option value="">(no pipeline is in force)</option>`;
+    pick.disabled = !pdlList.length && !ids.length;
+    const value = pipelinePdlId ? `pdl:${pipelinePdlId}` : wanted;
+    if (pick.value !== value) pick.value = value;
   }
   const flowBtn = document.getElementById("pipeline-flow-open");
-  if (flowBtn) flowBtn.disabled = !wanted;
+  if (flowBtn) {
+    flowBtn.disabled = !(pipelinePdlId || wanted);
+    flowBtn.title = pipelinePdlId
+      ? "open the flow — this PDL pipeline's stages left to right, with its gates on the connectors and its handoffs as the dashed loops. Read-only: nothing here runs a stage."
+      : "open the flow — every stage of this definition left to right, with its exit checks as notches on the connectors. A definition has no position, so every stage is drawn not reached.";
+  }
+  paintPipelineMapLink();
   list.innerHTML = (data.dropped || []).map(pipelineDroppedHtml).join("") || (ids.length ? "" : `<div class="settings-row"><span>no pipeline is in force — the catalogue is empty</span></div>`);
   // A dirty draft is never replaced: the list may repaint as often as it likes, and the form keeps the reader's text.
   if (!pipelineDraftDirty) {
-    if (wanted && (pipelineOpenId !== wanted || !pipelineDraft)) {
+    if (pipelinePdlId) {
+      // A PDL pipeline is not a ladder: the editor edits ladders, so it is closed and the status says what is drawn.
+      if (pipelineOpenId) closePipelineEditor();
+    } else if (wanted && (pipelineOpenId !== wanted || !pipelineDraft)) {
       pipelineOpenId = wanted;
       pipelineDraft = JSON.parse(JSON.stringify(pipelines[wanted]));
       paintPipelineEditor();
@@ -18530,6 +18603,8 @@ function paintPipelines(error = null) {
       closePipelineEditor();
     }
   }
+  // The PDL selection's note follows the selection, including across a repaint that kept it.
+  setPipelinePdlNote(pipelinePdlId ? pdlPickNote(selectedPdlPipeline() || { id: pipelinePdlId }) : "");
   const box = document.getElementById("settings-search");
   if (box && box.value) paintSettingsSearch();
 }
@@ -18537,24 +18612,56 @@ function paintPipelines(error = null) {
 // The dropdown's press: select a definition and edit it. A dirty draft is the one thing that can refuse the change,
 // and the select snaps back to the definition the form is still holding — a dropdown that stayed on "b" while the form
 // showed "a" would be a control that lies about what Save will write.
-function selectPipelineTab(id) {
+function selectPipelineTab(value) {
   const pipelines = (pipelinesIndex && pipelinesIndex.pipelines) || {};
   const pick = document.getElementById("pipeline-select");
-  if (!pipelines[id]) {
-    if (pick) pick.value = pipelineOpenId || "";
-    return;
-  }
-  if (pipelineDraftDirty && pipelineOpenId && pipelineOpenId !== id) {
+  const raw = String(value || "");
+  // The dropdown's two lists share one control, so the value says which list it came from: `pdl:<id>` is a pipeline a
+  // task runs on, anything else is a ladder definition this tab edits.
+  const pdlId = raw.startsWith("pdl:") ? raw.slice(4) : "";
+  const snapBack = () => {
+    if (pick) pick.value = pipelinePdlId ? `pdl:${pipelinePdlId}` : pipelineOpenId || "";
+  };
+  // A dirty ladder draft is the one thing that can refuse the change, whichever list the press came from.
+  if (pipelineDraftDirty && pipelineOpenId) {
     setPipelineStatus(`"${pipelineOpenId}" has unsaved changes — save or reload it before switching`, true);
-    if (pick) pick.value = pipelineOpenId;
+    snapBack();
     return;
   }
-  openPipelineEditor(id);
+  if (pdlId) {
+    const pdl = pdlPipelines().find((p) => p.id === pdlId);
+    if (!pdl) {
+      snapBack();
+      return;
+    }
+    pipelinePdlId = pdlId;
+    // A PDL pipeline is not a ladder: the editor edits ladders, so it is closed rather than left showing another
+    // document's stages under this pipeline's name.
+    closePipelineEditor();
+    setPipelinePdlNote(pdlPickNote(pdl));
+    paintPipelineMapLink();
+    return;
+  }
+  if (!pipelines[raw]) {
+    snapBack();
+    return;
+  }
+  pipelinePdlId = null;
+  setPipelinePdlNote("");
+  paintPipelineMapLink();
+  openPipelineEditor(raw);
 }
 
 // The control that opens the modal, in edit mode. The DRAFT is what is drawn (so a half-made edit is drawn as it
 // stands), and the flow's marks are all "not reached": a definition has no position — a task carries the position.
 function openPipelineFlow() {
+  // A PDL pipeline is drawn from its own document, not from a ladder draft: the two are different objects and the
+  // dialog says which one it is showing.
+  const pdl = selectedPdlPipeline();
+  if (pdl) {
+    openPdlFlow(pdl);
+    return;
+  }
   const pipelines = (pipelinesIndex && pipelinesIndex.pipelines) || {};
   const id = pipelineOpenId || (document.getElementById("pipeline-select") || {}).value || "";
   const def = pipelineDraft || pipelines[id];
@@ -18581,6 +18688,34 @@ function openPipelineFlow() {
     // No caption here: the drawing's own legend says "not reached 13" once when a definition has no position, and an
     // empty definition draws its own "no stage" box. A sentence repeating either was the dialog apologising for the
     // picture instead of letting it speak.
+    opener: document.getElementById("pipeline-flow-open"),
+  });
+}
+
+// A PDL pipeline's flow: the map page's card, built from the document's own stages, gates and handoffs
+// (public/core/pipeline-mermaid.js `fromPdl`). There is no edit drawing and no position — this dialog draws the
+// document, and the tab that edits ladders is not editing this one.
+function openPdlFlow(pdl) {
+  if (typeof PipelineModal === "undefined") return;
+  const stages = Array.isArray(pdl.stages) ? pdl.stages.length : 0;
+  const gates = Array.isArray(pdl.gates) ? pdl.gates.length : 0;
+  const handoffs = Array.isArray(pdl.handoffs) ? pdl.handoffs.length : 0;
+  PipelineModal.open({
+    mode: "edit",
+    pdl: true,
+    title: pdl.title || pdl.id,
+    subtitle: "PDL · read-only",
+    pipeline: null,
+    definition: pdl,
+    position: null,
+    preview: true,
+    facts: [
+      { label: "pipeline", value: pdl.id || "—" },
+      { label: "kind", value: "PDL" },
+      { label: "stages", value: String(stages) },
+      { label: "gates", value: String(gates) },
+      { label: "handoffs", value: String(handoffs) },
+    ],
     opener: document.getElementById("pipeline-flow-open"),
   });
 }

@@ -166,6 +166,94 @@
     };
   }
 
+  // ---- a PDL pipeline (the bundle's own shape), as the card model -----------------------------------------------
+  // A PDL pipeline is not a ladder definition. Its stages carry an artifact and the reads they are handed, its gates
+  // end a stage, and its handoffs are the edges (kind "sequence") and the loops (kind "loop", with a cap). Nothing is
+  // derived from a prompt, because a PDL stage has none: the second line names the artifact the stage writes, which is
+  // the document's own word for what leaves it. This is the mapping tools/render-pipeline-map.mjs writes for the
+  // bundle file's pipelines, so the panel's dialog and the map page draw one pipeline the same way.
+  const artifactId = (value) => oneLine(isObject(value) ? value.id || value.path : value);
+
+  function fromPdl(pipeline) {
+    const d = isObject(pipeline) ? pipeline : {};
+    const rows = Array.isArray(d.stages) ? d.stages : [];
+    const stages = rows.map((st, i) => {
+      const stage = isObject(st) ? st : {};
+      const artifact = artifactId(stage.artifact);
+      const position = Number(stage.position);
+      const reads = (Array.isArray(stage.reads) ? stage.reads : []).map(artifactId).filter(Boolean);
+      return {
+        id: stage.id,
+        ordinal: Number.isFinite(position) && position > 0 ? position : i + 1,
+        title: oneLine(stage.title || stage.id),
+        prompt: "",
+        purpose: artifact ? `writes ${artifact}` : "",
+        role: {
+          source: "artifact",
+          label: artifact ? `writes ${artifact}` : "writes nothing",
+          why: "a PDL stage names the artifact it writes; there is no prompt to derive a role from",
+          evidence: artifact,
+          quote: reads.length ? `reads ${reads.join(", ")}` : "",
+        },
+        artifact,
+        reads,
+        exit: null,
+        exitLabel: "",
+      };
+    });
+    const gates = (Array.isArray(d.gates) ? d.gates : []).filter(isObject).map((g) => ({
+      id: g.id,
+      after: g.after,
+      name: oneLine(g.name),
+      decider: oneLine(g.decider),
+      artifact: artifactId(g.artifact),
+      verifiedBy: oneLine(g.verifiedBy || g.verified_by || artifactId(g.decision)),
+      refusesWhen: oneLine(g.refusesWhen || g.refuses_when),
+    }));
+    const gateAfter = new Map(gates.map((g) => [g.after, g]));
+    const order = new Map(stages.map((s, i) => [s.id, i]));
+    const handoffs = (Array.isArray(d.handoffs) ? d.handoffs : []).filter(isObject);
+    const edges = handoffs
+      .filter((h) => h.kind === "sequence" && h.from && h.to)
+      .slice()
+      .sort((a, b) => (order.get(a.from) ?? 0) - (order.get(b.from) ?? 0))
+      .map((h) => {
+        const gate = gateAfter.get(h.from);
+        return {
+          from: h.from,
+          to: h.to,
+          artifact: artifactId(h.artifact),
+          label: gate ? `${gate.id} · ${gate.name} (${gate.decider})` : "",
+          gate: gate ? gate.id : null,
+        };
+      });
+    const loops = handoffs
+      .filter((h) => h.kind === "loop" && h.from && h.to)
+      .map((h) => ({
+        id: oneLine(h.id),
+        from: h.from,
+        to: h.to,
+        cap: oneLine(h.cap),
+        label: `${oneLine(h.id) ? oneLine(h.id) + " · " : ""}${oneLine(h.cap) || "loop"}`,
+        short: oneLine(h.id) || "loop",
+        source: "data",
+        note: oneLine(h.note),
+      }));
+    return {
+      id: d.id,
+      title: oneLine(d.title || d.id),
+      kind: "pdl",
+      description: oneLine(d.description),
+      next: null,
+      stages,
+      gates,
+      edges,
+      loops,
+      lastExit: null,
+      pdl: true,
+    };
+  }
+
   // ---- mermaid ----------------------------------------------------------------------------------------------------
   // useMaxWidth:false is a correctness setting here: with the default, mermaid scales the whole SVG to the container
   // and a 12 px label is painted at whatever fraction is left. Both surfaces keep the natural size and scroll
@@ -300,9 +388,12 @@
       <code>${esc(nameOf(loop.from))} \u2192 ${esc(nameOf(loop.to))}</code>${loop.cap ? ` · cap <code>${esc(loop.cap)}</code>` : ""}${loop.note ? ` · ${esc(loop.note)}` : ""}</li>`;
   }
 
+  // A gate prints the parts it HAS. A PDL gate names a decider and an artifact and no verifier, and "verified by " with
+  // nothing after it is a claim the document never made.
   function gateItem(gate, stages) {
     const after = (stages || []).find((s) => s.id === gate.after);
-    return `<li><span class="tag gate">${esc(gate.id)}</span> <code>${esc(gate.name)}</code> · ${esc(gate.decider)} · after ${esc(after ? `${after.ordinal} ${after.title}` : gate.after)} · verified by ${esc(gate.verifiedBy)}${gate.refusesWhen ? ` · refuses: ${esc(gate.refusesWhen)}` : ""}</li>`;
+    const verified = gate.verifiedBy ? ` · verified by ${esc(gate.verifiedBy)}` : "";
+    return `<li><span class="tag gate">${esc(gate.id)}</span> <code>${esc(gate.name)}</code> · ${esc(gate.decider)} · after ${esc(after ? `${after.ordinal} ${after.title}` : gate.after)}${verified}${gate.refusesWhen ? ` · refuses: ${esc(gate.refusesWhen)}` : ""}</li>`;
   }
 
   // `head: false` is the dialog: its bar already names the pipeline, so the card there is the drawing and the lists
@@ -312,10 +403,13 @@
     el.className = "pm-card";
     el.dataset.card = item.id;
     el.dataset.bundle = options.isBundle ? "1" : "0";
+    el.dataset.pdl = item.pdl ? "1" : "0";
     el.dataset.stages = String((item.stages || []).length);
     const loops = item.loops || [];
-    const chips = options.isBundle
-      ? [chip("bundle"), chip(`${item.stages.length} stages`), chip(`${(item.gates || []).length} gates`), chip(`${loops.length} loops`)]
+    // A PDL pipeline is drawn with the bundle's chips (stages, gates, loops) and its own tag: it is one pipeline out of
+    // the bundle file, not the whole file.
+    const chips = options.isBundle || item.pdl
+      ? [chip(item.pdl ? "PDL" : "bundle"), chip(`${item.stages.length} stages`), chip(`${(item.gates || []).length} gates`), chip(`${loops.length} loops`)]
       : [
           item.kind ? chip(item.kind, "kind") : "",
           chip(`${item.stages.length} stage${item.stages.length === 1 ? "" : "s"}`),
@@ -689,6 +783,7 @@
     compactExit,
     deriveRole,
     fromDefinition,
+    fromPdl,
     initialize,
     ensureMermaid,
     card,

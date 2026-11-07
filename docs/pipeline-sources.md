@@ -80,6 +80,23 @@ Both readers already stand on `parseBundle` for the bundle, and on nothing share
 themselves, and the Settings catalogue never reads the bundle at all. There are three reads of one
 file and no single answer that says "these are the panel's pipelines".
 
+## Where the two lists meet
+
+`GET /api/pipelines` carries the PDL catalogue as `pdl` beside the ladder (both from the reads above), and the
+Settings tab's one dropdown draws both lists from that answer: an **PDL pipelines** group first, each option tagged
+`PDL · <id>` with its stage count, then the **built-in ladders** group. The option value namespaces the two
+(`pdl:<id>` vs a ladder id), so one control can carry both without a second selector.
+
+Selecting a PDL pipeline is a read, not an edit: it closes the ladder editor (that form edits a different object) and
+`open the flow` draws the pipeline with `public/core/pipeline-mermaid.js` from the catalogue's own stages, gates and
+handoffs — a node per stage, an arrow per `sequence` handoff labelled with the gate that ends the stage it leaves, a
+dashed arc per `loop` handoff with its cap, and the gates list beside it. `open the map` follows the selection too:
+with a PDL pipeline selected it opens `/pipeline-map.html?doc=/api/assistant/pipeline-catalogue`, so the page draws
+the pipelines this install actually holds instead of the shipped seed.
+
+No execution path changes: a task's pipeline run is still the queue's assignment (`lib/task-pipeline-assign.js`),
+and the ladder editor still edits `pipelines.json`.
+
 ## The finding
 
 1. The two lists come from two files with two formats and two validators, so "the pipelines" means

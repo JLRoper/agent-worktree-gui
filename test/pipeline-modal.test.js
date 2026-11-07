@@ -284,8 +284,10 @@ test("the switch is two named buttons in the bar, pressed state on the one that 
 
 test("the preview draws the shared card, and only from a definition the caller supplied", () => {
   assert.match(source, /const M = global\.PipelineMermaid;/);
-  assert.match(source, /item = M\.fromDefinition\(state\.definition\)/);
-  assert.match(source, /M\.card\(item, \{ layout: "row", head: false, builtin: true \}\)/);
+  // Two documents, one card: a ladder definition from its prompts and exits, a PDL pipeline from its stages, gates and
+  // handoffs. Either way the model is the shared renderer's, never this dialog's own.
+  assert.match(source, /item = state\.pdl \? M\.fromPdl\(state\.definition\) : M\.fromDefinition\(state\.definition\)/);
+  assert.match(source, /M\.card\(item, \{ layout: "row", head: false, builtin: true/);
   assert.match(source, /await M\.paint\(\{ item, el \}, \{ layout: "row", ns: "pmodal", live \}\)/);
   // A render whose dialog moved on (switched view, closed) cannot paint: the generation is the guard.
   assert.match(source, /const live = \(\) => state\.open && state\.view === "preview" && seq === state\.chartSeq;/);
