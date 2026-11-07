@@ -1087,7 +1087,11 @@ has commits`, `already exists`) are untouched by it.
 "an interrupted agent gets exactly one continue". Such a rule is part of the normal rules list from then on, so
 it can answer a question (or, at `auto`, pick a choice) on the strength of it; the Scratchpad marks it
 **assistant**, and it is deletable there. A near-identical restatement refines the assistant's own earlier rule
-instead of adding a second; the reader's rules are never merged or edited by it.
+instead of adding a second; the reader's rules are never merged or edited by it. The list is capped at 40, and a
+41st `RULE:` line makes room by trimming the OLDEST rule the **assistant** wrote — never one of the reader's, so an
+agent that keeps restating itself cannot erase the reader's answers. A list that is full of nothing but the
+reader's rules has nothing of the assistant's own to trade, and the line is refused by name (journal:
+`rule-skipped`) rather than dropping one of them.
 
 **It can restart the thing that runs it.** `RESTART gateway` and `RESTART panel` map to `POST /api/restart`
 and neither runs inside the turn that wrote it: that turn *is* a run inside the gateway, so the request is
