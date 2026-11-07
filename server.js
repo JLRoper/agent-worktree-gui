@@ -121,6 +121,9 @@ import { childTranscript, collectPrompt, subagentsFor, subagentRoster } from "./
 import { thinkingFor } from "./lib/thinking.js";
 import { modelCatalogue, refreshModelCatalogue } from "./lib/hermes-models.js";
 import { createSpawn } from "./lib/features/spawn.js";
+// What a failed gateway probe MEANS: one sentence, keyed on whether there was a status code, a transport
+// error, or no answer at all (a timeout). The spawn card and the two run-start routes quote the same text.
+import { gatewayRefusalText } from "./lib/gateway-refusal.js";
 // The panel's own directories, and every state path derived from them. Nothing below builds one of those
 // paths itself any more: `resolveDirs` answers where, `statePaths` answers which file.
 import {
@@ -6165,7 +6168,7 @@ const server = createServer(async (req, res) => {
       const startMerge = async () => {
         const transport = await jobs.probe();
         if (!transport.reachable || !transport.capabilities?.runs) {
-          return { status: 503, body: { error: `the Hermes gateway API is not usable at ${jobs.api.url}${transport.error ? `: ${transport.error}` : ""}`, ...preview, prompt: undefined } };
+          return { status: 503, body: { error: gatewayRefusalText(transport, jobs.api.url), ...preview, prompt: undefined } };
         }
         const top = await gitIn(worktree, ["rev-parse", "--show-toplevel"], 15000);
         const ownerPath = top.ok && top.out ? top.out : worktree;
@@ -6301,7 +6304,7 @@ const server = createServer(async (req, res) => {
       if (body.dryRun) return sendJson(res, 200, { dryRun: true, ...preview });
       const transport = await jobs.probe();
       if (!transport.reachable || !transport.capabilities?.runs) {
-        return sendJson(res, 503, { error: `the Hermes gateway API is not usable at ${jobs.api.url}${transport.error ? `: ${transport.error}` : ""}`, ...preview, prompt: undefined });
+        return sendJson(res, 503, { error: gatewayRefusalText(transport, jobs.api.url), ...preview, prompt: undefined });
       }
       const top = await gitIn(worktree, ["rev-parse", "--show-toplevel"], 15000);
       const ownerPath = top.ok && top.out ? top.out : worktree;
@@ -6695,7 +6698,9 @@ server.listen(config.port, config.host, () => {
   log(`agent transport: ${jobs.api.url} (key ${jobs.api.key ? "loaded" : "MISSING"}) | default cwd ${config.defaultCwd}`);
   void jobs.probe({ fresh: true }).then(async (t) => {
     if (!t.reachable) {
-      log(`agent transport UNREACHABLE: ${t.error} — spawns will be refused until the gateway is back`);
+      // The sentence says which failure this was: a probe that timed out is not a gateway that refused, and
+      // "until the gateway is back" was a wrong sentence for a slow answer.
+      log(`agent transport ${t.timedOut ? "SLOW" : "UNREACHABLE"}: ${gatewayRefusalText(t, jobs.api.url)} - spawns will be refused until it answers`);
       return; // nothing to ask: a restored turn stays live and pending, and the orphan sweep asks again
     }
     log(`agent transport ready: hermes ${t.capabilities?.version || "?"} · runs ${t.capabilities?.runs ? "yes" : "no"} · steer ${t.capabilities?.steer ? "yes" : "no"} · per-run cwd ${t.capabilities?.runCwd ? "advertised (a run's tools still start in the gateway's directory — measured 2026-10-27)" : "NO (stock gateway — agents run in the gateway's directory)"}`);
