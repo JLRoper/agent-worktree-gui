@@ -17416,6 +17416,9 @@ function selectSettingsTab(key) {
   // for it — not on every repaint of the settings window. A tab the reader leaves and comes back to asks again only
   // when the answer is old; a press on its own re-read row asks at once (initBundlesPanel).
   if (key === "bundles" && Date.now() - bundlesLoadedAt > 15000) void loadBundles();
+  // The Pipeline tab draws the PDL bundle beside the ladder, so it is a read of a file another tab writes: a press on
+  // it asks again once the answer is old, the same rule the Bundles tab follows, and an import clears its stamp.
+  if (key === "pipeline" && Date.now() - pipelinesLoadedAt > 15000) void loadPipelines();
   // The release notes are a file read on the server too. A tab the reader comes back to re-asks when the answer
   // is old; the first answer is fetched at boot, beside the other tabs' reads, so the search sees its rows.
   if (key === "updates" && Date.now() - changelogLoadedAt > 15000) void loadChangelog();
@@ -18344,6 +18347,63 @@ function pipelineOptionLabel(def) {
   return `${def.id} — ${def.title || def.id} (${def.kind || "?"}, ${stages} stage${stages === 1 ? "" : "s"})`;
 }
 
+// The pipelines a TASK runs on: the PDL bundle's list, carried by this same route as `pdl` and read by
+// lib/pipeline-source.js - the module the queue's task pipeline window and the queue picker read. It is drawn here,
+// beside the ladder, because the two are one click apart in the reader's mind and were two different sets of
+// "pipelines" on two different tabs. The list is the ROUTE's, never a second parse: a bundle that is missing or
+// refused is printed with the loader's own code and locator, and the ladder above is never blamed for it.
+function pdlPipelineRowHtml(pipeline) {
+  const stages = Array.isArray(pipeline.stages) ? pipeline.stages.length : 0;
+  const isolation = pipeline.isolation === "per-stage" ? "one tree per stage" : "one tree";
+  const title = `${pipeline.title || pipeline.id} — ${stages} stage${stages === 1 ? "" : "s"}, ${isolation}. This is the pipeline a task is put on: open a queue task's pipeline window to see its stages in order and choose one.`;
+  return `<div class="settings-row" data-pdl-pipeline="${esc(pipeline.id)}" title="${esc(title)}">
+      <span><strong>${esc(pipeline.title || pipeline.id)}</strong> <span class="mono">${esc(pipeline.id)}</span></span>
+      <span class="settings-unit mono">${stages} stage${stages === 1 ? "" : "s"}</span>
+    </div>`;
+}
+
+function paintPdlPipelines(pdl, error = null) {
+  const summary = document.getElementById("pipeline-pdl-summary");
+  const source = document.getElementById("pipeline-pdl-source");
+  const list = document.getElementById("pipeline-pdl-list");
+  if (!summary || !list) return;
+  summary.classList.remove("bad");
+  if (source) source.classList.remove("bad");
+  const answer = !error && pdl && typeof pdl === "object" ? pdl : null;
+  if (!answer) {
+    summary.textContent = error ? `could not read the PDL bundle — ${error}` : "no PDL bundle was read by this answer";
+    summary.classList.add("bad");
+    if (source) {
+      source.textContent = "nothing was read, so this tab cannot say which pipelines a task can be put on";
+      source.title = source.textContent;
+      source.classList.add("bad");
+    }
+    list.innerHTML = "";
+    return;
+  }
+  const pipelines = Array.isArray(answer.pipelines) ? answer.pipelines : [];
+  if (answer.ok !== true) {
+    summary.textContent = `refused — ${answer.code || "the bundle was refused"}`;
+    summary.classList.add("bad");
+    if (source) {
+      source.textContent = `${answer.file || "the PDL bundle"} — ${answer.reason || "the loader refused it"}`;
+      source.title = source.textContent;
+      source.classList.add("bad");
+    }
+    list.innerHTML = "";
+    return;
+  }
+  const total = pipelines.reduce((n, p) => n + (Array.isArray(p.stages) ? p.stages.length : 0), 0);
+  summary.textContent = `${pipelines.length} pipeline${pipelines.length === 1 ? "" : "s"} · ${total} stage${total === 1 ? "" : "s"}${answer.name ? ` · ${answer.name}` : ""}`;
+  if (source) {
+    source.textContent = `${answer.file || "the PDL bundle"} · the list the queue's pipeline window offers`;
+    source.title = source.textContent;
+  }
+  list.innerHTML = pipelines.length
+    ? pipelines.map(pdlPipelineRowHtml).join("")
+    : `<div class="settings-row"><span>this bundle holds no pipeline — a task can only be put on the assistant's default path</span></div>`;
+}
+
 function paintPipelines(error = null) {
   const summary = document.getElementById("pipeline-summary");
   const source = document.getElementById("pipeline-source");
@@ -18364,6 +18424,9 @@ function paintPipelines(error = null) {
       pick.innerHTML = `<option value="">(no catalogue)</option>`;
       pick.disabled = true;
     }
+    // The PDL list has nothing to draw from a failed read either, and saying so is better than leaving the last
+    // paint's rows on screen beside a refusal.
+    paintPdlPipelines(null, error || "no answer");
     return;
   }
   summary.classList.remove("bad");
@@ -18382,6 +18445,8 @@ function paintPipelines(error = null) {
     source.classList.toggle("bad", Boolean(data.refused));
   }
   pipelineExitChecks = Array.isArray(data.exitChecks) ? data.exitChecks : pipelineExitChecks;
+  // The other half of "the pipelines this panel holds": the PDL bundle, drawn from this route's own `pdl` block.
+  paintPdlPipelines(data.pdl);
   // The dropdown, and the definition it names. The open one is kept while it is still in the catalogue; when nothing
   // is open (or what was open was dropped) the first definition is selected, because the tab's job is to edit ONE.
   const wanted = pipelineOpenId && pipelines[pipelineOpenId] ? pipelineOpenId : ids[0] || "";
@@ -18774,9 +18839,11 @@ async function savePipelineEditor() {
 function paintPipelineSearch(query, matched) {
   const panel = document.getElementById(PIPELINE_PANEL_ID);
   if (!panel) return 0;
-  const flat = [...panel.children].filter((node) => node.id !== "pipeline-list" && node.id !== "pipeline-editor");
+  const flat = [...panel.children].filter((node) => node.id !== "pipeline-list" && node.id !== "pipeline-pdl-list" && node.id !== "pipeline-editor");
   let hits = paintSettingsRows(flat, query, matched);
-  for (const row of panel.querySelectorAll("[data-pipeline-row]")) {
+  // The two LISTS are containers of rows, not rows: each of their rows is walked here so a search finds a pipeline by
+  // the name on it. Both lists are rebuilt markup, so this is the only place their rows meet the filter.
+  for (const row of panel.querySelectorAll("[data-pipeline-row], [data-pdl-pipeline]")) {
     const hit = !query || settingsRowText(row).includes(query);
     row.classList.toggle("search-hidden", !hit);
     if (hit) {
@@ -19059,6 +19126,9 @@ async function bundleImportChosen(input) {
       return null;
     }
     say(body.reason || `imported ${file.name}`);
+    // The Pipeline tab draws this same list (its `pdl` block), so its cached answer is stale the moment the write lands:
+    // clearing the stamp makes that tab's next press re-read instead of waiting out the freshness window.
+    pipelinesLoadedAt = 0;
     // The list above is a read of the file the write just changed, so it is re-read before the note is trusted.
     await loadBundles();
     return body;

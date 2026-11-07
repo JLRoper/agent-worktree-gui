@@ -427,6 +427,12 @@ holds.
 pipeline studio. The loader (`lib/pipeline-bundle.js`) accepts the studio's own export shapes and refuses a bad bundle
 WHOLE, with a code and a locator.
 
+That file is read through ONE module, `lib/pipeline-source.js`, and its list is the one the queue picker offers and
+the Settings pipeline tab draws (the `pdl` block of `GET /api/pipelines`). Settings also holds a tree ladder
+(`pipelines.json` over `pipelines.seed.json`, `docs/pipelines.md`) which is a different object: a ladder rung says what
+a TREE may do with a branch, a PDL pipeline says which stages a TASK runs. The two were once two different sets of
+"pipelines" on two tabs; `docs/pipeline-sources.md` records that recon and the one reading they now share.
+
 The panel ships `pipeline-bundle.seed.json` at the repo root: the studio's own export of its 13-stage POC-to-UAT
 project (`exportBundle(pipeline.seed.json).files.pipeline`), not a fixture assembled to suit the loader. Install it
 beside the queue with:
