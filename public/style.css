@@ -4041,6 +4041,10 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
    failure to paint red. */
 .as-task-note.is-good { color: #7ee787; }
 .as-task-note.is-info { color: var(--dim); }
+/* WHO FILED a row, when it was not the reader and not the queue's own assistant: one small line where the note
+   goes, so a row that arrived from another assistant says so without looking like a different KIND of card. Dimmer
+   than the note because it is provenance, not a reason the row is or is not moving. */
+.as-task-filed { margin: 0 0 0 18px; font-size: 9.5px; line-height: 1.35; color: var(--dimmer); }
 /* Anchored at the card's bottom, over a hairline: the presses do not float up under a long title, and a reader
    scanning a column of cards finds them in the same place on every one. */
 .as-task-actions { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; margin: auto 0 0; padding: 7px 0 0 19px; border-top: 1px solid #1f2530; }
