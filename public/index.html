@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes" />
   <title>Worktree Agent Monitor</title>
   <link rel="stylesheet" href="/style.css" />
+  <!-- The mermaid pipeline card's own stylesheet, shared with public/pipeline-map.html: the flow dialog's Preview
+       draws that page's cards, so the two read one file. -->
+  <link rel="stylesheet" href="/core/pipeline-card.css" />
 </head>
 <body>
   <header class="topbar">
@@ -852,6 +855,10 @@
   <script src="/board/paste-chips.js"></script>
   <script src="/core/transport.js"></script>
   <script src="/core/sse.js"></script>
+  <!-- The mermaid CARD: the map page's chart (public/core/pipeline-mermaid.js), its definition-to-card model and
+       the renderer both surfaces share. The modal's Preview draws through it; the map page loads the same file.
+       It loads before pipeline-flow.js, because the modal prefers a card and falls back to the flow drawing. -->
+  <script src="/core/pipeline-mermaid.js"></script>
   <!-- The pipeline FLOW and the modal that shows it. flow is DATA IN, MARKUP OUT (a definition, a bundle pipeline
        or the task pipeline window's model, drawn as stages left to right with gates as notches and a capped loop as
        an arc); modal is the one dialog both call sites open, differing only in mode. Both load before app.js, which
