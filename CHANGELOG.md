@@ -4,16 +4,33 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.43.7 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.43.8 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-356 releases from v0.1.0 (2026-10-20) to v1.43.7 (2026-11-06), 1253 commits between the tags. Every release is anchored by an
+357 releases from v0.1.0 (2026-10-20) to v1.43.8 (2026-11-06), 1257 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.43.8 — 2026-11-06 · 4 commits
+
+[`60e823e`](https://github.com/JLRoper/agent-worktree-gui/commit/60e823e14ff184645d4b35ceec3e70c5a9369329) · [compare v1.43.7...v1.43.8](https://github.com/JLRoper/agent-worktree-gui/compare/v1.43.7...v1.43.8)
+
+### Fixed
+
+- fix: a stamp's fraction is any length, and the refusal names the fault ([`0544965`](https://github.com/JLRoper/agent-worktree-gui/commit/05449652c2e740a2598b633edfaa790e573b349b))
+- fix: a failed run's park settles the run it parked on, not only the decision ([`70819f6`](https://github.com/JLRoper/agent-worktree-gui/commit/70819f6170482012c78008a33cbdf40dd8c1a85a))
+
+### Docs & tests
+
+- docs: render the changelog — 356 releases ([`05ddada`](https://github.com/JLRoper/agent-worktree-gui/commit/05ddada6cb4ac3b4c3cffafd4b621657a3f5325e))
+
+### Other
+
+- chore: 1.43.8 — the version this landing carries ([`60e823e`](https://github.com/JLRoper/agent-worktree-gui/commit/60e823e14ff184645d4b35ceec3e70c5a9369329))
 
 ## v1.43.7 — 2026-11-06 · 3 commits
 
