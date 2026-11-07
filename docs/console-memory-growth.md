@@ -226,3 +226,40 @@ at all when the record already carries the tail the card starts from (`public/ap
 The two amplifiers worth naming: the assistant's wake turn (`lib/assistant.js:3810`) doubled the number of records and
 buffers in this run, one per settled turn; and `state.thinkCache` was empty throughout because reasoning is off by
 default (`public/app.js:6315`, `thinkDefault`), so a reader who turns thinking on adds one more entry per live turn.
+
+## 7. The bounds, and what they measured
+
+All three are in `public/app.js` and `public/board/console.js` now, with `test/console-memory-bounds.test.js` holding
+each one down and `tools/measure-console-retention.mjs` re-taking this document's shapes on a real page:
+
+- **A buffer goes when the server stops listing its job.** `applyJobSnapshot()` replaces the snapshot loop and
+  releases the buffer of any turn the snapshot does not carry. A turn that was live before that snapshot is kept:
+  a record that has not arrived yet is not a record that is gone.
+- **The tab has a ceiling of its own, keyed by turn.** `trimJobLines()` keeps the newest 120 turn buffers and releases
+  older settled ones. A released turn is not a blank console: the card draws the record's 60-line tail, which is
+  the console a reload gives it anyway. A live turn is never evicted.
+- **The record's tail is held once, not twice.** `jobLines()` reads the record when a turn has no buffer of its own,
+  so neither a snapshot nor a `job` frame copies `lines` into a second array. Only `recordJobLine()` creates a
+  buffer, and only for a turn that is running (its first frame continues the tail the card was already showing).
+  Its per-turn trim is now 600, the number `lib/jobs.js` keeps, so the page can no longer hold lines the panel has
+  dropped.
+
+Measured on 240 turns of 76 lines, before (`098b5f9`) and after, same harness, same sandbox (heap is
+`JSHeapUsedSize` after `HeapProfiler.collectGarbage`):
+
+| after the phase | before | after |
+| --- | --- | --- |
+| 240 turns streamed | 240 buffers, 18,240 lines, 10.81 MB | 120 buffers, 9,120 lines, 9.04 MB |
+| the reader's "Clear finished" | 240 buffers, 18,240 lines kept, 7.64 MB | 0 buffers, 0 lines, 4.13 MB |
+| a snapshot of 240 settled turns the tab never streamed | 240 buffers, 14,400 extra slots | 0 buffers; the tails are held once |
+| 200 turns of one line | 200 buffers | 120 buffers |
+| one turn streaming 1,290 lines | 1,000 kept | 600 kept |
+
+Below the ceiling the clear is the whole story: at 120 turns the press released 120 buffers and 9,120 lines and
+dropped the retained heap from 5.97 MB to 4.51 MB. The seed removal is worth less than the line slots suggest -
+the copied array held the record's own line objects, so what went is 60 references per turn (about 115 KB at 240
+turns), not 60 duplicate objects. What it buys beyond the bytes is one source for a settled turn's console: the
+record, instead of the record and a copy that could disagree with it.
+
+Section 6's per-poll churn is untouched: `/api/state` still carries every job's 60-line tail, and nothing here
+retires a record the panel still holds.

@@ -305,7 +305,7 @@ async function ensureToolStore(turnId, tool, grp = null) {
   // the missing rows read as "no output recorded". A fold note names its result by that result's index over the
   // whole turn, so the read covers up to the furthest row this turn's own notes name as well — the head above
   // such a note is only checkable against its own row if the row is in hand.
-  const turnLines = state.jobLines.get(turnId) || [];
+  const turnLines = jobLines(turnId);
   const stamped = stampedRowFor(turnLines, tool);
   const n = Math.min(60, Math.max(4, resultBlocksFor(turnLines, tool) + 1, stamped == null ? 0 : stamped + 1));
   let changed = false;
@@ -1251,7 +1251,7 @@ function reasoningWants(evt) {
 // The moment of the last tool result already in the console: the thoughts newer than it are the ones a call is about
 // to follow. 0 (a turn with no result yet) counts every thought of the turn.
 function reasoningFloor(job) {
-  const lines = state.jobLines.get(String(job)) || [];
+  const lines = jobLines(String(job));
   for (let k = lines.length - 1; k >= 0; k--) if (lines[k]?.kind === "tool-out") return Number(lines[k].at) || 0;
   return 0;
 }
@@ -2687,16 +2687,34 @@ function appendJobLine(evt) {
 
 // The console's own record of the turn — the lines a rebuild draws from. A held line is not in here yet, so a
 // repaint mid-burst shows the transcript as far as it has got.
+//
+// The buffer is trimmed to the same number of lines the panel keeps for a turn (lib/jobs.js MAX_LINES), not a longer
+// one of its own: at 1,000 against the server's 600 the tab held lines the panel had already dropped, and no snapshot
+// ever told it so. One number on both sides of the wire, and the page can never show a console the server has
+// forgotten the tail of.
+const JOB_LINES_PER_TURN = 600;
+
 function recordJobLine(evt) {
   const line = evt.line || {};
-  const buf = state.jobLines.get(evt.id) || [];
+  let buf = state.jobLines.get(evt.id);
+  if (!buf) {
+    // This is the only place a buffer is created. A snapshot used to seed one for every record it carried, which
+    // retained the record's 60-line tail twice for every turn on the board; the card draws that tail from the record
+    // itself now (`jobLines()`), so a buffer is only needed once a line is actually going into it — and then it
+    // starts from the tail the card is already showing, or a turn that was running before this tab opened would
+    // read as if it began at the first frame that arrived.
+    const rec = state.jobs.get(evt.id);
+    buf = turnLive(rec) && Array.isArray(rec.lines) ? rec.lines.slice() : [];
+  }
   // mode "set" = the agent is still writing the same paragraph; that line grows in place
   // instead of a new one being pushed for every streamed fragment.
   const at = line.lid ? buf.findIndex((l) => l.lid === line.lid) : -1;
   if (line.mode === "set" && at >= 0) buf[at] = { ...buf[at], ...line };
   else buf.push(line);
-  if (buf.length > 1000) buf.splice(0, buf.length - 1000);
+  if (buf.length > JOB_LINES_PER_TURN) buf.splice(0, buf.length - JOB_LINES_PER_TURN);
   state.jobLines.set(evt.id, buf);
+  // A new buffer is also the moment the tab can cross its ceiling on how many turns it holds one for.
+  trimJobLines();
   // A folded turn shows only the peek, and it is not part of the console the lines are appended to.
   refreshTurnPeek(state.jobs.get(evt.id));
 }
