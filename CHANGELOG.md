@@ -4,16 +4,41 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.48.4 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.49.1 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-370 releases from v0.1.0 (2026-10-20) to v1.48.4 (2026-11-07), 1298 commits between the tags. Every release is anchored by an
+372 releases from v0.1.0 (2026-10-20) to v1.49.1 (2026-11-07), 1303 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.49.1 — 2026-11-07 · 2 commits
+
+[`477ffb2`](https://github.com/JLRoper/agent-worktree-gui/commit/477ffb27886bee4616327e20c3d91516d669f697) · [compare v1.49.0...v1.49.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.49.0...v1.49.1)
+
+### Fixed
+
+- fix: every done-run park settles the status, thread and job it parked on ([`1f51386`](https://github.com/JLRoper/agent-worktree-gui/commit/1f513864ef1625b7b78b97393872d97c98d9b7fc))
+
+### Other
+
+- chore: 1.49.1 — the version this landing carries ([`477ffb2`](https://github.com/JLRoper/agent-worktree-gui/commit/477ffb27886bee4616327e20c3d91516d669f697))
+
+## v1.49.0 — 2026-11-07 · 3 commits
+
+[`db73d1d`](https://github.com/JLRoper/agent-worktree-gui/commit/db73d1d20e2dad53a4616a52abc5ebbfe2d9b582) · [compare v1.48.4...v1.49.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.48.4...v1.49.0)
+
+### Performance
+
+- perf: a turn appends its queue digest, not the standing briefing ([`db73d1d`](https://github.com/JLRoper/agent-worktree-gui/commit/db73d1d20e2dad53a4616a52abc5ebbfe2d9b582))
+
+### Docs & tests
+
+- test: the spawn harness takes its roots from the caller, not a drive letter ([`60472e9`](https://github.com/JLRoper/agent-worktree-gui/commit/60472e970002880e301987457b064ea293b79c6a))
+- docs: render the changelog — 370 releases ([`f94ae60`](https://github.com/JLRoper/agent-worktree-gui/commit/f94ae60f34898d1246812b6ad025fb0a4827a731))
 
 ## v1.48.4 — 2026-11-07 · 4 commits
 
