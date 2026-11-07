@@ -307,6 +307,41 @@ test("the Director files a row into another assistant's queue and messages that 
   assert.equal(said[0].origin.kind, "assistant-message");
 });
 
+test("a QUEUE row landing draws a dim line on the target's thread and on the Director's own", async (t) => {
+  const { assistant } = await directorPanel(t);
+  const turn = {
+    id: "turn-log",
+    thread: assistant.threadOf("assistant-2"),
+    assistantId: "assistant-2",
+    status: "done",
+    prompt: "",
+    startedAt: new Date().toISOString(),
+  };
+  await assistant.applyActions(
+    turn,
+    parseActions("QUEUE #1 | fix the stale row on the docs tree\nMESSAGE #1 | #12 on the docs tree is stale: requeue it"),
+  );
+  await wait(60);
+
+  // The LANDING, on the thread that received the row: id and title first, because a log is read for "what is this
+  // row", and the sentence says where it came from.
+  const target = assistant.threadOf(PRIMARY_ASSISTANT);
+  const landed = assistant.journal.filter((j) => j.kind === "queue-landed");
+  assert.equal(landed.length, 1, "one landing line, and it is not written twice");
+  assert.equal(landed[0].thread, target, "it is on the target assistant's thread, not the Director's");
+  assert.match(landed[0].text, /^#\d+ fix the stale row on the docs tree — filed in this queue/, "the row id and title lead the line");
+
+  // …and the Director's OWN thread carries what it sent, so its card reads as a log of its two powers.
+  const sent = assistant.journal.filter((j) => j.kind === "queue-sent");
+  assert.equal(sent.length, 1, "the outbound QUEUE line is on the Director's thread");
+  assert.equal(sent[0].thread, turn.thread);
+  assert.match(sent[0].text, /^QUEUE Assistant #1 \| #\d+ fix the stale row on the docs tree — filed$/);
+  const messaged = assistant.journal.filter((j) => j.kind === "message-sent");
+  assert.equal(messaged.length, 1, "the outbound MESSAGE line is too");
+  assert.equal(messaged[0].thread, turn.thread);
+  assert.match(messaged[0].text, /^MESSAGE Assistant #1 \| #12 on the docs tree is stale: requeue it — sent$/);
+});
+
 test("QUEUE/MESSAGE are the Director's alone; TO and SPAWN are refused for it", async (t) => {
   const { assistant, said } = await directorPanel(t);
   const directorTurn = { id: "turn-2", thread: "panel-assistant-2", assistantId: "assistant-2", status: "done", prompt: "", startedAt: new Date().toISOString() };
