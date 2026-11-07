@@ -4,16 +4,33 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.53.3 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.53.4 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-394 releases from v0.1.0 (2026-10-20) to v1.53.3 (2026-11-07), 1359 commits between the tags. Every release is anchored by an
+395 releases from v0.1.0 (2026-10-20) to v1.53.4 (2026-11-07), 1363 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.53.4 — 2026-11-07 · 4 commits
+
+[`8d74c44`](https://github.com/JLRoper/agent-worktree-gui/commit/8d74c44b6edde5664302ba7bc86bdd0781dc8e47) · [compare v1.53.3...v1.53.4](https://github.com/JLRoper/agent-worktree-gui/compare/v1.53.3...v1.53.4)
+
+### Added
+
+- feat: a watchdog turn says so in a chip, not in its own prompt ([`11ee461`](https://github.com/JLRoper/agent-worktree-gui/commit/11ee46101ab29a4b43a31593bfbc6c34ae307ff0))
+
+### Docs & tests
+
+- test: pin the watchdog chip to originHtml's output ([`e0aaf5b`](https://github.com/JLRoper/agent-worktree-gui/commit/e0aaf5b7801047f625255e88ebb52f5440184837))
+- docs: the watchdog chip on a real watchdog turn ([`69978a4`](https://github.com/JLRoper/agent-worktree-gui/commit/69978a4f58ed44963cdba2faf263d87b7e30e78e))
+
+### Other
+
+- chore: 1.53.4 — the version this landing carries ([`8d74c44`](https://github.com/JLRoper/agent-worktree-gui/commit/8d74c44b6edde5664302ba7bc86bdd0781dc8e47))
 
 ## v1.53.3 — 2026-11-07 · 2 commits
 
