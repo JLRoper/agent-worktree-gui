@@ -81,6 +81,10 @@
     // the generation, so a mermaid render that finishes afterwards cannot paint into a dialog that moved on.
     view: "edit",
     definition: null,
+    // A PDL pipeline (the bundle's own shape) is drawn by the same card from its stages, gates and handoffs, but it is
+    // not a ladder definition: it has no prompt to derive a role from and no edit drawing, so the dialog offers the
+    // chart alone and no position control.
+    pdl: false,
     chartSeq: 0,
     onClose: null,
     wired: false,
@@ -160,10 +164,16 @@
   // the readable column width. It is set on the card, not on the flow: a custom property inherits DOWNWARD, and the card
   // is the ancestor that sizes itself from it.
   function stageCount(flow) {
-    return flow && Array.isArray(flow.stages) && flow.stages.length ? flow.stages.length : 1;
+    if (flow && Array.isArray(flow.stages) && flow.stages.length) return flow.stages.length;
+    // A PDL pipeline is handed as a definition and no flow: its stages are the card's width, not a default of one.
+    if (state.pdl && state.definition && Array.isArray(state.definition.stages) && state.definition.stages.length) return state.definition.stages.length;
+    return 1;
   }
 
   function previewHtml(flow, position) {
+    // A PDL pipeline has no position to preview: the card is the whole document, and a stage select would offer a
+    // control that moves nothing.
+    if (state.pdl) return "";
     if (!state.preview || !flow || !Array.isArray(flow.stages) || !flow.stages.length) return "";
     const stage = String((position && position.stage) || "");
     const refused = String((position && position.refused) || "");
@@ -185,7 +195,8 @@
   // Two words, the pressed one filled, and a read-only hint beside them while the preview is up: the cheap way to
   // say "this is a different picture of the same thing" rather than "this is a different thing".
   function viewsHtml() {
-    if (!previewAvailable()) return "";
+    // One view for a PDL pipeline: the card. There is no edit drawing of a document this dialog does not edit.
+    if (!previewAvailable() || state.pdl) return "";
     const pressed = (view) => (state.view === view ? "true" : "false");
     return `<span class="pmodal-views" role="group" aria-label="how this definition is drawn">
           <button type="button" data-pm-view="preview" aria-pressed="${pressed("preview")}" title="the map page's chart - every stage with its ordinal, its title and the role, and the exit check on the arrow that leaves it. Read-only: nothing here changes the definition.">preview</button>
@@ -204,11 +215,11 @@
     // The kicker names the thing being looked at, not a verb this dialog does not offer: the surface draws a flow in
     // both modes and has no edit control of its own, so "editing" claimed an action that is not here. The edit-mode
     // caller is the Settings tab, where the edit happens; a dirty draft is the `sub` line's job.
-    const kicker = state.mode === "position" ? "pipeline flow · position" : "pipeline flow · definition";
+    const kicker = state.pdl ? "pipeline flow · PDL" : state.mode === "position" ? "pipeline flow · position" : "pipeline flow · definition";
     const body = state.loading
       ? `<div class="pmodal-note">reading this task's pipeline…</div>`
       : `${state.note ? `<div class="pmodal-note">${esc(state.note)}</div>` : ""}${
-          state.flow
+          state.flow || (state.pdl && state.definition)
             ? state.view === "preview" && previewAvailable()
               ? chartHtml()
               : `<div class="pmodal-flow" data-pm-flow>${flowHtml(state.flow, state.position, state.motion, state.fit)}</div>`
@@ -384,12 +395,13 @@
     const seq = ++state.chartSeq;
     let item;
     try {
-      item = M.fromDefinition(state.definition);
+      // A PDL pipeline is mapped from its stages, gates and handoffs; a ladder definition from its prompts and exits.
+      item = state.pdl ? M.fromPdl(state.definition) : M.fromDefinition(state.definition);
     } catch (e) {
       host.innerHTML = `<div class="pmodal-empty">this definition could not be read as a chart: ${esc((e && e.message) || e)}</div>`;
       return false;
     }
-    const el = M.card(item, { layout: "row", head: false, builtin: true });
+    const el = M.card(item, { layout: "row", head: false, builtin: true, emptyLoops: state.pdl ? "this pipeline declares no loop" : undefined });
     host.replaceChildren(el);
     const live = () => state.open && state.view === "preview" && seq === state.chartSeq;
     try {
@@ -413,7 +425,7 @@
     } catch (e) {
       if (!live()) return false;
       const said = String((e && e.message) || e);
-      host.innerHTML = `<div class="pmodal-empty">the chart could not be drawn: ${esc(said)}. The edit view still draws this definition.</div>`;
+      host.innerHTML = `<div class="pmodal-empty">the chart could not be drawn: ${esc(said)}.${state.pdl ? "" : " The edit view still draws this definition."}</div>`;
       host.dataset.chartError = said;
       return false;
     }
@@ -614,6 +626,7 @@
       fit: false,
       view: "edit",
       definition: null,
+      pdl: false,
       // Any chart render still in flight belongs to the dialog that just closed.
       chartSeq: state.chartSeq + 1,
       onClose: null,
@@ -652,6 +665,9 @@
     // The DRAWER's own model, not the flow's: the mermaid card needs the ordinal, the role and the exit labels the
     // definition carries. A caller that passes no definition gets the edit drawing and no switch.
     state.definition = options.definition && typeof options.definition === "object" ? options.definition : null;
+    // The definition is a PDL pipeline, not a ladder definition: the card is built by fromPdl() and there is no edit
+    // drawing to switch to.
+    state.pdl = Boolean(options.pdl) && Boolean(state.definition);
     // A number that never repeats: a render still in flight from the PREVIOUS open must not match the next one's.
     state.chartSeq += 1;
     // Every open starts at the readable column width; `fit` is a reader's choice for the drawing they are looking at.
