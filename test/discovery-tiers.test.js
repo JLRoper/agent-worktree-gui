@@ -1,5 +1,5 @@
 // The scan half of the two-tier split: an OLD repo is stat-gated (no row scan, no full pass, no fetch), and one
-// of four .git mtimes moving - or the reader opening the project - promotes it for exactly ONE full probe and
+// of its signal moving - or the reader opening the project - promotes it for exactly ONE full probe and
 // one read of its rows. A RECENT repo is untouched: it keeps today's treatment.
 //
 // The repo here is real (a commit dated 20 days ago is what makes it old), while the pool is a stub: the test is

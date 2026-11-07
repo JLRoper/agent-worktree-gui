@@ -73,6 +73,7 @@
     "verify:assistant-reset-ui": "node tools/verify-assistant-reset-ui.mjs",
     "verify:exited-chip": "node tools/verify-exited-chip.mjs",
     "measure:perf-paths": "node tools/measure-perf-paths.mjs",
+    "measure:tier-signal": "node tools/measure-tier-signal.mjs",
     "capture:pipeline-flow": "node tools/capture-pipeline-flow.mjs",
     "capture:pipeline-import": "node tools/capture-pipeline-import.mjs",
     "capture:pipeline-readability": "node tools/capture-pipeline-readability.mjs",

@@ -76,7 +76,7 @@ async function quiet(fn) {
 }
 
 // ---- the fixture ---------------------------------------------------------------------------------------------
-// A repo here is a directory holding a `.git` DIRECTORY with the four paths the gate watches. Discovery only
+// A repo here is a directory holding a `.git` DIRECTORY with the git paths the gate watches. Discovery only
 // asks that `.git` is a directory (lib/projects.js), and the cache below seeds every record, so no git process
 // is needed to make 177 projects: a steady-state pass is exactly what the baseline measured.
 function buildFixture() {
