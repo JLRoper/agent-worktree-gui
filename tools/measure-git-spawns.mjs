@@ -70,10 +70,16 @@ const LABEL = String(arg("label", path.basename(ROOT)));
 const WORK = path.resolve(String(arg("work")));
 const LOG = process.env.WAG_GIT_COUNT_LOG;
 const CACHE_SRC = path.resolve(String(arg("cache", path.join(os.homedir(), ".wag", "state", "projects.json"))));
-const ROOTS = String(arg("roots", "C:/ProjectDevelopment,C:/CodeReviews"))
+// The roots to walk are the reader's, never a drive-letter default: pass `--roots <dir[,dir]>`. A path baked
+// into the tool names one machine and is exactly what the pre-push guard refuses.
+const ROOTS = String(arg("roots", ""))
   .split(/[;,]/)
   .map((s) => s.trim())
   .filter(Boolean);
+if (!ROOTS.length) {
+  console.error("git-spawns: pass --root <repo to measure> and --roots <dir[,dir]> (the projects to walk)");
+  process.exit(2);
+}
 const TICKS = Math.max(0, Number(arg("ticks", 20)) || 20);
 const TICK_MS = Math.max(0, Number(arg("tickMs", 1000)) || 1000);
 const DRAIN_MS = Math.max(1000, Number(arg("drainMs", 180000)) || 180000);
