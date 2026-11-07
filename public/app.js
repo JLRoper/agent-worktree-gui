@@ -2432,11 +2432,37 @@ function toggleTurn(key) {
   }
 }
 
+// ---- turn origin ---------------------------------------------------------------------------
 // `inline` puts the turn's request on the head line itself — the folded form is two rows: the head with
 // the request, then one line saying what the turn is doing (or, once done, what it concluded).
 // A turn the reader did not start: it answers a delivery, and the head should say which. One child names itself;
 // several are listed in the tooltip, in the same order the collect prompt numbered them.
+//
+// The panel's watchdog starts a turn with its own announcement AS the prompt ("Watchdog: LONG RUN …"), so the
+// head names the watchdog in a chip and the request under it drops the same two words. The chip is dark, not
+// the purple an assistant's attribution wears: the panel reporting a run is not a reply in the conversation.
+const WATCHDOG_PROMPT_PREFIX = "Watchdog: ";
+const WATCHDOG_TITLE = "the panel's watchdog — a turn the sentry started when it found a run worth reporting";
+function isWatchdogTurn(turn) {
+  return Boolean(turn) && String(turn.prompt || "").startsWith(WATCHDOG_PROMPT_PREFIX);
+}
+// Same box as `.turn-origin` (size, radius, padding); only the colours differ, in public/style.css.
+function watchdogHtml(turn) {
+  if (!isWatchdogTurn(turn)) return "";
+  return ` <span class="turn-origin is-watchdog mono" title="${esc(WATCHDOG_TITLE)}">watchdog</span>`;
+}
+// The prompt the head shows, minus the sentry's own opener: the chip already carries it, and repeating it costs
+// the reader the first words of the request in a head that is one line long.
+function watchdogPromptText(text) {
+  const s = String(text || "");
+  return s.startsWith(WATCHDOG_PROMPT_PREFIX) ? s.slice(WATCHDOG_PROMPT_PREFIX.length) : s;
+}
+// The head's chips, in the order they are drawn: who started the turn, then what the turn's own record adds.
 function originHtml(turn) {
+  if (!turn) return "";
+  return watchdogHtml(turn) + originAttributionHtml(turn);
+}
+function originAttributionHtml(turn) {
   const o = turn.origin;
   // A turn the panel assistant caused: it wrote a reply into this thread, or it woke itself about something.
   // Saying so on the turn head is the difference between "the agent suddenly changed course" and a move the
@@ -2469,6 +2495,7 @@ function originHtml(turn) {
     : "this turn was started by a subagent delivery";
   return ` <span class="turn-origin mono" title="${esc(title)}">\u21b3 ${esc(text)}</span>`;
 }
+// ---- end turn origin -----------------------------------------------------------------------
 
 // ---- session replaced ------------------------------------------------------------------------
 // A turn the panel had to move into a NEW gateway session, because the session its thread was on had been lost: the
@@ -2511,7 +2538,7 @@ function inlinePrompt(turn, inline) {
 // that paragraph is stripped before the prompt is drawn.
 const ATTACH_BLOCK_RE = /(?:\r?\n){1,2}Attachment: [^\n]*? — (?:read_file it|use vision_analyze on it) before answering\./g;
 function displayPrompt(text) {
-  return String(text || "").replace(ATTACH_BLOCK_RE, "").trim();
+  return watchdogPromptText(String(text || "").replace(ATTACH_BLOCK_RE, "")).trim();
 }
 
 // What the reader attached to this turn, under its prompt: a link to the file, no x (the file is
