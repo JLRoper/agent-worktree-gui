@@ -550,6 +550,59 @@ test("a failed run's park settles the run it parked on, in the same entry as the
   assert.match(entry.decision.reason, /ended failed: the build broke/);
 });
 
+// The three parks a DONE run can end in. Each is a terminal park of a run that finished, so each carries the same
+// four facts as the failed park above: the status it ended as, when this pass read it, the thread and the job. On
+// the base each of these left `status` null: the row named the run and could not say how it ended.
+test("an unresolved park settles the finished run it parked on, in the same entry as the decision", () => {
+  const job = { id: "j7", thread: "T1", status: "done", startedAt: "2026-11-03T15:00:00.000Z", endedAt: "2026-11-03T15:30:00.000Z" };
+  const out = drive([row({ pipelineRun: { pipeline: "gone", stage: "S1", enteredAt: "2026-11-03T15:00:00.000Z" } })], { jobs: [job] });
+
+  assert.equal(out.tasks[0].state, "parked", "the park itself is unchanged");
+  const runs = out.tasks[0].pipelineRun.stageRuns;
+  assert.equal(runs.length, 1, "one run, one entry: the settle does not mint a second attempt");
+  const entry = runs[0];
+  assert.equal(entry.stage, "S1");
+  assert.equal(entry.status, "done", "the entry says what the run ended as");
+  assert.equal(entry.settledAt, CLOCK, "and when this pass read it, not the job's own stamp");
+  assert.equal(entry.thread, "T1", "which thread ran it");
+  assert.equal(entry.job, "j7", "and which job");
+  assert.equal(entry.decision.code, DRIVE_FAULTS.UNRESOLVED, "the decision about the park rides the SAME entry");
+});
+
+test("a tree-gone park settles the finished run it parked on, in the same entry as the decision", () => {
+  const gone = path.join(tmpdir(), "wag-tree-that-is-not-there-7d21b4");
+  const job = { id: "j8", thread: "T1", status: "done", startedAt: "2026-11-03T15:00:00.000Z", endedAt: "2026-11-03T15:30:00.000Z" };
+  const out = drive([row({ pipelineRun: { pipeline: "two", stage: "S1", enteredAt: CLOCK, tree: { path: gone, branch: "wtgui/x-7d21b4" } } })], { jobs: [job] });
+
+  assert.equal(out.tasks[0].state, "parked", "the park itself is unchanged");
+  const runs = out.tasks[0].pipelineRun.stageRuns;
+  assert.equal(runs.length, 1, "one run, one entry: the settle does not mint a second attempt");
+  const entry = runs[0];
+  assert.equal(entry.stage, "S1");
+  assert.equal(entry.status, "done", "the entry says what the run ended as");
+  assert.equal(entry.settledAt, CLOCK, "and when this pass read it, not the job's own stamp");
+  assert.equal(entry.thread, "T1", "which thread ran it");
+  assert.equal(entry.job, "j8", "and which job");
+  assert.equal(entry.decision.code, DRIVE_FAULTS.TREE_GONE, "the decision about the park rides the SAME entry");
+});
+
+test("a changed park settles the finished run it parked on, in the same entry as the decision", () => {
+  const job = { id: "j6", thread: "T1", status: "done", startedAt: "2026-11-03T15:00:00.000Z", endedAt: "2026-11-03T15:30:00.000Z" };
+  const stale = `sha256:${"0".repeat(64)}`;
+  const out = drive([row({ pipelineRun: { pipeline: "two", stage: "S1", enteredAt: CLOCK, route: stale } })], { jobs: [job] });
+
+  assert.equal(out.tasks[0].state, "parked", "the park itself is unchanged");
+  const runs = out.tasks[0].pipelineRun.stageRuns;
+  assert.equal(runs.length, 1, "one run, one entry: the settle does not mint a second attempt");
+  const entry = runs[0];
+  assert.equal(entry.stage, "S1");
+  assert.equal(entry.status, "done", "the entry says what the run ended as");
+  assert.equal(entry.settledAt, CLOCK, "and when this pass read it, not the job's own stamp");
+  assert.equal(entry.thread, "T1", "which thread ran it");
+  assert.equal(entry.job, "j6", "and which job");
+  assert.equal(entry.decision.code, DRIVE_FAULTS.CHANGED, "the decision about the park rides the SAME entry");
+});
+
 test("a task with no pipeline comes back untouched, and settles exactly as it did before", () => {
   const plain = [row({ pipelineRun: null })];
   const out = drive(plain);
