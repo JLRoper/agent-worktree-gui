@@ -13189,9 +13189,23 @@ $("job-prompt").addEventListener("input", () => {
 // static markup, so it is restored once, here, not by any render path — the reply boxes restore themselves
 // through restoreTyping, and the assistant's intro box through its own render).
 restoreChipBoxes(document);
-$("btn-pause").addEventListener("click", () => {
+// PAUSE lives in Settings now, beside the scan and read rows it freezes (it used to be a header button). The
+// handler is unchanged in what it does and still finds the control by id, so moving the markup moved the control
+// and nothing else: a press closes the live stream and says so in the status line, and the next press reconnects and
+// re-syncs. The button carries its own state (label, aria-pressed, title) so closing Settings and opening it again
+// reads the same answer, and the paint runs once at boot for a page that starts unpaused.
+function paintPauseButton() {
+  const btn = $("btn-pause");
+  if (!btn) return;
+  btn.textContent = state.paused ? "Resume" : "Pause";
+  btn.setAttribute("aria-pressed", state.paused ? "true" : "false");
+  btn.title = state.paused
+    ? "resume the live stream — reconnects and re-syncs every row of the board"
+    : "pause the live stream — nothing updates until you press Resume, which reconnects and re-syncs the board";
+}
+$("btn-pause")?.addEventListener("click", () => {
   state.paused = !state.paused;
-  $("btn-pause").textContent = state.paused ? "Resume" : "Pause";
+  paintPauseButton();
   if (state.paused) {
     state.es?.close();
     setStream("paused", "warn");
@@ -13200,6 +13214,7 @@ $("btn-pause").addEventListener("click", () => {
     resync();
   }
 });
+paintPauseButton();
 
 document.addEventListener("click", async (e) => {
   // A click is the reader taking over: stop chasing the box a spawn wanted focused. Clicking inside
@@ -15309,7 +15324,9 @@ function paintHumanButton() {
   const sig = `${list.length}|${perms}|${asks}|${repeats}|${agents.join(",")}|${at}`;
   if (sig === state.human.sig) return;
   state.human.sig = sig;
-  if (label) label.textContent = at >= 0 ? `HUMAN ${at + 1}/${list.length}` : "HUMAN";
+  // The label is Title Case with a leading glyph, the way ✧ Assistant is — the button's word is its name, not a
+  // shouted tag. The rotation counter keeps the same shape: `🙋 Human 2/3`.
+  if (label) label.textContent = at >= 0 ? `🙋 Human ${at + 1}/${list.length}` : "🙋 Human";
   if (badge) {
     badge.hidden = list.length === 0;
     badge.textContent = String(list.length);
@@ -15318,13 +15335,13 @@ function paintHumanButton() {
   btn.setAttribute(
     "aria-label",
     list.length
-      ? `HUMAN — ${list.length} open question${list.length === 1 ? "" : "s"} waiting on you: ${perms} permission${perms === 1 ? "" : "s"}, ${asks} clarify question${asks === 1 ? "" : "s"}${repeats ? `, ${repeats} asked again` : ""}`
-      : "HUMAN — nothing is waiting on you",
+      ? `Human — ${list.length} open question${list.length === 1 ? "" : "s"} waiting on you: ${perms} permission${perms === 1 ? "" : "s"}, ${asks} clarify question${asks === 1 ? "" : "s"}${repeats ? `, ${repeats} asked again` : ""}`
+      : "Human — nothing is waiting on you",
   );
   const named = agents.length > 4 ? `${agents.slice(0, 4).join(", ")} and ${agents.length - 4} more` : agents.join(", ");
   btn.title = list.length
-    ? `HUMAN — ${list.length} open question${list.length === 1 ? "" : "s"} waiting on you: ${perms} permission${perms === 1 ? "" : "s"}, ${asks} clarify question${asks === 1 ? "" : "s"}${named ? ` — held by ${named}` : ""}${repeats ? `. ${repeats} of them the panel has already asked again about (once an hour, on its own clock)` : ""}. Click or press H to step through them: each agent is opened, its prompt centred and flashed red, and its answer control focused. A question that is answered, expires or whose turn ends drops out.`
-    : "HUMAN — nothing is waiting on you: no permission or clarify question is open on this board. Click or press H to check again.";
+    ? `Human — ${list.length} open question${list.length === 1 ? "" : "s"} waiting on you: ${perms} permission${perms === 1 ? "" : "s"}, ${asks} clarify question${asks === 1 ? "" : "s"}${named ? ` — held by ${named}` : ""}${repeats ? `. ${repeats} of them the panel has already asked again about (once an hour, on its own clock)` : ""}. Click or press H to step through them: each agent is opened, its prompt centred and flashed red, and its answer control focused. A question that is answered, expires or whose turn ends drops out.`
+    : "Human — nothing is waiting on you: no permission or clarify question is open on this board. Click or press H to check again.";
 }
 
 // Open exactly the path to one question and put it in front of the reader. A board question: its project and row
@@ -15513,7 +15530,7 @@ function humanStep() {
     state.human.at = -1;
     state.human.sig = "";
     paintHumanButton();
-    showBanner("HUMAN: nothing is waiting on you — no permission or clarify question is open");
+    showBanner("Human: nothing is waiting on you — no permission or clarify question is open");
     return;
   }
   // Where to look: after the question last shown; if that one has gone, the slot it held (the entry that took
@@ -15533,7 +15550,7 @@ function humanStep() {
   state.human.at = -1;
   state.human.sig = "";
   paintHumanButton();
-  showBanner("HUMAN: those questions closed before I could open one — nothing is waiting on you now");
+  showBanner("Human: those questions closed before I could open one — nothing is waiting on you now");
 }
 
 $("btn-human")?.addEventListener("click", (e) => {

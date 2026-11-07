@@ -307,8 +307,8 @@ try {
     const human = header.ids.indexOf("btn-human");
     const deliver = header.ids.indexOf("btn-deliver");
     const collapse = header.ids.indexOf("btn-collapse-all");
-    ok("the header button sits between HUMAN and Collapse all", human >= 0 && deliver === human + 1 && collapse === deliver + 1, header.ids.join(" "));
-    eq("the label is the plan's word", header.label, "DELIVERABLES");
+    ok("the header button sits between Human and Collapse all", human >= 0 && deliver === human + 1 && collapse === deliver + 1, header.ids.join(" "));
+    eq("the label is Title Case with its leading glyph, the way ✧ Assistant is", header.label, "📦 Deliverables");
     eq("the button says it is closed", header.expanded, "false");
 
     // ---- 1b. the badge: rows ABOVE the watermark, a class for the highlight, the number in the aria-label -------
@@ -386,7 +386,7 @@ try {
       };
     });
     eq("…the badge node and the highlight are gone", { cls: clearedBadge.cls, present: clearedBadge.present }, { cls: false, present: false });
-    eq("…and the button's own text is exactly the label", clearedBadge.text, "DELIVERABLES");
+    eq("…and the button's own text is exactly the label", clearedBadge.text, "📦 Deliverables");
     ok("…and the aria-label stops claiming anything is new", !/new deliverable/.test(clearedBadge.label), clearedBadge.label);
     // THE NEXT POLL: the page's own read again. A GET that answered just before the POST landed must not re-light it,
     // which is what taking the max of the store's watermark and this page's own is for.
@@ -718,7 +718,7 @@ try {
     );
     ok("…and the highlight goes with it", await page.evaluate(() => !document.getElementById("btn-deliver").classList.contains("has-unseen")));
     await page.evaluate(() => deliverFetch({ quiet: true }));
-    ok("…and the next poll keeps it cleared", await page.evaluate(() => !document.getElementById("deliver-badge") && document.getElementById("btn-deliver").textContent.trim() === "DELIVERABLES"));
+    ok("…and the next poll keeps it cleared", await page.evaluate(() => !document.getElementById("deliver-badge") && document.getElementById("btn-deliver").textContent.trim() === "📦 Deliverables"));
     const dismissed = await getJson(restartedPanel.base);
     eq(
       "the store holds the dismissed watermark: nothing above it",
