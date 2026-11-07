@@ -12,11 +12,11 @@ this report.
 | code | this worktree on `wtgui/read-only-diagnosis-of-t-0b803b` at `73def4f` (1.43.8), cut from `main` at the same sha |
 | live panel (1) | `http://127.0.0.1:7331`, pid 41116, booted 20:00:42 local, 329 to 354 MB, endpoint of every sample in sections 3 and 4 |
 | live panel (2) | `http://127.0.0.1:7331`, pid 44072, booted 03:42:58Z (22:42:58 local), 264 to 307 MB, the control and the 200 s window in section 3 |
-| live checkout | `C:\ProjectDevelopment\agent-worktree-gui` at `daa0012` — 200 lines ahead of this tree in `lib/scheduler.js` and `server.js` (the tier gate), so section 7 is read against the live file, not this one |
+| live checkout | the repo's main working tree at `daa0012` — 200 lines ahead of this tree in `lib/scheduler.js` and `server.js` (the tier gate), so section 7 is read against the live file, not this one |
 | live board | 177 projects, `/api/state` 3,730,099 bytes, `/api/jobs` 1,322,476 bytes, `/api/health` 71,881 bytes |
 | host | Windows 11, 16 logical cores, node v26.3.0; observed processor load 31 % |
 | measured | 2026-11-07 02:50 to 04:12Z (21:50 to 23:12 EST) |
-| scratch | `C:/Users/roper/AppData/Local/Temp/wag/d6e3c1e7` (`latency-probe.mjs`, `inspect-panel.mjs`, `spawn-census2.mjs`, `observe.mjs`, `spawn-block.mjs`, `process-map.ps1`, `observe.json`, `cpu-samples*.csv`) |
+| scratch | the run's own `%TEMP%/wag/d6e3c1e7` (`latency-probe.mjs`, `inspect-panel.mjs`, `spawn-census2.mjs`, `observe.mjs`, `spawn-block.mjs`, `process-map.ps1`, `observe.json`, `cpu-samples*.csv`) |
 | concurrent load | another worktree's full `node --test` suite at 22:20-22:34 and again from 23:03 (4 workers plus two to four panels of its own) |
 
 ## Method
