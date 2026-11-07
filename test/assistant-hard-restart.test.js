@@ -168,7 +168,11 @@ test("the next turn after a hard restart is the first turn of a new session", as
   assert.equal(request.reply, false, "and it is a first turn, not a continuation");
   assert.equal(request.assistantId, id, "still stamped as this assistant's turn");
   assert.equal(assistant.jobs.list().filter((j) => j.thread === old).length, 1, "no second job was started on the old thread");
-  assert.match(request.preamble, /Charter — the long tier, read in full this turn/, "the new session gets the charter in full");
+  assert.match(request.preamble, /Read your queue first/, "the turn half still carries the queue directive");
+  // The charter moved halves: it rides the run's SYSTEM text (`systemBriefing`) now, because it is standing text that
+  // must not be re-appended per turn, and `preamble` carries only the queue digest. Asserting the charter on
+  // `preamble` would be asserting a field main no longer puts it in.
+  assert.match(request.system, /Charter — the long tier, read in full this turn/, "the new session gets the charter in full");
 });
 
 test("a running panel hard-restarts one assistant and answers with the whole state", async (t) => {
