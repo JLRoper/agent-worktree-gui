@@ -4,16 +4,25 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.45.3 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.45.4 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-364 releases from v0.1.0 (2026-10-20) to v1.45.3 (2026-11-07), 1281 commits between the tags. Every release is anchored by an
+365 releases from v0.1.0 (2026-10-20) to v1.45.4 (2026-11-07), 1283 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.45.4 — 2026-11-07 · 2 commits
+
+[`6ddae59`](https://github.com/JLRoper/agent-worktree-gui/commit/6ddae599934b18dc265047c528e6779af9b374e6) · [compare v1.45.3...v1.45.4](https://github.com/JLRoper/agent-worktree-gui/compare/v1.45.3...v1.45.4)
+
+### Docs & tests
+
+- docs: render the changelog — 364 releases ([`f7ac9fb`](https://github.com/JLRoper/agent-worktree-gui/commit/f7ac9fb3e09a4264f58ad4b3a226942d1b3a79cb))
+- docs: the round-5 record reads the drive's own hand-off ([`6ddae59`](https://github.com/JLRoper/agent-worktree-gui/commit/6ddae599934b18dc265047c528e6779af9b374e6))
 
 ## v1.45.3 — 2026-11-07 · 2 commits
 
