@@ -4,16 +4,44 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.50.8 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.51.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-383 releases from v0.1.0 (2026-10-20) to v1.50.8 (2026-11-07), 1334 commits between the tags. Every release is anchored by an
+385 releases from v0.1.0 (2026-10-20) to v1.51.0 (2026-11-07), 1339 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.51.0 — 2026-11-07 · 3 commits
+
+[`cef36be`](https://github.com/JLRoper/agent-worktree-gui/commit/cef36be54083897c00b2643d2a343d86dbe221ea) · [compare v1.50.9...v1.51.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.50.9...v1.51.0)
+
+### Added
+
+- feat(version): a lane claims its number by pushing its tag ([`de36fc1`](https://github.com/JLRoper/agent-worktree-gui/commit/de36fc15a923d90bccbbfaa0baa6551d5220a61d))
+
+### Docs & tests
+
+- test(version): anchor the fixture's own number, and count the claims the gate sees ([`a17efdc`](https://github.com/JLRoper/agent-worktree-gui/commit/a17efdc5e66cbb23c623746b43f67d8752ba69a9))
+
+### Other
+
+- chore: 1.51.0 — the version this landing carries ([`cef36be`](https://github.com/JLRoper/agent-worktree-gui/commit/cef36be54083897c00b2643d2a343d86dbe221ea))
+
+## v1.50.9 — 2026-11-07 · 2 commits
+
+[`8566b66`](https://github.com/JLRoper/agent-worktree-gui/commit/8566b66aade07ad140c274c9d105c5ac4aea941f) · [compare v1.50.8...v1.50.9](https://github.com/JLRoper/agent-worktree-gui/compare/v1.50.8...v1.50.9)
+
+### Fixed
+
+- fix: wire the queue-line-dim gate into the scripts it declares ([`8566b66`](https://github.com/JLRoper/agent-worktree-gui/commit/8566b66aade07ad140c274c9d105c5ac4aea941f))
+
+### Docs & tests
+
+- docs: render the changelog — 383 releases ([`bb7b4df`](https://github.com/JLRoper/agent-worktree-gui/commit/bb7b4df55c680db8cff9790d309596315dd44094))
 
 ## v1.50.8 — 2026-11-07 · 1 commit
 
