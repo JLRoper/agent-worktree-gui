@@ -31,8 +31,9 @@ test("the header carries one DELIVERABLES button, between HUMAN and Collapse all
   assert.ok(button, "no #btn-deliver in the header");
   const tag = button[0];
   assert.match(tag, /type="button"/, "a header control is a plain button");
-  // The plan's word, and no PERMANENT count: this is an archive, not a queue (§5.1, "No badge").
-  assert.match(tag, />\s*<span id="deliver-label">DELIVERABLES<\/span>/, "the label is DELIVERABLES, in its own span so the badge can sit beside it");
+  // The plan's word, now Title Case with its leading glyph the way ✧ Assistant is ("📦 Deliverables"), and no
+  // PERMANENT count: this is an archive, not a queue (§5.1, "No badge").
+  assert.match(tag, />\s*<span id="deliver-label">📦 Deliverables<\/span>/, "the label is 📦 Deliverables (Title Case, leading glyph), in its own span so the badge can sit beside it");
   // The plan's "No badge" means no permanent count, and the zero case is now a REMOVAL rather than a hidden node: a
   // span that ships with "0" in it and is merely hidden still reads as part of the button ("DELIVERABLES0") and
   // measured 0x0 at (0,0). The markup therefore carries NO badge at all; public/app.js creates the pill only while

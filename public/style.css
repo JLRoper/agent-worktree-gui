@@ -146,7 +146,7 @@ button, select, input, textarea { font-family: var(--ui); }
 #btn-deliver[aria-expanded="true"] { border-color: #3b5680; background: #1b2534; color: #cfe6ff; }
 #btn-deliver[aria-expanded="true"]:hover { background: #223047; }
 /* The pill exists only while something is unseen: public/app.js creates it with a real count and REMOVES it when the
-   count is zero, so the button's text is never "DELIVERABLES0" and there is no dead 0x0 span inside the control. */
+   count is zero, so the button's text is never "Deliverables0" and there is no dead 0x0 span inside the control. */
 #deliver-badge {
   display: inline-block; min-width: 17px; height: 17px; padding: 0 4px;
   border-radius: 9px; background: #3f9d6b; color: #fff; cursor: pointer;

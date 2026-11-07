@@ -37,11 +37,10 @@ is `rev-parse`, `rev-list`, `merge-base`, `cherry`, `diff`, `status` and `log`.
 | **Worktree Agent Monitor** | Click it for Settings — the same panel as ⚙ Settings, handy when the page is zoomed in. |
 | Config line | Version, how many projects are being watched, the two main cadences, scan threads, bind host — and `refresh on screen only` when that refresh mode is on. |
 | Stream readout | `pool 1/3 · 3 conversations · 29 events · 2.4/s`: scan workers busy, how many conversations, and the event rate arriving over SSE. |
-| **HUMAN** | Every open permission and clarify question on the board, in one rotation. See below. |
+| **🙋 Human** | Every open permission and clarify question on the board, in one rotation. See below. |
 | **✧ Assistant** | Opens the assistant panel beside the board (`A` or `Ctrl+Shift+A`) — a rail by default, and a floating window for an assistant whose own **Settings** says `floating`. Its purple badge counts the open alerts; the `⧗` pill beside it counts the **spawn cards** waiting for a click, amber once the oldest has waited over two minutes. |
 | **Collapse all** | Folds the whole tree in one press — every folder, project, worktree row, card and turn. The button then reads **Expand all**. `Ctrl+]` also opens everything; `Ctrl+[` folds one tier per press instead. |
-| **Pause** | Freezes the page: closes the live stream, so nothing updates. The button reads **Resume**, which reconnects and resyncs. |
-| **⚙ Settings** | The Settings panel (`Ctrl+,`). **Refresh now** and **Fetch remotes** live in it too, under Board → **Read now**. |
+| **⚙ Settings** | The Settings panel (`Ctrl+,`). **Refresh now**, **Fetch remotes** and **Live updates → Pause** live in it too, under Board. |
 
 ### The HUMAN rotation
 
@@ -50,7 +49,7 @@ permission request, an agent parked on its own clarify question, or the dock's o
 project, row and turn that own it, centres the prompt, flashes it red and its card amber, and puts the caret on the
 answer control. A permission box starts on **Deny**, deliberately: a stray key cannot approve a command.
 
-- **H** (or another press) moves to the next question; the button counts its place (`HUMAN 2/3`).
+- **H** (or another press) moves to the next question; the button counts its place (`Human 2/3`).
 - The red badge is how many questions are waiting on you. Zero leaves no badge at all.
 - A question that is answered, expires or whose turn ends drops out of the rotation as you go.
 
@@ -931,6 +930,11 @@ seconds, so a row that already matches stays as it is, and a row whose verdict i
 gesture that touches git refs. Each says in the banner what it started, with the number of rows or projects it
 covers, and the rows repaint as the reads land.
 
+**Live updates** sits under **Read now**: a press freezes the page by closing the live stream, so nothing updates —
+no card, countdown, badge or console moves — and what was last read stays on screen. The button then reads
+**Resume**, which reconnects and re-syncs every row. It is the same control the top bar used to carry; it lives here
+now, beside the rows it freezes.
+
 **Stored in this browser** (per browser, not shared; the exceptions are the rows the table marks as this panel's own
 `config.json` — **Refresh**, **Hide stale worktrees** and **Chart columns** — which apply to every browser and survive
 a restart):
@@ -1086,7 +1090,7 @@ something you typed or an agent is writing. **Check now** asks at once, even wit
 | The agent works in the gateway's directory instead of its worktree | The gateway is missing the local patch (`docs/hermes-runs-api-knobs.diff`, lost after `hermes update`). The gateway chip's tooltip says `the gateway ignores per-run cwd`. |
 | No usage strip above a reply box | Same missing patch: no `run.usage` events, so the panel shows nothing rather than zeros. |
 | A verdict badge stays empty (grey) | It is computed on the project's slow pass; **Settings → Board → Read now → Refresh now** re-reads the rows at once, and a row whose verdict is stale is read in full. A dashed grey badge is a verdict being reclassified. |
-| Rows stop moving | The page may be paused, or the stream `reconnecting…`/`offline`. **Resume**, or **Settings → Board → Read now → Refresh now**. |
+| Rows stop moving | The page may be paused, or the stream `reconnecting…`/`offline`. **Settings → Board → Live updates → Resume**, or **Settings → Board → Read now → Refresh now**. |
 | A project's numbers look old while it is off screen | With Settings → Board → Refresh: **only on screen**, off-screen projects are not read until you scroll them into view — and nothing is read at all while no page is open. |
 | A worktree will not delete | An agent run is live in it — stop the run first. |
 | The assistant says it started a worker but nothing appeared | Look at the strip above **New agent** and at the `N spawn` pill on ✧ Assistant: in **ask** mode a SPAWN line is a card waiting for a click, not a run. If neither a card nor a worker exists two minutes after the turn, the journal carries a **lost SPAWN line** and the Alerts tab an alert naming the turn. |

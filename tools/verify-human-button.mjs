@@ -632,7 +632,7 @@ async function main() {
         section("1. the button and its red count");
         const first = await read(page);
         check("HUMAN is the control immediately after ✧ Assistant", first.besideAssistant, true);
-        check("the label reads HUMAN while no question is being shown", first.label, "HUMAN");
+        check("the label reads 🙋 Human while no question is being shown", first.label, "🙋 Human");
         check("the badge is not hidden", first.badgeHidden, false);
         check("the badge counts every open question", first.badgeText, "3");
         check("the badge is red", first.badgeBg, "rgb(229, 83, 75)");
@@ -675,7 +675,7 @@ async function main() {
           `centre ${p1.flash?.centreY} of ${p1.flash?.viewportH}`,
         );
         check("the clarify answer's first choice owns the caret", p1.focus, { tag: "button", choice: null, value: "Yes" });
-        check("the counter now says where in the rotation you are", p1.label, "HUMAN 1/3");
+        check("the counter now says where in the rotation you are", p1.label, "🙋 Human 1/3");
 
         // The row-owned thread: its card is not in the page until the project and row are opened.
         const p2 = await pressUntil(page, (s) => s.flash?.thread === "th-approve");
@@ -784,7 +784,7 @@ async function main() {
         // Walk to the unattached question, then ANSWER it for real: the choice button posts to the panel, the panel
         // posts to the stub, and the box and the count go together.
         const atHomeless = await pressUntil(page, (s) => s.flash?.thread === "th-homeless");
-        check("the rotation reaches the unattached agent again", [atHomeless.flash?.thread, atHomeless.label], ["th-homeless", "HUMAN 1/3"]);
+        check("the rotation reaches the unattached agent again", [atHomeless.flash?.thread, atHomeless.label], ["th-homeless", "🙋 Human 1/3"]);
         const homelessJobId = (await jobsNow()).filter((j) => j.thread === "th-homeless").map((j) => j.id).pop();
         await page.click(`.job[data-thread="th-homeless"] .turn-question button.tq-choice[data-qvalue="Yes"]`);
         await waitFor(
@@ -849,13 +849,13 @@ async function main() {
         await waitFor(
           async () => {
             const s = await read(page);
-            return s.listLength === 0 && s.badgeHidden === true && s.label === "HUMAN";
+            return s.listLength === 0 && s.badgeHidden === true && s.label === "🙋 Human";
           },
           { timeoutMs: 15_000, what: "an empty rotation with no badge" },
         );
         const zero = await read(page);
         check("no question leaves no badge", [zero.badgeHidden, zero.listLength], [true, 0]);
-        check("the label is a plain HUMAN again", zero.label, "HUMAN");
+        check("the label is a plain 🙋 Human again", zero.label, "🙋 Human");
         check("the waiting look is off", zero.hasQuestions, false);
         await pressHuman(page);
         const emptyPress = await read(page);
@@ -926,7 +926,7 @@ async function main() {
           ok("the question the stub asked is the box in the float", /Which queue should this assistant/.test(inFloat.flash?.text || ""), inFloat.flash?.text);
           check("the clarify answer's first choice owns the caret", inFloat.focus, { tag: "button", value: ASSISTANT_CHOICES[0] });
           const placed = await read(page);
-          ok("the counter names the place in a two-question rotation", /^HUMAN \d\/2$/.test(placed.label), placed.label);
+          ok("the counter names the place in a two-question rotation", /^🙋 Human \d\/2$/.test(placed.label), placed.label);
 
           // The float's own pager, exactly like a board card's: page the live turn off, press, and the rotation has
           // to page the turn that owns the question back in before it can centre it.
