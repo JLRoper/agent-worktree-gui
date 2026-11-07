@@ -182,9 +182,9 @@ scan-start watermark. Concretely:
    `liveMinutes` with no file change, and `pollSeconds` follows from it (`lib/scheduler.js:404-411`);
    both can be recomputed from `lastEdit` on a tick with no spawn at all.
 
-At these costs the mid tier's 311 rows cost 3.6 s of gate per pass instead of 288 s of git, and the
-dormant tier's 61 rows cost 0.3 s instead of 55 s. The tier split then measures changes instead of
-measuring the fleet.
+At these costs the mid tier's 311 rows cost 4.2 s of gate per pass instead of 288 s of git (at the
+pool's four workers), and the dormant tier's 61 rows cost 0.5 s instead of 56 s. The tier split then
+measures changes instead of measuring the fleet.
 
 ## Reproduction
 
