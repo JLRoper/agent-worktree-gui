@@ -338,7 +338,11 @@ function assistantSessionFor(thread, board = state) {
   const t = String(thread || "");
   if (!t) return null;
   const list = board.assistant?.assistants;
-  const hit = Array.isArray(list) ? list.find((a) => a.threadId === t) : null;
+  // A thread a hard restart left behind is still that assistant's: its card keeps the assistant's name and stays off
+  // the board's agent count, exactly as it did before the restart moved the assistant to a new thread.
+  const hit = Array.isArray(list)
+    ? list.find((a) => a.threadId === t || (Array.isArray(a.previousThreads) && a.previousThreads.includes(t)))
+    : null;
   if (hit) return hit;
   if (t === board.assistantThread) return { id: "assistant-1", name: "Assistant #1", threadId: t };
   return null;

@@ -3681,6 +3681,26 @@ const server = createServer(async (req, res) => {
         return sendJson(res, (e && e.code) === "assistant-unknown" ? 404 : 400, { error: String((e && e.message) || e) });
       }
     }
+    // A HARD RESTART of ONE assistant: it moves to a fresh Hermes thread — a new session id, so its next turn carries
+    // none of the conversation it has been having — and drops that assistant's session-recall records, so the first
+    // turn of the new session sends the charter, the board and the queue in full. The panel and the gateway are not
+    // restarted, and no other assistant's thread moves. 409 when a turn is still running: the thread must not move
+    // under a live run. The whole assistant state rides back, the way every other assistant route answers, so the
+    // pane repaints from one truth.
+    if (route === "/api/assistant/hard-restart" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      try {
+        const out = assistant.hardRestart(body.assistantId || undefined);
+        return sendJson(res, 200, { ...out, assistant: assistant.state() });
+      } catch (e) {
+        const code = e && e.code;
+        return sendJson(res, code === "assistant-unknown" ? 404 : code === "assistant-live" ? 409 : 400, {
+          ...(code ? { code } : {}),
+          error: String((e && e.message) || e),
+        });
+      }
+    }
     // One assistant's own profile: the default role prompt it runs on and the escalation list it would hand a
     // subject to (stored; nothing acts on it yet). One route for both fields because they are one file beside that
     // assistant's charter — a save of either writes that file whole, and a field left out of the body keeps what the
