@@ -4,16 +4,53 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.49.2 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.50.1 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-373 releases from v0.1.0 (2026-10-20) to v1.49.2 (2026-11-07), 1306 commits between the tags. Every release is anchored by an
+376 releases from v0.1.0 (2026-10-20) to v1.50.1 (2026-11-07), 1313 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.50.1 — 2026-11-07 · 2 commits
+
+[`e79b3aa`](https://github.com/JLRoper/agent-worktree-gui/commit/e79b3aa2aa4103c408ab0dfa870d7ece298f2a7a) · [compare v1.50.0...v1.50.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.50.0...v1.50.1)
+
+### Fixed
+
+- fix: release notes keep the list when a refresh fails ([`40415f5`](https://github.com/JLRoper/agent-worktree-gui/commit/40415f5c895123fae343290cc1b45688c14f8caf))
+
+### Other
+
+- chore: 1.50.1 — the version this landing carries ([`e79b3aa`](https://github.com/JLRoper/agent-worktree-gui/commit/e79b3aa2aa4103c408ab0dfa870d7ece298f2a7a))
+
+## v1.50.0 — 2026-11-07 · 2 commits
+
+[`cc1607f`](https://github.com/JLRoper/agent-worktree-gui/commit/cc1607f33e11367c4eff0f680765a1a2617c7d32) · [compare v1.49.3...v1.50.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.49.3...v1.50.0)
+
+### Other
+
+- Draw a worktree cut from another under its parent row, foldable ([`7aed877`](https://github.com/JLRoper/agent-worktree-gui/commit/7aed877194c850da446df6d797305b14f496977d))
+- chore: 1.50.0 — the version this landing carries ([`cc1607f`](https://github.com/JLRoper/agent-worktree-gui/commit/cc1607f33e11367c4eff0f680765a1a2617c7d32))
+
+## v1.49.3 — 2026-11-07 · 3 commits
+
+[`38276af`](https://github.com/JLRoper/agent-worktree-gui/commit/38276af4ed40135c6181e0d2f5640786fc2a2345) · [compare v1.49.2...v1.49.3](https://github.com/JLRoper/agent-worktree-gui/compare/v1.49.2...v1.49.3)
+
+### Fixed
+
+- fix: a dead run is reported once, not on every watchdog pass ([`1e607bf`](https://github.com/JLRoper/agent-worktree-gui/commit/1e607bff9aa4588fcf6c732fef36722dde10093e))
+
+### Docs & tests
+
+- docs: render the changelog — 373 releases ([`b9ba22d`](https://github.com/JLRoper/agent-worktree-gui/commit/b9ba22d5513d718def3045f4b0d1cb01e92382e0))
+
+### Other
+
+- chore: 1.49.3 - the version this landing carries ([`38276af`](https://github.com/JLRoper/agent-worktree-gui/commit/38276af4ed40135c6181e0d2f5640786fc2a2345))
 
 ## v1.49.2 — 2026-11-07 · 3 commits
 
