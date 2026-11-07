@@ -12,12 +12,12 @@ import { Scheduler } from "../lib/scheduler.js";
 const DAY = 864e5;
 const now = Date.now();
 
-function makeScheduler() {
+function makeScheduler(fleet = []) {
   const config = { tierDays: 7, tierBuckets: 60, tierCheckSeconds: 60, slowSeconds: 300, threads: 1 };
   const store = { rowsFor: () => [], ensureProject() {}, patchProject() {} };
   const pool = { size: 1, inFlight: 0, queue: [], submit: async () => ({}) };
   const getConfig = () => config;
-  return new Scheduler({ config, store, pool, registry: { getConfig, projects: [], tiers: null }, getProjects: () => [] });
+  return new Scheduler({ config, store, pool, registry: { getConfig, projects: [], tiers: null }, getProjects: () => fleet });
 }
 
 const project = (name, ageDays) => ({
@@ -28,8 +28,9 @@ const project = (name, ageDays) => ({
 });
 
 test("countTiers records what the pass reads and what it parks", () => {
-  const s = makeScheduler();
-  const visible = [project("fresh-a", 0), project("stale-a", 20), project("stale-b", 40), project("fresh-b", 3)];
+  const all = [project("fresh-a", 0), project("stale-a", 20), project("stale-b", 40), project("fresh-b", 3)];
+  const s = makeScheduler(all);
+  const visible = all; // a visible report of the whole board
   const read = s.countTiers(visible);
   assert.deepEqual(read.map((p) => p.name), ["fresh-a", "fresh-b"]);
   assert.equal(s.stats.tierRecent, 2);
@@ -38,11 +39,22 @@ test("countTiers records what the pass reads and what it parks", () => {
 });
 
 test("countTiers keeps the gate's own cumulative counter alone", () => {
-  const s = makeScheduler();
+  const s = makeScheduler([project("fresh", 1), project("stale", 30)]);
   s.stats.tierParked = 7; // the gate refused seven passes earlier in the process
   s.countTiers([project("fresh", 1), project("stale", 30)]);
   assert.equal(s.stats.tierParked, 7, "the cumulative gate reading is not overwritten");
   assert.equal(s.stats.tierParkedNow, 1);
+});
+
+test("the counters are the fleet's split, not the visible slice's", () => {
+  // A page reports the sections it can see, and those are the recent ones: counting only them says "0 parked" on a
+  // board that is mostly parked. The reading has to be over every project the board knows.
+  const all = [project("fresh", 1), project("stale-a", 30), project("stale-b", 60)];
+  const s = makeScheduler(all);
+  s.countTiers([all[0]]); // the page only reported the recent one
+  assert.equal(s.stats.tierRecent, 1);
+  assert.equal(s.stats.tierOld, 2, "both old projects are counted even though neither was visible");
+  assert.equal(s.stats.tierParkedNow, 2);
 });
 
 test("the folder header carries the scanning count beside the project count", () => {
