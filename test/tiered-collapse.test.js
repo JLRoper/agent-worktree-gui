@@ -26,6 +26,9 @@ import { sliceBetween, sliceRegion } from "../tools/panel-testkit.mjs";
 
 const source = readFileSync(new URL("../public/app.js", import.meta.url), "utf8").replaceAll("\r\n", "\n");
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
+// The turns tier delegates the "every turn, both copies" rule to public/core/turn-fold.js, so the module is part of
+// the region's own code and is loaded into each context before the sliced regions that call it.
+const foldSource = readFileSync(new URL("../public/core/turn-fold.js", import.meta.url), "utf8").replaceAll("\r\n", "\n");
 
 // ---- the fixture: one folder, two projects, three rows, four cards, one assistant ------------------------------
 const PROJECTS = [
@@ -110,6 +113,8 @@ function harness() {
     clearTimeout: (timer) => globalThis.clearTimeout(timer),
   };
   const context = vm.createContext(sandbox);
+  // The turns tier's own rule, in the same context as the regions that call it.
+  vm.runInContext(foldSource, context);
   // The path/root helpers and the per-project toggle the project tier mirrors a click with.
   vm.runInContext(sliceBetween(source, "const normPath = (p) =>", "// ---- the collapse cascade"), context);
   vm.runInContext(sliceBetween(source, "function toggleProject(name) {", "// ---- folder layer"), context);
@@ -197,9 +202,11 @@ test("nextCollapseTier names the lowest open tier, in the shipped order", () => 
 
 // ---- 2. the selector is pure -----------------------------------------------------------------------------------
 test("the selector answers from the state it is handed, with no page behind it", () => {
-  // A context with no document, no conversations and no stubs — only the region's own functions.
+  // A context with no document, no conversations and no stubs — only the region's own functions and the fold module
+  // they delegate the book to.
   const context = vm.createContext({});
   for (const code of [
+    foldSource,
     sliceBetween(source, "const normPath = (p) =>", "// ---- the collapse cascade"),
     sliceBetween(source, "const FIXED_CARDS =", "// Keep the row you clicked"),
     sliceBetween(source, "const turnOrder = (a, b) =>", "function turnSeqOf("),

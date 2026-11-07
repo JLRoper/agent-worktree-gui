@@ -581,7 +581,7 @@ next thing to touch it would delete through it.
 | `waiting on you →` | The run is parked on a permission request — click to jump to the box. `waiting on your answer →` is the agent's own question. |
 | Title | The Hermes session's name, with the worktree, run id and turn count beside it in dim text. |
 | `📄 N` / `🔗 N` | Deliverables: files and links, as two separate buttons. |
-| Turn pager | `▲`/`▼` and `6–10 / 23` when a thread has more turns than fit on a page. |
+| Turn pager | `▲`/`▼` and `6–10 / 23` when a thread has more turns than fit on a page. The arrows are the collapse gesture: every turn on the page you leave folds. |
 | Thread name | The Hermes session id (or your label for it) — the thing a reply continues. |
 | `📌` | Pin this card: it keeps its screen position while cards above it grow. One pin at a time; clicking again releases it, and clearing the thread releases it too. |
 | `🧠` | Show this session's reasoning (see below). |
@@ -630,6 +630,10 @@ Each turn is an accordion inside the card:
 
 - `☆ turn 3 · running 12s` — the star pins that turn above the paged turns (it stays in its page as well), the chevron
   opens it, and the line carries how long it ran.
+- The pager's arrows walk the thread a page at a time, newest page first (`▲`/`▼` beside `3–7 / 7`). Paging **is**
+  the collapse gesture: every turn on the page you just left folds, so going up and back down leaves the thread
+  closed behind you. The one thing it does not touch is a starred turn's **pinned** copy above the page — that copy is
+  on screen on every page, so it stays as you left it until you click it.
 - The open turn holds, in order: the thinking block (if on), the console, the subagent strip, and any approval or
   question box for that turn.
 - Sending a reply draws the earlier turns the way **Settings → Agent cards → Previous turn on send** says: a

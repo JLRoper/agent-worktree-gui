@@ -294,12 +294,15 @@ const state = {
   scanRootsDetail: new Map(),
   pollGap: new Map(), // key -> observed seconds between that row's scans, smoothed
   lastScanAt: new Map(), // key -> ms of the previous scan we rendered
-  turnOpen: new Map(), // job id -> whether that turn's body is expanded (default: only the newest)
+  // The transcript renderer's own books: which turn copies are open, which are frozen to a snippet, and which page of
+  // turns a card shows. Written ONLY through public/core/turn-fold.js — the module owns the keys, the defaults, the
+  // pager arithmetic and the fold-on-page gesture; these fields are read by the renderer and by the card's signature.
+  turnOpen: new Map(), // key -> whether that copy of the turn is open (default: the newest turn of a card)
   // Turns that were showing their body when the reader sent the next one: they keep their answer and last tool
   // line, and lose the thinking block and the tool chatter. Not folded all the way to a one-line peek - that
   // shrink is what used to drag the reply box out from under the reader's hands.
   turnCompact: new Set(),
-  turnPage: new Map(), // thread -> how many pages of turns back from the newest (0 = newest page)
+  turnPage: new Map(), // thread -> how many pages of turns back from the newest (absent = the newest page)
   gitOpen: new Set(), // row key -> the git/commit/diff accordion is unfolded
   // row key + "::modified" / "::untracked" -> that one file-list strip inside merge state is unfolded. A Set of its
   // own, so a strip opens and closes without touching the merge state strip around it or its sibling.
@@ -1032,11 +1035,7 @@ function setEverythingOpen(open) {
   for (const c of conversations()) {
     if (open) state.collapsedJobs.delete(c.thread);
     else state.collapsedJobs.add(c.thread);
-    for (const turn of c.turns || []) {
-      state.turnOpen.set(turnKey(turn), open);
-      // A pinned turn has its own copy above the paged ones with its own key.
-      if (state.pinnedTurns.has(turn.id)) state.turnOpen.set(turnKey(turn, "@pin"), open);
-    }
+    wtTurnFold.foldAll(state, c.turns || [], state.pinnedTurns, open);
   }
   saveExpandedProjects();
   saveCollapsedRoots();
@@ -1130,13 +1129,8 @@ function collapseOneTier() {
   const tier = nextCollapseTier(state);
   if (!tier) return null;
   if (tier === "turns") {
-    for (const conv of conversations()) {
-      for (const turn of conv.turns || []) {
-        state.turnOpen.set(turnKey(turn), false);
-        // A pinned turn has its own copy above the paged ones with its own key.
-        if (state.pinnedTurns.has(turn.id)) state.turnOpen.set(turnKey(turn, "@pin"), false);
-      }
-    }
+    // One direction for every conversation, and the module knows both copies of a starred turn.
+    for (const conv of conversations()) wtTurnFold.foldAll(state, conv.turns || [], state.pinnedTurns, false);
     // `turnOpen` is the session's own fold book (not persisted), so the tiers below leave it alone: the paint is
     // the whole save.
     for (const conv of conversations()) renderConversation(conv.thread);
@@ -2348,48 +2342,36 @@ async function answerRunQuestion(turnId, answer, requestId, box) {
   }
 }
 
-// A turn is open when the reader opened it, otherwise only the newest turn is: opening an agent
-// shows its current turn in full and lists the earlier ones as the single request line each.
-// The pinned copy of a turn keeps its own open state (`pin:<id>`), so unfolding it never unfolds the
-// original in the page — and a pinned turn starts folded.
+// The fold book and the pager's arithmetic live in ONE place — public/core/turn-fold.js — because the assistant's
+// own card reads and writes the same state (assistant.js), and two files spelling three books is how a turn ended up
+// unfolded on a page that was not showing it. These two names are the ones this renderer has always used, so every
+// call site below still reads the same; the answers behind them are the module's.
 function turnKey(turn, copy = "") {
-  return copy === "@pin" ? `pin:${turn.id}` : turn.id;
+  return wtTurnFold.key(turn.id, copy);
 }
 
+// A turn is open when the reader opened it, otherwise only the newest turn is: opening an agent shows its current
+// turn in full and lists the earlier ones as the single request line each. The pinned copy of a turn keeps its own
+// open state (`pin:<id>`), so unfolding it never unfolds the original in the page — and a pinned turn starts folded.
 function turnIsOpen(conv, turn, copy = "") {
-  const forced = state.turnOpen.get(turnKey(turn, copy));
-  if (forced !== undefined) return forced;
-  if (copy === "@pin") return false;
-  return turn.id === conv.latest.id;
+  return wtTurnFold.isOpen(state, turn, conv.latest.id, copy);
 }
 
 function toggleTurn(key) {
   // The pinned duplicate toggles under its own key, so it opens and closes independently of the turn
   // it was cloned from.
-  const pinnedCopy = key.startsWith("pin:");
-  const id = pinnedCopy ? key.slice(4) : key;
-  const turn = state.jobs.get(id);
+  const turn = state.jobs.get(wtTurnFold.idOf(key));
   if (!turn) return;
   const conv = conversations().find((c) => c.thread === (turn.thread || turn.id));
   if (!conv) return;
-  const copy = pinnedCopy ? "@pin" : "";
-  state.turnOpen.set(key, !turnIsOpen(conv, turn, copy));
-  state.turnCompact.delete(key);
+  const copy = wtTurnFold.isPinCopy(key) ? wtTurnFold.PIN : "";
+  const open = wtTurnFold.toggle(state, turn, conv.latest.id, copy);
   renderConversation(conv.thread);
   // A turn that was just opened should show its newest lines, not its first line.
-  if (turnIsOpen(conv, turn, copy)) {
-    const pre = document.querySelector(`pre[data-out="${CSS.escape(id)}${copy}"]`);
+  if (open) {
+    const pre = document.querySelector(`pre[data-out="${CSS.escape(turn.id)}${copy}"]`);
     if (pre) setScroll(pre, pre.scrollHeight);
   }
-}
-
-// Long conversations page their turns: five at a time, newest page first, because a thread with
-// thirty turns is thirty transcript panes the reader almost never needs at once.
-const TURNS_PER_PAGE = 5;
-
-function turnPageOffset(thread, turnCount) {
-  const pages = Math.max(1, Math.ceil(turnCount / TURNS_PER_PAGE));
-  return Math.min(pages - 1, Math.max(0, state.turnPage.get(thread) || 0));
 }
 
 // `inline` puts the turn's request on the head line itself — the folded form is two rows: the head with
@@ -3758,20 +3740,20 @@ function conversationHtml(conv) {
       : `<span class="mono dim">${esc(outcome)} · ${esc(elapsed(latest))}${latest.tokens?.total ? ` · tokens ${fmtTok(latest.tokens.total)}` : ""}${latest.error ? ` · ${esc(latest.error)}` : ""}</span>${turnRetryHtml(latest, thread)}`;
   const artifacts = artifactsFor(conv);
   const artSplit = splitArtifacts(artifacts);
+  // The page this card is showing, sliced by the one module that owns the arithmetic. The pager's count, the arrows'
+  // disabled ends and this strip are three readings of ONE range; they used to be three copies of the same sums.
   const blocks = (() => {
-    const offset = turnPageOffset(thread, turns.length);
-    const end = turns.length - offset * TURNS_PER_PAGE;
-    const start = Math.max(0, end - TURNS_PER_PAGE);
-    return { offset, start, end, html: turns.slice(start, end).map((t, i) => turnBlock(conv, t, start + i)).join("") };
+    const r = wtTurnFold.range(turns.length, wtTurnFold.offset(state, thread, turns.length));
+    return { ...r, html: turns.slice(r.start, r.end).map((t, i) => turnBlock(conv, t, r.start + i)).join("") };
   })();
-  const pages = Math.max(1, Math.ceil(turns.length / TURNS_PER_PAGE));
+  const pages = blocks.pages;
   // Starred turns are repeated above the page — still accordions, and still present in their own
   // page, so pinning never moves a turn out from under its history.
   const pinned = turns.filter((t) => state.pinnedTurns.has(t.id));
   const pinnedHtml = pinned.length
     ? `<div class="pinned-turns">
         <div class="pinned-head mono"><span>\u2605 pinned</span><span class="dimmer">${pinned.length} of ${turns.length}</span></div>
-        ${pinned.map((t) => turnBlock(conv, t, turns.indexOf(t), "@pin")).join("")}
+        ${pinned.map((t) => turnBlock(conv, t, turns.indexOf(t), wtTurnFold.PIN)).join("")}
       </div>`
     : "";
   const pager = pages > 1
@@ -5503,10 +5485,12 @@ function previousTurnPlan(mode, turns) {
 
 function applyPreviousTurnPlan(plan) {
   for (const op of plan) {
-    if (op.open === true) state.turnOpen.set(op.id, true);
-    else if (op.open === false) state.turnOpen.delete(op.id);
-    if (op.compact === true) state.turnCompact.add(op.id);
-    else if (op.compact === false) state.turnCompact.delete(op.id);
+    // `undefined` is the plan's own "leave that flag alone": "leave as is" is one of the answers, so a mode must be
+    // able to say nothing about a turn rather than writing a flag that would re-open one the reader folded.
+    if (op.open === true) wtTurnFold.setOpen(state, op.id, true);
+    else if (op.open === false) wtTurnFold.setOpen(state, op.id, false);
+    if (op.compact === true) wtTurnFold.freeze(state, op.id);
+    else if (op.compact === false) wtTurnFold.unfreeze(state, op.id);
   }
 }
 
@@ -5533,8 +5517,6 @@ function focusNewTurn(thread, turnId) {
   const conv = conversations().find((c) => c.thread === thread);
   const at = conv ? conv.turns.findIndex((t) => t.id === turnId) : -1;
   const previous = conv && at > 0 ? conv.turns[at - 1] : null;
-  // A new turn means the reader is back at the newest page.
-  state.turnPage.delete(thread);
   // What each older turn was showing has to be read BEFORE any flag moves: the turn just finished is open
   // because it was the newest, not because anything is written down about it.
   const older = conv ? conv.turns.filter((t) => t.id !== turnId) : [];
@@ -5542,8 +5524,14 @@ function focusNewTurn(thread, turnId) {
     prevTurnMode(),
     older.map((t) => ({ id: t.id, open: t.id === previous?.id || state.turnOpen.get(turnKey(t)) === true })),
   );
-  state.turnOpen.set(turnId, true);
-  state.turnCompact.delete(turnId);
+  // The new turn is the one open in its card, on the newest page — the same three claims every jump path makes, so
+  // they are written by the module's `reveal` rather than spelled out here.
+  if (conv) wtTurnFold.reveal(state, thread, conv.turns, turnId);
+  else {
+    // No conversation to page in yet (the store has not grouped the new turn): the fold is the only part sayable.
+    wtTurnFold.setOpen(state, turnId, true);
+    wtTurnFold.unfreeze(state, turnId);
+  }
   applyPreviousTurnPlan(plan);
   renderConversation(thread);
   scrollThreadToBottom(thread);
@@ -6621,18 +6609,11 @@ function renderJobs() {
   const convs = homelessConversations();
   const nested = boardConvs.length - convs.length;
   for (const id of [...state.collapsedJobs]) if (!conversations().some((c) => c.thread === id)) state.collapsedJobs.delete(id);
-  // Forgetting a cleared job's explicit turn state keeps the map from growing forever.
+  // Forgetting a cleared job's explicit turn state keeps the map from growing forever — and the module owns which
+  // keys belong to which turn (a pinned copy prunes on the turn it was cloned from) and a cleared thread's page.
   const live = new Set([...state.jobs.keys()]);
-  for (const id of [...state.turnOpen.keys()]) {
-    // Pinned copies share the turn id with a `pin:` prefix; prune on the turn they belong to.
-    if (!live.has(id.startsWith("pin:") ? id.slice(4) : id)) {
-      state.turnOpen.delete(id);
-      state.turnCompact.delete(id);
-    }
-  }
-  // Same for a cleared thread's remembered page.
   const threads = new Set([...state.jobs.values()].map((j) => j.thread || j.id));
-  for (const t of [...state.turnPage.keys()]) if (!threads.has(t)) state.turnPage.delete(t);
+  wtTurnFold.prune(state, { turnIds: live, threads });
   // ...and for a height the reader dragged on a console whose turn has left the board. A turn's thread going away is
   // the same event (the thread's turns go with it), so the turn id is the key that decides.
   pruneOutHeights(live);
@@ -7574,10 +7555,13 @@ function jumpToPanelAgent(projectName, { running = false } = {}) {
   if (!state.expandedProjects.has(projectName)) toggleProject(projectName);
   const key = keyOf(projectName, found.row.path);
   if (!state.expanded.has(key)) document.querySelector(`tr.row[data-key="${CSS.escape(key)}"]`)?.click();
-  // The live turn shows its console only while it is open; a reader who folded it would land on a header.
-  if (running && found.turnId && state.turnOpen.get(found.turnId) === false) {
-    state.turnOpen.set(found.turnId, true);
-    renderConversation(found.thread);
+  // The live turn shows its console only while it is open — and only while its page is the one on screen, so this
+  // also pages a card the reader had walked back through (the module's one "put this turn in front of the reader").
+  if (running && found.turnId) {
+    const conv = conversations().find((c) => c.thread === found.thread);
+    if (conv && wtTurnFold.reveal(state, found.thread, conv.turns, found.turnId).changed) {
+      renderConversation(found.thread);
+    }
   }
   if (state.collapsedJobs.has(found.thread)) {
     state.collapsedJobs.delete(found.thread);
@@ -14027,7 +14011,9 @@ document.addEventListener("click", async (e) => {
     keepInPlace(() => document.querySelector(`[data-turn-head="${CSS.escape(id)}"]`), () => toggleTurn(id));
     return;
   }
-  // Turn pagination: the arrows sit in the card head, next to the turn count.
+  // Turn pagination: the arrows sit in the card head, next to the turn count. Going up and back down IS the collapse
+  // gesture — the page just left folds, and only a starred turn's pinned copy is left for the reader's own click
+  // (public/core/turn-fold.js). An arrow pressed at its own end left no page, so nothing folds and nothing repaints.
   const pageBtn = e.target.closest("[data-turn-page]");
   if (pageBtn) {
     e.preventDefault();
@@ -14035,12 +14021,11 @@ document.addEventListener("click", async (e) => {
     const thread = pageBtn.dataset.threadPage;
     const conv = conversations().find((c) => c.thread === thread);
     if (conv) {
-      const pages = Math.max(1, Math.ceil(conv.turns.length / TURNS_PER_PAGE));
-      const cur = turnPageOffset(thread, conv.turns.length);
-      const next = pageBtn.dataset.turnPage === "older" ? Math.min(pages - 1, cur + 1) : Math.max(0, cur - 1);
-      if (next === 0) state.turnPage.delete(thread);
-      else state.turnPage.set(thread, next);
-      renderConversation(thread);
+      const moved = wtTurnFold.stepPage(state, thread, conv.turns.length, pageBtn.dataset.turnPage);
+      if (moved) {
+        wtTurnFold.foldPage(state, conv.turns, moved.left.offset);
+        renderConversation(thread);
+      }
     }
     return;
   }
@@ -15356,12 +15341,9 @@ function humanShow(q) {
   if (!conv) return false;
   const turn = conv.turns.find((t) => t.id === q.turnId);
   if (!turn || !humanOpenOnTurn(turn, q.kind)) return false;
-  // The turn that owns the question, unfolded and paged in. Written before either home is opened, because the float
-  // draws its card with `conversationHtml` too and reads exactly this state: one idea of "this turn is the one".
-  const pages = Math.max(1, Math.ceil(conv.turns.length / TURNS_PER_PAGE));
-  state.turnOpen.set(turn.id, true);
-  state.turnCompact.delete(turn.id);
-  state.turnPage.set(q.thread, pages - 1 - Math.floor(conv.turns.indexOf(turn) / TURNS_PER_PAGE));
+  // The turn that owns the question, unfolded, un-frozen and paged in — one call, because the float draws its card
+  // with `conversationHtml` too and reads exactly this state: one idea of "this turn is the one".
+  wtTurnFold.reveal(state, q.thread, conv.turns, turn.id);
   const assistant = assistantSessionFor(q.thread);
   let card;
   if (assistant) {
@@ -15630,9 +15612,9 @@ try {
 // it, so a mis-click in a 200-row list opens a console (cheap, reversible) rather than a window (not).
 //
 // WHAT THIS REACHES OUT FOR, by name at call time (all page globals): $, esc, tailPath, keyOf, fmtAgo
-// (core/dom-format.js), apiFetch (core/transport.js), state, conversations, renderConversation, renderJobs,
-// assistantSessionFor, hotRowFor, hotOpenPath, flashHotCard, scrollCardUnderBar, showBanner, toggleProject,
-// humanTextEntry and TURNS_PER_PAGE (this file).
+// (core/dom-format.js), apiFetch (core/transport.js), wtTurnFold (core/turn-fold.js), state, conversations,
+// renderConversation, renderJobs, assistantSessionFor, hotRowFor, hotOpenPath, flashHotCard, scrollCardUnderBar,
+// showBanner, toggleProject and humanTextEntry (this file).
 
 const DELIVER_DEFAULT_CAP = 200;
 const deliver = {
@@ -16594,12 +16576,9 @@ function deliverOpenAgent(seq) {
     }
   }
   if (conv && jobId) {
-    const turn = conv.turns.find((t) => t.id === jobId);
-    const index = conv.turns.indexOf(turn);
-    const pages = Math.max(1, Math.ceil(conv.turns.length / TURNS_PER_PAGE));
-    state.turnOpen.set(jobId, true);
-    state.turnCompact.delete(jobId);
-    state.turnPage.set(thread, pages - 1 - Math.floor(Math.max(0, index) / TURNS_PER_PAGE));
+    // The recorded turn, unfolded and paged in — the same claim `humanShow` makes, written once in the module. The
+    // trimmed case above already re-pointed `jobId` at the newest turn, so `reveal` always finds it.
+    wtTurnFold.reveal(state, thread, conv.turns, jobId);
   }
 
   let card;

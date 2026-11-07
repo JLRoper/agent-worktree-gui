@@ -10,7 +10,7 @@
 //      row keeps behaving exactly as it did;
 //   2. "leave as is" pins an open turn open and writes NOTHING about a folded one — re-opening a turn the reader
 //      folded by hand is not "leave it";
-//   3. "minimize" clears both flags, so every earlier turn falls to its one-line peek;
+//   3. "minimize" closes both flags, so every earlier turn falls to its one-line peek;
 //   4. an unknown or missing stored value falls back to the snippet, never to a mode the page cannot draw;
 //   5. the row exists once, in the Agent cards group, as a select over exactly those three values, and the page
 //      paints it at boot and writes it on change.
@@ -18,6 +18,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { sliceRegion } from "../tools/panel-testkit.mjs";
+
+// The plan writes through the transcript renderer's fold book (public/core/turn-fold.js), so the sliced region is
+// given the real module rather than a stub — the same object the page loads.
+await import("../public/core/turn-fold.js");
+const wtTurnFold = globalThis.wtTurnFold;
 
 const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
@@ -37,8 +42,9 @@ function page({ stored = null, select = null } = {}) {
     "localStorage",
     "state",
     "$",
+    "wtTurnFold",
     `${region}; return { PREV_TURN_MODES, previousTurnPlan, applyPreviousTurnPlan, prevTurnMode, applyPrevTurnMode };`,
-  )(localStorage, state, $);
+  )(localStorage, state, $, wtTurnFold);
   return { ...api, store, state };
 }
 
@@ -62,7 +68,7 @@ test("the default answer is the snippet the panel drew before the setting existe
   assert.equal(plan[1].compact, undefined);
 
   p.applyPreviousTurnPlan(plan);
-  assert.deepEqual([...p.state.turnOpen.keys()], [], "no older turn is left explicitly open");
+  assert.equal([...p.state.turnOpen.values()].some(Boolean), false, "no older turn is left explicitly open");
   assert.deepEqual([...p.state.turnCompact].sort(), ["turn-1", "turn-3"], "the turns that were showing keep a snippet");
 });
 
@@ -96,7 +102,7 @@ test("minimize folds every earlier turn to its one-line peek", () => {
     { id: "turn-1", open: false, compact: false },
   ]);
   p.applyPreviousTurnPlan(plan);
-  assert.deepEqual([...p.state.turnOpen.keys()], [], "nothing stays open");
+  assert.equal([...p.state.turnOpen.values()].some(Boolean), false, "nothing stays open");
   assert.deepEqual([...p.state.turnCompact], [], "nothing keeps a snippet either");
 });
 

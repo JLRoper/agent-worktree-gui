@@ -850,6 +850,11 @@
        gateway no longer has must never draw a button the gateway would refuse. Loaded before app.js, which draws
        from it; test/steerable.test.js imports this same file. -->
   <script src="/core/steerable.js"></script>
+  <!-- The transcript renderer's fold book: which turn a card opens on, what the pager folds on the way past, and the
+       one pinned copy that gesture leaves for the reader's own click. Published on globalThis as `wtTurnFold`;
+       app.js's renderer and assistant.js's own card both write through it, and test/turn-fold.test.js imports this
+       same file. Loaded before app.js, which reads it at render time. -->
+  <script src="/core/turn-fold.js"></script>
   <!-- How fast a run's output reaches the reader's eyes: the word pacer (a paragraph typing out) and the line gate
        (whole lines walking into a console), both driven from app.js by the two Settings > Display rows. Published
        on globalThis as `wtType`; test/type-stream.test.js imports this same file. -->
