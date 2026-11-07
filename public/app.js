@@ -11369,7 +11369,17 @@ function reorderProjects() {
 
 // One accordion per folder. The header carries the folder path and the aggregate state of
 // everything inside it, so a collapsed folder still says what it holds.
-function rootChips(projects, hidden = 0) {
+// How many of a folder's projects are on the FREQUENT scan: the recent tier the scheduler reads every few seconds,
+// as opposed to the old tier that only its hourly stat slice touches. The count comes from `project.tier`, which is
+// the server's own answer, so the header cannot drift from what the scheduler is actually doing. Rendered to the
+// right of the project count, where the folder's own totals live.
+function rootScanChip(scanning, days = recentDays()) {
+  if (!Number.isFinite(scanning)) return "";
+  const n = Math.max(0, Math.round(scanning));
+  return `<span class="chip scan" title="${n} of this folder's projects have a commit inside the last ${days} days and are read on the frequent scan; every other project sits on the hourly stat gate">${n} scanning</span>`;
+}
+
+function rootChips(projects, hidden = 0, scanning = null) {
   const names = new Set(projects.map((p) => p.name));
   const rows = [...state.rows.values()].filter((r) => names.has(r.project));
   const unmerged = rows.filter((r) => {
@@ -11380,8 +11390,9 @@ function rootChips(projects, hidden = 0) {
   const live = rows.filter(isRowLive).length;
   const out = [
     `<span class="chip">${projects.length} project${projects.length === 1 ? "" : "s"}</span>`,
+    rootScanChip(scanning),
     `<span class="chip">${rows.length} worktrees</span>`,
-  ];
+  ].filter(Boolean);
   if (unmerged) out.push(`<span class="chip bad">${unmerged} unmerged</span>`);
   if (dirty) out.push(`<span class="chip warn">${dirty} dirty</span>`);
   if (live) out.push(`<span class="chip live">${live} live</span>`);
@@ -11396,6 +11407,9 @@ function rootSection(root, allProjects) {
   const recentOnly = state.recentRoots.has(root);
   const projects = shownInRoot(root, allProjects);
   const hidden = allProjects.length - projects.length;
+  // The folder's frequent-scan count is over ALL its projects, not the ones the recent-only filter is showing: it
+  // answers "how many of these am I reading often", which does not change when the reader toggles the filter.
+  const scanning = allProjects.filter((p) => rootOf(p) === root && p.tier !== "old").length;
   const anyOpen = projects.some((p) => state.expandedProjects.has(p.name));
   const recentTitle = recentOnly
     ? `showing ${projects.length} of ${allProjects.length} projects - only those with a commit in the last ${recentDays()} days; click to show every project`
@@ -11404,7 +11418,7 @@ function rootSection(root, allProjects) {
     <div class="root-head" data-toggle-root="${esc(root)}" title="${open ? "collapse" : "expand"} ${esc(labelRoot(root))}">
       <span class="chev">${open ? "\u25be" : "\u25b8"}</span>
       <h2>${esc(labelRoot(root))}</h2>
-      <div class="chips">${rootChips(projects, hidden)}</div>
+      <div class="chips">${rootChips(projects, hidden, scanning)}</div>
       <span class="spacer"></span>
       <span class="root-filter" title="filter the projects in this folder by name or path — Escape clears it">
         <input class="root-search mono" data-root-search="${esc(root)}" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" spellcheck="false"
