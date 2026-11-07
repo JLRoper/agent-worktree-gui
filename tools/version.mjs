@@ -19,10 +19,21 @@
 //                      base's (main itself: nothing to land, nothing to bump). The pre-push hook calls it.
 //                      It never writes.
 //   apply <level>      write the new version to package.json (the one place it lives), commit that write as the
-//                      bump, and anchor the commit with an annotated v<version> tag. Run by the landing agent,
-//                      deliberately; never by check and never by a hook. In a tree that already carries other
-//                      changes it writes the number and stops — no commit, no tag — because a tag belongs to a
+//                      bump, anchor the commit with an annotated v<version> tag, and CLAIM the number by pushing
+//                      that tag to origin. Run by the landing agent, deliberately; never by check and never by a
+//                      hook. The number is computed above the higher of the branch and the base, so a branch cut
+//                      before main moved still bumps above main. In a tree that already carries other changes it
+//                      writes the number and stops — no commit, no tag, no claim — because a tag belongs to a
 //                      commit that carries the bump and nothing else; it says which of the two happened.
+//                      --no-claim writes and tags without reaching the network; `claim` is then the step.
+//   claim [--level <l>]  give this branch's number its claim: push refs/tags/v<version> to origin. git refuses
+//                      to create a ref that already exists, atomically, for every lane and every machine, so a
+//                      rejected push means the number is taken. The tool then re-derives the next free number at
+//                      the same level, rewrites the bump commit, re-tags it and pushes again — the losing lane
+//                      re-bumps unaided. Prints the claim, the number it had to move past, and the commit the tag
+//                      peels to. Exit 0 when the number is claimed (or already carried by this commit), when the
+//                      branch declares no number above the base (a render spends no number), or when the tree is
+//                      not the one to rewrite; exit 1 when a claim was needed and could not be made.
 //   tag                anchor the commit whose package.json patch FIRST declared the version the ref's tree
 //                      carries — not the ref's tip. A changelog render commit on top of a bump still reads the
 //                      bumped number, and tagging the tip names a commit whose diff touches only
@@ -269,6 +280,211 @@ function createTag(version, commit, { force = false } = {}) {
   ]);
 }
 
+// Publish the claim. A tag that only exists in this clone reserves nothing: `git push origin refs/tags/v<v>` is
+// what every other lane reads, and `--force` is the post-merge move of a claim this landing already owns.
+function pushTag(version, { remote = "origin", force = false } = {}) {
+  return gitRun(["push", ...(force ? ["--force"] : []), remote, `refs/tags/v${version}`]);
+}
+
+// ---------- the claim: a number is taken by pushing its tag ----------
+//
+// The number is chosen on a branch and consumed on main minutes later, and the only thing every lane and every
+// machine can see is the remote. `git push origin refs/tags/v<next>` either creates the ref or fails because it
+// already exists, and git decides that atomically — so the annotated tag that anchors the bump is also the
+// reservation, and a refused push is the signal to take the next number above it. The options are costed in
+// docs/research/version-integrity/parallel-lanes-and-one-version.md; this is option B, the reader's choice.
+
+function maxVersion(a, b) {
+  if (a == null) return b == null ? null : b;
+  if (b == null) return a;
+  const order = compareVersions(a, b);
+  if (order === null) return a;
+  return order >= 0 ? a : b;
+}
+
+// Every v<major>.<minor>.<patch> tag the remote carries, peeled to the commit it names. One `git ls-remote` for
+// the whole set: an annotated tag prints twice — the tag object and `<name>^{}` — and the peeled line is the
+// commit a reader follows. The remote, not this clone's tag list, is what "taken" means.
+function remoteTagMap(remote) {
+  const r = gitRun(["ls-remote", "--tags", remote]);
+  if (!r.ok) return { ok: false, err: r.err || r.out || "git ls-remote failed" };
+  const tags = new Map();
+  for (const line of r.out.split("\n")) {
+    const [sha, ref] = line.split("\t");
+    if (!sha || !ref) continue;
+    const m = /^refs\/tags\/(v\d+\.\d+\.\d+)(\^\{\})?$/.exec(ref);
+    if (!m) continue;
+    const version = m[1].slice(1);
+    if (m[2]) tags.set(version, { commit: sha, annotated: true });
+    else if (!tags.has(version)) tags.set(version, { commit: sha, annotated: false });
+  }
+  return { ok: true, tags };
+}
+
+function hasRemote(remote) {
+  return gitRun(["remote", "get-url", remote]).ok;
+}
+
+// The level a lost claim re-bumps at when the caller did not state one: the shape of the jump the branch had
+// already made above its base. A minor over the base is a minor; anything else is a patch.
+function inferLevel(version, baseVersion) {
+  const a = semver(version);
+  const b = semver(baseVersion);
+  if (!a || !b) return "patch";
+  if (a[0] !== b[0]) return "major";
+  if (a[1] !== b[1]) return "minor";
+  return "patch";
+}
+
+// Rewrite the bump commit so it declares `candidate` instead of `declared`, and re-anchor its tag. Only the
+// commit that carries the bump, only while it is the tip, and only while it is unpublished: a claim lost after
+// the branch was pushed is a rebase the landing agent makes, not history this tool rewrites underneath it.
+function rebumpAbove({ declared, level, declSha, occupied, baseVersion }) {
+  const head = gitOk(["rev-parse", "HEAD"]);
+  if (head !== declSha) {
+    return { ok: false, error:
+      `the bump is at ${String(declSha).slice(0, 10)}, but HEAD is ${String(head).slice(0, 10)}: only a bump commit at ` +
+      "the tip can be rewritten in place. Move it to the tip, then run claim again — nothing was changed." };
+  }
+  const up = gitRun(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]);
+  if (up.ok && up.out && gitRun(["merge-base", "--is-ancestor", declSha, up.out]).ok) {
+    return { ok: false, error:
+      `the bump commit ${declSha.slice(0, 10)} is already on ${up.out}, so rewriting it would rewrite published ` +
+      `history. Land the branch as it is and let the merge re-create the commit, or bump on a fresh commit ` +
+      `(node tools/version.mjs apply ${level}) — nothing was changed.` };
+  }
+  const dirty = dirtyFiles();
+  if (dirty.length) {
+    return { ok: false, error:
+      `the tree carries ${dirty.length} other change${dirty.length === 1 ? "" : "s"}, so a rewritten bump commit ` +
+      "would carry somebody else's work — nothing was changed" };
+  }
+  let candidate = nextVersion(declared, level);
+  let guard = 0;
+  while (candidate && guard < 64) {
+    const claimed = occupied.has(candidate);
+    const belowBase = baseVersion != null && compareVersions(candidate, baseVersion) <= 0;
+    if (!claimed && !belowBase) break;
+    candidate = nextVersion(candidate, level);
+    guard += 1;
+  }
+  if (!candidate) return { ok: false, error: `could not derive a free number above ${declared} at ${level}` };
+
+  const text = readWorking();
+  if (text === null) return { ok: false, error: `no package.json at ${PKG} — nothing was changed` };
+  let wrote = false;
+  const out = text.replace(/^([ \t]*"version"[ \t]*:[ \t]*")[^"]*(")/m, (_m, a, b) => {
+    wrote = true;
+    return a + candidate + b;
+  });
+  if (!wrote) return { ok: false, error: "could not find a top-level \"version\" line to write — nothing was changed" };
+  writeFileSync(PKG, out);
+  const added = gitRun(["add", "--", "package.json"]);
+  if (!added.ok) return { ok: false, error: `the number is written but git add refused — ${added.err}` };
+  const body = gitOk(["log", "-1", "--format=%B"]) || "";
+  const rest = body.split("\n").slice(1).join("\n").trim();
+  const subject = `chore: ${candidate} — the version this landing carries`;
+  const amended = gitRun(["commit", "--amend", "-m", subject, ...(rest ? ["-m", rest] : [])]);
+  if (!amended.ok) return { ok: false, error: `the number is written but git commit --amend refused — ${amended.err}` };
+  const sha = gitOk(["rev-parse", "HEAD"]) || "";
+  if (tagAt(`v${declared}`)) {
+    const deleted = gitRun(["tag", "-d", `v${declared}`]);
+    if (!deleted.ok) {
+      return { ok: false, error: `the bump was rewritten but the old tag v${declared} could not be removed — ${deleted.err}` };
+    }
+  }
+  const made = createTag(candidate, sha);
+  if (!made.ok) return { ok: false, error: `the bump was rewritten but v${candidate} was NOT created — ${made.err}` };
+  return { ok: true, version: candidate, commit: sha };
+}
+
+// One claim, retried until the number is ours or no free number can be found. Every iteration re-reads HEAD
+// (a rewrite moves it), the remote's tags (another lane moves them) and the base (a merge moves it), so nothing
+// is cached across a rejection.
+function claimVersion({ level, remote = "origin", maxAttempts = 12 }) {
+  const notes = [];
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const declared = versionAtHead();
+    const head = gitOk(["rev-parse", "HEAD"]);
+    if (!declared || !head) {
+      return { code: 1, notes, error: "HEAD's package.json has no readable \"version\" — nothing to claim" };
+    }
+    const { ref: baseRef } = resolveBase();
+    const baseVersion = baseRef ? versionAt(baseRef) : null;
+    const above = baseVersion === null ? 1 : compareVersions(declared, baseVersion);
+    if (above === null) {
+      return { code: 2, notes, error: `cannot compare ${declared} with ${baseRef}'s ${baseVersion}` };
+    }
+    if (above <= 0) {
+      return { code: 0, notes, nothing: true, version: declared, baseRef, baseVersion };
+    }
+
+    let found;
+    try {
+      found = findDeclaration({ root: ROOT, ref: head, version: declared });
+    } catch (e) {
+      return { code: 1, notes, error: `could not walk package.json's history at HEAD — ${String(e.stderr || e.message).trim()}` };
+    }
+    if (!found.declaration) {
+      return { code: 1, notes, error:
+        `no commit reachable from HEAD first carries ${declared}: a number whose declaring commit cannot be found ` +
+        "has no honest anchor, so there is nothing to claim — nothing was changed" };
+    }
+    const declSha = found.declaration.sha;
+
+    const remoteRead = remoteTagMap(remote);
+    if (!remoteRead.ok) {
+      return { code: 1, notes, error:
+        `could not read ${remote}'s tags, so v${declared} is UNCLAIMED — ${remoteRead.err}. Fix the remote, then run: ` +
+        "node tools/version.mjs claim" };
+    }
+    const holder = remoteRead.tags.get(declared);
+    if (holder && holder.commit === declSha) {
+      // The remote carries this number at the commit this branch declares it at: the claim is already ours.
+      const local = tagAt(`v${declared}`);
+      if (!local || local.commit !== declSha) createTag(declared, declSha, { force: Boolean(local) });
+      return { code: 0, notes, claimed: { version: declared, commit: declSha, attempts: attempt }, already: true };
+    }
+    if (holder) {
+      const moved = rebumpAbove({ declared, level, declSha, occupied: remoteRead.tags, baseVersion });
+      if (!moved.ok) return { code: 1, notes, error: moved.error };
+      notes.push(`  claim     v${declared} is taken: ${remote} carries it at ${String(holder.commit).slice(0, 10)}, this branch's declaration is ${declSha.slice(0, 10)}`);
+      notes.push(`  re-bumped ${declared} -> ${moved.version} (${level}) — bump commit rewritten, v${moved.version} anchored at ${moved.commit.slice(0, 10)}`);
+      continue;
+    }
+
+    // Free on the remote: the local tag has to name the declaring commit, and then the push IS the claim.
+    const local = tagAt(`v${declared}`);
+    if (!local || local.commit !== declSha || !local.annotated) {
+      const made = createTag(declared, declSha, { force: Boolean(local) });
+      if (!made.ok) return { code: 1, notes, error: `v${declared} could not be created at ${declSha.slice(0, 10)} — ${made.err}` };
+      notes.push(`  tag       v${declared} (annotated) at ${declSha.slice(0, 10)}`);
+    }
+    const pushed = gitRun(["push", remote, `refs/tags/v${declared}`]);
+    if (pushed.ok) {
+      return { code: 0, notes, claimed: { version: declared, commit: declSha, attempts: attempt } };
+    }
+    // The push failed. Ask the remote before believing anything: a network failure and a lost race both exit
+    // non-zero, and only one of them means "re-bump".
+    const after = remoteTagMap(remote);
+    const now = after.ok ? after.tags.get(declared) : null;
+    if (now && now.commit === declSha) {
+      return { code: 0, notes, claimed: { version: declared, commit: declSha, attempts: attempt }, already: true };
+    }
+    if (now) {
+      const moved = rebumpAbove({ declared, level, declSha, occupied: after.tags, baseVersion });
+      if (!moved.ok) return { code: 1, notes, error: moved.error };
+      notes.push(`  claim     the push lost: ${remote} now carries v${declared} at ${String(now.commit).slice(0, 10)}`);
+      notes.push(`  re-bumped ${declared} -> ${moved.version} (${level}) — bump commit rewritten, v${moved.version} anchored at ${moved.commit.slice(0, 10)}`);
+      continue;
+    }
+    return { code: 1, notes, error:
+      `git push of refs/tags/v${declared} refused, and ${remote} does not show that tag at another commit — ` +
+      `${pushed.err || pushed.out}. Nothing was claimed: fix the push, then run: node tools/version.mjs claim` };
+  }
+  return { code: 1, notes, error: `gave up after ${maxAttempts} claim${maxAttempts === 1 ? "" : "s"}: every number it tried was taken` };
+}
+
 // ---------- the three modes ----------
 
 function modeSuggest() {
@@ -450,11 +666,22 @@ function modeCheck(argv) {
   return 1;
 }
 
-function modeApply(level) {
+function modeApply(level, argv = []) {
   const want = String(level || "").toLowerCase();
   if (!LEVELS.includes(want)) {
     console.error(`version apply: needs a level — ${LEVELS.join(" | ")} (got: ${level === undefined ? "nothing" : JSON.stringify(level)})`);
     return 2;
+  }
+  let claim = true;
+  let remote = "origin";
+  for (let i = 0; i < argv.length; i += 1) {
+    const a = argv[i];
+    if (a === "--no-claim") claim = false;
+    else if (a === "--remote") remote = String(argv[(i += 1)] || "origin");
+    else {
+      console.error(`version apply: unknown argument: ${a}`);
+      return 2;
+    }
   }
   const text = readWorking();
   if (text === null) {
@@ -466,19 +693,24 @@ function modeApply(level) {
     console.error(`version apply: package.json's "version" is missing or not readable — refusing to guess`);
     return 2;
   }
-  const next = nextVersion(old, want);
-  if (!next) {
-    console.error(`version apply: "${old}" is not a major.minor.patch version I can bump`);
-    return 2;
+  // The number is taken above the BASE as well as above this branch: a branch cut before main moved still
+  // carries main's old number, and bumping from that stale value writes a number main has already passed.
+  const { ref: baseRef } = resolveBase();
+  const baseVersion = baseRef ? versionAt(baseRef) : null;
+  const floor = maxVersion(old, baseVersion);
+  // A number this clone already anchors is not free: a lane that has fetched another lane's claim carries its
+  // tag, and stepping past it here is cheaper than writing the number and losing the claim a moment later. The
+  // remote is the authority either way — the push is what decides — so nothing here stands in for the claim.
+  let next = nextVersion(floor, want);
+  const skipped = [];
+  for (let guard = 0; next && guard < 64; guard += 1) {
+    const local = tagAt(`v${next}`);
+    if (!local) break;
+    skipped.push({ version: next, at: local.commit });
+    next = nextVersion(next, want);
   }
-  // A version is anchored once. Writing a number that already names another commit would make the tag and the
-  // gate disagree about what the number means, so this is refused before the file moves.
-  const taken = tagAt(`v${next}`);
-  if (taken) {
-    console.error(
-      `version apply: package.json would declare ${next}, and v${next} already names ${taken.commit.slice(0, 10)}` +
-        " — a version is anchored once; move or delete that tag first",
-    );
+  if (!next) {
+    console.error(`version apply: "${floor}" is not a major.minor.patch version I can bump`);
     return 2;
   }
   // Dirtiness is read BEFORE the write: package.json is about to be the only change the bump commit may carry,
@@ -498,6 +730,12 @@ function modeApply(level) {
   writeFileSync(PKG, out);
   console.log(`version apply: ${want}`);
   console.log(`  package.json  ${old} -> ${next}`);
+  if (baseVersion && compareVersions(baseVersion, old) > 0) {
+    console.log(`  base          ${baseRef} reads ${baseVersion}, so the number was taken above the base, not above this branch`);
+  }
+  for (const s of skipped) {
+    console.log(`  skipped       v${s.version} is already anchored at ${String(s.at).slice(0, 10)} — taken, so this branch takes ${next}`);
+  }
   if (dirty.length) {
     console.log(
       `  no commit and no tag: the tree carried ${dirty.length} other change${dirty.length === 1 ? "" : "s"} ` +
@@ -505,7 +743,8 @@ function modeApply(level) {
     );
     for (const line of dirty.slice(0, 8)) console.log(`    ${line}`);
     if (dirty.length > 8) console.log(`    … and ${dirty.length - 8} more`);
-    console.log("  commit the change, then anchor it: node tools/version.mjs tag");
+    console.log("  the number is written but UNCLAIMED; commit the change, then anchor and claim it:");
+    console.log("    node tools/version.mjs tag && node tools/version.mjs claim");
     return 0;
   }
   const subject = `chore: ${next} — the version this landing carries`;
@@ -529,8 +768,74 @@ function modeApply(level) {
   }
   console.log(`  tag     v${next} (annotated) at ${sha.slice(0, 10)}`);
   console.log("  the board's config line reads this at its next start (server.js reads package.json once, at boot).");
-  console.log("  a rebase merge re-creates this commit — after the merge, move the tag onto the commit main carries:");
-  console.log(`    node tools/version.mjs tag --ref origin/main --force && git push origin v${next} --force`);
+
+  // The claim. A number nothing on the remote carries is a number the next lane will choose too; the push is
+  // what makes it ours, and a refused push is the one signal that costs a re-bump now instead of a red tip later.
+  if (!claim) {
+    console.log("  claim     skipped (--no-claim): the number is not reserved until its tag is pushed — run");
+    console.log("    node tools/version.mjs claim");
+  } else if (!hasRemote(remote)) {
+    console.log(`  claim     skipped: no remote named ${remote} — the number stays unclaimed until one exists`);
+  } else {
+    const claimed = claimVersion({ level: want, remote });
+    for (const line of claimed.notes) console.log(line);
+    if (claimed.code !== 0) {
+      console.error(`  claim     FAILED — ${claimed.error}`);
+      console.error("  the bump commit and its tag are local only: nothing on the remote reserves this number.");
+      return 1;
+    }
+    if (claimed.claimed) {
+      console.log(`  claim     v${claimed.claimed.version} is on ${remote} at ${claimed.claimed.commit.slice(0, 10)} — the number is taken by its tag`);
+    }
+    console.log("  a rebase merge re-creates this commit — after the merge, move the claim onto the commit main carries:");
+    console.log("    node tools/version.mjs tag --ref origin/main --force --fetch --push");
+  }
+  return 0;
+}
+
+// The claim on its own: for a bump committed by hand (the dirty-tree path), or for a lane that wrote its number
+// with --no-claim while offline. `apply` runs the same loop; this is the second door, not a second rule.
+function modeClaim(argv) {
+  let level = null;
+  let remote = "origin";
+  let maxAttempts = 12;
+  for (let i = 0; i < argv.length; i += 1) {
+    const a = argv[i];
+    if (a === "--level") level = String(argv[(i += 1)] || "").toLowerCase();
+    else if (a === "--remote") remote = String(argv[(i += 1)] || "origin");
+    else if (a === "--max") maxAttempts = Math.max(1, Number(argv[(i += 1)]) || 12);
+    else {
+      console.error(`version claim: unknown argument: ${a}`);
+      return 2;
+    }
+  }
+  if (level !== null && !LEVELS.includes(level)) {
+    console.error(`version claim: --level must be ${LEVELS.join(" | ")} (got: ${JSON.stringify(level)})`);
+    return 2;
+  }
+  if (!hasRemote(remote)) {
+    console.error(`version claim: no remote named ${remote} — there is nothing to claim against`);
+    return 2;
+  }
+  const declared = versionAtHead();
+  const { ref: baseRef } = resolveBase();
+  const baseVersion = baseRef ? versionAt(baseRef) : null;
+  const effective = level || inferLevel(declared, baseVersion);
+  const result = claimVersion({ level: effective, remote, maxAttempts });
+  for (const line of result.notes) console.log(line);
+  if (result.code !== 0) {
+    console.error(`version claim: refused — ${result.error}`);
+    return result.code;
+  }
+  if (result.nothing) {
+    console.log(`version claim: nothing to claim — this branch declares ${result.version} and ${result.baseRef} carries ${result.baseVersion}`);
+    console.log("  a render that is the whole PR spends no number and creates no tag; nothing was pushed.");
+    return 0;
+  }
+  const c = result.claimed;
+  if (result.already) console.log(`version claim: v${c.version} is already claimed at ${String(c.commit).slice(0, 10)} — nothing to push`);
+  else console.log(`version claim: v${c.version} claimed on ${remote} at ${String(c.commit).slice(0, 10)} (attempt ${c.attempts})`);
+  console.log(`  the claim is the annotated tag: git ls-remote --tags ${remote} carries v${c.version}, so a lane that asks for it is refused.`);
   return 0;
 }
 
@@ -544,13 +849,28 @@ function modeApply(level) {
 function modeTag(argv) {
   let ref = "HEAD";
   let force = false;
+  let fetch = false;
+  let push = false;
+  let remote = "origin";
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
     if (a === "--ref") ref = String(argv[(i += 1)] || "HEAD");
     else if (a === "--force") force = true;
+    else if (a === "--fetch") fetch = true;
+    else if (a === "--push") push = true;
+    else if (a === "--remote") remote = String(argv[(i += 1)] || "origin");
     else {
       console.error(`version tag: unknown argument: ${a}`);
       return 2;
+    }
+  }
+  // The move is post-merge, so the ref to read is the base AFTER the merge. On a clone that has not fetched since,
+  // `--ref origin/main` resolves to the pre-merge commit the caller is trying to leave.
+  if (fetch) {
+    const fetched = gitRun(["fetch", remote, "--prune", "--tags"]);
+    if (!fetched.ok) {
+      console.error(`version tag: git fetch ${remote} refused — ${fetched.err}`);
+      return 1;
     }
   }
   const tip = gitOk(["rev-parse", "--verify", "--quiet", `${ref}^{commit}`]);
@@ -613,6 +933,18 @@ function modeTag(argv) {
   }
   const name = `v${version}`;
   const existing = tagAt(name);
+  // The claim travels with the anchor: --push sends the tag this run created or moved, so the post-merge step is
+  // one command and the anchor the reader follows is the same ref every lane reads as "taken".
+  const publish = () => {
+    if (!push) return 0;
+    const sent = pushTag(version, { remote, force: Boolean(existing) });
+    if (!sent.ok) {
+      console.error(`version tag: ${name} is at ${commit.slice(0, 10)}, but the push refused — ${sent.err}`);
+      return 1;
+    }
+    console.log(`  pushed    ${name} to ${remote}${existing ? " (forced: the claim moved)" : ""}`);
+    return 0;
+  };
   // Said out loud whenever the anchor is not the ref's tip, so a reader who resolved origin/main can see the
   // tag followed the declaration and not the render commit.
   const namedTip = /^[0-9a-f]{4,40}$/i.test(ref) && tip.toLowerCase().startsWith(ref.toLowerCase())
@@ -621,7 +953,7 @@ function modeTag(argv) {
   const pastTip = commit === tip ? "" : ` — the commit that first declared ${version}, not ${namedTip}`;
   if (existing && existing.commit === commit && existing.annotated) {
     console.log(`version tag: ${name} is already an annotated tag at ${commit.slice(0, 10)}${pastTip} — nothing to do`);
-    return 0;
+    return publish();
   }
   if (existing && existing.commit === commit && !existing.annotated && !force) {
     console.error(
@@ -647,7 +979,7 @@ function modeTag(argv) {
     `version tag: ${name} (annotated) at ${commit.slice(0, 10)}` +
       `${existing ? ` — moved from ${existing.commit.slice(0, 10)}` : ""}${pastTip}`,
   );
-  return 0;
+  return publish();
 }
 
 // Anchor every version in package.json's history that has no tag, at the commit that first declared it. This is
@@ -727,20 +1059,28 @@ const [mode, ...rest] = process.argv.slice(2);
 const code =
   mode === "suggest" ? modeSuggest()
     : mode === "check" ? modeCheck(rest)
-      : mode === "apply" ? modeApply(rest[0])
-        : mode === "tag" ? modeTag(rest)
-          : mode === "backfill" ? modeBackfill(rest)
-            : (console.error([
-              "tools/version.mjs — the panel's one version number: advice, gate, write, anchor, backfill.",
-              "",
-              "  node tools/version.mjs suggest                     print the level the commits read as (advice; writes nothing)",
-              "  node tools/version.mjs check [--base <ref>]        exit 1 unless HEAD's version is above the base ref's",
-              "  node tools/version.mjs apply <patch|minor|major>   write the new version, commit it and tag that commit",
-              "  node tools/version.mjs tag [--ref <ref>] [--force] anchor the commit that first declared the version",
-              "                                                    in <ref>'s tree (--ref origin/main --force: the post-merge move)",
-              "  node tools/version.mjs backfill [--ref <ref>] [--push]",
-              "                                                    tag every untagged version at the commit that declared it",
-              "",
-              `  ${DOC} is the scale.`,
-            ].join("\n")), 2);
+      : mode === "apply" ? modeApply(rest[0], rest.slice(1))
+        : mode === "claim" ? modeClaim(rest)
+          : mode === "tag" ? modeTag(rest)
+            : mode === "backfill" ? modeBackfill(rest)
+              : (console.error([
+                "tools/version.mjs — the panel's one version number: advice, gate, write, claim, anchor, backfill.",
+                "",
+                "  node tools/version.mjs suggest                     print the level the commits read as (advice; writes nothing)",
+                "  node tools/version.mjs check [--base <ref>]        exit 1 unless HEAD's version is above the base ref's",
+                "  node tools/version.mjs apply <patch|minor|major> [--no-claim] [--remote <name>]",
+                "                                                    write the new version above the base, commit it, tag",
+                "                                                    that commit and claim the number by pushing its tag",
+                "  node tools/version.mjs claim [--level <l>] [--max <n>] [--remote <name>]",
+                "                                                    push v<version> to claim it; if it is taken, re-bump",
+                "                                                    above it at the same level and push again",
+                "  node tools/version.mjs tag [--ref <ref>] [--force] [--fetch] [--push] [--remote <name>]",
+                "                                                    anchor the commit that first declared the version",
+                "                                                    in <ref>'s tree (--ref origin/main --force --fetch --push:",
+                "                                                    the post-merge move of the claim)",
+                "  node tools/version.mjs backfill [--ref <ref>] [--push]",
+                "                                                    tag every untagged version at the commit that declared it",
+                "",
+                `  ${DOC} is the scale.`,
+              ].join("\n")), 2);
 process.exit(code);
