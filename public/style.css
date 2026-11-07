@@ -946,6 +946,9 @@ button.btn-plus:hover { background: #1f4a2a; color: #d6ffe0; border-color: #3fb9
 .chip.bad { color: #ff9c94; border-color: #57262a; background: var(--red-bg); }
 .chip.warn { color: #f0c674; border-color: #4d3d12; background: var(--amber-bg); }
 .chip.info { color: #9ecbff; border-color: #1c3a56; background: var(--blue-bg); }
+/* How many of a folder's projects are on the frequent (recent-tier) scan. Quiet on purpose: it states the
+   schedule, not a problem, so it must not read as a warning the way .warn and .bad do. */
+.chip.scan { color: #a7d8c9; border-color: #21453b; background: #101f1b; }
 /* "live" is a Hermes-session fact, so it wears the same violet as the ⧉ hermes chip. */
 .chip.live { color: #c8a6ff; border-color: #3b2d5c; background: var(--violet-bg); }
 /* The project's "n panel agents" chip: a LIGHTER violet than the live/hermes chip (#c8a6ff), so the two
