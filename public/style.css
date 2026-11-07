@@ -1998,6 +1998,31 @@ tr.row:hover .btn-refresh-tree { opacity: 1; }
 .btn-row-rename:disabled { opacity: .3; cursor: progress; }
 tr.row:hover .btn-row-rename { opacity: .9; }
 
+/* The fold on a parent row: it puts the trees cut from this one out of sight under it, and brings them back. The same
+   quiet-at-rest family as the ✎ — a board of rows must not look like a board of buttons — but it stays readable while
+   the group is folded (the state has to be visible from the row, not only from the children that are no longer on
+   screen). `is-folded` is the closed chevron; the tooltip and aria-expanded carry the count. */
+.btn-row-fold {
+  border: 1px solid transparent;
+  background: none;
+  color: var(--dim);
+  border-radius: 4px;
+  font: 11px/1.4 var(--term);
+  padding: 0 4px;
+  margin-left: 2px;
+  cursor: pointer;
+  opacity: .55;
+  vertical-align: 1px;
+}
+.btn-row-fold:hover { background: #232b3a; border-color: var(--line); color: var(--fg); opacity: 1; }
+.btn-row-fold.is-folded { color: var(--fg); opacity: .9; }
+tr.row:hover .btn-row-fold { opacity: .9; }
+/* The lead slot of a row's name line: the fold control, then the tick that says "cut from the row above". Empty on a
+   top-level row with no children, and it takes no room there. */
+td.name > .name-line > .row-lead { display: inline-flex; align-items: center; gap: 2px; flex: none; }
+.row-lead:empty { display: none; }
+.child-tick { color: #465668; font: 11px/1 var(--term); }
+
 /* The reader's lock, on the row itself: an emoji rather than a glyph, because it has to be legible to a person
    scanning a column and to an agent reading the board's own markup. Quiet while unlocked (a board of rows must not
    look like a board of buttons) and impossible to miss while locked. */
@@ -3062,6 +3087,21 @@ tbody td { padding: 7px 10px; border-bottom: 1px solid #1d222b; vertical-align: 
    open the card is 480px narrower, that mode kept the pre-rail floor, and the card clipped the overrun at the rail's
    left edge with no scrollbar to reach it. */
 #projects tbody tr.row td { padding-left: 12px; }
+/* ---- a worktree cut from another one hangs under it ------------------------------------------------
+   The panel records the branch every tree was cut from (`row.parent`), so the board draws it: the child steps in
+   under the parent row, one indent per level (the depth rides on the row as --child-depth, so a tree cut from a
+   child steps in again without a second rule), and it keeps every cell it had — its own branch, its own verdict, its
+   own actions. The rail is the project's own glyph, moved in with the row, so the two hierarchies read as one. */
+#projects tbody tr.row.is-child > td.name { padding-left: calc(12px + 16px * var(--child-depth, 1)); }
+#projects tbody tr.row.is-child > td:first-child::before {
+  content: "\2514"; /* └ */
+  left: calc(-13px + 16px * var(--child-depth, 1));
+  color: #39485c;
+}
+/* A fold hides a whole group where it stands — the child rows AND the details, questions and offers hanging under
+   them. Nothing leaves the document, which is the point: an open console, a half-typed reply and a scroll position
+   are all still there when the group opens again. */
+tr.is-fold-hidden { display: none !important; }
 #projects tbody tr.row td:first-child { position: relative; }
 #projects tbody tr.row td:first-child::before {
   content: "\251c"; /* ├ */
