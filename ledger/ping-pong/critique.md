@@ -1,67 +1,63 @@
-# The critique: a failed stage run, on its pipeline row
+# The critique: a parked stage run, on its pipeline row
 
-**Status:** design note, ping-pong round stage 2 of 2. Reads `ledger/ping-pong/draft.md` (928 words) at `cdf0ea4`, against the code at the same commit (`28f57a0` plus two docs-only commits, so the draft's citations are testable). Ten notes, five of them blocking. The verdict is the last section.
+**Status:** critique, ping-pong round 5, stage 2 of 2. Reads `ledger/ping-pong/draft.md` (693 words) at `42656fa`, against the code at `9f94a11`. `lib/task-pipeline-drive.js` and `lib/task-pipeline.js` are unchanged between that commit and `main`'s tip `504a842`, so every line number below is the draft's tree and main's. Nine notes, five blocking. The verdict is last.
 
 Each note names the sentence, what it gets wrong against the code, and the fix it needs. I have not touched the draft.
 
 ## Blocking
 
-**1. The parked state is cited to a line that returns `queued`.**
-*Sentence:* "the task state says `parked` (`lib/assistant/queue.js:1195`)".
-`queue.js:1195` is inside `settleTasks`, and it returns `state: "queued"`, `startedAt: null`, `attempts: t.attempts + 1` for a failed run: a retry, not a park. `queue.js` has no `parkRow` at all. The park is `parkRow` in `lib/task-pipeline-drive.js:1238-1240`, which calls `setTaskState(..., "parked", { by: "panel", reason, at, hold: { kind: "manual" } })`.
-*Fix:* cite `lib/task-pipeline-drive.js:1240` for the state and `:1235-1237` for the manual hold, and drop `queue.js:1195` from the sentence entirely.
+**1. `parkRow` does not write the decision.**
+*Sentence:* "`parkRow` changes the row's state and writes the decision; it does not advance the stage (`lib/task-pipeline-drive.js:1304-1313`)."
+`parkRow` takes an already-rendered `reason` string and hands it to `setTaskState` with `state: "parked"` and `hold: { kind: "manual" }` (`:1304-1306`); it never builds or writes a decision. The decision is written one level up, in `stop`: `recordStageDecision` at `:1474`, or the `settleStageRun` call at `:1465-1473` when the park carries a settle. The cited range is the row write only, which is exactly why it shows no decision.
+*Fix:* say `parkRow` changes the row's state and stamps the decision's rendered sentence as the row's `reason`; name `stop` (`:1459-1478`) as the writer of the decision on the stage run. The distinction matters later, where the invariant says "the same write" as if the row's park and the entry's settle were one write.
 
-**2. A second writer reacts to the same failure and the note never names it.**
-*Sentence:* invariant 3, "The park is the reader's. `hold: {kind: "manual"}`; no sweep, timer or start releases it."
-`settleTasks` (`lib/assistant/queue.js:1158`) reacts to the same terminal status one function later in the same pass: a `running` row whose last job failed comes back `queued` with `attempts + 1` (`:1191-1195`), no reader involved. It leaves the parked row alone for two reasons, neither of them in the draft: it is called after the driver (`lib/assistant.js:1181` then `:1196`), and it returns early on a row whose hold is missing or `manual` (`:1162-1163`). So invariant 3 is true today by pass order, not by construction. If the order flips, or the driver `continue`s on a row it cannot park (`lib/task-pipeline-drive.js:1496`, `:1501`), the row requeues itself and invariants 3, 5 and 10 all stop holding.
-*Fix:* name `settleTasks` as the second reactor, state driver-then-sweep as a precondition of the design, and add the rule that the sweep skips any row carrying a `pipelineRun`. Then the invariant is enforced rather than incidental.
+**2. The row's `reason` does not name the pipeline and the stage.**
+*Sentence:* "**`reason`** is the sentence `renderDecision(fact)` renders from the decision's fact (`:618-626`). It names the pipeline, stage and why the row waits: the row's one sentence."
+`:618-626` stops inside the `run-status` case of a switch that runs to `:711`. That case does print `pipeline · stage`; most others do not. A tree-gone park reads `the tree <path> this row ran in is gone ...` (`:677-682`); a gate park names the gate and the stage, not the pipeline (`:645-651`); a cap park names the edge and its endpoints (`:668-673`); the `record` and default cases return the fact's own reason, which may name neither (`:683-685`, `:707-710`). The row's one sentence is still one sentence, but it is not a sentence that names the pipeline and stage.
+*Fix:* cite `:618-711`, and say what the sentence is for: it is the rendered why, and which names it carries depends on the fact's `kind`. Do not promise pipeline and stage for every park.
 
-**3. Invariant 4 writes a field the stage run does not have.**
-*Sentence:* "The entry's `status`, `settledAt`, `job`, `thread` and `detail` are written in the same queue write as the park".
-There is no `detail` on the entry. `beginStageRun` creates `{id, stage, visit, at, thread, job, status, decision}` (`lib/task-pipeline.js:266-275`) and `settleStageRun` takes no `detail` parameter (`:287`); the last message rides inside `decision.fact.detail`.
-*Fix:* say `decision.fact.detail`, and say the failed branch makes ONE `settleStageRun` call carrying `status`, `at` and the park decision together. Not a settle followed by `recordStageDecision`, which is itself `settleStageRun(task, { decision })` (`:346`) and would write the same slot twice.
+**3. Only a gate park releases on its world-state; a cap and a route are the reader's.**
+*Sentence:* "A park carrying **`waitingFor`** (a gate's path, a cap's edge, or a moved route's fingerprint, `:1714-1718`) is released by its world-state: a gate's record does, and `releaseCapPark`/`restampRoutePark` release a cap or moved route."
+The two halves contradict each other, and the code says the second is right. `waitingFor` records the release condition, and only `kind: "gate"` is re-read by the driver (`:1484-1561`); the pass skips every other kind with the comment that a cap or fingerprint park "has no world-state that could release it: its release is a queue action" (`:1490-1491`). `releaseCapPark` zeroes the crossing count and `restampRoutePark` re-stamps the route, both with `by: "reader"` (`:1374-1412`). The citation is also short: `:1714-1718` covers the gate/verdict and cap waits only; the route wait is written at `:1638` and `:1797`.
+*Fix:* split the sentence. A `gate` wait releases on the record, and the driver re-reads it every pass. A `cap` or `route` wait has no world-state release: a reader runs `releaseCapPark` or `restampRoutePark`, and that action also writes a decision. Cite `:1638` and `:1714-1718` for the writes, `:1374-1412` and `:1484-1561` for the releases. Say `waitingFor` lives on `pipelineRun` (`:1311`), not on the row.
 
-**4. The quoted sentence is not the sentence the code renders.**
-*Sentence:* "the note says `stage ping-pong · draft ended failed: <last words> - the pipeline waits for a decision rather than re-running the stage`", repeated in the row block at line 30.
-`renderDecision` joins pipeline and stage with `" · "` and prefixes nothing (`lib/task-pipeline-drive.js:566`), so the string begins `ping-pong · draft`. `:572` puts an em dash (U+2014) before "the pipeline waits", not the hyphen shown. A note whose invariant 4 says "the sentence is `renderDecision(fact)` everywhere" cannot misquote it twice.
-*Fix:* quote the string exactly as `:572` builds it, or quote the intended new wording and say `renderDecision` changes to produce it.
+**4. The invariant defines "names the run" twice, then quotes a sentence that supports the second definition against the first.**
+*Sentence:* "**A parked row still names the run it parked on.** ... The entry stays, with its `id`, `thread` and `job`. ... a park that writes only the decision leaves `status: null`, which reads as a run that never ended and, in the code's words, "cannot say which run it parked on" (`:1455-1458`, `:1603-1606`)."
+By the draft's own account the run is named by the position and the entry's `id`, `thread` and `job`; a null `status` cannot lose that name. The quoted clause says the opposite, that status null means the entry "cannot say which run it parked on". The comment it comes from is about the ending: it says status null "reads as a run that never ended" (`:1603-1606`), and the draft says the same one clause earlier. The paragraph is therefore asking the reader to accept both "the entry names the run" and "without status it cannot name the run".
+*Fix:* define the name once. The stage run is named by `stage`, `visits[stage]` and the entry's `id`, with `thread` and `job` when a worker was cut. State the ending as a second requirement in its own sentence: `status` and `settledAt` are what make the entry read as a finished run rather than an open attempt. Quote only "reads as a run that never ended"; if the note wants to argue that a finished run's name includes its ending, say that in its own words instead of borrowing the comment.
 
-**5. Invariants 5 and 6 offer two remedies, one of which invariant 5 forbids.**
-*Sentence:* "A retry needs an attempt ordinal in the id, or `attempts[]` on one entry."
-Invariant 5 already says "the failed entry is never overwritten", which rules out `attempts[]` on one entry. Meanwhile `lib/task-pipeline.js:253-255` states the file's contract, "A retry of the same visit reuses the entry rather than minting a second one - a retry is an attempt, not a visit", and the guard at `:264` defeats it by demanding `!thread && !status`. So the note offers two options with one already dead, and never says the guard contradicts its own comment.
-*Fix:* state one rule - a retry is a new entry whose id carries the attempt, `<pipeline>/<stage>#<visit>.<attempt>`, leaving the filed one intact - and name the guard at `:264` as the code the rule replaces, because reuse cannot satisfy "never overwritten".
+**5. The three done-run parks are left undecided, and the "status null" premise is only true on one of the two paths into them.**
+*Sentence:* "**Unsure:** three done-run parks stop before the done-settle (`:1614-1640`): their entries name the run but leave `status` null. Whether the invariant should also require the ending there is not settled by these two modules."
+(a) The brief asks for one invariant, and this leaves three cases outside it. By the note's own argument, a park whose fact is a finished run must say how it ended; the answer is yes, not unsure. The three stops (`:1615-1617`, `:1625-1629`, `:1634-1640`) all run after `status === "done"` (`:1596`, `:1610`) and, on the running path, have `thread` and `last.id` in hand, so the settle is available.
+(b) "leave `status` null" is true only for a `running` row. The same block is entered for a `queued` leftover (`:1573`), whose entry already carries `status: "done"` and a `settledAt` from its earlier settle (`:1596`, `:1659-1669`). A blanket settle there would rewrite both, and would stamp the row's current thread onto the old run: with `own.status` already set, the `thread` at `:1589` falls back to `currentThread`, and `settleStageRun` writes it and a fresh `settledAt` (`lib/task-pipeline.js:319-326`).
+*Fix:* decide yes. Pass `settle: { status, thread, job: text(last && last.id) || null, at: isoOf(at) }` for the three, guarded so the leftover path keeps its entry: `settle: text(own.status) ? null : {...}`, using `own` from `:1588`. Rewrite line 30's "every other park passes no settle", which stops being true. If the stage prompt still wants an unsure section, it cannot contain this question.
 
 ## Not blocking
 
-**6. The mark's claim is overstated, and the fix contradicts the sentence.**
-*Sentence:* "the flow marks it `current` ... the same blue as a live worker. Blue claims work is happening. Nothing is."
-`current` is position, not liveness: `MARK_WORDS.current` is "current" (`public/pipeline-flow.js:51`) and `marksFor` returns `CURRENT` for the row's stage before it ever consults `ran` (`:384`, `:386`). The next paragraph keeps `data-mark="current"` because "the position is true", so the draft calls the mark a lie and then keeps it.
-*Fix:* say what the mark claims - the row is in this stage - and that nothing on the node speaks for the run. That is exactly the gap `data-run="failed"` fills, and then the two paragraphs agree.
+**6. `merge` is not a settle-only field, so a failed run can carry one.**
+*Sentence:* "`artifact`/`merge` are the handoff; a failed run has neither."
+`settleStageRun` writes `merge` when it is given one and never clears it when it is not (`lib/task-pipeline.js:341`). The aggregate writes the join's `merge` before the join's agent starts (`lib/assistant.js:1494`), which is how the driver knows the aggregate is no longer owed. A join that then fails keeps its `merge` on the parked entry. The `artifact` half is true: it is written by the done settle (`:1659-1669`), which a failed run never reaches.
+*Fix:* say `artifact` is the done run's handoff and `merge` is the aggregate's, written on the join before its run; a failed run has no `artifact`, and a failed join still has its `merge`. If the sentence must stay inside the two modules, drop "a failed run has neither": `settleStageRun` never clears either field, so the module does not support it.
 
-**7. The chip flattens what the note forbids flattening.**
-*Sentence:* "`pipeline <id> · <stage>` gains ` (visit <n>)` when n > 1 and ` · run failed` for a terminal failure."
-Line 20 requires the run's own word, "quoted, not flattened to `error`"; the chip flattens all eight words in `FAILED_STATUS` (`lib/task-pipeline-drive.js:132`, which also carries `error`, `canceled` and `exited`) to one phrase. The uncertainty section admits this, which is not the same as deciding it.
-*Fix:* keep `run failed` as the scan word, argue it in the body, and say which of the eight statuses the row block's `o exited` is portraying. Only the literal `failed` produces that word and the `.is-failed` pill (`public/assistant.js:2982`); the other seven read `not-running`.
+**7. "Its entry names the attempt" puts the done-run parks on the wrong side.**
+*Sentence:* "A park whose fact is not a run (an unresolved record, a refused start, a missing tree) says that fact; its entry names the attempt."
+Two of the three examples are parks that happen after the run finished: the unresolved-record park at `:1615-1617` and the tree-gone park at `:1625-1629` are inside the `status === "done"` branch, and their entries name the run, not an attempt. The start-path parks are different calls: `:1781` (unresolved), `:1800` (tree gone) and `:1807` (no target). Those are the ones whose entry is an attempt only. The note classifies by the fact's kind, but the distinction it needs is whether a worker ever linked.
+*Fix:* classify by the entry. A park that stops a start has an attempt-only entry, with `thread` and `job` null, created by the settle fallback when there is no entry (`lib/task-pipeline.js:312-317`). A park on a finished run has an entry with `thread` and `job` and needs the ending. List the calls for each side; the current parenthetical lists both sides as if they were one.
 
-**8. The chip's two new facts have no named source, and one of them does not exist yet.**
-*Sentence:* the same chip sentence.
-`queuePipelineChip` builds its words from `t.pipelineRun.pipeline` and `.stage` only (`public/assistant.js:3111-3117`). ` (visit <n>)` needs `visits[stage]` (`lib/task-pipeline.js:210-214`); ` · run failed` needs the last entry's `status`, which the draft's own line 13 says is null today and only becomes readable after the settle the draft proposes.
-*Fix:* name the read for each addition - `visits[stage]` for the visit, `decision.fact.status` (or the settled `status`) for the word - and say the chip is right both before and after the settle lands.
+**8. The field list mixes stored fields with fields that are read from a default.**
+*Sentences:* "**`visits`** is the ordinal that makes the id unique per visit ..." and "**`status`, `settledAt`** say how it ended and when the panel read it".
+`visits` can be absent on a record written before the counter: `visitsOf` reads it as one visit for the stage the row is in and writes nothing back (`lib/task-pipeline.js:206-219`). `settledAt` is not created with the entry: `beginStageRun` writes `status: null` and no `settledAt` (`:278-287`), and `settleStageRun` writes `settledAt` only when it writes a status (`:321-326`). A parked row that has not settled therefore has no `settledAt`, and an old row may have no stored `visits`, even though the draft's list presents both as fields the row keeps.
+*Fix:* say which fields are stored and which are read. `visits` is stored once a row has entered under this ledger and reads as `1` when absent; `settledAt` exists only with a settled `status`. That is the honest version of "which fields the row keeps", and it is the one a reader can check against the two modules.
 
-**9. The 600-char clip eats the half of the sentence the park depends on.**
-*Sentence:* "how much of the last message the row can hold (its reason is clipped to 600, `lib/assistant/queue.js:50`)".
-600 (`TASK_REASON_MAX`) is the clip on the composed sentence, and `clip` cuts the tail (`:70-73`); `setTaskState` applies it (`:687-692`). The fixed parts come to 101 characters, so 499 of message fits; a longer message silently removes "the pipeline waits for a decision rather than re-running the stage", which is the clause the row's own claim rests on. The note files this as an open question; it is a defect.
-*Fix:* clip the detail before composing, to a named constant such as `RUN_DETAIL_MAX`, and state that the tail is never clipped.
-
-**10. "The last run" is the job store, not the ledger.**
-*Sentence:* "The driver reads the last run on the row's thread".
-`lastRunFor(thread, jobs)` reads the job store's runs for the thread (`lib/task-pipeline-drive.js:1186-1192`), not `stageRuns[]`. In a note about the ledger, "the last run" reads as the entry, and the two disagree exactly in the case under discussion, where the entry's `status` is null.
-*Fix:* say "the last job on the row's thread".
+**9. "No clock expires it" is proved outside the two modules.**
+*Sentence:* "**`hold`** has `kind: "manual"`; no clock expires it."
+The driver never releases a manual hold, and that part is in these two modules. The negative ("no clock") is enforced by the board's sweep, which returns early on a missing or `manual` hold (`lib/assistant/queue.js:1165-1170`). A reader limited to the two cited modules can see that the driver does not release it, not that nothing does.
+*Fix:* either scope the claim to the driver ("the driver never releases it") or cite the sweep that skips a manual hold. Do not leave a negative whose only proof is outside the two files the brief names.
 
 ## Verdict
 
-**Not accepted in this round.** The structure is right and the central finding is correct and worth the note: the failed branch parks without settling, so `status` stays null and `settledAt` is absent while the done branch settles (`lib/task-pipeline-drive.js:1505` against `:1561`), and the chip cannot say what happened. That is real, and invariant 2's citation of `QUEUE_LIVE` is right.
+**Not accepted in this round.** The shape is right, and three findings survive contact with the code: a park and a move are different writes, the failed branch settles the entry in the same call as the decision (`:1599-1608`), and the invariant is about position and the entry rather than the row's state. The question the note isolates, whether a park on a finished run must also record the ending, is the right question and the reason the note is worth writing.
 
-But four of the citations a reader would lean on do not survive contact with the code: the park's state is cited to a line that requeues, the quoted sentence is not the one `renderDecision` renders, constant `detail` is named on a record that has no such field, and a retry's remedy is chosen from two options one of which the note's own invariant 5 rules out. Worse than any single citation, the model is missing an actor: `settleTasks` already retries a failed `running` row automatically, and the note's third invariant is true only because the driver happens to run first.
+But the contract it states is not the contract the code keeps. `parkRow` does not write the decision (1); the row's `reason` does not name the pipeline and stage for most parks (2); only a gate park releases on its world-state, while cap and route are reader actions (3); and the invariant defines "names the run" twice, then quotes a comment that supports the second definition against the first (4). The one decision the brief asks for is left "Unsure", and its premise is only true on one of the two paths into those parks (5). Notes 6 to 9 are corrections of claims that can be folded in without reopening the shape.
 
-Minimum for acceptance: notes 1 to 5 fixed in the text, invariant 3 rewarranted on the pass order plus a sweep rule, and one decision on the retry's id. Notes 6 to 10 are corrections of claims, not of design, and can be folded in without reopening the shape. The draft's last section should then keep only what is still genuinely open: `data-run` against a fifth mark, and the chip's word.
+Minimum for acceptance: notes 1 to 5 fixed, with the three done-run parks settled rather than left open; 6 to 9 folded in. Then the note can be read as a contract rather than a first pass at one.
