@@ -14,6 +14,8 @@
 //      largest), and choosing another one re-fills it again;
 //   4. the assignment press writes the record: the queue file on disk carries `pipelineRun` naming the chosen pipeline
 //      and its stage, and the window re-reads as "2 of 2".
+//   6. the Settings pipeline tab's PDL list is the SAME list the catalogue route serves, id for id and count for
+//      count, with the ladder catalogue still reading beside it (the two sources are one reading now).
 //
 //   node tools/verify-pipeline-catalogue.mjs            assert; exit 0 green, 1 red
 //   node tools/verify-pipeline-catalogue.mjs --quiet    only failures + the final line
@@ -221,6 +223,38 @@ try {
   check(/duplicate-id/.test(refusedNote), "a second import of the same id is refused with the route's code", refusedNote.slice(0, 200));
   check(/"review-two"/.test(refusedNote), "and the refusal names the pipeline id", refusedNote.slice(0, 200));
   check((await rowCount()) === 5, "nothing was added by the refused import", String(await rowCount()));
+
+  // ---- 6. Settings > Pipeline lists the SAME pipelines the picker offers ------------------------------
+  // The tab and the picker were two different sets ("the pipelines" meant the ladder on one surface and the PDL
+  // bundle on the other). Both answers now come from lib/pipeline-source.js, so the tab's PDL list and the
+  // catalogue route must be the same ids, in the same order, with the same counts.
+  await page.keyboard.press("Escape");
+  await openSettingsGroup(page, "pipeline");
+  await page.waitForFunction(() => document.querySelectorAll("#pipeline-pdl-list [data-pdl-pipeline]").length > 0, null, { timeout: 20_000, polling: 60 });
+  const tab = await page.evaluate(() => {
+    const rows = [...document.querySelectorAll("#pipeline-pdl-list [data-pdl-pipeline]")];
+    return {
+      ids: rows.map((r) => r.getAttribute("data-pdl-pipeline")),
+      units: rows.map((r) => (r.querySelector(".settings-unit")?.textContent || "").trim()),
+      summary: (document.getElementById("pipeline-pdl-summary")?.textContent || "").trim(),
+      source: (document.getElementById("pipeline-pdl-source")?.textContent || "").trim(),
+      ladder: (document.getElementById("pipeline-summary")?.textContent || "").trim(),
+      ladderRows: [...document.querySelectorAll("#pipeline-select option")].length,
+    };
+  });
+  const afterImport = await (await fetch(`${panel.base}/api/assistant/pipeline-catalogue`)).json();
+  const routeIds = (afterImport.pipelines || []).map((p) => p.id);
+  check(
+    tab.ids.join(",") === routeIds.join(","),
+    "the Settings pipeline tab lists exactly the catalogue route's pipelines, in order",
+    `${tab.ids.join(",")} vs ${routeIds.join(",")}`,
+  );
+  check(tab.ids.length === 5, "the tab shows the five pipelines the bundle holds after the import", tab.ids.join(","));
+  check(/5 pipelines/.test(tab.summary) && /POC to UAT/.test(tab.summary), "the tab's summary counts them and names the bundle", tab.summary);
+  check(/pipeline-bundle\.json/.test(tab.source), "and its source line names the file the panel reads", tab.source);
+  check(/5 pipelines/.test(tab.summary) && tab.units.every((u) => /^\d+ stage/.test(u)), "each row carries its own stage count", tab.units.join(" | "));
+  check(tab.ids.includes("review-two"), "the pipeline the import added is in the tab as well as in the picker", tab.ids.join(","));
+  check(/7 definitions/.test(tab.ladder) && tab.ladderRows === 7, "the ladder catalogue still reads beside it, untouched", `${tab.ladder} / ${tab.ladderRows} options`);
 
   check(pageErrors.length === 0, "no page error while the window and the tab were driven", pageErrors.slice(0, 2).join(" | "));
   await page.close();

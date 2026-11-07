@@ -88,6 +88,11 @@ test("the catalogue route reads the full merged catalogue and refuses with valid
   assert.equal(read.json.pipelines.local.stages[0].id, "work");
   assert.ok(String(read.json.pipelines.local.stages[0].prompt).length > 20, "the full definition travels, not a summary");
   assert.equal(read.json.readOnly, false);
+  // The PDL list rides the same answer: this panel was given no bundle, so it is a refusal of its OWN, and the ladder
+  // above is untouched by it. (The list itself is pinned in test/pipeline-source.test.js against a real bundle.)
+  assert.equal(read.json.pdl.ok, false);
+  assert.equal(read.json.pdl.code, "missing");
+  assert.deepEqual(read.json.pdl.pipelines, []);
 
   // (2) a valid save reaches the live file, and the answer is the catalogue again.
   const edit = seedDef("local");

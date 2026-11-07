@@ -114,6 +114,7 @@ import { createResetRoutes } from "./lib/assistant/reset.js";
 import { createPipelineWindowRoutes } from "./lib/pipeline-window.js";
 // The pipelines a window's assignment control may offer, read from the same bundle. A read, mounted beside the window.
 import { createPipelineCatalogueRoutes } from "./lib/task-pipeline-assign.js";
+import { pipelineSourceCatalogue } from "./lib/pipeline-source.js";
 // Importing a studio export into that bundle: an APPEND by pipeline id, refusing a duplicate id by name. The write side
 // of the loader, mounted with the two reads because all three answer about the one file.
 import { createPipelineBundleImportRoutes } from "./lib/pipeline-bundle-import.js";
@@ -3109,6 +3110,11 @@ const server = createServer(async (req, res) => {
         warnings: doc.warnings,
         dropped: doc.dropped,
         pipelines: doc.pipelines,
+        // The OTHER pipeline list this panel holds: the PDL bundle a task is put on, read through the one module the
+        // queue picker reads (lib/pipeline-source.js). The ladder above says what a TREE may do with a branch and the
+        // PDL pipelines below say what a TASK is carried through; the tab draws both and names which is which. A
+        // bundle that is missing or refused is carried here as its own value, never blamed on the ladder.
+        pdl: pipelineSourceCatalogue(config),
       });
     }
 
