@@ -22039,9 +22039,12 @@ startVisibilityReporting();
     // removed by a later snapshot (heroes-js showed up forever this way on a machine that does
     // not have it). The first snapshot paints the real set.
     await resync();
-    // The sections restored from the last visit are open in front of the reader, so they are reported like a
-    // click: an old repo among them is read now instead of at its next hourly stat slice.
-    for (const name of state.expandedProjects) noteProjectOpen(name);
+    // NO promotion on boot. A restored-open section is not a click: this loop used to POST /api/project/open for
+    // every project the reader had ever left expanded, and each one promotes an old repo into a full re-probe and a
+    // full row read. A boardful of restored sections therefore re-read the whole old fleet on EVERY reload, and
+    // because the route answers before the read runs, nothing in the page felt slow while the server drowned. The
+    // promotion signal is the reader's own click: toggleProject() reports the section they actually unfold. A
+    // restored section keeps the rows it already has until then, which is what it showed before the gate existed.
     connect();
     startAnchorObserver();
     updateColorsRow();
