@@ -3226,6 +3226,22 @@
     return leaf(t?.row?.project);
   }
 
+  // WHO FILED a row, when that is somebody other than the reader who is looking at it. `createdBy` is the `by` the
+  // write carried, which is the route's designed mechanism for a cross-assistant file and the only trace of it on the
+  // row: without this line a row Assistant #4 put in this queue is indistinguishable from one the reader typed. The
+  // name is the session's own when the panel knows the id, else the number the id carries ("assistant-4" reads
+  // "Assistant #4"), else the id as written. Two filers draw nothing because they are the ordinary case rather than a
+  // fact about the row: `reader` (the route's default, and what this page's own Add form posts) and the assistant
+  // whose queue this is (a row it filed for itself). "Came from outside this queue" is the one thing the line says.
+  function queueFiledBy(t, id) {
+    const by = String(t?.createdBy || "").trim();
+    if (!by || by === "reader" || by === String(id || "")) return null;
+    const named = sessionById(by)?.name;
+    if (named) return named;
+    const n = /^assistant-(\d+)$/.exec(by);
+    return n ? `Assistant #${n[1]}` : by;
+  }
+
   // One row, read in this order: WHAT the row is (its title), its STATE in a word, and WHAT IT IS WAITING ON — a
   // lane head, a hold, a question, a skipped file, a stopped run. Those are the head, on one line, at full contrast;
   // the marker is the accent beside them, never the only word for the state. The agents, project and PR follow on
@@ -3309,6 +3325,8 @@
     const more = fold.length
       ? `<details class="as-task-more"><summary title="the tree, the files, the attempts and the detail — folded so the row reads as one line">${t.worktree || (Array.isArray(t.files) && t.files.length) ? "tree · files" : "more"}${Number(t.attempts) > 0 ? " · attempts" : ""}${t.detail ? " · detail" : ""}</summary><div class="as-task-more-body">${fold.join(`<span class="as-task-sep">·</span>`)}</div></details>`
       : "";
+    // Somebody else filed this row (null for the ordinary case), drawn on its own small line below.
+    const filedBy = queueFiledBy(t, id);
     return `<div class="as-task${t.state === "done" ? " is-done" : ""}${t.state === "queued" ? " is-draggable" : ""}" data-as-qrow="${esc(String(t.id))}" data-as-qstate="${esc(state)}" data-as-qown="${esc(id)}" data-as-qthread="${esc(current)}">
         <div class="as-task-main">
           <div class="as-task-body"${current ? ` data-as-qopen="${esc(current)}"` : ""}>
@@ -3322,6 +3340,7 @@
               ${queueQuestionChip(t, alerts)}
             </div>
             <div class="as-task-facts">${agents}${meta.length ? `<span class="as-task-meta">${meta.join(" · ")}</span>` : ""}<span class="as-task-pipeline">${queuePipelineChip(t, id)}${queueFlowButton(t, id)}</span></div>
+            ${filedBy ? `<div class="as-task-filed" title="who filed this row: the by the write carried, which is not its owner">filed by ${esc(filedBy)}</div>` : ""}
             ${note}
             ${queueReattachNoteHtml(id, t.id)}
           </div>
