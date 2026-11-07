@@ -4,16 +4,33 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.48.2 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.48.4 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-369 releases from v0.1.0 (2026-10-20) to v1.48.2 (2026-11-07), 1294 commits between the tags. Every release is anchored by an
+370 releases from v0.1.0 (2026-10-20) to v1.48.4 (2026-11-07), 1298 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.48.4 — 2026-11-07 · 4 commits
+
+[`bf3b391`](https://github.com/JLRoper/agent-worktree-gui/commit/bf3b3912f0d3f5e5bc430fd535efab12ce1e33b5) · [compare v1.48.2...v1.48.4](https://github.com/JLRoper/agent-worktree-gui/compare/v1.48.2...v1.48.4)
+
+### Fixed
+
+- fix: an old-tier project runs no git outside the hourly stat check ([`85fd97a`](https://github.com/JLRoper/agent-worktree-gui/commit/85fd97a56ed01fe9daa603943d0aeba68b3e38f0))
+
+### Docs & tests
+
+- docs: render the changelog — 369 releases ([`9bbb847`](https://github.com/JLRoper/agent-worktree-gui/commit/9bbb847eb408738e494ed99bd7266132c80e0645))
+- test: the git-spawn harness hands the registry the record it seeded ([`219f3dc`](https://github.com/JLRoper/agent-worktree-gui/commit/219f3dcbf3f95a27aff7a7d67a05940f0519a7dd))
+
+### Other
+
+- chore: 1.48.4 — the version this landing carries ([`bf3b391`](https://github.com/JLRoper/agent-worktree-gui/commit/bf3b3912f0d3f5e5bc430fd535efab12ce1e33b5))
 
 ## v1.48.2 — 2026-11-07 · 3 commits
 
