@@ -33,7 +33,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { loadPlaywright, notRun, openSettingsGroup, withBrowser } from "./browser.mjs";
+import { loadPlaywright, notRun, openSettingsGroup, withBrowser, openFlowEdit } from "./browser.mjs";
 import { freePort, startPanel } from "./panel-testkit.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -467,7 +467,7 @@ const openDefinition = async (page, id) => {
   await page.selectOption("#pipeline-select", id);
   await page.waitForSelector("#pipeline-editor:not([hidden]) .pipeline-stage", { timeout: 15_000 });
   await page.click("#pipeline-flow-open");
-  await page.waitForSelector("#pipeline-modal:not([hidden]) .pflow-node", { timeout: 15_000 });
+  await openFlowEdit(page);
   // The modal measures after layout: wait for the count element to have been read, not for a timer.
   await page.waitForFunction(() => {
     const el = document.querySelector("[data-pflow-count]");

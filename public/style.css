@@ -4590,6 +4590,19 @@ body.pipew-open { overflow: hidden; }
 .pmodal-preview-note { color: var(--dimmer); text-transform: uppercase; letter-spacing: 0.06em; font-size: 11px; }
 .pmodal-preview select { background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; font: 11px var(--mono); }
 .pmodal-check { display: inline-flex; align-items: center; gap: 5px; }
+/* The PREVIEW switch: two words with a pressed state, and the read-only hint beside them while the chart is up. It
+   sits in the header's first row, after the subtitle, because it changes what the body shows and nothing about the
+   definition. The card inside the chart is the map page's own (public/core/pipeline-card.css), so only its placement
+   is decided here. */
+.pmodal-views { flex: 0 0 auto; display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.pmodal-views button { appearance: none; border: 0; background: transparent; color: var(--dim); font: 11px var(--mono); line-height: 16px; padding: 1px 8px; cursor: pointer; }
+.pmodal-views button + button { border-left: 1px solid var(--line); }
+.pmodal-views button:hover { color: var(--text); }
+.pmodal-views button[aria-pressed="true"] { background: var(--surface); color: var(--text); }
+.pmodal-views button:focus-visible { outline: 2px solid #4a90d9; outline-offset: 1px; }
+.pmodal-views-note { font: 10px var(--mono); text-transform: uppercase; letter-spacing: 0.07em; color: var(--dimmer); padding: 0 7px 0 6px; border-left: 1px solid var(--line); }
+.pmodal-chart .pm-card { margin: 0; }
+.pmodal-chart .pm-card .pm-draw .pm-node { cursor: default; }
 /* There is no `.pmodal-foot`: the close control and the status are in the header, so the card's last band is the
    drawing's own bottom edge. */
 body.pipeline-modal-open { overflow: hidden; }

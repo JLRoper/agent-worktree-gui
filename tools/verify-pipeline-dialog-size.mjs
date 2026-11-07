@@ -21,7 +21,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { loadPlaywright, notRun, openSettingsGroup, withBrowser } from "./browser.mjs";
+import { loadPlaywright, notRun, openSettingsGroup, withBrowser, openFlowEdit } from "./browser.mjs";
 import { freePort, startPanel } from "./panel-testkit.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -297,7 +297,7 @@ try {
           await page.selectOption("#pipeline-select", one.id);
           await page.waitForTimeout(160);
           await page.click("#pipeline-flow-open");
-          await page.waitForSelector("#pipeline-modal:not([hidden]) .pflow-node");
+          await openFlowEdit(page);
           await page.waitForTimeout(220);
           const m = await measure(page);
           m.case = `${label}/${one.id}`;
