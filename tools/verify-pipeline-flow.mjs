@@ -206,6 +206,19 @@ const readModal = (page) =>
   });
 
 const marks = (modal) => (modal ? modal.nodes.map((n) => `${n.id}:${n.mark}`) : []);
+// A definition opens at the PREVIEW now, so every section that judges the flow drawing has to ask for it. This is the
+// press a reader makes, not a state poke: the switch is part of what is being proven.
+const toEditView = async (page) => {
+  await page.waitForSelector('#pipeline-modal-card [data-pm-view="edit"]', { timeout: 20_000 });
+  await page.click('#pipeline-modal-card [data-pm-view="edit"]');
+  await page.waitForSelector("#pipeline-modal:not([hidden]) .pflow-node");
+};
+const openDefinitionFlow = async (page, view = "edit") => {
+  await page.click("#pipeline-flow-open");
+  await page.waitForSelector("#pipeline-modal:not([hidden])");
+  if (view === "edit") await toEditView(page);
+  else await page.waitForSelector('#pipeline-modal-card [data-pm-chart] .pm-card[data-ready="1"]', { timeout: 60_000 });
+};
 const openQueueFlow = async (page) => {
   await page.click('#as-queue .as-task[data-as-qrow="7"] [data-as-qflow]');
   await page.waitForFunction(
@@ -246,8 +259,69 @@ try {
     const editorFor = await page.evaluate(() => document.querySelector("#pipeline-editor .pipeline-editor-head")?.textContent?.replace(/\s+/g, " ") || "");
     check(editorFor.includes(multi), "the editor edits the definition the dropdown names", editorFor);
 
+    // ---- 1a. the PREVIEW: the map page's card, read-only, and the default -------------------------------------
+    console.log("\n== the preview: the map page's chart, opened by default and read-only ==");
     await page.click("#pipeline-flow-open");
-    await page.waitForSelector("#pipeline-modal:not([hidden]) .pflow-node");
+    await page.waitForSelector("#pipeline-modal:not([hidden])");
+    await page.waitForSelector('#pipeline-modal-card [data-pm-chart] .pm-card[data-ready="1"]', { timeout: 60_000 });
+    const prev = await page.evaluate(() => {
+      const card = document.getElementById("pipeline-modal-card");
+      const host = card.querySelector("[data-pm-chart]");
+      const pc = host && host.querySelector(".pm-card");
+      const views = [...card.querySelectorAll("[data-pm-view]")].map((b) => ({ view: b.dataset.pmView, pressed: b.getAttribute("aria-pressed"), text: (b.textContent || "").trim() }));
+      return {
+        views,
+        note: (card.querySelector(".pmodal-views-note")?.textContent || "").trim(),
+        hasFlow: Boolean(card.querySelector(".pflow")),
+        chartId: host?.dataset.chartId || "",
+        chartStages: Number(host?.dataset.chartStages || 0),
+        cardStages: Number(pc?.dataset.stages || 0),
+        cardBundle: pc?.dataset.bundle || "",
+        nodes: [...(pc?.querySelectorAll("g.node[data-stage]") || [])].map((n) => ({
+          id: n.getAttribute("data-stage"),
+          role: n.getAttribute("data-role-label") || "",
+          pressed: n.getAttribute("role") || "",
+          tab: n.getAttribute("tabindex"),
+          title: (n.getAttribute("title") || "").slice(0, 40),
+          text: (n.querySelector(".nodeLabel")?.textContent || "").replace(/\s+/g, " ").trim(),
+        })),
+        edges: [...(pc?.querySelectorAll(".edgeLabel") || [])].map((e) => (e.textContent || "").trim()).filter(Boolean),
+        status: (pc?.querySelector("[data-status]")?.textContent || "").replace(/\s+/g, " ").trim(),
+        statusRaw: pc?.querySelector("[data-status]")?.innerHTML || "",
+        loops: (pc?.querySelector(".pm-loops")?.textContent || "").replace(/\s+/g, " ").trim(),
+        bodyText: (card.querySelector(".pmodal-body")?.textContent || "").replace(/\s+/g, " ").trim(),
+      };
+    });
+    check(prev.views.length === 2 && prev.views[0].view === "preview" && prev.views[0].pressed === "true", "the definition opens on preview, and the switch says which view is up", JSON.stringify(prev.views));
+    check(/read-?only/i.test(prev.note), "and the preview is labelled read-only", prev.note);
+    check(!prev.hasFlow, "the preview is NOT the hand-built flow drawing");
+    check(prev.chartId === multi && prev.chartStages === catalogue.pipelines[multi].stages.length, "the chart is the definition the dropdown names, with every stage", `${prev.chartId} ${prev.chartStages}`);
+    check(prev.cardStages === catalogue.pipelines[multi].stages.length && prev.cardBundle === "0", "the card is one definition's card, not a bundle's", `${prev.cardStages} stages, bundle=${prev.cardBundle}`);
+    equal("every stage of the definition is drawn, in order", prev.nodes.map((n) => n.id), catalogue.pipelines[multi].stages.map((s) => s.id));
+    check(prev.nodes.every((n) => /^\d+ · /.test(n.text)), "each node is ordinal and title", JSON.stringify(prev.nodes.map((n) => n.text)));
+    check(prev.nodes.every((n) => /^(derived|role): /.test(n.role)), "and a role line the closed table or the definition supplies", JSON.stringify(prev.nodes.map((n) => n.role)));
+    check(prev.nodes.every((n) => n.title), "every node carries its prompt on hover");
+    check(prev.nodes.every((n) => !n.pressed && n.tab === null), "a read-only chart offers no press it would not honour: the nodes are not buttons", JSON.stringify(prev.nodes.map((n) => `${n.id}:${n.pressed}/${n.tab}`)));
+    // The card's own status sentence carries the arrow count: `<b>1</b> arrows · 1 labelled`. Reading it, rather than
+    // counting `.edgeLabel` nodes, is the same measurement the map page prints (mermaid nests two label nodes per edge).
+    const arrows = /<b>(\d+)<\/b> arrows · (\d+) labelled/.exec(prev.statusRaw || "");
+    check(
+      Boolean(arrows) && Number(arrows[1]) === Math.max(0, catalogue.pipelines[multi].stages.length - 1) && Number(arrows[2]) === Number(arrows[1]),
+      "the exit check that ends each stage labels the arrow that leaves it",
+      arrows ? `${arrows[1]} arrows, ${arrows[2]} labelled` : prev.status.slice(0, 120),
+    );
+    check(/nodes drawn/.test(prev.status) && /smallest label/.test(prev.status), "the card's status line is the map page's own measurement", prev.status);
+    check(prev.loops.includes("loop-backs"), "and the loop-backs list travels with the card", prev.loops.slice(0, 80));
+    await page.screenshot({ path: path.join(SHOTS, "preview-mode.png") });
+
+    // ---- 1b. the switch to the flow drawing ---------------------------------------------------------------
+    await toEditView(page);
+    check(!(await page.evaluate(() => Boolean(document.querySelector("[data-pm-chart] .pm-card")))), "the edit view replaces the chart rather than stacking under it");
+    const backToPreview = await page.evaluate(() => {
+      const b = document.querySelector('#pipeline-modal-card [data-pm-view="preview"]');
+      return b ? b.getAttribute("aria-pressed") : null;
+    });
+    check(backToPreview === "false", "and the switch's pressed state moved with it", String(backToPreview));
     const edit = await readModal(page);
     check(Boolean(edit), "the flow modal opened from the Pipeline tab");
     check(edit.mode === "edit", "it is in edit mode", edit.mode);
@@ -531,8 +605,7 @@ try {
     await page.waitForFunction(() => !/reading/.test(document.getElementById("pipeline-summary")?.textContent || ""), null, { timeout: 20_000 });
     await page.selectOption("#pipeline-select", THIRTEEN.id);
     await page.waitForSelector("#pipeline-editor:not([hidden]) .pipeline-stage", { timeout: 15_000 });
-    await page.click("#pipeline-flow-open");
-    await page.waitForSelector("#pipeline-modal:not([hidden]) .pflow-node");
+    await openDefinitionFlow(page);
     await page.waitForTimeout(260);
     const small = await readSmall();
     equal("the thirteen-stage definition is drawn in rows at a 640x480 window", small.wrap, "1");
@@ -569,8 +642,7 @@ try {
     // A fresh open is the stylesheet's card again: the place and size belong to the drawing the reader was looking at.
     await page.keyboard.press("Escape");
     await page.waitForFunction(() => document.getElementById("pipeline-modal").hidden === true, null, { timeout: 5_000 });
-    await page.click("#pipeline-flow-open");
-    await page.waitForSelector("#pipeline-modal:not([hidden]) .pflow-node");
+    await openDefinitionFlow(page);
     await page.waitForTimeout(160);
     const again = await readSmall();
     check(!/left:|top:|width:/.test(again.style), "a fresh open is the stylesheet's centred card again", again.style || "(no inline geometry)");
@@ -589,8 +661,7 @@ try {
     await page.waitForFunction(() => !/reading/.test(document.getElementById("pipeline-summary")?.textContent || ""), null, { timeout: 20_000 });
     await page.selectOption("#pipeline-select", THIRTEEN.id);
     await page.waitForSelector("#pipeline-editor:not([hidden]) .pipeline-stage", { timeout: 15_000 });
-    await page.click("#pipeline-flow-open");
-    await page.waitForSelector("#pipeline-modal:not([hidden]) .pflow-node");
+    await openDefinitionFlow(page);
     await page.waitForTimeout(240);
     const wide = await readFrame();
     equal("the thirteen-stage definition is one row at 1825x262, not a wrapped stack", wide.wrap, "0");

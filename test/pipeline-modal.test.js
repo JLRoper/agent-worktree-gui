@@ -257,3 +257,55 @@ test("a gate's notch is drawn inside the tile it belongs to, so no window shape 
   assert.match(rule, /top: 11\.5px; width: 3px; height: 15px;/, "a 3x15 bar straddling the connector's line instead of hanging below it");
   assert.match(css, /\.pflow-link \{ position: absolute; top: 19px;/, "the connector's hairline is at 19 px, which the notch centres on");
 });
+
+// ---- the VIEW: the map page's chart, beside the drawing this dialog has always held -------------------------------
+// The mode pair above is unchanged (the surface that opened the dialog); a VIEW is how the definition is drawn. The
+// two are separate on purpose: a position-mode dialog has a record and a preview control, not a definition, so it
+// never grows a switch.
+
+test("a view is not a mode: only preview and edit exist, and the element says which is up", () => {
+  assert.match(source, /const VIEWS = \["preview", "edit"\];/);
+  assert.match(source, /function previewAvailable\(\) \{/);
+  assert.match(source, /state\.mode === "edit" && Boolean\(state\.definition\)/);
+  // The default is the preview, decided at open() from the definition the caller handed over.
+  assert.match(source, /state\.view = previewAvailable\(\) && \(options\.view == null \|\| options\.view === "preview"\) \? "preview" : "edit";/);
+});
+
+test("the switch is two named buttons in the bar, pressed state on the one that is up", () => {
+  assert.match(source, /data-pm-view="preview" aria-pressed="\$\{pressed\("preview"\)\}"/);
+  assert.match(source, /data-pm-view="edit" aria-pressed="\$\{pressed\("edit"\)\}"/);
+  assert.match(source, /class="pmodal-views" role="group" aria-label="how this definition is drawn"/);
+  assert.match(source, /state\.view === "preview" \? `<span class="pmodal-views-note">read-only<\/span>`/);
+  // It sits in the header bar, after the subtitle — not in the drawing and not in the body.
+  const bar = source.slice(source.indexOf("return `<div class=\"pmodal-bar\">"), source.indexOf("<div class=\"pmodal-body\">"));
+  assert.match(bar, /\$\{viewsHtml\(\)\}/, "the switch is in the bar's first row");
+  assert.match(css, /\.pmodal-views button\[aria-pressed="true"\] \{ background: var\(--surface\); color: var\(--text\); \}/);
+});
+
+test("the preview draws the shared card, and only from a definition the caller supplied", () => {
+  assert.match(source, /const M = global\.PipelineMermaid;/);
+  assert.match(source, /item = M\.fromDefinition\(state\.definition\)/);
+  assert.match(source, /M\.card\(item, \{ layout: "row", head: false, builtin: true \}\)/);
+  assert.match(source, /await M\.paint\(\{ item, el \}, \{ layout: "row", ns: "pmodal", live \}\)/);
+  // A render whose dialog moved on (switched view, closed) cannot paint: the generation is the guard.
+  assert.match(source, /const live = \(\) => state\.open && state\.view === "preview" && seq === state\.chartSeq;/);
+  assert.match(source, /chartSeq: state\.chartSeq \+ 1,/);
+  // The chart's host is its own element, and a failure is a sentence in it rather than a blank body.
+  assert.match(source, /data-pm-chart-view="preview"><div class="pm-host" data-pm-chart>/);
+  assert.match(source, /the chart could not be drawn: \$\{esc\(said\)\}/);
+  // The definition travels from the Settings tab as the DRAFT, beside the flow the edit view draws.
+  const app = dropCR(readFileSync(new URL("../public/app.js", import.meta.url), "utf8"));
+  const at = app.indexOf("function openPipelineFlow()");
+  assert.ok(at > 0, "the tab's handler is in app.js");
+  assert.match(app.slice(at, at + 1200), /definition: def,/, "the modal is handed the definition itself, not only the flow");
+});
+
+test("the chart is as wide as its drawing, and the stylesheet's width returns for the flow drawing", () => {
+  assert.match(source, /card\.style\.width = `\$\{Math\.min\(Math\.max\(340, Math\.ceil\(draw\.scrollWidth \+ 32\)\), Math\.round\(vw \* 0\.96\)\)\}px`/);
+  // A width the reader dragged/resized belongs to both views and is never overwritten.
+  assert.ok(source.includes("if (!state.rect) {"), "the reader's frame wins over the fitted width");
+  // The switch back to the flow drawing clears the chart's width so `.pmodal-card`'s own rule sizes it again.
+  const setView = source.slice(source.indexOf("function setView("), source.indexOf("function focusables("));
+  assert.match(setView, /if \(!state\.rect\) \{/);
+  assert.match(setView, /card\.style\.width = "";/);
+});

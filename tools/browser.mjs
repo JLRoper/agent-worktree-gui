@@ -229,6 +229,15 @@ export async function openSettingsGroup(page, group = null) {
   }
 }
 
+// The flow dialog opens on the PREVIEW (the map page's chart, public/pipeline-modal.js). Every harness that measures
+// the FLOW DRAWING asks for it with this press: the switch is a real control, so this is the reader's own path rather
+// than a state poke, and a harness that skips it would measure a card whose tiles and notches are not there.
+export async function openFlowEdit(page) {
+  await page.waitForSelector("#pipeline-modal:not([hidden])", { timeout: 20_000 });
+  await page.click('#pipeline-modal-card [data-pm-view="edit"]');
+  await page.waitForSelector("#pipeline-modal:not([hidden]) .pflow-node", { timeout: 20_000 });
+}
+
 // The sentence every harness prints when the browser half could not run. One wording, so a reader greps once.
 export function notRun(what, why) {
   return `BROWSER-HALF-NOT-RUN  ${what} — ${why}`;

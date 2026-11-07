@@ -1,14 +1,18 @@
 // The pipeline MODAL: one shell for the two places a pipeline is looked at.
 //
 //   edit mode      the Pipeline tab's "open the flow" control. The pipeline is a catalogue definition
-//                  (pipelines.json over pipelines.seed.json) — stages left to right, each stage's exit check as the
-//                  notch on the connector after it, no mark because nothing has been entered yet.
+//                  (pipelines.json over pipelines.seed.json) — and it opens on the PREVIEW: the map page's own chart
+//                  (public/core/pipeline-mermaid.js), read-only, with the switch beside it for `edit`, the drawing
+//                  this dialog has always held (stages left to right, each stage's exit check as the notch on the
+//                  connector after it, no mark because nothing has been entered yet).
 //   position mode  a queue row's flow control. The pipeline is the task pipeline window's own answer for that task
 //                  (lib/pipeline-window.js) — the same sequence with the current stage, the ones behind it and the
-//                  ones still ahead, its gates as notches, and any capped loop as an arc labelled with its cap.
+//                  ones still ahead, its gates as notches, and any capped loop as an arc labelled with its cap. It has
+//                  a record and a position control, not a definition, so it keeps its one drawing and no switch.
 //
-// The callers differ ONLY in mode: both call `open({mode, ...})`, and every mark, notch and arc comes from
-// public/pipeline-flow.js. This file owns the dialog's behaviour and nothing else:
+// The callers differ ONLY in mode: both call `open({mode, ...})`. The edit drawing and its marks come from
+// public/pipeline-flow.js; the preview's card is public/core/pipeline-mermaid.js, the module the map page draws with.
+// This file owns the dialog's behaviour and nothing else:
 //
 //   - it is appended to <body>, OUTSIDE #settings and #assistant, and sits at z-index 140 — above the Settings window
 //     (120), which is the window the edit-mode press comes from. Nothing in the page is above it that opens on its own;
@@ -36,6 +40,11 @@
   const TITLE_ID = "pipeline-modal-title";
   const TABBABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
   const MODES = ["edit", "position"];
+  // The dialog's VIEW is not its MODE. A mode says which surface opened it and what the drawing means (a catalogue
+  // definition, or a live task's position); a view says HOW the definition is drawn. `preview` is the map page's
+  // mermaid card, read-only (public/core/pipeline-mermaid.js); `edit` is the hand-built flow drawing this dialog has
+  // always held, with its exit checks as notches and its capped loops as arcs. A definition opens at the preview.
+  const VIEWS = ["preview", "edit"];
   // ---- the card as a window ----------------------------------------------------------------------------------------
   // The bar drags the card and the corner grip resizes it. Both are POINTER gestures in VISUAL px (what a pointer
   // arrives in), and every length written back as a style is a LAYOUT px: Settings > Display's page zoom scales the
@@ -67,6 +76,12 @@
     status: "",
     loading: false,
     preview: false,
+    // Which view of the definition is drawn, the definition it was built from (the DRAFT the Settings tab holds, so
+    // the chart follows an unsaved edit), and the generation a chart render belongs to. A switch or a close bumps
+    // the generation, so a mermaid render that finishes afterwards cannot paint into a dialog that moved on.
+    view: "edit",
+    definition: null,
+    chartSeq: 0,
     onClose: null,
     wired: false,
     motion: true,
@@ -161,6 +176,30 @@
     </div>`;
   }
 
+  // The preview exists where there is a definition to draw and a renderer loaded: the Settings tab's edit mode. A
+  // position-mode dialog has a record and a position control, not a definition, so it keeps its one drawing.
+  function previewAvailable() {
+    return state.mode === "edit" && Boolean(state.definition) && Boolean(global.PipelineMermaid && global.PipelineMermaid.card);
+  }
+
+  // Two words, the pressed one filled, and a read-only hint beside them while the preview is up: the cheap way to
+  // say "this is a different picture of the same thing" rather than "this is a different thing".
+  function viewsHtml() {
+    if (!previewAvailable()) return "";
+    const pressed = (view) => (state.view === view ? "true" : "false");
+    return `<span class="pmodal-views" role="group" aria-label="how this definition is drawn">
+          <button type="button" data-pm-view="preview" aria-pressed="${pressed("preview")}" title="the map page's chart - every stage with its ordinal, its title and the role, and the exit check on the arrow that leaves it. Read-only: nothing here changes the definition.">preview</button>
+          <button type="button" data-pm-view="edit" aria-pressed="${pressed("edit")}" title="the flow drawing this dialog has always shown - exit checks as the gates on the connectors, a capped loop as an arc, every stage a press away from its prompt.">edit</button>
+          ${state.view === "preview" ? `<span class="pmodal-views-note">read-only</span>` : ""}
+        </span>`;
+  }
+
+  // The chart's home: the shared renderer builds its own `.pm-card` inside this host, so the dialog and the map page
+  // are reading the same element (and the same stylesheet) rather than two arrangements of the same facts.
+  function chartHtml() {
+    return `<div class="pmodal-flow pmodal-chart" data-pm-flow data-pm-chart-view="preview"><div class="pm-host" data-pm-chart><div class="pmodal-empty">drawing the chart...</div></div></div>`;
+  }
+
   function cardHtml() {
     // The kicker names the thing being looked at, not a verb this dialog does not offer: the surface draws a flow in
     // both modes and has no edit control of its own, so "editing" claimed an action that is not here. The edit-mode
@@ -169,7 +208,11 @@
     const body = state.loading
       ? `<div class="pmodal-note">reading this task's pipeline…</div>`
       : `${state.note ? `<div class="pmodal-note">${esc(state.note)}</div>` : ""}${
-          state.flow ? `<div class="pmodal-flow" data-pm-flow>${flowHtml(state.flow, state.position, state.motion, state.fit)}</div>` : ""
+          state.flow
+            ? state.view === "preview" && previewAvailable()
+              ? chartHtml()
+              : `<div class="pmodal-flow" data-pm-flow>${flowHtml(state.flow, state.position, state.motion, state.fit)}</div>`
+            : ""
         }${previewHtml(state.flow, state.position)}`;
     // ONE close control — the ✕ in the header. The footer under it held a second "close" button and a status span no
     // caller ever wrote to: 41 px of card below a drawing that was already the smaller half of the dialog. The status
@@ -186,6 +229,7 @@
         <span class="pmodal-kicker">${esc(kicker)}</span>
         <b class="pmodal-title" id="${TITLE_ID}">${esc(state.title || "pipeline")}</b>
         ${state.subtitle ? `<span class="pmodal-sub mono">${esc(state.subtitle)}</span>` : ""}
+        ${viewsHtml()}
         <span class="spacer"></span>
         <span class="pmodal-status mono" data-pm-status role="status" aria-live="polite">${esc(state.status || "")}</span>
         <span class="pmodal-actions">
@@ -206,11 +250,16 @@
     // public/style.css. Set on every paint, so a dialog reused for a shorter definition shrinks with it.
     card.style?.setProperty?.("--pflow-card-n", String(stageCount(state.flow)));
     wireContent(doc);
+    // The chart is ASYNC (mermaid may still be loading) and owns its own generation, so paint() does not await it: the
+    // shell is on screen at once, the host says "drawing the chart..." until the card is ready, and a switch or a
+    // close makes the in-flight render a no-op.
+    paintChart(doc);
   }
 
   // Only the flow is replaced by a position change: the preview control is a sibling, so the select the reader is
   // holding on to is not rebuilt under their hands and keeps its focus.
   function paintFlow(doc = document) {
+    if (state.view === "preview" && previewAvailable()) return;
     const box = doc.querySelector("[data-pm-flow]");
     if (!box) return;
     box.innerHTML = flowHtml(state.flow, state.position, state.motion, state.fit);
@@ -324,6 +373,73 @@
       win?.removeEventListener?.("resize", onResize);
     };
     readView(doc);
+  }
+
+  // The map page's card, drawn from the DRAFT the Settings tab holds. `live` is the whole lifecycle rule: the dialog
+  // must still be open, still in preview, and this render must be the latest one asked for.
+  async function paintChart(doc = document) {
+    const host = doc.querySelector("[data-pm-chart]");
+    if (!host || !previewAvailable()) return false;
+    const M = global.PipelineMermaid;
+    const seq = ++state.chartSeq;
+    let item;
+    try {
+      item = M.fromDefinition(state.definition);
+    } catch (e) {
+      host.innerHTML = `<div class="pmodal-empty">this definition could not be read as a chart: ${esc((e && e.message) || e)}</div>`;
+      return false;
+    }
+    const el = M.card(item, { layout: "row", head: false, builtin: true });
+    host.replaceChildren(el);
+    const live = () => state.open && state.view === "preview" && seq === state.chartSeq;
+    try {
+      await M.paint({ item, el }, { layout: "row", ns: "pmodal", live });
+      if (!live()) return false;
+      host.dataset.chartId = String(item.id || "");
+      host.dataset.chartStages = String(item.stages.length);
+      // The card is as wide as the DRAWING it holds. The stylesheet's width is a function of the stage count (the
+      // flow drawing's own column arithmetic); a mermaid chart's natural width is not, so a two-stage chart in a
+      // 340 px card hid its second stage behind a scroll bar. Clamped to the window, and never over a frame the
+      // reader has already dragged.
+      if (!state.rect) {
+        const draw = el.querySelector("[data-draw]");
+        const card = doc.getElementById(CARD_ID);
+        const vw = Math.max(1, Math.round(doc.defaultView?.innerWidth || 1200));
+        if (draw && card) card.style.width = `${Math.min(Math.max(340, Math.ceil(draw.scrollWidth + 32)), Math.round(vw * 0.96))}px`;
+      }
+      // The status line's "past the card" is a measurement of the width that is up NOW, so take it again.
+      M.measure({ item, el }, { layout: "row" });
+      return true;
+    } catch (e) {
+      if (!live()) return false;
+      const said = String((e && e.message) || e);
+      host.innerHTML = `<div class="pmodal-empty">the chart could not be drawn: ${esc(said)}. The edit view still draws this definition.</div>`;
+      host.dataset.chartError = said;
+      return false;
+    }
+  }
+
+  // The switch. It repaints the CARD's body and nothing else: the bar's facts, the reader's dragged frame and the
+  // Settings tab's draft are untouched, which is what "the toggle keeps the edit" has to mean.
+  function setView(view, { doc = document, focus = false } = {}) {
+    if (!state.open || !VIEWS.includes(view)) return false;
+    if (view === state.view) {
+      if (focus) doc.querySelector(`[data-pm-view="${view}"]`)?.focus?.({ preventScroll: true });
+      return true;
+    }
+    if (view === "preview" && !previewAvailable()) return false;
+    state.view = view;
+    // A width chosen for the chart is the chart's, not the flow drawing's: the stylesheet's own width rule takes over
+    // again unless the reader has dragged a frame, which belongs to both views.
+    if (!state.rect) {
+      const card = doc.getElementById(CARD_ID);
+      if (card && card.style) card.style.width = "";
+    }
+    paint(doc);
+    // The press rebuilt the bar, so the button under the pointer is a new element: hand the focus back to it rather
+    // than dropping a keyboard reader at the top of the page.
+    if (focus) doc.querySelector(`[data-pm-view="${view}"]`)?.focus?.({ preventScroll: true });
+    return true;
   }
 
   function focusables(doc) {
@@ -496,6 +612,10 @@
       loading: false,
       preview: false,
       fit: false,
+      view: "edit",
+      definition: null,
+      // Any chart render still in flight belongs to the dialog that just closed.
+      chartSeq: state.chartSeq + 1,
       onClose: null,
     });
     if (restoreFocus) restore(doc);
@@ -529,10 +649,18 @@
     state.status = String(options.status || "");
     state.loading = Boolean(options.loading);
     state.preview = options.preview == null ? mode === "position" : Boolean(options.preview);
+    // The DRAWER's own model, not the flow's: the mermaid card needs the ordinal, the role and the exit labels the
+    // definition carries. A caller that passes no definition gets the edit drawing and no switch.
+    state.definition = options.definition && typeof options.definition === "object" ? options.definition : null;
+    // A number that never repeats: a render still in flight from the PREVIOUS open must not match the next one's.
+    state.chartSeq += 1;
     // Every open starts at the readable column width; `fit` is a reader's choice for the drawing they are looking at.
     state.fit = false;
     state.onClose = typeof options.onClose === "function" ? options.onClose : null;
     state.motion = matchMotion(doc);
+    // Preview is the DEFAULT for a definition, and the only view a caller can ask for is one that exists: a view
+    // asked for without a definition (or without the renderer) falls back to the drawing rather than a blank body.
+    state.view = previewAvailable() && (options.view == null || options.view === "preview") ? "preview" : "edit";
     state.open = true;
     host.hidden = false;
     host.setAttribute("data-mode", mode);
@@ -568,6 +696,12 @@
       btn.addEventListener("click", (e) => {
         e.preventDefault();
         close({ doc });
+      });
+    }
+    for (const btn of card.querySelectorAll("[data-pm-view]")) {
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        setView(btn.dataset.pmView, { doc, focus: true });
       });
     }
     const stage = card.querySelector("[data-pm-stage]");

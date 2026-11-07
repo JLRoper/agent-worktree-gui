@@ -40,7 +40,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { loadPlaywright, notRun, openSettingsGroup } from "./browser.mjs";
+import { loadPlaywright, notRun, openSettingsGroup, openFlowEdit } from "./browser.mjs";
 import { startPanel } from "./panel-testkit.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -405,7 +405,9 @@ try {
 
   // ---- 3. the flow the tab draws for that definition -----------------------------------------------------
   await page.click("#pipeline-flow-open");
-  await page.waitForSelector("#pipeline-modal:not([hidden]) #pipeline-modal-card [data-stage]", { timeout: 20_000 });
+  // The dialog opens on the preview; this capture is of the FLOW drawing, so take the switch. `[data-stage]` is on
+  // both surfaces, so the wait alone would have measured whichever view happened to be up.
+  await openFlowEdit(page);
   await page.waitForTimeout(300);
   const flowState = await readFlow(page);
   const shot3 = await shoot(page, "#pipeline-modal-card", "pipeline-flow", path.join(SHOTS, "pipeline-flow.png"));

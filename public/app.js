@@ -18114,6 +18114,10 @@ function openPipelineFlow() {
     title: def.title || def.id || id,
     subtitle: pipelineDraftDirty ? "unsaved changes" : "",
     pipeline: flow,
+    // The DRAWER's model: the preview builds the map page's card from the definition itself (ordinals, roles, exit
+    // labels), and it is the DRAFT, so an unsaved edit is what the chart shows. The flow above still drives the edit
+    // view, which is why both are handed over.
+    definition: def,
     position: null,
     preview: false,
     facts: [
