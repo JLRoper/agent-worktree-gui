@@ -247,7 +247,7 @@ test("the top row is the assistant and the panel's panes, and the session's row 
   assert.match(subRow[4].label, /^Alerts\s*0/, "the Alerts pill carries the count");
   assert.match(subRow[5].label, /^Watches\s*0/, "and so does Watches");
   assert.equal(subRow[6].label, "Messages");
-  assert.equal(subRow[7].label, "Scratchpad");
+  assert.equal(subRow[7].label, "Notes");
   // Beneath it in the document, with nothing but a comment in between: the row is the session's, not a second strip
   // somewhere else in the panel.
   assert.match(

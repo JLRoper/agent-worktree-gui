@@ -359,7 +359,8 @@ test("a second assistant's pane draws ITS values, never Assistant #1's", () => {
   assert.match(own, /data-as-for="assistant-2"/, "every control posts to its own assistant");
   assert.match(own, /assistants\/assistant-2\/settings.json/, "and names the file it writes");
   assert.match(own, /Its wake budget and quiet windows/);
-  assert.match(own, /<h4>Assistant #2's rules — its own, not Assistant #1's<\/h4>/, "its standing rules stay in its own pane");
+  assert.doesNotMatch(own, /rules — its own, not Assistant #1's/, "no second rules block at the bottom of its Settings pane");
+  assert.doesNotMatch(own, /data-as-addrule|as-rules-text/, "the rules form lives on the Notes tab, not here");
   // Assistant #1's pane posts with no assistantId at all — the legacy path, unchanged.
   const first = render();
   assert.doesNotMatch(first.own, /data-as-for=/, "#1's controls carry no assistantId");
