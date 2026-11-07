@@ -869,6 +869,10 @@
       const shown = sessionById(selectedSessionId());
       const label = shown?.name || "Assistant";
       if (nameEl.textContent !== label) nameEl.textContent = label;
+      // The row gives the name ONE line, so a name wider than the row ellipsizes. The title carries the whole name
+      // first, then what the field is — otherwise the tail of a long name is nowhere on screen.
+      const hint = `${label} — the assistant this float is showing, named from its own record`;
+      if (nameEl.title !== hint) nameEl.title = hint;
     }
     // The sub-tab's count is the alert count LESS the spawn cards: the spawn cards have their own strip and badge,
     // and a number that silently included them is how a card nobody started stayed invisible. Both counts are the
@@ -1301,7 +1305,7 @@
         : w.minutes
           ? `<span class="as-watch-timer" data-watch-timer="${esc(w.id)}" data-watch-at="${esc(w.at || "")}" data-watch-min="${esc(w.minutes)}">
                    <span class="as-watch-left" data-watch-left>…</span>
-                   <span class="as-bar"><i data-watch-bar style="width:100%"></i></span>
+                   <span class="as-watchbar"><i data-watch-bar style="width:100%"></i></span>
                  </span>`
           : `<span class="as-until">no deadline</span>`;
     return `<div class="as-row${w.state === "done" ? " is-done" : ""}">
