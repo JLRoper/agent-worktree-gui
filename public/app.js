@@ -33,6 +33,11 @@ const TREENAMES_KEY = "wtgui.treenames";
 // its dead zone at that moment. The loader's try/catch swallowed the ReferenceError, so the choice was written to
 // localStorage and then never read back - every reload held the stale rows again and pointed the arrow down.
 const SHOW_OLD_KEY = "wtgui.showOldProjects";
+// Which parents the reader has folded shut, as a set of row keys. Declared up here for the same reason as
+// SHOW_OLD_KEY: `state` reads this key while it is being built, and a const declared below it is still in its dead
+// zone at that moment — the loader's try/catch would swallow the ReferenceError and the choice would be written and
+// never read back. A fold is the reader's picture of the board, so it is remembered like every other fold they own.
+const FOLDED_PARENTS_KEY = "wtgui.foldedParents";
 
 // The chip-bearing drafts this tab already holds (board/paste-chips.js): each chip's own text by id, and
 // the segments of every box that carries one. Read ONCE, above `state`, so a box can be restored from it
@@ -188,6 +193,9 @@ const state = {
   // Which projects' charts are showing every tree, count or not (see the top-N collapse below). Per project,
   // because one board holds a hundred of them.
   showOldProjects: loadShowOldProjects(),
+  // The parents the reader folded shut: row keys whose children are out of sight (see childTreeOf). A fold is a
+  // picture of the board, never a write, so it is remembered in this browser beside every other fold the reader owns.
+  foldedParents: loadFoldedParents(),
   // Per-folder project search ("root" -> query). Not persisted: a filter is a moment's narrowing, and a
   // reload that came back with ninety projects hidden would look like the board had lost them.
   rootFilter: new Map(),
@@ -648,6 +656,24 @@ function saveShowOldProjects() {
     localStorage.setItem(SHOW_OLD_KEY, JSON.stringify([...state.showOldProjects]));
   } catch {
     /* no storage: the choice simply will not persist */
+  }
+}
+
+// The parents the reader folded shut (see childTreeOf / syncChildGroups). Only FOLDS are remembered: a parent nobody
+// folded is open, so the set starts empty and a reload puts the board back the way it was left.
+function loadFoldedParents() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(FOLDED_PARENTS_KEY) || "[]"));
+  } catch {
+    return new Set();
+  }
+}
+
+function saveFoldedParents() {
+  try {
+    localStorage.setItem(FOLDED_PARENTS_KEY, JSON.stringify([...state.foldedParents]));
+  } catch {
+    /* no storage: the fold simply will not persist */
   }
 }
 
@@ -4183,6 +4209,7 @@ function paintRefreshOffer(key) {
   holder.innerHTML = refreshOfferHtml(offer);
   const card = holder.firstElementChild;
   if (!card) return false;
+  markUnder(card, key);
   rowEl.after(card);
   return true;
 }
@@ -7992,6 +8019,7 @@ function showWorktreeConfirm(key) {
       </td>`;
     rowEl.after(held);
     state.confirmEls.set(key, held);
+    markUnder(held, key);
     showBanner(`🔒 ${row.lock.reason || "this worktree is locked — unlock it in the row first"}`);
     return;
   }
@@ -8011,6 +8039,7 @@ function showWorktreeConfirm(key) {
     </td>`;
   state.confirmEls.set(key, confirm);
   rowEl.after(confirm);
+  markUnder(confirm, key);
 }
 
 // The scanner runs on its own clock, so the board only knows a worktree is gone once a pass has been
@@ -8812,6 +8841,225 @@ function ownerDetailHtml(row) {
 }
 // ---- end owner cell
 
+// ---- children under their parent ---------------------------------------------------------------
+// Every tree the panel has a record for says which branch it was cut from — `row.parent` — and `row.parentSource`
+// says how sure that record is: "cut" (the panel watched the cut), "backfilled" (a guess from a shared ticket id in
+// the branch name) or "unknown". The board draws that record: a row whose parent is another row of the SAME project
+// hangs under it, one indent in, with its own chips and its own actions, and the parent carries the fold that puts
+// the group out of sight.
+//
+// Three rules keep the picture honest:
+//   • a GUESS still groups. Grouping is a picture, not a write — the UNMERGED chip already refuses to roll into a
+//     backfilled parent — and a reader looking for the tree cut from this one wants it here whether the record was
+//     watched or guessed. Only the tooltip says which it was.
+//   • a child hangs under its parent only while the PARENT IS ON THE CHART. The chart's top-N can hold a parent back
+//     while its child ranks higher; the child then keeps its own row at the top level rather than hanging under a
+//     row that is not drawn or disappearing with it.
+//   • a record can point in a circle (two backfilled guesses). The loop is broken where it closes: the row that would
+//     be its own ancestor is drawn at the top level, because a row cannot hang under itself.
+function childTreeOf(project) {
+  const byBranch = new Map();
+  for (const r of state.rows.values()) {
+    if (r.project !== project) continue;
+    const b = String(r.branch || "").trim();
+    if (!b) continue;
+    const k = keyOf(project, r.path);
+    if (!byBranch.has(b)) byBranch.set(b, k);
+  }
+  const parentOf = new Map();
+  for (const r of state.rows.values()) {
+    if (r.project !== project) continue;
+    const par = String(r.parent || "").trim();
+    if (!par) continue;
+    const k = keyOf(project, r.path);
+    const pk = byBranch.get(par);
+    if (pk && pk !== k) parentOf.set(k, pk);
+  }
+  for (const k of [...parentOf.keys()]) {
+    const seen = new Set([k]);
+    for (let cur = parentOf.get(k); cur; cur = parentOf.get(cur)) {
+      if (seen.has(cur)) {
+        parentOf.delete(k);
+        break;
+      }
+      seen.add(cur);
+    }
+  }
+  const childrenOf = new Map();
+  for (const [k, pk] of parentOf) {
+    const kids = childrenOf.get(pk) || [];
+    kids.push(k);
+    childrenOf.set(pk, kids);
+  }
+  return { parentOf, childrenOf };
+}
+
+// What one row needs to know about its place: the row it hangs under (only while that row is drawn), how deep it is,
+// how many of its own children are drawn, whether the reader has folded IT, and whether an ancestor is folded — the
+// last one is what makes a rebuild come back folded instead of re-opening a group on the reader.
+function groupCtxOf(tree, key, drawn = null) {
+  const onChart = (k) => !drawn || drawn.has(k);
+  const pk = tree.parentOf.get(key) || null;
+  const parentKey = pk && onChart(pk) ? pk : null;
+  let depth = 0;
+  let hidden = false;
+  for (let cur = parentKey; cur; cur = tree.parentOf.get(cur)) {
+    depth += 1;
+    if (state.foldedParents.has(cur)) hidden = true;
+  }
+  return {
+    parentKey,
+    depth,
+    childCount: (tree.childrenOf.get(key) || []).filter(onChart).length,
+    folded: state.foldedParents.has(key),
+    hidden,
+  };
+}
+
+// The drawing order with every child moved directly under its parent — the one list both renderProjectRows() and
+// reorder() paint from, so a scan tick and a full rebuild cannot disagree about where a child sits. A key whose
+// parent is not in the list keeps its own place: that is the top-N case, and also a row of another project.
+function nestRowKeys(parentOf, keys) {
+  const inList = new Set(keys);
+  const kidsOf = new Map();
+  for (const k of keys) {
+    const pk = parentOf.get(k);
+    if (!pk || !inList.has(pk)) continue;
+    const kids = kidsOf.get(pk) || [];
+    kids.push(k);
+    kidsOf.set(pk, kids);
+  }
+  const out = [];
+  const seen = new Set();
+  const emit = (k) => {
+    if (seen.has(k)) return;
+    seen.add(k);
+    out.push(k);
+    for (const c of kidsOf.get(k) || []) emit(c);
+  };
+  for (const k of keys) if (!inList.has(parentOf.get(k))) emit(k);
+  for (const k of keys) emit(k);
+  return out;
+}
+
+function foldTitle(row, count, folded) {
+  const what = `${count} worktree${count === 1 ? "" : "s"} cut from ${row.branch || "this tree"}`;
+  return folded
+    ? `show the ${what} — each keeps its own chips, actions and open panel; the fold only put them out of sight`
+    : `hide the ${what} — folded one indent in under this row; nothing is removed and every open panel stays open behind the fold`;
+}
+
+function foldButtonHtml(key, row, ctx) {
+  const n = ctx.childCount;
+  return `<button class="btn-row-fold${ctx.folded ? " is-folded" : ""}" type="button" data-fold-tree="${esc(key)}" aria-expanded="${
+    ctx.folded ? "false" : "true"
+  }" aria-label="${ctx.folded ? "show" : "hide"} the ${n} worktree${n === 1 ? "" : "s"} cut from ${esc(row.branch || "this tree")}" title="${esc(
+    foldTitle(row, n, ctx.folded),
+  )}">${ctx.folded ? "\u25b8" : "\u25be"}</button>`;
+}
+
+// Paint the fold control in place — the node is kept, never replaced, because the button is what the pointer and the
+// keyboard are on when it flips.
+function paintFoldButton(btn, key, row, ctx) {
+  const n = ctx.childCount;
+  const glyph = ctx.folded ? "\u25b8" : "\u25be";
+  if (btn.textContent !== glyph) btn.textContent = glyph;
+  if (btn.getAttribute("aria-expanded") !== (ctx.folded ? "false" : "true")) {
+    btn.setAttribute("aria-expanded", ctx.folded ? "false" : "true");
+  }
+  const label = `${ctx.folded ? "show" : "hide"} the ${n} worktree${n === 1 ? "" : "s"} cut from ${row.branch || "this tree"}`;
+  if (btn.getAttribute("aria-label") !== label) btn.setAttribute("aria-label", label);
+  const title = foldTitle(row, n, ctx.folded);
+  if (btn.title !== title) btn.title = title;
+  btn.classList.toggle("is-folded", ctx.folded);
+}
+
+// Everything the grouping draws for ONE row: its child/parent classes, the indent, the fold control, and the tick
+// that says "cut from the row above". The lead slot is filled in place so a re-rank or a scan tick never rebuilds a
+// control the reader is pointing at.
+function paintRowGroup(tr, row, key, ctx) {
+  const child = Boolean(ctx.parentKey);
+  tr.classList.toggle("is-child", child);
+  tr.classList.toggle("is-parent", ctx.childCount > 0);
+  // Hidden because an ANCESTOR is folded. The row itself stays in the document: folding is a class, not a removal,
+  // which is what lets an open console, a half-typed reply and a scroll position survive it.
+  tr.classList.toggle("is-fold-hidden", ctx.hidden);
+  if (child) {
+    if (tr.dataset.parentKey !== ctx.parentKey) tr.dataset.parentKey = ctx.parentKey;
+    const depth = String(ctx.depth);
+    if (tr.dataset.depth !== depth) tr.dataset.depth = depth;
+    if (tr.style.getPropertyValue("--child-depth") !== depth) tr.style.setProperty("--child-depth", depth);
+  } else {
+    if (tr.hasAttribute("data-parent-key")) tr.removeAttribute("data-parent-key");
+    if (tr.dataset.depth) delete tr.dataset.depth;
+    if (tr.style.getPropertyValue("--child-depth")) tr.style.removeProperty("--child-depth");
+  }
+  const lead = tr.querySelector("td.name .row-lead");
+  if (!lead) return;
+  let tick = lead.querySelector(".child-tick");
+  if (child && !tick) {
+    lead.insertAdjacentHTML("afterbegin", `<span class="child-tick" aria-hidden="true">\u2514</span>`);
+    tick = lead.querySelector(".child-tick");
+  } else if (!child && tick) {
+    tick.remove();
+  }
+  let btn = lead.querySelector(".btn-row-fold");
+  if (ctx.childCount && !btn) {
+    lead.insertAdjacentHTML("beforeend", foldButtonHtml(key, row, ctx));
+    btn = lead.querySelector(".btn-row-fold");
+  } else if (!ctx.childCount && btn) {
+    btn.remove();
+    btn = null;
+  }
+  if (btn) paintFoldButton(btn, key, row, ctx);
+}
+
+// The nodes painted UNDER a row — its detail, a question it is asking, the ⟳'s offer — say which row they hang from
+// and hide with it. Everything here carries `data-parent-key`, so one selector finds a whole group.
+function paintUnder(el, ctx) {
+  if (!el) return;
+  if (ctx.parentKey) el.dataset.parentKey = ctx.parentKey;
+  else if (el.hasAttribute("data-parent-key")) el.removeAttribute("data-parent-key");
+  el.classList.toggle("is-fold-hidden", ctx.hidden);
+}
+
+function markUnder(el, key) {
+  const project = state.rows.get(key)?.project;
+  if (!el || !project) return el;
+  paintUnder(el, groupCtxOf(childTreeOf(project), key));
+  return el;
+}
+
+// One pass over a project's drawn rows, so a rebuild, a single-row repaint and a re-rank cannot each draw a
+// different picture of the same tree.
+function syncChildGroups(project) {
+  const tbody = state.tbodyEls.get(project);
+  if (!tbody || !tbody.isConnected) return;
+  const tree = childTreeOf(project);
+  const rows = [...tbody.children].filter((el) => el.classList.contains("row"));
+  const drawn = new Set(rows.map((el) => el.dataset.key));
+  const offers = new Map([...tbody.querySelectorAll("tr.refresh-offer")].map((el) => [el.dataset.refreshOffer, el]));
+  for (const tr of rows) {
+    const key = tr.dataset.key;
+    const row = state.rows.get(key);
+    if (!row) continue;
+    const ctx = groupCtxOf(tree, key, drawn);
+    paintRowGroup(tr, row, key, ctx);
+    for (const el of [state.detailEls.get(key), state.confirmEls.get(key), offers.get(key)]) paintUnder(el, ctx);
+  }
+}
+
+// Fold or unfold one parent. It writes nothing but the reader's own book: the children are hidden where they stand,
+// so their chips, their open panel and anything typed into it are exactly where they were when the fold opens again.
+function toggleChildFold(key) {
+  const row = state.rows.get(key);
+  if (!row) return;
+  if (state.foldedParents.has(key)) state.foldedParents.delete(key);
+  else state.foldedParents.add(key);
+  saveFoldedParents();
+  syncChildGroups(row.project);
+}
+
 function rowHtml(row, forceOwner = false) {
   const isOpen = state.expanded.has(keyOf(row.project, row.path));
   // A row whose path is no longer a tree of its own (lib/scan.js's RELEASED row) has no counts to show: "clean" would
@@ -8882,7 +9130,7 @@ function rowHtml(row, forceOwner = false) {
   // which cell is which: a hidden column is simply not in `cells`, and the row is the shown set in table order. The
   // age cell carries its own <td> (it is painted in place every second), which is why `life` is read, not wrapped.
   const cells = {
-    name: `<td class="name"><div class="name-line"><button class="btn-row-agent" data-agent-path="${esc(row.path)}" data-agent-name="${esc(row.name)}" data-agent-project="${esc(row.project)}"
+    name: `<td class="name"><div class="name-line"><span class="row-lead"></span><button class="btn-row-agent" data-agent-path="${esc(row.path)}" data-agent-name="${esc(row.name)}" data-agent-project="${esc(row.project)}"
       title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">\u25b6</button><span class="row-name" title="${esc(row.path)}">${esc(shownName)}</span>${renameBtn}${treeLockBtn}${agentBadgeHtml(row)}</div></td>`,
     branch: `<td class="mono branch">${branchCellHtml(row)}${branchLockBtn}</td>`,
     // The owner column: the assistant's NAME from the owner cell region above — never the raw id, never the role
@@ -10451,6 +10699,7 @@ function repaintTodoBlock(key) {
   holder.innerHTML = detailHtml(row);
   const fresh = holder.firstElementChild;
   if (!fresh) return;
+  markUnder(fresh, key);
   detail.replaceWith(fresh);
   state.detailEls.set(key, fresh);
   const input = fresh.querySelector(".todo-edit, .todo-add-input");
@@ -11338,7 +11587,7 @@ function projectSection(name) {
     <div class="wt-scroll">
       <table><thead><tr>${chartHeaderHtml()}</tr></thead><tbody data-tbody="${esc(name)}"></tbody></table>
     </div>
-    <div class="legend"><span class="age-slot" data-age-slot="${esc(name)}"></span>liveness evidence: <span class="sig sig-hermes">⧉ hermes</span> session active · <span class="sig sig-claude">⧉ claude</span> Claude Code session active · <span class="sig sig-board">● board</span> live board PID · <span class="sig sig-port">:port</span> dev server listening · <span class="sig sig-files">✎ files</span> edited recently — a row is live only if one of these fired · the number is time since that last happened, the ring fills up to green as the row becomes due for its next read</div>
+    <div class="legend"><span class="age-slot" data-age-slot="${esc(name)}"></span>liveness evidence: <span class="sig sig-hermes">⧉ hermes</span> session active · <span class="sig sig-claude">⧉ claude</span> Claude Code session active · <span class="sig sig-board">● board</span> live board PID · <span class="sig sig-port">:port</span> dev server listening · <span class="sig sig-files">✎ files</span> edited recently — a row is live only if one of these fired · the number is time since that last happened, the ring fills up to green as the row becomes due for its next read · a tree cut from another one hangs under it, one indent in, and the ▾ on its parent folds the group out of sight — a fold only hides, every chip and open panel stays as it was</div>
   </section>`;
 }
 
@@ -11914,7 +12163,12 @@ function reorder(name) {
   const tbody = state.tbodyEls.get(name);
   if (!tbody) return;
   // Stabilized: while one row of this project is open, none of them re-ranks around it.
-  if (stabilizeOn() && projectHasOpenRow(name)) return;
+  if (stabilizeOn() && projectHasOpenRow(name)) {
+    // The RANK is held still while a row is open, but the grouping is not a rank: a child that just arrived still
+    // belongs under its parent, and a row that has gone must not leave children indented under nothing.
+    syncChildGroups(name);
+    return;
+  }
   // Re-appending a detail takes its cards out of the DOM on the way, which is enough to lose a selection.
   const heldSelection = captureCardSelection();
   // And enough to lose the caret: a re-rank of some OTHER worktree re-appends every row in this project, including
@@ -11935,8 +12189,11 @@ function reorder(name) {
   for (const k of slotKeys) orderedKeys.push(fixed.has(k) ? k : free[f++] ?? k);
   // A row that just arrived has no slot of its own yet: give it one at the end of the free queue.
   for (const k of free.slice(f)) if (!orderedKeys.includes(k)) orderedKeys.push(k);
+  // A child is drawn under its parent whatever slot the rank handed it: the group is the shape of the board, and an
+  // open child that the rank happened to slot above its parent still belongs below it.
+  const nestedKeys = nestRowKeys(childTreeOf(name).parentOf, orderedKeys);
   const want = [];
-  for (const k of orderedKeys) {
+  for (const k of nestedKeys) {
     const tr = state.rowEls.get(k);
     if (tr) want.push(tr);
     // The confirmation is a child of its row inside the table, so a re-rank that re-appends only the
@@ -11957,7 +12214,12 @@ function reorder(name) {
   // Only touch the DOM when the order really changed: this runs on every row event, and re-appending
   // identical nodes would fight the scroll position while someone is reading.
   const current = [...tbody.children];
-  if (current.length === want.length && current.every((el, i) => el === want[i])) return;
+  if (current.length === want.length && current.every((el, i) => el === want[i])) {
+    // Nothing moved, but the grouping still has to be current: a parent's child count changes when a row is held
+    // back by the chart or comes back from it, and that is a fact about state, not about the order.
+    syncChildGroups(name);
+    return;
+  }
   // Same discipline as reorderProjects(): a detail that only slid because a NEIGHBOUR was re-ranked must not take its
   // console out of the layout tree. Only the rows that are out of place move, and what does move is put back in this
   // same task instead of waiting for the next line or the 400 ms sweep.
@@ -11966,6 +12228,9 @@ function reorder(name) {
   placeInOrder(tbody, want);
   endDomMove();
   releaseScrolls(heldScrolls);
+  // The rows are in their new order, so say where each one now sits in its group: the indent, the fold control and
+  // the class that hides a child behind a folded parent are all read from the order that was just painted.
+  syncChildGroups(name);
   if (typing) restoreTyping(tbody, typing);
   restoreAddAgent(tbody);
   // Say which rows moved: the order is the panel's judgement about what to look at first, and a
@@ -12118,6 +12383,9 @@ function placeRow(project, row, { flash = false } = {}) {
       gone.remove();
       state.rowEls.delete(key);
     }
+    // A row the chart held back may have been somebody's parent: its children keep their own rows, and the grouping
+    // has to say so now rather than leave them indented under a row that is no longer on the chart.
+    syncChildGroups(project);
     refreshChips(project);
     return;
   }
@@ -12190,6 +12458,9 @@ function placeRow(project, row, { flash = false } = {}) {
     h2.innerHTML = detailHtml(row);
     const dEl = h2.firstElementChild;
     if (dEl) dEl.dataset.dsig = detailSig;
+    // The detail hangs under this row: it is hidden with it when its group is folded, and a rebuild of the row
+    // must not drop that.
+    markUnder(dEl, key);
     newTr.after(dEl);
     state.detailEls.set(key, dEl);
     // The cards move across before anything is measured, so "where was this console" is answered by the node
@@ -12252,6 +12523,9 @@ function removeRow(project, p) {
   state.detailEls.delete(key);
   state.confirmEls.delete(key);
   state.rows.delete(key);
+  // A child leaving takes a worktree out of its parent's group: the parent's fold control has one fewer to name, and
+  // may have none left at all.
+  syncChildGroups(project);
   if (window.scrollY !== pageY) {
     const maxY = Math.max(0, document.scrollingElement.scrollHeight - window.innerHeight);
     window.scrollTo({ top: Math.min(pageY, maxY) });
@@ -12312,29 +12586,41 @@ function renderProjectRows(name, { typing = null } = {}) {
     );
   }
   if (expanded) {
-    for (const row of rowsInOrder) {
-      const key = keyOf(name, row.path);
+    // The rank says which rows are drawn; the grouping says where each one hangs. They are one list here: every child
+    // sits directly under its parent, and everything else keeps the rank's order.
+    const tree = childTreeOf(name);
+    const order = nestRowKeys(tree.parentOf, rowsInOrder.map((r) => keyOf(name, r.path)));
+    const byKey = new Map(rowsInOrder.map((r) => [keyOf(name, r.path), r]));
+    for (const k of order) {
+      const row = byKey.get(k);
+      if (!row) continue;
       const holder = document.createElement("tbody");
       holder.innerHTML = rowHtml(row);
       const tr = holder.firstElementChild;
       frag.appendChild(tr);
       // An open confirmation belongs to its row, and this path rebuilds every row: carry the live node
       // over so the question survives the repaint (and does not come back at the top of the table).
-      const confirmEl = state.confirmEls.get(key);
+      const confirmEl = state.confirmEls.get(k);
       if (confirmEl) frag.appendChild(confirmEl);
       let dEl = null;
-      if (state.expanded.has(key)) {
+      if (state.expanded.has(k)) {
         const h2 = document.createElement("tbody");
         h2.innerHTML = detailHtml(row);
         dEl = h2.firstElementChild;
+        // A detail hangs under its row, so it hides with the row's group; saying so here keeps it right even
+        // before syncChildGroups() gets its pass over the rebuilt table.
+        if (dEl) markUnder(dEl, k);
         frag.appendChild(dEl);
       }
-      built.push({ key, tr, dEl });
+      built.push({ key: k, tr, dEl });
     }
   }
   // One swap: the old rows leave as the new ones arrive, so the document never lays out half-built.
   beginDomMove();
   tbody.replaceChildren(frag);
+  // The grouping is painted into the rebuilt rows before anything measures them: an indent changes how wide the name
+  // cell is, and the cards and the typing below are restored against that layout.
+  syncChildGroups(name);
   if (!expanded) {
     for (const k of [...state.rowEls.keys()]) if (state.rows.get(k)?.project === name) state.rowEls.delete(k);
     for (const k of [...state.detailEls.keys()]) if (state.rows.get(k)?.project === name) state.detailEls.delete(k);
@@ -13279,6 +13565,16 @@ document.addEventListener("click", async (e) => {
   if (childTree) {
     e.preventDefault();
     void cutChildTree(childTree);
+    return;
+  }
+  // Fold a parent's children out of sight, or back into it. A picture, not a write: no request leaves the page, no row
+  // is rebuilt, and the children are only hidden where they stand — an open console, a half-typed reply and a scroll
+  // position are all still there when the fold opens again.
+  const foldTree = e.target.closest("[data-fold-tree]");
+  if (foldTree) {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleChildFold(foldTree.dataset.foldTree);
     return;
   }
   const refreshTree = e.target.closest("[data-refresh-tree]");
@@ -14938,6 +15234,7 @@ $("projects").addEventListener("click", (e) => {
         const holder = document.createElement("tbody");
         holder.innerHTML = detailHtml(row);
         const dEl = holder.firstElementChild;
+        markUnder(dEl, key);
         tr.after(dEl);
         state.detailEls.set(key, dEl);
         fillAgentSlots(dEl, new Map());
