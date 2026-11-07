@@ -1092,10 +1092,10 @@
 
   // The HUMAN rotation's way into an assistant's own card. An assistant's turn is not on the board: its card lives
   // in this float, one session tab and one Chat pane per assistant, so the path is open the float and put THAT
-  // assistant's Chat on screen. The turn's own unfolded/paged state is written by app.js before it calls this,
-  // because `conversationHtml` here reads the same `state.turnOpen` / `state.turnPage` a board card does — the
-  // repaint this triggers is the one that draws the turn the question lives on. False means there is no session
-  // record for the thread (nothing to put on screen), and the rotation steps on instead of flashing a hidden box.
+  // assistant's Chat on screen. The turn's own unfolded/paged state is written through wtTurnFold
+  // (public/core/turn-fold.js) — this file never touches `state.turnOpen` / `state.turnPage` itself, and the repaint
+  // this triggers is the one that draws the turn the question lives on. False means there is no session record for
+  // the thread (nothing to put on screen), and the rotation steps on instead of flashing a hidden box.
   function showAssistantThread(thread) {
     const rec = sessionRecords().find((s) => s.threadId === thread);
     if (!rec) return false;
@@ -1115,12 +1115,11 @@
     const land = () => {
       let card = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`);
       if (!card) return; // not painted yet — the next pass looks again
-      const turns = [...state.jobs.values()]
-        .filter((j) => (j.thread || j.id) === thread)
-        .sort((a, b) => String(a.startedAt || "").localeCompare(String(b.startedAt || "")));
-      const latest = turns[turns.length - 1] || null;
-      if (latest && state.turnOpen.get(turnKey(latest)) === false) {
-        state.turnOpen.set(turnKey(latest), true);
+      // The newest turn, unfolded and on the page it lives on: wtTurnFold writes the three books this card's renderer
+      // reads, so a reader who had paged back still lands on the console. `changed` false means it was already in
+      // front of them, and then there is nothing to repaint.
+      const conv = conversations().find((c) => c.thread === thread);
+      if (conv?.latest && wtTurnFold.reveal(state, thread, conv.turns, conv.latest.id).changed) {
         renderConversation(thread);
         // That render replaced the card, so the console below has to be looked up on the new node, not this one.
         card = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`);

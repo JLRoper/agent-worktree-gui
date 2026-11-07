@@ -63,6 +63,7 @@
     "dogfood:chat": "node tools/dogfood-chat.mjs",
     "verify:attachment-spawn": "node tools/verify-attachment-spawn.mjs",
     "verify:turn-pager": "node tools/verify-turn-pager.mjs",
+    "verify:turn-fold": "node tools/verify-turn-fold.mjs",
     "verify:human-button": "node tools/verify-human-button.mjs",
     "verify:provider-profiles": "node tools/verify-provider-profiles.mjs",
     "verify:assistant-dock-overlap": "node tools/verify-assistant-dock-overlap.mjs",
