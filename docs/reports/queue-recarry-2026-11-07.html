@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Why the Director's QUEUE line files itself again</title>
+<style>
+:root { color-scheme: dark; --bg:#0d1117; --card:#161b22; --line:#30363d; --ink:#e6edf3; --dim:#8b949e; --acc:#58a6ff; --ok:#3fb950; --bad:#f85149; --warn:#d29922; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.55 -apple-system,Segoe UI,Roboto,sans-serif; }
+.wrap { max-width:1100px; margin:0 auto; padding:40px 28px 64px; }
+h1 { font-size:30px; line-height:1.2; margin:0 0 6px; }
+h2 { font-size:19px; margin:36px 0 10px; border-bottom:1px solid var(--line); padding-bottom:6px; }
+h3 { font-size:16px; margin:22px 0 6px; color:var(--acc); }
+.sub { color:var(--dim); margin:0 0 22px; }
+.card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:16px 18px; margin:14px 0; }
+.answer { border-left:3px solid var(--ok); }
+.warncard { border-left:3px solid var(--warn); }
+.grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; }
+.k { color:var(--dim); font-size:12px; text-transform:uppercase; letter-spacing:.06em; }
+.v { font-size:15px; margin-top:2px; }
+code, pre { font-family:ui-monospace,SFMono-Regular,Consolas,monospace; }
+code { background:#21262d; padding:1px 5px; border-radius:4px; font-size:13px; }
+pre { background:#0b0f14; border:1px solid var(--line); border-radius:8px; padding:14px; overflow:auto; font-size:12.5px; line-height:1.5; }
+ul, ol { margin:8px 0; padding-left:22px; }
+li { margin:4px 0; }
+table { border-collapse:collapse; width:100%; font-size:14px; margin:10px 0; }
+td, th { border-bottom:1px solid var(--line); text-align:left; padding:7px 8px; vertical-align:top; }
+th { color:var(--dim); font-weight:600; }
+.pass { color:var(--ok); }
+.fail { color:var(--bad); }
+.dim { color:var(--dim); }
+.mono { font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:12.5px; }
+</style></head><body><div class="wrap">
+
+<h1>Why the Director's QUEUE line files itself again</h1>
+<p class="sub">Read-only research. The path from a Director reply's <code>QUEUE</code> line to its queue row, the one key that is supposed to stop a second filing, and why five texts were filed eighteen extra times. No product code was changed.</p>
+
+<div class="card grid">
+  <div><div class="k">Branch</div><div class="v"><code>wtgui/read-only-research-chang-09d43b</code></div></div>
+  <div><div class="k">Base</div><div class="v"><code>main</code> at <code>5ad18dc</code> when read; every anchor re-read at <code>44a39eb</code> (1.51.1) before landing</div></div>
+  <div><div class="k">Run</div><div class="v">2026-11-07, 19:43Z</div></div>
+  <div><div class="k">Store snapshot</div><div class="v">assistant.json savedAt 19:43:44Z, jobs.json savedAt 19:43:47Z</div></div>
+  <div><div class="k">Store copies</div><div class="v"><code>%TEMP%/wag/882e7467/store-copy</code> (never the live store)</div></div>
+  <div><div class="k">Harnesses</div><div class="v"><code>%TEMP%/wag/882e7467/repro-recarry3.mjs</code> and <code>repro-store-copy2.mjs</code></div></div>
+</div>
+
+<div class="card answer">
+<p><strong>Answer: a Director reply's <code>QUEUE</code> line has no idempotency key anywhere on its path. The only thing that stops the same reply filing a second row is the turn id being present in <code>Assistant.harvested</code>, a Set of at most 50 job ids in <code>assistant.json</code> (<code>lib/assistant.js:4838</code>). A turn that has fallen out of that set is re-harvested by the next re-read, and every <code>QUEUE</code> line in it is carried out again as a brand new row; <code>addTask</code> (<code>lib/assistant/queue.js:541</code>) has no duplicate check and the row carries no reference to the turn or the line.</strong></p>
+<p><strong>Measured on the live store: 5 texts, 18 extra rows.</strong> #268, #269 and #270 (filed 14:00, 14:41 and 15:01) were re-filed at 16:45, 16:48, 17:11, 17:54, 18:02 and 19:05 (rows #271 to #285 and #292 to #294). #281 and #282 joined the set at 19:05 (#291 and #290). #286 and #287 still exist once each. The difference is not the text: it is whether the turn that wrote it was still inside the 50-id mark when the next re-read ran.</p>
+</div>
+
+<h2>1. The path, stage by stage</h2>
+
+<table>
+<tr><th>Stage</th><th>Where</th><th>What it does</th></tr>
+<tr><td>The reply is stored</td><td class="mono">lib/jobs.js:1091-1160, :1376</td><td>Each Director turn is a job record in <code>jobs.json</code>: <code>id</code> (a uuid8), <code>thread: panel-assistant-5</code>, and <code>lines[]</code>. The reply is one or more <code>text</code> lines. <code>summary()</code> hands <code>lines.slice(-TAIL)</code> to every consumer.</td></tr>
+<tr><td>The parse</td><td class="mono">lib/assistant.js:4831-4840<br>lib/assistant/read.js:243<br>lib/assistant/actions.js:68-71</td><td><code>harvest(job)</code> reads <code>turnProse(job.lines)</code> (every text block joined, resends collapsed) and runs <code>parseActions</code>. The QUEUE grammar is <code>/^\s*QUEUE\s+(.+?)\s*\|\s*(.+)$/i</code> and produces <code>{ assistant: clip(q[1],80), text: clip(q[2],2000) }</code>. Nothing else is kept: no line index, no turn id.</td></tr>
+<tr><td>The guard</td><td class="mono">lib/assistant.js:4834-4838</td><td><code>if (!job?.id || this.harvested.has(job.id)) return;</code> then <code>harvested.add(job.id)</code> and <code>if (harvested.size &gt; 50) harvested = new Set([...harvested].slice(-50))</code>. One Set, persisted in <code>assistant.json</code>, shared by every assistant.</td></tr>
+<tr><td>The carry</td><td class="mono">lib/assistant.js:5040-5075</td><td>For each parsed queue action: <code>carry("queue-failed", ...)</code>, <code>directorTarget(q.assistant)</code> (<code>:5028</code>, refuses an unknown id and the turn's own assistant), then <code>queueMutate(target.id, "add", { title, detail }, { by: who })</code> (<code>:5061</code>).</td></tr>
+<tr><td>The write</td><td class="mono">lib/assistant.js:1552-1558<br>lib/assistant/queue.js:541-565</td><td><code>case "add"</code> calls <code>addTask</code>, which takes the next integer id from <code>nextId</code>, pushes the row and caps the list. There is no lookup against existing rows.</td></tr>
+<tr><td>The row</td><td class="mono">state/assistants/&lt;id&gt;/queue.json</td><td>Fields: <code>id, title, detail, state, owner, createdBy, createdAt, startedAt, doneAt, doneBy, thread, threads, project, worktree, files, lane, order, attempts, reason, hold, movedFrom, pipelineRun</code>. Nothing names the turn, the line, or a hash of the text.</td></tr>
+</table>
+
+<div class="card warncard">
+<p><strong>The key, stated exactly.</strong> The reply is stored under the <em>turn id</em>: the job record's <code>id</code> in <code>jobs.json</code>, mirrored into <code>harvested</code>. The queue row is stored under its <em>own integer id</em> in <code>queue.json</code>. There is no key shared between them. <code>createdBy</code> names the Director and <code>createdAt</code> names the moment, and that is all the row knows about where it came from.</p>
+</div>
+
+<h2>2. Why the same text is carried again</h2>
+
+<p>The guard is a window over harvest <em>events</em>, not over turn <em>age</em>. A Set keeps insertion order, and <code>slice(-50)</code> drops whatever was inserted first, so the mark retains the last 50 turns the panel harvested - in whatever order that happened. Two consequences follow.</p>
+
+<ol>
+<li><strong>A turn outside the mark is carried again.</strong> Any re-read of a stored turn that is no longer in the set runs its actions from scratch. The code already names this failure for SPAWN, in the comment that introduces the SPAWN debt's own guard: "which is what a boot does when it re-reads one of the assistant's old turns (the <code>harvested</code> mark is capped at 50 turn ids, so the oldest fall out and read as never harvested)" (<code>lib/assistant.js:5233-5236</code>).</li>
+<li><strong>The window moves in both directions.</strong> A re-read that inserts forty old ids evicts the newest ids first. That is how #281 and #282 became re-carryable at 19:05 while a 15:01 turn was still protected: the mark's contents are a harvest log, not a recency stack.</li>
+</ol>
+
+<h3>Per-kind idempotency is uneven</h3>
+<table>
+<tr><th>Line</th><th>Second carry of the same turn</th><th>Where</th></tr>
+<tr><td><code>SPAWN</code></td><td class="pass">refused by name: "it was already carried out once (job)"</td><td class="mono">lib/assistant.js:5228-5276</td></tr>
+<tr><td><code>QUEUE</code></td><td class="fail">files a new row</td><td class="mono">lib/assistant.js:5040-5075</td></tr>
+<tr><td><code>MESSAGE</code></td><td class="fail">starts a new turn on the target's thread</td><td class="mono">lib/assistant.js:5086-5145</td></tr>
+<tr><td><code>NOTE</code>, <code>CHARTER</code>, <code>WATCH</code></td><td class="fail">appended again</td><td class="mono">lib/assistant.js:4882-4942</td></tr>
+</table>
+
+<p>The SPAWN branch keeps a per-line record (<code>spawnIntents</code>, keyed by turn + target + prompt) precisely because the turn-id mark is not durable enough. QUEUE and MESSAGE have no equivalent, so the re-read that SPAWN refuses is the re-read that re-files.</p>
+
+<h3>The live evidence</h3>
+
+<p>Five texts account for eighteen extra rows. Every family below was created by <code>assistant-5</code> (the Director) into <code>assistant-2</code>'s queue.</p>
+
+<table>
+<tr><th>Text first filed</th><th>Rows</th><th>Created at</th></tr>
+<tr><td>#268 parks cleanup (14:00)</td><td>268, 271, 274, 277, 280, 285, 294</td><td class="mono">14:00:42, 16:45:48, 16:48:37, 17:11:15, 17:54:20, 18:02:03, 19:05:57</td></tr>
+<tr><td>#269 start #241 (14:41)</td><td>269, 273, 276, 279, 284, 293</td><td class="mono">14:41:10, 16:48:36, 17:11:14, 17:54:20, 18:02:03, 19:05:56</td></tr>
+<tr><td>#270 close #269 (15:01)</td><td>270, 272, 275, 278, 283, 292</td><td class="mono">15:01:14, 16:48:36, 17:11:14, 17:54:20, 18:02:02, 19:05:55</td></tr>
+<tr><td>#281 Notes rename (17:55)</td><td>281, 291</td><td class="mono">17:55:56, 19:05:53</td></tr>
+<tr><td>#282 memory study (17:59)</td><td>282, 290</td><td class="mono">17:59:19, 19:05:52</td></tr>
+<tr><td>#286 thread rendering (18:06)</td><td>286 only</td><td class="mono">18:06:19</td></tr>
+<tr><td>#287 this defect (18:28)</td><td>287 only</td><td class="mono">18:28:15</td></tr>
+</table>
+
+<p>26 of the 27 rows created since #265 are the Director's. The re-carried rows were closed by Assistant #2 within minutes each time (its own reasons: "Obsolete: #236 closed against PR #513 ...", "Duplicate of #282, which landed as PR #525"), which is why the visible damage is queue noise and two extra turns, not lost work.</p>
+
+<h3>What the 19:05 pass looked like from inside</h3>
+
+<p>The panel booted at <code>19:05:41</code> ("restored 80 job(s)"). At <code>19:05:50</code> it reconciled four turns a restart had cut off. From <code>19:05:52.690</code> to <code>19:05:57.425</code> the journal shows one continuous re-read of the Director's stored turns, oldest replies last, and each kind behaves the way the table above predicts:</p>
+
+<pre>19:05:52.690 note                  Pipeline-source worker re-issued and live ... #281 parked behind it
+19:05:52.690 spawn-replay-refused   SPAWN agent-worktree-gui: it was already carried out once (job) ...
+19:05:52.972 queue                 Assistant #2: added #290 Read-only measured investigation of client memory ...
+19:05:53.257 queue                 Assistant #2: added #291 Rename every user-facing "Scratchpad" ...
+19:05:53.525 queue-refused         no assistant answers to "[2]" - name it assistant-2, #2, 2 or its record name
+19:05:55.773 queue                 Assistant #2: added #292 Close #269 as redundant ...
+19:05:56.194 queue                 Assistant #2: added #293 Start #241 now that #225 is done ...
+19:05:57.069 queue                 Assistant #2: added #294 Close the two landed parks #236 ...
+19:06:00.752 said                  woken: Close #271, #272, #273 and #274 as obsolete ...
+19:06:01.420 said                  woken: #282 is extended: you may stand up a throwaway node service ...
+</pre>
+
+<p>The two <code>said</code> lines are MESSAGE lines from the same replies being re-sent: they started real jobs <code>914737be</code> and <code>b0abe4ad</code> on Assistant #2 at 19:05:59, exactly as a fresh Director turn would. The SPAWN lines in those same replies were refused by name. That contrast is the defect in one screen.</p>
+
+<h2>3. Reproduction</h2>
+
+<p>Two runs, both outside the live store. The first is a test double (a temp state directory and the real <code>Assistant</code>, <code>parseActions</code> and queue modules). The second is a copy of the live store, so the replies are the real ones.</p>
+
+<h3>3a. Test double: one turn, one row, then the mark ages out</h3>
+<table>
+<tr><th>Step</th><th>Call</th><th>Rows in the queue</th><th>Verdict</th></tr>
+<tr><td>1</td><td><code>harvest(job)</code> with one text block carrying one QUEUE line</td><td>1 (id 1)</td><td>the first filing</td></tr>
+<tr><td>2</td><td>the same job again, mark still holds the turn</td><td>1 (id 1)</td><td class="pass">guard holds</td></tr>
+<tr><td>3</td><td>50 later turn ids inserted, then <code>slice(-50)</code> as line 4838 does</td><td>1</td><td>the turn is no longer marked</td></tr>
+<tr><td>4</td><td>the same stored job delivered again</td><td>2 (ids 1, 2)</td><td class="fail">identical title, no refusal, no journal of a refusal</td></tr>
+<tr><td>5</td><td>the row's fields</td><td>-</td><td class="fail">no turn, source, key, hash or origin field</td></tr>
+<tr><td>6</td><td>the same replay on a SPAWN line</td><td>-</td><td class="pass"><code>spawn-replay-refused</code></td></tr>
+</table>
+
+<pre>step 4: {"rows": 2, "ids": [1, 2], "sameTitle": true}
+step 5: {"namesTheTurn": false, "createdBy": "assistant-2"}
+step 6: ["spawn-skipped: creating worktrees is switched off: ...",
+         "spawn-replay-refused: SPAWN agent-worktree-gui: it was already carried out once (skipped) ..."]</pre>
+
+<h3>3b. A copy of the live store: the real replies, the mark emptied</h3>
+
+<p><code>store-copy</code> is <code>assistant.json</code>, <code>assistants.json</code>, <code>jobs.json</code> and <code>assistants/</code> copied out of <code>~/.wag/state</code>. The harness sets <code>harvested</code> to an empty Set - the state a re-read treats as "never harvested" - and harvests the 17 Director turns the store still holds, oldest first.</p>
+
+<table>
+<tr><th>Result</th><th>Value</th></tr>
+<tr><td>Director turns in the copy</td><td>17</td></tr>
+<tr><td>Rows filed by the re-read</td><td class="fail">7 (#295 to #301): #270, #281, #282, #286, #287 twice, #288 texts</td></tr>
+<tr><td>MESSAGE lines re-sent</td><td class="fail">2 (the #271 to #274 close, and the #282 extension)</td></tr>
+<tr><td>QUEUE lines refused</td><td>0</td></tr>
+</table>
+
+<p>Two honest limits. The 14:00 and 14:41 turns are no longer in <code>jobs.json</code> (80 jobs, 120 lines each), so the copy cannot re-file those two texts - their text survives only as row titles. And the 18:27 reply repeats its QUEUE line in two paragraphs, so the copy files #287's text twice while the live board filed it once; the run is an upper bound, not a byte-for-byte replay of one boot.</p>
+
+<h2>4. Why those three, and not #281, #282, #286, #287</h2>
+
+<p>At the time the brief was written, #268, #269 and #270 were the only texts whose turns had left the mark. Their turns were written at 14:00, 14:41 and 15:01; by 16:45 enough harvests had happened to push them out, and every later re-read re-filed them. #281 (17:55), #282 (17:59), #286 (18:06) and #287 (18:28) were still inside the window.</p>
+
+<p>Six hours later the boundary had moved the other way. At 19:05 #281 and #282 had left the mark and were re-filed (#291, #290), while #286 and #287 had not. Nothing about the texts changed between 18:28 and 19:05 - only their position in a 50-entry Set.</p>
+
+<div class="card warncard">
+<p><strong>Limit of the reconstruction.</strong> The mark's exact membership at 18:28 cannot be recovered: it is a Set in <code>assistant.json</code> that every harvest overwrites, and the journal keeps 300 entries. What the store does prove is the guard itself (50 ids, <code>:4838</code>), its own comment naming the re-read (<code>:5217-5220</code>), the per-kind asymmetry (SPAWN refused, QUEUE filed, in the same pass), and the order of the 19:05 re-read. The 18:28 boundary is inferred from those, not replayed.</p>
+</div>
+
+<h2>5. Candidate fixes</h2>
+
+<h3>A. Key the carry, and give the row a source (recommended)</h3>
+<p>Thread the turn id and the line index through the carry and write them into the row. The index already exists in the audit ledger (<code>scanCommands</code> gives every prefix line an <code>index</code>, <code>lib/assistant/audit.js:71-81</code>); the queue branch would pass <code>{ key: `${who}|${job.id}|${index}`, source: { assistant: who, turn: job.id, index } }</code> to <code>queueMutate("add")</code>, and <code>addTask</code> would return the existing row instead of pushing a second when the key is already present. The same key applies to MESSAGE, which today can start a turn twice.</p>
+<ul>
+<li>Exact: survives a boot, a store restored from an older copy, a job re-adopted under a new id, and an <code>enforce</code> replay, because the decision does not depend on in-memory state.</li>
+<li>Turn-based, not text-based: a reader editing the row's title cannot defeat it.</li>
+<li>Cost: a new optional field on the row (<code>pickTask</code> default <code>null</code>, plus the "a missing key reads as absent, never as a match" rule any persisted shape needs), the turn id and index in <code>queueMutate</code>'s payload (a second argument, not a route field the page could forge), and tests at each door.</li>
+<li>Rows filed before the fix carry no key; a first re-read after the upgrade would file one more duplicate each unless the ledger is also seeded from the existing rows' titles once.</li>
+</ul>
+
+<h3>B. Make the mark age-bounded and per assistant</h3>
+<p>Replace the 50-entry FIFO with a persisted map of <code>turnId -&gt; harvestedAt</code>, pruned by age (for example, never evict a turn younger than the job store's own 80-job retention) and kept per assistant, so a busy #2 cannot evict the Director's turns.</p>
+<ul>
+<li>Cheapest: one function and one store shape, no queue schema change, and it fixes every kind at once - NOTEs stop duplicating, CHARTERs stop repeating, MESSAGEs stop starting turns.</li>
+<li>Treats the trigger, not the duplicate: a store restored from a copy, a job re-adopted under a new id, or <code>commandAudit: enforce</code> replaying an unaccounted line still files a second row.</li>
+<li>The state grows with turn count (bounded by the age rule), and the correctness argument stays "this process remembers", which is what failed here.</li>
+</ul>
+
+<h3>C. Refuse a duplicate at file time</h3>
+<p>In <code>addTask</code>, return the existing row when the same <code>by</code> already has a row with the same title and that row is not <code>done</code>.</p>
+<ul>
+<li>No schema change, one place, and it also catches the two identical QUEUE lines in one reply (measured: the 18:27 reply repeats its line twice).</li>
+<li>Heuristic: a legitimate later re-file of the same sentence is swallowed; titles clip at 200 characters, so two long texts that differ past the clip collide; and a duplicate that should never have been read is hidden rather than prevented, because the journal still records the carry.</li>
+<li>Reasonable as a one-line stopgap while A is built; not the shape to keep.</li>
+</ul>
+
+<div class="card answer">
+<p><strong>Recommendation: A now, B as the follow-up.</strong> A is the only one of the three that makes the decision from what is stored rather than from what this process remembers, and it is also the fix MESSAGE needs. B is worth taking in the same landing if the reader wants the duplicate NOTEs and re-sent messages to stop as well, because A alone leaves the other kinds re-applying on a re-read even when the queue row is protected.</p>
+</div>
+
+<h2>6. What was not done</h2>
+<ul>
+<li>No product code changed. <code>lib/assistant.js</code> and <code>public/assistant.js</code> were not edited; #286 is live in them.</li>
+<li>#287 stays parked until the reader picks a fix, as asked.</li>
+<li>The live store was read only. Both reproductions ran against a temp directory and a copy; nothing under <code>~/.wag</code> was written.</li>
+</ul>
+
+</div></body></html>
