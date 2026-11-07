@@ -38,16 +38,16 @@ const DAY = 864e5;
 const tick = () => new Promise((r) => setTimeout(r, 12));
 const sigOf = (overrides = {}) => Object.fromEntries(SIGNAL_KEYS.map((key) => [key, overrides[key] ?? 100]));
 
-test("tier: the last commit decides, and an unknown date is recent rather than old", () => {
+test("tier: the last commit decides, and an unknown date is old rather than recent", () => {
   const now = Date.now();
   assert.equal(tierOf({ activityAt: iso(0) }, now), "recent");
   assert.equal(tierOf({ activityAt: iso(RECENT_DAYS - 0.5) }, now), "recent", "inside the window");
   assert.equal(tierOf({ activityAt: iso(RECENT_DAYS + 0.5) }, now), "old", "past the window");
-  // "we have not probed it yet" is not "nothing happened in seven days": a record without a date must keep
-  // today's treatment, or discovery would stop reading a project nothing had classified.
-  assert.equal(tierOf({ activityAt: null }, now), "recent");
-  assert.equal(tierOf({}, now), "recent");
-  assert.equal(tierOf({ activityAt: "not a date" }, now), "recent");
+  // "we do not know its date" is not "it was touched today": an unclassified record is OLD, so it sits on
+  // the hourly gate and one probe decides. Defaulting it to recent is how every project gets read in full.
+  assert.equal(tierOf({ activityAt: null }, now), "old");
+  assert.equal(tierOf({}, now), "old");
+  assert.equal(tierOf({ activityAt: "not a date" }, now), "old");
   assert.equal(tierOf({ activityAt: iso(8) }, now, 10), "recent", "the window is a config knob");
 });
 
