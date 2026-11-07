@@ -1285,9 +1285,16 @@ function reasoningBusy(job) {
 }
 
 // Reasoning types out on the same pacer, at the same words/s the prose uses — it is the same reading. A block is
-// fed the first time the panel sees it while its turn is live, and every re-read of the store feeds it again so a
-// block that grew keeps flowing. Returns the prefix to draw, or null when this block is drawn whole (history, a
-// hidden tab, rate 0, or the turn has settled and the flush already released it).
+// fed the first time the panel sees it while its turn is live AND it is the newest thought that turn has, and every
+// re-read of the store feeds it again so a block that grew keeps flowing. Returns the prefix to draw, or null when
+// this block is drawn whole (history, a hidden tab, rate 0, or the turn has settled and the flush already released it).
+//
+// WHY ONLY THE NEWEST. Every path that draws a card hands this function the turn's WHOLE block list in one pass, and
+// the toggle is one of them: pressing 🧠 on a running turn paints the blocks for the first time, so with no gate the
+// pacer's first frame for each was the block's entire text, queued to be typed - the turn's reasoning replayed from
+// its first word over output the reader was already looking at (a live window holds tens of blocks and >100 kB of
+// reasoning on this box). The newest thought is the live edge, the one still being written, so it keeps its clock;
+// everything above it is history and paints whole.
 //
 // THE TWO BRANCHES MUST NOT DISAGREE. A block that has been fed always draws the PACER'S prefix — never its whole
 // text — because the two are not the same string: a live turn's reasoning runs to 100 kB and more per turn (measured:
@@ -1296,14 +1303,25 @@ function reasoningBusy(job) {
 // out again the moment the branches swap — a settled turn that is revived, a tab that comes back into view. And the
 // moment there is no flow to show (a settled turn, a hidden tab) the rest is released at once, so the block ends on
 // the wire's whole text instead of on a prefix nobody is left to write.
+function thinkIsNewest(turn, block) {
+  const blocks = state.thinkCache.get(turn.id)?.blocks || [];
+  if (!blocks.length) return true; // nothing to compare against: this block is all the turn has been read as
+  let newest = 0;
+  for (const b of blocks) {
+    const at = Number(b.at) || 0;
+    if (at > newest) newest = at;
+  }
+  return (Number(block.at) || 0) === newest;
+}
+
 function paceThinkBlock(turn, block) {
   const P = state.typePacer;
   if (!P || !block) return null;
   const lid = `think:${block.at}`;
   const flowing = !document.hidden && turnLive(turn);
-  // A block first seen on a turn that is not live — an old card, a reload, thinking switched on after the fact — is
-  // history and draws whole. One the pacer already holds is not history any more, whatever the status says now.
-  if (!state.thinkFed.has(lid) && !flowing) return null;
+  // A block the pacer has never held: history draws it whole, and on a live turn only the newest thought is written
+  // (see above). A block the pacer DOES hold is not history any more, whatever the status or the store says now.
+  if (!state.thinkFed.has(lid) && (!flowing || !thinkIsNewest(turn, block))) return null;
   state.thinkFed.add(lid);
   const shown = P.feed(lid, String(turn.id), String(block.text ?? ""));
   if (!flowing) return P.flush(lid) ?? shown;
