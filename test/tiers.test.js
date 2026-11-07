@@ -2,9 +2,10 @@
 // steady-state pass reuses every record it knows and starts no git process at all.
 //
 // The tier rule is the last COMMIT, and only that: a repo inside the window keeps today's treatment, one past it
-// is checked by four .git stats an hour. The four paths are the ones whose mtime a commit, a checkout, a branch
-// or a stage leaves a mark on, and the bucket is a hash of the PATH so a repo's minute does not move when its
-// neighbours come and go.
+// is checked by one signal read an hour. The signal is the worktree walk plus the narrow git watch set, and it
+// must move on the three events the gate exists for - a commit, a new branch and a dirty tree - while staying
+// quiet for the panel's own fetch and for dependency trees. The bucket is a hash of the PATH so a repo's minute
+// does not move when its neighbours come and go.
 import test, { after } from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -15,6 +16,7 @@ import {
   SIGNAL_KEYS,
   TierBook,
   bucketFor,
+  gitDirs,
   nextCheckAt,
   signalMoved,
   sliceIndex,
@@ -30,6 +32,11 @@ after(() => rmSync(root, { recursive: true, force: true }));
 const p = (...s) => path.join(root, ...s).replace(/\\/g, "/");
 const iso = (daysAgo) => new Date(Date.now() - daysAgo * 864e5).toISOString();
 const DAY = 864e5;
+// A file's mtime is the only thing the signal can see, and the filesystem's clock is coarser than a test's
+// loop: a write in the same tick as the read before it can tie. Ten milliseconds is well under any
+// filesystem's granularity that matters here and keeps a fast machine from flaking.
+const tick = () => new Promise((r) => setTimeout(r, 12));
+const sigOf = (overrides = {}) => Object.fromEntries(SIGNAL_KEYS.map((key) => [key, overrides[key] ?? 100]));
 
 test("tier: the last commit decides, and an unknown date is recent rather than old", () => {
   const now = Date.now();
@@ -69,7 +76,7 @@ test("slice and next check: one minute's slice, and the next one is inside the r
   assert.equal(nextCheckAt(repo, inside, 60, 60), start + (bucket + 60) * 60e3, "the next rotation, not this tick");
 });
 
-test("stat signal: the four watched paths, and any mtime change is movement", async () => {
+test("stat signal: a commit, a new branch and a dirty tree all promote; a fetch and node_modules do not", async () => {
   const repo = p("repo");
   mkdirSync(repo, { recursive: true });
   git(repo, "init", "-q", "-b", "main");
@@ -78,33 +85,117 @@ test("stat signal: the four watched paths, and any mtime change is movement", as
   git(repo, "commit", "-q", "-m", "one");
 
   const base = await statSignal(repo);
-  assert.deepEqual(Object.keys(base).sort(), SIGNAL_KEYS.slice().sort(), "exactly the four paths");
-  for (const key of SIGNAL_KEYS) assert.ok(base[key] > 0, `${key} reads a real mtime`);
+  assert.deepEqual(Object.keys(base).sort(), SIGNAL_KEYS.slice().sort(), "exactly the watched signal");
+  for (const key of SIGNAL_KEYS) {
+    // A fresh repository has no `.git/packed-refs` yet, and a missing path reads 0 rather than throwing; the
+    // packing test below is what pins that key.
+    if (key === "packed") continue;
+    assert.ok(base[key] > 0, `${key} reads a real mtime`);
+  }
+  await tick();
   assert.deepEqual(await statSignal(repo), base, "an untouched repo reads the same signature");
 
-  // A commit rewrites .git/logs/HEAD and .git/index.
+  // A commit rewrites .git/index and .git/logs/HEAD.
+  await tick();
   writeFileSync(path.join(repo, "a.txt"), "changed\n");
   git(repo, "add", "-A");
   git(repo, "commit", "-q", "-m", "two");
   const committed = await statSignal(repo);
   assert.ok(signalMoved(base, committed), "a commit moves the signal");
 
-  // A branch rewrites the refs/heads DIRECTORY.
+  // A branch rewrites refs/heads.
+  await tick();
   git(repo, "branch", "feature/two");
   const branched = await statSignal(repo);
   assert.ok(signalMoved(committed, branched), "creating a branch moves the signal");
 
   // A checkout rewrites .git/HEAD.
+  await tick();
   git(repo, "checkout", "-q", "feature/two");
   const checkedOut = await statSignal(repo);
   assert.ok(signalMoved(branched, checkedOut), "a checkout moves the signal");
 
-  // Editing a file is NOT movement: the gate is about git state, and a plain write touches none of the four.
-  writeFileSync(path.join(repo, "a.txt"), "edited, not staged\n");
-  assert.ok(!signalMoved(checkedOut, await statSignal(repo)), "a working-tree edit without a git command is not movement");
+  // A DIRTY TREE is movement, and at any depth: an edit moves the file and nothing else, so a row an agent is
+  // working in must promote even though no git command ran. The old four-.git-stat gate missed this, and on
+  // this fleet that was 35 of the 101 dirty repos.
+  const deep = path.join(repo, "src", "main", "java", "com", "sefl", "Deep.java");
+  mkdirSync(path.dirname(deep), { recursive: true });
+  await tick();
+  writeFileSync(deep, "class Deep {}\n");
+  assert.ok(signalMoved(checkedOut, await statSignal(repo)), "an unstaged edit at depth 5 moves the signal");
+
+  // A new untracked file is movement too - that is the same walk.
+  const afterDeep = await statSignal(repo);
+  await tick();
+  writeFileSync(path.join(repo, "notes.md"), "scratch\n");
+  assert.ok(signalMoved(afterDeep, await statSignal(repo)), "an untracked file moves the signal");
+
+  // A dependency tree is NOT the row's work: node_modules and build output are pruned on purpose.
+  const dep = path.join(repo, "node_modules", "left-pad", "index.js");
+  mkdirSync(path.dirname(dep), { recursive: true });
+  writeFileSync(dep, "module.exports = 1\n");
+  const withDeps = await statSignal(repo);
+  await tick();
+  writeFileSync(dep, "module.exports = 2\n");
+  assert.ok(!signalMoved(withDeps, await statSignal(repo)), "an edit under node_modules is not movement");
+
+  // The panel's own fetch pass must not promote anything: FETCH_HEAD and refs/remotes are deliberately absent
+  // from the watch set, because they move for the panel's writes and not for the row's state.
+  const quiet = await statSignal(repo);
+  await tick();
+  writeFileSync(path.join(repo, ".git", "FETCH_HEAD"), "0000\t\tbranch 'main' of origin\n");
+  mkdirSync(path.join(repo, ".git", "refs", "remotes", "origin"), { recursive: true });
+  writeFileSync(path.join(repo, ".git", "refs", "remotes", "origin", "main"), "0000\n");
+  assert.ok(!signalMoved(quiet, await statSignal(repo)), "a fetch's own writes are not movement");
+
+  // `packed-refs` is watched: a gc that packs the refs is movement, and a repo that has never been packed
+  // reads 0 there until one writes it.
+  const unpacked = await statSignal(repo);
+  assert.equal(unpacked.packed, 0, "a repo that has never been packed has no packed-refs");
+  await tick();
+  git(repo, "pack-refs", "--all");
+  assert.ok(signalMoved(unpacked, await statSignal(repo)), "packing the refs moves the signal");
 
   const gone = await statSignal(p("not-a-repo"));
-  assert.deepEqual(gone, { head: 0, index: 0, refs: 0, logs: 0 }, "a missing repo reads four zeros instead of throwing");
+  assert.deepEqual(gone, Object.fromEntries(SIGNAL_KEYS.map((k) => [k, 0])), "a missing repo reads zeros instead of throwing");
+});
+
+test("stat signal: a linked worktree resolves its real git dir, so its commit moves the signal", async () => {
+  const main = p("wt-main");
+  mkdirSync(main, { recursive: true });
+  git(main, "init", "-q", "-b", "main");
+  writeFileSync(path.join(main, "a.txt"), "a\n");
+  git(main, "add", "-A");
+  git(main, "commit", "-q", "-m", "one");
+  const linked = p("wt-main", ".worktrees", "child");
+  git(main, "worktree", "add", "-q", "-b", "child", linked);
+
+  // `.git` here is a FILE. A literal `<repo>/.git/index` would read 0 and the row would never move.
+  const dirs = gitDirs(linked);
+  assert.notEqual(dirs.gitdir, path.join(linked, ".git"), "the gitfile names the real git dir");
+  const base = await statSignal(linked);
+  for (const key of SIGNAL_KEYS) {
+    if (key === "packed") continue; // the common dir is packed only after a gc; pinned above
+    assert.ok(base[key] > 0, `${key} reads a real mtime in a linked worktree`);
+  }
+
+  await tick();
+  writeFileSync(path.join(linked, "a.txt"), "changed\n");
+  git(linked, "add", "-A");
+  git(linked, "commit", "-q", "-m", "two");
+  assert.ok(signalMoved(base, await statSignal(linked)), "a commit in the linked worktree moves its signal");
+
+  // The parent watches the `.worktrees` ENTRIES but does not walk into a sibling worktree: a worktree created
+  // is movement for its parent, while a deep edit inside one belongs to that row's own gate.
+  const parent = await statSignal(main);
+  await tick();
+  const second = p("wt-main", ".worktrees", "second");
+  git(main, "worktree", "add", "-q", "-b", "second", second);
+  assert.ok(signalMoved(parent, await statSignal(main)), "a worktree created is movement for its parent");
+  const parentAfter = await statSignal(main);
+  await tick();
+  writeFileSync(path.join(second, "a.txt"), "dirty\n");
+  assert.ok(!signalMoved(parentAfter, await statSignal(main)), "a deep edit in a sibling worktree is not the parent's movement");
 });
 
 test("TierBook: stamps tiers, keeps the baseline across a reload, forgets a repo that left", () => {
@@ -119,10 +210,11 @@ test("TierBook: stamps tiers, keeps the baseline across a reload, forgets a repo
   assert.equal(tiers.get("old"), "old");
   assert.equal(tiers.get("new"), "recent");
 
-  const sig = { head: 10, index: 20, refs: 30, logs: 40 };
+  const sig = sigOf({ head: 10, index: 20, refs: 30, logs: 40 });
   assert.deepEqual(book.stat("/tiers/old", sig, now), { first: true, moved: false }, "the first check only records what it saw");
   assert.equal(book.stat("/tiers/old", { ...sig }, now).moved, false, "the same state is not movement");
   assert.equal(book.stat("/tiers/old", { ...sig, index: 21 }, now).moved, true, "an index that moved is movement");
+  assert.equal(book.stat("/tiers/old", { ...sig, worktree: 99 }, now).moved, true, "a worktree that moved is movement");
   // A moved baseline is NOT recorded: the caller promotes and re-seeds, so a promotion that fails is retried.
   assert.equal(book.stat("/tiers/old", { ...sig, index: 21 }, now).moved, true, "still movement until the caller seeds it");
   book.seed("/tiers/old", { ...sig, index: 21 }, "old", now);
@@ -134,6 +226,21 @@ test("TierBook: stamps tiers, keeps the baseline across a reload, forgets a repo
 
   reloaded.sync([projects[1]], now);
   assert.equal(reloaded.tierFor("/tiers/old"), null, "a repo no longer under the roots is forgotten");
+});
+
+test("TierBook: a baseline from the older signal set re-seeds instead of promoting the fleet", () => {
+  // The gate used to record four `.git` mtimes. Every tiers.json written before this change carries that
+  // shape, and comparing it with today's signal would read a missing `worktree` as 0 against a real mtime -
+  // one promotion per old repo, on the first slice after the upgrade. A signature that is missing a key is
+  // treated as no signature: the check re-seeds and promotes nothing.
+  const file = p("state", "tiers-old.json");
+  const now = Date.now();
+  const book = new TierBook({ file, buckets: 4 });
+  book.sync([{ name: "old", path: "/tiers/old", activityAt: iso(30) }], now);
+  book.seed("/tiers/old", { head: 10, index: 20, refs: 30, logs: 40 }, "old", now);
+  assert.equal(book.stat("/tiers/old", sigOf({ head: 10, index: 20, refs: 30, logs: 40 }), now).moved, false,
+    "the old shape is re-seeded, not read as movement");
+  assert.equal(book.baselineFor("/tiers/old").worktree, 100, "and the new shape is what the next hour compares");
 });
 
 test("discovery: a steady-state pass reuses every record and starts no git process", async () => {

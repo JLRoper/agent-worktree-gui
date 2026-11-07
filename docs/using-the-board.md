@@ -218,8 +218,9 @@ is showing only the last seven days.
   ninety projects reads as if they were lost.
 - **All / 7d** - toggles between every project and only those whose last commit is inside the panel's window
   (7 days by default). A repo past it is on the hourly stat gate, so the 7d view is exactly the set the board
-  reads on its scan cadence; the rest are checked once an hour by four `.git` mtimes and read when something
-  moves - or when you open one. The chip count says how many are hidden.
+  reads on its scan cadence; the rest are checked once an hour by one signal read - the worktree's newest mtime
+  plus a handful of `.git` files - and read when something moves, or when you open one. The chip count says how
+  many are hidden.
 - **Collapse all / Expand all** — folds or opens every project inside that folder, not the whole board.
 - **+** — the folder's own row, with two actions. **Clone via ssh** clones a GitHub repo over SSH into that folder:
   type `name` or `owner/name` and press `Enter` (or click the button); `Escape` closes the row. The owner defaults to

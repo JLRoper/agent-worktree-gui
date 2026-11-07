@@ -145,7 +145,8 @@ a hiccup takes.
 
 The cadence above is per ROW, and it applies to a repository that has committed inside `tierDays` (7). A
 repository past that window is on the OLD tier (`lib/tiers.js`): no row scan, no full pass, no fetch. It gets one
-`stat(2)` of four paths instead - `.git/HEAD`, `.git/index`, `.git/refs/heads`, `.git/logs/HEAD` - once an hour,
+signal read instead - the newest mtime anywhere in the worktree (heavy directories pruned) plus `.git/index`,
+`.git/HEAD`, `.git/logs/HEAD`, `packed-refs` and `refs/heads` - once an hour,
 staggered across the hour by a bucket hashed from the project's path, so a minute's slice is a handful of repos
 and never the fleet. Any mtime change promotes it for ONE full discovery probe and one read of its rows; so does
 the reader opening the section (`POST /api/project/open`, reported by `toggleProject`). The probe re-derives the
