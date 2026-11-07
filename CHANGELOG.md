@@ -4,16 +4,32 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.49.1 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.49.2 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-372 releases from v0.1.0 (2026-10-20) to v1.49.1 (2026-11-07), 1303 commits between the tags. Every release is anchored by an
+373 releases from v0.1.0 (2026-10-20) to v1.49.2 (2026-11-07), 1306 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.49.2 — 2026-11-07 · 3 commits
+
+[`bacd972`](https://github.com/JLRoper/agent-worktree-gui/commit/bacd972b44393c840273fde1f892316c9b6a59a8) · [compare v1.49.1...v1.49.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.49.1...v1.49.2)
+
+### Fixed
+
+- fix: the thinking toggle writes only the newest thought, never history ([`17f1d9f`](https://github.com/JLRoper/agent-worktree-gui/commit/17f1d9f6d2acd1c69d1b2c18e312b3273d7cf060))
+
+### Docs & tests
+
+- docs: render the changelog — 372 releases ([`729062d`](https://github.com/JLRoper/agent-worktree-gui/commit/729062d9dafb6afcbcf5e7aa57ed8b8d2af7c414))
+
+### Other
+
+- chore: 1.49.2 - the version this landing carries (1.49.1 is claimed by wtgui/round-5-s-draft-worker-f) ([`bacd972`](https://github.com/JLRoper/agent-worktree-gui/commit/bacd972b44393c840273fde1f892316c9b6a59a8))
 
 ## v1.49.1 — 2026-11-07 · 2 commits
 
