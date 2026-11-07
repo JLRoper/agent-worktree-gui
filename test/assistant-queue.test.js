@@ -15,7 +15,10 @@
 //      queued with attempts+1 and the reason;
 //   7. the digest: the top N queued, every running task with its thread, every stale one, and nothing at all when the
 //      queue is empty — and every line carrying the same five facts (state, thread, worktree, PR state, why it is not
-//      going), with a live thread saying LIVE rather than leaving it to the absence of STALE.
+//      going), with a live thread saying LIVE rather than leaving it to the absence of STALE;
+//   8. the route's designed mechanism for a CROSS-ASSISTANT write: a body with no action is a 400 that writes nothing,
+//      and a row filed with `by: "assistant-4"` into another assistant's queue lands queued, naming the filer in
+//      `createdBy` and owning nobody — and neither a re-read nor a later edit hands it to the queue's own assistant.
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -26,6 +29,7 @@ import { Assistant } from "../lib/assistant.js";
 import {
   addTask,
   adoptTask,
+  createQueueRoutes,
   currentThread,
   deleteTask,
   decorateTasks,
@@ -589,4 +593,149 @@ test("a Move carries every agent across to the target queue", () => {
   const adopted = adoptTask([], two[0]);
   assert.deepEqual(adopted.task.threads, ["T1", "T2"], "the whole run history travels with the record");
   assert.equal(adopted.task.thread, "T1");
+});
+
+// ---- a row filed by ANOTHER assistant: the route's designed mechanism ---------------------------------------
+// POST /api/assistant/queue takes the target from `payload.assistantId` and the filer from `payload.by`, and nothing
+// verifies the caller. That is the design, not a gap: naming the filer in `by` is how a cross-assistant write says who
+// it is, and the row has to keep saying so AFTER the target reads it. What this section pins is the four facts a live
+// write proved (a row in another assistant's queue, createdBy naming the filer, owner null) plus the two ways the
+// behaviour could rot without anyone noticing: a body with no action being accepted, and a read or a later edit
+// quietly handing the row to the assistant whose queue holds it.
+
+// The route's transport, handed in exactly as the server hands it in, so this drives the real handler with no socket:
+// `sendJson` records what would have gone on the wire, `readBody` parses the body a test put on the request, and
+// `authorised` compares the panel token the way the server's own does.
+function queueTransport(assistant) {
+  const sent = [];
+  const routes = createQueueRoutes({
+    assistant,
+    config: { token: "queue-token" },
+    sendJson: (res, status, payload) => sent.push({ status, payload }),
+    readBody: async (req) => JSON.parse(req.bodyText ?? "{}"),
+    authorised: (req, token) => req.headers?.["x-panel-token"] === token,
+  });
+  const call = async ({ method = "GET", body = null, query = "", token = "queue-token" } = {}) => {
+    const url = new URL(`http://127.0.0.1/api/assistant/queue${query}`);
+    const req = {
+      method,
+      url: `${url.pathname}${url.search}`,
+      headers: token ? { "x-panel-token": token } : {},
+      bodyText: body === null ? null : JSON.stringify(body),
+    };
+    assert.equal(await routes(req, {}, "/api/assistant/queue", url), true, `${method} is the queue route's own`);
+    return sent.at(-1);
+  };
+  return { call, sent };
+}
+
+// One Assistant over a temp state directory, with the two collaborators a queue read asks for: no jobs, no board.
+async function panelAssistant(t, prefix) {
+  const dir = await mkdtemp(path.join(os.tmpdir(), prefix));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const assistantFile = path.join(dir, "assistant.json");
+  await writeFile(assistantFile, JSON.stringify({ version: 2, settings: {}, notes: "", rules: [], watches: [], alerts: [], journal: [] }));
+  const assistant = new Assistant({
+    config: { jobsFile: path.join(dir, "jobs.json"), assistantFile },
+    jobs: { list: () => [], firstOfThread: () => null, create: async (body) => ({ id: "job-1", ...body }) },
+    getProjects: () => [],
+    onLog: () => {},
+  });
+  return { dir, assistant };
+}
+
+test("a row filed by another assistant lands queued in the target's queue, naming the filer and owning nobody", async (t) => {
+  const { dir, assistant } = await panelAssistant(t, "wtgui-queue-cross-");
+  // Three creations after #1 give #2, #3 and #4, so the filer is a REAL assistant and not a string a test invented.
+  for (const name of ["Reviewer", "Builder", "Auditor"]) assistant.createAssistant({ name });
+  assert.deepEqual(assistant.assistants.map((a) => a.id), ["assistant-1", "assistant-2", "assistant-3", "assistant-4"]);
+  const route = queueTransport(assistant);
+
+  const filed = await route.call({
+    method: "POST",
+    body: {
+      assistantId: "assistant-1",
+      action: "add",
+      title: "read the other queue's PR",
+      detail: "the row Assistant #4 filed",
+      files: "lib/assistant/queue.js, public/assistant.js",
+      by: "assistant-4",
+    },
+  });
+  assert.equal(filed.status, 200, JSON.stringify(filed.payload));
+  const task = filed.payload.task;
+  assert.equal(task.id, 1);
+  assert.equal(task.state, "queued", "a filed row starts queued: starting it is the target's decision");
+  assert.equal(task.createdBy, "assistant-4", "the filer is named by the `by` the body carried");
+  assert.equal(task.owner, null, "filing is not assigning, so nobody owns the row");
+  assert.deepEqual(task.files, ["lib/assistant/queue.js", "public/assistant.js"], "the comma list is normalised on the way in");
+
+  // It is in the TARGET's file and in no other assistant's, which is what "another assistant's queue" means.
+  const file = path.join(dir, "assistants", "assistant-1", "queue.json");
+  const onDisk = JSON.parse(readFileSync(file, "utf8"));
+  assert.deepEqual(
+    onDisk.tasks.map((x) => [x.id, x.title, x.state, x.createdBy, x.owner]),
+    [[1, "read the other queue's PR", "queued", "assistant-4", null]],
+  );
+  assert.deepEqual(assistant.queueView("assistant-4").tasks, [], "it did not land in the filer's own queue");
+
+  // The target's own read sees it, and the digest counts it: one queued row, drawn under the header that says so.
+  const view = assistant.queueView("assistant-1");
+  assert.deepEqual(view.tasks.map((x) => [x.id, x.state, x.createdBy, x.owner]), [[1, "queued", "assistant-4", null]]);
+  assert.deepEqual([view.counts.queued, view.counts.running, view.counts.parked, view.counts.done, view.counts.total], [1, 0, 0, 0, 1]);
+  assert.equal(view.digest[0], "Your task queue (1 queued · 0 running · 0 parked · 0 done):");
+  const line = view.digest.find((l) => l.includes("#1 queued"));
+  assert.match(line, /read the other queue's PR/);
+  assert.match(line, /files lib\/assistant\/queue\.js, public\/assistant\.js/);
+
+  // …and the GET route, which is the read the tab and the preamble both make, answers the same row the same way.
+  const read = await route.call({ method: "GET", query: "?assistantId=assistant-1" });
+  assert.equal(read.status, 200);
+  assert.deepEqual(read.payload.queue.tasks.map((x) => [x.createdBy, x.owner]), [["assistant-4", null]]);
+});
+
+test("a body with no action is refused 400, and the refusal writes nothing", async (t) => {
+  const { dir, assistant } = await panelAssistant(t, "wtgui-queue-noaction-");
+  const route = queueTransport(assistant);
+  const file = path.join(dir, "assistants", "assistant-1", "queue.json");
+  const bytes = readFileSync(file, "utf8");
+
+  // An absent action and a whitespace one are the same refusal: the route trims before it decides, so "   " is not a
+  // caller naming an action no branch knows, it is a caller who named none.
+  for (const body of [
+    { assistantId: "assistant-1", title: "filed with no action" },
+    { assistantId: "assistant-1", action: "   ", title: "blank action" },
+  ]) {
+    const refused = await route.call({ method: "POST", body });
+    assert.equal(refused.status, 400, JSON.stringify(refused.payload));
+    assert.match(refused.payload.error, /an action is required/);
+  }
+  assert.equal(readFileSync(file, "utf8"), bytes, "a refused body leaves the queue file byte-identical");
+});
+
+test("a row filed by another assistant is not re-owned by the queue that holds it", async (t) => {
+  const { dir, assistant } = await panelAssistant(t, "wtgui-queue-reown-");
+  const route = queueTransport(assistant);
+  // `assistant-2` is named whether or not this panel created one: nothing verifies the caller, and that is the
+  // mechanism this route is built on rather than a check that went missing.
+  const filed = await route.call({ method: "POST", body: { assistantId: "assistant-1", action: "add", title: "filed from outside", by: "assistant-2" } });
+  assert.equal(filed.status, 200, JSON.stringify(filed.payload));
+  const file = path.join(dir, "assistants", "assistant-1", "queue.json");
+  const bytes = readFileSync(file, "utf8");
+
+  // Reading is not adopting: the reads leave the file untouched and the row exactly as it was filed.
+  for (let i = 0; i < 3; i += 1) assistant.queueView("assistant-1");
+  const once = assistant.queueView("assistant-1").tasks[0];
+  assert.equal(once.createdBy, "assistant-2");
+  assert.equal(once.owner, null, "the queue's own assistant is not the row's owner");
+  assert.equal(readFileSync(file, "utf8"), bytes, "a read writes nothing, so it cannot re-own anything");
+
+  // …and a WRITE that follows the read does not adopt it either: the reader's edit changes the words, not the filer,
+  // and nothing hands the row to the assistant whose queue it sits in.
+  const edited = assistant.queueMutate("assistant-1", "edit", { id: 1, title: "filed from outside, edited" }, { by: "reader" });
+  assert.equal(edited.ok, true, JSON.stringify(edited));
+  const after = assistant.queueView("assistant-1").tasks[0];
+  assert.equal(after.title, "filed from outside, edited");
+  assert.equal(after.createdBy, "assistant-2", "an edit by the reader does not rewrite who filed it");
+  assert.equal(after.owner, null, "and does not give the row to the assistant whose queue holds it");
 });
