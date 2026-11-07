@@ -48,6 +48,13 @@ const SCRIPT_REL = "public/pipeline-map.js";
 const SCRIPT = path.join(REPO, SCRIPT_REL);
 const IMPORT_REL = "public/core/pipeline-import.js";
 const IMPORT = path.join(REPO, IMPORT_REL);
+// The card renderer and its stylesheet are SHARED with the panel's flow dialog (public/pipeline-modal.js). This
+// renderer EVALUATES the module for the page's data block, so the model the page draws and the model the dialog
+// draws are built by one function; the stylesheet is inlined verbatim, so the page stays one file.
+const SHARED_REL = "public/core/pipeline-mermaid.js";
+const SHARED = path.join(REPO, SHARED_REL);
+const CARD_CSS_REL = "public/core/pipeline-card.css";
+const CARD_CSS = path.join(REPO, CARD_CSS_REL);
 const PKG = path.join(REPO, "package.json");
 const MERMAID_VERSION = "11.4.1";
 
@@ -56,59 +63,16 @@ const sha256 = (buf) => createHash("sha256").update(buf).digest("hex");
 const bytes = (n) => n.toLocaleString("en-US");
 const oneLine = (s) => String(s == null ? "" : s).replace(/\s+/g, " ").trim();
 
-// ---- the role table ------------------------------------------------------------------------------------------------
-// Every rule is a sentence the PROMPT actually says. The label names the actor in the prompt's own vocabulary.
-// `why` is the sentence a reader gets when they ask how the line was derived. A rule whose regex does not match
-// the prompt is never used; there is no fallback that invents a role — an unmatched stage is an error, not a guess.
-const ROLE_RULES = [
-  { id: "merge", re: /Merge the (?:pull request|PR) for/i, label: "worker · merges", why: "the prompt tells the stage to merge the PR on the host" },
-  { id: "wait", re: /Read the PR's activities once/i, label: "panel · waits for reviewer", why: "the prompt ends the turn and the panel re-checks on its own clock" },
-  { id: "approve", re: /wait for the head to be reviewed/i, label: "reviewer · approves at head", why: "the stage ends only when an approval exists at the head" },
-  { id: "answer", re: /For each new comment/i, label: "worker · answers comments", why: "the prompt answers every comment on the PR" },
-  { id: "open-pr", re: /Open ONE pull request/i, label: "worker · opens the PR", why: "the prompt opens one PR from the branch into main on the project's host" },
-  { id: "push", re: /Push the branch/i, label: "worker · pushes", why: "the prompt pushes the branch and names the panel's permission box as the grant" },
-  { id: "branch", re: /Rename this tree's branch/i, label: "worker · renames branch", why: "the prompt renames this tree's branch and nothing else" },
-  { id: "version", re: /tools\/version\.mjs suggest/i, label: "worker · version check", why: "the prompt runs node tools/version.mjs suggest and check" },
-  { id: "main", re: /git fetch origin/i, label: "worker · confirms main", why: "the prompt fetches origin's main and confirms the merge is reachable" },
-  { id: "commit", re: /Commit (?:everything|it on|the evidence)/i, label: "worker · commits", why: "the prompt commits in this tree on the branch" },
-  { id: "conclude", re: /Write the conclusion down/i, label: "worker · writes conclusion", why: "the prompt writes the conclusion into docs/investigation.md" },
-  { id: "probe", re: /Read, run and probe/i, label: "worker · probes", why: "the prompt reads, runs and probes this tree" },
-  { id: "work", re: /Do the work in this tree/i, label: "worker · does the work", why: "the prompt tells the stage to do the work in this tree" },
-];
-
-function deriveRole(stage) {
-  const prompt = String(stage.prompt || "");
-  for (const rule of ROLE_RULES) {
-    const m = rule.re.exec(prompt);
-    if (!m) continue;
-    const at = m.index;
-    const start = Math.max(0, prompt.lastIndexOf(". ", at) + (prompt.lastIndexOf(". ", at) >= 0 ? 2 : 0));
-    const endDot = prompt.indexOf(". ", at);
-    const sentence = prompt.slice(start, endDot >= 0 ? endDot + 1 : Math.min(prompt.length, at + 240)).trim();
-    return {
-      source: "derived",
-      rule: rule.id,
-      label: `derived: ${rule.label}`,
-      why: rule.why,
-      evidence: m[0],
-      quote: oneLine(sentence).slice(0, 220),
-    };
-  }
-  throw new Error(`stage ${stage.id}: no role rule matched its prompt — refusing to invent a role`);
-}
-
-// ---- exit labels ---------------------------------------------------------------------------------------------------
-// The edge is the condition the panel evaluates; its label names the check exactly and only carries parameters that
-// fit on an 11 px edge label. The full exit object travels in the data and is printed in the inspector.
-const basename = (p) => String(p || "").split(/[\\/]/).pop();
-function compactExit(exit) {
-  if (!exit || !exit.check) return "";
-  const e = exit;
-  if (exit.check === "commits") return `${exit.check} ≥ ${Number(exit.min) || 1}`;
-  if (exit.check === "file-exists") return `${exit.check} ${basename(exit.path)}`;
-  if (exit.check === "command") return `${exit.check}: ${(exit.argv || []).join(" ")}`;
-  if (exit.check === "branch-name") return exit.check;
-  return String(exit.check);
+// ---- the card model ------------------------------------------------------------------------------------------------
+// The role table, the exit label and the definition-to-card mapping live in public/core/pipeline-mermaid.js, the
+// module BOTH this page and the panel's flow dialog draw with. It is evaluated here rather than re-implemented: a
+// second copy of the role table is how the popup and the map would start disagreeing about who runs a stage.
+function loadShared() {
+  const text = readSource(SHARED).text;
+  const M = new Function(`${text}
+return globalThis.PipelineMermaid;`)();
+  if (!M || typeof M.fromDefinition !== "function") throw new Error(`${SHARED_REL} did not publish PipelineMermaid`);
+  return M;
 }
 
 // ---- read the two seeds -------------------------------------------------------------------------------------------
@@ -208,6 +172,7 @@ function bundleOf(def, index) {
 }
 
 function build() {
+  const M = loadShared();
   const seed = readJson(SEED, "the pipeline catalogue");
   // The bundle file is the panel's multi-pipeline wrapper (`{bundleVersion, name, pipelines: [...]}`); a bare studio
   // document is still read, because a reader may point this renderer at an older export. EVERY pipeline in the file
@@ -223,62 +188,9 @@ function build() {
   const bundleStages = bundles.reduce((n, b) => n + b.stages.length, 0);
   const bundleLoops = bundles.reduce((n, b) => n + b.loops.length, 0);
 
-  const pipelines = seed.pipelines.map((def, pi) => {
-    const stages = def.stages.map((st, i) => ({
-      id: st.id,
-      ordinal: i + 1,
-      title: oneLine(st.title || st.id),
-      prompt: String(st.prompt || ""),
-      role: deriveRole(st),
-      exit: st.exit ? { check: st.exit.check, ...Object.fromEntries(Object.entries(st.exit).filter(([k]) => k !== "check")) } : null,
-      exitLabel: compactExit(st.exit),
-    }));
-    const loops = [];
-    // A live/edited definition may carry loops[]; the seed does not. Read it when it is there, never invent one.
-    for (const loop of Array.isArray(def.loops) ? def.loops : []) {
-      if (!loop || !loop.from || !loop.to) continue;
-      loops.push({
-        id: oneLine(loop.id) || "",
-        from: oneLine(loop.from),
-        to: oneLine(loop.to),
-        cap: oneLine(loop.cap),
-        label: `${oneLine(loop.id) ? oneLine(loop.id) + " · " : ""}${oneLine(loop.label) || oneLine(loop.cap) || "loop"}`,
-        short: oneLine(loop.id) || "loop",
-        source: "data",
-        note: oneLine(loop.note),
-      });
-    }
-    // sefl-review-loop is iterative in its prompts: an approval at an older commit is not an approval of the head,
-    // so a change request sends the head back to Answer the review. ONE dashed edge, marked inferred.
-    if (def.id === "sefl-review-loop" && !loops.length) {
-      const approve = stages.find((s) => s.id === "approve");
-      const address = stages.find((s) => s.id === "address");
-      if (approve && address) {
-        loops.push({
-          id: "inferred-review-round",
-          from: "approve",
-          to: "address",
-          cap: "",
-          label: "inferred · another review round",
-          short: "inferred",
-          source: "inferred",
-          note: "the definition declares no loop (next: null); the round trip is read from the prompts — a change request at Wait for the approval at the head sends the head back to Answer the review",
-        });
-      }
-    }
-    return {
-      id: def.id,
-      ordinal: pi + 1,
-      title: oneLine(def.title || def.id),
-      kind: oneLine(def.kind),
-      description: oneLine(def.description),
-      next: def.next == null || def.next === "" ? null : oneLine(def.next),
-      stages,
-      loops,
-      edges: stages.slice(0, -1).map((s, i) => ({ from: s.id, to: stages[i + 1].id, label: s.exitLabel, exit: s.exit })),
-      lastExit: stages.length ? { stage: stages[stages.length - 1].id, label: stages[stages.length - 1].exitLabel, exit: stages[stages.length - 1].exit } : null,
-    };
-  });
+  // Every catalogue definition, mapped by the shared module (role table, exit labels, loops, the inferred review
+  // round). `strict` is this page's rule: an unmatched prompt is an error, never an invented role.
+  const pipelines = seed.pipelines.map((def, pi) => ({ ...M.fromDefinition(def, { strict: true }), ordinal: pi + 1 }));
 
   const model = {
     meta: {
@@ -292,12 +204,14 @@ function build() {
       studioStages: studio.stages.length,
       totalLoops: pipelines.reduce((n, p) => n + p.loops.length, 0) + bundleLoops,
       bundlePipelines: bundles.length,
-      roleRules: ROLE_RULES.map((r) => ({ id: r.id, label: r.label, why: r.why })),
+      roleRules: M.ROLE_RULES.map((r) => ({ id: r.id, label: r.label, why: r.why })),
       sources: [
         sourceRow(SEED, "pipelines.seed.json", "the catalogue of definitions"),
         sourceRow(BUNDLE, "pipeline-bundle.seed.json", "the bundle file's pipelines"),
         sourceRow(VENDOR, VENDOR_REL, "mermaid, inlined"),
         sourceRow(SCRIPT, SCRIPT_REL, "this page's own script"),
+        sourceRow(SHARED, SHARED_REL, "the card renderer, shared with the panel's flow dialog"),
+        sourceRow(CARD_CSS, CARD_CSS_REL, "the card's stylesheet, inlined"),
         sourceRow(IMPORT, IMPORT_REL, "the importer a document is read through"),
       ],
       mermaidVersion: MERMAID_VERSION,
@@ -317,7 +231,7 @@ function sourceRow(file, rel, role) {
 // ---- the page ------------------------------------------------------------------------------------------------------
 const escHtml = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-function html(model, vendor, provenance) {
+function html(model, vendor, provenance, cardCss) {
   if (!/globalThis\.mermaid|window\.mermaid/.test(vendor)) throw new Error(`${VENDOR_REL} does not set window.mermaid`);
   if (/<\/script/i.test(vendor)) throw new Error(`${VENDOR_REL} contains "</script" — it cannot be inlined verbatim`);
   const data = JSON.stringify(model).replace(/</g, "\\u003c");
@@ -397,59 +311,9 @@ function html(model, vendor, provenance) {
   .key[data-kind="gate"] i { border-top: 2px solid var(--green); }
   .key b { color: var(--text); font-weight: 600; }
 
-  .pm-card { border: 1px solid var(--line); border-radius: 11px; background: #12161c; margin: 0 0 22px; overflow: hidden; }
-  .pm-card[data-bundle="1"] { border-color: #3a3348; }
-  .pm-card-head { display: flex; gap: 12px; align-items: flex-start; padding: 13px 16px 9px; border-bottom: 1px solid var(--line-soft); }
-  .pm-idx { font: 600 12px var(--mono); color: var(--dimmer); padding-top: 4px; min-width: 24px; }
-  .pm-card-head h2 { font-size: 16px; margin: 0 0 2px; letter-spacing: -0.1px; }
-  .pm-card-head .pm-desc { margin: 0; color: var(--dim); font-size: 12.8px; max-width: 96ch; }
-  .pm-chips { margin-left: auto; display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; max-width: 46%; }
-  .chip { font: 11px var(--mono); color: var(--dim); border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
-  .chip.kind { color: var(--blue); border-color: #29405a; }
-  .chip.next { color: var(--purple); border-color: #40325c; }
-  .chip.last { color: var(--dim); }
-  .pm-vp { overflow-x: auto; padding: 4px 0 2px; scrollbar-width: thin; }
-  .pm-draw { position: relative; display: flex; justify-content: flex-start; padding: 6px 12px 4px; min-height: 60px; }
-  .pm-draw svg { max-width: none !important; height: auto; display: block; flex: 0 0 auto; }
-  .pm-draw .pm-node { cursor: pointer; }
-  .pm-draw .pm-node:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; border-radius: 6px; }
-  .pm-draw .pm-node[data-selected="1"] rect { stroke: var(--blue) !important; stroke-width: 2px !important; }
-  .pm-draw .pm-role { color: var(--dim) !important; font-size: 11px !important; }
-  .pm-draw .nodeLabel p, .pm-draw .nodeLabel span { white-space: nowrap !important; }
-  .pm-draw .pm-node[data-role-source="derived"] .pm-role { color: #a8b6c9 !important; }
-  .pm-draw .pm-node[data-role-source="assigned"] .pm-role { color: var(--blue) !important; }
-  .pm-draw .edgeLabel, .pm-draw .edgeLabel span, .pm-draw .edgeLabel p { color: var(--dim) !important; font: 11px var(--mono) !important; background: #12161c !important; }
-  .pm-draw .flowchart-link, .pm-draw .edgePath path { stroke: #5b6675 !important; stroke-width: 1.4px !important; }
-  .pm-draw marker path { fill: #5b6675 !important; stroke: #5b6675 !important; }
-  .pm-draw .pm-loop { stroke-dasharray: 5 4 !important; }
-  .pm-draw .pm-loop[data-loop-source="inferred"] { stroke: var(--amber) !important; }
-  .pm-draw .pm-loop[data-loop-source="data"] { stroke: var(--violet) !important; }
-
-  .pm-row { display: block; margin: 0; }
-  .pm-row + .pm-row { margin-top: 30px; }
-  .pm-row-label { display: block; font: 11px var(--mono); color: var(--dimmer); padding: 0 0 2px 2px; }
-  .pm-draw[data-layout="book"] { display: block; width: max-content; min-width: 100%; padding: 4px 12px 6px; }
-  .pm-draw[data-layout="book"] .pm-row + .pm-row { margin-top: 48px; }
-  .pm-draw[data-layout="book"] .pm-row svg { margin: 0; }
-  .pm-arcs { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
-  .pm-arcs text { font: 11px var(--mono); }
-  .pm-arcs .pm-arc-label { fill: var(--amber); }
-  .pm-arcs .pm-arc-label[data-loop-source="data"] { fill: var(--violet); }
-  .pm-arcs .pm-cont { stroke: #4a5568; stroke-dasharray: 4 4; fill: none; }
-  .pm-arcs .pm-cont-label { fill: var(--dimmer); }
-  .pm-arcs .pm-arc-bg { fill: #12161c; }
-
-  .pm-status { display: flex; flex-wrap: wrap; gap: 4px 18px; border-top: 1px solid var(--line-soft); padding: 7px 14px; font: 11.5px var(--mono); color: var(--dim); }
-  .pm-status b { color: var(--text); font-weight: 600; }
-  .pm-status .warn { color: var(--amber); }
-  .pm-loops { border-top: 1px solid var(--line-soft); padding: 8px 14px 10px; font-size: 12px; color: var(--dim); }
-  .pm-loops h3 { font: 11px var(--ui); text-transform: uppercase; letter-spacing: 0.08em; color: var(--dimmer); margin: 0 0 5px; }
-  .pm-loops ul { margin: 0; padding: 0; list-style: none; }
-  .pm-loops li { margin: 3px 0; }
-  .pm-loops .tag { font: 10.5px var(--mono); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; color: var(--violet); }
-  .pm-loops .tag[data-loop-source="inferred"] { color: var(--amber); border-color: #6b5726; }
-  .pm-gates .tag { color: var(--green); border-color: #2f5f38; background: #12261a; }
-  .pm-loops code { color: var(--text); font-size: 11.5px; }
+  /* The card. Its rules are the SHARED stylesheet, inlined so this page stays one file that opens offline:
+     public/core/pipeline-card.css, which the panel's flow dialog links for the same chart. */
+${cardCss}
 
   #inspector { position: fixed; right: 18px; bottom: 18px; width: min(440px, calc(100vw - 36px)); max-height: min(62vh, 620px); overflow: auto; background: var(--panel); border: 1px solid #35506b; border-radius: 11px; box-shadow: 0 16px 44px #0008; padding: 13px 15px 15px; z-index: 20; }
   #inspector[hidden] { display: none; }
@@ -547,6 +411,7 @@ ${reportFooter(provenance)}
 <script id="pipeline-map-data" type="application/json">${data}</script>
 <script id="mermaid-vendor">${vendor}</script>
 <script src="core/pipeline-import.js?v=${escHtml(meta.version)}"></script>
+<script src="core/pipeline-mermaid.js?v=${escHtml(meta.version)}"></script>
 <script src="pipeline-map.js?v=${escHtml(meta.version)}"></script>
 </body>
 </html>
@@ -590,7 +455,7 @@ async function main() {
     source: "node tools/render-pipeline-map.mjs reading pipelines.seed.json and pipeline-bundle.seed.json",
     now: new Date(model.meta.generatedAt),
   });
-  const page = html(model, vendor, provenance);
+  const page = html(model, vendor, provenance, readSource(CARD_CSS).text);
 
   if (opts.check) {
     if (!existsSync(opts.out)) throw new Error(`${path.relative(REPO, opts.out)} is not there — run the renderer`);

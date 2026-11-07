@@ -129,7 +129,7 @@ import {
 } from "./lib/paths.js";
 // HTTP framing lives in lib/http/: transport.js knows about req/res and nothing about worktrees,
 // and static.js serves public/. Both are handed the state they used to read by closure.
-import { authorised, handleStream, pageCaller, readBody, readRawBody, sendJson } from "./lib/http/transport.js";
+import { acceptsGzip, authorised, gzip, handleStream, pageCaller, readBody, readRawBody, sendJson } from "./lib/http/transport.js";
 import { serveStatic, PUBLIC_DIR } from "./lib/http/static.js";
 import { createBuild } from "./lib/build-version.js";
 // The steer refusal's own vocabulary: the page draws its control from this same file, so the route's status split
@@ -168,6 +168,9 @@ async function editorFor(target) {
 }
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+// The vendored mermaid, read once: the flow dialog's Preview is the only reader, and a 2.5 MB file per open would be
+// a disk read for bytes that cannot change while the process runs (an upgrade is a new file and a restart).
+let MERMAID_ASSET = null;
 // The panel's git/gh helpers. Same call shape as `promisify(execFile)`, but tracked: the child is in the
 // registry, its timeout is a CEILING for its kind, and the deadline kills the tree rather than the one pid
 // — which is what stops a push's pre-push hook (a changelog check taking minutes) outliving the push.
@@ -3113,6 +3116,35 @@ const server = createServer(async (req, res) => {
     if (route === "/api/pipeline-doc" && req.method === "GET") {
       const read = await readPipelineDocument(url.searchParams.get("url"));
       return sendJson(res, read.status, read.body);
+    }
+
+    // ---- the vendored mermaid, for the flow dialog's Preview -----------------------------------------
+    // public/pipeline-map.html INLINES mermaid (it is one file that must open with no network at all). The panel
+    // cannot: 2.5 MB of script in the shell would be parsed on every boot. The dialog's Preview loads this route on
+    // its first open instead, and it serves the SAME vendored bytes the map page inlines. The URL carries the mermaid
+    // version, so an upgrade is a different URL rather than new bytes behind an old cached one.
+    if (route === "/vendor/mermaid.min.js" && req.method === "GET") {
+      let body = MERMAID_ASSET;
+      if (!body) {
+        try {
+          body = MERMAID_ASSET = await readFile(path.join(HERE, "tools", "vendor", "mermaid.min.js"));
+        } catch (e) {
+          log(`vendored mermaid could not be read: ${String((e && e.message) || e)}`);
+          return sendJson(res, 404, { ok: false, error: "the vendored mermaid is not in this checkout (tools/vendor/mermaid.min.js)" });
+        }
+      }
+      const head = {
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=86400",
+        Vary: "Accept-Encoding",
+      };
+      if (body.length > 2048 && acceptsGzip(req)) {
+        const gz = gzip(body);
+        res.writeHead(200, { ...head, "Content-Encoding": "gzip", "Content-Length": gz.length });
+        return res.end(gz);
+      }
+      res.writeHead(200, { ...head, "Content-Length": body.length });
+      return res.end(body);
     }
 
     // Replace the live catalogue. The document is the pipelines.json shape: `{version, note, pipelines}`. A version

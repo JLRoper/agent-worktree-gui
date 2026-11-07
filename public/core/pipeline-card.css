@@ -1,0 +1,72 @@
+/* public/core/pipeline-card.css - the look of ONE mermaid pipeline card (public/core/pipeline-mermaid.js).
+   The map page inlines this file into its own single-file artefact at build time (tools/render-pipeline-map.mjs);
+   the panel links it for the flow dialog's Preview. One file, so the two surfaces cannot drift apart.
+
+   Every rule is scoped to .pm-card: the panel already owns `.chip` for its own chips, and a card must not restyle
+   the page it sits in. The canvas colour is deliberately the map's, because the mermaid theme variables in the
+   renderer are the map's too - a chart drawn two ways is the thing this module exists to end. */
+.pm-card {
+  --pm-canvas: #12161c;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--pm-canvas);
+  margin: 0 0 22px;
+  overflow: hidden;
+}
+.pm-card[data-bundle="1"] { border-color: #3a3348; }
+.pm-card .pm-card-head { display: flex; gap: 12px; align-items: flex-start; padding: 13px 16px 9px; border-bottom: 1px solid var(--line-soft, var(--line)); }
+.pm-card .pm-idx { font: 600 12px var(--mono); color: var(--dimmer); padding-top: 4px; min-width: 24px; }
+.pm-card .pm-card-head h2 { font-size: 16px; margin: 0 0 2px; letter-spacing: -0.1px; color: var(--text); }
+.pm-card .pm-card-head .pm-desc { margin: 0; color: var(--dim); font-size: 12.8px; max-width: 96ch; }
+.pm-card .pm-chips { margin-left: auto; display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; max-width: 46%; }
+.pm-card .chip { font: 11px var(--mono); color: var(--dim); border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+.pm-card .chip.kind { color: var(--blue); border-color: #29405a; }
+.pm-card .chip.next { color: var(--purple, var(--violet)); border-color: #40325c; }
+.pm-card .chip.last { color: var(--dim); }
+
+.pm-card .pm-vp { overflow-x: auto; padding: 4px 0 2px; scrollbar-width: thin; }
+.pm-card .pm-draw { position: relative; display: flex; justify-content: flex-start; padding: 6px 12px 4px; min-height: 60px; }
+.pm-card .pm-draw svg { max-width: none !important; height: auto; display: block; flex: 0 0 auto; }
+.pm-card .pm-draw .pm-node { cursor: pointer; }
+.pm-card .pm-draw .pm-node:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; border-radius: 6px; }
+.pm-card .pm-draw .pm-node[data-selected="1"] rect { stroke: var(--blue) !important; stroke-width: 2px !important; }
+.pm-card .pm-draw .pm-role { color: var(--dim) !important; font-size: 11px !important; }
+.pm-card .pm-draw .nodeLabel p,
+.pm-card .pm-draw .nodeLabel span { white-space: nowrap !important; }
+.pm-card .pm-draw .pm-node[data-role-source="derived"] .pm-role { color: #a8b6c9 !important; }
+.pm-card .pm-draw .pm-node[data-role-source="assigned"] .pm-role { color: var(--blue) !important; }
+.pm-card .pm-draw .edgeLabel,
+.pm-card .pm-draw .edgeLabel span,
+.pm-card .pm-draw .edgeLabel p { color: var(--dim) !important; font: 11px var(--mono) !important; background: var(--pm-canvas) !important; }
+.pm-card .pm-draw .flowchart-link,
+.pm-card .pm-draw .edgePath path { stroke: #5b6675 !important; stroke-width: 1.4px !important; }
+.pm-card .pm-draw marker path { fill: #5b6675 !important; stroke: #5b6675 !important; }
+.pm-card .pm-draw .pm-loop { stroke-dasharray: 5 4 !important; }
+.pm-card .pm-draw .pm-loop[data-loop-source="inferred"] { stroke: var(--amber) !important; }
+.pm-card .pm-draw .pm-loop[data-loop-source="data"] { stroke: var(--violet) !important; }
+
+.pm-card .pm-row { display: block; margin: 0; }
+.pm-card .pm-row + .pm-row { margin-top: 30px; }
+.pm-card .pm-row-label { display: block; font: 11px var(--mono); color: var(--dimmer); padding: 0 0 2px 2px; }
+.pm-card .pm-draw[data-layout="book"] { display: block; width: max-content; min-width: 100%; padding: 4px 12px 6px; }
+.pm-card .pm-draw[data-layout="book"] .pm-row + .pm-row { margin-top: 48px; }
+.pm-card .pm-draw[data-layout="book"] .pm-row svg { margin: 0; }
+.pm-card .pm-arcs { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+.pm-card .pm-arcs text { font: 11px var(--mono); }
+.pm-card .pm-arcs .pm-arc-label { fill: var(--amber); }
+.pm-card .pm-arcs .pm-arc-label[data-loop-source="data"] { fill: var(--violet); }
+.pm-card .pm-arcs .pm-cont { stroke: #4a5568; stroke-dasharray: 4 4; fill: none; }
+.pm-card .pm-arcs .pm-cont-label { fill: var(--dimmer); }
+.pm-card .pm-arcs .pm-arc-bg { fill: var(--pm-canvas); }
+
+.pm-card .pm-status { display: flex; flex-wrap: wrap; gap: 4px 18px; border-top: 1px solid var(--line-soft, var(--line)); padding: 7px 14px; font: 11.5px var(--mono); color: var(--dim); }
+.pm-card .pm-status b { color: var(--text); font-weight: 600; }
+.pm-card .pm-status .warn { color: var(--amber); }
+.pm-card .pm-loops { border-top: 1px solid var(--line-soft, var(--line)); padding: 8px 14px 10px; font-size: 12px; color: var(--dim); }
+.pm-card .pm-loops h3 { font: 11px var(--ui); text-transform: uppercase; letter-spacing: 0.08em; color: var(--dimmer); margin: 0 0 5px; }
+.pm-card .pm-loops ul { margin: 0; padding: 0; list-style: none; }
+.pm-card .pm-loops li { margin: 3px 0; }
+.pm-card .pm-loops .tag { font: 10.5px var(--mono); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; color: var(--violet); }
+.pm-card .pm-loops .tag[data-loop-source="inferred"] { color: var(--amber); border-color: #6b5726; }
+.pm-card .pm-gates .tag { color: var(--green); border-color: #2f5f38; background: #12261a; }
+.pm-card .pm-loops code { color: var(--text); font-size: 11.5px; }
