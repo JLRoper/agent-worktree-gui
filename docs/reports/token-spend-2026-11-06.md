@@ -99,8 +99,9 @@ Over the last hour the gateway's store shows 24 user messages on the assistant t
 holds 25 assistant jobs from that hour (it keeps 80). Their question texts: **median 167 chars, mean 209, min 82,
 max 655**. Against an ordinary sweep's 18,534 bytes of preamble and
 the `\n\n---\n\n` separator, the question is **0.9%** of the message. The prior audit measured 36,434 chars around
-an 81-char question before the charter marker landed; the marker took the standing share from 53% of the message
-to 99.1% of a much smaller one.
+an 81-char question, 53% of that preamble being the charter re-sent in full; this run's ordinary turn is half the
+size because the charter is one line on 19 turns in 20 (`lib/assistant.js:647`). The standing share of the message
+is 99.1% either way in those two measurements - what changed is the size of the message, not its composition.
 
 ### The append tax
 
