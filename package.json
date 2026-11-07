@@ -66,6 +66,7 @@
     "verify:human-button": "node tools/verify-human-button.mjs",
     "verify:provider-profiles": "node tools/verify-provider-profiles.mjs",
     "verify:assistant-dock-overlap": "node tools/verify-assistant-dock-overlap.mjs",
+    "verify:assistant-float-header": "node tools/verify-assistant-float-header.mjs",
     "verify:assistant-reset": "node tools/verify-assistant-reset.mjs",
     "verify:assistant-reset-ui": "node tools/verify-assistant-reset-ui.mjs",
     "verify:exited-chip": "node tools/verify-exited-chip.mjs",

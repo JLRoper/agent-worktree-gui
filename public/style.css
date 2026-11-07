@@ -3667,23 +3667,33 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 #assistant.is-moving .as-split { background: #3d6ea8; }
 /* The rail's rows never share its height with the transcript: they keep their natural height and the body takes
    what is left, at every width. */
-#assistant .as-bar, #assistant .as-tabs, #assistant .as-subtabs { flex: none; }
+#assistant > .as-bar, #assistant .as-tabs, #assistant .as-subtabs { flex: none; }
 /* The rail's title row: what it is, how it is running, and the one close toggle. It is not a window's title bar —
-   there is nothing to drag, and no pin or maximize to press. */
-.as-bar {
-  display: flex; align-items: center; gap: 8px; padding: 7px 10px;
+   there is nothing to drag, and no pin or maximize to press.
+   SCOPED, and that is the point: `.as-bar` is a name a progress bar reaches for too. The watchlist's deadline bar
+   carried it, its 78x4 box became this row's box, and the header — 78 px wide, 15 px tall — spilled its name and
+   mode chip above the float's top edge, where `overflow: hidden` cut them. The deadline bar is `.as-watchbar` now;
+   this selector keeps the title row from ever picking up another bar's box again. */
+#assistant > .as-bar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; padding: 7px 10px;
   background: linear-gradient(180deg, #1a2230, #141a23);
   border-bottom: 1px solid var(--line); user-select: none;
 }
-.as-bar strong { font-size: 13px; letter-spacing: .02em; }
-.as-bar .spacer { flex: 1; }
+/* The name and its mode chip keep ONE line each, and the row wraps instead: a width that cannot hold the whole row
+   moves the chips down, and a name longer than the row ellipsizes in its own box (its `title` carries the rest). No
+   header text is cut off, in either frame, at any zoom. */
+#assistant > .as-bar > strong {
+  font-size: 13px; letter-spacing: .02em;
+  flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#assistant > .as-bar .spacer { flex: 1; }
 .as-glyph { color: #8fb8ff; font-size: 14px; }
-.as-mode { font-size: 10.5px; color: var(--dim); border: 1px solid var(--line); border-radius: 99px; padding: 1px 7px; }
+.as-mode { font-size: 10.5px; color: var(--dim); border: 1px solid var(--line); border-radius: 99px; padding: 1px 7px; flex: 0 0 auto; white-space: nowrap; }
 .as-mode.is-auto { color: #7ee787; border-color: #2ea043; background: var(--green-bg); }
 .as-mode.is-safe { color: #e3b341; border-color: #6b4d16; background: var(--amber-bg); }
-#btn-as-close { border: 0; background: none; color: var(--dim); font-size: 14px; line-height: 1; cursor: pointer; padding: 0 2px; }
+#btn-as-close { border: 0; background: none; color: var(--dim); font-size: 14px; line-height: 1; cursor: pointer; padding: 0 2px; margin-left: auto; }
 #btn-as-close:hover { color: var(--text); }
-.as-bar .chips { display: flex; gap: 5px; }
+#assistant > .as-bar .chips { display: flex; gap: 5px; flex: 0 1 auto; flex-wrap: wrap; }
 
 .as-tabs { display: flex; gap: 2px; padding: 4px 6px 0; background: var(--panel-2); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .as-tabs button {
@@ -3822,15 +3832,17 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
    number, read at a glance from across the desk; the last fifth turns amber, then red. */
 .as-watch-timer { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex: 0 0 auto; min-width: 78px; }
 .as-watch-left { font-family: var(--mono); font-size: 10px; color: var(--dim); white-space: nowrap; }
-.as-bar { width: 78px; height: 4px; border-radius: 2px; background: #2a3240; overflow: hidden; }
-.as-bar i {
+/* The deadline bar is its OWN class: `.as-bar` is the assistant's title row, and when this bar borrowed the name
+   its 78x4 box took the header's box with it. */
+.as-watch-timer .as-watchbar { width: 78px; height: 4px; border-radius: 2px; background: #2a3240; overflow: hidden; flex: none; }
+.as-watch-timer .as-watchbar i {
   display: block; height: 100%; width: 100%; border-radius: 2px; background: var(--blue);
   transition: width .95s linear, background-color .3s;
 }
-.as-bar i.is-mid { background: var(--amber); }
-.as-bar i.is-low { background: var(--red); }
+.as-watch-timer .as-watchbar i.is-mid { background: var(--amber); }
+.as-watch-timer .as-watchbar i.is-low { background: var(--red); }
 .as-watch-timer.is-over .as-watch-left { color: var(--amber); }
-.as-watch-timer.is-over .as-bar i { background: var(--red); }
+.as-watch-timer.is-over .as-watchbar i { background: var(--red); }
 .as-row.is-done { opacity: .55; }
 .as-form { display: flex; flex-direction: column; gap: 6px; padding: 9px; border: 1px dashed var(--line); border-radius: 7px; margin-top: 4px; }
 .as-form .as-line { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
