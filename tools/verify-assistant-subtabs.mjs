@@ -24,7 +24,7 @@
 //   6. the four moved lists ARE inside #1's own pane and work from its row (alerts, watches, messages, pad), the
 //      second row goes away with a panel-wide pane (Role) and comes back on the sub-tab it was left on, the two
 //      counts live on the moved list pills, and Ctrl+, still opens the board's own Settings panel over the float;
-//   7. the Role tab: the seeded role in its picker, Assistant #1's own charter in its box (not the role's copy),
+//   7. the Role tab: Assistant #1's own charter in its box (not the role's copy) and no picker of its own,
 //      "New assistant from this role" adding Assistant #2 to the top row with its own pane — its Settings with NO
 //      per-assistant rules block (that block is gone) and its Notes tab keeping Notes, Standing rules and Journal,
 //      where a rule added lands on #2's own record — and, the claim this feature exists for, #2's saved edit landing
@@ -359,18 +359,14 @@ async function browserPhase(pw) {
   await page.waitForSelector("#as-role:not(.hidden)");
   ok("the Role pane is the one showing", await visible("#as-role"));
   ok("…and the session's row is gone with the session", !(await visible("#as-subtabs")));
-  const roleOpts = () => page.$$eval("#as-role-pick option", (els) => els.map((e) => ({ id: e.value, name: e.textContent.trim(), on: e.selected })));
-  const roleOptsNow = await roleOpts();
-  check("the picker offers the seeded roles", roleOptsNow.map((o) => o.id), ["agent-manager", "assistant-director"]);
-  check("…named", roleOptsNow.map((o) => o.name), ["Agent Manager", "Assistant Director"]);
-  ok("…and it is the one this assistant runs", roleOptsNow[0].on);
+  check("the pane carries no role picker", await page.locator("#as-role-pick, #as-roletarget, #btn-as-role-adopt").count(), 0);
   await page.waitForFunction(() => !document.querySelector("#as-role-text").readOnly, null, { timeout: 10_000 });
   const roleTextOf = (id) => page.locator(id).evaluate((el) => el.value);
   const charterOf1 = (await (await fetch(`${base}/api/assistant/charter`)).json()).charter.text;
   const shown = await roleTextOf("#as-role-text");
   check("the box holds Assistant #1's own charter, not a copy of the role's", shown, charterOf1);
   ok("…which is the file the old Charter tab edited", shown.length > 5000 && shown.includes("## Role and remit"), `${shown.length} chars`);
-  ok("…and the pane says which assistant it is editing", (await page.locator("#as-roletarget").evaluate((el) => el.value)) === "assistant-1");
+  ok("…and the pane names the assistant whose copy it edits", /Assistant #1's own copy/.test(await page.locator("#as-role [data-as-rolewho]").innerText()), await page.locator("#as-role [data-as-rolewho]").innerText());
   ok("…with the remit written out", /approved PR ready to merge/i.test(await page.locator("#as-role").innerText()));
 
   await page.click("#btn-as-new-assistant");
@@ -417,12 +413,15 @@ async function browserPhase(pw) {
   check("…and Assistant #1's rules are untouched", both.assistants.find((a) => a.id === "assistant-1").rules.map((r) => r.text), []);
   check("…while #2 has the one", both.assistants.find((a) => a.id === "assistant-2").rules.map((r) => r.text), ["ask before writing to a tree another agent owns"]);
 
-  // #2's charter is its own copy: edit it, and #1's injected text must not move.
-  await page.click('#as-tabs [data-as-tab="role"]');
+  // #2's charter is its own copy: edit it, and #1's injected text must not move. The Role tab carries no selector any
+  // more, so the way to its text for #2 is that assistant's Settings, whose Open Role tab press points the pane at the
+  // assistant the reader was on.
+  await page.click('#as-subtabs [data-as-subtab="settings"]');
+  await page.waitForSelector("#as-settings-2:not(.hidden)");
+  await page.click('[data-as-roleopen="assistant-2"]');
   await page.waitForSelector("#as-role:not(.hidden)");
-  await page.selectOption("#as-roletarget", "assistant-2");
   await waitFor(
-    async () => (await page.locator("#as-roletarget").evaluate((el) => el.value)) === "assistant-2" && (await roleTextOf("#as-role-text")).length > 15000,
+    async () => /Assistant #2's own copy/.test(await page.locator("#as-role [data-as-rolewho]").innerText()) && (await roleTextOf("#as-role-text")).length > 15000,
     { timeoutMs: 10_000, what: "#2's role pane and its copy of the role" },
   );
   const copy2 = await roleTextOf("#as-role-text");
@@ -1076,7 +1075,7 @@ try {
   console.log("own project scanned, its own files served, the live 7331 listener count identical across the run), and headless");
   console.log("Chromium over that panel — the two rows measured as boxes, Settings as the session's second tab, the record in");
   console.log("localStorage, the reload that lands back on Settings, the card still filling the float, every other tab, the");
-  console.log("Role tab's own picker and charter box, a second assistant made from that role with its own tab, pane, rules");
+  console.log("Role tab's own charter box (no picker), a second assistant made from that role with its own tab, pane, rules");
   console.log("and copy of the charter, that copy's edit landing in its own file while #1's text and #1's file stay byte for");
   console.log("byte, the badges and Ctrl+,");
   if (!failures) console.log("ASSISTANT-SUBTABS-OK");
