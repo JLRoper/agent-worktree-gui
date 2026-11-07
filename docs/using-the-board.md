@@ -1096,6 +1096,7 @@ something you typed or an agent is writing. **Check now** asks at once, even wit
 | The assistant says it started a worker but nothing appeared | Look at the strip above **New agent** and at the `N spawn` pill on ✧ Assistant: in **ask** mode a SPAWN line is a card waiting for a click, not a run. If neither a card nor a worker exists two minutes after the turn, the journal carries a **lost SPAWN line** and the Alerts tab an alert naming the turn. |
 | A column is too narrow or too wide | Drag the edge between two column headers (the pair trades width); **double-click** any edge to go back to the measured split. Widths are remembered in this browser, so a reset is per browser too. |
 | `revive` is refused | That session already has a card on the board. |
+| A restart seems to have changed nothing — the board is still the build you started | The bounce's own lines are in the panel's `server.out.log` (`panel-restart: stopped pid …`, `launched … as pid …`, `pid … is serving on …`). The replacement is started only after the outgoing panel and any stray `server.js` on the port are stopped, so a line saying `exited before it bound port` names the failure instead of leaving the old build answering. |
 | A console result is cut short | The run stream carries a preview, not the full payload. See the README's troubleshooting section. |
 
 More in the [README](../README.md#troubleshooting) and [SETUP.md](../SETUP.md). The panel's internals — how rows are
