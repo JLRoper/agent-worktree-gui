@@ -180,7 +180,10 @@ const [{ ProjectRegistry }, { Store }, { Scheduler }, { Pool }] = await Promise.
 
 const config = {
   scanRoots: ROOTS,
-  projects: EXPLICIT ? records.map((p) => ({ name: p.name, path: p.path })) : [],
+  // `--explicit` hands the registry the RECORD it seeded, not just a name and a path. A configured project
+  // outside every root is never probed, so a record stripped to {name, path} carries no commit date, every
+  // repo in the sample classifies as old, and the run measures a fleet that has no recent tier at all.
+  projects: EXPLICIT ? records.map((p) => ({ ...p })) : [],
   scanMode: "all",
   worktreeSeconds: 5,
   midSeconds: 30,
