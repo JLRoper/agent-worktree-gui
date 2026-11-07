@@ -3615,6 +3615,1108 @@
           }
         }
       ]
+    },
+    {
+      "id": "local",
+      "title": "Local work",
+      "description": "Work in this tree and stop. The LANDING paragraph composed into the prompt decides whether that includes a push and a pull request.",
+      "roles": [
+        {
+          "id": "worker",
+          "name": "Worker",
+          "kind": "agent",
+          "remit": "Do the work the stage names, in this tree, and commit it.",
+          "instructions": "Work in this tree and commit what you changed in one revertable commit. Report the files you touched, the commands you ran and their real results. Never push the main branch and never open a pull request unless the stage's own prompt says to."
+        }
+      ],
+      "stages": [
+        {
+          "id": "work",
+          "title": "Work in this tree",
+          "purpose": "The worker does the work in this tree, commits it in one revertable commit and stops there.",
+          "prompt": "Do the work in this tree and stop there.\n\nCommit what you changed in one revertable commit on this tree's branch, then report what you did: the files you touched, the commands you ran and their real results. Where this prompt carries a LANDING paragraph, that paragraph is the only instruction about pushing and opening a pull request: follow it exactly.",
+          "artifact": {
+            "id": "work-commit",
+            "path": "ledger/local/work.md",
+            "schema": "work-commit/1",
+            "writer": "worker"
+          },
+          "owner": {
+            "kind": "agent",
+            "role": "worker"
+          },
+          "inputs": {
+            "read": [],
+            "non": [
+              "a push or a pull request the LANDING paragraph did not ask for"
+            ]
+          }
+        }
+      ],
+      "handoffs": [],
+      "gates": [
+        {
+          "id": "G1",
+          "after": "work",
+          "artifact": "work-commit",
+          "name": "Committed",
+          "decider": "machine",
+          "verified_by": "commits >= 1",
+          "refuses_when": "nothing is committed on this tree's branch"
+        }
+      ]
+    },
+    {
+      "id": "investigate",
+      "title": "Investigation",
+      "description": "Find out something and write it down, in this tree. Ends by concluding.",
+      "roles": [
+        {
+          "id": "worker",
+          "name": "Worker",
+          "kind": "agent",
+          "remit": "Do the work the stage names, in this tree, and commit it.",
+          "instructions": "Work in this tree and commit what you changed in one revertable commit. Report the files you touched, the commands you ran and their real results. Never push the main branch and never open a pull request unless the stage's own prompt says to."
+        }
+      ],
+      "stages": [
+        {
+          "id": "probe",
+          "title": "Probe",
+          "purpose": "The worker probes this tree and commits the evidence it really gathered.",
+          "prompt": "Find out what is actually being asked.\n\nRead, run and probe in this tree. Record what you ran and what it really returned — the capture, the script, the artefact. Commit the evidence on this tree's branch in one revertable commit. Do not push the main branch and do not open a pull request.",
+          "artifact": {
+            "id": "probe-evidence",
+            "path": "ledger/investigate/probe.md",
+            "schema": "probe-evidence/1",
+            "writer": "worker"
+          },
+          "owner": {
+            "kind": "agent",
+            "role": "worker"
+          },
+          "inputs": {
+            "read": [],
+            "non": [
+              "a conclusion reached before anything was run"
+            ]
+          }
+        },
+        {
+          "id": "conclude",
+          "title": "Conclude",
+          "purpose": "The worker writes the conclusion to docs/investigation.md and commits it.",
+          "prompt": "Write the conclusion down in docs/investigation.md: what you found, what you ruled out, and what should happen next. Commit it on this tree's branch and report it in a few lines. Do not push.",
+          "artifact": {
+            "id": "investigation",
+            "path": "docs/investigation.md",
+            "schema": "investigation/1",
+            "writer": "worker"
+          },
+          "owner": {
+            "kind": "agent",
+            "role": "worker"
+          },
+          "inputs": {
+            "read": [
+              {
+                "artifact": "probe-evidence",
+                "mutability": "read-only",
+                "schema": "probe-evidence/1"
+              }
+            ],
+            "non": [
+              "a conclusion the evidence does not carry"
+            ]
+          }
+        }
+      ],
+      "handoffs": [
+        {
+          "id": "H-01",
+          "from": "probe",
+          "to": "conclude",
+          "artifact": "probe-evidence",
+          "kind": "sequence",
+          "note": "the evidence is the conclusion's only input"
+        }
+      ],
+      "gates": [
+        {
+          "id": "G1",
+          "after": "probe",
+          "artifact": "probe-evidence",
+          "name": "Evidence committed",
+          "decider": "machine",
+          "verified_by": "commits >= 1",
+          "refuses_when": "no evidence is committed on this tree's branch"
+        },
+        {
+          "id": "G2",
+          "after": "conclude",
+          "artifact": "investigation",
+          "name": "Concluded",
+          "decider": "machine",
+          "verified_by": "file-exists docs/investigation.md",
+          "refuses_when": "docs/investigation.md is not written"
+        }
+      ]
+    },
+    {
+      "id": "turnover",
+      "title": "Turnover",
+      "description": "This work is going to land: commit, push the branch and open the pull request, following this host's landing doctrine.",
+      "roles": [
+        {
+          "id": "worker",
+          "name": "Worker",
+          "kind": "agent",
+          "remit": "Do the work the stage names, in this tree, and commit it.",
+          "instructions": "Work in this tree and commit what you changed in one revertable commit. Report the files you touched, the commands you ran and their real results. Never push the main branch and never open a pull request unless the stage's own prompt says to."
+        }
+      ],
+      "stages": [
+        {
+          "id": "commit",
+          "title": "Commit",
+          "purpose": "The worker commits everything in this tree in one revertable commit whose subject names the symptom.",
+          "prompt": "Commit everything in this tree on this tree's branch in one revertable commit whose subject names the symptom.\n\nDo not push yet.",
+          "artifact": {
+            "id": "commit-record",
+            "path": "ledger/turnover/commit.md",
+            "schema": "commit-record/1",
+            "writer": "worker"
+          },
+          "owner": {
+            "kind": "agent",
+            "role": "worker"
+          },
+          "inputs": {
+            "read": [],
+            "non": [
+              "a push before the commit is read back"
+            ]
+          }
+        },
+        {
+          "id": "push",
+          "title": "Push the branch",
+          "purpose": "The worker pushes this tree's branch to origin and never the main branch.",
+          "prompt": "Push the branch, never the main branch: git push -u origin HEAD. If the write is refused, report the refusal and stop — the panel's permission box is the only thing that can grant it.",
+          "artifact": {
+            "id": "pushed-branch",
+            "path": "ledger/turnover/push.md",
+            "schema": "pushed-branch/1",
+            "writer": "worker"
+          },
+          "owner": {
+            "kind": "agent",
+            "role": "worker"
+          },
+          "inputs": {
+            "read": [
+              {
+                "artifact": "commit-record",
+                "mutability": "read-only",
+                "schema": "commit-record/1"
+              }
+            ],
+            "non": [
+              "a push to the main branch"
+            ]
+          }
+        },
+        {
+          "id": "pr",
+          "title": "Open the pull request",
+          "purpose": "The worker opens one pull request from this tree's branch into the main branch and reports its URL.",
+          "prompt": "Open ONE pull request from this tree's branch into the main branch, following this project's landing doctrine — the doctrine names the host, the title, the reviewers and the description sections. Report the PR URL. Leave it open: this pipeline does not merge.",
+          "artifact": {
+            "id": "pull-request",
+            "path": "ledger/turnover/pr.md",
+            "schema": "pull-request/1",
+            "writer": "worker"
+          },
+          "owner": {
+            "kind": "agent",
+            "role": "worker"
+          },
+          "inputs": {
+            "read": [
+              {
+                "artifact": "pushed-branch",
+                "mutability": "read-only",
+                "schema": "pushed-branch/1"
+              }
+            ],
+            "non": [
+              "a merge",
+              "a second pull request"
+            ]
+          }
+        }
+      ],
+      "handoffs": [
+        {
+          "id": "H-01",
+          "from": "commit",
+          "to": "push",
+          "artifact": "commit-record",
+          "kind": "sequence",
+          "note": "the commit is what the push carries"
+        },
+        {
+          "id": "H-02",
+          "from": "push",
+          "to": "pr",
+          "artifact": "pushed-branch",
+          "kind": "sequence",
+          "note": "the pushed head is what the pull request is opened from"
+        }
+      ],
+      "gates": [
+        {
+          "id": "G1",
+          "after": "commit",
+          "artifact": "commit-record",
+          "name": "Committed",
+          "decider": "machine",
+          "verified_by": "commits >= 1",
+          "refuses_when": "nothing is committed on this tree's branch"
+        },
+        {
+          "id": "G2",
+          "after": "push",
+          "artifact": "pushed-branch",
+          "name": "Pushed",
+          "decider": "machine",
+          "verified_by": "pushed",
+          "refuses_when": "the branch is not on origin"
+        },
+        {
+          "id": "G3",
+          "after": "pr",
+          "artifact": "pull-request",
+          "name": "PR open",
+          "decider": "machine",
+          "verified_by": "pr-open",
+          "refuses_when": "no pull request is open from this branch"
+        }
+      ]
+    },
+    {
+      "id": "github-investigate",
+      "title": "GitHub investigation",
+      "description": "Find out something on a GitHub project, write it down, and stop there — the work may chain into a turnover if it concludes the change has to land.",
+      "roles": [
+        {
+          "id": "worker",
+          "name": "Worker",
+          "kind": "agent",
+          "remit": "Do the work the stage names, in this tree, and commit it.",
+          "instructions": "Work in this tree and commit what you changed in one revertable commit. Report the files you touched, the commands you ran and their real results. Never push the main branch and never open a pull request unless the stage's own prompt says to."
+        }
+      ],
+      "stages": [
+        {
+          "id": "probe",
+          "title": "Probe",
+          "purpose": "The worker probes this tree and commits the evidence it really gathered.",
+          "prompt": "Find out what is actually being asked.\n\nRead, run and probe in this tree. Record what you ran and what it really returned — the capture, the script, the artefact. Commit the evidence on this tree's branch in one revertable commit. Do not push yet.",
+          "artifact": {
+            "id": "probe-evidence",
+            "path": "ledger/github-investigate/probe.md",
+            "schema": "probe-evidence/1",
+            "writer": "worker"
+          },
+          "owner": {
+            "kind": "agent",
+            "role": "worker"
+          },
+          "inputs": {
+            "read": [],
+            "non": [
+              "a conclusion reached before anything was run"
+            ]
+          }
+        },
+        {
+          "id": "conclude",
+          "title": "Conclude",
+          "purpose": "The worker writes the conclusion to docs/investigation.md and commits it, and the tree stays local.",
+          "prompt": "Write the conclusion down in docs/investigation.md: what you found, what you ruled out, and what should happen next. Commit it on this tree's branch and report it in a few lines. This tree stays local until the reader turns the conclusion into a turnover.",
+          "artifact": {
+            "id": "investigation",
+            "path": "docs/investigation.md",
+            "schema": "investigation/1",
+            "writer": "worker"
+          },
+          "owner": {
+            "kind": "agent",
+            "role": "worker"
+          },
+          "inputs": {
+            "read": [
+              {
+                "artifact": "probe-evidence",
+                "mutability": "read-only",
+                "schema": "probe-evidence/1"
+              }
+            ],
+            "non": [
+              "a conclusion the evidence does not carry"
+            ]
+          }
+        }
+      ],
+      "handoffs": [
+        {
+          "id": "H-01",
+          "from": "probe",
+          "to": "conclude",
+          "artifact": "probe-evidence",
+          "kind": "sequence",
+          "note": "the evidence is the conclusion's only input"
+        }
+      ],
+      "gates": [
+        {
+          "id": "G1",
+          "after": "probe",
+          "artifact": "probe-evidence",
+          "name": "Evidence committed",
+          "decider": "machine",
+          "verified_by": "commits >= 1",
+          "refuses_when": "no evidence is committed on this tree's branch"
+        },
+        {
+          "id": "G2",
+          "after": "conclude",
+          "artifact": "investigation",
+          "name": "Concluded",
+          "decider": "machine",
+          "verified_by": "file-exists docs/investigation.md",
+          "refuses_when": "docs/investigation.md is not written"
+        }
+      ]
+    },
+    {
+      "id": "sefl-investigate",
+      "title": "SEFL investigation",
+      "description": "Find out something on a SEFL Bitbucket project, write it down, and stop there — the work may chain into the review loop if it concludes the change has to land.",
+      "roles": [
+        {
+          "id": "worker",
+          "name": "Worker",
+          "kind": "agent",
+          "remit": "Do the work the stage names, in this tree, and commit it.",
+          "instructions": "Work in this tree and commit what you changed in one revertable commit. Report the files you touched, the commands you ran and their real results. Never push the main branch and never open a pull request unless the stage's own prompt says to."
+        }
+      ],
+      "stages": [
+        {
+          "id": "probe",
+          "title": "Probe",
+          "purpose": "The worker probes this tree on its branch and commits the evidence it really gathered.",
+          "prompt": "Find out what is actually being asked.\n\nRead, run and probe in this tree, on this tree's branch, from the host repository this project maps to. Record what you ran and what it really returned. Commit the evidence on this tree's branch in one revertable commit. Do not push yet.",
+          "artifact": {
+            "id": "probe-evidence",
+            "path": "ledger/sefl-investigate/probe.md",
+            "schema": "probe-evidence/1",
+            "writer": "worker"
+          },
+          "owner": {
+            "kind": "agent",
+            "role": "worker"
+          },
+          "inputs": {
+            "read": [],
+            "non": [
+              "a conclusion reached before anything was run"
+            ]
+          }
+        },
+        {
+          "id": "conclude",
+          "title": "Conclude",
+          "purpose": "The worker writes the conclusion to docs/investigation.md and commits it, and the tree stays local.",
+          "prompt": "Write the conclusion down in docs/investigation.md: what you found, what you ruled out, and what should happen next. Commit it on this tree's branch and report it in a few lines. This tree stays local until the reader turns the conclusion into a turnover.",
+          "artifact": {
+            "id": "investigation",
+            "path": "docs/investigation.md",
+            "schema": "investigation/1",
+            "writer": "worker"
+          },
+          "owner": {
+            "kind": "agent",
+            "role": "worker"
+          },
+          "inputs": {
+            "read": [
+              {
+                "artifact": "probe-evidence",
+                "mutability": "read-only",
+                "schema": "probe-evidence/1"
+              }
+            ],
+            "non": [
+              "a conclusion the evidence does not carry"
+            ]
+          }
+        }
+      ],
+      "handoffs": [
+        {
+          "id": "H-01",
+          "from": "probe",
+          "to": "conclude",
+          "artifact": "probe-evidence",
+          "kind": "sequence",
+          "note": "the evidence is the conclusion's only input"
+        }
+      ],
+      "gates": [
+        {
+          "id": "G1",
+          "after": "probe",
+          "artifact": "probe-evidence",
+          "name": "Evidence committed",
+          "decider": "machine",
+          "verified_by": "commits >= 1",
+          "refuses_when": "no evidence is committed on this tree's branch"
+        },
+        {
+          "id": "G2",
+          "after": "conclude",
+          "artifact": "investigation",
+          "name": "Concluded",
+          "decider": "machine",
+          "verified_by": "file-exists docs/investigation.md",
+          "refuses_when": "docs/investigation.md is not written"
+        }
+      ]
+    },
+    {
+      "id": "github-force-merge",
+      "title": "GitHub force merge",
+      "description": "The turnover pipeline for a GitHub project whose reader named it: commit, version, push, open the PR, merge with --admin (the ruleset's bypass) and confirm main moved.",
+      "roles": [
+        {
+          "id": "worker",
+          "name": "Worker",
+          "kind": "agent",
+          "remit": "Do the work the stage names, in this tree, and commit it.",
+          "instructions": "Work in this tree and commit what you changed in one revertable commit. Report the files you touched, the commands you ran and their real results. Never push the main branch and never open a pull request unless the stage's own prompt says to."
+        }
+      ],
+      "stages": [
+        {
+          "id": "commit",
+          "title": "Commit",
+          "purpose": "The worker commits everything in this tree in one revertable commit whose subject names the symptom.",
+          "prompt": "Commit everything in this tree on this tree's branch, one revertable commit whose subject names the symptom.",
+          "artifact": {
+            "id": "commit-record",
+            "path": "ledger/github-force-merge/commit.md",
+            "schema": "commit-record/1",
+            "writer": "worker"
+          },
+          "owner": {
+            "kind": "agent",
+            "role": "worker"
+          },
+          "inputs": {
+            "read": [],
+            "non": [
+              "a version bump in a second commit"
+            ]
+          }
+        },
+        {
+          "id": "version",
+          "title": "Version",
+          "purpose": "The worker judges the version level, applies it in the same commit and proves the check passes.",
+          "prompt": "Run `node tools/version.mjs suggest`, judge the level against what changed, apply it in the same commit and put the reason in the commit body. The stage is done when `node tools/version.mjs check` exits 0.",
+          "artifact": {
+            "id": "version-bump",
+            "path": "ledger/github-force-merge/version.md",
+            "schema": "version-bump/1",
+            "writer": "worker"
+          },
+          "owner": {
+            "kind": "agent",
+            "role": "worker"
+          },
+          "inputs": {
+            "read": [
+              {
+                "artifact": "commit-record",
+                "mutability": "read-only",
+                "schema": "commit-record/1"
+              }
+            ],
+            "non": [
+              "a level chosen without reading what changed"
+            ]
+          }
+        },
+        {
+          "id": "push",
+          "title": "Push the branch",
+          "purpose": "The worker pushes this tree's branch to origin and never the main branch.",
+          "prompt": "Push the branch, never the main branch: git push -u origin HEAD. If the push is refused, report the refusal and stop — the permission box is the only thing that grants a write.",
+          "artifact": {
+            "id": "pushed-branch",
+            "path": "ledger/github-force-merge/push.md",
+            "schema": "pushed-branch/1",
+            "writer": "worker"
+          },
+          "owner": {
+            "kind": "agent",
+            "role": "worker"
+          },
+          "inputs": {
+            "read": [
+              {
+                "artifact": "version-bump",
+                "mutability": "read-only",
+                "schema": "version-bump/1"
+              }
+            ],
+            "non": [
+              "a push to the main branch"
+            ]
+          }
+        },
+        {
+          "id": "pr",
+          "title": "Open the pull request",
+          "purpose": "The worker opens one pull request and reads it back before reporting it.",
+          "prompt": "Open ONE pull request from this tree's branch into the main branch and read it back before reporting it:\n\n  gh pr create --fill\n\nWhen this branch carries a version bump, --fill drops the reason the bump gave, so pass --title and --body-file instead and put the level and its reason into the body. Then run `gh pr view <n> --json state,headRefOid,baseRefName` and confirm headRefOid is the commit you just pushed. Report the PR URL.",
+          "artifact": {
+            "id": "pull-request",
+            "path": "ledger/github-force-merge/pr.md",
+            "schema": "pull-request/1",
+            "writer": "worker"
+          },
+          "owner": {
+            "kind": "agent",
+            "role": "worker"
+          },
+          "inputs": {
+            "read": [
+              {
+                "artifact": "pushed-branch",
+                "mutability": "read-only",
+                "schema": "pushed-branch/1"
+              }
+            ],
+            "non": [
+              "a second pull request"
+            ]
+          }
+        },
+        {
+          "id": "merge",
+          "title": "Merge",
+          "purpose": "The worker merges the pull request with --rebase --admin, the ruleset's bypass.",
+          "prompt": "Merge the pull request for this tree's branch: gh pr merge --rebase --admin.\n\n--admin is the ruleset's bypass, not a preference: the repository's ruleset, \"Owner only\" (id 25783530, docs/pushing-to-a-remote.md gate 8), refuses an update to the default branch except through a bypass. --rebase keeps the main branch linear, which the ruleset requires; --merge would be refused.\n\nIf the merge fails because this account has no bypass, say exactly that and report instead of retrying.",
+          "artifact": {
+            "id": "merge-record",
+            "path": "ledger/github-force-merge/merge.md",
+            "schema": "merge-record/1",
+            "writer": "worker"
+          },
+          "owner": {
+            "kind": "agent",
+            "role": "worker"
+          },
+          "inputs": {
+            "read": [
+              {
+                "artifact": "pull-request",
+                "mutability": "read-only",
+                "schema": "pull-request/1"
+              }
+            ],
+            "non": [
+              "a merge commit",
+              "a retry after a refused bypass"
+            ]
+          }
+        },
+        {
+          "id": "main",
+          "title": "Confirm main moved",
+          "purpose": "The worker fetches origin and confirms the merged commit is reachable from the main branch.",
+          "prompt": "Run `git fetch origin` and confirm the merge is on the main branch: the commit you merged is reachable from origin's main. Report the sha.",
+          "artifact": {
+            "id": "main-moved",
+            "path": "ledger/github-force-merge/main.md",
+            "schema": "main-moved/1",
+            "writer": "worker"
+          },
+          "owner": {
+            "kind": "agent",
+            "role": "worker"
+          },
+          "inputs": {
+            "read": [
+              {
+                "artifact": "merge-record",
+                "mutability": "read-only",
+                "schema": "merge-record/1"
+              }
+            ],
+            "non": [
+              "a claim that main moved without the fetch"
+            ]
+          }
+        }
+      ],
+      "handoffs": [
+        {
+          "id": "H-01",
+          "from": "commit",
+          "to": "version",
+          "artifact": "commit-record",
+          "kind": "sequence",
+          "note": "the version is judged against the commit that was made"
+        },
+        {
+          "id": "H-02",
+          "from": "version",
+          "to": "push",
+          "artifact": "version-bump",
+          "kind": "sequence",
+          "note": "the bump rides the commit the push carries"
+        },
+        {
+          "id": "H-03",
+          "from": "push",
+          "to": "pr",
+          "artifact": "pushed-branch",
+          "kind": "sequence",
+          "note": "the pushed head is what the pull request is opened from"
+        },
+        {
+          "id": "H-04",
+          "from": "pr",
+          "to": "merge",
+          "artifact": "pull-request",
+          "kind": "sequence",
+          "note": "the open pull request is what is merged"
+        },
+        {
+          "id": "H-05",
+          "from": "merge",
+          "to": "main",
+          "artifact": "merge-record",
+          "kind": "sequence",
+          "note": "the merge is what main is checked for"
+        }
+      ],
+      "gates": [
+        {
+          "id": "G1",
+          "after": "commit",
+          "artifact": "commit-record",
+          "name": "Committed",
+          "decider": "machine",
+          "verified_by": "commits >= 1",
+          "refuses_when": "nothing is committed on this tree's branch"
+        },
+        {
+          "id": "G2",
+          "after": "version",
+          "artifact": "version-bump",
+          "name": "Versioned",
+          "decider": "machine",
+          "verified_by": "command node tools/version.mjs check",
+          "refuses_when": "the version check does not exit 0"
+        },
+        {
+          "id": "G3",
+          "after": "push",
+          "artifact": "pushed-branch",
+          "name": "Pushed",
+          "decider": "machine",
+          "verified_by": "pushed",
+          "refuses_when": "the branch is not on origin"
+        },
+        {
+          "id": "G4",
+          "after": "pr",
+          "artifact": "pull-request",
+          "name": "PR open",
+          "decider": "machine",
+          "verified_by": "pr-open",
+          "refuses_when": "no pull request is open from this branch"
+        },
+        {
+          "id": "G5",
+          "after": "merge",
+          "artifact": "merge-record",
+          "name": "Merged",
+          "decider": "machine",
+          "verified_by": "pr-merged",
+          "refuses_when": "the pull request is not merged"
+        },
+        {
+          "id": "G6",
+          "after": "main",
+          "artifact": "main-moved",
+          "name": "Main moved",
+          "decider": "machine",
+          "verified_by": "main-moved",
+          "refuses_when": "the merged commit is not reachable from origin's main"
+        }
+      ]
+    },
+    {
+      "id": "sefl-review-loop",
+      "title": "SEFL review loop",
+      "description": "Cut a correctly named turnover branch, open a PR for code_review_java, answer what arrives, merge when approved.",
+      "roles": [
+        {
+          "id": "worker",
+          "name": "Worker",
+          "kind": "agent",
+          "remit": "Do the work the stage names, in this tree, and commit it.",
+          "instructions": "Work in this tree and commit what you changed in one revertable commit. Report the files you touched, the commands you ran and their real results. Never push the main branch and never open a pull request unless the stage's own prompt says to."
+        },
+        {
+          "id": "reviewer",
+          "name": "Reviewer",
+          "kind": "seat",
+          "remit": "Read the pull request at its current head and approve it, or say what has to change.",
+          "instructions": "Read the pull request at the head it is now on. An approval at an older commit is not an approval of the head: after any push the head needs re-approval. Approve only when nothing is left open."
+        }
+      ],
+      "stages": [
+        {
+          "id": "branch",
+          "title": "Name the branch",
+          "purpose": "The worker renames this tree's branch to the turnover pattern and reports the new name.",
+          "prompt": "Rename this tree's branch to YYYYMMDD_HHMM_<TICKET>_<desc> and nothing else: the cut's own local time, the ticket id the work names, and <desc> as lowercase words joined by underscores. Example: 20261102_1431_ABC-1234_fix_login_redirect. Then report the new name.",
+          "artifact": {
+            "id": "branch-name",
+            "path": "ledger/sefl-review-loop/branch.md",
+            "schema": "branch-name/1",
+            "writer": "worker"
+          },
+          "owner": {
+            "kind": "agent",
+            "role": "worker"
+          },
+          "inputs": {
+            "read": [],
+            "non": [
+              "a branch name that does not carry the ticket"
+            ]
+          }
+        },
+        {
+          "id": "push",
+          "title": "Push the branch",
+          "purpose": "The worker pushes this tree's branch to origin and never the main branch.",
+          "prompt": "Push the branch, never the main branch: git push origin HEAD. If the push is refused, report the refusal and stop — the panel's permission box is the only thing that grants a write.",
+          "artifact": {
+            "id": "pushed-branch",
+            "path": "ledger/sefl-review-loop/push.md",
+            "schema": "pushed-branch/1",
+            "writer": "worker"
+          },
+          "owner": {
+            "kind": "agent",
+            "role": "worker"
+          },
+          "inputs": {
+            "read": [
+              {
+                "artifact": "branch-name",
+                "mutability": "read-only",
+                "schema": "branch-name/1"
+              }
+            ],
+            "non": [
+              "a push to the main branch"
+            ]
+          }
+        },
+        {
+          "id": "pr",
+          "title": "Open the pull request",
+          "purpose": "The worker opens one pull request for code_review_java and reads it back.",
+          "prompt": "Open ONE pull request from this tree's branch into the main branch on the project's host, following the landing doctrine exactly:\n\n- title: \"Java Code Review for <repo> <branch>\"\n- reviewers: the GROUP code_review_java and nothing else — no individuals, no DAL group on a non-DAL change\n- description, four sections, every one present: ## Jira Ticket, ## Description, ## Test Procedures, ## Technical Specifications\n\nPOST it to the host's pull-request endpoint with the landing doctrine's REST path and bearer token, fromRef refs/heads/<the branch you pushed>, toRef refs/heads/<the main branch>. Read the PR back: reviewers must be exactly [code_review_java], and fromRef.latestCommit must be the head you pushed. Report the PR id and URL.",
+          "artifact": {
+            "id": "pull-request",
+            "path": "ledger/sefl-review-loop/pr.md",
+            "schema": "pull-request/1",
+            "writer": "worker"
+          },
+          "owner": {
+            "kind": "agent",
+            "role": "worker"
+          },
+          "inputs": {
+            "read": [
+              {
+                "artifact": "pushed-branch",
+                "mutability": "read-only",
+                "schema": "pushed-branch/1"
+              }
+            ],
+            "non": [
+              "a reviewer outside code_review_java",
+              "a second pull request"
+            ]
+          }
+        },
+        {
+          "id": "wait",
+          "title": "Wait for the reviewer",
+          "purpose": "The worker reads the pull request's activities once and ends the turn, and the panel re-checks on its own clock.",
+          "prompt": "Read the PR's activities once (the landing doctrine names the endpoint). Report what arrived, then END the turn: say plainly that nothing has arrived if nothing has. Do not sleep, do not poll in a loop, and do not merge — the panel re-checks on its own clock and wakes this thread when there is something to answer.",
+          "artifact": {
+            "id": "review-activity",
+            "path": "ledger/sefl-review-loop/wait.md",
+            "schema": "review-activity/1",
+            "writer": "worker"
+          },
+          "owner": {
+            "kind": "agent",
+            "role": "worker"
+          },
+          "inputs": {
+            "read": [
+              {
+                "artifact": "pull-request",
+                "mutability": "read-only",
+                "schema": "pull-request/1"
+              },
+              {
+                "artifact": "review-answers",
+                "mutability": "read-only",
+                "schema": "review-answers/1"
+              }
+            ],
+            "non": [
+              "a poll loop",
+              "a merge"
+            ]
+          }
+        },
+        {
+          "id": "address",
+          "title": "Answer the review",
+          "purpose": "The worker answers each new comment with the smallest change, commits it, pushes and replies naming the commit.",
+          "prompt": "For each new comment on the PR for this tree's branch: make the smallest change that answers it, commit on this tree's branch, push, and reply on that comment naming the commit. Then report what you answered. An approval at an older commit is not an approval of the head — after any push the head needs re-approval.",
+          "artifact": {
+            "id": "review-answers",
+            "path": "ledger/sefl-review-loop/address.md",
+            "schema": "review-answers/1",
+            "writer": "worker"
+          },
+          "owner": {
+            "kind": "agent",
+            "role": "worker"
+          },
+          "inputs": {
+            "read": [
+              {
+                "artifact": "review-activity",
+                "mutability": "read-only",
+                "schema": "review-activity/1"
+              }
+            ],
+            "non": [
+              "a change no comment asked for"
+            ]
+          }
+        },
+        {
+          "id": "approve",
+          "title": "Wait for the approval at the head",
+          "purpose": "The reviewer approves the pull request at its current head, and the worker reports the reviewer and the commit.",
+          "prompt": "Nothing to say: wait for the head to be reviewed. The stage ends when an approval exists whose lastReviewedCommit equals the PR's current head. Report the reviewer and the commit they approved.",
+          "artifact": {
+            "id": "approval",
+            "path": "ledger/sefl-review-loop/approve.md",
+            "schema": "approval/1",
+            "writer": "worker"
+          },
+          "owner": {
+            "kind": "agent",
+            "role": "worker"
+          },
+          "inputs": {
+            "read": [
+              {
+                "artifact": "review-activity",
+                "mutability": "read-only",
+                "schema": "review-activity/1"
+              }
+            ],
+            "non": [
+              "an approval at an older commit"
+            ]
+          }
+        },
+        {
+          "id": "merge",
+          "title": "Merge",
+          "purpose": "The worker merges the pull request at its current version and confirms the main branch moved.",
+          "prompt": "Merge the PR for this tree's branch with its current version: POST the host's merge endpoint (the landing doctrine names it) with the PR id and ?version=<the PR's current version>. Then confirm the main branch moved. Never push the main branch directly and never decline or close the PR.",
+          "artifact": {
+            "id": "merge-record",
+            "path": "ledger/sefl-review-loop/merge.md",
+            "schema": "merge-record/1",
+            "writer": "worker"
+          },
+          "owner": {
+            "kind": "agent",
+            "role": "worker"
+          },
+          "inputs": {
+            "read": [
+              {
+                "artifact": "approval",
+                "mutability": "read-only",
+                "schema": "approval/1"
+              }
+            ],
+            "non": [
+              "a direct push to the main branch",
+              "a declined or closed pull request"
+            ]
+          }
+        }
+      ],
+      "handoffs": [
+        {
+          "id": "H-01",
+          "from": "branch",
+          "to": "push",
+          "artifact": "branch-name",
+          "kind": "sequence",
+          "note": "the renamed branch is what is pushed"
+        },
+        {
+          "id": "H-02",
+          "from": "push",
+          "to": "pr",
+          "artifact": "pushed-branch",
+          "kind": "sequence",
+          "note": "the pushed head is what the pull request is opened from"
+        },
+        {
+          "id": "H-03",
+          "from": "pr",
+          "to": "wait",
+          "artifact": "pull-request",
+          "kind": "sequence",
+          "note": "the open pull request is what the reviewer reads"
+        },
+        {
+          "id": "H-04",
+          "from": "wait",
+          "to": "address",
+          "artifact": "review-activity",
+          "kind": "loop",
+          "cap": "3 rounds",
+          "note": "a comment arrived; the answer goes back to the wait, and after three rounds the loop stops"
+        },
+        {
+          "id": "H-05",
+          "from": "address",
+          "to": "wait",
+          "artifact": "review-answers",
+          "kind": "sequence",
+          "note": "the answers are what the next read of the pull request sees"
+        },
+        {
+          "id": "H-06",
+          "from": "wait",
+          "to": "approve",
+          "artifact": "review-activity",
+          "kind": "sequence",
+          "note": "an approval arrived at the head"
+        },
+        {
+          "id": "H-07",
+          "from": "approve",
+          "to": "merge",
+          "artifact": "approval",
+          "kind": "sequence",
+          "note": "the approval at the head is what the merge is allowed by"
+        }
+      ],
+      "gates": [
+        {
+          "id": "G1",
+          "after": "branch",
+          "artifact": "branch-name",
+          "name": "Branch named",
+          "decider": "machine",
+          "verified_by": "branch-name ^\\d{8}_\\d{4}_[A-Z][A-Z0-9]+-\\d+_[a-z0-9._-]+$",
+          "refuses_when": "the branch does not match the turnover pattern"
+        },
+        {
+          "id": "G2",
+          "after": "push",
+          "artifact": "pushed-branch",
+          "name": "Pushed",
+          "decider": "machine",
+          "verified_by": "pushed",
+          "refuses_when": "the branch is not on origin"
+        },
+        {
+          "id": "G3",
+          "after": "pr",
+          "artifact": "pull-request",
+          "name": "PR open",
+          "decider": "machine",
+          "verified_by": "pr-open",
+          "refuses_when": "no pull request is open from this branch"
+        },
+        {
+          "id": "G4",
+          "after": "wait",
+          "artifact": "review-activity",
+          "name": "Review read",
+          "decider": "machine",
+          "verified_by": "pr-comments",
+          "refuses_when": "the pull request's activities were not read"
+        },
+        {
+          "id": "G5",
+          "after": "address",
+          "artifact": "review-answers",
+          "name": "Answered",
+          "decider": "machine",
+          "verified_by": "pushed",
+          "refuses_when": "an answer is not pushed"
+        },
+        {
+          "id": "G6",
+          "after": "approve",
+          "artifact": "approval",
+          "name": "Approved at the head",
+          "decider": "reviewer",
+          "verified_by": "pr-approved",
+          "refuses_when": "no approval exists at the current head"
+        },
+        {
+          "id": "G7",
+          "after": "merge",
+          "artifact": "merge-record",
+          "name": "Merged",
+          "decider": "machine",
+          "verified_by": "pr-merged",
+          "refuses_when": "the pull request is not merged"
+        }
+      ]
     }
   ]
 }
