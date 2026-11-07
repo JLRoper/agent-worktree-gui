@@ -4,16 +4,44 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.45.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.45.3 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-362 releases from v0.1.0 (2026-10-20) to v1.45.0 (2026-11-06), 1273 commits between the tags. Every release is anchored by an
+364 releases from v0.1.0 (2026-10-20) to v1.45.3 (2026-11-07), 1281 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.45.3 — 2026-11-07 · 2 commits
+
+[`9c90790`](https://github.com/JLRoper/agent-worktree-gui/commit/9c90790884597a3a86cc4d232615cf0177f311e2) · [compare v1.45.2...v1.45.3](https://github.com/JLRoper/agent-worktree-gui/compare/v1.45.2...v1.45.3)
+
+### Fixed
+
+- fix: a panel restart frees the port before it starts the replacement ([`5cfa4d7`](https://github.com/JLRoper/agent-worktree-gui/commit/5cfa4d7a407618a94a9f0c5cc9b56413280a2c43))
+
+### Other
+
+- chore: 1.45.3 — the version this landing carries ([`9c90790`](https://github.com/JLRoper/agent-worktree-gui/commit/9c90790884597a3a86cc4d232615cf0177f311e2))
+
+## v1.45.2 — 2026-11-07 · 6 commits
+
+[`7a1547f`](https://github.com/JLRoper/agent-worktree-gui/commit/7a1547f0d7666b30c9bfe4b9f1da67444931b218) · [compare v1.45.0...v1.45.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.45.0...v1.45.2)
+
+### Fixed
+
+- fix: a probe timeout is not the gateway being unusable ([`7a1547f`](https://github.com/JLRoper/agent-worktree-gui/commit/7a1547f0d7666b30c9bfe4b9f1da67444931b218))
+
+### Docs & tests
+
+- docs: render the changelog — 362 releases ([`a039c1f`](https://github.com/JLRoper/agent-worktree-gui/commit/a039c1f9aefdb34859647a1bd719694d61946f8a))
+- docs: the panel's seconds are its own child processes ([`0fe56c1`](https://github.com/JLRoper/agent-worktree-gui/commit/0fe56c1b9f9f7169cdbdb0d2ef87e6ef6d956196))
+- docs: name the checkout and the scratch relatively ([`504a842`](https://github.com/JLRoper/agent-worktree-gui/commit/504a842b6db7d903bef1d2c58d1f8599349dff8c))
+- docs: a parked stage run still names the run it parked on ([`67fd3fc`](https://github.com/JLRoper/agent-worktree-gui/commit/67fd3fc140ec10311614881c917cc9bb7fe18a9e))
+- docs: the critique names nine faults in the parked-run note ([`b0a382f`](https://github.com/JLRoper/agent-worktree-gui/commit/b0a382fbdaf6125f0a051da8ed926e64dff0db89))
 
 ## v1.45.0 — 2026-11-06 · 2 commits
 
