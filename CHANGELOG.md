@@ -4,16 +4,33 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.44.2 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.44.3 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-360 releases from v0.1.0 (2026-10-20) to v1.44.2 (2026-11-06), 1267 commits between the tags. Every release is anchored by an
+361 releases from v0.1.0 (2026-10-20) to v1.44.3 (2026-11-06), 1271 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.44.3 — 2026-11-06 · 4 commits
+
+[`3a69c39`](https://github.com/JLRoper/agent-worktree-gui/commit/3a69c39efad04b2cd2922b824ae270ee6f9239d3) · [compare v1.44.2...v1.44.3](https://github.com/JLRoper/agent-worktree-gui/compare/v1.44.2...v1.44.3)
+
+### Fixed
+
+- fix: the rule cap trims the oldest assistant rule, never the reader's ([`5f50df1`](https://github.com/JLRoper/agent-worktree-gui/commit/5f50df1611caf3562508bacf997a84a607eb916b))
+
+### Docs & tests
+
+- docs: render the changelog — 360 releases ([`1fb9eb7`](https://github.com/JLRoper/agent-worktree-gui/commit/1fb9eb70d242d6e5dbdd764d8b3445f7595820a5))
+- docs: correct the prior-audit comparison in the token-spend report ([`9f94a11`](https://github.com/JLRoper/agent-worktree-gui/commit/9f94a116a47296196d50656a6053fa73ac5e0e8c))
+
+### Other
+
+- chore: 1.44.3 — the version this landing carries ([`3a69c39`](https://github.com/JLRoper/agent-worktree-gui/commit/3a69c39efad04b2cd2922b824ae270ee6f9239d3))
 
 ## v1.44.2 — 2026-11-06 · 4 commits
 
