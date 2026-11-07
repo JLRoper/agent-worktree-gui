@@ -2,8 +2,7 @@
 // The HTTP layer never runs git: the scheduler scans in worker threads and the
 // store holds the results. Spawned agents go through lib/jobs.js.
 import { createServer } from "node:http";
-import { execFile, spawn } from "node:child_process";
-import { promisify } from "node:util";
+import { spawn } from "node:child_process";
 import { mkdir, open, readFile, rename, rm, stat, unlink, writeFile } from "node:fs/promises";
 // The push-guard record is a few hundred bytes read at boot and written on an install: sync is the honest shape
 // for it, and it is the same file the Settings row reports from.
@@ -13,6 +12,9 @@ import path from "node:path";
 import { StringDecoder } from "node:string_decoder";
 import { fileURLToPath } from "node:url";
 import { Pool } from "./lib/pool.js";
+// Every helper process this panel starts is registered here: it carries a hard ceiling and dies with its
+// scope (a job that settled, a scan, the panel on the way out). See lib/child-tree.js for the leak it ends.
+import { panelChildren } from "./lib/child-tree.js";
 import { portHolder, refusalLine } from "./lib/port-guard.js";
 import { worktreeList, prIndex, prFor } from "./lib/project.js";
 import { Store } from "./lib/store.js";
@@ -22,7 +24,7 @@ import { ProjectRegistry } from "./lib/projects.js";
 // previewRequest is not: this commit moves both previewRequest call sites into lib/features/spawn.js, so
 // server.js has no use for the name any more — the import keeps their new name and drops the moved one.
 import { Jobs, RELEASE_BRIEF, hermesHome, isLiveJobStatus, makeThreadName } from "./lib/jobs.js";
-import { gitIn, scanWorktree } from "./lib/scan.js";
+import { gitIn, scanWorktree, setChildTracker } from "./lib/scan.js";
 // "Is this directory a tree of its own?" — asked before a reply is started, because a released tree's leftover
 // folder answers every `git` call from the project's primary checkout.
 import { replyTree } from "./lib/own-tree.js";
@@ -166,7 +168,10 @@ async function editorFor(target) {
 }
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const execP = promisify(execFile);
+// The panel's git/gh helpers. Same call shape as `promisify(execFile)`, but tracked: the child is in the
+// registry, its timeout is a CEILING for its kind, and the deadline kills the tree rather than the one pid
+// — which is what stops a push's pre-push hook (a changelog check taking minutes) outliving the push.
+const execP = (bin, args, opts = {}) => panelChildren.exec("panel", bin, args, opts);
 // The panel's version is declared once, in package.json: read it here so the page can say which
 // build is running without a second copy to keep in step.
 const VERSION = await readFile(path.join(HERE, "package.json"), "utf8")
@@ -282,6 +287,12 @@ const CONFIG_PATH = CONFIG_FILE.path;
 const CONFIG_DIR = path.dirname(CONFIG_PATH);
 
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
+// The child supervisor writes through the panel's own log, so a killed helper is one line beside every other
+// boot/shutdown line rather than a second stream.
+panelChildren.setLog((line) => log(line));
+// scan.js runs in worker threads AND here (the board's own reads call scanWorktree directly). The workers set
+// their own per-scan tracker; this thread's reads belong to the panel's list, so a shutdown kills them.
+setChildTracker(panelChildren, "panel");
 
 // The versioned static bundle: one hash over everything the shell loads, computed here at boot and
 // re-read when a file under public/ moves. The shell's asset URLs carry it and GET /api/build
@@ -698,6 +709,9 @@ let assistant = null;
 let naming = null;
 const jobs = new Jobs({
   config,
+  // The same supervisor server.js holds: a job that settles kills whatever its turn started, and a shutdown
+  // walks one list. A Jobs built by a test passes its own or none.
+  children: panelChildren,
   onEvent: (evt) => {
     guard("event broadcast", () => broadcast(evt));
     guard("worktree adopt", () => adoptFromJob(evt));
@@ -6681,6 +6695,15 @@ try {
 // port, so nothing waits on the SSE clients beyond the same two seconds this always allowed.
 function shutdown(code = 0) {
   log(`shutting down (exit ${code})`);
+  // Every helper this panel started dies with it, tree and all: a scan's git, a push's hook, a check agent's
+  // helper. Before the pool and the listener go, so nothing is left writing into a tree that is about to be
+  // released. `killAllSync` on `exit` is the backstop for an exit that never reaches here.
+  try {
+    const killed = panelChildren.killAll("the panel is shutting down");
+    if (killed) log(`child processes killed on shutdown: ${killed}`);
+  } catch (e) {
+    log(`child process cleanup failed: ${String((e && e.message) || e)}`);
+  }
   try {
     scheduler.stop();
   } catch {
@@ -6700,6 +6723,15 @@ function shutdown(code = 0) {
 for (const sig of ["SIGINT", "SIGTERM"]) {
   process.on(sig, () => shutdown(0));
 }
+// A path out of the process that never reaches shutdown() (a thrown boot, `process.exit` from a route): the
+// registry gets one synchronous sweep so a helper cannot outlive the panel it was started for.
+process.once("exit", () => {
+  try {
+    panelChildren.killAllSync("process exit");
+  } catch {
+    /* nothing may throw on the way out */
+  }
+});
 if (process.env.PANEL_PARENT_WATCH_STDIN === "1") {
   process.stdin.resume();
   process.stdin.on("end", () => shutdown(0));
