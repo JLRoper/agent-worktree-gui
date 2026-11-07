@@ -4,16 +4,34 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.50.5 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.50.6 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-380 releases from v0.1.0 (2026-10-20) to v1.50.5 (2026-11-07), 1326 commits between the tags. Every release is anchored by an
+381 releases from v0.1.0 (2026-10-20) to v1.50.6 (2026-11-07), 1331 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.50.6 — 2026-11-07 · 5 commits
+
+[`11b7d61`](https://github.com/JLRoper/agent-worktree-gui/commit/11b7d618e4b127e7b7a7876186e6e10a1d658860) · [compare v1.50.5...v1.50.6](https://github.com/JLRoper/agent-worktree-gui/compare/v1.50.5...v1.50.6)
+
+### Added
+
+- feat: one PDL reading, so the queue picker and Settings list the same pipelines ([`cc3dbf5`](https://github.com/JLRoper/agent-worktree-gui/commit/cc3dbf5906a1922bccde99d9f4b6cd341423fce2))
+
+### Docs & tests
+
+- docs: render the changelog — 380 releases ([`c665d7c`](https://github.com/JLRoper/agent-worktree-gui/commit/c665d7c72924003dd276199feadd93f44496803e))
+- docs: the two pipeline definitions and the one PDL source ([`2098d43`](https://github.com/JLRoper/agent-worktree-gui/commit/2098d4380e226f59653ca4ed394e53e606ed3dd5))
+
+### Other
+
+- chore: record the base's own root-scan fixture so a push from it is not refused ([`29d9bea`](https://github.com/JLRoper/agent-worktree-gui/commit/29d9bea5101fc5ee70c4d2d23507c70cc54f5621))
+- chore: 1.50.6 — the version this landing carries ([`11b7d61`](https://github.com/JLRoper/agent-worktree-gui/commit/11b7d618e4b127e7b7a7876186e6e10a1d658860))
 
 ## v1.50.5 — 2026-11-07 · 3 commits
 
