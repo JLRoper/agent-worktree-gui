@@ -62,6 +62,7 @@
     "verify:approvals-dock": "node tools/verify-approvals-dock.mjs",
     "dogfood:chat": "node tools/dogfood-chat.mjs",
     "verify:attachment-spawn": "node tools/verify-attachment-spawn.mjs",
+    "verify:message-attachments": "node tools/verify-message-attachments.mjs",
     "verify:turn-pager": "node tools/verify-turn-pager.mjs",
     "verify:turn-fold": "node tools/verify-turn-fold.mjs",
     "verify:human-button": "node tools/verify-human-button.mjs",
