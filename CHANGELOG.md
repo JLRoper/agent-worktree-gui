@@ -4,16 +4,33 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.50.2 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.50.3 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-377 releases from v0.1.0 (2026-10-20) to v1.50.2 (2026-11-07), 1316 commits between the tags. Every release is anchored by an
+378 releases from v0.1.0 (2026-10-20) to v1.50.3 (2026-11-07), 1320 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.50.3 — 2026-11-07 · 4 commits
+
+[`eedf510`](https://github.com/JLRoper/agent-worktree-gui/commit/eedf510a006c3ac732b94c9dff385e56f2c43779) · [compare v1.50.2...v1.50.3](https://github.com/JLRoper/agent-worktree-gui/compare/v1.50.2...v1.50.3)
+
+### Fixed
+
+- fix: the host bar's four controls wrap as one group ([`988b773`](https://github.com/JLRoper/agent-worktree-gui/commit/988b7737ac86b9b7377a82e6c3af3dc86693fe35))
+- fix: a page load promotes nothing, and promotions run one at a time ([`f92781c`](https://github.com/JLRoper/agent-worktree-gui/commit/f92781c1b5260d9ef004e9224ecfdf7e4c977b15))
+
+### Docs & tests
+
+- docs: render the changelog — 377 releases ([`5ce9d38`](https://github.com/JLRoper/agent-worktree-gui/commit/5ce9d38f27122a27875ea632b8a92ae9e16349e4))
+
+### Other
+
+- chore: 1.50.3 — the version this landing carries ([`eedf510`](https://github.com/JLRoper/agent-worktree-gui/commit/eedf510a006c3ac732b94c9dff385e56f2c43779))
 
 ## v1.50.2 — 2026-11-07 · 3 commits
 
