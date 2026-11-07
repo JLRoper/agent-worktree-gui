@@ -47,6 +47,11 @@
   const SUBTABS = ["chat", "settings", "queue", "worktrees", "alerts", "watches", "messages", "pad"];
   const FIRST_ASSISTANT = "assistant-1";
   const DEFAULT_VIEW = { assistant: FIRST_ASSISTANT, subTab: SUBTABS[0] };
+  // WHICH ASSISTANTS' HARD-RESTART PAIR IS ARMED. One record for the float, not a DOM flag: the Settings pane is
+  // rebuilt on every snapshot, and a flag kept on the element would be replaced under the reader's second press. It is
+  // cleared whenever the float opens or the reader changes tab — an armed pair is a question about the tab it was
+  // asked on — and `armed` is read back by the row's own painter (renderAssistantSettings).
+  const hardRestartArmed = new Set();
   // Every session the page knows about. Before the first /api/assistant answer there is still Assistant #1 — the
   // panel has always had it, and an empty row until a fetch lands reads as a broken float rather than a slow one.
   function sessionRecords() {
@@ -116,6 +121,9 @@
   // own send all land on the same one, so "where the reader was" has a single author.
   function setView(patch, { render = true } = {}) {
     const next = { ...state.assistantView, ...patch };
+    // An armed hard restart is a question the reader has walked out on: changing tab or tab-pane puts every
+    // assistant's Cancel/Confirm pair back to a single button before anything repaints.
+    if (next.subTab !== state.assistantView.subTab || next.assistant !== state.assistantView.assistant) hardRestartArmed.clear();
     state.assistantView = {
       assistant: tabsNow().includes(next.assistant) ? next.assistant : DEFAULT_VIEW.assistant,
       subTab: SUBTABS.includes(next.subTab) ? next.subTab : DEFAULT_VIEW.subTab,
@@ -525,6 +533,9 @@
       applyFrame(true);
       state.assistantSeenAt = Date.now();
       markSeen();
+      // Opening the float is opening Settings from the reader's point of view: a pair armed before it closed is one
+      // Enter away from clearing a conversation, so it starts at rest.
+      hardRestartArmed.clear();
       renderAssistant();
       paintAssistantBadge();
       pinChatToBottom(true);
@@ -557,11 +568,16 @@
     if (!data || typeof data !== "object") return;
     state.assistant = data;
     if (data.thread) state.assistantThread = data.thread;
-    // Every assistant thread, for app.js: a conversation is the float's when its thread is in here, and with
-    // roles there can be more than one.
-    state.assistantThreads = (Array.isArray(data.assistants) && data.assistants.length ? data.assistants : [{ threadId: data.thread }])
-      .map((a) => a.threadId)
-      .filter(Boolean);
+    // WHICH THREADS ARE THE FLOAT'S. The list is every assistant's CURRENT thread plus the threads a hard restart
+    // left behind: those still hold that assistant's transcript, and app.js hides an assistant conversation from the
+    // board by this list — a retired thread would otherwise be drawn as an agent's card the moment #1 moved off it.
+    state.assistantThreads = [
+      ...new Set(
+        (Array.isArray(data.assistants) && data.assistants.length ? data.assistants : [{ threadId: data.thread }])
+          .flatMap((a) => [a.threadId, ...(Array.isArray(a.previousThreads) ? a.previousThreads : [])])
+          .filter(Boolean),
+      ),
+    ];
     paintAssistantBadge();
     paintSpawnStrip();
     paintAggressive();
@@ -2639,6 +2655,38 @@
       ${connection}${messages}${policySec}${remindersSec}${watchesSec}${alerts}`;
   }
 
+  // ---- the hard restart: one assistant, a fresh thread, two presses -------------------------------
+  //
+  // The row's three states are all in the markup and toggled with `hidden`, never swapped: this pane is rebuilt on
+  // every snapshot, and a button that replaces itself mid-click is how a drawer closes under the press. The armed
+  // state lives in the float's `hardRestartArmed` set, so a repaint between the two presses keeps the question up.
+  //
+  // The first press does NOTHING but arm: it sets the flag, and the flag is the whole effect. Only the second press
+  // calls the route. That is the contract the reader asked for — one click arms, a second "Are you sure?" click does
+  // it — and it is why this is not `window.confirm`, which the browser can suppress.
+  function hardRestartRowHtml(id, rec, { armed = false, note = "", live = false } = {}) {
+    const now = String(rec?.threadId || "");
+    const was = Array.isArray(rec?.previousThreads) && rec.previousThreads.length ? rec.previousThreads[0] : "";
+    const from = was && was !== now ? `${esc(was)} → ` : "";
+    return `
+      <div class="as-group" data-as-hardrestart-group="${esc(id)}">
+        <h4>Hard restart — a fresh thread for this assistant</h4>
+        <div class="as-help">Clears THIS assistant's carried thread context and starts a fresh Hermes thread for it, so
+        its next turn is the first turn of a new session and nothing of the old conversation comes with it. It moves
+        <code>${from}${esc(now)}</code>; its queue, watches, charter, rules, settings and alerts are kept. The panel and
+        the gateway are <b>not</b> restarted, and no other assistant's thread is touched.
+        ${live ? "A turn is running — stop it first; a hard restart never moves the thread under a live run." : ""}</div>
+        <div class="as-line">
+          <button type="button" data-as-hardrestart="${esc(id)}" title="clear this assistant's carried thread context and start a fresh Hermes thread — no panel restart, no gateway restart"${armed ? " hidden" : ""}>Hard restart</button>
+          <button type="button" data-as-hardrestart-cancel="${esc(id)}" title="keep the thread it has now"${armed ? "" : " hidden"}>Cancel</button>
+          <button type="button" data-as-hardrestart-go="${esc(id)}" title="the second press does it: this assistant moves to a new thread now"${armed ? "" : " hidden"}>Are you sure? Start a fresh thread</button>
+          <span class="as-hint" data-as-hardrestart-note="${esc(id)}">${esc(note || `thread ${now}${live ? " · a turn is running — stop it first" : ""}`)}</span>
+          <span class="as-err" id="as-hardrestart-err-${esc(String(id).replace(/^assistant-/, ""))}"></span>
+        </div>
+      </div>`;
+  }
+  // ---- end the hard restart -----------------------------------------------------------------------
+
   // ONE ASSISTANT'S OWN SETTINGS.
   //
   // Every control drawn here is read through `settingsFor(id)` in lib/assistant.js out of that assistant's own
@@ -2745,6 +2793,11 @@
         </div>
         <div class="as-err" id="as-rolesave-err-${esc(n)}"></div>
       </div>
+      ${hardRestartRowHtml(id, rec, {
+        armed: hardRestartArmed.has(id),
+        note: String(host.dataset?.hardRestartNote || ""),
+        live: Boolean(rec?.live),
+      })}
       <div class="as-group">
         <h4>How this assistant's pane is drawn</h4>
         <div class="as-help">This is THIS assistant's frame, not the panel's: another assistant can float while this
@@ -5290,6 +5343,53 @@
         setErr(`as-rolesave-err-${n}`, "");
       } catch (err) {
         setErr(`as-rolesave-err-${n}`, err.message);
+      } finally {
+        t.disabled = false;
+      }
+      renderAssistantSettings(own, true);
+      return;
+    }
+
+    // THE HARD RESTART'S THREE PRESSES. The first only ARMS: it sets the float's armed flag and returns, with no request
+    // and no state change, so a stray click cannot clear a conversation. Cancel disarms. The confirm posts once; the
+    // answer's whole state rides back through `asPost` → `applyAssistant`, which repaints this assistant's tab on its
+    // NEW thread — its Chat goes back to the intro, because that thread has no turn yet.
+    if (t.dataset.asHardrestart) {
+      const own = t.dataset.asHardrestart;
+      hardRestartArmed.add(own);
+      renderAssistantSettings(own, true);
+      return;
+    }
+
+    if (t.dataset.asHardrestartCancel) {
+      const own = t.dataset.asHardrestartCancel;
+      hardRestartArmed.delete(own);
+      renderAssistantSettings(own, true);
+      return;
+    }
+
+    if (t.dataset.asHardrestartGo) {
+      const own = t.dataset.asHardrestartGo;
+      const n = String(own).replace(/^assistant-/, "");
+      const pane = hostFor(own, "settings");
+      t.disabled = true;
+      try {
+        const d = await asPost("/api/assistant/hard-restart", { assistantId: own });
+        const who = d.target?.name || "this assistant";
+        const from = d.target?.previousThread || "its old thread";
+        const to = d.target?.threadId || "a new thread";
+        if (pane) {
+          pane.dataset.hardRestartNote =
+            `Hard restarted ${who} — thread ${from} → ${to}. Its next turn is the first turn of a new session, ` +
+            `carrying none of the old conversation; its queue, watches, charter, rules and settings were kept. ` +
+            `The panel and the gateway were not restarted.`;
+        }
+        hardRestartArmed.delete(own);
+        setErr(`as-hardrestart-err-${n}`, "");
+      } catch (err) {
+        // A live turn is a refusal with a reason to wait, not a failure: say it beside the question and leave the pair
+        // armed, so the reader's next press (after stopping the turn) is the retry.
+        setErr(`as-hardrestart-err-${n}`, err.message);
       } finally {
         t.disabled = false;
       }

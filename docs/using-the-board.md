@@ -96,6 +96,21 @@ the box rather than silently ignored. Two assistants may share a name; what tell
 (`assistant-2`, `assistant-3`, ...), and a rename never changes it, so it moves nothing: not the assistant's queue,
 not its thread, not its charter file and not its state directory.
 
+### A hard restart of one assistant
+
+Its **Settings** sub-pane (its tab -> **Settings**) carries **Hard restart**, the one control there that throws context
+away on purpose. The first press only **arms** it: it becomes **Cancel** and **Are you sure? Start a fresh thread**,
+and nothing is sent. The second press clears that assistant's carried thread and starts it on a fresh one. The thread
+id is the gateway's session id, so the next turn is the first turn of a new session and none of the old conversation
+comes with it.
+
+Nothing else is cleared or restarted. The queue, the watches, the charter, the rules, the settings and the alerts stay;
+the panel and the gateway are not restarted, and no other assistant's thread or context is touched. The old thread
+is kept on the record (`previousThreads`) so its turns are still read as that assistant's rather than as a worker's,
+and its transcript stays in the panel's job store under the thread it ran on. A turn that is still running blocks the
+press - stop it first; the thread never moves under a live run. **Cancel**, a change of tab, or closing the float puts
+the single button back, and the row says in words what the last press did.
+
 ---
 
 ## Starting an agent

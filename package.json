@@ -53,6 +53,7 @@
     "verify:new-project": "node tools/verify-new-project.mjs",
     "verify:banner-timeout": "node tools/verify-banner-timeout.mjs",
     "verify:assistant-2-chat": "node tools/verify-assistant-2-chat.mjs",
+    "verify:assistant-hard-restart": "node tools/verify-assistant-hard-restart.mjs",
     "verify:preamble-cost": "node tools/verify-preamble-cost.mjs",
     "verify:digest-cost": "node tools/verify-digest-cost.mjs",
     "verify:append-tax": "node tools/verify-append-tax.mjs",

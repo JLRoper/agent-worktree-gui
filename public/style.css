@@ -3900,6 +3900,11 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 /* The working-dir field is a path: monospace, and wide enough to read one without scrolling it. */
 .as-group input[type="text"] { font-family: var(--mono); font-size: 11px; min-width: 250px; flex: 1 1 250px; }
 .as-group .as-help { font-size: 10.5px; color: var(--dimmer); line-height: 1.4; }
+/* The hard restart's two-step (an assistant's Settings). The pair is markup with `hidden` toggled, and this rule is
+   what keeps a flex row from painting a hidden button — an author `display` beats the UA's [hidden] rule. The confirm
+   press carries the same amber as the Settings drawer's armed Clean scratch, so "this is the one that acts" reads alike. */
+.as-group .as-line [hidden] { display: none; }
+.as-group button[data-as-hardrestart-go] { border-color: #6b4d16; background: var(--amber-bg); color: #ffd479; }
 
 /* ---- the worktrees sub-tab: one board project card per project ------------------------------------
    The card IS the board's `.project` (its background, outline and the `collapsed` body rule), narrowed to the
