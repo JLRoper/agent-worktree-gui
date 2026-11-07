@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ping-pong round 5: the drive cut both stages, took the loop edge, and one push met no version gate</title>
+<style>
+  :root { --bg:#0e1116; --panel:#151a21; --panel2:#1b212a; --line:#2a3340; --text:#e6e9ef; --dim:#9aa5b4;
+           --dimmer:#6f7a89; --green:#7ee787; --red:#ff9c94; --amber:#f0c674; --blue:#9ecbff; --purple:#c8a6ff;
+           --mono:ui-monospace,"Cascadia Mono",Consolas,"SF Mono",Menlo,monospace;
+           --ui:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  * { box-sizing:border-box; }
+  html { background:var(--bg); }
+  body { margin:0; color:var(--text); font:15px/1.62 var(--ui); }
+  .wrap { max-width:1120px; margin:0 auto; padding:30px 24px 72px; }
+  a { color:var(--blue); text-decoration:none; } a:hover { text-decoration:underline; }
+  h1 { font-size:27px; line-height:1.22; margin:4px 0 8px; letter-spacing:-0.2px; }
+  h2 { font-size:19px; margin:44px 0 12px; padding-top:16px; border-top:1px solid var(--line); }
+  h3 { font-size:15.5px; margin:26px 0 8px; color:var(--blue); }
+  h4 { font-size:12px; margin:18px 0 6px; color:var(--dim); text-transform:uppercase; letter-spacing:0.07em; }
+  p { margin:9px 0; }
+  ul,ol { margin:8px 0 8px 22px; padding:0; } li { margin:5px 0; }
+  code,.mono { font-family:var(--mono); font-size:12.8px; }
+  code { background:var(--panel2); border:1px solid var(--line); border-radius:4px; padding:0 4px; }
+  pre { background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:12px 14px; overflow-x:auto;
+         font-family:var(--mono); font-size:12.4px; line-height:1.55; }
+  .kicker { color:var(--dimmer); font-size:12px; text-transform:uppercase; letter-spacing:0.12em; }
+  .sub { color:var(--dim); font-size:16px; margin:0 0 14px; max-width:940px; }
+  .meta { color:var(--dim); font-size:12.5px; }
+  .meta code { font-size:12px; }
+  .anchor { font-family:var(--mono); font-size:12.2px; color:var(--purple); background:#1d1826;
+            border:1px solid #3d3352; border-radius:4px; padding:0 5px; white-space:nowrap; }
+  nav { margin:18px 0 8px; padding:12px 16px; background:var(--panel); border:1px solid var(--line);
+        border-radius:8px; font-size:13px; line-height:1.9; }
+  nav b { color:var(--dimmer); font-weight:600; text-transform:uppercase; font-size:11px; letter-spacing:0.1em; }
+  nav a { margin:0 10px 0 0; white-space:nowrap; }
+  .lead { background:var(--panel); border:1px solid var(--line); border-left:4px solid var(--blue);
+          border-radius:8px; padding:14px 18px; margin:18px 0; }
+  .lead p { margin:5px 0; }
+  .verdict { background:#13261a; border:1px solid #2f5f38; border-left:4px solid var(--green);
+             border-radius:8px; padding:13px 18px; margin:18px 0; }
+  .verdict h4 { color:var(--green); margin:0 0 4px; }
+  .failbox { background:#2a1414; border:1px solid #6b2a2a; border-left:4px solid var(--red);
+             border-radius:8px; padding:13px 18px; margin:18px 0; }
+  .failbox h4 { color:var(--red); margin:0 0 4px; }
+  .warn { background:#2a2414; border:1px solid #5c4d22; border-left:4px solid var(--amber);
+          border-radius:8px; padding:12px 18px; margin:16px 0; }
+  .warn h4 { color:var(--amber); margin:0 0 4px; }
+  .box { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px 18px; margin:14px 0; }
+  .tw { overflow-x:auto; margin:10px 0 16px; border:1px solid var(--line); border-radius:8px; }
+  table { border-collapse:collapse; width:100%; font-size:13px; }
+  th,td { text-align:left; vertical-align:top; padding:7px 10px; border-bottom:1px solid var(--line); }
+  th { background:var(--panel2); color:var(--dim); font-weight:600; font-size:12px;
+       text-transform:uppercase; letter-spacing:0.05em; }
+  tr:last-child td { border-bottom:0; }
+  .ok { color:var(--green); } .bad { color:var(--red); }
+  .warnpill { color:var(--amber); }
+  .pill { display:inline-block; margin-left:6px; padding:0 6px; border-radius:999px; font-size:10.5px;
+          text-transform:uppercase; letter-spacing:0.04em; color:var(--amber); border:1px solid #5c4d22; background:#241f10; }
+  .small { font-size:12.5px; color:var(--dim); }
+  .cols { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:12px; margin:12px 0; }
+  .stat { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:10px 14px; }
+  .stat b { display:block; font-size:22px; line-height:1.2; }
+  .stat span { color:var(--dim); font-size:12.5px; }
+  td.t { white-space:nowrap; font-family:var(--mono); font-size:12px; color:var(--purple); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="kicker">docs/reviews - agent-worktree-gui - ping-pong round 5</div>
+<h1>Ping-pong round 5: the drive cut both stages, took the loop edge, and one push met no version gate</h1>
+<p class="sub">Round 4's hand-off was refused by the driver on a record a person had written, and stage 2 was cut by hand.
+This round writes the record through the panel's own route and does not touch the pipeline: the drive starts stage 1,
+settles it, starts stage 2, and then opens another round on the loop edge by itself. The page reads the row, the three
+jobs and the two commits, and says what the drive did with each.</p>
+<p class="meta">
+  tree <code>.worktrees/ping-pong-round-5-draft-9f2c41</code> (repo-relative) -
+  branch <code>wtgui/ping-pong-round-5-draft-9f2c41</code> at <code>5447cf8</code> in the tree - cut from <code>9f94a11</code>
+  (<code>main</code> has since moved to <code>b0a382f</code>, which is PR #504 merged at 05:53:07Z) - version <code>1.44.2</code> in
+  the tree, <code>1.45.0</code> on <code>main</code> at that merge - queue <code>~/.wag/state/assistants/assistant-2/queue.json</code>, row #235 -
+  jobs <code>86f9b686</code> (draft), <code>569f957f</code> (critique), <code>bb494b8c</code> (the loop's second visit) -
+  records read 2026-11-07 01:05 EST (06:05Z).
+</p>
+
+<nav><b>Contents</b><br>
+  <a href="#answer">The answer</a>
+  <a href="#sequence">The stage sequence</a>
+  <a href="#row">The row and its entries</a>
+  <a href="#did">What the drive did</a>
+  <a href="#refused">What it refused or could not do</a>
+  <a href="#problems">The problems</a>
+  <a href="#fixes">Ranked fixes</a>
+  <a href="#limits">What this does not prove</a>
+  <a href="#evidence">The evidence</a>
+</nav>
+
+<div class="lead">
+<p><b>The round.</b> One queue row, put on <code>ping-pong</code> at <code>draft</code> with a pending record whose
+<code>enteredAt</code> the panel's own <code>assignPipeline</code> stamped. The brief: do not hand-cut stage 2; accept only
+if the drive settles stage 1 and starts <code>critique</code> by itself, and only if both stage-run entries carry a
+<code>status</code> and a <code>settledAt</code>. Nothing was created for the critic and no stage was assigned by hand.</p>
+<p><b>The short answer.</b> The drive did it. It settled <code>ping-pong/draft#1</code> at 05:09:17.452Z, entered
+<code>critique</code> itself, and started the critic 12.97 s later with the draft pinned into its prompt. It settled
+<code>ping-pong/critique#1</code> at 05:37:56.827Z. Both entries carry <code>status: done</code> and their own
+<code>settledAt</code>; the acceptance holds.</p>
+</div>
+
+<div class="verdict">
+<h4>Accepted - with three findings the acceptance does not cover</h4>
+<p>The hand-off is real: two stages, two workers, two settled entries, one row, no hand-cut. The findings are about what
+happens after it: the gate after <code>critique</code> cannot be asked, so the loop edge fires on the document's default
+order; a spawn link erases a park that was written while the start was in flight; and the stage worker's push met no
+version guard because the tree it ran in had none.</p>
+</div>
+
+<div class="cols">
+  <div class="stat"><b class="ok">2 / 2</b><span>stages the drive started and settled</span></div>
+  <div class="stat"><b class="ok">2 / 2</b><span>entries the acceptance reads, each with a status and a settledAt</span></div>
+  <div class="stat"><b>42m16s / 15m34s</b><span>draft job / critique job</span></div>
+  <div class="stat"><b class="warnpill">2m18s / 12m52s</b><span>settle lag after each job ended</span></div>
+  <div class="stat"><b>9 / 5</b><span>critique notes / blocking</span></div>
+  <div class="stat"><b class="bad">0</b><span>stages cut by hand</span></div>
+</div>
+
+<h2 id="answer">The answer</h2>
+<p>Row #235 was created through <code>POST /api/assistant/queue</code> with <code>action: "add"</code>, order 1, project
+<code>agent-worktree-gui</code> and the stage tree already cut from <code>main</code>. Ten seconds later the same route's
+<code>action: "pipeline"</code> put it on <code>ping-pong/draft</code>, and <code>assignPipeline</code> stamped
+<code>enteredAt</code> from the panel's clock (<code>lib/task-pipeline.js:367-372</code>). The driver's next pass read the
+record, wrote <code>startingAt</code> and the stage-run entry, moved the row to <code>running</code>, and asked for a
+worker - 4.339 s after the assignment. The drafter ran 42m15.8s, committed the note as <code>42656fa</code>, and exited 0.</p>
+<p>2m17.9 s after that job ended, the drive settled the entry: <code>status: done</code>, <code>settledAt</code>, the
+artifact's hash and blob, the tree at settle, and a decision on the same entry
+(<code>lib/task-pipeline-drive.js:1690-1712</code>). In the same pass it moved the row itself: stage <code>critique</code>,
+<code>visits.critique</code> 1, <code>crossings["H-01"]</code> 1, a fresh <code>enteredAt</code>. The critic's prompt was
+built from that entry: <code>handed on draft, ledger/ping-pong/draft.md, commit 42656fadd691, blob 4a0d99132fac,
+sha256 4762cc663c06, writer drafter (draft -> critique, handoff H-01)</code>. The critic ran 15m34.1s, committed
+<code>5447cf8</code>, and exited 0.</p>
+<p>Then the loop. The critique was not accepted - nine notes, five blocking, each citing a line in the two modules - and
+the drive entered draft visit 2, charging <code>H-02</code>. It read no verdict to do that: <code>G1</code> in the bundle
+declares no <code>decision</code> record, and <code>gateAfter</code> only answers a gate that has one
+(<code>lib/task-pipeline-drive.js:722-726</code>). So the loop edge is taken on the document's kind order, and the
+critic's "not accepted" never gates anything. A second drafter was spawned at 05:40:11; the reader cancelled it at
+05:43:59.953, and the drive settled that entry <code>cancelled</code> and parked the row 1.585 s later.</p>
+<p>The push is the other finding. The stage worker pushed its branch and opened PR #504 while the branch was at
+<code>1.44.2</code> and <code>origin/main</code> was at <code>1.45.0</code>. No gate refused it: the stage tree had no
+<code>core.hooksPath</code>, so the repo's <code>pre-push</code> chain, and the version check inside it, never ran. A
+landing worker the panel's own assistant spawned on #235 then pushed the critique commit and merged the PR at
+05:53:07Z: <code>main</code> carries both files as <code>67fd3fc</code> and <code>b0a382f</code>, and read
+<code>1.45.0</code> at that merge.</p>
+
+<h2 id="sequence">The stage sequence, with the clocks the records carry</h2>
+<p class="small">Local time is UTC-05:00. Every stamp below is read from the store named in its source column; the panel's
+journal keeps the same events from its own side, and no two rows average a disagreement - both are shown where they
+differ.</p>
+<div class="tw">
+<table>
+<thead><tr><th>local</th><th>UTC (stored)</th><th>event</th><th>source</th></tr></thead>
+<tbody>
+<tr><td class="t">23:24:13.118</td><td class="t">04:24:13.118Z</td><td>row #235 added: state queued, order 1, project <code>agent-worktree-gui</code>, worktree named; <code>pipelineRun</code> null</td><td>queue.json #235</td></tr>
+<tr><td class="t">23:24:23.419</td><td class="t">04:24:23.419Z</td><td>pipeline assigned: <code>ping-pong/draft</code>; <code>enteredAt</code> stamped by <code>assignPipeline</code></td><td>queue.json #235</td></tr>
+<tr><td class="t">23:24:27.758</td><td class="t">04:24:27.758Z</td><td>the drive's next pass: <code>startingAt</code>, stage run <code>ping-pong/draft#1</code>, row queued -&gt; running (4.339 s after the assign)</td><td>queue.json #235</td></tr>
+<tr><td class="t">23:24:43.709</td><td class="t">04:24:43.709Z</td><td>job <code>86f9b686</code> starts; thread <code>wtgui-write-the-draft-the-brief-as-7b4346</code></td><td>jobs.json</td></tr>
+<tr><td class="t">00:03:33</td><td class="t">05:03:33Z</td><td>commit <code>42656fa</code>: the draft, 693 words, one file</td><td>git log</td></tr>
+<tr><td class="t">00:06:59.554</td><td class="t">05:06:59.554Z</td><td>job <code>86f9b686</code> ends done, exit 0, 42m15.8s</td><td>jobs.json</td></tr>
+<tr><td class="t">00:09:17.452</td><td class="t">05:09:17.452Z</td><td><code>draft#1</code> settled done, artifact pinned; row -&gt; critique, <code>visits.critique</code> 1, <code>crossings["H-01"]</code> 1 (2m17.9 s after the job)</td><td>queue.json #235</td></tr>
+<tr><td class="t">00:09:30.420</td><td class="t">05:09:30.420Z</td><td>job <code>569f957f</code> starts; its prompt carries the draft's pin as input H-01 (12.97 s after the entry)</td><td>jobs.json, prompt</td></tr>
+<tr><td class="t">00:25:04.511</td><td class="t">05:25:04.511Z</td><td>job <code>569f957f</code> ends done, exit 0, 15m34.1s</td><td>jobs.json</td></tr>
+<tr><td class="t">00:26:21</td><td class="t">05:26:21Z</td><td>commit <code>5447cf8</code>: the critique, nine notes, five blocking, not accepted</td><td>git log</td></tr>
+<tr><td class="t">00:37:51</td><td class="t">05:37:51Z</td><td>the panel restarts (pid 6528); its log truncates and starts again</td><td>panel log</td></tr>
+<tr><td class="t">00:37:55</td><td class="t">05:37:55Z</td><td>reconcile: run <code>569f957f</code> -&gt; done, "the gateway had already ended it"</td><td>panel log</td></tr>
+<tr><td class="t">00:37:56.827</td><td class="t">05:37:56.827Z</td><td><code>critique#1</code> settled done, artifact pinned; row enters draft visit 2, <code>crossings["H-02"]</code> 1 (12m52.3 s after the job)</td><td>queue.json #235</td></tr>
+<tr><td class="t">00:38:10.758</td><td class="t">05:38:10.758Z</td><td>journal: starting draft, visit 2</td><td>assistant.json</td></tr>
+<tr><td class="t">00:40:11.116</td><td class="t">05:40:11.116Z</td><td>job <code>bb494b8c</code> starts, the loop's second drafter</td><td>jobs.json</td></tr>
+<tr><td class="t">00:43:59.953</td><td class="t">05:43:59.953Z</td><td>the reader cancels job <code>bb494b8c</code> (3m48.8 s in)</td><td>jobs.json</td></tr>
+<tr><td class="t">00:44:01.538</td><td class="t">05:44:01.538Z</td><td><code>draft#2</code> settled <code>cancelled</code>; row parked, hold manual (1.585 s after the cancel)</td><td>queue.json #235</td></tr>
+<tr><td class="t">00:46:53</td><td class="t">05:46:53Z</td><td>assistant-2 requeues #235 from the parked state</td><td>assistant.json</td></tr>
+<tr><td class="t">00:47:22</td><td class="t">05:47:22Z</td><td>the drive's start fails: "the Hermes gateway API is not usable at http://127.0.0.1:8642: This operation was aborted"; the panel parks the row with that sentence</td><td>assistant.json</td></tr>
+<tr><td class="t">00:48:04.780</td><td class="t">05:48:04.780Z</td><td>a SPAWN titled "land round 5 ..." links to #235 in the same tree: the row reads running, and its reason and hold are cleared</td><td>queue.json #235</td></tr>
+<tr><td class="t">00:53:07</td><td class="t">05:53:07Z</td><td>PR #504 merged at <code>b0a382f</code>; <code>main</code> carries the two files as <code>67fd3fc</code> and <code>b0a382f</code>, version still <code>1.45.0</code></td><td>gh pr view 504</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2 id="row">The row and its entries</h2>
+<p>Read from the queue file, not from the row's prose. "Draft run" means the entry <code>ping-pong/draft#1</code>, and so
+on. The row's own state moved after the round ended (assistant-2's landing spawn), so the state below is the one at
+read, not the one the acceptance was taken at.</p>
+<div class="tw">
+<table>
+<thead><tr><th>field</th><th>value</th></tr></thead>
+<tbody>
+<tr><td>state</td><td><code>running</code> at read - parked at 05:44:01.538Z, requeued at 05:46:53Z, re-linked at 05:48:04.780Z</td></tr>
+<tr><td>created / started / done</td><td>04:24:13.118Z / 05:48:04.780Z / null</td></tr>
+<tr><td>createdBy / order / attempts</td><td><code>reader</code> / 1 / 0</td></tr>
+<tr><td>thread / threads</td><td><code>...7b4346</code> / <code>7b4346</code>, <code>27c65a</code>, <code>d6e5e4</code>, <code>7d7fd2</code></td></tr>
+<tr><td>project / worktree</td><td><code>agent-worktree-gui</code> / <code>.worktrees/ping-pong-round-5-draft-9f2c41</code></td></tr>
+<tr><td>pipelineRun.stage / enteredAt</td><td><code>draft</code> / 05:37:56.827Z (the loop's re-entry; the round's first stamp, 04:24:23.419Z, survives only as <code>draft#1.at</code>)</td></tr>
+<tr><td>visits / crossings</td><td><code>{draft: 2, critique: 1}</code> / <code>{"H-01": 1, "H-02": 1}</code></td></tr>
+<tr><td>hold / reason</td><td>null / empty - both cleared by the 05:48:04 link; the park's sentence was "ping-pong - draft ended cancelled with no final message - the pipeline waits for a decision rather than re-running the stage"</td></tr>
+</tbody>
+</table>
+</div>
+<div class="tw">
+<table>
+<thead><tr><th>entry</th><th>at</th><th>thread / job</th><th>status</th><th>settledAt</th><th>artifact</th></tr></thead>
+<tbody>
+<tr><td><code>ping-pong/draft#1</code> v1</td><td>04:24:27.758Z</td><td><code>...7b4346</code> / <code>86f9b686</code></td><td class="ok">done</td><td>05:09:17.452Z</td><td><code>ledger/ping-pong/draft.md</code>, commit <code>42656fa</code>, sha256 <code>bdd97511...</code>, blob <code>4a0d9913...</code></td></tr>
+<tr><td><code>ping-pong/critique#1</code> v1</td><td>05:09:17.452Z</td><td><code>...27c65a</code> / <code>569f957f</code></td><td class="ok">done</td><td>05:37:56.827Z</td><td><code>ledger/ping-pong/critique.md</code>, commit <code>5447cf8</code>, sha256 <code>f1b4b7f8...</code>, blob <code>f7df252e...</code></td></tr>
+<tr><td><code>ping-pong/draft#2</code> v2</td><td>05:37:56.827Z</td><td><code>...d6e5e4</code> / <code>bb494b8c</code></td><td class="warnpill">cancelled</td><td>05:44:01.538Z</td><td>none; inputs name the critique by H-02 and the draft again as "earlier"</td></tr>
+<tr><td><code>ping-pong/draft#2</code> v2, again</td><td>05:47:01.049Z</td><td><code>...7d7fd2</code> / <code>ce240516</code></td><td class="bad">null</td><td>null</td><td>the failed start's attempt; decision <code>pipeline-start-refused</code> at 05:47:22.054Z</td></tr>
+</tbody>
+</table>
+</div>
+<p class="small">The third and fourth entries are not gaps in the acceptance. The third is the visit the loop opened after
+<code>H-02</code> was charged, and it ended with a status because the reader cancelled the worker - the drive's failed-run
+branch settles the entry in the same call as the decision (<code>lib/task-pipeline-drive.js:1599-1612</code>). The fourth
+is the attempt the same visit made after assistant-2 requeued the row: the start failed, the entry carries the refusal as
+its decision and no status, and the landing worker's link then wrote its own thread and job onto it. Two entries share
+the id <code>ping-pong/draft#2</code> because the id has no attempt counter (<code>lib/task-pipeline.js:198-204</code>),
+and the link's write matches by stage and visit alone (<code>:295-300</code>) - the defect the round-4 record named, seen
+here inside one row.</p>
+
+<h2 id="did">What the drive did</h2>
+<ul>
+<li><b>Started a stage from a record the panel's own route wrote.</b> The assignment was 4.339 s old when the entry was
+written; the job was 15.951 s behind it. Round 4's park came from a record a person had written by hand; this round's
+record was never touched outside the route.</li>
+<li><b>Wrote the ledger before the worker existed.</b> <code>startingAt</code> and the entry are written in the same pass
+that asks for the start (<code>lib/task-pipeline-drive.js:1868-1906</code>), so a restart between the ask and the link
+still names the attempt. The thread and job were filled in at the link, 27.5 s later.</li>
+<li><b>Held the row live for the whole turn and settled it once.</b> The row stayed <code>running</code> for 42m15.8 s,
+then the entry gained <code>status</code>, <code>settledAt</code>, <code>commit</code>, <code>artifact</code> and
+<code>decision</code> in one write.</li>
+<li><b>Pinned the artifact instead of trusting it.</b> The entry records the file's sha256, its git blob, the blob's
+sha256 and the commit; all four agree with the tree at <code>42656fa</code> (see the evidence table).</li>
+<li><b>Built stage 2's input from the handoff.</b> The critic's prompt names the artifact, the commit, the blob, the
+writer and the edge <code>H-01</code>, and tells it to read the file at that commit. Nothing about the draft was left to
+the critic to infer.</li>
+<li><b>Moved the row itself, twice.</b> queued -&gt; running at the start; running -&gt; critique at the settle with
+<code>visits.critique</code> and <code>crossings["H-01"]</code> written in the same record; critique -&gt; draft visit 2 on
+the loop edge.</li>
+<li><b>Settled a cancelled run properly.</b> The failed branch passed the run's status with the decision, so the entry
+reads <code>cancelled</code> and <code>settledAt</code> and the row is parked with the sentence that says why
+(<code>:1599-1612</code>). 1.585 s after the cancel was recorded.</li>
+</ul>
+
+<h2 id="refused">What it refused or could not do</h2>
+<ul>
+<li><b>It did not ask the gate after the critique.</b> <code>G1</code> carries <code>id</code>, <code>after</code>,
+<code>artifact</code>, <code>decider</code>, <code>verified_by</code> and <code>refuses_when</code>, and no
+<code>decision</code> block. <code>gateAfter</code> requires one, so the gate is invisible to the driver and the loop edge
+is taken by kind order. Measured: <code>crossings["H-02"]</code> 1 and <code>visits.draft</code> 2, with no
+<code>waitingFor</code> gate on the row at any point.</li>
+<li><b>It did not stop the loop.</b> There is no decision record to route "not accepted" back to draft, so the second
+visit is the driver's default out of <code>critique</code>, not the critic's verdict. The cap on <code>H-02</code> is the
+only thing that ends it.</li>
+<li><b>It did not start draft visit 2 the first time.</b> At 05:47:17 the drive asked for a worker, and at 05:47:22 the
+start failed with "the Hermes gateway API is not usable at http://127.0.0.1:8642: This operation was aborted"; the panel
+parked the row with that sentence rather than retrying in the same tick.</li>
+<li><b>It did not keep a park written during a start.</b> Two parks were overwritten by spawn links:
+05:39:23 -&gt; link 05:41:11, and 05:44:01 -&gt; link 05:48:04. <code>linkTaskRun</code> writes
+<code>state: "running"</code> and clears <code>reason</code> and <code>hold</code> without reading the state it is
+overwriting (<code>lib/assistant/queue.js:737</code>, <code>:749-750</code>).</li>
+</ul>
+
+<h2 id="problems">The problems</h2>
+<div class="tw">
+<table>
+<thead><tr><th>#</th><th>problem</th><th>anchor</th><th>measurement</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>A spawn link overwrites a park, and with it the reason and the hold</td><td><code>lib/assistant/queue.js:737</code>, <code>:749-750</code></td><td>two parks, two links: 05:39:23 then 05:41:11; 05:44:01 then 05:48:04</td></tr>
+<tr><td>2</td><td><code>G1</code> cannot be asked: no decision block, so no gate</td><td><code>lib/task-pipeline-drive.js:722-726</code>; bundle <code>ping-pong.gates[0]</code></td><td><code>H-02</code> 1, draft visit 2, no gate wait ever written</td></tr>
+<tr><td>3</td><td>A stale job card delays the settle by minutes</td><td><code>lib/jobs.js</code> reconcile path; panel log</td><td>critique job ended 05:25:04.511, settled 05:37:56.827 - 12m52.3 s, of which 11m35 s was the card reading running</td></tr>
+<tr><td>4</td><td>A stage worker pushes, and this tree had no gate to stop it</td><td><code>.githooks/pre-push</code>; loose per-tree <code>core.hooksPath</code></td><td>PR #504 at <code>1.44.2</code> against main <code>1.45.0</code>, merged 05:53:07Z with main still at <code>1.45.0</code></td></tr>
+<tr><td>5</td><td>The row's <code>enteredAt</code> is the current stage's entry, not the round's start</td><td><code>lib/task-pipeline.js:398-405</code></td><td>reads 05:37:56.827Z; the round began at 04:24:23.419Z</td></tr>
+<tr><td>6</td><td>The park's sentence names the run's ending, not the reader's reason</td><td><code>lib/task-pipeline-drive.js:1601</code></td><td>"draft ended cancelled with no final message" - the cancel and its cause live in the journal, not on the row</td></tr>
+<tr><td>7</td><td>Two entries share one stage-run id, and a link writes onto the wrong one</td><td><code>lib/task-pipeline.js:198-204</code>, <code>:295-300</code></td><td><code>ping-pong/draft#2</code> twice: cancelled 05:44:01.538Z and null at 05:47:01.049Z, the second wearing the landing worker's thread</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>1. A park written during a start is erased by the link</h3>
+<p>At 05:39:23 the reader parked #235; the row read <code>parked</code> with a manual hold and a sentence. At 05:41:11 the
+spawn that had already been asked linked its thread, and <code>linkTaskRun</code> wrote <code>state: "running"</code>,
+<code>reason: ""</code> and <code>hold: null</code> - the park, its sentence and its hold are gone. The same thing happened
+again at 05:48:04, this time on a park the drive had written. The function has no branch for a row that is not
+<code>queued</code>: it is the tail of the start path, and it assumes the row is where the start left it.</p>
+
+<h3>2. The gate after the critique cannot be asked</h3>
+<p>The pipeline's picture draws a verdict after <code>critique</code>, and the critique produced one: nine notes, five
+blocking, "not accepted in this round". The driver never read it. <code>gateAfter</code> finds a gate only when the gate
+object carries <code>decision</code>, and the bundle's <code>G1</code> has none, so the function returns null and the loop
+edge is taken. The critic's verdict is prose in the artifact; the record that would route it does not exist. The round's
+own artifact says the same thing in its closing line: the verdict is a sentence, not a decision.</p>
+
+<h3>3. The settle waits on the card, not on the run</h3>
+<p>The draft's settle lagged 2m17.9 s; the critique's lagged 12m52.3 s. The second number is almost all card: the gateway's
+run ended at 05:25:04.511, but the panel's job card read <code>running</code> until the panel restarted at 05:37:51 and
+reconciled it at 05:37:55. The drive's own tick is 10 s (<code>server.js</code> watchdog) and the sweep is cheap; the wait
+is the card's liveness, not the driver's clock. A panel that never restarted would leave the row live until its next
+reconcile.</p>
+
+<h3>4. The stage worker's push met no version gate</h3>
+<p>The drafter ran <code>git push -u origin HEAD</code> at 05:07:04 and <code>gh pr create --fill</code> twenty seconds
+later. The repo has a <code>pre-push</code> that refuses a bump-worthy branch at a stale version, and the drafter had
+already seen it refuse when run by hand ("branch 1.44.2, base origin/main 1.45.0"). It never ran on the push, because the
+worktree answers no <code>core.hooksPath</code>: the guard is installed per tree by the panel, and this tree was cut by
+hand. PR #504 is now MERGED (05:53:07Z) with one file and an empty body, and <code>main</code> reads
+<code>1.45.0</code> at that merge - no number was spent for a landing that carried two commits. A stage branch is also, by rule 5,
+meant to stay local.</p>
+
+<h3>5. The row's clock answers a different question than the round's</h3>
+<p>After the loop, <code>pipelineRun.enteredAt</code> reads 05:37:56.827Z - the moment the row entered draft visit 2.
+The round began at 04:24:23.419Z, which now survives only as the first entry's <code>at</code>. This is by design
+(<code>enterStage</code> restamps on every entry), but a reader who takes "time in stage" as "time in the round" is off by
+1h13m. The entries are the only place the earlier clock still exists.</p>
+
+<h3>6. The park's sentence does not say who stopped it or why</h3>
+<p>The row's reason reads "ping-pong - draft ended cancelled with no final message - the pipeline waits for a decision
+rather than re-running the stage". That is exactly what the record knows: a run ended without a final message. The
+cancel's cause - the reader stopped the loop's second visit - is in the journal as a queue action, not on the row. A
+reader opening the row afterwards has the ending and not the reason.</p>
+
+<h3>7. One stage-run id, two entries, and a link that wrote onto the wrong one</h3>
+<p><code>ping-pong/draft#2</code> exists twice: the visit that was cancelled at 05:44:01.538Z, and the attempt made when
+assistant-2 requeued the row at 05:47:01.049Z. <code>stageRunId</code> is
+<code>&lt;pipeline&gt;/&lt;stage&gt;#&lt;visit&gt;</code> with no attempt, and <code>settleStageRun</code> matches by stage
+and visit alone, so the landing worker's link at 05:48:04 wrote its own thread <code>...7d7fd2</code> and job
+<code>ce240516</code> onto the second entry - a draft visit no draft worker ran. A reader of the ledger sees one id, two
+outcomes, and a thread that belongs to neither run.</p>
+
+<h2 id="fixes">Ranked fixes</h2>
+<div class="tw">
+<table>
+<thead><tr><th>rank</th><th>fix</th><th>the test it needs</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>linkTaskRun</code> reads the row's state before writing: a row that is <code>parked</code> or
+<code>done</code> keeps its state, its reason and its hold, and the link is recorded without unfastening the row (or the
+caller parks the arriving run with its own sentence)</td><td>a row parked between the start ask and the link stays
+parked, with its reason and hold intact, and the stage entry still names the thread and job</td></tr>
+<tr><td>2</td><td><code>stageRunId</code> carries the attempt (or <code>beginStageRun</code> refuses to append a second
+entry at the same visit), and a link matches the entry by the job it was written for</td><td>a visit that fails and is
+requeued produces two entries with distinct ids; the link writes on the attempt it belongs to, not the settled one</td></tr>
+<tr><td>3</td><td>Give <code>G1</code> a decision block (<code>ledger/gates/G1-{{run_id}}.json</code>, outcomes
+<code>accepted</code> / <code>revise</code>, routes <code>revise -&gt; draft</code>, <code>accepted -&gt; null</code>) so the
+verdict gates the loop instead of the loop taking the default</td><td>a critique with no record parks on the gate; a
+record with <code>revise</code> enters draft once and charges <code>H-02</code>; <code>accepted</code> ends the pipeline</td></tr>
+<tr><td>4</td><td>Reconcile a <code>running</code> card against the gateway's run on the queue's own tick, not only at
+boot</td><td>a job whose gateway run is terminal and whose card says running settles on the next pass, measured against
+<code>GET /v1/runs/&lt;id&gt;</code></td></tr>
+<tr><td>5</td><td>Install the push guard on every tree the panel names, and have the stage start refuse a push from a
+stage branch</td><td>a tree cut by <code>git worktree add</code> answers <code>core.hooksPath</code> after the panel names
+it; a <code>git push</code> from a stage tree is refused with the rule named</td></tr>
+<tr><td>6</td><td>Put the reader's reason on the row when a queue action parks or requeues it, not only in the
+journal</td><td>a park written by a queue action carries the action's sentence on the row's <code>reason</code> beside the
+run's ending</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2 id="limits">What this does not prove</h2>
+<ul>
+<li><b>It does not prove the loop converges.</b> No gate record exists, so "not accepted" has no route; visit 2 is the
+default out of <code>critique</code>, not the critic's verdict. Whether the note improves in a second round is untested -
+the second drafter was cancelled 3m48.8 s in.</li>
+<li><b>It does not prove a live card settles promptly.</b> Stage 2 settled on a restart's reconcile, not on a tick. The
+10 s tick and the 2m18s draft lag are consistent with the card being the delay, but one sample cannot separate the
+card's poll from the driver's pass.</li>
+<li><b>It does not prove the artifacts were landable in the sense the repo means.</b> They did land - PR #504 merged at
+<code>b0a382f</code>, and <code>main</code> carries both files with the same blobs the ledger pinned - but the landing spent
+no version number and <code>main</code> read <code>1.45.0</code> at that merge, and its body is empty. What the round proves is
+that the bytes reached <code>main</code>, not that a pipeline stage's output is a well-formed landing.</li>
+<li><b>It does not prove the push gate's rules in general.</b> Only that this tree had no hook at all. A tree the panel
+booted carries one.</li>
+<li><b>It is one round, one machine, one panel, one restart.</b> The numbers are a reading, not a benchmark.</li>
+</ul>
+
+<h2 id="evidence">The evidence</h2>
+<p>The stores read: <code>~/.wag/state/assistants/assistant-2/queue.json</code> (row #235),
+<code>~/.wag/state/jobs.json</code> (three jobs), <code>~/.wag/state/assistant.json</code> (the journal lines quoted
+above), <code>~/.wag/logs/server.out.log</code> (the restart and the reconcile), and
+<code>~/.wag/state/pipeline-bundle.json</code> (<code>ping-pong</code> and its <code>G1</code>). The tree and the two
+commits are in <code>.worktrees/ping-pong-round-5-draft-9f2c41</code> at <code>5447cf8</code>.</p>
+<div class="tw">
+<table>
+<thead><tr><th>what</th><th>recorded</th><th>read back</th></tr></thead>
+<tbody>
+<tr><td>draft, file sha256</td><td><code>bdd975114c1d550ad7fc875ed2f22fa5097b08e1c73753155beab67edf6e2cb6</code></td><td><code>sha256sum ledger/ping-pong/draft.md</code> - equal</td></tr>
+<tr><td>draft, blob</td><td><code>4a0d99132fac7d7c4b8f84c29b701c5fb6a744ce</code></td><td><code>git rev-parse 42656fa:ledger/ping-pong/draft.md</code> - equal</td></tr>
+<tr><td>draft, blob sha256</td><td><code>4762cc663c0671c8a853cdd82af98db154bdf2cf777a432565ee94f8d4505b4c</code></td><td><code>git show 42656fa:ledger/ping-pong/draft.md | sha256sum</code> - equal</td></tr>
+<tr><td>critique, file sha256</td><td><code>f1b4b7f8a57b5f18561bdf83adc4eff54878a5de1c313e62ede8413756e20a43</code></td><td><code>sha256sum ledger/ping-pong/critique.md</code> - equal</td></tr>
+<tr><td>critique, blob</td><td><code>f7df252e0811b0ef4aafe37057d63718ee9da7d5</code></td><td><code>git rev-parse 5447cf8:ledger/ping-pong/critique.md</code> - equal</td></tr>
+<tr><td>critique, blob sha256</td><td><code>f1b4b7f8a57b5f18561bdf83adc4eff54878a5de1c313e62ede8413756e20a43</code></td><td><code>git show 5447cf8:ledger/ping-pong/critique.md | sha256sum</code> - equal</td></tr>
+<tr><td>the landing</td><td>PR #504 MERGED at 05:53:07Z, merge commit <code>b0a382f</code>; the two commits on <code>main</code> are <code>67fd3fc</code> (draft) and <code>b0a382f</code> (critique)</td><td><code>gh pr view 504 --json state,mergeCommit,mergedAt</code>; <code>git log origin/main -- ledger/ping-pong/</code></td></tr>
+<tr><td>the blobs on <code>main</code></td><td><code>4a0d99132fac...</code> (draft), <code>f7df252e0811...</code> (critique) - the same two the ledger pinned</td><td><code>git rev-parse origin/main:ledger/ping-pong/draft.md origin/main:ledger/ping-pong/critique.md</code> - equal</td></tr>
+<tr><td>the version at <code>main</code></td><td><code>1.45.0</code> before and after the merge</td><td><code>git show origin/main:package.json | jq -r .version</code></td></tr>
+</tbody>
+</table>
+</div>
+<p class="small">The draft's file hash differs from its blob hash because the working copy carries CRLF and the blob does
+not, which is the checkout's own setting; the critique was written LF, so its three hashes coincide. Equal hashes across
+the two pairs are what prove the pins name these files.</p>
+
+<p class="small">Round 4's record is <code>docs/reviews/ping-pong-round-4-2026-11-06.html</code>. This page is round 5's
+and takes its place as the current reading.</p>
+
+</div>
+</body>
+</html>
