@@ -4156,6 +4156,12 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 .as-journal div { padding: 2px 0; border-bottom: 1px solid #1c222b; }
 .as-journal .k { color: #8fb8ff; }
 .as-journal .t { color: var(--dimmer); }
+/* The thread's dim log: the panel's own lines under the assistant's card (a QUEUE row filed here, the Director's
+   outbound QUEUE/MESSAGE lines). The ink is the console's own `.jl-dim` - dimmer and italic - because these are the
+   same kind of line: a record the panel wrote, not the agent's prose. One line per entry, hanging indent so a second
+   line of a long title stays under the first, and no border: the card above already draws the edge. */
+.as-thread-log { margin: 6px 10px 10px; display: flex; flex-direction: column; gap: 2px; font-family: var(--mono); font-size: 10.5px; line-height: 1.45; color: var(--dimmer); font-style: italic; overflow-wrap: anywhere; }
+.as-thread-line { padding-left: 9px; text-indent: -9px; }
 /* ---- the task pipeline window -------------------------------------------------------------------- */
 /* The row's opener: a press, not a chip, because it opens a window. It sits on its own line under the agents so a long
    pipeline id can never squeeze the title out of a 340px rail, and it renders what the RECORD says — the resolved
