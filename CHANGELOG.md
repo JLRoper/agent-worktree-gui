@@ -4,16 +4,30 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.43.8 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.44.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-357 releases from v0.1.0 (2026-10-20) to v1.43.8 (2026-11-06), 1257 commits between the tags. Every release is anchored by an
+358 releases from v0.1.0 (2026-10-20) to v1.44.0 (2026-11-06), 1261 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.44.0 — 2026-11-06 · 4 commits
+
+[`82de359`](https://github.com/JLRoper/agent-worktree-gui/commit/82de3593aa035f9e3f807b5108d34615a6578d87) · [compare v1.43.8...v1.44.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.43.8...v1.44.0)
+
+### Added
+
+- feat: two tiers for discovery and the scan, with an hourly stat gate on old repos ([`82de359`](https://github.com/JLRoper/agent-worktree-gui/commit/82de3593aa035f9e3f807b5108d34615a6578d87))
+
+### Docs & tests
+
+- docs: the tier split's promotion signal, measured ([`af6bd5c`](https://github.com/JLRoper/agent-worktree-gui/commit/af6bd5cc31c2b856c4fc7cc8895cf6b8e262fc2a))
+- docs: render the changelog — 357 releases ([`fc8e6d0`](https://github.com/JLRoper/agent-worktree-gui/commit/fc8e6d007514ac923481128e55d01c390663cadd))
+- docs: correct the gate's per-tier totals to the measured values ([`73def4f`](https://github.com/JLRoper/agent-worktree-gui/commit/73def4fd10204551c4c8302b17bf2b36eea011da))
 
 ## v1.43.8 — 2026-11-06 · 4 commits
 
