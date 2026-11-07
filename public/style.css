@@ -1877,6 +1877,10 @@ select.model-native { display: none; }
 .model-none { padding: 8px; font-size: 12px; }
 /* A turn that answers a subagent delivery: the attribution rides on the turn head, not in the transcript. */
 .turn-origin { flex: none; white-space: nowrap; color: #c8a6ff; border: 1px solid #3d3350; background: #241d33; border-radius: 4px; padding: 0 5px; font-size: 10.5px; }
+/* A turn the panel's watchdog started: the panel reporting a run, not a reply in the conversation. Same box as the
+   origin chip above (size, radius, padding); near-black on grey, so it cannot be read as one of the assistant's own
+   purple chips. */
+.turn-origin.is-watchdog { background: #14171b; border-color: #333a44; color: #b6bec9; }
 .turn-head:hover { color: var(--text); }
 .turn-head:hover .chev { color: var(--text); }
 .job-body > .turn:first-child > .turn-head { margin-top: 4px; border-top: none; }
