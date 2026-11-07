@@ -4,16 +4,41 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.45.4 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.48.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-365 releases from v0.1.0 (2026-10-20) to v1.45.4 (2026-11-07), 1283 commits between the tags. Every release is anchored by an
+367 releases from v0.1.0 (2026-10-20) to v1.48.0 (2026-11-07), 1288 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.48.0 — 2026-11-07 · 2 commits
+
+[`f4fa724`](https://github.com/JLRoper/agent-worktree-gui/commit/f4fa7248aeed762b77b10f2f9f38b78c65af395f) · [compare v1.47.0...v1.48.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.47.0...v1.48.0)
+
+### Added
+
+- feat: a MESSAGE line carries the sender turn's attachments ([`27b159e`](https://github.com/JLRoper/agent-worktree-gui/commit/27b159eaedf184aa81f9c5036075eccd50f3ce4e))
+
+### Other
+
+- chore: 1.48.0 — the version this landing carries ([`f4fa724`](https://github.com/JLRoper/agent-worktree-gui/commit/f4fa7248aeed762b77b10f2f9f38b78c65af395f))
+
+## v1.47.0 — 2026-11-07 · 3 commits
+
+[`057cddf`](https://github.com/JLRoper/agent-worktree-gui/commit/057cddf39e5c6812d9c2598aa145206db9d0f8b5) · [compare v1.45.4...v1.47.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.45.4...v1.47.0)
+
+### Docs & tests
+
+- docs: render the changelog — 365 releases ([`549187e`](https://github.com/JLRoper/agent-worktree-gui/commit/549187e31639546f91cdd642936acc854da85aa1))
+
+### Other
+
+- Fold every turn on the page the pager just left ([`ff8cd8e`](https://github.com/JLRoper/agent-worktree-gui/commit/ff8cd8e64915bdabdae75d2ff3e80feb7473cc4f))
+- chore: 1.47.0 — the version this landing carries ([`057cddf`](https://github.com/JLRoper/agent-worktree-gui/commit/057cddf39e5c6812d9c2598aa145206db9d0f8b5))
 
 ## v1.45.4 — 2026-11-07 · 2 commits
 
