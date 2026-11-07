@@ -114,7 +114,7 @@ kinds of work:
 |---|---|---|
 | **Liveness pass** | 5 s (`liveSeconds`) | for every row: `outsideNestedWorktrees`, newest file edit, the eight memoised signal readers in `lib/activity.js`; a changed row goes through `store.touch()` and paints without flashing |
 | **Row scans** | per row, 5 s / 45 s / 90 s | `enqueueDue` asks `intervalFor(row)` for each row; the three tiers are in the table just below |
-| **Full pass** | `slowSeconds` (300 s), in practice backlog-bound | `projectMeta` → `worktreeList --porcelain` reconcile → every row at `depth: "full"` → re-stamp `dueAfter` |
+| **Full pass** | `slowSeconds` (300 s), in practice backlog-bound | `projectMeta` -> `worktreeList --porcelain` reconcile -> every row at `depth: "full"` -> re-stamp `dueAfter`; the tick runs it for the recent tier only, the boot pass maps every project |
 
 Cadence is the interesting part: `Scheduler.intervalFor(row)` is a small policy function with
 three tiers, and it is re-read on **every tick**, not frozen into the row when it was stamped —
@@ -140,6 +140,24 @@ and drops rows git no longer lists — but only when that call succeeded and ret
 because a transient git hiccup must not blank the table. A row whose folder is gone goes on the
 first pass; one that is still a checkout but unlisted gets a second pass, because that is the shape
 a hiccup takes.
+
+#### The two tiers
+
+The cadence above is per ROW, and it applies to a repository that has committed inside `tierDays` (7). A
+repository past that window is on the OLD tier (`lib/tiers.js`): no row scan, no full pass, no fetch. It gets one
+`stat(2)` of four paths instead - `.git/HEAD`, `.git/index`, `.git/refs/heads`, `.git/logs/HEAD` - once an hour,
+staggered across the hour by a bucket hashed from the project's path, so a minute's slice is a handful of repos
+and never the fleet. Any mtime change promotes it for ONE full discovery probe and one read of its rows; so does
+the reader opening the section (`POST /api/project/open`, reported by `toggleProject`). The probe re-derives the
+tier from the commit it finds: a repo whose commit is now inside the window stays on the sharp cadence, one that
+is still old returns to the gate with a fresh baseline, so the movement that promoted it is not handled twice.
+
+Discovery classifies from each record's own `activityAt` - no git, no stats - and still reuses every known record;
+only a directory new to this machine is probed. A steady-state pass therefore starts no git process at all, and
+the one-time cost (writing the tier book for the fleet) is on the first pass after an upgrade. On this machine
+160 of the 177 projects under the two roots are old, which is where the saving is: the steady-state scan queue
+drops from every row in the fleet to the rows of the 17 recent repos. The page's All/7d button only FILTERS on
+`project.tier`; it holds no window of its own, so the view cannot disagree with the treatment it describes.
 
 ### 3.2 The agent half
 
@@ -285,7 +303,7 @@ agree about which tree a TODO, a lock, a name or a release refers to.
 
 | Noun | Shape | Owner | Lives in |
 |---|---|---|---|
-| **Project** | `{name, path, mainBranch, remote, prRepo, activityAt, empty}` | `lib/projects.js` (discovery), `Store.ensureProject` | memory + `projects.json` cache |
+| **Project** | `{name, path, mainBranch, remote, prRepo, activityAt, empty, tier}` | `lib/projects.js` (discovery), `Store.ensureProject` | memory + `projects.json` cache; `tier` + the stat baseline in `tiers.json` |
 | **Row** | one worktree: branch, head, ahead/behind, verdict, dirty/untracked, `mergeable`, `sync`, `signals`, `scannedAt` | `lib/scan.js` produces, `Store.putRow` assembles | memory |
 | **Job** | one agent run: `{id, thread, status, runId, project, path, prompt, model, usage…}` | `lib/jobs.js` | `jobs.json` |
 | **Thread** | a Hermes session id; a panel thread name *is* the session id | `lib/jobs.js`, `lib/subagents.js` | gateway + `jobs.json` |
@@ -693,6 +711,7 @@ panel. It is where the entropy is; §10 points at the review that measures it.
                  "mainBranch": "main", "prRepo": "JLRoper/agent-worktree-gui",
                  "pushNewBranches": "allow-name-gate", "releaseWorktrees": true }],
   "worktreeSeconds": 5, "midSeconds": 45, "dormantSeconds": 90,
+  "tierDays": 7, "tierBuckets": 60, "tierCheckSeconds": 60,
   "slowSeconds": 300, "collapseAfterSeconds": 30,
   "fetchSeconds": 1800, "liveSeconds": 5,
   "threads": 5, "jobMaxRuntimeSeconds": 7200,
@@ -713,6 +732,11 @@ Two elements of the config shape are architectural rather than incidental:
   the routes that change them rewrite exactly one line, re-read the file, and refuse if it does
   not say what was asked (`lib/hermes-config.js`). Values the panel cannot own are reported, not
   faked.
+- **The tier gate has three keys, and the page reads none of them as a decision.** `tierDays` (7) is the commit
+  window, `tierBuckets` (60) the number of slices in a rotation and `tierCheckSeconds` (60) the length of one, so
+  the default gate checks an old repo once an hour. The panel reports them in every snapshot because the All/7d
+  button's label and sentence quote the window in force; the filter itself is `project.tier`, which discovery
+  stamps. A test can set both to `1` to run a whole rotation on seconds.
 
 ---
 

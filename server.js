@@ -420,6 +420,14 @@ async function loadConfig() {
   // project sections are on screen and only those are re-read - with ~100 projects that is most of the git work
   // the board does. The setting lives in this file so it survives a restart and applies to every browser.
   cfg.scanMode = String(cfg.scanMode || "all").toLowerCase() === "visible" ? "visible" : "all";
+  // The two-tier gate (lib/tiers.js). A repo whose last commit is older than `tierDays` stops being polled: it
+  // is checked by four .git stats once an hour, staggered across the hour in `tierBuckets` slices of
+  // `tierCheckSeconds` each, and a change (or the reader opening the project) promotes it for one full probe.
+  // The knob that decides a repo is old, and the shape of its hour. They live in config.json so a test can run
+  // the rotation on seconds instead of waiting for the wall clock; lib/tiers.js owns the arithmetic.
+  cfg.tierDays = Math.max(1, Number(cfg.tierDays) || 7);
+  cfg.tierBuckets = Math.max(1, Math.floor(Number(cfg.tierBuckets) || 60));
+  cfg.tierCheckSeconds = Math.max(1, Number(cfg.tierCheckSeconds) || 60);
   // Whether an agent may take a tree off this disk by itself once the work has landed: Settings → Board → Agents
   // clean up. It is a VETO above every project, so it can only CLOSE the door — a project still needs its own
   // `releaseWorktrees: true` — and a missing key reads as ON, which is what an install written before this row did.
@@ -631,6 +639,9 @@ const registry = new ProjectRegistry({
   // lib/paths.js — it used to default to a path relative to the process cwd, which a sandbox then shared with the
   // live board while its own seeded rows stayed invisible.
   cacheFile: config.projectsCacheFile,
+  // Each repo's tier and the four mtimes its hourly gate compares. Beside the projects cache and outside every
+  // checkout: it is state, and a restart must resume the hour rather than re-probe the old fleet.
+  tierFile: config.tiersFile,
 });
 let scheduler = new Scheduler({
   config,
@@ -1357,6 +1368,12 @@ const settingsOut = () => ({
   defaultCwd: config.defaultCwd,
   worktreeSource: String(config.discovery?.worktreeSource || "git").toLowerCase(),
   scanMode: config.scanMode === "visible" ? "visible" : "all",
+  // The tier gate's own numbers travel with every snapshot: the page's All/7d button is a VIEW of the server's
+  // tier, so its label and its sentence have to read the window the server actually applies, not a second 7
+  // written into the client.
+  tierDays: config.tierDays,
+  tierBuckets: config.tierBuckets,
+  tierCheckSeconds: config.tierCheckSeconds,
   // Which folders the board scans, as config.json states them, plus whether the fallback is the one in force. It
   // travels with every snapshot for the same reason the column list does: the Settings list is drawn from this fact,
   // and a tab opened before another browser (or a hand edit) moved it has to agree with the file.
@@ -5488,6 +5505,23 @@ const server = createServer(async (req, res) => {
       jobs.clearFinished();
       broadcast({ type: "jobs", jobs: jobs.list() });
       return sendJson(res, 200, { ok: true, jobs: jobs.list() });
+    }
+
+    // The reader opened a project section. That is a promotion signal in its own right (lib/tiers.js): an old
+    // repo is re-probed once and its rows re-read, instead of waiting for its next hourly slice. The read runs in
+    // the background (the page repaints from the SSE row frames), so this answers at once with whether one began.
+    if (route === "/api/project/open" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const name = String(body.project || "").trim();
+      const project = (registry?.projects || []).find((p) => p.name === name);
+      if (!project) return sendJson(res, 404, { error: `no project called '${name}'` });
+      const tier = scheduler.projectTier(project);
+      if (tier === "recent") return sendJson(res, 200, { ok: true, project: name, tier, promoting: false });
+      void scheduler
+        .openProject(name)
+        .catch((e) => log(`tier: opening ${name} failed: ${String((e && e.message) || e)}`));
+      return sendJson(res, 200, { ok: true, project: name, tier, promoting: true });
     }
 
     if (route === "/api/refresh" && req.method === "POST") {

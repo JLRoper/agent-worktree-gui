@@ -543,10 +543,28 @@ function toggleFixed(name) {
   // scroll position of a running turn: nothing is destroyed, the body is only hidden.
 }
 
+// Opening a project is the reader's own promotion signal: the server re-probes an old repo and re-reads its
+// rows when one is opened (POST /api/project/open), so an old section is current the moment it is unfolded
+// instead of waiting up to an hour for its stat slice. Fire and forget - the rows arrive over SSE - and one
+// report per project a minute, so folding and unfolding a section is not a request each time.
+const projectOpenSentAt = new Map();
+function noteProjectOpen(name) {
+  if (!name) return;
+  const now = Date.now();
+  if (now - (projectOpenSentAt.get(name) || 0) < 60000) return;
+  projectOpenSentAt.set(name, now);
+  apiFetch("/api/project/open", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: name }) }, { timeoutMs: 5000 }).catch(() => {
+    /* a missed report only means the section keeps its last-known rows until its next stat slice */
+  });
+}
+
 function toggleProject(name) {
   if (!name) return;
   if (state.expandedProjects.has(name)) state.expandedProjects.delete(name);
-  else state.expandedProjects.add(name);
+  else {
+    state.expandedProjects.add(name);
+    noteProjectOpen(name);
+  }
   saveExpandedProjects();
   scheduleCollapseCascade("project", name, !state.expandedProjects.has(name));
   applyProjectCollapse(name);
@@ -599,6 +617,13 @@ function saveRecentRoots() {
 }
 
 const RECENT_DAYS = 7;
+// The window the SERVER's tier gate uses (`settings.tierDays`). The All/7d button reads it so a config that moves
+// the window moves the button with it; RECENT_DAYS is only the fallback for a snapshot from a build that predates
+// the gate. The page decides no tier itself: `shownInRoot` filters on the server's `project.tier`.
+function recentDays() {
+  const n = Number(state.settings?.tierDays);
+  return Number.isFinite(n) && n > 0 ? n : RECENT_DAYS;
+}
 
 // The chart's top-N collapse. A chart draws the first `chartTopCount` rows of `chartTopOrder` — last activity newest
 // first, then by name — and one arrow at the bottom of that chart lists the rest in that same order. Both halves of
@@ -10931,22 +10956,13 @@ function folderActivity(list) {
   return list && list[0] ? projectActivity(list[0]) : 0;
 }
 
-// "Touched" is deliberately wider than sort order: a commit, a file edit, or any life evidence
-// observed in one of its worktrees. A month-old checkout that an agent is working in right now is
-// touched; a merged tree nobody has opened since spring is not.
-function projectTouchedAt(p) {
-  let best = projectActivity(p);
-  for (const r of state.rows.values()) {
-    if (r.project !== p.name) continue;
-    best = Math.max(best, Date.parse(r.lastAliveAt || "") || 0);
-  }
-  return best;
-}
-
+// A folder's All/7d button is a VIEW of the server's tier, not a second decision: discovery stamps `tier` on
+// every project from its last commit (lib/tiers.js), and this only chooses whether to draw the old ones. The
+// page holds no cutoff and no recency rule of its own, so the view and the treatment cannot disagree; a project
+// with no tier yet (a snapshot from a build before the gate) is drawn, never hidden.
 function shownInRoot(root, projects) {
   if (!state.recentRoots.has(root)) return projects;
-  const cutoff = Date.now() - RECENT_DAYS * 864e5;
-  return projects.filter((p) => projectTouchedAt(p) >= cutoff);
+  return projects.filter((p) => p.tier !== "old");
 }
 
 // Where a project belongs in its folder: a panel agent working there leads, then any live worktree,
@@ -11136,8 +11152,9 @@ function rootChips(projects, hidden = 0) {
   if (unmerged) out.push(`<span class="chip bad">${unmerged} unmerged</span>`);
   if (dirty) out.push(`<span class="chip warn">${dirty} dirty</span>`);
   if (live) out.push(`<span class="chip live">${live} live</span>`);
-  // In "last 7 days" mode the folder is a filtered view, and saying so beats an unexplained short list.
-  if (hidden) out.push(`<span class="chip" title="projects with no commit, edit or life evidence in the last ${RECENT_DAYS} days">${hidden} hidden</span>`);
+  // In "last N days" mode the board shows the server's recent tier: a repo whose last commit is past the window
+  // is on the hourly stat gate and is folded away here. Saying which rule decided it beats an unexplained list.
+  if (hidden) out.push(`<span class="chip" title="projects with no commit in the last ${recentDays()} days - the hourly stat gate reads them once an hour, and opening one reads it now">${hidden} hidden</span>`);
   return out.join("");
 }
 
@@ -11148,8 +11165,8 @@ function rootSection(root, allProjects) {
   const hidden = allProjects.length - projects.length;
   const anyOpen = projects.some((p) => state.expandedProjects.has(p.name));
   const recentTitle = recentOnly
-    ? `showing ${projects.length} of ${allProjects.length} projects — only those touched in the last ${RECENT_DAYS} days; click to show every project`
-    : `showing all ${allProjects.length} projects; click to show only those touched in the last ${RECENT_DAYS} days`;
+    ? `showing ${projects.length} of ${allProjects.length} projects - only those with a commit in the last ${recentDays()} days; click to show every project`
+    : `showing all ${allProjects.length} projects; click to show only those with a commit in the last ${recentDays()} days`;
   return `<section class="root-group${open ? "" : " collapsed"}" data-root="${esc(root)}">
     <div class="root-head" data-toggle-root="${esc(root)}" title="${open ? "collapse" : "expand"} ${esc(labelRoot(root))}">
       <span class="chev">${open ? "\u25be" : "\u25b8"}</span>
@@ -11162,7 +11179,7 @@ function rootSection(root, allProjects) {
         <button type="button" class="root-search-clear${rootFilterValue(root) ? " is-on" : ""}" data-root-search-clear="${esc(root)}" title="clear the filter">\u2715</button>
         <span class="root-count mono${rootFilterValue(root) ? " on" : ""}" data-root-count></span>
       </span>
-      <button type="button" class="btn-root-recent${recentOnly ? " on" : ""}" data-root-recent="${esc(root)}" title="${esc(recentTitle)}">${recentOnly ? `${RECENT_DAYS}d` : "All"}</button>
+      <button type="button" class="btn-root-recent${recentOnly ? " on" : ""}" data-root-recent="${esc(root)}" title="${esc(recentTitle)}">${recentOnly ? `${recentDays()}d` : "All"}</button>
       <button type="button" class="btn-root-collapse" data-root-collapse="${esc(root)}" title="${anyOpen ? "collapse" : "expand"} every project in ${esc(labelRoot(root))} (${projects.length})">${anyOpen ? "Collapse all" : "Expand all"}</button>
       <button type="button" class="btn-root-clone" data-root-clone="${esc(root)}" title="clone a GitHub repo over ssh into ${esc(labelRoot(root))}">+</button>
     </div>
@@ -21702,6 +21719,9 @@ startVisibilityReporting();
     // removed by a later snapshot (heroes-js showed up forever this way on a machine that does
     // not have it). The first snapshot paints the real set.
     await resync();
+    // The sections restored from the last visit are open in front of the reader, so they are reported like a
+    // click: an old repo among them is read now instead of at its next hourly stat slice.
+    for (const name of state.expandedProjects) noteProjectOpen(name);
     connect();
     startAnchorObserver();
     updateColorsRow();
