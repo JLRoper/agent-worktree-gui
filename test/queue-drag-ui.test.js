@@ -1,7 +1,7 @@
 // The queue pane's drag: the order it draws, the drop it refuses, and the one card that wears a badge.
 //
 // The gesture itself lives in listeners and is proved by tools/verify-queue-drag.mjs in a real browser. What this file
-// pins is the half that decides anything — the pure functions the gesture calls, sliced out of public/assistant.js and
+// pins is the half that decides anything — the pure functions the gesture calls, sliced out of public/queue-cards.js and
 // driven against fixtures:
 //
 //   1. `queueSorted` puts the state bucket first (running, queued, parked, done), `order` second, id last — so a
@@ -15,8 +15,8 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { sliceRegion } from "../tools/panel-testkit.mjs";
 
-const assistant = readFileSync(new URL("../public/assistant.js", import.meta.url), "utf8");
-const region = sliceRegion(assistant, "the queue sub-tab");
+const cards = readFileSync(new URL("../public/queue-cards.js", import.meta.url), "utf8");
+const region = sliceRegion(cards, "the queue sub-tab");
 
 const esc = (s) =>
   String(s ?? "")

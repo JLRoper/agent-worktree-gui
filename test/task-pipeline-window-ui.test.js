@@ -55,8 +55,9 @@ const plain = (html) =>
     .replace(/\s+/g, " ")
     .trim();
 
+const cards = readFileSync(new URL("../public/queue-cards.js", import.meta.url), "utf8");
 const windowRegion = sliceRegion(assistant, "the task pipeline window");
-const queueRegion = sliceRegion(assistant, "the queue sub-tab");
+const queueRegion = sliceRegion(cards, "the queue sub-tab");
 
 const buildWindow = () =>
   new Function("esc", "fmtDur", `${windowRegion}\nreturn { pipelineWindowHtml, pipeWindowStageOptions, pipeWindowAssignHtml, pipeWindowElapsedAt, pipeWindowElapsedText, pipeWindowShow, pipeWindowClose, pipeWindowKey, pipeWindowTick, pipeWindowState };`)(esc, fmtDur);
