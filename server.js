@@ -105,6 +105,9 @@ import { Assistant, ASSISTANT_THREAD, ElementChannel, createBridgeChannel } from
 // import and one row in the mount table: the module owns the routes and the wire shape, the Assistant owns the file
 // path and the read-modify-write, and this composition root only hands both of them the transport helpers.
 import { QUEUE_PATH, createQueueRoutes } from "./routes/assistant-queue.js";
+// The delete control's one write: a dry run that names what would go, and the real press that archives the
+// assistant and takes it out of the roster. The module owns the refusals and the archive; this file only mounts it.
+import { DELETE_PATH, createDeleteRoutes } from "./routes/assistant-delete.js";
 // The ticket watch's one route: a door onto `assistant.wake` for the cron poller, which lives outside this process.
 import { createTicketWatchRoutes } from "./lib/ticket-watch.js";
 // The assistant reset: settle an unknown admission through the gateway, then drop this assistant's queued wakes and
@@ -1265,6 +1268,9 @@ const PREFIX_MOUNTS = [
   // The per-assistant task queue (routes/assistant-queue.js). The factory takes the Assistant, which owns each queue's
   // file and its read-modify-write, and the transport helpers this file already imports.
   { prefix: QUEUE_PATH, handles: createQueueRoutes({ assistant, config, sendJson, readBody, authorised }) },
+  // Deleting one assistant (routes/assistant-delete.js). The dry run and the real press are one handler; the
+  // module refuses on live work, archives the four files and writes the roster before the directory goes.
+  { prefix: DELETE_PATH, handles: createDeleteRoutes({ assistant, config, sendJson, readBody, authorised }) },
 ];
 // The reset's route: the gateway client, the store path and the single-flight map live in that module; this file only
 // hands the same transport helpers to it and mounts it below.

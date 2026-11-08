@@ -58,6 +58,11 @@
   // cleared whenever the float opens or the reader changes tab — an armed pair is a question about the tab it was
   // asked on — and `armed` is read back by the row's own painter (renderAssistantSettings).
   const hardRestartArmed = new Set();
+  // WHICH ASSISTANTS' DELETE IS ARMED, and the dry run that armed it. Same reason as the hard restart's set:
+  // the Settings pane is rebuilt on every snapshot, so the question and the archive folder it names have to
+  // live in the float's record rather than on a button that a repaint replaces. Cleared with the hard restart's
+  // set whenever the tab changes, and on a refusal - a refused delete has nothing left to confirm.
+  const deleteArmed = new Map();
   // Every session the page knows about. Before the first /api/assistant answer there is still Assistant #1 — the
   // panel has always had it, and an empty row until a fetch lands reads as a broken float rather than a slow one.
   function sessionRecords() {
@@ -129,7 +134,10 @@
     const next = { ...state.assistantView, ...patch };
     // An armed hard restart is a question the reader has walked out on: changing tab or tab-pane puts every
     // assistant's Cancel/Confirm pair back to a single button before anything repaints.
-    if (next.subTab !== state.assistantView.subTab || next.assistant !== state.assistantView.assistant) hardRestartArmed.clear();
+    if (next.subTab !== state.assistantView.subTab || next.assistant !== state.assistantView.assistant) {
+      hardRestartArmed.clear();
+      deleteArmed.clear();
+    }
     state.assistantView = {
       assistant: tabsNow().includes(next.assistant) ? next.assistant : DEFAULT_VIEW.assistant,
       subTab: SUBTABS.includes(next.subTab) ? next.subTab : DEFAULT_VIEW.subTab,
@@ -175,6 +183,22 @@
           pane.appendChild(s);
         }
         body.insertBefore(pane, body.firstElementChild || null);
+      }
+    }
+    // A record can also LEAVE the roster - the delete control removes one - so the row and the pane follow the
+    // list in both directions. Only session-shaped ids are pruned: LISTS (Role, Watchdog, Bridge) are the
+    // panel's own and never appear in `assistantIds()`.
+    const ids = new Set(assistantIds());
+    if (row) {
+      for (const b of row.querySelectorAll("[data-as-tab]")) {
+        const id = b.dataset.asTab;
+        if (!LISTS.includes(id) && !ids.has(id)) b.remove();
+      }
+    }
+    if (body) {
+      for (const p of body.querySelectorAll(":scope > .as-pane[data-pane]")) {
+        const id = p.dataset.pane;
+        if (!LISTS.includes(id) && !ids.has(id)) p.remove();
       }
     }
   }
@@ -2761,6 +2785,42 @@
   }
   // ---- end the hard restart -----------------------------------------------------------------------
 
+  // ---- delete one assistant: two presses, an archive, and the bottom of its Settings tab ----------
+  //
+  // The destructive pair the hard restart does not cover: a hard restart KEEPS every file, a delete takes
+  // the assistant out of the roster. Drawn only for Assistant #2 and up (#1 is the panel's own session and
+  // the route refuses it by name), and the second press names the assistant and exactly what goes: its
+  // record, its queue, its charter and its notes, which are archived rather than erased.
+  //
+  // The armed state lives in the float's `deleteArmed` map, not on the button: this pane is rebuilt on every
+  // snapshot, and a DOM flag would be replaced under the reader's second press. The map holds the DRY RUN's
+  // plan, so the confirmation can name the archive folder the real press will write.
+  function deleteRowHtml(id, rec, { first = false, armed = false, plan = null, note = "" } = {}) {
+    // Assistant #1 is the panel's own session: the row is not drawn at all, and the route refuses it by name.
+    if (first) return "";
+    const n = String(id).replace(/^assistant-/, "");
+    const who = rec?.name || `Assistant #${n}`;
+    const at = String(plan?.archive?.dir || "");
+    const goes = Array.isArray(plan?.removes) && plan.removes.length ? plan.removes.join(", ") : "record.json, queue.json, charter.md, notes.md";
+    return `
+      <div class="as-group as-delete" data-as-delete-group="${esc(id)}">
+        <h4>Delete this assistant</h4>
+        <div class="as-help">Takes <b>${esc(who)}</b> out of the roster and off this float's tab row. Its <b>record</b>,
+        its <b>queue</b>, its <b>charter</b> and its <b>notes</b> are copied to a timestamped folder under the panel's
+        state directory — not deleted. Its Hermes thread and its transcript stay with the gateway. A live run or an
+        open queue row refuses the delete and says which one; Assistant #1 is the panel's own and has no row here.</div>
+        <div class="as-line">
+          <button type="button" class="as-danger" data-as-delete="${esc(id)}" title="delete ${esc(who)} — two presses, and the second names exactly what is removed"${armed ? " hidden" : ""}>Delete ${esc(who)}…</button>
+          <button type="button" data-as-delete-cancel="${esc(id)}" title="keep ${esc(who)} and close this question"${armed ? "" : " hidden"}>Cancel</button>
+          <button type="button" class="as-danger" data-as-delete-go="${esc(id)}" title="the second press does it: ${esc(who)}'s record, queue, charter and notes are archived and it leaves the roster"${armed ? "" : " hidden"}>Delete ${esc(who)} and archive its record, queue, charter and notes</button>
+          <span class="as-hint" data-as-delete-note="${esc(id)}">${esc(note)}</span>
+        </div>
+        ${armed ? `<div class="as-help" data-as-delete-what="${esc(id)}">Second press: removes <b>${esc(who)}</b> from the roster and archives <b>${esc(goes)}</b>${at ? ` to <code>${esc(at)}</code>` : ""}. Nothing is erased.</div>` : ""}
+        <div class="as-err" id="as-delete-err-${esc(n)}"></div>
+      </div>`;
+  }
+  // ---- end delete one assistant -------------------------------------------------------------------
+
   // ONE ASSISTANT'S OWN SETTINGS.
   //
   // Every control drawn here is read through `settingsFor(id)` in lib/assistant.js out of that assistant's own
@@ -2925,7 +2985,8 @@
       <div class="as-help">The pass clock, the command audit and the per-rule escalation table belong to the panel's
       one watchdog — they are in the <b>Watchdog</b> tab. This assistant's default role prompt is in the <b>Role</b> tab
       and the worktrees it owns are in its <b>Worktrees</b> tab. Its thread is
-      <code>${esc(rec?.threadId || "")}</code>.</div>`;
+      <code>${esc(rec?.threadId || "")}</code>.</div>
+      ${deleteRowHtml(id, rec, { first, armed: deleteArmed.has(id), plan: deleteArmed.get(id) || null, note: String(host.dataset?.deleteNote || "") })}`;
     // The aggressive switch is one control for one mode, and its place is the top of whichever assistant's
     // Settings sub-pane is on screen. Inserted after the pane's markup so a repaint cannot leave a stale copy
     // behind, and painted from the server's state here (a hidden pane's copy is never what the reader sees).
@@ -4508,6 +4569,70 @@
         t.disabled = false;
       }
       renderAssistantSettings(own, true);
+      return;
+    }
+
+    // THE DELETE'S TWO PRESSES. The first is a DRY RUN: it asks the route what a second press would do, so a live
+    // run or an open queue row is refused HERE, in the route's own sentence naming the run or the rows. The plan it
+    // returns is what the confirmation names — the four files and the archive folder. The second press posts once;
+    // the answer's assistant state is applied by asPost, and syncSessionTabs prunes the tab and the pane.
+    if (t.dataset.asDelete) {
+      const own = t.dataset.asDelete;
+      const n = String(own).replace(/^assistant-/, "");
+      const pane = hostFor(own, "settings");
+      t.disabled = true;
+      try {
+        const d = await asPost("/api/assistant/delete", { assistantId: own, dryRun: true });
+        deleteArmed.set(own, d.plan || null);
+        if (pane) pane.dataset.deleteNote = "";
+        setErr(`as-delete-err-${n}`, "");
+      } catch (err) {
+        // A refusal disarms: the route refused before mutating, so a second press would ask the same question and
+        // get the same answer. The sentence is the route's, and it names the run or the rows.
+        deleteArmed.delete(own);
+        if (pane) pane.dataset.deleteNote = err.message;
+        setErr(`as-delete-err-${n}`, err.message);
+      } finally {
+        t.disabled = false;
+      }
+      renderAssistantSettings(own, true);
+      return;
+    }
+
+    if (t.dataset.asDeleteCancel) {
+      const own = t.dataset.asDeleteCancel;
+      deleteArmed.delete(own);
+      const pane = hostFor(own, "settings");
+      if (pane) pane.dataset.deleteNote = "";
+      renderAssistantSettings(own, true);
+      return;
+    }
+
+    if (t.dataset.asDeleteGo) {
+      const own = t.dataset.asDeleteGo;
+      const n = String(own).replace(/^assistant-/, "");
+      t.disabled = true;
+      try {
+        const d = await asPost("/api/assistant/delete", { assistantId: own });
+        deleteArmed.delete(own);
+        showBanner(
+          `${d.removed?.name || "The assistant"} was deleted — its record, queue, charter and notes are archived at ${d.archive?.dir || "the panel's assistant archive"}`,
+        );
+        setErr(`as-delete-err-${n}`, "");
+        // The float may have been ON the deleted assistant: move it to #1 before the next paint, since the tab and
+        // its pane no longer exist by then.
+        if (state.assistantView?.assistant === own) {
+          lastSession = FIRST_ASSISTANT;
+          setView({ assistant: FIRST_ASSISTANT, subTab: "chat" });
+        }
+      } catch (err) {
+        const pane = hostFor(own, "settings");
+        if (pane) pane.dataset.deleteNote = err.message;
+        setErr(`as-delete-err-${n}`, err.message);
+        renderAssistantSettings(own, true);
+      } finally {
+        t.disabled = false;
+      }
       return;
     }
 
