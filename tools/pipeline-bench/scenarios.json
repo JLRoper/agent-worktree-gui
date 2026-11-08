@@ -1,0 +1,191 @@
+{
+  "note": "One scenario per walk. `expect` is the DOCUMENT's answer, not the driver's: the stage order, the visits, the crossings, the end state and the parks are read off bundle.json. `verdicts` is the decider's policy, one outcome per visit of the stage it names — the bench writes the gate's record only after the row has parked on it.",
+  "scenarios": [
+    {
+      "id": "handoff",
+      "pipeline": "bench-handoff",
+      "title": "stage the draft and hand it on",
+      "kind": "handoff",
+      "about": "A sequence handoff: the first stage stages the work, the second receives it, and the row finishes on the last stage's own verdict because its artifact is not a pull request.",
+      "expect": {
+        "starts": [
+          "draft",
+          "stage"
+        ],
+        "visits": {
+          "draft": 1,
+          "stage": 1
+        },
+        "crossings": {
+          "H-01": 1
+        },
+        "end": "done",
+        "reason": "is over at stage"
+      }
+    },
+    {
+      "id": "gate-accept",
+      "pipeline": "bench-gate",
+      "title": "route an accepting review",
+      "kind": "gate",
+      "about": "The review settles with no record, so the row parks on G1; the decider writes accept and the document routes H-02 on to publish. Nothing bounces.",
+      "verdicts": {
+        "review": [
+          "accept"
+        ]
+      },
+      "expect": {
+        "starts": [
+          "draft",
+          "review",
+          "publish"
+        ],
+        "visits": {
+          "draft": 1,
+          "review": 1,
+          "publish": 1
+        },
+        "crossings": {
+          "H-01": 1,
+          "H-02": 1
+        },
+        "end": "done",
+        "parks": [
+          {
+            "stage": "review",
+            "visit": 1,
+            "gate": "G1",
+            "outcome": "accept",
+            "edge": "H-02",
+            "to": "publish"
+          }
+        ],
+        "bounces": []
+      }
+    },
+    {
+      "id": "gate-reject",
+      "pipeline": "bench-gate",
+      "title": "route a rejecting review, then an accepting one",
+      "kind": "gate",
+      "about": "The first review rejects: the row bounces along H-03 to a second draft, is reviewed again, and the second review accepts on to publish. One gate, both outcomes, one bounce.",
+      "verdicts": {
+        "review": [
+          "reject",
+          "accept"
+        ]
+      },
+      "expect": {
+        "starts": [
+          "draft",
+          "review",
+          "draft",
+          "review",
+          "publish"
+        ],
+        "visits": {
+          "draft": 2,
+          "review": 2,
+          "publish": 1
+        },
+        "crossings": {
+          "H-01": 2,
+          "H-02": 1,
+          "H-03": 1
+        },
+        "end": "done",
+        "parks": [
+          {
+            "stage": "review",
+            "visit": 1,
+            "gate": "G1",
+            "outcome": "reject",
+            "edge": "H-03",
+            "to": "draft"
+          },
+          {
+            "stage": "review",
+            "visit": 2,
+            "gate": "G1",
+            "outcome": "accept",
+            "edge": "H-02",
+            "to": "publish"
+          }
+        ],
+        "bounces": [
+          {
+            "gate": "G1",
+            "outcome": "reject",
+            "edge": "H-03",
+            "from": "review",
+            "to": "draft",
+            "visit": 2
+          }
+        ]
+      }
+    },
+    {
+      "id": "queue-behind-live",
+      "pipeline": "bench-queue",
+      "title": "wait behind a live row, then start",
+      "kind": "queue",
+      "about": "The pipeline is filed behind a row that is already running. Three sweeps of the panel's clock must leave it queued with no stage started; when the live row settles, the pipeline starts and walks to done.",
+      "blocker": {
+        "title": "a row that is already running",
+        "thread": "thread-blocker",
+        "job": "job-blocker"
+      },
+      "expect": {
+        "starts": [
+          "queue-a",
+          "queue-b"
+        ],
+        "visits": {
+          "queue-a": 1,
+          "queue-b": 1
+        },
+        "crossings": {
+          "H-01": 1
+        },
+        "end": "done",
+        "queuedBehind": {
+          "row": 1,
+          "stage": "queue-a",
+          "sweeps": 3
+        }
+      }
+    },
+    {
+      "id": "ping-pong",
+      "pipeline": "bench-ping-pong",
+      "title": "ping-pong until the cap stops it",
+      "kind": "ping-pong",
+      "about": "Both edges are capped loops, so the two-way ping-pong must spend two crossings each and park on H-01's cap. Anything past five starts, or a park that names no cap, is the loop this document exists to catch.",
+      "expect": {
+        "starts": [
+          "ping",
+          "pong",
+          "ping",
+          "pong",
+          "ping"
+        ],
+        "maxStarts": 5,
+        "visits": {
+          "ping": 3,
+          "pong": 2
+        },
+        "crossings": {
+          "H-01": 2,
+          "H-02": 2
+        },
+        "end": "parked",
+        "parkedFor": {
+          "kind": "cap",
+          "edge": "H-01",
+          "limit": 2
+        },
+        "reason": "at its cap of 2 rounds"
+      }
+    }
+  ]
+}

@@ -1,0 +1,2288 @@
+{
+ "generatedAt": "2026-11-08T22:43:47.009Z",
+ "bundle": "tools/pipeline-bench/bundle.json",
+ "fixture": "scenarios.json",
+ "scenarios": [
+  "handoff",
+  "gate-accept",
+  "gate-reject",
+  "queue-behind-live",
+  "ping-pong"
+ ],
+ "runs": [
+  {
+   "id": "handoff",
+   "pipeline": "bench-handoff",
+   "title": "stage the draft and hand it on",
+   "kind": "handoff",
+   "about": "A sequence handoff: the first stage stages the work, the second receives it, and the row finishes on the last stage's own verdict because its artifact is not a pull request.",
+   "document": {
+    "stages": [
+     {
+      "id": "draft",
+      "position": 1,
+      "artifact": "bench/draft.md",
+      "writer": "drafter"
+     },
+     {
+      "id": "stage",
+      "position": 2,
+      "artifact": "bench/staged.md",
+      "writer": "stager"
+     }
+    ],
+    "handoffs": [
+     {
+      "id": "H-01",
+      "from": "draft",
+      "to": "stage",
+      "kind": "sequence",
+      "cap": null
+     }
+    ],
+    "gates": []
+   },
+   "row": {
+    "id": 1,
+    "title": "stage the draft and hand it on",
+    "state": "done",
+    "stage": "stage",
+    "via": "H-01",
+    "visits": {
+     "draft": 1,
+     "stage": 1
+    },
+    "crossings": {
+     "H-01": 1
+    },
+    "waitingFor": null,
+    "reason": "pipeline bench-handoff is over at stage — its artifact \"bench-staged\" (bench-staged/1, kind unstated) is not a PR to land, so the row settles on the stage's own verdict"
+   },
+   "tree": "<sandbox>/tree",
+   "cuts": 1,
+   "blocker": null,
+   "queued": null,
+   "started": [
+    {
+     "step": 2,
+     "at": "2026-11-08T12:00:02.000Z",
+     "pipeline": "bench-handoff",
+     "stage": "draft",
+     "visit": 1,
+     "run": "bench-handoff/draft#1",
+     "job": "job-1",
+     "thread": "bench-handoff-1",
+     "artifact": "bench/draft.md",
+     "sha256": "569fa8560f937e8ca7e8e270960a1e1c6744d7170404a9c83b16b48f7ac88679"
+    },
+    {
+     "step": 3,
+     "at": "2026-11-08T12:00:03.000Z",
+     "pipeline": "bench-handoff",
+     "stage": "stage",
+     "visit": 1,
+     "run": "bench-handoff/stage#1",
+     "job": "job-2",
+     "thread": "bench-handoff-2",
+     "artifact": "bench/staged.md",
+     "sha256": "f99aff81e61fc56080c96b8a91ebfab19af9ff68a53031d5abe5417e7b75c991"
+    }
+   ],
+   "stageRuns": [
+    {
+     "id": "bench-handoff/draft#1",
+     "stage": "draft",
+     "visit": 1,
+     "status": "done",
+     "thread": "bench-handoff-1",
+     "job": "job-1",
+     "settledAt": "2026-11-08T12:00:03.000Z",
+     "artifact": {
+      "path": "bench/draft.md",
+      "present": true,
+      "sha256": "569fa8560f937e8ca7e8e270960a1e1c6744d7170404a9c83b16b48f7ac88679",
+      "unchanged": false
+     },
+     "decision": {
+      "trigger": "stage-settled",
+      "code": null,
+      "reason": "bench-handoff · draft settled — the run finished"
+     }
+    },
+    {
+     "id": "bench-handoff/stage#1",
+     "stage": "stage",
+     "visit": 1,
+     "status": "done",
+     "thread": "bench-handoff-2",
+     "job": "job-2",
+     "settledAt": "2026-11-08T12:00:04.000Z",
+     "artifact": {
+      "path": "bench/staged.md",
+      "present": true,
+      "sha256": "f99aff81e61fc56080c96b8a91ebfab19af9ff68a53031d5abe5417e7b75c991",
+      "unchanged": false
+     },
+     "decision": {
+      "trigger": "stage-settled",
+      "code": null,
+      "reason": "bench-handoff · stage settled — the run finished"
+     }
+    }
+   ],
+   "parks": [],
+   "steps": [
+    {
+     "step": 1,
+     "at": "2026-11-08T12:00:01.000Z",
+     "mode": "queue",
+     "state": "queued",
+     "stage": "draft",
+     "via": null,
+     "visits": {
+      "draft": 1
+     },
+     "crossings": {},
+     "waitingFor": null,
+     "reason": null,
+     "starts": 0,
+     "runs": 0,
+     "run": null,
+     "thread": null,
+     "job": null,
+     "decision": null,
+     "from": "queued"
+    },
+    {
+     "step": 2,
+     "at": "2026-11-08T12:00:02.000Z",
+     "mode": "queue",
+     "state": "running",
+     "stage": "draft",
+     "via": null,
+     "visits": {
+      "draft": 1
+     },
+     "crossings": {},
+     "waitingFor": null,
+     "reason": null,
+     "starts": 1,
+     "runs": 1,
+     "run": "bench-handoff/draft#1",
+     "thread": "bench-handoff-1",
+     "job": "job-1",
+     "decision": null,
+     "from": "queued"
+    },
+    {
+     "step": 3,
+     "at": "2026-11-08T12:00:03.000Z",
+     "mode": "queue",
+     "state": "running",
+     "stage": "stage",
+     "via": "H-01",
+     "visits": {
+      "draft": 1,
+      "stage": 1
+     },
+     "crossings": {
+      "H-01": 1
+     },
+     "waitingFor": null,
+     "reason": null,
+     "starts": 2,
+     "runs": 2,
+     "run": "bench-handoff/stage#1",
+     "thread": "bench-handoff-2",
+     "job": "job-2",
+     "decision": null,
+     "from": "running"
+    },
+    {
+     "step": 4,
+     "at": "2026-11-08T12:00:04.000Z",
+     "mode": "queue",
+     "state": "done",
+     "stage": "stage",
+     "via": "H-01",
+     "visits": {
+      "draft": 1,
+      "stage": 1
+     },
+     "crossings": {
+      "H-01": 1
+     },
+     "waitingFor": null,
+     "reason": "pipeline bench-handoff is over at stage — its artifact \"bench-staged\" (bench-staged/1, kind unstated) is not a PR to land, so the row settles on the stage's own verdict",
+     "starts": 2,
+     "runs": 2,
+     "run": "bench-handoff/stage#1",
+     "thread": "bench-handoff-2",
+     "job": "job-2",
+     "decision": "stage-settled",
+     "from": "running"
+    }
+   ],
+   "endedAtStep": 4,
+   "checks": [
+    {
+     "ok": true,
+     "what": "row #1 (bench-handoff) is on the document under test",
+     "detail": "scenario handoff → bench-handoff"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-handoff) started the document's stages in order",
+     "detail": "bench-handoff/draft#1 → bench-handoff/stage#1"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-handoff) staged bench-handoff/draft#1",
+     "detail": "job-1 · bench-handoff-1 · bench/draft.md · 569fa8560f93…"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-handoff) staged bench-handoff/stage#1",
+     "detail": "job-2 · bench-handoff-2 · bench/staged.md · f99aff81e61f…"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-handoff) entered draft 1 time",
+     "detail": "visits {\"draft\":1,\"stage\":1}; expected draft=1"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-handoff) entered stage 1 time",
+     "detail": "visits {\"draft\":1,\"stage\":1}; expected stage=1"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-handoff) crossed H-01 1 time",
+     "detail": "crossings {\"H-01\":1}; expected H-01=1"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-handoff) moved draft → stage along H-01 at step 3",
+     "detail": "sequence · crossing 1"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-handoff) ended done",
+     "detail": "state done at stage; reason: pipeline bench-handoff is over at stage — its artifact \"bench-staged\" (bench-staged/1, kind unstated) is not a PR to land, so the row settles on the stage's own verdict"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-handoff) says what ended it",
+     "detail": "reason: pipeline bench-handoff is over at stage — its artifact \"bench-staged\" (bench-staged/1, kind unstated) is not a PR to land, so the row settles on the stage's own verdict (expected /is over at stage/)"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-handoff) never stalled",
+     "detail": "no queued run of more than two sweeps without a start"
+    }
+   ],
+   "verdicts": {
+    "staged": 2,
+    "gated": 0,
+    "queued": 0,
+    "bounced": 0
+   },
+   "ok": true
+  },
+  {
+   "id": "gate-accept",
+   "pipeline": "bench-gate",
+   "title": "route an accepting review",
+   "kind": "gate",
+   "about": "The review settles with no record, so the row parks on G1; the decider writes accept and the document routes H-02 on to publish. Nothing bounces.",
+   "document": {
+    "stages": [
+     {
+      "id": "draft",
+      "position": 1,
+      "artifact": "bench/draft.md",
+      "writer": "drafter"
+     },
+     {
+      "id": "review",
+      "position": 2,
+      "artifact": "bench/review.md",
+      "writer": "reviewer"
+     },
+     {
+      "id": "publish",
+      "position": 3,
+      "artifact": "bench/published.md",
+      "writer": "publisher"
+     }
+    ],
+    "handoffs": [
+     {
+      "id": "H-01",
+      "from": "draft",
+      "to": "review",
+      "kind": "sequence",
+      "cap": null
+     },
+     {
+      "id": "H-02",
+      "from": "review",
+      "to": "publish",
+      "kind": "sequence",
+      "cap": null
+     },
+     {
+      "id": "H-03",
+      "from": "review",
+      "to": "draft",
+      "kind": "loop",
+      "cap": "2 bounces"
+     }
+    ],
+    "gates": [
+     {
+      "id": "G1",
+      "after": "review",
+      "decision": {
+       "path": "bench/verdict-{{round}}.json",
+       "outcomes": [
+        "accept",
+        "reject"
+       ],
+       "routes": {
+        "accept": "H-02",
+        "reject": "H-03"
+       }
+      }
+     }
+    ]
+   },
+   "row": {
+    "id": 1,
+    "title": "route an accepting review",
+    "state": "done",
+    "stage": "publish",
+    "via": "H-02",
+    "visits": {
+     "draft": 1,
+     "review": 1,
+     "publish": 1
+    },
+    "crossings": {
+     "H-01": 1,
+     "H-02": 1
+    },
+    "waitingFor": null,
+    "reason": "pipeline bench-gate is over at publish — its artifact \"bench-published\" (bench-published/1, kind unstated) is not a PR to land, so the row settles on the stage's own verdict"
+   },
+   "tree": "<sandbox>/tree",
+   "cuts": 1,
+   "blocker": null,
+   "queued": null,
+   "started": [
+    {
+     "step": 2,
+     "at": "2026-11-08T12:00:02.000Z",
+     "pipeline": "bench-gate",
+     "stage": "draft",
+     "visit": 1,
+     "run": "bench-gate/draft#1",
+     "job": "job-1",
+     "thread": "bench-gate-accept-1",
+     "artifact": "bench/draft.md",
+     "sha256": "0f3f6d531da65c3f1f6a1fa549c0373fd7bfe9cf91cd28664cd0b5c16e3ecd93"
+    },
+    {
+     "step": 3,
+     "at": "2026-11-08T12:00:03.000Z",
+     "pipeline": "bench-gate",
+     "stage": "review",
+     "visit": 1,
+     "run": "bench-gate/review#1",
+     "job": "job-2",
+     "thread": "bench-gate-accept-2",
+     "artifact": "bench/review.md",
+     "sha256": "ffd2d20f9196e31f5e8a8eec02aa30317732872501e1f68733f401e7a65baea2"
+    },
+    {
+     "step": 5,
+     "at": "2026-11-08T12:00:05.000Z",
+     "pipeline": "bench-gate",
+     "stage": "publish",
+     "visit": 1,
+     "run": "bench-gate/publish#1",
+     "job": "job-3",
+     "thread": "bench-gate-accept-3",
+     "artifact": "bench/published.md",
+     "sha256": "b0c4d1f27cdb2b797b70b8319c849e74326333616f0983ee673b5876713379ad"
+    }
+   ],
+   "stageRuns": [
+    {
+     "id": "bench-gate/draft#1",
+     "stage": "draft",
+     "visit": 1,
+     "status": "done",
+     "thread": "bench-gate-accept-1",
+     "job": "job-1",
+     "settledAt": "2026-11-08T12:00:03.000Z",
+     "artifact": {
+      "path": "bench/draft.md",
+      "present": true,
+      "sha256": "0f3f6d531da65c3f1f6a1fa549c0373fd7bfe9cf91cd28664cd0b5c16e3ecd93",
+      "unchanged": false
+     },
+     "decision": {
+      "trigger": "stage-settled",
+      "code": null,
+      "reason": "bench-gate · draft settled — the run finished"
+     }
+    },
+    {
+     "id": "bench-gate/review#1",
+     "stage": "review",
+     "visit": 1,
+     "status": "done",
+     "thread": "bench-gate-accept-2",
+     "job": "job-2",
+     "settledAt": "2026-11-08T12:00:04.000Z",
+     "artifact": {
+      "path": "bench/review.md",
+      "present": true,
+      "sha256": "ffd2d20f9196e31f5e8a8eec02aa30317732872501e1f68733f401e7a65baea2",
+      "unchanged": false
+     },
+     "decision": {
+      "trigger": "gate-record",
+      "code": null,
+      "reason": "gate G1 crossed by <sandbox>\\tree\\bench\\verdict-1.json"
+     }
+    },
+    {
+     "id": "bench-gate/publish#1",
+     "stage": "publish",
+     "visit": 1,
+     "status": "done",
+     "thread": "bench-gate-accept-3",
+     "job": "job-3",
+     "settledAt": "2026-11-08T12:00:06.000Z",
+     "artifact": {
+      "path": "bench/published.md",
+      "present": true,
+      "sha256": "b0c4d1f27cdb2b797b70b8319c849e74326333616f0983ee673b5876713379ad",
+      "unchanged": false
+     },
+     "decision": {
+      "trigger": "stage-settled",
+      "code": null,
+      "reason": "bench-gate · publish settled — the run finished"
+     }
+    }
+   ],
+   "parks": [
+    {
+     "step": 4,
+     "stage": "review",
+     "visit": 1,
+     "gate": "G1",
+     "outcome": "accept",
+     "edge": "H-02",
+     "to": "publish",
+     "path": "bench/verdict-1.json",
+     "at": "2026-11-08T12:00:04.000Z"
+    }
+   ],
+   "steps": [
+    {
+     "step": 1,
+     "at": "2026-11-08T12:00:01.000Z",
+     "mode": "queue",
+     "state": "queued",
+     "stage": "draft",
+     "via": null,
+     "visits": {
+      "draft": 1
+     },
+     "crossings": {},
+     "waitingFor": null,
+     "reason": null,
+     "starts": 0,
+     "runs": 0,
+     "run": null,
+     "thread": null,
+     "job": null,
+     "decision": null,
+     "from": "queued"
+    },
+    {
+     "step": 2,
+     "at": "2026-11-08T12:00:02.000Z",
+     "mode": "queue",
+     "state": "running",
+     "stage": "draft",
+     "via": null,
+     "visits": {
+      "draft": 1
+     },
+     "crossings": {},
+     "waitingFor": null,
+     "reason": null,
+     "starts": 1,
+     "runs": 1,
+     "run": "bench-gate/draft#1",
+     "thread": "bench-gate-accept-1",
+     "job": "job-1",
+     "decision": null,
+     "from": "queued"
+    },
+    {
+     "step": 3,
+     "at": "2026-11-08T12:00:03.000Z",
+     "mode": "queue",
+     "state": "running",
+     "stage": "review",
+     "via": "H-01",
+     "visits": {
+      "draft": 1,
+      "review": 1
+     },
+     "crossings": {
+      "H-01": 1
+     },
+     "waitingFor": null,
+     "reason": null,
+     "starts": 2,
+     "runs": 2,
+     "run": "bench-gate/review#1",
+     "thread": "bench-gate-accept-2",
+     "job": "job-2",
+     "decision": null,
+     "from": "running"
+    },
+    {
+     "step": 4,
+     "at": "2026-11-08T12:00:04.000Z",
+     "mode": "queue",
+     "state": "parked",
+     "stage": "review",
+     "via": "H-01",
+     "visits": {
+      "draft": 1,
+      "review": 1
+     },
+     "crossings": {
+      "H-01": 1
+     },
+     "waitingFor": {
+      "kind": "gate",
+      "gate": "G1",
+      "path": "bench/verdict-{{round}}.json",
+      "stage": "review",
+      "since": "2026-11-08T12:00:04.000Z"
+     },
+     "reason": "gate G1 follows stage review and declares a decision record at <sandbox>\\tree\\bench\\verdict-1.json — the code does not decide it, and the record has not been written",
+     "starts": 2,
+     "runs": 2,
+     "run": "bench-gate/review#1",
+     "thread": "bench-gate-accept-2",
+     "job": "job-2",
+     "decision": "stage-settled",
+     "from": "running",
+     "park": {
+      "gate": "G1",
+      "outcome": "accept",
+      "path": "bench/verdict-1.json"
+     }
+    },
+    {
+     "step": 5,
+     "at": "2026-11-08T12:00:05.000Z",
+     "mode": "queue",
+     "state": "running",
+     "stage": "publish",
+     "via": "H-02",
+     "visits": {
+      "draft": 1,
+      "review": 1,
+      "publish": 1
+     },
+     "crossings": {
+      "H-01": 1,
+      "H-02": 1
+     },
+     "waitingFor": null,
+     "reason": null,
+     "starts": 3,
+     "runs": 3,
+     "run": "bench-gate/publish#1",
+     "thread": "bench-gate-accept-3",
+     "job": "job-3",
+     "decision": null,
+     "from": "parked"
+    },
+    {
+     "step": 6,
+     "at": "2026-11-08T12:00:06.000Z",
+     "mode": "queue",
+     "state": "done",
+     "stage": "publish",
+     "via": "H-02",
+     "visits": {
+      "draft": 1,
+      "review": 1,
+      "publish": 1
+     },
+     "crossings": {
+      "H-01": 1,
+      "H-02": 1
+     },
+     "waitingFor": null,
+     "reason": "pipeline bench-gate is over at publish — its artifact \"bench-published\" (bench-published/1, kind unstated) is not a PR to land, so the row settles on the stage's own verdict",
+     "starts": 3,
+     "runs": 3,
+     "run": "bench-gate/publish#1",
+     "thread": "bench-gate-accept-3",
+     "job": "job-3",
+     "decision": "stage-settled",
+     "from": "running"
+    }
+   ],
+   "endedAtStep": 6,
+   "checks": [
+    {
+     "ok": true,
+     "what": "row #1 (bench-gate) is on the document under test",
+     "detail": "scenario gate-accept → bench-gate"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-gate) started the document's stages in order",
+     "detail": "bench-gate/draft#1 → bench-gate/review#1 → bench-gate/publish#1"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-gate) staged bench-gate/draft#1",
+     "detail": "job-1 · bench-gate-accept-1 · bench/draft.md · 0f3f6d531da6…"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-gate) staged bench-gate/review#1",
+     "detail": "job-2 · bench-gate-accept-2 · bench/review.md · ffd2d20f9196…"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-gate) staged bench-gate/publish#1",
+     "detail": "job-3 · bench-gate-accept-3 · bench/published.md · b0c4d1f27cdb…"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-gate) entered draft 1 time",
+     "detail": "visits {\"draft\":1,\"review\":1,\"publish\":1}; expected draft=1"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-gate) entered review 1 time",
+     "detail": "visits {\"draft\":1,\"review\":1,\"publish\":1}; expected review=1"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-gate) entered publish 1 time",
+     "detail": "visits {\"draft\":1,\"review\":1,\"publish\":1}; expected publish=1"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-gate) crossed H-01 1 time",
+     "detail": "crossings {\"H-01\":1,\"H-02\":1}; expected H-01=1"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-gate) crossed H-02 1 time",
+     "detail": "crossings {\"H-01\":1,\"H-02\":1}; expected H-02=1"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-gate) moved draft → review along H-01 at step 3",
+     "detail": "sequence · crossing 1"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-gate) moved review → publish along H-02 at step 5",
+     "detail": "sequence · crossing 1"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-gate) parked on G1 at review#1 and crossed H-02 to publish",
+     "detail": "the decider wrote accept at bench/verdict-1.json during step 4; step 5 reads running at publish via H-02; the gate waited at bench/verdict-{{round}}.json"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-gate) ended done",
+     "detail": "state done at publish; reason: pipeline bench-gate is over at publish — its artifact \"bench-published\" (bench-published/1, kind unstated) is not a PR to land, so the row settles on the stage's own verdict"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-gate) never stalled",
+     "detail": "no queued run of more than two sweeps without a start"
+    }
+   ],
+   "verdicts": {
+    "staged": 3,
+    "gated": 1,
+    "queued": 0,
+    "bounced": 0
+   },
+   "ok": true
+  },
+  {
+   "id": "gate-reject",
+   "pipeline": "bench-gate",
+   "title": "route a rejecting review, then an accepting one",
+   "kind": "gate",
+   "about": "The first review rejects: the row bounces along H-03 to a second draft, is reviewed again, and the second review accepts on to publish. One gate, both outcomes, one bounce.",
+   "document": {
+    "stages": [
+     {
+      "id": "draft",
+      "position": 1,
+      "artifact": "bench/draft.md",
+      "writer": "drafter"
+     },
+     {
+      "id": "review",
+      "position": 2,
+      "artifact": "bench/review.md",
+      "writer": "reviewer"
+     },
+     {
+      "id": "publish",
+      "position": 3,
+      "artifact": "bench/published.md",
+      "writer": "publisher"
+     }
+    ],
+    "handoffs": [
+     {
+      "id": "H-01",
+      "from": "draft",
+      "to": "review",
+      "kind": "sequence",
+      "cap": null
+     },
+     {
+      "id": "H-02",
+      "from": "review",
+      "to": "publish",
+      "kind": "sequence",
+      "cap": null
+     },
+     {
+      "id": "H-03",
+      "from": "review",
+      "to": "draft",
+      "kind": "loop",
+      "cap": "2 bounces"
+     }
+    ],
+    "gates": [
+     {
+      "id": "G1",
+      "after": "review",
+      "decision": {
+       "path": "bench/verdict-{{round}}.json",
+       "outcomes": [
+        "accept",
+        "reject"
+       ],
+       "routes": {
+        "accept": "H-02",
+        "reject": "H-03"
+       }
+      }
+     }
+    ]
+   },
+   "row": {
+    "id": 1,
+    "title": "route a rejecting review, then an accepting one",
+    "state": "done",
+    "stage": "publish",
+    "via": "H-02",
+    "visits": {
+     "draft": 2,
+     "review": 2,
+     "publish": 1
+    },
+    "crossings": {
+     "H-01": 2,
+     "H-03": 1,
+     "H-02": 1
+    },
+    "waitingFor": null,
+    "reason": "pipeline bench-gate is over at publish — its artifact \"bench-published\" (bench-published/1, kind unstated) is not a PR to land, so the row settles on the stage's own verdict"
+   },
+   "tree": "<sandbox>/tree",
+   "cuts": 1,
+   "blocker": null,
+   "queued": null,
+   "started": [
+    {
+     "step": 2,
+     "at": "2026-11-08T12:00:02.000Z",
+     "pipeline": "bench-gate",
+     "stage": "draft",
+     "visit": 1,
+     "run": "bench-gate/draft#1",
+     "job": "job-1",
+     "thread": "bench-gate-reject-1",
+     "artifact": "bench/draft.md",
+     "sha256": "0f3f6d531da65c3f1f6a1fa549c0373fd7bfe9cf91cd28664cd0b5c16e3ecd93"
+    },
+    {
+     "step": 3,
+     "at": "2026-11-08T12:00:03.000Z",
+     "pipeline": "bench-gate",
+     "stage": "review",
+     "visit": 1,
+     "run": "bench-gate/review#1",
+     "job": "job-2",
+     "thread": "bench-gate-reject-2",
+     "artifact": "bench/review.md",
+     "sha256": "ffd2d20f9196e31f5e8a8eec02aa30317732872501e1f68733f401e7a65baea2"
+    },
+    {
+     "step": 5,
+     "at": "2026-11-08T12:00:05.000Z",
+     "pipeline": "bench-gate",
+     "stage": "draft",
+     "visit": 2,
+     "run": "bench-gate/draft#2",
+     "job": "job-3",
+     "thread": "bench-gate-reject-3",
+     "artifact": "bench/draft.md",
+     "sha256": "da492ad635a694eac6ef85a77e5399e4ca8068ca986378b698dbfdbd9531f423"
+    },
+    {
+     "step": 6,
+     "at": "2026-11-08T12:00:06.000Z",
+     "pipeline": "bench-gate",
+     "stage": "review",
+     "visit": 2,
+     "run": "bench-gate/review#2",
+     "job": "job-4",
+     "thread": "bench-gate-reject-4",
+     "artifact": "bench/review.md",
+     "sha256": "4cfe1bfd8e5480287e5006ff44876074061666ee43b6b3fde5deb0c650d7e7bc"
+    },
+    {
+     "step": 8,
+     "at": "2026-11-08T12:00:08.000Z",
+     "pipeline": "bench-gate",
+     "stage": "publish",
+     "visit": 1,
+     "run": "bench-gate/publish#1",
+     "job": "job-5",
+     "thread": "bench-gate-reject-5",
+     "artifact": "bench/published.md",
+     "sha256": "190200318413dbdc9c434db288b0d3f299e51bb0a5a41f7c9e1992f2c0900eb3"
+    }
+   ],
+   "stageRuns": [
+    {
+     "id": "bench-gate/draft#1",
+     "stage": "draft",
+     "visit": 1,
+     "status": "done",
+     "thread": "bench-gate-reject-1",
+     "job": "job-1",
+     "settledAt": "2026-11-08T12:00:03.000Z",
+     "artifact": {
+      "path": "bench/draft.md",
+      "present": true,
+      "sha256": "0f3f6d531da65c3f1f6a1fa549c0373fd7bfe9cf91cd28664cd0b5c16e3ecd93",
+      "unchanged": false
+     },
+     "decision": {
+      "trigger": "stage-settled",
+      "code": null,
+      "reason": "bench-gate · draft settled — the run finished"
+     }
+    },
+    {
+     "id": "bench-gate/review#1",
+     "stage": "review",
+     "visit": 1,
+     "status": "done",
+     "thread": "bench-gate-reject-2",
+     "job": "job-2",
+     "settledAt": "2026-11-08T12:00:04.000Z",
+     "artifact": {
+      "path": "bench/review.md",
+      "present": true,
+      "sha256": "ffd2d20f9196e31f5e8a8eec02aa30317732872501e1f68733f401e7a65baea2",
+      "unchanged": false
+     },
+     "decision": {
+      "trigger": "gate-record",
+      "code": null,
+      "reason": "gate G1 crossed by <sandbox>\\tree\\bench\\verdict-1.json"
+     }
+    },
+    {
+     "id": "bench-gate/draft#2",
+     "stage": "draft",
+     "visit": 2,
+     "status": "done",
+     "thread": "bench-gate-reject-3",
+     "job": "job-3",
+     "settledAt": "2026-11-08T12:00:06.000Z",
+     "artifact": {
+      "path": "bench/draft.md",
+      "present": true,
+      "sha256": "da492ad635a694eac6ef85a77e5399e4ca8068ca986378b698dbfdbd9531f423",
+      "unchanged": false
+     },
+     "decision": {
+      "trigger": "stage-settled",
+      "code": null,
+      "reason": "bench-gate · draft settled — the run finished"
+     }
+    },
+    {
+     "id": "bench-gate/review#2",
+     "stage": "review",
+     "visit": 2,
+     "status": "done",
+     "thread": "bench-gate-reject-4",
+     "job": "job-4",
+     "settledAt": "2026-11-08T12:00:07.000Z",
+     "artifact": {
+      "path": "bench/review.md",
+      "present": true,
+      "sha256": "4cfe1bfd8e5480287e5006ff44876074061666ee43b6b3fde5deb0c650d7e7bc",
+      "unchanged": false
+     },
+     "decision": {
+      "trigger": "gate-record",
+      "code": null,
+      "reason": "gate G1 crossed by <sandbox>\\tree\\bench\\verdict-2.json"
+     }
+    },
+    {
+     "id": "bench-gate/publish#1",
+     "stage": "publish",
+     "visit": 1,
+     "status": "done",
+     "thread": "bench-gate-reject-5",
+     "job": "job-5",
+     "settledAt": "2026-11-08T12:00:09.000Z",
+     "artifact": {
+      "path": "bench/published.md",
+      "present": true,
+      "sha256": "190200318413dbdc9c434db288b0d3f299e51bb0a5a41f7c9e1992f2c0900eb3",
+      "unchanged": false
+     },
+     "decision": {
+      "trigger": "stage-settled",
+      "code": null,
+      "reason": "bench-gate · publish settled — the run finished"
+     }
+    }
+   ],
+   "parks": [
+    {
+     "step": 4,
+     "stage": "review",
+     "visit": 1,
+     "gate": "G1",
+     "outcome": "reject",
+     "edge": "H-03",
+     "to": "draft",
+     "path": "bench/verdict-1.json",
+     "at": "2026-11-08T12:00:04.000Z"
+    },
+    {
+     "step": 7,
+     "stage": "review",
+     "visit": 2,
+     "gate": "G1",
+     "outcome": "accept",
+     "edge": "H-02",
+     "to": "publish",
+     "path": "bench/verdict-2.json",
+     "at": "2026-11-08T12:00:07.000Z"
+    }
+   ],
+   "steps": [
+    {
+     "step": 1,
+     "at": "2026-11-08T12:00:01.000Z",
+     "mode": "queue",
+     "state": "queued",
+     "stage": "draft",
+     "via": null,
+     "visits": {
+      "draft": 1
+     },
+     "crossings": {},
+     "waitingFor": null,
+     "reason": null,
+     "starts": 0,
+     "runs": 0,
+     "run": null,
+     "thread": null,
+     "job": null,
+     "decision": null,
+     "from": "queued"
+    },
+    {
+     "step": 2,
+     "at": "2026-11-08T12:00:02.000Z",
+     "mode": "queue",
+     "state": "running",
+     "stage": "draft",
+     "via": null,
+     "visits": {
+      "draft": 1
+     },
+     "crossings": {},
+     "waitingFor": null,
+     "reason": null,
+     "starts": 1,
+     "runs": 1,
+     "run": "bench-gate/draft#1",
+     "thread": "bench-gate-reject-1",
+     "job": "job-1",
+     "decision": null,
+     "from": "queued"
+    },
+    {
+     "step": 3,
+     "at": "2026-11-08T12:00:03.000Z",
+     "mode": "queue",
+     "state": "running",
+     "stage": "review",
+     "via": "H-01",
+     "visits": {
+      "draft": 1,
+      "review": 1
+     },
+     "crossings": {
+      "H-01": 1
+     },
+     "waitingFor": null,
+     "reason": null,
+     "starts": 2,
+     "runs": 2,
+     "run": "bench-gate/review#1",
+     "thread": "bench-gate-reject-2",
+     "job": "job-2",
+     "decision": null,
+     "from": "running"
+    },
+    {
+     "step": 4,
+     "at": "2026-11-08T12:00:04.000Z",
+     "mode": "queue",
+     "state": "parked",
+     "stage": "review",
+     "via": "H-01",
+     "visits": {
+      "draft": 1,
+      "review": 1
+     },
+     "crossings": {
+      "H-01": 1
+     },
+     "waitingFor": {
+      "kind": "gate",
+      "gate": "G1",
+      "path": "bench/verdict-{{round}}.json",
+      "stage": "review",
+      "since": "2026-11-08T12:00:04.000Z"
+     },
+     "reason": "gate G1 follows stage review and declares a decision record at <sandbox>\\tree\\bench\\verdict-1.json — the code does not decide it, and the record has not been written",
+     "starts": 2,
+     "runs": 2,
+     "run": "bench-gate/review#1",
+     "thread": "bench-gate-reject-2",
+     "job": "job-2",
+     "decision": "stage-settled",
+     "from": "running",
+     "park": {
+      "gate": "G1",
+      "outcome": "reject",
+      "path": "bench/verdict-1.json"
+     }
+    },
+    {
+     "step": 5,
+     "at": "2026-11-08T12:00:05.000Z",
+     "mode": "queue",
+     "state": "running",
+     "stage": "draft",
+     "via": "H-03",
+     "visits": {
+      "draft": 2,
+      "review": 1
+     },
+     "crossings": {
+      "H-01": 1,
+      "H-03": 1
+     },
+     "waitingFor": null,
+     "reason": null,
+     "starts": 3,
+     "runs": 3,
+     "run": "bench-gate/draft#2",
+     "thread": "bench-gate-reject-3",
+     "job": "job-3",
+     "decision": null,
+     "from": "parked"
+    },
+    {
+     "step": 6,
+     "at": "2026-11-08T12:00:06.000Z",
+     "mode": "queue",
+     "state": "running",
+     "stage": "review",
+     "via": "H-01",
+     "visits": {
+      "draft": 2,
+      "review": 2
+     },
+     "crossings": {
+      "H-01": 2,
+      "H-03": 1
+     },
+     "waitingFor": null,
+     "reason": null,
+     "starts": 4,
+     "runs": 4,
+     "run": "bench-gate/review#2",
+     "thread": "bench-gate-reject-4",
+     "job": "job-4",
+     "decision": null,
+     "from": "running"
+    },
+    {
+     "step": 7,
+     "at": "2026-11-08T12:00:07.000Z",
+     "mode": "queue",
+     "state": "parked",
+     "stage": "review",
+     "via": "H-01",
+     "visits": {
+      "draft": 2,
+      "review": 2
+     },
+     "crossings": {
+      "H-01": 2,
+      "H-03": 1
+     },
+     "waitingFor": {
+      "kind": "gate",
+      "gate": "G1",
+      "path": "bench/verdict-{{round}}.json",
+      "stage": "review",
+      "since": "2026-11-08T12:00:07.000Z"
+     },
+     "reason": "gate G1 follows stage review and declares a decision record at <sandbox>\\tree\\bench\\verdict-2.json — the code does not decide it, and the record has not been written",
+     "starts": 4,
+     "runs": 4,
+     "run": "bench-gate/review#2",
+     "thread": "bench-gate-reject-4",
+     "job": "job-4",
+     "decision": "stage-settled",
+     "from": "running",
+     "park": {
+      "gate": "G1",
+      "outcome": "accept",
+      "path": "bench/verdict-2.json"
+     }
+    },
+    {
+     "step": 8,
+     "at": "2026-11-08T12:00:08.000Z",
+     "mode": "queue",
+     "state": "running",
+     "stage": "publish",
+     "via": "H-02",
+     "visits": {
+      "draft": 2,
+      "review": 2,
+      "publish": 1
+     },
+     "crossings": {
+      "H-01": 2,
+      "H-03": 1,
+      "H-02": 1
+     },
+     "waitingFor": null,
+     "reason": null,
+     "starts": 5,
+     "runs": 5,
+     "run": "bench-gate/publish#1",
+     "thread": "bench-gate-reject-5",
+     "job": "job-5",
+     "decision": null,
+     "from": "parked"
+    },
+    {
+     "step": 9,
+     "at": "2026-11-08T12:00:09.000Z",
+     "mode": "queue",
+     "state": "done",
+     "stage": "publish",
+     "via": "H-02",
+     "visits": {
+      "draft": 2,
+      "review": 2,
+      "publish": 1
+     },
+     "crossings": {
+      "H-01": 2,
+      "H-03": 1,
+      "H-02": 1
+     },
+     "waitingFor": null,
+     "reason": "pipeline bench-gate is over at publish — its artifact \"bench-published\" (bench-published/1, kind unstated) is not a PR to land, so the row settles on the stage's own verdict",
+     "starts": 5,
+     "runs": 5,
+     "run": "bench-gate/publish#1",
+     "thread": "bench-gate-reject-5",
+     "job": "job-5",
+     "decision": "stage-settled",
+     "from": "running"
+    }
+   ],
+   "endedAtStep": 9,
+   "checks": [
+    {
+     "ok": true,
+     "what": "row #1 (bench-gate) is on the document under test",
+     "detail": "scenario gate-reject → bench-gate"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-gate) started the document's stages in order",
+     "detail": "bench-gate/draft#1 → bench-gate/review#1 → bench-gate/draft#2 → bench-gate/review#2 → bench-gate/publish#1"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-gate) staged bench-gate/draft#1",
+     "detail": "job-1 · bench-gate-reject-1 · bench/draft.md · 0f3f6d531da6…"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-gate) staged bench-gate/review#1",
+     "detail": "job-2 · bench-gate-reject-2 · bench/review.md · ffd2d20f9196…"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-gate) staged bench-gate/draft#2",
+     "detail": "job-3 · bench-gate-reject-3 · bench/draft.md · da492ad635a6…"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-gate) staged bench-gate/review#2",
+     "detail": "job-4 · bench-gate-reject-4 · bench/review.md · 4cfe1bfd8e54…"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-gate) staged bench-gate/publish#1",
+     "detail": "job-5 · bench-gate-reject-5 · bench/published.md · 190200318413…"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-gate) entered draft 2 times",
+     "detail": "visits {\"draft\":2,\"review\":2,\"publish\":1}; expected draft=2"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-gate) entered review 2 times",
+     "detail": "visits {\"draft\":2,\"review\":2,\"publish\":1}; expected review=2"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-gate) entered publish 1 time",
+     "detail": "visits {\"draft\":2,\"review\":2,\"publish\":1}; expected publish=1"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-gate) crossed H-01 2 times",
+     "detail": "crossings {\"H-01\":2,\"H-03\":1,\"H-02\":1}; expected H-01=2"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-gate) crossed H-02 1 time",
+     "detail": "crossings {\"H-01\":2,\"H-03\":1,\"H-02\":1}; expected H-02=1"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-gate) crossed H-03 1 time",
+     "detail": "crossings {\"H-01\":2,\"H-03\":1,\"H-02\":1}; expected H-03=1"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-gate) moved draft → review along H-01 at step 3",
+     "detail": "sequence · crossing 1"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-gate) moved review → draft along H-03 at step 5",
+     "detail": "loop · cap 2 bounces · crossing 1"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-gate) moved draft → review along H-01 at step 6",
+     "detail": "sequence · crossing 2"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-gate) moved review → publish along H-02 at step 8",
+     "detail": "sequence · crossing 1"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-gate) parked on G1 at review#1 and crossed H-03 to draft",
+     "detail": "the decider wrote reject at bench/verdict-1.json during step 4; step 5 reads running at draft via H-03; the gate waited at bench/verdict-{{round}}.json"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-gate) parked on G1 at review#2 and crossed H-02 to publish",
+     "detail": "the decider wrote accept at bench/verdict-2.json during step 7; step 8 reads running at publish via H-02; the gate waited at bench/verdict-{{round}}.json"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-gate) bounced review → draft along H-03 on \"reject\"",
+     "detail": "step 5: review → draft (visit 2) along loop; crossings {\"H-01\":2,\"H-03\":1,\"H-02\":1}"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-gate) ended done",
+     "detail": "state done at publish; reason: pipeline bench-gate is over at publish — its artifact \"bench-published\" (bench-published/1, kind unstated) is not a PR to land, so the row settles on the stage's own verdict"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-gate) never stalled",
+     "detail": "no queued run of more than two sweeps without a start"
+    }
+   ],
+   "verdicts": {
+    "staged": 5,
+    "gated": 2,
+    "queued": 0,
+    "bounced": 1
+   },
+   "ok": true
+  },
+  {
+   "id": "queue-behind-live",
+   "pipeline": "bench-queue",
+   "title": "wait behind a live row, then start",
+   "kind": "queue",
+   "about": "The pipeline is filed behind a row that is already running. Three sweeps of the panel's clock must leave it queued with no stage started; when the live row settles, the pipeline starts and walks to done.",
+   "document": {
+    "stages": [
+     {
+      "id": "queue-a",
+      "position": 1,
+      "artifact": "bench/a.md",
+      "writer": "worker-a"
+     },
+     {
+      "id": "queue-b",
+      "position": 2,
+      "artifact": "bench/b.md",
+      "writer": "worker-b"
+     }
+    ],
+    "handoffs": [
+     {
+      "id": "H-01",
+      "from": "queue-a",
+      "to": "queue-b",
+      "kind": "sequence",
+      "cap": null
+     }
+    ],
+    "gates": []
+   },
+   "row": {
+    "id": 2,
+    "title": "wait behind a live row, then start",
+    "state": "done",
+    "stage": "queue-b",
+    "via": "H-01",
+    "visits": {
+     "queue-a": 1,
+     "queue-b": 1
+    },
+    "crossings": {
+     "H-01": 1
+    },
+    "waitingFor": null,
+    "reason": "pipeline bench-queue is over at queue-b — its artifact \"bench-b\" (bench-b/1, kind unstated) is not a PR to land, so the row settles on the stage's own verdict"
+   },
+   "tree": "<sandbox>/tree",
+   "cuts": 1,
+   "blocker": {
+    "id": 1,
+    "title": "a row that is already running",
+    "thread": "thread-blocker"
+   },
+   "queued": {
+    "row": 2,
+    "behind": {
+     "id": 1,
+     "title": "a row that is already running",
+     "thread": "thread-blocker",
+     "state": "running"
+    },
+    "sweeps": 3,
+    "stage": "queue-a",
+    "startsDuring": 0,
+    "stateAtRelease": "queued",
+    "reasonAtRelease": null,
+    "releasedAtStep": 4
+   },
+   "started": [
+    {
+     "step": 6,
+     "at": "2026-11-08T12:00:06.000Z",
+     "pipeline": "bench-queue",
+     "stage": "queue-a",
+     "visit": 1,
+     "run": "bench-queue/queue-a#1",
+     "job": "job-1",
+     "thread": "bench-queue-behind-live-1",
+     "artifact": "bench/a.md",
+     "sha256": "eddc988bbe62dfe777c631eacb6389575b209cb61ee9ef6e2db7303d4bc3213b"
+    },
+    {
+     "step": 7,
+     "at": "2026-11-08T12:00:07.000Z",
+     "pipeline": "bench-queue",
+     "stage": "queue-b",
+     "visit": 1,
+     "run": "bench-queue/queue-b#1",
+     "job": "job-2",
+     "thread": "bench-queue-behind-live-2",
+     "artifact": "bench/b.md",
+     "sha256": "bbbe2c545ba4df59f206c04574e8a65d088d7df24461eabbc83ad9118c2815b0"
+    }
+   ],
+   "stageRuns": [
+    {
+     "id": "bench-queue/queue-a#1",
+     "stage": "queue-a",
+     "visit": 1,
+     "status": "done",
+     "thread": "bench-queue-behind-live-1",
+     "job": "job-1",
+     "settledAt": "2026-11-08T12:00:07.000Z",
+     "artifact": {
+      "path": "bench/a.md",
+      "present": true,
+      "sha256": "eddc988bbe62dfe777c631eacb6389575b209cb61ee9ef6e2db7303d4bc3213b",
+      "unchanged": false
+     },
+     "decision": {
+      "trigger": "stage-settled",
+      "code": null,
+      "reason": "bench-queue · queue-a settled — the run finished"
+     }
+    },
+    {
+     "id": "bench-queue/queue-b#1",
+     "stage": "queue-b",
+     "visit": 1,
+     "status": "done",
+     "thread": "bench-queue-behind-live-2",
+     "job": "job-2",
+     "settledAt": "2026-11-08T12:00:08.000Z",
+     "artifact": {
+      "path": "bench/b.md",
+      "present": true,
+      "sha256": "bbbe2c545ba4df59f206c04574e8a65d088d7df24461eabbc83ad9118c2815b0",
+      "unchanged": false
+     },
+     "decision": {
+      "trigger": "stage-settled",
+      "code": null,
+      "reason": "bench-queue · queue-b settled — the run finished"
+     }
+    }
+   ],
+   "parks": [],
+   "steps": [
+    {
+     "step": 1,
+     "at": "2026-11-08T12:00:01.000Z",
+     "mode": "blocked",
+     "state": "queued",
+     "stage": "queue-a",
+     "via": null,
+     "visits": {
+      "queue-a": 1
+     },
+     "crossings": {},
+     "waitingFor": null,
+     "reason": null,
+     "starts": 0,
+     "runs": 0,
+     "run": null,
+     "thread": null,
+     "job": null,
+     "decision": null,
+     "from": "queued"
+    },
+    {
+     "step": 2,
+     "at": "2026-11-08T12:00:02.000Z",
+     "mode": "blocked",
+     "state": "queued",
+     "stage": "queue-a",
+     "via": null,
+     "visits": {
+      "queue-a": 1
+     },
+     "crossings": {},
+     "waitingFor": null,
+     "reason": null,
+     "starts": 0,
+     "runs": 0,
+     "run": null,
+     "thread": null,
+     "job": null,
+     "decision": null,
+     "from": "queued"
+    },
+    {
+     "step": 3,
+     "at": "2026-11-08T12:00:03.000Z",
+     "mode": "blocked",
+     "state": "queued",
+     "stage": "queue-a",
+     "via": null,
+     "visits": {
+      "queue-a": 1
+     },
+     "crossings": {},
+     "waitingFor": null,
+     "reason": null,
+     "starts": 0,
+     "runs": 0,
+     "run": null,
+     "thread": null,
+     "job": null,
+     "decision": null,
+     "from": "queued"
+    },
+    {
+     "step": 4,
+     "at": "2026-11-08T12:00:04.000Z",
+     "mode": "queue",
+     "state": "queued",
+     "stage": "queue-a",
+     "via": null,
+     "visits": {
+      "queue-a": 1
+     },
+     "crossings": {},
+     "waitingFor": null,
+     "reason": null,
+     "starts": 0,
+     "runs": 0,
+     "run": null,
+     "thread": null,
+     "job": null,
+     "decision": null,
+     "from": "queued"
+    },
+    {
+     "step": 5,
+     "at": "2026-11-08T12:00:05.000Z",
+     "mode": "queue",
+     "state": "queued",
+     "stage": "queue-a",
+     "via": null,
+     "visits": {
+      "queue-a": 1
+     },
+     "crossings": {},
+     "waitingFor": null,
+     "reason": null,
+     "starts": 0,
+     "runs": 0,
+     "run": null,
+     "thread": null,
+     "job": null,
+     "decision": null,
+     "from": "queued"
+    },
+    {
+     "step": 6,
+     "at": "2026-11-08T12:00:06.000Z",
+     "mode": "queue",
+     "state": "running",
+     "stage": "queue-a",
+     "via": null,
+     "visits": {
+      "queue-a": 1
+     },
+     "crossings": {},
+     "waitingFor": null,
+     "reason": null,
+     "starts": 1,
+     "runs": 1,
+     "run": "bench-queue/queue-a#1",
+     "thread": "bench-queue-behind-live-1",
+     "job": "job-1",
+     "decision": null,
+     "from": "queued"
+    },
+    {
+     "step": 7,
+     "at": "2026-11-08T12:00:07.000Z",
+     "mode": "queue",
+     "state": "running",
+     "stage": "queue-b",
+     "via": "H-01",
+     "visits": {
+      "queue-a": 1,
+      "queue-b": 1
+     },
+     "crossings": {
+      "H-01": 1
+     },
+     "waitingFor": null,
+     "reason": null,
+     "starts": 2,
+     "runs": 2,
+     "run": "bench-queue/queue-b#1",
+     "thread": "bench-queue-behind-live-2",
+     "job": "job-2",
+     "decision": null,
+     "from": "running"
+    },
+    {
+     "step": 8,
+     "at": "2026-11-08T12:00:08.000Z",
+     "mode": "queue",
+     "state": "done",
+     "stage": "queue-b",
+     "via": "H-01",
+     "visits": {
+      "queue-a": 1,
+      "queue-b": 1
+     },
+     "crossings": {
+      "H-01": 1
+     },
+     "waitingFor": null,
+     "reason": "pipeline bench-queue is over at queue-b — its artifact \"bench-b\" (bench-b/1, kind unstated) is not a PR to land, so the row settles on the stage's own verdict",
+     "starts": 2,
+     "runs": 2,
+     "run": "bench-queue/queue-b#1",
+     "thread": "bench-queue-behind-live-2",
+     "job": "job-2",
+     "decision": "stage-settled",
+     "from": "running"
+    }
+   ],
+   "endedAtStep": 8,
+   "checks": [
+    {
+     "ok": true,
+     "what": "row #2 (bench-queue) is on the document under test",
+     "detail": "scenario queue-behind-live → bench-queue"
+    },
+    {
+     "ok": true,
+     "what": "row #2 (bench-queue) started the document's stages in order",
+     "detail": "bench-queue/queue-a#1 → bench-queue/queue-b#1"
+    },
+    {
+     "ok": true,
+     "what": "row #2 (bench-queue) staged bench-queue/queue-a#1",
+     "detail": "job-1 · bench-queue-behind-live-1 · bench/a.md · eddc988bbe62…"
+    },
+    {
+     "ok": true,
+     "what": "row #2 (bench-queue) staged bench-queue/queue-b#1",
+     "detail": "job-2 · bench-queue-behind-live-2 · bench/b.md · bbbe2c545ba4…"
+    },
+    {
+     "ok": true,
+     "what": "row #2 (bench-queue) entered queue-a 1 time",
+     "detail": "visits {\"queue-a\":1,\"queue-b\":1}; expected queue-a=1"
+    },
+    {
+     "ok": true,
+     "what": "row #2 (bench-queue) entered queue-b 1 time",
+     "detail": "visits {\"queue-a\":1,\"queue-b\":1}; expected queue-b=1"
+    },
+    {
+     "ok": true,
+     "what": "row #2 (bench-queue) crossed H-01 1 time",
+     "detail": "crossings {\"H-01\":1}; expected H-01=1"
+    },
+    {
+     "ok": true,
+     "what": "row #2 (bench-queue) moved queue-a → queue-b along H-01 at step 7",
+     "detail": "sequence · crossing 1"
+    },
+    {
+     "ok": true,
+     "what": "row #2 (bench-queue) waited behind #1 for 3 sweeps at queue-a",
+     "detail": "waited 3 sweep(s) at queue-a; 0 start(s) while #1 (thread-blocker) was running; the row read queued at release; first start bench-queue/queue-a#1"
+    },
+    {
+     "ok": true,
+     "what": "row #2 (bench-queue) started nothing while it was blocked",
+     "detail": "step 1: queued at queue-a (0 start(s)); step 2: queued at queue-a (0 start(s)); step 3: queued at queue-a (0 start(s))"
+    },
+    {
+     "ok": true,
+     "what": "row #2 (bench-queue) ended done",
+     "detail": "state done at queue-b; reason: pipeline bench-queue is over at queue-b — its artifact \"bench-b\" (bench-b/1, kind unstated) is not a PR to land, so the row settles on the stage's own verdict"
+    },
+    {
+     "ok": true,
+     "what": "row #2 (bench-queue) never stalled",
+     "detail": "no queued run of more than two sweeps without a start"
+    }
+   ],
+   "verdicts": {
+    "staged": 2,
+    "gated": 0,
+    "queued": 3,
+    "bounced": 0
+   },
+   "ok": true
+  },
+  {
+   "id": "ping-pong",
+   "pipeline": "bench-ping-pong",
+   "title": "ping-pong until the cap stops it",
+   "kind": "ping-pong",
+   "about": "Both edges are capped loops, so the two-way ping-pong must spend two crossings each and park on H-01's cap. Anything past five starts, or a park that names no cap, is the loop this document exists to catch.",
+   "document": {
+    "stages": [
+     {
+      "id": "ping",
+      "position": 1,
+      "artifact": "bench/ping.md",
+      "writer": "pinger"
+     },
+     {
+      "id": "pong",
+      "position": 2,
+      "artifact": "bench/pong.md",
+      "writer": "ponger"
+     }
+    ],
+    "handoffs": [
+     {
+      "id": "H-01",
+      "from": "ping",
+      "to": "pong",
+      "kind": "loop",
+      "cap": "2 rounds"
+     },
+     {
+      "id": "H-02",
+      "from": "pong",
+      "to": "ping",
+      "kind": "loop",
+      "cap": "2 rounds"
+     }
+    ],
+    "gates": []
+   },
+   "row": {
+    "id": 1,
+    "title": "ping-pong until the cap stops it",
+    "state": "parked",
+    "stage": "ping",
+    "via": "H-02",
+    "visits": {
+     "ping": 3,
+     "pong": 2
+    },
+    "crossings": {
+     "H-01": 2,
+     "H-02": 2
+    },
+    "waitingFor": {
+     "kind": "cap",
+     "edge": "H-01",
+     "from": "ping",
+     "to": "pong",
+     "limit": 2,
+     "used": 2,
+     "stage": "ping",
+     "since": "2026-11-08T12:00:07.000Z"
+    },
+    "reason": "the loop H-01 (ping → pong) is at its cap of 2 rounds — 2 crossings already taken, so the row stops here for a decision"
+   },
+   "tree": "<sandbox>/tree",
+   "cuts": 1,
+   "blocker": null,
+   "queued": null,
+   "started": [
+    {
+     "step": 2,
+     "at": "2026-11-08T12:00:02.000Z",
+     "pipeline": "bench-ping-pong",
+     "stage": "ping",
+     "visit": 1,
+     "run": "bench-ping-pong/ping#1",
+     "job": "job-1",
+     "thread": "bench-ping-pong-1",
+     "artifact": "bench/ping.md",
+     "sha256": "d289e3cc54e74ca66fdcffbfff66e0a50434fd403f58c1af68b1a5758213b59b"
+    },
+    {
+     "step": 3,
+     "at": "2026-11-08T12:00:03.000Z",
+     "pipeline": "bench-ping-pong",
+     "stage": "pong",
+     "visit": 1,
+     "run": "bench-ping-pong/pong#1",
+     "job": "job-2",
+     "thread": "bench-ping-pong-2",
+     "artifact": "bench/pong.md",
+     "sha256": "582d6d4d388f971a361ec6f65735860e813206b0bd7128fedc7ae050d09a046e"
+    },
+    {
+     "step": 4,
+     "at": "2026-11-08T12:00:04.000Z",
+     "pipeline": "bench-ping-pong",
+     "stage": "ping",
+     "visit": 2,
+     "run": "bench-ping-pong/ping#2",
+     "job": "job-3",
+     "thread": "bench-ping-pong-3",
+     "artifact": "bench/ping.md",
+     "sha256": "5402a1ce0ee89fb178c2681200de3993402c27e6ed04a9e1332929c73c4ab281"
+    },
+    {
+     "step": 5,
+     "at": "2026-11-08T12:00:05.000Z",
+     "pipeline": "bench-ping-pong",
+     "stage": "pong",
+     "visit": 2,
+     "run": "bench-ping-pong/pong#2",
+     "job": "job-4",
+     "thread": "bench-ping-pong-4",
+     "artifact": "bench/pong.md",
+     "sha256": "43fdc48a8b968f515a5f13aa6f7f0b214bcccd8c1a3608e727b00282b11cbdd6"
+    },
+    {
+     "step": 6,
+     "at": "2026-11-08T12:00:06.000Z",
+     "pipeline": "bench-ping-pong",
+     "stage": "ping",
+     "visit": 3,
+     "run": "bench-ping-pong/ping#3",
+     "job": "job-5",
+     "thread": "bench-ping-pong-5",
+     "artifact": "bench/ping.md",
+     "sha256": "010c1e78a8e90000eece31228dacce6160cf59bf4a79a0b73cfce82238d378ef"
+    }
+   ],
+   "stageRuns": [
+    {
+     "id": "bench-ping-pong/ping#1",
+     "stage": "ping",
+     "visit": 1,
+     "status": "done",
+     "thread": "bench-ping-pong-1",
+     "job": "job-1",
+     "settledAt": "2026-11-08T12:00:03.000Z",
+     "artifact": {
+      "path": "bench/ping.md",
+      "present": true,
+      "sha256": "d289e3cc54e74ca66fdcffbfff66e0a50434fd403f58c1af68b1a5758213b59b",
+      "unchanged": false
+     },
+     "decision": {
+      "trigger": "stage-settled",
+      "code": null,
+      "reason": "bench-ping-pong · ping settled — the run finished"
+     }
+    },
+    {
+     "id": "bench-ping-pong/pong#1",
+     "stage": "pong",
+     "visit": 1,
+     "status": "done",
+     "thread": "bench-ping-pong-2",
+     "job": "job-2",
+     "settledAt": "2026-11-08T12:00:04.000Z",
+     "artifact": {
+      "path": "bench/pong.md",
+      "present": true,
+      "sha256": "582d6d4d388f971a361ec6f65735860e813206b0bd7128fedc7ae050d09a046e",
+      "unchanged": false
+     },
+     "decision": {
+      "trigger": "stage-settled",
+      "code": null,
+      "reason": "bench-ping-pong · pong settled — the run finished"
+     }
+    },
+    {
+     "id": "bench-ping-pong/ping#2",
+     "stage": "ping",
+     "visit": 2,
+     "status": "done",
+     "thread": "bench-ping-pong-3",
+     "job": "job-3",
+     "settledAt": "2026-11-08T12:00:05.000Z",
+     "artifact": {
+      "path": "bench/ping.md",
+      "present": true,
+      "sha256": "5402a1ce0ee89fb178c2681200de3993402c27e6ed04a9e1332929c73c4ab281",
+      "unchanged": false
+     },
+     "decision": {
+      "trigger": "stage-settled",
+      "code": null,
+      "reason": "bench-ping-pong · ping settled — the run finished"
+     }
+    },
+    {
+     "id": "bench-ping-pong/pong#2",
+     "stage": "pong",
+     "visit": 2,
+     "status": "done",
+     "thread": "bench-ping-pong-4",
+     "job": "job-4",
+     "settledAt": "2026-11-08T12:00:06.000Z",
+     "artifact": {
+      "path": "bench/pong.md",
+      "present": true,
+      "sha256": "43fdc48a8b968f515a5f13aa6f7f0b214bcccd8c1a3608e727b00282b11cbdd6",
+      "unchanged": false
+     },
+     "decision": {
+      "trigger": "stage-settled",
+      "code": null,
+      "reason": "bench-ping-pong · pong settled — the run finished"
+     }
+    },
+    {
+     "id": "bench-ping-pong/ping#3",
+     "stage": "ping",
+     "visit": 3,
+     "status": "done",
+     "thread": "bench-ping-pong-5",
+     "job": "job-5",
+     "settledAt": "2026-11-08T12:00:07.000Z",
+     "artifact": {
+      "path": "bench/ping.md",
+      "present": true,
+      "sha256": "010c1e78a8e90000eece31228dacce6160cf59bf4a79a0b73cfce82238d378ef",
+      "unchanged": false
+     },
+     "decision": {
+      "trigger": "cap",
+      "code": "pipeline-cap",
+      "reason": "the loop H-01 (ping → pong) is at its cap of 2 rounds — 2 crossings already taken, so the row stops here for a decision"
+     }
+    }
+   ],
+   "parks": [],
+   "steps": [
+    {
+     "step": 1,
+     "at": "2026-11-08T12:00:01.000Z",
+     "mode": "queue",
+     "state": "queued",
+     "stage": "ping",
+     "via": null,
+     "visits": {
+      "ping": 1
+     },
+     "crossings": {},
+     "waitingFor": null,
+     "reason": null,
+     "starts": 0,
+     "runs": 0,
+     "run": null,
+     "thread": null,
+     "job": null,
+     "decision": null,
+     "from": "queued"
+    },
+    {
+     "step": 2,
+     "at": "2026-11-08T12:00:02.000Z",
+     "mode": "queue",
+     "state": "running",
+     "stage": "ping",
+     "via": null,
+     "visits": {
+      "ping": 1
+     },
+     "crossings": {},
+     "waitingFor": null,
+     "reason": null,
+     "starts": 1,
+     "runs": 1,
+     "run": "bench-ping-pong/ping#1",
+     "thread": "bench-ping-pong-1",
+     "job": "job-1",
+     "decision": null,
+     "from": "queued"
+    },
+    {
+     "step": 3,
+     "at": "2026-11-08T12:00:03.000Z",
+     "mode": "queue",
+     "state": "running",
+     "stage": "pong",
+     "via": "H-01",
+     "visits": {
+      "ping": 1,
+      "pong": 1
+     },
+     "crossings": {
+      "H-01": 1
+     },
+     "waitingFor": null,
+     "reason": null,
+     "starts": 2,
+     "runs": 2,
+     "run": "bench-ping-pong/pong#1",
+     "thread": "bench-ping-pong-2",
+     "job": "job-2",
+     "decision": null,
+     "from": "running"
+    },
+    {
+     "step": 4,
+     "at": "2026-11-08T12:00:04.000Z",
+     "mode": "queue",
+     "state": "running",
+     "stage": "ping",
+     "via": "H-02",
+     "visits": {
+      "ping": 2,
+      "pong": 1
+     },
+     "crossings": {
+      "H-01": 1,
+      "H-02": 1
+     },
+     "waitingFor": null,
+     "reason": null,
+     "starts": 3,
+     "runs": 3,
+     "run": "bench-ping-pong/ping#2",
+     "thread": "bench-ping-pong-3",
+     "job": "job-3",
+     "decision": null,
+     "from": "running"
+    },
+    {
+     "step": 5,
+     "at": "2026-11-08T12:00:05.000Z",
+     "mode": "queue",
+     "state": "running",
+     "stage": "pong",
+     "via": "H-01",
+     "visits": {
+      "ping": 2,
+      "pong": 2
+     },
+     "crossings": {
+      "H-01": 2,
+      "H-02": 1
+     },
+     "waitingFor": null,
+     "reason": null,
+     "starts": 4,
+     "runs": 4,
+     "run": "bench-ping-pong/pong#2",
+     "thread": "bench-ping-pong-4",
+     "job": "job-4",
+     "decision": null,
+     "from": "running"
+    },
+    {
+     "step": 6,
+     "at": "2026-11-08T12:00:06.000Z",
+     "mode": "queue",
+     "state": "running",
+     "stage": "ping",
+     "via": "H-02",
+     "visits": {
+      "ping": 3,
+      "pong": 2
+     },
+     "crossings": {
+      "H-01": 2,
+      "H-02": 2
+     },
+     "waitingFor": null,
+     "reason": null,
+     "starts": 5,
+     "runs": 5,
+     "run": "bench-ping-pong/ping#3",
+     "thread": "bench-ping-pong-5",
+     "job": "job-5",
+     "decision": null,
+     "from": "running"
+    },
+    {
+     "step": 7,
+     "at": "2026-11-08T12:00:07.000Z",
+     "mode": "queue",
+     "state": "parked",
+     "stage": "ping",
+     "via": "H-02",
+     "visits": {
+      "ping": 3,
+      "pong": 2
+     },
+     "crossings": {
+      "H-01": 2,
+      "H-02": 2
+     },
+     "waitingFor": {
+      "kind": "cap",
+      "edge": "H-01",
+      "from": "ping",
+      "to": "pong",
+      "limit": 2,
+      "used": 2,
+      "stage": "ping",
+      "since": "2026-11-08T12:00:07.000Z"
+     },
+     "reason": "the loop H-01 (ping → pong) is at its cap of 2 rounds — 2 crossings already taken, so the row stops here for a decision",
+     "starts": 5,
+     "runs": 5,
+     "run": "bench-ping-pong/ping#3",
+     "thread": "bench-ping-pong-5",
+     "job": "job-5",
+     "decision": "cap",
+     "from": "running"
+    }
+   ],
+   "endedAtStep": 7,
+   "checks": [
+    {
+     "ok": true,
+     "what": "row #1 (bench-ping-pong) is on the document under test",
+     "detail": "scenario ping-pong → bench-ping-pong"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-ping-pong) started the document's stages in order",
+     "detail": "bench-ping-pong/ping#1 → bench-ping-pong/pong#1 → bench-ping-pong/ping#2 → bench-ping-pong/pong#2 → bench-ping-pong/ping#3"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-ping-pong) staged bench-ping-pong/ping#1",
+     "detail": "job-1 · bench-ping-pong-1 · bench/ping.md · d289e3cc54e7…"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-ping-pong) staged bench-ping-pong/pong#1",
+     "detail": "job-2 · bench-ping-pong-2 · bench/pong.md · 582d6d4d388f…"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-ping-pong) staged bench-ping-pong/ping#2",
+     "detail": "job-3 · bench-ping-pong-3 · bench/ping.md · 5402a1ce0ee8…"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-ping-pong) staged bench-ping-pong/pong#2",
+     "detail": "job-4 · bench-ping-pong-4 · bench/pong.md · 43fdc48a8b96…"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-ping-pong) staged bench-ping-pong/ping#3",
+     "detail": "job-5 · bench-ping-pong-5 · bench/ping.md · 010c1e78a8e9…"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-ping-pong) entered ping 3 times",
+     "detail": "visits {\"ping\":3,\"pong\":2}; expected ping=3"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-ping-pong) entered pong 2 times",
+     "detail": "visits {\"ping\":3,\"pong\":2}; expected pong=2"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-ping-pong) crossed H-01 2 times",
+     "detail": "crossings {\"H-01\":2,\"H-02\":2}; expected H-01=2"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-ping-pong) crossed H-02 2 times",
+     "detail": "crossings {\"H-01\":2,\"H-02\":2}; expected H-02=2"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-ping-pong) moved ping → pong along H-01 at step 3",
+     "detail": "loop · cap 2 rounds · crossing 1"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-ping-pong) moved pong → ping along H-02 at step 4",
+     "detail": "loop · cap 2 rounds · crossing 1"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-ping-pong) moved ping → pong along H-01 at step 5",
+     "detail": "loop · cap 2 rounds · crossing 2"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-ping-pong) moved pong → ping along H-02 at step 6",
+     "detail": "loop · cap 2 rounds · crossing 2"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-ping-pong) ended parked",
+     "detail": "state parked at ping; reason: the loop H-01 (ping → pong) is at its cap of 2 rounds — 2 crossings already taken, so the row stops here for a decision"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-ping-pong) says what ended it",
+     "detail": "reason: the loop H-01 (ping → pong) is at its cap of 2 rounds — 2 crossings already taken, so the row stops here for a decision (expected /at its cap of 2 rounds/)"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-ping-pong) parked on cap H-01 at 2",
+     "detail": "waitingFor {\"kind\":\"cap\",\"edge\":\"H-01\",\"from\":\"ping\",\"to\":\"pong\",\"limit\":2,\"used\":2,\"stage\":\"ping\",\"since\":\"2026-11-08T12:00:07.000Z\"}; reason: the loop H-01 (ping → pong) is at its cap of 2 rounds — 2 crossings already taken, so the row stops here for a decision"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-ping-pong) stayed inside its bound of 5 starts",
+     "detail": "5 start(s): bench-ping-pong/ping#1 → bench-ping-pong/pong#1 → bench-ping-pong/ping#2 → bench-ping-pong/pong#2 → bench-ping-pong/ping#3; the walk ended at step 7 (parked)"
+    },
+    {
+     "ok": true,
+     "what": "row #1 (bench-ping-pong) never stalled",
+     "detail": "no queued run of more than two sweeps without a start"
+    }
+   ],
+   "verdicts": {
+    "staged": 5,
+    "gated": 0,
+    "queued": 0,
+    "bounced": 0
+   },
+   "ok": true
+  }
+ ]
+}
