@@ -1,0 +1,165 @@
+{
+ "assistantId": "assistant-2",
+ "plan": {
+  "version": 1,
+  "ops": [
+   {
+    "op": "merge",
+    "from": [
+     "b51d40ee",
+     "3d661fe2",
+     "a65db958",
+     "248a9487",
+     "b1d77961",
+     "06e7066f"
+    ],
+    "text": "Judge landing by CONTENT against the branch's PARENT, never ancestry, commit counts or a worker's done message: git diff the touched files. A squash rewrites SHAs so AHEAD never zeroes; `MERGED (N commits)` is a receipt. Done is not landed until the PR reads MERGED and origin/main moved.",
+    "safety": false
+   },
+   {
+    "op": "merge",
+    "from": [
+     "e3f2a020",
+     "205dbcc7",
+     "ceebc516",
+     "a60a69dd"
+    ],
+    "text": "GitHub repos land by PR only, never a local merge or a push to main: agent-worktree-gui's gate is `gh pr merge <n> --rebase --admin`, and a sub-task merges into its feature branch. SEFL Bitbucket never pushes master - one feature branch and ONE reviewed PR. Here remoteBranchPolicy is allow, so a wtgui/* worker may push.",
+    "safety": false
+   },
+   {
+    "op": "merge",
+    "from": [
+     "5a3083a2",
+     "a79b69c6",
+     "92574f20",
+     "074c57ac",
+     "21fa5721"
+    ],
+    "text": "Never cut a worktree to compare, export or clean up: use git archive or git show. A tree is deleted the moment its work is in its parent, after `git rev-list --count <parent>..HEAD`; a RELEASE line is a request, not an eviction - it is only a worker's final line for its own tree, and proof it is done, never that the tree is gone.",
+    "safety": false
+   },
+   {
+    "op": "merge",
+    "from": [
+     "ec5090a7",
+     "5acc2ee2"
+    ],
+    "text": "After a restart assess EVERY session by end state, tree and final message, and re-issue only the ones it killed - no outcome and no endedAt, or running with a dead run id. Never re-issue a reader-cancelled run, a 402 credits or 429 concurrency failure, or a finished one.",
+    "safety": false
+   },
+   {
+    "op": "merge",
+    "from": [
+     "5b9c0b85",
+     "4b4e0bc6"
+    ],
+    "text": "Re-attach a killed session through its EXITED or NOT-RUNNING chip, the continue path and not a new spawn, only when the tree still holds work. Resolve a killed run first: GET /v1/runs/{old_id}, then resolve-unknown with its admission_id and execution_generation, then re-issue once.",
+    "safety": false
+   },
+   {
+    "op": "merge",
+    "from": [
+     "f930bc32",
+     "563e58b4",
+     "da688bd4"
+    ],
+    "text": "A quiet run is stalled, not slow, only when its last event is a completed tool result, no child of its tree is alive and no approval is open; a quiet npm test proves nothing. The panel will not reap it: the reader cancels and the thread continues, never a TO. A failed row is judged by outcome.reason and its tree, never the status word.",
+    "safety": false
+   },
+   {
+    "op": "merge",
+    "from": [
+     "5092163d",
+     "2db83f5d"
+    ],
+    "text": "The gateway denies an approval at 600s and a working worker simply re-asks, so a row parked on approval every ~10 minutes is looping on expiry, not stalled. A live --test child proves a healthy run only when its start time matches the launch; leaked children outlive their run by hours.",
+    "safety": false
+   },
+   {
+    "op": "merge",
+    "from": [
+     "157dbf62",
+     "bf273d58"
+    ],
+    "text": "An approval `/api/approvals` does not list is not a card: confirm approvals empty, `approvalDone` null and the transcript line, then cancel and re-issue only the unfinished step. An api_server approval is not a person seeing it - record it as unsanctioned, never relay 'approved'.",
+    "safety": false
+   },
+   {
+    "op": "merge",
+    "from": [
+     "f2e7c533",
+     "56c403b9"
+    ],
+    "text": "A SPAWN line is not a started worker: read /api/jobs (never logs/jobs.json) within 2 minutes for a running job in that tree, then name the thread and job id; an unclicked card is waiting for a click, and say how many are stacked.",
+    "safety": false
+   },
+   {
+    "op": "merge",
+    "from": [
+     "0ba6fcd2",
+     "1981abda"
+    ],
+    "text": "A fix brief names exactly one endpoint, once: stop at the commit and report the SHA, or push, open a PR and land it - never both. When the next step is genuinely ambiguous, ask the reader a short question with numbered options instead of guessing or staying silent; never invent a task to look busy.",
+    "safety": false
+   },
+   {
+    "op": "merge",
+    "from": [
+     "3fc43b5d",
+     "b0426cd0"
+    ],
+    "text": "oauth2-multi remediation is LOCAL ONLY: cut every implementation branch from turnover branch 20260710_1338_DMR-39015_authorizationCodeFlowPCKE, merge it back locally with a fast-forward, never push it and never open its PR. Never push that turnover branch at all - its history carries a real JWT private key and OKTA_CLIENT_SECRET_VALUE in 25 commits.",
+    "safety": true
+   },
+   {
+    "op": "charter",
+    "id": "3bc54874",
+    "because": "a SPAWN decision detail, not an every-turn answer"
+   },
+   {
+    "op": "charter",
+    "id": "4c27cdd2",
+    "because": "only matters while a restart is being judged"
+   },
+   {
+    "op": "charter",
+    "id": "62bf5ee2",
+    "because": "worker-side diagnosis, read when a loop alert fires"
+   },
+   {
+    "op": "charter",
+    "id": "6dcf300d",
+    "because": "a landing edge case"
+   },
+   {
+    "op": "charter",
+    "id": "70695257",
+    "because": "worker-side diagnosis, read when a loop alert fires"
+   },
+   {
+    "op": "charter",
+    "id": "360b57a3",
+    "because": "a project-config artefact, not an every-turn answer"
+   },
+   {
+    "op": "drop",
+    "id": "587f332a",
+    "because": "a stray fragment, not a rule"
+   },
+   {
+    "op": "rewrite",
+    "from": [
+     "0f49e2bb"
+    ],
+    "text": "Never write U+2014 or U+2013 anywhere - replies, commits, PR titles and bodies, comments, docs, logs or shell output. Use a plain ASCII hyphen; those characters become mojibake under cp1252.",
+    "safety": true
+   },
+   {
+    "op": "prompt",
+    "from": [],
+    "text": "You are Assistant #2 on the Agent Manager role: you watch the board and never do the work or start a worker yourself. Read your queue before the board on every wake. A worker's done message is never proof: judge landing by content against the branch's parent, and a row by its outcome and its tree. When the next step is ambiguous, ask the reader a short numbered question. Reply short - a digest, not an essay."
+   }
+  ]
+ }
+}

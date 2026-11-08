@@ -1,0 +1,134 @@
+{
+ "assistantId": "assistant-3",
+ "plan": {
+  "version": 1,
+  "ops": [
+   {
+    "op": "merge",
+    "from": [
+     "0f424040",
+     "5aaae7cf"
+    ],
+    "text": "GitHub-remote repos land by PR only, never a local merge or a push to main; agent-worktree-gui has no Jenkins - its gate is `gh pr merge <n> --rebase --admin`, then pull and restart only if server.js, lib/** or public/** changed. A sub-task merges into its feature branch and the feature lands as ONE PR.",
+    "safety": false
+   },
+   {
+    "op": "rewrite",
+    "from": [
+     "25dd92b1"
+    ],
+    "text": "SEFL Bitbucket: never push master, never merge locally. Deliver one feature branch plus ONE PR to master, reviewed by code_review_java; the title is `Java Code Review for <repo> <branch>`, and add code_review_java_dal for a DAL change.",
+    "safety": false
+   },
+   {
+    "op": "merge",
+    "from": [
+     "6d64cb30",
+     "7effd91f"
+    ],
+    "text": "oauth2-multi remediation is LOCAL ONLY: implementation branches are cut from turnover branch 20260710_1338_DMR-39015_authorizationCodeFlowPCKE, merged back locally with a fast-forward, never pushed and never given a PR. Never push that turnover branch for any task - its history carries a real JWT private key.",
+    "safety": true
+   },
+   {
+    "op": "merge",
+    "from": [
+     "b220dfb0",
+     "c8587554",
+     "2ebea9f1",
+     "121e2492"
+    ],
+    "text": "Judge landing against the branch's PARENT by content (git diff the touched files), never ancestry or a worker's done message. A squash rewrites SHAs, so judge by tree equality and AHEAD never zeroes; `git branch -D` only after the PR reads MERGED. A done run is not finished until the PR reads MERGED and origin/main moved.",
+    "safety": false
+   },
+   {
+    "op": "merge",
+    "from": [
+     "ca23a83c",
+     "21e5c90f"
+    ],
+    "text": "Cut a SPAWN or new branch from the repo's current HEAD, and review a branch by cutting from THAT branch and verifying rev-parse/log -1. An empty branch is not evidence work landed: measure the tree (git status --porcelain, added lines) before judging, and never remove a tree holding the only copy.",
+    "safety": false
+   },
+   {
+    "op": "merge",
+    "from": [
+     "444fee49",
+     "2ed1a837"
+    ],
+    "text": "Delete a worktree the moment its work is in its parent, same turn, after `git rev-list --count <parent>..HEAD`; never cut a worktree to compare or export a branch (git archive or git show). A RELEASE line is a request, not an eviction: a worker may write it only for its own tree, and the panel acts after settle.",
+    "safety": false
+   },
+   {
+    "op": "merge",
+    "from": [
+     "4c247a60",
+     "c43e1d3d",
+     "9b46d45b"
+    ],
+    "text": "A SPAWN line is not a started worker: check /api/jobs (never logs/jobs.json) within 2 minutes for a running job in that tree, then name the thread and job id. A fix brief names exactly one endpoint - stop at the commit, or push, PR and land - and an ambiguous next step is a short numbered question.",
+    "safety": false
+   },
+   {
+    "op": "merge",
+    "from": [
+     "eade91df",
+     "d0ef82a8"
+    ],
+    "text": "After a restart assess EVERY session by end state, tree and final message, and re-issue only the ones it killed; never a reader-cancelled run, a 402/429 failure or a finished one. A failed row is judged by outcome.reason and its tree, never the status word - max_turns means the turns ran out mid-task.",
+    "safety": false
+   },
+   {
+    "op": "merge",
+    "from": [
+     "590962f3",
+     "409399ed",
+     "2a2abe93"
+    ],
+    "text": "Re-attach a killed session through its EXITED or NOT-RUNNING chip, not a new spawn, only if the tree holds work; resolve a killed run via GET /v1/runs/{id} and resolve-unknown first, then re-issue once. A restart is proved by a changed pid and start_time, never by a turn.",
+    "safety": false
+   },
+   {
+    "op": "merge",
+    "from": [
+     "b9ee44a4",
+     "b97ab0b4"
+    ],
+    "text": "A quiet run is stalled only when its last event is a completed tool result, no child of its tree is alive and no approval is open; a quiet npm test, especially piped through grep, proves nothing. The panel will not reap it: the reader cancels and the thread continues, never a TO.",
+    "safety": false
+   },
+   {
+    "op": "merge",
+    "from": [
+     "bd4d20aa",
+     "853a9b34",
+     "5f128752"
+    ],
+    "text": "An approval /api/approvals does not list is not a card (approvals empty, approvalDone null, the transcript line): cancel and re-issue only the unfinished step. The gateway denies at 600s and a working worker re-asks, so a row parked every ~10 min is looping. A live --test child counts only if its start matches the launch.",
+    "safety": false
+   },
+   {
+    "op": "charter",
+    "id": "8574444c",
+    "because": "worker-side diagnosis, read when a loop alert fires"
+   },
+   {
+    "op": "charter",
+    "id": "15cab06c",
+    "because": "worker-side diagnosis, read when a loop alert fires"
+   },
+   {
+    "op": "charter",
+    "id": "57d028c1",
+    "because": "a project-config artefact, read when a row shows it"
+   },
+   {
+    "op": "rewrite",
+    "from": [
+     "af0b26cb"
+    ],
+    "text": "Never write U+2014 or U+2013 anywhere: replies, commits, PR titles and bodies, comments, docs, logs, shell output. Use a plain ASCII hyphen, and state that the count is zero.",
+    "safety": true
+   }
+  ]
+ }
+}
