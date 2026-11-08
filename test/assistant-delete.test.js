@@ -23,7 +23,7 @@ import test from "node:test";
 import { Assistant } from "../lib/assistant.js";
 import { PRIMARY_ASSISTANT } from "../lib/assistants.js";
 import { createDeleteRoutes } from "../routes/assistant-delete.js";
-import { sliceRegion } from "../tools/panel-testkit.mjs";
+import { post, sliceRegion, startPanel } from "../tools/panel-testkit.mjs";
 
 // One panel over a temp state directory, with two extra assistants (#2 and #3) and a job store the test can
 // fill. Nothing is started: no sentry clock, no wake timer, no socket.
@@ -185,6 +185,31 @@ test("Assistant #1 and an unknown id are refused by name", async (t) => {
   assert.match(missing.payload.error, /no such assistant/);
 
   assert.equal(assistant.assistants.length, 3, "neither refusal moved the roster");
+});
+
+test("the route is mounted by the real server: a dry run names the plan and the real press drops the tab", async (t) => {
+  const panel = await startPanel({});
+  t.after(() => panel.stop());
+
+  const created = await post(panel.base, "/api/assistant/assistants", { body: { roleId: "agent-manager" } });
+  assert.equal(created.status, 201, created.text.slice(0, 300));
+  const id = created.json.created.id;
+
+  const dry = await post(panel.base, "/api/assistant/delete", { body: { assistantId: id, dryRun: true } });
+  assert.equal(dry.status, 200, dry.text.slice(0, 300));
+  assert.equal(dry.json.dryRun, true);
+  assert.equal(dry.json.plan.id, id);
+  assert.deepEqual(dry.json.plan.removes, ["record.json", "queue.json", "charter.md", "notes.md"]);
+  assert.ok(existsSync(dry.json.plan.archive.dir) === false, "a dry run writes no folder");
+
+  const real = await post(panel.base, "/api/assistant/delete", { body: { assistantId: id } });
+  assert.equal(real.status, 200, real.text.slice(0, 300));
+  assert.ok(existsSync(real.json.archive.dir), "the archive exists after the delete");
+  assert.equal(real.json.assistant.assistants.some((a) => a.id === id), false, "the answer's state is the new roster");
+
+  const after = await fetch(`${panel.base}/api/assistant`).then((r) => r.json());
+  assert.equal(after.assistants.some((a) => a.id === id), false, "a fresh read of the panel no longer carries it");
+  assert.equal(after.assistants.some((a) => a.id === PRIMARY_ASSISTANT), true, "Assistant #1 is still there");
 });
 
 test("the row is absent for Assistant #1 and its second press names the assistant and the four removals", async () => {
