@@ -77,10 +77,9 @@ import {
 import { installGuard, uninstallGuard, guardState, refreshGuardFiles, normTree } from "./lib/push-guard.js";
 import { safeUrl, openerFor, openerForFolder, chromeFor } from "./lib/open-url.js";
 import { errorStatus } from "./lib/errors.js";
-import { readSkillsIndex } from "./lib/skills.js";
 // The Matrix bridge's process lifecycle (start / stop / liveness / one --self-test). The protocol itself is the
 // standalone Python program's; this module only ever owns a child process, its pid file and its log.
-import { MatrixBridge, matrixBlock, matrixConfig, matrixPatchFrom } from "./lib/matrix-bridge.js";
+import { MatrixBridge, matrixConfig } from "./lib/matrix-bridge.js";
 // The Bridge tab's policy: one markdown file in the panel's state folder, served at /api/matrix/policy and
 // carried into the bridge turn by the next reader. It is NOT bridge.env and never sits beside the script.
 import { MatrixPolicyStore, matrixPolicyTemplate } from "./lib/matrix-policy.js";
@@ -89,19 +88,10 @@ import { MatrixPolicyStore, matrixPolicyTemplate } from "./lib/matrix-policy.js"
 // here can add, complete, re-word and delete a reminder but can never write a watch (lib/matrix-reminders.js
 // `apply` refuses those keys before it touches the file).
 import { MatrixRemindersStore } from "./lib/matrix-reminders.js";
-import { readPermissions } from "./lib/gateway-permissions.js";
-import {
-  approvalState, writeApprovalTimeout, APPROVAL_TIMEOUT_MIN, APPROVAL_TIMEOUT_MAX,
-  clarifyWindowSeconds, approvalWindowSeconds,
-  sessionSettings, writeSessionListLimit, SESSION_LIST_MIN, SESSION_LIST_MAX,
-  providerState, writeProviderSettings,
-} from "./lib/hermes-config.js";
-// The named (URL, key) pairs the Gateway tab applies. The store lives in the panel's state folder and its keys
-// never leave this process: Apply reads one here and hands it straight to writeProviderSettings above.
-import { listProfiles, saveProfile, deleteProfile, profileWithKey } from "./lib/provider-profiles.js";
+import { clarifyWindowSeconds, approvalWindowSeconds } from "./lib/hermes-config.js";
 import { hermesSessionTail } from "./lib/activity.js";
 import { Assistant, ASSISTANT_THREAD, ElementChannel, createBridgeChannel } from "./lib/assistant.js";
-import { DOCK_MODES, pickDock } from "./lib/assistant/config.js";
+import { pickDock } from "./lib/assistant/config.js";
 // The per-assistant task queue's prefix, cut into routes/ (step 8 of docs/reports/module-map-2026-11-07.html). One
 // import and one row in the mount table: the module owns the routes and the wire shape, the Assistant owns the file
 // path and the read-modify-write, and this composition root only hands both of them the transport helpers.
@@ -132,6 +122,11 @@ import { createPipelineCatalogueRoutes } from "./lib/task-pipeline-assign.js";
 // edits and the one save that replaces it now live in one module, mounted from the table. The store and the logger
 // are this file's own and travel in; the catalogue's own readers come with the module.
 import { PIPELINES_PATH, createPipelinesRoutes } from "./routes/pipelines.js";
+// The settings prefix, lifted out of this file's own chain beside the other three: the twenty-six answers the
+// Settings panel makes, in three runs of the chain, now live in one module mounted from the table. The live config,
+// the stores and this file's own setters stay here and travel in; the transport helpers come from
+// lib/http/respond.js, as they do for every other row.
+import { SETTINGS_PATH, createSettingsRoutes } from "./routes/settings.js";
 // Importing a studio export into that bundle: an APPEND by pipeline id, refusing a duplicate id by name. The write side
 // of the loader, mounted with the two reads because all three answer about the one file.
 import { createPipelineBundleImportRoutes } from "./lib/pipeline-bundle-import.js";
@@ -682,6 +677,18 @@ let scheduler = new Scheduler({
   // Every worktree a listing turns up, before it becomes a row: the naming ledger's seeding (see seedTreeName).
   onWorktreeSeen: (project, tree) => seedTreeName(project, tree),
 });
+
+// The one settings save that cannot be a plain write: the General tab's worker count replaces the scan pool while
+// the fleet is being scanned. `pool` is this file's binding and the scheduler holds a reference to it, so the swap
+// stays here and routes/settings.js asks for it by name. RETIRE, never close: `close()` terminates workers mid-scan,
+// while a retiring pool refuses its queue (the next pass re-requests those rows) and lets the scans it holds finish
+// before its threads go.
+function rebuildPool(threads) {
+  const retired = pool;
+  pool = new Pool(threads);
+  if (scheduler) scheduler.pool = pool;
+  retired.retire();
+}
 
 const clients = new Set();
 
@@ -1558,6 +1565,23 @@ async function readScanRootsBody(body) {
 // is fired from the listen callback below, once the port is bound — the panel comes up first, and a bridge that
 // cannot start surfaces as `state().boot` on the Gateway tab rather than in a log line nobody reads.
 const matrixBridge = new MatrixBridge({ config, onLog: log });
+
+// The settings row joins the table rather than sitting in its literal above: two of the facts it carries
+// (matrixBridge and settingsOut) are consts declared below that table, so the factory can only be built once they
+// exist. PREFIX_MOUNTS is still the one place the route is mounted from, and the settings prefix shares nothing
+// with any row above it, so the order the loop walks is unchanged in effect.
+PREFIX_MOUNTS.push({
+  prefix: SETTINGS_PATH,
+  handles: createSettingsRoutes({
+    getConfig: () => config,
+    jobs, registry, assistant, scheduler, matrixBridge, broadcast, snapshot, settingsOut, log, patchPanelConfig,
+    pushKindOf, setProjectPushSetting, setRepoPushSetting,
+    readScanRootsBody, scanRootsOut, applyScanRoots,
+    chartTopCountFrom, collapseAfterSecondsFrom, rebuildPool,
+    CONFIG_PATH, HERE, DEFAULT_SCAN_ROOT,
+    sendJson, readBody, authorised,
+  }),
+});
 
 // The policy the Bridge tab edits and the bridge turn carries. One store, one file, one precedence rule
 // (panel text > WTGUI_MATRIX_POLICY > the template); `statePaths` derives the file so a sandbox and a real
@@ -3118,62 +3142,6 @@ const server = createServer(async (req, res) => {
       });
     }
 
-    // ---- the one Hermes setting the panel can change ------------------------------------
-    // approvals.timeout is the gateway's clock, not the panel's: the gate that waits for the answer
-    // runs inside the process executing the turn. It lives in <HERMES_HOME>/config.yaml, so this
-    // reads and writes there rather than config.json, and it refuses when the gateway is another
-    // machine. Read on demand — it is opened from Settings, never folded into the 30 s snapshot.
-    // ---- how many sessions the CLI's picker shows ------------------------------------------
-    // `sessions.list_limit`, read by the local CLI patch. The store itself is not capped — this
-    // reports what it actually holds, so "only ten are kept" is answerable — and `patched: false`
-    // means the installed CLI has no patch (a `hermes update` replaced it), which makes the value
-    // in config.yaml inert. Saying that is the point: a setting that quietly does nothing is worse
-    // than no setting.
-    if (route === "/api/settings/sessions" && req.method === "GET") {
-      return sendJson(res, 200, await sessionSettings());
-    }
-
-    // ---- where these agents' skills are absorbed from ------------------------------------------
-    // The Skills tab's whole answer, and the one read in Settings that opens more than one file: every
-    // root Hermes reads skills from (the profile's own `skills/`, a junctioned directory as its own
-    // source, `skills.create_dir`, `skills.external_dirs`, a trusted project's `.hermes/skills`), the
-    // name and description out of each SKILL.md, and the gateway's `GET /v1/skills` for what a run is
-    // actually SERVED. Read on demand — the tab is the only caller — so a skill added a minute ago is
-    // there the next time it is opened, and a gateway that cannot answer is a reason in the payload
-    // rather than a failed request.
-    if (route === "/api/settings/skills" && req.method === "GET") {
-      return sendJson(
-        res,
-        200,
-        await readSkillsIndex({
-          home: hermesHome(),
-          projects: registry.projects.map((p) => ({ name: p.name, path: p.path })),
-          gateway: { url: jobs.api.url, key: jobs.api.key },
-        }),
-      );
-    }
-
-    // ---- what permissions are in force, and where each one comes from ----------------------------
-    // The Permissions tab's whole answer: the five config.yaml blocks the gateway actually reads
-    // (parsed at request time, every row carrying its own file:line), the gateway's advertised
-    // surface (a 401 is "not exposed, needs a token", never a guess at the features), and this
-    // panel's remote-write layer — config.json's policy and lib/remote-writes.js's grants.
-    // Read on demand, so the tab reports the file as it is now rather than a snapshot from boot.
-    if (route === "/api/settings/permissions" && req.method === "GET") {
-      return sendJson(
-        res,
-        200,
-        await readPermissions({
-          home: hermesHome(),
-          // THIS instance's config, as this process resolved it at boot — never `path.join(HERE, "config.json")`,
-          // which is the checkout's file and is what a PANEL_CONFIG sandbox used to have reported back to it.
-          panelConfigPath: CONFIG_PATH,
-          modulePath: path.join(HERE, "lib", "remote-writes.js"),
-          gateway: { url: jobs.api.url, key: jobs.api.key },
-        }),
-      );
-    }
-
     // ---- one pipeline document, read for the map's `?doc=` -----------------------------------------
     // public/pipeline-map.html draws a document it did not build, but a page served on this origin cannot fetch the
     // factory on :8090 (no CORS header) — so the reader's own panel does the read and hands the page the bytes with
@@ -3210,233 +3178,6 @@ const server = createServer(async (req, res) => {
       }
       res.writeHead(200, { ...head, "Content-Length": body.length });
       return res.end(body);
-    }
-
-    if (route === "/api/settings/sessions" && req.method === "POST") {
-      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
-      const body = await readBody(req);
-      const state = await sessionSettings();
-      if (!state.editable) return sendJson(res, 409, { ...state, error: state.reason || "not editable" });
-      const limit = Number(body.listLimit ?? body.limit);
-      if (!Number.isInteger(limit) || limit < SESSION_LIST_MIN || limit > SESSION_LIST_MAX) {
-        return sendJson(res, 400, {
-          ...state,
-          error: `the session list must be a whole number between ${SESSION_LIST_MIN} and ${SESSION_LIST_MAX}`,
-        });
-      }
-      try {
-        writeSessionListLimit(limit);
-      } catch (e) {
-        return sendJson(res, 500, { ...state, error: String((e && e.message) || e) });
-      }
-      log(`sessions.list_limit = ${limit} written to ${state.configPath}`);
-      return sendJson(res, 200, {
-        ...(await sessionSettings()),
-        written: true,
-        // The CLI reads config at start-up of each invocation, so the next /sessions uses it.
-        note: "saved — the next hermes session's /sessions and /resume use it",
-      });
-    }
-
-    if (route === "/api/settings/approvals" && req.method === "GET") {
-      return sendJson(res, 200, approvalState({ gatewayUrl: jobs.api.url }));
-    }
-
-    if (route === "/api/settings/approvals" && req.method === "POST") {
-      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
-      const body = await readBody(req);
-      const state = approvalState({ gatewayUrl: jobs.api.url });
-      if (!state.editable) return sendJson(res, 409, { ...state, error: state.reason || "not editable" });
-      const seconds = Number(body.timeoutSeconds ?? body.timeout);
-      if (!Number.isInteger(seconds) || seconds < APPROVAL_TIMEOUT_MIN || seconds > APPROVAL_TIMEOUT_MAX) {
-        return sendJson(res, 400, {
-          ...state,
-          error: `the approval window must be a whole number of seconds between ${APPROVAL_TIMEOUT_MIN} and ${APPROVAL_TIMEOUT_MAX}`,
-        });
-      }
-      try {
-        writeApprovalTimeout(seconds);
-      } catch (e) {
-        return sendJson(res, 500, { ...state, error: String((e && e.message) || e) });
-      }
-      log(`approvals.timeout = ${seconds}s written to ${state.configPath}`);
-      return sendJson(res, 200, {
-        ...approvalState({ gatewayUrl: jobs.api.url }),
-        written: true,
-        // Hermes re-reads config.yaml when the file signature changes and reads this per request,
-        // so the next prompt uses the new window without restarting the gateway.
-        note: "saved",
-      });
-    }
-
-    // The provider endpoint every run talks to: OpenRouter's URL and the key it authenticates with. The
-    // key itself never leaves this process - GET reports whether one is set, where it came from and its
-    // last four characters; POST writes into config.yaml's model block (the file the gateway re-reads).
-    if (route === "/api/settings/provider" && req.method === "GET") {
-      return sendJson(res, 200, providerState());
-    }
-
-    if (route === "/api/settings/provider" && req.method === "POST") {
-      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
-      const body = await readBody(req).catch(() => ({}));
-      const state = providerState();
-      if (!state.editable) return sendJson(res, 409, { ...state, error: state.reason || "not editable" });
-      try {
-        const wrote = writeProviderSettings({
-          baseUrl: body.baseUrl,
-          apiKey: body.apiKey,
-          clearKey: Boolean(body.clearKey),
-        });
-        const what = [wrote.wroteUrl ? "model.base_url" : null, wrote.wroteKey ? "model.api_key" : null, wrote.clearedKey ? "model.api_key removed" : null]
-          .filter(Boolean)
-          .join(", ");
-        log(`${what || "provider settings"} written to ${wrote.configPath}`);
-        return sendJson(res, 200, {
-          ...providerState(),
-          written: true,
-          note: "saved — the next run uses it; a run already in flight keeps the endpoint and key it started with",
-        });
-      } catch (e) {
-        return sendJson(res, 400, { ...providerState(), error: String((e && e.message) || e) });
-      }
-    }
-
-    // ---- the saved provider profiles: a named (URL, key) pair ------------------------------
-    // One store, four answers, and one rule that shapes all of them: a key is written here and applied here, and
-    // no answer carries it back. What a list row says about a key is whether it is set and its last four — the
-    // same sentence the config.yaml field already speaks. Apply is server-side for exactly that reason: the
-    // browser names a profile, this process reads the key out of the state file and hands it to
-    // writeProviderSettings, so the secret is never in a request body or in a response.
-    // The path is lib/paths.js's (statePaths.providerProfilesFile, assigned onto this config at boot), never a
-    // literal built here: it must stay inside the panel's own state folder and outside every checkout.
-    const profilesFile = config.providerProfilesFile;
-
-    if (route === "/api/settings/provider/profiles" && req.method === "GET") {
-      return sendJson(res, 200, listProfiles({ file: profilesFile }));
-    }
-
-    if (route === "/api/settings/provider/profiles" && req.method === "POST") {
-      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
-      const body = await readBody(req).catch(() => ({}));
-      try {
-        const saved = saveProfile({ file: profilesFile, id: body.id || null, name: body.name, baseUrl: body.baseUrl, apiKey: body.apiKey });
-        log(`provider profile ${saved.created ? "saved" : "updated"}: "${saved.profile.name}" (${saved.profile.baseUrl}) in ${profilesFile}`);
-        return sendJson(res, 200, {
-          ...listProfiles({ file: profilesFile }),
-          saved: saved.profile,
-          note: saved.created
-            ? `profile "${saved.profile.name}" saved — its key stays in the panel's own state folder, never in the repository`
-            : `profile "${saved.profile.name}" updated${body.apiKey ? "" : " — the stored key was kept because the key box was empty"}`,
-        });
-      } catch (e) {
-        return sendJson(res, Number(e.status) || 400, { ...listProfiles({ file: profilesFile }), error: String((e && e.message) || e) });
-      }
-    }
-
-    if (route === "/api/settings/provider/profiles/delete" && req.method === "POST") {
-      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
-      const body = await readBody(req).catch(() => ({}));
-      try {
-        const dropped = deleteProfile({ file: profilesFile, id: body.id });
-        if (!dropped) {
-          return sendJson(res, 404, { ...listProfiles({ file: profilesFile }), error: `no profile with id ${String(body.id || "(none)")}` });
-        }
-        log(`provider profile deleted: "${dropped.removed.name}" — its stored key was removed with it, from ${profilesFile}`);
-        return sendJson(res, 200, {
-          ...listProfiles({ file: profilesFile }),
-          removed: dropped.removed,
-          note: `profile "${dropped.removed.name}" deleted, and the key it held with it`,
-        });
-      } catch (e) {
-        return sendJson(res, Number(e.status) || 400, { ...listProfiles({ file: profilesFile }), error: String((e && e.message) || e) });
-      }
-    }
-
-    // Apply writes the chosen pair through the SAME function the URL/key rows use, so there is one writer of
-    // model.base_url and model.api_key in this process and one set of checks on the way in.
-    if (route === "/api/settings/provider/apply" && req.method === "POST") {
-      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
-      const body = await readBody(req).catch(() => ({}));
-      const state = providerState();
-      if (!state.editable) return sendJson(res, 409, { ...state, error: state.reason || "not editable" });
-      const profile = profileWithKey({ file: profilesFile, id: body.id });
-      if (!profile) {
-        return sendJson(res, 404, { ...providerState(), error: `no saved profile with id ${String(body.id || "(none)")}` });
-      }
-      if (!profile.apiKey) {
-        return sendJson(res, 400, { ...providerState(), error: `profile "${profile.name}" holds no key — open it and press Edit with a key in the box` });
-      }
-      try {
-        const wrote = writeProviderSettings({ baseUrl: profile.baseUrl, apiKey: profile.apiKey });
-        log(`provider profile applied: "${profile.name}" (${profile.baseUrl}) -> ${wrote.configPath}`);
-        return sendJson(res, 200, {
-          ...providerState(),
-          applied: { id: profile.id, name: profile.name, baseUrl: profile.baseUrl },
-          written: true,
-          note: `profile "${profile.name}" applied — the next run uses it; a run already in flight keeps the endpoint and key it started with`,
-        });
-      } catch (e) {
-        return sendJson(res, 400, { ...providerState(), error: String((e && e.message) || e) });
-      }
-    }
-
-    // ---- the Matrix bridge: a process this panel starts and stops ------------------------------
-    // The bridge is a standalone Python program (Matrix sync + E2EE + the Hermes CLI), with its credentials in
-    // bridge.env beside it. These routes are the whole of the panel's involvement. Nothing here opens that
-    // file: `credentialsPresent` is whether it exists, and no answer carries a value from it.
-    //
-    // Liveness is the OS's answer for the pid this panel recorded, never the pid file's existence — a record
-    // outlives the process it names (a crash, a reboot), and a stale one must never read as a running bot.
-    if (route === "/api/settings/matrix" && req.method === "GET") {
-      return sendJson(res, 200, matrixBridge.state());
-    }
-
-    // The four fields beside Start/Stop write through here. It accepts ONLY the keys lib/matrix-bridge.js names
-    // (scriptPath, pythonPath, roomId, autoStart) and writes ONLY those into config.json's `matrix` block — a
-    // `password` in the body is ignored and has nowhere to reappear, because the answer is the GET shape and the
-    // written block is the whitelist. An empty roomId is saved as "no room set": start and self-test refuse loudly
-    // rather than launching the bridge into nothing.
-    if (route === "/api/settings/matrix" && req.method === "POST") {
-      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
-      const body = await readBody(req).catch(() => ({}));
-      const { values, error } = matrixPatchFrom(body);
-      if (error) return sendJson(res, 400, { ...matrixBridge.state(), error });
-      const next = matrixBlock(config.matrix, values);
-      try {
-        await patchPanelConfig({ matrix: next });
-      } catch (e) {
-        return sendJson(res, 500, { ...matrixBridge.state(), error: `could not write config.json: ${String((e && e.message) || e)}` });
-      }
-      // The running panel answers from the same object the file now holds: a GET straight after the save reads the
-      // new room, and the next boot spawn uses it too.
-      config.matrix = next;
-      log(`matrix bridge settings saved: script ${next.scriptPath || "(none)"} | interpreter ${next.pythonPath || "(none)"} | room ${next.roomId || "(none)"} | auto-start ${next.autoStart ? "on" : "off"}`);
-      return sendJson(res, 200, {
-        ...matrixBridge.state(),
-        note: `saved — ${next.roomId ? `room ${next.roomId}` : "no room set, so Start and Run self-test will refuse"} · auto-start ${next.autoStart ? "on" : "off"}`,
-      });
-    }
-
-    if (route === "/api/settings/matrix/start" && req.method === "POST") {
-      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
-      const out = await matrixBridge.start();
-      const { status, ...body } = out;
-      return sendJson(res, Number(status) || 200, body);
-    }
-
-    if (route === "/api/settings/matrix/stop" && req.method === "POST") {
-      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
-      const out = await matrixBridge.stop();
-      const { status, ...body } = out;
-      return sendJson(res, Number(status) || 200, body);
-    }
-
-    if (route === "/api/settings/matrix/test" && req.method === "POST") {
-      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
-      // The self-test's own answer is the `ok`/`output`/`exitCode` triple the bridge defines; the state rides
-      // along so the page can repaint the dot and the log from one response.
-      const result = await matrixBridge.selfTest();
-      return sendJson(res, 200, { ...matrixBridge.state(), ...result });
     }
 
     // ---- the Bridge tab's one read -------------------------------------------------------------------
@@ -5040,50 +4781,6 @@ const server = createServer(async (req, res) => {
       }
     }
 
-    // ONE PROJECT'S TWO CONTROLS. The card's selects and the Settings → Repo tab both write here, one kind at a
-    // time. The value must be one of the four — anything else is a 400 rather than a guess — and a project under a
-    // repo force-override is a 409 naming the repository, because that select is rendered disabled and a hand-written
-    // request must not slip past the same rule the page shows.
-    if (route === "/api/settings/push-project" && req.method === "POST") {
-      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
-      const body = await readBody(req).catch(() => ({}));
-      const name = String(body.project || "").trim();
-      const kind = pushKindOf(body.kind);
-      if (!kind) return sendJson(res, 400, { error: "kind must be new or existing", settings: settingsOut() });
-      if (!PUSH_CHOICES.includes(String(body.value || "").trim().toLowerCase())) {
-        return sendJson(res, 400, { error: `value must be one of: ${PUSH_CHOICES.join(", ")}`, settings: settingsOut() });
-      }
-      const out = await setProjectPushSetting(name, { [kind]: body.value }, { by: "the project card" });
-      if (out.error) return sendJson(res, out.status || 500, { error: out.error, settings: settingsOut() });
-      return sendJson(res, 200, { ok: true, project: name, resolved: out.resolved, settings: settingsOut(), note: `saved — ${name}: ${kind === "newBranches" ? "new" : "existing"} branches ${out.resolved[kind]}` });
-    }
-
-    // ONE REMOTE REPOSITORY'S DEFAULTS (and its force-override). A repo section edits BOTH controls and the toggle
-    // through this route, because they are one record in config.json and two writers would be two chances to lose a
-    // key. The answer carries the settings again so every open tab repaints from the server's copy.
-    if (route === "/api/settings/push-repo" && req.method === "POST") {
-      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
-      const body = await readBody(req).catch(() => ({}));
-      const repo = String(body.repo || "").trim();
-      const patch = {};
-      if (body.kind !== undefined || body.value !== undefined) {
-        const kind = pushKindOf(body.kind);
-        if (!kind) return sendJson(res, 400, { error: "kind must be new or existing", settings: settingsOut() });
-        if (!PUSH_CHOICES.includes(String(body.value || "").trim().toLowerCase())) {
-          return sendJson(res, 400, { error: `value must be one of: ${PUSH_CHOICES.join(", ")}`, settings: settingsOut() });
-        }
-        patch[kind] = body.value;
-      }
-      if (body.force !== undefined) {
-        if (typeof body.force !== "boolean") return sendJson(res, 400, { error: "force must be true or false", settings: settingsOut() });
-        patch.force = body.force;
-      }
-      if (!Object.keys(patch).length) return sendJson(res, 400, { error: "nothing to save: send kind+value, force, or both", settings: settingsOut() });
-      const out = await setRepoPushSetting(repo, patch, { by: "the Settings → Repo tab" });
-      if (out.error) return sendJson(res, out.status || 500, { error: out.error, settings: settingsOut() });
-      return sendJson(res, 200, { ok: true, repo, record: out.record, settings: settingsOut(), note: `${repo}: ${out.record.force ? "force-override ON — this repository's values win for every project in it" : "each project's own values win"}` });
-    }
-
     // Put the guard in (or take it out of) the worktrees of a project, or in every local-only tree the board
     // knows. The automatic path is the panel's own worktree creation; this is the deliberate one, for trees that
     // were cut before the guard existed.
@@ -5487,235 +5184,6 @@ const server = createServer(async (req, res) => {
         .filter((n) => known.has(n));
       scheduler.noteVisible(names);
       return sendJson(res, 200, { ok: true, visible: names.length, mode: config.scanMode });
-    }
-
-    // Refresh everything, or only what is on screen. Server-side: the scans happen here, so the choice has to
-    // outlive a tab and apply to whichever browser is open.
-    if (route === "/api/settings/scan" && req.method === "POST") {
-      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
-      const body = await readBody(req).catch(() => ({}));
-      const mode = String(body.mode || "").toLowerCase() === "visible" ? "visible" : "all";
-      try {
-        await patchPanelConfig({ scanMode: mode });
-      } catch (e) {
-        return sendJson(res, 500, { error: `could not write config.json: ${String((e && e.message) || e)}` });
-      }
-      config.scanMode = mode;
-      scheduler.cfg.scanMode = mode;
-      // Switching back to "all" must not wait for the visibility heartbeat to lapse.
-      if (mode === "all") scheduler.noteVisible(null);
-      log(`scan mode: ${mode}`);
-      broadcast({ type: "snapshot", data: snapshot() });
-      return sendJson(res, 200, { ok: true, mode, settings: settingsOut() });
-    }
-
-    // Which folders the board scans, as a WRITE. The body is the whole list (`{ roots: [...] }`), because the tab
-    // edits a list rather than adding to a file behind the reader's back: remove a folder and it stops being scanned.
-    // Every entry must be an absolute path to an existing folder, duplicates are refused, and an empty list is allowed
-    // — it means the fallback (the folder this panel sits in), which the answer names so the page can say so.
-    //
-    // Discovery is re-run BEFORE the answer goes out. That is the half that makes the list useful without a restart:
-    // the project registry walks the new roots, the store learns the projects under them, and the snapshot broadcast
-    // after it repaints the board with one card per folder. A discovery that throws is logged, not turned into a 500:
-    // the file is already written, and the next sweep will read it.
-    if (route === "/api/settings/scan-roots" && req.method === "POST") {
-      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
-      const body = await readBody(req).catch(() => ({}));
-      const checked = await readScanRootsBody(body);
-      if (checked.error) return sendJson(res, 400, { error: checked.error, ...(await scanRootsOut()) });
-      try {
-        await patchPanelConfig({ scanRoots: checked.roots });
-      } catch (e) {
-        return sendJson(res, 500, { error: `could not write config.json: ${String((e && e.message) || e)}`, ...(await scanRootsOut()) });
-      }
-      applyScanRoots(config, checked.roots);
-      log(
-        `scan roots: ${config.scanRootsConfigured.length ? config.scanRootsConfigured.join(", ") : `(none named — scanning ${DEFAULT_SCAN_ROOT})`}`,
-      );
-      let projects = null;
-      try {
-        projects = (await registry.refresh({ after: true })).length;
-      } catch (e) {
-        log(`discovery after the scan-roots write failed: ${String((e && e.message) || e)}`);
-      }
-      broadcast({ type: "snapshot", data: snapshot() });
-      return sendJson(res, 200, { ok: true, projects, ...(await scanRootsOut()) });
-    }
-
-    // Whether an agent may take its own tree off this disk once the work has landed: Settings → Board → Agents
-    // clean up. Server-side like the two rows above, because this process is what hands out the RELEASE paragraph
-    // and what sweeps the release executor — so the switch has to outlive a tab and apply to every browser.
-    //
-    // It is a VETO: on leaves each project's own `releaseWorktrees` grant deciding, so pressing it on never opens a
-    // delete; off closes every project at once. Only a literal boolean in the body is written — a body that names
-    // no `agentCleanup` writes OFF, because a delete permission that is assumed is not one.
-    if (route === "/api/settings/cleanup" && req.method === "POST") {
-      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
-      const body = await readBody(req).catch(() => ({}));
-      const allowed = body.agentCleanup === true;
-      try {
-        await patchPanelConfig({ agentCleanup: allowed });
-      } catch (e) {
-        return sendJson(res, 500, { error: `could not write config.json: ${String((e && e.message) || e)}` });
-      }
-      config.agentCleanup = allowed;
-      log(`agent cleanup: ${allowed ? "on — a project's own releaseWorktrees grant decides" : "off — no worktree is removed automatically"}`);
-      broadcast({ type: "settings", settings: settingsOut() });
-      return sendJson(res, 200, { ok: true, agentCleanup: allowed, settings: settingsOut() });
-    }
-
-    // How many worktrees a project's chart draws before its arrow lists the rest, so the board can open on the top
-    // of each chart. Server-side for the same reason the refresh mode is: the number goes into this panel's own
-    // config.json, so it survives a restart and applies to whichever browser is open — and it is the config.json the
-    // reader edits by hand. `count: 0` draws every tree.
-    if (route === "/api/settings/chart-top" && req.method === "POST") {
-      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
-      const body = await readBody(req).catch(() => ({}));
-      const count = chartTopCountFrom(body.count);
-      try {
-        await patchPanelConfig({ chartTopCount: count });
-      } catch (e) {
-        return sendJson(res, 500, { error: `could not write config.json: ${String((e && e.message) || e)}` });
-      }
-      config.chartTopCount = count;
-      log(`chart: ${count ? `the top ${count} worktree${count === 1 ? "" : "s"} drawn (the chart's arrow shows the rest)` : "every worktree drawn"}`);
-      broadcast({ type: "snapshot", data: snapshot() });
-      return sendJson(res, 200, { ok: true, count, settings: settingsOut() });
-    }
-
-    // How long a parent the reader collapsed keeps the cards under it as they were before the page writes every one
-    // of them into its remembered fold set. Server-side like the age threshold above: the number goes into this
-    // panel's own config.json, so it survives a restart and applies to whichever browser is open. `seconds: 0`
-    // disables the cascade — a collapsed parent then leaves its children's folds alone, which is what the panel did
-    // before this row existed.
-    if (route === "/api/settings/collapse-after" && req.method === "POST") {
-      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
-      const body = await readBody(req).catch(() => ({}));
-      const seconds = collapseAfterSecondsFrom(body.seconds);
-      try {
-        await patchPanelConfig({ collapseAfterSeconds: seconds });
-      } catch (e) {
-        return sendJson(res, 500, { error: `could not write config.json: ${String((e && e.message) || e)}` });
-      }
-      config.collapseAfterSeconds = seconds;
-      log(`collapse cascade: ${seconds ? `a parent collapsed for ${seconds}s minimizes every card under it` : "off — a collapsed parent leaves its cards as they are"}`);
-      broadcast({ type: "settings", settings: settingsOut() });
-      return sendJson(res, 200, { ok: true, seconds, settings: settingsOut() });
-    }
-
-    // ---- Settings → General: what the panel costs the machine -------------------------------------
-    // Three numbers that were config.json-only until now, and one route for all three because they are one
-    // surface: how many git scans run at once (`threads`), how often a row is re-read (`worktreeSeconds`), and the
-    // ceiling on what one assistant turn appends (`briefingBudgetChars`, stored on the assistant, not here). The
-    // fourth field is not a number: `dockMode` is the assistant pane's frame, one choice for every assistant, which
-    // became the panel's when it moved out of each assistant's own Settings pane.
-    //
-    // `threads` and `worktreeSeconds` are the spawn knobs. Measured on this machine, a CreateProcess costs 0.6-4.7s
-    // under the endpoint agent, and the scan pool was running five of them continuously beside every agent tool
-    // call; a panel at 5s x 5 workers is the load the fleet's own commands then queue behind. The route applies
-    // both LIVE: a new pool replaces the old one (the scheduler takes the reference, and the retired pool closes
-    // its workers once their scan returns), and the cadence is written into the scheduler's own cfg, so no restart
-    // is needed and nothing on the board is dropped.
-    //
-    // `briefingBudgetChars` rides the assistant's OWN settings route (/api/assistant/settings) because it belongs
-    // to that file; this route names it only so one Save can carry all three. It is forwarded there and reported
-    // back in the same answer, and a refused value leaves the other two unwritten only when it is refused first.
-    if (route === "/api/settings/general" && req.method === "POST") {
-      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
-      const body = await readBody(req).catch(() => ({}));
-      const int = (value, lo, hi) => {
-        const n = Number(value);
-        if (!Number.isFinite(n)) return null;
-        const rounded = Math.round(n);
-        return rounded < lo || rounded > hi ? null : rounded;
-      };
-      const threads = body.threads === undefined ? config.threads : int(body.threads, 1, 16);
-      const worktreeSeconds = body.worktreeSeconds === undefined ? config.worktreeSeconds : int(body.worktreeSeconds, 5, 120);
-      const budget = body.briefingBudgetChars === undefined ? null : int(body.briefingBudgetChars, 0, 40_000);
-      // THE PANE'S FRAME, one choice for every assistant's pane. `pickDock(value, null)` is the validator: anything
-      // that is not one of the two modes is refused here, by name, rather than written and read back as a default.
-      const dockAsked = body.dockMode !== undefined;
-      const dockMode = dockAsked ? pickDock(body.dockMode, null) : config.dockMode;
-      if (threads === null) return sendJson(res, 400, { error: "scan workers must be a whole number from 1 to 16" });
-      if (worktreeSeconds === null) return sendJson(res, 400, { error: "row refresh must be a whole number of seconds from 5 to 120" });
-      if (dockAsked && dockMode === null) return sendJson(res, 400, { error: `the assistant pane must be ${DOCK_MODES.join(" or ")}` });
-      if (body.briefingBudgetChars !== undefined && budget === null) {
-        return sendJson(res, 400, { error: "the turn briefing budget must be a whole number of characters from 0 (off) to 40000" });
-      }
-      const patch = {};
-      if (threads !== config.threads) patch.threads = threads;
-      if (worktreeSeconds !== config.worktreeSeconds) patch.worktreeSeconds = worktreeSeconds;
-      if (dockAsked && dockMode !== config.dockMode) patch.dockMode = dockMode;
-      if (Object.keys(patch).length) {
-        try {
-          await patchPanelConfig(patch);
-        } catch (e) {
-          return sendJson(res, 500, { error: `could not write config.json: ${String((e && e.message) || e)}` });
-        }
-      }
-      if (patch.worktreeSeconds !== undefined) {
-        config.worktreeSeconds = worktreeSeconds;
-        if (scheduler && scheduler.cfg) scheduler.cfg.worktreeSeconds = worktreeSeconds;
-        log(`row refresh: every ${worktreeSeconds}s`);
-      }
-      if (patch.threads !== undefined) {
-        config.threads = threads;
-        const retired = pool;
-        pool = new Pool(threads);
-        if (scheduler) scheduler.pool = pool;
-        // RETIRE, never close: this route runs while the fleet is being scanned, and `close()` terminates workers
-        // mid-scan. The retiring pool refuses its queue (the next pass re-requests those rows) and lets the scans it
-        // holds finish before its threads go.
-        retired.retire();
-        log(`scan workers: ${threads} (the pool was rebuilt live; the old one retires when its scans settle)`);
-      }
-      if (patch.dockMode !== undefined) {
-        config.dockMode = dockMode;
-        // THE PER-ASSISTANT KEY IS RETIRED IN THE SAME BREATH. A second copy of a panel-wide choice is a value that
-        // can disagree with the panel — the thing this move exists to end — so every assistant's file loses the
-        // `dock` key as soon as the panel's own key exists. `from` is the assistant the PAGE was showing, which is
-        // the value the one-time migration adopted; it is not a write, only the name in the log line.
-        const dropped = assistant.retireDockField();
-        const cameFrom = assistant.assistants.find((a) => a.id === String(body.from || "")) || null;
-        log(
-          `pane frame: ${dockMode} — the panel's one frame${cameFrom ? `, taken from ${cameFrom.name} (the assistant the panel was showing)` : ""}${
-            dropped.length ? `; ${dropped.length} per-assistant value${dropped.length === 1 ? "" : "s"} retired` : ""
-          }`,
-        );
-      }
-      let settings = settingsOut();
-      if (budget !== null) {
-        try {
-          const saved = assistant.setSettingsFor(undefined, { briefingBudgetChars: budget });
-          settings = { ...settings, briefingBudgetChars: saved.briefingBudgetChars };
-          log(`turn briefing budget: ${budget ? `${budget} chars` : "off — a turn is sent whole"}`);
-        } catch (e) {
-          return sendJson(res, 400, { error: String((e && e.message) || e) });
-        }
-      }
-      broadcast({ type: "settings", settings: settingsOut() });
-      return sendJson(res, 200, { ok: true, settings });
-    }
-
-    // Which of the worktree chart's columns are drawn. Server-side like the age threshold above: the list goes into
-    // this panel's own config.json, so it survives a restart and applies to whichever browser is open. The body names
-    // the columns to HIDE, not the ones to show, so a column added to the chart later arrives visible for every
-    // reader; lib/chart-columns.js is the one place that decides which ids are real.
-    if (route === "/api/settings/columns" && req.method === "POST") {
-      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
-      const body = await readBody(req).catch(() => ({}));
-      const hidden = chartColumnsFrom(body.hidden);
-      try {
-        await patchPanelConfig({ hiddenColumns: hidden });
-      } catch (e) {
-        return sendJson(res, 500, { error: `could not write config.json: ${String((e && e.message) || e)}` });
-      }
-      config.hiddenColumns = hidden;
-      log(`chart columns: ${hidden.length ? `${hidden.join(", ")} hidden` : "all drawn"}`);
-      // `settings`, not a snapshot: the page has to rebuild the tables (a hidden column is a missing cell in every
-      // row), and that is what the settings handler does for every open tab.
-      broadcast({ type: "settings", settings: settingsOut() });
-      return sendJson(res, 200, { ok: true, hidden, settings: settingsOut() });
     }
 
     // Open a link from an agent's console in the OS default browser. Only http(s) gets through, and the
