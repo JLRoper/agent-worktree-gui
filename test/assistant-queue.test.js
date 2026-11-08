@@ -26,10 +26,10 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { Assistant } from "../lib/assistant.js";
+import { createQueueRoutes } from "../routes/assistant-queue.js";
 import {
   addTask,
   adoptTask,
-  createQueueRoutes,
   currentThread,
   deleteTask,
   decorateTasks,
