@@ -1520,7 +1520,10 @@
       ${notesGroup}
       <div class="as-group">
         <h4>Standing rules — its only confident answers</h4>
-        ${rules.map((r) => `<div class="as-rule-row${r.by === "assistant" ? " is-by-assistant" : ""}"><span class="as-rule-name">${esc(r.text)}${r.by === "assistant" ? `<i class="as-rule-by" title="the assistant wrote this one; delete it if it is wrong">assistant</i>` : ""}</span><button type="button" data-as-unrule="${esc(r.id)}" data-as-rulefor="${esc(who)}" title="remove this rule">✕</button></div>`).join("") || `<div class="as-help">None yet. A rule is an answer you have given once and do not want to give twice.</div>`}
+        <div class="as-line">
+          <label class="as-hint" title="The reader's permission for one consolidation pass: merge rules, drop one, move one into the charter, set the role prompt. A snapshot of the before state is written first."><input type="checkbox" data-as-padgrant="${esc(who)}" ${owner?.consolidate?.granted ? "checked" : ""}/> allow this assistant to consolidate its own rules</label>
+        </div>
+        ${rules.map((r) => `<div class="as-rule-row${r.by === "assistant" ? " is-by-assistant" : ""}"><span class="as-rule-name">${esc(r.text)}${r.by === "assistant" ? `<i class="as-rule-by" title="the assistant wrote this one; delete it if it is wrong">assistant</i>` : ""}${r.rewritten ? `<i class="as-rule-by" title="a consolidation summary; the original is in the pass's snapshot">rewritten</i>` : ""}${r.safety ? `<i class="as-rule-by" title="pinned: the twelve-seat window never leaves this one out, and a pass may not drop or unpin it">safety</i>` : ""}</span><button type="button" data-as-unrule="${esc(r.id)}" data-as-rulefor="${esc(who)}" title="remove this rule">✕</button></div>`).join("") || `<div class="as-help">None yet. A rule is an answer you have given once and do not want to give twice.</div>`}
         <div class="as-form">
           <div class="as-line">
             <input id="${padId("as-rule-text", who)}" class="as-grow" placeholder="e.g. Deploy to QA, never PROD, from a worktree agent" />
@@ -4042,6 +4045,23 @@
         renderAssistantPad(true, forId || selectedSessionId());
       } catch (err) {
         setErr(forId ? padId("as-pad-err", forId) : padId("as-pad-err", selectedSessionId()), err.message);
+      } finally {
+        t.disabled = false;
+      }
+      return;
+    }
+
+    if (t.dataset.asPadgrant) {
+      // The reader's one press for the consolidation grant. The checkbox is already toggled by the browser, so
+      // `checked` is the answer being saved; the repaint takes the state the server sends, not the box's guess.
+      const who = isAssistant(t.dataset.asPadgrant) ? t.dataset.asPadgrant : selectedSessionId();
+      const granted = t.checked === true;
+      t.disabled = true;
+      try {
+        await asPost("/api/assistant/consolidate/grant", { assistantId: who, granted });
+        renderAssistantPad(true, who);
+      } catch (err) {
+        setErr(padId("as-pad-err", who), err.message);
       } finally {
         t.disabled = false;
       }

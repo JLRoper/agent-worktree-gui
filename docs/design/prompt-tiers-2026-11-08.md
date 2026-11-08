@@ -1,8 +1,10 @@
 # What a turn is told: five prompt tiers and a twelve-kilobyte contract
 
-**Status:** design, not built. Every claim about *today* is a symbol read at `7bc87bf` (`package.json` 1.60.3,
-2026-11-08); every claim about *the design* is a decision with its cost stated beside it. Section 6 is the list of
-what does not exist yet, and section 4 is a migration plan, not a record of one performed.
+**Status:** partly built. Every claim about *today* is a symbol read at `7bc87bf` (`package.json` 1.60.3,
+2026-11-08) unless it names a later commit; every claim about *the design* is a decision with its cost stated beside
+it. Section 5's consolidation facility is BUILT on this branch (`lib/assistant/consolidate.js`, its routes and its
+test), and the rows of section 6 that name it say so. The tiers themselves - project rules, the 12,288-byte block,
+the 200-character store cap - remain a design, and section 4 is a migration plan, not a record of one performed.
 
 **The question.** A turn is handed a role prompt, a rule list, a charter, a project list and a queue digest in one
 request. Which sentences belong in each, in what order do they arrive, how large may the part that rides every turn
@@ -14,8 +16,10 @@ seats. **Project rules** are one repository's deploy, landing, build and test pa
 project's worker briefs and indexed in the assistant's system block. **Assistant rules** are the model's own notes,
 filling only the seats the user rules leave. The **charter** is the long tier, sent whole on the first turn of a
 session, on a byte change and every twentieth turn. The four always-injected tiers share a 12,288-byte system block;
-the charter is exempt and rides the turn block. A turn may add a rule but may never merge or delete one;
-consolidation is a reader-pressed pass with provenance and a snapshot, not a model's edit.
+the charter is exempt and rides the turn block. A turn may add a rule. Consolidation is the assistant's job, under a
+grant the reader gives once on the assistant record: a granted pass may merge rules, drop one, move one into the
+charter and set the role prompt, refuses the four unsafe cases by name, and writes a snapshot of the before state
+with `rewrittenFrom` provenance on every rule it produces, before it writes anything else.
 
 Contents:
 
@@ -23,7 +27,7 @@ Contents:
 2. [The five tiers](#2-the-five-tiers)
 3. [Injection order and the twelve-kilobyte budget](#3-injection-order-and-the-twelve-kilobyte-budget)
 4. [The migration](#4-the-migration)
-5. [Consolidation: a turn adds, the reader consolidates](#5-consolidation-a-turn-adds-the-reader-consolidates)
+5. [Consolidation: a turn adds, the assistant consolidates under the reader's grant](#5-consolidation-a-turn-adds-the-assistant-consolidates-under-the-readers-grant)
 6. [What is missing](#6-what-is-missing)
 7. [Open questions](#7-open-questions)
 8. [Sources and measurement](#8-sources-and-measurement)
@@ -147,8 +151,9 @@ today is zero: every role's prompt is empty.
 A user rule is a decision the reader has made once and does not want to give twice: a boundary ("never PROD"), a
 correction ("a quiet test run is not evidence"), a preference ("mark a rewritten rule as rewritten"). It is stored
 in the assistant's `rules` array with `by: "reader"` and injected on **every turn**, with no cadence and no
-withholding. No turn writes it: the model may add to its own list and append to the charter, but the reader's rules
-are the one list it may never change.
+withholding. No turn writes it: the model may add to its own list and append to the charter, and when the reader has
+granted consolidation (section 5) the assistant may rewrite or merge a reader's rule - its intent survives in the
+produced text - but it may never delete one, and the grant itself is the reader's press, not a turn's.
 
 The window is twelve seats (`RULE_BRIEFING_MAX`). The reader's rules hold their own seats: all of them when they
 fit, the newest twelve when they do not, and the block ends with the left-out count so twelve cannot read as the
@@ -358,8 +363,9 @@ Each existing rule is read with §2's question and one more: **would this senten
 repository?** If yes, it is a rule (user or assistant, by who wrote it). If no, it is a project rule, and the
 repository it names is the project. If it only matters when a particular question arises, it is the charter. A rule
 that restates another is merged into the one that survives; a rule that is superseded is merged into the one that
-supersedes it. Every rewritten rule is marked `rewritten: true` with `rewrittenFrom: [ids]`, and the Notes tab shows
-the chip and the original, so a summary is never mistaken for the reader's wording.
+supersedes it. Every rewritten rule is marked `rewritten: true` with `rewrittenFrom: [ids]` by the consolidation
+pass that rewrote it (section 5), and the pass's snapshot holds the originals, so a summary is never mistaken for
+the reader's wording.
 
 The table covers Assistant #1's store, the canonical one: `assistant.json` holds its 40 rules, and #2, #3 and #5
 carry seeded copies on their own records. Assistant #3's copy is the reader's own 30-rule condensation of the same
@@ -414,8 +420,8 @@ repository patterns are the project rules in §4.3.
 | 40 | a row is in flight only with a running job | assistant | assistant rule | rewritten |
 
 Tally: 2 stay user rules, 23 stay assistant rules, 5 become project rules, 5 move to the charter, and 5 merge into
-another rule. Row 20 is the reader's, row 33 is the reader's, and both are rewritten by the reader's own
-consolidation pass, not by a turn.
+another rule. Row 20 is the reader's, row 33 is the reader's, and both are rewritten by a GRANTED consolidation pass
+(section 5), not by a turn that adds.
 
 ### 4.3 Worked rewrites
 
@@ -497,11 +503,11 @@ sentence the worker is handed.
 
 ---
 
-## 5. Consolidation: a turn adds, the reader consolidates
+## 5. Consolidation: a turn adds, the assistant consolidates under the reader's grant
 
-### 5.1 What a turn can do today
+### 5.1 What a turn can do
 
-`addRuleToList` (`lib/assistant/rules.js`) is the only door a turn has onto the list, and it has four answers:
+`addRuleToList` (`lib/assistant/rules.js`) is the door a turn has onto the list, and it has four answers:
 
 - **duplicate** - the exact text is already there; the list is returned untouched, with no journal and no write;
 - **refined** - for an assistant rule only, a near-duplicate (Jaccard 0.75) rewrites that rule in place;
@@ -511,97 +517,123 @@ sentence the worker is handed.
 
 A turn writes `RULE:` lines, which the panel applies as `by: "assistant"`. The reader's Add rule form in the Notes
 tab posts `POST /api/assistant/rule` as `by: "reader"`, and the ✕ beside any rule posts
-`POST /api/assistant/rule/remove`. Those are the only two writes the reader has.
+`POST /api/assistant/rule/remove`.
 
-### 5.2 What a turn cannot do
+### 5.2 The grant
 
-A turn **cannot merge two rules into one, cannot delete a rule, and cannot edit the reader's**. That is not a policy
-the prompt asks the model to respect; it is the shape of the code. There is no route that takes a rule id and a new
-text, no route that takes two ids and produces one, and `addRuleToList` only appends or refines the assistant's own.
-A model that wants a rule gone can only say so in its reply; the reader presses the ✕ or the consolidation pass
-does it.
+A turn used to have no way to merge, drop, move or promote a rule, and the design answered that with a
+reader-pressed pass. The answer is honest about the risk and wrong about the cost: tidying the list is exactly the
+work the reader does not want to do again, and most of the list is the model's own output. What the reader needs is
+not to be the hand; it is to be the judgement, applied once and undoable.
 
-That boundary is the answer to "why not let the model tidy the list": a merge is a decision about what the reader
-meant, and the model is the one party that cannot be trusted to decide which of two of its own guesses the reader
-actually holds. It can propose the merge; it cannot be the write.
+So the door is a **grant**, stored on the assistant record (`lib/assistant.js` `setConsolidationGrant`):
 
-### 5.3 The consolidation pass
+```json
+{ "consolidate": { "by": "reader", "at": "2026-11-08T21:00:00.000Z" } }
+```
 
-Consolidation is a reader-pressed pass, `POST /api/assistant/rules/consolidate`, with a plan and a dry run:
+`POST /api/assistant/consolidate/grant` with `{ "assistantId": "assistant-2", "granted": true }` writes it;
+`granted: false` takes it back. The record is read as a grant only in that exact shape: a hand-edited
+`"consolidate": true` is no grant, and a pass reads the RECORD rather than a boolean handed in by its caller, so no
+caller can pass `granted: true` around the reader's answer.
+
+### 5.3 The four doors, and the unsafe case each refuses
+
+Built in `lib/assistant/consolidate.js`. Every refusal throws a code, so the route, the page and the test assert the
+same word.
+
+| door | does | refuses |
+|---|---|---|
+| `mergeRules` / `rewriteRule` | several rules become one at the earliest source's position; `rewrittenFrom` names every id it replaced; `by` stays the source's, and is `"reader"` when any source was the reader's | fewer than two ids; an unknown id; an empty or over-400-character text; **a pinned source merged into a rule that is not `safety: true`** (`consolidate-safety-lost`) |
+| `deleteRule` | an assistant's own unpinned rule leaves the list | an unknown id; **a reader's rule** (`consolidate-reader`); **a `safety: true` rule** (`consolidate-pinned`) |
+| `moveRuleToCharter` | the rule's text lands in the charter as one dated entry naming the id, and leaves the every-turn list | an unknown id; **a pinned rule** (a boundary must not ride a file sent every twentieth turn); **a charter with no room** (`charter-full`: the text is never truncated) |
+| `setRolePrompt` | sets the tier-1 seat, stamped `promptBy: "assistant"` with `promptAt` and `promptFrom` provenance | **over 1,472 characters** (the tier's own seat, §3.2); **empty** (the absence of a contract is not a shorter one); **a prompt that already says something without the assistant's stamp** (`consolidate-prompt-reader`) |
+
+Two of these are the safety decisions, stated plainly. A reader's rule is rewritten or merged, never dropped: a
+rewrite keeps the answer's intent in the produced text, and a drop keeps nothing. And a pinned rule never changes
+tier, because the pin means "the twelve-seat window never leaves this out", while the charter is a file sent once
+every twenty turns. The pin itself is part of the record: `safety` and the three rewrite fields survive a reload
+(`lib/assistants.js` `normaliseAssistants`), which a test proves by building a second Assistant over the same
+directory.
+
+### 5.4 The pass: validate, snapshot, write once, journal
+
+The pass is `POST /api/assistant/consolidate` with `{ assistantId, dryRun, plan }`. `Assistant.consolidateRulesFor`
+is the only caller of the module's `consolidatePlan`:
 
 ```json
 {
-  "assistantId": "assistant-1",
-  "dryRun": true,
-  "plan": [
-    { "op": "keep", "id": "cc83737d" },
-    { "op": "rewrite", "from": ["d2aecae2"], "text": "Outside oauth2-multi, a tree cut from a non-landing branch still lands by PR ...", "safety": true },
-    { "op": "merge", "from": ["9b850bac", "847590ac"], "text": "A quiet test run is not evidence: match the test-runner child's start time to its launch ...", "safety": false },
-    { "op": "drop", "id": "f1fa6596", "because": "merged into 847590ac" }
-  ]
+  "assistantId": "assistant-2",
+  "dryRun": false,
+  "plan": {
+    "version": 1,
+    "ops": [
+      { "op": "keep", "id": "cc83737d" },
+      { "op": "merge", "from": ["9b850bac", "847590ac"], "text": "A quiet test run is not evidence: match the test child's start time to its launch.", "safety": false },
+      { "op": "rewrite", "from": ["d2aecae2"], "text": "Outside oauth2-multi, a tree cut from a non-landing branch still lands by PR.", "safety": true },
+      { "op": "charter", "id": "18ab73f1", "because": "one repository's history" },
+      { "op": "prompt", "from": ["44f0c1aa"], "text": "Read the queue before the board. Answer a worker only from something written down." },
+      { "op": "drop", "id": "f1fa6596", "because": "merged into 9b850bac" }
+    ]
+  }
 }
 ```
 
-This is an excerpt, not a whole plan: the pass requires every id to appear, and a real plan names all forty.
+An excerpt, not a whole plan: every rule in the list must be named by exactly one op, whether it is kept,
+rewritten, merged, dropped, moved or absorbed into the prompt. A plan that leaves one unaccounted for is refused
+with the ids, because a silent skip is how a pass loses a rule.
 
 The pass does five things, in this order:
 
-1. **Snapshot** the current list to `logs/rule-consolidations/<iso>.json` before any write.
-2. **Validate** the plan: every id exists; every removed rule is named by a `merge`, a `rewrite` or a `drop`; a
-   `drop` of a reader's rule is refused (a reader's rule can be rewritten, never dropped); a rewrite over 200
-   characters is refused; a rewrite that replaces a `safety: true` rule must carry `safety: true` itself; a plan
-   that leaves a rule unaccounted for is refused with the ids.
-3. **Write once**: one `persist()` of the new array, with `rewritten: true`, `rewrittenFrom: [ids]` and
-   `rewrittenAt` on every rule the pass produced. The reader's rules keep `by: "reader"`; the assistant's keep
-   `by: "assistant"`.
-4. **Journal and charter**: one journal line per operation and one charter entry naming the counts (kept, rewritten,
-   merged, dropped) and the snapshot path.
-5. **Report** the before and after bytes of the injected block, the pinned rules and their destinations, and the
-   ids the twelve-seat window now leaves out.
+1. **Validate** the plan: every id exists, no id is consumed by two ops, and every rule is accounted for.
+2. **Snapshot** the before state to `<dataDir>/logs/rule-consolidations/<iso>-<assistant>.json`: the whole list, the
+   charter, the prompt and the plan. This is the FIRST write, and a pass whose snapshot cannot be written does not
+   run.
+3. **Write once per store**: the rules array, the charter (the moved entries plus one summary naming the counts and
+   the snapshot path) and the profile's prompt. No store is written twice.
+4. **Journal** one line per op, then one line naming the counts, the three sizes and the snapshot.
+5. **Report** the before and after rule counts and characters, the counts per op, the ids still pinned, how many
+   rules the twelve-seat window now leaves out, the charter and prompt sizes, and the snapshot path.
 
-The dry run is the same validation and the same report with the write removed. Its report is what the Notes tab
-prints before Apply: the counts, the safety rows and the snapshot it would take. A plan the model drafts is a
-document or a queue row; the reader pastes it into the Consolidate box (or presses Draft, which asks the assistant
-for a plan and shows it) and presses Apply. The model never holds the button.
+`dryRun: true` is the same validation and the same report with steps 2-4 removed: the counts, the safety rows and
+the snapshot it would take. The report is what a Notes tab would print before Apply; the route is what the assistant
+calls, and the grant is what the reader presses.
 
-The pass is also how a rewritten rule is marked. A `rewrite` or `merge` operation sets `rewritten: true` and
-`rewrittenFrom`; the Notes tab draws the chip and a "show the original" line that reads the snapshot; and the
-injected block ends with one line naming how many of its rules are rewritten summaries and where the originals are.
-That line is about 70 bytes, which is what the 2,688-byte tier-2 ceiling in §3.2 has room for; a per-rule marker
-would cost 132 bytes and push the block over.
+### 5.5 Why the grant is worth the trust
 
-### 5.4 Why the boundary is worth the friction
-
-The alternative is a model that can merge and delete, and the failure is not hypothetical: a model that condenses
-"never push the oauth2-multi turnover branch" into "never push a turnover branch" has preserved the shape and lost
-the key material. The intent check cannot be mechanical, so the reader's press is the judgement, and the snapshot is
-what makes a wrong judgement reversible. The model's contribution is real and stays: it reads the list, groups it,
-drafts the rewrites and the merges, and files them as a plan. It just cannot be the hand that writes.
+The failure the old design guarded against is real: a model that condenses "never push the oauth2-multi turnover
+branch" into "never push a turnover branch" has kept the shape and lost the key material. The grant does not deny
+that failure; it makes it (a) named, by the refusal that will not let a pinned rule be merged into an unpinned text,
+and (b) reversible, by a snapshot written before anything else and named in the charter and the journal. The reader
+still holds the judgement - the grant is theirs to give and to take back, and an ungranted pass is refused at the
+record - but they are no longer the only hand that can tidy a list. That is the trade the tiers exist to make: the
+short tier has to stay small, and the party that writes most of it is the party that should be able to keep it
+small, under a permission that costs one press and an undo that costs none.
 
 ---
 
 ## 6. What is missing
 
-Every line here is an absence measured at `7bc87bf`, beside what does exist:
+Each line is an absence measured at `7bc87bf` unless it says it was built on this branch, beside what does exist:
 
 | what the design needs | what is on main today | evidence |
 |---|---|---|
 | 12 seats, reader-first, left-out count | **built**: `RULE_BRIEFING_MAX` 12 and `briefingRules` | `lib/assistant/rules.js`, landed at `2623e8c` |
 | `projects[].landingRules` | **in flight, uncommitted**: `lib/project-rules.js` in the sibling tree `add-per-project-landing-rules-the-carry-4cc45c`, one field, 2,000-character cap, 12-project preamble digest | `git grep landingRules` on main returns 0 |
 | `projects[].deployRules`, `buildRules`, `testRules` | **absent** | `git grep deployRules`, `buildRules`, `testRules` over `lib/`, `server.js`, `test/` and `config.example.json`: 0 |
-| `safety: true`, `rewritten: true`, `rewrittenFrom` | **absent**: a rule is `{id, text, at, by}` | `lib/assistant/rules.js`, `lib/assistants.js` |
-| the consolidation route | **absent**: add and remove only | `server.js` has `/api/assistant/rule` and `/api/assistant/rule/remove`; `git grep consolidate` over `lib/` and `server.js`: 0 |
-| a 200-character store cap | **absent**: `RULE_TEXT_MAX` is 400, injected clipped to 200 | `lib/assistant/rules.js` |
-| a 1,472-character role prompt | **absent**: `PROMPT_CAP` is 8,000 | `lib/assistant/profile.js`, `lib/roles.js` |
+| `safety: true`, `rewritten: true`, `rewrittenFrom` | **built** on this branch: the record schema keeps all four fields across a reload, the consolidation pass writes them, and a test proves the round trip | `lib/assistants.js` `normaliseAssistants`, `lib/assistant/consolidate.js`, `test/assistant-consolidate.test.js` |
+| the consolidation route | **built** on this branch: `POST /api/assistant/consolidate` (a plan, a dry run) and `POST /api/assistant/consolidate/grant` (the reader's permission) | `server.js`, `lib/assistant.js` `consolidateRulesFor` |
+| a 200-character store cap | **absent**: `RULE_TEXT_MAX` is 400, injected clipped to 200; a consolidation refuses a text over 400, not over 200 | `lib/assistant/rules.js`, `lib/assistant/consolidate.js` |
+| a 1,472-character role prompt | **partly**: the reader's form still writes up to `PROMPT_CAP` 8,000; a consolidation may write at most `ROLE_PROMPT_MAX` 1,472 | `lib/assistant/profile.js`, `lib/assistant/consolidate.js` |
 | a 12,288-byte system block | **absent**: `briefingBudgetChars` caps the turn half only, defaults to 0 (off), maximum 40,000; nothing measures the system text | `lib/assistant.js` `clipTurnBriefing`, `lib/assistant/config.js` |
 | a 10-project list | **absent**: `known.slice(0, 40)` | `lib/assistant.js` `briefingParts` |
 | watches off the system block | **absent**: the watches block is 617 bytes of it | `lib/assistant.js` `briefingParts` |
 | the charter's own header | **not true today**: it says the panel "injects it in full" | the charter file's first paragraph |
-| a Notes tab that can consolidate | **absent**: add, delete and read only | `public/assistant.js` `renderAssistantPad` |
+| a Notes tab that can consolidate | **partly**: the tab draws the reader's grant switch and the `rewritten`/`safety` chips; the plan box and its dry-run preview are not built | `public/assistant.js` `renderAssistantPad`, `test/assistant-consolidate.test.js` |
 | a test that measures the block | **absent**: the briefing tests read the rules window and the turn budget, not the system total | `test/assistant-rules-briefing.test.js`, `test/briefing-budget.test.js` |
 
-The one built piece is the most important one: the reader-first window is the tier-2 behaviour this design assumes,
-and it landed before the design did. The rest is a plan.
+The reader-first window was the first piece, and the consolidation facility is the second: the tier-2 behaviour and
+the tidy-up that keeps it inside its twelve seats. Everything else in the table is a plan.
 
 ---
 
@@ -636,6 +668,12 @@ and it landed before the design did. The rest is a plan.
   `ROLE_CHARTER_MAX_CHARS`), `lib/charter.js` (`CHARTER_MAX_CHARS`, `CHARTER_RESEND_EVERY`), `lib/jobs.js`
   (`body.input` and `pre`), `lib/projects.js` (the explicit-entry merge), `public/assistant.js` (`renderAssistantPad`,
   the Add rule form and the ✕).
+- **The consolidation facility**, built on this branch: `lib/assistant/consolidate.js` (the grant read, the four
+  doors, the plan, the snapshot), `lib/assistant.js` (`consolidationGrantFor`, `setConsolidationGrant`,
+  `consolidateRulesFor`, `consolidationDir`), `lib/assistants.js` (`normaliseAssistants` keeps `safety`, `rewritten`,
+  `rewrittenFrom`, `rewrittenAt` and the grant), `lib/assistant/profile.js` (`promptBy`, `promptAt`, `promptFrom`),
+  `server.js` (the two routes), and `test/assistant-consolidate.test.js` (13 tests, one per door and one per
+  refusal).
 - **The measurement**: the live state directory was copied to a scratch sandbox and `Assistant.briefingParts`,
   `systemBriefing` and `turnBriefing` were driven directly, so the numbers in §1.2 are the panel's own functions on
   the panel's own bytes, not a reimplementation. The registry held 177 projects; the preamble listed 40.
