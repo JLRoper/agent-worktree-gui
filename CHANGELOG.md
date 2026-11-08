@@ -4,16 +4,33 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.60.4 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.60.6 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-436 releases from v0.1.0 (2026-10-20) to v1.60.4 (2026-11-08), 1458 commits between the tags. Every release is anchored by an
+438 releases from v0.1.0 (2026-10-20) to v1.60.6 (2026-11-08), 1461 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.60.6 — 2026-11-08 · 1 commit
+
+[`0a5fe60`](https://github.com/JLRoper/agent-worktree-gui/commit/0a5fe6041d068a5ad7c8e376dd3b6c89f96ecc7b) · [compare v1.60.5...v1.60.6](https://github.com/JLRoper/agent-worktree-gui/compare/v1.60.5...v1.60.6)
+
+### Changed
+
+- refactor: the worktree chart's rules move out of style.css into chart.css ([`0a5fe60`](https://github.com/JLRoper/agent-worktree-gui/commit/0a5fe6041d068a5ad7c8e376dd3b6c89f96ecc7b))
+
+## v1.60.5 — 2026-11-08 · 2 commits
+
+[`db94cca`](https://github.com/JLRoper/agent-worktree-gui/commit/db94cca90f0272845e8c3b79d23b1ff655afa005) · [compare v1.60.4...v1.60.5](https://github.com/JLRoper/agent-worktree-gui/compare/v1.60.4...v1.60.5)
+
+### Docs & tests
+
+- docs: render the changelog — 436 releases ([`8c7b8c8`](https://github.com/JLRoper/agent-worktree-gui/commit/8c7b8c84ace1ab0e8cfa6ed4316bb913465e004f))
+- docs: the five prompt tiers and the twelve-kilobyte contract ([`db94cca`](https://github.com/JLRoper/agent-worktree-gui/commit/db94cca90f0272845e8c3b79d23b1ff655afa005))
 
 ## v1.60.4 — 2026-11-08 · 2 commits
 
