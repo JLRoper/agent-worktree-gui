@@ -231,7 +231,7 @@ test("the row is absent for Assistant #1 and its second press names the assistan
     {
       armed: true,
       plan: {
-        archive: { dir: "C:/state/assistant-archive/assistant-2-2026-11-07T23-59-00-000Z" },
+        archive: { dir: "state/assistant-archive/assistant-2-2026-11-07T23-59-00-000Z" },
         removes: ["record.json", "queue.json", "charter.md", "notes.md"],
       },
     },
