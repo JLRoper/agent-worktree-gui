@@ -4,16 +4,52 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.65.1 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.65.6 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-440 releases from v0.1.0 (2026-10-20) to v1.65.1 (2026-11-08), 1466 commits between the tags. Every release is anchored by an
+443 releases from v0.1.0 (2026-10-20) to v1.65.6 (2026-11-08), 1472 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.65.6 — 2026-11-08 · 2 commits
+
+[`e297738`](https://github.com/JLRoper/agent-worktree-gui/commit/e297738fc64648ef9c28c0d0b1f1da93d97a79e4) · [compare v1.65.5...v1.65.6](https://github.com/JLRoper/agent-worktree-gui/compare/v1.65.5...v1.65.6)
+
+### Changed
+
+- refactor: the jobs prefix moves into routes/jobs.js, mounted from the prefix table ([`e400b01`](https://github.com/JLRoper/agent-worktree-gui/commit/e400b01609f00925c6b165e605684b7a62aa8e6e))
+
+### Other
+
+- chore: 1.65.6 - the version this landing carries ([`e297738`](https://github.com/JLRoper/agent-worktree-gui/commit/e297738fc64648ef9c28c0d0b1f1da93d97a79e4))
+
+## v1.65.5 — 2026-11-08 · 1 commit
+
+[`189bb3f`](https://github.com/JLRoper/agent-worktree-gui/commit/189bb3f95083263227d5b52e8b30d64bf2239d48) · [compare v1.65.3...v1.65.5](https://github.com/JLRoper/agent-worktree-gui/compare/v1.65.3...v1.65.5)
+
+### Fixed
+
+- fix: a steer press greys its box and button until the gateway answers ([`189bb3f`](https://github.com/JLRoper/agent-worktree-gui/commit/189bb3f95083263227d5b52e8b30d64bf2239d48))
+
+## v1.65.3 — 2026-11-08 · 3 commits
+
+[`2a6eeb3`](https://github.com/JLRoper/agent-worktree-gui/commit/2a6eeb3cb1e0b745846475401b61d14bf34a644a) · [compare v1.65.1...v1.65.3](https://github.com/JLRoper/agent-worktree-gui/compare/v1.65.1...v1.65.3)
+
+### Added
+
+- feat: a message turn names its sender in a purple chip on the head ([`2a6eeb3`](https://github.com/JLRoper/agent-worktree-gui/commit/2a6eeb3cb1e0b745846475401b61d14bf34a644a))
+
+### Fixed
+
+- fix: the version tool writes an ASCII hyphen in its bump subject ([`fb5a9c1`](https://github.com/JLRoper/agent-worktree-gui/commit/fb5a9c1735ccc116d0ec8afa83c8442e6d67f44d))
+
+### Docs & tests
+
+- docs: render the changelog - 440 releases ([`9b5b88f`](https://github.com/JLRoper/agent-worktree-gui/commit/9b5b88fa040500d326bb4b1b27a7a5eafc3ff1dd))
 
 ## v1.65.1 — 2026-11-08 · 2 commits
 
