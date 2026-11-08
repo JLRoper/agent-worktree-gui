@@ -3909,6 +3909,11 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
    press carries the same amber as the Settings drawer's armed Clean scratch, so "this is the one that acts" reads alike. */
 .as-group .as-line [hidden] { display: none; }
 .as-group button[data-as-hardrestart-go] { border-color: #6b4d16; background: var(--amber-bg); color: #ffd479; }
+/* The delete pair is the destructive one: the first press asks, the second does it. Both read red so the
+   difference from Hard restart (amber, keeps every file) is visible before the first press. */
+.as-group.as-delete { border-color: #5a2a2a; }
+.as-group button.as-danger, .as-group button[data-as-delete-go] { border-color: #6b2b2b; background: rgba(255, 90, 90, .10); color: #ff9a9a; }
+.as-group button.as-danger:hover, .as-group button[data-as-delete-go]:hover { background: rgba(255, 90, 90, .18); }
 
 /* ---- the worktrees sub-tab: one board project card per project ------------------------------------
    The card IS the board's `.project` (its background, outline and the `collapsed` body rule), narrowed to the
