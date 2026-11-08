@@ -1287,8 +1287,15 @@ const pipelineWindowRoutes = createPipelineWindowRoutes({ assistant, config, sen
 // file the window resolves against, so the control cannot offer a stage the window would then call unresolved.
 const pipelineCatalogueRoutes = createPipelineCatalogueRoutes({ config, sendJson });
 // …and the import that appends to that same file: a studio export goes in beside what is already there, a duplicate
-// pipeline id is refused by name, and the merged document is re-read by the loader before it is written.
-const pipelineBundleImportRoutes = createPipelineBundleImportRoutes({ config, sendJson, readBody });
+// pipeline id is refused by name, and the merged document is re-read by the loader before it is written. `seedFile` is
+// the bundle this checkout ships, so `{seed: true}` can repair a live file the loader refuses without the page ever
+// carrying the document or naming a path.
+const pipelineBundleImportRoutes = createPipelineBundleImportRoutes({
+  config,
+  sendJson,
+  readBody,
+  seedFile: config.pipelineBundleSeedFile || "pipeline-bundle.seed.json",
+});
 
 // ---- restarting the gateway, or this panel ---------------------------------------------
 // Everything that touches the outside world is injectable (lib/restart.js), which is what lets

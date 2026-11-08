@@ -14024,6 +14024,18 @@ function paintPdlPipelines(pdl, error = null) {
   summary.classList.remove("bad");
   if (source) source.classList.remove("bad");
   const answer = !error && pdl && typeof pdl === "object" ? pdl : null;
+  // The repair control lives on this row and is offered for ONE state: the loader read the file and refused it. A
+  // read that never answered (a dead route) has nothing to replace, and a bundle that loaded needs no repair — so a
+  // press that would either guess or overwrite a readable file is not shown at all.
+  const repair = document.getElementById("pipeline-pdl-repair");
+  const refused = Boolean(answer) && answer.ok !== true;
+  if (repair) {
+    repair.hidden = !refused;
+    repair.disabled = false;
+    repair.title = refused
+      ? `import the bundle this checkout ships (pipeline-bundle.seed.json) over ${answer.file || "the refused bundle"} — the import replaces a bundle the loader cannot read instead of merging into it, and this tab re-reads when it lands`
+      : "import the bundle this checkout ships over a refused one";
+  }
   if (!answer) {
     summary.textContent = error ? `could not read the PDL bundle — ${error}` : "no PDL bundle was read by this answer";
     summary.classList.add("bad");
@@ -14058,6 +14070,50 @@ function paintPdlPipelines(pdl, error = null) {
     : `<div class="settings-row"><span>this bundle holds no pipeline — a task can only be put on the assistant's default path</span></div>`;
 }
 
+// The repair the refused state needs. The live bundle is only ever replaced by the import — PR #566 gave planImport
+// the repair path, where a document that loads REPLACES a live file the loader cannot read instead of being refused
+// as `live-bundle-unreadable`. The seed this checkout ships is that document, and the route reads it: the page does
+// not carry 127 KB of JSON, and it does not name a path the browser would have to know. Nothing here writes when the
+// seed or the live file is fine: the route's own plan decides, and its refusal is printed in its own words.
+//
+// The tab re-reads AFTER the write lands (`pipelinesLoadedAt = 0`, then loadPipelines) — a note saying "repaired"
+// beside a dropdown that still offers nothing would be the same dead end the control exists to end.
+async function repairPipelineBundle() {
+  const btn = document.getElementById("pipeline-pdl-repair");
+  const note = document.getElementById("pipeline-pdl-repair-note");
+  const say = (message, bad = false) => {
+    if (!note) return;
+    note.hidden = !message;
+    note.textContent = message || "";
+    note.classList.toggle("bad", Boolean(message) && bad);
+  };
+  if (btn) btn.disabled = true;
+  say("importing pipeline-bundle.seed.json over the refused bundle…");
+  try {
+    const r = await apiFetch("/api/assistant/pipeline-bundle/import", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ seed: true }),
+    });
+    const body = await r.json().catch(() => null);
+    if (!r.ok || !body || body.ok !== true) {
+      const code = body && body.code ? ` (${body.code})` : "";
+      say(`the repair was refused — ${(body && body.error) || `the panel answered ${r.status}`}${code}`, true);
+      return null;
+    }
+    say(body.reason || "the bundle was repaired from the seed");
+    // The dropdown and the list above are a read of the file the write just changed, so the cached answer is stale.
+    pipelinesLoadedAt = 0;
+    await loadPipelines();
+    return body;
+  } catch (e) {
+    say(`the repair failed — ${(e && e.message) || e}`, true);
+    return null;
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 function paintPipelines(error = null) {
   const summary = document.getElementById("pipeline-summary");
   const source = document.getElementById("pipeline-source");
@@ -14086,7 +14142,14 @@ function paintPipelines(error = null) {
   summary.classList.remove("bad");
   const pipelines = data.pipelines || {};
   const ids = Object.keys(pipelines);
-  const bits = [`${ids.length} definition${ids.length === 1 ? "" : "s"}`];
+  // The count a reader takes as "how many pipelines does this panel hold" is the PDL catalogue's, and it is read
+  // through `data.pdl` — the route's `pipelineSourceCatalogue(config)`, i.e. lib/pipeline-source.js's ONE
+  // readPipelineSource, the same list the queue's assignment control offers. The ladder ships empty (pipelines.seed.json
+  // holds no definition), so counting only the ladder said "0 definitions" to an install carrying eleven pipelines.
+  // The ladder's own count is kept beside it, because a reader who edits one still needs to know how many there are.
+  const pdlNow = pdlPipelines();
+  const bits = [`${pdlNow.length} pipeline${pdlNow.length === 1 ? "" : "s"}`];
+  bits.push(`${ids.length} definition${ids.length === 1 ? "" : "s"}`);
   if (data.readOnly) bits.push("read-only");
   if (data.refused) bits.push("refused whole");
   if (Array.isArray(data.dropped) && data.dropped.length) bits.push(`${data.dropped.length} dropped`);
@@ -14109,6 +14172,10 @@ function paintPipelines(error = null) {
   const pdlList = pdlPipelines();
   if (pipelinePdlId && !pdlList.some((p) => p.id === pipelinePdlId)) pipelinePdlId = null;
   const wanted = pipelineOpenId && pipelines[pipelineOpenId] ? pipelineOpenId : ids[0] || "";
+  // Nothing open and nothing picked: the control's value is the FIRST pipeline a task runs on, so a tab whose ladder
+  // ships empty opens on a real pipeline (and its flow button works) rather than on a blank select. A ladder definition
+  // still wins when there is one, because that is the half of this tab the reader can edit.
+  if (!pipelinePdlId && !wanted && pdlList.length) pipelinePdlId = pdlList[0].id;
   if (pick) {
     const pdlOptions = pdlList.length
       ? `<optgroup label="PDL pipelines">${pdlList.map((p) => `<option value="pdl:${esc(p.id)}"${p.id === pipelinePdlId ? " selected" : ""}>${esc(pdlOptionLabel(p))}</option>`).join("")}</optgroup>`
@@ -14129,7 +14196,7 @@ function paintPipelines(error = null) {
       : "open the flow — every stage of this definition left to right, with its exit checks as notches on the connectors. A definition has no position, so every stage is drawn not reached.";
   }
   paintPipelineMapLink();
-  list.innerHTML = (data.dropped || []).map(pipelineDroppedHtml).join("") || (ids.length ? "" : `<div class="settings-row"><span>no pipeline is in force — the catalogue is empty</span></div>`);
+  list.innerHTML = (data.dropped || []).map(pipelineDroppedHtml).join("") || (ids.length || pdlList.length ? "" : `<div class="settings-row"><span>no pipeline is in force — the catalogue is empty</span></div>`);
   // A dirty draft is never replaced: the list may repaint as often as it likes, and the form keeps the reader's text.
   if (!pipelineDraftDirty) {
     if (pipelinePdlId) {
@@ -14269,6 +14336,12 @@ document.getElementById("pipeline-select")?.addEventListener("change", (e) => se
 document.getElementById("pipeline-flow-open")?.addEventListener("click", (e) => {
   e.preventDefault();
   openPipelineFlow();
+});
+// The refused bundle's repair. Offered only while the loader refuses the file (paintPdlPipelines hides it otherwise),
+// and the press is the import with this checkout's seed — never a file the page would have to read or name.
+document.getElementById("pipeline-pdl-repair")?.addEventListener("click", (e) => {
+  e.preventDefault();
+  void repairPipelineBundle();
 });
 
 function openPipelineEditor(id) {

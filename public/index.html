@@ -636,16 +636,17 @@
       </div>
 
       <div class="settings-group" id="settings-panel-pipeline" data-settings-group="pipeline" role="tabpanel" aria-labelledby="settings-tab-pipeline" hidden>
-        <div class="settings-row" id="pipeline-summary-row" title="What this read covers: the merged catalogue — the reader's pipelines.json over the shipped seed — with both file paths, the version it was written with, and every definition the loader dropped or refused. Read only until a definition is opened.">
+        <div class="settings-row" id="pipeline-summary-row" title="What this read covers: the pipelines this panel can put a task on — the PDL bundle (config.pipelineBundleFile, read through lib/pipeline-source.js, the same list the queue's pipeline window offers) — and the ladder catalogue the reader's pipelines.json merges over the shipped seed. The count leads with the PDL pipelines, because the ladder ships empty and a count of it alone told a reader with eleven pipelines that the catalogue held none. Both files are named under the row, with the ladder's version and every definition the loader dropped or refused.">
           <span>Pipeline catalogue <span class="settings-info">ⓘ</span></span>
           <span class="settings-unit mono" id="pipeline-summary">reading…</span>
         </div>
         <div class="settings-preview mono" id="pipeline-source">…</div>
-        <div class="settings-row" id="pipeline-pdl-row" title="The pipelines a TASK is carried through: the PDL bundle this panel reads (config.pipelineBundleFile), the same list the queue's task pipeline window offers when a task is put on a pipeline. It is a different object from the ladder above - a ladder rung says what a tree may do with a branch, a PDL pipeline says which stages a task runs - so the tab draws both and names which is which.">
+        <div class="settings-row" id="pipeline-pdl-row" title="The pipelines a TASK is carried through: the PDL bundle this panel reads (config.pipelineBundleFile), the same list the queue's task pipeline window offers when a task is put on a pipeline. It is a different object from the ladder above - a ladder rung says what a tree may do with a branch, a PDL pipeline says which stages a task runs - so the tab draws both and names which is which. When the file is refused, the loader's own sentence is printed below and this row offers the repair: import the bundle this checkout ships (pipeline-bundle.seed.json) over the unreadable one.">
           <span>Pipelines a task runs on <span class="settings-info">ⓘ</span></span>
-          <span class="settings-unit mono" id="pipeline-pdl-summary">reading…</span>
+          <span class="settings-unit mono"><span id="pipeline-pdl-summary">reading…</span> <button type="button" id="pipeline-pdl-repair" hidden title="import the bundle this checkout ships (pipeline-bundle.seed.json) over the file the loader refused — the import replaces a bundle it cannot read instead of merging into it, and the tab re-reads when it lands">repair from the seed</button></span>
         </div>
         <div class="settings-preview mono" id="pipeline-pdl-source">…</div>
+        <div class="settings-preview mono" id="pipeline-pdl-repair-note" role="status" aria-live="polite" hidden></div>
         <div id="pipeline-pdl-list"></div>
         <div class="settings-row" id="pipeline-map-row" title="The whole library on ONE page: every catalogue definition and every pipeline in the bundle file, drawn as a map — each stage a node with its ordinal, title and who runs it, and the exit check or gate on the arrow that leaves it. It is a generated page (npm run render:pipeline-map) of the two seed files this panel ships, so it shows the library as written, not a draft open in the editor. Opens in its own tab, so the panel stays on the tab you are editing in.">
           <span>Pipeline map <span class="settings-info">ⓘ</span></span>
