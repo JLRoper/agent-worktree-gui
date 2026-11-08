@@ -7,6 +7,9 @@ import { readFileSync } from "node:fs";
 import { sliceRegion } from "../tools/panel-testkit.mjs";
 
 const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+// The chart's columns moved to public/charts.js in step 3 of docs/reports/module-map-2026-11-07.html's order of
+// work, so the section pin below reads the file that carries it now; the cell itself is still built in app.js.
+const charts = readFileSync(new URL("../public/charts.js", import.meta.url), "utf8");
 const code = sliceRegion(src, "ahead / behind cell");
 // The two pins at the bottom of this file are pins on a SECTION, cut the way every other slice in test/ is cut: a
 // `// ---- name … // ---- end name` pair travels as one, so an anchor cannot end up outside the section whose closer
@@ -14,7 +17,7 @@ const code = sliceRegion(src, "ahead / behind cell");
 // <section>")) — has no begin marker: a vertical cut that carries the pinned text into the neighbouring section
 // leaves both markers where they were and only GROWS the window over that section's code, so every assertion still
 // passes on a slice that is no longer the section it names. Cut from the region and the text is simply absent.
-const chartColumns = sliceRegion(src, "chart columns");
+const chartColumns = sliceRegion(charts, "chart columns");
 const mergeControl = sliceRegion(src, "merge control");
 const esc = (s) =>
   String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");

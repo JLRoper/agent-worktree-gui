@@ -38,7 +38,7 @@
 //                 writes 12 and gives the field up, and the "all" preset writes 0, draws every row and takes the arrow
 //                 away; a count larger than the list draws the whole list
 //   driven        a second boot with NEITHER key: 10 by default, and the default is not written back to the file
-//   inspected     that the slice is taken after the sort is read off the source (`chartTopSplit` in public/app.js
+//   inspected     that the slice is taken after the sort is read off the source (`chartTopSplit` in public/charts.js
 //                 sorts `all` and then slices it) as well as driven through the DOM
 //
 // The browser half needs a Playwright install. Point the script at one with PANEL_PLAYWRIGHT_ROOT (a directory holding

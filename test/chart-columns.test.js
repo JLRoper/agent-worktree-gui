@@ -23,12 +23,17 @@ import { CHART_COLUMN_IDS, DEFAULT_HIDDEN_COLUMNS, REQUIRED_COLUMN_ID, chartColu
 import { post, sliceRegion, startPanel } from "../tools/panel-testkit.mjs";
 
 const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+// The chart's own code moved out of public/app.js into public/charts.js in step 3 of
+// docs/reports/module-map-2026-11-07.html's order of work. The column region is read from the file that carries it
+// now; `src` stays public/app.js for the colspan pins at the bottom, because the rows that span the table are still
+// built there.
+const charts = readFileSync(new URL("../public/charts.js", import.meta.url), "utf8");
 const esc = (s) =>
   String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 // The page's own region, run with a stub `state`: the same function the browser calls, with no board under it. The
 // owner column is decided from `state.rows` and `state.assistant.assistants`, so both are part of the stub.
-const region = sliceRegion(src, "chart columns");
+const region = sliceRegion(charts, "chart columns");
 const page = (settings = {}, extra = {}) =>
   new Function("state", "esc", `${region}; return { CHART_COLUMNS, shownColumns, wtColspan, chartHeaderHtml, ownerMatters };`)(
     { settings, rows: new Map(), assistant: null, ...extra },
