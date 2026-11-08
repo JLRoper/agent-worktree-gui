@@ -130,7 +130,11 @@ window.WMApp.queueCards = function queueCards(deps) {
     t.stale
       ? `stale — the file still says running, but ${String(t.staleWhy || "its thread has no live run").replace(/^that thread/, "its thread")}`
       : t.state === "running"
-        ? "running — a run is carrying it; its agent's own status is on the facts line"
+        ? t.runBy === "run" && t.runId
+          ? `running — run ${t.runId} is ${t.runStatus || "live"}: the row's verdict is read from that run, not from the thread it shares`
+          : t.guessed
+            ? "running — a run is carrying it, but the row names no run id: this verdict is a guess from its tree path or thread"
+            : "running — a run is carrying it; its agent's own status is on the facts line"
         : t.state === "parked"
           ? "parked — stopped until the condition in the note is released; nothing starts it by itself"
           : t.state === "done"
@@ -302,13 +306,37 @@ window.WMApp.queueCards = function queueCards(deps) {
   // One sub-row per agent. The whole line is the opener — it carries the mark this RUN owns (not the task's) and the
   // card's own chip — and pressing it opens that agent's card AND the console of the turn it is on (openAgentTurn),
   // not just the card header.
+  //
+  // The RUN ID rides beside the current thread, because a thread is not one run: two records can share one slug (a
+  // failed attempt and its live retry), and the id is the only thing on the card that says which record the row's
+  // verdict was read from. A row with no run id says so — `guessing` — instead of letting a thread match pass for
+  // evidence.
   function queueAgentHtml(id, t, thread, jobs) {
-    const job = jobs && typeof jobs.get === "function" ? jobs.get(thread) : null;
+    const threads = Array.isArray(t?.threads) && t.threads.length ? t.threads.filter(Boolean) : t?.thread ? [t.thread] : [];
+    const current = threads.length ? threads[threads.length - 1] : "";
+    const onCurrent = thread === current;
+    // The row's OWN run is what its chip says when the row names one and the verdict came from it (queue.js's
+    // `runningFlag`). Otherwise the chip keeps reading the newest turn on the thread, which is the old behaviour.
+    const rowRun = onCurrent && t?.runId && String(t?.runBy || "") === "run" ? { status: t.runStatus } : null;
+    const job = rowRun || (jobs && typeof jobs.get === "function" ? jobs.get(thread) : null);
     const chip = queueAgentChip(job);
     const label = String(assistantThreadName(thread) || "").trim();
     const named = label && label !== thread;
     const open = `data-as-qopen="${esc(thread)}" data-as-qid="${esc(String(t.id))}"`;
     const title = `open ${named ? `“${label}” ` : ""}(${thread})'s card and its current console turn — this agent's run is ${chip.word}, read from /api/jobs`;
+    // What the row is ON, in the one word an id can be: the run id itself. Absent from a queued row (nothing is
+    // running it), present on a running or parked one, and the record on a done one. `guessing` is the same slot with
+    // the opposite claim: there is no run id, so the state above it was inferred from the tree path or the thread.
+    const runChip =
+      onCurrent && t?.runId && t?.state !== "queued"
+        ? `<span class="as-task-agent-run" data-as-qrun="${esc(String(t.runId))}" title="${esc(
+            `run ${t.runId} — the run this row names; ${t.state === "running" ? `its status (${t.runStatus || "unknown"}) is what the row's running/stale verdict is read from` : "kept as the record of the run this row was last on"}`,
+          )}">${esc(String(t.runId).length > 24 ? `${String(t.runId).slice(0, 23)}…` : String(t.runId))}</span>`
+        : onCurrent && t?.state === "running" && t?.guessed
+          ? `<span class="as-task-agent-run is-guess" title="${esc(
+              `no run id on this row — the running/stale verdict is a GUESS from ${t.runBy === "thread" ? `its thread (${thread})` : "a live run in its tree path"}; the next cut or resume writes the run id, and then this is evidence`,
+            )}">guessing</span>`
+          : "";
     // The stopped chip is a real <button>: that IS the role, the tab stop and the Enter/Space activation in one
     // element, so no `role=`/`tabindex=` has to be written onto a span. The word stays the status and the ↻ is the
     // glyph the board's own stopped pill already carries, so a reader who has pressed one recognises the other.
@@ -324,6 +352,7 @@ window.WMApp.queueCards = function queueCards(deps) {
     return `<div class="as-task-agent" role="button" tabindex="0" ${open} title="${esc(title)}" aria-label="${esc(title)}">
             <span class="as-agent-mark is-${esc(chip.markState)}" aria-hidden="true">${chip.mark}</span>
             <code class="as-task-agent-thread">${esc(thread)}</code>
+            ${runChip}
             ${named ? `<span class="as-task-agent-label">${esc(label)}</span>` : ""}
             ${pill}
           </div>`;
