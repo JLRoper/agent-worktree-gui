@@ -9,7 +9,8 @@
 //   - a row the reader REQUEUES over a stage that has already settled is advanced by the next sweep, not run again.
 //     That is the leftover state a panel restart or a manual requeue leaves behind, and starting the same stage
 //     again is the stall this driver must not have.
-//   - probe-fix: probe → fix, once each, then the last settle finishes the row on the landing rule.
+//   - probe-fix: probe → fix, once each, then the last stage's own verdict finishes the row — its artifact is a patch,
+//     not a PR, so there is no landing for the settle to read.
 //   - author-review-revise: author → review ⇄ author (a gate's verdict decides) → revise, so a sequence, a routed
 //     loop and a finish are all crossed without a person pressing start.
 //
@@ -231,19 +232,21 @@ test("a row left queued over a settled stage advances on the next sweep instead 
   assert.equal(probeRun.decision.trigger, "stage-settled", "the order was read: the entry now carries its decision");
 });
 
-test("probe-fix walks probe → fix once each, and the last settle finishes the row on the landing rule", async (t) => {
+test("probe-fix walks probe → fix once each, and the last stage settles the row on its own verdict", async (t) => {
   const h = harness(t, { pipelines: ["probe-fix"] });
   const id = h.start("probe then fix");
   assert.equal(h.put(id, "probe-fix", "probe").ok, true);
-  // The tree lands when the pipeline is over: the settle's own rule, untouched by this change.
-  h.state.rows.push({ path: h.state.tree, verdict: "MERGED" });
+  // No landing row is planted: the seed's fix stage writes a patch, not a PR, and the defect was that such a row
+  // waited for a MERGED that could never arrive.
 
   const row = await walk(h, id, { until: (r) => r.state === "done" });
   assert.deepEqual(h.state.started.map((s) => s.stage), ["probe", "fix"]);
-  assert.equal(row.state, "done");
+  assert.equal(row.state, "done", "the pipeline is over and nothing is left to land");
   assert.equal(row.pipelineRun.stage, "fix", "the record still names the stage that finished it");
   assert.deepEqual(row.pipelineRun.visits, { probe: 1, fix: 1 });
-  assert.match(row.reason, /PR reads MERGED/);
+  assert.match(row.reason, /pipeline probe-fix is over at fix/, "the row says why it is finished");
+  assert.match(row.reason, /not a PR to land/);
+  assert.doesNotMatch(row.reason, /PR reads/, "no landing was read, and none was invented");
 });
 
 test("author-review-revise crosses a sequence, a gate-routed loop and a finish, with no hand-start", async (t) => {

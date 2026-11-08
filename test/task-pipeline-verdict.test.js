@@ -217,7 +217,7 @@ test("a converged loop ends at its verdict — the cap is never charged for the 
 
   await runStage(id); // S3 visit 2 settles: verdict "pass" routes nowhere
   row = rowOf(id);
-  assert.equal(row.state, "running", "the pipeline is over; the settle, not the driver, finishes the row");
+  assert.equal(row.state, "done", "the pipeline is over and its last artifact is not a PR, so the row is settled on the verdict");
   assert.equal(row.hold, null, "no cap park: the verdict ended the loop before it was charged");
   assert.equal(row.pipelineRun.stage, "S3");
   assert.equal(row.pipelineRun.crossings["H-3"], 1, "the converged round spent no second crossing");
@@ -232,13 +232,15 @@ test("a converged loop ends at its verdict — the cap is never charged for the 
   assert.match(last.decision.reason, /"pass"/);
   assert.match(last.decision.reason, /pipeline is over/);
   assert.equal(row.pipelineRun.waitingFor ?? null, null, "a converged row is not waiting on a decision");
+  assert.match(row.reason, /pipeline probe-fix-loop is over at S3/, "the row says why it is finished");
+  assert.match(row.reason, /not a PR to land/);
 
-  // And the settle finishes it on the rule it has always had: the tree's PR reads MERGED.
-  state.rows.push({ path: state.tree, verdict: "MERGED" });
+  // The end is final: with no PR to read, there is no landing for the settle to wait on, and the next sweep does not
+  // start the stage again.
+  const started = state.started.length;
   await runStage(id);
-  row = rowOf(id);
-  assert.equal(row.state, "done");
-  assert.match(row.reason, /PR reads MERGED/);
+  assert.equal(rowOf(id).state, "done");
+  assert.equal(state.started.length, started, "a finished pipeline is not restarted");
   assert.equal(state.started.length, 6, "three stages, twice — and no third round for a converged pipeline");
 });
 

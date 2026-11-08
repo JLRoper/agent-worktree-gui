@@ -37,7 +37,11 @@ const bundleDoc = {
     {
       id: "two",
       title: "Two stages",
-      stages: [stage(1), stage(2)],
+      // The SECOND stage's artifact is the pull request this pipeline lands (artifact kind `pr`), so the end of this
+      // walk is the settle's landing rule: the row is finished when that PR reads MERGED. A stage declaring any other
+      // artifact is settled by the driver on its own verdict instead — that half is pinned in
+      // test/task-pipeline-drive.test.js, and this file stays about the sweep that performs the landing read.
+      stages: [stage(1), { ...stage(2), artifact: { ...stage(2).artifact, kind: "pr" } }],
       gates: [],
       handoffs: [{ id: "h1", from: "S1", to: "S2", artifact: "artifact-1", kind: "sequence" }],
     },
