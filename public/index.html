@@ -36,6 +36,7 @@
       <button id="btn-settings-close" type="button" title="close (Esc)">✕</button>
     </div>
     <div class="settings-tabs" id="settings-tabs" role="tablist" aria-label="Settings sections">
+      <button type="button" class="settings-tab" id="settings-tab-general" role="tab" aria-controls="settings-panel-general" aria-selected="false" tabindex="-1" data-settings-tab="general" title="What this panel costs the machine, and what one of its turns costs the model. Scan workers is how many git scans run at once — each one is a process creation, which this machine charges seconds for while an endpoint agent filters it; row refresh is how often a worktree row is re-read, and the board's chips are only as fresh as this number. Both are written into config.json and applied at once, no restart. The turn briefing budget is a ceiling in characters on the text one assistant turn appends (queue digest, board, charter): zero is off, and a turn that fits is sent byte for byte. The tab you choose is remembered in this browser."><span class="settings-tab-label">General</span><span class="settings-tab-count" aria-hidden="true" hidden>0</span></button>
       <button type="button" class="settings-tab" id="settings-tab-display" role="tab" aria-controls="settings-panel-display" aria-selected="true" tabindex="0" data-settings-tab="display" title="How the board and the agent's output look. Panel font covers the headings, labels, buttons and whatever you type; terminal font and weight cover the console and the tool lines inside it; Thinking text, Skill output and Console text each set a colour for their own part of it; the console also carries the one size its words, a tool's output and the reasoning all read, and a skill's box has a size of its own. All of it is saved in this browser. The tab you choose is remembered in this browser."><span class="settings-tab-label">Display</span><span class="settings-tab-count" aria-hidden="true" hidden>0</span></button>
       <button type="button" class="settings-tab" id="settings-tab-cards" role="tab" aria-controls="settings-panel-cards" aria-selected="false" tabindex="-1" data-settings-tab="cards" title="What a card shows and does for you. The tab you choose is remembered in this browser."><span class="settings-tab-label">Cards</span><span class="settings-tab-count" aria-hidden="true" hidden>0</span></button>
       <button type="button" class="settings-tab" id="settings-tab-board" role="tab" aria-controls="settings-panel-board" aria-selected="false" tabindex="-1" data-settings-tab="board" title="How the board behaves while you are reading it, and the two gestures that read it now instead of on the clock. The tab you choose is remembered in this browser."><span class="settings-tab-label">Board</span><span class="settings-tab-count" aria-hidden="true" hidden>0</span></button>
@@ -49,6 +50,45 @@
       <button type="button" class="settings-tab" id="settings-tab-bundles" role="tab" aria-controls="settings-panel-bundles" aria-selected="false" tabindex="-1" data-settings-tab="bundles" title="The studio pipeline bundles this panel has read — one exported file per install, its pipelines in order, and the loader's own refusal when the file is missing or bad. Opening a task's pipeline window draws the stages; this tab names what was imported and what was refused, so a broken export is a code and a sentence rather than a generic error. The tab you choose is remembered in this browser."><span class="settings-tab-label">Bundles</span><span class="settings-tab-count" aria-hidden="true" hidden>0</span></button>
     </div>
     <div class="settings-body">
+
+      <div class="settings-group" id="settings-panel-general" data-settings-group="general" role="tabpanel" aria-labelledby="settings-tab-general" hidden>
+        <label class="settings-row" for="general-threads" title="How many git scans run at once. Every worktree row is read by spawning git (status, log, rev-list), and each of those is a process creation: this machine charges 0.6-4.7s for one while the endpoint agent filters it, so five workers is five of them running beside every command your agents run. Lowering this makes the background read cheaper and the board no less correct — it only delays a row's refresh. Written into config.json and applied at once: the pool is rebuilt live.">
+          <span>Scan workers <span class="settings-info">ⓘ</span></span>
+          <input id="general-threads" type="number" inputmode="numeric" step="1" min="1" max="16">
+          <span class="settings-unit mono">threads</span>
+        </label>
+        <div class="settings-presets">
+          <button type="button" data-general-threads="2">2</button>
+          <button type="button" data-general-threads="3">3</button>
+          <button type="button" data-general-threads="5">5</button>
+          <button type="button" data-general-threads="8">8</button>
+        </div>
+
+        <label class="settings-row" for="general-worktree" title="How often a worktree row is re-read by the cheap pass. Rows flash when something changed, so this is the freshness of every chip on the board; it is also the volume of git processes the panel spawns. Written into config.json and applied at once — no restart, and no row is dropped.">
+          <span>Row refresh <span class="settings-info">ⓘ</span></span>
+          <input id="general-worktree" type="number" inputmode="numeric" step="1" min="5" max="120">
+          <span class="settings-unit mono">s</span>
+        </label>
+        <div class="settings-presets">
+          <button type="button" data-general-worktree="5">5 s</button>
+          <button type="button" data-general-worktree="15">15 s</button>
+          <button type="button" data-general-worktree="30">30 s</button>
+          <button type="button" data-general-worktree="60">1 min</button>
+        </div>
+
+        <label class="settings-row" for="general-budget" title="A ceiling, in characters, on the text one assistant turn appends: its queue digest, the board digest or marker, and the charter. Measured on this panel, an API call carried p50 123,786 input tokens and was re-read on every call of the turn. Zero is off — a turn is sent whole, which is how every panel behaved before this row existed. Above zero a turn that fits is still sent byte for byte; one that does not is cut at a line boundary, keeps the queue (written first) and says in its own words that the tail was cut. Stored on the assistant, so it survives a restart.">
+          <span>Turn briefing budget <span class="settings-info">ⓘ</span></span>
+          <input id="general-budget" type="number" inputmode="numeric" step="1000" min="0" max="40000">
+          <span class="settings-unit mono">chars</span>
+        </label>
+        <div class="settings-presets">
+          <button type="button" data-general-budget="0">off</button>
+          <button type="button" data-general-budget="8000">8k</button>
+          <button type="button" data-general-budget="16000">16k</button>
+          <button type="button" data-general-budget="32000">32k</button>
+        </div>
+        <div class="settings-preview mono" id="general-preview">…</div>
+      </div>
 
       <div class="settings-group" id="settings-panel-display" data-settings-group="display" role="tabpanel" aria-labelledby="settings-tab-display">
 
