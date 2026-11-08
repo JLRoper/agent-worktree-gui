@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ping-pong round 6: the driver cut the tree, settled the draft and handed the critic a pinned file</title>
+<style>
+  :root { --bg:#0e1116; --panel:#151a21; --panel2:#1b212a; --line:#2a3340; --text:#e6e9ef; --dim:#9aa5b4;
+           --dimmer:#6f7a89; --green:#7ee787; --red:#ff9c94; --amber:#f0c674; --blue:#9ecbff; --purple:#c8a6ff;
+           --mono:ui-monospace,"Cascadia Mono",Consolas,"SF Mono",Menlo,monospace;
+           --ui:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  * { box-sizing:border-box; }
+  html { background:var(--bg); }
+  body { margin:0; color:var(--text); font:15px/1.62 var(--ui); }
+  .wrap { max-width:1120px; margin:0 auto; padding:30px 24px 72px; }
+  a { color:var(--blue); text-decoration:none; } a:hover { text-decoration:underline; }
+  h1 { font-size:27px; line-height:1.22; margin:4px 0 8px; letter-spacing:-0.2px; }
+  h2 { font-size:19px; margin:44px 0 12px; padding-top:16px; border-top:1px solid var(--line); }
+  h3 { font-size:15.5px; margin:26px 0 8px; color:var(--blue); }
+  p { margin:9px 0; }
+  ul,ol { margin:8px 0 8px 22px; padding:0; } li { margin:6px 0; }
+  code,.mono { font-family:var(--mono); font-size:12.8px; }
+  code { background:var(--panel2); border:1px solid var(--line); border-radius:4px; padding:0 4px; }
+  pre { background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:12px 14px; overflow-x:auto;
+         font-family:var(--mono); font-size:12.4px; line-height:1.55; }
+  .kicker { color:var(--dimmer); font-size:12px; text-transform:uppercase; letter-spacing:0.12em; }
+  .sub { color:var(--dim); font-size:16px; margin:0 0 14px; max-width:940px; }
+  .meta { color:var(--dim); font-size:12.5px; }
+  .meta code { font-size:12px; }
+  nav { margin:18px 0 8px; padding:12px 16px; background:var(--panel); border:1px solid var(--line);
+        border-radius:8px; font-size:13px; line-height:1.9; }
+  nav b { color:var(--dimmer); font-weight:600; text-transform:uppercase; font-size:11px; letter-spacing:0.1em; }
+  nav a { margin:0 10px 0 0; white-space:nowrap; }
+  .lead { background:var(--panel); border:1px solid var(--line); border-left:4px solid var(--blue);
+          border-radius:8px; padding:14px 18px; margin:18px 0; }
+  .lead p { margin:5px 0; }
+  .verdict { background:#13261a; border:1px solid #2f5f38; border-left:4px solid var(--green);
+             border-radius:8px; padding:13px 18px; margin:18px 0; }
+  .verdict h4 { color:var(--green); margin:0 0 4px; }
+  .warn { background:#2a2414; border:1px solid #5c4d22; border-left:4px solid var(--amber);
+          border-radius:8px; padding:12px 18px; margin:16px 0; }
+  .warn h4 { color:var(--amber); margin:0 0 4px; }
+  .box { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px 18px; margin:14px 0; }
+  .tw { overflow-x:auto; margin:10px 0 16px; border:1px solid var(--line); border-radius:8px; }
+  table { border-collapse:collapse; width:100%; font-size:13px; }
+  th,td { text-align:left; vertical-align:top; padding:7px 10px; border-bottom:1px solid var(--line); }
+  th { background:var(--panel2); color:var(--dim); font-weight:600; font-size:12px;
+       text-transform:uppercase; letter-spacing:0.05em; }
+  tr:last-child td { border-bottom:0; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin:14px 0; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px 14px; }
+  .card .n { font-family:var(--mono); font-size:19px; color:var(--green); }
+  .card .l { color:var(--dim); font-size:12px; margin-top:2px; }
+  .ok { color:var(--green); } .bad { color:var(--red); } .warnpill { color:var(--amber); }
+  .pill { display:inline-block; margin-left:6px; padding:0 6px; border-radius:999px; font-size:10.5px;
+          text-transform:uppercase; letter-spacing:0.04em; color:var(--amber); border:1px solid #5c4d22; background:#241f10; }
+  .small { font-size:12.5px; color:var(--dim); }
+</style>
+</head>
+<body>
+<div class="wrap">
+<p class="kicker">Agent board - pipeline run report - 2026-11-08</p>
+<h1>Ping-pong round 6: the driver cut the tree, settled the draft and handed the critic a pinned file</h1>
+<p class="sub">Task #333 on Assistant #2's queue, the <code>ping-pong</code> bundle pipeline, project <code>agent-worktree-gui</code>. This page reads the queue row, the two stage-run entries, the two job records and the two commits, and separates what the panel did by itself from what cost time.</p>
+<p class="meta">row <code>#333</code> - pipeline <code>ping-pong</code> - tree <code>.worktrees/write-the-draft-the-brief-asks-for-in-970633</code> - branch <code>wtgui/write-the-draft-the-brief-asks-for-in-970633</code> at <code>985a84b</code> - records read 2026-11-08 23:09:55Z</p>
+
+<nav><b>Contents</b><br>
+<a href="#answer">The answer</a><a href="#well">What went well</a><a href="#bumps">The speed bumps</a><a href="#sequence">The stage sequence</a><a href="#artifacts">The two artifacts</a><a href="#limits">What this does not prove</a><a href="#evidence">The evidence</a>
+</nav>
+
+<h2 id="answer">The answer</h2>
+<div class="lead">
+<p><b>The mechanics work.</b> A queue row put on <code>ping-pong/draft</code> was given a tree 14.3 s after the assignment, started its drafter 15.1 s after it, and the driver settled the draft stage on its own run's status at <code>2026-11-08T22:59:23.923Z</code>. In the same pass it charged the <code>H-01</code> edge and built the critic's prompt with the draft pinned by commit, blob and sha256. Nobody cut a tree, moved a stage, or wrote a stage entry by hand.</p>
+<p><b>The speed bumps are around the driver, not in its graph.</b> A pipeline row takes two writes to create; the artifact path is shared across rounds, so the tree was cut holding round 5's draft and critique; G1 has no decision record, so the loop is taken on kind order and the verdict is prose; every stage worker is told to push and open a PR by the LANDING paragraph, so a document stage produced PR #607; and an unattended spawn still tries <code>execute_code</code> before its policy refuses it.</p>
+</div>
+
+<div class="grid">
+<div class="card"><div class="n">6.0 s</div><div class="l">pipeline assignment to tree cut</div></div><div class="card"><div class="n">7.3 s</div><div class="l">assignment to the drafter's start</div></div><div class="card"><div class="n">9.0 min</div><div class="l">drafter's run</div></div><div class="card"><div class="n">52.2 s</div><div class="l">settle lag after the draft</div></div><div class="card"><div class="n">587 w</div><div class="l">the draft</div></div><div class="card"><div class="n"> - </div><div class="l">critic's run (so far)</div></div>
+</div>
+
+<h2 id="well">What went well</h2>
+<ol>
+<li><b>The row was driven, not hand-carried.</b> The journal reads: added <code>22:49:15.904Z</code>, put on <code>ping-pong/draft</code> at <code>22:49:24.164Z</code>, tree cut at <code>22:49:30.187Z</code>, <code>starting draft</code> at <code>22:49:31.450Z</code>, linked to thread <code>wtgui-write-the-draft-the-brief-as-2316b2</code> at <code>22:49:32.495Z</code>. Six seconds from the assignment to a tree, seven to a worker.</li>
+<li><b>The tree cut is a record on the row.</b> <code>pipelineRun.tree</code> carries the path, the branch, <code>startSha 985a84b</code>, <code>cutAt</code> and <code>by: "panel"</code>. The drafter's prompt carried the same path, the branch, <code>HEAD 985a84b</code> and <code>0 uncommitted files</code> in its INPUTS block, so the worker did not have to guess where it was.</li>
+<li><b>The settle reads the run, not the prose.</b> Job <code>50a24831</code> ended <code>2026-11-08T22:58:31.719Z</code> with status <code>done</code>; the next sweep settled <code>ping-pong/draft#1</code> with <code>status: done</code>, <code>settledAt</code>, <code>artifact.present: true</code>, <code>sha256 014087baed19</code> and <code>commit a943e6d8a3fb</code>. The lag was 52.2 s.</li>
+<li><b>The hand-off is pinned, not described.</b> The critic's prompt reads: <code>handed on draft ledger/ping-pong/draft.md commit a943e6d8a3fb blob ... sha256 ... writer drafter (draft -&gt; critique, handoff H-01, sequence)</code>. The row's <code>crossings</code> reads <code>{"H-01": 1}</code> and <code>via</code> reads <code>H-01</code>.</li>
+<li><b>The draft is a real artifact.</b> 587 words, cites <code>lib/task-pipeline-drive.js</code>, <code>lib/task-pipeline.js</code> and <code>lib/assistant/queue.js</code> by line, and ends with an <i>Unsure</i> line rather than a summary. Commit <code>d2c86f4</code>, one file,  1 file changed, 29 insertions(+), 54 deletions(-).</li>
+<li><b>The row's ledger is readable.</b> <code>stageRuns[]</code> carries the run id, stage, visit, thread, job, <code>at</code>, <code>status</code>, <code>settledAt</code>, the artifact's hash and the commit. A reader can reconstruct the round from the queue file alone, without the panel's UI or the job store.</li>
+<li><b>The second agent read the pinned file and wrote a real critique.</b> <code>ledger/ping-pong/critique.md</code> is 1048 words, five notes, all blocking, and its verdict line is <i>Not accepted in this round</i>. It checked every citation, named the round-5 file it replaced, and did not rewrite the draft. That is the exchange the pipeline exists to produce, and it happened on the first crossing.</li>
+</ol>
+
+<h2 id="bumps">The speed bumps</h2>
+<ol>
+<li><b>A pipeline row takes two writes.</b> <code>add</code> always creates the row <code>queued</code>; a second <code>pipeline</code> POST puts it on a stage. This run's two posts are <code>22:49:15.904Z</code> and <code>22:49:24.164Z</code>, 8.3 s apart. A crash between them leaves a queued row with no stage, which reads like ordinary work and is easy to miss.</li>
+<li><b>The artifact path is shared across rounds, so the tree starts holding the last round's work.</b> The tree was cut from <code>985a84b</code> and already held <code>draft.md</code> (4349 bytes) and <code>critique.md</code> (12284 bytes) from round 5. The drafter's commit is <b>9 insertions, 28 deletions</b>: it overwrote the old draft. Round 2 will overwrite this one. The only per-round identity is the stage run's pin (commit + blob + sha256), never the path.</li>
+<li><b>G1 cannot be asked.</b> The bundle's <code>ping-pong.gates[0]</code> carries <code>decision: null</code>. <code>gateAfter</code> only answers a gate that declares a decision (<code>lib/task-pipeline-drive.js:722-726</code>), so the loop edge <code>H-02</code> is taken in kind order. If the critic says accept, the driver still enters draft visit 2; if it says revise, the driver cannot route the rework. The next move is the cap, not the verdict.</li>
+<li><b>Every stage worker is told to push and open a PR.</b> The <code>LANDING</code> paragraph in the worker's prompt comes from <code>lib/branch-policy.js:55-62</code>, not from the stage document. The drafter pushed <code>wtgui/write-the-draft-the-brief-asks-for-in-970633</code> and opened PR <a href="https://github.com/JLRoper/agent-worktree-gui/pull/607">#607</a> (OPEN). A document stage's artifact is a file in the ledger; the PR is a remote write nobody asked for, and the critic's own <code>gh pr create</code> will meet the same branch and the same PR.</li>
+<li><b>The settle lags the run by about a minute.</b> The drafter's job ended <code>2026-11-08T22:58:31.719Z</code> and the stage settled <code>2026-11-08T22:59:23.923Z</code>: 52.2 s. The wait is the panel's job card plus the sweep, not the worker. For a nine-minute stage that is tolerable; for a one-minute stage it is most of the round.</li>
+<li><b>The unattended spawn's toolset includes a tool its policy refuses.</b> The critic's first call was <code>execute_code</code>, answered with <i>BLOCKED: this session runs on an unattended platform (api_server) with no user present</i>. It cost a turn before the fallback to <code>terminal</code>. A spawn prompt that names the permitted tools would save it.</li>
+<li><b>The cap is a person's job, and there is no accept exit.</b> <code>cap: "3 rounds"</code> allows three crossings; the fourth is refused and the row parks with <code>pipeline-cap</code>. A requeue does not clear it; <code>pipeline-release {release: "cap"}</code> does. Because G1 has no decision record, a ping-pong that converged on round 1 still runs to the cap and then parks.</li>
+<li><b>The row's clock is the stage's, not the round's.</b> <code>enteredAt</code> was re-stamped to <code>2026-11-08T22:59:23.923Z</code> when the row entered critique; the round began at <code>2026-11-08T22:49:15.901Z</code>. "Time in stage" is not "time in round"; the stage-run entries are the only place the earlier clock survives.</li>
+</ol>
+
+<h2 id="sequence">The stage sequence, with the clocks the records carry</h2>
+<div class="tw"><table>
+<tr><th>stage run</th><th>visit</th><th>thread</th><th>job</th><th>started</th><th>job ended</th><th>job</th><th>settle lag</th><th>status</th><th>commit</th></tr>
+<tr><td><code>ping-pong/draft#1</code></td><td>1</td><td class='mono'>wtgui-write-the-draft-the-brief-as-2316b2</td><td class='mono'>50a24831</td><td>2026-11-08T22:49:31.036Z</td><td>2026-11-08T22:58:31.719Z</td><td>9.0 min</td><td>52.2 s</td><td><span class='ok'>done</span></td><td class='mono'>a943e6d8a3fb</td></tr>
+<tr><td><code>ping-pong/critique#1</code></td><td>1</td><td class='mono'>wtgui-read-the-draft-against-the-b-22d394</td><td class='mono'>889cc700</td><td>2026-11-08T22:59:23.923Z</td><td> - </td><td> - </td><td> - </td><td><span class='warnpill'>running</span></td><td class='mono'></td></tr>
+</table></div>
+<p class="small">The settle lag is <code>settledAt - endedAt</code> on the stage-run entry; the job duration is <code>endedAt - at</code>. The critic's row has a <code>status</code> of <code> - </code> until its run settles; that is the record being honest, not a missing value.</p>
+
+<div class="verdict">
+<h4>The critique is on disk</h4>
+<p><code>ledger/ping-pong/critique.md</code>, 1048 words, sha256 <code>efab921dda9351b3</code>. Verdict line: <span class="mono">Not accepted in this round. The brief's five sections are all there, each in its own paragraph, with the module names it asks for and a real surprise at the end: settleTasks would requeue a failed run with attempts + 1, while the driver parks the row and stamps a manual hold; the driver runs first, so the park is what the queue's settle finds (lib/assistant.js:1300, :1315). Every other</span>. Its header says it replaces the round-5 critique of the previous draft and names that critique's history at <code>b0a382f</code>.</p>
+</div>
+
+<h2 id="artifacts">The two artifacts</h2>
+<div class="box">
+<p><b>The draft.</b> <code>ledger/ping-pong/draft.md</code>, 587 words, sha256 <code>014087baed19cf3e</code>, commit <code>a943e6d8a3fb</code>. Its last line is the uncertainty the brief asked for: <span class="small">whether the park is right for a pipeline row's failure, since the manual hold makes it unreleasable by the sweep while the queue's own settle keeps a retry path for that run, and only call order separates them.</span></p>
+<p><b>The critique.</b> <code>ledger/ping-pong/critique.md</code>, 1048 words, sha256 <code>efab921dda9351b3</code>. Verdict line: Not accepted in this round. The brief's five sections are all there, each in its own paragraph, with the module names it asks for and a real surprise at the end: settleTasks would requeue a failed run with attempts + 1, while the driver parks the row and stamps a manual hold; the driver runs first, so the park is what the queue's settle finds (lib/assistant.js:1300, :1315). Every other</p>
+</div>
+
+<h2 id="limits">What this does not prove</h2>
+<ul>
+<li><b>The loop had not been charged a second time when this page was read.</b> The row was at <code>critique</code> visit 1 with <code>crossings {'H-01': 1}</code>; the <code>H-02</code> back edge, its cap behaviour and the cap park are read from the bundle and the driver's own rules, not observed in this run. The critique's stage run had not settled when the page was written, so its commit and its own <code>settledAt</code> are the panel's next writes, not this page's facts.</li>
+<li><b>One run is one sample.</b> The settle lag and the drafter's duration depend on the gateway's card and the model; they are not a benchmark.</li>
+<li><b>The critique's verdict is not a decision record.</b> Even when it lands, the page can quote the prose; it cannot claim the driver read it.</li>
+</ul>
+
+<h2 id="evidence">The evidence</h2>
+<pre>2026-11-08T23:06:11.796Z  note  23:50Z: PR #605 MERGED e94fc2f: release tags are now moved by land and land-pr through tools/release-tag.mjs, verified with v1.66.13 moving to the merge commit and version-tags PASS at 455 bumps. Its verifier flagged four failed edits to foreign paths (a sibling project, agent-worktree-hub), the second such contamination tonight. #333 critique live on 22d394.</pre>
+<p class="small">Queue row: <code>~/.wag/state/assistants/assistant-2/queue.json</code>, task <code>#333</code>. Stage entries: <code>pipelineRun.stageRuns[]</code>. Jobs: <code>GET http://127.0.0.1:7331/api/jobs</code>. Bundle: <code>~/.wag/state/pipeline-bundle.json</code>, pipeline <code>ping-pong</code>. PR: <a href="https://github.com/JLRoper/agent-worktree-gui/pull/607">https://github.com/JLRoper/agent-worktree-gui/pull/607</a>. Tree: <code>.worktrees/write-the-draft-the-brief-asks-for-in-970633</code>.</p>
+</div>
+</body>
+</html>
