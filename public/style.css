@@ -195,6 +195,9 @@ button {
 }
 button:hover { background: #232936; }
 button:disabled { opacity: .5; cursor: default; }
+/* A steer press greys the box for the round trip: the box is contenteditable, where `disabled` is not a property
+   that paints anything, so this class is what button:disabled does for the button beside it. */
+.reply-box.steer-pending { opacity: .5; cursor: default; }
 button.primary { background: #1d3a57; border-color: #2b5480; color: #cfe6ff; }
 button.primary:hover { background: #24466a; }
 
