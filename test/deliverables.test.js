@@ -519,7 +519,10 @@ test("POST /api/deliverables/seen is a token-carrying write beside the open, and
   assert.match(block, /authorised\(req, config\.token\)/, "the token must be passed, not omitted");
   assert.match(block, /deliverables\.markSeen\(body\.seq\)/, "the watermark is the store's, keyed by the seq the page sent");
   assert.match(block, /seen\.error\) return sendJson\(res, 400/, "a non-integer seq is a 400, not a silent clear");
-  const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+  // The list's code moved to public/deliverables.js in step 3, and its wiring stayed in app.js: read both,
+  // so an assertion follows the code rather than the file it happened to live in.
+  const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8") + "\n" +
+    readFileSync(new URL("../public/deliverables.js", import.meta.url), "utf8");
   assert.match(app, /function deliverUnseenCount\(\)[\s\S]{0,200}?Number\(e\.seq\) > floor/, "the count is rows ABOVE the watermark");
   assert.match(app, /classList\.toggle\("has-unseen"/, "the highlight is a class, not an inline style");
   assert.match(app, /apiFetch\("\/api\/deliverables\/seen"/, "the page posts the watermark");
@@ -582,7 +585,10 @@ test("the store's onChange is one SSE frame, and the page listens for exactly th
     /deliverables\.onChange[\s\S]{0,200}?broadcast\(\{\s*type: "deliverable", seq: entry\.seq, kind: entry\.kind, title: entry\.title, at: entry\.at\s*\}\)/,
     "the frame carries seq, kind, title and at, and nothing else",
   );
-  const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+  // The list's code moved to public/deliverables.js in step 3, and its wiring stayed in app.js: read both,
+  // so an assertion follows the code rather than the file it happened to live in.
+  const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8") + "\n" +
+    readFileSync(new URL("../public/deliverables.js", import.meta.url), "utf8");
   assert.match(app, /state\.es\.addEventListener\("deliverable"/, "the page re-reads the list on the frame");
 });
 

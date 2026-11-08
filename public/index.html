@@ -968,6 +968,12 @@
        re-exports them on window.WMApp.charts; it declares (and binds its own settings rows), so that order
        costs nothing and nothing here waits on boot. -->
   <script src="/charts.js"></script>
+  <!-- The deliverables list, cut out of app.js (step 3 of the same order of work): the header button's popover,
+       its rows, its text filter and kind chips, its place and size on the page, the store read, the seen
+       watermark and the two openers. Loaded before app.js, which calls it by bare name and re-exports it on
+       window.WMApp.deliverables; it declares only, and the wiring that runs at load (the button's press, the first
+       read, the poll and the close/place listeners) stays in app.js. -->
+  <script src="/deliverables.js"></script>
   <script src="/app.js"></script>
   <!-- The update check. Loaded after app.js because it reads that file's `state`, `turnLive` and
        the banner helpers by name — at call time, never at load, so nothing here waits on boot. -->
