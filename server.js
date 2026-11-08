@@ -101,10 +101,10 @@ import {
 import { listProfiles, saveProfile, deleteProfile, profileWithKey } from "./lib/provider-profiles.js";
 import { hermesSessionTail } from "./lib/activity.js";
 import { Assistant, ASSISTANT_THREAD, ElementChannel, createBridgeChannel } from "./lib/assistant.js";
-// The per-assistant task queue's HTTP adapter. One import and one call site: the module owns the routes and the
-// transitions, the Assistant owns the file path and the read-modify-write, and this composition root only hands both
-// of them the transport helpers.
-import { createQueueRoutes } from "./lib/assistant/queue.js";
+// The per-assistant task queue's prefix, cut into routes/ (step 8 of docs/reports/module-map-2026-11-07.html). One
+// import and one row in the mount table: the module owns the routes and the wire shape, the Assistant owns the file
+// path and the read-modify-write, and this composition root only hands both of them the transport helpers.
+import { QUEUE_PATH, createQueueRoutes } from "./routes/assistant-queue.js";
 // The ticket watch's one route: a door onto `assistant.wake` for the cron poller, which lives outside this process.
 import { createTicketWatchRoutes } from "./lib/ticket-watch.js";
 // The assistant reset: settle an unknown admission through the gateway, then drop this assistant's queued wakes and
@@ -1256,10 +1256,16 @@ assistant = new Assistant({
 log(`assistant cwd: ${assistant.ensureCwd()}`);
 assistant.start();
 
-// The per-assistant task queue's routes. The factory takes the Assistant (which owns each queue's file and its
-// read-modify-write) and the transport helpers this file already imports, so the module itself knows nothing about
-// HTTP and a test can drive it with stubs. Mounted in the request handler as one line — see "the queue's routes".
-const queueRoutes = createQueueRoutes({ assistant, config, sendJson, readBody, authorised });
+// ---- the route prefixes cut out of this chain, mounted from one table ------------------------------------------
+// Step 8 of docs/reports/module-map-2026-11-07.html moves one prefix at a time into routes/, so a prefix is a ROW here
+// rather than another branch in the request chain below. A mount answers for its own paths and says `false` for
+// anything else, and the loop at the top of the handler asks each row in turn. The queue is the first row; the next cut
+// adds its row beside it and changes nothing else.
+const PREFIX_MOUNTS = [
+  // The per-assistant task queue (routes/assistant-queue.js). The factory takes the Assistant, which owns each queue's
+  // file and its read-modify-write, and the transport helpers this file already imports.
+  { prefix: QUEUE_PATH, handles: createQueueRoutes({ assistant, config, sendJson, readBody, authorised }) },
+];
 // The reset's route: the gateway client, the store path and the single-flight map live in that module; this file only
 // hands the same transport helpers to it and mounts it below.
 const resetRoutes = createResetRoutes({ assistant, config, sendJson, readBody, authorised });
@@ -2953,10 +2959,15 @@ const server = createServer(async (req, res) => {
     bootPassCanSatisfyReload = false;
   }
   try {
-    // ---- the per-assistant task queue ------------------------------------------------------------
-    // One module owns its routes, its transitions and its wire shape (lib/assistant/queue.js); this handler asks it
-    // first because its own guard is a string compare. `false` means "not mine" and falls through to the board.
-    if (await queueRoutes(req, res, route, url)) return;
+    // ---- the prefixes mounted from the table above ------------------------------------------------
+    // One module owns each prefix's routes, its transitions and its wire shape (routes/assistant-queue.js for the
+    // queue); this handler asks the table first because each mount's own guard is a string compare. A path that does
+    // not start with a row's prefix cannot be that row's, so the skip is a fast path and not a rule; `false` means
+    // "not mine" and falls through to the board.
+    for (const mount of PREFIX_MOUNTS) {
+      if (!route.startsWith(mount.prefix)) continue;
+      if (await mount.handles(req, res, route, url)) return;
+    }
     // …and the ticket watch's one door, beside the queue's routes: it wakes the assistant that owns a ticket list.
     if (await ticketWatchRoutes(req, res, route, url)) return;
 
