@@ -24,7 +24,8 @@
 //              own textarea/execCommand fallback has to do the copy, and then BOTH are made to fail and the
 //              button must not claim success
 //   inspected  that the mechanism is one delegated handler and one attribute (read off public/app.js and
-//              public/style.css), not per-renderer markup
+//              public/style.css), not per-renderer markup, and that the copy writer it calls is still the
+//              panel's one (now public/dom.js)
 //
 // The browser half needs a Playwright install; without one this prints BROWSER-HALF-NOT-RUN, counts a
 // failure and exits non-zero rather than passing on a half that never ran.
@@ -750,6 +751,7 @@ async function browserPhase(pw) {
 // ---- what can only be read off the source --------------------------------------------------------
 function sourceChecks() {
   const app = readFileSync(path.join(ROOT, "public", "app.js"), "utf8");
+  const dom = readFileSync(path.join(ROOT, "public", "dom.js"), "utf8");
   const css = readFileSync(path.join(ROOT, "public", "style.css"), "utf8");
   const lines = app.split(/\r?\n/);
   const count = (re) => lines.filter((l) => re.test(l)).length;
@@ -763,7 +765,7 @@ function sourceChecks() {
   check("inspected: the reveal is CSS, keyed on that attribute", count(/^\[data-copy\]:hover > \.copy-block \{/m) || (css.includes("[data-copy]:hover > .copy-block") ? 1 : 0), 1);
   ok("inspected: and the button is hidden by visibility+opacity+pointer-events, so it is out of the a11y tree and out of a selection", /\.copy-block \{[\s\S]*?visibility: hidden;[\s\S]*?pointer-events: none;[\s\S]*?user-select: none;/.test(css));
   ok("inspected: the gutter the button needs is reserved whether or not it is showing", /\[data-copy\] > \.job-out,[\s\S]*?padding-right: 24px;/.test(css));
-  ok("inspected: the copy writer is the panel's existing one (secure context, then a textarea fallback)", /async function copyText\(text\)/.test(app) && /document\.execCommand\("copy"\)/.test(app));
+  ok("inspected: the copy writer is the panel's existing one (secure context, then a textarea fallback)", /async function copyText\(text\)/.test(dom) && /document\.execCommand\("copy"\)/.test(dom));
 }
 
 // ---- run -----------------------------------------------------------------------------------------
