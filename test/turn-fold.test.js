@@ -15,7 +15,7 @@
 //   5. `reveal` unfolds, un-freezes and pages in one turn: the assistant's "open this turn" and the panel's three jump
 //      paths all mean that, and none of them may leave the pager on a page the turn is not on;
 //   6. Collapse all / Expand all and the Ctrl+[ turns tier move both copies, because that gesture asks for every turn;
-//   7. nothing outside public/core/turn-fold.js writes the three books, both files that draw the card go through it,
+//   7. nothing outside public/core/turn-fold.js writes the three books, every file that draws the card goes through it,
 //      the module is loaded before app.js, and the page arithmetic is not spelled a second time in app.js.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -25,6 +25,9 @@ await import("../public/core/turn-fold.js");
 const fold = globalThis.wtTurnFold;
 
 const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+// The card itself moved out of app.js with step 7 of docs/reports/module-map-2026-11-07.html: renderJobs,
+// conversationHtml and turnBlock live in public/render-jobs.js now, and they are card renderers too.
+const jobs = readFileSync(new URL("../public/render-jobs.js", import.meta.url), "utf8");
 const assistant = readFileSync(new URL("../public/assistant.js", import.meta.url), "utf8");
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
 
@@ -234,6 +237,7 @@ test("the books are written only in the module, and both card renderers go throu
   // No file outside the module writes `turnOpen` / `turnCompact` / `turnPage`: every gesture above has an API here.
   for (const [name, src] of [
     ["public/app.js", app],
+    ["public/render-jobs.js", jobs],
     ["public/assistant.js", assistant],
   ]) {
     for (const book of ["turnOpen", "turnCompact", "turnPage"]) {
@@ -251,10 +255,12 @@ test("the books are written only in the module, and both card renderers go throu
   assert.doesNotMatch(assistant, /state\.turn(?:Open|Page|Compact)\.(?:get|set|has|delete|add|clear)\(/);
   assert.match(assistant, /wtTurnFold\.reveal\(/, "the queue row's 'open this turn' is the module's reveal");
 
-  // The page arithmetic has one spelling too: app.js slices, counts and steps through the module.
+  // The page arithmetic has one spelling too: the module slices, counts and steps. renderJobs draws the page and
+  // moved to public/render-jobs.js with step 7 of the module map; the arrow press stayed in app.js.
   assert.doesNotMatch(app, /TURNS_PER_PAGE/, "the page size is the module's constant, not a second local one");
   assert.doesNotMatch(app, /turnPageOffset/, "the offset is asked for, not recomputed beside the renderer");
-  assert.match(app, /wtTurnFold\.range\(/, "the page's slice is the module's range");
+  assert.doesNotMatch(jobs, /TURNS_PER_PAGE/, "the page size is the module's constant, not a second local one");
+  assert.match(jobs, /wtTurnFold\.range\(/, "the page's slice is the module's range");
   assert.match(app, /wtTurnFold\.stepPage\(/, "an arrow press is the module's step");
   assert.match(app, /wtTurnFold\.foldPage\(/, "and the page it left is folded by the module");
 

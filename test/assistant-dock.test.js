@@ -144,8 +144,11 @@ test("with every turn folded the composer block sits under the head and the grey
   assert.match(css, /\.job-body > \.reply \{ position: sticky; bottom: 0;/, "the composer stays pinned in both states");
   assert.match(css, /\.job-body > \.job-foot \{ position: static; flex: none; \}/,
     "and the outcome line stays in flow, never a second item pinned to the same edge");
-  const appJs = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
-  const boxAt = appJs.indexOf('class="reply-box');
-  const stripAt = appJs.indexOf('class="job-stats-slot"');
+  // The reply box and the strip are drawn in the card template, which moved to public/render-jobs.js with step 7
+  // of docs/reports/module-map-2026-11-07.html; both files are read so the order is pinned wherever the card lives.
+  const card = ["../public/render-jobs.js", "../public/app.js"]
+    .map((f) => readFileSync(new URL(f, import.meta.url), "utf8")).join("\n");
+  const boxAt = card.indexOf('class="reply-box');
+  const stripAt = card.indexOf('class="job-stats-slot"');
   assert.ok(boxAt > 0 && stripAt > boxAt, "the token strip is the reply box's FOLLOWING sibling, never above it");
 });
