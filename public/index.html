@@ -1040,6 +1040,13 @@
        which calls them by bare name and re-exports them on window.WMApp.jobs; it declares only, so that order costs
        nothing and nothing here waits on boot. -->
   <script src="/render-jobs.js"></script>
+  <!-- The board's shared scaffolding, cut out of app.js (item 2 of "The remaining lane" in
+       docs/reports/module-map-2026-11-08.html): the panel map and the liveness reads, the row's chip strip and its
+       badge with the painters that keep them current, the project header's counts and its host strip, the row's
+       expanded detail block with its TODO strip, and the card the row's own refresh opens. Loaded before app.js,
+       which calls them by bare name and re-exports them on window.WMApp.scaffold; it declares only, so that order
+       costs nothing and nothing here waits on boot. -->
+  <script src="/board-scaffold.js"></script>
   <script src="/app.js"></script>
   <!-- The update check. Loaded after app.js because it reads that file's `state`, `turnLive` and
        the banner helpers by name — at call time, never at load, so nothing here waits on boot. -->

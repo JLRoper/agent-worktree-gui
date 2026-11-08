@@ -23,7 +23,7 @@ import vm from "node:vm";
 // step 4, and the board's child reads and re-rank (childrenMatching, boardGroups, groupBody, reorderProjects) to
 // public/render-projects.js in step 7.
 const page = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
-const src = `${page("public/board/console.js")}\n${page("public/dom.js")}\n${page("public/charts.js")}\n${page("public/turns.js")}\n${page("public/render-projects.js")}\n${page("public/app.js")}`;
+const src = `${page("public/board/console.js")}\n${page("public/dom.js")}\n${page("public/charts.js")}\n${page("public/turns.js")}\n${page("public/render-projects.js")}\n${page("public/render-jobs.js")}\n${page("public/board-scaffold.js")}\n${page("public/app.js")}`;
 
 function grab(name) {
   const start = src.indexOf(`function ${name}(`);

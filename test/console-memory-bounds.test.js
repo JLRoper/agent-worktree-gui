@@ -25,11 +25,12 @@ import test from "node:test";
 import { readSource, sliceBetween } from "../tools/panel-testkit.mjs";
 
 const app = readSource("public/app.js");
+const scaffold = readSource("public/board-scaffold.js");
 const settings = readSource("public/settings.js");
 const consoleJs = readSource("public/board/console.js");
 
 // turnLive() and its status set are app.js's answers, so a fixture cannot invent a liveness rule of its own.
-const liveCode = sliceBetween(app, 'const LIVE_STATUS = new Set([', "// An approval is only a question while the gateway");
+const liveCode = sliceBetween(scaffold, 'const LIVE_STATUS = new Set([', "// An approval is only a question while the gateway");
 // jobLines(), the ceiling and its trim sit together under the agents heading.
 const buffersCode = sliceBetween(app, "// ---------------- agents ----------------", "// ---- minimize / expand a card");
 // The snapshot's job half, extracted so the sweep can be driven without a DOM. Both functions were
