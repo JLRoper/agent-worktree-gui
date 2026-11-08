@@ -1,36 +1,17 @@
-# A parked stage run, on its pipeline row
+# A row through a pipeline stage
 
-**Status:** design note, ping-pong round 5, stage 1 of 2. Read at `9f94a11` (main); line numbers are this tree's. It states the contract and names a gap.
+A row that names a pipeline is driven, not judged. Every sweep, `driveTaskPipelines` (lib/task-pipeline-drive.js:1441) reads the row and returns new rows, transitions and requests (`ensureTree`, `starts`, `aggregates`), writing nothing itself (rule 8, `:69-71`). `sweepQueues` writes the rows, then cuts the trees and starts the workers.
 
-**The question.** A stage's run has ended and the row is parked. Which fields does it keep, what is each for, and what must never break?
+**The tree cut.** A row with no tree gets an `ensureTree` request, not a start (`:1915-1931`). The Assistant cuts it, writes `pipelineRun.tree` on the row, and the next pass starts the stage there with `existing: true` (`lib/assistant.js:1471-1544`). One tree serves an ordinary row: `moveTo` carries it forward (`:957-959`), and a loop back returns to its old directory, where the refused work is.
 
-A park is not a move. `parkRow` changes the row's state and writes the decision; it does not advance the stage (`lib/task-pipeline-drive.js:1304-1313`). The row keeps its position and the ledger entry that names the run. Its write is small: `state: "parked"`, the decision's sentence as the row's `reason`, and `hold: {kind: "manual"}`. A world-state park also writes `waitingFor`.
+**The stage run.** `beginStageRun` (lib/task-pipeline.js:268) writes the entry when the start is asked for, before a worker exists: `<pipeline>/<stage>#<visit>`, with `thread` and `job` null. `startingAt` is stamped on the row in the same pass (`lib/task-pipeline-drive.js:1957`), so the next sweep inside the grace asks for nothing; the link fills `thread` and `job` (`lib/assistant.js:1941`). A retry reuses the open entry, because a retry is an attempt, not a visit (`lib/task-pipeline.js:275-288`).
 
-## The row's own fields
+**The settle.** The driver settles on the entry's thread while it is unsettled, else the row's newest, and reads the job store's last run for it (`:1627-1631`). `settleStageRun` writes `status`, `settledAt`, the artifact's presence and hash, the commit, and the decision on that entry (`lib/task-pipeline.js:299-355`). On `done` the artifact is checked before the graph (`:1702`); a failure parks the row with the run's status in the same write (`:1643-1651`), so the stage is not started again.
 
-- **`state`** is `parked`: neither live nor queued. The driver starts only a queued row and skips a parked one (`:1574`, `:1770-1772`), so nothing starts the stage again without a person.
-- **`reason`** is the sentence `renderDecision(fact)` renders from the decision's fact (`:618-626`). It names the pipeline, stage and why the row waits: the row's one sentence.
-- **`hold`** has `kind: "manual"`; no clock expires it. A park carrying **`waitingFor`** (a gate's path, a cap's edge, or a moved route's fingerprint, `:1714-1718`) is released by its world-state: a gate's record does, and `releaseCapPark`/`restampRoutePark` release a cap or moved route. A failed run carries none and waits for a requeue.
+**The loop edge and its cap.** `edgeOutOf` takes edges in kind order: `sequence`, `return`, `loop` (`:180-194`). Without a gate that routes by outcome the rail wins, so a stage drawing both advances, and the back edge is taken only when it is the only way out. The cap counts crossings stored by edge id; `enterStage` charges one in the moving write (`lib/task-pipeline.js:404-421`), and `nextStageOf` refuses the edge when `used + 1 > limit` (`:905-935`). `capOf` reads only the leading whole number: `2 of 3 rounds` is a progress label and is refused; an unreadable cap is not unlimited; either way the edge is not crossed (`:165-173`). Requeueing does not clear a cap park; `releaseCapPark` zeroes the count first (`:1387-1406`).
 
-## The position the row keeps
+**The gate.** A gate that declares a `decision` is a barrier: if the record is absent when the stage settles, the row parks with `waitingFor: {kind: "gate", path}` (`:1768-1772`). Every pass re-resolves that path against the tree, filling `{{round}}` with the visit, so last round's record cannot release this round (`:1511-1524`); when the file appears, the row returns to `queued` and moves in the same write (`:1586-1590`). A record already in the tree is crossed without a park. If the gate declares `routes`, the record's `outcome` picks the edge, and a route to `null` ends the pipeline without charging the cap (`:855-898`).
 
-Every position field stays where the run left it. `pipeline` and `stage` are the two halves of the run id. `enteredAt` is the clock `elapsedInStage` measures from. `visits` is the ordinal that makes the id unique per visit; `assignPipeline`/`enterStage` increment it, a park does not. `crossings` is the loop cap's count; only `enterStage` charges it, on an edge. `route` is the fingerprint the row entered under. `tree` is the row's tree; a park neither recuts nor clears it. `via` is the edge the row arrived by. A failed run is not an edge and charges no crossing. `moveTo` deletes `waitingFor` and `startingAt`; a park does not move it (`:928-948`).
+**The surprise.** The queue has a second settle for the same run. `settleTasks` (lib/assistant/queue.js:1351) would put a failed run back in `queued` with `attempts + 1` (`:1388-1392`), the opposite of the driver's park. Order decides it, not either module: `sweepQueues` calls the driver first and `settleTasks` second (`lib/assistant.js:1300`, `:1315`), and a parked row with a manual hold is left alone (`lib/assistant/queue.js:1355-1356`). Call `settleTasks` alone and that run is requeued.
 
-## The run's entry
-
-`pipelineRun.stageRuns[]` is the ledger, newest last, capped at 30 with the dropped count in `runsDropped` (`lib/task-pipeline.js:235-249`). The current entry is the run's name:
-
-- **`id`** is `<pipeline>/<stage>#<visit>` (`stageRunId`, `:198-204`).
-- **`stage`, `visit`, `at`** say where and when the start was asked (`beginStageRun`, `:268-291`).
-- **`thread`, `job`** name the agent and job that carried it.
-- **`status`, `settledAt`** say how it ended and when the panel read it (`settleStageRun`, `:299-355`).
-- **`decision`** is the park's structured why: `by`, `trigger`, `code`, `at`, `fact`, `reason` (`decisionOf`, `:715-718`).
-- **`commit`, `inputs`** are the starting point, written at the ask (`:1900-1909`); a park leaves them. `artifact`/`merge` are the handoff; a failed run has neither.
-
-When the park's fact is a finished run, the failed branch passes `settle: {status, thread, job, at}` to `stop`, which calls `settleStageRun` with those and the decision in one call (`:1459-1478`, `:1599-1607`). The entry's `status`, `settledAt`, `thread`, `job` and `decision` land together. Every other park passes no settle: its fact is not the run's end.
-
-## The invariant
-
-**A parked row still names the run it parked on.** The position does not move: `stage` and `visits[stage]` are the same as when the run ended. The entry stays, with its `id`, `thread` and `job`. Break either and the row names a stage, not a run: an advanced stage or a bumped visit would name another run; a dropped entry would lose the name. For a park whose fact is a finished run, the same write must also say how it ended: a park that writes only the decision leaves `status: null`, which reads as a run that never ended and, in the code's words, "cannot say which run it parked on" (`:1455-1458`, `:1603-1606`). A park whose fact is not a run (an unresolved record, a refused start, a missing tree) says that fact; its entry names the attempt.
-
-**Unsure:** three done-run parks stop before the done-settle (`:1614-1640`): their entries name the run but leave `status` null. Whether the invariant should also require the ending there is not settled by these two modules.
+*Unsure:* whether the park is right for a pipeline row's failure, since the manual hold makes it unreleasable by the sweep while the queue's own settle keeps a retry path for that run, and only call order separates them.
