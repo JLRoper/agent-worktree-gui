@@ -10,7 +10,8 @@
 //   ping-pong            draft ⇄ critique, H-02 capped at "3 rounds" — four entries into each stage, three crossings,
 //                        then the cap park. The loop is the hardest case: every crossing re-enters a stage the row
 //                        has already been through.
-//   probe-fix            probe → fix, one sequence edge, then the last settle finishes the row on the landing rule.
+//   probe-fix            probe → fix, one sequence edge, then the last settle finishes the row on the STAGE's own
+//                        verdict: `fix` declares a patch, not a pull request, so there is no PR to land.
 //   author-review-revise author → review, a gate that ROUTES a verdict (`reject` back to the author, twice, then
 //                        `accept` on to the reviser) → revise. A sequence, a capped loop and a gate, in one walk.
 //
@@ -27,6 +28,8 @@
 //
 //   node tools/verify-pipeline-walk.mjs                     run all three, write the ledger + the report
 //   node tools/verify-pipeline-walk.mjs --only ping-pong    one pipeline
+//   node tools/verify-pipeline-walk.mjs --bundle <path>     the document to walk (default: the shipped seed) - the
+//                                                          reader's own repaired bundle is walked with this
 //   node tools/verify-pipeline-walk.mjs --out <dir>         where the ledger and the report go
 //   WALK_KEEP=1 node tools/verify-pipeline-walk.mjs         keep the sandbox trees
 //
@@ -38,6 +41,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { Assistant } from "../lib/assistant.js";
+import { parseBundle } from "../lib/pipeline-bundle.js";
 import { Jobs } from "../lib/jobs.js";
 import { PipelineRecords, cutPipeline } from "../lib/pipelines.js";
 import { readQueueFile, writeQueueFile } from "../lib/assistant/queue.js";
@@ -50,7 +54,13 @@ const opt = (name, fallback = null) => (argv.includes(name) ? argv[argv.indexOf(
 const OUT = path.resolve(opt("--out", path.join(REPO, "docs", "reviews", "pipeline-walk")));
 const ONLY = String(opt("--only", "")).trim();
 const KEEP = String(process.env.WALK_KEEP || "") === "1";
-const SEED = path.join(REPO, "pipeline-bundle.seed.json");
+// The document under test. The shipped seed by default; `--bundle` names another one (the reader's own state file,
+// once repaired), because "the seed walks" and "the bundle this install holds walks" are different claims.
+// The label a committed ledger carries: a file inside the checkout by its repo path, and one outside it as
+// `<bundle>/name`, because a ledger on main must not name a folder on the machine that ran the walk.
+const BUNDLE = path.resolve(opt("--bundle", path.join(REPO, "pipeline-bundle.seed.json")));
+const BUNDLE_RELATIVE = path.relative(REPO, BUNDLE);
+const BUNDLE_LABEL = BUNDLE_RELATIVE.startsWith("..") || path.isAbsolute(BUNDLE_RELATIVE) ? `<bundle>/${path.basename(BUNDLE)}` : BUNDLE_RELATIVE.split(path.sep).join("/");
 // The registry entry the panel cuts in. The seat below performs the cut itself, so the path is the checkout this
 // tool runs from — never a folder on the machine that wrote it (`tools/absolute-paths.mjs`).
 const PROJECT = { name: "agent-worktree-gui", path: path.resolve(REPO) };
@@ -66,7 +76,12 @@ const check = (ok, what, detail = "") => {
   console.log(`${ok ? "PASS" : "FAIL"}  ${what}${detail ? ` — ${detail}` : ""}`);
 };
 
-const seed = JSON.parse(readFileSync(SEED, "utf8"));
+const source = parseBundle(readFileSync(BUNDLE, "utf8"), { file: BUNDLE });
+if (source.ok !== true) {
+  console.error(`verify-pipeline-walk: ${BUNDLE} is not a bundle this panel can read — ${source.code}${source.where ? ` at ${source.where}` : ""}: ${source.reason}`);
+  process.exit(2);
+}
+const seed = JSON.parse(readFileSync(BUNDLE, "utf8"));
 const wanted = (ONLY ? ONLY.split(",").map((s) => s.trim()) : ["ping-pong", "probe-fix", "author-review-revise"]).filter(Boolean);
 
 // ---- one walk ----------------------------------------------------------------------------------------------------
@@ -75,7 +90,7 @@ const wanted = (ONLY ? ONLY.split(",").map((s) => s.trim()) : ["ping-pong", "pro
 // can say who decided what.
 async function walk(pipelineId, { leftover = false, timer = false, restartAt = 0 } = {}) {
   const doc = { bundleVersion: 1, name: pipelineId, pipelines: seed.pipelines.filter((p) => p.id === pipelineId) };
-  if (!doc.pipelines.length) throw new Error(`the seed holds no pipeline "${pipelineId}"`);
+  if (!doc.pipelines.length) throw new Error(`${BUNDLE_LABEL} holds no pipeline "${pipelineId}"`);
   const tree = doc.pipelines[0];
   const dir = mkdtempSync(path.join(os.tmpdir(), `wag-walk-${pipelineId}-`));
   const bundleFile = path.join(dir, "pipeline-bundle.json");
@@ -372,7 +387,7 @@ function expectWalk(ledger) {
   if (ledger.pipeline === "probe-fix") {
     check(stages.join(",") === "probe,fix", "probe-fix walks probe → fix with no hand-start", stages.join(","));
     check(ledger.row.state === "done", "the last stage's settle finishes the row", ledger.row.state);
-    check(/PR reads MERGED/.test(String(ledger.row.reason)), "the row ends on the settle's own landing rule", ledger.row.reason);
+    check(ledger.row.state === "done" && /is not a PR to land/.test(String(ledger.row.reason)), "the row ends on the settle's own verdict: its artifact is not a PR to land", ledger.row.reason);
     return;
   }
   if (ledger.pipeline === "author-review-revise") {
@@ -438,7 +453,7 @@ ${REPORT_FOOTER_CSS}
 <p class="order"><b>The case this change is about</b> is the fourth walk. A row can be left <code>queued</code> over a stage whose run has already settled — a restart between the settle and the pass that reads it, a requeue, a killed pass. On the driver before this change that row stayed <code>queued</code> on <code>probe</code> with no decision on its stage run and never advanced (measured: 17 / 20 checks, all three red ones in that walk). The driver now reads the settle off the row's own ledger and moves to the graph's next stage.</p>
 <p class="order"><b>The fifth walk is the same document on the panel's other clock.</b> The cut writes a HOLD on the tree's pipeline record (<code>pipelineWait.kind: "run"</code>), keyed to the run; <code>sweepPipelineWaits</code> reads that run's status and, when it has settled, hands the row to the one advance seam. The assistant's queue is not swept between boundaries — and the walk is restarted mid-wait, from the files alone.</p>
 ${rows}
-<p class="note">Each start above was asked for by <code>driveTaskPipelines</code> on the sweep that settled the stage before it: the seat is handed the stage prompt and its tree, writes the stage's declared artifact, and returns the job a gateway would return. The cap, the gate's routed verdict, the artifact gate and the landing rule are read from <code>pipeline-bundle.seed.json</code>, not restated here. Ledger: <code>ledger.json</code> beside this page.</p>
+<p class="note">Each start above was asked for by <code>driveTaskPipelines</code> on the sweep that settled the stage before it: the seat is handed the stage prompt and its tree, writes the stage's declared artifact, and returns the job a gateway would return. The cap, the gate's routed verdict, the artifact gate and the landing rule are read from <code>${esc(BUNDLE_LABEL)}</code>, not restated here. Ledger: <code>ledger.json</code> beside this page.</p>
 ${reportFooter(provenance)}
 </body></html>
 `;
@@ -464,11 +479,11 @@ try {
     expectWalk(ledger);
   }
   mkdirSync(OUT, { recursive: true });
-  writeFileSync(path.join(OUT, "ledger.json"), `${JSON.stringify({ generatedAt: new Date().toISOString(), seed: "pipeline-bundle.seed.json", walks: ledgers }, null, 1)}\n`);
+  writeFileSync(path.join(OUT, "ledger.json"), `${JSON.stringify({ generatedAt: new Date().toISOString(), bundle: BUNDLE_LABEL, walks: ledgers }, null, 1)}\n`);
   writeFileSync(path.join(OUT, "report.html"), report(ledgers, resolveReportProvenance({
     repo: REPO,
     title: "A pipeline walks by itself",
-    source: "node tools/verify-pipeline-walk.mjs reading pipeline-bundle.seed.json",
+    source: `node tools/verify-pipeline-walk.mjs reading ${BUNDLE_LABEL}`,
   })));
   console.log(`\nledger  ${path.join(OUT, "ledger.json")}`);
   console.log(`report  ${path.join(OUT, "report.html")}`);
