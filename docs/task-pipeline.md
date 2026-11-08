@@ -458,3 +458,34 @@ the reader can fix; pretending the assignment was the default path would silentl
    started by the panel at its stage; each stage that settles writes the row forward to the next one in the same tree,
    and a stage that cannot start, cannot find its artifact, or finds a tree claimed by another row parks with a named
    reason. On **ask** or **off** the row advances the same way but waits for you to start it, and no tree is cut.
+
+## The bench: four shapes, one real task each
+
+`tools/verify-pipeline-walk.mjs` walks the SHIPPED documents, which are large enough that a reader cannot check the
+graph by eye. `tools/bench-pipeline.mjs` is the other half: four definitions small enough to hold in one's head, one
+per shape a walk can take, checked in under `tools/pipeline-bench/` as a single bundle.
+
+| document | the shape | the scenario |
+|---|---|---|
+| `bench-handoff` | `draft → stage`, one sequence edge | `handoff` |
+| `bench-gate` | `draft → review → publish`, G1 routing `accept → H-02`, `reject → H-03` | `gate-accept`, `gate-reject` |
+| `bench-queue` | `queue-a → queue-b`, filed behind a live row | `queue-behind-live` |
+| `bench-ping-pong` | `ping ⇄ pong`, both edges capped loops | `ping-pong` |
+
+Every scenario is attached to a real queue task and walked by `Assistant.sweepQueues()`, the panel's clock; the gate's
+decider writes the record only after the row has parked, so the barrier is observed rather than crossed early. The
+report (`docs/reviews/pipeline-bench/report.html`, ledger beside it) answers per pipeline and per stage whether the
+assistant staged, gated, queued and bounced, and names the row, the stage run, the job and the thread. A failure names
+the step where the walk left the document: a start out of order, an entry with no edge, a gate crossed without a park,
+a reject that went forward, a loop past its cap, or a queued row with a start owed.
+
+```
+node tools/bench-pipeline.mjs                 # walk all five, write the report
+node tools/bench-pipeline.mjs --only ping-pong
+node tools/bench-pipeline.mjs --no-write       # print only
+```
+
+The tool reads `tools/pipeline-bench/bundle.json` and `scenarios.json` on every run and rebuilds neither, so an edited
+definition is the definition the next run walks. The four documents are independent of the live catalogue: repairing
+or replacing the install's bundle does not change what the bench walks, which is what lets it keep running after a
+catalogue repair.

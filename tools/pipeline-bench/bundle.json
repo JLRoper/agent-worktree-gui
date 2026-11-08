@@ -1,0 +1,228 @@
+{
+  "bundleVersion": 1,
+  "name": "pipeline bench",
+  "pipelines": [
+    {
+      "id": "bench-handoff",
+      "title": "Bench: staging handoff",
+      "description": "Two stages and one sequence edge. The first stage stages a draft; the second receives it and stages the result. Nothing routes, nothing loops: this is the plain handoff the other three are built on.",
+      "stages": [
+        {
+          "id": "draft",
+          "title": "Draft",
+          "prompt": "Write the draft the next stage will receive. Put it at bench/draft.md and say what it decided.",
+          "artifact": {
+            "id": "bench-draft",
+            "path": "bench/draft.md",
+            "schema": "bench-draft/1",
+            "writer": "drafter"
+          }
+        },
+        {
+          "id": "stage",
+          "title": "Stage",
+          "prompt": "Read bench/draft.md and stage it as the handoff's artifact. Write bench/staged.md with the draft's decision and nothing new.",
+          "artifact": {
+            "id": "bench-staged",
+            "path": "bench/staged.md",
+            "schema": "bench-staged/1",
+            "writer": "stager"
+          }
+        }
+      ],
+      "handoffs": [
+        {
+          "id": "H-01",
+          "from": "draft",
+          "to": "stage",
+          "artifact": "bench-draft",
+          "kind": "sequence",
+          "note": "The draft is the stager's only input."
+        }
+      ],
+      "gates": []
+    },
+    {
+      "id": "bench-gate",
+      "title": "Bench: a gate that routes accept and reject",
+      "description": "Three stages and one routed gate. A review that accepts goes straight to publish; a review that rejects goes back to draft, which is the bounce. The gate's record is the only thing that crosses it.",
+      "stages": [
+        {
+          "id": "draft",
+          "title": "Draft",
+          "prompt": "Write the draft under review at bench/draft.md.",
+          "artifact": {
+            "id": "bench-draft",
+            "path": "bench/draft.md",
+            "schema": "bench-draft/1",
+            "writer": "drafter"
+          }
+        },
+        {
+          "id": "review",
+          "title": "Review",
+          "prompt": "Read bench/draft.md and write the review at bench/review.md. Do not decide the gate: the decider writes bench/verdict-<round>.json after you settle.",
+          "artifact": {
+            "id": "bench-review",
+            "path": "bench/review.md",
+            "schema": "bench-review/1",
+            "writer": "reviewer"
+          }
+        },
+        {
+          "id": "publish",
+          "title": "Publish",
+          "prompt": "Read the accepted review and publish it at bench/published.md.",
+          "artifact": {
+            "id": "bench-published",
+            "path": "bench/published.md",
+            "schema": "bench-published/1",
+            "writer": "publisher"
+          }
+        }
+      ],
+      "handoffs": [
+        {
+          "id": "H-01",
+          "from": "draft",
+          "to": "review",
+          "artifact": "bench-draft",
+          "kind": "sequence",
+          "note": "The draft is what the reviewer decides on."
+        },
+        {
+          "id": "H-02",
+          "from": "review",
+          "to": "publish",
+          "artifact": "bench-review",
+          "kind": "sequence",
+          "note": "An acceptance hands the review on to the publisher."
+        },
+        {
+          "id": "H-03",
+          "from": "review",
+          "to": "draft",
+          "artifact": "bench-review",
+          "kind": "loop",
+          "cap": "2 bounces",
+          "note": "A rejection returns the work to the drafter with the review."
+        }
+      ],
+      "gates": [
+        {
+          "id": "G1",
+          "name": "Accept or reject",
+          "after": "review",
+          "artifact": "bench-review",
+          "decider": "reviewer",
+          "verified_by": "machine",
+          "refuses_when": "A rejection carries no review, or an acceptance leaves a note open.",
+          "decision": {
+            "id": "bench-verdict",
+            "path": "bench/verdict-{{round}}.json",
+            "schema": "bench-verdict/1",
+            "writer": "reviewer",
+            "outcomes": [
+              "accept",
+              "reject"
+            ],
+            "routes": {
+              "accept": "H-02",
+              "reject": "H-03"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "bench-queue",
+      "title": "Bench: a row that waits behind a live row",
+      "description": "Two stages and one sequence edge, filed behind a row that is already running. The queue starts only its front row, so this pipeline must wait, name the row it waits behind, and start when that row settles.",
+      "stages": [
+        {
+          "id": "queue-a",
+          "title": "First",
+          "prompt": "Write bench/a.md with the first half of the work.",
+          "artifact": {
+            "id": "bench-a",
+            "path": "bench/a.md",
+            "schema": "bench-a/1",
+            "writer": "worker-a"
+          }
+        },
+        {
+          "id": "queue-b",
+          "title": "Second",
+          "prompt": "Read bench/a.md and write bench/b.md with the second half.",
+          "artifact": {
+            "id": "bench-b",
+            "path": "bench/b.md",
+            "schema": "bench-b/1",
+            "writer": "worker-b"
+          }
+        }
+      ],
+      "handoffs": [
+        {
+          "id": "H-01",
+          "from": "queue-a",
+          "to": "queue-b",
+          "artifact": "bench-a",
+          "kind": "sequence",
+          "note": "The first half is the second half's input."
+        }
+      ],
+      "gates": []
+    },
+    {
+      "id": "bench-ping-pong",
+      "title": "Bench: a two-way ping-pong that must stop",
+      "description": "Two stages whose only way out is a capped loop in each direction. The row must go back and forth until one cap is spent, then park for a decision: a walk that keeps starting stages past the bound is the loop this document exists to catch.",
+      "stages": [
+        {
+          "id": "ping",
+          "title": "Ping",
+          "prompt": "Write bench/ping.md, then hand it to pong. Do not invent an exit: the document's cap is what stops the round.",
+          "artifact": {
+            "id": "bench-ping",
+            "path": "bench/ping.md",
+            "schema": "bench-ping/1",
+            "writer": "pinger"
+          }
+        },
+        {
+          "id": "pong",
+          "title": "Pong",
+          "prompt": "Read bench/ping.md, answer it at bench/pong.md, and hand it back to ping.",
+          "artifact": {
+            "id": "bench-pong",
+            "path": "bench/pong.md",
+            "schema": "bench-pong/1",
+            "writer": "ponger"
+          }
+        }
+      ],
+      "handoffs": [
+        {
+          "id": "H-01",
+          "from": "ping",
+          "to": "pong",
+          "artifact": "bench-ping",
+          "kind": "loop",
+          "cap": "2 rounds",
+          "note": "Ping hands to pong; the cap counts the crossings of this edge."
+        },
+        {
+          "id": "H-02",
+          "from": "pong",
+          "to": "ping",
+          "artifact": "bench-pong",
+          "kind": "loop",
+          "cap": "2 rounds",
+          "note": "Pong hands back to ping, under its own cap."
+        }
+      ],
+      "gates": []
+    }
+  ]
+}
