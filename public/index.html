@@ -956,6 +956,12 @@
       window.__panelStaleBuild = { loaded, report };
     })();
   </script>
+  <!-- The page's DOM primitives, cut out of app.js (step 2 of docs/reports/module-map-2026-11-07.html's
+       order of work): the two cached node lookups, the class-animation restart, the caret-safe move
+       bracket, the selection save and restore, and the clipboard writer. Loaded immediately before
+       app.js, which calls them by bare name and re-exports them on window.WMApp.dom; it declares only,
+       so that order costs nothing and nothing here waits on boot. -->
+  <script src="/dom.js"></script>
   <script src="/app.js"></script>
   <!-- The update check. Loaded after app.js because it reads that file's `state`, `turnLive` and
        the banner helpers by name — at call time, never at load, so nothing here waits on boot. -->

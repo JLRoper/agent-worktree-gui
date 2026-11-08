@@ -15,14 +15,15 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
 
-// Two classic scripts since the console cut (public/index.html): board/console.js, then app.js. A classic
-// script's names are page-wide, so a rule is read from the script that now carries it.
+// The classic scripts in page order (public/index.html): board/console.js, then dom.js, then app.js. A classic
+// script's names are page-wide, so a rule is read from the script that now carries it - the three cached
+// lookups and the animation restart moved to public/dom.js in step 2 of docs/reports/module-map-2026-11-07.html.
 const page = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
-const src = `${page("public/board/console.js")}\n${page("public/app.js")}`;
+const src = `${page("public/board/console.js")}\n${page("public/dom.js")}\n${page("public/app.js")}`;
 
 function grab(name) {
   const start = src.indexOf(`function ${name}(`);
-  assert.ok(start >= 0, `public/app.js carries ${name}()`);
+  assert.ok(start >= 0, `the page carries ${name}()`);
   const end = src.indexOf("\n}\n", start);
   assert.ok(end > start, `${name}() is a top-level function`);
   return src.slice(start, end + 3);

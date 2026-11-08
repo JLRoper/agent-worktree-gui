@@ -3,6 +3,26 @@
 //   - liveness is shown as labelled evidence chips (files / hermes / board / port)
 //   - agents spawned from the "New agent" card stream their stdout live
 
+// ---- the DOM helpers live in public/dom.js, and are re-exported here ------------------------------
+//
+// The page's DOM primitives were cut out of this file into public/dom.js: the two cached node lookups
+// (rowNode, projectNode), the class-animation restart, the caret-safe move bracket (beginDomMove,
+// endDomMove), the selection save and restore (selectionIn, captureCardSelection, restoreCardSelection,
+// with offsetIn and pointAt under them, and cardForThread), and the clipboard writer (copyText). That is
+// step 2 of docs/reports/module-map-2026-11-07.html's order of work, and it was a move, not a rewrite:
+// nothing was renamed and no call site changed. public/dom.js is a classic script the shell loads
+// immediately before this one, so its top-level declarations are page-wide and every bare name here is
+// the same binding it was before the move.
+//
+// This object is the re-export, under the same names: one door for the later steps of the split, and for
+// any module that would rather reach it than a page global.
+window.WMApp = window.WMApp || {};
+window.WMApp.dom = {
+  rowNode, projectNode, restartClassAnimation, beginDomMove, endDomMove,
+  selectionIn, captureCardSelection, restoreCardSelection, offsetIn, pointAt, cardForThread,
+  copyText,
+};
+
 // Declared BEFORE `state`: it is read while the state literal below is built, and a `const` further
 // down the file would still be in its temporal dead zone at that moment (the read would throw and get
 // swallowed, leaving an empty history).
@@ -2750,31 +2770,6 @@ async function deleteArtifact(thread, key) {
   }
 }
 
-// navigator.clipboard needs a secure context; the panel is served over http on loopback, which
-// browsers do NOT always treat as secure, so there is a textarea fallback behind it.
-async function copyText(text) {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    /* fall through */
-  }
-  const ta = document.createElement("textarea");
-  ta.value = text;
-  ta.style.position = "fixed";
-  ta.style.opacity = "0";
-  document.body.appendChild(ta);
-  ta.select();
-  let ok = false;
-  try {
-    ok = document.execCommand("copy");
-  } catch {
-    ok = false;
-  }
-  ta.remove();
-  return ok;
-}
-
 // One row per deliverable: the name (or the URL) opens it, `copy` takes the full location, `✕` asks
 // before removing it. The path itself is not a column — it is on hover, which is where you look for it.
 function artifactRowsHtml(list) {
@@ -5354,14 +5349,7 @@ document.addEventListener("focusout", (e) => {
 // field blurs it, and a blur cannot be told apart from the reader walking away - which is how the inline field used
 // to lose its claim (and the caret) several times a second on a busy board. One call brackets the move: while a move
 // is open a blur leaves the claim alone, and the restore that ends the move puts the caret back.
-let domMoveDepth = 0;
-function beginDomMove() {
-  domMoveDepth += 1;
-}
-function endDomMove() {
-  domMoveDepth = Math.max(0, domMoveDepth - 1);
-}
-
+// The bracket itself - beginDomMove(), endDomMove() and the depth they keep - is public/dom.js.
 function rememberAddAgentCaret(input) {
   const a = state.addAgent;
   if (!a || !input) return;
@@ -6953,104 +6941,6 @@ function conversationSignature(conv) {
     // The stats row is repainted in place too: a new reading must update the numbers, but it must not rebuild
     // the console under them.
   ].join("~");
-}
-
-// Is the reader's selection standing in this element? A non-collapsed range counts wherever it touches: a drag that
-// started before the readout and runs off its end has endpoints outside it and still owns the text between them.
-function selectionIn(el) {
-  const sel = window.getSelection();
-  if (!sel || sel.isCollapsed || !sel.rangeCount) return false;
-  for (let i = 0; i < sel.rangeCount; i++) {
-    const r = sel.getRangeAt(i);
-    if (el.contains(r.startContainer) || el.contains(r.endContainer) || r.intersectsNode(el)) return true;
-  }
-  return false;
-}
-
-// A board rebuild detaches every card and puts it back, and the browser drops the selection on the way through: a
-// saved `Range` does not bring it back (measured — a clone whose boundary nodes are connected again, reattached card,
-// `addRange` leaves `getSelection()` empty and collapsed; the boundary points died with the subtree). What survives
-// is where in the readout the selection stood, so that is what is recorded: the card it belongs to and a character
-// offset into its usage readout. A rebuild re-renders that markup, so the range is rebuilt against the nodes that are
-// actually on screen afterwards.
-function offsetIn(root, node, offset) {
-  const r = document.createRange();
-  r.selectNodeContents(root);
-  try {
-    r.setEnd(node, offset);
-  } catch {
-    return null;
-  }
-  return r.toString().length;
-}
-
-// The text node and offset at character position `n` inside `root`.
-function pointAt(root, n) {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  let seen = 0;
-  let last = null;
-  for (let t = walker.nextNode(); t; t = walker.nextNode()) {
-    const len = t.data.length;
-    if (n <= seen + len) return { node: t, offset: n - seen };
-    seen += len;
-    last = t;
-  }
-  return last ? { node: last, offset: last.data.length } : null;
-}
-
-// Which copy of a thread's card to restore onto: the board's, not the unattached panel's, when both exist.
-function cardForThread(thread) {
-  const cards = [...document.querySelectorAll(`.job[data-thread="${CSS.escape(thread)}"]`)];
-  return cards.find((c) => c.closest("tr.detail")) || cards[0] || null;
-}
-
-function captureCardSelection() {
-  const sel = window.getSelection();
-  if (!sel || sel.isCollapsed || !sel.rangeCount) return null;
-  const held = [];
-  for (let i = 0; i < sel.rangeCount; i++) {
-    const r = sel.getRangeAt(i);
-    if (r.collapsed) continue;
-    const startEl = r.startContainer.nodeType === 1 ? r.startContainer : r.startContainer.parentElement;
-    const card = startEl?.closest?.(".job[data-thread]");
-    if (!card) continue;
-    // The readout when the selection sits in it, the whole card otherwise.
-    const root = startEl.closest("[data-stats]") || card;
-    if (!root.contains(r.endContainer)) continue;
-    const start = offsetIn(root, r.startContainer, r.startOffset);
-    const end = offsetIn(root, r.endContainer, r.endOffset);
-    if (start == null || end == null || end <= start) continue;
-    held.push({ thread: card.dataset.thread, stats: root !== card, start, end });
-  }
-  return held.length ? held : null;
-}
-
-function restoreCardSelection(held) {
-  if (!held || !held.length) return;
-  const sel = window.getSelection();
-  if (!sel) return;
-  // Only when nothing else is selected now: a reader who has picked something else has moved on.
-  if (sel.rangeCount && !sel.isCollapsed) return;
-  const ranges = [];
-  for (const h of held) {
-    const card = cardForThread(h.thread);
-    const root = card && (h.stats ? card.querySelector("[data-stats]") : card);
-    if (!root) continue;
-    const a = pointAt(root, h.start);
-    const b = pointAt(root, h.end);
-    if (!a || !b) continue;
-    const r = document.createRange();
-    try {
-      r.setStart(a.node, a.offset);
-      r.setEnd(b.node, b.offset);
-    } catch {
-      continue;
-    }
-    ranges.push(r);
-  }
-  if (!ranges.length) return;
-  sel.removeAllRanges();
-  for (const r of ranges) sel.addRange(r);
 }
 
 // The two things on a card that move without changing its markup: when it was last used, and its usage figures.
@@ -9512,33 +9402,6 @@ function pulseRow(key) {
   tr._flashT = setTimeout(() => tr.classList.remove("flash"), flashRowMs() + 40);
 }
 
-// A worktree row's own node, from the map placeRow keeps, checked before use (still in the page, still this key);
-// the document is asked only when the map has no live node. Both callers run on every agent event, and a lookup by
-// attribute value walks the whole board.
-function rowNode(key) {
-  const kept = state.rowEls.get(key);
-  if (kept && kept.isConnected && kept.dataset.key === key) return kept;
-  return document.querySelector(`#projects tr.row[data-key="${CSS.escape(key)}"]`);
-}
-
-// Restart a one-shot animation a class carries, without a forced layout. Taking the class off and putting it back in
-// one task needs a reflow between the two (`void el.offsetWidth`) or the browser sees no change, and on a 55k-node
-// board that reflow ran on every pulse. A running animation is put back to its first frame instead, and a class
-// that is not there is simply added: neither needs layout. Only the instant between an animation ending and its
-// class being taken off still pays the reflow.
-function restartClassAnimation(el, cls, animationName) {
-  if (el.classList.contains(cls)) {
-    const running = el.getAnimations().find((a) => a.animationName === animationName);
-    if (running) {
-      running.currentTime = 0;
-      return;
-    }
-    el.classList.remove(cls);
-    void el.offsetWidth;
-  }
-  el.classList.add(cls);
-}
-
 function pulseProject(project) {
   if (!project) return;
   const sec = document.querySelector(`section.project[data-project="${CSS.escape(project)}"]`);
@@ -11680,24 +11543,6 @@ function refreshChips(name) {
   }
   // The chart's arrow (top-N collapse) depends on the same rows, so it is refreshed from the same place.
   refreshTopToggle(name);
-}
-
-// One project's node by its attribute (its chip strip, its age slot, its age button). A lookup by attribute value
-// walks the whole document, and refreshChips runs on every row placed - about 340 calls a minute on the reader's
-// board, three lookups each: about 300 ms a minute of querySelector under refreshChips and refreshTopToggle in a
-// read-only profile of it. The node found is kept and checked before each use - still in the page, still carrying this
-// name - so a section rebuilt from scratch, or a strip some other attribute owner reuses, is simply looked up again.
-// The cache hangs off the function itself, so it exists from the first line of this file (a top-level `const` here
-// would be in its temporal dead zone for any call made before this point is evaluated).
-function projectNode(attr, name) {
-  const nodes = (projectNode.nodes ||= new Map());
-  const key = `${attr}\u0000${name}`;
-  const kept = nodes.get(key);
-  if (kept && kept.isConnected && kept.getAttribute(attr) === name) return kept;
-  const found = document.querySelector(`[${attr}="${CSS.escape(name)}"]`);
-  if (found) nodes.set(key, found);
-  else nodes.delete(key);
-  return found;
 }
 
 // ---- chart columns: which of the table's eleven the reader keeps ------------------------------------------
