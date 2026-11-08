@@ -39,7 +39,7 @@
 // on 7331 and the live gateway are never touched, and the temp root is deleted at the end. Without a Playwright
 // install the script says BROWSER-NOT-RUN and exits 2 rather than passing on a half that never ran.
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { loadPlaywright, openSettingsGroup } from "./browser.mjs";
@@ -279,7 +279,7 @@ const run = async () => {
   check("the two headers read Life and Next read", [heads.life, heads.nextread], ["Life", "Next read"]);
   check("Life sits immediately left of Next read", heads.order, ["life", "nextread"]);
   ok("the Life header explains the age and the chips", /time since this worktree was last seen alive/.test(heads.lifeTitle) && /chips are the evidence/.test(heads.lifeTitle), heads.lifeTitle.slice(0, 90));
-  ok("the Next read header explains the ring and its countdown", /ring fills up to green/.test(heads.nextTitle) && /due in Xs/.test(heads.nextTitle), heads.nextTitle.slice(0, 90));
+  ok("the Next read header explains the ring and the bare figure", /ring fills up to green/.test(heads.nextTitle) && /figure only/.test(heads.nextTitle) && /amber/.test(heads.nextTitle), heads.nextTitle.slice(0, 90));
   const clocks = await page.evaluate(() =>
     [...document.querySelectorAll("section.project tbody tr.row")].slice(0, 4).map((r) => {
       const life = r.querySelector("td.age");
@@ -300,12 +300,100 @@ const run = async () => {
   ok("the Life cell carries the age and the chips, never the ring", clocks.every((c) => c.lifeNum && c.lifeChips && !c.lifeRing), JSON.stringify(clocks[0]));
   ok("the Next read cell carries the ring and its countdown, never the chips", clocks.every((c) => c.nextRing && c.nextNum && !c.nextChips), JSON.stringify(clocks[0]));
   ok(
-    "the countdown reads due in Xs, due now or overdue",
-    clocks.every((c) => /^(due in \d+s|due now|overdue .+)$/.test(c.nextNum)),
+    "the countdown is a figure only - seconds while it waits, the lateness once it is past - never a sentence",
+    clocks.every((c) => /^(?:\d+[dhms])+$/.test(c.nextNum)),
     JSON.stringify(clocks.map((c) => c.nextNum)),
   );
-  ok("each cell's own tooltip says what that cell is", clocks.every((c) => /^last life /.test(c.lifeTitle) && /^next read /.test(c.nextTitle)), JSON.stringify(clocks[0].nextTitle));
+  ok(
+    "each cell's own tooltip still spells the state and the cadence out",
+    clocks.length > 0 && clocks.every((c) => /^last life /.test(c.lifeTitle) && /^next read (due in \d+s|overdue .+) \(every /.test(c.nextTitle)),
+    JSON.stringify(clocks[0]?.nextTitle),
+  );
   await shot(page, "life-and-next-read");
+
+  // ---- the figure, both states ---------------------------------------------------------------------
+  // The cell says a figure and nothing else, in two states: the countdown while the read is owed, and the lateness
+  // once it is past. A live board rarely shows both at once - the scheduler reads each row the moment its own due
+  // time comes round, so "wait for an amber cell to appear" is a race rather than a proof. This second page gets the
+  // SAME panel's snapshot with two rows' `nextReadAt` stamped either side of one fixed instant, and the stream held
+  // shut so a rescan cannot replace the rows under the shot. The clock is then frozen at that instant, which is what
+  // keeps the two texts exact ("4s" and "9s") instead of drifting between the read and the capture. The markup, the
+  // paint loop and the amber class are the shipped ones; only the due stamps are staged.
+  const FROZEN_AT = Date.now();
+  const figure = await browser.newPage({ viewport: { width: 1600, height: 560 } });
+  const figureErrors = [];
+  figure.on("pageerror", (e) => figureErrors.push(String(e.message || e)));
+  await figure.route("**/api/state", async (route) => {
+    const res = await route.fetch();
+    const body = await res.json();
+    const rows = [];
+    for (const p of body.projects || []) for (const w of p.worktrees || []) rows.push(w);
+    check("the sandbox carries the two rows the figure is staged on", rows.length >= 2, true);
+    if (rows.length >= 2) {
+      rows[0].nextReadAt = new Date(FROZEN_AT + 4000).toISOString();
+      rows[1].nextReadAt = new Date(FROZEN_AT - 9000).toISOString();
+    }
+    await route.fulfill({ response: res, body: JSON.stringify(body) });
+  });
+  await figure.route("**/api/stream", (route) => route.abort());
+  await figure.goto(base, { waitUntil: "domcontentloaded" });
+  await waitFor(async () => (await figure.locator("section.project").count()) > 0, { timeoutMs: 60_000, what: "the sandbox project on the figure page" });
+  await figure.evaluate((at) => {
+    Date.now = () => at;
+  }, FROZEN_AT);
+  await openProjects(figure);
+  const two = await waitFor(async () => {
+    const texts = await figure.evaluate(() => [...document.querySelectorAll("section.project tbody tr.row td.nextread .next-num")].map((n) => n.textContent));
+    return texts.includes("4s") && texts.includes("9s");
+  }, { timeoutMs: 20_000, what: "the frozen figures, one waiting and one late" });
+  ok("both states paint from the same render, one row waiting and one late", two);
+  const figures = await figure.evaluate(() => {
+    const probe = (name) => {
+      const s = document.createElement("span");
+      s.style.color = `var(${name})`;
+      document.body.appendChild(s);
+      const c = getComputedStyle(s).color;
+      s.remove();
+      return c;
+    };
+    return {
+      dim: probe("--dim"),
+      amber: probe("--amber"),
+      cells: [...document.querySelectorAll("section.project tbody tr.row td.nextread")].map((td) => {
+        const num = td.querySelector(".next-num");
+        return {
+          text: num?.textContent || "",
+          late: num?.classList.contains("late") || false,
+          color: num ? getComputedStyle(num).color : "",
+          title: td.getAttribute("title") || "",
+        };
+      }),
+    };
+  });
+  const waiting = figures.cells.find((c) => c.text === "4s");
+  const late = figures.cells.find((c) => c.text === "9s");
+  ok("the waiting row's cell is the bare figure, with no word in it", Boolean(waiting), JSON.stringify(figures.cells.map((c) => c.text)));
+  ok("...and it wears no amber: the class is keyed on lateness alone", waiting && !waiting.late && waiting.color === figures.dim, waiting ? `${waiting.color} vs dim ${figures.dim}` : "");
+  ok("the late row's cell is the figure alone too - never 'overdue 9s'", Boolean(late) && /^9s$/.test(late.text), late ? late.text : "");
+  ok("...and it is the one carrying the amber .late class", late && late.late && late.color === figures.amber, late ? `${late.color} vs amber ${figures.amber}` : "");
+  ok("every other cell on the board is a figure, never a sentence", figures.cells.length >= 2 && figures.cells.every((c) => /^(?:\d+[dhms])+$/.test(c.text)), JSON.stringify(figures.cells.map((c) => c.text)));
+  ok("the .late class and the tooltip's own state agree on every row", figures.cells.every((c) => c.late === /^next read overdue /.test(c.title)), JSON.stringify(figures.cells.map((c) => c.late)));
+  ok(
+    "the sentence still lives in the tooltip, state first and cadence after",
+    /^next read due in 4s \(every \d+s/.test(waiting?.title || "") && /^next read overdue 9s \(every \d+s/.test(late?.title || ""),
+    JSON.stringify([waiting?.title, late?.title]),
+  );
+  await figure.evaluate(() => document.querySelector("section.project")?.scrollIntoView({ block: "start" }));
+  await sleep(200);
+  const figureShot = await shot(figure, "next-read-due-and-overdue");
+  // A shot inside the sandbox dies with it; PANEL_SHOTS_DIR is how a run keeps one as evidence for the reader.
+  if (process.env.PANEL_SHOTS_DIR) {
+    mkdirSync(process.env.PANEL_SHOTS_DIR, { recursive: true });
+    copyFileSync(figureShot, path.join(process.env.PANEL_SHOTS_DIR, path.basename(figureShot)));
+    note(`kept ${path.join(process.env.PANEL_SHOTS_DIR, path.basename(figureShot))}`);
+  }
+  ok("no page error on the figure page", figureErrors.length === 0, figureErrors.slice(0, 3).join(" | "));
+  await figure.close();
 
   // The helper, not a bare press: it opens the drawer if it is closed AND unfolds the Board group the row lives in,
   // which a plain `#btn-settings` click does not (the switches are then attached but not visible).
