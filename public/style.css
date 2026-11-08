@@ -3898,6 +3898,13 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 .as-group { border: 1px solid var(--line); border-radius: 7px; padding: 9px 10px; margin-bottom: 9px; background: var(--card); }
 .as-group h4 { margin: 0 0 6px; font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--dimmer); }
 .as-group .as-line { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; font-size: 12px; }
+/* The role editor's name and remit are one-line fields, but the label owns the row so the box takes the group's
+   width: a 250px input clips a 400-character remit at "drives every agent it starts to an appro". */
+.as-group .as-line label.as-role-field { flex: 1 1 100%; }
+.as-group .as-line label.as-role-field input { width: 100%; }
+/* The role editor's remit box has no inline label to sit beside (it is a two-row textarea under the name), so it
+   carries a caption of its own: the group's sentence explains the field, the caption names it. */
+.as-group .as-role-caption { display: block; font-size: 10.5px; color: var(--dim); margin: 2px 0 4px; }
 .as-group .as-line label { display: flex; gap: 6px; align-items: center; color: var(--dim); }
 .as-group select, .as-group input[type="number"] { background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 4px 6px; font-size: 11.5px; }
 .as-group input[type="number"] { width: 74px; }

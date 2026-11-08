@@ -367,7 +367,8 @@ try {
       ok("the turn's input names the new role", /role Assistant Director/.test(submitted?.input || ""), String(submitted?.input || "").slice(0, 300));
       ok("…and carries the Director charter in full", /Charter — the long tier, read in full this turn \(role Assistant Director;/.test(submitted?.input || ""));
       ok("…not the withheld marker", !/unchanged and withheld this turn/.test(submitted?.input || ""));
-      ok("…and the Director's own job is in it", /You direct the other assistants/.test(submitted?.input || ""));
+      ok("…and the Director's own job is in it", /You direct the other assistants/.test(`${submitted?.instructions || ""}
+${submitted?.input || ""}`), String(submitted?.instructions || "").slice(0, 200));
       ok("…while the reader's words are the card's prompt", /show me the role this turn runs/.test(submitted?.input || ""));
 
       // A SECOND restart, now that a turn has actually been built: the cleared list is no longer empty, and the line
@@ -387,35 +388,36 @@ try {
       ok("…and is still honest about the running turn", /a turn was already running; the rebuild is its next one/i.test(restartAgain.status), restartAgain.status);
 
       // ==============================================================================================================
-      console.log("\n== 6. the Role-tab press lands on the Role tab, editing #2 ==");
+      console.log("\n== 6. the Role-tab press lands on the role that assistant runs ==");
       await page.click('[data-as-roleopen="assistant-2"]');
       await page.waitForSelector("#as-role:not(.hidden)", { timeout: 10_000 });
-      await waitFor(() => page.evaluate(() => !document.querySelector("#as-role-text")?.readOnly), {
-        what: "the Role tab to read #2's charter",
+      await waitFor(() => page.evaluate(() => Boolean(document.querySelector("#as-role-pick")?.value && !document.querySelector("#as-role-name")?.disabled)), {
+        what: "the Role editor to read the role",
         timeoutMs: 15_000,
       });
       const onRole = await page.evaluate(() => ({
         roleVisible: !document.getElementById("as-role")?.classList.contains("hidden"),
         subRowGone: !document.getElementById("as-subtabs") || getComputedStyle(document.getElementById("as-subtabs")).display === "none",
         view: JSON.parse(localStorage.getItem("wm.assistantView") || "null"),
-        target: document.querySelector("#as-role [data-as-rolewho]")?.innerText || null,
-        remit: document.querySelector("#as-role .as-help")?.innerText || "",
+        name: document.querySelector("#as-role-name")?.value || null,
+        remit: document.querySelector("#as-role-description")?.value || "",
         assigned: document.querySelectorAll("#as-roletarget, [data-as-roletarget], #btn-as-role-adopt").length,
         viewPick: document.querySelector("#as-role-pick")?.value || null,
+        named: /Assistant #2|own copy|read-only preview/.test(document.getElementById("as-role")?.innerText || ""),
       }));
       ok("the panel-level Role pane is the one showing", onRole.roleVisible, `visible ${onRole.roleVisible}`);
       ok("…with the session's second row gone", onRole.subRowGone);
       check("…the view persisted as the Role tab", onRole.view?.assistant, "role");
-      ok("…naming the assistant whose Settings was on screen", /Assistant #2's own copy/.test(onRole.target || ""), onRole.target);
-      ok("…showing the role that assistant runs", /Assistant Director/.test(onRole.remit), onRole.remit.slice(0, 120));
+      ok("…naming no assistant at all", !onRole.named, String(onRole.named));
+      ok("…showing the role that assistant runs", /Assistant Director/.test(onRole.name || ""), `${onRole.name} — ${String(onRole.remit).slice(0, 90)}`);
       check("…carrying no control that changes the role the assistant runs", onRole.assigned, 0);
-      check("…and its view picker on the role the record runs", onRole.viewPick, "assistant-director");
+      check("…and its selector on the role the record runs", onRole.viewPick, "assistant-director");
 
       check("no page errors", pageErrors, []);
       check("no console errors", consoleErrors, []);
       summaries.push("the Settings picker saved Assistant Director on #2's record and a reload read it back");
       summaries.push("Restart rebuilt #2's next turn from the Director role and named what it rebuilt, with no panel or gateway restart");
-      summaries.push("the next run's input carried the Director charter in full, and the Role-tab press landed on #2's Role pane");
+      summaries.push("the next run's briefing carried the Director charter in full, and the Role-tab press landed on the role #2 runs");
     },
     { viewport: { width: 1600, height: 1000 }, initScript: stubEventSourceInit },
   );

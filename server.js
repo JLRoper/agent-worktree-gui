@@ -3670,15 +3670,42 @@ const server = createServer(async (req, res) => {
         return sendJson(res, code, { error: String((e && e.message) || e) });
       }
     }
-    // ONE role's OWN charter text, by id: the Role tab changes its box to this text when the picker changes, and
-    // the tab must not carry it around in state. GET because it changes nothing — the pick is still its own press
-    // and Save still writes the ASSISTANT's copy, which is a different file.
+    // ONE role's own text, by id: the Role tab changes its box to this text when the picker changes, and
+    // the tab must not carry it around in state. GET because it changes nothing; the PUT below is the write.
     if (route === "/api/assistant/role/charter" && req.method === "GET") {
       const q = new URL(req.url, "http://127.0.0.1").searchParams;
       try {
         return sendJson(res, 200, assistant.roleCharterPayload(q.get("roleId")));
       } catch (e) {
         const code = (e && e.code) === "role-unknown" ? 404 : 400;
+        return sendJson(res, code, { error: String((e && e.message) || e) });
+      }
+    }
+    // THE ROLE'S OWN SAVE. Until this route the library could be read (GET above), created and copied, but a role's
+    // own charter had no writer: Save on the Role tab wrote an ASSISTANT's copy. The tab is a role editor now, so
+    // the same path takes a PUT carrying the four fields the editor shows — name, description, prompt and charter.
+    // 413 over the cap, 409 when the role moved since the read, 404 unknown, 400 anything else; every refusal is
+    // the lib/roles.js writer's own message, so the tab and the store never disagree about why a save did not land.
+    if (route === "/api/assistant/role/charter" && req.method === "PUT") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      let body;
+      try {
+        body = await readBody(req);
+      } catch (e) {
+        return sendJson(res, 400, { error: String((e && e.message) || e) });
+      }
+      try {
+        const out = assistant.saveRole({
+          roleId: body.roleId,
+          name: body.name,
+          description: body.description,
+          prompt: body.prompt,
+          text: body.text,
+          expectMtime: body.expectMtime,
+        });
+        return sendJson(res, 200, { ...out, assistant: assistant.state() });
+      } catch (e) {
+        const code = (e && e.code) === "role-unknown" ? 404 : (e && e.code) === "charter-too-long" ? 413 : (e && e.code) === "charter-stale" ? 409 : 400;
         return sendJson(res, code, { error: String((e && e.message) || e) });
       }
     }
@@ -3756,7 +3783,7 @@ const server = createServer(async (req, res) => {
       if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       try {
-        const out = assistant.createRole({ name: body.name, description: body.description, from: body.from, charter: body.charter });
+        const out = assistant.createRole({ name: body.name, description: body.description, prompt: body.prompt, from: body.from, charter: body.charter });
         return sendJson(res, 201, { ...out, assistant: assistant.state() });
       } catch (e) {
         return sendJson(res, 400, { error: String((e && e.message) || e) });

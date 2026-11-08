@@ -251,6 +251,96 @@ test("the picker's charter read is the ROLE's own text, and never the assistant'
   assert.equal(code, "role-unknown", "an unknown id is the route's 404, not an empty box");
 });
 
+test("the Role tab saves a role's own four fields in one write, and the two refusals are the role's own", async (t) => {
+  // The missing half of the role library: a role could be read (GET /api/assistant/role/charter), created and
+  // copied, but its OWN charter had no writer — Save wrote an assistant's copy. The tab is a role editor now, and
+  // this is the store contract behind its one press: name, description, prompt and charter land together.
+  const { assistant, rolesFile } = await panel(t);
+  const first = assistant.roles.find((r) => r.id === "agent-manager");
+  const readAt = new Date(first.updatedAt).getTime();
+  const saved = assistant.saveRole({
+    roleId: "agent-manager",
+    name: "Manager Prime",
+    description: "drives the board, and nothing else",
+    prompt: "Be brief, and never approve your own work.",
+    text: "# rewritten\n\nSAVED-ON-THE-ROLE\n",
+    expectMtime: readAt,
+  });
+  assert.deepEqual([saved.role.id, saved.role.name, saved.role.description], ["agent-manager", "Manager Prime", "drives the board, and nothing else"]);
+  assert.equal(saved.text, "# rewritten\n\nSAVED-ON-THE-ROLE\n", "the answer carries the role's own text");
+  assert.equal(saved.prompt, "Be brief, and never approve your own work.");
+  assert.equal(saved.cap, ROLE_CHARTER_MAX_CHARS);
+  assert.equal(typeof saved.mtime, "number", "the answer carries the stamp the next save sends back");
+  // ONE write: every field is in the same stored record, and the library's list follows the rename in the same answer.
+  const stored = JSON.parse(await readFile(rolesFile, "utf8")).roles.find((r) => r.id === "agent-manager");
+  assert.deepEqual(
+    [stored.name, stored.description, stored.prompt, stored.charter],
+    ["Manager Prime", "drives the board, and nothing else", "Be brief, and never approve your own work.", "# rewritten\n\nSAVED-ON-THE-ROLE\n"],
+  );
+  assert.equal(saved.roles.find((r) => r.id === "agent-manager").name, "Manager Prime", "the picker's label moves with the save");
+
+  // A role needs a name: the pane refuses it before the request and the store refuses it behind that.
+  let code = null;
+  try {
+    assistant.saveRole({ roleId: "agent-manager", name: "   ", text: "# x\n" });
+  } catch (e) {
+    code = e.code;
+  }
+  assert.equal(code, "role-invalid");
+  assert.equal(JSON.parse(await readFile(rolesFile, "utf8")).roles[0].name, "Manager Prime", "and nothing was written");
+
+  // Over the cap is the SAME charter cap every copy has, refused whole.
+  code = null;
+  try {
+    assistant.saveRole({ roleId: "agent-manager", name: "Manager Prime", text: "x".repeat(ROLE_CHARTER_MAX_CHARS + 1) });
+  } catch (e) {
+    code = e.code;
+  }
+  assert.equal(code, "charter-too-long", "over the cap is the route's 413");
+  assert.equal(JSON.parse(await readFile(rolesFile, "utf8")).roles[0].charter, "# rewritten\n\nSAVED-ON-THE-ROLE\n", "and the stored text stands");
+
+  // A role that moved under the reader is refused rather than silently overwritten.
+  code = null;
+  try {
+    assistant.saveRole({ roleId: "agent-manager", name: "Manager Prime", text: "# stale\n", expectMtime: readAt });
+  } catch (e) {
+    code = e.code;
+  }
+  assert.equal(code, "charter-stale", "a save that read the older role is the route's 409");
+  assert.equal(JSON.parse(await readFile(rolesFile, "utf8")).roles[0].charter, "# rewritten\n\nSAVED-ON-THE-ROLE\n", "and the newer text stands");
+
+  code = null;
+  try {
+    assistant.saveRole({ roleId: "no-such-role", name: "x", text: "" });
+  } catch (e) {
+    code = e.code;
+  }
+  assert.equal(code, "role-unknown", "an unknown id is the route's 404");
+});
+
+test("a role's prompt is what its turns begin with, and an assistant's own prompt wins over it", async (t) => {
+  // The prompt moved onto the ROLE: the Role tab edits it for every assistant that runs the role, and the store
+  // reads it when the assistant has no prompt of its own. An assistant's own file still wins — that is the
+  // per-assistant override the profile route has always written.
+  const { assistant } = await panel(t);
+  assistant.createRole({ name: "Reviewer", description: "reads a diff", prompt: "Read the diff before you answer.", charter: "# reviewer\n" });
+  assistant.pickRole(PRIMARY_ASSISTANT, "reviewer", { adopt: true });
+  const briefing = assistant.preamble(PRIMARY_ASSISTANT);
+  assert.match(briefing, /Your role's prompt \(saved with the Reviewer role/, "the role's prompt is announced as the role's");
+  assert.ok(briefing.includes("Read the diff before you answer."), "and it rides in full");
+
+  assistant.saveProfile(PRIMARY_ASSISTANT, { prompt: "MINE-ONLY" });
+  const own = assistant.preamble(PRIMARY_ASSISTANT);
+  assert.match(own, /Your default role prompt/, "the assistant's own prompt is still the default label");
+  assert.ok(own.includes("MINE-ONLY"), "and it is what the turn runs on");
+  assert.ok(!own.includes("Read the diff before you answer."), "the role's prompt is not repeated under it");
+
+  // Clearing the role's prompt takes it out of the turn; a prompt-only save is a role save like any other.
+  assistant.saveRole({ roleId: "reviewer", name: "Reviewer", description: "reads a diff", prompt: "", text: "# reviewer\n" });
+  assistant.saveProfile(PRIMARY_ASSISTANT, { prompt: "" });
+  assert.ok(!assistant.preamble(PRIMARY_ASSISTANT).includes("Your role's prompt"), "an empty role prompt adds nothing to the turn");
+});
+
 test("both copies refuse a save over the 20,000-character cap", async (t) => {
   const { assistant } = await panel(t);
   assistant.createAssistant({ roleId: "agent-manager" });

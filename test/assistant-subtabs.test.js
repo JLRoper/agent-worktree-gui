@@ -239,7 +239,7 @@ test("the top row is the assistant and the panel's panes, and the session's row 
   assert.ok(!topRow.some((t) => t.key === "charter"), "the Charter tab is gone from the row");
   assert.ok(!topRow.some((t) => ["alerts", "watches", "messages", "pad"].includes(t.key)), "the four lists moved inside the assistant");
   assert.match(topRow[1].label, /^Role$/, "and the tab that replaced Charter is the Role tab");
-  assert.match(float, /data-as-tab="role" title="the role this assistant runs/, "whose tooltip says what it edits");
+  assert.match(float, /data-as-tab="role" title="the panel's role library/, "whose tooltip says what it edits");
   assert.deepEqual(subRow.map((t) => t.key), ["chat", "settings", "queue", "worktrees", "alerts", "watches", "messages", "pad"], "the session's row holds all eight");
   assert.deepEqual(subRow.slice(0, 4).map((t) => t.label), ["Chat", "Settings", "Queue", "Worktrees"]);
   // The counts ride on the two lists' pills (the markup read concatenates the hidden spawn count, `innerText` on the
