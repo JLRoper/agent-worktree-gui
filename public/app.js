@@ -88,7 +88,7 @@ window.WMApp.deliverables = {
 window.WMApp.turns = {
   conversations, turnOrder, turnSeqOf,
   turnKey, turnIsOpen, toggleTurn,
-  originHtml, originAttributionHtml, isWatchdogTurn, watchdogHtml, watchdogPromptText, sessionReplacedHtml,
+  originHtml, originAttributionHtml, isWatchdogTurn, watchdogHtml, watchdogPromptText, messageHtml, messagePromptText, sessionReplacedHtml,
   turnHead, inlinePrompt, displayPrompt, turnAttachmentsHtml, turnPeekLine, firstSentence, compactHtml, peekHtml,
   refreshTurnPeek,
   THINK_KEY, thinkDefault, thinkingOn, setThinking,
