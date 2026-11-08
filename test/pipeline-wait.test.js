@@ -95,10 +95,10 @@ function waitRecord(over = {}) {
 }
 
 // A tree in the durable book, on the `wait` stage of the review loop, with the record the panel would have written.
-function board(t, { stage = "wait", wait = waitRecord(), recordOver = {} } = {}) {
+function board(t, { stage = "wait", wait = waitRecord(), recordOver = {}, onStageSettled = null } = {}) {
   const dir = mkdtempSync(path.join(os.tmpdir(), "wtgui-wait-"));
   const records = new PipelineRecords({ file: path.join(dir, "pipeline-records.json") });
-  const jobs = new Jobs({ config: { jobsFile: path.join(dir, "jobs.json"), defaultCwd: dir }, onLog: () => {} });
+  const jobs = new Jobs({ config: { jobsFile: path.join(dir, "jobs.json"), defaultCwd: dir }, onLog: () => {}, onStageSettled });
   jobs.pipelineRecords = records;
   jobs.pipelines = CATALOGUE;
   const record = {
@@ -525,6 +525,54 @@ test("the cut writes the hold; a live run keeps it, and the settle hands the row
   const again = await jobs.sweepPipelineWaits({ now: T0 + 4 * 60_000, readReview: never, wake: () => ({ ok: true }), advance });
   assert.deepEqual({ checked: again.checked, advanced: again.advanced }, { checked: 0, advanced: 0 });
   assert.equal(calls.length, 1, "the stage is started once, never twice");
+});
+
+// The settle lag (docs/reviews/ping-pong-round-6-2026-11-08.html, "The settle lags the run by about a minute"): the
+// drafter's run ended at 22:58:31.719Z and the stage settled at 22:59:23.923Z — 52.2 s, because the hold's only owner
+// was the panel's MINUTE ticker. The run's own end is the event the hold was written for, so the settle now asks the
+// sweep at once. This test drives the hook the way server.js wires it: the stamp fires the hook, the hook runs the
+// one sweep, and the row is advanced on the settle's own instant — no clock, no night's wait.
+test("a run's end asks the sweep AT ONCE — the stage does not wait for the next minute", async (t) => {
+  const never = () => {
+    throw new Error("a hold reads the job store, never the host");
+  };
+  const calls = [];
+  let advanced = 0;
+  let jobs = null;
+  // What server.js does with the hook: `void tickPipelineWaits()`. The sweep is given the SETTLE's instant, so this
+  // test cannot pass by waiting for a later clock.
+  const kick = (info) => {
+    calls.push(info);
+    void jobs
+      .sweepPipelineWaits({
+        now: Date.parse(info.at),
+        readReview: never,
+        wake: () => ({ ok: true }),
+        advance: () => ({ ok: true, moved: true, from: "wait", to: "address", state: "queued" }),
+      })
+      .then((out) => {
+        advanced = out.advanced;
+      });
+  };
+  const made = board(t, { wait: null, onStageSettled: kick });
+  jobs = made.jobs;
+  const stamp = T0 + 1000;
+  jobs.holdPipelineStageRun({ tree: TREE, pipeline: LOOP.id, stage: "wait", visit: 1, thread: THREAD, job: "job-7", at: iso(T0) });
+  jobs.jobs.set("job-7", { id: "job-7", thread: THREAD, status: "done" });
+
+  const stored = jobs.stampPipelineHold({ id: "job-7", thread: THREAD, worktreePath: TREE }, { now: stamp });
+  assert.equal(stored.pipelineWait.settledAt, iso(stamp), "the settle is stamped as it always was");
+  assert.equal(calls.length, 0, "the hook is DEFERRED: it must not run inside the run's own settle");
+
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(calls.length, 1, "one settle asks the panel once");
+  assert.equal(calls[0].tree, TREE);
+  assert.equal(calls[0].job, "job-7");
+  assert.equal(calls[0].stage, "wait");
+
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.equal(advanced, 1, "the sweep it asked for advanced the row on the settle's own stamp");
+  assert.equal(made.records.get(TREE, { fresh: true }).pipelineWait, undefined, "and the hold is gone with the advance");
 });
 
 test("a hold whose card the store no longer has is still the timer's to advance, and the seam is required", async (t) => {

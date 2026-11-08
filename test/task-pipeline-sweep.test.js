@@ -280,3 +280,29 @@ test("a cap park is released by the reader's action, and the row starts again", 
   assert.equal(row.pipelineRun.stageRuns.at(-1).decision.by, "reader");
   assert.equal(row.pipelineRun.stageRuns.at(-1).decision.fact.kind, "cap-release");
 });
+
+// The remote write a STAGE earns, decided by its declared artifact and carried to the spawner. The sweep is where the
+// round's defect lived: `startSpawn` was handed no flag, so `lib/jobs.js` rendered the PARENT's LANDING paragraph for
+// every stage and a document stage pushed its branch and opened PR #607 (docs/reviews/ping-pong-round-6-2026-11-08.html).
+// Here the DRIVER's own answers are pinned: a stage that writes a document says `local`, a stage whose artifact is the
+// pull request says `pr`. The paragraph those two words render is asserted in test/branch-policy.test.js and, end to
+// end through the real spawner, in test/spawn-stage-landing.test.js.
+test("a stage's artifact decides its remote write: a document stage is local, a pr stage is not", async (t) => {
+  const { assistant, state, rowOf, settleStarts } = harness(t);
+
+  const added = assistant.queueMutate("assistant-1", "add", { title: "carry the contract", project: "agent-worktree-gui" }).task;
+  putOnPipeline(assistant, added.id, "S1");
+  assistant.sweepQueues(); // the cut
+  await settleStarts();
+  assistant.sweepQueues(); // the first stage's start
+  await settleStarts();
+  assert.equal(state.started.length, 1);
+  assert.equal(state.started[0].remoteWrite, "local", "S1 writes a document, so its worker is told to commit and report");
+
+  state.board[0].status = "done";
+  assistant.sweepQueues();
+  await settleStarts();
+  assert.equal(state.started.length, 2, "the next stage was started by the same sweep");
+  assert.equal(state.started[1].remoteWrite, "pr", "S2's artifact IS the pull request, so it lands the way it always did");
+  assert.equal(rowOf(added.id).pipelineRun.stage, "S2");
+});

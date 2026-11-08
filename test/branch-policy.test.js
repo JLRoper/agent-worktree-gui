@@ -22,6 +22,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { Jobs } from "../lib/jobs.js";
+import { branchLandingLine } from "../lib/branch-policy.js";
 import { policyForProject, policyFrom } from "../lib/remote-writes.js";
 import { installGuard, guardPaths, commonDirOf } from "../lib/push-guard.js";
 import { ROOT, configureRepo, git as runGit } from "../tools/panel-testkit.mjs";
@@ -216,6 +217,45 @@ test("a worker's run body names the parent its tree was really cut from", async 
   const bodyC = stub.last();
   assert.doesNotMatch(bodyC, /cut from `/, `no parent is invented for a tree that records none:\n${bodyC}`);
   assert.match(bodyC, /LOCAL-ONLY/, "the blanket local-only rule stands instead");
+});
+
+// The stage's own case, and the one that was missing: a stage whose declared artifact is a document has nothing to
+// land, so its worker is told to commit and report — on a tree cut from main, where the parent's paragraph used to say
+// "push it and open a pull request". The paragraph is asserted where a worker READS it: the run body the spy gateway
+// received. The ping-pong's drafter pushed a branch and opened PR #607 under the old rendering.
+test("a stage whose artifact is not a pull request is local-only: commit and report, no push and no PR", async (t) => {
+  const stub = await stubGateway();
+  const repo = makeRepo("main");
+  const dir = mkdtempSync(path.join(tmpdir(), "wtgui-policy-stage-"));
+  t.after(async () => {
+    await stub.stop();
+    rmSync(repo, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+    rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+  });
+  const jobs = makeJobs(dir, stub.url);
+  t.after(() => jobs.dispose());
+
+  // 1. The same tree, cut from main, for a stage whose artifact IS the pull request: the parent's rule, unchanged.
+  await jobs.create({ prompt: "land the patch", cwd: repo, existing: false, project: "agent-worktree-gui", branchPolicy: "allow", remote: "github", remoteWrite: "pr" });
+  const prBody = stub.last();
+  assert.match(prBody, /cut from `main`/, `a pr stage keeps the parent's paragraph:\n${prBody}`);
+  assert.match(prBody, /push it and open a pull request/, "a stage that lands by PR is still told to open one");
+  assert.match(prBody, /gh pr create --fill/);
+
+  // 2. The same cut, for a stage that writes a document: local-only, whatever the parent is.
+  await jobs.create({ prompt: "write the draft", cwd: repo, existing: false, project: "agent-worktree-gui", branchPolicy: "allow", remote: "github", remoteWrite: "local" });
+  const body = stub.last();
+  assert.match(body, /This stage's artifact is not a pull request, so this tree is local-only/, `the stage's own case is rendered:\n${body}`);
+  assert.match(body, /commit on `[^`]+` and report the commit/, "it is told to commit on the stage branch and report the commit");
+  assert.doesNotMatch(body, /gh pr create/, "and never to open a PR");
+  assert.doesNotMatch(body, /push it and open a pull request/, "nor to push the branch for one");
+  assert.doesNotMatch(body, /cut from `main`/, "the parent is not named — it would not change the answer");
+
+  // 3. A tree nobody can name still gets a true sentence, because the stage's case does not need the parent at all.
+  const line = branchLandingLine({ localOnly: true, branch: "wtgui/write-the-draft-a1b2c3", policy: "allow" });
+  assert.match(line, /^LANDING: /);
+  assert.match(line, /local-only/);
+  assert.doesNotMatch(line, /\{\{|\$/, "no placeholders in a sentence a worker has to obey");
 });
 
 test("the panel's own assistant is handed no landing paragraph at all", async (t) => {

@@ -3316,7 +3316,7 @@
           "id": "critique",
           "title": "Critique",
           "purpose": "Read the draft against the brief and return one note per defect.",
-          "prompt": "Read the draft against the brief and return one note per defect: the sentence, the defect, the fix it needs. Do not rewrite the draft. When no note is left open, accept it and say so in one line. The notes are the artifact the next round reads.",
+          "prompt": "Read the draft against the brief and return one note per defect: the sentence, the defect, the fix it needs. Do not rewrite the draft. When no note is left open, accept it in one line and record that verdict where the gate asks for it, so the drafter can be told the round is over instead of writing another one. The notes are the artifact the next round reads.",
           "artifact": {
             "id": "critique-notes",
             "path": "ledger/ping-pong/critique.md",
@@ -3368,7 +3368,21 @@
           "name": "Verdict",
           "decider": "critic",
           "verified_by": "machine",
-          "refuses_when": "a note is open and the draft was not rewritten against it"
+          "refuses_when": "a note is open and the draft was not rewritten against it",
+          "decision": {
+            "id": "ping-pong-verdict",
+            "path": "ledger/ping-pong/verdict-r{{round}}.json",
+            "schema": "verdict/1",
+            "writer": "critic",
+            "outcomes": [
+              "accept",
+              "revise"
+            ],
+            "routes": {
+              "accept": null,
+              "revise": "H-02"
+            }
+          }
         }
       ]
     },
@@ -3807,7 +3821,8 @@
             "id": "pushed-branch",
             "path": "ledger/turnover/push.md",
             "schema": "pushed-branch/1",
-            "writer": "worker"
+            "writer": "worker",
+            "kind": "pr"
           },
           "owner": {
             "kind": "agent",
@@ -3835,7 +3850,8 @@
             "id": "pull-request",
             "path": "ledger/turnover/pr.md",
             "schema": "pull-request/1",
-            "writer": "worker"
+            "writer": "worker",
+            "kind": "pr"
           },
           "owner": {
             "kind": "agent",
@@ -4169,7 +4185,8 @@
             "id": "pushed-branch",
             "path": "ledger/github-force-merge/push.md",
             "schema": "pushed-branch/1",
-            "writer": "worker"
+            "writer": "worker",
+            "kind": "pr"
           },
           "owner": {
             "kind": "agent",
@@ -4197,7 +4214,8 @@
             "id": "pull-request",
             "path": "ledger/github-force-merge/pr.md",
             "schema": "pull-request/1",
-            "writer": "worker"
+            "writer": "worker",
+            "kind": "pr"
           },
           "owner": {
             "kind": "agent",
@@ -4225,7 +4243,8 @@
             "id": "merge-record",
             "path": "ledger/github-force-merge/merge.md",
             "schema": "merge-record/1",
-            "writer": "worker"
+            "writer": "worker",
+            "kind": "pr"
           },
           "owner": {
             "kind": "agent",
@@ -4254,7 +4273,8 @@
             "id": "main-moved",
             "path": "ledger/github-force-merge/main.md",
             "schema": "main-moved/1",
-            "writer": "worker"
+            "writer": "worker",
+            "kind": "pr"
           },
           "owner": {
             "kind": "agent",
@@ -4425,7 +4445,8 @@
             "id": "pushed-branch",
             "path": "ledger/sefl-review-loop/push.md",
             "schema": "pushed-branch/1",
-            "writer": "worker"
+            "writer": "worker",
+            "kind": "pr"
           },
           "owner": {
             "kind": "agent",
@@ -4453,7 +4474,8 @@
             "id": "pull-request",
             "path": "ledger/sefl-review-loop/pr.md",
             "schema": "pull-request/1",
-            "writer": "worker"
+            "writer": "worker",
+            "kind": "pr"
           },
           "owner": {
             "kind": "agent",
@@ -4516,7 +4538,8 @@
             "id": "review-answers",
             "path": "ledger/sefl-review-loop/address.md",
             "schema": "review-answers/1",
-            "writer": "worker"
+            "writer": "worker",
+            "kind": "pr"
           },
           "owner": {
             "kind": "agent",
@@ -4572,7 +4595,8 @@
             "id": "merge-record",
             "path": "ledger/sefl-review-loop/merge.md",
             "schema": "merge-record/1",
-            "writer": "worker"
+            "writer": "worker",
+            "kind": "pr"
           },
           "owner": {
             "kind": "agent",

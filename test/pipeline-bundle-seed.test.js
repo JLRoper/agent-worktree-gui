@@ -104,6 +104,28 @@ test("the seed's three small pipelines are complete: 2-3 stages each, with the c
   const gate = author.gates[0];
   assert.ok(gate && gate.decision, "the review gate carries a decision artifact rather than being an unstated pause");
   assert.deepEqual(gate.decision.outcomes, ["accept", "reject"]);
+
+  // …and so does the ping-pong's, which used to be `decision: null`: a gate nobody could ask took the loop edge in
+  // kind order, so an accepted draft still entered another visit and a converged round still ran to the cap. The
+  // accept route is null — the pipeline ends there — and the revise route is the back edge it always was.
+  const verdict = pingPong.gates.find((entry) => entry.id === "G1");
+  assert.ok(verdict && verdict.decision, "the ping-pong's verdict gate carries a decision record");
+  assert.deepEqual(verdict.decision.outcomes, ["accept", "revise"]);
+  assert.deepEqual(verdict.decision.routes, { accept: null, revise: "H-02" }, "accept ends the loop; revise crosses the back edge");
+  assert.equal(verdict.decision.path, "ledger/ping-pong/verdict-r{{round}}.json", "one record per round, so a stale verdict cannot answer the next one");
+
+  // The landing ladders declare `kind: "pr"` on the stages that ACT on the remote. That is the word the driver reads to
+  // decide a stage's landing paragraph (`lib/branch-policy.js`'s third case), and a push stage told "do not push"
+  // would be a pipeline that cannot do its own job. The commit/version/branch stages declare nothing: they are local
+  // commits, and "commit and report, do not push" is exactly what they are.
+  const ladder = (id) => byId.get(id).stages.map((entry) => [entry.id, entry.artifact.kind || null]);
+  assert.deepEqual(ladder("turnover"), [["commit", null], ["push", "pr"], ["pr", "pr"]]);
+  assert.deepEqual(ladder("github-force-merge"), [["commit", null], ["version", null], ["push", "pr"], ["pr", "pr"], ["merge", "pr"], ["main", "pr"]]);
+  assert.deepEqual(
+    ladder("sefl-review-loop"),
+    [["branch", null], ["push", "pr"], ["pr", "pr"], ["wait", null], ["address", "pr"], ["approve", null], ["merge", "pr"]],
+    "the read-only stages of the review loop stay local: they neither push nor open anything",
+  );
 });
 
 test("a task assigned from the seed reads its stage, its position of 13 and its elapsed span from the stored stamp", () => {
