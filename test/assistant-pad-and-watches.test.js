@@ -75,7 +75,7 @@ const turnOf = (assistant, id) => ({ id: `turn-${id}`, thread: assistant.threadO
 
 test("#2's pad is seeded once from the shared text, and a later seed never overwrites it", async (t) => {
   const { assistant, notesFile } = await panel(t, { notes: SHARED });
-  const id = assistant.createAssistant({ roleId: "agent-manager", name: "Reviewer" }).created.id;
+  const id = assistant.createAssistant({ roleId: "assistant-agent-manager", name: "Reviewer" }).created.id;
   assert.equal(id, "assistant-2");
   // Seeded at CREATE, beside its charter, from the text every assistant used to share.
   assert.equal(await readFile(notesFile(id), "utf8"), SHARED, "its own notes.md starts from the shared text");
@@ -97,9 +97,9 @@ test("#2's pad is seeded once from the shared text, and a later seed never overw
 test("a record that predates the split gets its own rules and pad on the boot pass, once", async (t) => {
   const rules = [rule("r1", "answer in one line"), rule("r2", "deploy after the suite")];
   const assistants = [
-    { id: PRIMARY_ASSISTANT, name: "Assistant #1", roleId: "agent-manager", threadId: ASSISTANT_THREAD, rules: [], createdAt: iso() },
-    { id: "assistant-2", name: "Assistant #2", roleId: "agent-manager", threadId: threadFor("assistant-2"), rules: [], createdAt: iso(1) },
-    { id: "assistant-3", name: "Assistant #3", roleId: "agent-manager", threadId: threadFor("assistant-3"), rules: [], createdAt: iso(2) },
+    { id: PRIMARY_ASSISTANT, name: "Assistant #1", roleId: "assistant-agent-manager", threadId: ASSISTANT_THREAD, rules: [], createdAt: iso() },
+    { id: "assistant-2", name: "Assistant #2", roleId: "assistant-agent-manager", threadId: threadFor("assistant-2"), rules: [], createdAt: iso(1) },
+    { id: "assistant-3", name: "Assistant #3", roleId: "assistant-agent-manager", threadId: threadFor("assistant-3"), rules: [], createdAt: iso(2) },
   ];
   const { assistant, notesFile } = await panel(t, { notes: SHARED, rules, assistants });
   assert.deepEqual(assistant.assistants.map((a) => a.id), [PRIMARY_ASSISTANT, "assistant-2", "assistant-3"]);
@@ -132,7 +132,7 @@ test("a record that predates the split gets its own rules and pad on the boot pa
 
 test("the Pad-tab save writes the assistant it was made for, and nothing else", async (t) => {
   const { assistant, assistantFile, notesFile, dir, stored } = await panel(t, { notes: SHARED });
-  const id = assistant.createAssistant({ roleId: "agent-manager", name: "Reviewer" }).created.id;
+  const id = assistant.createAssistant({ roleId: "assistant-agent-manager", name: "Reviewer" }).created.id;
   assistant.setNotesFor(id, "REVIEWER-PAD: read the diff before you answer");
   assert.equal(await readFile(notesFile(id), "utf8"), "REVIEWER-PAD: read the diff before you answer", "the save is #2's file");
   assert.equal(assistant.notesFor(PRIMARY_ASSISTANT), SHARED, "#1's notes did not move");
@@ -151,7 +151,7 @@ test("each assistant's preamble carries its OWN scratchpad — the eviction the 
   // #1's pad is the long one, the shape the defect was reported on: every turn clipped the same 1,200 characters.
   const long = Array.from({ length: 220 }, (_, i) => `- shared line ${i} ${"z".repeat(24)}`).join("\n").slice(-7999);
   const { assistant } = await panel(t, { notes: long });
-  const id = assistant.createAssistant({ roleId: "agent-manager", name: "Reviewer" }).created.id;
+  const id = assistant.createAssistant({ roleId: "assistant-agent-manager", name: "Reviewer" }).created.id;
 
   // Seeded from the shared text, #2's first turn reads it — and after its first write, only its own line. The
   // share is the ONE copy; the eviction was every later turn reading the same clipped tail forever.
@@ -168,8 +168,8 @@ test("each assistant's preamble carries its OWN scratchpad — the eviction the 
 
 test("a NOTE lands in the pad of the assistant whose turn wrote it", async (t) => {
   const { assistant, notesFile } = await panel(t, { notes: SHARED });
-  const two = assistant.createAssistant({ roleId: "agent-manager", name: "Reviewer" }).created.id;
-  const three = assistant.createAssistant({ roleId: "agent-manager", name: "Auditor" }).created.id;
+  const two = assistant.createAssistant({ roleId: "assistant-agent-manager", name: "Reviewer" }).created.id;
+  const three = assistant.createAssistant({ roleId: "assistant-agent-manager", name: "Auditor" }).created.id;
   assert.deepEqual([two, three], ["assistant-2", "assistant-3"]);
 
   await assistant.applyActions(turnOf(assistant, two), parseActions("NOTE: the reviewer prefers the short diff"));
@@ -189,7 +189,7 @@ test("a NOTE lands in the pad of the assistant whose turn wrote it", async (t) =
 
 test("a watch is stamped with the assistant whose turn created it", async (t) => {
   const { assistant, rows, stored } = await panel(t);
-  const id = assistant.createAssistant({ roleId: "agent-manager", name: "Reviewer" }).created.id;
+  const id = assistant.createAssistant({ roleId: "assistant-agent-manager", name: "Reviewer" }).created.id;
   rows.push({ id: "run-1", thread: "wtgui-worker-1", status: "running", startedAt: iso() });
 
   await assistant.applyActions(turnOf(assistant, id), parseActions("WATCH wtgui-worker-1: the deploy finishes | 15"));
@@ -208,7 +208,7 @@ test("a watch is stamped with the assistant whose turn created it", async (t) =>
 
 test("the reader's own add is stamped for the tab it was made from, and #1's records keep their shape", async (t) => {
   const { assistant } = await panel(t);
-  const id = assistant.createAssistant({ roleId: "agent-manager", name: "Reviewer" }).created.id;
+  const id = assistant.createAssistant({ roleId: "assistant-agent-manager", name: "Reviewer" }).created.id;
   const theirs = assistant.addWatch({ thread: "wtgui-worker-2", title: "from #2's tab", assistantId: id }, "reader");
   assert.equal(theirs.assistantId, id, "the tab's assistant is the watch's");
   const mine = assistant.addWatch({ thread: "wtgui-worker-3", title: "from #1's tab", assistantId: PRIMARY_ASSISTANT }, "reader");
@@ -222,7 +222,7 @@ test("the reader's own add is stamped for the tab it was made from, and #1's rec
 
 test("an overdue watch files its notice, stamped with the watch's owner", async (t) => {
   const { assistant, rows } = await panel(t);
-  const id = assistant.createAssistant({ roleId: "agent-manager", name: "Reviewer" }).created.id;
+  const id = assistant.createAssistant({ roleId: "assistant-agent-manager", name: "Reviewer" }).created.id;
   // A run still live on the watched thread: `checkWatches` files an OVERDUE notice for a live turn whose deadline
   // was set by the clock, and that branch used to reference a `const` declared inside the FINISHED branch — every
   // overdue watch threw `noticeFor is not defined` and filed nothing.
@@ -245,7 +245,7 @@ test("legacy watches are resolved from the thread at read time, and the store is
     { id: "w3", thread: "wtgui-worker-legacy", title: "legacy on a worker thread", at: iso(3), by: "reader", state: "watching" },
   ];
   const { assistant, stored } = await panel(t, { watches: legacy });
-  const id = assistant.createAssistant({ roleId: "agent-manager", name: "Reviewer" }).created.id;
+  const id = assistant.createAssistant({ roleId: "assistant-agent-manager", name: "Reviewer" }).created.id;
   assert.equal(id, "assistant-2");
 
   // A record with no stamp answers from its thread, and a worker thread belongs to nobody — which reads as #1.

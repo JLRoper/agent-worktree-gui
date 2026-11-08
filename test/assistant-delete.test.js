@@ -191,7 +191,7 @@ test("the route is mounted by the real server: a dry run names the plan and the 
   const panel = await startPanel({});
   t.after(() => panel.stop());
 
-  const created = await post(panel.base, "/api/assistant/assistants", { body: { roleId: "agent-manager" } });
+  const created = await post(panel.base, "/api/assistant/assistants", { body: { roleId: "assistant-agent-manager" } });
   assert.equal(created.status, 201, created.text.slice(0, 300));
   const id = created.json.created.id;
 

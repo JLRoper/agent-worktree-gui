@@ -59,7 +59,7 @@ const BEHAVIOURS = [
 
 test("every assistant's preamble carries the directive, each naming its own queue file", async (t) => {
   const { assistant } = await panel(t);
-  const second = assistant.createAssistant({ roleId: "agent-manager", name: "Reviewer" }).created.id;
+  const second = assistant.createAssistant({ roleId: "assistant-agent-manager", name: "Reviewer" }).created.id;
   assert.notEqual(second, PRIMARY_ASSISTANT, "there is a second assistant to check");
 
   for (const id of [PRIMARY_ASSISTANT, second]) {
@@ -81,7 +81,7 @@ test("every assistant's preamble carries the directive, each naming its own queu
 
 test("a reader's own role prompt does not replace the directive", async (t) => {
   const { assistant } = await panel(t);
-  const second = assistant.createAssistant({ roleId: "agent-manager", name: "Reviewer" }).created.id;
+  const second = assistant.createAssistant({ roleId: "assistant-agent-manager", name: "Reviewer" }).created.id;
   assistant.saveProfile(second, { prompt: "Answer in one line and never guess." });
   const text = assistant.preamble(second);
   assert.ok(text.includes("Answer in one line and never guess."), "the reader's prompt rides in full");
@@ -102,7 +102,7 @@ test("the directive is standing: a wake that skips the queue digest still carrie
 
 test("the turn the panel creates is the one that carries it", async (t) => {
   const { assistant, created } = await panel(t);
-  const second = assistant.createAssistant({ roleId: "agent-manager", name: "Reviewer" }).created.id;
+  const second = assistant.createAssistant({ roleId: "assistant-agent-manager", name: "Reviewer" }).created.id;
   await assistant.say("what are you carrying?", { assistantId: second });
   await assistant.say("and you?");
   assert.equal(created.length, 2);

@@ -133,7 +133,7 @@ test("the setter stores an id, answers with the updated row, and survives a rest
   const tree = board.trees["tree-one-1a2b3c"];
   const panel = await startPanel({ keep: true, config: configFor(board) });
   await waitForRow(panel.base, "proj", tree);
-  const created = await post(panel.base, "/api/assistant/assistants", { body: { roleId: "agent-manager" } });
+  const created = await post(panel.base, "/api/assistant/assistants", { body: { roleId: "assistant-agent-manager" } });
   assert.equal(created.status, 201, created.text);
   assert.equal(created.json.created.id, "assistant-2");
 
@@ -168,7 +168,7 @@ test("setting Assistant #1 clears the entry instead of writing one", { timeout: 
   const panel = await startPanel({ keep: true, config: configFor(board) });
   t.after(() => panel.stop());
   await waitForRow(panel.base, "proj", tree);
-  await post(panel.base, "/api/assistant/assistants", { body: { roleId: "agent-manager" } });
+  await post(panel.base, "/api/assistant/assistants", { body: { roleId: "assistant-agent-manager" } });
   const set = await post(panel.base, "/api/worktree/assistant", { body: { project: "proj", path: tree, assistant: "assistant-2" }, ...fromPage(panel) });
   assert.equal(set.status, 200, set.text);
   assert.notDeepEqual(await ownersOnDisk(panel), {});
@@ -190,7 +190,7 @@ test("an unknown assistant id is refused and the stored owner does not move", { 
   const panel = await startPanel({ keep: true, config: configFor(board) });
   t.after(() => panel.stop());
   await waitForRow(panel.base, "proj", tree);
-  await post(panel.base, "/api/assistant/assistants", { body: { roleId: "agent-manager" } });
+  await post(panel.base, "/api/assistant/assistants", { body: { roleId: "assistant-agent-manager" } });
   await post(panel.base, "/api/worktree/assistant", { body: { project: "proj", path: tree, assistant: "assistant-2" }, ...fromPage(panel) });
 
   const refused = await post(panel.base, "/api/worktree/assistant", { body: { project: "proj", path: tree, assistant: "nobody-9" }, ...fromPage(panel) });
@@ -208,7 +208,7 @@ test("the owner survives a rename of the directory AND the branch", { timeout: 1
   const panel = await startPanel({ keep: true, config: configFor(board) });
   t.after(() => panel.stop());
   await waitForRow(panel.base, "proj", tree);
-  await post(panel.base, "/api/assistant/assistants", { body: { roleId: "agent-manager" } });
+  await post(panel.base, "/api/assistant/assistants", { body: { roleId: "assistant-agent-manager" } });
   const set = await post(panel.base, "/api/worktree/assistant", { body: { project: "proj", path: tree, assistant: "assistant-2" }, ...fromPage(panel) });
   assert.equal(set.status, 200, set.text);
 
@@ -289,7 +289,7 @@ test("an owner whose assistant is gone falls back to Assistant #1 and says so", 
   const tree = board.trees["tree-one-1a2b3c"];
   const panel = await startPanel({ keep: true, config: configFor(board) });
   await waitForRow(panel.base, "proj", tree);
-  await post(panel.base, "/api/assistant/assistants", { body: { roleId: "agent-manager" } });
+  await post(panel.base, "/api/assistant/assistants", { body: { roleId: "assistant-agent-manager" } });
   const set = await post(panel.base, "/api/worktree/assistant", { body: { project: "proj", path: tree, assistant: "assistant-2" }, ...fromPage(panel) });
   assert.equal(set.status, 200, set.text);
 
@@ -323,7 +323,7 @@ test("the setter is the reader's: a request with no same-origin Origin is refuse
   const panel = await startPanel({ keep: true, config: configFor(board) });
   t.after(() => panel.stop());
   await waitForRow(panel.base, "proj", tree);
-  await post(panel.base, "/api/assistant/assistants", { body: { roleId: "agent-manager" } });
+  await post(panel.base, "/api/assistant/assistants", { body: { roleId: "assistant-agent-manager" } });
 
   // What a worker's own shell produces: the right body, no Origin — the shape of an agent trying to reassign the tree
   // it is working in.

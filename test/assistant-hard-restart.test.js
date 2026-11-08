@@ -59,7 +59,7 @@ async function panel(t, { jobs = [] } = {}) {
     if (assistant.persistTimer) clearTimeout(assistant.persistTimer);
     if (assistant.settleTimer) clearTimeout(assistant.settleTimer);
   });
-  const second = assistant.createAssistant({ roleId: "agent-manager" }).created;
+  const second = assistant.createAssistant({ roleId: "assistant-agent-manager" }).created;
   return { assistant, dir, assistantFile, assistantsFile: assistant.assistantsFile, second, listed, created };
 }
 
@@ -179,7 +179,7 @@ test("the next turn after a hard restart is the first turn of a new session", as
 test("a running panel hard-restarts one assistant and answers with the whole state", async (t) => {
   const panel = await startPanel({});
   t.after(() => panel.stop());
-  const created = await post(panel.base, "/api/assistant/assistants", { body: { roleId: "agent-manager" } });
+  const created = await post(panel.base, "/api/assistant/assistants", { body: { roleId: "assistant-agent-manager" } });
   assert.equal(created.status, 201, created.text.slice(0, 300));
   const id = created.json.created.id;
   const before = created.json.created.threadId;

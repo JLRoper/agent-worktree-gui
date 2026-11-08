@@ -425,7 +425,7 @@ const run = async () => {
   const made = await fetch(`${base}/api/assistant/assistants`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ roleId: "agent-manager" }),
+    body: JSON.stringify({ roleId: "assistant-agent-manager" }),
   });
   check("a second assistant can be created on the sandbox panel", made.status, 201);
   const ownerOn = await waitFor(

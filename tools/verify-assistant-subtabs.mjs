@@ -535,7 +535,7 @@ async function movedPanesPhase(pw) {
   const assistants = [1, 2, 3].map((n) => ({
     id: `assistant-${n}`,
     name: `Assistant #${n}`,
-    roleId: "agent-manager",
+    roleId: "assistant-agent-manager",
     threadId: n === 1 ? "panel-assistant" : `panel-assistant-${n}`,
     rules: [],
     createdAt: before(90 - n),

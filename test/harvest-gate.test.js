@@ -95,7 +95,7 @@ async function panel(t) {
 
 test("a second assistant's finished turn is harvested as its own", async (t) => {
   const { assistant } = await panel(t);
-  const second = assistant.createAssistant({ roleId: "agent-manager", name: "Reviewer" }).created;
+  const second = assistant.createAssistant({ roleId: "assistant-agent-manager", name: "Reviewer" }).created;
   assistant.observe({
     type: "job",
     job: turn({
@@ -129,7 +129,7 @@ test("Assistant #1's finished turn still harvests", async (t) => {
 
 test("a #2 turn does not clear #1's COMPLETE ask, and #1's own turn does", async (t) => {
   const { assistant, rows } = await panel(t);
-  const second = assistant.createAssistant({ roleId: "agent-manager", name: "Reviewer" }).created;
+  const second = assistant.createAssistant({ roleId: "assistant-agent-manager", name: "Reviewer" }).created;
   const run = turn({ id: "run-1", thread: "wtgui-docs-111111", assistant: false, assistantId: PRIMARY_ASSISTANT, turn: 1 });
   rows.push(run);
 
@@ -151,7 +151,7 @@ test("a #2 turn does not clear #1's COMPLETE ask, and #1's own turn does", async
 
 test("a #1 turn does not clear #2's COMPLETE ask, and #2's own turn does", async (t) => {
   const { assistant, rows } = await panel(t);
-  const second = assistant.createAssistant({ roleId: "agent-manager", name: "Reviewer" }).created;
+  const second = assistant.createAssistant({ roleId: "assistant-agent-manager", name: "Reviewer" }).created;
   const run = turn({ id: "run-2", thread: "wtgui-docs-222222", assistant: false, assistantId: second.id, turn: 1 });
   rows.push(run);
 

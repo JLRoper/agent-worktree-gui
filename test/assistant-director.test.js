@@ -105,7 +105,7 @@ function directorPanel(t) {
 
 test("the Assistant Director charter is a new document, under the cap, and it names the job", async (t) => {
   const text = await readFile(DIRECTOR_SEED, "utf8");
-  const manager = await readFile(new URL("../data/roles/agent-manager.md", import.meta.url), "utf8");
+  const manager = await readFile(new URL("../data/roles/assistant-agent-manager.md", import.meta.url), "utf8");
   assert.ok(text.length < CHARTER_MAX_CHARS, `under the cap (${text.length}/${CHARTER_MAX_CHARS})`);
   assert.notEqual(text, manager, "a NEW charter, not the manager's file under another name");
   assert.ok(text.length > 4000, "a real operating document, not a placeholder");
@@ -135,7 +135,7 @@ test("the Director role is registered beside the manager, with its own size and 
   assert.equal(meta.chars, director.charter.length);
   assert.equal(meta.over, false);
   const stored = JSON.parse(await readFile(rolesFile, "utf8"));
-  assert.deepEqual(stored.roles.map((r) => r.id), ["agent-manager", ASSISTANT_DIRECTOR_ID]);
+  assert.deepEqual(stored.roles.map((r) => r.id), ["assistant-agent-manager", ASSISTANT_DIRECTOR_ID]);
 });
 
 test("the role registers exactly once across two boots, and a reader's edit is never regenerated", async (t) => {
@@ -164,7 +164,7 @@ test("the role registers exactly once across two boots, and a reader's edit is n
 
   // The second BOOT is also an Assistant constructor, not only the helper: same file, same two roles.
   const second = await panel(t, { dir: first.dir });
-  assert.deepEqual(second.assistant.roles.map((r) => r.id), ["agent-manager", ASSISTANT_DIRECTOR_ID]);
+  assert.deepEqual(second.assistant.roles.map((r) => r.id), ["assistant-agent-manager", ASSISTANT_DIRECTOR_ID]);
 
   // A reader's edit to the Director's charter survives a later registration pass.
   const edited = writeRoleCharter(first.rolesFile, bootTwo.roles, ASSISTANT_DIRECTOR_ID, "# the director, edited\n");
@@ -192,7 +192,7 @@ test("a charter over the cap is refused with the existing code, and the file is 
 
 test("the built-in registrar never duplicates and never overwrites", () => {
   const seeded = ensureBuiltInRoles([], { at: new Date("2026-11-04T00:00:00Z") });
-  assert.deepEqual(seeded.roles.map((r) => r.id), ["agent-manager", ASSISTANT_DIRECTOR_ID]);
+  assert.deepEqual(seeded.roles.map((r) => r.id), ["assistant-agent-manager", ASSISTANT_DIRECTOR_ID]);
   assert.equal(seeded.added.length, 2);
   const again = ensureBuiltInRoles(seeded.roles);
   assert.deepEqual(again.added, [], "a second pass adds nothing");
@@ -267,7 +267,7 @@ test("checkCadence is the sentry's only clock: 19 is early, 21 is due, and a liv
 
 test("no interval and an empty queue means no cadence; the profile is the standing clock's only field", async (t) => {
   const { assistant, profileFile } = await panel(t);
-  assistant.createAssistant({ roleId: "agent-manager" });
+  assistant.createAssistant({ roleId: "assistant-agent-manager" });
   // The manager-role assistant has no cadence even after a very long quiet.
   assert.equal(assistant.checkCadence(assistant.bootedAt + 24 * 60 * MINUTE), null);
   assert.equal(assistant.profileOf("assistant-2").wakeEveryMinutes, 0);

@@ -79,7 +79,7 @@ const turnOf = (assistant, id, prose) => ({
 test("a second assistant's knobs are its own, and Assistant #1's file is not touched", async (t) => {
   const { assistant, profileFile, assistantFile } = await panel(t);
   const before = sha(await readFile(assistantFile));
-  const created = assistant.createAssistant({ roleId: "agent-manager", name: "Reviewer" });
+  const created = assistant.createAssistant({ roleId: "assistant-agent-manager", name: "Reviewer" });
   const id = created.created.id;
   assert.equal(id, "assistant-2", "the next assistant");
   assert.equal(assistant.settingsFor(id).autonomy, "draft", "before anything is set, #2 is at its own default");
@@ -125,7 +125,7 @@ test("a second assistant's knobs are its own, and Assistant #1's file is not tou
 
 test("the default role prompt is saved by the Role tab's route and read back after a restart", async (t) => {
   const { assistant, dir, profileFile } = await panel(t);
-  const id = assistant.createAssistant({ roleId: "agent-manager" }).created.id;
+  const id = assistant.createAssistant({ roleId: "assistant-agent-manager" }).created.id;
   const PROMPT = "You are the reviewer: read the diff before you answer, and never approve your own work.";
   const saved = assistant.saveProfile(id, { prompt: PROMPT });
   assert.equal(saved.profile.promptChars, PROMPT.length, "the pane is told the size it just saved");
@@ -155,7 +155,7 @@ test("the default role prompt is saved by the Role tab's route and read back aft
 
 test("clearing the prompt clears it in the file and in the next turn", async (t) => {
   const { assistant, profileFile } = await panel(t);
-  const id = assistant.createAssistant({ roleId: "agent-manager" }).created.id;
+  const id = assistant.createAssistant({ roleId: "assistant-agent-manager" }).created.id;
   assistant.saveProfile(id, { prompt: "first" });
   assistant.saveProfile(id, { prompt: "" });
   assert.equal(JSON.parse(await readFile(profileFile(id), "utf8")).prompt, "");
@@ -164,7 +164,7 @@ test("clearing the prompt clears it in the file and in the next turn", async (t)
 
 test("the whitelists are gone from the profile, the payloads, the page and the route", async (t) => {
   const { assistant, profileFile } = await panel(t);
-  const id = assistant.createAssistant({ roleId: "agent-manager" }).created.id;
+  const id = assistant.createAssistant({ roleId: "assistant-agent-manager" }).created.id;
   // The module exports nothing to match a list against, and the profile it hands back has no key for one.
   const profile = await import("../lib/assistant/profile.js");
   for (const key of ["whitelistMatches", "parseWhitelist", "whitelistText", "describeList", "WHITELIST_ALL", "WHITELIST_MAX"]) {
@@ -204,7 +204,7 @@ test("the whitelists are gone from the profile, the payloads, the page and the r
 
 test("a SPAWN is judged by the assistant's own spawn switch and by nothing else", async (t) => {
   const { assistant, spawned } = await panel(t);
-  const id = assistant.createAssistant({ roleId: "agent-manager" }).created.id;
+  const id = assistant.createAssistant({ roleId: "assistant-agent-manager" }).created.id;
   // `ask`: the line becomes a card, whichever project it names — there is no list to fall outside of.
   assistant.setSettingsFor(id, { spawn: "ask" });
   const job = turnOf(assistant, id, "SPAWN beta | do something in beta");
@@ -230,7 +230,7 @@ test("a SPAWN is judged by the assistant's own spawn switch and by nothing else"
 
 test("the preamble offers every project on the panel, to every assistant", async (t) => {
   const { assistant } = await panel(t);
-  const id = assistant.createAssistant({ roleId: "agent-manager" }).created.id;
+  const id = assistant.createAssistant({ roleId: "assistant-agent-manager" }).created.id;
   for (const who of [PRIMARY_ASSISTANT, id]) {
     const text = assistant.preamble(who);
     assert.match(text, /- alpha · C:\/work\/alpha/, `${who} is shown alpha`);
