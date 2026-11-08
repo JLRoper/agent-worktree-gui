@@ -4,16 +4,28 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.60.3 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.60.4 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-435 releases from v0.1.0 (2026-10-20) to v1.60.3 (2026-11-08), 1456 commits between the tags. Every release is anchored by an
+436 releases from v0.1.0 (2026-10-20) to v1.60.4 (2026-11-08), 1458 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.60.4 — 2026-11-08 · 2 commits
+
+[`4a982b0`](https://github.com/JLRoper/agent-worktree-gui/commit/4a982b08f15ec064d884553efa60eb0469abf4a1) · [compare v1.60.3...v1.60.4](https://github.com/JLRoper/agent-worktree-gui/compare/v1.60.3...v1.60.4)
+
+### Fixed
+
+- fix: retire the agent-manager role id, and refuse a role delete while an assistant names it ([`4a982b0`](https://github.com/JLRoper/agent-worktree-gui/commit/4a982b08f15ec064d884553efa60eb0469abf4a1))
+
+### Docs & tests
+
+- docs: render the changelog - v1.60.0, v1.60.1, v1.60.2, v1.60.3 ([`7bc87bf`](https://github.com/JLRoper/agent-worktree-gui/commit/7bc87bf45b267a67bd71b5c72562158d7c63c615))
 
 ## v1.60.3 — 2026-11-08 · 2 commits
 
