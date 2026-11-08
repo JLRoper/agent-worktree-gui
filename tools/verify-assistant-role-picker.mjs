@@ -18,8 +18,8 @@
 //   5. THE NEXT TURN CARRIES THE NEW ROLE: the run the page's Send starts on panel-assistant-2 has an `input` with
 //      `role Assistant Director` and the Director's charter in full, not the withheld marker.
 //   6. THE LINK LANDS ON THE ROLE TAB, editing #2: `#as-role` is the visible pane, the view persisted as
-//      `{assistant:"role"}`, the pane names #2 and the Director role it runs, and it carries no picker of its own -
-//      the Settings row above is the one place a role is changed.
+//      `{assistant:"role"}`, the pane names #2 and the Director role it runs, its view picker sits on that role, and
+//      it carries no control that changes the role - the Settings row above is the one place a role is assigned.
 //
 // Everything happens in a sandbox of its own: a throwaway repo, HERMES_HOME, PANEL_CONFIG with its own port, its own
 // logs and job store, and a stub Runs API on an ephemeral port. The live panel on 7331 and the live gateway are never
@@ -400,14 +400,16 @@ try {
         view: JSON.parse(localStorage.getItem("wm.assistantView") || "null"),
         target: document.querySelector("#as-role [data-as-rolewho]")?.innerText || null,
         remit: document.querySelector("#as-role .as-help")?.innerText || "",
-        pickers: document.querySelectorAll("#as-roletarget, #as-role-pick, #btn-as-role-adopt").length,
+        assigned: document.querySelectorAll("#as-roletarget, [data-as-roletarget], #btn-as-role-adopt").length,
+        viewPick: document.querySelector("#as-role-pick")?.value || null,
       }));
       ok("the panel-level Role pane is the one showing", onRole.roleVisible, `visible ${onRole.roleVisible}`);
       ok("…with the session's second row gone", onRole.subRowGone);
       check("…the view persisted as the Role tab", onRole.view?.assistant, "role");
       ok("…naming the assistant whose Settings was on screen", /Assistant #2's own copy/.test(onRole.target || ""), onRole.target);
       ok("…showing the role that assistant runs", /Assistant Director/.test(onRole.remit), onRole.remit.slice(0, 120));
-      check("…and carrying no role picker of its own", onRole.pickers, 0);
+      check("…carrying no control that changes the role the assistant runs", onRole.assigned, 0);
+      check("…and its view picker on the role the record runs", onRole.viewPick, "assistant-director");
 
       check("no page errors", pageErrors, []);
       check("no console errors", consoleErrors, []);
