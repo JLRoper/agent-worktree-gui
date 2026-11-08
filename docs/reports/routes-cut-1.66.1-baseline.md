@@ -52,3 +52,37 @@ of the two-run verification. Run two reads this as the "before" side of its own 
 - Run two does not have to wait for a bounce. Re-read the pid to confirm it is still 109544 and the
   served version still 1.66.1, then browser-verify the pipeline list, the flow map and one
   pipeline's detail, and rebuild the module report as an HTML page under `docs/reports/`.
+
+## Update, 16:55 - main moved to 1.66.2 and the panel followed
+
+Main moved again while run one was still reading, and the panel caught up on its own a second time.
+Everything below was read after 16:47 and is the state run two should start from.
+
+- At 16:47:03 the primary checkout fast-forwarded again: `git pull --ff-only origin main` moved
+  `main` from `49982c1` to `499aa48` ("docs: render the changelog - 448 releases"), on top of
+  `04c1b98` ("feat: consolidation is the assistant's job, under the reader's grant"). `package.json`
+  now reads `1.66.2`, so the main tip and the served build agree again.
+- The 1.66.2 delta touches `CHANGELOG.md`, `docs/design/prompt-tiers-2026-11-08.md`,
+  `lib/assistant.js`, `lib/assistant/actions.js`, `lib/assistant/consolidate.js` (new, 412 lines),
+  `lib/assistant/profile.js`, `lib/assistants.js`, `package.json`, `public/assistant.js`, `server.js`
+  and `test/assistant-consolidate.test.js`. `routes/` is untouched by 1.66.2.
+- At 16:47:25 a new panel process, pid `17560`, started 22 seconds after that pull. Its CommandLine
+  is `"C:\Program Files\nodejs\node.exe" server.js`, and port 7331 listens on it. It serves `1.66.2`
+  on GET `/api/config`, so the served version equals the main tip. Pid `109544` no longer exists.
+  The new process's restart ledger is empty (`queued []`, `last null`), so this bounce did not arrive
+  through the queue.
+- GET `/api/pipelines` still answers 200 with 1054 bytes on the 1.66.2 build, so the routes prefix is
+  mounted in the running graph as well as in the 1.66.1 one.
+- Therefore the step 3 premise no longer holds in either direction: the served version is not behind
+  the main tip now (`1.66.2` both sides), and the routes modules have been live since the 16:31:32
+  bounce. A `RESTART panel` request written now is refused by `lib/restart.js`, because the
+  checkout's `package.json` names the same `1.66.2` the panel already serves; the guard calls that a
+  bounce for nothing.
+- The branch is 2 commits behind `origin/main`. A push would be refused twice: base drift first, then
+  `tools/version.mjs check`, because the branch still carries `1.66.1` while main carries `1.66.2`.
+  Run two should rebase onto `origin/main`, apply a patch bump (`node tools/version.mjs apply patch`,
+  which lands `1.66.3`), then push and open the pull request with the report commit.
+- For the browser pass: `~/.wag/state/pipelines.json` and `pipelines.seed.json` both hold an empty
+  `pipelines` list, while `~/.wag/state/pipeline-bundle.json` holds 4 pipelines. The bundle's own
+  PDL check reports `incomplete-gate` on `author-review-revise`: gate G1 declares outcomes accept and
+  reject with no routes map. The flow map may draw that as a validation error rather than a route.
