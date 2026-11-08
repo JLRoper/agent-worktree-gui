@@ -91,7 +91,7 @@
     "verify:role-pane": "node tools/verify-role-pane.mjs",
     "verify:assistant-director": "node tools/verify-assistant-director.mjs",
     "verify:assistant-rename": "node tools/verify-assistant-rename.mjs",
-    "verify:queue-line-dim": "node tools/verify-queue-line-dim.mjs",
+    "verify:no-thread-log": "node tools/verify-no-thread-log.mjs",
     "seed:pipeline-bundle": "node tools/seed-pipeline-bundle.mjs",
     "test": "node --test --test-concurrency=4 test/*.test.js",
     "test:changed": "node tools/test-changed.mjs",
