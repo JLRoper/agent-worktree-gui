@@ -12,14 +12,16 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
-// The one-stream section's own comment moved to public/turns.js in step 4 of docs/reports/module-map-2026-11-07.html;
-// the button itself stays in app.js, in the card's header template that draws it.
+const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+// The button lives in the card's header template, which moved out of app.js into public/render-jobs.js with step 7
+// of docs/reports/module-map-2026-11-07.html; both classic scripts are read in page order.
+const src = `${readFileSync(new URL("../public/render-jobs.js", import.meta.url), "utf8")}\n${app}`;
+// The one-stream section's own comment moved to public/turns.js in step 4 of docs/reports/module-map-2026-11-07.html.
 const turns = readFileSync(new URL("../public/turns.js", import.meta.url), "utf8");
 
 const button = () => {
   const at = src.indexOf('<button class="btn-stream');
-  assert.ok(at >= 0, "public/app.js still draws the 🌊 button");
+  assert.ok(at >= 0, "the card still draws the 🌊 button");
   const end = src.indexOf("</button>", at);
   assert.ok(end > at, "…and closes it");
   return src.slice(at, end);

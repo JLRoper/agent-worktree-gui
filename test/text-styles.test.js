@@ -18,6 +18,9 @@ const read = (f) => readFileSync(path.join(root, f), "utf8");
 const src = read("public/app.js");
 const settings = read("public/settings.js");
 const html = read("public/index.html");
+// The card that re-emits the zoom is drawn by renderConversation, which moved to public/render-jobs.js with step 7
+// of docs/reports/module-map-2026-11-07.html; the wheel handler itself stayed in app.js.
+const jobs = read("public/render-jobs.js");
 const css = read("public/style.css").replace(/\/\*[\s\S]*?\*\//g, "");
 
 const begin = src.indexOf("// ---- text styles");
@@ -231,7 +234,7 @@ test("a stored Thinking size from the retired row is dropped, not left pretendin
 test("Ctrl+wheel writes that one variable on the card, and the card re-emits it on every repaint", () => {
   assert.match(src, /getComputedStyle\(card\)\.getPropertyValue\("--term-size"\)/, "the step starts from the one size in force");
   assert.match(src, /card\.style\.setProperty\("--term-size", `\$\{next\}px`\)/);
-  assert.match(src, /const zoom = state\.consoleZoom\.get\(thread\);\s*\n\s*const sizeVars = zoom \? `--term-size:\$\{zoom\}px` : ""/, "a rebuilt card carries its zoom back");
+  assert.match(jobs, /const zoom = state\.consoleZoom\.get\(thread\);\s*\n\s*const sizeVars = zoom \? `--term-size:\$\{zoom\}px` : ""/, "a rebuilt card carries its zoom back");
   // One step per gesture, wherever in the card the wheel was: normal output, a tool's output and the 🧠 block all
   // resolve to the same selector list and the same write.
   assert.match(src, /const zone = target \? target\.closest\("\.job-out, \.think-body"\) : null;/);
