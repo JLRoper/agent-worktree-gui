@@ -4,16 +4,29 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.57.17 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.57.18 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-420 releases from v0.1.0 (2026-10-20) to v1.57.17 (2026-11-08), 1419 commits between the tags. Every release is anchored by an
+421 releases from v0.1.0 (2026-10-20) to v1.57.18 (2026-11-08), 1422 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.57.18 — 2026-11-08 · 3 commits
+
+[`189d608`](https://github.com/JLRoper/agent-worktree-gui/commit/189d6083a97ecc489d2b9fad54e8a515ad0dc5a9) · [compare v1.57.17...v1.57.18](https://github.com/JLRoper/agent-worktree-gui/compare/v1.57.17...v1.57.18)
+
+### Docs & tests
+
+- docs: render the changelog — 420 releases ([`dcec30d`](https://github.com/JLRoper/agent-worktree-gui/commit/dcec30db2abe7d6dbfda6084fc2d13ac1613ba31))
+- test: the pool-retire fixtures name no folder on this machine ([`5608451`](https://github.com/JLRoper/agent-worktree-gui/commit/5608451d4f45476c644374786de1a616f1125b6d))
+
+### Other
+
+- chore: 1.57.18 — the version this landing carries ([`189d608`](https://github.com/JLRoper/agent-worktree-gui/commit/189d6083a97ecc489d2b9fad54e8a515ad0dc5a9))
 
 ## v1.57.17 — 2026-11-08 · 1 commit
 
