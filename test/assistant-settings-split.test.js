@@ -33,6 +33,9 @@ const sha = (buf) => createHash("sha256").update(buf).digest("hex");
 const FIRST_SETTINGS_KEYS = [
   "approvalSeconds",
   "autonomy",
+  // The ceiling on what one turn appends, in characters (0 = off). It is #1's setting like the queue digest it
+  // bounds, so it belongs in this list rather than in the panel's own watchdog half.
+  "briefingBudgetChars",
   "childQuietSeconds",
   "commandAudit",
   "contextPercent",

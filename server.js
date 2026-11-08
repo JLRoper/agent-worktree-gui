@@ -1385,6 +1385,9 @@ const settingsOut = () => ({
   // The chart's hidden columns travel with every snapshot for the same reason the age threshold does: the table's
   // header and rows are built from this list, and a page that opened before the setting moved has to agree with it.
   hiddenColumns: config.hiddenColumns,
+  // The turn budget is the assistant's own knob, but the General tab paints it beside the scan numbers, so one
+  // answer carries all three: the live value when the assistant exists, zero (off) before it is built.
+  briefingBudgetChars: Number((assistant && assistant.settings && assistant.settings.briefingBudgetChars) || 0),
   threads: config.threads,
   host: config.host,
   defaultCwd: config.defaultCwd,
@@ -5738,6 +5741,75 @@ const server = createServer(async (req, res) => {
       log(`collapse cascade: ${seconds ? `a parent collapsed for ${seconds}s minimizes every card under it` : "off — a collapsed parent leaves its cards as they are"}`);
       broadcast({ type: "settings", settings: settingsOut() });
       return sendJson(res, 200, { ok: true, seconds, settings: settingsOut() });
+    }
+
+    // ---- Settings → General: what the panel costs the machine -------------------------------------
+    // Three numbers that were config.json-only until now, and one route for all three because they are one
+    // surface: how many git scans run at once (`threads`), how often a row is re-read (`worktreeSeconds`), and the
+    // ceiling on what one assistant turn appends (`briefingBudgetChars`, stored on the assistant, not here).
+    //
+    // `threads` and `worktreeSeconds` are the spawn knobs. Measured on this machine, a CreateProcess costs 0.6-4.7s
+    // under the endpoint agent, and the scan pool was running five of them continuously beside every agent tool
+    // call; a panel at 5s x 5 workers is the load the fleet's own commands then queue behind. The route applies
+    // both LIVE: a new pool replaces the old one (the scheduler takes the reference, and the retired pool closes
+    // its workers once their scan returns), and the cadence is written into the scheduler's own cfg, so no restart
+    // is needed and nothing on the board is dropped.
+    //
+    // `briefingBudgetChars` rides the assistant's OWN settings route (/api/assistant/settings) because it belongs
+    // to that file; this route names it only so one Save can carry all three. It is forwarded there and reported
+    // back in the same answer, and a refused value leaves the other two unwritten only when it is refused first.
+    if (route === "/api/settings/general" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const int = (value, lo, hi) => {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return null;
+        const rounded = Math.round(n);
+        return rounded < lo || rounded > hi ? null : rounded;
+      };
+      const threads = body.threads === undefined ? config.threads : int(body.threads, 1, 16);
+      const worktreeSeconds = body.worktreeSeconds === undefined ? config.worktreeSeconds : int(body.worktreeSeconds, 5, 120);
+      const budget = body.briefingBudgetChars === undefined ? null : int(body.briefingBudgetChars, 0, 40_000);
+      if (threads === null) return sendJson(res, 400, { error: "scan workers must be a whole number from 1 to 16" });
+      if (worktreeSeconds === null) return sendJson(res, 400, { error: "row refresh must be a whole number of seconds from 5 to 120" });
+      if (body.briefingBudgetChars !== undefined && budget === null) {
+        return sendJson(res, 400, { error: "the turn briefing budget must be a whole number of characters from 0 (off) to 40000" });
+      }
+      const patch = {};
+      if (threads !== config.threads) patch.threads = threads;
+      if (worktreeSeconds !== config.worktreeSeconds) patch.worktreeSeconds = worktreeSeconds;
+      if (Object.keys(patch).length) {
+        try {
+          await patchPanelConfig(patch);
+        } catch (e) {
+          return sendJson(res, 500, { error: `could not write config.json: ${String((e && e.message) || e)}` });
+        }
+      }
+      if (patch.worktreeSeconds !== undefined) {
+        config.worktreeSeconds = worktreeSeconds;
+        if (scheduler && scheduler.cfg) scheduler.cfg.worktreeSeconds = worktreeSeconds;
+        log(`row refresh: every ${worktreeSeconds}s`);
+      }
+      if (patch.threads !== undefined) {
+        config.threads = threads;
+        const retired = pool;
+        pool = new Pool(threads);
+        if (scheduler) scheduler.pool = pool;
+        retired.close();
+        log(`scan workers: ${threads} (the pool was rebuilt live)`);
+      }
+      let settings = settingsOut();
+      if (budget !== null) {
+        try {
+          const saved = assistant.setSettingsFor(undefined, { briefingBudgetChars: budget });
+          settings = { ...settings, briefingBudgetChars: saved.briefingBudgetChars };
+          log(`turn briefing budget: ${budget ? `${budget} chars` : "off — a turn is sent whole"}`);
+        } catch (e) {
+          return sendJson(res, 400, { error: String((e && e.message) || e) });
+        }
+      }
+      broadcast({ type: "settings", settings: settingsOut() });
+      return sendJson(res, 200, { ok: true, settings });
     }
 
     // Which of the worktree chart's columns are drawn. Server-side like the age threshold above: the list goes into

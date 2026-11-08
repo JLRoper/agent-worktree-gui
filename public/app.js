@@ -19573,6 +19573,88 @@ $("agent-cleanup")?.addEventListener("change", async (e) => {
 // threshold above: one number for every browser, and it survives a restart. The timers themselves are the page's own
 // (state.collapseTimers, public/app.js's collapse cascade), so this only decides how long each one waits — and a
 // number that moves applies to the NEXT collapse, never to a clock already running.
+// ---- Settings → General: what the panel costs, and what a turn costs ---------------------------
+// One pane for the two halves of the same bill: the scan numbers decide how many git processes the panel spawns
+// while you read it, and the briefing budget decides how much text one assistant turn carries into the provider.
+// Painted from the snapshot's settings, which the server sends whole, so a second tab agrees without a reload.
+function generalSentence(s = {}) {
+  const threads = Number(s.threads);
+  const cadence = Number(s.worktreeSeconds);
+  const budget = Number(s.briefingBudgetChars) || 0;
+  const scan =
+    Number.isFinite(threads) && Number.isFinite(cadence)
+      ? `${threads} scan worker${threads === 1 ? "" : "s"} re-reading a row every ${cadence}s`
+      : "scan settings unknown";
+  return `${scan} · ${budget ? `a turn appends at most ${budget} chars` : "a turn is sent whole (budget off)"}`;
+}
+
+function paintGeneralSettings(s = state.settings || {}) {
+  const put = (id, value) => {
+    const el = $(id);
+    if (el && String(el.value) !== String(value)) el.value = String(value);
+  };
+  put("general-threads", Number(s.threads) || 0);
+  put("general-worktree", Number(s.worktreeSeconds) || 0);
+  put("general-budget", Number(s.briefingBudgetChars) || 0);
+  const preview = $("general-preview");
+  if (preview) preview.textContent = generalSentence(s);
+}
+
+// One POST for one number: the route applies both scan knobs live (the pool is rebuilt, the cadence written into
+// the scheduler) and forwards the budget to the assistant's own settings, so nothing here needs a restart.
+async function saveGeneralSettings(patch, label) {
+  try {
+    const r = await apiFetch(
+      "/api/settings/general",
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) },
+      { timeoutMs: 10000 },
+    );
+    const out = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(out.error || `HTTP ${r.status}`);
+    state.settings = { ...(state.settings || {}), ...(out.settings || {}) };
+    paintGeneralSettings(state.settings);
+    const fw = $("f-worktree");
+    if (fw && state.settings.worktreeSeconds) fw.textContent = String(state.settings.worktreeSeconds);
+    showBanner(`${label}: ${generalSentence(state.settings)}`);
+  } catch (e) {
+    showBanner(`Cannot save ${label}: ${e.message}.`);
+    paintGeneralSettings(state.settings || {});
+  }
+}
+
+for (const [id, key, label] of [
+  ["general-threads", "threads", "scan workers"],
+  ["general-worktree", "worktreeSeconds", "row refresh"],
+  ["general-budget", "briefingBudgetChars", "turn briefing budget"],
+]) {
+  $(id)?.addEventListener("change", () => {
+    const n = Number($(id).value);
+    if (!Number.isFinite(n)) return paintGeneralSettings(state.settings || {});
+    void saveGeneralSettings({ [key]: n }, label);
+  });
+}
+for (const b of document.querySelectorAll("[data-general-threads]")) {
+  b.addEventListener("click", () => {
+    const n = Number(b.getAttribute("data-general-threads"));
+    $("general-threads").value = String(n);
+    void saveGeneralSettings({ threads: n }, "scan workers");
+  });
+}
+for (const b of document.querySelectorAll("[data-general-worktree]")) {
+  b.addEventListener("click", () => {
+    const n = Number(b.getAttribute("data-general-worktree"));
+    $("general-worktree").value = String(n);
+    void saveGeneralSettings({ worktreeSeconds: n }, "row refresh");
+  });
+}
+for (const b of document.querySelectorAll("[data-general-budget]")) {
+  b.addEventListener("click", () => {
+    const n = Number(b.getAttribute("data-general-budget"));
+    $("general-budget").value = String(n);
+    void saveGeneralSettings({ briefingBudgetChars: n }, "turn briefing budget");
+  });
+}
+
 const COLLAPSE_AFTER_MAX_UI = 3600;
 
 function collapseAfterStored() {
@@ -20441,6 +20523,7 @@ startVisibilityReporting();
     // listed folder is still on disk.
     applyScanRootsAnswer(cfg);
     $("f-worktree").textContent = cfg.worktreeSeconds;
+    paintGeneralSettings(cfg);
     $("f-slow").textContent = cfg.slowSeconds;
     paintConfigLine();
     // Deliberately no seeding of state.projects from cfg.projects here: before discovery has
