@@ -4,16 +4,41 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.66.6 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.66.8 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-450 releases from v0.1.0 (2026-10-20) to v1.66.6 (2026-11-08), 1493 commits between the tags. Every release is anchored by an
+452 releases from v0.1.0 (2026-10-20) to v1.66.8 (2026-11-08), 1501 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.66.8 — 2026-11-08 · 6 commits
+
+[`066b2f7`](https://github.com/JLRoper/agent-worktree-gui/commit/066b2f700494ba8c7f10b0ef06b62556da07a2f0) · [compare v1.66.7...v1.66.8](https://github.com/JLRoper/agent-worktree-gui/compare/v1.66.7...v1.66.8)
+
+### Docs & tests
+
+- docs: record the 1.66.1 routes cut baseline ([`26b72be`](https://github.com/JLRoper/agent-worktree-gui/commit/26b72be5668cc791152683f449b68ac379950d6c))
+- docs: update the routes cut baseline after the 1.66.2 pull and restart ([`235c3dc`](https://github.com/JLRoper/agent-worktree-gui/commit/235c3dc819e5148ea0557ede3357ce429fa7312a))
+- docs: name the panel's paths relatively so the push gate passes ([`5b3bc14`](https://github.com/JLRoper/agent-worktree-gui/commit/5b3bc14fd15fe5d778f5ac0900835f1d345f283f))
+- docs: note the panel's pid churn in the baseline record ([`cb83042`](https://github.com/JLRoper/agent-worktree-gui/commit/cb83042bfe2701eadd713a790f9ff44259ca8d21))
+- docs: drop the brittle version number from the landing note ([`1f0cef2`](https://github.com/JLRoper/agent-worktree-gui/commit/1f0cef2b0934e6e96270291bb2332e7464a04a11))
+
+### Other
+
+- chore: 1.66.8 - the version this landing carries ([`066b2f7`](https://github.com/JLRoper/agent-worktree-gui/commit/066b2f700494ba8c7f10b0ef06b62556da07a2f0))
+
+## v1.66.7 — 2026-11-08 · 2 commits
+
+[`184f3ce`](https://github.com/JLRoper/agent-worktree-gui/commit/184f3ce39411f5f7bd335eecced46d576986abba) · [compare v1.66.6...v1.66.7](https://github.com/JLRoper/agent-worktree-gui/compare/v1.66.6...v1.66.7)
+
+### Docs & tests
+
+- docs: render the changelog — 450 releases ([`f2ef137`](https://github.com/JLRoper/agent-worktree-gui/commit/f2ef137d83510fde617b9c432c855aaf794205b7))
+- docs: the module map at 1.66.6, with the route cuts and the scaffolding landed ([`184f3ce`](https://github.com/JLRoper/agent-worktree-gui/commit/184f3ce39411f5f7bd335eecced46d576986abba))
 
 ## v1.66.6 — 2026-11-08 · 7 commits
 
