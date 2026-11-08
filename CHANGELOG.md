@@ -4,16 +4,48 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.67.1 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.67.3 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-457 releases from v0.1.0 (2026-10-20) to v1.67.1 (2026-11-08), 1514 commits between the tags. Every release is anchored by an
+459 releases from v0.1.0 (2026-10-20) to v1.67.3 (2026-11-08), 1520 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.67.3 — 2026-11-08 · 3 commits
+
+[`f388e13`](https://github.com/JLRoper/agent-worktree-gui/commit/f388e13238fdca7615a2c3e56cc827d45256c4e2) · [compare v1.67.2...v1.67.3](https://github.com/JLRoper/agent-worktree-gui/compare/v1.67.2...v1.67.3)
+
+### Fixed
+
+- fix: a stage lands by its artifact, settles on its run's end, and can end its loop on a verdict ([`1189cb1`](https://github.com/JLRoper/agent-worktree-gui/commit/1189cb1df20be8392e8fe29f8b7442d9792df581))
+
+### Docs & tests
+
+- docs: the round-6 review, and the landing report that answers its four defects ([`4eb7035`](https://github.com/JLRoper/agent-worktree-gui/commit/4eb703508ffae1a83c25d30b0eb0e7a860dc5127))
+
+### Other
+
+- chore: 1.67.3 - the version this landing carries ([`f388e13`](https://github.com/JLRoper/agent-worktree-gui/commit/f388e13238fdca7615a2c3e56cc827d45256c4e2))
+
+## v1.67.2 — 2026-11-08 · 3 commits
+
+[`b17a354`](https://github.com/JLRoper/agent-worktree-gui/commit/b17a354e407e49151665b6c04e8b2a776ada3162) · [compare v1.67.1...v1.67.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.67.1...v1.67.2)
+
+### Changed
+
+- refactor: the settings prefix moves into routes/settings.js, mounted from the prefix table ([`0bc8741`](https://github.com/JLRoper/agent-worktree-gui/commit/0bc8741ffb7a50d95800ec1e1b0a6c41c2ec554d))
+
+### Docs & tests
+
+- docs: render the changelog - 457 releases ([`6773622`](https://github.com/JLRoper/agent-worktree-gui/commit/67736227f0fcf066f8a79018bacb028f223f0d8b))
+
+### Other
+
+- chore: 1.67.2 - the version this landing carries ([`b17a354`](https://github.com/JLRoper/agent-worktree-gui/commit/b17a354e407e49151665b6c04e8b2a776ada3162))
 
 ## v1.67.1 — 2026-11-08 · 3 commits
 
