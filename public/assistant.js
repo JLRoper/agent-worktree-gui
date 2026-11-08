@@ -1015,56 +1015,6 @@
     </div>`;
   }
 
-  // ---- the thread's dim log ----------------------------------------------------------------------
-  //
-  // The panel writes a journal line onto a thread whenever it carries something out FOR it: a QUEUE row it filed
-  // into that assistant's queue (`queue-landed`, on the row's new owner) and the QUEUE/MESSAGE lines the Assistant
-  // Director sent from its own turn (`queue-sent` / `message-sent`, on the Director's thread). lib/assistant.js is
-  // where those lines are written; this is where the thread they belong to draws them.
-  //
-  // Dim lines under the card, in the ink the console gives a `dim` line (--dimmer, italic), because that is what
-  // they are: the panel's own record, quieter than the agent's prose. The journal is the source rather than a
-  // turn's console because a row can land on an assistant that has never run - there is no turn to put a console
-  // line in - and because the journal is the copy that survives a job store trim. Nothing is invented: no entry,
-  // no block (a header over nothing is chrome), and the newest eight keep it the size of a log.
-  const THREAD_LOG_KINDS = new Set(["queue-landed", "queue-sent", "message-sent"]);
-  const THREAD_LOG_MAX = 8;
-  function threadLogRowsHtml(thread, journal = state.assistant?.journal) {
-    const list = Array.isArray(journal) ? journal : [];
-    // The state's journal is the store's own array, oldest-first (`lib/assistant.js` `state()`), so the NEWEST
-    // lines are its tail and they are drawn in the order they were written: the newest sits nearest the box the
-    // reader types in.
-    const lines = list
-      .filter((j) => j && THREAD_LOG_KINDS.has(String(j.kind || "")) && String(j.thread || "") === String(thread || ""))
-      .slice(-THREAD_LOG_MAX);
-    return lines
-      .map((j) => `<div class="as-thread-line" data-as-line="${esc(j.kind)}" title="${esc(new Date(j.at).toLocaleString())}">\u21e2 ${esc(j.text)}</div>`)
-      .join("");
-  }
-  // Painted apart from the card so a landing moves one line: `conversationSignature` knows nothing about the
-  // journal, and without this the block would wait for the next turn's rebuild.
-  function paintThreadLog(host, thread) {
-    if (!host) return;
-    const rows = threadLogRowsHtml(thread);
-    let box = host.querySelector(":scope > .as-thread-log");
-    if (!rows) {
-      box?.remove();
-      return;
-    }
-    if (!box) {
-      box = document.createElement("div");
-      box.className = "as-thread-log";
-      box.setAttribute("role", "log");
-      box.setAttribute("aria-label", "what the panel carried out for this thread");
-      box.dataset.asThreadLog = String(thread || "");
-      host.appendChild(box);
-    }
-    if (box.dataset.rows === rows) return;
-    box.dataset.rows = rows;
-    box.innerHTML = rows;
-  }
-  // ---- end the thread's dim log ------------------------------------------------------------------
-
   function renderAssistantChat(id = activeSessionId()) {
     const host = hostFor(id, "chat");
     if (!host) return;
@@ -1078,9 +1028,6 @@
         // A pasted block the reader was writing here before a reload comes back as a chip, with its text.
         restorePersistedBox(as$(firstBoxId(id)));
       }
-      // A thread with no turn yet still has a log: a row filed here before the assistant ever ran is exactly
-      // the case the block exists for.
-      paintThreadLog(host, thread);
       return;
     }
     // A live edit in the intro box survives until the first turn exists; after that the card owns the box.
@@ -1089,7 +1036,6 @@
     const card = host.querySelector(`.job[data-thread="${CSS.escape(conv.thread)}"]`);
     if (card && card.dataset.sig === sig) {
       paintCardMeta(card, conv);
-      paintThreadLog(host, conv.thread);
       return;
     }
     const prevScrolls = captureScrolls(host);
@@ -1101,8 +1047,6 @@
     const wasPinned = chatPinned;
     const pageY = window.scrollY;
     host.innerHTML = conversationHtml(conv);
-    // The card is new, so the log that sits under it is too: `innerHTML` took the old block with it.
-    paintThreadLog(host, conv.thread);
     const fresh = host.firstElementChild;
     if (fresh) fresh.dataset.sig = sig;
     restoreScrolls(host, prevScrolls);

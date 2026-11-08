@@ -1,23 +1,27 @@
 // HARNESS: LIVE GATE
-// The thread's dim log, proved on the REAL page: a QUEUE row that landed on an assistant, and the Director's own
-// outbound QUEUE/MESSAGE lines, are drawn as dim lines under that assistant's card.
+// The thread's dim log is GONE from the assistant cards, proved on the REAL page: no queue-landed, queue-sent or
+// message-sent echo is drawn under any assistant's input box, while the journal entries themselves still exist on
+// the server and a queue row filed by ANOTHER assistant still names its filer.
 //
-//   node tools/verify-queue-line-dim.mjs
+//   node tools/verify-no-thread-log.mjs
 //
-// The claim is about pixels and about which thread a line belongs to, so it is proved by Chromium over a booted
-// panel - never by slicing the renderer's string (test/assistant-thread-log.test.js pins the filter; this pins the
-// page). In order, this gate:
+// The claim is about what the page draws, so it is proved by Chromium over a booted panel - never by slicing the
+// renderer's string (test/assistant-no-thread-log.test.js pins the source; this pins the page). In order, this gate:
 //
-//   1. seeds the panel's own journal with the three kinds lib/assistant.js writes - `queue-landed` on the row's new
-//      owner, `queue-sent` and `message-sent` on the Director's thread - and boots a sandbox on its own port;
-//   2. opens the float on the DIRECTOR's tab and reads the block under its card: both outbound lines, in the order
-//      they were written, with the row id and title on the QUEUE line;
-//   3. opens the TARGET's tab: the landing line, and NOT the Director's outbound ones (a line belongs to the thread
-//      it was filed under);
-//   4. opens a third assistant's tab, which nothing was carried out for: no block at all, not an empty one;
-//   5. measures the ink: the block is `--dimmer` and italic, the console's own `.jl-dim`, and it sits under the card
-//      rather than inside it;
-//   6. fails on any page error, and never touches the live board on 7331 (its listener count is compared).
+//   1. serves the page's own files and reads them: `/assistant.js` carries none of `threadLogRowsHtml`,
+//      `paintThreadLog`, `THREAD_LOG_KINDS`, `as-thread-log` or `as-thread-line`, and `/style.css` carries neither
+//      rule - so the removal is what the panel serves, not only what the checkout holds;
+//   2. seeds the journal with the three kinds lib/assistant.js writes and proves `/api/assistant` still serves them
+//      (the entries stay; only their echo under the card is gone);
+//   3. files a row into Assistant #1's queue with `by: "assistant-2"` through the route's own POST, so the filer is a
+//      real assistant and the row's `createdBy` is the route's write;
+//   4. opens every assistant's tab and counts the log's own shapes in the pane and in the document: no
+//      `.as-thread-log`, no `.as-thread-line`, no `[data-as-line]`, no `[data-as-thread-log]`, and no line leading
+//      with the log's marker - including the intro box a thread with no turn yet draws, which is the case the block
+//      was written for;
+//   5. opens the Queue sub-tab and reads the filed row: `filed by Assistant #2` is still drawn under its title;
+//   6. writes a screenshot of the float when PANEL_VERIFY_SHOT names a path (and the filed row beside it, suffixed
+//      `-filed`), fails on any page error, and never touches the live board on 7331 (its listener count is compared).
 import { execSync, spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -76,7 +80,7 @@ const JOURNAL = [
 let panel = null;
 let liveBrowser = null;
 try {
-  const dir = mkdtempSync(path.join(tmpdir(), "wtgui-queue-dim-"));
+  const dir = mkdtempSync(path.join(tmpdir(), "wtgui-no-thread-log-"));
   const repos = path.join(dir, "repos");
   const home = path.join(dir, "hermes-home");
   const configDir = path.join(dir, "panel");
@@ -162,14 +166,37 @@ try {
     return { status: r.status, body: await r.json().catch(() => ({})) };
   };
 
-  console.log("\n== the sandbox: the journal the panel writes, and three assistants ==");
+  console.log("\n== the page the panel serves: the renderer and the rules are gone ==");
+  const servedJs = await (await fetch(`${base}/assistant.js`)).text();
+  const servedCss = await (await fetch(`${base}/style.css`)).text();
+  for (const gone of ["threadLogRowsHtml", "paintThreadLog", "THREAD_LOG_KINDS", "as-thread-log", "as-thread-line"]) {
+    ok(`/assistant.js carries no ${gone}`, servedJs.includes(gone) === false, `${servedJs.length} bytes served`);
+  }
+  for (const rule of [".as-thread-log", ".as-thread-line"]) {
+    ok(`/style.css carries no ${rule}`, servedCss.includes(rule) === false, `${servedCss.length} bytes served`);
+  }
+
+  console.log("\n== the journal: the entries themselves stay ==");
   const state = await GET("/api/assistant");
-  const kinds = (state.body?.journal || []).map((j) => j.kind);
-  ok("the seeded journal is the panel's own", kinds.includes("queue-landed") && kinds.includes("queue-sent") && kinds.includes("message-sent"), kinds.join(", "));
+  const journal = state.body?.journal || [];
+  const kinds = journal.map((j) => j.kind);
+  ok("queue-landed, queue-sent and message-sent are still journaled", kinds.includes("queue-landed") && kinds.includes("queue-sent") && kinds.includes("message-sent"), kinds.join(", "));
+  ok("and the landing still carries the row id and its title", journal.some((j) => j.kind === "queue-landed" && /^#12 .*filed in this queue/.test(j.text)), journal.find((j) => j.kind === "queue-landed")?.text);
+
+  console.log("\n== the filer: a row Assistant #2 filed into Assistant #1's queue ==");
   const made2 = await POST("/api/assistant/assistants", {});
-  ok("a second assistant exists, so the Director's thread is a real tab", made2.status === 201, `HTTP ${made2.status}`);
+  ok("a second assistant exists, so the filer is a real one", made2.status === 201, `HTTP ${made2.status}`);
   const made3 = await POST("/api/assistant/assistants", {});
   ok("and a third, which nothing was carried out for", made3.status === 201, `HTTP ${made3.status}`);
+  const filed = await POST("/api/assistant/queue", {
+    assistantId: "assistant-1",
+    action: "add",
+    title: "read the other queue's PR",
+    detail: "the row Assistant #2 filed",
+    by: "assistant-2",
+  });
+  ok("the route filed it into Assistant #1's queue", filed.status === 200 && filed.body?.task?.id, JSON.stringify(filed.body?.error || filed.body?.task?.title || filed.body));
+  check("…naming Assistant #2 as its filer and owning nobody", [filed.body?.task?.createdBy, filed.body?.task?.owner], ["assistant-2", null]);
   const dock = await POST("/api/assistant/profile", { assistantId: "assistant-1", dock: "floating" });
   ok("the float is the frame this gate drives", dock.status === 200, JSON.stringify(dock.body?.dock || dock.body?.error));
 
@@ -194,63 +221,72 @@ try {
   const chatPane = (id) => (id === "assistant-1" ? "#as-chat" : `#as-chat-${String(id).replace(/^assistant-/, "")}`);
   const openTab = async (id) => {
     await page.click(`#as-tabs [data-as-tab="${id}"]`);
+    // The sub-tab strip is shared: a pane left on Queue keeps Chat hidden, so hand the room back before waiting.
+    const chatTab = await page.$('#as-subtabs [data-as-subtab="chat"]');
+    if (chatTab) await chatTab.click().catch(() => {});
     await page.waitForSelector(chatPane(id), { state: "visible" });
     await page.waitForTimeout(250);
   };
-  const logOf = async (id) =>
+  // The log's own shapes, counted in the pane and in the whole document: a block that moved out of the pane but
+  // stayed in the page would still be a grey line under some input box.
+  const logShapes = (selector) =>
     page.evaluate((who) => {
-      const host = document.querySelector(who === "assistant-1" ? "#as-chat" : `#as-chat-${String(who).replace(/^assistant-/, "")}`);
-      const box = host?.querySelector(":scope > .as-thread-log") || null;
-      if (!box) return { present: false, lines: [], underCard: null, style: null };
-      const first = host.firstElementChild;
-      const cs = getComputedStyle(box);
+      const pane = document.querySelector(who);
+      const shapes = ".as-thread-log, .as-thread-line, [data-as-line], [data-as-thread-log]";
       return {
-        present: true,
-        lines: [...box.querySelectorAll(".as-thread-line")].map((el) => el.innerText.replace(/\s+/g, " ").trim()),
-        // Under the card (or under the intro box a thread with no turn yet draws), never the first thing in the pane.
-        underCard: Boolean(first && first !== box && host.lastElementChild === box),
-        style: { color: cs.color, fontStyle: cs.fontStyle, dimmer: getComputedStyle(document.documentElement).getPropertyValue("--dimmer").trim() },
+        pane: pane ? pane.querySelectorAll(shapes).length : -1,
+        document: document.querySelectorAll(shapes).length,
+        arrows: pane ? (pane.innerText.match(/⇢/g) || []).length : -1,
+        text: pane ? pane.innerText.replace(/\s+/g, " ").trim().slice(0, 160) : "",
       };
-    }, id);
+    }, selector);
 
-  console.log("\n== the Director's own thread: what it sent ==");
-  await openTab("assistant-2");
-  const director = await logOf("assistant-2");
-  ok("the Director's card carries a log block", director.present, JSON.stringify(director.lines));
-  check("…with its outbound QUEUE and MESSAGE lines, oldest first", director.lines, [
-    "⇢ QUEUE Assistant #1 | #12 fix the stale row on the docs tree — filed",
-    "⇢ MESSAGE Assistant #1 | #12 on the docs tree is stale: requeue it — sent",
-  ]);
-  ok("…and not the landing line, which belongs to the target", !director.lines.some((l) => /filed in this queue/.test(l)), director.lines.join(" | "));
+  console.log("\n== every assistant's tab: no log under the input box ==");
+  for (const id of ["assistant-2", "assistant-1", "assistant-3"]) {
+    await openTab(id);
+    const shapes = await logShapes(chatPane(id));
+    check(`${id}: no log block, line or marker in the pane`, [shapes.pane, shapes.arrows], [0, 0]);
+    check(`${id}: and none anywhere in the document`, shapes.document, 0);
+    note(`${id} pane reads: ${shapes.text || "(no text)"}`);
+  }
 
-  console.log("\n== the target's thread: the row that landed ==");
+  console.log("\n== the row Assistant #2 filed still names it ==");
   await openTab("assistant-1");
-  const target = await logOf("assistant-1");
-  ok("the target's card carries a log block", target.present, JSON.stringify(target.lines));
-  check("…with the landing line, row id and title first", target.lines, [
-    "⇢ #12 fix the stale row on the docs tree — filed in this queue by the Assistant Director",
-  ]);
-  ok("…and not the Director's outbound lines", !target.lines.some((l) => /^⇢ (QUEUE|MESSAGE) /.test(l)), target.lines.join(" | "));
+  await page.click('#as-subtabs [data-as-subtab="queue"]');
+  await page.waitForSelector("#as-queue:not(.hidden)");
+  const rowsPainted = await waitFor(() => page.locator("#as-queue .as-task").count().then((n) => (n >= 1 ? n : 0)), {
+    timeoutMs: 25_000,
+    stepMs: 200,
+    what: "the filed row to paint",
+  });
+  ok("the queue pane paints the filed row", rowsPainted >= 1, `${await page.locator("#as-queue .as-task").count()} row(s)`);
+  const row = await page.evaluate(() => {
+    const el = document.querySelector('#as-queue .as-task[data-as-qrow="1"]');
+    if (!el) return null;
+    return {
+      title: el.querySelector(".as-task-title")?.textContent?.trim() || "",
+      filed: el.querySelector(".as-task-filed")?.innerText?.replace(/\s+/g, " ").trim() || "",
+      titleAttr: el.querySelector(".as-task-filed")?.getAttribute("title") || "",
+    };
+  });
+  check("the row's own line names the filer", row?.filed, "filed by Assistant #2");
+  ok("…under the row it belongs to", row?.title === "read the other queue's PR", row?.title);
+  ok("…and the line says what it means", /who filed this row/i.test(row?.titleAttr || ""), row?.titleAttr);
 
-  console.log("\n== a thread nothing was carried out for ==");
-  await openTab("assistant-3");
-  const quiet = await logOf("assistant-3");
-  ok("no block at all, not an empty one", quiet.present === false, JSON.stringify(quiet.lines));
-
-  console.log("\n== the ink: the console's own dim line ==");
-  await openTab("assistant-1");
-  const ink = await logOf("assistant-1");
-  ok("the block sits under the card, not inside it", ink.underCard === true, String(ink.underCard));
-  ok("it is italic", ink.style?.fontStyle === "italic", String(ink.style?.fontStyle));
-  ok("it is --dimmer", Boolean(ink.style?.color) && ink.style.color !== "rgb(255, 255, 255)", `${ink.style?.color} (--dimmer ${ink.style?.dimmer})`);
-
-  // A picture of the block, when the caller asks for one: the gate's verdict is the checks above, this is for a
-  // reader who wants to see the ink.
   const shot = String(process.env.PANEL_VERIFY_SHOT || "").trim();
   if (shot) {
-    await openTab("assistant-2");
-    await page.screenshot({ path: shot, fullPage: false });
-    ok("the screenshot was written", existsSync(shot), shot);
+    console.log("\n== the picture ==");
+    const filedShot = shot.replace(/\.png$/i, "-filed.png");
+    // The float itself, not the whole board: at a 1500 px viewport the rail is a strip on the right, and a reader
+    // comparing the row's filer line needs the pane, not the page around it.
+    const float = await page.$("#assistant");
+    const shoot = async (target, file) => (target ? target.screenshot({ path: file }) : page.screenshot({ path: file }));
+    await shoot(float, filedShot);
+    ok("the filed row's screenshot was written", existsSync(filedShot), filedShot);
+    await openTab("assistant-1");
+    await page.waitForSelector(chatPane("assistant-1"), { state: "visible" });
+    await shoot(await page.$("#assistant"), shot);
+    ok("the card's screenshot was written", existsSync(shot), shot);
   }
 
   check("no page errors", pageErrors, []);
