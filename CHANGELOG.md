@@ -17,11 +17,11 @@ has no tag.
 
 ## v1.57.5 — 2026-11-07 · 3 commits
 
-[`c1b895d`](https://github.com/JLRoper/agent-worktree-gui/commit/c1b895d03bcb1cc0d0475fa71fd4ee3083ca72e6) · [compare v1.57.4...v1.57.5](https://github.com/JLRoper/agent-worktree-gui/compare/v1.57.4...v1.57.5)
+[`72b31b7`](https://github.com/JLRoper/agent-worktree-gui/commit/72b31b7edaa9d1514263f0fe77b1f7656e35f74e) · [compare v1.57.4...v1.57.5](https://github.com/JLRoper/agent-worktree-gui/compare/v1.57.4...v1.57.5)
 
 ### Performance
 
-- perf: the changelog render starts from the version the file carries ([`b89578f`](https://github.com/JLRoper/agent-worktree-gui/commit/b89578fdde9414c0c8e80b7f3a7d07ead01bc071))
+- perf: the changelog render starts from the version the file carries ([`637069a`](https://github.com/JLRoper/agent-worktree-gui/commit/637069a3777d4b59dec80ad02f14e5d884a100a6))
 
 ### Docs & tests
 
@@ -29,7 +29,7 @@ has no tag.
 
 ### Other
 
-- chore: 1.57.5 — the version this landing carries ([`c1b895d`](https://github.com/JLRoper/agent-worktree-gui/commit/c1b895d03bcb1cc0d0475fa71fd4ee3083ca72e6))
+- chore: 1.57.5 — the version this landing carries ([`72b31b7`](https://github.com/JLRoper/agent-worktree-gui/commit/72b31b7edaa9d1514263f0fe77b1f7656e35f74e))
 
 ## v1.57.4 — 2026-11-07 · 3 commits
 
