@@ -223,6 +223,9 @@ docs commit (no version, no tag), pushes the base with the render, and proves it
 moved, and on a render that would name commits the base lacks; a second run prints `nothing to render`, commits
 nothing and leaves the tree clean. `npm run land:check` is the gate shape and writes nothing. This is the whole
 step: it replaces "now remember to run `npm run changelog` and commit it" with one command the landing path runs.
+The render is incremental — the sections `CHANGELOG.md` already carries are kept and only the releases above them
+are rendered, which is what keeps the step inside a command's foreground cap on a history this size;
+`node tools/changelog.mjs --full` rebuilds the whole history when that is what a reader wants.
 The hook enforces it: a push that would land the base branch while `CHANGELOG.md` is stale is refused by
 `.githooks/pre-push`, and the refusal names `npm run land`. A worktree branch's changelog is the base's business,
 so only a base push is gated.
