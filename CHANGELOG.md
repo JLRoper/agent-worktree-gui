@@ -4,16 +4,65 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.59.3 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.60.3 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-431 releases from v0.1.0 (2026-10-20) to v1.59.3 (2026-11-08), 1447 commits between the tags. Every release is anchored by an
+435 releases from v0.1.0 (2026-10-20) to v1.60.3 (2026-11-08), 1456 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.60.3 — 2026-11-08 · 2 commits
+
+[`e3a047f`](https://github.com/JLRoper/agent-worktree-gui/commit/e3a047f99ebe7a28ff90bea57f55ede7b7838aa1) · [compare v1.60.2...v1.60.3](https://github.com/JLRoper/agent-worktree-gui/compare/v1.60.2...v1.60.3)
+
+### Fixed
+
+- fix: the briefing shows the reader's standing rules first ([`2623e8c`](https://github.com/JLRoper/agent-worktree-gui/commit/2623e8cbbd1f1a38178f83d4efa36201cd0fdc1f))
+
+### Other
+
+- chore: 1.60.3 — the version this landing carries ([`e3a047f`](https://github.com/JLRoper/agent-worktree-gui/commit/e3a047f99ebe7a28ff90bea57f55ede7b7838aa1))
+
+## v1.60.2 — 2026-11-08 · 2 commits
+
+[`d8833cd`](https://github.com/JLRoper/agent-worktree-gui/commit/d8833cd65c61096ad66700246e575f1446ce4448) · [compare v1.60.1...v1.60.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.60.1...v1.60.2)
+
+### Changed
+
+- refactor: the board's shared scaffolding moves out of public/app.js ([`f49e379`](https://github.com/JLRoper/agent-worktree-gui/commit/f49e37971c85d04c7dee8decc010f525aeaf5336))
+
+### Other
+
+- chore: 1.60.2 — the version this landing carries ([`d8833cd`](https://github.com/JLRoper/agent-worktree-gui/commit/d8833cd65c61096ad66700246e575f1446ce4448))
+
+## v1.60.1 — 2026-11-08 · 2 commits
+
+[`d1a9165`](https://github.com/JLRoper/agent-worktree-gui/commit/d1a9165d555c6e7cfeb60239f54df6fa11e405d2) · [compare v1.60.0...v1.60.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.60.0...v1.60.1)
+
+### Fixed
+
+- fix: the next read cell is the figure alone, the sentence moves to its tooltip ([`119f540`](https://github.com/JLRoper/agent-worktree-gui/commit/119f540797351c3e6b5cba1280386d8fe029535e))
+
+### Other
+
+- chore: 1.60.1 — the version this landing carries ([`d1a9165`](https://github.com/JLRoper/agent-worktree-gui/commit/d1a9165d555c6e7cfeb60239f54df6fa11e405d2))
+
+## v1.60.0 — 2026-11-08 · 3 commits
+
+[`4fbbb20`](https://github.com/JLRoper/agent-worktree-gui/commit/4fbbb20f6ab958e20a01afe7bf689045471e52fa) · [compare v1.59.3...v1.60.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.59.3...v1.60.0)
+
+### Docs & tests
+
+- docs: render the changelog — 431 releases ([`4829d3c`](https://github.com/JLRoper/agent-worktree-gui/commit/4829d3cf753f0af7f81c8aec2f0543e812ffac6b))
+
+### Other
+
+- Let the Pipeline tab count and list the PDL bundle, and repair a refused one ([`7c5bfc5`](https://github.com/JLRoper/agent-worktree-gui/commit/7c5bfc5cb2d3da01ea8397b111f2b94a7c9f7689))
+- chore: 1.60.0 — the version this landing carries ([`4fbbb20`](https://github.com/JLRoper/agent-worktree-gui/commit/4fbbb20f6ab958e20a01afe7bf689045471e52fa))
 
 ## v1.59.3 — 2026-11-08 · 2 commits
 
