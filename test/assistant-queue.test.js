@@ -39,9 +39,11 @@ import {
   pickTask,
   queueCounts,
   queueDigest,
+  readQueueFile,
   reassignTask,
   setTaskState,
   settleTasks,
+  writeQueueFile,
 } from "../lib/assistant/queue.js";
 
 const at = (iso) => new Date(iso);
@@ -238,6 +240,91 @@ test("staleness never touches a queued or done task", () => {
   const { tasks: done } = setTaskState(added, 1, "done");
   const d2 = decorateTasks(done, { isLive: () => false });
   assert.equal(d2[0].stale, undefined);
+});
+
+// ---- the run a row is on ---------------------------------------------------------------------------------
+//
+// A row used to carry a thread and nothing else, and a thread is not one run: a re-queued task's thread can hold a
+// failed attempt and its live retry at the same time. These three are the brief's own proofs, in its own order.
+
+const THREAD = "wtgui-run-row-89de10";
+const liveRun = { id: "job-live0001", runId: "run_live0001", thread: THREAD, status: "running", startedAt: "2026-11-08T10:00:00.000Z" };
+const failedRun = { id: "job-fail0001", runId: "run_fail0001", thread: THREAD, status: "failed", startedAt: "2026-11-08T09:00:00.000Z", endedAt: "2026-11-08T09:10:00.000Z" };
+
+test("a row whose thread carries a failed run and a live retry reads running through its run id", () => {
+  const { tasks } = addTask([], { title: "the retry", thread: THREAD, worktree: TREE });
+  const { tasks: running } = setTaskState(tasks, 1, "running");
+  const linked = linkTaskRun(running, 1, { thread: THREAD, runId: liveRun.runId });
+  assert.equal(linked.task.runId, liveRun.runId, "the row names the run it was handed");
+
+  // The thread is NOT live by the old test — the store's live record is on it, but `isLive` is handed the slug alone
+  // and answers false, which is exactly the case a slug cannot describe. The run id is what makes the row live.
+  const [row] = decorateTasks(linked.tasks, { jobs: [failedRun, liveRun], isLive: () => false });
+  assert.equal(row.stale, undefined, "the row's own run is running, so the row is running");
+  assert.equal(row.runBy, "run");
+  assert.equal(row.runStatus, "running");
+  assert.equal(row.guessed, undefined, "an answer read from the row's run is not a guess");
+});
+
+test("a row whose run id points at a failed run reads stale even though another record shares its thread", () => {
+  const { tasks } = addTask([], { title: "the dead attempt", thread: THREAD, worktree: TREE });
+  const { tasks: running } = setTaskState(tasks, 1, "running");
+  const linked = linkTaskRun(running, 1, { thread: THREAD, runId: failedRun.runId });
+
+  // `isLive` says the thread is live (the retry is on it) — the old rule would call this row running. Its own run
+  // failed, so it reads stale, and the sentence names the run rather than the thread.
+  const [row] = decorateTasks(linked.tasks, { jobs: [failedRun, liveRun], isLive: () => true });
+  assert.equal(row.stale, true, "a failed run on the row is stale work, whatever else shares the thread");
+  assert.equal(row.runBy, "run");
+  assert.equal(row.runStatus, "failed");
+  assert.match(row.staleWhy, /run run_fail0001 ended failed/);
+  assert.match(row.staleWhy, new RegExp(THREAD), "the sentence still names the thread the run was on");
+});
+
+test("a row with no run id falls back to matching the tree path, and says it is guessing", () => {
+  const { tasks } = addTask([], { title: "old row", thread: "T-old", worktree: TREE });
+  const { tasks: running } = setTaskState(tasks, 1, "running");
+  // The row is the one a queue file written before the field existed reads as: a thread, a tree, no run id.
+  assert.equal(running[0].runId, null);
+  const otherRun = { id: "job-tree0001", runId: "run_tree0001", thread: "T-somebody-else", status: "running", startedAt: "2026-11-08T10:00:00.000Z", worktreePath: TREE };
+
+  const [live] = decorateTasks(running, { jobs: [otherRun], isLive: () => false });
+  assert.equal(live.stale, undefined, "a live run standing in the row's tree is the fallback the old row gets");
+  assert.equal(live.runBy, "tree");
+  assert.equal(live.guessed, true, "and it is marked as the guess it is");
+
+  const [guessedThread] = decorateTasks(running, { jobs: [], isLive: (t) => t === "T-old" });
+  assert.equal(guessedThread.stale, undefined);
+  assert.equal(guessedThread.runBy, "thread");
+  assert.equal(guessedThread.guessed, true);
+
+  const [nothing] = decorateTasks(running, { jobs: [], isLive: () => false });
+  assert.equal(nothing.stale, true);
+  assert.equal(nothing.guessed, true);
+  assert.match(nothing.staleWhy, /names no run id/);
+});
+
+test("a link with no run id keeps the id already on the row, and a resume replaces it", () => {
+  const { tasks } = addTask([], { title: "handed on", thread: "T1" });
+  const first = linkTaskRun(tasks, 1, { thread: "T1", runId: "run_first" });
+  assert.equal(first.task.runId, "run_first");
+  const blank = linkTaskRun(first.tasks, 1, { thread: "T1" });
+  assert.equal(blank.task.runId, "run_first", "a link with nothing to say cannot erase the run the row is on");
+  const resumed = linkTaskRun(first.tasks, 1, { thread: "T1", runId: "run_second" });
+  assert.equal(resumed.task.runId, "run_second", "a resume hands the row the run that is actually doing it");
+});
+
+test("the settle judges the row's own run, not its thread's newest record", () => {
+  const { tasks } = addTask([], { title: "settle me", thread: THREAD });
+  const { tasks: running } = setTaskState(tasks, 1, "running");
+  const linked = linkTaskRun(running, 1, { thread: THREAD, runId: failedRun.runId });
+  // The thread's newest record is the live retry; the row's own run failed. The settle returns it to the queue with
+  // the reason, which is the write half of the same rule the stale flag reads.
+  const { tasks: settled, changed } = settleTasks(linked.tasks, { jobs: [failedRun, liveRun], isLive: () => true });
+  assert.equal(changed.length, 1);
+  assert.equal(settled[0].state, "queued");
+  assert.equal(settled[0].attempts, 1);
+  assert.match(settled[0].reason, /run ended failed/);
 });
 
 // ---- conflict --------------------------------------------------------------------------------------------
@@ -593,6 +680,54 @@ test("a Move carries every agent across to the target queue", () => {
   const adopted = adoptTask([], two[0]);
   assert.deepEqual(adopted.task.threads, ["T1", "T2"], "the whole run history travels with the record");
   assert.equal(adopted.task.thread, "T1");
+});
+
+// ---- the resume write half: a new run on a thread a row already names --------------------------------
+
+test("a resume writes the new run id on the row it retries, and not on a row that is still live", async (t) => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "wtgui-queue-resume-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const assistantFile = path.join(dir, "assistant.json");
+  await writeFile(assistantFile, JSON.stringify({ version: 2, settings: {}, notes: "", rules: [], watches: [], alerts: [], journal: [] }));
+  const board = [];
+  const assistant = new Assistant({
+    config: { jobsFile: path.join(dir, "jobs.json"), assistantFile },
+    jobs: { list: () => board, firstOfThread: () => null, create: async (body) => ({ id: "job-1", ...body }) },
+    getProjects: () => [],
+    onLog: () => {},
+  });
+  const file = assistant.queuePathOf();
+  const seeded = writeQueueFile(
+    file,
+    [
+      pickTask({ id: 1, title: "the dead attempt", thread: "T1", state: "running", runId: "run_fail" }),
+      pickTask({ id: 2, title: "somebody else's live row", thread: "T1", state: "running", runId: "run_other" }),
+      pickTask({ id: 3, title: "old row, no run id", thread: "T2", state: "running" }),
+    ],
+    4,
+  );
+  assert.equal(seeded.length, 3);
+  board.push(
+    { id: "job-fail", runId: "run_fail", thread: "T1", status: "failed" },
+    { id: "job-other", runId: "run_other", thread: "T1", status: "running" },
+    { id: "job-new", runId: "run_new", thread: "T1", status: "running" },
+  );
+
+  const wrote = assistant.linkResumedRun("T1", { id: "job-new", runId: "run_new" });
+  assert.deepEqual(wrote, { assistantId: "assistant-1", id: 1, runId: "run_new" }, "the row whose own run was over takes the retry's id");
+  const after = readQueueFile(file).tasks;
+  assert.equal(after.find((x) => x.id === 1).runId, "run_new", "the retried row names the run actually doing it");
+  assert.equal(after.find((x) => x.id === 2).runId, "run_other", "a row whose own run is still live is not claimed by the resume");
+  assert.equal(after.find((x) => x.id === 3).runId, null, "a row on another thread is not touched");
+
+  // A row with no run id on the resumed thread IS the row this write is evidence for.
+  board.push({ id: "job-third", runId: "run_third", thread: "T2", status: "running" });
+  const second = assistant.linkResumedRun("T2", { id: "job-third", runId: "run_third" });
+  assert.equal(second?.id, 3);
+  assert.equal(readQueueFile(file).tasks.find((x) => x.id === 3).runId, "run_third");
+
+  // Nothing left to write: the only open row on T1 with no live run already names this one.
+  assert.equal(assistant.linkResumedRun("T1", { id: "job-new", runId: "run_new" }), null);
 });
 
 // ---- a row filed by ANOTHER assistant: the route's designed mechanism ---------------------------------------

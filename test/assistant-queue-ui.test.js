@@ -199,6 +199,54 @@ test("a legacy record with only `thread` draws one sub-row, and a task nobody ra
   assert.ok(!empty.includes("data-as-qopen"), "…and nothing in it is an opener");
 });
 
+test("the current agent's sub-row names the RUN the row is on, beside the thread", () => {
+  const { queueTaskHtml } = build();
+  // The row's verdict came from its run (queue.js's `runningFlag` sets runBy "run"), and the chip says WHICH record
+  // that was: the same slot that used to carry nothing but a thread id.
+  const html = queueTaskHtml(
+    "assistant-1",
+    { id: 20, title: "carry it", state: "running", files: [], threads: ["T-old", "T-live"], runId: "run_live0001", runBy: "run", runStatus: "running" },
+    jobs([
+      ["T-old", { status: "failed" }],
+      ["T-live", { status: "running" }],
+    ]),
+  );
+  assert.ok(html.includes('data-as-qrun="run_live0001"'), "the run id is on the card");
+  assert.ok(html.includes(">run_live0001</span>"), "…in the text beside the thread");
+  assert.equal((html.match(/class="as-task-agent-run"/g) || []).length, 1, "one run chip: the current agent's, not every thread's");
+  // A failed run on the row paints the chip from the ROW's run, not from the newest record on the shared thread.
+  const stale = queueTaskHtml(
+    "assistant-1",
+    { id: 21, title: "the dead attempt", state: "running", files: [], threads: ["T-live"], runId: "run_fail0001", runBy: "run", runStatus: "failed", stale: true, staleWhy: "run run_fail0001 ended failed on thread T-live" },
+    jobs([["T-live", { status: "running" }]]),
+  );
+  assert.ok(stale.includes(">exited<"), "the chip is the row's own failed run, not the retry that shares its thread");
+  assert.ok(stale.includes("STALE — run run_fail0001 ended failed"), "and the sentence names the run");
+});
+
+test("a row with no run id says it is guessing instead of passing a thread match off as evidence", () => {
+  const { queueTaskHtml } = build();
+  const guessing = queueTaskHtml(
+    "assistant-1",
+    { id: 22, title: "old row", state: "running", files: [], threads: ["T-old"], runBy: "thread", guessed: true },
+    jobs([["T-old", { status: "running" }]]),
+  );
+  assert.ok(guessing.includes("as-task-agent-run is-guess"), "the guess wears its own class");
+  assert.ok(guessing.includes(">guessing</span>"), "…and the word");
+  assert.ok(!guessing.includes("data-as-qrun="), "no id is invented for a row that names none");
+  assert.match(guessing, /title="[^"]*no run id on this row[^"]*GUESS from its thread/, "the title says where the guess came from");
+  // A row judged by the tree fallback says so in its own words.
+  const tree = queueTaskHtml(
+    "assistant-1",
+    { id: 23, title: "old row, tree", state: "running", files: [], threads: ["T-old"], runBy: "tree", guessed: true, worktree: "C:/ProjectDevelopment/Menu/.worktrees/old-40a1b2" },
+    new Map(),
+  );
+  assert.match(tree, /GUESS from a live run in its tree path/, "the tree fallback is named as the guess it is");
+  // …and a row the run id judged never wears it.
+  const evidence = queueTaskHtml("assistant-1", { id: 24, title: "run row", state: "running", files: [], threads: ["T-live"], runId: "run_x", runBy: "run", runStatus: "running" }, new Map());
+  assert.ok(!evidence.includes("is-guess"), "evidence is not labelled a guess");
+});
+
 test("the agent's label is drawn when it is not just the thread id", () => {
   const { queueTaskHtml } = build({ label: (t) => (t === "T-named" ? "land the queue row" : t) });
   const named = queueTaskHtml("assistant-1", { id: 14, title: "x", state: "running", files: [], threads: ["T-named", "T-bare"] }, new Map());
