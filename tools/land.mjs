@@ -175,6 +175,22 @@ export function docsOnlyPush(root, from) {
   return true;
 }
 
+// The render's own commit message, in one place: the subject is what the next render lists for the release it
+// lands, so its characters are part of the history a reader greps. Plain ASCII hyphens only - a long dash here
+// reaches the changelog and every log that quotes the subject, the same defect tools/version.mjs's bump subject
+// carried before it was fixed.
+export function renderMessage(releaseCount, base) {
+  const subject = `docs: render the changelog - ${releaseCount} releases`;
+  const body = [
+    `The landing's last step, run on ${base} after the merge: CHANGELOG.md is rendered from the commits between`,
+    `consecutive tags, so the section describing this landing names the shas ${base} carries - never the branch's,`,
+    "which a rebase or squash merge re-creates.",
+    "",
+    "It spends no version and creates no tag (docs/versioning.md): the version went with the change.",
+  ].join("\n");
+  return { subject, body };
+}
+
 function ancestry(root, ref) {
   return (sha) => spawnSync("git", ["-C", root, "merge-base", "--is-ancestor", sha, ref], { encoding: "utf8" }).status === 0;
 }
@@ -314,14 +330,7 @@ function main(argv) {
 
   if (plan.action === "commit") {
     writeFileSync(path.join(root, FILE), rendered.text);
-    const subject = `docs: render the changelog — ${rendered.releaseCount} releases`;
-    const body = [
-      `The landing's last step, run on ${base} after the merge: CHANGELOG.md is rendered from the commits between`,
-      `consecutive tags, so the section describing this landing names the shas ${base} carries — never the branch's,`,
-      "which a rebase or squash merge re-creates.",
-      "",
-      "It spends no version and creates no tag (docs/versioning.md): the version went with the change.",
-    ].join("\n");
+    const { subject, body } = renderMessage(rendered.releaseCount, base);
     try {
       git(root, ["add", "--", FILE]);
       const staged = git(root, ["diff", "--cached", "--name-only"]).split("\n").filter(Boolean);
