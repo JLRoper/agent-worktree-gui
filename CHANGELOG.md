@@ -4,16 +4,56 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.65.6 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.66.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-443 releases from v0.1.0 (2026-10-20) to v1.65.6 (2026-11-08), 1472 commits between the tags. Every release is anchored by an
+446 releases from v0.1.0 (2026-10-20) to v1.66.0 (2026-11-08), 1479 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.66.0 — 2026-11-08 · 2 commits
+
+[`888cdc3`](https://github.com/JLRoper/agent-worktree-gui/commit/888cdc39b8d83d49f8ce5ad1698d07ca20425e25) · [compare v1.65.9...v1.66.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.65.9...v1.66.0)
+
+### Added
+
+- feat: a landing finishes its own changelog in one command ([`fbb61bf`](https://github.com/JLRoper/agent-worktree-gui/commit/fbb61bf5ab7841c4b486981e3bf968c2c9f0fd48))
+
+### Other
+
+- chore: 1.66.0 — the version this landing carries ([`888cdc3`](https://github.com/JLRoper/agent-worktree-gui/commit/888cdc39b8d83d49f8ce5ad1698d07ca20425e25))
+
+## v1.65.9 — 2026-11-08 · 2 commits
+
+[`2dc9311`](https://github.com/JLRoper/agent-worktree-gui/commit/2dc93115c38b9de3f1f858f838f4d3e96c582c17) · [compare v1.65.7...v1.65.9](https://github.com/JLRoper/agent-worktree-gui/compare/v1.65.7...v1.65.9)
+
+### Fixed
+
+- fix: the panel's type utilities leave chart.css, so nothing outside it resizes ([`0c5cead`](https://github.com/JLRoper/agent-worktree-gui/commit/0c5cead5cc29740a7238321e247b944f53168cf0))
+
+### Other
+
+- chore: 1.65.9 - the version this landing carries ([`2dc9311`](https://github.com/JLRoper/agent-worktree-gui/commit/2dc93115c38b9de3f1f858f838f4d3e96c582c17))
+
+## v1.65.7 — 2026-11-08 · 3 commits
+
+[`bd27dc4`](https://github.com/JLRoper/agent-worktree-gui/commit/bd27dc4919d6fe8e7abe88fc6e04854e81d1dc11) · [compare v1.65.6...v1.65.7](https://github.com/JLRoper/agent-worktree-gui/compare/v1.65.6...v1.65.7)
+
+### Fixed
+
+- fix: the jobs clear refusal says its sentence with a plain hyphen ([`ed40e69`](https://github.com/JLRoper/agent-worktree-gui/commit/ed40e69b9e4223a2937bbb7b492705749a6bfe40))
+
+### Docs & tests
+
+- docs: render the changelog - 443 releases ([`77fa885`](https://github.com/JLRoper/agent-worktree-gui/commit/77fa8854d384c7587624f3b0a5f28b060bdda1e6))
+
+### Other
+
+- chore: 1.65.7 - the version this landing carries ([`bd27dc4`](https://github.com/JLRoper/agent-worktree-gui/commit/bd27dc4919d6fe8e7abe88fc6e04854e81d1dc11))
 
 ## v1.65.6 — 2026-11-08 · 2 commits
 
