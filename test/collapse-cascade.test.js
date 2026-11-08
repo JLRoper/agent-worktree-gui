@@ -27,6 +27,8 @@ const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf
 // its own config.json is tested against that instead.
 const config = JSON.parse(readFileSync(new URL("../config.example.json", import.meta.url), "utf8"));
 const serverSource = readFileSync(new URL("../server.js", import.meta.url), "utf8").replaceAll("\r\n", "\n");
+// The settings prefix moved into routes/settings.js, so the route that writes the cascade is read from there.
+const settingsSource = readFileSync(new URL("../routes/settings.js", import.meta.url), "utf8").replaceAll("\r\n", "\n");
 
 // ---- the shipped region, in a page-shaped context ----------------------------------------------------------------
 // Everything the cascade reads from the page is a stub here; the resolution and the timer are the shipped code.
@@ -295,7 +297,8 @@ test("the server's normaliser: absent is 30, 0 stays 0, a typo is 30, an absurd 
   assert.equal(read(-5), 30, "a negative is a typo");
   assert.equal(read(99999), 3600, "an absurd number is clamped");
   assert.match(serverSource, /collapseAfterSeconds: config\.collapseAfterSeconds/, "the number travels with every snapshot");
-  assert.equal(serverSource.split('"/api/settings/collapse-after"').length - 1, 1, "one route writes it");
+  assert.equal(settingsSource.split('"/api/settings/collapse-after"').length - 1, 1, "one route writes it");
+  assert.equal(serverSource.split('"/api/settings/collapse-after"').length - 1, 0, "and the chain no longer answers it");
 });
 
 test("the Board tab carries one number field for it, and its title says what 0 does", () => {

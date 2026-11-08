@@ -286,8 +286,9 @@ test("the Gateway tab carries the picker, its four presses, and TWO independent 
 
 test("writeProviderSettings is the only writer the Apply route uses", async () => {
   // A source-level guard: a second writer of model.base_url would be a second set of checks to keep in step.
-  const server = readFileSync(path.join(ROOT, "server.js"), "utf8");
-  const applyRoute = server.slice(server.indexOf('route === "/api/settings/provider/apply"'), server.indexOf("// The models the New-agent form offers"));
+  // The settings prefix lives in routes/settings.js since it was lifted out of server.js's chain.
+  const settings = readFileSync(path.join(ROOT, "routes", "settings.js"), "utf8");
+  const applyRoute = settings.slice(settings.indexOf('route === "/api/settings/provider/apply"'), settings.indexOf("// ---- the Matrix bridge"));
   assert.match(applyRoute, /writeProviderSettings\(\{ baseUrl: profile\.baseUrl, apiKey: profile\.apiKey \}\)/);
   assert.ok(!/writeFileSync|setBlockValueText/.test(applyRoute), "the apply route edits config.yaml only through writeProviderSettings");
 

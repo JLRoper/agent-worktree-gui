@@ -386,7 +386,8 @@ try {
   v.ok("the whitelist carries autoStart", /MATRIX_KEYS = \["scriptPath", "pythonPath", "roomId", "autoStart"\]/.test(lib));
   const server = readFileSync(path.join(ROOT, "server.js"), "utf8");
   v.ok("server.js spawns the bridge at boot", /matrixBridge\.autoStart\(\)/.test(server), "the listen callback calls it");
-  v.ok("server.js answers POST /api/settings/matrix", /route === "\/api\/settings\/matrix" && req\.method === "POST"/.test(server));
+  const settings = readFileSync(path.join(ROOT, "routes", "settings.js"), "utf8");
+  v.ok("routes/settings.js answers POST /api/settings/matrix", /route === "\/api\/settings\/matrix" && req\.method === "POST"/.test(settings));
 } catch (e) {
   console.log(`FAIL  the run threw before it finished — ${String((e && e.stack) || e)}`);
 } finally {
