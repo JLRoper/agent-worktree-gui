@@ -15,13 +15,16 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+import { ladderDefinition } from "./fixtures/ladder-definitions.mjs";
+
 await import("../public/core/pipeline-mermaid.js");
 const M = globalThis.PipelineMermaid;
 
 const read = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8");
 const LF = (text) => text.replaceAll(String.fromCharCode(13), "").replaceAll(String.fromCharCode(13, 10), "\n");
-const SEED = JSON.parse(LF(read("pipelines.seed.json")));
-const def = (id) => JSON.parse(JSON.stringify(SEED.pipelines.find((p) => p.id === id)));
+// The ladder shapes a reader's own pipelines.json may still hold. The seed ships none now — every shipped pipeline is
+// a PDL document — but `fromDefinition` is still the renderer for a definition, so it is driven against the fixture.
+const def = ladderDefinition;
 const sha256 = (text) => createHash("sha256").update(Buffer.from(LF(text), "utf8")).digest("hex");
 
 test("a catalogue definition becomes the card's model: ordinal, title, derived role and the exit on the edge", () => {

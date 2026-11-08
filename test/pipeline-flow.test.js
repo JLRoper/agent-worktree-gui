@@ -1,8 +1,10 @@
 // The pipeline FLOW renderer (public/pipeline-flow.js): a definition, a bundle pipeline or a task window's model
 // drawn as one left-to-right sequence.
 //
-// This is the pure half of the pipeline modal and it is driven against the REAL documents: pipelines.seed.json and
-// pipeline-bundle.seed.json, read from disk, so a shape the two loaders produce is what the renderer is asked to draw.
+// This is the pure half of the pipeline modal and it is driven against the REAL documents: pipeline-bundle.seed.json
+// read from disk, so a shape the loader produces is what the renderer is asked to draw, and the ladder definitions in
+// test/fixtures/ladder-definitions.mjs, which are the shapes a reader's own pipelines.json may still hold now that the
+// ladder seed ships none.
 // What this pins:
 //
 //   - the sequence reads left to right, one column per stage in the order the document holds;
@@ -18,10 +20,14 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+import { LADDER_DEFINITIONS } from "./fixtures/ladder-definitions.mjs";
+
 await import("../public/pipeline-flow.js");
 const { fromDefinition, fromBundle, fromWindowModel, marksFor, markup, render } = globalThis.PipelineFlow;
 
-const SEED_DEFS = JSON.parse(readFileSync(new URL("../pipelines.seed.json", import.meta.url), "utf8")).pipelines;
+// The ladder shapes a reader's own pipelines.json may still hold: the seed ships none, so the renderer's definition
+// half is driven against the fixture rather than a file that no longer carries a definition.
+const SEED_DEFS = LADDER_DEFINITIONS;
 // The shipped seed is the panel's multi-pipeline wrapper now; the 13-stage studio export is its `poc-to-uat` entry.
 const SEED_DOC = JSON.parse(readFileSync(new URL("../pipeline-bundle.seed.json", import.meta.url), "utf8"));
 const SEED_BUNDLE = SEED_DOC.pipelines.find((p) => (p.id || (p.project && p.project.id)) === "poc-to-uat");

@@ -96,33 +96,79 @@ function definition(id, kind, over = {}) {
   };
 }
 
+// The ladder definitions the switching route is driven against. The seed ships none now — every shipped pipeline is a
+// PDL document — so a test that exercises the ladder route writes its own live file, the same file a reader edits,
+// rather than depending on what the seed happens to hold.
+const LADDER_FIXTURE = [
+  { id: "github-force-merge", kind: "turnover", stages: ["commit", "version", "push", "pr", "merge", "main"] },
+  { id: "sefl-review-loop", kind: "turnover", stages: ["branch", "push", "pr", "wait", "address", "approve", "merge"] },
+  { id: "sefl-investigate", kind: "investigation", stages: ["probe", "conclude"] },
+];
+const ladderFixture = () =>
+  LADDER_FIXTURE.map(({ id, kind, stages }) =>
+    definition(id, kind, { stages: stages.map((s) => ({ id: s, title: s, prompt: `Do ${s} on {{branch}}.`, exit: { check: "clean" } })) }),
+  );
+
 // ---- §1.5: the seed ---------------------------------------------------------------------------------------------
-test("the shipped seed is a valid catalogue carrying the three built-in kinds", () => {
+// The ladder seed ships EMPTY. Every pipeline this board ships is a PDL document in pipeline-bundle.seed.json, so the
+// seed's job is now to be a valid, empty catalogue — and the seven definitions that used to live in it are checked
+// where they live, stage for stage, so a conversion that dropped a stage or a prompt fails here.
+test("the shipped ladder seed is a valid, empty catalogue", () => {
   const doc = readPipelinesFile(SEED);
   assert.deepEqual(doc.warnings, []);
   assert.deepEqual(doc.dropped, []);
   assert.equal(doc.version, PIPELINES_VERSION);
   assert.equal(doc.refused, null);
-  for (const kind of Object.keys(BUILTIN_IDS)) {
-    const builtin = doc.pipelines[BUILTIN_IDS[kind]];
-    assert.ok(builtin, `the seed ships a ${kind} definition (${BUILTIN_IDS[kind]})`);
-    assert.equal(builtin.kind, kind);
-  }
-  // Every check the seed uses is in §1.3's closed vocabulary, and every hole its prompts carry is in §1.4's list.
-  for (const [id, def] of Object.entries(doc.pipelines)) {
-    for (const stage of def.stages) {
-      assert.ok(EXIT_CHECKS.includes(stage.exit.check), `${id}/${stage.id}: ${stage.exit.check} is a closed check`);
-      for (const hole of promptPlaceholders(stage.prompt)) {
-        assert.ok(PROMPT_PLACEHOLDERS.includes(hole), `${id}/${stage.id}: {{${hole}}} is a closed placeholder`);
-      }
-      assert.deepEqual(unknownPlaceholders(stage.prompt), []);
+  assert.deepEqual(doc.pipelines, {}, "nothing ships in the ladder catalogue");
+  // The three built-in ids are still the closed defaults the code resolves to; they are simply PDL documents now.
+  assert.deepEqual(Object.values(BUILTIN_IDS), ["local", "investigate", "turnover"]);
+});
+
+test("the seven converted pipelines are PDL documents, stage for stage, with their prompts kept", () => {
+  const bundle = JSON.parse(readFileSync(path.join(ROOT, "pipeline-bundle.seed.json"), "utf8"));
+  const byId = new Map(bundle.pipelines.map((p) => [p.id, p]));
+  // The ladder's own stage lists, in the ladder's own order. A conversion that renamed, merged or dropped a stage
+  // fails on the first line of this table.
+  const LADDER = {
+    local: ["work"],
+    investigate: ["probe", "conclude"],
+    turnover: ["commit", "push", "pr"],
+    "github-investigate": ["probe", "conclude"],
+    "sefl-investigate": ["probe", "conclude"],
+    "github-force-merge": ["commit", "version", "push", "pr", "merge", "main"],
+    "sefl-review-loop": ["branch", "push", "pr", "wait", "address", "approve", "merge"],
+  };
+  for (const [id, stages] of Object.entries(LADDER)) {
+    const pdl = byId.get(id);
+    assert.ok(pdl, `${id} ships as a PDL pipeline`);
+    assert.deepEqual(pdl.stages.map((s) => s.id), stages, `${id}: the ladder's stages, in the ladder's order`);
+    // Every stage keeps an instruction, and it is prose: the PDL driver hands stage.prompt verbatim, so a ladder
+    // {{placeholder}} left in it would reach the agent as braces.
+    for (const stage of pdl.stages) {
+      assert.ok(typeof stage.prompt === "string" && stage.prompt.trim().length > 20, `${id}/${stage.id}: a prompt`);
+      assert.deepEqual(promptPlaceholders(stage.prompt), [], `${id}/${stage.id}: no ladder hole survives the conversion`);
+      assert.ok(stage.artifact && stage.artifact.id && stage.artifact.path && stage.artifact.writer, `${id}/${stage.id}: an artifact`);
+      assert.ok(pdl.roles.some((r) => r.id === stage.owner.role), `${id}/${stage.id}: its owner is on the roster`);
     }
+    // A pipeline with no round trip carries the ladder's stage order as consecutive handoffs. The review loop does not:
+    // its path is wait -> address -> wait -> approve, so its edges are asserted by name below.
+    const carried = pdl.handoffs.map((h) => `${h.from}->${h.to}`);
+    if (!pdl.handoffs.some((h) => h.kind === "loop")) {
+      const expected = stages.slice(0, -1).map((s, i) => `${s}->${stages[i + 1]}`);
+      for (const edge of expected) assert.ok(carried.includes(edge), `${id}: a handoff carries ${edge}`);
+    }
+    for (const gate of pdl.gates) assert.ok(stages.includes(gate.after), `${id}: gate ${gate.id} ends a stage the document holds`);
   }
-  // The two host turnover pipelines the document names by id are the data, not code paths.
-  assert.equal(doc.pipelines["github-force-merge"].kind, "turnover");
-  assert.equal(doc.pipelines["sefl-review-loop"].kind, "turnover");
-  assert.deepEqual(doc.pipelines["sefl-review-loop"].stages.map((s) => s.id), ["branch", "push", "pr", "wait", "address", "approve", "merge"]);
-  assert.match(doc.pipelines["sefl-review-loop"].stages[0].exit.pattern, /^\^\\d\{8\}_/);
+  // The review loop's round trip is a DECLARED capped loop now, not the map's inference.
+  const review = byId.get("sefl-review-loop");
+  const loop = review.handoffs.find((h) => h.kind === "loop");
+  assert.ok(loop, "the review loop declares its round trip");
+  assert.equal(loop.from, "wait");
+  assert.equal(loop.to, "address");
+  assert.match(loop.cap, /^\d+ rounds$/);
+  // The two chains the ladder carried in `next` survive in the description's own words, because PDL has no chain field.
+  assert.match(byId.get("github-investigate").description, /chain into a turnover/);
+  assert.match(byId.get("sefl-investigate").description, /chain into the review loop/);
 });
 
 test("the merge is per id: the reader's edit wins, and a seed record still arrives", () =>
@@ -174,7 +220,9 @@ test("a live file newer than this code is refused whole, and the seed loads read
     assert.equal(doc.readOnly, true);
     assert.ok(doc.refused);
     assert.equal(doc.pipelines["from-the-future"], undefined, "no definition from the newer file is in force");
-    assert.ok(doc.pipelines[BUILTIN_IDS.local], "the seed is the catalogue");
+    // The seed is the catalogue, and the seed ships nothing: a refused live file leaves an EMPTY ladder, not a
+    // half-parsed one and not a resurrected default.
+    assert.deepEqual(doc.pipelines, {}, "the seed contributes no definition");
     assert.ok(!doc.pipelines.gone, "and nothing was invented");
 
     // The loader (what the server holds) refuses it the same way, not only the pure merge.
@@ -230,7 +278,8 @@ test("an invalid definition is dropped by id and named, while the rest of the fi
     resetPipelinesCache();
     const merged = pipelinesDoc({ file: live, seedFile: SEED, ttlMs: 0 });
     assert.ok(merged.pipelines["good-one"]);
-    assert.ok(merged.pipelines[BUILTIN_IDS.turnover]);
+    // The seed ships nothing, so the merged catalogue is exactly the live file's valid records.
+    assert.deepEqual(Object.keys(merged.pipelines).sort(), ["doubled", "good-one"]);
     assert.equal(merged.pipelines["unknown-check"], undefined);
   }));
 
@@ -264,7 +313,19 @@ test("a project's default resolves project → global → the built-in, and a ba
   withDir((dir) => {
     resetPipelinesCache();
     const live = path.join(dir, "pipelines.json");
-    writeJson(live, { version: PIPELINES_VERSION, pipelines: [definition("mine", "turnover"), definition("theirs", "turnover"), definition("probe", "investigation"), definition("wrong-rung", "investigation")] });
+    // The seed ships no definition, so the fixture carries the two built-in ids the resolver falls back to as well as
+    // the reader's own: the fallback is a property of the resolver, not of what the seed happens to hold.
+    writeJson(live, {
+      version: PIPELINES_VERSION,
+      pipelines: [
+        definition("mine", "turnover"),
+        definition("theirs", "turnover"),
+        definition("probe", "investigation"),
+        definition("wrong-rung", "investigation"),
+        definition(BUILTIN_IDS.turnover, "turnover"),
+        definition(BUILTIN_IDS.investigation, "investigation"),
+      ],
+    });
     const catalogue = pipelinesDoc({ file: live, seedFile: SEED, ttlMs: 0 });
 
     // 1. the project's own value wins.
@@ -304,17 +365,23 @@ test("a project's default resolves project → global → the built-in, and a ba
   }));
 
 test("config.json carries the two defaults beside remoteBranchPolicy, and they name definitions in force", () => {
-  const config = JSON.parse(readFileSync(path.join(ROOT, "config.json"), "utf8"));
+  // config.json is the reader's own file — machine paths and their board — so it is gitignored and a fresh worktree has
+  // only the tracked template. The template is what ships, so it is what must carry the two keys.
+  const checkout = path.join(ROOT, "config.json");
+  const file = existsSync(checkout) ? checkout : path.join(ROOT, "config.example.json");
+  const config = JSON.parse(readFileSync(file, "utf8"));
   assert.ok("remoteBranchPolicy" in config);
-  assert.ok("defaultTurnover" in config, "config.json carries defaultTurnover beside remoteBranchPolicy");
-  assert.ok("defaultInvestigation" in config, "config.json carries defaultInvestigation beside remoteBranchPolicy");
-  const catalogue = readPipelinesFile(SEED);
+  assert.ok("defaultTurnover" in config, `${path.basename(file)} carries defaultTurnover beside remoteBranchPolicy`);
+  assert.ok("defaultInvestigation" in config, `${path.basename(file)} carries defaultInvestigation beside remoteBranchPolicy`);
+  // The definitions in force are the seven PDL documents in the bundle — the ladder seed ships empty — so an id a
+  // project names has to resolve to one of those (or to a ladder definition a reader still keeps in the seed).
+  const bundle = JSON.parse(readFileSync(path.join(ROOT, "pipeline-bundle.seed.json"), "utf8"));
+  const inForce = new Set([...bundle.pipelines.map((p) => p.id), ...Object.keys(readPipelinesFile(SEED).pipelines)]);
   for (const project of config.projects || []) {
-    const resolved = defaultsForProject(project, { catalogue, config });
-    for (const kind of ["turnover", "investigation"]) {
-      const got = resolved[kind];
-      assert.ok(got.definition, `${project.name}'s ${kind} default resolves to a definition in force (${got.id})`);
-      assert.equal(got.definition.kind, kind);
+    for (const key of ["defaultTurnover", "defaultInvestigation"]) {
+      const id = project[key];
+      if (id == null) continue;
+      assert.ok(inForce.has(id), `${project.name}'s ${key} names a definition in force (${id})`);
     }
   }
 });
@@ -479,9 +546,12 @@ test("P0-2: a write that fails returns null, and the switch answers 500 with no 
   }));
 
 // ---- P0-3 (docs/pipelines-audit.md): one landing instruction, not three -------------------------------------------
-test("P0-3: the seed's local prompt and the landing paragraph a run is handed agree", () => {
-  const doc = readPipelinesFile(SEED);
-  const local = doc.pipelines.local;
+test("P0-3: the local pipeline's prompt and the landing paragraph a run is handed agree", () => {
+  // `local` is a PDL document now, so the prompt this pins is the one in the bundle — the same sentence the ladder
+  // shipped, with its {{desc}} hole dropped (the driver appends the task's own detail) and {{branch}} spelled out.
+  const bundle = JSON.parse(readFileSync(path.join(ROOT, "pipeline-bundle.seed.json"), "utf8"));
+  const local = bundle.pipelines.find((p) => p.id === "local");
+  assert.ok(local, "the local pipeline ships in the PDL bundle");
   const prompt = local.stages[0].prompt;
   // What a local run on a tree cut from main is actually handed (lib/jobs.js composes this ahead of the prompt).
   const landing = branchLandingLine({ parent: "main", branch: "wtgui/x", policy: "allow", remote: "origin" }, "C:/tree");
@@ -544,7 +614,10 @@ test("the switching route reads the tree's record back on /api/jobs and refuses 
     },
   });
 
-  const panel = await startPanel({ dir, config: { jobsFile, assistant: { enabled: false }, projects: [] } });
+  // The ladder the route reads: the seed ships none, so the live file carries the three ids this test switches between.
+  const pipelinesFile = path.join(logs, "pipelines.json");
+  writeJson(pipelinesFile, { version: PIPELINES_VERSION, pipelines: ladderFixture() });
+  const panel = await startPanel({ dir, config: { jobsFile, pipelinesFile, assistant: { enabled: false }, projects: [] } });
   t.after(async () => {
     await panel.stop();
     rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
@@ -559,10 +632,11 @@ test("the switching route reads the tree's record back on /api/jobs and refuses 
   assert.equal(onBoard.pipeline.id, "github-force-merge");
   assert.equal(onBoard.pipeline.stage, "commit");
 
-  // The catalogue live file is created beside hosts.json, with the version stamp.
-  const live = JSON.parse(readFileSync(path.join(logs, "pipelines.json"), "utf8"));
+  // The live file is the catalogue: the seed ships nothing, so what the route can switch to is exactly what is written
+  // here, and the version stamp is the one this panel reads.
+  const live = JSON.parse(readFileSync(pipelinesFile, "utf8"));
   assert.equal(live.version, PIPELINES_VERSION);
-  assert.deepEqual(live.pipelines, [], "the live file starts empty: the defaults are the seed's");
+  assert.deepEqual(live.pipelines.map((p) => p.id).sort(), ["github-force-merge", "sefl-investigate", "sefl-review-loop"]);
 
   // turnover → investigation: a 409 with the sentence, and the file is untouched.
   const down = await call({ path: tree, id: "sefl-investigate" });
@@ -620,8 +694,11 @@ test("P0-4: a switch that cannot start its run is refused and the record is unch
     lines: [],
   };
   writeJson(jobsFile, { savedAt: new Date().toISOString(), jobs: [card] });
+  // The climb this test refuses is a real one, so the target has to be in the catalogue the route reads.
+  const pipelinesFile = path.join(logs, "pipelines.json");
+  writeJson(pipelinesFile, { version: PIPELINES_VERSION, pipelines: ladderFixture() });
 
-  const panel = await startPanel({ dir, config: { jobsFile, assistant: { enabled: false }, projects: [] } });
+  const panel = await startPanel({ dir, config: { jobsFile, pipelinesFile, assistant: { enabled: false }, projects: [] } });
   t.after(async () => {
     await panel.stop();
     rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
@@ -666,7 +743,10 @@ async function childCutFixture(t) {
   git(parentTree, ["add", "."]);
   git(parentTree, ["commit", "-q", "-m", "parent: its own commit"]);
 
-  const panel = await startPanel({ config: { scanRoots: [scanRoot] } });
+  // The ladder the later switch reads: the seed ships none, so the fixture is the catalogue.
+  const pipelinesFile = path.join(base, "pipelines.json");
+  writeJson(pipelinesFile, { version: PIPELINES_VERSION, pipelines: ladderFixture() });
+  const panel = await startPanel({ config: { scanRoots: [scanRoot], pipelinesFile } });
   t.after(async () => {
     await panel.stop();
     rmSync(base, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });

@@ -20,6 +20,7 @@ import test from "node:test";
 
 import { parseBundle } from "../lib/pipeline-bundle.js";
 import { pipelineCatalogue } from "../lib/task-pipeline-assign.js";
+import { ladderDefinition } from "./fixtures/ladder-definitions.mjs";
 
 await import("../public/pipeline-flow.js");
 const { fromBundle, fromDefinition, fromWindowModel, markup } = globalThis.PipelineFlow;
@@ -147,7 +148,8 @@ test("a pipeline with no artifacts draws no layer and no key, and a definition h
   assert.doesNotMatch(html, /class="pflow-artifacts"/);
   assert.doesNotMatch(html, /data-pflow-artifact-key/);
   assert.match(html, /data-artifacts="0"/);
-  const def = JSON.parse(readFileSync(new URL("../pipelines.seed.json", import.meta.url), "utf8")).pipelines[0];
+  // A ladder definition has no artifact layer to draw. The seed ships none now, so the shape comes from the fixture.
+  const def = ladderDefinition("local");
   assert.doesNotMatch(markup(fromDefinition(def), null), /class="pflow-artifacts"/);
 });
 
