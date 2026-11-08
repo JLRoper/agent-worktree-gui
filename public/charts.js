@@ -235,11 +235,18 @@ const CHART_COLUMNS = [
   { id: "dirty", label: "Dirty", min: 64, give: 1 },
   {
     id: "life",
-    label: "Life / next read",
-    min: 120,
-    give: 0.5,
+    label: "Life",
+    min: 92,
+    give: 0.6,
     title:
-      "time since this worktree was last seen alive (any evidence firing) · the ring fills up to green as the row becomes due for its next read · chips are the evidence: ⧉ hermes session · ● board PID · :port dev server · ✎ files edited",
+      "time since this worktree was last seen alive (any evidence firing) · chips are the evidence: ⧉ hermes session · ● board PID · :port dev server · ✎ files edited. The next-read ring and its countdown are the column beside this one.",
+  },
+  {
+    id: "nextread",
+    label: "Next read",
+    min: 92,
+    give: 0.5,
+    title: "the ring fills up to green as the row becomes due for its next read · the countdown reads \"due in Xs\" while it waits, \"due now\" the moment it is due, and \"overdue <time>\" once the read is late · click the ring to read this worktree now",
   },
   { id: "verdict", label: "Verdict", min: 104, give: 0.5 },
   { id: "actions", label: "", min: 52, give: 0.15, title: "remove a worktree (sent to the Recycle Bin)" },

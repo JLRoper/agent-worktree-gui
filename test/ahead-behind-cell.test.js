@@ -8,8 +8,10 @@ import { sliceRegion } from "../tools/panel-testkit.mjs";
 
 const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
 // The chart's columns moved to public/charts.js in step 3 of docs/reports/module-map-2026-11-07.html's order of
-// work, so the section pin below reads the file that carries it now; the cell itself is still built in app.js.
+// work, so the section pin below reads the file that carries it now; the row's cells moved to
+// public/render-projects.js in step 7, which is where the one-cell-per-column map is read.
 const charts = readFileSync(new URL("../public/charts.js", import.meta.url), "utf8");
+const projects = readFileSync(new URL("../public/render-projects.js", import.meta.url), "utf8");
 const code = sliceRegion(src, "ahead / behind cell");
 // The two pins at the bottom of this file are pins on a SECTION, cut the way every other slice in test/ is cut: a
 // `// ---- name … // ---- end name` pair travels as one, so an anchor cannot end up outside the section whose closer
@@ -122,7 +124,7 @@ test("the column header explains the arrows, and the verdict carries the count a
   assert.match(chartColumns, /label: "Ahead \/ Behind"/);
   assert.match(chartColumns, /title:\s*\n?\s*"↑ commits this branch has that its own copy on the remote does not[^"]*"/);
   assert.match(chartColumns, /id: "ahead"/);
-  assert.match(src, /ahead: `<td class="mono nowrap">\$\{aheadBehindCellHtml\(row\)\}<\/td>`/);
+  assert.match(projects, /ahead: `<td class="mono nowrap">\$\{aheadBehindCellHtml\(row\)\}<\/td>`/);
   // verdictHtml keeps the sentence inline so tools/verify-merge-chip.mjs can read its region on its own.
   assert.match(mergeControl, /function verdictHtml\(row\) \{/, "verdictHtml is not in the merge control section");
   assert.match(mergeControl, /Against \$\{row\.baseRef\}: \$\{Number\(row\.ahead\) \|\| 0\} ahead, \$\{Number\(row\.behind\) \|\| 0\} behind\./);

@@ -2,7 +2,7 @@
 //
 //   PANEL_PLAYWRIGHT_ROOT=C:/Users/<user>/AppData/Roaming/npm node tools/verify-chart-columns.mjs
 //
-// Settings > Board > **Chart columns** turns each of the table's eleven columns on and off. The choice is the panel's
+// Settings > Board > **Chart columns** turns each of the table's twelve columns on and off. The choice is the panel's
 // own config.json (`hiddenColumns`, POST /api/settings/columns), so every browser and every restart draws the same
 // chart, and the table is rebuilt from the shown set: the header carries one <th> per visible column, every row one
 // <td>, and the two column-spanning rows (an expanded worktree, the delete question) ask for the shown count instead
@@ -11,24 +11,24 @@
 //
 // WHAT IS DRIVEN, AND WHAT IS ONLY INSPECTED
 //
-//   driven    at rest: ten of the eleven headers drawn while every tree is on Assistant #1 and there is no second
+//   driven    at rest: eleven of the twelve headers drawn while every tree is on Assistant #1 and there is no second
 //             assistant — the OWNER column ("assistant") hides ITSELF there, with its switch ON and the Settings row
-//             saying why — ten cells per row, no hiddenColumns key in config.json (the page's own rule is not a
-//             stored default, and the file stays keyless until the reader moves a switch), eleven switches checked
+//             saying why — eleven cells per row, no hiddenColumns key in config.json (the page's own rule is not a
+//             stored default, and the file stays keyless until the reader moves a switch), twelve switches checked
 //   driven    a SECOND assistant brings the owner column back with no switch touched: its header, its cell — the
 //             compact TAG ("M1") the numbered role label resolves to, never `assistant-1`, never the name and never a
 //             dash, while the tooltip carries the tag, the name and the label ("M1 — Assistant #1 (Manager 1) owns
-//             this worktree") beside the display-only sentence — and the counter says 11/11; switching it off again
+//             this worktree") beside the display-only sentence — and the counter says 12/12; switching it off again
 //             stores exactly that one column, and hides it even with the second assistant there
 //   driven    an expanded worktree's detail carries its own line, "Controlled by: Assistant #1 — Manager", beside
 //             the branch and the verdict
-//   driven    unchecking Cherry and Tip rebuilds every project table to eight columns — the header loses those two
-//             <th>, each row loses those two <td>, an expanded worktree's detail row spans exactly eight, and the
+//   driven    unchecking Cherry and Tip rebuilds every project table to nine columns — the header loses those two
+//             <th>, each row loses those two <td>, an expanded worktree's detail row spans exactly nine, and the
 //             remaining columns still add up to the table's width (no horizontal scroll where there was none)
 //   driven    the write is the panel's, not the tab's: config.json carries ["assistant","tip","cherry"] in the
 //             chart's own order, /api/config agrees, and a RELOAD of the page (a fresh browser state) still draws
-//             eight columns
-//   driven    "show all" puts eleven back and stores an empty list, not a missing key
+//             nine columns
+//   driven    "show all" puts twelve back and stores an empty list, not a missing key
 //   driven    the actions column cannot be hidden away: unchecking every switch leaves one column, the row's ⟳/✕
 //   driven    no page error along the way, and the settings row reads back what the chart draws
 //   inspected the column list itself: the page's ids and the server's are the same list (test/chart-columns.test.js
@@ -251,17 +251,61 @@ const run = async () => {
 
   // ---- at rest -----------------------------------------------------------------------------------
   const before = await chartState(page);
-  const ALL_IDS = ["name", "branch", "assistant", "tip", "ahead", "cherry", "pr", "dirty", "life", "verdict", "actions"];
+  const ALL_IDS = ["name", "branch", "assistant", "tip", "ahead", "cherry", "pr", "dirty", "life", "nextread", "verdict", "actions"];
   // The owner column draws itself only while it has something to say. The sandbox's config.json carries no
   // hiddenColumns key and the panel's default is empty, so the OWNER SWITCH is on — and the column is still absent,
   // because every tree is on Assistant #1 and there is no second assistant. That self-hide is the column's own rule
   // (public/app.js `ownerMatters`), not a default.
   const AT_REST = ALL_IDS.filter((id) => id !== "assistant");
   note(`chart: ${before.map((t) => `${t.project} ${t.ids.length} cols / ${t.rows} rows`).join(" · ")}`);
-  ok("every project table starts with ten of its eleven columns", before.every((t) => t.ids.join(",") === AT_REST.join(",")), before[0]?.ids.join(","));
-  ok("every row starts with ten cells", before.every((t) => t.rowCells.every((n) => n === 10)), JSON.stringify(before[0]?.rowCells));
+  ok("every project table starts with eleven of its twelve columns", before.every((t) => t.ids.join(",") === AT_REST.join(",")), before[0]?.ids.join(","));
+  ok("every row starts with eleven cells", before.every((t) => t.rowCells.every((n) => n === 11)), JSON.stringify(before[0]?.rowCells));
   ok("the owner column hides itself while every tree is on Assistant #1 and there is no second assistant", before.every((t) => !t.ids.includes("assistant")), before[0]?.ids.join(","));
   check("no column key is written for that: it is the page's own rule, not a stored default", "hiddenColumns" in readConfig(), false);
+
+  // ---- Life and Next read are two columns -----------------------------------------------------------
+  // The single "Life / next read" cell is split: Life carries the age number and the evidence chips, Next read the
+  // ring and its countdown. Each has its own header and its own explanation, and the Life id did not move.
+  const heads = await page.evaluate(() => {
+    const th = (id) => document.querySelector(`section.project thead th[data-col-id="${id}"]`);
+    return {
+      life: th("life")?.textContent,
+      nextread: th("nextread")?.textContent,
+      lifeTitle: th("life")?.getAttribute("title") || "",
+      nextTitle: th("nextread")?.getAttribute("title") || "",
+      order: [...document.querySelectorAll("section.project thead th")].map((x) => x.dataset.colId).filter((x) => x === "life" || x === "nextread"),
+    };
+  });
+  check("the two headers read Life and Next read", [heads.life, heads.nextread], ["Life", "Next read"]);
+  check("Life sits immediately left of Next read", heads.order, ["life", "nextread"]);
+  ok("the Life header explains the age and the chips", /time since this worktree was last seen alive/.test(heads.lifeTitle) && /chips are the evidence/.test(heads.lifeTitle), heads.lifeTitle.slice(0, 90));
+  ok("the Next read header explains the ring and its countdown", /ring fills up to green/.test(heads.nextTitle) && /due in Xs/.test(heads.nextTitle), heads.nextTitle.slice(0, 90));
+  const clocks = await page.evaluate(() =>
+    [...document.querySelectorAll("section.project tbody tr.row")].slice(0, 4).map((r) => {
+      const life = r.querySelector("td.age");
+      const next = r.querySelector("td.nextread");
+      return {
+        lifeNum: life?.querySelector(".age-num")?.textContent || "",
+        lifeRing: !!life?.querySelector(".poll-ring"),
+        lifeChips: !!life?.querySelector(".sigs"),
+        lifeTitle: life?.getAttribute("title") || "",
+        nextRing: !!next?.querySelector(".poll-ring"),
+        nextChips: !!next?.querySelector(".sigs"),
+        nextNum: next?.querySelector(".next-num")?.textContent || "",
+        nextTitle: next?.getAttribute("title") || "",
+      };
+    }),
+  );
+  ok("every row draws both cells", clocks.length > 0 && clocks.every((c) => c.lifeNum && c.nextRing), JSON.stringify(clocks[0]));
+  ok("the Life cell carries the age and the chips, never the ring", clocks.every((c) => c.lifeNum && c.lifeChips && !c.lifeRing), JSON.stringify(clocks[0]));
+  ok("the Next read cell carries the ring and its countdown, never the chips", clocks.every((c) => c.nextRing && c.nextNum && !c.nextChips), JSON.stringify(clocks[0]));
+  ok(
+    "the countdown reads due in Xs, due now or overdue",
+    clocks.every((c) => /^(due in \d+s|due now|overdue .+)$/.test(c.nextNum)),
+    JSON.stringify(clocks.map((c) => c.nextNum)),
+  );
+  ok("each cell's own tooltip says what that cell is", clocks.every((c) => /^last life /.test(c.lifeTitle) && /^next read /.test(c.nextTitle)), JSON.stringify(clocks[0].nextTitle));
+  await shot(page, "life-and-next-read");
 
   // The helper, not a bare press: it opens the drawer if it is closed AND unfolds the Board group the row lives in,
   // which a plain `#btn-settings` click does not (the switches are then attached but not visible).
@@ -271,8 +315,8 @@ const run = async () => {
     return { ids: boxes.map((b) => b.dataset.chartCol), checked: boxes.filter((b) => b.checked).length, count: document.querySelector("#chart-cols-count")?.textContent };
   });
   check("Settings carries one switch per column", switches.ids, ALL_IDS);
-  check("all eleven start switched on — the owner column included, which is on and simply has nothing to say yet", switches.checked, 11);
-  check("the row's counter reads the whole chart", switches.count, "11/11");
+  check("all twelve start switched on — the owner column included, which is on and simply has nothing to say yet", switches.checked, 12);
+  check("the row's counter reads the whole chart", switches.count, "12/12");
   const offSwitch = await page.evaluate(() => {
     const box = document.querySelector('#chart-cols input[data-chart-col="assistant"]');
     return box ? { present: true, checked: box.checked } : { present: false };
@@ -297,13 +341,13 @@ const run = async () => {
   });
   check("a second assistant can be created on the sandbox panel", made.status, 201);
   const ownerOn = await waitFor(
-    async () => (await chartState(page)).every((t) => t.ids.length === 11 && t.ids.includes("assistant")),
-    { timeoutMs: 20_000, what: "eleven columns with the owner column back" },
+    async () => (await chartState(page)).every((t) => t.ids.length === 12 && t.ids.includes("assistant")),
+    { timeoutMs: 20_000, what: "twelve columns with the owner column back" },
   );
   ok("a second assistant brings the owner column back in every project table, with no switch touched", ownerOn);
   const withOwner = await chartState(page);
   check("the owner header sits between Branch and Tip, in the chart's own order", withOwner.every((t) => t.ids.join(",") === ALL_IDS.join(",")), true);
-  ok("every row gains its cell", withOwner.every((t) => t.rowCells.every((n) => n === 11)), JSON.stringify(withOwner[0]?.rowCells));
+  ok("every row gains its cell", withOwner.every((t) => t.rowCells.every((n) => n === 12)), JSON.stringify(withOwner[0]?.rowCells));
   const ownerCells = await page.evaluate(() => [...document.querySelectorAll("section.project tbody tr.row td.owner")].map((td) => td.textContent.trim()));
   ok("the cell is the compact tag, never the name or the role label", ownerCells.length > 0 && ownerCells.every((x) => x === "M1"), JSON.stringify(ownerCells.slice(0, 3)));
   ok("…and never draws a bare dash", ownerCells.length > 0 && ownerCells.every((x) => !/^[—–-]+$/.test(x)), JSON.stringify(ownerCells.slice(0, 3)));
@@ -315,31 +359,31 @@ const run = async () => {
       ownerTitles.every((t) => /^M1 — Assistant #1 \(Manager 1\) owns this worktree\. Display only: it does not change who wakes or runs\.$/.test(t)),
     JSON.stringify(ownerTitles.slice(0, 2)),
   );
-  check("the counter reads the whole chart", await page.evaluate(() => document.querySelector("#chart-cols-count")?.textContent), "11/11");
+  check("the counter reads the whole chart", await page.evaluate(() => document.querySelector("#chart-cols-count")?.textContent), "12/12");
   await page.evaluate(() => document.getElementById("chart-cols-row")?.scrollIntoView({ block: "center" }));
   await sleep(250);
   await shot(page, "owner-column-on");
 
   // …and off again: the reader's switch hides it even with a second assistant on the board, and the stored list is
   // now the owner column alone, which is the state the next step's arithmetic starts from (two more switches off =
-  // eight columns).
+  // nine columns).
   const ownerBox = page.locator('#chart-cols input[data-chart-col="assistant"]');
   await ownerBox.click();
   const ownerOff = await waitFor(
-    async () => (await chartState(page)).every((t) => t.ids.length === 10 && !t.ids.includes("assistant")),
-    { timeoutMs: 15_000, what: "ten columns with the owner column off" },
+    async () => (await chartState(page)).every((t) => t.ids.length === 11 && !t.ids.includes("assistant")),
+    { timeoutMs: 15_000, what: "eleven columns with the owner column off" },
   );
   ok("switching it off takes it back out of every table", ownerOff);
   check("and stores that one hidden column, in the chart's own order", readConfig().hiddenColumns, ["assistant"]);
 
   // ---- hide Cherry and Tip -----------------------------------------------------------------------
   await setSwitches(page, ["cherry", "tip"]);
-  const eight = await waitFor(async () => (await chartState(page)).every((t) => t.ids.length === 8), { timeoutMs: 15_000, what: "eight columns" });
-  ok("unchecking Cherry and Tip rebuilds every table to eight columns", eight);
+  const nine = await waitFor(async () => (await chartState(page)).every((t) => t.ids.length === 9), { timeoutMs: 15_000, what: "nine columns" });
+  ok("unchecking Cherry and Tip rebuilds every table to nine columns", nine);
   const hidden = await chartState(page);
-  const want8 = ALL_IDS.filter((id) => id !== "tip" && id !== "cherry" && id !== "assistant");
-  check("the header keeps the other eight, in table order", hidden.every((t) => t.ids.join(",") === want8.join(",")), true);
-  ok("no row still draws a ninth cell", hidden.every((t) => t.rowCells.every((n) => n === 8)), JSON.stringify(hidden[0]?.rowCells));
+  const want9 = ALL_IDS.filter((id) => id !== "tip" && id !== "cherry" && id !== "assistant");
+  check("the header keeps the other nine, in table order", hidden.every((t) => t.ids.join(",") === want9.join(",")), true);
+  ok("no row still draws a tenth cell", hidden.every((t) => t.rowCells.every((n) => n === 9)), JSON.stringify(hidden[0]?.rowCells));
   ok(
     "the remaining columns still add up to the table's own width",
     hidden.every((t) => Math.abs(t.widths.reduce((a, b) => a + b, 0) - t.tableWidth) <= 2),
@@ -349,7 +393,7 @@ const run = async () => {
   const liveSettings = await (await fetch(`${base}/api/config`)).json();
   check("/api/config agrees with the file", liveSettings.hiddenColumns, ["assistant", "tip", "cherry"]);
   const counter = await page.evaluate(() => document.querySelector("#chart-cols-count")?.textContent);
-  check("the Settings row counts what is drawn", counter, "8/11");
+  check("the Settings row counts what is drawn", counter, "9/12");
 
   // ---- the column-spanning rows --------------------------------------------------------------------
   // A plain click on a row's name folds it open (the ⧉ chip only exists for a row that already owns agents); the
@@ -368,30 +412,30 @@ const run = async () => {
       { timeoutMs: 15_000, what: "an expanded worktree's detail row" },
     );
     const colspan = await page.evaluate(() => Number(document.querySelector("tr.detail td[colspan]")?.getAttribute("colspan") || 0));
-    ok("an expanded worktree's detail cell spans the eight visible columns", span && colspan === 8, `colspan=${colspan}`);
+    ok("an expanded worktree's detail cell spans the nine visible columns", span && colspan === 9, `colspan=${colspan}`);
     const ownerLine = await page.evaluate(() => document.querySelector("tr.detail .git-owner")?.textContent.trim() || "");
     check("the detail carries its own owner line: the name, then the role", ownerLine.startsWith("Controlled by: Assistant #1 — Manager"), true);
     ok("…and never the raw id", !/assistant-1/.test(ownerLine), ownerLine);
-    await shot(page, "eight-columns");
+    await shot(page, "nine-columns");
   } else {
     note("no [data-open-row] chip was reachable, so the detail row's colspan was not driven here");
   }
 
   // ---- a reload is a fresh browser: the setting has to be the panel's ------------------------------
   await page.reload({ waitUntil: "domcontentloaded" });
-  const persisted = await waitFor(async () => (await chartState(page)).every((t) => t.ids.length === 8), { timeoutMs: 60_000, what: "eight columns after a reload" });
+  const persisted = await waitFor(async () => (await chartState(page)).every((t) => t.ids.length === 9), { timeoutMs: 60_000, what: "nine columns after a reload" });
   ok("the choice survives a reload — it lives in the panel's config.json, not the tab", persisted);
   await page.click("#btn-settings");
   const reloadedBoxes = await page.evaluate(() => {
     const boxes = [...document.querySelectorAll("#chart-cols input[data-chart-col]")];
     return { checked: boxes.filter((b) => b.checked).map((b) => b.dataset.chartCol), count: document.querySelector("#chart-cols-count")?.textContent };
   });
-  check("the switches read back the stored choice", reloadedBoxes.checked, want8);
-  check("and the counter with it", reloadedBoxes.count, "8/11");
+  check("the switches read back the stored choice", reloadedBoxes.checked, want9);
+  check("and the counter with it", reloadedBoxes.count, "9/12");
 
   // ---- show all -----------------------------------------------------------------------------------
   await page.click("#btn-cols-all");
-  const back = await waitFor(async () => (await chartState(page)).every((t) => t.ids.length === 11), { timeoutMs: 15_000, what: "eleven columns again" });
+  const back = await waitFor(async () => (await chartState(page)).every((t) => t.ids.length === 12), { timeoutMs: 15_000, what: "twelve columns again" });
   ok("show all puts every column back", back);
   check("and stores an empty list, not a missing key", readConfig().hiddenColumns, []);
   const cleared = await page.evaluate(() => [...document.querySelectorAll("#chart-cols input[data-chart-col]")].every((b) => b.checked));
@@ -409,13 +453,13 @@ const run = async () => {
   // Put the chart back the way a fresh config draws it — every column on, then the owner column off — so the sandbox
   // ends where it started. `show all` first, because the previous step hid everything but the actions cell.
   await page.click("#btn-cols-all");
-  await waitFor(async () => (await chartState(page)).every((t) => t.ids.length === 11), { timeoutMs: 15_000, what: "eleven columns before the restore" });
+  await waitFor(async () => (await chartState(page)).every((t) => t.ids.length === 12), { timeoutMs: 15_000, what: "twelve columns before the restore" });
   await setSwitches(page, ["assistant"]);
   const restored = await waitFor(
-    async () => (await chartState(page)).every((t) => t.ids.length === 10 && !t.ids.includes("assistant")),
+    async () => (await chartState(page)).every((t) => t.ids.length === 11 && !t.ids.includes("assistant")),
     { timeoutMs: 15_000, what: "the default chart at the end" },
   );
-  ok("the chart ends on its default: ten columns, the owner column off", restored);
+  ok("the chart ends on its default: eleven columns, the owner column off", restored);
   check("and the file holds that one hidden column", readConfig().hiddenColumns, ["assistant"]);
 
   ok("no page error along the way", errors.length === 0, errors.slice(0, 3).join(" | "));
