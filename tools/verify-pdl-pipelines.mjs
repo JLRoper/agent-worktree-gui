@@ -1,24 +1,29 @@
 #!/usr/bin/env node
 // HARNESS: LIVE GATE
-// The four PDL pipelines, in a real browser: the Settings > Pipeline dropdown lists them first and tagged PDL, and the
-// map draws each one from its stages, gates and handoffs.
+// The PDL pipelines, in a real browser: the Settings > Pipeline dropdown lists every pipeline the shipped bundle
+// carries — eleven of them — first and tagged PDL, and the map draws each one from its stages, gates and handoffs.
 //
 //   node tools/verify-pdl-pipelines.mjs
 //
 // WHAT IT PROVES, and why each line is not decoration:
-//   - the dropdown carries `pdl:poc-to-uat`, `pdl:ping-pong`, `pdl:probe-fix` and `pdl:author-review-revise`, every one
-//     of them BEFORE the first ladder option, inside an optgroup whose label says PDL. The catalogue is read from
-//     config.pipelineBundleFile through lib/pipeline-source.js, so this is the panel's own reading, not the seed page's;
-//   - pressing "open the flow" on each PDL selection paints public/core/pipeline-mermaid.js's card from that
-//     pipeline's stages, gates and handoffs: 13 painted nodes for poc-to-uat, 2 for ping-pong, 2 for probe-fix and 3 for
+//   - the dropdown carries every id pipeline-bundle.seed.json ships (eleven today), each `pdl:<id>` and tagged PDL,
+//     inside an optgroup whose label says PDL. The catalogue is read from config.pipelineBundleFile through
+//     lib/pipeline-source.js, so this is the panel's own reading, not the seed page's. The LADDER half is empty by
+//     design (`pipelines.seed.json` holds no definition since the built-in ladders became PDL), so the count row has to
+//     lead with this one — a tab that read the ladder alone told a reader with eleven pipelines that it held none;
+//   - pressing "open the flow" on a PDL selection paints public/core/pipeline-mermaid.js's card from that pipeline's
+//     stages, gates and handoffs: 13 painted nodes for poc-to-uat, 2 for ping-pong, 2 for probe-fix and 3 for
 //     author-review-revise, with the document's gates and capped loops beside them;
 //   - the map link carries the panel's own catalogue route while a PDL pipeline is selected, and the map page opened
-//     from it draws the same four pipelines at the same stage counts.
+//     from it draws every pipeline in that catalogue at the same stage counts;
+//   - a selection opens no ladder editor, and the tab says why there is no ladder group to open.
 //
 // BROWSER-HALF-NOT-RUN (exit 2) when Playwright is absent, rather than a green half that never opened a page.
 import { copyFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { readBundle } from "../lib/pipeline-bundle.js";
+import { pdlCatalogue } from "../lib/pipeline-source.js";
 import { loadPlaywright, openSettingsGroup } from "./browser.mjs";
 import { startPanel, ROOT } from "./panel-testkit.mjs";
 
@@ -44,11 +49,19 @@ const PDL = [
   { id: "author-review-revise", stages: 3, gates: 1, loops: 1 },
 ];
 
+// The ids the shipped bundle actually carries, in its own order, read through the SAME loader the page's route uses:
+// the seed's first record is a studio document with no top-level id (the loader lifts it), so a raw JSON read would
+// compare a blank id and report a listing that is in fact correct as a mismatch.
+
 const dir = mkdtempSync(path.join(tmpdir(), "wtgui-pdl-pipelines-"));
-// The panel reads ONE bundle file (config.pipelineBundleFile). Point it at the seed so the four ids are the ones the
+// The panel reads ONE bundle file (config.pipelineBundleFile). Point it at the seed so the seed's ids are the ones the
 // dropdown must list, and keep the ladder catalogue in its own file beside it.
 const bundleFile = path.join(dir, "pipeline-bundle.json");
 copyFileSync(path.join(ROOT, "pipeline-bundle.seed.json"), bundleFile);
+// The ids this bundle carries, in its own order, through the SAME loader the page's route uses: the seed's first
+// record is a studio document with no top-level id (the loader lifts it), so a raw JSON read would compare a blank id
+// and report a listing that is in fact correct as a mismatch.
+const SEED_IDS = pdlCatalogue(readBundle(bundleFile)).pipelines.map((p) => p.id);
 const panel = await startPanel({
   dir,
   keep: true,
@@ -82,21 +95,33 @@ try {
     const el = document.getElementById("pipeline-summary");
     return el && !/reading/.test(el.textContent);
   }, null, { timeout: 20_000 });
-  await page.waitForFunction(() => document.querySelectorAll("#pipeline-select optgroup").length >= 2, null, { timeout: 20_000 });
+  // The count the reader takes as "how many pipelines does this panel hold" leads with the PDL catalogue: the ladder
+  // store ships empty, so a count of it alone read "0 definitions" to an install carrying eleven pipelines.
+  const countLine = (await page.textContent("#pipeline-summary")) || "";
+  check(
+    countLine.startsWith(`${SEED_IDS.length} pipelines`),
+    "the catalogue count leads with the bundle's pipelines",
+    countLine,
+  );
+  await page.waitForFunction(
+    (want) => document.querySelectorAll('#pipeline-select optgroup[label="PDL pipelines"] option').length === want,
+    SEED_IDS.length,
+    { timeout: 20_000 },
+  );
 
-  // (1) The dropdown: two groups, PDL first, and the four ids inside it.
+  // (1) The dropdown: the PDL group first, carrying every id the shipped bundle holds.
   const pick = await page.$$eval("#pipeline-select optgroup", (groups) =>
     groups.map((g) => ({
       label: g.label,
       options: [...g.querySelectorAll("option")].map((o) => ({ value: o.value, label: o.textContent.trim() })),
     })),
   );
-  check(pick.map((g) => g.label).join(" | ") === "PDL pipelines | built-in ladders", "the dropdown groups PDL pipelines above the built-in ladders", pick.map((g) => g.label).join(" | "));
+  check(pick[0]?.label === "PDL pipelines", "the dropdown's first group is the PDL pipelines", pick.map((g) => g.label).join(" | "));
   const pdlOptions = pick.find((g) => g.label === "PDL pipelines")?.options || [];
   const ladderOptions = pick.find((g) => g.label === "built-in ladders")?.options || [];
   check(
-    JSON.stringify(pdlOptions.map((o) => o.value)) === JSON.stringify(PDL.map((p) => `pdl:${p.id}`)),
-    "the PDL group lists the four ids, in the bundle's order",
+    JSON.stringify(pdlOptions.map((o) => o.value)) === JSON.stringify(SEED_IDS.map((id) => `pdl:${id}`)),
+    `the PDL group lists the bundle's ${SEED_IDS.length} ids, in its order`,
     pdlOptions.map((o) => o.value).join(", "),
   );
   check(pdlOptions.every((o) => /^PDL · /.test(o.label)), "every PDL option is tagged PDL", pdlOptions.map((o) => o.label).join(" | "));
@@ -148,7 +173,7 @@ try {
   }
   check(drawn.map((c) => c.nodes).join(",") === "13,2,2,3", "the four draws are 13, 2, 2 and 3 stages", drawn.map((c) => `${c.id}:${c.nodes}`).join(", "));
 
-  // (3) The map link hands the page this panel's catalogue, and the page draws the same four.
+  // (3) The map link hands the page this panel's catalogue, and the page draws every pipeline in it.
   await page.selectOption("#pipeline-select", "pdl:poc-to-uat");
   const href = await page.getAttribute("#pipeline-map-open", "href");
   check(href === "/pipeline-map.html?doc=/api/assistant/pipeline-catalogue", "the map link carries the panel's own PDL catalogue", String(href));
@@ -157,10 +182,10 @@ try {
   mapPage.on("pageerror", (e) => mapErrors.push(String(e)));
   await mapPage.goto(panel.base + href, { waitUntil: "domcontentloaded" });
   // The page draws its own seed first and then the document it was handed; the document's own count is on the root.
-  await mapPage.waitForFunction(() => document.documentElement.dataset.pipelineDocCards === "4", null, { timeout: 40_000 });
+  await mapPage.waitForFunction((want) => document.documentElement.dataset.pipelineDocCards === String(want), SEED_IDS.length, { timeout: 40_000 });
   await mapPage.waitForFunction(() => [...document.querySelectorAll(".pm-card[data-card]")].every((el) => el.getAttribute("data-ready") === "1"), null, { timeout: 40_000 });
   const mapCards = await mapPage.$$eval(".pm-card[data-card]", (els) => els.map((el) => ({ id: el.dataset.card, stages: Number(el.dataset.stages || 0), nodes: Number(el.dataset.nodeCount || 0), loops: Number(el.dataset.loopCount || 0), gates: el.querySelectorAll(".pm-gates li").length })));
-  check(mapCards.length === 4, "the map page drew four PDL pipelines from the panel's catalogue", mapCards.map((c) => c.id).join(", "));
+  check(mapCards.length === SEED_IDS.length, `the map page drew all ${SEED_IDS.length} PDL pipelines from the panel's catalogue`, mapCards.map((c) => c.id).join(", "));
   for (const want of PDL) {
     const card = mapCards.find((c) => c.id === want.id);
     check(Boolean(card) && card.stages === want.stages && card.nodes === want.stages, `map: ${want.id} is ${want.stages} stages`, card ? `${card.stages} declared / ${card.nodes} painted` : "missing");
@@ -168,12 +193,18 @@ try {
   }
   await mapPage.close();
 
-  // (4) A ladder still edits: the dropdown's other half is not collateral.
-  await page.selectOption("#pipeline-select", "local");
-  await page.waitForSelector("#pipeline-editor:not([hidden]) textarea.stage-prompt", { timeout: 10_000 });
-  const ladderPick = await page.evaluate(() => ({ value: document.getElementById("pipeline-select").value, href: document.getElementById("pipeline-map-open").getAttribute("href") }));
-  check(ladderPick.value === "local", "a built-in ladder still opens its editor", ladderPick.value);
-  check(ladderPick.href === "/pipeline-map.html", "and the map link goes back to the generated library page", ladderPick.href);
+  // (4) The ladder half is empty by design, and the tab says so instead of offering a group that is not there.
+  check(ladderOptions.length === 0, "the dropdown carries no built-in ladder group — the ladder seed ships empty", `${ladderOptions.length} ladder options`);
+  check(
+    /0 definitions/.test(countLine),
+    "the count row still names the ladder's own size",
+    countLine,
+  );
+  check(
+    (await page.evaluate(() => document.getElementById("pipeline-editor")?.hidden !== false)) === true,
+    "a PDL selection opens no ladder editor",
+    "",
+  );
 
   check(pageErrors.length === 0, "no page error", pageErrors.slice(0, 3).join(" | "));
   check(mapErrors.length === 0, "no error on the map page", mapErrors.slice(0, 3).join(" | "));
