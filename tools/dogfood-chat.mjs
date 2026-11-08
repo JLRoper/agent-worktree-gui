@@ -265,8 +265,8 @@ Exit 0 when every check passed.`);
         {
           version: 1,
           assistants: [
-            { id: "assistant-1", name: "Assistant #1", roleId: "agent-manager", threadId: "panel-assistant", rules: [], createdAt: new Date().toISOString() },
-            { id: SESSION, name: "Sandbox Assistant", roleId: "agent-manager", threadId: THREAD, charterRel: `assistants/${SESSION}/charter.md`, rules: [], createdAt: new Date().toISOString() },
+            { id: "assistant-1", name: "Assistant #1", roleId: "assistant-agent-manager", threadId: "panel-assistant", rules: [], createdAt: new Date().toISOString() },
+            { id: SESSION, name: "Sandbox Assistant", roleId: "assistant-agent-manager", threadId: THREAD, charterRel: `assistants/${SESSION}/charter.md`, rules: [], createdAt: new Date().toISOString() },
           ],
         },
         null,

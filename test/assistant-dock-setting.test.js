@@ -64,7 +64,7 @@ test("a second assistant holds the opposite frame from the first", async (t) => 
   const { assistant: store, assistantFile, profileFile } = await panel(t);
   const before = sha(await readFile(assistantFile));
   assert.deepEqual(store.state().dock, { [PRIMARY_ASSISTANT]: "docked" }, "a panel that chose nothing is docked");
-  const second = store.createAssistant({ roleId: "agent-manager", name: "Reviewer" }).created.id;
+  const second = store.createAssistant({ roleId: "assistant-agent-manager", name: "Reviewer" }).created.id;
   // One assistant floats; its neighbour stays docked. The value is the FILE's, not a global switch's.
   store.saveProfile(second, { dock: "floating" });
   assert.deepEqual(store.state().dock, { [PRIMARY_ASSISTANT]: "docked", [second]: "floating" });
@@ -86,7 +86,7 @@ test("a second assistant holds the opposite frame from the first", async (t) => 
 
 test("a saved knob does not put the pane back in its dock", async (t) => {
   const { assistant: store, profileFile } = await panel(t);
-  const second = store.createAssistant({ roleId: "agent-manager", name: "Reviewer" }).created.id;
+  const second = store.createAssistant({ roleId: "assistant-agent-manager", name: "Reviewer" }).created.id;
   store.saveProfile(second, { dock: "floating" });
   // A Settings save writes the whole profile file; the frame it was not asked about has to survive it, or a reader
   // who changed their model would find the window gone.
@@ -102,7 +102,7 @@ test("a saved knob does not put the pane back in its dock", async (t) => {
 
 test("a file that says nothing, or something unknown, reads as docked", async (t) => {
   const { assistant: store, profileFile } = await panel(t);
-  const second = store.createAssistant({ roleId: "agent-manager", name: "Reviewer" }).created.id;
+  const second = store.createAssistant({ roleId: "assistant-agent-manager", name: "Reviewer" }).created.id;
   await mkdir(path.dirname(profileFile(second)), { recursive: true });
   await writeFile(profileFile(second), JSON.stringify({ version: 1, dock: "sideways" }));
   store.readProfile(store.assistantRecord(second));

@@ -2,7 +2,7 @@
 //
 // What this file is the contract for:
 //
-//   1. the seed — the panel's own `state/assistant-charter.md` copied verbatim to `data/roles/agent-manager.md`, so
+//   1. the seed — the panel's own `state/assistant-charter.md` copied verbatim to `data/roles/assistant-agent-manager.md`, so
 //      seeding the Agent Manager role loses NOTHING of a charter a reader already wrote. Asserted by bytes: the
 //      seeded charter is strictly equal to the file, and both sha256s are the same string;
 //   2. the remit — the manager's one-line description names the end state it drives to (an approved PR ready to
@@ -22,10 +22,10 @@ import path from "node:path";
 import test from "node:test";
 import { Assistant, ASSISTANT_THREAD } from "../lib/assistant.js";
 import { CHARTER_MAX_CHARS } from "../lib/charter.js";
-import { AGENT_MANAGER_DESCRIPTION, ROLE_CHARTER_MAX_CHARS, agentManagerRole, roleMeta, writeRoleCharter } from "../lib/roles.js";
+import { ASSISTANT_AGENT_MANAGER_DESCRIPTION, RETIRED_AGENT_MANAGER_ID, ROLE_CHARTER_MAX_CHARS, assistantAgentManagerRole, roleMeta, writeRoleCharter } from "../lib/roles.js";
 import { PRIMARY_ASSISTANT, threadFor } from "../lib/assistants.js";
 
-const SEED_URL = new URL("../data/roles/agent-manager.md", import.meta.url);
+const SEED_URL = new URL("../data/roles/assistant-agent-manager.md", import.meta.url);
 const sha = (text) => createHash("sha256").update(text).digest("hex");
 
 async function panel(t) {
@@ -63,7 +63,11 @@ test("the Agent Manager role is the panel's own charter, byte for byte", async (
   const seed = await readFile(SEED_URL, "utf8");
   assert.equal(assistant.roles.length, 2, "both built-in roles are seeded");
   const [role] = assistant.roles;
-  assert.equal(role.id, "agent-manager");
+  assert.equal(role.id, "assistant-agent-manager", "the id carries the assistant- prefix");
+  assert.ok(
+    !assistant.roles.some((r) => r.id === RETIRED_AGENT_MANAGER_ID),
+    "the retired id is not seeded: the library a fresh panel starts with is the two built-ins, and nothing else",
+  );
   assert.equal(role.name, "Agent Manager");
   assert.equal(role.charter, seed, "the seeded charter IS the repo's copy of the live file");
   assert.equal(sha(role.charter), sha(seed), "…and its sha256 is the same string");
@@ -78,11 +82,11 @@ test("the Agent Manager role is the panel's own charter, byte for byte", async (
 });
 
 test("the remit says what the manager drives to and what it wakes on", () => {
-  assert.match(AGENT_MANAGER_DESCRIPTION, /approved PR ready to merge/i, "the end state is an approved, mergeable PR");
+  assert.match(ASSISTANT_AGENT_MANAGER_DESCRIPTION, /approved PR ready to merge/i, "the end state is an approved, mergeable PR");
   for (const w of ["settle", "EXITED", "loop", "quiet", "leftover"]) {
-    assert.ok(AGENT_MANAGER_DESCRIPTION.includes(w), `…and it names the ${w} wake`);
+    assert.ok(ASSISTANT_AGENT_MANAGER_DESCRIPTION.includes(w), `…and it names the ${w} wake`);
   }
-  const meta = roleMeta(agentManagerRole({ charter: "x" }));
+  const meta = roleMeta(assistantAgentManagerRole({ charter: "x" }));
   assert.deepEqual(
     Object.keys(meta).sort(),
     ["cap", "chars", "description", "id", "name", "over", "updatedAt"],
@@ -98,7 +102,7 @@ test("a role's charter has the same cap and the same stale-save refusal as the f
   let code = null;
   try {
     // Through the same writer the route uses: lib/roles.js's `writeRoleCharter`.
-    writeRoleCharter(rolesFile, assistant.roles, "agent-manager", over);
+    writeRoleCharter(rolesFile, assistant.roles, "assistant-agent-manager", over);
   } catch (e) {
     code = e.code;
   }
@@ -108,10 +112,10 @@ test("a role's charter has the same cap and the same stale-save refusal as the f
 
   const before = new Date(assistant.roles[0].updatedAt || 0).getTime();
   await new Promise((r) => setTimeout(r, 25));
-  writeRoleCharter(rolesFile, assistant.roles, "agent-manager", "# rewritten\n");
+  writeRoleCharter(rolesFile, assistant.roles, "assistant-agent-manager", "# rewritten\n");
   code = null;
   try {
-    writeRoleCharter(rolesFile, assistant.roles, "agent-manager", "# stale\n", { expectMtime: before });
+    writeRoleCharter(rolesFile, assistant.roles, "assistant-agent-manager", "# stale\n", { expectMtime: before });
   } catch (e) {
     code = e.code;
   }
@@ -134,7 +138,7 @@ test("Assistant #1 keeps its thread, its file and its route; #2 gets a copy of i
   assert.equal(payload.cap, CHARTER_MAX_CHARS);
   assert.equal(typeof payload.mtime, "number");
 
-  const out = assistant.createAssistant({ roleId: "agent-manager" });
+  const out = assistant.createAssistant({ roleId: "assistant-agent-manager" });
   assert.equal(out.created.id, "assistant-2");
   assert.equal(out.created.threadId, threadFor("assistant-2"));
   assert.equal(out.created.threadId, "panel-assistant-2");
@@ -149,7 +153,7 @@ test("Assistant #1 keeps its thread, its file and its route; #2 gets a copy of i
 test("each assistant's preamble carries only its own charter, so #2 cannot inherit #1's text", async (t) => {
   const { assistant } = await panel(t);
   assistant.setCharter("# #1\n\nFIRST-ONLY-TEXT\n");
-  assistant.createAssistant({ roleId: "agent-manager" });
+  assistant.createAssistant({ roleId: "assistant-agent-manager" });
 
   const first = assistant.preamble(PRIMARY_ASSISTANT);
   assert.ok(first.includes("FIRST-ONLY-TEXT"), "#1's preamble carries its own text");
@@ -175,7 +179,7 @@ test("each assistant's preamble carries only its own charter, so #2 cannot inher
 test("a turn for #2 is created on #2's thread with #2's preamble", async (t) => {
   const { assistant, created } = await panel(t);
   assistant.setCharter("# #1\n\nFIRST-ONLY-TEXT\n");
-  assistant.createAssistant({ roleId: "agent-manager" });
+  assistant.createAssistant({ roleId: "assistant-agent-manager" });
   await assistant.say("what is going on?", { assistantId: "assistant-2" });
   await assistant.say("and for you?");
   assert.equal(created.length, 2);
@@ -197,14 +201,14 @@ test("a turn for #2 is created on #2's thread with #2's preamble", async (t) => 
 
 test("rules belong to one assistant, and adopting a role replaces only that assistant's copy", async (t) => {
   const { assistant } = await panel(t);
-  assistant.createAssistant({ roleId: "agent-manager" });
+  assistant.createAssistant({ roleId: "assistant-agent-manager" });
   assistant.addRuleFor("assistant-2", "ask before writing");
   assert.equal(assistant.assistantRecord("assistant-2").rules.length, 1);
   assert.equal(assistant.rules.length, 0, "#1's rules were not touched");
   assert.ok(assistant.preamble("assistant-2").includes("ask before writing"));
   assert.ok(!assistant.preamble(PRIMARY_ASSISTANT).includes("ask before writing"));
 
-  assistant.createRole({ name: "Reviewer", description: "reads PRs and says no", from: "agent-manager" });
+  assistant.createRole({ name: "Reviewer", description: "reads PRs and says no", from: "assistant-agent-manager" });
   assert.equal(assistant.roles.length, 3);
   const picked = assistant.pickRole("assistant-2", "reviewer", { adopt: true });
   assert.equal(picked.role.id, "reviewer");
@@ -215,8 +219,8 @@ test("rules belong to one assistant, and adopting a role replaces only that assi
 
   // A pick without `adopt` changes the title and leaves the text where the reader put it.
   assistant.setCharterFor("assistant-2", "# mine again\n");
-  const again = assistant.pickRole("assistant-2", "agent-manager");
-  assert.equal(again.role.id, "agent-manager");
+  const again = assistant.pickRole("assistant-2", "assistant-agent-manager");
+  assert.equal(again.role.id, "assistant-agent-manager");
   assert.equal(again.charter.text, "# mine again\n", "picking a role is not an overwrite");
 });
 
@@ -256,33 +260,33 @@ test("the Role tab saves a role's own four fields in one write, and the two refu
   // copied, but its OWN charter had no writer — Save wrote an assistant's copy. The tab is a role editor now, and
   // this is the store contract behind its one press: name, description, prompt and charter land together.
   const { assistant, rolesFile } = await panel(t);
-  const first = assistant.roles.find((r) => r.id === "agent-manager");
+  const first = assistant.roles.find((r) => r.id === "assistant-agent-manager");
   const readAt = new Date(first.updatedAt).getTime();
   const saved = assistant.saveRole({
-    roleId: "agent-manager",
+    roleId: "assistant-agent-manager",
     name: "Manager Prime",
     description: "drives the board, and nothing else",
     prompt: "Be brief, and never approve your own work.",
     text: "# rewritten\n\nSAVED-ON-THE-ROLE\n",
     expectMtime: readAt,
   });
-  assert.deepEqual([saved.role.id, saved.role.name, saved.role.description], ["agent-manager", "Manager Prime", "drives the board, and nothing else"]);
+  assert.deepEqual([saved.role.id, saved.role.name, saved.role.description], ["assistant-agent-manager", "Manager Prime", "drives the board, and nothing else"]);
   assert.equal(saved.text, "# rewritten\n\nSAVED-ON-THE-ROLE\n", "the answer carries the role's own text");
   assert.equal(saved.prompt, "Be brief, and never approve your own work.");
   assert.equal(saved.cap, ROLE_CHARTER_MAX_CHARS);
   assert.equal(typeof saved.mtime, "number", "the answer carries the stamp the next save sends back");
   // ONE write: every field is in the same stored record, and the library's list follows the rename in the same answer.
-  const stored = JSON.parse(await readFile(rolesFile, "utf8")).roles.find((r) => r.id === "agent-manager");
+  const stored = JSON.parse(await readFile(rolesFile, "utf8")).roles.find((r) => r.id === "assistant-agent-manager");
   assert.deepEqual(
     [stored.name, stored.description, stored.prompt, stored.charter],
     ["Manager Prime", "drives the board, and nothing else", "Be brief, and never approve your own work.", "# rewritten\n\nSAVED-ON-THE-ROLE\n"],
   );
-  assert.equal(saved.roles.find((r) => r.id === "agent-manager").name, "Manager Prime", "the picker's label moves with the save");
+  assert.equal(saved.roles.find((r) => r.id === "assistant-agent-manager").name, "Manager Prime", "the picker's label moves with the save");
 
   // A role needs a name: the pane refuses it before the request and the store refuses it behind that.
   let code = null;
   try {
-    assistant.saveRole({ roleId: "agent-manager", name: "   ", text: "# x\n" });
+    assistant.saveRole({ roleId: "assistant-agent-manager", name: "   ", text: "# x\n" });
   } catch (e) {
     code = e.code;
   }
@@ -292,7 +296,7 @@ test("the Role tab saves a role's own four fields in one write, and the two refu
   // Over the cap is the SAME charter cap every copy has, refused whole.
   code = null;
   try {
-    assistant.saveRole({ roleId: "agent-manager", name: "Manager Prime", text: "x".repeat(ROLE_CHARTER_MAX_CHARS + 1) });
+    assistant.saveRole({ roleId: "assistant-agent-manager", name: "Manager Prime", text: "x".repeat(ROLE_CHARTER_MAX_CHARS + 1) });
   } catch (e) {
     code = e.code;
   }
@@ -302,7 +306,7 @@ test("the Role tab saves a role's own four fields in one write, and the two refu
   // A role that moved under the reader is refused rather than silently overwritten.
   code = null;
   try {
-    assistant.saveRole({ roleId: "agent-manager", name: "Manager Prime", text: "# stale\n", expectMtime: readAt });
+    assistant.saveRole({ roleId: "assistant-agent-manager", name: "Manager Prime", text: "# stale\n", expectMtime: readAt });
   } catch (e) {
     code = e.code;
   }
@@ -343,7 +347,7 @@ test("a role's prompt is what its turns begin with, and an assistant's own promp
 
 test("both copies refuse a save over the 20,000-character cap", async (t) => {
   const { assistant } = await panel(t);
-  assistant.createAssistant({ roleId: "agent-manager" });
+  assistant.createAssistant({ roleId: "assistant-agent-manager" });
   for (const id of [PRIMARY_ASSISTANT, "assistant-2"]) {
     let code = null;
     try {
@@ -363,7 +367,7 @@ test("an assistant's charter meta names ITS file, so #2's row is not #1's", asyn
   // collision cannot come back as a state payload whose #2 entry points at #1's path, size and age.
   const { assistant, charter } = await panel(t);
   assistant.setCharter("# #1\n");
-  assistant.createAssistant({ roleId: "agent-manager" });
+  assistant.createAssistant({ roleId: "assistant-agent-manager" });
   const copy2 = assistant.charterPathOf(assistant.assistantRecord("assistant-2"));
   const text2 = "# #2 only\n\nSECOND-ONLY-TEXT\n";
   assistant.setCharterFor("assistant-2", text2);
@@ -398,7 +402,7 @@ test("Assistant #1's preamble carries its charter whole, and #2's edit does not 
   assert.equal(payload.chars, seed.length, "#1's file holds the seed exactly");
   const before = sha(await readFile(charter, "utf8"));
 
-  assistant.createAssistant({ roleId: "agent-manager" });
+  assistant.createAssistant({ roleId: "assistant-agent-manager" });
   const first = assistant.preamble(PRIMARY_ASSISTANT);
   assert.ok(first.includes(seed.trim()), `the whole file rides in the preamble (${seed.length} chars, unclipped)`);
   assert.match(first, /Charter — the long tier, read in full this turn \(role Agent Manager; /, "labelled with the role and the file");

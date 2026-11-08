@@ -295,7 +295,7 @@ console.log("GET and PUT /api/assistant/charter, over a real instance on a scrat
       // and "new assistant" is a COPY of that role's charter. The three claims here are the ones the feature was
       // asked for: the seeded role is the panel's own file, a save through the role route lands on the role, and
       // a second assistant's edit does not move the first assistant's file.
-      const seedText = readFileSync(path.join(ROOT, "data", "roles", "agent-manager.md"), "utf8");
+      const seedText = readFileSync(path.join(ROOT, "data", "roles", "assistant-agent-manager.md"), "utf8");
       const rolesFile = path.join(sandbox, "logs", "roles.json");
       const assistantsFile = path.join(sandbox, "logs", "assistants.json");
       ok(existsSync(rolesFile), "the instance seeded its own role library beside its own job store", rolesFile);
@@ -333,7 +333,7 @@ console.log("GET and PUT /api/assistant/charter, over a real instance on a scrat
       const made = await fetch(`${base}/api/assistant/assistants`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roleId: "agent-manager" }),
+        body: JSON.stringify({ roleId: "assistant-agent-manager" }),
       });
       const md = await made.json();
       eq(made.status, 201, "POST /api/assistant/assistants answers 201");
@@ -359,7 +359,7 @@ console.log("GET and PUT /api/assistant/charter, over a real instance on a scrat
       const newRole = await fetch(`${base}/api/assistant/roles`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: "Reviewer", description: "reads PRs", from: "agent-manager" }),
+        body: JSON.stringify({ name: "Reviewer", description: "reads PRs", from: "assistant-agent-manager" }),
       });
       eq(newRole.status, 201, "a second role can be created");
       const picked = await fetch(`${base}/api/assistant/role/pick`, {

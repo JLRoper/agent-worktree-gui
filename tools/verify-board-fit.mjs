@@ -196,7 +196,7 @@ try {
 
       // ---- a second assistant: the owner column comes back on its own ----
       const made = await page.evaluate(async () => {
-        const r = await fetch("/api/assistant/assistants", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ roleId: "agent-manager" }) });
+        const r = await fetch("/api/assistant/assistants", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ roleId: "assistant-agent-manager" }) });
         return { status: r.status, error: (await r.json().catch(() => ({}))).error || "" };
       });
       check(made.status === 201, "a second assistant can be created on the sandbox panel", `${made.status} ${made.error}`);

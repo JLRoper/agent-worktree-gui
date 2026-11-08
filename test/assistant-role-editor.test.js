@@ -33,12 +33,12 @@ const esc = (v) =>
 
 const MANAGER_DESCRIPTION = "The board manager: drives every agent it starts to an approved PR ready to merge.";
 const MANAGER = {
-  id: "agent-manager",
+  id: "assistant-agent-manager",
   name: "Agent Manager",
   description: MANAGER_DESCRIPTION,
   prompt: "Be brief, and never approve your own work.",
   text: "# The manager charter\n\nDRIVES-THE-BOARD\n",
-  role: { id: "agent-manager", name: "Agent Manager", description: MANAGER_DESCRIPTION, chars: 40, cap: 20000, over: false, updatedAt: "2026-11-08T00:00:00.000Z" },
+  role: { id: "assistant-agent-manager", name: "Agent Manager", description: MANAGER_DESCRIPTION, chars: 40, cap: 20000, over: false, updatedAt: "2026-11-08T00:00:00.000Z" },
   cap: 20000,
   mtime: 1762560000000,
 };
@@ -55,7 +55,7 @@ const REVIEWER = {
 
 // The page's own region, run against the handful of things it asks of the page. `fields` is the DOM the pane paints
 // into by id, and `host.innerHTML` is what a render produced — the markup the assertions read.
-const pane = ({ roles = [MANAGER.role, REVIEWER.role], payloads = { "agent-manager": MANAGER, reviewer: REVIEWER }, sessionRole = "agent-manager" } = {}) => {
+const pane = ({ roles = [MANAGER.role, REVIEWER.role], payloads = { "assistant-agent-manager": MANAGER, reviewer: REVIEWER }, sessionRole = "assistant-agent-manager" } = {}) => {
   const host = { innerHTML: "", dataset: {} };
   const fields = new Map();
   const node = (id) => {
@@ -203,8 +203,8 @@ test("the boxes hold the role the read landed, and the picker lists the library"
   p.api.renderAssistantRole(true);
   await p.flush();
   const html = p.host.innerHTML;
-  assert.match(p.reads[0], /\/api\/assistant\/role\/charter\?roleId=agent-manager/, "the one role shown is the one read");
-  assert.match(html, /<option value="agent-manager" selected>Agent Manager<\/option>/, "the picker selects the role the pane shows");
+  assert.match(p.reads[0], /\/api\/assistant\/role\/charter\?roleId=assistant-agent-manager/, "the one role shown is the one read");
+  assert.match(html, /<option value="assistant-agent-manager" selected>Agent Manager<\/option>/, "the picker selects the role the pane shows");
   assert.match(html, /<option value="reviewer">Reviewer<\/option>/, "and lists the rest of the library");
   assert.match(html, /id="as-role-name"[^>]*value="Agent Manager"/, "the name box holds the role's name");
   assert.match(html, /id="as-role-description"[^>]*>The board manager: drives every agent it starts to an approved PR ready to merge\.<\/textarea>/, "the description box holds its remit");

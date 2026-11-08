@@ -140,7 +140,7 @@ try {
   );
 
   for (const n of [2, 3]) {
-    const made = await api(base, "/api/assistant/assistants", { method: "POST", body: { roleId: "agent-manager" } });
+    const made = await api(base, "/api/assistant/assistants", { method: "POST", body: { roleId: "assistant-agent-manager" } });
     ok(`creating Assistant #${n} is accepted`, made.status === 201, `HTTP ${made.status} ${made.json?.error || ""}`);
   }
   const seeded = (await assistantState()).assistants || [];

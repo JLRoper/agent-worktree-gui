@@ -76,7 +76,7 @@ try {
     ok("it fits the cap", director.chars > 0 && director.chars <= CAP && director.over === false);
     ok("the list carries no charter text", director.charter === undefined);
   }
-  ok("the manager is still there", (roles.json?.roles || []).some((r) => r.id === "agent-manager"));
+  ok("the manager is still there", (roles.json?.roles || []).some((r) => r.id === "assistant-agent-manager"));
 
   // 2. an assistant made from it
   const made = await postJson(panel.base, "/api/assistant/assistants", { roleId: ROLE_ID });

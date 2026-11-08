@@ -149,7 +149,7 @@ test("a served payload that a reader has changed still carries every key", async
 test("an assistant edits only its own file — #1's store is byte-identical afterwards", async (t) => {
   const { assistant, assistantFile, profileFile } = await panel(t);
   const before = sha(await readFile(assistantFile));
-  const id = assistant.createAssistant({ roleId: "agent-manager", name: "Reviewer" }).created.id;
+  const id = assistant.createAssistant({ roleId: "assistant-agent-manager", name: "Reviewer" }).created.id;
   // Both halves of the split move for #2: the assistant-scope knobs AND a wake budget it owns.
   assistant.setSettingsFor(id, { autonomy: "auto", model: "some/small-model", maxWakesPerHour: 3, quietSeconds: 90, childQuietSeconds: 120 });
   const own = assistant.settingsFor(id);
@@ -174,8 +174,8 @@ test("an assistant edits only its own file — #1's store is byte-identical afte
 test("the escalation list is stored in order, inert, and never written until it is used", async (t) => {
   const { assistant, assistantFile, profileFile, dir } = await panel(t);
   const before = sha(await readFile(assistantFile));
-  const second = assistant.createAssistant({ roleId: "agent-manager", name: "Reviewer" }).created.id;
-  const third = assistant.createAssistant({ roleId: "agent-manager", name: "Triage" }).created.id;
+  const second = assistant.createAssistant({ roleId: "assistant-agent-manager", name: "Reviewer" }).created.id;
+  const third = assistant.createAssistant({ roleId: "assistant-agent-manager", name: "Triage" }).created.id;
   // Ordered, and the order is the reader's — not sorted, not deduped into a set.
   assistant.saveProfile(second, { escalateTo: [third, PRIMARY_ASSISTANT] });
   assert.deepEqual(JSON.parse(await readFile(profileFile(second), "utf8")).escalateTo, [third, PRIMARY_ASSISTANT]);
@@ -207,7 +207,7 @@ test("the escalation list is stored in order, inert, and never written until it 
 
 test("the list drops its own assistant, a stranger and a duplicate", async (t) => {
   const { assistant, profileFile } = await panel(t);
-  const second = assistant.createAssistant({ roleId: "agent-manager", name: "Reviewer" }).created.id;
+  const second = assistant.createAssistant({ roleId: "assistant-agent-manager", name: "Reviewer" }).created.id;
   assistant.saveProfile(second, { escalateTo: [second, "assistant-99", "not-an-assistant", "assistant-1", "assistant-1"] });
   assert.deepEqual(JSON.parse(await readFile(profileFile(second), "utf8")).escalateTo, ["assistant-1"]);
   // The picker's own contract, so the pane and the route agree on what a list is.

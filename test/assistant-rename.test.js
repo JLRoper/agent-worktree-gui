@@ -38,7 +38,7 @@ async function panel(t) {
     if (assistant.persistTimer) clearTimeout(assistant.persistTimer);
     if (assistant.settleTimer) clearTimeout(assistant.settleTimer);
   });
-  const created = assistant.createAssistant({ roleId: "agent-manager" });
+  const created = assistant.createAssistant({ roleId: "assistant-agent-manager" });
   return { assistant, dir, assistantFile, assistantsFile: assistant.assistantsFile, id: created.created.id };
 }
 
@@ -145,7 +145,7 @@ test("POST /api/assistant/settings carries the rename and answers with the state
   const panel = await startPanel({});
   t.after(() => panel.stop());
 
-  const created = await post(panel.base, "/api/assistant/assistants", { body: { roleId: "agent-manager" } });
+  const created = await post(panel.base, "/api/assistant/assistants", { body: { roleId: "assistant-agent-manager" } });
   assert.equal(created.status, 201, created.text.slice(0, 300));
   const id = created.json.created.id;
 

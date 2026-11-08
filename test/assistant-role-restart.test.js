@@ -40,14 +40,14 @@ async function panel(t) {
     if (assistant.persistTimer) clearTimeout(assistant.persistTimer);
     if (assistant.settleTimer) clearTimeout(assistant.settleTimer);
   });
-  const created = assistant.createAssistant({ roleId: "agent-manager" });
+  const created = assistant.createAssistant({ roleId: "assistant-agent-manager" });
   return { assistant, dir, assistantFile, assistantsFile: assistant.assistantsFile, id: created.created.id };
 }
 
 test("a role picked from Settings is written to that assistant's record and survives a reload", async (t) => {
   const { assistant, dir, assistantsFile, id } = await panel(t);
   const before = assistant.rolePayload(id);
-  assert.equal(before.role.id, "agent-manager", "Assistant #2 starts on the manager role");
+  assert.equal(before.role.id, "assistant-agent-manager", "Assistant #2 starts on the manager role");
   const copyBefore = assistant.charterPayloadFor(id).text;
 
   const picked = assistant.pickRole(id, ASSISTANT_DIRECTOR_ID, { adopt: false });
@@ -119,7 +119,7 @@ test("a running panel restarts one assistant's turn context and answers with the
   const panel = await startPanel({});
   t.after(() => panel.stop());
 
-  const created = await post(panel.base, "/api/assistant/assistants", { body: { roleId: "agent-manager" } });
+  const created = await post(panel.base, "/api/assistant/assistants", { body: { roleId: "assistant-agent-manager" } });
   assert.equal(created.status, 201, created.text.slice(0, 300));
   const id = created.json.created.id;
 

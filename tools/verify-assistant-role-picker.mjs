@@ -240,7 +240,7 @@ try {
   const seeded = (await assistantState()).assistants || [];
   check("two assistants are on the board", seeded.map((a) => a.id), [A1, A2]);
   const a2Before = seeded.find((a) => a.id === A2);
-  check("#2 starts on the manager role", [a2Before?.roleId, a2Before?.roleName], ["agent-manager", "Agent Manager"]);
+  check("#2 starts on the manager role", [a2Before?.roleId, a2Before?.roleName], ["assistant-agent-manager", "Agent Manager"]);
   const a1Before = seeded.find((a) => a.id === A1);
   const a1RoleBefore = a1Before?.roleId;
 
@@ -284,12 +284,12 @@ try {
 
       const row = await roleRow();
       ok("the role row is on #2's Settings", row.visible, `visible ${row.visible}`);
-      check("it shows the role #2 runs", row.value, "agent-manager");
+      check("it shows the role #2 runs", row.value, "assistant-agent-manager");
       check("…and names it", row.hint, "Agent Manager");
       check(
         "…listing the server's role library",
         row.options.map((o) => o.id),
-        ["agent-manager", "assistant-director"],
+        ["assistant-agent-manager", "assistant-director"],
       );
       ok("…with a Restart role press beside it", row.restart, `restart ${row.restart}`);
       ok("…and a press that opens the Role tab", row.open, `open ${row.open}`);

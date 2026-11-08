@@ -20,7 +20,7 @@ README.md | 4 | example: the panel's own folders, in the notes that say how it f
 SETUP.md | 1 | example: a placeholder a reader replaces with their own path
 config.json | 6 | config: this project's own folders — the file the panel is meant to read
 data/openrouter-model-prices.json | 1 | data: the provider cache path this file was generated beside
-data/roles/agent-manager.md | 2 | seed: the copy of a charter that quoted the folders it worked in
+data/roles/assistant-agent-manager.md | 2 | seed: the copy of a charter that quoted the folders it worked in
 docker/PLAN.md | 12 | record: the host paths this deployment plan was written against
 docs/arch-review-functional.md | 1 | review record: the checkout it read, as it was
 docs/arch-review-organization.md | 4 | review record: the checkout it read, as it was
