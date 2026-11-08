@@ -357,6 +357,12 @@ function applySnapshot(data) {
   // sections on screen are still valid and a full re-render would be pure cost.
   const beforeSig = [...state.projects.keys()].sort().join("|");
   state.settings = data.settings || state.settings;
+  // The General tab draws from these numbers, and the pane's frame is one of them (`dockMode`). A snapshot is how a
+  // value this page migrated at boot, or another tab saved, reaches that row and the frame — the settings EVENT is
+  // not always heard: the migration's own save can land before this tab's stream is open. Both hooks are cheap and
+  // idempotent (the painter writes only what changed, `applyFrame` returns early when the mode has not moved).
+  if (typeof paintGeneralSettings === "function") paintGeneralSettings(state.settings);
+  if (typeof window.__assistantFrame === "function") window.__assistantFrame();
   // The push controls ride every snapshot, and a project's repository is only known once discovery has probed its
   // remote URL. The cards and the Settings sections are repainted here so that fact arrives where it is drawn,
   // without waiting for a full board render.
@@ -735,6 +741,10 @@ function applySettings(settings) {
   paintChartColumns();
   paintScanRoots();
   paintCollapseAfterSetting();
+  // The pane's frame is the panel's now, and a change made in another tab has to re-frame this one: the row on the
+  // General tab is painted from these same numbers, and the painter lives in public/assistant.js.
+  if (typeof paintGeneralSettings === "function") paintGeneralSettings(state.settings);
+  if (typeof window.__assistantFrame === "function") window.__assistantFrame();
   if ((state.settings.hiddenColumns || []).join(",") !== colsBefore) renderAll();
 }
 

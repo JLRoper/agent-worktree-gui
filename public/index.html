@@ -55,6 +55,15 @@
     <div class="settings-body">
 
       <div class="settings-group" id="settings-panel-general" data-settings-group="general" role="tabpanel" aria-labelledby="settings-tab-general" hidden>
+        <label class="settings-row" for="general-dock" title="Which frame EVERY assistant's pane is drawn in — one choice for the whole panel, not one assistant's. docked is the rail beside the board; floating is a window over it, at the size and place you last left it. Picking takes effect at once (nothing reloads) and is written into config.json, so it survives a restart and applies in every browser. When this was each assistant's own setting, the frame of the assistant the panel was showing is the one that was kept; where two assistants disagreed, the other value was dropped.">
+          <span>Assistant pane <span class="settings-info">ⓘ</span></span>
+          <select id="general-dock">
+            <option value="docked">docked — a rail</option>
+            <option value="floating">floating — a window</option>
+          </select>
+        </label>
+        <div class="settings-preview" id="general-dock-help">One frame for every assistant's pane: the rail beside the board, or a window over it at the size and place you last left it. Picking takes effect at once and is saved in this panel's config.json. This used to be each assistant's own setting — where two assistants disagreed, the frame of the assistant the panel was showing at the time is the one that was kept.</div>
+
         <label class="settings-row" for="general-threads" title="How many git scans run at once. Every worktree row is read by spawning git (status, log, rev-list), and each of those is a process creation: this machine charges 0.6-4.7s for one while the endpoint agent filters it, so five workers is five of them running beside every command your agents run. Lowering this makes the background read cheaper and the board no less correct — it only delays a row's refresh. Written into config.json and applied at once: the pool is rebuilt live.">
           <span>Scan workers <span class="settings-info">ⓘ</span></span>
           <input id="general-threads" type="number" inputmode="numeric" step="1" min="1" max="16">

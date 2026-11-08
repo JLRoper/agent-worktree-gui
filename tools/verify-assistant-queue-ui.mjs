@@ -177,8 +177,8 @@ try {
   ok("…and the skipped and held facts are derived, not written", Array.isArray(seeded?.digest) && seeded.digest.some((l) => /SKIP: files in use by #1/.test(l)), seeded?.digest?.find((l) => l.includes("#2")));
   const made = await POST("/api/assistant/assistants", {});
   ok("a second assistant exists, so Move is a real control", made.status === 201, `HTTP ${made.status}`);
-  const dock = await POST("/api/assistant/profile", { assistantId: "assistant-1", dock: "floating" });
-  ok("the float is the frame this gate drives", dock.status === 200, JSON.stringify(dock.body?.dock || dock.body?.error));
+  const dock = await POST("/api/settings/general", { dockMode: "floating" });
+  ok("the float is the frame this gate drives", dock.status === 200 && dock.body?.settings?.dockMode === "floating", JSON.stringify(dock.body?.settings?.dockMode || dock.body?.error));
 
   const pw = loadPlaywright();
   if (!pw) throw new Error("BROWSER-HALF-NOT-RUN — no Playwright install; set PANEL_PLAYWRIGHT_ROOT to a dir holding node_modules/playwright");

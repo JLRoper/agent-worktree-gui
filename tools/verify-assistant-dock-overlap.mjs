@@ -328,14 +328,14 @@ try {
 
     await runFrame("docked");
 
-    // The float is ONE ASSISTANT'S OWN setting, not the panel's: flip it through the route the Settings pane
-    // posts to, then reload so the boot path paints the floating frame.
-    const flip = await fetch(`${panel.base}/api/assistant/profile`, {
+    // The float is the PANEL's one frame now (Settings → General's `dockMode`), not one assistant's setting: flip
+    // it through the route that row posts to, then reload so the boot path paints the floating frame.
+    const flip = await fetch(`${panel.base}/api/settings/general`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ assistantId: "assistant-1", dock: "floating" }),
+      body: JSON.stringify({ dockMode: "floating" }),
     });
-    check(flip.status === 200, "assistant #1 is switched to its floating frame", `HTTP ${flip.status}`);
+    check(flip.status === 200, "the panel is switched to the floating frame", `HTTP ${flip.status}`);
     await page.reload({ waitUntil: "domcontentloaded" });
     await page.waitForSelector(`#assistant .job[data-thread="${THREAD}"]`, { timeout: 45_000 });
     await page.waitForTimeout(900);

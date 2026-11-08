@@ -161,8 +161,8 @@ try {
   writeFileSync(file, `${JSON.stringify({ version: 1, nextId: TOTAL + 1, tasks: SEED }, null, 1)}\n`, "utf8");
   const seeded = (await GET("/api/assistant/queue?assistantId=assistant-1")).body?.queue || null;
   check("the seed is read back as 121 tasks", [seeded?.counts?.total, seeded?.counts?.done, seeded?.counts?.queued], [TOTAL, DONE, 1]);
-  const dock = await POST("/api/assistant/profile", { assistantId: "assistant-1", dock: "floating" });
-  ok("the float is the frame this gate drives", dock.status === 200, JSON.stringify(dock.body?.dock || dock.body?.error));
+  const dock = await POST("/api/settings/general", { dockMode: "floating" });
+  ok("the float is the frame this gate drives", dock.status === 200 && dock.body?.settings?.dockMode === "floating", JSON.stringify(dock.body?.settings?.dockMode || dock.body?.error));
 
   const pw = loadPlaywright();
   if (!pw) throw new Error("BROWSER-HALF-NOT-RUN - no Playwright install; set PANEL_PLAYWRIGHT_ROOT to a dir holding node_modules/playwright");

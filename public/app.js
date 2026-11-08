@@ -15941,11 +15941,19 @@ function generalSentence(s = {}) {
 function paintGeneralSettings(s = state.settings || {}) {
   const put = (id, value) => {
     const el = $(id);
-    if (el && String(el.value) !== String(value)) el.value = String(value);
+    // A repaint is also driven by snapshots now (the pane's frame rides them), so it must never take a box the
+    // reader is TYPING in: a number half-entered would be replaced by the stored one mid-keystroke. A select is not
+    // typed into, so it is always repainted from the stored value — including by the catch that follows a refused save.
+    if (!el) return;
+    if (el.tagName === "INPUT" && document.activeElement === el) return;
+    if (String(el.value) !== String(value)) el.value = String(value);
   };
   put("general-threads", Number(s.threads) || 0);
   put("general-worktree", Number(s.worktreeSeconds) || 0);
   put("general-budget", Number(s.briefingBudgetChars) || 0);
+  // The pane's frame is one value for the whole panel. A panel that has never chosen (`dockMode: null`) shows the
+  // rail it draws; the page's migration writes the value it adopted into config.json on the same boot.
+  put("general-dock", s.dockMode === "floating" ? "floating" : "docked");
   const preview = $("general-preview");
   if (preview) preview.textContent = generalSentence(s);
 }
@@ -15963,9 +15971,14 @@ async function saveGeneralSettings(patch, label) {
     if (!r.ok) throw new Error(out.error || `HTTP ${r.status}`);
     state.settings = { ...(state.settings || {}), ...(out.settings || {}) };
     paintGeneralSettings(state.settings);
+    // The frame is drawn by public/assistant.js from `dockMode`, so a pick lands on the open pane NOW rather than on
+    // the next repaint: no reload, and the same painter a settings event from another tab reaches.
+    if (typeof window.__assistantFrame === "function") window.__assistantFrame();
     const fw = $("f-worktree");
     if (fw && state.settings.worktreeSeconds) fw.textContent = String(state.settings.worktreeSeconds);
-    showBanner(`${label}: ${generalSentence(state.settings)}`);
+    // A frame pick is not a scan number: the banner says what changed on screen instead of restating the scan
+    // sentence the other three rows share.
+    showBanner(`${label}: ${patch && patch.dockMode ? `every assistant's pane is ${patch.dockMode} — applied at once, saved in config.json` : generalSentence(state.settings)}`);
   } catch (e) {
     showBanner(`Cannot save ${label}: ${e.message}.`);
     paintGeneralSettings(state.settings || {});
@@ -16004,6 +16017,14 @@ for (const b of document.querySelectorAll("[data-general-budget]")) {
     void saveGeneralSettings({ briefingBudgetChars: n }, "turn briefing budget");
   });
 }
+
+// The assistant pane's frame: a select, not a number, so it does not ride the loop above. One value for the whole
+// panel; the server writes it into config.json and public/assistant.js re-frames the open pane from the answer.
+$("general-dock")?.addEventListener("change", () => {
+  const value = String($("general-dock").value || "");
+  if (value !== "docked" && value !== "floating") return paintGeneralSettings(state.settings || {});
+  void saveGeneralSettings({ dockMode: value }, "assistant pane");
+});
 
 const COLLAPSE_AFTER_MAX_UI = 3600;
 

@@ -425,12 +425,12 @@ try {
 
     // ---- 6. the float, at 1600, with its own scroller ------------------------------------------------
     console.log("\n== the floating frame at 1600: the same bottom-edge drag ==");
-    const flip = await fetch(`${base}/api/assistant/profile`, {
+    const flip = await fetch(`${base}/api/settings/general`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ assistantId: "assistant-1", dock: "floating" }),
+      body: JSON.stringify({ dockMode: "floating" }),
     });
-    ok("assistant #1 is switched to its floating frame", flip.status === 200, `HTTP ${flip.status}`);
+    ok("the panel is switched to the floating frame", flip.status === 200, `HTTP ${flip.status}`);
     await page.reload({ waitUntil: "domcontentloaded" });
     await openQueue();
     const floatShape = await frame();
