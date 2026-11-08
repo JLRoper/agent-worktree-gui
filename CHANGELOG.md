@@ -4,16 +4,29 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.66.2 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.66.4 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-448 releases from v0.1.0 (2026-10-20) to v1.66.2 (2026-11-08), 1483 commits between the tags. Every release is anchored by an
+449 releases from v0.1.0 (2026-10-20) to v1.66.4 (2026-11-08), 1486 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.66.4 — 2026-11-08 · 3 commits
+
+[`fd69433`](https://github.com/JLRoper/agent-worktree-gui/commit/fd69433770b19658c27805a14b49656ce0eda21b) · [compare v1.66.2...v1.66.4](https://github.com/JLRoper/agent-worktree-gui/compare/v1.66.2...v1.66.4)
+
+### Fixed
+
+- fix: a moved rule arrives whole, and a prompt may absorb no rule ([`a525b17`](https://github.com/JLRoper/agent-worktree-gui/commit/a525b17a673401d34e1264dfc2426e632a7b5b30))
+
+### Docs & tests
+
+- docs: render the changelog — 448 releases ([`499aa48`](https://github.com/JLRoper/agent-worktree-gui/commit/499aa482823eb737a04cf850df533c612b3e51ba))
+- docs: the consolidation pass on Assistant #2 and #3, and what it proved ([`fd69433`](https://github.com/JLRoper/agent-worktree-gui/commit/fd69433770b19658c27805a14b49656ce0eda21b))
 
 ## v1.66.2 — 2026-11-08 · 1 commit
 
