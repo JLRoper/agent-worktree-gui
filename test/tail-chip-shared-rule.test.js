@@ -151,8 +151,11 @@ test("both chips are drawn carrying the shared class, so the rule reaches them",
   assert.match(toBottom[1], /class="tail-chip to-bottom"/, "the console chip carries tail-chip and its own hook");
   // Every element that carries `wt-age-toggle` must carry `tail-chip` beside it: the chart rule no longer sets a
   // width or height of its own, so an arrow drawn without the shared class would collapse to a bare glyph.
-  const chartSites = [...app.matchAll(/class="([^`]*?)wt-age-toggle/g)].map((m) => m[1]);
-  assert.ok(chartSites.length >= 1, "app.js still draws the chart's arrow");
+  // The chart's arrow is drawn by public/charts.js now (the chart block was cut out of app.js), so the scan
+  // reads both files: the console chip above is still app.js's.
+  const charts = readFileSync(new URL("../public/charts.js", import.meta.url), "utf8");
+  const chartSites = [...`${app}\n${charts}`.matchAll(/class="([^`]*?)wt-age-toggle/g)].map((m) => m[1]);
+  assert.ok(chartSites.length >= 1, "the page still draws the chart's arrow");
   for (const classes of chartSites) {
     assert.equal(classes, "tail-chip ", `the arrow's class list starts with tail-chip (read "${classes}")`);
   }
