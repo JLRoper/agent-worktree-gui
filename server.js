@@ -108,6 +108,9 @@ import { QUEUE_PATH, createQueueRoutes } from "./routes/assistant-queue.js";
 // The delete control's one write: a dry run that names what would go, and the real press that archives the
 // assistant and takes it out of the roster. The module owns the refusals and the archive; this file only mounts it.
 import { DELETE_PATH, createDeleteRoutes } from "./routes/assistant-delete.js";
+// The state read's prefix, cut into routes/ beside the queue and the delete control: one module for /api/state and
+// its /api/audit alias, and one table row each because the alias shares no prefix with the path the board polls.
+import { STATE_PATH, AUDIT_PATH, createStateRoutes } from "./routes/state.js";
 // The ticket watch's one route: a door onto `assistant.wake` for the cron poller, which lives outside this process.
 import { createTicketWatchRoutes } from "./lib/ticket-watch.js";
 // The assistant reset: settle an unknown admission through the gateway, then drop this assistant's queued wakes and
@@ -1262,8 +1265,12 @@ assistant.start();
 // ---- the route prefixes cut out of this chain, mounted from one table ------------------------------------------
 // Step 8 of docs/reports/module-map-2026-11-07.html moves one prefix at a time into routes/, so a prefix is a ROW here
 // rather than another branch in the request chain below. A mount answers for its own paths and says `false` for
-// anything else, and the loop at the top of the handler asks each row in turn. The queue is the first row; the next cut
-// adds its row beside it and changes nothing else.
+// anything else, and the loop at the top of the handler asks each row in turn. Three prefixes are rows now; a later cut
+// adds its row here and changes nothing else.
+//
+// The state read's handler is built once, above the table: `snapshot` is a function declaration further down this file
+// (hoisted, so this call is safe), and both of the state rows below are handed this one instance.
+const stateRoutes = createStateRoutes({ snapshot, sendJson });
 const PREFIX_MOUNTS = [
   // The per-assistant task queue (routes/assistant-queue.js). The factory takes the Assistant, which owns each queue's
   // file and its read-modify-write, and the transport helpers this file already imports.
@@ -1271,6 +1278,12 @@ const PREFIX_MOUNTS = [
   // Deleting one assistant (routes/assistant-delete.js). The dry run and the real press are one handler; the
   // module refuses on live work, archives the four files and writes the roster before the directory goes.
   { prefix: DELETE_PATH, handles: createDeleteRoutes({ assistant, config, sendJson, readBody, authorised }) },
+  // The state read (routes/state.js), which is the snapshot and nothing else: the store, the registry, the jobs and
+  // the assistants are this file's own, so the assembled snapshot stays here and travels in as a function.
+  { prefix: STATE_PATH, handles: stateRoutes },
+  // ...and the same read under its older name. A second row rather than a second branch: the table keys on a prefix,
+  // and /api/audit shares none with /api/state, so the one handler above is mounted twice.
+  { prefix: AUDIT_PATH, handles: stateRoutes },
 ];
 // The reset's route: the gateway client, the store path and the single-flight map live in that module; this file only
 // hands the same transport helpers to it and mounts it below.
@@ -4182,10 +4195,6 @@ const server = createServer(async (req, res) => {
         wake: { assistantId: rec.id, thread: rec.threadId },
         row: { ...row, assistant: assistantForRow(projectName, row) },
       });
-    }
-
-    if (route === "/api/state" || route === "/api/audit") {
-      return sendJson(res, 200, snapshot());
     }
 
     // ---- the panel's own folders, acted on only when the reader asks -------------------------------------
