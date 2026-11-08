@@ -25,9 +25,20 @@ await import("../public/core/turn-fold.js");
 const wtTurnFold = globalThis.wtTurnFold;
 
 const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+const settings = readFileSync(new URL("../public/settings.js", import.meta.url), "utf8");
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
 
-const region = sliceRegion(src, "previous turn on send");
+// The two appliers were cut out of app.js into settings.js (step 6 of the module map), so the region
+// and the writers it declares come from the two files together.
+function declaredIn(source, name) {
+  const at = source.indexOf(`function ${name}(`);
+  assert.ok(at > 0, `${name} is in public/settings.js`);
+  return source.slice(at, source.indexOf("\nfunction ", at + 10));
+}
+
+const region = `${sliceRegion(src, "previous turn on send")}
+${declaredIn(settings, "applyPreviousTurnPlan")}
+${declaredIn(settings, "applyPrevTurnMode")}`;
 
 function page({ stored = null, select = null } = {}) {
   const store = new Map();

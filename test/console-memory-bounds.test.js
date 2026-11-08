@@ -25,14 +25,16 @@ import test from "node:test";
 import { readSource, sliceBetween } from "../tools/panel-testkit.mjs";
 
 const app = readSource("public/app.js");
+const settings = readSource("public/settings.js");
 const consoleJs = readSource("public/board/console.js");
 
 // turnLive() and its status set are app.js's answers, so a fixture cannot invent a liveness rule of its own.
 const liveCode = sliceBetween(app, 'const LIVE_STATUS = new Set([', "// An approval is only a question while the gateway");
 // jobLines(), the ceiling and its trim sit together under the agents heading.
 const buffersCode = sliceBetween(app, "// ---------------- agents ----------------", "// ---- minimize / expand a card");
-// The snapshot's job half, extracted so the sweep can be driven without a DOM.
-const snapshotCode = sliceBetween(app, "function applyJobSnapshot(", "function applySnapshot(");
+// The snapshot's job half, extracted so the sweep can be driven without a DOM. Both functions were
+// cut out of app.js into settings.js (step 6 of the module map), and they still sit together there.
+const snapshotCode = sliceBetween(settings, "function applyJobSnapshot(", "function applySnapshot(");
 // The console's only buffer writer, and the per-turn cap it trims to.
 const recordCode = sliceBetween(consoleJs, "const JOB_LINES_PER_TURN", "// One line into every pane showing this turn.");
 

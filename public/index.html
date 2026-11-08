@@ -1020,6 +1020,12 @@
        by bare name and re-exports them on window.WMApp.turns; it declares only, so that order costs nothing and
        nothing here waits on boot. -->
   <script src="/turns.js"></script>
+  <!-- The settings appliers, cut out of app.js (step 6 of the same order of work): the 32 apply* functions, the
+       page's look, the board's folds, the settings payloads, approvals and turns, the chart's columns, the
+       snapshot and focus appliers, and the skills folds. Loaded before app.js, which calls them by bare name and
+       re-exports them on window.WMApp.settings; it declares only, so that order costs nothing and nothing here
+       waits on boot. -->
+  <script src="/settings.js"></script>
   <script src="/app.js"></script>
   <!-- The update check. Loaded after app.js because it reads that file's `state`, `turnLive` and
        the banner helpers by name — at call time, never at load, so nothing here waits on boot. -->
