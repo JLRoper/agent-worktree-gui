@@ -15,7 +15,9 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const src = readFileSync(path.join(root, "public/app.js"), "utf8");
+// conversationHtml, the card head the chip is drawn in, moved to public/render-jobs.js in step 7 of
+// docs/reports/module-map-2026-11-07.html; the chip builder itself stayed in app.js.
+const src = `${readFileSync(path.join(root, "public/app.js"), "utf8")}\n${readFileSync(path.join(root, "public/render-jobs.js"), "utf8")}`;
 const css = readFileSync(path.join(root, "public/style.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
 
 const begin = src.indexOf("// ---- pipeline chip");

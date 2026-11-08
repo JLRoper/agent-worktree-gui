@@ -1033,6 +1033,12 @@
        before app.js, which calls them by bare name and re-exports them on window.WMApp.projects; it declares
        only, so that order costs nothing and nothing here waits on boot. -->
   <script src="/render-projects.js"></script>
+  <!-- The job card and its turns, cut out of app.js (step 7 of the same order of work, the second of its two big
+       cuts): the body a turn draws (console lines, reasoning blocks and runs of tool calls), the block a turn sits
+       in, the card template, and the render and update path that keeps a card on the page. Loaded before app.js,
+       which calls them by bare name and re-exports them on window.WMApp.jobs; it declares only, so that order costs
+       nothing and nothing here waits on boot. -->
+  <script src="/render-jobs.js"></script>
   <script src="/app.js"></script>
   <!-- The update check. Loaded after app.js because it reads that file's `state`, `turnLive` and
        the banner helpers by name — at call time, never at load, so nothing here waits on boot. -->
