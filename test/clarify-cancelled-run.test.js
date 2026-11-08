@@ -155,7 +155,7 @@ test("the page keeps '✓ answered' for a delivered answer and prints the refusa
   // The undelivered path is the shipped refusal path: `out.error` goes into every copy's warn slot and the
   // controls come back through the one painter, so the reader can answer the same question again when a live
   // run offers it.
-  const submit = sliceBetween(page, "async function answerRunQuestion(", "// A turn is open when");
+  const submit = sliceBetween(page, "async function answerRunQuestion(", "function turnBlock(conv, turn, index");
   assert.match(submit, /paintQuestionFlight\(turnId, requestId, "error", text\)/, "the refusal is written on every copy of the box");
   assert.match(submit, /paintQuestionFlight\(turnId, requestId, "sending"\)/, "and the press greys them before the POST");
   assert.doesNotMatch(submit, /\bb\.disabled = false\b/, "controls come back through the painter, not one list of buttons");

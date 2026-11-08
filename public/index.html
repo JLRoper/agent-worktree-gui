@@ -974,6 +974,12 @@
        window.WMApp.deliverables; it declares only, and the wiring that runs at load (the button's press, the first
        read, the poll and the close/place listeners) stays in app.js. -->
   <script src="/deliverables.js"></script>
+  <!-- The turn's own face, cut out of app.js (step 4 of the same order of work): the list a card pages through,
+       the fold book's three names, the origin and session-replaced chips, the head and the two ways a turn is
+       drawn shut, and the two display switches (thinking and one stream). Loaded before app.js, which calls them
+       by bare name and re-exports them on window.WMApp.turns; it declares only, so that order costs nothing and
+       nothing here waits on boot. -->
+  <script src="/turns.js"></script>
   <script src="/app.js"></script>
   <!-- The update check. Loaded after app.js because it reads that file's `state`, `turnLive` and
        the banner helpers by name — at call time, never at load, so nothing here waits on boot. -->

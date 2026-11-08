@@ -119,7 +119,7 @@ const tick = () => new Promise((resolve) => setImmediate(resolve));
 test("one press answers a question once, greys every copy, and clears both surfaces on ok", async () => {
   const page = await pageSource();
   const decls = sliceBetween(page, "const questionPicks = new Map();", "const RECOMMENDED_RE");
-  const helpers = sliceBetween(page, "// Every card that draws this question", "// A turn is open when");
+  const helpers = sliceBetween(page, "// Every card that draws this question", "function turnBlock(conv, turn, index");
   const build = pageHarness(
     `${decls}\n${helpers}`,
     ["document", "state", "apiFetch", "renderConversation", "assistantSessionFor", "window", "paintHumanButton", "showBanner"],

@@ -71,6 +71,30 @@ window.WMApp.deliverables = {
   deliverPollTick, deliverHookStream,
 };
 
+// ---- the turn's own face lives in public/turns.js, and is re-exported here -------------------------
+//
+// The turn surface was cut out of this file into public/turns.js: the list a card pages through (conversations,
+// turnOrder, turnSeqOf), the fold book's three names (turnKey, turnIsOpen, toggleTurn), the origin chips and the
+// session-replaced chip, the head and the two ways a turn is drawn shut (turnHead, inlinePrompt, displayPrompt,
+// turnAttachmentsHtml, turnPeekLine, compactHtml, peekHtml, refreshTurnPeek), and the two display switches
+// (thinkingOn, setThinking, streamOn, setStreamMode and their defaults). That is step 4 of
+// docs/reports/module-map-2026-11-07.html's order of work, and it was a move, not a rewrite: nothing was renamed
+// and no call site changed. public/turns.js is a classic script the shell loads after charts.js and before this
+// one, so its top-level declarations are page-wide and every bare name here is the same binding it was before
+// the move.
+//
+// This object is the re-export, under the same names: one door for the later steps of the split, and for any
+// module that would rather reach it than a page global.
+window.WMApp.turns = {
+  conversations, turnOrder, turnSeqOf,
+  turnKey, turnIsOpen, toggleTurn,
+  originHtml, originAttributionHtml, isWatchdogTurn, watchdogHtml, watchdogPromptText, sessionReplacedHtml,
+  turnHead, inlinePrompt, displayPrompt, turnAttachmentsHtml, turnPeekLine, firstSentence, compactHtml, peekHtml,
+  refreshTurnPeek,
+  THINK_KEY, thinkDefault, thinkingOn, setThinking,
+  STREAM_KEY, SHOW_STREAM_KEY, showStreamButton, streamDefault, streamOn, setStreamMode,
+};
+
 // Declared BEFORE `state`: it is read while the state literal below is built, and a `const` further
 // down the file would still be in its temporal dead zone at that moment (the read would throw and get
 // swallowed, leaving an empty history).
@@ -1682,46 +1706,6 @@ function refreshJobPreview(id) {
   if (el) el.innerHTML = jobPreviewHtml(j);
 }
 
-// ---- conversations ------------------------------------------------------------
-// Every turn of one thread is a separate CLI process, but they are one conversation: group
-// them so the card reads top to bottom and the reply box continues the same session.
-// The order a thread's turns are drawn in: by the clock, with the counter as the tiebreaker for one millisecond.
-// The collapse tiers name the newest turn through this same order, so "the turn drawn open" cannot drift from
-// the one the card paints.
-const turnOrder = (a, b) =>
-  (Date.parse(a.startedAt || "") || 0) - (Date.parse(b.startedAt || "") || 0) || (a.turn || 0) - (b.turn || 0);
-
-function conversations() {
-  const groups = new Map();
-  for (const j of state.jobs.values()) {
-    const key = j.thread || j.id;
-    const arr = groups.get(key) || [];
-    arr.push(j);
-    groups.set(key, arr);
-  }
-  const out = [];
-  for (const [thread, turns] of groups) {
-    // By the clock, not by `turn`. That counter is `siblings.length + 1` over the jobs KEEP_JOBS still holds, so
-    // trimming old turns moves it BACKWARDS: the turn that resumed an interrupted thread got 7 while the dead turn
-    // it replaced was still 8, and the card drew "turn 7 · running" ABOVE "turn 8 · interrupted" — running on top
-    // of interrupted, which is exactly what a reader reads as a contradiction (measured live on 7473). The clock
-    // only moves forward, so it orders the list; the counter is the tiebreaker for one millisecond.
-    turns.sort(turnOrder);
-    out.push({ thread, turns, first: turns[0], latest: turns[turns.length - 1] });
-  }
-  out.sort((a, b) => String(b.latest.startedAt).localeCompare(String(a.latest.startedAt)));
-  return out;
-}
-
-// The number a turn is drawn under (see `turnHead`): its place in the thread by the clock. The one-second clock tick
-// rewrites a running head's text in place, so it has to agree with the render or the label jumps a second later.
-function turnSeqOf(j) {
-  const turns = [...state.jobs.values()].filter((x) => (x.thread || x.id) === (j.thread || j.id));
-  turns.sort(turnOrder);
-  const i = turns.findIndex((x) => x.id === j.id);
-  return i < 0 ? j.turn || "?" : i + 1;
-}
-
 function liveLabel(secs) {
   const n = Math.max(0, Math.floor(secs));
   return ` · running ${n < 60 ? `${n}s` : `${Math.floor(n / 60)}m${String(n % 60).padStart(2, "0")}s`}`;
@@ -2465,259 +2449,6 @@ async function answerRunQuestion(turnId, answer, requestId, box) {
     paintQuestionFlight(turnId, requestId, "error", `could not answer: ${err.message}`);
   } finally {
     questionFlights.delete(key);
-  }
-}
-
-// The fold book and the pager's arithmetic live in ONE place — public/core/turn-fold.js — because the assistant's
-// own card reads and writes the same state (assistant.js), and two files spelling three books is how a turn ended up
-// unfolded on a page that was not showing it. These two names are the ones this renderer has always used, so every
-// call site below still reads the same; the answers behind them are the module's.
-function turnKey(turn, copy = "") {
-  return wtTurnFold.key(turn.id, copy);
-}
-
-// A turn is open when the reader opened it, otherwise only the newest turn is: opening an agent shows its current
-// turn in full and lists the earlier ones as the single request line each. The pinned copy of a turn keeps its own
-// open state (`pin:<id>`), so unfolding it never unfolds the original in the page — and a pinned turn starts folded.
-function turnIsOpen(conv, turn, copy = "") {
-  return wtTurnFold.isOpen(state, turn, conv.latest.id, copy);
-}
-
-function toggleTurn(key) {
-  // The pinned duplicate toggles under its own key, so it opens and closes independently of the turn
-  // it was cloned from.
-  const turn = state.jobs.get(wtTurnFold.idOf(key));
-  if (!turn) return;
-  const conv = conversations().find((c) => c.thread === (turn.thread || turn.id));
-  if (!conv) return;
-  const copy = wtTurnFold.isPinCopy(key) ? wtTurnFold.PIN : "";
-  const open = wtTurnFold.toggle(state, turn, conv.latest.id, copy);
-  renderConversation(conv.thread);
-  // A turn that was just opened should show its newest lines, not its first line.
-  if (open) {
-    const pre = document.querySelector(`pre[data-out="${CSS.escape(turn.id)}${copy}"]`);
-    if (pre) setScroll(pre, pre.scrollHeight);
-  }
-}
-
-// ---- turn origin ---------------------------------------------------------------------------
-// `inline` puts the turn's request on the head line itself — the folded form is two rows: the head with
-// the request, then one line saying what the turn is doing (or, once done, what it concluded).
-// A turn the reader did not start: it answers a delivery, and the head should say which. One child names itself;
-// several are listed in the tooltip, in the same order the collect prompt numbered them.
-//
-// The panel's watchdog starts a turn with its own announcement AS the prompt ("Watchdog: LONG RUN …"), so the
-// head names the watchdog in a chip and the request under it drops the same two words. The chip is dark, not
-// the purple an assistant's attribution wears: the panel reporting a run is not a reply in the conversation.
-const WATCHDOG_PROMPT_PREFIX = "Watchdog: ";
-const WATCHDOG_TITLE = "the panel's watchdog — a turn the sentry started when it found a run worth reporting";
-function isWatchdogTurn(turn) {
-  return Boolean(turn) && String(turn.prompt || "").startsWith(WATCHDOG_PROMPT_PREFIX);
-}
-// Same box as `.turn-origin` (size, radius, padding); only the colours differ, in public/style.css.
-function watchdogHtml(turn) {
-  if (!isWatchdogTurn(turn)) return "";
-  return ` <span class="turn-origin is-watchdog mono" title="${esc(WATCHDOG_TITLE)}">watchdog</span>`;
-}
-// The prompt the head shows, minus the sentry's own opener: the chip already carries it, and repeating it costs
-// the reader the first words of the request in a head that is one line long.
-function watchdogPromptText(text) {
-  const s = String(text || "");
-  return s.startsWith(WATCHDOG_PROMPT_PREFIX) ? s.slice(WATCHDOG_PROMPT_PREFIX.length) : s;
-}
-// The head's chips, in the order they are drawn: who started the turn, then what the turn's own record adds.
-function originHtml(turn) {
-  if (!turn) return "";
-  return watchdogHtml(turn) + originAttributionHtml(turn);
-}
-function originAttributionHtml(turn) {
-  const o = turn.origin;
-  // A turn the panel assistant caused: it wrote a reply into this thread, or it woke itself about something.
-  // Saying so on the turn head is the difference between "the agent suddenly changed course" and a move the
-  // reader can trace back to the alert that prompted it.
-  if (o && o.kind === "assistant-reply") {
-    const how = o.by === "reader" ? "sent from the assistant panel" : "written by the assistant";
-    return ` <span class="turn-origin mono" title="${esc(how)}${o.autonomy ? ` · autonomy: ${esc(o.autonomy)}` : ""}">\u21b3 ${esc(o.by === "reader" ? "from the assistant panel" : "from the assistant")}</span>`;
-  }
-  if (o && o.kind === "assistant-wake") {
-    return ` <span class="turn-origin mono" title="${esc(o.reason || "the assistant woke itself")}">\u21b3 assistant woke itself</span>`;
-  }
-  if (o && o.kind === "assistant-spawn") {
-    const where = o.project ? `a worktree cut in ${o.project}` : "a directory that already existed";
-    // A SPAWN IN name that had to be resolved to a real tree: the panel says which one it picked here, because
-    // a chip that only says "the assistant started this" hides the one fact that was in doubt.
-    const fit = o.resolvedPath ? ` — ${o.resolvedFrom} had been renamed, resolved to ${o.resolvedPath} (${o.resolvedHow || "matched"})` : "";
-    return ` <span class="turn-origin mono" title="${esc(where)}${esc(fit)}">\u21b3 started by the assistant</span>`;
-  }
-  if (o && o.kind === "row-refresh") {
-    const what = Array.isArray(o.evidence) && o.evidence.length ? o.evidence.join(" · ") : "nothing that moved";
-    return ` <span class="turn-origin mono" title="${esc(`started by the ⟳ on this worktree's row to double-check the TODO, the description and the merge state — what it found: ${what}`)}">\u21b3 from the row's ⟳</span>`;
-  }
-  if (!o || o.kind !== "subagent-delivery") return "";
-  const subs = Array.isArray(o.subagents) ? o.subagents : [];
-  const one = subs.length === 1 ? subs[0] : null;
-  const list = subs.map((s) => `#${s.index} ${s.title || "(untitled)"}`).join("\n");
-  const text = one ? `from subagent #${one.index} · ${one.title || "untitled"}` : `from ${subs.length} subagents`;
-  const title = subs.length
-    ? `this turn was started by the delivery of:\n${list}`
-    : "this turn was started by a subagent delivery";
-  return ` <span class="turn-origin mono" title="${esc(title)}">\u21b3 ${esc(text)}</span>`;
-}
-// ---- end turn origin -----------------------------------------------------------------------
-
-// ---- session replaced ------------------------------------------------------------------------
-// A turn the panel had to move into a NEW gateway session, because the session its thread was on had been lost: the
-// gateway admitted the previous run and never executed it, so continuing that id would have queued for ever. The head
-// says so — the answer under this turn is a cold start, not a continuation of the conversation above it, and a reader
-// comparing the two needs to know which it is. Absent on every ordinary turn, warm retries included.
-function sessionReplacedHtml(turn) {
-  const r = turn && turn.sessionReplaced;
-  if (!r) return "";
-  const from = String(r.from || "");
-  const to = String(r.to || "");
-  if (!from || !to) return "";
-  const why = String(r.why || "");
-  const title = `the gateway lost session ${from}${why ? ` (${why})` : ""} — this turn starts ${to} in the same tree`;
-  return ` <span class="turn-origin mono" data-session-replaced="${esc(from)}" title="${esc(title)}">\u21ba new session</span>`;
-}
-// ---- end session replaced --------------------------------------------------------------------
-
-function turnHead(turn, index, open, copy = "", inline = false) {
-  // The number the reader counts down the thread. Not `turn.turn`: that counter is trimmed with the store and can
-  // repeat (a restarted board showed two "turn 6" and two "turn 7" in one card), while `index` is the turn's place in
-  // the clock-ordered list that the pager already counts ("turns 5–7 of 7").
-  const label = `turn ${index + 1}`;
-  const pinned = state.pinnedTurns.has(turn.id);
-  const state_ = turnStateText(turn);
-  return `<div class="turn-head mono dimmer" data-turn-head="${esc(turn.id)}" data-toggle-turn="${esc(turnKey(turn, copy))}" title="${open ? "collapse" : "expand"} this turn"><button type="button" class="btn-star${pinned ? " on" : ""}" data-star-turn="${esc(turn.id)}" title="${pinned ? "unpin this turn" : "pin this turn above the paged turns"}">${pinned ? "\u2605" : "\u2606"}</button><span class="chev">${open ? "\u25be" : "\u25b8"}</span> <span class="turn-text">${esc(label)} · ${esc(state_)}</span>${originHtml(turn)}${sessionReplacedHtml(turn)}${inlinePrompt(turn, inline)}</div>`;
-}
-
-function inlinePrompt(turn, inline) {
-  const text = inline ? displayPrompt(turn.prompt) : "";
-  if (!text) return "";
-  return `<span class="turn-prompt-inline" title="${esc(text)}">${esc(text)}</span>`;
-}
-
-// One turn: its head, then either the full prompt + output, or a single line carrying the request
-// that turn was about. The one-line form is what makes a long conversation readable.
-// `copy` marks the pinned duplicate's transcript so it cannot collide with the paged one.
-// The prompt the agent was given vs the prompt the card shows. Attachment paths are appended to the
-// request as a paragraph of machine text — the agent needs them, the reader has the chips for them — so
-// that paragraph is stripped before the prompt is drawn.
-const ATTACH_BLOCK_RE = /(?:\r?\n){1,2}Attachment: [^\n]*? — (?:read_file it|use vision_analyze on it) before answering\./g;
-function displayPrompt(text) {
-  return watchdogPromptText(String(text || "").replace(ATTACH_BLOCK_RE, "")).trim();
-}
-
-// What the reader attached to this turn, under its prompt: a link to the file, no x (the file is
-// already part of this turn — removing it here would mean editing history the agent has seen).
-function turnAttachmentsHtml(turn) {
-  const list = Array.isArray(turn.attachments) ? turn.attachments : [];
-  if (!list.length) return "";
-  return `<div class="turn-attachments">${list
-    .map(
-      (a) =>
-        `<button type="button" class="turn-attach mono" data-open-path="${esc(a.path)}" title="open ${esc(a.path)} in Notepad++">[${esc(a.name)}]</button>`,
-    )
-    .join("")}</div>`;
-}
-
-// The answer a turn ended on: the first sentence of what the agent said AFTER its last tool call. Not the
-// console, not the tool output, not the thinking — the line a reader would have kept.
-function firstSentence(text) {
-  const s = String(text || "").replace(/\s+/g, " ").trim();
-  if (!s) return "";
-  const m = /^(.{12,}?[.!?])(\s|$)/.exec(s);
-  const out = m ? m[1] : s;
-  return out.length > 220 ? `${out.slice(0, 217)}…` : out;
-}
-
-function turnPeekLine(turn) {
-  const lines = state.jobLines.get(turn.id) || turn.lines || [];
-  if (!lines.length) return null;
-  const running = turnLive(turn);
-  if (running) {
-    // What it is doing right now: the newest tool CALL, drawn exactly as the console draws it. The
-    // completion line ("↳ terminal") is skipped while a call exists — swapping to it for two seconds
-    // read as the peek going backwards.
-    for (let i = lines.length - 1; i >= 0; i--) {
-      const l = lines[i];
-      if (l && l.kind === "tool" && String(l.text || "").trim()) return { kind: "tool", text: String(l.text).trim() };
-    }
-    for (let i = lines.length - 1; i >= 0; i--) {
-      const l = lines[i];
-      if (l && l.kind === "tool-out" && String(l.text || "").trim()) return { kind: "tool", text: String(l.text).trim() };
-    }
-    return null;
-  }
-  // Finished: the first sentence it said after its last tool call.
-  let last = -1;
-  for (let i = lines.length - 1; i >= 0; i--) {
-    const k = lines[i] && lines[i].kind;
-    if (k === "tool" || k === "tool-out") { last = i; break; }
-  }
-  const after = lines
-    .slice(last + 1)
-    .filter((l) => l && l.kind === "text" && String(l.text || "").trim())
-    .map((l) => String(l.text).trim())
-    .join(" ");
-  const said = firstSentence(after);
-  if (said) return { kind: "answer", text: said };
-  // A turn that ended on a tool still has an answer somewhere: fall back to its last words.
-  for (let i = lines.length - 1; i >= 0; i--) {
-    const l = lines[i];
-    if (l && l.kind === "text" && String(l.text || "").trim()) {
-      return { kind: "answer", text: firstSentence(l.text) };
-    }
-  }
-  return null;
-}
-
-// A compacted turn: what it concluded, and the last tool it used. Thinking blocks and the run of tool calls -
-// usually several hundred pixels of scrollback the reader has already read - are dropped, not merely folded.
-function compactHtml(turn, copy = "") {
-  const lines = jobLines(turn.id).filter((l) => !isBookkeeping(l));
-  let lastTool = -1;
-  for (let i = lines.length - 1; i >= 0; i--) {
-    const k = lines[i] && lines[i].kind;
-    if (k === "tool" || k === "tool-out") {
-      lastTool = i;
-      break;
-    }
-  }
-  const texts = (from) =>
-    lines
-      .slice(from)
-      .filter((l) => l && l.kind === "text" && String(l.text || "").trim())
-      .map((l) => String(l.text).trim());
-  // The answer is what it said after its last tool call; a turn that ended on a tool still has words somewhere.
-  const said = texts(lastTool + 1);
-  const answer = (said.length ? said : texts(0)).join("\n\n");
-  const tool = lastTool >= 0 ? lines[lastTool] : null;
-  const hidden = lines.filter((l) => l.kind === "tool" || l.kind === "tool-out" || l.kind === "dim").length;
-  return `<div class="turn-compact" data-compact-turn="${esc(turn.id)}${esc(copy)}">${
-    tool ? `<div class="tc-tool mono" title="${esc(String(tool.text || ""))}">${linkifyText(String(tool.text || ""))}</div>` : ""
-  }${answer ? `<div class="tc-answer">${linkifyText(answer)}</div>` : ""}<div class="tc-more dimmer mono">${
-    hidden ? `${hidden} tool line${hidden === 1 ? "" : "s"} folded` : "thinking folded"
-  } · open for the whole turn</div></div>`;
-}
-
-function peekHtml(turn) {
-  const peek = turnPeekLine(turn);
-  if (!peek) return `<div class="turn-peek" data-peek-turn="${esc(turn.id)}" hidden></div>`;
-  return `<div class="turn-peek${peek.kind === "tool" ? " is-tool" : ""}" data-peek-turn="${esc(turn.id)}" title="${esc(peek.text)}">${esc(peek.text)}</div>`;
-}
-
-// A folded turn has no console on the page, so the peek is repainted by hand as its lines arrive.
-function refreshTurnPeek(turn) {
-  if (!turn || !turn.id) return;
-  for (const el of document.querySelectorAll(`.turn-peek[data-peek-turn="${CSS.escape(turn.id)}"]`)) {
-    const peek = turnPeekLine(turn);
-    el.hidden = !peek;
-    el.classList.toggle("is-tool", Boolean(peek && peek.kind === "tool"));
-    const text = peek ? peek.text : "";
-    if (el.textContent !== text) el.textContent = text;
-    el.title = text;
   }
 }
 
@@ -6403,98 +6134,15 @@ async function answerRemoteWrite(id, choice, btn) {
 // Every output pane's position, so a rebuild can put the reader back where they were instead of
 // dropping them at the first line of an hour-old transcript.
 // ---- thinking -----------------------------------------------------------------------------
-// What the agent thought before it acted. The runs stream only carries a 500-char preview (and not at all on the
-// durable path), so this is read from the store per turn. It is a per-session preference with a global default:
-// thinking is 1-2 KB per block, which is the whole point on one agent and noise across forty cards.
-const THINK_KEY = "wtgui.think"; // global default, "1" when a card without its own answer should show thinking
+// The books the two display switches read. The switches themselves - the reader's per-session answer, the
+// global default, and the press that flips it - live in public/turns.js with the turn head that draws them;
+// these hang off `state`, so they stay with the state it is built in.
 state.thinkCache = state.thinkCache || new Map(); // turn key -> { blocks, at }
 state.thinkOpen = state.thinkOpen || new Set(); // turn keys whose block is expanded
 state.thinkPinned = state.thinkPinned || new Map(); // block key -> false once the reader scrolls it up
 state.thinkScroll = state.thinkScroll || new Map(); // block key -> where the reader left it, for a rebuild to restore
 state.thinkClosed = state.thinkClosed || new Set(); // turn keys the reader folded on purpose
 state.thinkLoading = state.thinkLoading || new Set();
-
-function thinkDefault() {
-  try {
-    return localStorage.getItem(THINK_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-function thinkingOn(thread) {
-  try {
-    const own = localStorage.getItem(`wtgui.think.${thread}`);
-    if (own === "1") return true;
-    if (own === "0") return false;
-  } catch {
-    /* private mode: fall through to the default */
-  }
-  return thinkDefault();
-}
-
-function setThinking(thread, on) {
-  try {
-    localStorage.setItem(`wtgui.think.${thread}`, on ? "1" : "0");
-  } catch {
-    /* the choice just will not persist */
-  }
-  renderConversation(thread);
-}
-
-// ---- one stream ------------------------------------------------------------------------------
-// The 🌊 among the head's controls (while Settings > Agent cards > Wave button draws it): draw this session as ONE
-// stream — what the agent thought, said, called and got back, in the
-// order it happened, with no burst to open. What is NOT folded there is the run of calls itself: a result is still the
-// shut box it is in the condensed view (core/console-format.js), so the stream is one flow of what happened rather
-// than a wall of output. Per session like thinking, and with a global default like it too (Settings > Agent cards >
-// Combined output): a card that never pressed the button follows that switch, and a card that did keeps its answer.
-const STREAM_KEY = "wtgui.stream"; // global default, "1" when a card without its own answer should be drawn as one stream
-// Whether a card DRAWS the wave button at all is a separate answer from what the button does: Settings > Agent cards >
-// Wave button. Off by default — a card's head is the five controls that act on the card itself — and the answer is the
-// browser's, so it survives a reload. Each card reads it while it renders, so the switch is the only save path.
-const SHOW_STREAM_KEY = "wtgui.showStreamButton";
-
-function showStreamButton() {
-  try {
-    return localStorage.getItem(SHOW_STREAM_KEY) === "1";
-  } catch {
-    /* private mode: off, which is the default anyway */
-    return false;
-  }
-}
-
-function streamDefault() {
-  try {
-    return localStorage.getItem(STREAM_KEY) === "1";
-  } catch {
-    /* private mode: off, which is the default anyway */
-    return false;
-  }
-}
-
-// NOT `setStream`. That name is already core/sse.js's connection label (the ● live / offline pill, called from
-// there, from core/transport.js and from this file); it is a global in a classic script, so a function of the same
-// name here would replace it for every caller and the status pill would stop moving.
-function streamOn(thread) {
-  try {
-    const own = localStorage.getItem(`${STREAM_KEY}.${thread}`);
-    if (own === "1") return true;
-    if (own === "0") return false;
-  } catch {
-    /* private mode: fall through to the default */
-  }
-  return streamDefault();
-}
-
-function setStreamMode(thread, on) {
-  try {
-    localStorage.setItem(`${STREAM_KEY}.${thread}`, on ? "1" : "0");
-  } catch {
-    /* the choice just will not persist */
-  }
-  renderConversation(thread);
-}
 
 // ---- a run of tool calls: tallied, or one line each (Settings > Agent cards) -------------------
 // The condensed card draws a burst of calls as ONE tallied group by default: a head row per tool with its count
