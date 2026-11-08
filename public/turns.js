@@ -145,6 +145,40 @@ function watchdogPromptText(text) {
   const s = String(text || "");
   return s.startsWith(WATCHDOG_PROMPT_PREFIX) ? s.slice(WATCHDOG_PROMPT_PREFIX.length) : s;
 }
+// A turn another assistant's message started. The store writes its line as "message from <name>: <request>", so
+// the head would spend its one line naming the sender; the chip carries the sender's own name instead, in the same
+// purple box every assistant attribution wears, and the opener is dropped the way the watchdog's is. The tooltip
+// names the sender and the thread the message was written on, so a head in the All view can be traced back to it.
+const MESSAGE_PROMPT_OPENER = "message from ";
+function messageOrigin(turn) {
+  const o = turn && turn.origin;
+  return o && o.kind === "assistant-message" ? o : null;
+}
+// The sender's own name; an origin recorded before the name was stored falls back to its id, never to "the assistant".
+function messageSenderName(o) {
+  return String(o.name || o.from || "another assistant");
+}
+function messageHtml(turn) {
+  const o = messageOrigin(turn);
+  if (!o) return "";
+  const name = messageSenderName(o);
+  const id = String(o.id || o.from || "");
+  const thread = String(o.thread || turn.thread || "");
+  const title = `started by a message from ${name}${id && id !== name ? ` (${id})` : ""}${thread ? ` on thread ${thread}` : ""}`;
+  return ` <span class="turn-origin mono" title="${esc(title)}">${esc(name)}</span>`;
+}
+// The prompt the head shows, minus the sender's opener: the chip already carries the name, and the request is what
+// the head's one line is for. Only a turn whose origin says a message started it is stripped, so a reader's own
+// request that happens to begin with the same words keeps them.
+function messagePromptText(text, turn) {
+  const s = String(text || "");
+  const o = messageOrigin(turn);
+  if (!o) return s;
+  const named = `${MESSAGE_PROMPT_OPENER}${messageSenderName(o)}: `;
+  if (s.startsWith(named)) return s.slice(named.length);
+  const m = /^message from [^:\n]+: /.exec(s);
+  return m ? s.slice(m[0].length) : s;
+}
 // The head's chips, in the order they are drawn: who started the turn, then what the turn's own record adds.
 function originHtml(turn) {
   if (!turn) return "";
@@ -152,6 +186,9 @@ function originHtml(turn) {
 }
 function originAttributionHtml(turn) {
   const o = turn.origin;
+  // A message another assistant sent into this thread. Its own chip, before the kinds below, because the sender is
+  // the answer to "who started this turn" — the same question the watchdog chip answers for the sentry.
+  if (o && o.kind === "assistant-message") return messageHtml(turn);
   // A turn the panel assistant caused: it wrote a reply into this thread, or it woke itself about something.
   // Saying so on the turn head is the difference between "the agent suddenly changed course" and a move the
   // reader can trace back to the alert that prompted it.
@@ -213,7 +250,7 @@ function turnHead(turn, index, open, copy = "", inline = false) {
 }
 
 function inlinePrompt(turn, inline) {
-  const text = inline ? displayPrompt(turn.prompt) : "";
+  const text = inline ? displayPrompt(turn.prompt, turn) : "";
   if (!text) return "";
   return `<span class="turn-prompt-inline" title="${esc(text)}">${esc(text)}</span>`;
 }
@@ -225,8 +262,8 @@ function inlinePrompt(turn, inline) {
 // request as a paragraph of machine text — the agent needs them, the reader has the chips for them — so
 // that paragraph is stripped before the prompt is drawn.
 const ATTACH_BLOCK_RE = /(?:\r?\n){1,2}Attachment: [^\n]*? — (?:read_file it|use vision_analyze on it) before answering\./g;
-function displayPrompt(text) {
-  return watchdogPromptText(String(text || "").replace(ATTACH_BLOCK_RE, "")).trim();
+function displayPrompt(text, turn = null) {
+  return messagePromptText(watchdogPromptText(String(text || "").replace(ATTACH_BLOCK_RE, "")).trim(), turn).trim();
 }
 
 // What the reader attached to this turn, under its prompt: a link to the file, no x (the file is
