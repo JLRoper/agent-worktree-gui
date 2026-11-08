@@ -215,9 +215,10 @@ async function directorTurn(p, { message, reply }) {
 }
 
 // The page's own turn listing, run over the receiving turn: the chips are what the reader sees under a prompt.
-// Grabbed from public/app.js by name so this is the card's renderer, not a second copy of it.
+// The renderer moved to public/turns.js when the turn block was cut out of app.js, so it is read from there by
+// name: this is still the card's renderer, not a second copy of it.
 function turnListHtml(turn) {
-  const page = readFileSync(new URL("../public/app.js", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+  const page = readFileSync(new URL("../public/turns.js", import.meta.url), "utf8").replace(/\r\n/g, "\n");
   const m = /(?:^|\n)function turnAttachmentsHtml\(/.exec(page);
   assert.ok(m, "the page carries turnAttachmentsHtml()");
   const start = m.index + (m[0].startsWith("\n") ? 1 : 0);

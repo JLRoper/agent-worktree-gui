@@ -133,8 +133,34 @@ function page({ settings: own = {}, aggressive = null, open = null, second = fal
     "as$",
     "aggressiveBlock",
     "paintAggressive",
+    // The settings region now runs the queue-cards factory (public/queue-cards.js) at its end, which reads
+    // `window.WMApp`. The factory's own return is not what this file tests, so an empty object is enough -
+    // without it the slice throws `window is not defined` at build time and every case here fails before it runs.
+    "window",
+    // The factory's own argument object names the page helpers it is handed. None of them runs in this file
+    // (nothing here calls a queue function), but the object is built at slice load, so each name has to resolve.
+    "asPost",
+    "setErr",
+    "assistantThreadName",
+    "applyAssistant",
     `${region}; return { renderAssistantSettings, renderWatchdog, FIRST_ASSISTANT, RULE_THRESHOLDS, THRESHOLDS_OPEN_KEY, thresholdsOpen, saveThresholdsOpen, rememberThresholdOpen, thresholdSummary, ownsWatchdog, scopeOfKey };`,
-  )(document, localStorage, state, esc, () => false, () => null, { attach() {} }, (id) => document.getElementById(id), () => ({ nodeType: 1 }), () => {});
+  )(
+    document,
+    localStorage,
+    state,
+    esc,
+    () => false,
+    () => null,
+    { attach() {} },
+    (id) => document.getElementById(id),
+    () => ({ nodeType: 1 }),
+    () => {},
+    { WMApp: { queueCards: () => ({}) } },
+    async () => ({}),
+    () => {},
+    (t) => t,
+    () => {},
+  );
   return { ...api, hosts, host, store, state };
 }
 
