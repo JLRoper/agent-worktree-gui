@@ -4,16 +4,124 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.57.6 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.57.17 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-411 releases from v0.1.0 (2026-10-20) to v1.57.6 (2026-11-07), 1401 commits between the tags. Every release is anchored by an
+420 releases from v0.1.0 (2026-10-20) to v1.57.17 (2026-11-08), 1419 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.57.17 — 2026-11-08 · 1 commit
+
+[`92cc05a`](https://github.com/JLRoper/agent-worktree-gui/commit/92cc05a1426d19c5a5ea7cc1652550eac76fe22c) · [compare v1.57.15...v1.57.17](https://github.com/JLRoper/agent-worktree-gui/compare/v1.57.15...v1.57.17)
+
+### Fixed
+
+- fix: the import repairs a live bundle it cannot read instead of refusing ([`92cc05a`](https://github.com/JLRoper/agent-worktree-gui/commit/92cc05a1426d19c5a5ea7cc1652550eac76fe22c))
+
+## v1.57.15 — 2026-11-08 · 1 commit
+
+[`dce7e96`](https://github.com/JLRoper/agent-worktree-gui/commit/dce7e96258cb7770b6307d74782ba93ec735dd4f) · [compare v1.57.14...v1.57.15](https://github.com/JLRoper/agent-worktree-gui/compare/v1.57.14...v1.57.15)
+
+### Docs & tests
+
+- docs: the pipeline window's stale bundle, and the one action that fixes it ([`dce7e96`](https://github.com/JLRoper/agent-worktree-gui/commit/dce7e96258cb7770b6307d74782ba93ec735dd4f))
+
+## v1.57.14 — 2026-11-07 · 2 commits
+
+[`33f1090`](https://github.com/JLRoper/agent-worktree-gui/commit/33f10901266fc7501af76a7e7e60fa561bff0770) · [compare v1.57.13...v1.57.14](https://github.com/JLRoper/agent-worktree-gui/compare/v1.57.13...v1.57.14)
+
+### Fixed
+
+- fix: replacing the scan pool retires it, and never signals a pid it does not own ([`94fce31`](https://github.com/JLRoper/agent-worktree-gui/commit/94fce316ad7441dddac4afa9c4f16178d626b4b3))
+
+### Other
+
+- chore: 1.57.14 — the version this landing carries ([`33f1090`](https://github.com/JLRoper/agent-worktree-gui/commit/33f10901266fc7501af76a7e7e60fa561bff0770))
+
+## v1.57.13 — 2026-11-07 · 2 commits
+
+[`7b8a4b6`](https://github.com/JLRoper/agent-worktree-gui/commit/7b8a4b625dbf972fb2f32561229123a9fa04c2c5) · [compare v1.57.12...v1.57.13](https://github.com/JLRoper/agent-worktree-gui/compare/v1.57.12...v1.57.13)
+
+### Changed
+
+- refactor: the queue cards move out of public/assistant.js into public/queue-cards.js ([`afc8910`](https://github.com/JLRoper/agent-worktree-gui/commit/afc89109a3e1c3428786400a673538cf4f9ad58c))
+
+### Other
+
+- chore: 1.57.13 - the version this landing carries ([`7b8a4b6`](https://github.com/JLRoper/agent-worktree-gui/commit/7b8a4b625dbf972fb2f32561229123a9fa04c2c5))
+
+## v1.57.12 — 2026-11-07 · 3 commits
+
+[`5bf2f3d`](https://github.com/JLRoper/agent-worktree-gui/commit/5bf2f3d18dad1fd978224669c504562dcf57bbd5) · [compare v1.57.11...v1.57.12](https://github.com/JLRoper/agent-worktree-gui/compare/v1.57.11...v1.57.12)
+
+### Performance
+
+- perf: a bounded test gate, a turn budget, and one gateway key ([`f89be5b`](https://github.com/JLRoper/agent-worktree-gui/commit/f89be5b5a8d07c6feae12b93f512a394e61ca3ad))
+
+### Docs & tests
+
+- docs: the step 8 report says which base its suite counts came from ([`1c60fbd`](https://github.com/JLRoper/agent-worktree-gui/commit/1c60fbdf2aa9dd69ec48c2728caa94e3204c9edd))
+
+### Other
+
+- chore: 1.57.12 — the version this landing carries ([`5bf2f3d`](https://github.com/JLRoper/agent-worktree-gui/commit/5bf2f3d18dad1fd978224669c504562dcf57bbd5))
+
+## v1.57.11 — 2026-11-07 · 2 commits
+
+[`70dc37a`](https://github.com/JLRoper/agent-worktree-gui/commit/70dc37a539802221c70257b6227f59f51e63a4ce) · [compare v1.57.10...v1.57.11](https://github.com/JLRoper/agent-worktree-gui/compare/v1.57.10...v1.57.11)
+
+### Changed
+
+- refactor: the assistant queue's route moves into routes/assistant-queue.js ([`7a33d01`](https://github.com/JLRoper/agent-worktree-gui/commit/7a33d013bdb17163e3a31cc6ad5ba360aa723c70))
+
+### Other
+
+- chore: 1.57.11 - the version this landing carries ([`70dc37a`](https://github.com/JLRoper/agent-worktree-gui/commit/70dc37a539802221c70257b6227f59f51e63a4ce))
+
+## v1.57.10 — 2026-11-07 · 2 commits
+
+[`91c1ae9`](https://github.com/JLRoper/agent-worktree-gui/commit/91c1ae9ce0a28dcde26a337c2f3e22a7ce6774c0) · [compare v1.57.9...v1.57.10](https://github.com/JLRoper/agent-worktree-gui/compare/v1.57.9...v1.57.10)
+
+### Changed
+
+- refactor: the turn's own face moves out of public/app.js into public/turns.js ([`88d9376`](https://github.com/JLRoper/agent-worktree-gui/commit/88d9376f623cb8f1aad8c0c03f2cc3e00e0967d6))
+
+### Other
+
+- chore: 1.57.10 - the version this landing carries ([`91c1ae9`](https://github.com/JLRoper/agent-worktree-gui/commit/91c1ae9ce0a28dcde26a337c2f3e22a7ce6774c0))
+
+## v1.57.9 — 2026-11-07 · 2 commits
+
+[`4a63afa`](https://github.com/JLRoper/agent-worktree-gui/commit/4a63afab00886ae6cf97549887f0cc004d232e75) · [compare v1.57.8...v1.57.9](https://github.com/JLRoper/agent-worktree-gui/compare/v1.57.8...v1.57.9)
+
+### Changed
+
+- refactor: the respond helpers move into lib/http/respond.js ([`660e3c9`](https://github.com/JLRoper/agent-worktree-gui/commit/660e3c980d4c751214f4fd70dc05a198ef13a742))
+
+### Other
+
+- chore: 1.57.9 — the version this landing carries ([`4a63afa`](https://github.com/JLRoper/agent-worktree-gui/commit/4a63afab00886ae6cf97549887f0cc004d232e75))
+
+## v1.57.8 — 2026-11-07 · 3 commits
+
+[`aaefdb1`](https://github.com/JLRoper/agent-worktree-gui/commit/aaefdb1464a4d983460d31a05e4b83e9cc217deb) · [compare v1.57.6...v1.57.8](https://github.com/JLRoper/agent-worktree-gui/compare/v1.57.6...v1.57.8)
+
+### Changed
+
+- refactor: the wake queue moves out of lib/assistant.js into lib/assistant/wakes.js ([`df45975`](https://github.com/JLRoper/agent-worktree-gui/commit/df459757d9327e6eb71c65f808938b6bf2bbd076))
+
+### Docs & tests
+
+- docs: render the changelog — 411 releases ([`3032b39`](https://github.com/JLRoper/agent-worktree-gui/commit/3032b398b594003bfdf4b9820644e7bc2b927f98))
+
+### Other
+
+- chore: 1.57.8 — the version this landing carries ([`aaefdb1`](https://github.com/JLRoper/agent-worktree-gui/commit/aaefdb1464a4d983460d31a05e4b83e9cc217deb))
 
 ## v1.57.6 — 2026-11-07 · 4 commits
 
