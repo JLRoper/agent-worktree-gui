@@ -21,7 +21,8 @@ import test from "node:test";
 import { sliceRegion } from "../tools/panel-testkit.mjs";
 
 const assistant = readFileSync(new URL("../public/assistant.js", import.meta.url), "utf8");
-const region = sliceRegion(assistant, "the queue sub-tab");
+const cards = readFileSync(new URL("../public/queue-cards.js", import.meta.url), "utf8");
+const region = sliceRegion(cards, "the queue sub-tab");
 
 const esc = (v) =>
   String(v ?? "")

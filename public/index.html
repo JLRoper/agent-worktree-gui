@@ -1024,6 +1024,13 @@
   <!-- The update check. Loaded after app.js because it reads that file's `state`, `turnLive` and
        the banner helpers by name — at call time, never at load, so nothing here waits on boot. -->
   <script src="/core/update-check.js"></script>
+  <!-- The queue cards, cut out of the assistant's panel (step 5 of docs/reports/module-map-2026-11-07.html's
+       order of work): one assistant's task queue as a column of cards, its row and head, its lane, hold and
+       question chips, the agents under a task, the window of rows drawn, the reader's order and the drag, and
+       the reads and the one write path behind them. Loaded after app.js and before assistant.js, because the
+       panel calls its factory when it loads and hands it that file's own helpers; it declares only, so that
+       order costs nothing and nothing here waits on boot. -->
+  <script src="/queue-cards.js"></script>
   <!-- The assistant's floating panel. Loaded after app.js on purpose: it reads that file's own state and card
        renderer, so the assistant's card is a real card rather than a second implementation of one. -->
   <script src="/assistant.js"></script>

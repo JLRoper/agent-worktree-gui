@@ -1,6 +1,6 @@
 // The Queue sub-tab's row: one task, its four markers, one sub-row per AGENT and the presses on it.
 //
-// The row renderer is the page's own code, sliced out of public/assistant.js and driven against stubs — the same
+// The row renderer is the page's own code, sliced out of public/queue-cards.js and driven against stubs — the same
 // style as assistant-subtabs.test.js. What this pins:
 //
 //   - ○ queued, ● running, ⏸ parked, ✓ done still reach the task's own marker, and a done row is the only greyed one;
@@ -20,8 +20,8 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { sliceRegion } from "../tools/panel-testkit.mjs";
 
-const assistant = readFileSync(new URL("../public/assistant.js", import.meta.url), "utf8");
-const region = sliceRegion(assistant, "the queue sub-tab");
+const cards = readFileSync(new URL("../public/queue-cards.js", import.meta.url), "utf8");
+const region = sliceRegion(cards, "the queue sub-tab");
 
 const esc = (s) =>
   String(s ?? "")

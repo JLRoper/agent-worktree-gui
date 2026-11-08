@@ -1,7 +1,7 @@
 // The Queue row's stopped chip: the EXITED pill (and the not-running one) is the re-attach CONTROL, and what a press
 // does with the route's answer.
 //
-// The renderer and the press are the page's own code, sliced out of public/assistant.js and driven against stubs — the
+// The renderer and the press are the page's own code, sliced out of public/queue-cards.js and driven against stubs — the
 // same style as assistant-queue-ui.test.js. What this pins:
 //
 //   1. the markup: the stopped chip is a real <button> carrying `data-as-qreattach` (the thread), `data-as-qown` (the
@@ -20,8 +20,8 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { sliceRegion } from "../tools/panel-testkit.mjs";
 
-const assistant = readFileSync(new URL("../public/assistant.js", import.meta.url), "utf8");
-const region = sliceRegion(assistant, "the queue sub-tab");
+const cards = readFileSync(new URL("../public/queue-cards.js", import.meta.url), "utf8");
+const region = sliceRegion(cards, "the queue sub-tab");
 
 const esc = (s) =>
   String(s ?? "")
