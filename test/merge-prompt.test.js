@@ -160,7 +160,7 @@ test("a worker following the prompt's order lands a merged tip where the changel
     // The prompt's order: render at the merged tip, in the same run.
     const render = land(work, "--no-fetch", "--no-push");
     assert.equal(render.status, 0, render.text);
-    assert.match(render.text, /land: committed [0-9a-f]{7} — docs: render the changelog — 2 releases/);
+    assert.match(render.text, /land: committed [0-9a-f]{7} \u2014 docs: render the changelog - 2 releases/);
     assert.match(render.text, /changelog: CHANGELOG\.md is current — 2 releases/);
 
     const green = land(work, "--check", "--no-fetch");

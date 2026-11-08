@@ -179,7 +179,9 @@ test("one run renders the missing releases and commits only CHANGELOG.md; a seco
     // The first run: renders, commits its own docs commit, proves itself.
     const first = land(work, "--no-fetch", "--no-push");
     assert.equal(first.status, 0, first.text);
-    assert.match(first.text, /land: committed [0-9a-f]{7} — docs: render the changelog — 3 releases/);
+    // The printed separator is the tool's own console text (left alone); the pattern names it by code point so
+    // this line does not type the character.
+    assert.match(first.text, /land: committed [0-9a-f]{7} \u2014 docs: render the changelog - 3 releases/);
     assert.match(first.text, /changelog: CHANGELOG\.md is current — 3 releases/);
     assert.notEqual(git(work, ["rev-parse", "HEAD"]), head, "the render is its own commit");
 
