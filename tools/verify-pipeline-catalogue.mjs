@@ -7,15 +7,17 @@
 //
 // What it proves, in the order the request names them:
 //
-//   1. GET /api/assistant/pipeline-catalogue lists EVERY pipeline in the bundle with its own stage count — the large
-//      studio pipeline and the three small ones, each count equal to its stages[] length;
+//   1. GET /api/assistant/pipeline-catalogue lists EVERY pipeline in the bundle with its own stage count — the four
+//      studio pipelines first, then the seven ladders the seed carries as PDL documents, each count equal to its
+//      stages[] length;
 //   2. the pipeline window's PIPELINE select offers all of them, by title and id;
 //   3. choosing a 2-stage pipeline fills STARTING STAGE from THAT pipeline's stages (not from the first, not from the
 //      largest), and choosing another one re-fills it again;
 //   4. the assignment press writes the record: the queue file on disk carries `pipelineRun` naming the chosen pipeline
 //      and its stage, and the window re-reads as "2 of 2".
-//   6. the Settings pipeline tab's PDL list is the SAME list the catalogue route serves, id for id and count for
-//      count, with the ladder catalogue still reading beside it (the two sources are one reading now).
+//   5. the Settings pipeline tab's PDL list is the SAME list the catalogue route serves, id for id and count for
+//      count, with the ladder catalogue beside it reading its own (empty) size - the ladder seed ships no definition
+//      since the seven moved into the bundle, and the row says "0 definitions" without hiding the eleven.
 //
 //   node tools/verify-pipeline-catalogue.mjs            assert; exit 0 green, 1 red
 //   node tools/verify-pipeline-catalogue.mjs --quiet    only failures + the final line
@@ -84,9 +86,9 @@ try {
   check(res.status === 200, "the catalogue answers 200", String(res.status));
   check(catalogue.ok === true, "the seed bundle is readable", catalogue.reason || "");
   const listed = (catalogue.pipelines || []).map((p) => ({ id: p.id, title: p.title, count: p.stageCount, stages: p.stages.length }));
-  check(listed.length === 4, "the catalogue lists the bundle's four pipelines", listed.map((p) => `${p.id}:${p.count}`).join(", "));
+  check(listed.length === 11, "the catalogue lists the bundle's eleven pipelines", listed.map((p) => `${p.id}:${p.count}`).join(", "));
   check(
-    listed.every((p) => p.count === p.stages && p.count >= 2),
+    listed.every((p) => p.count === p.stages && p.count >= 1),
     "every pipeline carries a stage count that is its stages[] length",
     listed.map((p) => `${p.id}:${p.count}/${p.stages}`).join(", "),
   );
@@ -95,6 +97,11 @@ try {
   check(byId.get("ping-pong")?.count === 2, "the ping-pong pipeline is 2 stages", String(byId.get("ping-pong")?.count));
   check(byId.get("probe-fix")?.count === 2, "the probe-then-fix pipeline is 2 stages", String(byId.get("probe-fix")?.count));
   check(byId.get("author-review-revise")?.count === 3, "the author-review-revise pipeline is 3 stages", String(byId.get("author-review-revise")?.count));
+  // The seven ladders the conversion moved into the bundle: still here, each on its own document.
+  check(byId.get("local")?.count === 1, "the local ladder is 1 stage", String(byId.get("local")?.count));
+  check(byId.get("investigate")?.count === 2, "the investigation ladder is 2 stages", String(byId.get("investigate")?.count));
+  check(byId.get("turnover")?.count === 3, "the turnover ladder is 3 stages", String(byId.get("turnover")?.count));
+  check(byId.get("sefl-review-loop")?.count === 7, "the SEFL review loop is 7 stages", String(byId.get("sefl-review-loop")?.count));
 
   // ---- 2. the window's PIPELINE select offers all of them ---------------------------------------------
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
@@ -126,9 +133,9 @@ try {
     };
   });
   check(options.mode === "assistant-decides", "the task starts on the default path", String(options.mode));
-  check(options.pipes?.length === 4, "the PIPELINE select offers every pipeline in the bundle", String(options.pipes?.length));
+  check(options.pipes?.length === 11, "the PIPELINE select offers every pipeline in the bundle", String(options.pipes?.length));
   check(
-    ["poc-to-uat", "ping-pong", "probe-fix", "author-review-revise"].every((id) => options.pipes?.some((o) => o.value === id)),
+    ["poc-to-uat", "ping-pong", "probe-fix", "author-review-revise", "local", "investigate", "turnover", "github-investigate", "sefl-investigate", "github-force-merge", "sefl-review-loop"].every((id) => options.pipes?.some((o) => o.value === id)),
     "and each pipeline is offered by its id",
     (options.pipes || []).map((o) => o.value).join(", "),
   );
@@ -213,8 +220,8 @@ try {
   await page.setInputFiles("#bundle-import-file", exportFile);
   await page.waitForFunction(() => /imported/i.test(document.getElementById("bundle-import-note")?.textContent || ""), null, { timeout: 20_000, polling: 60 });
   const importedNote = await noteText();
-  check(/now holds 5 pipelines/.test(importedNote), "the tab says what the import added and how many the bundle now holds", importedNote);
-  check((await rowCount()) === 5, "the pipeline list grew to five rows", String(await rowCount()));
+  check(/now holds 12 pipelines/.test(importedNote), "the tab says what the import added and how many the bundle now holds", importedNote);
+  check((await rowCount()) === 12, "the pipeline list grew to twelve rows", String(await rowCount()));
 
   // The same document twice: the route refuses the duplicate id by name, the tab prints the code, nothing is added.
   await page.setInputFiles("#bundle-import-file", exportFile);
@@ -222,7 +229,7 @@ try {
   const refusedNote = await noteText();
   check(/duplicate-id/.test(refusedNote), "a second import of the same id is refused with the route's code", refusedNote.slice(0, 200));
   check(/"review-two"/.test(refusedNote), "and the refusal names the pipeline id", refusedNote.slice(0, 200));
-  check((await rowCount()) === 5, "nothing was added by the refused import", String(await rowCount()));
+  check((await rowCount()) === 12, "nothing was added by the refused import", String(await rowCount()));
 
   // ---- 6. Settings > Pipeline lists the SAME pipelines the picker offers ------------------------------
   // The tab and the picker were two different sets ("the pipelines" meant the ladder on one surface and the PDL
@@ -240,6 +247,7 @@ try {
       source: (document.getElementById("pipeline-pdl-source")?.textContent || "").trim(),
       ladder: (document.getElementById("pipeline-summary")?.textContent || "").trim(),
       ladderRows: [...document.querySelectorAll("#pipeline-select option")].length,
+      ladderValues: [...document.querySelectorAll("#pipeline-select option")].map((o) => o.value),
     };
   });
   const afterImport = await (await fetch(`${panel.base}/api/assistant/pipeline-catalogue`)).json();
@@ -249,12 +257,23 @@ try {
     "the Settings pipeline tab lists exactly the catalogue route's pipelines, in order",
     `${tab.ids.join(",")} vs ${routeIds.join(",")}`,
   );
-  check(tab.ids.length === 5, "the tab shows the five pipelines the bundle holds after the import", tab.ids.join(","));
-  check(/5 pipelines/.test(tab.summary) && /POC to UAT/.test(tab.summary), "the tab's summary counts them and names the bundle", tab.summary);
+  check(tab.ids.length === 12, "the tab shows the twelve pipelines the bundle holds after the import", tab.ids.join(","));
+  // The name is the FIRST pipeline's project name once a wrapper has been re-imported (lib/pipeline-bundle-import.js
+  // keeps a live name only from a parsed document, and the route hands it the raw text), so the check pins the count
+  // and the name the file answers with today rather than inventing a rename.
+  check(/12 pipelines/.test(tab.summary) && /POC to UAT/.test(tab.summary), "the tab's summary counts them and names the bundle", tab.summary);
   check(/pipeline-bundle\.json/.test(tab.source), "and its source line names the file the panel reads", tab.source);
-  check(/5 pipelines/.test(tab.summary) && tab.units.every((u) => /^\d+ stage/.test(u)), "each row carries its own stage count", tab.units.join(" | "));
+  check(/12 pipelines/.test(tab.summary) && tab.units.every((u) => /^\d+ stage/.test(u)), "each row carries its own stage count", tab.units.join(" | "));
   check(tab.ids.includes("review-two"), "the pipeline the import added is in the tab as well as in the picker", tab.ids.join(","));
-  check(/7 definitions/.test(tab.ladder) && tab.ladderRows === 7, "the ladder catalogue still reads beside it, untouched", `${tab.ladder} / ${tab.ladderRows} options`);
+  // The ladder seed ships EMPTY by design (the seven definitions are PDL documents in the bundle now), so its row
+  // reads zero and the dropdown's twelve options are all PDL. A control that counted the ladder alone is what said
+  // "0 pipelines" beside a bundle holding eleven.
+  check(/0 definitions/.test(tab.ladder), "the ladder catalogue reads its own empty size beside the bundle", tab.ladder);
+  check(
+    tab.ladderRows === 12 && tab.ladderValues.every((value) => value.startsWith("pdl:")),
+    "the dropdown's twelve options are the twelve PDL pipelines - no ladder definition is offered, because none ships",
+    `${tab.ladderRows} options`,
+  );
 
   check(pageErrors.length === 0, "no page error while the window and the tab were driven", pageErrors.slice(0, 2).join(" | "));
   await page.close();
