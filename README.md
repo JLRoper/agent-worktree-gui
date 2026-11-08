@@ -801,7 +801,10 @@ shorter than the panel starts at its foot instead of leaving empty panel under i
   what can be started or say plainly that the queue is clean — because an unconstrained "mind the queue" wake
   becomes a vibe. One settle is one sweep, keyed on the settle's job id, and it rides the settle's own turn rather
   than opening a second run on a live thread. Its second trigger is the failsafe: every run of an assistant quiet
-  for `queueIdleMinutes` (default 30, **0** disables the timer) while its queue still holds an open row. It is an
+  for `queueIdleMinutes` (default 30, **0** disables the timer) while its queue still holds an open row. An
+  assistant with **no** standing wake (`wakeEveryMinutes` 0 in its profile) gets the same look on that window even
+  with the failsafe off, so a queue holding a queued row and nothing of its own running can never end up with no
+  clock at all: a sweep used to be armed only by a settle, and a settle only fires when a run ENDS. It is an
   event, so the hourly wake budget cannot drop it, and its clock is the rule's own disclosure under **Settings →
   Per-rule escalation**, beside the other watchdog bars), plus `exited` (a worker's run ended
   `failed` — the card's **EXITED** chip — and no newer run on its thread has taken the failure over. It is the
