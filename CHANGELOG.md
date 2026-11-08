@@ -4,16 +4,40 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.57.2 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.57.4 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-407 releases from v0.1.0 (2026-10-20) to v1.57.2 (2026-11-07), 1390 commits between the tags. Every release is anchored by an
+409 releases from v0.1.0 (2026-10-20) to v1.57.4 (2026-11-07), 1394 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.57.4 — 2026-11-07 · 3 commits
+
+[`cc18147`](https://github.com/JLRoper/agent-worktree-gui/commit/cc18147b754b0bdd73d1676db122a76d9836edc1) · [compare v1.57.3...v1.57.4](https://github.com/JLRoper/agent-worktree-gui/compare/v1.57.3...v1.57.4)
+
+### Changed
+
+- refactor: the chart's own code moves out of public/app.js into public/charts.js ([`638ec41`](https://github.com/JLRoper/agent-worktree-gui/commit/638ec41de38546b3779d6bb77c11d6ef75de4d88))
+
+### Docs & tests
+
+- docs: render the changelog - 407 releases ([`490c848`](https://github.com/JLRoper/agent-worktree-gui/commit/490c8481c4bae2e6484401ffb090da40474d8d5c))
+
+### Other
+
+- chore: 1.57.4 - the version this landing carries ([`cc18147`](https://github.com/JLRoper/agent-worktree-gui/commit/cc18147b754b0bdd73d1676db122a76d9836edc1))
+
+## v1.57.3 — 2026-11-07 · 1 commit
+
+[`2b10cec`](https://github.com/JLRoper/agent-worktree-gui/commit/2b10cece3d9919228701176b005a242058ee49c5) · [compare v1.57.2...v1.57.3](https://github.com/JLRoper/agent-worktree-gui/compare/v1.57.2...v1.57.3)
+
+### Changed
+
+- refactor: the standing rules move out of lib/assistant.js into lib/assistant/rules.js ([`2b10cec`](https://github.com/JLRoper/agent-worktree-gui/commit/2b10cece3d9919228701176b005a242058ee49c5))
 
 ## v1.57.2 — 2026-11-07 · 2 commits
 
