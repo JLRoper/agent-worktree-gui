@@ -4,16 +4,36 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.66.4 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.66.6 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-449 releases from v0.1.0 (2026-10-20) to v1.66.4 (2026-11-08), 1486 commits between the tags. Every release is anchored by an
+450 releases from v0.1.0 (2026-10-20) to v1.66.6 (2026-11-08), 1493 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.66.6 — 2026-11-08 · 7 commits
+
+[`d11bb9b`](https://github.com/JLRoper/agent-worktree-gui/commit/d11bb9bf01a69995c30ce87ddca6dd35e1b87f9f) · [compare v1.66.4...v1.66.6](https://github.com/JLRoper/agent-worktree-gui/compare/v1.66.4...v1.66.6)
+
+### Fixed
+
+- fix: a live pipeline bundle's ambiguous gates are repaired, not replaced ([`e405c6e`](https://github.com/JLRoper/agent-worktree-gui/commit/e405c6e9d60e2d372278d6fe330547408645c511))
+
+### Docs & tests
+
+- docs: render the changelog — 449 releases ([`2274aa0`](https://github.com/JLRoper/agent-worktree-gui/commit/2274aa01e30eb041199f806476e1a1c58a34f50f))
+- test: the bundle repair copies the seed's routes, refuses a guess, and keeps the guard ([`3f94e3b`](https://github.com/JLRoper/agent-worktree-gui/commit/3f94e3bdde2ec73e195d2c85789ba1665e187f5f))
+- test: the catalogue gate reads the eleven-pipeline seed and the empty ladder ([`139d11c`](https://github.com/JLRoper/agent-worktree-gui/commit/139d11c6ec2630d34640ce391910323e72ccf891))
+- test: the walk reads the bundle it is pointed at, and probe-fix settles on its own verdict ([`37f9606`](https://github.com/JLRoper/agent-worktree-gui/commit/37f9606dc4da7887b3c03b05ffb28e9fe811bc38))
+- docs: where the pipeline stores are, and the repair that made the tab list four ([`e64aad3`](https://github.com/JLRoper/agent-worktree-gui/commit/e64aad3cc456503ff7e51a0db12d06d70f4970fb))
+
+### Other
+
+- chore: 1.66.6 - the version this landing carries ([`d11bb9b`](https://github.com/JLRoper/agent-worktree-gui/commit/d11bb9bf01a69995c30ce87ddca6dd35e1b87f9f))
 
 ## v1.66.4 — 2026-11-08 · 3 commits
 
