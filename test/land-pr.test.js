@@ -95,7 +95,7 @@ test("primaryCheckout names the primary checkout, not the linked tree asking", (
 
 function copyTools(dest) {
   mkdirSync(path.join(dest, "tools"), { recursive: true });
-  for (const f of ["land.mjs", "land-pr.mjs", "changelog.mjs", "release-history.mjs"]) {
+  for (const f of ["land.mjs", "land-pr.mjs", "changelog.mjs", "release-history.mjs", "release-tag.mjs", "verify-version-tags.mjs"]) {
     writeFileSync(
       path.join(dest, "tools", f),
       readFileSync(path.join(ROOT, "tools", f), "utf8").split(CR + LF).join(LF),
@@ -104,9 +104,10 @@ function copyTools(dest) {
   }
 }
 
-// The stand-in host. `gh pr view` reads a file; `gh pr merge` does what a rebase merge does to the remote - main
-// becomes the branch's commit - and flips the state to MERGED. Every call is appended to a log, so the test can
-// assert the ARGUMENTS the command sends (the --rebase --admin in particular) and that a refusal sends none.
+// The stand-in host. `gh pr view` reads a file; `gh pr merge` does what a rebase merge does to the remote - the
+// branch's commit is RE-CREATED (the same tree on a new sha, which is what a rebase does to a one-commit branch)
+// and main becomes it - and flips the state to MERGED. Every call is appended to a log, so the test can assert the
+// ARGUMENTS the command sends (the --rebase --admin in particular) and that a refusal sends none.
 const FAKE_GH = `
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -118,9 +119,13 @@ if (argv[0] === "pr" && argv[1] === "view") {
   process.exit(0);
 }
 if (argv[0] === "pr" && argv[1] === "merge") {
-  const { work, bare, branch } = state.merge;
-  execFileSync("git", ["-C", work, "push", "-q", bare, branch + ":refs/heads/main"], { stdio: "ignore" });
-  const tip = execFileSync("git", ["-C", work, "rev-parse", branch], { encoding: "utf8" }).trim();
+  const { bare, branch, linked } = state.merge;
+  execFileSync("git", ["-C", linked, "commit", "-q", "--amend", "--no-edit"], {
+    stdio: "ignore",
+    env: { ...process.env, GIT_COMMITTER_DATE: "2027-01-01T00:00:00 +0000" },
+  });
+  const tip = execFileSync("git", ["-C", linked, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+  execFileSync("git", ["-C", linked, "push", "-q", bare, branch + ":refs/heads/main"], { stdio: "ignore" });
   const next = { ...state, view: { ...state.view, state: "MERGED", mergeCommit: { oid: tip } } };
   writeFileSync(process.env.LAND_PR_FAKE, JSON.stringify(next, null, 2));
   console.log("merged " + tip);
@@ -153,7 +158,11 @@ function sandbox(view = { state: "OPEN", mergeCommit: null }) {
   const pkg = path.join(work, "package.json");
   writeFileSync(pkg, readFileSync(pkg, "utf8").replace(/"version":\s*"[^"]*"/, '"version": "1.1.0"'), "utf8");
   git(work, ["commit", "-q", "-am", "feat: the capability this landing carries, and its version"]);
+  // The claim `version.mjs apply` makes: an annotated v<version> on the branch's bump commit, pushed so every lane
+  // reads the number as taken. A rebase merge re-creates that commit, and this is the tag it orphans.
+  git(work, ["tag", "-a", "v1.1.0", "-m", "v1.1.0"]);
   git(work, ["push", "-q", "origin", "feature"]);
+  git(work, ["push", "-q", "origin", "refs/tags/v1.1.0"]);
   // The primary goes back to the base before the linked tree takes the branch: the landing runs FROM a worktree
   // and renders IN the primary checkout, which is the whole shape of the command.
   git(work, ["checkout", "-q", "main"]);
@@ -167,7 +176,7 @@ function sandbox(view = { state: "OPEN", mergeCommit: null }) {
     JSON.stringify(
       {
         view: { number: 7, url: "https://github.com/JTest/sandbox/pull/7", baseRefName: "main", headRefName: "feature", ...view },
-        merge: { work, bare, branch: "feature" },
+        merge: { work, bare, linked, branch: "feature" },
         log,
       },
       null,
@@ -279,6 +288,46 @@ test("the primary checkout's own untracked artifacts do not stop the render, and
     assert.match(text, /changelog --check reads current - 2 releases/);
     assert.deepEqual(git(box.work, ["show", "--name-only", "--format=", "HEAD"]).split("\n").filter(Boolean), ["CHANGELOG.md"]);
     assert.equal(readFileSync(path.join(box.work, "config.7330.json"), "utf8"), "{}\n", "the stray file is not touched");
+  } finally {
+    box.done();
+  }
+});
+
+// The commit origin's v<version> tag peels to — the `^{}` line, which is the one a reader (and the gate) follows.
+function peeled(box, name = "v1.1.0") {
+  const exact = new RegExp(`refs/tags/${name.replace(/\./g, "\\.")}(\\^\\{\\})?$`);
+  const lines = git(box.work, ["ls-remote", "--tags", "origin"])
+    .split("\n")
+    .filter(Boolean)
+    .filter((l) => exact.test(l.split(/\s+/)[1] || ""));
+  const line = lines.find((l) => l.endsWith("^{}")) || lines[lines.length - 1] || "";
+  return line.split(/\s+/)[0] || "";
+}
+
+test("the landing moves the release tag onto the commit the rebase merge produced, with no hand step", () => {
+  const box = sandbox();
+  try {
+    const claimed = git(box.linked, ["rev-parse", "HEAD"]);
+    assert.equal(peeled(box), claimed, "the fixture starts where a real branch does: the claim is on the pre-merge sha");
+
+    const r = box.run("7", "--gh-script", path.join(box.dir, "fake-gh.mjs"));
+    const text = `${r.stdout || ""}${r.stderr || ""}`;
+    assert.equal(r.status, 0, text);
+
+    const merged = JSON.parse(readFileSync(box.stateFile, "utf8")).view.mergeCommit.oid;
+    assert.notEqual(merged, claimed, "a rebase merge re-creates the bump commit under a new sha");
+    assert.match(text, /land-pr: moved [0-9a-f]{10} -> [0-9a-f]{10} on origin \(--force\)/);
+    assert.match(text, new RegExp(`land-pr: done .*tag v1\\.1\\.0 at ${merged.slice(0, 7)}`));
+    assert.equal(peeled(box), merged, "origin's tag names the merged commit, not the branch's pre-merge one");
+
+    // The second run finds the anchor right: nothing is force-pushed, nothing is merged, nothing is committed.
+    const tip = git(box.work, ["rev-parse", "HEAD"]);
+    const again = box.run("7", "--gh-script", path.join(box.dir, "fake-gh.mjs"));
+    const againText = `${again.stdout || ""}${again.stderr || ""}`;
+    assert.equal(again.status, 0, againText);
+    assert.match(againText, /land-pr: v1\.1\.0 is already at [0-9a-f]{10} on origin/);
+    assert.equal(peeled(box), merged);
+    assert.equal(git(box.work, ["rev-parse", "HEAD"]), tip);
   } finally {
     box.done();
   }

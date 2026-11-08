@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// tools/land-pr.mjs - one command that LANDS and RENDERS: merge the pull request, bring the primary checkout to
-// the merged tip, render CHANGELOG.md there, and prove the check reads current.
+// tools/land-pr.mjs - one command that LANDS, RENDERS and ANCHORS: merge the pull request, bring the primary
+// checkout to the merged tip, move the release's tag onto the commit the merge produced, render CHANGELOG.md
+// there, and prove the check reads current.
 //
 // WHY: every `gh pr merge --rebase --admin` bypasses the pre-push hook that renders, so a landing that stopped at
 // "merged" left CHANGELOG.md stale at the next tip. It happened at 1.53.6, at 1.60.0 through 1.60.3, at 1.65.0 and
@@ -28,6 +29,7 @@ import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { repoRoot } from "./release-history.mjs";
+import { moveReleaseTag } from "./release-tag.mjs";
 
 const DASHED = "\u2014"; // the separator tools/changelog.mjs and tools/land.mjs print
 
@@ -154,8 +156,9 @@ export function trackedChanges(root) {
 
 const USAGE = [
   "node tools/land-pr.mjs [<pr>] [--base main] [--remote origin] [--check] [--no-fetch] [--gh-script <file>]",
-  "  land and render in one command: merge the PR (--rebase --admin), fast-forward the primary checkout,",
-  "  render CHANGELOG.md at the merged tip through tools/land.mjs's incremental path, and prove the check.",
+  "  land and render in one step: merge the PR (--rebase --admin), fast-forward the primary checkout, move the",
+  "  release's tag onto the commit the merge produced, render CHANGELOG.md at the merged tip through",
+  "  tools/land.mjs's incremental path, and confirm the check.",
   "  <pr>        the pull request number or URL; omit it for the pull request of the current branch",
   "  --check     judge only: read the PR and the primary checkout, say what would happen, touch nothing",
   "  --base      the base branch this landing lands (default main)",
@@ -290,6 +293,20 @@ function main(argv) {
     return 1;
   }
 
+  // The anchor. A rebase merge re-creates the branch's bump commit, so the tag `version.mjs apply` put on the
+  // branch names a sha main does not have — and `verify-version-tags` reads it as wrong-commit on origin the moment
+  // the landing is called finished, which is how v1.66.6 was left on e0a2875 while main carried d11bb9bf. Moving it
+  // here, before the render, is what makes the move part of the landing: the release is anchored where the gate
+  // reads it even if the render that follows fails, and tools/land.mjs runs the same step when a landing is done
+  // by hand. The tag is the one the tree just fast-forwarded to declares, and the commit is the walk's.
+  const moveTag = () => moveReleaseTag({ root: primary, ref: "HEAD", remote, push: true });
+  const sayTag = (res) => {
+    for (const line of res.notes) console.log(`land-pr: ${line}`);
+    if (!res.ok) console.error(`land-pr: the release tag did not move - ${res.error}`);
+  };
+  let tag = moveTag();
+  sayTag(tag);
+
   // The render. tools/land.mjs is the whole of it: the incremental path, one CHANGELOG.md commit, the docs-only
   // push, its own re-render proof. Run it here rather than reimplementing it, and echo what it said.
   let landOut;
@@ -317,9 +334,23 @@ function main(argv) {
   }
   if (count === null) count = releaseCount(landOut);
 
+  // tools/land.mjs runs the same step on the same tree, so a first attempt that lost its push may already have
+  // been repaired by the render it just made. Ask again rather than reporting an anchor the second pass fixed.
+  if (!tag.ok) {
+    tag = moveTag();
+    sayTag(tag);
+    if (!tag.ok) {
+      console.error(
+        `land-pr: the merge landed and the changelog is current, but the release tag does not name the merged commit - ${tag.error}`,
+      );
+      return 1;
+    }
+  }
+
   console.log(
     `land-pr: done - PR #${pr.number} landed${mergeCommit ? ` at ${mergeCommit.slice(0, 7)}` : ""}, ` +
-      `changelog --check reads current${count === null ? "" : ` - ${count} releases`}`,
+      `changelog --check reads current${count === null ? "" : ` - ${count} releases`}` +
+      (tag.version && tag.commit ? `, tag v${tag.version} at ${String(tag.commit).slice(0, 7)}` : ""),
   );
   return 0;
 }

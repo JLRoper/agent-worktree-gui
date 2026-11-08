@@ -89,7 +89,7 @@ const LF = String.fromCharCode(10);
 
 function copyTools(dest) {
   mkdirSync(path.join(dest, "tools"), { recursive: true });
-  for (const f of ["land.mjs", "changelog.mjs", "release-history.mjs"]) {
+  for (const f of ["land.mjs", "changelog.mjs", "release-history.mjs", "release-tag.mjs", "verify-version-tags.mjs"]) {
     writeFileSync(
       path.join(dest, "tools", f),
       readFileSync(path.join(ROOT, "tools", f), "utf8").split(CR + LF).join(LF),

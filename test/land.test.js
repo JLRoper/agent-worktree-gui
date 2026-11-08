@@ -12,6 +12,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { FILE, docsOnlyPush, foreignCommits, landPlan, missingReleases, parseSections } from "../tools/land.mjs";
+import { planTagMove } from "../tools/release-tag.mjs";
 import { ROOT, configureRepo, git } from "../tools/panel-testkit.mjs";
 
 const CR = String.fromCharCode(13);
@@ -114,11 +115,52 @@ test("landPlan renders on a branch and commits on the base", () => {
   assert.match(commit.why, /it would add v1\.2\.0 and publish the result/);
 });
 
+// ---------- the anchor: the tag a rebase merge orphans ----------
+
+const declared = { version: "1.2.0", sha: "abcdef1234567890" };
+
+test("planTagMove anchors at the commit that declared the number, and never moves one origin already has right", () => {
+  const create = planTagMove({ version: "1.2.0", declared });
+  assert.equal(create.action, "create");
+  assert.equal(create.commit, declared.sha);
+
+  const current = planTagMove({ version: "1.2.0", declared, remote: "origin", remoteTag: { commit: declared.sha, annotated: true } });
+  assert.equal(current.action, "current");
+  assert.match(current.why, /already at abcdef1234 on origin/);
+
+  // The defect this file is about: the claim names the branch's pre-merge commit, main carries the merged one.
+  const moved = planTagMove({
+    version: "1.2.0",
+    declared,
+    remote: "origin",
+    remoteTag: { commit: "e0a2875958", annotated: true },
+    localTag: { commit: "e0a2875958", annotated: true },
+  });
+  assert.equal(moved.action, "move");
+  assert.match(moved.why, /points at e0a2875958 on origin, but 1\.2\.0 first appeared at abcdef1234/);
+
+  const lightweight = planTagMove({ version: "1.2.0", declared, remote: "origin", remoteTag: { commit: declared.sha, annotated: false } });
+  assert.equal(lightweight.action, "move", "a lightweight tag at the right commit is still recreated annotated");
+  assert.match(lightweight.why, /lightweight tag/);
+
+  const held = planTagMove({ version: "1.2.0", declared, remote: "origin", localTag: { commit: "cafebabe42", annotated: true } });
+  assert.equal(held.action, "create", "a claim origin never got is pushed, not force-pushed over");
+  assert.match(held.why, /origin carries no such tag/);
+
+  const noDeclaration = planTagMove({ version: "1.2.0", declared: null });
+  assert.equal(noDeclaration.action, "refuse");
+  assert.match(noDeclaration.why, /no commit reachable from HEAD first declares 1\.2\.0/);
+
+  const noNumber = planTagMove({ version: null, declared });
+  assert.equal(noNumber.action, "refuse", "no number, no anchor");
+  assert.match(noNumber.why, /no readable package\.json "version"/);
+});
+
 // ---------- the real half: one sandbox, two runs ----------
 
 function copyTools(dest) {
   mkdirSync(path.join(dest, "tools"), { recursive: true });
-  for (const f of ["land.mjs", "changelog.mjs", "release-history.mjs"]) {
+  for (const f of ["land.mjs", "changelog.mjs", "release-history.mjs", "release-tag.mjs", "verify-version-tags.mjs"]) {
     writeFileSync(
       path.join(dest, "tools", f),
       readFileSync(path.join(ROOT, "tools", f), "utf8").split(CR + LF).join(LF),
@@ -145,10 +187,15 @@ function land(work, ...args) {
 function sandbox() {
   const dir = mkdtempSync(path.join(os.tmpdir(), "wtgui-land-"));
   const work = path.join(dir, "work");
+  const origin = path.join(dir, "origin.git");
   mkdirSync(work, { recursive: true });
+  // A real origin, because the release's tag is judged against what the remote publishes — the same authority
+  // verify-version-tags reads. A checkout with no origin is the local-only case, covered by the pure plan.
+  git(dir, ["init", "-q", "--bare", "-b", "main", origin]);
   git(work, ["init", "-q", "-b", "main"]);
   configureRepo(work);
   git(work, ["config", "core.autocrlf", "false"]);
+  git(work, ["remote", "add", "origin", origin.replace(/\\/g, "/")]);
   // A GitHub remote, as the real clones have: the render resolves its commit links from one, and refuses when this
   // clone carries none (see "a tree with no GitHub remote" below).
   git(work, ["remote", "add", "github", "git@github.com:JTest/sandbox.git"]);
@@ -161,7 +208,8 @@ function sandbox() {
   git(work, ["commit", "-q", "-am", "feat: the second capability, and the version this release carries"]);
   setVersion(work, "1.2.0");
   git(work, ["commit", "-q", "-am", "feat: the third capability, and the version this release carries"]);
-  return { dir, work, done: () => rmSync(dir, { recursive: true, force: true }) };
+  git(work, ["push", "-q", "-u", "origin", "main"]);
+  return { dir, work, origin, done: () => rmSync(dir, { recursive: true, force: true }) };
 }
 
 test("one run renders the missing releases and commits only CHANGELOG.md; a second run leaves one render and a clean tree", () => {
@@ -271,7 +319,7 @@ test("a tree with no GitHub remote refuses rather than commit a link-less render
     const r = land(work, "--no-fetch", "--no-push");
     assert.equal(r.status, 2, r.text);
     assert.match(r.text, /land: no GitHub remote to take the changelog's links from/);
-    assert.match(r.text, /this clone's remotes are upstream \(git@gitlab\.com:acme\/widget\.git\)/);
+    assert.match(r.text, /upstream \(git@gitlab\.com:acme\/widget\.git\)/);
     assert.equal(readFileSync(path.join(work, FILE), "utf8"), before, "the refusal writes nothing");
     assert.equal(git(work, ["status", "--porcelain"]), "", "and leaves the tree clean");
   } finally {
@@ -296,3 +344,47 @@ test("docsOnlyPush is true only for a push whose every commit touches CHANGELOG.
     box.done();
   }
 });
+
+// The commit origin's v1.2.0 tag peels to. An annotated tag prints twice on the wire — the tag object and the
+// `^{}` line that names the commit — and the peeled line is the one a reader (and the gate) follows.
+function peeledTag(work, name = "v1.2.0") {
+  const exact = new RegExp(`refs/tags/${name.replace(/\./g, "\\.")}(\\^\\{\\})?$`);
+  const lines = git(work, ["ls-remote", "--tags", "origin"]).split("\n").filter(Boolean).filter((l) => exact.test(l.split(/\s+/)[1] || ""));
+  const line = lines.find((l) => l.endsWith("^{}")) || lines[lines.length - 1] || "";
+  return line.split(/\s+/)[0] || "";
+}
+
+test("land moves the release tag onto the commit that first declared it, and a second run moves nothing", () => {
+  const box = sandbox();
+  try {
+    const { work } = box;
+    const declaring = git(work, ["rev-parse", "HEAD"]); // the commit that wrote 1.2.0
+    const preMerge = git(work, ["rev-parse", "HEAD~1"]); // where the branch's claim pointed
+    // The state a rebase merge leaves behind, set up by hand: origin holds the tag at a commit that is not the one
+    // the base's history shows first declaring the number.
+    git(work, ["tag", "-a", "v1.2.0", preMerge, "-m", "v1.2.0"]);
+    git(work, ["push", "-q", "origin", "refs/tags/v1.2.0"]);
+    assert.equal(peeledTag(work), preMerge);
+
+    const r = land(work, "--no-fetch");
+    assert.equal(r.status, 0, r.text);
+    assert.match(r.text, /land: moved [0-9a-f]{10} -> [0-9a-f]{10} on origin \(--force\)/);
+    assert.match(r.text, /changelog: CHANGELOG\.md is current — 3 releases/);
+    assert.equal(peeledTag(work), declaring, "origin's tag names the commit that first declared 1.2.0");
+    assert.equal(git(work, ["rev-parse", "v1.2.0^{commit}"]), declaring, "and so does this checkout's");
+
+    // The move writes no file: the commit the landing made is still the render alone.
+    assert.deepEqual(git(work, ["show", "--name-only", "--format=", "HEAD"]).split("\n").filter(Boolean), [FILE]);
+
+    // A second run is idempotent: the anchor is right, so nothing is force-pushed and nothing is committed.
+    const before = peeledTag(work);
+    const again = land(work, "--no-fetch");
+    assert.equal(again.status, 0, again.text);
+    assert.match(again.text, /land: v1\.2\.0 is already at [0-9a-f]{10} on origin/);
+    assert.equal(peeledTag(work), before);
+    assert.equal(git(work, ["rev-parse", "HEAD"]), git(work, ["rev-parse", "origin/main"]));
+  } finally {
+    box.done();
+  }
+});
+

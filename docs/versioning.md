@@ -24,14 +24,21 @@ A rebase merge re-creates the branch's commits on `main` with new shas, so the a
 `chore: <version> — the version this landing carries`, and creates `v<version>` annotated on that commit — so the
 branch carries a tag the gate can read. On a dirty tree it writes the number and stops, saying which it did,
 because a tag belongs to a commit that carries the bump and nothing else; commit the change by hand, then
-`node tools/version.mjs tag`. Once the PR has merged, move the anchor onto the commit `main` carries — never leave
-it on the branch's pre-merge tip:
+`node tools/version.mjs tag`.
 
-    node tools/version.mjs tag --ref origin/main --force
-    git push origin v<version> --force
+The MOVE is the landing's, not a hand step after it. A rebase merge re-creates the bump commit, so the tag still
+names the branch's pre-merge sha and `npm run verify:version-tags` reads `wrong-commit` on `origin` the moment the
+landing is called finished — that is how v1.66.6 was left on `e0a2875` while `main` carried `d11bb9bf`. So
+`npm run land:pr` and `npm run land` both run the move themselves, through `tools/release-tag.mjs`: after the
+merge, they anchor `v<version>` at the commit the merged `main` shows first declaring it, push it with `--force`,
+and read `origin` back to print where it landed. A tag already right on `origin` is left alone — no force-push —
+which is what makes a second run a no-op. Landing by hand is one command too:
 
-`node tools/version.mjs tag` refuses a dirty tree, refuses to move an existing tag without `--force`, and is a
-no-op (exit 0) when the tag already names the right commit.
+    node tools/release-tag.mjs --ref origin/main
+
+`tools/release-tag.mjs` reads the number from the ref's tree and the commit from the same walk the gate judges,
+refuses to anchor a number that walk does not show being declared, and is a no-op (exit 0) when the tag already
+names the right commit. `node tools/version.mjs tag` is still there for a tag the branch writes before its merge.
 
 A bump that reached `main` without its tag is repaired by one idempotent pass:
 
@@ -50,9 +57,9 @@ and the merged tip is red the moment it lands. The order is the rule, and the me
 
     node tools/version.mjs apply <level>   # 1. the bump, on the branch; the tag anchors that commit
     git push -u origin <branch>            # 2. the branch and its pull request
-    npm run land:pr -- <n>                 # 3. the merge, the fast-forward, the render at the merged tip, the push
+    npm run land:pr -- <n>                 # 3. the merge, the anchor moved, the render at the merged tip, the push
 
-`npm run land:pr` (`tools/land-pr.mjs`) is a landing that finishes its own changelog. A bare
+`npm run land:pr` (`tools/land-pr.mjs`) is a landing that finishes its own changelog and its own anchor. A bare
 `gh pr merge <n> --rebase --admin` bypasses the pre-push hook that renders, which is how `CHANGELOG.md` went stale
 at 1.53.6, at 1.60.0 through 1.60.3, at 1.65.0 and at 1.65.3: the merge landed, the next tip was red, and the
 render was a second command no brief named. So a brief names THIS command, not a merge. It does, in order:
@@ -65,23 +72,25 @@ render was a second command no brief named. So a brief names THIS command, not a
    and never reports a landing it did not read back;
 3. fetches and fast-forwards the PRIMARY checkout (`git worktree list` names it first, so this works from a landing
    worktree) to the merged tip - never a reset, never a stash;
-4. runs the render there through `npm run land`: the incremental path, one `CHANGELOG.md` docs commit, the push;
-5. proves the tip is not red by running `changelog --check` and printing the release count it read, e.g.
-   `land-pr: done - PR #412 landed at 8f2a1b3, changelog --check reads current - 445 releases`.
+4. moves the release tag onto the merged commit (`tools/release-tag.mjs`), before the render, so a render that fails
+   still leaves the number anchored at the commit `verify-version-tags` reads;
+5. runs the render there through `npm run land`: the incremental path, one `CHANGELOG.md` docs commit, the push;
+6. proves the tip is not red by running `changelog --check` and printing the release count it read, e.g.
+   `land-pr: done - PR #412 landed at 8f2a1b3, changelog --check reads current - 445 releases, tag v1.66.7 at 8f2a1b3`.
 
 `--check` is the same judgment with nothing touched: it prints the PR's state, where the primary checkout stands and
 whether the command would merge. The steps it composes, for a PR already merged or a landing done by hand, are still
 runnable one at a time:
 
     gh pr merge <n> --rebase --admin       # the merge, when the PR does not already read MERGED
-    npm run land                           # at the merged tip: render, commit only CHANGELOG.md, push, prove
+    npm run land                           # at the merged tip: render, commit only CHANGELOG.md, move the tag, push
     npm run land:check                     # "changelog: CHANGELOG.md is current — N releases"
 
 `node tools/land.mjs` renders from the base's own history (the shas the merge produced, never the branch's), refuses
-a branch, a dirty tree or a base that moved, commits the render as its own docs commit (no version, no tag), pushes
-the base with it, and proves itself by re-rendering (`land: CHANGELOG.md is current — N releases, nothing to render`
-on a second run). A landing is not finished while the tip reads red: that reading is the landing's own failure to
-fix, not a follow-up row's job.
+a branch, a dirty tree or a base that moved, commits the render as its own docs commit (no version, no tag), moves
+the release tag onto the commit the base's history shows first declaring it, pushes both, and proves itself by
+re-rendering (`land: CHANGELOG.md is current — N releases, nothing to render` on a second run). A landing is not
+finished while the tip reads red: that reading is the landing's own failure to fix, not a follow-up row's job.
 
 The render is **incremental**, and that is what makes the step runnable at all. A section costs one
 `git log <previous-tag>..<tag>`, so a 400-release history took minutes of wall clock — past the 600 second cap a
@@ -171,7 +180,8 @@ Nothing new for a user and nothing broken for anyone:
 | `node tools/version.mjs apply <patch\|minor\|major>` | writes the new version to `package.json` — the one place it lives — and prints old and new. Run by the landing agent, deliberately; never by `check` and never by a hook. |
 | `node tools/verify-version-tags.mjs` | the anchor's gate: walks `git log -p --follow -- package.json` and fails when a version that first appeared at a commit has no annotated `v<version>` tag there, when the tag points at another commit, when it is lightweight, or when it names a version `package.json` never held. `npm run verify:version-tags`. It exits 2, never a vacuous pass, when the walk comes back empty. |
 | `node tools/changelog.mjs` | renders `CHANGELOG.md` from the commits between consecutive tags, newest first, grouped by the conventional-commit prefix. The render is **incremental**: the sections the file already carries are kept byte for byte and only the releases above them are rendered, because a render of every tag in this history runs past the 600 second command cap a landing runs under. `--full` rebuilds every release from the first tag; `--since v<version>` prints only what came after the build a tab is running; `--check` fails when the file is stale. `npm run changelog`, `npm run changelog:check`. |
-| `node tools/land.mjs` | **the landing's last step**, run on the base branch after the merge: re-renders the changelog from the base's own history (the shas the merge made) — forward from the sections the file already carries, so the step finishes — commits only `CHANGELOG.md` as a docs commit, pushes the base with the render, and proves itself by re-rendering. `--check` renders in memory and exits 1 when the base is stale or a section names a sha the base lacks (writes nothing); `--render` writes the file only, for a branch preview; `--full` rebuilds every release. Refuses on a branch, a dirty tree, or a base that moved. Idempotent: a second run commits nothing and leaves the tree clean. `npm run land`, `npm run land:check`. |
+| `node tools/land.mjs` | **the landing's last step**, run on the base branch after the merge: re-renders the changelog from the base's own history (the shas the merge made) — forward from the sections the file already carries, so the step finishes — commits only `CHANGELOG.md` as a docs commit, moves the release's tag onto the commit the base's history first declares the number at, pushes the base and the tag, and proves itself by re-rendering. `--check` renders in memory and exits 1 when the base is stale or a section names a sha the base lacks (writes nothing, no tag moved); `--render` writes the file only, for a branch preview; `--full` rebuilds every release. Refuses on a branch, a dirty tree, or a base that moved. Idempotent: a second run commits nothing, moves no tag, and leaves the tree clean. `npm run land`, `npm run land:check`. |
+| `node tools/release-tag.mjs` | the anchor's **move**, as a step the landing runs: reads the version from the ref's tree, asks the same walk `verify-version-tags` judges which commit first declared it, and creates or moves the annotated tag there and pushes it (`--force` only when origin already carries the ref). Judged against `origin`'s tags, parsed by the gate's own parser; a tag already right is left alone, so a second run is a no-op. `--no-push` anchors in the checkout only; `--dry-run` writes nothing. Called by `tools/land.mjs` and `tools/land-pr.mjs` after a rebase merge, so the tag a re-created commit orphaned is moved without a hand step. |
 | `.githooks/pre-push` | makes forgetting impossible: it runs `check`, so a push cannot carry a bump-worthy branch with no bump. |
 | the merge prompt (`lib/merge-prompt.js`) | tells the landing agent to decide the level from the diff, run `apply`, and state the level and the reason in the PR body and the commit. It makes the render PHASE 4, at the merged tip after the merge, so a landing cannot finish with a stale changelog and a remembered second step is not part of the pipeline. |
 
