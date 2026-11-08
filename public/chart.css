@@ -248,8 +248,6 @@ body.no-grey-flash tbody tr.row.flash-idle { animation: none; }
 section.project.collapsed.flash { animation: flashsection var(--flash-project, 1100ms) ease-out; }
 section.project.collapsed.flash .project-head { animation: flashhead var(--flash-project, 1100ms) ease-out; }
 
-.mono { font-family: var(--mono); font-size: 12px; }
-.name { font-weight: 600; }
 button.btn-row-agent {
   width: 20px;
   height: 20px;
@@ -302,7 +300,6 @@ button.btn-row-agent.is-probing { opacity: .55; cursor: progress; }
 .add-agent-input .paste-chip { line-height: 1.6; vertical-align: middle; }
 .add-agent-input:focus { border-color: var(--addbar-hover-edge, #319051); box-shadow: inset 0 0 0 2px #ffffff2e; }
 .add-agent-input:disabled { opacity: .7; cursor: progress; }
-.branch { color: #c8d1dc; }
 /* A branch the remote actually has: the name itself is the link, so the cell keeps its `mono branch` sizing and
    only the colour says "this opens something". Hover underlines it rather than moving it — a row is a dense grid
    and a shifting column under the pointer is worse than no affordance. */
@@ -317,9 +314,6 @@ td.branch .branch-local { font-size: 9.5px; letter-spacing: .04em; text-transfor
    tooltip quotes the project's fetch note. Same box, different colour: the shape is familiar, the claim is weaker. */
 td.branch .branch-unverified { font-size: 9.5px; letter-spacing: .04em; text-transform: uppercase; color: #8a7448; border: 1px dashed #4a3f28; border-radius: 3px; padding: 0 3px; vertical-align: 1px; }
 td.branch .branch-plain { color: #9aa6b4; }
-.dim { color: var(--dim); }
-.dimmer { color: var(--dimmer); }
-.nowrap { white-space: nowrap; }
 
 .badge {
   display: inline-block;
@@ -407,8 +401,6 @@ td.branch .branch-plain { color: #9aa6b4; }
 .mc-note-rebase { color: #8d9bb0; }
 .mc-note { font-size: 10px; color: var(--dimmer); padding: 2px 4px; line-height: 1.45; }
 
-.clean { color: #7ee787; }
-.dirty { color: #f0c674; }
 /* The Ahead / Behind cell (public/app.js, "ahead / behind cell"): ↑ not pushed lights with .dirty, ↓ not pulled lights
    blue, and a count taken while the last fetch was failing is dotted with a ? beside it. */
 .ab-down { color: var(--blue); }

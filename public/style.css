@@ -2936,6 +2936,22 @@ body.modal-open { overflow: hidden; }
 /* The worktree chart's surface - the table, its cells and rows, the legend, the age arrow and the row
    detail - lives in public/chart.css, loaded right after this file. */
 
+/* The panel's type and status utilities are NOT the chart's, so they live here rather than in chart.css: .mono,
+   .name, .dim, .dimmer, .nowrap, .clean and .dirty are read by the console, Settings and the assistant rail as well
+   as by the chart's cells, and .branch is printed in the row's own confirm lines. Each is a single-class rule, so the
+   sheet it sits in decides whether it beats another single-class rule on the same element: in chart.css (loaded
+   last) .mono resized the assistant's message path and copy button, its hint and mode pill, and the pipeline
+   window's sub line, number and position - every one of them sets its own 9.5-10.5px size. They keep the place in
+   this file that the chart's block held, which is where they sat before the block moved. */
+.mono { font-family: var(--mono); font-size: 12px; }
+.name { font-weight: 600; }
+.branch { color: #c8d1dc; }
+.dim { color: var(--dim); }
+.dimmer { color: var(--dimmer); }
+.nowrap { white-space: nowrap; }
+.clean { color: #7ee787; }
+.dirty { color: #f0c674; }
+
 /* ---- the host chip in a project's header, and its Discover strip -------------------------------------------- */
 /* The chip is a statement about DATA ("this project's links come from sefl-bitbucket, IT/Menu"), so it is quiet when
    the mapping exists and louder when it does not: an unmapped project is the one case where the reader has something
