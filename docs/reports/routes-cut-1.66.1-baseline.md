@@ -78,10 +78,15 @@ Everything below was read after 16:47 and is the state run two should start from
   bounce. A `RESTART panel` request written now is refused by `lib/restart.js`, because the
   checkout's `package.json` names the same `1.66.2` the panel already serves; the guard calls that a
   bounce for nothing.
-- The branch is 2 commits behind `origin/main`. A push would be refused twice: base drift first, then
-  `tools/version.mjs check`, because the branch still carries `1.66.1` while main carries `1.66.2`.
-  Run two should rebase onto `origin/main`, apply a patch bump (`node tools/version.mjs apply patch`,
-  which lands `1.66.3`), then push and open the pull request with the report commit.
+- The branch was rebased onto `origin/main` at `499aa48` and given a patch bump to `1.66.3`, so the
+  base-drift and version gates both pass. It is pushed and PR #600 is open against `main`. Run two
+  pushes its report commit to that same branch and PR rather than opening a second one. If main moves
+  again before that push, rebase first and re-run `node tools/version.mjs check`.
+- The pid is a moving target: by 17:03 it had moved again to 73076 (started 16:57:34, parent 78984,
+  same relative `server.js` launch) while the served version stayed 1.66.2. The sequence this run
+  saw is 110608, then 109544 at 16:31:25, then 17560 at 16:47:25, then 73076 at 16:57:34, so the
+  panel is being bounced on its own roughly every 10 to 16 minutes. Run two should read the pid when
+  it starts and compare against that read, not against this record.
 - For the browser pass: `~/.wag/state/pipelines.json` and `pipelines.seed.json` both hold an empty
   `pipelines` list, while `~/.wag/state/pipeline-bundle.json` holds 4 pipelines. The bundle's own
   PDL check reports `incomplete-gate` on `author-review-revise`: gate G1 declares outcomes accept and
