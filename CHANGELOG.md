@@ -4,16 +4,33 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.59.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.59.2 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-428 releases from v0.1.0 (2026-10-20) to v1.59.0 (2026-11-08), 1442 commits between the tags. Every release is anchored by an
+430 releases from v0.1.0 (2026-10-20) to v1.59.2 (2026-11-08), 1445 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.59.2 — 2026-11-08 · 1 commit
+
+[`b63c06b`](https://github.com/JLRoper/agent-worktree-gui/commit/b63c06b608b5676484fa3d0b3fa682f7df98be04) · [compare v1.59.1...v1.59.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.59.1...v1.59.2)
+
+### Added
+
+- feat: split the chart's Life / next read column into Life and Next read ([`b63c06b`](https://github.com/JLRoper/agent-worktree-gui/commit/b63c06b608b5676484fa3d0b3fa682f7df98be04))
+
+## v1.59.1 — 2026-11-08 · 2 commits
+
+[`e4cebdf`](https://github.com/JLRoper/agent-worktree-gui/commit/e4cebdfdd0d443ad34c3d4ec03373c679c5dc936) · [compare v1.59.0...v1.59.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.59.0...v1.59.1)
+
+### Docs & tests
+
+- docs: render the changelog - 428 releases ([`9e6c109`](https://github.com/JLRoper/agent-worktree-gui/commit/9e6c109f142ce270b777d6632979b5f535546e7f))
+- docs: the module map at 11-08, with eight of the nine steps landed ([`e4cebdf`](https://github.com/JLRoper/agent-worktree-gui/commit/e4cebdfdd0d443ad34c3d4ec03373c679c5dc936))
 
 ## v1.59.0 — 2026-11-08 · 1 commit
 
