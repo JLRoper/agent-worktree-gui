@@ -252,7 +252,7 @@ export function createJobsRoutes({ jobs, config = {}, assistant, broadcast, gone
         // separate action, and a "clear" that silently killed a turn would be a trap.
         const r = jobs.clearThread(thread);
         if (!r.ok) {
-          sendJson(res, 409, { error: `a turn is still running in this agent — cancel it first`, running: r.running });
+          sendJson(res, 409, { error: `a turn is still running in this agent - cancel it first`, running: r.running });
           return true;
         }
         broadcast({ type: "jobs", jobs: jobs.list() });
