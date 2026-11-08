@@ -77,10 +77,18 @@ is how one gets in, appending by pipeline id and never replacing what is held â€
 live file the loader refuses WHOLE (or cannot parse at all) is REPLACED by the document being imported, and the
 answer says it is a repair and names the fault of the file it replaces. A bundle that loads is never replaced.
 
-Both readers already stand on `parseBundle` for the bundle, and on nothing shared for anything else:
-`lib/pipeline-window.js` and `lib/task-pipeline-assign.js` each call `readBundle(config.pipelineBundleFile)`
-themselves, and the Settings catalogue never reads the bundle at all. There are three reads of one
-file and no single answer that says "these are the panel's pipelines".
+Both readers already stand on `parseBundle`, and most of them reach it through ONE read: `lib/pipeline-source.js`'s
+`readPipelineSource(config)` is what `lib/pipeline-window.js`, `lib/task-pipeline-assign.js` and the Settings
+catalogue (as the `pdl` block of `GET /api/pipelines`) call, so the window, the picker and the tab answer from the
+same document. The driver (`lib/assistant.js`) reads `config.pipelineBundleFile` itself, once per sweep, because a
+sweep must not depend on an HTTP answer.
+
+A file that is only AMBIGUOUS - a gate that declares outcomes, needs routes, and has none - is not replaced by that
+import unless the reader chooses to: `tools/repair-pipeline-bundle.mjs` (planning in
+`lib/pipeline-bundle-repair.js`) copies the routes the shipped seed declares for the SAME pipeline and gate into the
+live document, checks them against the live handoffs, and writes the result only after `parseBundle` accepts it. It
+also writes an explicit `"decision": null` on a gate that declares no decision, so a pause says so in the file. The
+loader's refusal is untouched either way: a bundle that leaves an outcome unrouted still does not load.
 
 ## Where the two lists meet
 
