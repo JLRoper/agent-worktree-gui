@@ -1,12 +1,14 @@
 #!/usr/bin/env node
-// tools/land.mjs — the landing's LAST step: render the changelog on the base branch, commit it, publish it.
+// tools/land.mjs — the landing's LAST step: render the changelog on the base branch, commit it, publish it, and
+// move the release's tag onto the commit the merge produced.
 //
 // WHY: the render used to be a second step a landing agent had to remember ("now run npm run changelog, commit
 // it, push it"). A rule in a document is not a pipeline: landings finished with a CHANGELOG that named every
 // release but the one that had just landed, `npm run changelog:check` stayed red, and the next reader found a
 // release with no section. This is the command the landing path runs instead, and it is the whole step:
 //
-//   node tools/land.mjs              on the base branch, after the merge: render, commit if it changed, push, prove
+//   node tools/land.mjs              on the base branch, after the merge: render, commit if it changed, push, move
+//                                    the release's tag onto the merged commit, prove
 //   node tools/land.mjs --check      render in memory; exit 1 when the base's changelog is stale (writes nothing)
 //   node tools/land.mjs --render     render only, in whatever tree you are in — the BRANCH case, where the sections
 //                                    describe versions the base ALREADY carries and the landing's own section has
@@ -27,6 +29,10 @@
 //     when every commit it is sending touches nothing but CHANGELOG.md, and prints that line instead of leaving
 //     the bypass silent.
 //
+//   - THE ANCHOR MOVES WITH THE MERGE. A rebase merge re-creates the branch's commit, so `v<version>` still names
+//     the branch's pre-merge sha and `verify-version-tags` reads wrong-commit the moment the landing says it is
+//     done. The tag move belongs to the landing (tools/release-tag.mjs), not to a hand step after it.
+//
 // Idempotent by construction: the render is compared with the file before anything is written, so a second run
 // finds it current, commits nothing, pushes nothing and leaves the tree clean. The decision is one pure function
 // (landPlan) so the states below are pinned by test/land.test.js without building a repository for each one.
@@ -37,6 +43,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { renderRepo } from "./changelog.mjs";
 import { repoRoot } from "./release-history.mjs";
+import { moveReleaseTag } from "./release-tag.mjs";
 
 export const FILE = "CHANGELOG.md";
 
@@ -214,7 +221,8 @@ function parseArgs(argv) {
 
 const USAGE = [
   "node tools/land.mjs [--check | --render] [--base main] [--remote origin] [--no-fetch] [--no-push] [--full]",
-  "  the landing's last step: render CHANGELOG.md on the base branch, commit it as a docs commit, push it, prove it.",
+  "  the landing's last step: render CHANGELOG.md on the base branch, commit it as a docs commit, push it, move the",
+  "  release's tag onto the commit that first declared it, and prove it.",
   "  --check   write nothing; exit 1 when the base's changelog is stale (the gate shape)",
   "  --render  write the file only — the branch case, for versions the base already carries",
   "  --full    rebuild every release from the first tag instead of rendering forward from the file's own sections",
@@ -356,34 +364,47 @@ function main(argv) {
   // Publish. A gate publishes nothing; a base that is already at the remote has nothing to send; a base carrying
   // the landing and not yet pushed sends the landing with its render, which is the step this command exists for.
   const sendable = plan.action === "commit" || ahead > 0;
-  if (mode === "check" || !opt.push || !remote || !sendable) {
+  const publishing = mode !== "check" && Boolean(opt.push && remote && sendable);
+  if (!publishing) {
     if (!remote && plan.action === "commit") console.log("land: no remote — the render is committed locally only");
-    return verify(root, rendered);
+  } else {
+    const bypass = docsOnlyPush(root, remoteRef);
+    const args = ["push", remote, base];
+    if (bypass) args.push("--no-verify");
+    try {
+      git(root, args);
+    } catch (e) {
+      console.error(`land: the push was refused — ${String((e.stderr || e.message || "").trim().split("\n").slice(-2).join(" ") || "unknown error")}`);
+      console.error(
+        "land: the render is committed and the tree is clean; the refusal is a hook's, not this tool's. A landing that spends no version (a docs-only merge) is refused by .githooks/pre-push on purpose — push it deliberately with `git push <remote> <base> --no-verify` and say why in the PR, or land a branch that bumps.",
+      );
+      return 1;
+    }
+    console.log(
+      `land: pushed ${base} to ${remote}${bypass ? " with --no-verify — every commit sent touches only CHANGELOG.md, and a render spends no version (docs/versioning.md)" : ""}`,
+    );
+    const sent = git(root, ["rev-parse", "HEAD"]);
+    const there = (gitOk(root, ["ls-remote", remote, `refs/heads/${base}`]) || "").split(/\s+/)[0] || "";
+    if (there !== sent) {
+      console.error(`land: ${remote}/${base} reads ${there.slice(0, 7) || "nothing"}, not ${sent.slice(0, 7)} — the push did not land`);
+      return 1;
+    }
+    console.log(`land: ${remote}/${base} is at ${sent.slice(0, 7)}`);
   }
 
-  const bypass = docsOnlyPush(root, remoteRef);
-  const args = ["push", remote, base];
-  if (bypass) args.push("--no-verify");
-  try {
-    git(root, args);
-  } catch (e) {
-    console.error(`land: the push was refused — ${String((e.stderr || e.message || "").trim().split("\n").slice(-2).join(" ") || "unknown error")}`);
-    console.error(
-      "land: the render is committed and the tree is clean; the refusal is a hook's, not this tool's. A landing that spends no version (a docs-only merge) is refused by .githooks/pre-push on purpose — push it deliberately with `git push <remote> <base> --no-verify` and say why in the PR, or land a branch that bumps.",
-    );
-    return 1;
+  // The anchor. A rebase merge re-creates the branch's bump commit, so the tag `version.mjs apply` created on the
+  // branch names a commit the base does not carry, and `verify-version-tags` reads it as wrong-commit the moment
+  // the landing is called finished. Moving it here is what makes that move part of the landing instead of a hand
+  // step after it: the version comes from this tree's package.json, the commit from the walk the gate judges.
+  // A gate writes nothing, and a landing that is not publishing anything has no remote claim to move.
+  const tag = mode === "check" ? null : moveReleaseTag({ root, ref: "HEAD", remote: opt.push ? remote : null, push: opt.push });
+  if (tag) {
+    for (const line of tag.notes) console.log(`land: ${line}`);
+    if (!tag.ok) console.error(`land: FAILED — ${tag.error}`);
   }
-  console.log(
-    `land: pushed ${base} to ${remote}${bypass ? " with --no-verify — every commit sent touches only CHANGELOG.md, and a render spends no version (docs/versioning.md)" : ""}`,
-  );
-  const sent = git(root, ["rev-parse", "HEAD"]);
-  const there = (gitOk(root, ["ls-remote", remote, `refs/heads/${base}`]) || "").split(/\s+/)[0] || "";
-  if (there !== sent) {
-    console.error(`land: ${remote}/${base} reads ${there.slice(0, 7) || "nothing"}, not ${sent.slice(0, 7)} — the push did not land`);
-    return 1;
-  }
-  console.log(`land: ${remote}/${base} is at ${sent.slice(0, 7)}`);
-  return verify(root, rendered);
+
+  const verified = verify(root, rendered);
+  return tag && !tag.ok ? 1 : verified;
 }
 
 // The proof, in the check's own words: a re-render against what is now on disk and in HEAD. If these two disagree
