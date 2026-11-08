@@ -1,12 +1,14 @@
-// The Role tab is a ROLE editor: one selector, then three groups in one order — what the role is for (name and
-// description), the prompt, and the charter — and Save, Create role and New assistant from this role at the bottom.
+// The Role tab is a ROLE editor: a Role group holding the selector, then three groups in one order — what the role
+// is for (name and description), the prompt, and the charter — and Save, Create role and New assistant from this
+// role at the bottom.
 //
 // What this file is the contract for, and why each half is asserted where it is:
 //
 //   1. THE SHAPE is the pane's own renderer, sliced out of public/assistant.js and run against a stub document: one
-//      #as-role-pick at the top, three .as-group blocks in that order, each carrying ONE sentence (a single period),
-//      the four editable fields, and the three buttons inside the LAST element of the pane. A fourth group, a second
-//      picker or a button above the charter is the regression this pins.
+//      #as-role-pick inside the first .as-group (headed "Role", carrying the library's count on that heading), then
+//      three .as-group blocks in that order, each carrying ONE sentence (a single period), the four editable fields,
+//      and the three buttons inside the LAST element of the pane. A second picker, a picker outside the first group,
+//      a count trailing the select, or a button above the charter is the regression this pins.
 //   2. NO PER-ASSISTANT REFERENCE survives in the pane: the thread id, "each assistant has its own copy", the
 //      Assistant #2 versus #1 sentence, and the read-only preview dance are the strings the brief takes out, and
 //      they are asserted ABSENT rather than left to a reader to notice.
@@ -133,13 +135,20 @@ return { renderAssistantRole, loadRoleText, roleShown, roleValues, roleDirty, ro
 
 const groupStarts = (html) => [...html.matchAll(/<div class="as-group">\s*<h4>([^<]+)<\/h4>\s*<p class="as-help">([^<]+)<\/p>/g)].map(([, h, s]) => ({ h, s }));
 
-test("the tab is one role selector, then the three groups in order, each with one sentence", async () => {
+test("the tab is a Role group holding the selector, then the three groups in order, each with one sentence", async () => {
   const p = pane();
   p.api.renderAssistantRole(true);
   await p.flush();
   const html = p.host.innerHTML;
   assert.equal((html.match(/id="as-role-pick"/g) || []).length, 1, "exactly one role selector");
-  assert.ok(html.indexOf('id="as-role-pick"') < html.indexOf('<div class="as-group">'), "the selector sits above the groups");
+  const firstGroup = html.indexOf('<div class="as-group"');
+  const secondGroup = html.indexOf('<div class="as-group"', firstGroup + 10);
+  assert.ok(firstGroup > 0 && secondGroup > firstGroup, "the first group opens before the three below it");
+  assert.ok(html.indexOf('id="as-role-pick"') > firstGroup, "the selector sits inside the first group");
+  assert.ok(html.indexOf('id="as-role-pick"') < secondGroup, "…and above the three below it, not inside one");
+  assert.match(html.slice(firstGroup, secondGroup), /<h4>Role <span class="as-hint" data-as-rolecount>2 roles in this panel<\/span><\/h4>/, "its heading is Role, and the library's count rides that heading");
+  assert.ok(html.indexOf("data-as-rolecount") < html.indexOf('id="as-role-pick"'), "the count is on the heading, not trailing the select");
+  assert.match(html.slice(firstGroup, secondGroup), /<label class="as-role-field"[^>]*>role\s*<select id="as-role-pick"/, "the picker is a labelled .as-role-field, the way the name box is");
   const groups = groupStarts(html);
   assert.deepEqual(groups.map((g) => g.h), ["What this role is for", "The prompt", "The charter"], "the three groups, in the brief's order");
   for (const g of groups) {
@@ -151,7 +160,7 @@ test("the tab is one role selector, then the three groups in order, each with on
   assert.match(groups[2].s, /charter/i, "the third is about the charter");
   assert.match(groups[2].s, /first turn/i, "and says when it is sent: the first turn");
   assert.match(groups[2].s, /every twentieth turn/i, "…on change, and every twentieth turn");
-  assert.equal((html.match(/<div class="as-group">/g) || []).length, 3, "three groups, no fourth");
+  assert.equal((html.match(/<div class="as-group"/g) || []).length, 4, "four groups: the Role picker's, then the three");
   // The four fields the editor writes, one per subject.
   for (const id of ["as-role-name", "as-role-description", "as-role-prompt", "as-role-text"]) {
     assert.match(html, new RegExp(`id="${id}"`), `${id} is in the pane`);

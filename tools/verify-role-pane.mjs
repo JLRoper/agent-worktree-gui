@@ -5,10 +5,13 @@
 // Driven in a real browser over a panel sandbox of its own. The brief took the per-assistant references out of this
 // tab and gave it the save path it never had, so the gate proves both halves:
 //
-//   1. THE SHAPE: one #as-role-pick at the top; three .as-group blocks in ONE order (what the role is for -> the
-//      prompt -> the charter), each with a single sentence and its own field(s); Save, Create role and New assistant
-//      from this role together in one actions block at the bottom; and no per-assistant words on the pane at all -
-//      no thread id, no "each assistant has its own copy", no Assistant #2-versus-#1 sentence, no preview.
+//   1. THE SHAPE: one #as-role-pick inside the first .as-group, whose heading reads "Role" and carries the library's
+//      count on that heading line; then three more .as-group blocks in ONE order (what the role is for -> the prompt
+//      -> the charter), each with a single sentence and its own field(s); Save, Create role and New assistant from
+//      this role together in one actions block at the bottom; and no per-assistant words on the pane at all - no
+//      thread id, no "each assistant has its own copy", no Assistant #2-versus-#1 sentence, no preview. The picker
+//      is also measured: its row starts on the headings' left edge and its box takes the group's width, so the top
+//      line lines up with the groups under it instead of sitting outside them.
 //   2. THE READ: the boxes hold the ROLE the picker selects, byte for byte, read through
 //      GET /api/assistant/role/charter - never an assistant's copy of it.
 //   3. THE SAVE: editing name, description, prompt and charter and pressing Save writes THAT ROLE through
@@ -181,7 +184,14 @@ try {
     const textOf = async (sel) => ((await page.locator(sel).count()) ? page.locator(sel).innerText() : "");
     const valueOf = (sel) => page.locator(sel).inputValue();
     const saveDisabled = () => page.locator("#btn-as-role").isDisabled();
-    const groupHeads = () => page.$$eval("#as-role .as-group h4", (els) => els.map((e) => e.innerText.trim()));
+    const groupHeads = () =>
+      page.$$eval("#as-role .as-group h4", (els) =>
+        els.map((e) => {
+          const head = e.cloneNode(true);
+          for (const hint of head.querySelectorAll(".as-hint")) hint.remove();
+          return head.textContent.trim();
+        }),
+      );
     const groupSentences = () => page.$$eval("#as-role .as-group .as-help", (els) => els.map((e) => e.innerText.trim()));
     const openRole = async () => {
       if (!(await page.locator("#as-role:not(.hidden)").count())) await page.click('#as-tabs [data-as-tab="role"]');
@@ -203,11 +213,33 @@ try {
     await page.waitForSelector("#assistant", { state: "visible" });
     await openRole();
 
-    console.log("\n== 1. one selector, three groups in order, one sentence each, and the presses at the bottom ==");
+    console.log("\n== 1. the Role group holds the selector, then three groups in order, one sentence each, and the presses at the bottom ==");
     check("one role selector", await page.locator("#as-role-pick").count(), 1);
-    check("…at the top of the pane", await page.evaluate(() => document.querySelector("#as-role-pick").getBoundingClientRect().top < document.querySelector("#as-role .as-group").getBoundingClientRect().top), true);
-    check("three groups", await page.locator("#as-role .as-group").count(), 3);
-    check("their order", (await groupHeads()).map((h) => h.toLowerCase()), ["what this role is for", "the prompt", "the charter"]);
+    check("four groups", await page.locator("#as-role .as-group").count(), 4);
+    check("their order", (await groupHeads()).map((h) => h.toLowerCase()), ["role", "what this role is for", "the prompt", "the charter"]);
+    const roleHead = (await textOf("#as-role .as-group[data-as-roletop] h4")).replace(/\s+/g, " ").trim();
+    ok("the Role heading carries the library's count", /^role \d+ roles? in this panel$/i.test(roleHead), roleHead);
+    ok("…and the selector sits inside that group, not above it", await page.evaluate(() => Boolean(document.querySelector("#as-role .as-group[data-as-roletop] #as-role-pick"))));
+    ok("…as a labelled .as-role-field, the way the name box is", await page.evaluate(() => {
+      const label = document.querySelector("#as-role-pick")?.closest("label.as-role-field");
+      return Boolean(label && label.getAttribute("title") && label.textContent.trim().toLowerCase().startsWith("role"));
+    }));
+    // The alignment the top line is meant to have: the picker's row starts on the group headings' own left edge, and
+    // its box takes as much of the row as the group gives it - the same shape as the name box in the group below.
+    const boxOf = (sel) =>
+      page.evaluate((s) => {
+        const el = document.querySelector(s);
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        return { left: Math.round(r.left), width: Math.round(r.width) };
+      }, sel);
+    const headLefts = await page.$$eval("#as-role .as-group h4", (els) => els.map((e) => Math.round(e.getBoundingClientRect().left)));
+    ok("every group's heading shares one left edge", new Set(headLefts).size === 1, headLefts.join(", "));
+    const pickRow = await boxOf("#as-role .as-group[data-as-roletop] .as-role-field");
+    ok("…and the picker's row starts on it", pickRow.left === headLefts[0], `row ${pickRow.left}px, headings ${headLefts[0]}px`);
+    const roleGroup = await boxOf("#as-role .as-group[data-as-roletop]");
+    const pickBox = await boxOf("#as-role-pick");
+    ok("the picker's box takes the group's width", pickBox.width / roleGroup.width > 0.8, `${pickBox.width}px of ${roleGroup.width}px`);
     const sentences = await groupSentences();
     check("one sentence per group", sentences.map((s) => (s.match(/\./g) || []).length), [1, 1, 1]);
     ok("the first says what the role is for, in its name and description", /name/.test(sentences[0]) && /description/.test(sentences[0]), sentences[0]);
@@ -386,10 +418,11 @@ try {
   console.log("\n== summary ==");
   console.log(`${checks} checks, ${failures} failed`);
   console.log("\nWHAT WAS DRIVEN: a real panel process on its own port over its own PANEL_CONFIG and HERMES_HOME, two roles");
-  console.log("created through its own route, and headless Chromium over it. The Role tab's shape (one selector, three");
-  console.log("groups, one sentence each, the presses at the bottom), the role's own read and PUT save, the cap warning and");
-  console.log("its forced-press refusal, the pick as the subject, the dirty guard, Create role and New assistant from this");
-  console.log("role were all exercised. Browser dialogs: zero by counter, not by inspection.");
+  console.log("created through its own route, and headless Chromium over it. The Role tab's shape (the Role group holding");
+  console.log("the selector under a heading that carries the count, three groups below it with one sentence each, the");
+  console.log("presses at the bottom), the picker's row measured against the headings' left edge, the role's own read and");
+  console.log("PUT save, the cap warning and its forced-press refusal, the pick as the subject, the dirty guard, Create");
+  console.log("role and New assistant from this role were all exercised. Browser dialogs: zero by counter, not by inspection.");
   if (!failures) console.log("ROLE-PANE-OK");
 } catch (err) {
   failures += 1;
