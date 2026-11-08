@@ -18,6 +18,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+const settings = readFileSync(new URL("../public/settings.js", import.meta.url), "utf8");
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
 const css = readFileSync(new URL("../public/style.css", import.meta.url), "utf8");
 
@@ -332,8 +333,9 @@ test("the page binds the press and the select, and repaints the roster on a snap
   const changeAt = src.indexOf('$("reset-assistant")?.addEventListener("change"');
   assert.ok(changeAt > 0, "the select is bound");
   assert.match(src.slice(changeAt, changeAt + 120), /resetDisarm\(\);[\s\S]{0,8}paintResetRow\(\);/);
-  const snapshotAt = src.indexOf("function applySnapshot(data)");
-  const snapshot = src.slice(snapshotAt, src.indexOf("\nfunction ", snapshotAt + 10));
+  const snapshotAt = settings.indexOf("function applySnapshot(data)");
+  assert.ok(snapshotAt > 0, "applySnapshot is in public/settings.js");
+  const snapshot = settings.slice(snapshotAt, settings.indexOf("\nfunction ", snapshotAt + 10));
   assert.match(snapshot, /if \(typeof paintResetRow === "function"\) paintResetRow\(\);/, "a new assistant becomes a choice on the next snapshot");
   const open = src.slice(src.indexOf("function toggleSettings(open = null)"), src.indexOf("function toggleSettings(open = null)") + 3000);
   assert.match(open, /paintResetRow\(\);/, "opening Settings reads the roster again");
