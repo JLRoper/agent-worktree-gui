@@ -197,8 +197,8 @@ try {
   });
   ok("the route filed it into Assistant #1's queue", filed.status === 200 && filed.body?.task?.id, JSON.stringify(filed.body?.error || filed.body?.task?.title || filed.body));
   check("…naming Assistant #2 as its filer and owning nobody", [filed.body?.task?.createdBy, filed.body?.task?.owner], ["assistant-2", null]);
-  const dock = await POST("/api/assistant/profile", { assistantId: "assistant-1", dock: "floating" });
-  ok("the float is the frame this gate drives", dock.status === 200, JSON.stringify(dock.body?.dock || dock.body?.error));
+  const dock = await POST("/api/settings/general", { dockMode: "floating" });
+  ok("the float is the frame this gate drives", dock.status === 200 && dock.body?.settings?.dockMode === "floating", JSON.stringify(dock.body?.settings?.dockMode || dock.body?.error));
 
   const pw = loadPlaywright();
   if (!pw) throw new Error("BROWSER-HALF-NOT-RUN — no Playwright install; set PANEL_PLAYWRIGHT_ROOT to a dir holding node_modules/playwright");

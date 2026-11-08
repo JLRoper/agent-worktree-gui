@@ -149,7 +149,7 @@ for (const [w, h] of [[380, 520], [480, 600], [640, 760]]) for (const z of [100,
 for (const w of [340, 480]) for (const z of [100, 125]) cases.push({ frame: "docked", w, z });
 
 try {
-  await post("/api/assistant/profile", { assistantId: "assistant-1", dock: "floating" });
+  await post("/api/settings/general", { dockMode: "floating" });
   await post("/api/assistant/watch", { thread: "panel-assistant", title: "the deadline bar keeps its own box", minutes: 30, assistantId: "assistant-1" });
 
   const { chromium } = playwright;
@@ -166,8 +166,7 @@ try {
         },
         [{ x: 900, y: 90, w, h }, z, frame === "docked" ? w : 480],
       );
-      if (frame === "docked") await post("/api/assistant/profile", { assistantId: "assistant-1", dock: "docked" });
-      else await post("/api/assistant/profile", { assistantId: "assistant-1", dock: "floating" });
+      await post("/api/settings/general", { dockMode: frame === "docked" ? "docked" : "floating" });
       await page.reload({ waitUntil: "domcontentloaded" });
       await page.waitForSelector("#btn-assistant", { timeout: 20_000 });
       await page.waitForTimeout(600);

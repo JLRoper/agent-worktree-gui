@@ -19,10 +19,11 @@
   const DOCK_SHARE = 0.6;
   const DOCK_DEFAULT = 480;
   // ---- the frame's other mode: the float ----------------------------------------------------------
-  // Which one is on screen is the ASSISTANT's setting (`dock`, in that assistant's own settings file), not a panel
-  // switch: #2 can float while #1 stays docked, and the page re-frames on a tab change. What the float remembers is
-  // its rect, kept beside the rail's width rather than replacing it — switching back to the rail must not lose the
-  // width the reader dragged, and switching to the float must not lose the place they left it at.
+  // Which one is on screen is the PANEL's setting (`dockMode` in the panel's own config.json, chosen in
+  // Settings → General), not one assistant's: every assistant's pane is drawn the same way, and switching tabs no
+  // longer changes it. What the float remembers is its rect, kept beside the rail's width rather than replacing it —
+  // switching back to the rail must not lose the width the reader dragged, and switching to the float must not lose
+  // the place they left it at.
   const FLOAT_KEY = "wm.assistantFloat";
   const FLOAT_MIN_W = 320;
   const FLOAT_MIN_H = 320;
@@ -366,16 +367,45 @@
 
   // ---- which frame is on screen: the rail, or the float -------------------------------------------
   //
-  // The frame is ONE ASSISTANT'S OWN setting, not the panel's: `state.assistant.dock` is the server's map of
-  // assistant id -> "docked" | "floating", read from that assistant's settings file. `docked` is the default and the
-  // absence of the key, so a panel that has never been touched draws exactly the rail it always did.
-  //
-  // The tab the reader is on decides whose frame is drawn. A list tab (Alerts, Watchdog, …) belongs to no session, so
-  // it falls back to the last session tab — the same fallback the Role pane and the intro boxes use — which keeps the
-  // frame still while the reader walks the lists.
+  // The frame is ONE CHOICE FOR THE WHOLE PANEL: `state.settings.dockMode` — "docked" | "floating", out of the
+  // panel's own config.json, chosen in Settings → General. It used to be each assistant's own field; the move made
+  // it one key, so this reader asks that key and nothing else and every assistant's pane is drawn the same way.
+  // `docked` is the default AND what an absent key means, so a panel that has never chosen draws the rail it
+  // always did. The tab the reader is on therefore no longer decides the frame — it only decides whose content the
+  // pane shows — which is why `frameSessionId` is still here: `applyFrame` uses it to notice a tab change and
+  // re-place the float for the new pane.
   const frameSessionId = () => (isAssistant(state.assistantView?.assistant) ? state.assistantView.assistant : lastSession);
-  const dockModeOf = (id) => ((state.assistant && state.assistant.dock ? state.assistant.dock[id] : "") === "floating" ? "floating" : "docked");
-  const floating = () => dockModeOf(frameSessionId()) === "floating";
+  const dockModeOf = () => (String(state.settings?.dockMode || "") === "floating" ? "floating" : "docked");
+  const floating = () => dockModeOf() === "floating";
+
+  // ---- one-time: the per-assistant frame becomes the panel's one key -------------------------------
+  //
+  // Until this build each assistant carried its own `dock` in its own settings file. The frame is one key now, so
+  // the value is ADOPTED rather than dropped: the server still serves the map of values previous builds wrote
+  // (`state.assistant.dock`, empty for ever once this has run), and the assistant whose tab is on screen is the one
+  // asked — the frame the reader is actually looking at is the one the panel keeps. Where two assistants disagreed
+  // the other value goes, and the General row's help says so. The write lands in the panel's config.json; the
+  // server retires every per-assistant key in the same answer, so the map cannot outlive this call.
+  let dockAdopted = false;
+  function adoptDockFromSettings() {
+    if (dockAdopted || !state.settings || typeof state.settings !== "object") return;
+    if (state.settings.dockMode === "docked" || state.settings.dockMode === "floating") {
+      dockAdopted = true;
+      return;
+    }
+    const legacy = state.assistant && state.assistant.dock;
+    if (!legacy || typeof legacy !== "object" || !Object.keys(legacy).length) return;
+    dockAdopted = true;
+    const shown = frameSessionId();
+    const value = legacy[shown] === "floating" ? "floating" : "docked";
+    // The page's own copy first, so the very first paint draws the frame the reader has been looking at …
+    state.settings = { ...state.settings, dockMode: value };
+    // … then the write. A failed save leaves `dockAdopted` false and the old map in place, so the next page load
+    // tries again rather than pretending the value was carried.
+    asPost("/api/settings/general", { dockMode: value, from: shown }).catch(() => {
+      dockAdopted = false;
+    });
+  }
   // A remembered number, or the fallback for anything that is not one: a style length must never be `NaNpx`.
   const finite = (v, fallback) => (Number.isFinite(Number(v)) ? Number(v) : fallback);
 
@@ -414,7 +444,7 @@
     const el = as$("assistant");
     if (!el) return;
     const id = frameSessionId();
-    const mode = dockModeOf(id) === "floating" ? "floating" : "docked";
+    const mode = dockModeOf();
     const moved = mode !== frameMode || id !== frameId;
     frameMode = mode;
     frameId = id;
@@ -597,6 +627,9 @@
   function applyAssistant(data) {
     if (!data || typeof data !== "object") return;
     state.assistant = data;
+    // The one-time move of the frame out of this payload and into the panel's own key. Before any paint, so the
+    // reader never sees the rail flash where their window was.
+    adoptDockFromSettings();
     if (data.thread) state.assistantThread = data.thread;
     // WHICH THREADS ARE THE FLOAT'S. The list is every assistant's CURRENT thread plus the threads a hard restart
     // left behind: those still hold that assistant's transcript, and app.js hides an assistant conversation from the
@@ -899,8 +932,9 @@
 
   function renderAssistant() {
     const a = state.assistant;
-    // Which frame this assistant is drawn in is a setting, and this is the one painter every path already calls: a
-    // save, a tab change and the first snapshot all land here, so the panel re-frames without a reload.
+    // Which frame the PANE is drawn in is the panel's setting, and this is the one painter every path already calls:
+    // a save, a settings event from another tab and the first snapshot all land here, so it re-frames without a
+    // reload. The tab decides whose content is inside the pane, never its shape.
     applyFrame();
     const mode = a?.settings?.autonomy || "draft";
     const modeEl = as$("as-mode");
@@ -2642,9 +2676,6 @@
     const first = id === FIRST_ASSISTANT;
     const rec = sessionById(id);
     const s = first ? a.settings : (a.assistantSettings || {})[id] || {};
-    // The frame this assistant's pane is drawn in, from the server's per-assistant map — not from `s`: it is one of
-    // the file's non-knob fields, so it is never part of the settings object a turn reads.
-    const dockMode = (a.dock || {})[id] === "floating" ? "floating" : "docked";
     const autonomy = a.autonomy || ["draft", "auto-safe", "auto"];
     const autonomyLabel = {
       draft: "draft only — nothing is sent without my click",
@@ -2739,20 +2770,6 @@
         note: String(host.dataset?.hardRestartNote || ""),
         live: Boolean(rec?.live),
       })}
-      <div class="as-group">
-        <h4>How this assistant's pane is drawn</h4>
-        <div class="as-help">This is THIS assistant's frame, not the panel's: another assistant can float while this
-        one stays docked, and the panel re-frames when you switch tabs. <b>docked</b> is the rail beside the board;
-        <b>floating</b> is a window over it, at the size and place you last left it. The switch takes effect at once —
-        nothing reloads — and it is saved in this assistant's own settings file with the rest of its fields.</div>
-        <div class="as-line">
-          <label title="which frame THIS assistant's pane is drawn in — saved in this assistant's own settings file, and never applied to another assistant">pane <select data-as-dock="${esc(id)}" title="docked: the rail beside the board · floating: a window over the board, which you can move by its title row and size from its corner">${(a.dockModes || ["docked", "floating"])
-            .map((v) => `<option value="${esc(v)}"${dockMode === v ? " selected" : ""}>${v === "docked" ? "docked — a rail beside the board" : "floating — a window over the board"}</option>`)
-            .join("")}</select></label>
-          <span class="as-hint">switches as soon as you pick it</span>
-          <span class="as-err" id="as-dock-err-${esc(n)}"></span>
-        </div>
-      </div>
       <div class="as-group">
         <h4>Its wake budget and quiet windows</h4>
         <div class="as-line">
@@ -4619,23 +4636,6 @@
       await loadRoleText(nextId);
       return;
     }
-    if (el.dataset.asDock) {
-      // The FRAME: one assistant's own field, saved through the profile route beside its prompt and its escalation
-      // list — the same per-assistant file, not assistant.json and not the panel. The answer carries the whole state,
-      // so the panel re-frames through `applyFrame` before this repaint draws the row's new value.
-      const own = el.dataset.asDock;
-      const n = String(own).replace(/^assistant-/, "");
-      try {
-        await asPost("/api/assistant/profile", { assistantId: own, dock: el.value });
-        setErr(`as-dock-err-${n}`, "");
-      } catch (err) {
-        setErr(`as-dock-err-${n}`, err.message);
-      }
-      // Either way the pane is repainted from the stored value: a failed save puts the select back rather than
-      // leaving the control claiming a mode the file never took.
-      renderAssistantSettings(own, true);
-      return;
-    }
     if (el.dataset.asSetrole) {
       // THE ROLE PICKER in Settings — the one control that changes a role. It writes the assistant's own record
       // through the role route, never a page-side copy, and it deliberately does NOT adopt the role's charter: the
@@ -5073,6 +5073,11 @@
     renderAssistantChat(rec ? rec.id : activeSessionId());
   };
   window.__assistantToggle = toggleAssistant;
+  // Settings → General's frame picker: the setting is the panel's, the painter is here, so app.js calls this after
+  // the save (and public/settings.js `applySettings` after any settings change from any tab). `applyFrame()` is
+  // idempotent — an unchanged mode returns before it measures anything — so calling it on every settings event is
+  // free, and a changed one re-frames the open pane with no reload.
+  window.__assistantFrame = () => applyFrame();
   // app.js's HUMAN rotation: the thread an assistant's question lives on -> that assistant's Chat, on screen.
   window.__assistantShowThread = showAssistantThread;
   // The task pipeline window's opener, for the ONE surface outside this rail that lists queue tasks: Settings > Bundles.

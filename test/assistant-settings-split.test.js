@@ -2,9 +2,10 @@
 //
 // The page can only draw what the server tells it, so the contract is here, in three facts:
 //
-//   1. ONE OWNER PER KEY — lib/assistant/config.js's SETTINGS_SCOPE partitions every knob (and the three profile
+//   1. ONE OWNER PER KEY — lib/assistant/config.js's SETTINGS_SCOPE partitions every knob (and the two profile
 //      fields) into exactly two panes, and the two derived lists never intersect. A key nobody declared has no
-//      owner, so a new knob cannot slip into a pane by default.
+//      owner, so a new knob cannot slip into a pane by default — and the pane's frame is nobody's key: it is the
+//      panel's own `dockMode`, chosen once in Settings → General.
 //
 //   2. ASSISTANT #1'S SERVED PAYLOAD IS UNCHANGED — `state().settings` is the same object, the same keys and the
 //      same values it was before the split: nothing moved out to a "watchdog" sub-record, and the panel-wide
@@ -94,11 +95,13 @@ test("every key has exactly one owner, and the two panes' key lists never inters
   );
   // The profile fields are an assistant's, and they are the only non-knobs in the table.
   const notKnobs = [...WATCHDOG_KEYS, ...ASSISTANT_KEYS].filter((k) => !(k in DEFAULTS));
-  assert.deepEqual(notKnobs.sort(), ["dock", "escalateTo", "prompt"]);
+  assert.deepEqual(notKnobs.sort(), ["escalateTo", "prompt"]);
   for (const key of notKnobs) assert.equal(scopeOf(key), "assistant");
-  // The frame is the third kind of field in an assistant's own file: per assistant, and not a knob a turn reads.
-  assert.equal(scopeOf("dock"), "assistant");
-  assert.ok(!("dock" in DEFAULTS), "the frame is not in the settings object a turn runs on");
+  // The pane's frame is NOT one of an assistant's keys any more: it is the panel's one `dockMode` in config.json,
+  // chosen in Settings → General and applied to every assistant's pane at once, so it has no row in this table and
+  // no per-assistant file to live in. `null` is the table's answer for a key nobody declared.
+  assert.equal(scopeOf("dock"), null, "the frame has no per-assistant owner");
+  assert.ok(!("dock" in DEFAULTS), "and it is still not a knob a turn runs on");
   // A key nobody declared has NO owner: a new knob must be placed before a pane can draw it.
   assert.equal(scopeOf("aKeyNobodyDeclared"), null);
   // The panel-wide half is the sentry's own: the switch, the table, the journal and the per-pass bars.

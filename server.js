@@ -101,6 +101,7 @@ import {
 import { listProfiles, saveProfile, deleteProfile, profileWithKey } from "./lib/provider-profiles.js";
 import { hermesSessionTail } from "./lib/activity.js";
 import { Assistant, ASSISTANT_THREAD, ElementChannel, createBridgeChannel } from "./lib/assistant.js";
+import { DOCK_MODES, pickDock } from "./lib/assistant/config.js";
 // The per-assistant task queue's prefix, cut into routes/ (step 8 of docs/reports/module-map-2026-11-07.html). One
 // import and one row in the mount table: the module owns the routes and the wire shape, the Assistant owns the file
 // path and the read-modify-write, and this composition root only hands both of them the transport helpers.
@@ -416,6 +417,12 @@ async function loadConfig() {
   // collapsed parent, and when it fires every card under that parent is written into the browser's remembered fold
   // set. Server-side like the age threshold below, so it survives a restart and applies to every browser.
   cfg.collapseAfterSeconds = collapseAfterSecondsFrom(cfg.collapseAfterSeconds);
+  // HOW THE ASSISTANT'S PANE IS DRAWN: one `docked` rail or one `floating` window for the WHOLE panel, out of this
+  // file because it is the panel's own frame and not any assistant's. ABSENT is not `docked` here: it means the
+  // panel has never made this choice, which is what lets a per-assistant value written by the older build be
+  // adopted (by the page, which knows which assistant is on screen) instead of dropped. A key that IS present but
+  // says something this build has no frame for reads as the default, so a hand edit cannot strand the pane.
+  cfg.dockMode = Object.prototype.hasOwnProperty.call(cfg, "dockMode") ? pickDock(cfg.dockMode) : null;
   cfg.fetchSeconds = Number(cfg.fetchSeconds ?? 600);
   cfg.threads = Number(cfg.threads) || Math.max(1, Math.min(4, cpus().length - 1));
   // How many of a project's worktrees its chart draws before the reader opens the rest. Server-side, like scanMode
@@ -1263,6 +1270,14 @@ assistant = new Assistant({
 // that checkout had been deleted. Logged once, so the path is never a mystery in the boot log.
 log(`assistant cwd: ${assistant.ensureCwd()}`);
 assistant.start();
+// A config.json that already names the pane's frame is a panel that has finished this move. Any assistant file
+// still carrying the retired per-assistant key is cleaned up here, without waiting for the next save: one key, one
+// owner. A config WITHOUT it is left alone on purpose — the page's migration reads those files first, and picks
+// the value of the assistant it is showing.
+if (config.dockMode != null) {
+  const retiredDocks = assistant.retireDockField();
+  if (retiredDocks.length) log(`pane frame: ${config.dockMode} — ${retiredDocks.length} per-assistant frame(s) retired from previous builds`);
+}
 
 // ---- the route prefixes cut out of this chain, mounted from one table ------------------------------------------
 // Step 8 of docs/reports/module-map-2026-11-07.html moves one prefix at a time into routes/, so a prefix is a ROW here
@@ -1411,6 +1426,10 @@ const settingsOut = () => ({
   // age threshold does: the timer that reads it is the page's own, and a tab opened before the number moved has to
   // agree with the file.
   collapseAfterSeconds: config.collapseAfterSeconds,
+  // The assistant pane's frame: the panel's ONE choice (`docked` or `floating`), or null on a panel that has never
+  // made one — which the page reads as "docked" and, when an assistant's file still carries the retired key,
+  // migrates. It travels with every snapshot because the frame is drawn from it on every render.
+  dockMode: config.dockMode,
   fetchSeconds: config.fetchSeconds,
   liveMinutes: config.liveMinutes ?? 5,
   // How many of a project's worktrees its chart draws before the reader opens the rest. It travels with every
@@ -3708,9 +3727,9 @@ const server = createServer(async (req, res) => {
           // The ordered escalation list. Stored and inert: the route carries it because it is one field of the same
           // per-assistant file, and nothing in the wake path reads it yet.
           escalateTo: body.escalateTo,
-          // The frame that assistant's pane is drawn in, saved in the same file. The page reads it back from the
-          // state this answer carries and re-frames the open panel, so the switch needs no reload.
-          dock: body.dock,
+          // `dock` is deliberately NOT carried. The pane's frame is the panel's one `dockMode`, saved through
+          // /api/settings/general; a stale page that still posts a per-assistant value is ignored rather than
+          // written back into a file this build no longer reads it from.
         });
         return sendJson(res, 200, { ...out, assistant: assistant.state() });
       } catch (e) {
@@ -5587,7 +5606,9 @@ const server = createServer(async (req, res) => {
     // ---- Settings → General: what the panel costs the machine -------------------------------------
     // Three numbers that were config.json-only until now, and one route for all three because they are one
     // surface: how many git scans run at once (`threads`), how often a row is re-read (`worktreeSeconds`), and the
-    // ceiling on what one assistant turn appends (`briefingBudgetChars`, stored on the assistant, not here).
+    // ceiling on what one assistant turn appends (`briefingBudgetChars`, stored on the assistant, not here). The
+    // fourth field is not a number: `dockMode` is the assistant pane's frame, one choice for every assistant, which
+    // became the panel's when it moved out of each assistant's own Settings pane.
     //
     // `threads` and `worktreeSeconds` are the spawn knobs. Measured on this machine, a CreateProcess costs 0.6-4.7s
     // under the endpoint agent, and the scan pool was running five of them continuously beside every agent tool
@@ -5611,14 +5632,20 @@ const server = createServer(async (req, res) => {
       const threads = body.threads === undefined ? config.threads : int(body.threads, 1, 16);
       const worktreeSeconds = body.worktreeSeconds === undefined ? config.worktreeSeconds : int(body.worktreeSeconds, 5, 120);
       const budget = body.briefingBudgetChars === undefined ? null : int(body.briefingBudgetChars, 0, 40_000);
+      // THE PANE'S FRAME, one choice for every assistant's pane. `pickDock(value, null)` is the validator: anything
+      // that is not one of the two modes is refused here, by name, rather than written and read back as a default.
+      const dockAsked = body.dockMode !== undefined;
+      const dockMode = dockAsked ? pickDock(body.dockMode, null) : config.dockMode;
       if (threads === null) return sendJson(res, 400, { error: "scan workers must be a whole number from 1 to 16" });
       if (worktreeSeconds === null) return sendJson(res, 400, { error: "row refresh must be a whole number of seconds from 5 to 120" });
+      if (dockAsked && dockMode === null) return sendJson(res, 400, { error: `the assistant pane must be ${DOCK_MODES.join(" or ")}` });
       if (body.briefingBudgetChars !== undefined && budget === null) {
         return sendJson(res, 400, { error: "the turn briefing budget must be a whole number of characters from 0 (off) to 40000" });
       }
       const patch = {};
       if (threads !== config.threads) patch.threads = threads;
       if (worktreeSeconds !== config.worktreeSeconds) patch.worktreeSeconds = worktreeSeconds;
+      if (dockAsked && dockMode !== config.dockMode) patch.dockMode = dockMode;
       if (Object.keys(patch).length) {
         try {
           await patchPanelConfig(patch);
@@ -5641,6 +5668,20 @@ const server = createServer(async (req, res) => {
         // holds finish before its threads go.
         retired.retire();
         log(`scan workers: ${threads} (the pool was rebuilt live; the old one retires when its scans settle)`);
+      }
+      if (patch.dockMode !== undefined) {
+        config.dockMode = dockMode;
+        // THE PER-ASSISTANT KEY IS RETIRED IN THE SAME BREATH. A second copy of a panel-wide choice is a value that
+        // can disagree with the panel — the thing this move exists to end — so every assistant's file loses the
+        // `dock` key as soon as the panel's own key exists. `from` is the assistant the PAGE was showing, which is
+        // the value the one-time migration adopted; it is not a write, only the name in the log line.
+        const dropped = assistant.retireDockField();
+        const cameFrom = assistant.assistants.find((a) => a.id === String(body.from || "")) || null;
+        log(
+          `pane frame: ${dockMode} — the panel's one frame${cameFrom ? `, taken from ${cameFrom.name} (the assistant the panel was showing)` : ""}${
+            dropped.length ? `; ${dropped.length} per-assistant value${dropped.length === 1 ? "" : "s"} retired` : ""
+          }`,
+        );
       }
       let settings = settingsOut();
       if (budget !== null) {
