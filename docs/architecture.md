@@ -76,7 +76,7 @@ write is a decision that has to be made somewhere visible).
 ┌───────────────────────────────▼──────────────────────────────────────────────────┐
 │ server.js — composition root                                                     │
 │   wires: config → paths → Store, Pool, Scheduler, Jobs, Assistant, Registry      │
-│   HTTP:  lib/http/transport.js (framing, auth, SSE)  lib/http/static.js (public/)│
+│   HTTP:  respond.js (responses)  transport.js (auth, SSE)  static.js (public/)  │
 │   routes: 126 branches → each one a call into a lib/ module, then broadcast      │
 └──────┬──────────────────┬───────────────────┬───────────────────┬────────────────┘
        │                  │                   │                   │

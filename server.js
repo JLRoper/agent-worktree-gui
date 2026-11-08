@@ -134,9 +134,11 @@ import {
   cleanScratch, ensureDirs, humanBytes, measureSize, migrateState, readMigrationJournal, resolveConfigPath, resolveDirs,
   SCRATCH_MARKER, sizeOf, statePaths,
 } from "./lib/paths.js";
-// HTTP framing lives in lib/http/: transport.js knows about req/res and nothing about worktrees,
-// and static.js serves public/. Both are handed the state they used to read by closure.
-import { acceptsGzip, authorised, gzip, handleStream, pageCaller, readBody, readRawBody, sendJson } from "./lib/http/transport.js";
+// HTTP framing lives in lib/http/: respond.js writes the answer and reads the body, transport.js
+// decides who may write and attaches the SSE reader, and static.js serves public/. All three are
+// handed the state they used to read by closure.
+import { authorised, handleStream, pageCaller } from "./lib/http/transport.js";
+import { acceptsGzip, gzip, readBody, readRawBody, sendJson } from "./lib/http/respond.js";
 import { serveStatic, PUBLIC_DIR } from "./lib/http/static.js";
 import { createBuild } from "./lib/build-version.js";
 // The steer refusal's own vocabulary: the page draws its control from this same file, so the route's status split
