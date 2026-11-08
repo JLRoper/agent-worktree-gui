@@ -4,16 +4,84 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.57.18 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.58.2 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-421 releases from v0.1.0 (2026-10-20) to v1.57.18 (2026-11-08), 1422 commits between the tags. Every release is anchored by an
+426 releases from v0.1.0 (2026-10-20) to v1.58.2 (2026-11-08), 1437 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.58.2 — 2026-11-08 · 2 commits
+
+[`6cd4dfd`](https://github.com/JLRoper/agent-worktree-gui/commit/6cd4dfd58e63d656dde5d6eba2258f36981e5b8b) · [compare v1.58.1...v1.58.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.58.1...v1.58.2)
+
+### Fixed
+
+- fix: the assistant cards stop drawing the thread's dim log ([`8bbd37e`](https://github.com/JLRoper/agent-worktree-gui/commit/8bbd37e47c4e0702409f0020485821248022427f))
+
+### Other
+
+- chore: 1.58.2 - the version this landing carries ([`6cd4dfd`](https://github.com/JLRoper/agent-worktree-gui/commit/6cd4dfd58e63d656dde5d6eba2258f36981e5b8b))
+
+## v1.58.1 — 2026-11-08 · 7 commits
+
+[`4046b75`](https://github.com/JLRoper/agent-worktree-gui/commit/4046b75b8fda4986f33d8d94aec19a6eec7ee7ba) · [compare v1.58.0...v1.58.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.58.0...v1.58.1)
+
+### Fixed
+
+- fix: a deleted assistant does not stay the float's last session ([`b1e456c`](https://github.com/JLRoper/agent-worktree-gui/commit/b1e456c87218a6461efd17906311e0e45099a486))
+
+### Changed
+
+- refactor: the board's projects, sections and rows move out of public/app.js ([`4046b75`](https://github.com/JLRoper/agent-worktree-gui/commit/4046b75b8fda4986f33d8d94aec19a6eec7ee7ba))
+
+### Docs & tests
+
+- test: a delete refuses by name, archives what it removes, and drops the roster row ([`5380711`](https://github.com/JLRoper/agent-worktree-gui/commit/5380711cca93baae55cf73f202998b0633e150b4))
+- test: the delete route is mounted by the real server and a fresh read loses the record ([`2ed926e`](https://github.com/JLRoper/agent-worktree-gui/commit/2ed926ece501f70bfeabb175107560c1dad3e134))
+- test: repair the gates a later landing left red on the base ([`0d283c4`](https://github.com/JLRoper/agent-worktree-gui/commit/0d283c48a011fdaa262ec682cf1b75242a7b3aeb))
+- test: the delete row's archive fixture is a relative folder ([`edc9327`](https://github.com/JLRoper/agent-worktree-gui/commit/edc9327b4164fd0565e91e5d187038477a459d4f))
+- test: three more source-scan gates follow the modules their blocks moved to ([`7294f36`](https://github.com/JLRoper/agent-worktree-gui/commit/7294f36819dcff07ce4662de5dd1bd0c185f1048))
+
+## v1.58.0 — 2026-11-08 · 1 commit
+
+[`8a834de`](https://github.com/JLRoper/agent-worktree-gui/commit/8a834de7b7108b27bef553b7e2fd454877d7cfeb) · [compare v1.57.21...v1.58.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.57.21...v1.58.0)
+
+### Added
+
+- feat: an assistant can be deleted from its own Settings, and its files are archived ([`8a834de`](https://github.com/JLRoper/agent-worktree-gui/commit/8a834de7b7108b27bef553b7e2fd454877d7cfeb))
+
+## v1.57.21 — 2026-11-08 · 2 commits
+
+[`2d81303`](https://github.com/JLRoper/agent-worktree-gui/commit/2d813034bf883418b497645b2dc4a23e1bc4e6b6) · [compare v1.57.20...v1.57.21](https://github.com/JLRoper/agent-worktree-gui/compare/v1.57.20...v1.57.21)
+
+### Fixed
+
+- fix: a queue with work in it is its own cadence, so an idle assistant is woken ([`e245813`](https://github.com/JLRoper/agent-worktree-gui/commit/e24581311101700f6fad07bdd43492e1830f523b))
+
+### Other
+
+- chore: 1.57.21 - the version this landing carries ([`2d81303`](https://github.com/JLRoper/agent-worktree-gui/commit/2d813034bf883418b497645b2dc4a23e1bc4e6b6))
+
+## v1.57.20 — 2026-11-08 · 3 commits
+
+[`6384f13`](https://github.com/JLRoper/agent-worktree-gui/commit/6384f13b65a9e33a924326c551b9c259c62b4ded) · [compare v1.57.18...v1.57.20](https://github.com/JLRoper/agent-worktree-gui/compare/v1.57.18...v1.57.20)
+
+### Changed
+
+- refactor: the settings appliers move out of public/app.js into public/settings.js ([`a0f8c20`](https://github.com/JLRoper/agent-worktree-gui/commit/a0f8c20090cb8fcf6b8b53f693af9d52272f333b))
+
+### Docs & tests
+
+- docs: render the changelog — 421 releases ([`cbfcb06`](https://github.com/JLRoper/agent-worktree-gui/commit/cbfcb0609a0bf522a4262ad49130e0169eeee348))
+
+### Other
+
+- chore: 1.57.20 - the version this landing carries ([`6384f13`](https://github.com/JLRoper/agent-worktree-gui/commit/6384f13b65a9e33a924326c551b9c259c62b4ded))
 
 ## v1.57.18 — 2026-11-08 · 3 commits
 
