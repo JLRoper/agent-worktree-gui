@@ -29,6 +29,12 @@
   // Air kept between the float and every viewport edge, in client px. The float is laid out in the LAYOUT viewport
   // (`documentElement.clientWidth/Height`, which already excludes the classic scrollbar) — see `viewportBox`.
   const FLOAT_EDGE = 8;
+  // How far inside the float's bottom-right corner a press still begins a corner resize, in client px. The float and
+  // its handle are both ROUND (10px and 9px radii, `overflow: hidden` on the float), so the handle's own box loses its
+  // last pixels to the clip: a press on the corner the reader aims at reaches the BOARD under the window, and the
+  // resize never starts. This is the band that press has to be claimed in (see the corner zone in the gesture block).
+  const FLOAT_GRAB = 6;
+
   const SEEN_KEY = "wm.assistantSeenAt";
   // ---- the float's two rows: what it remembers, and how it is painted -----------------------------
   const VIEW_KEY = "wm.assistantView";
@@ -5736,9 +5742,11 @@
         d.py += d.box.top + dy - y;
         return;
       }
-      // The float's bottom-right corner: the left and top edges stay where they are, and neither dimension is ever
-      // asked for LESS than the frame already has — a frame taller than the room left would otherwise snap down on
-      // the first pixel of the drag.
+      // The float's bottom-right corner: the left and top edges stay where they are, the corner travels by EXACTLY the
+      // pointer's own travel (`dx`/`dy`, both measured from the press), and neither dimension is ever asked for LESS
+      // than the frame already has — a frame taller than the room left would otherwise snap down on the first pixel of
+      // the drag. The press's own inset inside the corner (`grab`, up to the handle's 16px) is deliberately KEPT: the
+      // frame must not yank its corner onto the cursor on the first move, which is the "jump" a resize cannot have.
       const w = clamp(d.box.width + dx, FLOAT_MIN_W, Math.max(d.box.width, vw - FLOAT_EDGE - d.box.left));
       const h = clamp(d.box.height + dy, FLOAT_MIN_H, Math.max(d.box.height, vh - FLOAT_EDGE - d.box.top));
       el.style.width = cssPx(w, z);
@@ -5767,6 +5775,28 @@
 
     split.addEventListener("pointerdown", (e) => onDown(e, floating() ? "float-size" : "dock-width", split));
     if (bar) bar.addEventListener("pointerdown", (e) => { if (floating()) onDown(e, "float-move", bar); });
+    // THE FLOAT'S CORNER IS ROUND, AND THAT IS WHAT MAKES ITS GRAB DEAD. The handle's 16x16 box sits inside the
+    // float's 10px corner radius with `overflow: hidden` on the float, so the last pixels of the handle are clipped
+    // out of every hit area: a press on the corner a reader aims at does not reach the handle, does not even reach
+    // the pane, and lands on the BOARD under the window. The reader grabs the grip and drags, and nothing resizes.
+    // Claim that band in CAPTURE, before anything under the float can act on the press, and start the same
+    // `float-size` gesture the handle starts. Only a press on the board or the pane is given up: one that belongs to
+    // Settings, a banner or a popup is that layer's, even when it sits over the float's corner.
+    document.addEventListener(
+      "pointerdown",
+      (e) => {
+        if (e.button !== 0 || press || !floating()) return;
+        // A closed pane has no corner: `getBoundingClientRect` on a `[hidden]` float is four zeros, and every press
+        // near the window's own top-left would read as a corner grab.
+        if (el.hidden) return;
+        if (!e.target?.closest?.(".shell, main, body")) return;
+        const r = el.getBoundingClientRect();
+        if (e.clientX < r.right - FLOAT_GRAB || e.clientY < r.bottom - FLOAT_GRAB) return;
+        e.stopPropagation();
+        onDown(e, "float-size", el);
+      },
+      true,
+    );
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onUp);
