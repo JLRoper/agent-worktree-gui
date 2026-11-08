@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
+<title>Module map - agent-worktree-gui, 2026-11-08 (1.66.6)</title>
+<style>
+  :root{ --ink:#191714; --paper:#fbf9f4; --rule:#ded7cb; --muted:#6b645b; --accent:#7a4bd0; --bar:#b79ce8; --warn:#b4453a; }
+  @media (prefers-color-scheme: dark){
+    :root{ --ink:#e8e6e1; --paper:#14161a; --rule:#2a2f38; --muted:#9aa3ad; --accent:#c8a6ff; --bar:#6f4fa8; --warn:#e5534b; }
+  }
+  html,body{ margin:0; background:var(--paper); color:var(--ink); font:15px/1.55 -apple-system,Segoe UI,Helvetica,Arial,sans-serif; }
+  main{ max-width:1080px; margin:0 auto; padding:36px 28px 80px; }
+  h1{ font-size:26px; margin:0 0 4px; letter-spacing:-.01em; }
+  h2{ font-size:19px; margin:38px 0 10px; padding-bottom:6px; border-bottom:1px solid var(--rule); }
+  h3{ font-size:16px; margin:24px 0 8px; }
+  .sub{ color:var(--muted); margin:0 0 22px; }
+  .cards{ display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin:18px 0 6px; }
+  .card{ border:1px solid var(--rule); border-radius:10px; padding:12px 14px; }
+  .card b{ display:block; font-size:22px; letter-spacing:-.02em; }
+  .card span{ color:var(--muted); font-size:13px; }
+  table{ border-collapse:collapse; width:100%; font-size:14px; }
+  th,td{ text-align:left; padding:6px 8px; border-bottom:1px solid var(--rule); vertical-align:top; }
+  th{ color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+  td.n{ text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  code{ font:13px ui-monospace,Consolas,monospace; background:rgba(127,127,127,.12); padding:1px 5px; border-radius:4px; }
+  .bar{ height:8px; border-radius:4px; background:var(--bar); display:inline-block; vertical-align:middle; }
+  .row{ display:grid; grid-template-columns:190px 1fr 70px; gap:10px; align-items:center; margin:3px 0; font-size:13px; }
+  .row .name{ font:12px ui-monospace,Consolas,monospace; color:var(--muted); overflow:hidden; text-overflow:ellipsis; }
+  .note{ border-left:3px solid var(--accent); padding:6px 0 6px 12px; color:var(--muted); margin:14px 0; }
+  ol li, ul li{ margin:6px 0; }
+  .tag{ font-size:11px; padding:1px 6px; border:1px solid var(--rule); border-radius:10px; color:var(--muted); white-space:nowrap; }
+  .tag.yes{ border-color:var(--accent); color:var(--accent); }
+  .tag.part{ border-color:var(--warn); color:var(--warn); }
+  .down{ color:var(--accent); }
+  .up{ color:var(--warn); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Module map: agent-worktree-gui</h1>
+<p class="sub">Measured 2026-11-08 at 22:22Z (17:22 EST) at <code>f2ef137</code> (origin/main, 1.66.6), with the same recipe the 2026-11-08 page used on <code>9e6c109</code> (1.59.0) - and that recipe reproduces the 2026-11-07 page's numbers on <code>db5307a</code> exactly, which is what lets the "before" column below be a measurement rather than a quote. Counts are <code>wc -l</code> (every line, comments included) and <code>grep</code> over top-level declarations, so they are reproducible rather than estimated.</p>
+
+<div class="cards">
+  <div class="card"><b>105,345</b><span>lines across server.js, lib/, public/ (js, css, html). +1,472</span></div>
+  <div class="card"><b>16,888</b><span>lines in public/app.js, 16.0% of the shipped code (was 17.0%)</span></div>
+  <div class="card"><b>634</b><span>top-level declarations in public/app.js (was 672)</span></div>
+  <div class="card"><b>81,365</b><span>lines of JavaScript at the top level of server.js, lib/ and public/</span></div>
+  <div class="card"><b>60,032</b><span>lines in test/ (not shipped, not counted above)</span></div>
+  <div class="card"><b>55</b><span>modules in the split directories - was 50 at the earlier snapshot</span></div>
+</div>
+
+<h2>The verdict in one line</h2>
+<p>Eight of the nine steps are complete, and the ninth has taken three of the four route prefixes the earlier page named: <code>state</code>, <code>jobs</code> and <code>pipelines</code> left the request chain for <code>routes/</code> today, and the board's shared scaffolding left <code>public/app.js</code> for <code>public/board-scaffold.js</code>, which retires item 2 of the earlier page's remaining lane. <code>public/app.js</code> fell from 17,684 to 16,888 (<b>-796, -4.5%</b>) and <code>server.js</code> from 6,962 to 6,748 (<b>-214</b>), while the shipped total rose 1,472 lines: 25 pull requests landed in the same window and most of them add code rather than move it. The <b>module count moved 50 to 55</b>: <code>routes/state.js</code>, <code>routes/jobs.js</code>, <code>routes/pipelines.js</code>, <code>public/board-scaffold.js</code> and <code>lib/assistant/consolidate.js</code> are the five that were not on the earlier page. The one thing still on the lane is the <code>settings</code> prefix: 22 of the 127 <code>/api</code> literals <code>server.js</code> still carries.</p>
+
+<h2>The nine steps, and what landed</h2>
+<p>Every row was read with <code>gh pr view</code> and confirmed in main's own history on 2026-11-08; each PR reads <code>MERGED</code> and the commit is the one main carries. The <code>Lines</code> column is the extracted file as the cut landed it, which is why a file that has grown since (see the module table below) still shows its original size here.</p>
+<table>
+<tr><th>Step</th><th>What moved</th><th>Status</th><th class="n">PR</th><th>Commit</th><th class="n">Lines</th></tr>
+<tr><td>1</td><td>respond helpers out of <code>server.js</code> into <code>lib/http/respond.js</code></td><td><span class="tag yes">landed</span></td><td class="n">#559</td><td><code>4a63afa</code></td><td class="n">98</td></tr>
+<tr><td>2</td><td><code>dom.js</code> out of <code>public/app.js</code> into <code>public/dom.js</code></td><td><span class="tag yes">landed</span></td><td class="n">#548</td><td><code>37b5339</code></td><td class="n">211</td></tr>
+<tr><td>3</td><td><code>charts.js</code> and <code>deliverables.js</code> out of <code>public/app.js</code></td><td><span class="tag yes">landed</span></td><td class="n">#555<br>#557</td><td><code>cc18147</code><br><code>b3996d5</code></td><td class="n">519<br>1,024</td></tr>
+<tr><td>4</td><td><code>turns.js</code> out of <code>public/app.js</code> into <code>public/turns.js</code></td><td><span class="tag yes">landed</span></td><td class="n">#560</td><td><code>91c1ae9</code></td><td class="n">429</td></tr>
+<tr><td>5</td><td><code>queue-cards.js</code> into <code>public/queue-cards.js</code> - cut from <code>public/assistant.js</code>, not <code>app.js</code></td><td><span class="tag yes">landed</span></td><td class="n">#563</td><td><code>7b8a4b6</code></td><td class="n">1,040</td></tr>
+<tr><td>6</td><td><code>settings.js</code> out of <code>public/app.js</code> into <code>public/settings.js</code></td><td><span class="tag yes">landed</span></td><td class="n">#569</td><td><code>6384f13</code></td><td class="n">740</td></tr>
+<tr><td>7</td><td><code>render-projects.js</code> then <code>render-jobs.js</code>, in two PRs</td><td><span class="tag yes">landed</span></td><td class="n">#572<br>#574</td><td><code>4046b75</code><br><code>f2c79be</code></td><td class="n">1,440<br>911</td></tr>
+<tr><td>8</td><td><code>routes/*.js</code> out of <code>server.js</code>, one prefix at a time, mounted from a table</td><td><span class="tag part">three of four prefixes</span></td><td class="n">#561<br>#571<br>#588<br>#593<br>#597</td><td><code>1c60fbd</code><br><code>cab6b08</code><br><code>e400b01</code><br><code>45a34b7</code></td><td class="n">96<br>67<br>47<br>302<br>156</td></tr>
+<tr><td>9</td><td><code>lib/assistant/rules.js</code> then <code>wakes.js</code></td><td><span class="tag yes">landed</span></td><td class="n">#553<br>#558</td><td><code>2b10cec</code><br><code>aaefdb1</code></td><td class="n">-<br>-</td></tr>
+</table>
+<div class="note">Step 8 is the one step still open, and only for one prefix. Six rows now hang off <code>PREFIX_MOUNTS</code> (the queue, the delete, the state read twice - <code>/api/state</code> and its older name <code>/api/audit</code> - the jobs prefix and the pipelines prefix), and 16 route literals live in <code>routes/*.js</code> against 143 distinct <code>/api</code> literals across <code>server.js</code> and <code>routes/</code> together. The <code>settings</code> prefix is what is left: 22 literals, from <code>/api/settings/approvals</code> to <code>/api/settings/skills</code>, still in <code>server.js</code>'s own if-chain. The three route modules landed today are the ones the earlier page named and did not have: <code>routes/state.js</code> 47 lines (#588), <code>routes/jobs.js</code> 302 (#593) and <code>routes/pipelines.js</code> 156 (#597).</div>
+
+<h2>What landed today, module by module</h2>
+<p>Every module this map enumerates, measured at both ends with the same commands. <code>-</code> means the file did not exist at the earlier snapshot. The five rows whose left column is <code>-</code> are the module count's whole delta; the rest were on the earlier page and are re-measured here so the two pages can be read together.</p>
+<table>
+<tr><th>Module</th><th class="n">9e6c109</th><th class="n">f2ef137</th><th>Landed</th><th>What it owns today</th></tr>
+<tr><td><code>routes/assistant-queue.js</code></td><td class="n">96</td><td class="n">96</td><td class="n">#561</td><td>the per-assistant task queue's read and its writes, handed the Assistant and the transport helpers.</td></tr>
+<tr><td><code>routes/assistant-delete.js</code></td><td class="n">67</td><td class="n">67</td><td class="n">#571</td><td>deleting one assistant: the dry run, the refusal on live work, the archive and the roster write.</td></tr>
+<tr><td><code>routes/state.js</code></td><td class="n">-</td><td class="n">47</td><td class="n">#588</td><td>the snapshot read, mounted twice (<code>/api/state</code>, <code>/api/audit</code>); the assembler travels in as a function.</td></tr>
+<tr><td><code>routes/jobs.js</code></td><td class="n">-</td><td class="n">302</td><td class="n">#593</td><td>the board's card read plus ten writes: cancel, steer, reattach, ask-complete, approve, answer, attach, clear, label, artifact delete.</td></tr>
+<tr><td><code>routes/pipelines.js</code></td><td class="n">-</td><td class="n">156</td><td class="n">#597</td><td>the catalogue read (both file paths, the vocabularies, the refusals, the PDL block) and the one save that replaces it.</td></tr>
+<tr><td><code>lib/http/respond.js</code></td><td class="n">98</td><td class="n">98</td><td class="n">#559</td><td><code>sendJson</code>, <code>sendText</code>, the body reader and their error shape.</td></tr>
+<tr><td><code>lib/http/static.js</code></td><td class="n">90</td><td class="n">90</td><td>before</td><td>the static file answer, its types and its 404.</td></tr>
+<tr><td><code>lib/http/transport.js</code></td><td class="n">83</td><td class="n">83</td><td>before</td><td>the token check and the transport probe the jobs prefix asks.</td></tr>
+<tr><td><code>lib/assistant/rules.js</code></td><td class="n">232</td><td class="n">258</td><td class="n">#553</td><td>the standing-rule list: add, move, cap, and the order a moved rule arrives in.</td></tr>
+<tr><td><code>lib/assistant/wakes.js</code></td><td class="n">249</td><td class="n">249</td><td class="n">#558</td><td>the wake queue: who is owed a turn, the budget, and the single-flight per assistant.</td></tr>
+<tr><td><code>lib/assistant/consolidate.js</code></td><td class="n">-</td><td class="n">420</td><td class="n">#599</td><td>the consolidation pass: merge, drop, move to charter, promote to role, under the reader's grant.</td></tr>
+<tr><td><code>public/dom.js</code></td><td class="n">211</td><td class="n">211</td><td class="n">#548</td><td>the element helpers every other cut file draws with.</td></tr>
+<tr><td><code>public/charts.js</code></td><td class="n">519</td><td class="n">526</td><td class="n">#555</td><td>the worktree chart's drawing: ring, spark, bars, legend.</td></tr>
+<tr><td><code>public/deliverables.js</code></td><td class="n">1,024</td><td class="n">1,024</td><td class="n">#557</td><td>the <code>deliver*</code> functions and their window.</td></tr>
+<tr><td><code>public/turns.js</code></td><td class="n">429</td><td class="n">466</td><td class="n">#560</td><td>one turn's face: the head, the fold, the status line.</td></tr>
+<tr><td><code>public/queue-cards.js</code></td><td class="n">1,040</td><td class="n">1,069</td><td class="n">#563</td><td>queue rows, drag order, holds and the assistant badge.</td></tr>
+<tr><td><code>public/settings.js</code></td><td class="n">740</td><td class="n">740</td><td class="n">#569</td><td>settings, hosts, push policy, approvals, the reset row: 31 <code>apply*</code> functions.</td></tr>
+<tr><td><code>public/render-projects.js</code></td><td class="n">1,440</td><td class="n">1,487</td><td class="n">#572</td><td>project sections, rows and their ordering.</td></tr>
+<tr><td><code>public/render-jobs.js</code></td><td class="n">911</td><td class="n">911</td><td class="n">#574</td><td>job and turn cards, tool-call lines.</td></tr>
+<tr><td><code>public/board-scaffold.js</code></td><td class="n">-</td><td class="n">991</td><td class="n">#581</td><td>the board's shared scaffolding: chip strips, agent badges, project header counts, the expanded detail block, the panel map and liveness reads. 45 declarations moved line for line.</td></tr>
+<tr><td><code>public/chart.css</code></td><td class="n">-</td><td class="n">552</td><td class="n">#586</td><td>the worktree chart's rules, cut out of <code>public/style.css</code> byte for byte and loaded right after it; #591 moved the panel's type utilities back out, so nothing outside the chart resized.</td></tr>
+<tr><td><code>lib/pipeline-bundle-repair.js</code></td><td class="n">-</td><td class="n">188</td><td class="n">#602</td><td>repairing a live bundle whose gates are ambiguous by taking the shipped seed's routes for the same pipeline and gate - nothing invented, and the loader still refuses the rest.</td></tr>
+</table>
+<div class="note">Two of the rows are not cuts and are here because they landed in the same window and change what the map counts: <code>lib/assistant/consolidate.js</code> is a new behaviour beside the rules list, and <code>lib/pipeline-bundle-repair.js</code> is the module behind the Settings tab's repair control. Neither moves a line out of an existing file, so neither changes what the extraction charges; they are the kind of landing the module count is meant to show.</div>
+
+<h2>Where the weight sits</h2>
+<div class="row"><span class="name">public/app.js</span><span class="bar" style="width:100%"></span><span>16,888</span></div>
+<div class="row"><span class="name">lib/assistant.js</span><span class="bar" style="width:49%"></span><span>8,295</span></div>
+<div class="row"><span class="name">server.js</span><span class="bar" style="width:40%"></span><span>6,748</span></div>
+<div class="row"><span class="name">lib/jobs.js</span><span class="bar" style="width:31%"></span><span>5,225</span></div>
+<div class="row"><span class="name">public/assistant.js</span><span class="bar" style="width:30%"></span><span>5,085</span></div>
+<div class="row"><span class="name">public/style.css</span><span class="bar" style="width:25%"></span><span>4,231</span></div>
+<div class="row"><span class="name">public/board/console.js</span><span class="bar" style="width:17%"></span><span>2,852</span></div>
+<div class="row"><span class="name">public/pipeline-map.html</span><span class="bar" style="width:15%"></span><span>2,593</span></div>
+<div class="row"><span class="name">lib/task-pipeline-drive.js</span><span class="bar" style="width:12%"></span><span>1,977</span></div>
+<div class="row"><span class="name">public/render-projects.js</span><span class="bar" style="width:9%"></span><span>1,487</span></div>
+
+<h2>The 25 largest files</h2>
+<table>
+<tr><th>File</th><th class="n">Lines</th><th>What it owns today</th></tr>
+<tr><td><code>public/app.js</code></td><td class="n">16,888</td><td>the state store, the event wiring, boot and the polling loop, plus what has not been cut: 634 top-level declarations, 51 of them named <code>paint*</code>. The board's shared scaffolding left for <code>public/board-scaffold.js</code> in #581.</td></tr>
+<tr><td><code>lib/assistant.js</code></td><td class="n">8,295</td><td>the assistant: charter, notes, gates, queue actions, chat, fan-out. 201 methods on one object (was 195).</td></tr>
+<tr><td><code>server.js</code></td><td class="n">6,748</td><td>the HTTP surface plus the glue: 127 <code>/api/</code> literals, 85 top-level declarations, six rows mounted from <code>PREFIX_MOUNTS</code>.</td></tr>
+<tr><td><code>lib/jobs.js</code></td><td class="n">5,225</td><td>the job store and run lifecycle, 109 methods.</td></tr>
+<tr><td><code>public/assistant.js</code></td><td class="n">5,085</td><td>the assistant float: transcript, tabs, console, spawn cards, watches.</td></tr>
+<tr><td><code>public/style.css</code></td><td class="n">4,231</td><td>every surface but the worktree chart, which is now <code>public/chart.css</code>.</td></tr>
+<tr><td><code>public/board/console.js</code></td><td class="n">2,852</td><td>console rendering, already extracted.</td></tr>
+<tr><td><code>public/pipeline-map.html</code></td><td class="n">2,593</td><td>a standalone page, self-contained.</td></tr>
+<tr><td><code>lib/task-pipeline-drive.js</code></td><td class="n">1,977</td><td>driving a stage run to its next step.</td></tr>
+<tr><td><code>public/render-projects.js</code></td><td class="n">1,487</td><td>project sections, rows and ordering, cut in #572 and grown by #577 and #580.</td></tr>
+<tr><td><code>lib/assistant/queue.js</code></td><td class="n">1,405</td><td>queue rows and their holds, already extracted.</td></tr>
+<tr><td><code>lib/restart.js</code></td><td class="n">1,239</td><td>panel restart and the port holder.</td></tr>
+<tr><td><code>public/index.html</code></td><td class="n">1,160</td><td>the shell and every panel's markup; loads <code>chart.css</code> and <code>board-scaffold.js</code> beside the older files.</td></tr>
+<tr><td><code>lib/scheduler.js</code></td><td class="n">1,144</td><td>scan cadence, slices, promotion.</td></tr>
+<tr><td><code>lib/pipelines.js</code></td><td class="n">1,133</td><td>pipeline documents and their validation; the route that serves it is now <code>routes/pipelines.js</code>.</td></tr>
+<tr><td><code>public/queue-cards.js</code></td><td class="n">1,069</td><td>queue rows, drag order, holds, the assistant badge, cut in #563 and grown by #587's run name.</td></tr>
+<tr><td><code>public/deliverables.js</code></td><td class="n">1,024</td><td>the <code>deliver*</code> functions and their UI, cut in #557.</td></tr>
+<tr><td><code>public/board-scaffold.js</code></td><td class="n">991</td><td>the board's shared scaffolding, cut in #581: 45 declarations moved line for line out of <code>app.js</code>.</td></tr>
+<tr><td><code>public/render-jobs.js</code></td><td class="n">911</td><td>job and turn cards, tool-call lines, cut in #574.</td></tr>
+<tr><td><code>public/pipeline-flow.js</code></td><td class="n">875</td><td>flow drawing.</td></tr>
+<tr><td><code>public/pipeline-modal.js</code></td><td class="n">851</td><td>the pipeline modal.</td></tr>
+<tr><td><code>public/core/pipeline-mermaid.js</code></td><td class="n">796</td><td>mermaid rendering, already extracted.</td></tr>
+<tr><td><code>public/board/paste-chips.js</code></td><td class="n">795</td><td>paste chips, already extracted.</td></tr>
+<tr><td><code>lib/worktrees.js</code></td><td class="n">793</td><td>cutting, landing and removing trees.</td></tr>
+<tr><td><code>public/core/console-format.js</code></td><td class="n">754</td><td>console formatting, already extracted.</td></tr>
+</table>
+
+<h2>What has already been split</h2>
+<p>Counted whole directories, which is the one place this page and the earlier one differ: the earlier page summed only the files it named for the <code>public/</code> row and counts whole directories everywhere else. The <b>module count</b> below is the sum of the seven rows.</p>
+<table>
+<tr><th>Directory</th><th class="n">Files</th><th class="n">Lines</th><th>Contents</th></tr>
+<tr><td><code>lib/assistant/</code></td><td class="n">18</td><td class="n">5,684</td><td><code>queue.js</code> 1,405, <code>consolidate.js</code> 420, <code>rules.js</code> 258, <code>wakes.js</code>, <code>reset.js</code>, <code>actions.js</code>, <code>audit.js</code>, <code>charter-file.js</code>, <code>config.js</code>, <code>landed.js</code>, <code>match.js</code>, <code>messages.js</code>, <code>notes-file.js</code>, <code>profile.js</code>, <code>read.js</code>, <code>remove.js</code>, <code>reset-store.js</code>, <code>store-file.js</code>.</td></tr>
+<tr><td><code>public/core/</code></td><td class="n">16</td><td class="n">4,947</td><td><code>console-format.js</code> 754, plus <code>sse.js</code>, <code>transport.js</code>, <code>dom-format.js</code>, <code>console-markdown.js</code>, <code>deliver-kinds.js</code>, <code>liveness.js</code>, <code>model-menu.js</code>, <code>pipeline-import.js</code>, <code>pipeline-mermaid.js</code> 796, <code>steerable.js</code>, <code>stream-merge.js</code>, <code>turn-fold.js</code>, <code>type-stream.js</code>, <code>update-check.js</code> and <code>pipeline-card.css</code>.</td></tr>
+<tr><td><code>public/board/</code></td><td class="n">3</td><td class="n">3,833</td><td><code>console.js</code> 2,852, <code>paste-chips.js</code> 795, <code>attachments.js</code>.</td></tr>
+<tr><td><code>public/</code> (cut files)</td><td class="n">9</td><td class="n">7,425</td><td><code>render-projects.js</code> 1,487, <code>queue-cards.js</code> 1,069, <code>deliverables.js</code> 1,024, <code>board-scaffold.js</code> 991, <code>render-jobs.js</code> 911, <code>settings.js</code> 740, <code>charts.js</code> 526, <code>turns.js</code> 466, <code>dom.js</code> 211.</td></tr>
+<tr><td><code>lib/http/</code></td><td class="n">3</td><td class="n">271</td><td><code>respond.js</code> 98, <code>static.js</code> 90, <code>transport.js</code> 83.</td></tr>
+<tr><td><code>lib/jobs/</code></td><td class="n">1</td><td class="n">228</td><td>one small helper.</td></tr>
+<tr><td><code>routes/</code></td><td class="n">5</td><td class="n">668</td><td><code>jobs.js</code> 302, <code>pipelines.js</code> 156, <code>assistant-queue.js</code> 96, <code>assistant-delete.js</code> 67, <code>state.js</code> 47.</td></tr>
+<tr><td><b>Total</b></td><td class="n"><b>55</b></td><td class="n"><b>23,056</b></td><td><b>was 50 modules at 9e6c109; +5 today</b> (three route modules, the board scaffolding, the consolidation pass).</td></tr>
+</table>
+<div class="note">The nine files at the top of <code>public/</code> total 7,425 lines against the 5,269 <code>app.js</code> has lost since its 22,157 peak: each extracted file carries its own header and re-export, so the two numbers cannot match. What matters for the lane is the file a row edits, and that file is now a quarter smaller than it was on 11-07. <code>routes/</code> is 2.9% of the module lines and holds 16 of the 143 distinct <code>/api</code> literals.</div>
+
+<h2>What app.js still owns</h2>
+<p>16,888 lines and 634 declarations is the state store, the event wiring, boot, the polling loop, and the surfaces that were in no cut: the host bar, the queue's non-card parts, the charts' and deliverables' call sites, and the 51 <code>paint*</code> functions. The earlier page's estimate that eight cuts would leave <code>app.js</code> near 8,000 lines was wrong by about 9,000 lines, and this window shows why: the scaffolding cut moved 991 lines into a new file while <code>app.js</code> fell 796, and the rest of the file is the central wiring every cut surface still calls into.</p>
+<p>The remaining lane, in the order I would still cut it:</p>
+<ol>
+<li>The last route prefix step 8 named: <code>settings</code>, 22 <code>/api</code> literals from <code>/api/settings/approvals</code> to <code>/api/settings/skills</code>. The mount table is there and its neighbours are the pattern.</li>
+<li><code>public/style.css</code> at 4,231 lines. <code>chart.css</code> proved the cut works on a coherent block; the rest of the sheet is one file per surface.</li>
+<li>What the scaffolding cut left in <code>app.js</code>: the write paths (<code>todoPost</code>, the proposal writes) and the polling loop that calls them.</li>
+</ol>
+
+<h2>9e6c109 against f2ef137</h2>
+<table>
+<tr><th>Measure</th><th class="n">2026-11-08 early<br><code>9e6c109</code> (1.59.0)</th><th class="n">2026-11-08 late<br><code>f2ef137</code> (1.66.6)</th><th class="n">Delta</th></tr>
+<tr><td>Shipped lines, <code>server.js</code> + <code>lib/**/*.js</code> + <code>public/**/*.js|css|html</code></td><td class="n">103,873</td><td class="n">105,345</td><td class="n up">+1,472</td></tr>
+<tr><td>Shipped files</td><td class="n">149</td><td class="n">153</td><td class="n up">+4</td></tr>
+<tr><td>JavaScript lines at the top level (<code>server.js</code>, <code>lib/*.js</code>, <code>public/*.js</code>)</td><td class="n">80,578</td><td class="n">81,365</td><td class="n up">+787</td></tr>
+<tr><td>Lines in <code>test/</code></td><td class="n">57,921</td><td class="n">60,032</td><td class="n up">+2,111</td></tr>
+<tr><td>Files in <code>test/</code></td><td class="n">252</td><td class="n">260</td><td class="n up">+8</td></tr>
+<tr><td><b>Modules in the split directories</b></td><td class="n"><b>50</b></td><td class="n"><b>55</b></td><td class="n down"><b>+5</b></td></tr>
+<tr><td><code>public/app.js</code></td><td class="n">17,684</td><td class="n">16,888</td><td class="n down">-796</td></tr>
+<tr><td>Top-level declarations in <code>public/app.js</code></td><td class="n">672</td><td class="n">634</td><td class="n down">-38</td></tr>
+<tr><td><code>paint*</code> functions in <code>public/app.js</code></td><td class="n">54</td><td class="n">51</td><td class="n down">-3</td></tr>
+<tr><td><code>apply*</code> functions in <code>public/app.js</code></td><td class="n">0</td><td class="n">0</td><td class="n">0</td></tr>
+<tr><td><code>server.js</code></td><td class="n">6,962</td><td class="n">6,748</td><td class="n down">-214</td></tr>
+<tr><td>Distinct <code>/api/</code> literals in <code>server.js</code></td><td class="n">139</td><td class="n">127</td><td class="n down">-12</td></tr>
+<tr><td>Distinct <code>/api/</code> literals in <code>routes/*.js</code></td><td class="n">2</td><td class="n">16</td><td class="n down">+14</td></tr>
+<tr><td>Distinct <code>/api/</code> literals, both halves</td><td class="n">141</td><td class="n">143</td><td class="n up">+2</td></tr>
+<tr><td>Top-level declarations in <code>server.js</code></td><td class="n">85</td><td class="n">85</td><td class="n">0</td></tr>
+<tr><td><code>lib/assistant.js</code> methods</td><td class="n">195</td><td class="n">201</td><td class="n up">+6</td></tr>
+<tr><td><code>lib/jobs.js</code> methods</td><td class="n">109</td><td class="n">109</td><td class="n">0</td></tr>
+<tr><td><code>public/app.js</code> as a share of shipped lines</td><td class="n">17.0%</td><td class="n">16.0%</td><td class="n down">-1.0 pt</td></tr>
+</table>
+<div class="note">The route half moved both ways at once: three prefixes left <code>server.js</code> (14 literals: 2 from state, 11 from jobs, 1 from pipelines) while two new endpoints landed (<code>/api/assistant/consolidate</code> and its <code>/grant</code>), which is why <code>server.js</code> reads 127 and the two halves 143. The shipped total rose because 25 PRs landed in this window and most of them add code rather than move it; the cuts are the minority. Nothing here was measured by estimate: the "before" column is <code>9e6c109</code> re-measured with the same script on the same day.</div>
+
+<h2>The Pipeline tab, on the live panel</h2>
+<p>The <code>pipelines</code> prefix is one of the three that landed today, so it was verified in a browser rather than only at the HTTP layer. The panel at <code>127.0.0.1:7331</code> (pid 11412) was left running at 1.66.4 - the build that carries <code>routes/pipelines.js</code> - and a Playwright run opened Settings, chose the Pipeline tab, and read the tab's own DOM:</p>
+<ul>
+<li>the PDL list drew <b>four</b> pipelines with their stage counts: <code>poc-to-uat</code> (POC to UAT, 13), <code>ping-pong</code> (2), <code>probe-fix</code> (2), <code>author-review-revise</code> (3), and the summary read "4 pipelines &#183; 0 definitions" - the ladder ships empty, which is why the PDL count leads;</li>
+<li>the flow control opened the PDL flow: the chart drew <b>13 nodes, 12 arrows, 3 loop-backs</b>, and the dialog's facts read pipeline <code>poc-to-uat</code>, kind PDL, 13 stages, 5 gates, 15 handoffs;</li>
+<li>selecting the pipeline in the dropdown opened its read-only detail: "13 stages, 5 gates, 15 handoffs";</li>
+<li><b>0 console errors and 0 uncaught page errors</b> across the three views.</li>
+</ul>
+<p>That is the route cut judged by the surface a reader uses, not by the route's status code. The same run's three screenshots are kept beside this report's landing, not in it: the page is text and tables, as the earlier one was.</p>
+
+<h2>On lanes</h2>
+<p>The first page's definition still holds: a lane is a file two rows both need. The scaffolding cut took the last shared surface out of the biggest file, so a row that touches a card now edits <code>public/board-scaffold.js</code> (991) or one of the two renderers (1,487 and 911) instead of a 17,000-line page - but <code>public/app.js</code> remains the single lane for the state store and the wiring, at 16,888. <code>server.js</code> is a lane for one thing now: a new settings endpoint. <code>public/style.css</code> is the other, at 4,231 lines, and <code>chart.css</code> is the proof it can be cut.</p>
+
+<h2>How this was measured</h2>
+<p><code>git archive &lt;sha&gt; | tar -x -C &lt;dir&gt;</code> for each end, then <code>wc -l</code> over <code>server.js</code>, <code>lib/**/*.js</code>, <code>public/**/*.js|css|html</code>; <code>grep -cE '^(async )?function |^const [A-Za-z_$][A-Za-z0-9_$]* = (async )?\('</code> for top-level declarations; <code>grep -cE '^  [A-Za-z_$][A-Za-z0-9_$]*\('</code> for method lines on <code>lib/assistant.js</code> and <code>lib/jobs.js</code>; <code>grep -ohE '"/api/[a-z0-9/:-]+"' server.js routes/*.js | sort -u</code> for routes. Counts include comments and blank lines. <code>test/</code> is measured separately (60,032 lines) because it is not shipped and does not create lanes on the page. Module counts are the file counts of the seven directories in the split table, one directory each, no recursion past the directory.</p>
+<p>The recipe was calibrated before it was trusted: on <code>9e6c109</code> it prints 103,873 shipped lines, 149 files, 17,684 <code>app.js</code> lines, 672 declarations, 54 <code>paint*</code>, 0 <code>apply*</code>, 6,962 <code>server.js</code> lines, 85 server declarations, 139 routes, 195 and 109 methods and 57,921 test lines - every figure the earlier page printed, which is what licenses the after column here. The 2026-11-07 page's numbers on <code>db5307a</code> reproduce the same way and are quoted on that page rather than repeated here.</p>
+<p class="sub" style="margin-top:34px">Report written 2026-11-08 for the reader's modularisation question, beside the earlier 2026-11-08 page rather than over it. No product code was changed to produce it; the only code this page describes is what the 25 pull requests in its window landed.</p>
+
+</main>
+</body>
+</html>
