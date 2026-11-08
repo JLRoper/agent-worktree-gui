@@ -17,8 +17,10 @@
 //   - THE RENDER IS POST-MERGE, and is never folded into the bump commit. Every section links shas, and a rebase
 //     or squash merge re-creates the branch's commits on the base with new ones — so a section written on the
 //     branch lists links that 404 for the reader. The base commit is refused when HEAD is behind the base or the
-//     tree is dirty; a branch render is written but warned about, because its newest sections name commits the
-//     base does not carry and must be re-rendered after the merge. `--check` is the gate and writes nothing.
+//     tree carries TRACKED changes (an untracked file cannot enter a one-file commit, so it is left alone and
+//     named, because a primary checkout full of stray artifacts is otherwise unrunnable); a branch render is
+//     written but warned about, because its newest sections name commits the base does not carry and must be
+//     re-rendered after the merge. `--check` is the gate and writes nothing.
 //
 //   - A RENDER SPENDS NO VERSION: it is a docs commit — no bump, no tag. `.githooks/pre-push` refuses a push whose
 //     branch did not bump (and refuses a base push whose changelog is stale), so this tool passes --no-verify only
@@ -255,7 +257,14 @@ function main(argv) {
   const ahead = remoteRef && gitOk(root, ["rev-parse", "--verify", "--quiet", remoteRef])
     ? Number(git(root, ["rev-list", "--count", `${remoteRef}..HEAD`]) || 0)
     : 0;
-  const dirty = git(root, ["status", "--porcelain"]).split("\n").filter(Boolean);
+  // TRACKED changes only. The guard's purpose is that the commit is the whole of the change, and an untracked file
+  // cannot enter it: the index is checked below before the commit, and anything staged that is not CHANGELOG.md is
+  // a refusal. A primary checkout carrying a stray artifact (a local `config.<port>.json`, a report another run
+  // wrote) is the ordinary state of the tree this step runs in, and refusing it made the step unrunnable there -
+  // the same stale changelog by another route.
+  const status = git(root, ["status", "--porcelain"]).split("\n").filter(Boolean);
+  const dirty = status.filter((line) => !line.startsWith("??"));
+  const untracked = status.length - dirty.length;
   const disk = readDisk(root);
 
   let rendered;
@@ -328,6 +337,9 @@ function main(argv) {
     const made = git(root, ["rev-parse", "HEAD"]);
     const files = git(root, ["show", "--name-only", "--format=", "HEAD"]).split("\n").filter(Boolean);
     console.log(`land: committed ${made.slice(0, 7)} — ${subject} (${files.join(", ")})`);
+    if (untracked) {
+      console.log(`land: ${untracked} untracked file${untracked === 1 ? "" : "s"} left alone — the commit is still ${FILE} and nothing else`);
+    }
   } else {
     console.log(`land: ${FILE} is current — ${rendered.releaseCount} releases, nothing to render`);
   }
@@ -370,7 +382,9 @@ function main(argv) {
 function verify(root, rendered) {
   const disk = readDisk(root);
   const same = normalise(disk) === rendered.text;
-  const clean = git(root, ["status", "--porcelain"]).trim() === "";
+  // -uno, for the same reason the refuse above reads tracked changes only: what this proves is that no TRACKED
+  // change is left over from the render, and the tree's stray untracked files were there before it ran.
+  const clean = git(root, ["status", "--porcelain", "-uno"]).trim() === "";
   if (!same || !clean) {
     console.error(
       `land: the tree did not settle — ${!same ? `${FILE} is not the render` : ""}${!same && !clean ? "; " : ""}${!clean ? "git status is not empty" : ""}`,

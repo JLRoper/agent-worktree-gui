@@ -207,6 +207,34 @@ test("one run renders the missing releases and commits only CHANGELOG.md; a seco
   }
 });
 
+test("an untracked artifact in the base tree does not refuse the render; a tracked change still does", () => {
+  const box = sandbox();
+  try {
+    const { work } = box;
+    // The primary checkout this step runs in carries stray artifacts (a local config, another run's report). They
+    // cannot enter a one-file commit - the index is proved to hold CHANGELOG.md alone - so they are named, not
+    // refused; refusing them made the step unrunnable exactly where it has to run.
+    writeFileSync(path.join(work, "config.7330.json"), "{}\n", "utf8");
+    const first = land(work, "--no-fetch", "--no-push");
+    assert.equal(first.status, 0, first.text);
+    assert.match(first.text, /land: 1 untracked file left alone/);
+    assert.match(first.text, /changelog: CHANGELOG\.md is current — 3 releases/);
+    assert.deepEqual(git(work, ["show", "--name-only", "--format=", "HEAD"]).split("\n").filter(Boolean), [FILE]);
+    assert.equal(readFileSync(path.join(work, "config.7330.json"), "utf8"), "{}\n", "the artifact is not touched");
+
+    // A tracked change is still a refusal: the commit could not be shown to be the whole of it.
+    writeFileSync(path.join(work, "notes.md"), "a change, tracked\n", "utf8");
+    git(work, ["add", "--", "notes.md"]);
+    git(work, ["commit", "-q", "-m", "docs: a tracked change in the tree"]);
+    writeFileSync(path.join(work, "notes.md"), "a change, tracked and then edited\n", "utf8");
+    const dirty = land(work, "--no-fetch", "--no-push");
+    assert.equal(dirty.status, 1, dirty.text);
+    assert.match(dirty.text, /land: refused — the tree is not clean/);
+  } finally {
+    box.done();
+  }
+});
+
 test("a base that is behind refuses, and names what to do first", () => {
   const box = sandbox();
   try {
