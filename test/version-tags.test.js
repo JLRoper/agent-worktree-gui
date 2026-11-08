@@ -176,6 +176,88 @@ test("tag --ref anchors the bump under a render commit, not the render tip", asy
   assert.match(gate.out, /PASS/, "the gate accepts the anchor the fixed tool chose");
 });
 
+// The gate's other half is the repository's claim, and a claim lives on the remote. These cases build a real
+// origin (a bare repo pushed to) because `git ls-remote` is the source the gate now judges: a checkout whose tags
+// were fetched before a landing re-created a bump commit keeps the old sha, and reading those refs reported six
+// correct anchors on main as wrong-commit. The local ref is the checkout's business; the anchor is origin's.
+
+// A repository with commits, a bare origin, and main pushed — the shape every real clone is in.
+async function remoteFixture(t, versions) {
+  const base = await mkdtemp(path.join(os.tmpdir(), "wtgui-version-tags-remote-"));
+  t.after(async () => rm(base, { recursive: true, force: true }));
+  const bare = path.join(base, "origin.git");
+  const dir = path.join(base, "clone");
+  git(base, ["init", "--bare", "-b", "main", bare]);
+  git(base, ["init", "-b", "main", dir]);
+  const shas = [];
+  for (const version of versions) {
+    await writeFile(path.join(dir, "package.json"), pkg(version));
+    git(dir, ["add", "-A"]);
+    git(dir, ["commit", "-m", `chore: ${version}`]);
+    shas.push(git(dir, ["rev-parse", "HEAD"]));
+  }
+  git(dir, ["remote", "add", "origin", bare]);
+  git(dir, ["push", "-u", "origin", "main"]);
+  return { dir, bare, shas };
+}
+
+test("a stale local tag is a stale-local warning, never wrong-commit", async (t) => {
+  const { dir, shas } = await remoteFixture(t, ["0.1.0", "0.2.0"]);
+  git(dir, ["tag", "-a", "v0.1.0", shas[0], "-m", "v0.1.0"]);
+  git(dir, ["tag", "-a", "v0.2.0", shas[1], "-m", "v0.2.0"]);
+  git(dir, ["push", "origin", "--tags"]);
+
+  // What a clone keeps after a landing re-created the bump commit: this ref never moved, origin's did.
+  git(dir, ["tag", "-f", "v0.2.0", shas[0]]);
+
+  const json = tool(GATE, ["--ref", "origin/main", "--json"], dir);
+  assert.equal(json.code, 0, `${json.out}${json.err}`);
+  const out = JSON.parse(json.out);
+  assert.equal(out.tagSource, "origin", "the gate asked origin, not the checkout");
+  assert.deepEqual(out.findings, [], "the anchor origin publishes is right, so nothing fails");
+  assert.deepEqual(out.staleLocal.map((s) => s.name), ["v0.2.0"]);
+  assert.equal(out.staleLocal[0].local, shas[0], "the stale commit is named");
+  assert.equal(out.staleLocal[0].remote, shas[1], "and so is the published one");
+
+  const human = tool(GATE, ["--ref", "origin/main"], dir);
+  assert.equal(human.code, 0, human.err);
+  assert.match(human.out, /stale-local\s+v0\.2\.0: this checkout has [0-9a-f]{10}, origin has [0-9a-f]{10}/);
+  assert.match(human.out, /PASS/);
+  assert.doesNotMatch(human.out, /wrong-commit/, "the finding a stale checkout used to produce");
+});
+
+test("an anchor that is wrong on origin is still wrong-commit when this checkout's tag is right", async (t) => {
+  const { dir, shas } = await remoteFixture(t, ["0.1.0", "0.2.0"]);
+  git(dir, ["tag", "-a", "v0.1.0", shas[0], "-m", "v0.1.0"]);
+  git(dir, ["tag", "-a", "v0.2.0", shas[1], "-m", "v0.2.0"]);
+  git(dir, ["push", "origin", "--tags"]);
+
+  // main's landing re-created the bump — same number, new sha. The tag is moved here and never pushed, so the
+  // published anchor still names the old commit. Judging the checkout would call this clean; judging origin
+  // catches it, which is the whole point.
+  git(dir, ["commit", "--amend", "-m", "chore: 0.2.0 — the version this landing carries"]);
+  const rebuilt = git(dir, ["rev-parse", "HEAD"]);
+  git(dir, ["tag", "-f", "-a", "v0.2.0", rebuilt, "-m", "v0.2.0"]);
+  git(dir, ["push", "--force", "origin", "main"]);
+  git(dir, ["fetch", "origin"]);
+
+  const r = tool(GATE, ["--ref", "origin/main"], dir);
+  assert.equal(r.code, 1, `${r.out}${r.err}`);
+  assert.match(r.out, /wrong-commit v0\.2\.0 points at [0-9a-f]{10} on origin/);
+  assert.match(r.out, /this checkout's tag already names that commit and was never pushed: git push --force origin v0\.2\.0/);
+  assert.doesNotMatch(r.out, /stale-local/, "the checkout is not the side at fault here");
+});
+
+test("a tag only this checkout has is missing on origin, and the message says how to push it", async (t) => {
+  const { dir, shas } = await remoteFixture(t, ["0.1.0"]);
+  git(dir, ["tag", "-a", "v0.1.0", shas[0], "-m", "v0.1.0"]);
+
+  const r = tool(GATE, ["--ref", "origin/main"], dir);
+  assert.equal(r.code, 1, `${r.out}${r.err}`);
+  assert.match(r.out, /missing\s+v0\.1\.0 is not tagged/);
+  assert.match(r.out, /is not on origin: git push origin v0\.1\.0/);
+});
+
 // The other half: a number the ref's tree carries but no reachable commit's patch writes. A merge resolution is
 // the honest shape — `git log -p` prints no diff for a merge commit unless asked — and falling back to the tip
 // there would invent an anchor the gate cannot accept. The run must refuse and name what it looked for.
