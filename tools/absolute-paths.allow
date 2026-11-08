@@ -87,7 +87,8 @@ lib/jobs.js | 2 | example: a comment or a prompt's sample path — no code here 
 lib/project.js | 2 | example: a comment or a prompt's sample path — no code here opens it
 lib/push-guard.js | 2 | example: a comment or a prompt's sample path — no code here opens it
 lib/verify-prompt.js | 1 | example: a comment or a prompt's sample path — no code here opens it
-public/app.js | 5 | example: a comment or a prompt's sample path — no code here opens it
+public/app.js | 4 | example: a comment or a prompt's sample path — no code here opens it
+public/deliverables.js | 1 | example: the DELIVER grammar's sample path in the empty state, moved here from public/app.js
 public/index.html | 2 | example: a comment or a prompt's sample path — no code here opens it
 server.js | 3 | defaults: the editor the panel tries to open, and a placeholder in a usage comment
 test/activity.test.js | 1 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one

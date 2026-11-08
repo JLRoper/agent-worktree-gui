@@ -17,7 +17,9 @@ import { DELIVER_KINDS } from "../lib/deliverables.js";
 await import("../public/core/deliver-kinds.js");
 const K = globalThis.wtDeliverKinds;
 
-const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+// The list's rendering moved to public/deliverables.js in step 3 of docs/reports/module-map-2026-11-07.html's
+// order of work.
+const list = readFileSync(new URL("../public/deliverables.js", import.meta.url), "utf8");
 
 // A store's list, newest first, with every kind in it. The targets are what the text filter searches as well as the
 // titles, so one entry can be found by a word that appears only in its path.
@@ -111,7 +113,7 @@ test("a kind with no rows gets no chip — the dead chip is hidden, never greyed
   assert.deepEqual(K.presentKinds([]), [], "an empty store has no chip at all");
   assert.deepEqual(K.presentKinds([row(1, "link", "only a link", "http://x/y")]), ["link"]);
   // The page hides the chip rather than dimming it: a control that can never do anything is not drawn.
-  const paint = sliceRegion(app, "deliverables");
+  const paint = sliceRegion(list, "deliverables");
   assert.match(paint, /chip\.hidden\s*=\s*!on/, "the paint hides a chip for a kind with no rows");
   assert.match(paint, /group\.hidden\s*=\s*shown\.length === 0/, "and hides the group when no kind has a row");
 });
@@ -129,7 +131,7 @@ test("the state is the paint's INPUT: a repaint re-reads it instead of rebuildin
   assert.equal(K.countText({ shown: second.length, total: repainted.length, off, entries: repainted }), "5 of 6 · link file");
   assert.notEqual(K.countText({ shown: second.length, total: repainted.length, off, entries: repainted }), countFirst, "the numbers move with the list; the narrowing does not");
   // The source half: the paint function must never assign the state it reads, or a frame would reset the chips.
-  const paint = sliceRegion(app, "deliverables");
+  const paint = sliceRegion(list, "deliverables");
   const body = paint.slice(paint.indexOf("function paintDeliverRows"), paint.indexOf("// A row: a glyph by kind"));
   assert.ok(body.length > 500, "the paint function was found");
   assert.doesNotMatch(body, /deliver\.kindsOff\s*=/, "the paint never writes kindsOff");

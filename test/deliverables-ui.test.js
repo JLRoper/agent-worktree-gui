@@ -21,10 +21,15 @@ import { sliceRegion } from "../tools/panel-testkit.mjs";
 
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
 const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+// The list's own code moved to public/deliverables.js in step 3 of docs/reports/module-map-2026-11-07.html's
+// order of work; the page's wiring for it stayed in public/app.js.
+const list = readFileSync(new URL("../public/deliverables.js", import.meta.url), "utf8");
 const cssRaw = readFileSync(new URL("../public/style.css", import.meta.url), "utf8");
 // The stylesheet's comments argue the rules; a keyword in prose is not a rule.
 const css = cssRaw.replace(/\/\*[\s\S]*?\*\//g, "");
-const block = () => sliceRegion(app, "deliverables");
+const block = () => sliceRegion(list, "deliverables");
+// The page's wiring for the list stayed in public/app.js (step 3); it has its own region there.
+const wiring = () => sliceRegion(app, "deliverables wiring");
 
 test("the header carries one DELIVERABLES button, between HUMAN and Collapse all", () => {
   const button = html.match(/<button id="btn-deliver"[^>]*>[\s\S]*?<\/button>/);
@@ -40,8 +45,8 @@ test("the header carries one DELIVERABLES button, between HUMAN and Collapse all
   // rows sit above the reader's persisted watermark and removes it when the count is zero.
   assert.doesNotMatch(tag, /id="deliver-badge"/, "the markup carries no badge — a zero count is not a node");
   assert.doesNotMatch(tag, /deliver-badge/, "…and no dead span of any kind inside the button");
-  assert.match(app, /function paintDeliverBadge\(\)[\s\S]{0,900}?document\.createElement\("span"\)[\s\S]{0,400}?badge\.id = "deliver-badge"/, "the page creates the pill when there is something unseen");
-  assert.match(app, /function paintDeliverBadge\(\)[\s\S]{0,1400}?badge\.remove\(\)/, "…and removes it when the count is zero");
+  assert.match(list, /function paintDeliverBadge\(\)[\s\S]{0,900}?document\.createElement\("span"\)[\s\S]{0,400}?badge\.id = "deliver-badge"/, "the page creates the pill when there is something unseen");
+  assert.match(list, /function paintDeliverBadge\(\)[\s\S]{0,1400}?badge\.remove\(\)/, "…and removes it when the count is zero");
   // The title has to say what the click does and that D is the key, because that sentence is the only
   // documentation a reader gets before the popover exists.
   assert.match(tag, /title="[^"]*every deliverable[^"]*"/i, "the title says what the list is");
@@ -56,7 +61,7 @@ test("the header carries one DELIVERABLES button, between HUMAN and Collapse all
 });
 
 test("D opens and closes the list, and a d typed into a field stays in the field", () => {
-  const src = block();
+  const src = `${block()}\n${wiring()}`;
   // The HUMAN precedent, both halves: the bare letter and the two guards (M13, N10).
   assert.match(src, /humanTextEntry\(document\.activeElement\)/, "a caret in any field owns the keystroke");
   assert.match(src, /e\.repeat/, "holding the key must not race the toggle");
@@ -151,7 +156,7 @@ test("the empty state documents the grammar; a failed read says so and offers re
   // The definition, where the reader looks for it — and ONCE: the same sentence is in every brief, so a second copy
   // on the page would be the page explaining itself twice.
   assert.match(src, /A deliverable is a file or URL the reader can open, not a description of one/, "the help text defines a deliverable");
-  const all = `${app}\n${html}`;
+  const all = `${app}\n${list}\n${html}`;
   assert.equal(all.split("not a description of one").length - 1, 1, "the definition is stated once on the page");
   assert.match(src, /could not read the list/i, "a failed read is not an empty list");
   assert.match(src, /retry/i, "and it offers the retry");
