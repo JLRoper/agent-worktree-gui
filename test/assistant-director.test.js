@@ -38,15 +38,19 @@ import { PRIMARY_ASSISTANT } from "../lib/assistants.js";
 import { post, startPanel } from "../tools/panel-testkit.mjs";
 
 const MINUTE = 60_000;
+// lib/assistant/wakes.js exports this as QUEUE_CADENCE_MINUTES. Held as a literal on purpose: the red proof for
+// this test stashes the product files, and an import of a NEW export would then fail at module load instead of at
+// the assertion - a test that cannot load proves the symbol is new, not that the queue was never woken.
+const QUEUE_MINUTES = 30;
 const wait = (ms = 400) => new Promise((r) => setTimeout(r, ms));
 const DIRECTOR_SEED = new URL("../data/roles/assistant-director.md", import.meta.url);
 
-async function panel(t, { dir: given = null } = {}) {
+async function panel(t, { dir: given = null, settings = {} } = {}) {
   const dir = given || (await mkdtemp(path.join(os.tmpdir(), "wtgui-director-")));
   if (!given) t.after(() => rm(dir, { recursive: true, force: true }));
   const assistantFile = path.join(dir, "assistant.json");
   if (!given) {
-    await writeFile(assistantFile, JSON.stringify({ version: 2, settings: {}, notes: "", rules: [], watches: [], alerts: [], journal: [] }));
+    await writeFile(assistantFile, JSON.stringify({ version: 2, settings: { ...settings }, notes: "", rules: [], watches: [], alerts: [], journal: [] }));
   }
   const created = [];
   const said = [];
@@ -261,7 +265,7 @@ test("checkCadence is the sentry's only clock: 19 is early, 21 is due, and a liv
   assert.equal(said.at(-1).assistantId, "assistant-2", "the Director kept its own standing wake");
 });
 
-test("no interval means no cadence; the profile is the only field the sentry reads", async (t) => {
+test("no interval and an empty queue means no cadence; the profile is the standing clock's only field", async (t) => {
   const { assistant, profileFile } = await panel(t);
   assistant.createAssistant({ roleId: "agent-manager" });
   // The manager-role assistant has no cadence even after a very long quiet.
@@ -278,6 +282,56 @@ test("no interval means no cadence; the profile is the only field the sentry rea
   assert.deepEqual(due, { assistantId: "assistant-2", minutes: 15 });
   await wait(250);
   assert.equal(assistant.timer, null, "checkCadence never creates a timer of its own");
+});
+
+// ---- 2b. the queue is its own cadence ----------------------------------------------------------------
+
+// THE DEADLOCK this pair exists for: an assistant that holds a queued row and has nothing of its own running.
+// A queue sweep used to be armed only by a run SETTLING, and a settle is a door that only something ENDING can
+// open - so with no prior run at all there was nothing to open it, and the row was never read. The queue is now
+// its own cadence, and this test drives it with the idle failsafe OFF, which is the state that had no clock at
+// all: no standing wake, no settle, no failsafe.
+test("a queued row with no prior run is its own cadence: the queue gets its look", async (t) => {
+  const { assistant, said } = await panel(t, { settings: { queueIdleMinutes: 0 } });
+  assert.equal(assistant.settings.queueIdleMinutes, 0, "the idle failsafe is off, so only the queue's clock is left");
+  assert.equal(assistant.profileOf(PRIMARY_ASSISTANT).wakeEveryMinutes, 0, "and there is no standing interval");
+  assert.deepEqual(assistant.jobs.list(), [], "no run has ever happened");
+
+  const rec = assistant.assistantRecord(PRIMARY_ASSISTANT);
+  const made = addTask([], { title: "the queued row with no run", project: "agent-worktree-gui" }, { by: "reader" });
+  writeQueueFile(assistant.queuePathOf(rec), made.tasks, made.nextId);
+  assert.equal(assistant.openQueueRows(PRIMARY_ASSISTANT).length, 1, "one open row, and it is queued");
+
+  const start = assistant.bootedAt;
+  assert.equal(assistant.checkCadence(start + (QUEUE_MINUTES - 1) * MINUTE), null, "one minute short is not due");
+  assert.equal(said.length, 0, "and nothing was said");
+  const due = assistant.checkCadence(start + (QUEUE_MINUTES + 1) * MINUTE);
+  assert.deepEqual(due, { assistantId: PRIMARY_ASSISTANT, minutes: QUEUE_MINUTES, queue: 1 });
+  await wait(300);
+  assert.equal(said.length, 1, "the queue's own look started one turn");
+  assert.equal(said[0].assistantId, PRIMARY_ASSISTANT, "on the queue owner's thread");
+  assert.match(said[0].text, /the queue's own look/);
+  assert.match(said[0].text, /#1 queued/, "the row itself is named");
+  assert.match(said[0].text, /Sweep your queue now/, "and the four checks ride with it");
+  assert.equal(assistant.checkCadence(start + (QUEUE_MINUTES + 2) * MINUTE), null, "the clock restarted when the wake went out");
+});
+
+// The failsafe already swept a queue; the cadence must count that look, or a queue with the failsafe ON is
+// woken twice for the same window (once by the alert, once by the clock behind it).
+test("the queue's own look and the idle failsafe are one clock: one turn per window", async (t) => {
+  const { assistant, said } = await panel(t);
+  assert.equal(assistant.settings.queueIdleMinutes, 30, "the failsafe ships on, at thirty minutes");
+  const rec = assistant.assistantRecord(PRIMARY_ASSISTANT);
+  const made = addTask([], { title: "the queued row with no run", project: "agent-worktree-gui" }, { by: "reader" });
+  writeQueueFile(assistant.queuePathOf(rec), made.tasks, made.nextId);
+
+  const start = assistant.bootedAt;
+  const alert = assistant.checkQueueIdle(start + 31 * MINUTE, []);
+  assert.ok(alert, "the failsafe raised its alert for the queued row");
+  assert.match(alert.title, /still open/);
+  assert.equal(assistant.checkCadence(start + 31 * MINUTE), null, "the cadence counts the failsafe's look as the look");
+  await wait(300);
+  assert.equal(said.length, 1, "one turn, not two");
 });
 
 // ---- 3. the two powers --------------------------------------------------------------------------------
