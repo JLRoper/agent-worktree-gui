@@ -73,7 +73,9 @@ It never serves a stage's id, order or artifact, and it has no per-document rout
 index cannot drive the queue picker on its own: a picker needs a stage to start a task at, and an
 index row has none. The panel's `pipeline-bundle.json` is the wrapper that carries those same PDL
 documents whole, and `POST /api/assistant/pipeline-bundle/import` (`lib/pipeline-bundle-import.js`)
-is how one gets in, appending by pipeline id and never replacing what is held.
+is how one gets in, appending by pipeline id and never replacing what is held — with one exception, the repair: a
+live file the loader refuses WHOLE (or cannot parse at all) is REPLACED by the document being imported, and the
+answer says it is a repair and names the fault of the file it replaces. A bundle that loads is never replaced.
 
 Both readers already stand on `parseBundle` for the bundle, and on nothing shared for anything else:
 `lib/pipeline-window.js` and `lib/task-pipeline-assign.js` each call `readBundle(config.pipelineBundleFile)`

@@ -73,6 +73,7 @@ test("an import into an existing panel wrapper keeps its name, adds the pipeline
   // A single pipeline still arrives as a DOCUMENT (a panel one here) because the loader dates an import by its version.
   const plan = planImport(live, bundled([PING], "ping-pong export"));
   assert.equal(plan.ok, true, plan.reason);
+  assert.equal(plan.repair, null, "a readable live bundle is an append, not a repair");
   assert.equal(plan.doc.name, "SEFL pipelines");
   assert.deepEqual(plan.pipelines.map((p) => p.id), ["poc-to-uat", "ping-pong"]);
 });
@@ -109,11 +110,68 @@ test("a document the loader refuses is refused here with the loader's own code a
   assert.match(plan.reason, /stages\[0\]/);
 });
 
-test("a live file this panel cannot read is refused rather than overwritten", () => {
-  const plan = planImport("{ not json", studioDoc("x", "X"));
+// The case this module exists for is a bundle the panel draws as unresolved, and it was the one case the import
+// refused: a live file the loader cannot read. The reader had to run `node tools/seed-pipeline-bundle.mjs --force` by
+// hand. A repair replaces that file with the document being imported and says so on the plan, naming the fault of the
+// file it replaces — but a document that does not load is still refused, because one refused bundle does not repair
+// another, and a readable bundle is still appended to.
+
+test("a READABLE live bundle is still an append: the plan is not a repair and carries no repair sentence", () => {
+  const plan = planImport(bundled([POC], "SEFL pipelines"), studioDoc("after", "After"));
+  assert.equal(plan.ok, true, plan.reason);
+  assert.equal(plan.repair, null);
+  assert.equal(plan.reason, null);
+  assert.deepEqual(plan.pipelines.map((p) => p.id), ["poc-to-uat", "after"]);
+});
+
+test("a live bundle the loader REFUSES is repaired, and the plan names the fault of the file it replaces", () => {
+  // The measured case (docs/reports/pipeline-window-stale-bundle-2026-11-08.md): gate G1 of `author-review-revise`
+  // declares two outcomes and carries no routes map, so the loader refuses the file WHOLE and the window draws
+  // nothing. Importing the seed over it used to answer live-bundle-unreadable.
+  const stale = JSON.parse(JSON.stringify(SEED));
+  delete stale.pipelines.find((p) => p.id === "author-review-revise").gates[0].decision.routes;
+  const refused = parseBundle(stale);
+  assert.equal(refused.ok, false, "the fixture has to be one the panel's own loader refuses");
+  assert.equal(refused.code, "incomplete-gate");
+
+  const plan = planImport(stale, SEED);
+  assert.equal(plan.ok, true, plan.reason);
+  assert.ok(plan.repair, "the plan says it is a repair");
+  assert.equal(plan.repair.code, "incomplete-gate", "the loader's code travels into the repair");
+  assert.equal(plan.repair.where, refused.where);
+  assert.match(plan.repair.reason, /the file it replaces cannot be read/);
+  assert.match(plan.repair.reason, /routes/, "what was wrong is the loader's own sentence");
+  assert.match(plan.reason, /a repair/);
+  assert.match(plan.reason, /incomplete-gate/);
+
+  // The replacement is the seed whole, and it reads back through the same loader the panel reads with.
+  const seedIds = SEED.pipelines.map((p) => p.id || (p.project && p.project.id));
+  assert.deepEqual(plan.pipelines.map((p) => p.id), seedIds);
+  assert.equal(plan.doc.name, "SEFL pipelines");
+  const reread = parseBundle(plan.text);
+  assert.equal(reread.ok, true, `${reread.code} ${reread.reason}`);
+  assert.equal(reread.bundle.pipelines.length, seedIds.length);
+});
+
+test("a live file that is not JSON is repaired the same way, and an ABSENT file is still a first import", () => {
+  const plan = planImport("{ not json", SEED);
+  assert.equal(plan.ok, true, plan.reason);
+  assert.equal(plan.repair.code, "not-a-bundle");
+  assert.equal(plan.pipelines.length, SEED.pipelines.length);
+
+  const first = planImport(null, SEED);
+  assert.equal(first.ok, true, first.reason);
+  assert.equal(first.repair, null, "there was no file to repair");
+});
+
+test("a document that does not parse is refused even over an unreadable live file, and nothing is replaced", () => {
+  const brokenSeed = JSON.parse(JSON.stringify(SEED));
+  delete brokenSeed.pipelines[0].stages[0].artifact;
+  const plan = planImport("{ not json", brokenSeed);
   assert.equal(plan.ok, false);
-  assert.equal(plan.code, IMPORT_FAULTS.LIVE);
+  assert.equal(plan.code, "incomplete-stage", "the refusal names the document the reader handed in");
   assert.equal(plan.doc, null);
+  assert.equal(plan.repair, null);
 });
 
 test("importBundleFile writes the merged bundle, and a second import of another pipeline appends again", () => {
@@ -139,6 +197,39 @@ test("importBundleFile writes the merged bundle, and a second import of another 
     const dup = importBundleFile({ file, document: studioDoc("second", "Second again") });
     assert.equal(dup.ok, false);
     assert.equal(dup.code, IMPORT_FAULTS.DUPLICATE);
+    assert.equal(readFileSync(file, "utf8"), before);
+  } finally {
+    rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+  }
+});
+
+test("importBundleFile REPLACES an unreadable live file, and the next import appends to the repaired file", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "wtgui-import-repair-"));
+  const file = path.join(dir, "pipeline-bundle.json");
+  try {
+    // Truncated mid-record, the shape a half-written edit leaves: not JSON at all.
+    writeFileSync(file, '{"bundleVersion":1,"name":"stale","pipelines":[{"id":"half', "utf8");
+    const out = importBundleFile({ file, document: SEED });
+    assert.equal(out.ok, true, out.reason);
+    assert.ok(out.repair, "the result says it was a repair, not an append");
+    assert.equal(out.repair.code, "not-a-bundle");
+    const read = readBundle(file);
+    assert.equal(read.ok, true, `${read.code} ${read.reason}`);
+    assert.deepEqual(read.bundle.pipelines.map((p) => p.id), SEED.pipelines.map((p) => p.id || (p.project && p.project.id)));
+
+    // The repair is ONE import, not a mode: the file now loads, so the next one appends to it.
+    const next = importBundleFile({ file, document: studioDoc("after-repair", "After the repair") });
+    assert.equal(next.ok, true, next.reason);
+    assert.equal(next.repair, null);
+    assert.equal(next.pipelines[next.pipelines.length - 1].id, "after-repair");
+
+    // And a seed that itself fails to parse still writes nothing: the file stays byte-identical.
+    const brokenSeed = JSON.parse(JSON.stringify(SEED));
+    delete brokenSeed.pipelines[0].stages[0].artifact;
+    const before = readFileSync(file, "utf8");
+    const bad = importBundleFile({ file, document: brokenSeed });
+    assert.equal(bad.ok, false);
+    assert.equal(bad.code, "incomplete-stage");
     assert.equal(readFileSync(file, "utf8"), before);
   } finally {
     rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });

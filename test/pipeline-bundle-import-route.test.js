@@ -14,9 +14,12 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { startPanel } from "../tools/panel-testkit.mjs";
 
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const SEED_TEXT = await readFile(path.join(ROOT, "pipeline-bundle.seed.json"), "utf8");
 const TOKEN = "import-token";
 const sha = (text) => createHash("sha256").update(text).digest("hex");
 
@@ -177,6 +180,29 @@ test("an import appends a second studio export: the catalogue lists both, and th
   assert.equal(view.json.count, 2, "the window counts the chosen pipeline's stages, not the largest one's");
   assert.equal(view.json.current.id, "critique");
   assert.equal(view.json.current.position, 2);
+
+  // ---- an unreadable live bundle is REPAIRED over HTTP, and the route says so ------------------------
+  // The case the import exists for: the file on disk is one the loader refuses whole, so the window draws nothing.
+  // This used to be a 422 live-bundle-unreadable and the reader ran the seed tool by hand.
+  const truncated = '{"bundleVersion":1,"name":"stale","pipelines":[{"id":"half';
+  await writeFile(bundleFile, truncated, "utf8");
+  const repaired = await postImport(panel.base, { text: SEED_TEXT, name: "pipeline-bundle.seed.json" });
+  assert.equal(repaired.status, 200, repaired.text.slice(0, 400));
+  assert.equal(repaired.json.ok, true);
+  assert.ok(repaired.json.repair, "the route reports the repair instead of an append");
+  assert.equal(repaired.json.repair.code, "not-a-bundle");
+  assert.match(repaired.json.repair.reason, /the file it replaces cannot be read/);
+  assert.match(repaired.json.reason, /repaired the bundle/);
+  assert.match(repaired.json.reason, /not-a-bundle/);
+  const healed = await get(panel.base, "/api/assistant/pipeline-catalogue");
+  assert.equal(healed.status, 200);
+  assert.ok(healed.json.pipelines.length > 1, "the catalogue reads the repaired bundle");
+
+  // ---- a document that does not parse is still a 422 that writes nothing, repair or not -----------------
+  const afterRepair = await readFile(bundleFile, "utf8");
+  const refusedSeed = await postImport(panel.base, { document: { version: 1, stages: [{ id: "x", title: "X" }] } });
+  assert.equal(refusedSeed.status, 422, refusedSeed.text.slice(0, 400));
+  assert.equal(sha(await readFile(bundleFile, "utf8")), sha(afterRepair), "a refused document writes nothing");
 
   // ---- the route is a POST only ----------------------------------------------------------------------
   const wrong = await fetch(`${panel.base}/api/assistant/pipeline-bundle/import`);
