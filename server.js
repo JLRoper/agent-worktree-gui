@@ -39,6 +39,9 @@ import { Hosts, docOf, prListing, proposeMapping, renderTemplate } from "./lib/h
 // one, and the ladder that is the only way a tree's kind may change (docs/pipelines.md §1–§3).
 import { PIPELINES_VERSION, PIPELINE_KINDS, EXIT_CHECKS, Pipelines, PipelineRecords, presumedPipeline, changePipeline, storeSwitch, validatePipelinesDocument, readPipelinesFile, observeGithubPr, observeBitbucketPr } from "./lib/pipelines.js";
 import { TreeNames, describeNaming, tagOf, treeKey, autoNameRefusal, namingState, renameRefusal } from "./lib/tree-names.js";
+// One slug rule for a tree's name, shared by the cut (lib/jobs.js `makeWorktree`) and the rename here, so a tree
+// cut for a task and a tree renamed after it are spelled the same way: whole words, cut between them.
+import { treeSlug } from "./lib/tree-slug.js";
 import { WorktreeNaming } from "./lib/worktree-naming.js";
 import { DEFAULT_OWNER, Locks, describeLock, rebaseKey, writerLocks } from "./lib/locks.js";
 import { rebaseWorktree } from "./lib/rebase.js";
@@ -1198,12 +1201,6 @@ remoteWrites.setVerifier(async ({ worktree, remote, branch }) => {
 // ask it in one place (lib/features/spawn.js), named `spawnFeature` because node:child_process
 // already owns `spawn` in this module. The two answers that go stale are passed as getters:
 // /api/reload replaces `config` wholesale, and every registry refresh replaces the project array.
-const spawnFeature = createSpawn({
-  getConfig: () => config,
-  getProjects: () => registry.projects,
-  jobs,
-});
-
 // The board's rows, each carrying the PROJECT it belongs to. The store keys its rows `<project>::<path>`, and one
 // reader needs the name ON the row rather than beside it: the assistant's queue card draws the project first in its
 // meta line, and a task with no project of its own falls back to its row's. A row that already carries one keeps it.
@@ -1212,6 +1209,16 @@ const rowsWithProject = () =>
     const at = String(key).indexOf("::");
     return { ...row, project: row.project || (at > 0 ? String(key).slice(0, at) : null) };
   });
+
+const spawnFeature = createSpawn({
+  getConfig: () => config,
+  getProjects: () => registry.projects,
+  jobs,
+  // The rows the scanner already wrote, read at the cut: before a tree is made, the spawner asks whether the
+  // project already holds an unfinished tree carrying this task (lib/spawn-reuse.js). The same rows the assistant
+  // reads, so the cut and the digest cannot be told two different stories about one tree.
+  getRows: rowsWithProject,
+});
 
 // ---- the reader's locks ---------------------------------------------------------------------------------------
 // A worktree or a branch the reader has locked (lib/locks.js): the one record here that is the reader's and not
@@ -2119,12 +2126,9 @@ store.onEvent((evt) => {
 descriptions.harvest(2500);
 
 function worktreeDirName(name, tag) {
-  const slug = String(name || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 40)
-    .replace(/-+$/, "");
+  // The same rule the cut uses (lib/tree-slug.js): whole words, cut between them. An empty name still yields an
+  // empty directory name, which the callers read as "nothing to rename to".
+  const slug = String(name ?? "").trim() ? treeSlug(name) : "";
   return slug ? `${slug}-${tag}` : "";
 }
 

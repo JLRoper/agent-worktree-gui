@@ -776,6 +776,7 @@ Two decisions the review does not argue, and this map still states:
 | the assistant | `lib/assistant.js` header, `lib/assistant/config.js` (rules + autonomy) |
 | the permission model | `lib/remote-writes.js`, `lib/push-guard.js`, `lib/approvals.js`, `docs/pushing-to-a-remote.md` |
 | naming, parents, roll-ups | `lib/tree-names.js`, `lib/parents.js`, `lib/child-worktree.js`, `docs/child-worktrees-and-rollups.md` |
+| a cut, and what it does when the task is already in hand | `lib/features/spawn.js`, `lib/spawn-reuse.js`, `lib/tree-slug.js`, `docs/spawn-reuse.md` |
 | the page | `public/index.html` (script order), `docs/using-the-board.md` |
 | how a change is proven | `tools/verify.mjs`, `tools/panel-testkit.mjs`, `docs/versioning.md` |
 | where the tree can be cut | `docs/reviews/architecture-modules.html` — the signed seam list, costed and ordered |
