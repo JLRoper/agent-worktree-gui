@@ -37,7 +37,7 @@ import { Deliverables } from "./lib/deliverables.js";
 import { Hosts, docOf, prListing, proposeMapping, renderTemplate } from "./lib/hosts.js";
 // What a worktree is FOR: the definition catalogue (reader-edited over the shipped seed), where each tree stands in
 // one, and the ladder that is the only way a tree's kind may change (docs/pipelines.md §1–§3).
-import { PIPELINES_VERSION, PIPELINE_KINDS, EXIT_CHECKS, Pipelines, PipelineRecords, presumedPipeline, changePipeline, storeSwitch, validatePipelinesDocument, readPipelinesFile, observeGithubPr, observeBitbucketPr } from "./lib/pipelines.js";
+import { Pipelines, PipelineRecords, presumedPipeline, changePipeline, storeSwitch, observeGithubPr, observeBitbucketPr } from "./lib/pipelines.js";
 import { TreeNames, describeNaming, tagOf, treeKey, autoNameRefusal, namingState, renameRefusal } from "./lib/tree-names.js";
 // One slug rule for a tree's name, shared by the cut (lib/jobs.js `makeWorktree`) and the rename here, so a tree
 // cut for a task and a tree renamed after it are spelled the same way: whole words, cut between them.
@@ -127,7 +127,10 @@ import { createResetRoutes } from "./lib/assistant/reset.js";
 import { createPipelineWindowRoutes } from "./lib/pipeline-window.js";
 // The pipelines a window's assignment control may offer, read from the same bundle. A read, mounted beside the window.
 import { createPipelineCatalogueRoutes } from "./lib/task-pipeline-assign.js";
-import { pipelineSourceCatalogue } from "./lib/pipeline-source.js";
+// The pipelines prefix, lifted out of this file's own chain beside the jobs prefix: the catalogue the Pipeline tab
+// edits and the one save that replaces it now live in one module, mounted from the table. The store and the logger
+// are this file's own and travel in; the catalogue's own readers come with the module.
+import { PIPELINES_PATH, createPipelinesRoutes } from "./routes/pipelines.js";
 // Importing a studio export into that bundle: an APPEND by pipeline id, refusing a duplicate id by name. The write side
 // of the loader, mounted with the two reads because all three answer about the one file.
 import { createPipelineBundleImportRoutes } from "./lib/pipeline-bundle-import.js";
@@ -1288,6 +1291,10 @@ const PREFIX_MOUNTS = [
   // and the tree and PR a reattach has to name come from the board's own rows, so all of them travel in beside the
   // transport helpers.
   { prefix: JOBS_PATH, handles: createJobsRoutes({ jobs, config, assistant, broadcast, gonePointers, sendJson, readBody, authorised }) },
+  // The pipelines prefix (routes/pipelines.js), the third row lifted out of this file's own chain: the catalogue read
+  // and the one save that replaces it. The store owns the live file and the logger records the save, so both travel in
+  // beside the transport helpers; the version, the vocabularies and the loader's functions come with the module.
+  { prefix: PIPELINES_PATH, handles: createPipelinesRoutes({ pipelines, config, sendJson, readBody, authorised, log }) },
 ];
 // The reset's route: the gateway client, the store path and the single-flight map live in that module; this file only
 // hands the same transport helpers to it and mounts it below.
@@ -3148,34 +3155,6 @@ const server = createServer(async (req, res) => {
       );
     }
 
-    // ---- the pipeline catalogue ------------------------------------------------------------------
-    // The Pipeline tab's whole answer: the merged catalogue — the reader's pipelines.json over the shipped seed —
-    // with its provenance (both file paths), the version it was written with, and every refusal the loader made.
-    // A file whose version is newer than this panel's is refused whole (the seed is in force read-only); a
-    // definition that fails validation is dropped by id and named. The FULL definitions travel here, not the
-    // summary /api/state carries: the tab edits stages and prompts, and a summary would make it guess.
-    if (route === "/api/pipelines" && req.method === "GET") {
-      const doc = pipelines.doc({ fresh: true });
-      return sendJson(res, 200, {
-        file: doc.file,
-        seedFile: doc.seedFile,
-        version: doc.version,
-        supported: PIPELINES_VERSION,
-        kinds: PIPELINE_KINDS,
-        exitChecks: EXIT_CHECKS,
-        readOnly: doc.readOnly,
-        refused: doc.refused,
-        warnings: doc.warnings,
-        dropped: doc.dropped,
-        pipelines: doc.pipelines,
-        // The OTHER pipeline list this panel holds: the PDL bundle a task is put on, read through the one module the
-        // queue picker reads (lib/pipeline-source.js). The ladder above says what a TREE may do with a branch and the
-        // PDL pipelines below say what a TASK is carried through; the tab draws both and names which is which. A
-        // bundle that is missing or refused is carried here as its own value, never blamed on the ladder.
-        pdl: pipelineSourceCatalogue(config),
-      });
-    }
-
     // ---- one pipeline document, read for the map's `?doc=` -----------------------------------------
     // public/pipeline-map.html draws a document it did not build, but a page served on this origin cannot fetch the
     // factory on :8090 (no CORS header) — so the reader's own panel does the read and hands the page the bytes with
@@ -3212,78 +3191,6 @@ const server = createServer(async (req, res) => {
       }
       res.writeHead(200, { ...head, "Content-Length": body.length });
       return res.end(body);
-    }
-
-    // Replace the live catalogue. The document is the pipelines.json shape: `{version, note, pipelines}`. A version
-    // newer than this panel's is refused whole (409), exactly as the loader would refuse it on the next read. Every
-    // definition is validated with validatePipeline and its findings come back UNALTERED under `findings`, so the
-    // tab can show each sentence beside the field it belongs to. Nothing is written when any definition is
-    // refused: a half-saved catalogue is the one state the loader's drop-by-id rule exists to prevent.
-    //
-    // A document may carry ONE definition (the tab's save sends only the pipeline it edited): the body's pipelines
-    // are merged over the live file's own, so an edit to one id never silently deletes the reader's other edits.
-    // The seed's definitions are not copied in — the live file holds only the reader's, and the seed still supplies
-    // everything it supplies.
-    if (route === "/api/pipelines" && req.method === "PUT") {
-      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
-      const body = await readBody(req).catch(() => null);
-      if (!body || typeof body !== "object" || Array.isArray(body)) {
-        return sendJson(res, 400, { error: "a pipeline document is required (a JSON object)" });
-      }
-      const version = Number(body.version);
-      if (Number.isFinite(version) && version > PIPELINES_VERSION) {
-        return sendJson(res, 409, {
-          error: `the document is version ${version}, newer than this panel's ${PIPELINES_VERSION} — it is refused whole, not half-parsed`,
-          refused: { version, supported: PIPELINES_VERSION, why: `the document names version ${version}, newer than this panel's ${PIPELINES_VERSION}` },
-        });
-      }
-      const live = readPipelinesFile(config.pipelinesFile);
-      if (live.refused) {
-        return sendJson(res, 409, {
-          error: `the live pipelines.json is refused whole: ${live.refused.why}`,
-          refused: live.refused,
-        });
-      }
-      const incoming = Array.isArray(body.pipelines)
-        ? Object.fromEntries(body.pipelines.filter((rec) => rec && typeof rec === "object").map((rec) => [String(rec.id ?? "").trim(), rec]))
-        : body.pipelines && typeof body.pipelines === "object"
-          ? body.pipelines
-          : {};
-      const merged = { ...(live.pipelines || {}), ...incoming };
-      // The document the reader is asking to put in force is the WHOLE catalogue — the seed's definitions, the live
-      // file's and this edit — so a `next` pointing at a seed definition is not reported as unknown. Only the live
-      // file's definitions and the edit are WRITTEN; the seed still supplies its own.
-      const inForce = { ...(pipelines.doc({ fresh: true }).pipelines || {}), ...incoming };
-      const document = { version: PIPELINES_VERSION, pipelines: inForce };
-      if (body.note) document.note = body.note;
-      const { errors } = validatePipelinesDocument(document);
-      if (errors.length) {
-        return sendJson(res, 422, {
-          error: `the pipeline document was refused: ${errors.length} finding${errors.length === 1 ? "" : "s"}`,
-          findings: errors,
-        });
-      }
-      const saved = pipelines.save({ version: PIPELINES_VERSION, pipelines: merged, ...(body.note ? { note: body.note } : {}) });
-      if (!saved.ok) return sendJson(res, 500, { error: saved.error });
-      log(`pipelines: saved ${saved.file} — ${Object.keys(merged).length} definition(s) in force`);
-      const doc = pipelines.doc({ fresh: true });
-      return sendJson(res, 200, {
-        ok: true,
-        file: saved.file,
-        state: {
-          file: doc.file,
-          seedFile: doc.seedFile,
-          version: doc.version,
-          supported: PIPELINES_VERSION,
-          kinds: PIPELINE_KINDS,
-          exitChecks: EXIT_CHECKS,
-          readOnly: doc.readOnly,
-          refused: doc.refused,
-          warnings: doc.warnings,
-          dropped: doc.dropped,
-          pipelines: doc.pipelines,
-        },
-      });
     }
 
     if (route === "/api/settings/sessions" && req.method === "POST") {
