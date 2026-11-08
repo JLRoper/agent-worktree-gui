@@ -1,4 +1,4 @@
-// Choosing which of the worktree chart's eleven columns are drawn.
+// Choosing which of the worktree chart's twelve columns are drawn.
 //
 // Five facts, each driven rather than read off the source:
 //
@@ -7,7 +7,7 @@
 //   2. the page's column list and the server's are the SAME list, in the same order. A typo on either side hides
 //      nothing and reports success, which is indistinguishable from a switch that does not work;
 //   3. the header and the column-spanning rows are built from the shown set, so hiding a column leaves a table whose
-//      header and every row still agree (colspan 11 → 8, not a bare strip of panel at the right edge);
+//      header and every row still agree (colspan 12 → 9, not a bare strip of panel at the right edge);
 //   4. the OWNER column is the one the page decides for itself: it hides while every row is on Assistant #1 and no
 //      second assistant exists — a column of identical tags — and comes back on its own for a reassigned tree or a
 //      second assistant, without the reader moving a switch. `DEFAULT_HIDDEN_COLUMNS` is empty because of it: a
@@ -78,16 +78,21 @@ test("the page's columns are the server's columns, in the same order", () => {
 
 test("nothing hidden draws every header the column can speak for — and the owner column is silent on an idle board", () => {
   const { chartHeaderHtml, shownColumns, wtColspan } = page({}, idle());
-  assert.equal(shownColumns().length, CHART_COLUMN_IDS.length - 1, "ten of eleven: the owner column hides itself");
+  assert.equal(shownColumns().length, CHART_COLUMN_IDS.length - 1, "eleven of twelve: the owner column hides itself");
   assert.equal(wtColspan(), CHART_COLUMN_IDS.length - 1);
   assert.doesNotMatch(chartHeaderHtml(), /data-col-id="assistant"/);
   const html = chartHeaderHtml();
   for (const id of CHART_COLUMN_IDS.filter((x) => x !== "assistant")) assert.match(html, new RegExp(`data-col-id="${id}"`));
   assert.match(html, /Ahead \/ Behind/);
-  assert.match(html, /Life \/ next read/);
+  // Life and Next read are two columns now: the age and its chips, the ring and its countdown. Each keeps its own
+  // header and its own explanation, and the Life id is unchanged so a stored hiddenColumns entry still lands on it.
+  assert.match(html, /<th data-col-id="life"[^>]*>Life<\/th>/);
+  assert.match(html, /<th data-col-id="nextread"[^>]*>Next read<\/th>/);
   // The two long explanations stay on their own headers rather than being lost with the hand-written markup.
   assert.match(html, /data-col-id="ahead" title="/);
-  assert.match(html, /data-col-id="life" title="/);
+  assert.match(html, /data-col-id="life" title="[^"]*time since this worktree was last seen alive/);
+  assert.match(html, /data-col-id="nextread" title="[^"]*the ring fills up to green/);
+  assert.doesNotMatch(html, /Life \/ next read/);
 });
 
 test("the owner column comes back on its own for a second assistant, or for one reassigned tree", () => {
@@ -96,7 +101,7 @@ test("the owner column comes back on its own for a second assistant, or for one 
     ["a tree was moved to another assistant", reassigned()],
   ]) {
     const { chartHeaderHtml, shownColumns } = page({}, board);
-    assert.equal(shownColumns().length, CHART_COLUMN_IDS.length, `all eleven with ${why}`);
+    assert.equal(shownColumns().length, CHART_COLUMN_IDS.length, `all twelve with ${why}`);
     assert.match(chartHeaderHtml(), /data-col-id="assistant"/, `the header returns with ${why}`);
   }
   // A stored owner that is gone still says something: the cell draws the fallback's owner, and the tooltip why.
@@ -120,16 +125,19 @@ test("a hidden column leaves the header, the colspan and the order consistent", 
   // The owner column is drawn here because a second assistant exists (see the tests above); the three named columns
   // are the reader's own hidden list.
   const { chartHeaderHtml, shownColumns, wtColspan } = page({ hiddenColumns: ["tip", "cherry", "life"] }, second());
-  assert.equal(wtColspan(), 8);
+  assert.equal(wtColspan(), 9);
   assert.deepEqual(
     shownColumns().map((i) => CHART_COLUMN_IDS[i]),
-    ["name", "branch", "assistant", "ahead", "pr", "dirty", "verdict", "actions"],
+    ["name", "branch", "assistant", "ahead", "pr", "dirty", "nextread", "verdict", "actions"],
   );
   const html = chartHeaderHtml();
-  assert.equal((html.match(/<th /g) || []).length, 8);
+  assert.equal((html.match(/<th /g) || []).length, 9);
   assert.doesNotMatch(html, /data-col-id="tip"/);
   assert.doesNotMatch(html, /data-col-id="cherry"/);
   assert.doesNotMatch(html, /data-col-id="life"/);
+  // Keeping the id means an entry a reader stored before the split still hides Life — and only Life: the ring's new
+  // column is not swept up by it.
+  assert.match(html, /data-col-id="nextread"/);
   assert.ok(html.indexOf('data-col-id="branch"') < html.indexOf('data-col-id="ahead"'), "table order survives");
 });
 

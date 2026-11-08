@@ -732,19 +732,23 @@ button.poll-btn:hover .poll-track { stroke: var(--dim); }
 button.poll-btn.busy { opacity: .55; cursor: progress; }
 .poll-track { stroke: var(--line); }
 .poll-arc { stroke: var(--green); }
-/* Life on the left, the next-read ring immediately to its right, both on one line; the evidence
-   chips wrap underneath. The old `.age-num { display: block }` is what pushed the ring onto a line
-   of its own — the number lives in a flex row now. */
+/* Two columns now: Life keeps the age number and the evidence chips, Next read keeps the ring and its countdown.
+   They used to be one cell - life on the left, the ring immediately to its right, the chips wrapping underneath -
+   and the split gives each a floor of its own. */
 /* The cell itself must NOT be `nowrap`: the chip strip is an inline-level box, so with nowrap it could not break
    onto a line of its own, shrink-to-fit the few pixels left beside the duration, and a chip wider than those spilled
    out of the cell - the row showed "✎ file" with its right border sliced off. Normal wrapping (the strip and the
    duration each keep nowrap for their own contents) lets a crowded strip drop to a full-width line and stack whole. */
 td.age { white-space: normal; }
 td.age .age-line { display: inline-flex; align-items: center; gap: 6px; vertical-align: middle; white-space: nowrap; }
-td.age .poll-ring { display: block; margin-right: 0; flex: none; }
 td.age .sigs { display: inline-flex; align-items: center; flex-wrap: wrap; margin-left: 7px; vertical-align: middle; white-space: nowrap; }
 td.age .age-num { font-family: var(--mono); font-size: 12px; display: inline-block; }
 td.age .age-num.dimmer { color: var(--dimmer); }
+/* Next read is the ring and its countdown on one line: "due in 4s" beside the ring IS the cell, so it never wraps. */
+td.nextread { white-space: nowrap; }
+td.nextread button.poll-btn { margin-right: 4px; }
+td.nextread .next-num { font-family: var(--mono); font-size: 11.5px; color: var(--dim); }
+td.nextread .next-num.late { color: var(--amber); }
 
 /* agents owned by a worktree, listed inside that row's detail */
 /* The rule closes the agent list rather than opening it: the bar sits at the BOTTOM of the list when the setting

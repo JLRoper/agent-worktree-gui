@@ -15,10 +15,11 @@
 //   a project's section    projectSection, the whole section.project node: the head and its chips, the
 //                          local-main and remote-tip line, the live board PIDs, the split table and the legend;
 //                          and refreshChips, the one strip repainted in place instead of rebuilt
-//   the worktree row       rowHtml, the template every cell of a row is written into, and the age column under
-//                          it: RING_C, noteScan, eventLifeAt, lifeAtFor, ringState, ringOffset, ringStroke,
-//                          ageCellHtml and paintAgeCell. rowKeyForThread, pulseRow and pulseProject are the
-//                          lookups and the two green pulses an event and a scan both use
+//   the worktree row       rowHtml, the template every cell of a row is written into, and the two clock columns
+//                          under it: RING_C, noteScan, eventLifeAt, lifeAtFor, ringState, ringOffset, ringStroke,
+//                          lifeCellHtml and paintLifeCell (the age number and the chips), nextReadCellHtml and
+//                          paintNextReadCell (the ring and its countdown). rowKeyForThread, pulseRow and pulseProject
+//                          are the lookups and the two green pulses an event and a scan both use
 //   children under a       childTreeOf, groupCtxOf and nestRowKeys (which row hangs under which, and the drawing
 //   parent                 order that keeps a child directly under its parent), foldTitle, foldButtonHtml,
 //                          paintFoldButton, paintRowGroup, paintUnder, markUnder, syncChildGroups and
@@ -662,7 +663,8 @@ function rowHtml(row, forceOwner = false) {
       title="${esc(branchLockTitle)}" aria-pressed="${branchLockedByBranch ? "true" : "false"}" aria-label="lock this branch">${branchLockedByBranch ? "\u{1F512}" : "\u{1F513}"}</button>`;
   // One cell per column, keyed by the column's id (CHART_COLUMNS), so the row and the header cannot disagree about
   // which cell is which: a hidden column is simply not in `cells`, and the row is the shown set in table order. The
-  // age cell carries its own <td> (it is painted in place every second), which is why `life` is read, not wrapped.
+  // life and next-read cells carry their own <td> (both are painted in place every second), which is why `life` and
+  // `nextread` are read, not wrapped.
   const cells = {
     name: `<td class="name"><div class="name-line"><span class="row-lead"></span><button class="btn-row-agent" data-agent-path="${esc(row.path)}" data-agent-name="${esc(row.name)}" data-agent-project="${esc(row.project)}"
       title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">\u25b6</button><span class="row-name" title="${esc(row.path)}">${esc(shownName)}</span>${renameBtn}${treeLockBtn}${agentBadgeHtml(row)}</div></td>`,
@@ -676,7 +678,8 @@ function rowHtml(row, forceOwner = false) {
     cherry: `<td class="mono dim nowrap">+${row.cherryPlus ?? 0}/−${row.cherryMinus ?? 0}</td>`,
     pr: `<td class="pr">${pr}</td>`,
     dirty: `<td class="mono nowrap">${dirty}</td>`,
-    life: ageCellHtml(row),
+    life: lifeCellHtml(row),
+    nextread: nextReadCellHtml(row),
     verdict: `<td class="verdict">${badge}</td>`,
     actions: `<td class="row-actions">${isProjectRoot ? "" : `${childBtn}<button class="btn-refresh-tree" data-refresh-tree="${esc(delKey)}" type="button" title="reconcile this one worktree — re-read its git state (dirty, ahead/behind, cherry, verdict, PR), then check its TODO list against what the tree now contains (a proposal, nothing closed) and its description, re-derived only if it has gone stale; every action is journalled under the row">\u27f3</button><button class="btn-del-tree${delDirect ? " is-direct" : ""}" data-del-tree="${esc(delKey)}" title="${delDirect ? "this worktree is merged and clean — deletes it straight away, its files go to the Recycle Bin and git's record is pruned" : "remove this worktree — asks first; its files go to the Recycle Bin and git's record of it is pruned"}">✕</button>`}</td>`,
   };
@@ -761,18 +764,75 @@ function ringStroke(st) {
   return st.fill >= 0.9 ? "var(--green)" : "var(--dim)";
 }
 
-function ageCellHtml(row) {
-  const alive = lifeAtFor(row) || NaN;
-  const label = Number.isFinite(alive) ? fmtDur(Date.now() - alive) : "never live";
-  const st = ringState(row);
-  return `<td class="age nowrap" data-key="${esc(keyOf(row.project, row.path))}">
-      <span class="age-line"><span class="age-num${Number.isFinite(alive) ? "" : " dimmer"}">${esc(label)}</span><button class="poll-btn" data-refresh-row="${esc(keyOf(row.project, row.path))}" type="button" title="read this worktree now"><svg class="poll-ring" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-        <circle class="poll-track" cx="8" cy="8" r="6" fill="none" stroke-width="2"></circle>
-        <circle class="poll-arc" cx="8" cy="8" r="6" fill="none" stroke-width="2" transform="rotate(-90 8 8)" stroke-dasharray="${RING_C.toFixed(2)}" stroke-dashoffset="${ringOffset(st)}" stroke="${ringStroke(st)}"></circle>
-      </svg></button></span><span class="sigs">${sigChips(row)}</span></td>`;
+// The Life column's own facts: the last moment this worktree was seen alive, whether there is one at all, and why if
+// it was not the scan that said so (a running panel agent IS life observed by us, and so is any event we received).
+// Shared by the builder and the once-a-second painter so the cell cannot say two different things about one row.
+function lifeState(row) {
+  const running = panelFor(row)?.running;
+  const fromEvent = eventLifeAt(row);
+  const alive = running ? Date.now() : lifeAtFor(row) || NaN;
+  const live = Number.isFinite(alive);
+  const why = running
+    ? " (a panel agent is running here now)"
+    : fromEvent && fromEvent >= (Date.parse(row.lastAliveAt || "") || 0)
+      ? " (an event we received for this worktree)"
+      : "";
+  return { alive, live, why };
 }
 
-function paintAgeCell(cell, row) {
+function lifeTitle(row) {
+  const { alive, live, why } = lifeState(row);
+  return (
+    `last life ${live ? `${fmtDur(Date.now() - alive)} ago${why}` : "never seen"} · polled ${relTime(row.scannedAt)} ago · ` +
+    "chips are the evidence: ⧉ hermes session · ● board PID · :port dev server · ✎ files edited"
+  );
+}
+
+function lifeCellHtml(row) {
+  const { alive, live } = lifeState(row);
+  const label = live ? fmtDur(Date.now() - alive) : "never live";
+  return `<td class="age nowrap" data-key="${esc(keyOf(row.project, row.path))}" title="${esc(lifeTitle(row))}">
+      <span class="age-line"><span class="age-num${live ? "" : " dimmer"}">${esc(label)}</span></span><span class="sigs">${sigChips(row)}</span></td>`;
+}
+
+// The next-read column: the ring that fills toward the moment this row is due to be read again, and the countdown
+// spelled out beside it. Three states, and each one is a word the reader can act on: "due in 4s" while it waits,
+// "due now" for the second the read is owed (a sub-second lateness is not worth a number), and "overdue 12s" after
+// that. It is its own <td> because the countdown moves every second and the reader asked for it to be readable on its
+// own, not hidden in a tooltip.
+function nextReadLabel(st) {
+  if (st.overdue >= 1000) return `overdue ${fmtDur(st.overdue)}`;
+  return st.remain > 0 ? `due in ${Math.ceil(st.remain / 1000)}s` : "due now";
+}
+
+function nextReadTitle(st) {
+  const cadence = st.every === st.configured ? `every ${st.every}s` : `every ${st.every}s, observed (configured ${st.configured}s)`;
+  return `next read ${nextReadLabel(st)} (${cadence}) · click the ring to read this worktree now`;
+}
+
+function nextReadCellHtml(row) {
+  const st = ringState(row);
+  const key = esc(keyOf(row.project, row.path));
+  return `<td class="nextread nowrap" data-key="${key}" title="${esc(nextReadTitle(st))}">
+      <button class="poll-btn" data-refresh-row="${key}" type="button" title="read this worktree now"><svg class="poll-ring" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+        <circle class="poll-track" cx="8" cy="8" r="6" fill="none" stroke-width="2"></circle>
+        <circle class="poll-arc" cx="8" cy="8" r="6" fill="none" stroke-width="2" transform="rotate(-90 8 8)" stroke-dasharray="${RING_C.toFixed(2)}" stroke-dashoffset="${ringOffset(st)}" stroke="${ringStroke(st)}"></circle>
+      </svg></button><span class="next-num${st.overdue > 0 ? " late" : ""}">${esc(nextReadLabel(st))}</span></td>`;
+}
+
+function paintLifeCell(cell, row) {
+  const { alive, live } = lifeState(row);
+  const num = cell.querySelector(".age-num");
+  if (num) {
+    const text = live ? fmtDur(Date.now() - alive) : "never live";
+    if (num.textContent !== text) num.textContent = text;
+    num.classList.toggle("dimmer", !live);
+  }
+  const title = lifeTitle(row);
+  if (cell.title !== title) cell.title = title;
+}
+
+function paintNextReadCell(cell, row) {
   const st = ringState(row);
   const arc = cell.querySelector(".poll-arc");
   if (arc) {
@@ -783,26 +843,13 @@ function paintAgeCell(cell, row) {
     if (arc.getAttribute("stroke-dashoffset") !== off) arc.setAttribute("stroke-dashoffset", off);
     if (arc.getAttribute("stroke") !== stroke) arc.setAttribute("stroke", stroke);
   }
-  // A running panel agent IS life, observed by us, whatever the last scan said - and so is any event we have
-  // received about this worktree since.
-  const running = panelFor(row)?.running;
-  const fromEvent = eventLifeAt(row);
-  const alive = running ? st.now : lifeAtFor(row) || NaN;
-  const live = Number.isFinite(alive);
-  const num = cell.querySelector(".age-num");
+  const num = cell.querySelector(".next-num");
   if (num) {
-    num.textContent = live ? fmtDur(st.now - alive) : "never live";
-    num.classList.toggle("dimmer", !live);
+    const text = nextReadLabel(st);
+    if (num.textContent !== text) num.textContent = text;
+    num.classList.toggle("late", st.overdue > 0);
   }
-  const cadence = st.every === st.configured ? `every ${st.every}s` : `every ${st.every}s, observed (configured ${st.configured}s)`;
-  const why = running
-    ? " (a panel agent is running here now)"
-    : fromEvent && fromEvent >= (Date.parse(row.lastAliveAt || "") || 0)
-      ? " (an event we received for this worktree)"
-      : "";
-  const title =
-    `last life ${live ? `${fmtDur(st.now - alive)} ago${why}` : "never seen"} · polled ${relTime(row.scannedAt)} ago · ` +
-    `next read ${st.remain > 0 ? `in ${Math.ceil(st.remain / 1000)}s` : `due now${st.overdue > st.total ? ` (overdue ${fmtDur(st.overdue)})` : ""}`} (${cadence})`;
+  const title = nextReadTitle(st);
   if (cell.title !== title) cell.title = title;
 }
 

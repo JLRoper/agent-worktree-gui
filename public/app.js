@@ -142,7 +142,8 @@ window.WMApp.projects = {
   rootScanChip, rootChips, rootSection, projectSection, refreshChips,
   childTreeOf, groupCtxOf, nestRowKeys, foldTitle, foldButtonHtml, paintFoldButton, paintRowGroup,
   paintUnder, markUnder, syncChildGroups, toggleChildFold, rowHtml,
-  RING_C, noteScan, eventLifeAt, lifeAtFor, ringState, ringOffset, ringStroke, ageCellHtml, paintAgeCell,
+  RING_C, noteScan, eventLifeAt, lifeAtFor, ringState, ringOffset, ringStroke, lifeCellHtml, paintLifeCell,
+  nextReadLabel, nextReadCellHtml, paintNextReadCell,
   rowKeyForThread, pulseRow, pulseProject,
   STABILIZE_KEY, stabilizeOn, projectHasOpenRow, rowHasOpenCard, orderedAgents, rememberAgentOrder,
   rememberAgentOrders, reorder, flashMovedByKey, flashMoved, pendingRows, rowFrame, DETAIL_VOLATILE,
@@ -7420,7 +7421,7 @@ function prCellHtml(row) {
 
 // ---- owner cell: the assistant's compact tag, and its name and role in the tooltip -----------------------------
 // The owner column answers "whose is this tree" in one glyph pair instead of one name: M1 is Manager 1, M2 is
-// Manager 2, A1 is Assistant #1. A cell is one word wide and eleven columns do not fit a name like "Assistant #2"
+// Manager 2, A1 is Assistant #1. A cell is one word wide and twelve columns do not fit a name like "Assistant #2"
 // twice over, so the cell carries the TAG and the tooltip carries the sentence — the assistant's own name, the
 // numbered role label the server resolved, and the display-only reminder. The row's detail keeps the long form
 // ("Controlled by: Assistant #1 — Manager") for the reader who wants it spelled out.
@@ -7864,8 +7865,11 @@ function noteEventLife(thread) {
   // and repaints the age cell exactly as it did before.
   pushEventLife(lifeRowKey(key), now);
   if (row && row.project) pushEventLife(lifeProjKey(row.project), now);
-  const cell = rowNode(key)?.querySelector("td.age") || null;
-  if (cell && row) paintAgeCell(cell, row);
+  const node = rowNode(key);
+  const cell = node?.querySelector("td.age") || null;
+  if (cell && row) paintLifeCell(cell, row);
+  const readCell = node?.querySelector("td.nextread") || null;
+  if (readCell && row) paintNextReadCell(readCell, row);
   if (state.eventFlash) {
     const last = state.lastEventFlashAt.get(key) || 0;
     if (now - last >= 900) {
@@ -12001,10 +12005,11 @@ setInterval(() => {
     const next = fmtDur(Date.now() - at);
     if (el.textContent !== next) el.textContent = next;
   }
-  for (const cell of document.querySelectorAll("td.age")) {
+  for (const cell of document.querySelectorAll("td.age, td.nextread")) {
     const row = state.rows.get(cell.dataset.key);
     if (!row) continue;
-    paintAgeCell(cell, row);
+    if (cell.classList.contains("nextread")) paintNextReadCell(cell, row);
+    else paintLifeCell(cell, row);
   }
   // Subagent rows carry their own clock, like the turn head above them.
   for (const el of document.querySelectorAll("[data-sub-elapsed]")) {

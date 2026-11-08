@@ -442,7 +442,8 @@ async function browserPhase(pw) {
   await resetRanking();
   const ageBefore = await page.evaluate((k) => {
     const cell = document.querySelector(`td.age[data-key="${CSS.escape(k)}"]`);
-    return { num: cell?.querySelector(".age-num")?.textContent, arc: cell?.querySelector(".poll-arc")?.getAttribute("stroke") };
+    const ring = document.querySelector(`td.nextread[data-key="${CSS.escape(k)}"]`);
+    return { num: cell?.querySelector(".age-num")?.textContent, arc: ring?.querySelector(".poll-arc")?.getAttribute("stroke") };
   }, keyFor("alpha-old"));
   const orderBeforeG = await domOrder();
   // open a row and hold it: stabilize is on by default, so a burst must not move anything.
@@ -458,8 +459,9 @@ async function browserPhase(pw) {
   // The age column and the ring repainted on each event: quote them.
   const ageAfter = await page.evaluate((k) => {
     const cell = document.querySelector(`td.age[data-key="${CSS.escape(k)}"]`);
+    const ring = document.querySelector(`td.nextread[data-key="${CSS.escape(k)}"]`);
     const row = state.rows.get(k);
-    return { num: cell?.querySelector(".age-num")?.textContent, arc: cell?.querySelector(".poll-arc")?.getAttribute("stroke"), lifeAt: eventLifeAt(row), lastAliveAt: row?.lastAliveAt || null };
+    return { num: cell?.querySelector(".age-num")?.textContent, arc: ring?.querySelector(".poll-arc")?.getAttribute("stroke"), lifeAt: eventLifeAt(row), lastAliveAt: row?.lastAliveAt || null };
   }, keyFor("zulu-burst"));
   ok("an event still stamps life on the age cell (the number is the row's own)", typeof ageAfter.num === "string" && ageAfter.num.length > 0, `age cell reads ${ageAfter.num}`);
   ok("...and the ring is still drawn (its stroke is one of the ring colours)", ["var(--dim)", "var(--green)", "var(--amber)", "var(--red)"].includes(ageAfter.arc), `ring stroke ${ageAfter.arc}`);
