@@ -4619,8 +4619,10 @@
           `${d.removed?.name || "The assistant"} was deleted — its record, queue, charter and notes are archived at ${d.archive?.dir || "the panel's assistant archive"}`,
         );
         setErr(`as-delete-err-${n}`, "");
-        // The float may have been ON the deleted assistant: move it to #1 before the next paint, since the tab and
-        // its pane no longer exist by then.
+        // A list tab (Role, Watchdog) falls back to the session the reader was last on, so a deleted id must not
+        // stay there; and the float may have been ON the deleted assistant, in which case it moves to #1 before the
+        // next paint, since the tab and its pane no longer exist by then.
+        if (lastSession === own) lastSession = FIRST_ASSISTANT;
         if (state.assistantView?.assistant === own) {
           lastSession = FIRST_ASSISTANT;
           setView({ assistant: FIRST_ASSISTANT, subTab: "chat" });
