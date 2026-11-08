@@ -116,7 +116,7 @@ test("two lanes pick one number: the second is refused the claim and re-bumps un
     assert.match(rb.out, /claim\s+v1\.0\.2 is on origin at [0-9a-f]{10}/);
 
     assert.equal(versionOf(b), "1.0.2", "the branch carries the number the tool printed");
-    assert.equal(git(b, ["log", "-1", "--format=%s"]), "chore: 1.0.2 — the version this landing carries");
+    assert.equal(git(b, ["log", "-1", "--format=%s"]), "chore: 1.0.2 - the version this landing carries");
     assert.equal(git(b, ["rev-parse", "v1.0.2^{commit}"]), git(b, ["rev-parse", "HEAD"]), "the tag peels to the declaring commit");
     assert.doesNotMatch(git(b, ["log", "--format=%s"]), /chore: 1\.0\.1/, "the discarded bump is not in the history");
 

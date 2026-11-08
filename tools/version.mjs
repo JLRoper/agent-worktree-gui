@@ -383,7 +383,7 @@ function rebumpAbove({ declared, level, declSha, occupied, baseVersion }) {
   if (!added.ok) return { ok: false, error: `the number is written but git add refused — ${added.err}` };
   const body = gitOk(["log", "-1", "--format=%B"]) || "";
   const rest = body.split("\n").slice(1).join("\n").trim();
-  const subject = `chore: ${candidate} — the version this landing carries`;
+  const subject = `chore: ${candidate} - the version this landing carries`;
   const amended = gitRun(["commit", "--amend", "-m", subject, ...(rest ? ["-m", rest] : [])]);
   if (!amended.ok) return { ok: false, error: `the number is written but git commit --amend refused — ${amended.err}` };
   const sha = gitOk(["rev-parse", "HEAD"]) || "";
@@ -747,7 +747,7 @@ function modeApply(level, argv = []) {
     console.log("    node tools/version.mjs tag && node tools/version.mjs claim");
     return 0;
   }
-  const subject = `chore: ${next} — the version this landing carries`;
+  const subject = `chore: ${next} - the version this landing carries`;
   const added = gitRun(["add", "--", "package.json"]);
   if (!added.ok) {
     console.error(`version apply: the number is written but git add refused — ${added.err}`);

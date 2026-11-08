@@ -58,7 +58,7 @@ test("apply commits the bump and anchors that commit with an annotated tag", asy
 
   const head = git(dir, ["rev-parse", "HEAD"]);
   assert.notEqual(head, shas[0], "the bump is a commit of its own");
-  assert.equal(git(dir, ["log", "-1", "--format=%s"]), "chore: 0.2.0 — the version this landing carries");
+  assert.equal(git(dir, ["log", "-1", "--format=%s"]), "chore: 0.2.0 - the version this landing carries");
 
   const [tag] = tags(dir);
   assert.equal(tag.name, "v0.2.0");
