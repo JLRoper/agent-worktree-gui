@@ -28,11 +28,15 @@ match and in the 405 sentence, which renders the same bytes.
 `node --check` passes on every file touched: `server.js`, `routes/assistant-queue.js`, `lib/assistant/queue.js`,
 `lib/assistant/reset.js`, `test/assistant-queue.test.js`.
 
-The suite (`node --test --test-concurrency=4 test/*.test.js`, 246 files, run in ten chunks because this session kills a
+The suite (`node --test --test-concurrency=4 test/*.test.js`, 246 files, run in ten shards because this session kills a
 single call at 420 s):
 
-- 1,994 tests, 1,987 pass, 7 fail.
-- All 7 failures also fail, with the same counts, on a clean `git archive origin/main` export:
+- On the branch as cut from `4a63afa`: 1,994 tests, 1,987 pass, 7 fail.
+- After the rebase onto `1.57.10` (`91c1ae9`), six of the ten shards were re-run before landing: 1,235 tests, 1,229
+  pass, 6 fail, and the six are the same four files, all red at that base as well (the same four files at the base:
+  16 tests, 10 pass, 6 fail). The last four shards were not re-run: the landing was stopped there, and none of the
+  files in them is touched by this cut.
+- The failures, every one of them red on a clean `git archive origin/main` export:
   - `test/gateway-permissions.test.js` (1): reads the checkout's `config.json`, which is gitignored and absent from any
     clean export, so the file throws `ENOENT` before a test runs.
   - `test/tool-call-rows.test.js` (1): its `part("function conversationSignature(", ...)` end marker no longer appears
