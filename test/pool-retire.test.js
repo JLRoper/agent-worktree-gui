@@ -57,13 +57,15 @@ test("retire refuses the queue, lets the running scan settle, then lets its thre
   assert.equal(pool.workers.length, 1, "one worker to start with");
 
   // A job queued behind nothing still gets a worker immediately, so the queue is primed with a second one.
-  const first = pool.run({ wtPath: "C:/retire/a", depth: "fast" });
-  const queued = pool.run({ wtPath: "C:/retire/b", depth: "fast" });
+  // The paths are placeholders that name nothing on any machine: `ownTree` answers "gone" for each, which is the
+  // missing-worktree row this test needs, and no drive letter is committed into the tree by the fixture.
+  const first = pool.run({ wtPath: "%TEMP%/retire/a", depth: "fast" });
+  const queued = pool.run({ wtPath: "%TEMP%/retire/b", depth: "fast" });
   await new Promise((r) => setTimeout(r, 50));
 
   pool.retire();
   assert.equal(pool.queued, 0, "the queue is refused, not silently kept (the next pass re-requests those rows)");
-  await assert.rejects(pool.run({ wtPath: "C:/retire/c", depth: "fast" }), /retired/, "and no new work is accepted");
+  await assert.rejects(pool.run({ wtPath: "%TEMP%/retire/c", depth: "fast" }), /retired/, "and no new work is accepted");
   // The two scans already handed to the pool settle one way or the other — a missing worktree is a row with an error
   // in it, not a rejection, so this asserts that neither promise is left hanging.
   await Promise.allSettled([first, queued]);
