@@ -46,13 +46,36 @@ nothing and exits 0 — it never duplicates a tag, and it will not rewrite a pus
 A landing renders `CHANGELOG.md` once, at the merged tip, after the merge — never on the branch, and never as a
 follow-up row. Every section links the shas of the commits it lists, and a rebase or squash merge re-creates the
 branch's commits on `main` with new ones: a section written on the branch names commits the reader cannot follow,
-and the merged tip is red the moment it lands. The order is the rule, and it is one motion:
+and the merged tip is red the moment it lands. The order is the rule, and the merge and the render are ONE command:
 
     node tools/version.mjs apply <level>   # 1. the bump, on the branch; the tag anchors that commit
     git push -u origin <branch>            # 2. the branch and its pull request
-    gh pr merge <n> --rebase --admin       # 3. the merge — this is what rewrites the shas
-    npm run land                           # 4. at the merged tip: render, commit only CHANGELOG.md, push, prove
-    npm run land:check                     # 5. "changelog: CHANGELOG.md is current — N releases"
+    npm run land:pr -- <n>                 # 3. the merge, the fast-forward, the render at the merged tip, the push
+
+`npm run land:pr` (`tools/land-pr.mjs`) is a landing that finishes its own changelog. A bare
+`gh pr merge <n> --rebase --admin` bypasses the pre-push hook that renders, which is how `CHANGELOG.md` went stale
+at 1.53.6, at 1.60.0 through 1.60.3, at 1.65.0 and at 1.65.3: the merge landed, the next tip was red, and the
+render was a second command no brief named. So a brief names THIS command, not a merge. It does, in order:
+
+1. reads the pull request and judges it BEFORE anything is merged - a CLOSED PR, a PR into another base, a primary
+   checkout on another branch, one carrying tracked changes, or one carrying commits the base does not have are all
+   refusals that leave the tip untouched, because a merge that cannot be followed by its render is worse than no
+   merge: nobody then owns the render;
+2. merges it with `gh pr merge <n> --rebase --admin`, reads the PR back until it reads MERGED with a merge commit,
+   and never reports a landing it did not read back;
+3. fetches and fast-forwards the PRIMARY checkout (`git worktree list` names it first, so this works from a landing
+   worktree) to the merged tip - never a reset, never a stash;
+4. runs the render there through `npm run land`: the incremental path, one `CHANGELOG.md` docs commit, the push;
+5. proves the tip is not red by running `changelog --check` and printing the release count it read, e.g.
+   `land-pr: done - PR #412 landed at 8f2a1b3, changelog --check reads current - 445 releases`.
+
+`--check` is the same judgment with nothing touched: it prints the PR's state, where the primary checkout stands and
+whether the command would merge. The steps it composes, for a PR already merged or a landing done by hand, are still
+runnable one at a time:
+
+    gh pr merge <n> --rebase --admin       # the merge, when the PR does not already read MERGED
+    npm run land                           # at the merged tip: render, commit only CHANGELOG.md, push, prove
+    npm run land:check                     # "changelog: CHANGELOG.md is current — N releases"
 
 `node tools/land.mjs` renders from the base's own history (the shas the merge produced, never the branch's), refuses
 a branch, a dirty tree or a base that moved, commits the render as its own docs commit (no version, no tag), pushes

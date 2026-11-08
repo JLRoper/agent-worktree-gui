@@ -18,6 +18,7 @@
     "changelog:check": "node tools/changelog.mjs --check",
     "land": "node tools/land.mjs",
     "land:check": "node tools/land.mjs --check",
+    "land:pr": "node tools/land-pr.mjs",
     "render:pipelines": "node tools/render-pipelines.mjs",
     "render:pipeline-map": "node tools/render-pipeline-map.mjs",
     "verify:pipelines-viz": "node tools/verify-pipelines-viz.mjs",
