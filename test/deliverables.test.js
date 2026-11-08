@@ -547,7 +547,7 @@ test("server.js serves the list without a token, and opens with one (authorised(
 
   const openAt = source.indexOf('route === "/api/deliverables/open"');
   assert.ok(openAt > 0, "POST /api/deliverables/open is not wired");
-  const openBlock = source.slice(openAt, source.indexOf('route === "/api/jobs/artifact/delete"', openAt));
+  const openBlock = source.slice(openAt, source.indexOf('route === "/api/worktree/delete"', openAt));
   assert.match(openBlock, /authorised\(req, config\.token\)/, "the token must be passed, not omitted (M1)");
   assert.doesNotMatch(openBlock, /authorised\(req\)/, "the one-argument form refuses every off-machine write");
   assert.match(openBlock, /deliverables\.get\(body\.seq\)/, "the target comes from the store, never from the page");

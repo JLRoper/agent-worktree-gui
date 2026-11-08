@@ -111,6 +111,10 @@ import { DELETE_PATH, createDeleteRoutes } from "./routes/assistant-delete.js";
 // The state read's prefix, cut into routes/ beside the queue and the delete control: one module for /api/state and
 // its /api/audit alias, and one table row each because the alias shares no prefix with the path the board polls.
 import { STATE_PATH, AUDIT_PATH, createStateRoutes } from "./routes/state.js";
+// The jobs prefix, lifted out of this file's own chain beside the state read: eleven blocks under /api/jobs (the
+// read, and the ten writes that settle, steer, answer and file a card) now live in one module, mounted from the
+// table. The store, the token, the assistant, the broadcast and the pointers all stay here and travel in.
+import { JOBS_PATH, createJobsRoutes } from "./routes/jobs.js";
 // The ticket watch's one route: a door onto `assistant.wake` for the cron poller, which lives outside this process.
 import { createTicketWatchRoutes } from "./lib/ticket-watch.js";
 // The assistant reset: settle an unknown admission through the gateway, then drop this assistant's queued wakes and
@@ -147,11 +151,6 @@ import { authorised, handleStream, pageCaller } from "./lib/http/transport.js";
 import { acceptsGzip, gzip, readBody, readRawBody, sendJson } from "./lib/http/respond.js";
 import { serveStatic, PUBLIC_DIR } from "./lib/http/static.js";
 import { createBuild } from "./lib/build-version.js";
-// The steer refusal's own vocabulary: the page draws its control from this same file, so the route's status split
-// and the card's button can never disagree about which of the three refusals happened.
-import "./public/core/steerable.js";
-
-const { PARKED: STEER_PARKED, PAST_BOUNDARY: STEER_PAST_BOUNDARY, GONE: STEER_GONE } = globalThis.wtSteerable;
 
 // A file an agent produced is meant to be OPENED, and the shell association may hand a .md to a
 // browser. Prefer a text editor: Notepad++ when installed, else Windows' notepad (always present),
@@ -1265,7 +1264,7 @@ assistant.start();
 // ---- the route prefixes cut out of this chain, mounted from one table ------------------------------------------
 // Step 8 of docs/reports/module-map-2026-11-07.html moves one prefix at a time into routes/, so a prefix is a ROW here
 // rather than another branch in the request chain below. A mount answers for its own paths and says `false` for
-// anything else, and the loop at the top of the handler asks each row in turn. Three prefixes are rows now; a later cut
+// anything else, and the loop at the top of the handler asks each row in turn. Four prefixes are rows now; a later cut
 // adds its row here and changes nothing else.
 //
 // The state read's handler is built once, above the table: `snapshot` is a function declaration further down this file
@@ -1284,6 +1283,11 @@ const PREFIX_MOUNTS = [
   // ...and the same read under its older name. A second row rather than a second branch: the table keys on a prefix,
   // and /api/audit shares none with /api/state, so the one handler above is mounted twice.
   { prefix: AUDIT_PATH, handles: stateRoutes },
+  // The jobs prefix (routes/jobs.js), the second row lifted out of this file's own chain: the board's read and the
+  // ten writes that settle, steer, answer and file a card. The store, the token and the assistant are this file's,
+  // and the tree and PR a reattach has to name come from the board's own rows, so all of them travel in beside the
+  // transport helpers.
+  { prefix: JOBS_PATH, handles: createJobsRoutes({ jobs, config, assistant, broadcast, gonePointers, sendJson, readBody, authorised }) },
 ];
 // The reset's route: the gateway client, the store path and the single-flight map live in that module; this file only
 // hands the same transport helpers to it and mounts it below.
@@ -4749,13 +4753,8 @@ const server = createServer(async (req, res) => {
       });
     }
 
-    if (route === "/api/jobs" && req.method === "GET") {
-      await jobs.probe();
-      return sendJson(res, 200, { jobs: jobs.list(), transport: jobs.transportInfo(), defaultCwd: config.defaultCwd });
-    }
-
     // Every deliverable this panel has recorded, newest first: `{version, cap, kept, nextSeq, seenSeq, seenAt,
-    // unseenCount, at, entries}`. READ-ONLY and NOT token-gated — the same convention as GET /api/jobs above. A read
+    // unseenCount, at, entries}`. READ-ONLY and NOT token-gated, the same convention as GET /api/jobs in routes/jobs.js. A read
     // changes nothing, and a board opened on another machine has to be able to paint the list; the two writes beside
     // it (the seen watermark and the open) are the ones that carry a token. `seenSeq`/`unseenCount` come out of the
     // store's own record — the badge counts rows above the watermark and a GET never walks the list to do it.
@@ -5325,89 +5324,6 @@ const server = createServer(async (req, res) => {
       return sendJson(res, out.status, out.body);
     }
 
-    if (route === "/api/jobs/cancel" && req.method === "POST") {
-      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
-      const body = await readBody(req);
-      return sendJson(res, 200, { ok: jobs.cancel(String(body.id || "")) });
-    }
-
-    // Steer a turn that is already running: the text is injected at the agent's next tool boundary,
-    // so it can change course without ending the turn. 409 means it crossed the last boundary.
-    if (route === "/api/jobs/steer" && req.method === "POST") {
-      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
-      const body = await readBody(req);
-      const r = await jobs.steer(String(body.id || ""), body.text ?? body.input);
-      // A steer lands inside the turn that is already running, so its documents belong to that turn's
-      // card rather than to a new one.
-      if (r.ok && Array.isArray(body.attachments) && body.attachments.length) jobs.addAttachments(String(body.id || ""), body.attachments);
-      // One status per case, and the body's `reason` says which: 409 for a run that EXISTS and will not take a steer
-      // right now (parked on an approval, or past its last tool boundary), 404 for a run the gateway no longer has
-      // (the row has already been settled in this same answer), and 400 only for a request this route cannot act on
-      // at all (no such card, no text, a card that is not running).
-      const why = String(r.reason || "");
-      const refused =
-        why === STEER_PARKED ||
-        why === STEER_PAST_BOUNDARY ||
-        ["run_not_accepting_steer", "steer_not_accepted", "run_parked_on_approval"].includes(String(r.code || "")) ||
-        Number(r.gatewayStatus) === 409;
-      const status = r.ok ? 200 : why === STEER_GONE ? 404 : refused ? 409 : 400;
-      return sendJson(res, status, r);
-    }
-
-    // The NOT-RUNNABLE chip's press: ask the gateway about ONE interrupted card's run and take the same decision
-    // the boot reconcile takes (lib/jobs.js settleRestoredRun — one implementation, not two). The pointers are
-    // looked up only here, because only this answer leaves the reader with nothing left to click: a run the gateway
-    // has forgotten settles as interrupted, and the card has to name the tree the work is in and its PR.
-    if (route === "/api/jobs/reattach" && req.method === "POST") {
-      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
-      const body = await readBody(req);
-      const id = String(body?.id || "").trim();
-      const r = await jobs.reattachNow(id, { pointers: gonePointers(id) });
-      // 400 for a card this route cannot ask about at all (unknown, no run id, not interrupted), and for a gateway
-      // that will not answer: the press is a question the panel understood and cannot settle, and the card keeps its
-      // verdict. A decision always comes back as 200 with the card it left behind.
-      return sendJson(res, r.ok ? 200 : 400, r);
-    }
-
-    // The press on a finished card's COMPLETE chip: queue ONE ask for the board assistant and send nothing to the
-    // agent. It goes through the assistant's own wake queue — the path an alert handed over uses — and never through
-    // /api/assistant/say, which starts a turn at once and would talk over a run already in flight. The answer carries
-    // what the queue decided, so the chip can say the ask landed or say why it did not; a card this route cannot ask
-    // about (unknown, or no longer `done`) is a 400 with the reason.
-    if (route === "/api/jobs/ask-complete" && req.method === "POST") {
-      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
-      const body = await readBody(req);
-      try {
-        return sendJson(res, 200, assistant.askAboutComplete(String(body?.id || "").trim()));
-      } catch (e) {
-        return sendJson(res, 400, { error: String((e && e.message) || e), ok: false });
-      }
-    }
-
-    // Answer a parked run's approval. The gateway validates the choice a second time, so a stale
-    // card cannot widen what the host allows.
-    if (route === "/api/jobs/approve" && req.method === "POST") {
-      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
-      const body = await readBody(req);
-      const r = await jobs.approve(String(body.id || ""), body.choice, body.requestId ?? body.request_id);
-      // 409 for "there is nothing to answer any more" — the gateway's own verdict on a prompt it has let go, and
-      // the panel's on one whose window closed (`gone`), so a client can tell it from a malformed request.
-      // `answer_in_flight` is a conflict too: the first press owns the answer, and this one changed nothing.
-      return sendJson(res, r.ok ? 200 : r.gone || r.code === "approval_not_pending" || r.code === "answer_in_flight" ? 409 : 400, r);
-    }
-
-    // Answer a question the agent's `clarify` tool is blocked on. Same fence as an approval: the
-    // gateway re-validates the prompt id against the run's pending controls and its execution
-    // generation, so a stale card cannot answer a question that has already been settled.
-    if (route === "/api/jobs/answer" && req.method === "POST") {
-      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
-      const body = await readBody(req);
-      const r = await jobs.answerQuestion(String(body.id || ""), body.answer, body.requestId ?? body.request_id);
-      // `answer_in_flight` is the single-flight fence refusing a second press for a question the first one is
-      // already answering: a conflict, not a malformed body.
-      return sendJson(res, r.ok ? 200 : r.code === "approval_not_pending" || r.code === "answer_in_flight" ? 409 : 400, r);
-    }
-
     // ---- reviving a conversation the panel no longer has a card for -------------------------
     // A session outlives the panel's job store: the conversation lives in the gateway, so a reset
     // store (or a ✕) leaves the row still saying "Hermes session open here but idle" with nothing to
@@ -5579,70 +5495,6 @@ const server = createServer(async (req, res) => {
       if (!out.ok) return sendJson(res, 409, out);
       log(`revived session ${sessionId} under ${target}`);
       return sendJson(res, 200, out);
-    }
-
-    if (route === "/api/jobs/attach" && req.method === "POST") {
-      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
-      const body = await readBody(req);
-      const thread = String(body.thread || "").trim();
-      const target = String(body.path || "").trim();
-      if (!thread) return sendJson(res, 400, { error: "thread is required" });
-      if (!jobs.firstOfThread(thread)) return sendJson(res, 404, { error: `unknown thread: ${thread}` });
-      // detach: the agent goes back to the unattached workspace.
-      if (body.detach === true || !target) {
-        const r = jobs.setOwner(thread, null);
-        broadcast({ type: "jobs", jobs: jobs.list() });
-        return sendJson(res, 200, { ok: true, ownerPath: null, turns: r.turns, jobs: jobs.list() });
-      }
-      try {
-        if (!(await stat(target)).isDirectory()) return sendJson(res, 400, { error: `${target} is not a directory` });
-      } catch {
-        return sendJson(res, 400, { error: `${target} does not exist` });
-      }
-      // Only a real worktree can own an agent, and only at its root — a subdirectory or a plain
-      // folder would file the agent somewhere no row can ever show.
-      const isWt = await gitIn(target, ["rev-parse", "--is-inside-work-tree"]);
-      const top = await gitIn(target, ["rev-parse", "--show-toplevel"]);
-      const normTarget = path.resolve(target).replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
-      const normTop = String(top.out || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
-      if (!isWt.ok || isWt.out !== "true" || normTop !== normTarget) {
-        return sendJson(res, 400, { error: `${target} is not the root of a git worktree` });
-      }
-      const r = jobs.setOwner(thread, target);
-      broadcast({ type: "jobs", jobs: jobs.list() });
-      return sendJson(res, 200, { ok: true, ownerPath: r.ownerPath, turns: r.turns, jobs: jobs.list() });
-    }
-
-    if (route === "/api/jobs/label" && req.method === "POST") {
-      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
-      const body = await readBody(req).catch(() => ({}));
-      const thread = String(body.thread || "").trim();
-      if (!thread) return sendJson(res, 400, { error: "thread is required" });
-      if (!jobs.firstOfThread(thread)) return sendJson(res, 404, { error: `unknown thread: ${thread}` });
-      // A panel-side display name only. The Hermes thread id stays the identity (it is what resumes
-      // the session), so renaming can never orphan a conversation.
-      const label = jobs.setLabel(thread, body.label);
-      if (!label.ok) return sendJson(res, 400, { error: label.error });
-      return sendJson(res, 200, { ok: true, thread, label: label.label, jobs: jobs.list() });
-    }
-
-    if (route === "/api/jobs/clear" && req.method === "POST") {
-      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
-      const body = await readBody(req).catch(() => ({}));
-      const thread = String(body.thread || "").trim();
-      if (thread) {
-        // Forget one conversation only. Refused while it is working: cancelling is a deliberate,
-        // separate action, and a "clear" that silently killed a turn would be a trap.
-        const r = jobs.clearThread(thread);
-        if (!r.ok) {
-          return sendJson(res, 409, { error: `a turn is still running in this agent — cancel it first`, running: r.running });
-        }
-        broadcast({ type: "jobs", jobs: jobs.list() });
-        return sendJson(res, 200, { ok: true, removed: r.removed, jobs: jobs.list() });
-      }
-      jobs.clearFinished();
-      broadcast({ type: "jobs", jobs: jobs.list() });
-      return sendJson(res, 200, { ok: true, jobs: jobs.list() });
     }
 
     // The reader opened a project section. That is a promotion signal in its own right (lib/tiers.js): an old
@@ -6020,28 +5872,6 @@ const server = createServer(async (req, res) => {
       } catch (e) {
         return sendJson(res, 500, { error: String((e && e.message) || e) });
       }
-    }
-
-    // Delete a deliverable. The confirmation lives in the UI; this only acts on a path or URL the panel
-    // itself recorded, so a stray string from the page can never delete an arbitrary file.
-    if (route === "/api/jobs/artifact/delete" && req.method === "POST") {
-      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
-      const body = await readBody(req).catch(() => ({}));
-      const key = String(body.key || body.path || body.url || "").trim();
-      const hit = jobs.findArtifact(key);
-      if (!hit) return sendJson(res, 404, { error: `not a recorded deliverable: ${key}` });
-      let removedFile = false;
-      if (hit.artifact.kind !== "url" && hit.artifact.path) {
-        try {
-          await unlink(hit.artifact.path);
-          removedFile = true;
-        } catch (e) {
-          // Already gone is the same outcome for the reader; anything else is worth reporting.
-          if (e.code !== "ENOENT") return sendJson(res, 500, { error: String((e && e.message) || e) });
-        }
-      }
-      jobs.removeArtifact(hit.job, key);
-      return sendJson(res, 200, { ok: true, removedFile, kind: hit.artifact.kind || "file" });
     }
 
     // Remove a worktree from the board: the directory goes to the Windows Recycle Bin (recoverable), then git's
