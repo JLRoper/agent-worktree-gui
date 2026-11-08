@@ -135,8 +135,11 @@ export function landPlan({ onBase, base, clean, behind, changed, missing, foreig
 
 // ---------- the render ----------
 
-function renderAt(root) {
-  const rendered = renderRepo({ root, ref: "HEAD" });
+function renderAt(root, full) {
+  // Incremental by default: the sections CHANGELOG.md already carries are kept and only the releases above them
+  // are rendered, because a render of every tag in this history does not finish inside a foreground command. The
+  // landing's own cap (600 s) is the number that made this the default — see tools/changelog.mjs.
+  const rendered = renderRepo({ root, ref: "HEAD", full });
   if (!rendered) throw new Error("package.json's history came back empty — refusing to render a changelog of nothing");
   return rendered;
 }
@@ -175,11 +178,12 @@ function ancestry(root, ref) {
 }
 
 function parseArgs(argv) {
-  const opt = { base: null, remote: null, check: false, render: false, fetch: true, push: true, help: false };
+  const opt = { base: null, remote: null, check: false, render: false, fetch: true, push: true, full: false, help: false };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
     if (a === "--check") opt.check = true;
     else if (a === "--render") opt.render = true;
+    else if (a === "--full") opt.full = true;
     else if (a === "--no-fetch") opt.fetch = false;
     else if (a === "--no-push") opt.push = false;
     else if (a === "--base") opt.base = String(argv[(i += 1)] || "");
@@ -191,10 +195,11 @@ function parseArgs(argv) {
 }
 
 const USAGE = [
-  "node tools/land.mjs [--check | --render] [--base main] [--remote origin] [--no-fetch] [--no-push]",
+  "node tools/land.mjs [--check | --render] [--base main] [--remote origin] [--no-fetch] [--no-push] [--full]",
   "  the landing's last step: render CHANGELOG.md on the base branch, commit it as a docs commit, push it, prove it.",
   "  --check   write nothing; exit 1 when the base's changelog is stale (the gate shape)",
   "  --render  write the file only — the branch case, for versions the base already carries",
+  "  --full    rebuild every release from the first tag instead of rendering forward from the file's own sections",
 ];
 
 function main(argv) {
@@ -255,7 +260,7 @@ function main(argv) {
 
   let rendered;
   try {
-    rendered = renderAt(root);
+    rendered = renderAt(root, opt.full);
   } catch (e) {
     console.error(`land: ${e.message}`);
     return 2;
@@ -293,14 +298,14 @@ function main(argv) {
   if (plan.action === "render") {
     writeFileSync(path.join(root, FILE), rendered.text);
     const what = missing.length ? `adding ${missing.map((r) => `v${r.version}`).join(", ")}` : "refreshing the sections whose shas changed";
-    console.log(`land: rendered ${FILE} — ${rendered.releases.length} releases, ${what}`);
+    console.log(`land: rendered ${FILE} — ${rendered.releaseCount} releases, ${what}`);
     console.log(`land: ${plan.why} (this tree is on ${branch || "a detached HEAD"}) — commit it, do not push ${base} from here`);
     return 0;
   }
 
   if (plan.action === "commit") {
     writeFileSync(path.join(root, FILE), rendered.text);
-    const subject = `docs: render the changelog — ${rendered.releases.length} releases`;
+    const subject = `docs: render the changelog — ${rendered.releaseCount} releases`;
     const body = [
       `The landing's last step, run on ${base} after the merge: CHANGELOG.md is rendered from the commits between`,
       `consecutive tags, so the section describing this landing names the shas ${base} carries — never the branch's,`,
@@ -324,7 +329,7 @@ function main(argv) {
     const files = git(root, ["show", "--name-only", "--format=", "HEAD"]).split("\n").filter(Boolean);
     console.log(`land: committed ${made.slice(0, 7)} — ${subject} (${files.join(", ")})`);
   } else {
-    console.log(`land: ${FILE} is current — ${rendered.releases.length} releases, nothing to render`);
+    console.log(`land: ${FILE} is current — ${rendered.releaseCount} releases, nothing to render`);
   }
 
   // Publish. A gate publishes nothing; a base that is already at the remote has nothing to send; a base carrying
@@ -372,7 +377,7 @@ function verify(root, rendered) {
     );
     return 1;
   }
-  console.log(`changelog: ${FILE} is current — ${rendered.releases.length} releases`);
+  console.log(`changelog: ${FILE} is current — ${rendered.releaseCount} releases`);
   return 0;
 }
 
