@@ -1026,6 +1026,13 @@
        re-exports them on window.WMApp.settings; it declares only, so that order costs nothing and nothing here
        waits on boot. -->
   <script src="/settings.js"></script>
+  <!-- The board's projects, sections and rows, cut out of app.js (step 7 of the same order of work): a folder's
+       card and its counts, the project section and its head, the worktree row and the age column under it, the
+       children under their parent with the one fold that hides them, the ordering that puts a folder, a project
+       and a row's cards where they belong, and placeRow / queueRow / renderProjectRows that draw them. Loaded
+       before app.js, which calls them by bare name and re-exports them on window.WMApp.projects; it declares
+       only, so that order costs nothing and nothing here waits on boot. -->
+  <script src="/render-projects.js"></script>
   <script src="/app.js"></script>
   <!-- The update check. Loaded after app.js because it reads that file's `state`, `turnLive` and
        the banner helpers by name — at call time, never at load, so nothing here waits on boot. -->
