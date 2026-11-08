@@ -5,7 +5,7 @@ of the two-run verification. Run two reads this as the "before" side of its own 
 
 ## The checkout
 
-- Primary checkout `C:/ProjectDevelopment/agent-worktree-gui`, branch `main`.
+- Primary checkout, the panel's own directory, branch `main`.
 - Main tip `49982c19337c29fe68a21e5a413f7ea2d98ede64` (short `49982c1`), `package.json` version
   `1.66.1`. `main...origin/main` with nothing ahead or behind.
 - No tracked changes. Six untracked artifacts are the reader's own and were left alone: `.kilo/`,
@@ -67,7 +67,7 @@ Everything below was read after 16:47 and is the state run two should start from
   `lib/assistant/profile.js`, `lib/assistants.js`, `package.json`, `public/assistant.js`, `server.js`
   and `test/assistant-consolidate.test.js`. `routes/` is untouched by 1.66.2.
 - At 16:47:25 a new panel process, pid `17560`, started 22 seconds after that pull. Its CommandLine
-  is `"C:\Program Files\nodejs\node.exe" server.js`, and port 7331 listens on it. It serves `1.66.2`
+  names the node executable followed by a bare `server.js` (no directory prefix), and port 7331 listens on it. It serves `1.66.2`
   on GET `/api/config`, so the served version equals the main tip. Pid `109544` no longer exists.
   The new process's restart ledger is empty (`queued []`, `last null`), so this bounce did not arrive
   through the queue.
