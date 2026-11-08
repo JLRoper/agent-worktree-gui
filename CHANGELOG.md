@@ -4,16 +4,41 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.58.2 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.59.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-426 releases from v0.1.0 (2026-10-20) to v1.58.2 (2026-11-08), 1437 commits between the tags. Every release is anchored by an
+428 releases from v0.1.0 (2026-10-20) to v1.59.0 (2026-11-08), 1442 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.59.0 — 2026-11-08 · 1 commit
+
+[`7ebd11d`](https://github.com/JLRoper/agent-worktree-gui/commit/7ebd11de5dde2746cb4e8d23a88160cf170e0935) · [compare v1.58.3...v1.59.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.58.3...v1.59.0)
+
+### Added
+
+- feat: the Role tab edits a role, and a role's charter can be saved ([`7ebd11d`](https://github.com/JLRoper/agent-worktree-gui/commit/7ebd11de5dde2746cb4e8d23a88160cf170e0935))
+
+## v1.58.3 — 2026-11-08 · 4 commits
+
+[`f2c79be`](https://github.com/JLRoper/agent-worktree-gui/commit/f2c79be887fd4113448dee63e918fd8e594ee7cd) · [compare v1.58.2...v1.58.3](https://github.com/JLRoper/agent-worktree-gui/compare/v1.58.2...v1.58.3)
+
+### Changed
+
+- refactor: the job cards and their turns move out of public/app.js ([`e8d30d7`](https://github.com/JLRoper/agent-worktree-gui/commit/e8d30d731b1198ed494bd6499f1158c44777746f))
+
+### Docs & tests
+
+- docs: render the changelog — 426 releases ([`0c7e12e`](https://github.com/JLRoper/agent-worktree-gui/commit/0c7e12ec247514a112633edcc35ccaafc1aedbe1))
+- test: four source-scan gates follow the card into render-jobs.js ([`da524ed`](https://github.com/JLRoper/agent-worktree-gui/commit/da524edd1556f7241793ae843abfe233d0fd2fb5))
+
+### Other
+
+- chore: 1.58.3 - the version this landing carries ([`f2c79be`](https://github.com/JLRoper/agent-worktree-gui/commit/f2c79be887fd4113448dee63e918fd8e594ee7cd))
 
 ## v1.58.2 — 2026-11-08 · 2 commits
 
