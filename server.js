@@ -1734,6 +1734,14 @@ async function startThreadReply({ thread = "", text = "", displayPrompt = null, 
   });
   // A delivery turn closes the offer on the turn it answers, for every reader and every reload.
   if (origin && origin.fromTurn) jobs.markCollected(origin.fromTurn, job.id);
+  // …and the queue row this thread belongs to now names THIS run: a reply is a resume, the same thread carrying a new
+  // record, and a row that kept naming the attempt before it would read stale under live work (lib/assistant.js
+  // `linkResumedRun`). Best-effort: the run is already accepted, and a queue file that refuses must not fail it.
+  try {
+    assistant?.linkResumedRun?.(first.thread, job);
+  } catch (e) {
+    log(`queue resume link failed for ${first.thread}: ${String((e && e.message) || e)}`);
+  }
   return { status: 202, body: { job } };
 }
 

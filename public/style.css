@@ -3530,6 +3530,10 @@ button.btn-host:focus-visible { outline: 1px solid #7fb2e8; outline-offset: 1px;
 .as-task-agent.is-none:hover { background: none; }
 .as-task-agent .as-task-agent-thread { font-family: var(--mono); font-size: 10px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .as-task-agent .as-task-agent-label { font-size: 10.5px; color: var(--dimmer); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The RUN ID beside the current thread: the record the row's verdict was read from. Amber when it is a guess
+   (`guessing`), because a guess and an id must never look the same on a row a reader counts in flight. */
+.as-task-agent .as-task-agent-run { font-family: var(--mono); font-size: 9.5px; color: #8fb8d8; background: #16222c; border: 1px solid #24404f; border-radius: 999px; padding: 0 5px; white-space: nowrap; flex: 0 0 auto; max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+.as-task-agent .as-task-agent-run.is-guess { color: #e0b341; background: #2b2413; border-color: #4d3f1c; }
 .as-task-agent .pill { margin-left: auto; flex: none; }
 .as-agent-mark { font-size: 11px; line-height: 1; width: 11px; text-align: center; flex: 0 0 auto; }
 .as-agent-mark.is-queued { color: var(--dim); }
