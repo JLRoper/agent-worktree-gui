@@ -13,6 +13,9 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+// The one-stream section's own comment moved to public/turns.js in step 4 of docs/reports/module-map-2026-11-07.html;
+// the button itself stays in app.js, in the card's header template that draws it.
+const turns = readFileSync(new URL("../public/turns.js", import.meta.url), "utf8");
 
 const button = () => {
   const at = src.indexOf('<button class="btn-stream');
@@ -32,9 +35,9 @@ test("the 🌊 tooltip says a stream keeps each result a folded box — both bef
 });
 
 test("the one-stream section's own comment does not claim the stream is unfolded", () => {
-  const at = src.indexOf("// ---- one stream ----");
-  assert.ok(at >= 0, "public/app.js still carries the one-stream section");
-  const section = src.slice(at, src.indexOf("const STREAM_KEY", at));
+  const at = turns.indexOf("// ---- one stream ----");
+  assert.ok(at >= 0, "public/turns.js still carries the one-stream section");
+  const section = turns.slice(at, turns.indexOf("const STREAM_KEY", at));
   assert.equal(/nothing folded/.test(section), false);
   assert.match(section, /shut box/, "it says what the stream keeps folded and what it does not");
 });

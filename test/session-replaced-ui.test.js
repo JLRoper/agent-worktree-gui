@@ -10,9 +10,10 @@ import { readFileSync } from "node:fs";
 import { sliceRegion } from "../tools/panel-testkit.mjs";
 
 const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+const turns = readFileSync(new URL("../public/turns.js", import.meta.url), "utf8");
 const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const { retryableError } = new Function(`${sliceRegion(src, "retry")}; return { retryableError };`)();
-const { sessionReplacedHtml } = new Function("esc", `${sliceRegion(src, "session replaced")}; return { sessionReplacedHtml };`)(esc);
+const { sessionReplacedHtml } = new Function("esc", `${sliceRegion(turns, "session replaced")}; return { sessionReplacedHtml };`)(esc);
 
 test("unknown_execution offers the retry — the one verb that repairs a fenced session", () => {
   // The gateway's exact body code, and the same word inside a longer sentence a build might wrap it in.
@@ -54,7 +55,7 @@ test("nothing from the job store is trusted as markup", () => {
 
 test("the turn head draws the chip between the origin note and the inline prompt", () => {
   assert.match(
-    src,
+    turns,
     /<span class="turn-text">\$\{esc\(label\)\} · \$\{esc\(state_\)\}<\/span>\$\{originHtml\(turn\)\}\$\{sessionReplacedHtml\(turn\)\}\$\{inlinePrompt\(turn, inline\)\}<\/div>/,
   );
 });

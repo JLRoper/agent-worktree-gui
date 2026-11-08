@@ -25,6 +25,10 @@ import vm from "node:vm";
 import { sliceBetween, sliceRegion } from "../tools/panel-testkit.mjs";
 
 const source = readFileSync(new URL("../public/app.js", import.meta.url), "utf8").replaceAll("\r\n", "\n");
+// The turn order, the conversation grouping and the fold book's three names moved to public/turns.js in step 4 of
+// docs/reports/module-map-2026-11-07.html; the regions are sliced from the file that now carries them, and loaded
+// into the same context as the tier region that calls them.
+const turnsSource = readFileSync(new URL("../public/turns.js", import.meta.url), "utf8").replaceAll("\r\n", "\n");
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
 // The turns tier delegates the "every turn, both copies" rule to public/core/turn-fold.js, so the module is part of
 // the region's own code and is loaded into each context before the sliced regions that call it.
@@ -122,8 +126,8 @@ function harness() {
   vm.runInContext(sliceRegion(source, "the collapse cascade", "the collapse cascade"), context);
   // The constants the tiers read: the fixed cards, the turn order, the conversation grouping, the assistant test.
   vm.runInContext(sliceBetween(source, "const FIXED_CARDS =", "// Keep the row you clicked"), context);
-  vm.runInContext(sliceBetween(source, "const turnOrder = (a, b) =>", "function turnSeqOf("), context);
-  vm.runInContext(sliceBetween(source, 'function turnKey(turn, copy = "") {', "function turnIsOpen("), context);
+  vm.runInContext(sliceBetween(turnsSource, "const turnOrder = (a, b) =>", "function turnSeqOf("), context);
+  vm.runInContext(sliceBetween(turnsSource, 'function turnKey(turn, copy = "") {', "function turnIsOpen("), context);
   vm.runInContext(
     sliceBetween(source, "function assistantSessionFor(thread, board = state) {", "// ---------------- agents ----------------"),
     context,
@@ -209,8 +213,8 @@ test("the selector answers from the state it is handed, with no page behind it",
     foldSource,
     sliceBetween(source, "const normPath = (p) =>", "// ---- the collapse cascade"),
     sliceBetween(source, "const FIXED_CARDS =", "// Keep the row you clicked"),
-    sliceBetween(source, "const turnOrder = (a, b) =>", "function turnSeqOf("),
-    sliceBetween(source, 'function turnKey(turn, copy = "") {', "function turnIsOpen("),
+    sliceBetween(turnsSource, "const turnOrder = (a, b) =>", "function turnSeqOf("),
+    sliceBetween(turnsSource, 'function turnKey(turn, copy = "") {', "function turnIsOpen("),
     sliceBetween(source, "function assistantSessionFor(thread, board = state) {", "// ---------------- agents ----------------"),
     sliceRegion(source, "collapse one tier", "collapse one tier"),
   ]) {

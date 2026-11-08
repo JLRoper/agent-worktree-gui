@@ -19,12 +19,15 @@ import test from "node:test";
 import { sliceBetween } from "../tools/panel-testkit.mjs";
 
 const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+const turns = readFileSync(new URL("../public/turns.js", import.meta.url), "utf8");
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
 
 // The one-stream region: `const STREAM_KEY` through the 🌊/condensed decision (`streamDefault`, `streamOn`,
 // `setStreamMode`), stopping before the tool-group section that follows. (Anchored on the const, not on
-// "// ---- one stream": that phrase also heads the section that draws a single tool row.)
-const REGION = sliceBetween(src, 'const STREAM_KEY = "wtgui.stream";', "// ---- a run of tool calls");
+// "// ---- one stream": that phrase also heads the section that draws a single tool row.) It lives in
+// public/turns.js since step 4 of docs/reports/module-map-2026-11-07.html; the settings row's handler stays in
+// public/app.js, with the rest of the page's wiring.
+const REGION = sliceBetween(turns, 'const STREAM_KEY = "wtgui.stream";');
 
 // The settings row's own change handler, from its statement to the `});` that closes it.
 const handlerAt = src.indexOf('$("stream-default")?.addEventListener("change"');
