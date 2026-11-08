@@ -32,6 +32,15 @@ const PROMPT = "p-accept-1";
 // The page's own functions are what run here, not a rewrite of them. `document`, `state` and `apiFetch` are the
 // only globals the sliced region touches, so each case hands in its own.
 const pageSource = () => readFile(new URL("../public/app.js", import.meta.url), "utf8");
+const settingsSource = () => readFile(new URL("../public/settings.js", import.meta.url), "utf8");
+
+// The two appliers that clear the cards were cut out of app.js into settings.js (step 6 of the module
+// map), so a slice of the page's own answer path brings the one function it calls across with it.
+function declaredIn(source, name) {
+  const at = source.indexOf(`function ${name}(`);
+  assert.ok(at > 0, `${name} is in public/settings.js`);
+  return source.slice(at, source.indexOf("\nfunction ", at + 10));
+}
 
 function pageHarness(source, params, names) {
   const fn = new Function(...params, `${source}\nreturn { ${names.join(", ")} };`);
@@ -118,10 +127,11 @@ const tick = () => new Promise((resolve) => setImmediate(resolve));
 // ── 1. the clarify card: one answer, every copy greyed, both surfaces cleared ───────────────────
 test("one press answers a question once, greys every copy, and clears both surfaces on ok", async () => {
   const page = await pageSource();
+  const settings = await settingsSource();
   const decls = sliceBetween(page, "const questionPicks = new Map();", "const RECOMMENDED_RE");
   const helpers = sliceBetween(page, "// Every card that draws this question", "function turnBlock(conv, turn, index");
   const build = pageHarness(
-    `${decls}\n${helpers}`,
+    `${decls}\n${helpers}\n${declaredIn(settings, "applyQuestionAnswered")}`,
     ["document", "state", "apiFetch", "renderConversation", "assistantSessionFor", "window", "paintHumanButton", "showBanner"],
     ["answerRunQuestion", "questionFlights"],
   );
@@ -178,11 +188,12 @@ test("one press answers a question once, greys every copy, and clears both surfa
 // ── 2. the permission card: the same flight, keyed on the gateway's request id ─────────────────
 test("one press answers a permission once, greys every copy, and clears both copies on ok", async () => {
   const page = await pageSource();
+  const settings = await settingsSource();
   const flights = sliceBetween(page, "const approvalFlights = new Map();", "// The permission box itself:");
   const sent = sliceBetween(page, "const approvalSent = new Map();", "async function answerApproval(");
   const handlers = sliceBetween(page, "async function answerRunApproval(", "// Take the decision away from a card");
   const build = pageHarness(
-    `${flights}\n${sent}\n${handlers}`,
+    `${flights}\n${sent}\n${handlers}\n${declaredIn(settings, "applyApprovalAnswered")}`,
     ["document", "state", "apiFetch", "renderConversation", "assistantSessionFor", "window", "paintHumanButton", "showBanner", "answerRemoteWrite", "closeApprovalCard"],
     ["answerRunApproval", "approvalFlights"],
   );

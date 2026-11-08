@@ -15,7 +15,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+const appSrc = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+// The chart's top-count row was cut out of app.js into charts.js (step 3 of the module map), and its two
+// listeners went with it; the page's settings wiring is the two files together, not app.js alone.
+const chartsSrc = readFileSync(new URL("../public/charts.js", import.meta.url), "utf8");
+const app = `${appSrc}\n${chartsSrc}`;
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 
 const ROW = "chart-top-count";

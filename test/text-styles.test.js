@@ -16,13 +16,19 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (f) => readFileSync(path.join(root, f), "utf8");
 const src = read("public/app.js");
+const settings = read("public/settings.js");
 const html = read("public/index.html");
 const css = read("public/style.css").replace(/\/\*[\s\S]*?\*\//g, "");
 
 const begin = src.indexOf("// ---- text styles");
 const end = src.indexOf("// ---- end text styles");
 assert.ok(begin > 0 && end > begin, "the text-style region is in public/app.js");
-const region = src.slice(begin, end);
+// applyTextStyle itself was cut out of app.js into settings.js (step 6 of the module map), so the
+// region and the one function it built come from the two files together.
+const applyAt = settings.indexOf("function applyTextStyle(");
+assert.ok(applyAt > 0, "applyTextStyle is in public/settings.js");
+const applyTextStyleCode = settings.slice(applyAt, settings.indexOf("\nfunction ", applyAt + 10));
+const region = `${src.slice(begin, end)}\n${applyTextStyleCode}`;
 
 // A page just big enough for the region: the root element's style, the controls by id, a localStorage.
 function page(seed = {}) {
