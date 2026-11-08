@@ -372,3 +372,130 @@ test("the seed's review gate routes accept and reject, and its loop charges only
   const gate = author.gates.find((entry) => entry.id === "G1");
   assert.deepEqual(gate.decision.routes, { accept: "H-03", reject: "H-02" }, "the shipped review gate routes both outcomes");
 });
+
+// The seed's own PING-PONG, walked by the panel's clock — the loop the round drove, with the gate it could not ask
+// (docs/reviews/ping-pong-round-6-2026-11-08.html, "G1 cannot be asked... The next move is the cap, not the verdict").
+//
+// `ping-pong.gates[0]` carried `decision: null`, so `gateAfter` answered nothing: the back edge H-02 was taken in kind
+// order whatever the critic wrote, an accepted draft entered another visit, and a converged round still spent its cap
+// and parked for a person. The gate now declares a record and routes both outcomes (accept → the pipeline ends here,
+// revise → H-02), and this walks that: the accepted draft stops at visit 1, the revised one crosses exactly one edge.
+function pingPongHarness(t, { outcomes = ["accept"] } = {}) {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "wag-ping-pong-"));
+  const bundleFile = path.join(dir, "pipeline-bundle.json");
+  // The SHIPPED document, from the seed: the thing under test is the ping-pong as it ships, not a fixture of it.
+  writeFileSync(bundleFile, readFileSync(new URL("../pipeline-bundle.seed.json", import.meta.url)));
+  const state = { board: [], started: [], rows: [], cuts: [], tree: path.join(dir, "trees", "write-the-draft-the-brief-as-0cd7da"), outcomes };
+  const jobs = {
+    list: () => state.board,
+    firstOfThread: (thread) => state.board.find((job) => job.thread === thread) || null,
+    busyFor: () => ({ held: false, where: null, by: [] }),
+    modelFor: () => null,
+    create: async (opts) => ({ id: "job-created", ...opts }),
+    answerQuestion: async () => ({ ok: true }),
+    stop: async () => ({ ok: true }),
+    get: () => null,
+    clarify: { state: () => null },
+    makeWorktree: async (repoDir, prompt) => {
+      state.cuts.push({ repoDir, prompt });
+      mkdirSync(state.tree, { recursive: true });
+      return { path: state.tree, branch: "wtgui/write-the-draft-the-brief-as-0cd7da", startSha: "985a84b" };
+    },
+  };
+  const assistant = new Assistant({
+    config: { jobsFile: path.join(dir, "jobs.json"), assistantFile: path.join(dir, "assistant.json"), defaultCwd: dir, pipelineBundleFile: bundleFile },
+    jobs,
+    getProjects: () => [PROJECT],
+    getRows: () => state.rows,
+    spawner: async (spec) => {
+      const marks = spec.prompt.match(/\(([\w.-]+)\/([\w.-]+)\)(?:, visit (\d+))?/) || [];
+      const stageId = marks[2];
+      const visit = Number(marks[3] || 1);
+      const rel = stageId === "draft" ? "ledger/ping-pong/draft.md" : "ledger/ping-pong/critique.md";
+      mkdirSync(path.dirname(path.join(spec.target, ...rel.split("/"))), { recursive: true });
+      writeFileSync(path.join(spec.target, ...rel.split("/")), `# ${stageId} visit ${visit}\n`);
+      if (stageId === "critique") {
+        // The critic's own record, where the gate declares it: one per ROUND, so round 2 is never answered by round 1.
+        const outcome = state.outcomes[Math.min(visit - 1, state.outcomes.length - 1)] || "revise";
+        writeFileSync(path.join(spec.target, "ledger", "ping-pong", `verdict-r${visit}.json`), JSON.stringify({ outcome }));
+      }
+      const job = { id: `job-${state.started.length + 1}`, thread: THREAD, cwd: spec.target, worktreePath: spec.target, status: "running", startedAt: iso(T0) };
+      state.started.push({ ...spec, stage: stageId, visit });
+      state.board.push(job);
+      return job;
+    },
+    now: () => T0,
+  });
+  assistant.settings.spawn = "auto";
+  t.after(() => {
+    clearTimeout(assistant.persistTimer);
+    if (assistant.timer) clearInterval(assistant.timer);
+    rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+  });
+  const rowOf = (id) => readQueueFile(assistant.queuePathOf(assistant.assistantRecord("assistant-1"))).tasks.find((x) => x.id === id) || null;
+  const nap = () => new Promise((resolve) => setTimeout(resolve, 5));
+  const waitForRow = async (id, { moved = false, before = 0 } = {}) => {
+    for (let i = 0; i < 200; i += 1) {
+      const row = rowOf(id);
+      if (row.state === "parked" || row.state === "done") return row;
+      const entry = row.pipelineRun && Array.isArray(row.pipelineRun.stageRuns) ? row.pipelineRun.stageRuns.at(-1) : null;
+      if (entry && entry.thread && row.state === "running" && (!moved || state.board.length > before)) return row;
+      await nap();
+    }
+    return rowOf(id);
+  };
+  const begin = async () => {
+    assistant.queueMutate("assistant-1", "add", { title: "write the draft the brief asks for", project: "agent-worktree-gui" });
+    const row = readQueueFile(assistant.queuePathOf(assistant.assistantRecord("assistant-1"))).tasks.at(-1);
+    assistant.queueMutate("assistant-1", "pipeline", { id: row.id, pipeline: "ping-pong", stage: "draft" });
+    assistant.sweepQueues(); // the cut
+    await nap();
+    assistant.sweepQueues(); // the drafter's start
+    await waitForRow(row.id, { moved: true });
+    return row.id;
+  };
+  // One stage run: mark the live job done, sweep, wait for the panel to finish acting on it.
+  const runStage = async (id) => {
+    const before = state.board.length;
+    const live = state.board[state.board.length - 1];
+    if (live) live.status = "done";
+    assistant.sweepQueues();
+    await waitForRow(id, { moved: true, before });
+    await nap();
+  };
+  return { assistant, state, rowOf, begin, runStage };
+}
+
+test("an accepted ping-pong draft ENDS the loop on round one, and no crossing is charged", async (t) => {
+  const { state, rowOf, begin, runStage } = pingPongHarness(t, { outcomes: ["accept"] });
+  const id = await begin();
+  assert.equal(rowOf(id).pipelineRun.stage, "draft", "the drafter was started first");
+  await runStage(id); // draft settles → critique
+  assert.deepEqual(state.started.map((s) => s.stage), ["draft", "critique"], "the critic is started by the settle, as before");
+  await runStage(id); // critique settles → its verdict is ACCEPTED
+
+  const row = rowOf(id);
+  assert.equal(row.state, "done", "an accepted pipeline is finished by the settle, not run to its cap");
+  assert.match(String(row.reason), /is not a PR to land/, "the last stage declares a document, so the driver finishes the row itself");
+  assert.equal(state.started.length, 2, "no second draft was ever started: the accept route is the END of the graph");
+  assert.deepEqual(row.pipelineRun.visits, { draft: 1, critique: 1 }, "one visit each — the round converged where the critic said it did");
+  assert.equal(Number((row.pipelineRun.crossings || {})["H-02"] || 0), 0, "an accepted round charges no crossing at all");
+});
+
+test("a revised ping-pong draft crosses the back edge once — and only because the record said 'revise'", async (t) => {
+  const { state, rowOf, begin, runStage } = pingPongHarness(t, { outcomes: ["revise", "accept"] });
+  const id = await begin();
+  await runStage(id); // draft → critique
+  await runStage(id); // critique says revise
+  let row = rowOf(id);
+  assert.equal(row.pipelineRun.stage, "draft", "a revise routes back to the drafter, by the document's own map");
+  assert.equal(Number(row.pipelineRun.crossings["H-02"]), 1, "one crossing, the one the verdict asked for");
+  assert.deepEqual(row.pipelineRun.visits, { draft: 2, critique: 1 }, "the second visit is the second round");
+  assert.equal(state.started.at(-1).visit, 2, "and the drafter's second worker was told it is visit 2");
+
+  await runStage(id); // draft 2 → critique 2
+  await runStage(id); // critique 2 says accept
+  row = rowOf(id);
+  assert.equal(row.state, "done", "the second round's accept ends it, with crossings to spare");
+  assert.equal(state.started.length, 4, "two rounds, two stages, no third round invented");
+});

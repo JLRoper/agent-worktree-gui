@@ -74,11 +74,18 @@ moves — and a reader can hold three in their head while judging a card.
 **One landing instruction.** The paragraph `lib/branch-policy.js` `branchLandingLine` renders is the authoritative
 instruction about where a run's branch goes, and `lib/jobs.js` composes it ahead of every worker's prompt. It is not
 silent about pushing: for a tree cut from `main` it says "commit on …, push it and open a pull request", and for a
-tree cut from a turnover branch it says "merge into … locally and do not push". A pipeline's prompt carries the
-WORK and defers to that paragraph; it never restates the landing rule. `local`'s seed prompt used to end "do not
-push, do not open a pull request", which contradicted the paragraph every landing-parent run actually receives, so
-it now names the LANDING paragraph as the only instruction about pushing and a PR. When no paragraph can be
-rendered (the tree's parent is unknown), the panel's blanket local-only line stands.
+tree cut from a turnover branch it says "merge into … locally and do not push". A THIRD case is the stage's own and
+wins over both: a pipeline stage whose declared artifact kind is not `pr` has nothing to land, so its worker is told
+to commit on the stage branch and report the commit — no push and no pull request. The driver says which case it is
+(`remoteWrite: "local"` on the start, `pr` for a stage whose artifact IS the pull request), and `lib/jobs.js` renders
+the one paragraph. Before that, a document stage was handed the parent's paragraph and opened a PR for a file in the
+ledger. The seed's landing ladders (`turnover`, `github-force-merge`, `sefl-review-loop`) therefore declare
+`kind: "pr"` on the stages that act on the remote — a push stage told "do not push" is a pipeline that cannot do its
+own job — and declare nothing on their commit stages, which are local commits and are told to stop there.
+A pipeline's prompt carries the WORK and defers to that paragraph; it never restates the landing rule.
+`local`'s seed prompt used to end "do not push, do not open a pull request", which contradicted the paragraph every
+landing-parent run actually receives, so it now names the LANDING paragraph as the only instruction about pushing and
+a PR. When no paragraph can be rendered (the tree's parent is unknown), the panel's blanket local-only line stands.
 
 ### 1.3 An exit condition is machine-checkable, or it is not an exit
 
@@ -559,6 +566,12 @@ the reviewer's, because that is the only wait the panel could write then).
   `advance` seam, which the server wires to `Assistant.advancePipelineTree` — the same `driveTaskPipelines` pass the
   queue tick runs. So the graph rules are never re-implemented here: a **cap**, a **gate-REVISE park**, a **missing
   artifact** and a **refusal** all still stop the walk, and the sweep reports the driver's own sentence.
+- **The run's END asks the sweep, the ticker is the fallback.** The settle stamps the hold and then fires
+  `Jobs.onStageSettled`, which `server.js` wires to one `tickPipelineWaits()` on the next event-loop turn. The run's
+  own end is the event the hold was written for, so the row is advanced at the settle's instant instead of at the
+  next minute tick (measured before the hook: 52.2 s of lag on a nine-minute stage, most of a short one). The ticker
+  stays for the hold whose run the store never saw end — a restart, a dropped stream — and both doors meet the same
+  compare-and-set, so the advance cannot happen twice.
 - **The driver is the fallback, never the second owner.** `driveTaskPipelines` leaves a row alone while the book holds
   it on that stage and visit (`heldByBook`), because two passes moving one stage is the double-advance this exists to
   prevent. Past `HOLD_OWNER_MS` (3 minutes) from the settle, the driver takes the row back: a panel whose ticker died

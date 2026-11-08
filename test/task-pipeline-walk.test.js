@@ -33,7 +33,7 @@ const iso = (ms) => new Date(ms).toISOString();
 const PROJECT = { name: "agent-worktree-gui", path: path.resolve(import.meta.dirname, "..") };
 const SEED = path.resolve(import.meta.dirname, "..", "pipeline-bundle.seed.json");
 
-function harness(t, { pipelines = null } = {}) {
+function harness(t, { pipelines = null, seatVerdict = null } = {}) {
   const dir = mkdtempSync(path.join(os.tmpdir(), "wag-pipeline-walk-"));
   const bundleFile = path.join(dir, "pipeline-bundle.json");
   const seed = JSON.parse(readFileSync(SEED, "utf8"));
@@ -84,6 +84,18 @@ function harness(t, { pipelines = null } = {}) {
       const file = path.join(spec.target, stage.artifact.path);
       mkdirSync(path.dirname(file), { recursive: true });
       writeFileSync(file, `${pipelineId}/${stageId} visit ${visit} — ${state.started.length + 1}\n`);
+      // The gate the stage OWNS, when the walk's seat answers it: the record goes where the document declares it, with
+      // the round's hole filled exactly as the driver fills it. The ping-pong's verdict gate is a barrier now, so a
+      // walk that never wrote it would park on the gate instead of walking the cap it was written for.
+      if (seatVerdict) {
+        const gate = (pipeline.gates || []).find((g) => g.after === stageId && g.decision);
+        if (gate) {
+          const rel = String(gate.decision.path).replace(/\{\{round\}\}/g, String(visit));
+          const record = path.join(spec.target, ...rel.split("/"));
+          mkdirSync(path.dirname(record), { recursive: true });
+          writeFileSync(record, JSON.stringify({ outcome: seatVerdict }));
+        }
+      }
       jobNo += 1;
       const job = {
         id: `job-${jobNo}`,
@@ -140,7 +152,10 @@ async function walk(h, id, { until = () => false, budget = 40 } = {}) {
 }
 
 test("ping-pong walks three loop rounds through the sweep with no hand-start, and stops on its cap", async (t) => {
-  const h = harness(t, { pipelines: ["ping-pong"] });
+  // The seat answers the verdict gate with `revise` every round: the gate is a barrier the panel never writes, and this
+  // walk is the CAP's, so every round crosses. The other exit — an accepted draft ending the loop on round one — is
+  // walked in test/task-pipeline-verdict.test.js.
+  const h = harness(t, { pipelines: ["ping-pong"], seatVerdict: "revise" });
   const id = h.start("draft and critique the piece");
   assert.equal(h.put(id, "ping-pong", "draft").ok, true);
 

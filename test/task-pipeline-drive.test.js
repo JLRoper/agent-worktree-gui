@@ -1031,6 +1031,64 @@ test("stagePrompt is the stage's instruction plus the row, and the inputs only w
   assert.doesNotMatch(withInputs, /summary/i);
 });
 
+// The unattended spawn's toolset (docs/reviews/ping-pong-round-6-2026-11-08.html, "The unattended spawn's toolset
+// includes a tool its policy refuses"): the critic's first call was `execute_code`, answered "BLOCKED: this session
+// runs on an unattended platform", and the turn was spent learning what the prompt could have said. Every stage start
+// is that unattended run, so the sentence rides every stage prompt — and it names the tool that does work.
+test("stagePrompt names the tools an unattended stage may use, and the one the platform refuses", () => {
+  const bundle = bundleOf(pipeline());
+  const prompt = stagePrompt({ id: 7, title: "carry it", detail: "" }, bundle.pipelines[0], bundle.pipelines[0].stages[0]);
+  assert.match(prompt, /\nTOOLS — this stage runs unattended/);
+  assert.match(prompt, /nobody is at the keyboard/);
+  assert.match(prompt, /refuses `execute_code`/, "the refused tool is named, so the run does not spend a turn testing it");
+  assert.match(prompt, /Use `terminal` for commands/, "and the tool that works is named beside it");
+  assert.match(prompt, /`read_file`, `write_file` and `patch`/);
+  assert.equal(prompt.split("TOOLS —").length - 1, 1, "one sentence, once, not a paragraph per section");
+});
+
+// The gate a stage OWNS (docs/reviews/ping-pong-round-6-2026-11-08.html, "G1 cannot be asked"): a gate with a decision
+// is a barrier, and the panel never writes the record — so the worker standing on that gate has to be told the file
+// exists, and which words it may put in it. Without this line the ping-pong's converged round still ran to its cap.
+test("stagePrompt tells the stage that owns a gate's verdict to write it, with this round's path", () => {
+  const gate = {
+    id: "G1",
+    after: "S2",
+    artifact: "artifact-2",
+    name: "Verdict",
+    decider: "worker-2",
+    decision: {
+      id: "verdict",
+      path: "out/verdict-r{{round}}.json",
+      schema: "verdict/1",
+      writer: "worker-2",
+      outcomes: ["accept", "revise"],
+      routes: { accept: null, revise: "h-back" },
+    },
+  };
+  const loop = bundleOf(
+    pipeline({
+      gates: [gate],
+      handoffs: [
+        { id: "h1", from: "S1", to: "S2", artifact: "artifact-1", kind: "sequence" },
+        { id: "h-back", from: "S2", to: "S1", artifact: "artifact-2", kind: "loop", cap: "3 rounds" },
+      ],
+    }),
+  ).pipelines[0];
+  const record = { pipeline: "two", stage: "S2", enteredAt: CLOCK, visits: { S1: 1, S2: 2 }, stageRuns: [] };
+  const prompt = stagePrompt({ id: 7, title: "carry it" }, loop, loop.stages[1], { run: record });
+  assert.match(prompt, /\nGATE\n/);
+  assert.match(prompt, /the gate G1 \(Verdict\) after this stage declares out\/verdict-r2\.json/, "the round is filled, exactly as the driver fills it when it reads the record");
+  assert.match(prompt, /write it as \{"outcome": "accept" \| "revise"\}/);
+  assert.match(prompt, /accept → the pipeline ends here/, "the seat is told what its word will do");
+  assert.match(prompt, /revise → handoff h-back/);
+  assert.match(prompt, /never writes the record for you/);
+
+  // The other stage of the same pipeline does not own this verdict, and is not told to write it.
+  const first = stagePrompt({ id: 7, title: "carry it" }, loop, loop.stages[0], { run: { ...record, stage: "S1", visits: { S1: 1 } } });
+  assert.doesNotMatch(first, /\nGATE\n/);
+  assert.doesNotMatch(first, /out\/verdict/);
+});
+
 test("the decision record is rendered, not written twice: row reason and stage run carry the same sentence", (t) => {
   const dir = tree(t); // the artifact is missing, so the park and its decision are about that fact
   const out = drive([row({ worktree: dir })], { unattended: false });

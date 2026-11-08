@@ -32,6 +32,11 @@ the instruction the tree was cut with and the two controls are what decide wheth
 - **parent is `main`/`master`** — "push it and open a pull request".
 - **parent is any other branch** — "merge into the parent LOCALLY and do not push", because the parent has not
   landed and a remote branch of this tree lands nothing.
+- **the run is a pipeline stage whose artifact is not a `pr`** — "commit on the stage branch and report the commit;
+  do not push the branch and do not open a pull request". This case does not look at the parent at all: the artifact is
+  a file (a draft, a report, a build) that the next stage reads out of the tree, so a remote branch carries nothing the
+  pipeline needs. The driver says so on the start (`remoteWrite: "local"`), and a stage whose artifact IS the pull
+  request keeps the parent's case — push and open one, exactly as before.
 
 The same line carries `guardTail`, one sentence on what the guard will do — "a push is not asked about" under
 `allow`, "will park and then fail" under `local-only`, "will fail" under `deny`. The parent is read from the panel's

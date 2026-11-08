@@ -164,7 +164,11 @@ queue's own tick — asks `lib/task-pipeline-drive.js` three questions about eve
   start is the `existing: true` path, whether it is the first stage or the tenth. The stage's prompt is the turn, plus
   the INPUTS block: the handoff's artifact by path, COMMIT and blob hash, the gate it came back through, the earlier
   visit's artifact on a loop back, and the tree's branch/HEAD/dirty count. A handoff is never named by a branch: the
-  panel stores the commit the writer settled at and hands that to the next stage. **An arrival is named only when the
+  panel stores the commit the writer settled at and hands that to the next stage. Two short blocks ride the same
+  prompt and are not briefs: **GATE** tells the stage that OWNS a gate's verdict where the record goes, the words it
+  may hold and where the document routes each of them (the panel never writes it, so a seat that is never told leaves
+  the row parked on the gate); **TOOLS** names the tools an unattended run can use and the one the platform refuses
+  (`execute_code`), so a worker does not spend its first turn discovering that. **An arrival is named only when the
   RECORD names the edge** (`pipelineRun.via`): a first visit has crossed nothing, so it is handed nothing, and the block
   does not reconstruct an edge from the graph — deriving "the last handoff whose `to` is this stage" is how a loop into
   a pipeline's first stage used to be announced before its first crossing. A row with NO pipeline is not

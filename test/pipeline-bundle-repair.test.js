@@ -9,7 +9,7 @@
 // Pinned here:
 //   1. the plan on the seed's own author-review-revise, stripped of its routes: accept -> H-03, reject -> H-02, and
 //      the result loads with four pipelines (the repaired document is one the panel can read);
-//   2. the six gates that declare no decision come out as explicit nulls, and the loader still reads them as pauses;
+//   2. the five gates that declare no decision come out as explicit nulls, and the loader still reads them as pauses;
 //   3. the refusals: a model with no routes for the gate, and a model route that names a handoff the live pipeline does
 //      not hold. A refusal writes nothing and returns no document;
 //   4. the guard itself is untouched: a bundle that leaves its routes off is STILL refused by the loader, and this
@@ -69,27 +69,33 @@ test("the stale four-pipeline bundle is refused, and the repair is the seed's ow
   assert.deepEqual(review.gates[0].decision.outcomes, ["accept", "reject"]);
 });
 
-test("the six gates that declare no decision come out as explicit pauses, and still load as pauses", () => {
+test("the five gates that declare no decision come out as explicit pauses, and still load as pauses", () => {
   const doc = staleDoc();
   const plan = planBundleRepair(doc, { model: seedModel() });
   assert.equal(plan.ok, true, plan.reason || "");
   const pauses = plan.changes.filter((change) => change.kind === "pause");
   assert.deepEqual(
     pauses.map((change) => `${change.pipeline}/${change.gate}`),
-    ["poc-to-uat/G0", "poc-to-uat/G1", "poc-to-uat/G2", "poc-to-uat/G3", "poc-to-uat/G4", "ping-pong/G1"],
+    ["poc-to-uat/G0", "poc-to-uat/G1", "poc-to-uat/G2", "poc-to-uat/G3", "poc-to-uat/G4"],
     "every gate that declared nothing now says null, by pipeline and gate",
   );
-  // The written document carries the key (not an omission), and the loader still reads each one as the pause it is.
+  // The ping-pong's verdict gate is NOT one of them any more: it declares the critic's record and routes both words,
+  // so a stale file that carries its routes is repaired by the seed's own map and left as a decision, not a pause.
+  const pingPong = doc.pipelines.find((pipeline) => pipeline.id === "ping-pong");
+  assert.ok(pingPong.gates[0].decision, "the ping-pong gate is a decision, not a pause");
+  assert.deepEqual(pingPong.gates[0].decision.routes, { accept: null, revise: "H-02" }, "accept ends the loop, revise crosses it");
+  // The written document carries the key (not an omission), and the loader still reads each pause as the pause it is.
+  const answered = new Set(["author-review-revise", "ping-pong"]);
   for (const pipeline of doc.pipelines) {
     for (const gate of pipeline.gates || []) {
-      if (pipeline.id === "author-review-revise") continue;
+      if (answered.has(pipeline.id)) continue;
       assert.ok(Object.prototype.hasOwnProperty.call(gate, "decision"), `${pipeline.id}/${gate.id} carries the decision key`);
       assert.equal(gate.decision, null, `${pipeline.id}/${gate.id} is a pause`);
     }
   }
   const loaded = parseBundle(doc);
   assert.equal(loaded.ok, true, loaded.reason || "");
-  assert.ok(loaded.bundle.pipelines.filter((pipeline) => pipeline.id !== "author-review-revise").every((pipeline) => pipeline.gates.every((gate) => gate.decision === null)));
+  assert.ok(loaded.bundle.pipelines.filter((pipeline) => !answered.has(pipeline.id)).every((pipeline) => pipeline.gates.every((gate) => gate.decision === null)));
 });
 
 test("a gate with one way out is left alone: the loader needs no map there", () => {

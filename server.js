@@ -780,6 +780,13 @@ const jobs = new Jobs({
   // The same for an approval, which the gateway gives up on at `approvals.timeout`: without it the card kept
   // offering "Allow once" long after the gateway had already denied the command and moved on.
   approvalWindow: () => approvalWindowSeconds(),
+  // The run's own end is when a stage's hold stops being a wait: the sweep is asked for HERE, one event-loop turn
+  // after the settle stamped the hold, rather than on the ticker's next minute. The ticker stays as the door for a
+  // hold whose run the store never saw end (a restart, a dropped stream) — two doors into one compare-and-set, and the
+  // advance itself is idempotent (lib/task-pipeline-drive.js writes the decision it read).
+  onStageSettled: () => {
+    void tickPipelineWaits();
+  },
 });
 // Where the work of a card whose run the gateway has forgotten still is: the tree the turn ran in, and the PR its
 // branch has. Read from the board's own rows — a scan already carries the PR per branch (lib/scheduler.js), so this

@@ -42,6 +42,7 @@ import { fileURLToPath } from "node:url";
 
 import { Assistant } from "../lib/assistant.js";
 import { parseBundle } from "../lib/pipeline-bundle.js";
+import { fillHoles } from "../lib/task-pipeline-drive.js";
 import { Jobs } from "../lib/jobs.js";
 import { PipelineRecords, cutPipeline } from "../lib/pipelines.js";
 import { readQueueFile, writeQueueFile } from "../lib/assistant/queue.js";
@@ -155,15 +156,21 @@ async function walk(pipelineId, { leftover = false, timer = false, restartAt = 0
         mkdirSync(path.dirname(file), { recursive: true });
         const body = `${pipeline}/${id} visit ${visit}\nwritten by the seat at ${new Date(state.clock).toISOString()}\n`;
         writeFileSync(file, body);
-        // The seat's gate decision: the reviewer rejects twice, then accepts. Written where the gate's document says
-        // the record lives, because that file — not a press — is what crosses a gate (§6.1).
+        // The seat's gate decision, written where the gate's document says the record lives, because that file — not a
+        // press — is what crosses a gate (§6.1). A gate whose outcomes name `revise` is a loop that only ends on its
+        // cap (ping-pong, which this walk takes to the cap); the reviewer's own gate rejects twice and then accepts.
+        // The path's `{{round}}` is filled the way the driver fills it, or the seat would write a literal
+        // `verdict-r{{round}}.json` the driver never reads and the walk would park on its own gate.
         const gate = (tree.gates || []).find((g) => g.after === id && g.decision);
         if (gate) {
-          const outcome = Number(visit) >= 3 ? "accept" : "reject";
-          const record = path.join(spec.target, gate.decision.path);
+          const declared = Array.isArray(gate.decision.outcomes) ? gate.decision.outcomes : [];
+          const holding = declared.includes("revise") ? "revise" : declared.includes("reject") ? "reject" : declared[0] || "accept";
+          const outcome = declared.includes("revise") ? holding : Number(visit) >= 3 ? "accept" : holding;
+          const rel = fillHoles(gate.decision.path, { round: Number(visit) });
+          const record = path.join(spec.target, rel);
           mkdirSync(path.dirname(record), { recursive: true });
           writeFileSync(record, `${JSON.stringify({ outcome, gate: gate.id, at: new Date(state.clock).toISOString() }, null, 1)}\n`);
-          state.verdicts.push({ stage: id, visit: Number(visit), gate: gate.id, outcome, file: gate.decision.path });
+          state.verdicts.push({ stage: id, visit: Number(visit), gate: gate.id, outcome, file: rel });
         }
         jobNo += 1;
         const job = { id: `job-${jobNo}`, thread: `walk-${pipelineId}-${jobNo}`, cwd: spec.target, worktreePath: spec.target, status: "running", startedAt: new Date(state.clock).toISOString() };
