@@ -5795,8 +5795,11 @@ const server = createServer(async (req, res) => {
         const retired = pool;
         pool = new Pool(threads);
         if (scheduler) scheduler.pool = pool;
-        retired.close();
-        log(`scan workers: ${threads} (the pool was rebuilt live)`);
+        // RETIRE, never close: this route runs while the fleet is being scanned, and `close()` terminates workers
+        // mid-scan. The retiring pool refuses its queue (the next pass re-requests those rows) and lets the scans it
+        // holds finish before its threads go.
+        retired.retire();
+        log(`scan workers: ${threads} (the pool was rebuilt live; the old one retires when its scans settle)`);
       }
       let settings = settingsOut();
       if (budget !== null) {
