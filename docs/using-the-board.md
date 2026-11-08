@@ -864,7 +864,8 @@ a row of zeros. Token counts read in three significant digits, truncated (`636k 
 - It grows with the draft (up to about 18 lines, or 45% of the window) and the buttons ride its bottom edge.
 - **While a turn runs**, the primary button is **Steer turn**: the text goes into the live run and is read at the
   agent's next tool boundary, so the turn changes course. `Ctrl+Enter` (`⌘+Enter` on a Mac) is that button's press
-  from the box itself.
+  from the box itself, and either press greys the box and the button at once — before the gateway answers. A refusal
+  puts both back with the words still in the box; an accepted steer keeps them greyed and empties it.
 - **Queue reply** holds the text and sends it when the current turn finishes; queued replies show as ghost turns
   (`queued · sends when the current turn finishes`). While subagents are out, queueing also waits for them. `Enter`
   is that button's press: while the card offers it, `Enter` holds the reply instead of sending it. With no live turn

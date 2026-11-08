@@ -3756,8 +3756,9 @@ function steerOfferedFor(box) {
 
 // One press of Steer turn, from the button or from Ctrl/Cmd+Enter: send what the box holds into the turn that is
 // running now. The button carries the id of the turn it was drawn for; from the keyboard the live turn on this
-// thread is looked up instead, which is the same turn the card drew its button for.
-function steerFromBox(thread, turnId = null) {
+// thread is looked up instead, which is the same turn the card drew its button for. `pressed` is the element the
+// press came from - the button, or the box from a keystroke - and it is what steerTurn greys for the round trip.
+function steerFromBox(thread, turnId = null, pressed = null) {
   const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
   // From the keyboard the turn is found through the SAME predicate the card drew its button from, never through any
   // live turn on the thread: Ctrl+Enter is offered only while that button is, so it must name the same turn.
@@ -3765,7 +3766,7 @@ function steerFromBox(thread, turnId = null) {
     turnId ||
     [...state.jobs.values()].find((j) => (j.thread || j.id) === thread && turnLive(j) && j.steerable?.ok)?.id;
   if (!id) return Promise.resolve(false);
-  return steerTurn(thread, id, readBox(box));
+  return steerTurn(thread, id, readBox(box), pressed);
 }
 
 function replyQueued(thread) {
@@ -4641,7 +4642,9 @@ async function sendReply(thread, preset = null, presetAttachments = null) {
   }
 }
 
-async function steerTurn(thread, id, text, btn = null) {
+// `pressed` is the element the press came from - the [data-steer] button from a click, the box from Enter - and it
+// is what the press's two controls are resolved from, so a steer waiting on the gateway is never a still frame.
+async function steerTurn(thread, id, text, pressed = null) {
   const warn = document.querySelector(`[data-reply-warn="${CSS.escape(thread)}"]`);
   const typed = String(text ?? "").trim();
   const attached = attachmentBlock(thread);
@@ -4650,9 +4653,23 @@ async function steerTurn(thread, id, text, btn = null) {
     if (warn) warn.textContent = "type what the agent should do instead";
     return false;
   }
+  // The two controls this press owns: the Steer button and the box it sends. Read from the element that was pressed
+  // and, on the way back, from the page as it stands THEN - a repaint can replace either node while the fetch is
+  // open, so the node captured at the press would be the detached one. The box is contenteditable, where `disabled`
+  // paints nothing: it takes a class (public/style.css, beside button:disabled), and the button its own property.
+  const steerPaint = (on, from) => {
+    const reply =
+      from?.closest?.(".reply") ||
+      document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`)?.closest(".reply") ||
+      null;
+    const btn = reply?.querySelector("[data-steer]");
+    const box = reply?.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
+    if (btn) btn.disabled = on;
+    if (box) box.classList.toggle("steer-pending", on);
+  };
   const body = typed + attached;
   rememberReply(thread, typed);
-  if (btn) btn.disabled = true;
+  steerPaint(true, pressed);
   try {
     const res = await apiFetch("/api/jobs/steer", {
       method: "POST",
@@ -4692,7 +4709,7 @@ async function steerTurn(thread, id, text, btn = null) {
         // After the repaint queueReply causes: it replaces the card, and the old warnline with it.
         const heldWarn = document.querySelector(`[data-reply-warn="${CSS.escape(thread)}"]`);
         if (heldWarn) heldWarn.textContent = `steer held — ${why}; your text is queued and goes out as the next turn on this thread.`;
-        if (btn) btn.disabled = false;
+        steerPaint(false, null);
         return false;
       }
       const advice =
@@ -4705,7 +4722,7 @@ async function steerTurn(thread, id, text, btn = null) {
       // now — the one captured when this press started may already be detached.
       const liveWarn = document.querySelector(`[data-reply-warn="${CSS.escape(thread)}"]`) || warn;
       if (liveWarn) liveWarn.textContent = `steer refused — ${why}. ${advice}`;
-      if (btn) btn.disabled = false;
+      steerPaint(false, null);
       return false;
     }
     // The text went into the LIVE turn, so clear the draft: leaving it would invite sending the same
@@ -4729,7 +4746,7 @@ async function steerTurn(thread, id, text, btn = null) {
     return true;
   } catch (err) {
     if (warn) warn.textContent = `steer failed: ${err.message}`;
-    if (btn) btn.disabled = false;
+    steerPaint(false, null);
     return false;
   }
 }
@@ -10558,7 +10575,7 @@ document.addEventListener("click", async (e) => {
     e.preventDefault();
     e.stopPropagation();
     // The same press Ctrl/Cmd+Enter makes: one function, so the button and the keystroke cannot drift apart.
-    await steerFromBox(steerBtn.closest(".job")?.dataset.thread || "", steerBtn.dataset.steer);
+    await steerFromBox(steerBtn.closest(".job")?.dataset.thread || "", steerBtn.dataset.steer, steerBtn);
     return;
   }
   const btn = e.target.closest(".btn-cancel");
@@ -10771,7 +10788,7 @@ document.addEventListener("keydown", async (e) => {
   // a newline and never a steer.
   if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !e.shiftKey && steerOfferedFor(box)) {
     e.preventDefault();
-    void steerFromBox(box.dataset.reply);
+    void steerFromBox(box.dataset.reply, null, box);
     return;
   }
   if (e.key === "Enter" && !e.shiftKey) {
@@ -10793,7 +10810,7 @@ document.addEventListener("keydown", async (e) => {
         (j) => (j.thread || j.id) === thread && (turnLive(j)),
       );
       if (running) {
-        await steerTurn(thread, running.id, text);
+        await steerTurn(thread, running.id, text, box);
         return;
       }
     }

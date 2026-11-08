@@ -9,6 +9,7 @@
 //       last tool boundary, and a run the gateway no longer has (404) — and a proven-gone run settles the row in the
 //       same request instead of surfacing as a 400.
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { Jobs } from "../lib/jobs.js";
 
@@ -197,4 +198,150 @@ test("a 404 from the gateway is the gone refusal, and the row settles in the sam
   assert.equal(out.card.status, "interrupted");
   assert.equal(out.card.runGone, true);
   assert.equal(out.card.steerable.why, "gone");
+});
+
+// ── the press on screen: the box and the button grey before the gateway answers ───────────────────────
+// The shipped functions run here — sliced out of public/app.js, not rewritten — over a page reduced to the one
+// `.reply` a card draws: a contenteditable `.reply-box` and the `[data-steer]` button beside it. `apiFetch` is a
+// gate this file holds open by hand, which is what makes "before the response" a state a test can stand in.
+const pageSource = () => readFileSync(new URL("../public/app.js", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+
+function pageRegion(src, name) {
+  const at = src.indexOf(`function ${name}(`);
+  assert.ok(at > 0, `public/app.js carries ${name}()`);
+  // `async` is part of some of these functions and carries the await this page is built on.
+  const start = src.slice(Math.max(0, at - 6), at) === "async " ? at - 6 : at;
+  const end = src.indexOf("\n}\n", start);
+  assert.ok(end > start, `${name}() ends where its own brace says`);
+  return src.slice(start, end + 3);
+}
+
+const CSS = { escape: (s) => String(s) };
+
+// One card's reply area. `text` is what readBox answers and writeBox writes back, so a wipe is visible; `greyed`
+// is the class set the box's disabled style is drawn from.
+function replyPage(thread, { text = "", turnId = "run_steer" } = {}) {
+  const box = {
+    dataset: { reply: thread },
+    text,
+    greyed: new Set(),
+    classList: {
+      add: (n) => box.greyed.add(n),
+      remove: (n) => box.greyed.delete(n),
+      toggle: (n, on) => (on ? box.greyed.add(n) : box.greyed.delete(n)),
+      contains: (n) => box.greyed.has(n),
+    },
+    closest: (sel) => (sel === ".reply" ? reply : null),
+    focus: () => {},
+  };
+  const btn = { disabled: false, dataset: { steer: turnId }, closest: (sel) => (sel === ".reply" ? reply : null) };
+  const warn = { textContent: "" };
+  const reply = {
+    querySelector(sel) {
+      if (sel === "[data-steer]") return btn;
+      if (sel === `.reply-box[data-reply="${thread}"]`) return box;
+      return null;
+    },
+    closest: (sel) => (sel === ".reply" ? reply : null),
+  };
+  const document = {
+    querySelector(sel) {
+      if (sel === `.reply-box[data-reply="${thread}"]`) return box;
+      if (sel === `[data-reply-warn="${thread}"]`) return warn;
+      return null;
+    },
+  };
+  return { document, box, btn, warn };
+}
+
+// The page's own steer functions, with /api/jobs/steer replaced by a promise this file resolves when it chooses.
+function steerPage(thread, options) {
+  const page = replyPage(thread, options);
+  const src = pageSource();
+  let open;
+  const gate = new Promise((resolve) => {
+    open = resolve;
+  });
+  const calls = [];
+  const run = new Function(
+    "document", "CSS", "state", "apiFetch", "focusReplyBox", "attachmentBlock", "attachmentsFor", "rememberReply",
+    "readBox", "writeBox", "clearBoxDraft", "queueReply", "clearAttachments", "updateJob", "inflightToolName",
+    "jobLines",
+    `${["steerFromBox", "steerTurn"].map((n) => pageRegion(src, n)).join("\n")}\nreturn { steerFromBox, steerTurn };`,
+  )(
+    page.document,
+    CSS,
+    { replyDrafts: {}, jobs: new Map(), replyQueue: new Map() },
+    (url, opts) => {
+      calls.push({ url, body: JSON.parse(opts.body) });
+      return gate;
+    },
+    () => {},
+    () => "",
+    () => [],
+    () => {},
+    (b) => b.text,
+    (b, v) => {
+      b.text = v;
+    },
+    () => {},
+    () => {},
+    () => {},
+    () => {},
+    () => "",
+    () => [],
+  );
+  return { page, run, calls, answer: (res) => open(res) };
+}
+
+const ANSWER = (ok, body) => ({ ok, status: ok ? 200 : 409, json: async () => body });
+
+test("one steer press greys the box and the button before the gateway answers, and a refusal puts both back", async () => {
+  const thread = "wtgui-steer-press-1";
+  const press = steerPage(thread, { text: "hold this heading" });
+  const { page, run } = press;
+  const going = run.steerFromBox(thread, "run_steer", page.btn);
+
+  // The frame the reader sees the moment they press: the route has been asked, nothing has answered, and both
+  // controls are already grey with the words still in the box.
+  assert.equal(press.calls.length, 1, "the press reached /api/jobs/steer");
+  assert.equal(press.calls[0].url, "/api/jobs/steer");
+  assert.equal(page.btn.disabled, true, "the button is disabled before the response");
+  assert.equal(page.box.classList.contains("steer-pending"), true, "…and the box is greyed in the same frame");
+  assert.equal(page.box.text, "hold this heading", "…with the words still in it");
+
+  press.answer(ANSWER(false, { ok: false, reason: "parked", error: "this turn is parked on an approval" }));
+  assert.equal(await going, false, "a refusal answers false");
+  assert.equal(page.btn.disabled, false, "the button comes back");
+  assert.equal(page.box.classList.contains("steer-pending"), false, "…and the box with it");
+  assert.equal(page.box.text, "hold this heading", "…the words intact");
+  assert.match(page.warn.textContent, /^steer refused — /);
+});
+
+test("a steer from Enter greys the same pair, and an accepted steer keeps it greyed and wipes the box", async () => {
+  const thread = "wtgui-steer-press-2";
+  const press = steerPage(thread, { text: "come left ten degrees" });
+  const { page, run } = press;
+  // The Enter path's own call: the box is the element that was pressed, and the live turn is already in hand.
+  const going = run.steerTurn(thread, "run_steer", page.box.text, page.box);
+  assert.equal(page.box.classList.contains("steer-pending"), true, "the box greys from Enter as it does from the button");
+  assert.equal(page.btn.disabled, true, "…and the button beside it greys with it");
+
+  press.answer(ANSWER(true, { ok: true, accepted: true }));
+  assert.equal(await going, true, "an accepted steer answers true");
+  assert.equal(page.box.text, "", "the box is wiped");
+  assert.equal(page.box.classList.contains("steer-pending"), true, "…and stays greyed until the card repaints");
+  assert.equal(page.btn.disabled, true, "…the button with it");
+  assert.match(page.warn.textContent, /^steered — /);
+});
+
+test("both press paths hand the element that was pressed to the turn", () => {
+  const src = pageSource();
+  // The defect this pins: steerTurn took the pressed element and no caller passed one, so the disable never ran.
+  assert.match(
+    src,
+    /await steerFromBox\(steerBtn\.closest\("\.job"\)\?\.dataset\.thread \|\| "", steerBtn\.dataset\.steer, steerBtn\);/,
+  );
+  assert.match(src, /void steerFromBox\(box\.dataset\.reply, null, box\);/);
+  assert.match(src, /await steerTurn\(thread, running\.id, text, box\);/);
 });

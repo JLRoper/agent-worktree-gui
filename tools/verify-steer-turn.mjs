@@ -362,9 +362,9 @@ async function run(pw) {
     // regression this line exists to catch.
     const src = await page.evaluate(async () => (await fetch("/app.js")).text());
     ok(
-      "the button's click handler and Ctrl+Enter both call steerFromBox()",
-      /steerFromBox\(steerBtn\.closest\("\.job"\)\?\.dataset\.thread \|\| "", steerBtn\.dataset\.steer\)/.test(src) &&
-        /steerOfferedFor\(box\)\) \{\s*e\.preventDefault\(\);\s*void steerFromBox\(box\.dataset\.reply\)/.test(src),
+      "the button's click handler and Ctrl+Enter both call steerFromBox() with the pressed element",
+      /steerFromBox\(steerBtn\.closest\("\.job"\)\?\.dataset\.thread \|\| "", steerBtn\.dataset\.steer, steerBtn\)/.test(src) &&
+        /steerOfferedFor\(box\)\) \{\s*e\.preventDefault\(\);\s*void steerFromBox\(box\.dataset\.reply, null, box\)/.test(src),
     );
 
     // ── (c) Queue reply still holds the text, and Enter still queues ──────────────────────────────────
