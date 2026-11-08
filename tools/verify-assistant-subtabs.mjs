@@ -24,8 +24,9 @@
 //   6. the four moved lists ARE inside #1's own pane and work from its row (alerts, watches, messages, pad), the
 //      second row goes away with a panel-wide pane (Role) and comes back on the sub-tab it was left on, the two
 //      counts live on the moved list pills, and Ctrl+, still opens the board's own Settings panel over the float;
-//   7. the Role tab: Assistant #1's own charter in its box (not the role's copy) and no picker of its own,
-//      "New assistant from this role" adding Assistant #2 to the top row with its own pane — its Settings with NO
+//   7. the Role tab: Assistant #1's own charter in its box and the view picker showing the role its record runs
+//      (with no control that changes that role - Settings owns that), "New assistant from this role" adding
+//      Assistant #2 to the top row with its own pane - its Settings with NO
 //      per-assistant rules block (that block is gone) and its Notes tab keeping Notes, Standing rules and Journal,
 //      where a rule added lands on #2's own record — and, the claim this feature exists for, #2's saved edit landing
 //      in its own file while #1's text and #1's charter file stay byte for byte what they were;
@@ -359,7 +360,15 @@ async function browserPhase(pw) {
   await page.waitForSelector("#as-role:not(.hidden)");
   ok("the Role pane is the one showing", await visible("#as-role"));
   ok("…and the session's row is gone with the session", !(await visible("#as-subtabs")));
-  check("the pane carries no role picker", await page.locator("#as-role-pick, #as-roletarget, #btn-as-role-adopt").count(), 0);
+  check("the pane carries the role VIEW picker", await page.locator("#as-role-pick").count(), 1);
+  check("…and no control that changes which role the assistant runs", await page.locator("#as-roletarget, [data-as-roletarget], #btn-as-role-adopt").count(), 0);
+  const roleNow = await (await fetch(`${base}/api/assistant/role?assistantId=assistant-1`)).json();
+  check("…with the role the record runs selected", await page.locator("#as-role-pick").inputValue(), roleNow.role.id);
+  ok(
+    "…named as this assistant's role",
+    /this assistant's role/.test(await page.locator("#as-role-pick").evaluate((el) => (el.selectedOptions[0] || {}).textContent || "")),
+    await page.locator("#as-role-pick").evaluate((el) => (el.selectedOptions[0] || {}).textContent || ""),
+  );
   await page.waitForFunction(() => !document.querySelector("#as-role-text").readOnly, null, { timeout: 10_000 });
   const roleTextOf = (id) => page.locator(id).evaluate((el) => el.value);
   const charterOf1 = (await (await fetch(`${base}/api/assistant/charter`)).json()).charter.text;
@@ -1075,7 +1084,7 @@ try {
   console.log("own project scanned, its own files served, the live 7331 listener count identical across the run), and headless");
   console.log("Chromium over that panel — the two rows measured as boxes, Settings as the session's second tab, the record in");
   console.log("localStorage, the reload that lands back on Settings, the card still filling the float, every other tab, the");
-  console.log("Role tab's own charter box (no picker), a second assistant made from that role with its own tab, pane, rules");
+  console.log("Role tab's own charter box and its view picker, a second assistant made from that role with its own tab, pane, rules");
   console.log("and copy of the charter, that copy's edit landing in its own file while #1's text and #1's file stay byte for");
   console.log("byte, the badges and Ctrl+,");
   if (!failures) console.log("ASSISTANT-SUBTABS-OK");

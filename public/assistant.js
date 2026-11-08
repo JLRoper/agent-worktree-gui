@@ -1828,9 +1828,21 @@
   // What the reader has typed since that load, or null while the box still holds `roleText`. Kept outside the DOM
   // because the pane is rebuilt from state: a repaint must paint the reader's text back, never the loaded one.
   let roleDraft = null;
+  // WHICH ROLE THE PANE SHOWS. `""` is this assistant's own copy — the charter text the role on its RECORD runs,
+  // and the one text Save writes. Any other id is ANOTHER role's own charter, read from the library on the pick
+  // and shown READ-ONLY in the box. A pick here is a VIEW: it writes no role to any record (Settings' The role it
+  // runs is the one place a role is assigned) and there is no press on this tab that adopts a role's text.
+  let roleShow = "";
+  // The preview that read landed: {id, name, description, text, cap}, or null while the copy is the subject.
+  let roleShown = null;
+  // The id a preview read is in flight for, so the picker keeps the reader's choice while the box says "reading…".
+  let roleShowLoading = "";
+  // Bumped on every pick, so a slow answer for a role the reader has already moved off cannot paint over the
+  // one they are looking at now.
+  let roleShowSeq = 0;
   // A question waiting on the reader, asked INLINE in the tab (never a browser dialog): {kind, roleId, name}.
-  // kind is "pick" (load that role's text), "adopt" (copy the role's text over this assistant's copy) or "reload"
-  // (read the copy from disk). The box and the picker do not move until it is answered.
+  // kind is "pick" (show that role's own text, read-only) or "reload" (read this assistant's copy from disk).
+  // The box and the picker do not move until it is answered.
   let roleAsk = null;
   // The cap the text in the box is judged against. Mostly the assistant's own (`charter.cap`), but a role's own
   // text may be over it, and then the warning has to quote the number the SERVER will refuse at.
@@ -1842,6 +1854,9 @@
   let roleFor = "";
   let roleLoadedAt = 0;
   let roleErr = "";
+  // A preview read that failed, kept apart from `roleErr`: the copy's own error stays on screen while the picker
+  // snaps back, and the next successful read of either kind clears it.
+  let roleShowErr = "";
   let roleInfo = null;
   let roleRoles = [];
   // Which assistant the Role tab is editing. The tab carries no selector: it edits the session the reader last had
@@ -1868,6 +1883,14 @@
         roleMtime = Number.isFinite(Number(d.charter?.mtime)) ? Number(d.charter.mtime) : null;
         roleInfo = { role: d.role, sameAsRole: Boolean(d.sameAsRole), charter: d.charter, target: d.target, wakeEveryMinutes: Number(d.wakeEveryMinutes) || 0 };
         roleRoles = Array.isArray(d.roles) ? d.roles : [];
+        // A preview of the role this assistant now RUNS is not a preview any more: the copy and the role's own
+        // text are the same subject, and the box goes back to being the copy Save writes.
+        if (roleShown && roleShown.id === String(d.role?.id || "")) {
+          roleShown = null;
+          roleShow = "";
+          roleShowLoading = "";
+          roleShowSeq += 1;
+        }
         // The read is the assistant's COPY, and the box says so. Any pending question or typed draft belongs to the
         // text that read replaces, so both go with it.
         roleDraft = null;
@@ -1878,6 +1901,7 @@
         roleLoaded = true;
         roleLoadedAt = Date.now();
         roleErr = "";
+        roleShowErr = "";
       })
       .catch((err) => {
         if (roleFor === id) roleErr = String((err && err.message) || err);
@@ -1885,6 +1909,62 @@
       .finally(() => {
         renderAssistantRole(true);
       });
+  }
+
+  // Read ONE role's own charter into the box as a PREVIEW. Nothing is posted: the record keeps the role Settings
+  // gave it, the box is read-only while another role is shown, and there is no press on this tab that adopts the
+  // text. Picking a role is how the reader looks at the library's other charters without touching an assistant.
+  async function showRole(roleId) {
+    const target = roleTargetSession();
+    // Picking the role the record RUNS is not a preview: the box goes back to the copy Save writes, and no read is
+    // owed - that text is already in the box.
+    if (roleId === String(sessionById(target)?.roleId || "")) {
+      clearShownRole();
+      return;
+    }
+    const seq = ++roleShowSeq;
+    roleAsk = null;
+    roleShowErr = "";
+    roleShow = roleId;
+    roleShowLoading = roleId;
+    renderAssistantRole(true);
+    try {
+      const r = await apiFetch(`/api/assistant/role/charter?roleId=${encodeURIComponent(roleId)}`);
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+      // A slower answer for a role the reader has moved off is not the pane's business any more.
+      if (seq !== roleShowSeq || roleTargetSession() !== target) return;
+      const listed = (roleRoles.length ? roleRoles : state.assistant?.roles || []).find((x) => x.id === roleId);
+      roleShown = {
+        id: roleId,
+        name: String(d.role?.name || listed?.name || roleId),
+        description: String(d.role?.description ?? listed?.description ?? ""),
+        text: String(d.text ?? ""),
+        cap: Number(d.cap) || Number(listed?.cap) || 0,
+      };
+    } catch (err) {
+      if (seq !== roleShowSeq) return;
+      // The picker snaps back to the role the record runs: the pane never claims a role it could not read.
+      roleShown = null;
+      roleShow = "";
+      roleShowErr = String((err && err.message) || err);
+    } finally {
+      if (seq === roleShowSeq) {
+        roleShowLoading = "";
+        renderAssistantRole(true);
+      }
+    }
+  }
+
+  // Drop a preview and put the assistant's own copy back in the box. No request: the copy is already loaded, and
+  // a draft typed before the preview was asked for was confirmed away by the inline question.
+  function clearShownRole() {
+    roleShowSeq += 1;
+    roleShown = null;
+    roleShow = "";
+    roleShowLoading = "";
+    roleShowErr = "";
+    renderAssistantRole(true);
   }
 
   function renderAssistantRole(force = false) {
@@ -1908,6 +1988,12 @@
       // The prompt is per assistant as well: painting #1's saved prompt under #2's name would offer the reader a
       // box that saves #2's file with #1's words in it.
       rolePrompt = "";
+      // A preview belongs to the assistant whose pane asked for it; another assistant's tab starts on its copy.
+      roleShowSeq += 1;
+      roleShow = "";
+      roleShown = null;
+      roleShowLoading = "";
+      roleShowErr = "";
     }
     if (roleTriedFor !== target) void loadRole(target);
     const rec = sessionById(target);
@@ -1918,65 +2004,100 @@
       roleFollowFor = String(rec.roleId);
       void loadRole(target);
     }
+    const recRoleId = String(rec?.roleId || "");
+    // A preview of the role the record now runs is not a preview any more: the box goes back to being the copy.
+    if (roleShown && roleShown.id === recRoleId) {
+      roleShown = null;
+      roleShow = "";
+      roleShowLoading = "";
+    }
+    const preview = roleShown && roleShown.id !== recRoleId ? roleShown : null;
     const c = (state.assistant.assistants || []).find((x) => x.id === target)?.charter || {};
     const roles = roleRoles.length ? roleRoles : state.assistant.roles || [];
     // The role's own line comes from the read that carries the charter; the list behind it (`roleRoles`, the server's
     // library) stands in with the description until that read lands, so the pane never draws the title alone.
-    const listed = roles.find((r) => r.id === String(rec?.roleId || "")) || null;
+    const listed = roles.find((r) => r.id === recRoleId) || null;
     const role = roleInfo?.role || (rec ? { name: rec.roleName, description: listed?.description || "" } : null);
-    const boxText = roleLoaded ? String(roleDraft ?? roleText ?? "") : "";
-    const size = roleLoaded ? boxText.length : Number(c.chars) || 0;
-    const cap = roleCap || Number(c.cap) || 0;
+    // WHICH ROLE THE PANE SHOWS, and whose words those are: the role on the record (this assistant's own copy,
+    // editable) or another role from the library, previewed read-only. `role` above always describes the RECORD's
+    // role, so the pane can name the role the assistant runs even while it shows another one's text.
+    const shown = preview ? { name: preview.name, description: preview.description || "" } : role;
+    const boxText = preview ? String(preview.text ?? "") : roleLoaded ? String(roleDraft ?? roleText ?? "") : "";
+    const size = preview || roleLoaded ? boxText.length : Number(c.chars) || 0;
+    const cap = preview ? Number(preview.cap) || Number(c.cap) || 0 : roleCap || Number(c.cap) || 0;
     const pct = cap ? Math.round((size / cap) * 100) : 0;
     // The cap is checked against the text that WOULD BE SENT: the server's 413 refuses a 20,001-character save whole,
     // so the warning (and the disabled Save) has to land before the press rather than after it. One charter here sits
-    // at 19,773 — four words from the line.
-    const over = cap > 0 && size > cap;
+    // at 19,773 — four words from the line. A preview is never sent, so it is never judged.
+    const over = !preview && cap > 0 && size > cap;
     const dirty = roleDirty();
     const when = c.exists ? `last written ${esc(relTime(c.mtimeIso))} ago` : "not on disk yet — the panel seeds it on first boot";
     // WHICH TEXT THE BOX HOLDS. Save replaces this assistant's copy whole, so the box says whether what is in it is
-    // the copy read from disk or edits the reader has not saved yet. The sentence under the buttons says what Save
-    // does with each.
+    // the copy read from disk, edits the reader has not saved yet, or another role's own text being previewed.
     const holdsHint = roleHoldsLabel(dirty);
     // The inline question. Never a browser dialog: the row is part of the tab, so a reader who is mid-sentence in the
     // textarea keeps their words on screen while they answer, and a page that never repaints the tab cannot lose it.
     const ask = roleAsk
-      ? {
-          what: "Reloading reads this assistant's copy from disk and replaces the text in the box.",
-          use: "Reload from disk",
-        }
+      ? roleAsk.kind === "pick"
+        ? {
+            what: `The box holds text you have not saved. Showing ${roleAsk.name}'s own charter would replace it.`,
+            use: "Show it",
+          }
+        : {
+            what: "Reloading reads this assistant's copy from disk and replaces the text in the box.",
+            use: "Reload from disk",
+          }
       : null;
+    // THE PICKER'S VALUE IS THE ROLE THE PANE SHOWS — never a role assignment. The record's own role is named as
+    // such, so the reader can always find their way back to the copy Save writes.
+    const shownRoleId = preview ? preview.id : roleShow || recRoleId;
+    const options = roles
+      .map((r) => `<option value="${esc(r.id)}"${r.id === shownRoleId ? " selected" : ""}>${esc(r.name)}${r.id === recRoleId ? " (this assistant's role)" : ""}</option>`)
+      .join("");
+    const who = preview
+      ? `${esc(rec?.name || "This assistant")} · showing the ${esc(preview.name)} role's own text — read-only`
+      : `${esc(rec?.name || "This assistant")}'s own copy${rec?.threadId ? ` · thread ${esc(rec.threadId)}` : ""}${state.assistant.assistants?.length > 1 ? " · each assistant has its own copy" : ""}`;
+    // The box is editable only while it holds this assistant's copy AND that copy has been read: a role's own
+    // text is a preview here, and a textarea that never read the file must not be able to save an empty one.
+    const readOnly = !roleLoaded || Boolean(preview) || Boolean(roleShowLoading);
     host.innerHTML = `
       <div class="as-group">
         <h4>The role — the job this assistant runs, and the charter text it carries</h4>
         <div class="as-line">
-          <span class="as-hint" data-as-rolewho>${esc(rec?.name || "This assistant")}'s own copy${rec?.threadId ? ` · thread ${esc(rec.threadId)}` : ""}${state.assistant.assistants?.length > 1 ? " · each assistant has its own copy" : ""}</span>
-          <button id="btn-as-new-assistant" type="button" class="primary" title="make the next assistant from this role: its own thread, its own rules and its own copy of the charter text — Assistant #1 is not touched">New assistant from this role</button>
+          <label title="which role's charter this pane shows. Picking one reads THAT role's own text into the box, read-only — it changes no assistant and adopts nothing. The role an assistant runs is changed in its Settings">showing
+            <select id="as-role-pick" data-as-role-pick>${options}</select></label>
+          <span class="as-hint" data-as-rolewho>${who}</span>
+          <button id="btn-as-new-assistant" type="button" class="primary" title="make the next assistant from the role this pane shows: its own thread, its own rules and its own copy of the charter text — the assistant above is not touched">New assistant from this role</button>
         </div>
-        ${role ? `<div class="as-help"><b>${esc(role.name)}</b> — ${esc(role.description || "(no remit written yet)")}</div>` : ""}
+        ${shown ? `<div class="as-help"><b>${esc(shown.name)}</b> — ${esc(shown.description || "(no remit written yet)")}${preview ? ` · <b>previewed</b>, not this assistant's role` : ""}</div>` : ""}
         <div class="as-help">The role an assistant runs is changed in that assistant's own <b>Settings</b>, under
-        <b>The role it runs</b>. This pane is the charter text alone: it edits the copy the assistant above carries,
-        and Save writes it there.</div>
+        <b>The role it runs</b>. The picker here chooses which role's charter this pane <b>shows</b>: pick another
+        role to read its own text, <b>read-only</b> — nothing on this tab assigns a role to an assistant or adopts a
+        charter. Pick ${esc(role?.name || "this assistant's role")} to come back to this assistant's own copy, which
+        Save writes.</div>
         ${roleInfo?.wakeEveryMinutes ? `<div class="as-help" data-as-rolewake><b>Standing wake: every ${esc(String(roleInfo.wakeEveryMinutes))} minutes.</b> The panel's own sentry starts this assistant's turn on that clock, reads every assistant's queue and files the next action with the one that should carry it. The interval is stored in this assistant's settings file; it is not a second timer.</div>` : ""}
         <div class="as-charter-meta">
-          <code class="as-charter-path" title="${esc(c.path || "")}">${esc(c.path || "…")}</code>
-          <span class="as-hint">${when}</span>
+          ${
+            preview
+              ? `<code class="as-charter-path" title="a role's charter in the panel's library">roles/${esc(preview.id)}</code><span class="as-hint">the role's own text — a preview, saved nowhere from here</span>`
+              : `<code class="as-charter-path" title="${esc(c.path || "")}">${esc(c.path || "…")}</code><span class="as-hint">${when}</span>`
+          }
           <span class="as-hint${over ? " is-bad" : ""}" data-as-rolesize>${size}/${cap} chars${over ? ` — ${size - cap} over the cap, Save is refused` : pct >= 90 ? ` (${pct}%)` : ""}</span>
           <span class="as-hint" data-as-roleholds>${esc(holdsHint)}</span>
         </div>
-        <textarea class="as-note-box as-charter-box" id="as-role-text" rows="16" spellcheck="false"${roleLoaded ? "" : " readonly"} placeholder="${roleLoaded ? "" : "reading the charter text…"}">${esc(boxText)}</textarea>
+        <textarea class="as-note-box as-charter-box" id="as-role-text" rows="16" spellcheck="false"${readOnly ? " readonly" : ""} placeholder="${roleShowLoading ? "reading that role's charter text…" : roleLoaded ? "" : "reading the charter text…"}">${esc(boxText)}</textarea>
         ${over ? `<div class="as-ask is-bad" id="as-role-cap" role="status"><b>${size.toLocaleString()} characters</b> — ${(size - cap).toLocaleString()} over the ${cap.toLocaleString()}-character cap. The panel refuses a save this size: prune the oldest changelog entries, then save.</div>` : ""}
         ${ask ? `<div class="as-ask" id="as-role-ask" role="alert"><span class="as-ask-what">${esc(ask.what)}</span><button type="button" data-as-roleask="keep">Keep mine</button><button type="button" data-as-roleask="use" class="primary">${esc(ask.use)}</button></div>` : ""}
         <div class="as-actions">
-          <button id="btn-as-role" type="button" class="primary"${roleLoaded && !over ? "" : " disabled"}>Save role charter</button>
-          <button id="btn-as-role-reload" type="button">Reload from disk</button>
+          <button id="btn-as-role" type="button" class="primary"${roleLoaded && !preview && !roleShowLoading && !over ? "" : " disabled"}>Save role charter</button>
+          <button id="btn-as-role-reload" type="button"${preview || roleShowLoading ? " disabled" : ""}>Reload from disk</button>
           <span class="as-hint" data-as-rolesave>${esc(roleSaveSentence(dirty))}</span>
-          <span class="as-err" id="as-role-err">${esc(roleErr)}</span>
+          <span class="as-err" id="as-role-err">${esc(roleShowErr || roleErr)}</span>
         </div>
         <div class="as-line">
-          <label title="a role is a named charter: the new one starts as a copy of the role above">new role
+          <label title="a role is a named charter: the new one starts as a copy of the role this pane shows">new role
             <input type="text" id="as-role-name" spellcheck="false" maxlength="80" placeholder="e.g. PR Reviewer"></label>
-          <button id="btn-as-role-newrole" type="button" title="create a role from the role this pane names above, under a new name">Create role</button>
+          <button id="btn-as-role-newrole" type="button" title="create a role from the role this pane shows, under a new name">Create role</button>
           <span class="as-hint" id="as-role-newerr"></span>
         </div>
         <div class="as-help">A role is {name, description, charter text}: the job title, one line of what it is for, and the
@@ -2004,21 +2125,26 @@
   }
 
   // Is the box holding text the last READ did not put there? Compared against the text that read loaded (this
-  // assistant's copy, or the role's own charter), never against the file: a save from another surface is the 409's
-  // business, not a reason to call the reader's words dirty.
+  // assistant's copy), never against the file: a save from another surface is the 409's business, not a reason to
+  // call the reader's words dirty. A preview is never dirty — it is the role's text, read-only, and no press here
+  // writes it.
   function roleDirty() {
+    if (roleShown) return false;
     return Boolean(roleLoaded && roleDraft !== null && roleDraft !== String(roleText ?? ""));
   }
 
-  // WHICH TEXT THE BOX HOLDS, in the reader's words: this assistant's copy, or a draft on top of it.
+  // WHICH TEXT THE BOX HOLDS, in the reader's words: this assistant's copy, a draft on top of it, or another
+  // role's own charter being previewed.
   function roleHoldsLabel(dirty = roleDirty()) {
+    if (roleShown) return `the ${roleShown.name} role's own text — a preview, read-only; not this assistant's copy`;
     if (dirty) return "edited in this box, not saved";
     return `this assistant's own copy${roleInfo?.sameAsRole ? " — the role's own text" : " — edited from the role's text"}`;
   }
 
   // What the sentence under the buttons must keep true: Save writes this assistant's COPY, whole, whatever the box
-  // happens to hold. A role's own text has not been saved anywhere yet, so the sentence says where it came from.
+  // happens to hold. A preview has no Save at all — the role's own text is not this assistant's to write from here.
   function roleSaveSentence(dirty = roleDirty()) {
+    if (roleShown) return `read-only preview — pick ${roleInfo?.role?.name || "this assistant's role"} above to edit and save this assistant's copy`;
     if (!roleLoaded) return "read-only until the charter text has been read";
     if (dirty) return "the box has edits that are not saved — Save writes what is in it to this assistant's copy, replacing the copy whole";
     return `read from disk ${relTime(new Date(roleLoadedAt).toISOString())} ago — saving replaces this assistant's copy whole`;
@@ -2030,6 +2156,8 @@
   function paintRoleBox() {
     const box = as$("as-role-text");
     if (!box) return;
+    // A preview is read-only text from another role: no cap judgement, no Save — nothing here is written anywhere.
+    if (roleShown) return;
     const size = String(box.value ?? "").length;
     const cap = roleCap || Number((state.assistant?.assistants || []).find((x) => x.id === roleTargetSession())?.charter?.cap) || 0;
     const over = cap > 0 && size > cap;
@@ -2668,8 +2796,8 @@
     const escOthers = assistantIds().filter((x) => x !== id && !escList.includes(x));
     // THE ROLE THIS ASSISTANT RUNS. The list is the server's own library (`state.assistant.roles`) and the current
     // value is the RECORD's `roleId` — not a page copy, so two tabs cannot disagree about the job. This is the one
-    // control that changes a role; the Role tab only carries the charter text. A library with no rows still shows the
-    // role the record names rather than an empty box.
+    // control that changes a role; the Role tab's picker only chooses which role's charter it shows, read-only. A
+    // library with no rows still shows the role the record names rather than an empty box.
     const roles = Array.isArray(a.roles) ? a.roles : [];
     const roleNow = String(rec?.roleId || "");
     const roleNameNow = String(rec?.roleName || "");
@@ -2727,7 +2855,7 @@
         <div class="as-help">The role is the job this assistant's turns are told they are doing. Picking one writes
         <code>roleId</code> on this assistant's own record and nothing else: the charter text stays this assistant's
         own copy, which the <b>Role</b> tab edits and saves. This row is the one place a role is changed — the Role
-        tab carries the text and no picker. <b>Restart role</b> is the press that applies it to the next turn: it
+        tab's picker only chooses which role's charter it SHOWS, read-only, and assigns nothing. <b>Restart role</b> is the press that applies it to the next turn: it
         rebuilds THIS assistant's turn context from the role now on the record, so the charter, the board digest and
         the queue digest go in full again under the new role. It does not restart the panel, the gateway, or any other
         assistant's context.</div>
@@ -5089,6 +5217,12 @@
     }
 
     if (t.id === "btn-as-role") {
+      // A preview is another role's own text, shown read-only: no press on this tab writes it anywhere. The button
+      // is disabled while a preview is up; this guard is what a forced press meets.
+      if (roleShown) {
+        setErr("as-role-err", `this box is the ${roleShown.name} role's own text, a read-only preview — pick the role this assistant runs to edit its copy`);
+        return;
+      }
       const target = roleTargetSession();
       const text = String(as$("as-role-text")?.value ?? "");
       // The panel refuses an over-cap save WHOLE (413) and writes nothing, so it is not sent: the warning between the
@@ -5126,6 +5260,12 @@
     }
 
     if (t.id === "btn-as-role-reload") {
+      // Reload reads THIS ASSISTANT'S copy; while another role is previewed there is nothing of this assistant's
+      // to refresh, and the picker is the way back.
+      if (roleShown) {
+        clearShownRole();
+        return;
+      }
       // Reload is a read that REPLACES the box, so typed words get the inline question instead of vanishing under a
       // press meant to refresh the file.
       if (roleDirty()) {
@@ -5154,7 +5294,10 @@
       }
       t.disabled = true;
       try {
-        await loadRole(roleTargetSession());
+        // A pick that was held back by a typed draft reads THAT role's own text now; a reload reads this
+        // assistant's copy from disk. Two different subjects, so the branch is the question's own `kind`.
+        if (asked.kind === "pick") await showRole(asked.roleId);
+        else await loadRole(roleTargetSession());
       } catch (err) {
         setErr("as-role-err", err.message);
         renderAssistantRole(true);
@@ -5188,8 +5331,9 @@
     }
 
     if (t.id === "btn-as-new-assistant") {
-      // The pane carries no picker: the new assistant is made from the role the charter above describes.
-      const pick = String(roleInfo?.role?.id || "");
+      // The new assistant is made from the role the PANE SHOWS - a preview is a role the reader is looking at, and
+      // the button's title says so. With no preview it is the role the charter above describes.
+      const pick = String(roleShown?.id || roleInfo?.role?.id || "");
       t.disabled = true;
       try {
         const d = await asPost("/api/assistant/assistants", { roleId: pick });
@@ -5214,7 +5358,8 @@
       }
       t.disabled = true;
       try {
-        const d = await asPost("/api/assistant/roles", { name, from: String(roleInfo?.role?.id || "") });
+        // A new role is a copy of the role the pane SHOWS, so a preview is what gets copied when one is up.
+        const d = await asPost("/api/assistant/roles", { name, from: String(roleShown?.id || roleInfo?.role?.id || "") });
         roleRoles = Array.isArray(d.roles) ? d.roles : roleRoles;
         const box = as$("as-role-name");
         if (box) box.value = "";
@@ -5452,6 +5597,33 @@
   // will believe is live when it is not.
   as$("assistant")?.addEventListener("change", async (e) => {
     const el = e.target;
+    if (el.dataset.asRolePick !== undefined) {
+      // WHICH ROLE THE PANE SHOWS, never which role an assistant runs. Picking another role reads that role's own
+      // charter into the box READ-ONLY; the record is untouched, because Settings' The role it runs is the one place
+      // a role is assigned. The repaint below draws the select from what the pane actually holds, so a pick that is
+      // not confirmed snaps back rather than claiming a role the pane never read.
+      const target = roleTargetSession();
+      const nextId = String(el.value || "");
+      const recRoleId = String(sessionById(target)?.roleId || "");
+      if (nextId === (roleShown?.id || recRoleId)) {
+        renderAssistantRole(true);
+        return;
+      }
+      if (nextId === recRoleId) {
+        clearShownRole();
+        return;
+      }
+      // Typed words are the reader's, and a select change must not silently discard them: ask in the tab, name the
+      // role, and keep the text on screen until they answer. "Keep mine" leaves the box and the select where they were.
+      if (roleDirty()) {
+        const name = String(el.selectedOptions?.[0]?.textContent || nextId).trim();
+        roleAsk = { kind: "pick", roleId: nextId, name };
+        renderAssistantRole(true);
+        return;
+      }
+      await showRole(nextId);
+      return;
+    }
     if (el.dataset.asDock) {
       // The FRAME: one assistant's own field, saved through the profile route beside its prompt and its escalation
       // list — the same per-assistant file, not assistant.json and not the panel. The answer carries the whole state,

@@ -1,21 +1,26 @@
-// THE ROLE PANE CARRIES TEXT, NOT A PICKER: the charter box and its Save, and no way to change what an assistant runs.
+// THE ROLE PANE CARRIES THE CHARTER TEXT AND A VIEW PICKER: which role's charter the pane SHOWS, and no way to change
+// what an assistant RUNS.
 //
 //   node tools/verify-role-pane.mjs
 //
-// The ability to change an assistant's role was taken off the shared Role tab: the "editing <assistant>" selector, the
-// role picker and "Adopt this role's charter" are gone, and that assistant's own Settings (The role it runs) is the one
-// place a role is changed. What the tab KEEPS is driven here, on a sandbox panel of its own and a real Chromium over it:
+// The ability to assign a role from the shared Role tab was taken off: the "editing <assistant>" selector and "Adopt
+// this role's charter" are gone, and that assistant's own Settings (The role it runs) is the one place a role is
+// assigned. What the tab keeps - and what is driven here, on a sandbox panel of its own and a real Chromium over it:
 //
-//   1. THE PANE DRAWS NO PICKER: #as-roletarget, #as-role-pick and #btn-as-role-adopt do not exist; the pane says whose
-//      copy it edits, names the role the record runs with its description, and points at Settings for the choice;
+//   1. THE PANE CARRIES A VIEW PICKER: #as-role-pick lists the library with the role the record runs selected and
+//      named as this assistant's role; #as-roletarget and #btn-as-role-adopt do not exist; the pane says whose copy
+//      it edits and points at Settings for the choice;
 //   2. THE BOX HOLDS THIS ASSISTANT'S COPY, byte for byte, and Save writes what is in it to that copy on disk;
 //   3. A 19,773-character charter saves clean; an edit past the 20,000 cap warns BEFORE the press, disables Save, and a
 //      forced press refuses without a request; pruning under the cap clears the warning;
-//   4. SETTINGS IS THE ONE PLACE A ROLE CHANGES: picking one there writes the record, does NOT adopt the role's charter
-//      (the box keeps this assistant's copy), and the Role pane's role line follows the record;
-//   5. CREATE ROLE still makes a role from the one the pane is on, and NEW ASSISTANT FROM THIS ROLE still starts a
+//   4. A PICK IS A VIEW: choosing another role reads THAT role's own charter into the box read-only, names it as a
+//      preview, disables Save and Reload, and a forced Save refuses and writes nothing - the record and its copy never
+//      move. Picking this assistant's role brings its copy back, editable;
+//   5. SETTINGS IS THE ONE PLACE A ROLE CHANGES: picking one there writes the record, does NOT adopt the role's charter
+//      (the box keeps this assistant's copy), and the Role pane's role line and picker follow the record;
+//   6. CREATE ROLE still makes a role from the one the pane shows, and NEW ASSISTANT FROM THIS ROLE still starts a
 //      second assistant on it;
-//   6. no page errors, and zero browser dialogs throughout.
+//   7. no page errors, and zero browser dialogs throughout.
 //
 // HARNESS: LIVE GATE
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
@@ -148,10 +153,20 @@ try {
     await page.waitForSelector("#assistant", { state: "visible" });
     await openRole();
 
-    console.log("\n== the pane draws no way to change what an assistant runs ==");
-    check("#as-roletarget is gone", await page.locator("#as-roletarget").count(), 0);
-    check("#as-role-pick is gone", await page.locator("#as-role-pick").count(), 0);
-    check("#btn-as-role-adopt is gone", await page.locator("#btn-as-role-adopt").count(), 0);
+    console.log("\n== the picker chooses which role the pane SHOWS, never which role an assistant runs ==");
+    check("#as-role-pick is the view picker", await page.locator("#as-role-pick").count(), 1);
+    check("#as-roletarget is still gone (a role is assigned in Settings)", await page.locator("#as-roletarget").count(), 0);
+    check("#btn-as-role-adopt is still gone (nothing on this tab adopts a charter)", await page.locator("#btn-as-role-adopt").count(), 0);
+    const seededRoleId = (await roleOf()).role.id;
+    const pickerState = () =>
+      page.locator("#as-role-pick").evaluate((el) => ({
+        value: el.value,
+        options: [...el.options].map((o) => ({ value: o.value, label: o.textContent.trim() })),
+      }));
+    const picked0 = await pickerState();
+    check("the picker's value is the role the record runs", picked0.value, seededRoleId);
+    ok("...and that option is named as this assistant's role", picked0.options.some((o) => o.value === seededRoleId && /this assistant's role/.test(o.label)), JSON.stringify(picked0.options));
+    ok("...with the library's other roles beside it", picked0.options.length >= 3, `${picked0.options.length} options`);
     ok("the pane says whose copy it edits", /Assistant #1's own copy/.test(await textOf("[data-as-rolewho]")), await textOf("[data-as-rolewho]"));
     ok("...and points at Settings as the one place a role is changed", /changed in that assistant's own\s+Settings/i.test(await paneText()));
     ok("the role the record runs is named with its remit", /Agent Manager/.test(await remit()) && /approved PR ready to merge/i.test(await remit()), (await remit()).slice(0, 120));
@@ -208,6 +223,43 @@ try {
     ok("pruning under the cap clears the warning", await waitFor(async () => (await page.locator("#as-role-cap").count()) === 0, { timeoutMs: 5_000, what: "the warning to clear" }));
     ok("...and Save comes back alive", !(await saveDisabled()));
 
+    console.log("\n== a pick is a VIEW: another role's own charter, read-only, and no record moves ==");
+    const beforePick = await roleOf();
+    await page.selectOption("#as-role-pick", "reviewer");
+    ok(
+      "the box fills with the Reviewer role's own charter",
+      await waitFor(async () => (await box()) === reviewer, { timeoutMs: 15_000, what: "the preview read" }),
+      `${reviewer.length} chars`,
+    );
+    check("...and the box is read-only", await page.locator("#as-role-text").evaluate((el) => el.readOnly), true);
+    ok("...Save is disabled, so a preview cannot be written anywhere", await saveDisabled());
+    ok("...Reload is disabled too: the picker is the way back", await page.locator("#btn-as-role-reload").isDisabled());
+    ok("...the provenance names it as a preview", /the Reviewer role's own text/.test(await hold()) && /read-only/.test(await hold()), await hold());
+    ok("...the who line says the pane is showing another role", /showing the Reviewer role's own text/.test(await textOf("[data-as-rolewho]")), await textOf("[data-as-rolewho]"));
+    ok("...and the remit line is the previewed role's own", /reads a diff and says no/.test(await remit()), (await remit()).slice(0, 140));
+    check("...while the record still runs the role it did", (await roleOf()).role.id, beforePick.role.id);
+    check("...and its copy is untouched", (await roleOf()).charter.text, beforePick.charter.text);
+    // A keyboard or forced press must refuse without a request: the guard, not the disabled attribute, is the proof.
+    await page.evaluate(() => {
+      const b = document.querySelector("#btn-as-role");
+      b.disabled = false;
+      b.click();
+    });
+    ok(
+      "a forced Save on a preview refuses with the preview's own words",
+      await waitFor(async () => /read-only preview/.test(await page.locator("#as-role-err").innerText()), { timeoutMs: 5_000, what: "the preview refusal" }),
+      await page.locator("#as-role-err").innerText(),
+    );
+    check("...and wrote nothing", (await roleOf()).charter.text, beforePick.charter.text);
+
+    await page.selectOption("#as-role-pick", beforePick.role.id);
+    ok(
+      "picking this assistant's role brings its copy back, editable",
+      await waitFor(async () => !(await page.locator("#as-role-text").evaluate((el) => el.readOnly)) && (await box()) === edge, { timeoutMs: 15_000, what: "the copy to come back" }),
+    );
+    ok("...with Save live again", !(await saveDisabled()));
+    check("...and the picker back on the record's role", (await pickerState()).value, beforePick.role.id);
+
     console.log("\n== Settings is the one place a role changes, and it does not adopt the charter ==");
     await page.click('#as-tabs [data-as-tab="assistant-1"]');
     await page.waitForSelector("#as-subtabs");
@@ -229,6 +281,7 @@ try {
     ok("...while the box still holds this assistant's copy, not the role's charter", (await box()) === edge, `${edge.length} chars`);
     check("...and the copy on disk was not touched", (await roleOf()).charter.text.length, edge.length);
     check("...so the pick adopted nothing", (await roleOf()).sameAsRole, false);
+    check("...and the pane's picker now selects the role the record runs", (await pickerState()).value, "reviewer");
 
     console.log("\n== Create role still copies the role the pane is on ==");
     await page.fill("#as-role-name", "Third Role");
@@ -269,10 +322,11 @@ try {
   console.log("\n== summary ==");
   console.log(`${checks} checks, ${failures} failed`);
   console.log("\nWHAT WAS DRIVEN: a real panel process on its own port over its own PANEL_CONFIG and HERMES_HOME, two roles");
-  console.log("created through its own route, and headless Chromium over it. The Role pane was proved to carry no");
-  console.log("selector, no role picker and no adopt press; its box and Save, the 19,773-character save, the cap warning");
-  console.log("and its refusal, the Settings pick that moves the record without adopting the charter, Create role and");
-  console.log("New assistant from this role were all exercised. Browser dialogs: zero by counter, not by inspection.");
+  console.log("created through its own route, and headless Chromium over it. The Role pane's view picker was proved to");
+  console.log("read another role's own charter read-only and to leave every record alone; its box and Save, the");
+  console.log("19,773-character save, the cap warning and its refusal, the Settings pick that moves the record without");
+  console.log("adopting the charter, Create role and New assistant from this role were all exercised. Browser dialogs:");
+  console.log("zero by counter, not by inspection.");
   if (!failures) console.log("ROLE-PANE-OK");
 } catch (err) {
   failures += 1;
