@@ -61,18 +61,56 @@ test("the prompt no longer forbids the render: it is the landing's own last step
   assert.match(prompt, /\.githooks\/pre-push refuses a base push whose changelog is stale/);
 });
 
-test("the prompt states the order and why: bump, push, merge, then render at the merged tip", () => {
+test("the prompt states the order and why: bump, push, land in one step, then prove", () => {
   const prompt = mergePrompt({ ...base, ahead: 2, commits: ["1111111 one", "2222222 two"] });
-  const at = (s) => prompt.indexOf(s);
-  for (const step of ["1. bump the version on wtgui/lane", "2. push wtgui/lane", "3. merge it", "4. fetch main", "5. prove it"]) {
+  // The block is four steps because `npm run land:pr` is the merge, the fetch, the render and the check in one
+  // command: a separate "merge it" and "fetch and render" step would tell the agent to do by hand what it does.
+  // Read with the line breaks flattened, so a re-wrap of the same clause is not a failure; a different clause is.
+  const flat = prompt.replace(/\s+/g, " ");
+  const at = (s) => flat.indexOf(s);
+  const steps = [
+    "1. bump the version on wtgui/lane (PHASE 1B)",
+    "2. push wtgui/lane and open its pull request",
+    "3. land it in ONE step: npm run land:pr -- <n> when it lands as a pull request",
+    "4. prove it: npm run land:check",
+  ];
+  for (const step of steps) {
     assert.ok(at(step) > 0, `the ordered block is missing "${step}"`);
   }
-  assert.ok(at("1. bump the version on wtgui/lane") < at("2. push wtgui/lane"));
-  assert.ok(at("2. push wtgui/lane") < at("3. merge it"));
-  assert.ok(at("3. merge it") < at("4. fetch main"), "the render follows the merge, because the merge is what rewrites the shas");
-  assert.ok(at("4. fetch main") < at("5. prove it"));
-  assert.match(prompt, /The render must follow the merge because the section has to name the shas the merge's rewrite produced/);
-  assert.match(prompt, /A landing\s+that stops at the merge leaves a red tip/);
+  for (let i = 1; i < steps.length; i += 1) {
+    assert.ok(at(steps[i - 1]) < at(steps[i]), `"${steps[i - 1]}" must come before "${steps[i]}"`);
+  }
+  // Step 3 is the whole landing: the command merges, fast-forwards the checkout, moves the release tag onto the
+  // merged commit, renders at the merged tip and proves the check - so the render cannot be a later row.
+  assert.ok(
+    flat.includes(
+      `(that command merges it --rebase --admin, fast-forwards ${base.root}, moves the release's tag onto the merged commit, renders at the merged tip and proves the check)`,
+    ),
+    "step 3 must say the one command merges, fast-forwards the checkout, moves the tag and renders at the merged tip",
+  );
+  assert.ok(
+    flat.includes("a local landing merges in PHASE 2, and then renders with npm run land (PHASE 4), which moves the tag too"),
+    "the local route keeps the same render-last order",
+  );
+  // Step 4 proves both readings the landing has to quote, on the merged tip.
+  assert.ok(
+    flat.includes(`4. prove it: npm run land:check reads "changelog: CHANGELOG.md is current - N releases"`),
+    "proving the render is step 4",
+  );
+  assert.ok(
+    flat.includes("npm run verify:version-tags -- --ref origin/main reads PASS"),
+    "step 4 also proves the tag names the merged commit",
+  );
+  // The five-step shape is gone, so a merge step and a separate fetch-and-render step cannot come back unnoticed.
+  assert.doesNotMatch(flat, /3\. merge it/, "the merge is not a step of its own: land:pr does it");
+  assert.doesNotMatch(flat, /4\. fetch main/, "there is no separate fetch-and-render step any more");
+  assert.doesNotMatch(flat, /5\. prove it/);
+  // The reason the render is last outlives the rewrite, and still names the merge's shas.
+  assert.ok(
+    flat.includes("The render must follow the merge because the section has to name the shas the merge's rewrite produced."),
+    "the block says why the render cannot precede the merge",
+  );
+  assert.ok(flat.includes("A landing that stops at the merge leaves a red tip"), "and what a merge-only landing leaves behind");
 });
 
 test("an unknown count keeps the exception conditional instead of claiming one shape", () => {
