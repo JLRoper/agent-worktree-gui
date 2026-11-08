@@ -168,7 +168,7 @@ test("a panel bundle loads: stages in order, prompts, artifacts, gates and hando
   const [s0, s1] = pipeline.stages;
   assert.equal(s0.prompt, "Do the Intake work.");
   assert.equal(s0.promptFrom, "stage");
-  assert.deepEqual(s0.artifact, { id: "charter", path: "out/charter.json", schema: "out/1", writer: "worker", sha256: "sha256:abc" });
+  assert.deepEqual(s0.artifact, { id: "charter", path: "out/charter.json", schema: "out/1", writer: "worker", sha256: "sha256:abc", kind: null });
   // A stage the studio names with `name` (the guide's field) is the same record as one the panel names with `title`.
   assert.equal(s1.title, "Freeze");
 
@@ -376,6 +376,71 @@ test("a gate's decision routes are read, and a map that cannot route every outco
   assert.equal(missing.ok, false);
   assert.equal(missing.code, BUNDLE_FAULTS.REFERENCE);
   assert.match(missing.reason, /does not hold/);
+});
+
+// The gated walk's first defect: the reader's own bundle declared a gate with outcomes and no `routes`, its stage drew
+// a sequence edge and a loop, and the driver silently took the sequence — so a `reject` advanced the manuscript and
+// the capped loop was unreachable. What made that possible was a loader that only judged `routes` when there was one.
+test("a route-less gate whose stage draws two ways out is refused, naming the gate and the pipeline", () => {
+  const reviewLoop = () => ({
+    bundleVersion: 1,
+    name: "review",
+    pipelines: [
+      {
+        id: "review-loop",
+        title: "Review loop",
+        stages: [stage("author", "Author", "manuscript"), stage("review", "Review", "notes"), stage("revise", "Revise", "revision")],
+        handoffs: [
+          { id: "H-01", from: "author", to: "review", artifact: "manuscript", kind: "sequence" },
+          { id: "H-02", from: "review", to: "author", artifact: "notes", kind: "loop", cap: "2 rejects" },
+          { id: "H-03", from: "review", to: "revise", artifact: "notes", kind: "sequence" },
+        ],
+        gates: [
+          {
+            id: "G1",
+            name: "Accept or reject",
+            after: "review",
+            artifact: "notes",
+            decision: { id: "verdict", path: "ledger/verdict.json", schema: "verdict/1", writer: "reviewer", outcomes: ["accept", "reject"] },
+          },
+        ],
+      },
+    ],
+  });
+
+  const refused = parseBundle(reviewLoop());
+  assert.equal(refused.ok, false, "a verdict the driver cannot route must not load silently");
+  assert.equal(refused.code, BUNDLE_FAULTS.GATE);
+  assert.equal(refused.bundle, null, "an import is whole or not at all");
+  assert.equal(refused.where, "pipelines[0].gates[0].decision.routes");
+  assert.match(refused.reason, /gate G1/);
+  assert.match(refused.reason, /pipeline review-loop/, "the refusal names the PIPELINE as well as the gate");
+  assert.match(refused.reason, /no "routes" map/);
+  assert.match(refused.reason, /H-02, H-03/, "and the ways out the driver would choose between");
+
+  // The same document WITH the map is the fix, and loads.
+  const routed = reviewLoop();
+  routed.pipelines[0].gates[0].decision.routes = { accept: "H-03", reject: "H-02" };
+  const loadedWithRoutes = parseBundle(routed);
+  assert.equal(loadedWithRoutes.ok, true, loadedWithRoutes.reason || "");
+  assert.deepEqual(loadedWithRoutes.bundle.pipelines[0].gates[0].decision.routes, { accept: "H-03", reject: "H-02" });
+
+  // One way out is not a choice: the row takes that edge whatever the record says, so a decision there is a pause
+  // with a verdict on it and still loads.
+  const oneWay = reviewLoop();
+  oneWay.pipelines[0].handoffs = oneWay.pipelines[0].handoffs.filter((handoff) => handoff.id !== "H-02");
+  const loadedOneWay = parseBundle(oneWay);
+  assert.equal(loadedOneWay.ok, true, loadedOneWay.reason || "");
+  assert.equal(loadedOneWay.bundle.pipelines[0].gates[0].decision.routes, undefined);
+});
+
+test("an artifact's kind is carried, lower-cased, and null when the document names none", () => {
+  const bundle = panelBundle();
+  bundle.pipelines[0].stages[2].artifact.kind = "PR";
+  const result = parseBundle(bundle);
+  assert.equal(result.ok, true, result.reason || "");
+  assert.equal(result.bundle.pipelines[0].stages[2].artifact.kind, "pr");
+  assert.equal(result.bundle.pipelines[0].stages[0].artifact.kind, null, "an artifact that names no kind is not guessed at");
 });
 
 test("a missing file is absence, an unreadable one is a bad bundle, and the file is named back", () => {

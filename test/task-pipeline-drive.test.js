@@ -883,17 +883,83 @@ test("a second open row naming the same tree is refused, compared case-insensiti
   assert.equal(out.starts.length, 0);
 });
 
-test("the last stage is left to the settle: the pipeline does not invent a stage after it", (t) => {
+test("a last stage that declares no PR settles its row on the stage's own verdict", (t) => {
   const dir = tree(t, { artifacts: [2] });
   const out = drive([row({ worktree: dir, pipelineRun: { pipeline: "two", stage: "S2", enteredAt: "2026-11-03T15:00:00.000Z" } })]);
 
-  assert.equal(out.changed.length, 0);
-  assert.equal(out.starts.length, 0);
-  assert.equal(out.tasks[0].state, "running", "the row is finished by the settle, on the landing rule it always had");
+  // The gated walk's second defect: the pipeline is over, its last stage declares an artifact that is not a PR, and
+  // the landing rule (a tree's PR reads MERGED) can never be satisfied. The row must not stay `running` for ever.
+  assert.equal(out.tasks[0].state, "done", "the row is settled, not left running for a landing that is not coming");
+  assert.equal(out.tasks[0].doneBy, "panel");
+  assert.match(out.tasks[0].reason, /pipeline two is over at S2/);
+  assert.match(out.tasks[0].reason, /artifact "artifact-2"/);
+  assert.match(out.tasks[0].reason, /not a PR to land/);
+  assert.equal(out.tasks[0].pipelineRun.waitingFor, null, "a finished row is waiting on nothing");
   assert.equal(out.tasks[0].pipelineRun.stageRuns.at(-1).status, "done", "the last stage's run is still recorded");
+  assert.equal(out.starts.length, 0, "the pipeline does not invent a stage after it");
+  assert.equal(out.changed.length, 1);
+  assert.equal(out.changed[0].from, "running");
+  assert.equal(out.changed[0].to, "done");
+  assert.equal(out.changed[0].stage, "S2");
 
-  const settled = settleTasks(out.tasks, { jobs: done, isLive: () => false, at: CLOCK, rowFor: () => ({ path: dir, verdict: "MERGED" }) });
+  // Nothing is left for the settle to do, and it cannot undo the end: a done row is not running.
+  const settled = settleTasks(out.tasks, { jobs: done, isLive: () => false, at: CLOCK, rowFor: () => null });
   assert.equal(settled.tasks[0].state, "done");
+});
+
+test("a last stage whose artifact IS a PR is left to the landing rule", (t) => {
+  const dir = tree(t, { artifacts: [2] });
+  const pr = { ...stage(2), artifact: { ...stage(2).artifact, kind: "pr" } };
+  const landing = bundleOf(pipeline({ stages: [stage(1), pr] }));
+  const out = drive([row({ worktree: dir, pipelineRun: { pipeline: "two", stage: "S2", enteredAt: "2026-11-03T15:00:00.000Z" } })], { bundle: landing });
+
+  assert.equal(out.tasks[0].state, "running", "this row really is waiting on a landing, and the settle reads it");
+  assert.equal(out.changed.length, 0);
+  assert.equal(out.tasks[0].pipelineRun.stageRuns.at(-1).status, "done");
+
+  // Unmerged, the row stays open; MERGED is what finishes it.
+  const open = settleTasks(out.tasks, { jobs: done, isLive: () => false, at: CLOCK, rowFor: () => ({ path: dir, verdict: "OPEN" }) });
+  assert.equal(open.tasks[0].state, "running");
+  const merged = settleTasks(out.tasks, { jobs: done, isLive: () => false, at: CLOCK, rowFor: () => ({ path: dir, verdict: "MERGED" }) });
+  assert.equal(merged.tasks[0].state, "done");
+  assert.match(merged.tasks[0].reason, /PR reads MERGED/);
+});
+
+test("a verdict that ends the pipeline settles the row when its stage declares no PR", (t) => {
+  const dir = tree(t, { artifacts: [1] });
+  const gated = bundleOf(
+    pipeline({
+      gates: [
+        {
+          id: "G1",
+          name: "Ship or stop",
+          after: "S1",
+          artifact: "artifact-1",
+          decider: "seat",
+          decision: { id: "d1", path: "gates/G1.json", schema: "decision/1", writer: "seat", outcomes: ["ship", "stop"], routes: { ship: "h1", stop: null } },
+        },
+      ],
+    }),
+  );
+
+  // No record yet: the row parks on the gate, exactly as it always did.
+  const stopped = drive([row({ worktree: dir })], { bundle: gated });
+  assert.equal(stopped.tasks[0].state, "parked");
+  assert.equal(stopped.tasks[0].pipelineRun.waitingFor.gate, "G1");
+
+  // The record routes `stop` nowhere: the pipeline is over at a stage whose artifact is not a PR, so the row is
+  // finished in the same pass that reads the verdict, with the verdict recorded on the stage run.
+  mkdirSync(path.join(dir, "gates"), { recursive: true });
+  writeFileSync(path.join(dir, "gates", "G1.json"), JSON.stringify({ outcome: "stop" }));
+  const ended = drive(stopped.tasks, { bundle: gated, jobs: [], at: LATER });
+  assert.equal(ended.tasks[0].state, "done");
+  assert.equal(ended.changed.length, 1);
+  assert.equal(ended.changed[0].from, "parked");
+  assert.equal(ended.changed[0].to, "done");
+  assert.match(ended.tasks[0].reason, /pipeline two is over at S1/);
+  assert.equal(ended.tasks[0].pipelineRun.waitingFor, null, "the park is over with the pipeline");
+  assert.equal(ended.tasks[0].pipelineRun.stageRuns.at(-1).decision.trigger, "verdict", "the verdict that ended it is on the run");
+  assert.equal(ended.tasks[0].pipelineRun.stageRuns.at(-1).decision.fact.outcome, "stop");
 });
 
 test("nextStageOf answers the graph: handoff first, reading order next, nothing after the last stage", () => {
