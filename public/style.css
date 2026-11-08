@@ -744,7 +744,7 @@ td.age .age-line { display: inline-flex; align-items: center; gap: 6px; vertical
 td.age .sigs { display: inline-flex; align-items: center; flex-wrap: wrap; margin-left: 7px; vertical-align: middle; white-space: nowrap; }
 td.age .age-num { font-family: var(--mono); font-size: 12px; display: inline-block; }
 td.age .age-num.dimmer { color: var(--dimmer); }
-/* Next read is the ring and its countdown on one line: "due in 4s" beside the ring IS the cell, so it never wraps. */
+/* Next read is the ring and its figure on one line: "4s" beside the ring IS the cell, so it never wraps. */
 td.nextread { white-space: nowrap; }
 td.nextread button.poll-btn { margin-right: 4px; }
 td.nextread .next-num { font-family: var(--mono); font-size: 11.5px; color: var(--dim); }

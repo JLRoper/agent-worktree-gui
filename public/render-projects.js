@@ -795,19 +795,19 @@ function lifeCellHtml(row) {
       <span class="age-line"><span class="age-num${live ? "" : " dimmer"}">${esc(label)}</span></span><span class="sigs">${sigChips(row)}</span></td>`;
 }
 
-// The next-read column: the ring that fills toward the moment this row is due to be read again, and the countdown
-// spelled out beside it. Three states, and each one is a word the reader can act on: "due in 4s" while it waits,
-// "due now" for the second the read is owed (a sub-second lateness is not worth a number), and "overdue 12s" after
-// that. It is its own <td> because the countdown moves every second and the reader asked for it to be readable on its
-// own, not hidden in a tooltip.
+// The next-read column: the ring that fills toward the moment this row is due to be read again, and the bare figure
+// beside it. The figure is all the cell says - "4s" while the read is owed, and the lateness once it is past - because
+// the countdown moves every second and a sentence there read as three different states to scan for. The words live in
+// nextReadTitle, so the tooltip still spells the state out; the .late class keys on the same `overdue > 0` the label
+// does, so the amber can never disagree with the number it colours.
 function nextReadLabel(st) {
-  if (st.overdue >= 1000) return `overdue ${fmtDur(st.overdue)}`;
-  return st.remain > 0 ? `due in ${Math.ceil(st.remain / 1000)}s` : "due now";
+  return st.overdue > 0 ? fmtDur(st.overdue) : `${Math.max(0, Math.ceil(st.remain / 1000))}s`;
 }
 
 function nextReadTitle(st) {
   const cadence = st.every === st.configured ? `every ${st.every}s` : `every ${st.every}s, observed (configured ${st.configured}s)`;
-  return `next read ${nextReadLabel(st)} (${cadence}) · click the ring to read this worktree now`;
+  const when = st.overdue > 0 ? `overdue ${fmtDur(st.overdue)}` : `due in ${Math.max(0, Math.ceil(st.remain / 1000))}s`;
+  return `next read ${when} (${cadence}) · click the ring to read this worktree now`;
 }
 
 function nextReadCellHtml(row) {

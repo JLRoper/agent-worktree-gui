@@ -246,7 +246,7 @@ const CHART_COLUMNS = [
     label: "Next read",
     min: 92,
     give: 0.5,
-    title: "the ring fills up to green as the row becomes due for its next read · the countdown reads \"due in Xs\" while it waits, \"due now\" the moment it is due, and \"overdue <time>\" once the read is late · click the ring to read this worktree now",
+    title: "the ring fills up to green as the row becomes due for its next read · the cell beside it is the figure only: \"4s\" while the read is owed, and the lateness in amber once it is past · hover for the sentence, or click the ring to read this worktree now",
   },
   { id: "verdict", label: "Verdict", min: 104, give: 0.5 },
   { id: "actions", label: "", min: 52, give: 0.15, title: "remove a worktree (sent to the Recycle Bin)" },
