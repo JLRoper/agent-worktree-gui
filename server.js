@@ -3906,6 +3906,31 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, { rules: assistant.removeRuleFor(body.assistantId, String(body.id || "")), assistant: assistant.state() });
     }
 
+    // Consolidation: the reader's grant on one assistant, and the pass it allows. Two routes, because the two are
+    // two different decisions: `grant` is the reader saying "this assistant may tidy its own list", and
+    // `consolidate` is one plan being validated, snapshotted and applied. The grant is the only door onto a write,
+    // so a plan posted without it answers 403 with the module's own sentence rather than 400.
+    if (route === "/api/assistant/consolidate/grant" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      try {
+        const grant = assistant.setConsolidationGrant(body.assistantId, body.granted === true);
+        return sendJson(res, 200, { grant, assistant: assistant.state() });
+      } catch (e) {
+        return sendJson(res, 400, { error: String((e && e.message) || e), code: e?.code || null });
+      }
+    }
+    if (route === "/api/assistant/consolidate" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      try {
+        const consolidation = assistant.consolidateRulesFor(body.assistantId, { plan: body.plan, dryRun: body.dryRun === true });
+        return sendJson(res, 200, { consolidation, assistant: assistant.state() });
+      } catch (e) {
+        return sendJson(res, e?.code === "consolidate-not-granted" ? 403 : 400, { error: String((e && e.message) || e), code: e?.code || null });
+      }
+    }
+
     // The scratchpad of ONE assistant. GET carries the text (the polled state carries Assistant #1's string only —
     // an extra assistant's pad is a file, and the Pad tab reads it when the reader opens the tab); POST is the
     // reader's save. `assistantId` says whose pad, #1 by default, so every old caller keeps meaning the assistant the
