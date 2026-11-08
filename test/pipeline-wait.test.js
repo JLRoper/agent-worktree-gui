@@ -55,7 +55,8 @@ const iso = (ms) => new Date(ms).toISOString();
 const TREE = "c:/repo/.worktrees/build-the-stage-timer-0b37d7";
 const THREAD = "wtgui/build-the-stage-timer-0b37d7";
 const BRANCH = "wtgui/build-the-stage-timer-0b37d7";
-const SEED = fileURLToPath(new URL("../pipelines.seed.json", import.meta.url));
+// The review loop ships as a PDL document now (pipeline-bundle.seed.json), not as a ladder definition.
+const BUNDLE = fileURLToPath(new URL("../pipeline-bundle.seed.json", import.meta.url));
 
 // The review loop this panel ships (pipelines.seed.json's `sefl-review-loop`), cut down to the stages a wait touches:
 // a `wait` that exits on `pr-comments`, the `address` its wake starts, and the `approve`/`merge` after it.
@@ -115,8 +116,10 @@ function board(t, { stage = "wait", wait = waitRecord(), recordOver = {} } = {})
 
 // ---- §6.1 the model ----------------------------------------------------------------------------------------------
 test("reviewWaitFor: only the reviewer's three exits seed a wait, and reviewers-exact carries its who", () => {
-  const seed = (id) => JSON.parse(readFileSync(SEED, "utf8")).pipelines.find((p) => p.id === id);
-  const loop = seed("sefl-review-loop");
+  // The timer reads a LADDER definition's `stage.exit.check`. The seed ships no ladder definition any more — the review
+  // loop is a PDL document, and a PDL stage carries an artifact, not an exit — so the shape is the fixture's, and the
+  // PDL document is checked below for the stages the conversion had to keep.
+  const loop = LOOP;
 
   const wait = reviewWaitFor(loop.stages.find((s) => s.id === "wait"), { at: iso(T0), lastSeen: iso(T0 - HOUR), thread: THREAD, branch: BRANCH });
   assert.equal(wait.check, "pr-comments", "the shipped wait stage is the reviewer's answer");
@@ -133,6 +136,16 @@ test("reviewWaitFor: only the reviewer's three exits seed a wait, and reviewers-
   const exact = reviewWaitFor({ id: "r", exit: { check: "reviewers-exact", who: ["code_review_java"] } });
   assert.deepEqual(exact.who, ["code_review_java"], "reviewers-exact keeps the set it must match");
   assert.equal(reviewWaitFor(null), null);
+
+  // The conversion kept the stages the timer is about: the PDL document carries the same seven ids, in the same order,
+  // and the wait stage's instruction is the sentence the ladder shipped. What it does NOT carry is `exit` — a PDL stage
+  // names the artifact it writes, not the check that ends it — so the ladder timer has nothing to read for a PDL
+  // pipeline. That gap is named in the PR body; it is not papered over here by inventing an exit on the document.
+  const pdl = JSON.parse(readFileSync(BUNDLE, "utf8")).pipelines.find((p) => p.id === "sefl-review-loop");
+  assert.ok(pdl, "the review loop ships in the PDL bundle");
+  assert.deepEqual(pdl.stages.map((s) => s.id), ["branch", "push", "pr", "wait", "address", "approve", "merge"]);
+  assert.match(pdl.stages.find((s) => s.id === "wait").prompt, /END the turn/);
+  assert.equal(pdl.stages.find((s) => s.id === "wait").exit, undefined, "a PDL stage carries no ladder exit");
 });
 
 test("readReviewExit: an answer advances it; quiet, unreadable and an older approval do not; a merged PR closes it", () => {

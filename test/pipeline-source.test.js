@@ -26,9 +26,26 @@ import test from "node:test";
 import { readBundle } from "../lib/pipeline-bundle.js";
 import { pdlCatalogue, readPipelineSource } from "../lib/pipeline-source.js";
 import { ROOT, startPanel } from "../tools/panel-testkit.mjs";
+import { ladderDefinition } from "./fixtures/ladder-definitions.mjs";
 
 const SEED = path.join(ROOT, "pipeline-bundle.seed.json");
 const SEED_DOC = JSON.parse(readFileSync(SEED, "utf8"));
+
+// The bundle's own order: the four studio exports it shipped, then the seven ladders the conversion moved here. A
+// pipeline that dropped out of the bundle, or moved, fails the first assertion below.
+const BUNDLE_IDS = [
+  "poc-to-uat",
+  "ping-pong",
+  "probe-fix",
+  "author-review-revise",
+  "local",
+  "investigate",
+  "turnover",
+  "github-investigate",
+  "sefl-investigate",
+  "github-force-merge",
+  "sefl-review-loop",
+];
 
 const catalogueOf = async (base) => {
   const res = await fetch(`${base}/api/assistant/pipeline-catalogue`);
@@ -64,7 +81,7 @@ test("the catalogue is the bundle's own list, read through the loader", () => {
   assert.equal(catalogue.name, SEED_DOC.name);
   assert.deepEqual(
     catalogue.pipelines.map((p) => p.id),
-    ["poc-to-uat", "ping-pong", "probe-fix", "author-review-revise"],
+    BUNDLE_IDS,
   );
   const big = catalogue.pipelines.find((p) => p.id === "poc-to-uat");
   assert.equal(big.stageCount, 13);
@@ -80,6 +97,10 @@ test("both routes quote one list, and a refused bundle is refused once", async (
   const dir = await mkdtemp(path.join(os.tmpdir(), "wtgui-pipeline-source-"));
   const bundleFile = path.join(dir, "pipeline-bundle.json");
   writeFileSync(bundleFile, JSON.stringify(SEED_DOC, null, 1), "utf8");
+  // The ladder that reads beside the PDL list: the seed ships none, so the reader's own file is what the panel shows,
+  // and a bundle that is refused or absent must leave it untouched.
+  const pipelinesFile = path.join(dir, "pipelines.json");
+  writeFileSync(pipelinesFile, JSON.stringify({ version: 1, pipelines: [ladderDefinition("local")] }, null, 1), "utf8");
   const panel = await startPanel({
     dir,
     keep: true,
@@ -95,6 +116,7 @@ test("both routes quote one list, and a refused bundle is refused once", async (
       assistant: { enabled: false },
       apiServer: { url: "http://127.0.0.1:9", key: "sandbox-key" },
       pipelineBundleFile: bundleFile,
+      pipelinesFile,
     },
   });
   t.after(async () => {
@@ -109,7 +131,7 @@ test("both routes quote one list, and a refused bundle is refused once", async (
   assert.equal(settings.status, 200);
   assert.equal(picker.json.ok, true, picker.json.reason || "");
   assert.deepEqual(bare(settings.json.pdl), bare(picker.json), "the Settings answer carries the picker's own list");
-  assert.equal(settings.json.pdl.pipelines.length, 4);
+  assert.equal(settings.json.pdl.pipelines.length, BUNDLE_IDS.length);
   assert.ok(settings.json.pipelines.local, "the ladder still reads beside the PDL list");
 
   // (2) a refused bundle: the loader's code, sentence and locator, identically on both sides, and nothing written.
@@ -209,7 +231,7 @@ test("an imported PDL document is read as it is, and the next open lists it", as
   const picker = await catalogueOf(panel.base);
   const settings = await settingsOf(panel.base);
   assert.deepEqual(bare(settings.json.pdl), bare(picker.json), "the imported document reached both answers");
-  assert.deepEqual(picker.json.pipelines.map((p) => p.id), ["poc-to-uat", "ping-pong", "probe-fix", "author-review-revise", "factory-doc"]);
+  assert.deepEqual(picker.json.pipelines.map((p) => p.id), [...BUNDLE_IDS, "factory-doc"]);
   const added = picker.json.pipelines.find((p) => p.id === "factory-doc");
   assert.equal(added.stageCount, 2);
   assert.deepEqual(added.stages.map((s) => s.id), ["check", "sign"]);

@@ -1,11 +1,12 @@
-// The four PDL pipelines, in the Settings dropdown and on the map.
+// The eleven PDL pipelines, in the Settings dropdown and on the map.
 //
 // The tab used to offer one list (the ladder) and draw one kind of document (a ladder definition). The bundle's
 // pipelines are a different object: stages with an artifact, gates that end a stage, handoffs that are the edges and
 // the loops. This file pins the two halves that make them visible without a browser:
 //
 //   THE READING   the catalogue comes from lib/pipeline-source.js over config.pipelineBundleFile - the same read the
-//                 queue's picker quotes - and it holds the four ids at 13, 2, 2 and 3 stages;
+//                 queue's picker quotes - and it holds the studio's four at 13, 2, 2 and 3 stages, then the seven
+//                 ladders the conversion moved here at 1, 2, 3, 2, 2, 6 and 7;
 //   THE DRAWING   public/core/pipeline-mermaid.js `fromPdl` turns one of those pipelines into the card model: one node
 //                 per stage, one arrow per sequence handoff (labelled with the gate that ends the stage it leaves), one
 //                 dashed loop per loop handoff with its cap, and the gates list.
@@ -29,13 +30,22 @@ const BUNDLE = fileURLToPath(new URL("../pipeline-bundle.seed.json", import.meta
 const catalogue = pdlCatalogue(readPipelineSource({ pipelineBundleFile: BUNDLE }));
 const byId = (id) => catalogue.pipelines.find((p) => p.id === id);
 
-test("the catalogue holds the four PDL pipelines at 13, 2, 2 and 3 stages", () => {
+test("the catalogue holds the eleven PDL pipelines, in the bundle's own order and at its own stage counts", () => {
   assert.equal(catalogue.ok, true, catalogue.reason || "the seed bundle is readable");
-  assert.deepEqual(
-    catalogue.pipelines.map((p) => p.id),
-    ["poc-to-uat", "ping-pong", "probe-fix", "author-review-revise"],
-  );
-  assert.deepEqual(catalogue.pipelines.map((p) => p.stageCount), [13, 2, 2, 3]);
+  assert.deepEqual(catalogue.pipelines.map((p) => p.id), [
+    "poc-to-uat",
+    "ping-pong",
+    "probe-fix",
+    "author-review-revise",
+    "local",
+    "investigate",
+    "turnover",
+    "github-investigate",
+    "sefl-investigate",
+    "github-force-merge",
+    "sefl-review-loop",
+  ]);
+  assert.deepEqual(catalogue.pipelines.map((p) => p.stageCount), [13, 2, 2, 3, 1, 2, 3, 2, 2, 6, 7]);
   // The counts are the stages list's own length, not a second number that could disagree with it.
   for (const pipeline of catalogue.pipelines) assert.equal(pipeline.stageCount, pipeline.stages.length, pipeline.id);
 });

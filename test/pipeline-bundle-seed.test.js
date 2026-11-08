@@ -35,7 +35,21 @@ test("the shipped seed holds the studio's 13-stage POC-to-UAT export as its firs
   assert.equal(source.ok, true, `the seed must load: ${source.code} ${source.reason}`);
   const bundle = source.bundle;
   assert.equal(bundle.name, "SEFL pipelines");
-  assert.deepEqual(bundle.pipelines.map((p) => p.id), ["poc-to-uat", "ping-pong", "probe-fix", "author-review-revise"]);
+  // The studio's four exports first, then the seven ladders the conversion moved here, in that order. A ladder that
+  // dropped out of the bundle fails here, which is the one thing a "the seed is what ships" pin is for.
+  assert.deepEqual(bundle.pipelines.map((p) => p.id), [
+    "poc-to-uat",
+    "ping-pong",
+    "probe-fix",
+    "author-review-revise",
+    "local",
+    "investigate",
+    "turnover",
+    "github-investigate",
+    "sefl-investigate",
+    "github-force-merge",
+    "sefl-review-loop",
+  ]);
   const pipeline = bundle.pipelines[0];
   assert.equal(pipeline.title, "POC to UAT");
   assert.deepEqual(pipeline.order, ["S0", "S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9", "S10", "S11", "S12"]);
@@ -138,11 +152,11 @@ test("the seed tool writes a bundle the panel reads back, and refuses to clobber
       encoding: "utf8",
     });
     assert.match(out, /wrote .*pipeline-bundle\.json/);
-    assert.match(out, /4 pipelines/);
+    assert.match(out, /11 pipelines/);
     assert.match(out, /poc-to-uat: 13 stages S0\.\.S12/);
     const read = readBundle(target);
     assert.equal(read.ok, true, `the seeded file is readable: ${read.code} ${read.reason}`);
-    assert.equal(read.bundle.pipelines.length, 4);
+    assert.equal(read.bundle.pipelines.length, 11);
     assert.equal(read.bundle.pipelines[0].stages.length, 13);
     assert.equal(readFileSync(target, "utf8"), readFileSync(SEED, "utf8"), "the tool copies the seed verbatim");
 

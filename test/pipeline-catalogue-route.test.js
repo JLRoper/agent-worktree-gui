@@ -19,16 +19,19 @@
 //   6. a save that names one definition merges over the live file's others: editing `local` and then `investigate`
 //      leaves both edits in force.
 import assert from "node:assert/strict";
-import { readFileSync, rmSync } from "node:fs";
+import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
 import { ROOT, startPanel } from "../tools/panel-testkit.mjs";
+import { ladderDefinition } from "./fixtures/ladder-definitions.mjs";
 
-const SEED = JSON.parse(readFileSync(path.join(ROOT, "pipelines.seed.json"), "utf8"));
-const seedDef = (id) => JSON.parse(JSON.stringify(SEED.pipelines.find((p) => p.id === id)));
+// The seed ships `pipelines: []` — every pipeline this board ships is a PDL document now — so a route that edits the
+// LADDER needs a live file to edit. The definitions this test drives are the reader's own kind, copied from the seed as
+// it shipped into test/fixtures/ladder-definitions.mjs.
+const seedDef = (id) => ladderDefinition(id);
 
 const liveRecords = (file) => {
   const raw = JSON.parse(readFileSync(file, "utf8"));
@@ -54,6 +57,9 @@ const call = async (base, method, body) => {
 test("the catalogue route reads the full merged catalogue and refuses with validatePipeline's own findings", async (t) => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "wtgui-pipelines-route-"));
   const pipelinesFile = path.join(dir, "pipelines.json");
+  // The catalogue the route merges over: the seed ships nothing, so the live file is what is in force — the two
+  // definitions this test edits and saves back.
+  writeFileSync(pipelinesFile, JSON.stringify({ version: 1, pipelines: [seedDef("local"), seedDef("investigate")] }, null, 2));
   const panel = await startPanel({
     dir,
     keep: true,
