@@ -17,10 +17,12 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
 
-// Two classic scripts since the console cut (public/index.html): board/console.js, then app.js. A classic
-// script's names are page-wide, so a region is read from the script that now carries it.
+// Three classic scripts since the console and render-jobs cuts (public/index.html): board/console.js, then
+// render-jobs.js, then app.js. A classic script's names are page-wide, so a region is read from the script
+// that now carries it - renderConversation moved to public/render-jobs.js in step 7 of
+// docs/reports/module-map-2026-11-07.html.
 const page = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
-const src = `${page("public/board/console.js")}\n${page("public/app.js")}`;
+const src = `${page("public/board/console.js")}\n${page("public/render-jobs.js")}\n${page("public/app.js")}`;
 
 
 function grab(name) {
