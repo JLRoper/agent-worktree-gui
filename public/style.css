@@ -3906,6 +3906,14 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
    width: a 250px input clips a 400-character remit at "drives every agent it starts to an appro". */
 .as-group .as-line label.as-role-field { flex: 1 1 100%; }
 .as-group .as-line label.as-role-field input { width: 100%; }
+/* The role picker is the same row as the name box: a labelled control in a .as-group, so its label starts on the
+   group's heading edge and its box takes the rest of the row. Without this the select keeps its intrinsic width and
+   the top line reads as an afterthought beside the groups below it. */
+.as-group .as-line label.as-role-field select { width: 100%; }
+/* The Role group's count rides its heading, the way the Bridge sections' headings carry theirs: the h4's uppercase
+   belongs to the heading, so the hint drops back to sentence case on the same baseline. */
+.as-group[data-as-roletop] h4 { display: flex; align-items: baseline; gap: 8px; }
+.as-group[data-as-roletop] h4 .as-hint { text-transform: none; letter-spacing: 0; font-weight: 400; }
 /* The role editor's remit box has no inline label to sit beside (it is a two-row textarea under the name), so it
    carries a caption of its own: the group's sentence explains the field, the caption names it. */
 .as-group .as-role-caption { display: block; font-size: 10.5px; color: var(--dim); margin: 2px 0 4px; }

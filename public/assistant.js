@@ -1927,10 +1927,12 @@
       ? `<div class="as-ask" id="as-role-ask" role="alert"><span class="as-ask-what">This role has edits you have not saved. Switching to ${esc(roleMetaOf(roleAsk.roleId)?.name || "another role")} replaces them.</span><button type="button" data-as-roleask="keep">Keep editing</button><button type="button" data-as-roleask="switch" class="primary">Switch</button></div>`
       : "";
     host.innerHTML = `
-      <div class="as-line" data-as-roletop>
-        <label title="which role this tab edits — the panel's role library. Picking one reads that role's own four fields; it changes no assistant">role
-          <select id="as-role-pick" data-as-role-pick${roles.length ? "" : " disabled"}>${options}</select></label>
-        <span class="as-hint">${roles.length ? `${roles.length} role${roles.length === 1 ? "" : "s"} in this panel` : "no roles yet — Create role makes the first one"}</span>
+      <div class="as-group" data-as-roletop>
+        <h4>Role <span class="as-hint" data-as-rolecount>${roles.length ? `${roles.length} role${roles.length === 1 ? "" : "s"} in this panel` : "no roles yet — Create role makes the first one"}</span></h4>
+        <div class="as-line">
+          <label class="as-role-field" title="which role this tab edits — the panel's role library. Picking one reads that role's own four fields; it changes no assistant">role
+            <select id="as-role-pick" data-as-role-pick${roles.length ? "" : " disabled"}>${options}</select></label>
+        </div>
       </div>
       <div class="as-group">
         <h4>What this role is for</h4>
