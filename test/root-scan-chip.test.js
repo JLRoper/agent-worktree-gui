@@ -58,7 +58,9 @@ test("the counters are the fleet's split, not the visible slice's", () => {
 });
 
 test("the folder header carries the scanning count beside the project count", () => {
-  const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+  // The chip builders moved to public/render-projects.js in step 7 of docs/reports/module-map-2026-11-07.html,
+  // beside the folder card they draw.
+  const src = readFileSync(new URL("../public/render-projects.js", import.meta.url), "utf8");
   // Cut the two chip builders out of the page by their own boundaries: the folder-header section has no `end`
   // marker, and a whole-region slice drags in a dozen functions these assertions do not need.
   const from = src.indexOf("function rootScanChip(");

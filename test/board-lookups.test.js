@@ -16,12 +16,14 @@ import test from "node:test";
 import vm from "node:vm";
 
 // The classic scripts in page order (public/index.html): board/console.js, then dom.js, then charts.js, then
-// turns.js, then app.js. A classic script's names are page-wide, so a rule is read from the script that now carries
-// it - the three cached lookups and the animation restart moved to public/dom.js in step 2 of
-// docs/reports/module-map-2026-11-07.html, the chart's arrow (refreshTopToggle, paintTopToggle) to public/charts.js
-// in step 3, and the turn head's peek (refreshTurnPeek) to public/turns.js in step 4.
+// turns.js, then settings.js, then render-projects.js, then app.js. A classic script's names are page-wide, so a
+// rule is read from the script that now carries it - the three cached lookups and the animation restart moved to
+// public/dom.js in step 2 of docs/reports/module-map-2026-11-07.html, the chart's arrow (refreshTopToggle,
+// paintTopToggle) to public/charts.js in step 3, the turn head's peek (refreshTurnPeek) to public/turns.js in
+// step 4, and the board's child reads and re-rank (childrenMatching, boardGroups, groupBody, reorderProjects) to
+// public/render-projects.js in step 7.
 const page = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
-const src = `${page("public/board/console.js")}\n${page("public/dom.js")}\n${page("public/charts.js")}\n${page("public/turns.js")}\n${page("public/app.js")}`;
+const src = `${page("public/board/console.js")}\n${page("public/dom.js")}\n${page("public/charts.js")}\n${page("public/turns.js")}\n${page("public/render-projects.js")}\n${page("public/app.js")}`;
 
 function grab(name) {
   const start = src.indexOf(`function ${name}(`);

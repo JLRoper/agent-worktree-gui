@@ -23,6 +23,9 @@
 import { readFileSync } from "node:fs";
 
 const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+// rowHtml and the actions cell inside it moved to public/render-projects.js in step 7 of
+// docs/reports/module-map-2026-11-07.html; the handler and its delegated listener stayed in app.js.
+const rowSrc = readFileSync(new URL("../public/render-projects.js", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const css = readFileSync(new URL("../public/style.css", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 
 let checks = 0;
@@ -38,10 +41,10 @@ function ok(label, pass, detail = "") {
 
 // ---- 1..4: the cell's template ------------------------------------------------------------------------------------
 // The whole actions cell, taken from the row template it lives in. One line, because that is how rowHtml writes it.
-const cellAt = src.indexOf('<td class="row-actions">');
-const cellEnd = cellAt < 0 ? -1 : src.indexOf("</td>", cellAt);
-const cell = cellAt < 0 || cellEnd < 0 ? "" : src.slice(cellAt, cellEnd);
-ok("the actions cell is in rowHtml", Boolean(cell), cell ? `${cell.length} chars` : "no `td.row-actions` in public/app.js");
+const cellAt = rowSrc.indexOf('<td class="row-actions">');
+const cellEnd = cellAt < 0 ? -1 : rowSrc.indexOf("</td>", cellAt);
+const cell = cellAt < 0 || cellEnd < 0 ? "" : rowSrc.slice(cellAt, cellEnd);
+ok("the actions cell is in rowHtml", Boolean(cell), cell ? `${cell.length} chars` : "no `td.row-actions` in public/render-projects.js");
 
 const atChild = cell.indexOf("${childBtn}");
 const atRefresh = cell.indexOf("data-refresh-tree=");
@@ -57,9 +60,9 @@ ok(
 
 // The button's own ternary: drawn only for a row that HAS a branch, and only for a non-root row. Its template carries
 // semicolons inside the tooltip, so the slice ends at the comment that introduces the ✕ rather than at the first `;`.
-const btnAt = src.indexOf("const childBtn =");
-const btnStop = src.indexOf("// One ✕ per row", btnAt);
-const btn = btnAt < 0 || btnStop < 0 ? "" : src.slice(btnAt, btnStop);
+const btnAt = rowSrc.indexOf("const childBtn =");
+const btnStop = rowSrc.indexOf("// One ✕ per row", btnAt);
+const btn = btnAt < 0 || btnStop < 0 ? "" : rowSrc.slice(btnAt, btnStop);
 ok("the button is built once, from one ternary", Boolean(btn), btn ? btn.split("\n")[0] : "no `const childBtn`");
 ok("the project's own checkout draws no cut control", /isProjectRoot \|\| !row\.branch/.test(btn), btn.match(/isProjectRoot[^?]*\?/)?.[0] || "");
 ok("a detached row draws no cut control", /!row\.branch/.test(btn));

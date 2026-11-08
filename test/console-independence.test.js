@@ -37,10 +37,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-// Two classic scripts since the console cut (public/index.html): board/console.js, then app.js. A classic
-// script's names are page-wide, so a region is read from the script that now carries it.
+// Three classic scripts since the console cut and the render-projects cut (public/index.html):
+// board/console.js, then render-projects.js, then app.js. A classic script's names are page-wide, so a region is
+// read from the script that now carries it - reorderProjects, reorder and placeRow moved to public/render-projects.js
+// in step 7 of docs/reports/module-map-2026-11-07.html.
 const page = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8").replaceAll("\r\n", "\n");
-const src = `${page("public/board/console.js")}\n${page("public/app.js")}`;
+const src = `${page("public/board/console.js")}\n${page("public/render-projects.js")}\n${page("public/app.js")}`;
 
 const begin = src.indexOf("// ---- moving nodes without losing what is scrolled inside them");
 const end = src.indexOf("// ---- end moving nodes without losing what is scrolled inside them");
