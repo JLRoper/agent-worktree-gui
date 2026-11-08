@@ -596,8 +596,9 @@ The pass does five things, in this order:
    rules the twelve-seat window now leaves out, the charter and prompt sizes, and the snapshot path.
 
 `dryRun: true` is the same validation and the same report with steps 2-4 removed: the counts, the safety rows and
-the snapshot it would take. The report is what a Notes tab would print before Apply; the route is what the assistant
-calls, and the grant is what the reader presses.
+the snapshot it would take. It writes nothing, so it needs no grant - it is how a reader previews a pass. The report
+is what a Notes tab would print before Apply; the route is what the assistant calls, and the grant is what the
+reader presses.
 
 ### 5.5 Why the grant is worth the trust
 

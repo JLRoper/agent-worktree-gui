@@ -145,7 +145,14 @@ test("move to charter refuses a charter with no room rather than truncating it",
   );
 });
 
-test("setting the role prompt refuses over the seat, empty, and a reader's prompt", () => {
+test("a moved rule arrives in the charter whole, not clipped to a changelog entry", () => {
+  const long = `never push the turnover branch 20260710_1338_DMR-39015_authorizationCodeFlowPCKE: ${"the history carries key material and a named secret constant ".repeat(4)}`.slice(0, 380);
+  const rules = [rule("r-long", long), rule("r-keep", "a rule that stays")];
+  const out = moveRuleToCharter({ rules, id: "r-long", charter: "# Charter\n", granted: true });
+  assert.ok(out.charter.includes(long), "the whole rule text is in the charter, not a 300-character summary");
+});
+
+test("setting the role prompt", () => {
   const out = setRolePrompt({ prompt: "", promptBy: null, text: "Read the queue first.", from: ["r-one"], granted: true, at: iso(3) });
   assert.equal(out.prompt, "Read the queue first.");
   assert.equal(out.promptBy, "assistant");
@@ -195,9 +202,13 @@ test("a dry run reports and writes nothing; a granted pass writes the snapshot f
     ],
   };
 
-  // No grant yet: refused, and nothing on disk moved.
+  // No grant yet: a real pass is refused, and nothing on disk moved.
   fails(() => assistant.consolidateRulesFor(second.id, { plan }), "consolidate-not-granted");
   assert.deepEqual(rec.rules.map((r) => r.id), before.map((r) => r.id), "the refused pass wrote nothing");
+  // A dry run writes nothing, so it needs no grant: it is how a reader previews the pass before granting it.
+  const preview = assistant.consolidateRulesFor(second.id, { plan, dryRun: true });
+  assert.equal(preview.dryRun, true);
+  assert.equal(preview.after.rules, 2);
 
   assistant.setConsolidationGrant(second.id, true);
   const dry = assistant.consolidateRulesFor(second.id, { plan, dryRun: true });
@@ -290,6 +301,19 @@ test("a pass moves a rule into the charter and fills the role prompt, and refuse
   const charter = readFileSync(charterFile, "utf8");
   assert.ok(charter.includes("a repository's landing pattern"), "the moved rule's text is in the charter");
   assert.ok(charter.includes("moved to the charter: a repository's landing pattern"), "as a move, not a rewrite");
+});
+
+test("a prompt op may set the seat from new text without absorbing a rule", async (t) => {
+  const { assistant, second } = await panel(t);
+  assistant.addRuleFor(second.id, "one", "assistant");
+  assistant.setConsolidationGrant(second.id, true);
+  const [one] = assistant.assistantRecord(second.id).rules;
+  const out = assistant.consolidateRulesFor(second.id, {
+    plan: { ops: [{ op: "keep", id: one.id }, { op: "prompt", text: "Watch the board and judge landing by content." }] },
+  });
+  assert.equal(out.counts.prompted, 1);
+  assert.equal(assistant.profileOf(second.id).prompt, "Watch the board and judge landing by content.");
+  assert.equal(assistant.profileOf(second.id).promptBy, "assistant");
 });
 
 test("a plan that skips a rule is refused with the ids", async (t) => {
