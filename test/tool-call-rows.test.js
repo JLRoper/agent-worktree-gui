@@ -157,6 +157,8 @@ test("every console's render path asks the switch, and the card's signature carr
   assert.match(source, /const flat = openGroup \? openGroup\.dataset\.gflat === "1" : streaming \|\| !toolGroupsOn\(\);/);
   // The signature term beside the 🌊 one: without it, `setToolGroups` repaints every card and every repaint
   // concludes nothing changed, so the console keeps the shape it was drawn under.
-  const sig = part("function conversationSignature(", "// Is the reader's selection standing in this element?");
+  // The comment that used to follow it moved to public/dom.js with the selection helper; the next function in
+  // app.js is the stable end marker.
+  const sig = part("function conversationSignature(", "function paintCardMeta(");
   assert.match(sig, /toolGroupsOn\(\) \? "g" : "-"/, "the shape is part of what the card is redrawn for");
 });

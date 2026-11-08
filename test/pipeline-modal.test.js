@@ -163,8 +163,11 @@ test("the Pipeline tab has the dropdown, the editor and the control that opens t
   const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
   assert.match(app, /PipelineModal\.open\(\{\s*\n?\s*mode: "edit"/, "the tab opens the modal in edit mode");
   assert.match(app, /pipeline-select"\)\?\.addEventListener\("change"/, "the dropdown is what changes the selection");
+  // The queue row's press moved to public/queue-cards.js when the queue cards were cut out of assistant.js;
+  // the handler that opens the modal in position mode stayed in assistant.js.
+  const queue = readFileSync(new URL("../public/queue-cards.js", import.meta.url), "utf8");
+  assert.match(queue, /data-as-qflow=/, "a queue row carries the position-mode press");
   const assistant = readFileSync(new URL("../public/assistant.js", import.meta.url), "utf8");
-  assert.match(assistant, /data-as-qflow=/, "a queue row carries the position-mode press");
   assert.match(assistant, /mode: "position"/, "and it opens the modal in position mode");
 });
 
