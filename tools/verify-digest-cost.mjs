@@ -54,7 +54,7 @@ const job = (over) => ({
   status: "running",
   startedAt: new Date(Date.now() - 4 * 60_000).toISOString(),
   prompt: longPrompt,
-  worktreePath: "C:/repos/agent-worktree-gui/.worktrees/a-tree",
+  worktreePath: ".worktrees/a-tree",
   finalMessage: "",
   lines: [],
   ...over,
@@ -67,7 +67,7 @@ for (let i = 1; i <= 10; i += 1) {
       thread: `live-thread-${i}`,
       title: `live worker ${i}`,
       startedAt: new Date(Date.now() - i * 60_000).toISOString(),
-      worktreePath: `C:/repos/agent-worktree-gui/.worktrees/live-${i}`,
+      worktreePath: `.worktrees/live-${i}`,
     }),
   );
 }
@@ -80,7 +80,7 @@ for (let i = 1; i <= 5; i += 1) {
       status: "done",
       startedAt: new Date(Date.now() - (10 + i) * 60_000).toISOString(),
       endedAt: new Date(Date.now() - (9 + i) * 60_000).toISOString(),
-      worktreePath: `C:/repos/agent-worktree-gui/.worktrees/recent-${i}`,
+      worktreePath: `.worktrees/recent-${i}`,
     }),
   );
 }
