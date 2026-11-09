@@ -1,0 +1,94 @@
+{
+ "outcome": "improved",
+ "evidence": {
+  "reasons": [
+   "every viewport: the visit line, the clock and the artifact line each own a line, nothing paints outside its box, the element set and control names are unchanged, the only text that moved is the live clock, and both test runs are green"
+  ],
+  "blocks": {
+   "1440x900": {
+    "before_interleaved": 1,
+    "after_interleaved": 0,
+    "ownLines": {
+     "pipew-visit": {
+      "top": 194.88,
+      "alone": true,
+      "overflowsBox": false
+     },
+     "pipew-live": {
+      "top": 210.38,
+      "alone": true,
+      "overflowsBox": false
+     },
+     "pipew-artifact": {
+      "top": 228.31,
+      "alone": true,
+      "overflowsBox": false
+     }
+    }
+   },
+   "1280x900": {
+    "before_interleaved": 1,
+    "after_interleaved": 0,
+    "ownLines": {
+     "pipew-visit": {
+      "top": 194.88,
+      "alone": true,
+      "overflowsBox": false
+     },
+     "pipew-live": {
+      "top": 210.38,
+      "alone": true,
+      "overflowsBox": false
+     },
+     "pipew-artifact": {
+      "top": 228.31,
+      "alone": true,
+      "overflowsBox": false
+     }
+    }
+   },
+   "1024x900": {
+    "before_interleaved": 1,
+    "after_interleaved": 0,
+    "ownLines": {
+     "pipew-visit": {
+      "top": 194.88,
+      "alone": true,
+      "overflowsBox": false
+     },
+     "pipew-live": {
+      "top": 210.38,
+      "alone": true,
+      "overflowsBox": false
+     },
+     "pipew-artifact": {
+      "top": 228.31,
+      "alone": true,
+      "overflowsBox": false
+     }
+    }
+   },
+   "1600x900": {
+    "before_interleaved": 1,
+    "after_interleaved": 0,
+    "ownLines": {
+     "pipew-visit": {
+      "top": 194.88,
+      "alone": true,
+      "overflowsBox": false
+     },
+     "pipew-live": {
+      "top": 210.38,
+      "alone": true,
+      "overflowsBox": false
+     },
+     "pipew-artifact": {
+      "top": 228.31,
+      "alone": true,
+      "overflowsBox": false
+     }
+    }
+   }
+  }
+ }
+}
