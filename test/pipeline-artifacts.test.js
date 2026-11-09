@@ -14,12 +14,20 @@
 //
 // The view is markup-and-a-list, not a screenshot: `flow.artifacts` is the list and `<span class="pflow-artifact">` is
 // the drawing, so a test reads the same facts a reader sees.
+//
+// The last two cases are about the artifact's OTHER reader, the settle: which TREE it resolves a stage's artifact
+// against. They live here because this is the file the artifact rules are proved in, and the rule they pin is the same
+// one the drawing follows - an artifact is the file its writer wrote, not whatever sits at that path elsewhere.
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import test from "node:test";
 
 import { parseBundle } from "../lib/pipeline-bundle.js";
 import { pipelineCatalogue } from "../lib/task-pipeline-assign.js";
+import { START_GRACE_MS, driveTaskPipelines } from "../lib/task-pipeline-drive.js";
 import { ladderDefinition } from "./fixtures/ladder-definitions.mjs";
 
 await import("../public/pipeline-flow.js");
@@ -182,4 +190,194 @@ test("the window model draws the same view from its own stages, when no bundle i
   assert.deepEqual(chips(html).map((chip) => chip.id).sort(), ["a1", "outside"]);
   assert.equal(chips(html).find((chip) => chip.id === "outside").kind, "external");
   assert.deepEqual(edges(html).map((edge) => [edge.kind, edge.to]), [["external", "S2"]], "adjacent handoffs are the thick connector, not a line");
+});
+
+// ---- the settle's artifact tree ----------------------------------------------------------------------------------
+//
+// #260 parked on a false verdict: the gui-improve implement stage settled with "its artifact change-set
+// (ledger/gui-improve/change-set.patch) is not in the tree", while the change-set sat committed in that stage's OWN
+// tree at 49278bee. The settle resolved the artifact against `pipelineRun.tree`, which under a round is the tree the
+// ROUND began in - a parent's checkout - so a stage that wrote only in its own workspace was refused on a directory
+// it never touched (lib/assistant.js `cutPipelineTree`: a stage's tree is never promoted to the row's).
+//
+// Both cases pin the rule that replaced it: a stage's artifact is read in the tree its stage run records, and the
+// row's tree is the LAST answer, never the first.
+const CLOCK = "2026-11-09T10:00:00.000Z";
+const EMAIL = ["stage", "example.invalid"].join(String.fromCharCode(64));
+const CHANGE_SET = "ledger/gui-improve/change-set.patch";
+
+const GUI_IMPROVE = {
+  bundleVersion: 1,
+  name: "gui-improve",
+  pipelines: [
+    {
+      id: "gui-improve",
+      title: "Gui improve",
+      stages: [
+        {
+          id: "baseline",
+          title: "Baseline",
+          prompt: "Take the baseline.",
+          artifact: { id: "baseline", path: "ledger/gui-improve/baseline/capture.json", schema: "capture/1", writer: "surveyor", kind: "file" },
+        },
+        {
+          id: "implement",
+          title: "Implement",
+          prompt: "Write the change set.",
+          inputs: { read: [{ artifact: "baseline" }] },
+          artifact: { id: "change-set", path: CHANGE_SET, schema: "change-set/1", writer: "implementer", kind: "file" },
+        },
+        {
+          id: "compare",
+          title: "Compare",
+          prompt: "Compare it.",
+          inputs: { read: [{ artifact: "baseline" }, { artifact: "change-set" }] },
+          artifact: { id: "comparison", path: "ledger/gui-improve/compare/comparison.json", schema: "comparison/1", writer: "surveyor", kind: "file" },
+        },
+      ],
+      gates: [],
+      handoffs: [
+        { id: "H-01", from: "baseline", to: "implement", artifact: "baseline", kind: "sequence" },
+        { id: "H-02", from: "implement", to: "compare", artifact: "change-set", kind: "sequence" },
+      ],
+    },
+  ],
+};
+const GUI = parseBundle(GUI_IMPROVE, { file: "gui-improve.json" });
+assert.equal(GUI.ok, true, GUI.reason || "the fixture bundle must parse");
+
+// A real repository with one commit, and the stage trees the panel cuts from it: `git worktree` directories of the
+// SAME repository, so the commit one stage settles at is in the object store every other stage's tree reads. The reads
+// under test are git readings (the pin is a blob at a commit), so a fixture that faked one would prove nothing.
+function workspace(t) {
+  const base = mkdtempSync(path.join(tmpdir(), "wag-artifacts-"));
+  const root = path.join(base, "repo");
+  mkdirSync(root);
+  const git = (where, ...args) =>
+    execFileSync("git", ["-C", where, "-c", "user.name=Stage Fixture", "-c", `user.email=${EMAIL}`, "-c", "commit.gpgsign=false", "-c", "core.autocrlf=false", ...args], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    }).trim();
+  const write = (where, rel, body) => {
+    const at = path.join(where, ...rel.split("/"));
+    mkdirSync(path.dirname(at), { recursive: true });
+    writeFileSync(at, body);
+  };
+  git(root, "init", "-q", "-b", "main");
+  write(root, "seed.txt", "the round began here\n");
+  git(root, "add", "-A");
+  git(root, "commit", "-qm", "the round's parent");
+  const cut = (name) => {
+    const dir = path.join(base, name);
+    git(root, "worktree", "add", "-q", "-b", `stage/${name}`, dir, "main");
+    return dir;
+  };
+  t.after(() => rmSync(base, { recursive: true, force: true }));
+  return { dir: root, git, write, cut, head: (where) => git(where, "rev-parse", "HEAD") };
+}
+
+// A row at the implement stage in the shape #260's ledger carries: the row's tree is one live directory, and the
+// implement stage's own run records the directory that stage actually ran in. The record has no `round` - that is a
+// record written before rounds existed, and it is exactly where the row's tree and the stage's own tree disagree,
+// which is the disagreement the lookup has to settle in the stage's favour.
+function implementRow({ rowTree, stageTree, stageSha }) {
+  return {
+    id: 260,
+    title: "the gui-improve round",
+    detail: "",
+    state: "running",
+    thread: "T-impl",
+    threads: ["T-impl"],
+    worktree: stageTree,
+    project: "agent-worktree-gui",
+    files: [],
+    attempts: 0,
+    reason: "",
+    hold: null,
+    pipelineRun: {
+      pipeline: "gui-improve",
+      stage: "implement",
+      enteredAt: CLOCK,
+      via: "H-01",
+      visits: { baseline: 1, implement: 1 },
+      tree: { path: rowTree, branch: "wtgui/the-round" },
+      stageRuns: [
+        { id: "gui-improve/baseline#1", stage: "baseline", visit: 1, status: "done", thread: "T-base", artifact: { id: "baseline", path: "ledger/gui-improve/baseline/capture.json", present: true } },
+        { id: "gui-improve/implement#1", stage: "implement", visit: 1, status: null, thread: "T-impl", tree: { path: stageTree, branch: "wtgui/the-implement-stage", commit: stageSha } },
+      ],
+    },
+  };
+}
+
+const settle = (task) =>
+  driveTaskPipelines([task], {
+    bundle: GUI.bundle,
+    jobs: [{ id: "j-impl", thread: "T-impl", status: "done", startedAt: CLOCK }],
+    isLive: () => false,
+    at: CLOCK,
+    unattended: true,
+  });
+
+test("a stage whose artifact is only in its OWN stage tree settles present and hands it on", (t) => {
+  const w = workspace(t);
+  const rowTree = w.cut("round");
+  const stageTree = w.cut("implement");
+  w.write(stageTree, CHANGE_SET, "diff --git a/public/style.css b/public/style.css\n");
+  w.git(stageTree, "add", "-A");
+  w.git(stageTree, "commit", "-qm", "the change set");
+  const stageSha = w.head(stageTree);
+
+  const row = implementRow({ rowTree, stageTree, stageSha });
+
+  const out = settle(row);
+  const settled = out.tasks[0];
+  const entry = settled.pipelineRun.stageRuns.find((run) => run.stage === "implement");
+
+  assert.equal(settled.state, "queued", "the row is not parked");
+  assert.equal(settled.pipelineRun.stage, "compare", "the settle moved it to the stage the handoff names");
+  assert.equal(entry.artifact.present, true, "the change-set IS in the tree the stage ran in");
+  assert.equal(entry.artifact.commit, stageSha, "and it is pinned to that tree's commit");
+  assert.match(entry.artifact.blob || "", /^[0-9a-f]{40}$/, "the blob the commit holds is recorded");
+  assert.equal(entry.tree.path, stageTree, "the ledger names the tree the artifact was read in, not the row's");
+
+  // Handed on: the next stage's brief names the artifact and the commit to read it at, and its STORED manifest carries
+  // the same pin. The round tree is a live directory that never held the file, so a lookup that read there could
+  // produce neither.
+  const later = new Date(Date.parse(CLOCK) + START_GRACE_MS + 1000).toISOString();
+  const next = driveTaskPipelines([{ ...settled, state: "queued" }], { bundle: GUI.bundle, jobs: [], isLive: () => false, at: later, unattended: true });
+  assert.equal(next.starts.length, 1, "the compare stage is asked for");
+  const start = next.starts[0];
+  assert.equal(start.stage, "compare");
+  assert.match(start.prompt, /handed on\s+change-set/, "the brief names the change-set it was handed");
+  assert.ok(start.prompt.includes(`git show ${stageSha.slice(0, 12)}:${CHANGE_SET}`), "and the commit and path to read it at");
+  const compareEntry = next.tasks[0].pipelineRun.stageRuns.find((run) => run.stage === "compare");
+  const carried = (compareEntry.inputs || []).find((input) => input.artifact === "change-set");
+  assert.ok(carried, "the compare stage's manifest carries the change-set");
+  assert.equal(carried.commit, stageSha, "pinned to the commit the implement stage settled at");
+  assert.match(carried.blobSha256 || "", /^[0-9a-f]{64}$/, "with the blob's hash, so the bytes are the writer's");
+});
+
+test("a stage whose artifact is absent from its OWN stage tree refuses, even when a parent tree holds it", (t) => {
+  const w = workspace(t);
+  const rowTree = w.cut("round");
+  const stageTree = w.cut("implement");
+  // The trap: the file exists at the same path in the row's tree (the round's) and nowhere in the stage's own. A
+  // lookup that reads the row's directory settles this stage PRESENT and hands on an artifact this stage never wrote.
+  w.write(rowTree, CHANGE_SET, "diff --git a/public/style.css b/public/style.css\n");
+  w.git(rowTree, "add", "-A");
+  w.git(rowTree, "commit", "-qm", "a parent's copy, not the stage's");
+
+  const out = settle(implementRow({ rowTree, stageTree, stageSha: w.head(stageTree) }));
+  const parked = out.tasks[0];
+  const entry = parked.pipelineRun.stageRuns.find((run) => run.stage === "implement");
+
+  assert.equal(parked.state, "parked", "the row stops");
+  assert.equal(parked.pipelineRun.stage, "implement", "at the stage that settled");
+  assert.equal(entry.artifact.present, false, "the artifact is not in the stage's own tree");
+  assert.match(
+    parked.reason,
+    /its artifact change-set \(ledger\/gui-improve\/change-set\.patch\) is not in the tree, so handoff H-02 has nothing to pass/,
+    "the refusal is the same sentence the panel already prints",
+  );
+  assert.equal(out.starts.length, 0, "nothing is handed on");
 });
