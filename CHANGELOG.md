@@ -4,16 +4,38 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.76.3 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.76.5 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-497 releases from v0.1.0 (2026-10-20) to v1.76.3 (2026-11-09), 1634 commits between the tags. Every release is anchored by an
+498 releases from v0.1.0 (2026-10-20) to v1.76.5 (2026-11-09), 1640 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.76.5 — 2026-11-09 · 6 commits
+
+[`d28b774`](https://github.com/JLRoper/agent-worktree-gui/commit/d28b774b5a29de5cca033e9681f201f8dd5e9d81) · [compare v1.76.3...v1.76.5](https://github.com/JLRoper/agent-worktree-gui/compare/v1.76.3...v1.76.5)
+
+### Added
+
+- feat: the board's scan-roots block reads as one control group ([`3364a49`](https://github.com/JLRoper/agent-worktree-gui/commit/3364a49fa000996e97080b53462eb9e7abf760c7))
+
+### Fixed
+
+- fix: the add-folder hint keeps its example in the field title ([`8124cca`](https://github.com/JLRoper/agent-worktree-gui/commit/8124cca37b72b516092ff5a383729839d5a68cd1))
+
+### Docs & tests
+
+- docs: render the changelog - 497 releases ([`548ee47`](https://github.com/JLRoper/agent-worktree-gui/commit/548ee47605d9aeecfa5e39b8f120d6e010274787))
+- docs: the accepted Board round's ledger lands beside the change ([`97e0390`](https://github.com/JLRoper/agent-worktree-gui/commit/97e0390a9da7a807aae962f1a6fd81907a070b71))
+
+### Other
+
+- chore: the ledger's measured paths are allowlisted as records ([`e1bc2fb`](https://github.com/JLRoper/agent-worktree-gui/commit/e1bc2fbcd75f876ffa22f80120212c3d1ad0e303))
+- chore: 1.76.5 - the version this landing carries ([`d28b774`](https://github.com/JLRoper/agent-worktree-gui/commit/d28b774b5a29de5cca033e9681f201f8dd5e9d81))
 
 ## v1.76.3 — 2026-11-09 · 4 commits
 
