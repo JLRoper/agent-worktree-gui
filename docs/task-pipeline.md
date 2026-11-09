@@ -257,33 +257,54 @@ A verdict that ends the pipeline writes its own decision on the settled stage ru
 `fact: { kind: "verdict", outcome, edge, ended: true }`), so a reader can see WHICH word ended the loop. The row is then
 finished by the settle, on the landing rule it has always had.
 
-### The tree: one per row, cut once, reused by every stage
+### The tree: one per stage, all cut from the round's frozen parent
 
-**A pipeline row works in ONE tree. It is cut before the first stage starts, and every later stage — including every
-pass round a loop — starts a new agent in that same tree.** The pipeline never cuts a second tree and never retires one.
+**Every stage of a round works in its OWN tree.** A round is one run of a pipeline, from its first stage to its last;
+the first cut resolves the parent branch to a COMMIT and records it on the row (`pipelineRun.round = { parent, sha, at,
+by }`), and every later stage tree is cut at that commit. The parent branch is named for the reader and never
+re-resolved per stage.
 
-- The driver returns `ensureTree = { taskId, project, prompt }`; the Assistant's `cutPipelineTree` calls the job store's
-  own `makeWorktree`, writes `pipelineRun.tree = { path, branch, startSha, cutAt, by }` on the row, and journals it.
-  Nothing is started by that step: a cut with no start is a row with a tree and no thread — visible, named, re-startable.
-  A cut that fails parks the row with the cut's own sentence.
-- The lookup is a sequence of three answers and then a park: `pipelineRun.tree.path`, then the most recent
-  `stageRuns[].tree.path` that still exists on disk (the ledger wins when the two disagree), then `task.worktree`. None
-  of them existing is `pipeline-tree-gone`, **never** a second cut and never the project checkout — the panel does not
-  start a stage beside the work the earlier visits left behind.
-- A tree path is claimed by every OPEN row whose run tree, `worktree` or **any lane tree on the record** normalises to
+- The record is what makes a round a round. `round.parent` is the branch (usually `main`) and `round.sha` is what it
+  resolved to at the first cut. A commit that lands on the parent branch after that moment is **not** in a later
+  stage's tree, which is the defect this model exists to remove: with one shared tree and a re-resolved branch, a stage
+  cut mid-round started at whatever main was THEN.
+- The driver returns `ensureTree = { taskId, project, prompt, stage, base, parent, role }`. For a chain stage `role` is
+  `stage`, `base` is `round.sha` and `parent` is `round.parent`; the Assistant's `cutPipelineTree` calls the job store's
+  own `makeWorktree`, writes the tree under `pipelineRun.trees[stage]` (and `pipelineRun.tree` for the round's first,
+  the row's landing branch), and journals it. Nothing is started by that step: a cut with no start is a row with a tree
+  and no thread — visible, named, re-startable. A cut that fails parks the row with the cut's own sentence.
+- The parent is written into the panel's parent book with `parentSource: "cut"` — including when it is a main branch,
+  because a round's parent IS main. That is what the worktree chart nests a round's stage trees under: one group, one
+  indent in, under the row the round was cut from.
+- The lookup answers the stage's OWN tree, from `stageRuns[].tree.path` and then `pipelineRun.trees[stage]`. A stage
+  with no tree yet is `needed` (the cut is the next step), and a tree that was recorded and is gone is
+  `pipeline-tree-gone`, **never** a second cut and never the project checkout.
+- A row written before rounds existed has no `round` and keeps the model it was cut under: one tree, reused by every
+  stage (`treeLookup`). A deploy therefore never re-cuts a row already in flight.
+- A tree path is claimed by every OPEN row whose run tree, `worktree` or **any stage tree on the record** normalises to
   it (case-insensitively, across every assistant's queue). A start whose tree is claimed by a DIFFERENT open row parks
   `pipeline-tree-claimed`, naming the other row: two stages in one tree is the one collision that corrupts work
-  silently. A fan-out's lane trees are the row's too — they hold its work, and a second row starting in one is the same
-  collision.
+  silently.
 
-The cost, stated plainly: a stage cannot be isolated from the previous stage's mess. That is the right default for a
-review-fix loop and the wrong one for a stage that needs a clean base; the design records that as an open question.
+### The handoff: a stage reads what the document says it reads
+
+Because the stages no longer share a directory, an artifact is handed FORWARD by its declared input, not found beside
+the stage that wants it. `inputs.read[]` and the handoff edge both name artifacts; `inputManifest` resolves each one at
+the WRITER's commit (the pin: commit, blob, blob sha256), and `artifactOf` reads the blob from that commit when the
+file is not in the stage's own tree. The INPUTS block then says so plainly — the artifact is not in this stage's tree,
+and `git show <commit>:<path>` is where to read it.
+
+The cost, stated plainly: a stage cannot see the previous stage's uncommitted work, and any file an earlier stage left
+behind by accident is invisible to it. That is the point — the document, not the directory, decides what a stage is
+handed.
 
 ### The fan-out: a per-stage block, and the one merge
 
-`shared` is the model above and the default. A pipeline may declare `isolation: "per-stage"` in its bundle, and then
-the CONCURRENT part of its graph — and only that part — runs in one tree per stage. A chain keeps today's single tree:
-the flag decides where the shape allows, not that every stage gets a directory.
+The model above is every pipeline's: one tree per stage, cut at the round's frozen parent. A pipeline may ALSO declare
+`isolation: "per-stage"` in its bundle, and then the CONCURRENT part of its graph — and only that part — is treated as a
+block: the lanes start from ONE base instead of a chain's per-stage order, and the aggregator merges them in one commit.
+The flag changes how a fork/join is walked and merged; it is not what gives a stage its own directory, which every stage
+has.
 
 - **The block.** A stage with two or more non-loop successors is the fork; the lanes are its successors, and the join is
   the earliest stage, in reading order, that every lane can reach. No fork stage and two or more roots is the same block

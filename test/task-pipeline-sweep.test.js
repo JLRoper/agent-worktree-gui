@@ -22,6 +22,9 @@ const T0 = Date.parse("2026-11-03T16:00:00.000Z");
 const iso = (ms) => new Date(ms).toISOString();
 const PROJECT = { name: "agent-worktree-gui", path: "C:/ProjectDevelopment/agent-worktree-gui" };
 const THREAD = "wtgui-pipeline-4ab3c1";
+// The commit the round's parent resolved to at the first cut. Every stage tree of the round is cut at THIS, which is
+// what the second cut's `from` is asserted against.
+const ROUND_SHA = "9f3c1a2d4e5f60718293a4b5c6d7e8f901234567";
 
 const stage = (n) => ({
   id: `S${n}`,
@@ -66,13 +69,18 @@ function harness(t, { spawn = "auto" } = {}) {
     get: () => null,
     clarify: { state: () => null },
     // The cut the design makes its own step: a directory and a branch, and the artifacts both stages will settle
-    // with (a stage that ends `done` without its artifact parks, by design).
-    makeWorktree: async (repoDir, prompt) => {
-      state.cuts.push({ repoDir, prompt });
-      mkdirSync(path.join(state.tree, "out"), { recursive: true });
-      writeFileSync(path.join(state.tree, "out", "1.json"), JSON.stringify({ stage: 1 }));
-      writeFileSync(path.join(state.tree, "out", "2.json"), JSON.stringify({ stage: 2 }));
-      return { path: state.tree, branch: "wtgui/carry-the-contract-a1b2c3", startSha: "9f3c1a2" };
+    // with (a stage that ends `done` without its artifact parks, by design). ONE TREE PER STAGE: every call makes its
+    // own directory, records the `from` and `parent` it was handed, and answers the branch and parent a real
+    // `Jobs.makeWorktree` answers — the round's frozen parent is read off the second call's `from`.
+    makeWorktree: async (repoDir, prompt, opts = {}) => {
+      const n = state.cuts.length + 1;
+      const branch = n === 1 ? "wtgui/carry-the-contract-a1b2c3" : `wtgui/carry-the-contract-s${n}-b${n}`;
+      const tree = n === 1 ? state.tree : path.join(dir, "trees", `carry-the-contract-s${n}-b${n}`);
+      state.cuts.push({ repoDir, prompt, from: opts.from || null, parent: opts.parent || null, tree, branch });
+      mkdirSync(path.join(tree, "out"), { recursive: true });
+      writeFileSync(path.join(tree, "out", "1.json"), JSON.stringify({ stage: 1 }));
+      writeFileSync(path.join(tree, "out", "2.json"), JSON.stringify({ stage: 2 }));
+      return { path: tree, branch, startSha: ROUND_SHA, parentName: "main" };
     },
   };
   const assistant = new Assistant({
@@ -143,7 +151,8 @@ test("a pipeline task's tree is cut first, then its stage is started, advanced o
   assert.equal(row.pipelineRun.stageRuns.at(-1).id, "two/S1#1");
   assert.equal(row.pipelineRun.stageRuns.at(-1).thread, THREAD, "the entry learned its thread at the link");
 
-  // 3. The stage's run settles. The sweep writes the row forward and starts the NEXT stage in the same pass.
+  // 3. The stage's run settles. The sweep writes the row forward and CUTS THE NEXT STAGE ITS OWN TREE, from the
+  //    round's frozen parent: the row's one shared tree is the model this replaced.
   state.board[0].status = "done";
   assistant.sweepQueues();
   await settleStarts();
@@ -156,14 +165,20 @@ test("a pipeline task's tree is cut first, then its stage is started, advanced o
   assert.equal(state.started.length, 2, "the second stage was started by the panel, not left for the assistant");
   assert.match(state.started[1].prompt, /Do stage 2\./);
   assert.equal(state.started[1].taskId, added.id);
-  assert.equal(state.started[1].target, state.tree, "the second stage runs in the SAME tree");
-  assert.equal(state.cuts.length, 1, "no second tree is ever cut");
+  assert.equal(state.started[1].target, state.cuts[1].tree, "the second stage runs in ITS OWN tree");
+  assert.notEqual(state.started[1].target, state.tree, "and never in the first stage's tree");
+  assert.equal(state.cuts.length, 2, "one tree per stage of the round");
+  assert.equal(state.cuts[1].from, ROUND_SHA, "cut at the commit the round began at, not at the branch as it stands now");
+  assert.equal(state.cuts[1].parent, "main", "and recorded as a child of the round's parent, so the chart nests it");
+  assert.equal(row.pipelineRun.round.sha, ROUND_SHA, "the round's parent commit is on the record, once");
+  assert.equal(row.pipelineRun.trees.S1.path, state.tree);
+  assert.equal(row.pipelineRun.trees.S2.path, state.cuts[1].tree);
 
   // 4. The last stage settles. The driver has nothing after it, so the queue's own settle finishes the row — the
   //    same transition it has always made, on the row that is now done. The landing rule is unchanged: a row with a
-  //    tree is done when that tree's PR reads MERGED.
+  //    tree is done when that tree's PR reads MERGED, and the tree it reads is the one the LAST stage ran in.
   state.board[1].status = "done";
-  state.rows.push({ path: state.tree, verdict: "MERGED" });
+  state.rows.push({ path: state.cuts[1].tree, verdict: "MERGED" });
   assistant.sweepQueues();
   await settleStarts();
 

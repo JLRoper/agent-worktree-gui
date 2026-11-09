@@ -246,6 +246,15 @@ parks a row for a fact it could not have recorded.
 
 ### 3.1 The decision
 
+> **SUPERSEDED for the default model.** Every stage of a round now gets its OWN tree, all cut from one frozen parent:
+> the first cut resolves the parent branch to a commit and stores it (`pipelineRun.round`), and every later stage tree
+> is cut at that commit (`lib/task-pipeline-drive.js` `roundOf` / `stageTreeLookup`, `lib/assistant.js`
+> `cutPipelineTree`). The reasoning below is kept as the record of why one tree was right for a CHAIN before rounds
+> existed — and the two defects that changed the answer are named in `docs/task-pipeline.md`, "The tree: one per
+> stage": a mid-round cut saw commits that landed after the round began, and a critique read its draft because the draft
+> happened to sit beside it, not because the document said so. A row written before rounds existed still runs as
+> described here.
+
 **One tree per row. Cut once, by the first stage that needs one. Every later stage — including a loop back into a stage
 that already ran — starts its own agent in that same tree. The pipeline never cuts a second tree and never retires one.**
 
