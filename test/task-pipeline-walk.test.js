@@ -81,7 +81,13 @@ function harness(t, { pipelines = null, seatVerdict = null } = {}) {
       const pipeline = (document.bundle.pipelines || []).find((p) => p.id === pipelineId);
       const stage = pipeline && pipeline.stages.find((s) => s.id === stageId);
       assert.ok(stage && stage.artifact, `${pipelineId}/${stageId} declares an artifact`);
-      const file = path.join(spec.target, stage.artifact.path);
+      // The artifact's declared path is a PATTERN, and the prompt's ARTIFACT line names the file with THIS visit's
+      // holes filled (`{{round}}` is the visit). The seat writes the path the line names — which is also how the walk
+      // proves the line reaches the worker, and that a second round writes a second file instead of overwriting the
+      // first (the round-7 dossier's item 1).
+      const named = /^ {2}writes {6}\S+ {3}(\S+) {3}\(/m.exec(spec.prompt);
+      assert.ok(named, `${pipelineId}/${stageId}'s prompt names the file it writes: ${spec.prompt.slice(0, 300)}`);
+      const file = path.join(spec.target, ...named[1].split("/"));
       mkdirSync(path.dirname(file), { recursive: true });
       writeFileSync(file, `${pipelineId}/${stageId} visit ${visit} — ${state.started.length + 1}\n`);
       // The gate the stage OWNS, when the walk's seat answers it: the record goes where the document declares it, with

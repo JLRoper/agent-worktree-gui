@@ -1017,6 +1017,14 @@ test("stagePrompt is the stage's instruction plus the row, and the inputs only w
   assert.match(prompt, /Queue task #7: carry it/);
   assert.match(prompt, /the reader's words/);
   assert.doesNotMatch(prompt, /INPUTS/, "with no record there is nothing resolved to hand on");
+  // The ARTIFACT block names the file the panel CHECKS at settle, with this visit's holes filled — the declaration is
+  // a pattern, and a loop's second round must write a second file rather than overwrite the first (dossier item 1).
+  assert.match(prompt, /\nARTIFACT\n {2}writes {6}artifact-2 {3}out\/2\.json {3}\(out\/1, kind unstated\) {3}writer worker-2 — the file the panel checks/);
+  const roundStage = { ...bundle.pipelines[0].stages[1], artifact: { ...bundle.pipelines[0].stages[1].artifact, path: "out/r{{round}}/2.json", kind: "file" } };
+  const round1 = stagePrompt({ id: 7, title: "carry it", detail: "" }, bundle.pipelines[0], roundStage, { run: { pipeline: "two", stage: "S2", enteredAt: CLOCK, visits: { S2: 1 } } });
+  const round2 = stagePrompt({ id: 7, title: "carry it", detail: "" }, bundle.pipelines[0], roundStage, { run: { pipeline: "two", stage: "S2", enteredAt: CLOCK, visits: { S2: 2 } } });
+  assert.match(round1, /out\/r1\/2\.json {3}\(out\/1, kind file\)/, "visit 1 writes its own round's file");
+  assert.match(round2, /out\/r2\/2\.json {3}\(out\/1, kind file\)/, "visit 2 writes a DIFFERENT file, not visit 1's again");
 
   // With the record and the tree facts, the block is paths, hashes and facts — never a summary. The writer's settled
   // run carries the PIN, and the block names it INSTEAD OF a branch: the commit, the blob, and where to read it.

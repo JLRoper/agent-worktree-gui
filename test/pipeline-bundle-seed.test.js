@@ -16,13 +16,14 @@
 // output is read back through the loader, so "seeded" means a file the window can resolve, not a byte count.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { ARTIFACT_KINDS, readBundle } from "../lib/pipeline-bundle.js";
+import { artifactOf, fillHoles } from "../lib/task-pipeline-drive.js";
 import { assignTaskPipeline } from "../lib/task-pipeline-assign.js";
 import { resolveTaskPipeline } from "../lib/task-pipeline.js";
 
@@ -226,6 +227,40 @@ test("the seed tool writes a bundle the panel reads back, and refuses to clobber
     assert.equal(readFileSync(target, "utf8"), mine, "the reader's bundle was not clobbered");
     execFileSync(process.execPath, [path.join(ROOT, "tools", "seed-pipeline-bundle.mjs"), "--file", target, "--force"], { cwd: ROOT, encoding: "utf8" });
     assert.equal(readFileSync(target, "utf8"), readFileSync(SEED, "utf8"), "--force replaces it with the shipped seed");
+  } finally {
+    rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+  }
+});
+
+// The round-7 dossier's first item: the tree already held `draft.md` from earlier rounds, so all three drafts wrote
+// that one path and each visit overwrote the last (draft#1's commit was 9 insertions and 28 deletions on one file).
+// A visit-scoped path is the fix: the seed's two document stages carry `{{round}}`, and the resolver fills it with the
+// visit, so draft#3 writes draft-r3.md and leaves draft-r2.md where its own stage run pinned it.
+test("the ping-pong's artifact paths are visit-scoped, so a later round cannot overwrite an earlier one's file", () => {
+  const source = readBundle(SEED);
+  const pingPong = source.bundle.pipelines.find((entry) => entry.id === "ping-pong");
+  const [draft, critique] = pingPong.stages;
+  assert.equal(draft.artifact.path, "ledger/ping-pong/draft-r{{round}}.md", "the draft path names the visit");
+  assert.equal(critique.artifact.path, "ledger/ping-pong/critique-r{{round}}.md", "the notes path names the visit too");
+
+  const dir = mkdtempSync(path.join(os.tmpdir(), "wtgui-round-artifacts-"));
+  try {
+    mkdirSync(path.join(dir, "ledger", "ping-pong"), { recursive: true });
+    writeFileSync(path.join(dir, "ledger", "ping-pong", "draft-r1.md"), "the first round\n", "utf8");
+    writeFileSync(path.join(dir, "ledger", "ping-pong", "draft-r2.md"), "the second round, longer\n", "utf8");
+
+    const first = artifactOf(draft.artifact, { worktree: dir, values: { round: 1 } });
+    const second = artifactOf(draft.artifact, { worktree: dir, values: { round: 2 } });
+    assert.equal(first.file, "ledger/ping-pong/draft-r1.md");
+    assert.equal(second.file, "ledger/ping-pong/draft-r2.md");
+    assert.notEqual(first.sha256, second.sha256, "two visits are two files with two hashes — not one file rewritten");
+    assert.equal(readFileSync(path.join(dir, first.file), "utf8"), "the first round\n", "the earlier round's file is untouched");
+
+    // Visit 3 has no file YET, and the resolver says so rather than handing the stage visit 2's bytes: the round it
+    // knows is FILLED, never matched to the first `r*` that sorts — which is how seven rounds once recorded one hash.
+    const third = artifactOf(draft.artifact, { worktree: dir, values: { round: 3 } });
+    assert.equal(third.present, false);
+    assert.equal(fillHoles(draft.artifact.path, { round: 3 }), "ledger/ping-pong/draft-r3.md");
   } finally {
     rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
   }
