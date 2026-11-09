@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
+<title>Pipeline next moves: the GitHub walk, two unfiled gaps, and the SEFL refusal test - 2026-11-09</title>
+<style>
+  :root{ color-scheme:dark; --ink:#e8e6e1; --paper:#14161a; --rule:#2a2f38; --muted:#9aa3ad; --accent:#c8a6ff; --bar:#6f4fa8; --warn:#e5534b; --good:#6fcf97; --sunk:#1a1d22; }
+  html,body{ margin:0; background:var(--paper); color:var(--ink); font:15px/1.55 -apple-system,Segoe UI,Helvetica,Arial,sans-serif; }
+  main{ max-width:1120px; margin:0 auto; padding:36px 28px 80px; }
+  h1{ font-size:26px; margin:0 0 4px; letter-spacing:-.01em; }
+  h2{ font-size:19px; margin:38px 0 10px; padding-bottom:6px; border-bottom:1px solid var(--rule); }
+  h3{ font-size:16px; margin:24px 0 8px; }
+  .sub{ color:var(--muted); margin:0 0 22px; max-width:930px; }
+  .cards{ display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin:18px 0 6px; }
+  .card{ border:1px solid var(--rule); border-radius:10px; padding:12px 14px; }
+  .card b{ display:block; font-size:22px; letter-spacing:-.02em; }
+  .card span{ color:var(--muted); font-size:13px; }
+  table{ border-collapse:collapse; width:100%; font-size:14px; }
+  .tw{ overflow-x:auto; margin:8px 0 4px; }
+  th,td{ text-align:left; padding:6px 8px; border-bottom:1px solid var(--rule); vertical-align:top; }
+  th{ color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+  td.n{ text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  code{ font:13px ui-monospace,Consolas,monospace; background:rgba(127,127,127,.12); padding:1px 5px; border-radius:4px; }
+  .verdict{ border-left:3px solid var(--accent); padding:10px 0 10px 14px; margin:18px 0 6px; }
+  .verdict b{ display:block; margin-bottom:4px; }
+  .note{ border-left:3px solid var(--accent); padding:6px 0 6px 12px; color:var(--muted); margin:14px 0; }
+  .note b{ color:var(--ink); }
+  .warnbox{ border-left:3px solid var(--warn); padding:6px 0 6px 12px; margin:14px 0; }
+  .warnbox b{ color:var(--warn); }
+  .goodbox{ border-left:3px solid var(--good); padding:6px 0 6px 12px; margin:14px 0; }
+  .goodbox b{ color:var(--good); }
+  ol,ul{ padding-left:22px; }
+  ol li, ul li{ margin:6px 0; }
+  .tag{ font-size:11px; padding:1px 6px; border:1px solid var(--rule); border-radius:10px; color:var(--muted); white-space:nowrap; }
+  .tag.yes{ border-color:var(--good); color:var(--good); }
+  .tag.no{ border-color:var(--warn); color:var(--warn); }
+  .tag.warn{ border-color:var(--bar); color:var(--accent); }
+  .source{ font:12px ui-monospace,Consolas,monospace; color:var(--muted); }
+  .small{ font-size:13px; color:var(--muted); }
+  .pass{ border:1px solid var(--rule); border-radius:10px; padding:12px 16px; margin:12px 0; background:var(--sunk); }
+  .pass h3{ margin:0 0 4px; }
+  .two{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media (max-width:760px){ .two{ grid-template-columns:1fr; } }
+  .k{ color:var(--accent); font-weight:600; }
+  .stage-flow{ font:13px ui-monospace,Consolas,monospace; color:var(--ink); background:var(--sunk); border:1px solid var(--rule); border-radius:8px; padding:10px 12px; margin:10px 0; overflow-x:auto; white-space:nowrap; }
+  .stage-flow b{ color:var(--accent); }
+  .cmd{ font:12px ui-monospace,Consolas,monospace; background:var(--sunk); border:1px solid var(--rule); border-radius:8px; padding:10px 12px; white-space:pre-wrap; overflow-wrap:anywhere; }
+  .req{ border:1px solid var(--rule); border-radius:10px; padding:12px 16px; margin:14px 0; background:var(--sunk); }
+  .req h3{ margin:0 0 4px; }
+  .req p{ margin:4px 0 8px; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Pipeline next moves: the GitHub walk, two unfiled gaps, and the SEFL refusal test</h1>
+<p class="sub">The shipped <code>github-force-merge</code> ladder walked through the panel's own loader and driver resolver, and the live landing that carries this page; the two gaps the 2026-11-09 stage map named but nobody filed, with what a fix touches and what it costs; and the SEFL approval-to-refusal plan on PictureViewer with Alex Poore as reviewer. Measured against <code>4dd79438</code> (1.76.28), the tree the walk read; landed above origin/main's 1.77.0. The files it names are the ones it read.</p>
+
+<div class="cards">
+  <div class="card"><b>6 of 6</b><span>GitHub stages visited, in the document's order</span></div>
+  <div class="card"><b>0</b><span>GitHub stages skipped, 0 loops taken</span></div>
+  <div class="card"><b>0 of 6</b><span>GitHub gates that read a decision record</span></div>
+  <div class="card"><b>0</b><span>ladder walks that landed before this page</span></div>
+</div>
+
+<div class="verdict">
+  <b>The short answer</b>
+  <p>The shipped GitHub ladder walks exactly as drawn: <code>commit</code> &rarr; <code>version</code> &rarr; <code>push</code> &rarr; <code>pr</code> &rarr; <code>merge</code> &rarr; <code>main</code>, six visits, five sequence handoffs, no skip and no loop. That is a pass of the stage order, not of the checks: all six gates carry a <code>verified_by</code> and a <code>decider</code>, and none carries a <code>decision</code> record, so the driver advances on the stage's run and its artifact. No ladder walk landed earlier tonight. The two SEFL gaps are still unfiled, and the nine open comments on PictureViewer PR 7 are the live proof that the review loop cannot answer one.</p>
+</div>
+
+<h2>1. Did a ladder walk already land tonight?</h2>
+<p>No. The two commits the brief pointed at are PR 672's rebase merge and the changelog render that followed it, and the queue row that carried PR 672 has no <code>pipelineRun</code>. The only <code>github-force-merge</code> row tonight reached <code>push</code> and parked there without producing a PR. The table is the check, in the order it was read.</p>
+
+<div class="tw"><table>
+  <thead><tr><th>Read</th><th>What it says</th><th>What it proves</th></tr></thead>
+  <tbody>
+    <tr><td><code>git show -s 4dd79438</code></td><td><code>docs: render the changelog - 518 releases</code>, Mon Nov 9 18:08:22 2026 -0500</td><td>This is the landing's last step, run on main after a merge; it spends no version and creates no tag.</td></tr>
+    <tr><td><code>git show -s af1399d1</code></td><td><code>fix: a child row on the chart draws one L, not two</code>, Mon Nov 9 17:53:13 2026 -0500</td><td>This is PR 672's commit, rebase-merged into main.</td></tr>
+    <tr><td><code>gh pr view 672</code></td><td><code>MERGED</code> at 2026-11-09T23:08:04Z, merge commit <code>daaa137f</code></td><td>The landing exists, and it was a normal landing on the GitHub host.</td></tr>
+    <tr><td>Row 59, <code>assistant-3</code></td><td><code>done</code>, the child-row task, no <code>pipelineRun</code></td><td>The row that carried PR 672 was not a ladder walk. The two commits are not ladder evidence.</td></tr>
+    <tr><td>Row 58, <code>assistant-3</code></td><td><code>github-force-merge</code>, visits <code>commit</code> 1, <code>version</code> 1, <code>push</code> 1; crossings <code>H-01</code>, <code>H-02</code>; stage <code>push</code> entered 22:58:43Z and settled 22:59:20Z; row <code>parked</code></td><td>The only ladder row tonight stopped at <code>push</code>. There is no <code>pr</code>, no <code>merge</code> and no <code>main</code>.</td></tr>
+    <tr><td><code>git ls-remote --heads origin wtgui/github-landing-sanity-0bbdd3</code></td><td>empty</td><td>The parked row's branch never reached origin, so no PR could exist for it. Its tree exists and is clean, but two commits sit on it and neither is on the remote.</td></tr>
+  </tbody>
+</table></div>
+
+<p class="small">Sources: <code>git log</code> and <code>git show</code> on this tree at <code>4dd79438</code>; <code>gh pr view 672</code>; <code>~/.wag/state/assistants/assistant-3/queue.json</code> rows 58 and 59. The previous attempt died on an HTTP 402, and its row parked at <code>push</code>; the branch never reached origin. The row's own <code>parked</code> state at 22:59:20Z is the panel's record of that stop. Main moved again at 18:28 to 1.77.0 (<code>feat: keep another project's docs commit out of the changelog</code>); that is a normal landing, not a ladder walk, and it is the base this page was rebased onto.</p>
+
+<div class="warnbox">
+  <b>A landing is not a ladder walk.</b>
+  <p>PR 672 landed on GitHub, but the row that carried it has no pipeline stage runs. Reading its two commits as the sanity test's evidence would credit the ladder with a walk it never made. This page therefore records its own walk in section 2 and uses its own landing in section 2.4.</p>
+</div>
+
+<h2>2. The shipped ladder, walked</h2>
+<p>The walk was read through the panel's own resolver, not from the raw JSON: <code>readBundle</code> in <code>lib/pipeline-bundle.js</code> loads <code>pipeline-bundle.seed.json</code>, and <code>nextStageOf</code> in <code>lib/task-pipeline-drive.js:901</code> answers the edge out of each stage. One call per stage, with the visit and crossing counts the driver itself would keep. The output below is the whole transcript.</p>
+
+<div class="cmd">bundle: SEFL pipelines | bundleVersion 1 | pipelines 11
+
+=== github-force-merge ===
+declared order: commit -&gt; version -&gt; push -&gt; pr -&gt; merge -&gt; main
+gates with a decision record: 0 of 6
+1. commit | artifact file | gate G1 | decision no | handoff H-01 sequence commit-&gt;version
+2. version | artifact file | gate G2 | decision no | handoff H-02 sequence version-&gt;push
+3. push | artifact pr | gate G3 | decision no | handoff H-03 sequence push-&gt;pr
+4. pr | artifact pr | gate G4 | decision no | handoff H-04 sequence pr-&gt;merge
+5. merge | artifact pr | gate G5 | decision no | handoff H-05 sequence merge-&gt;main
+6. main | artifact pr | gate G6 | decision no | ends here
+stages visited: 6 of 6
+order: commit -&gt; version -&gt; push -&gt; pr -&gt; merge -&gt; main
+skipped: none
+loops taken: none
+
+=== sefl-review-loop ===
+declared order: branch -&gt; push -&gt; pr -&gt; wait -&gt; address -&gt; approve -&gt; merge
+gates with a decision record: 0 of 7
+1. branch | artifact file | gate G1 | decision no | handoff H-01 sequence branch-&gt;push
+2. push | artifact pr | gate G2 | decision no | handoff H-02 sequence push-&gt;pr
+3. pr | artifact pr | gate G3 | decision no | handoff H-03 sequence pr-&gt;wait
+4. wait | artifact file | gate G4 | decision no | handoff H-06 sequence wait-&gt;approve
+5. approve | artifact file | gate G6 | decision no | handoff H-07 sequence approve-&gt;merge
+6. merge | artifact pr | gate G7 | decision no | ends here
+stages visited: 6 of 7
+order: branch -&gt; push -&gt; pr -&gt; wait -&gt; approve -&gt; merge
+skipped: address
+loops taken: none
+
+=== turnover ===
+declared order: commit -&gt; push -&gt; pr
+gates with a decision record: 0 of 3
+1. commit | artifact file | gate G1 | decision no | handoff H-01 sequence commit-&gt;push
+2. push | artifact pr | gate G2 | decision no | handoff H-02 sequence push-&gt;pr
+3. pr | artifact pr | gate G3 | decision no | ends here
+stages visited: 3 of 3
+order: commit -&gt; push -&gt; pr
+skipped: none
+loops taken: none</div>
+
+<h3>2.1 The GitHub ladder, row by row</h3>
+<div class="tw"><table>
+  <thead><tr><th>#</th><th>Stage</th><th>Artifact kind</th><th>Gate</th><th><code>verified_by</code></th><th><code>decision</code>?</th><th>Handoff out</th></tr></thead>
+  <tbody>
+    <tr><td class="n">1</td><td><code>commit</code></td><td><code>file</code></td><td>G1</td><td><code>commits &gt;= 1</code></td><td><span class="tag no">no</span></td><td>H-01 <code>sequence</code></td></tr>
+    <tr><td class="n">2</td><td><code>version</code></td><td><code>file</code></td><td>G2</td><td><code>command node tools/version.mjs check</code></td><td><span class="tag no">no</span></td><td>H-02 <code>sequence</code></td></tr>
+    <tr><td class="n">3</td><td><code>push</code></td><td><code>pr</code></td><td>G3</td><td><code>pushed</code></td><td><span class="tag no">no</span></td><td>H-03 <code>sequence</code></td></tr>
+    <tr><td class="n">4</td><td><code>pr</code></td><td><code>pr</code></td><td>G4</td><td><code>pr-open</code></td><td><span class="tag no">no</span></td><td>H-04 <code>sequence</code></td></tr>
+    <tr><td class="n">5</td><td><code>merge</code></td><td><code>pr</code></td><td>G5</td><td><code>pr-merged</code></td><td><span class="tag no">no</span></td><td>H-05 <code>sequence</code></td></tr>
+    <tr><td class="n">6</td><td><code>main</code></td><td><code>pr</code></td><td>G6</td><td><code>main-moved</code></td><td><span class="tag no">no</span></td><td>ends</td></tr>
+  </tbody>
+</table></div>
+<p class="small">Source: <code>pipeline-bundle.seed.json</code> from line 4144 (<code>github-force-merge</code>); the five handoffs are H-01 to H-05, all <code>sequence</code>, each crossed once by the walk. The gates are at the same block; none has a <code>decision</code> object, which is the only field <code>gateAfter</code> tests (<code>lib/task-pipeline-drive.js:849</code>).</p>
+
+<div class="stage-flow"><b>order</b> commit &rarr; version &rarr; push &rarr; pr &rarr; merge &rarr; main &nbsp; <b>crossings</b> H-01=1, H-02=1, H-03=1, H-04=1, H-05=1 &nbsp; <b>loops</b> none &nbsp; <b>skipped</b> none</div>
+
+<h3>2.2 Judged against the 2026-11-09 stage map</h3>
+<p>The yardstick is <code>docs/reports/pipeline-execution-next-test-2026-11-09.html</code>. Its section 2.1 draws the GitHub order and each stage's exit, section 3 gives the four facts the executor really tests, section 4 gives the terminal states, and section 6 is the SEFL test this page plans but does not run.</p>
+
+<div class="tw"><table>
+  <thead><tr><th>The report said</th><th>Where</th><th>What the walk did</th><th>Verdict</th></tr></thead>
+  <tbody>
+    <tr><td>The GitHub order is <code>commit</code>, <code>version</code>, <code>push</code>, <code>pr</code>, <code>merge</code>, <code>main</code>.</td><td>2.1</td><td>The resolver entered exactly those six, in that order, one visit each.</td><td><span class="tag yes">pass</span></td></tr>
+    <tr><td>Every stage's executor test is "run settled, artifact present".</td><td>2.1, 3.1</td><td>The walk advanced on the stage and the handoff; no gate record was asked for or found.</td><td><span class="tag yes">pass, as predicted</span></td></tr>
+    <tr><td>A gate with no <code>decision</code> is a pause, not a check.</td><td>3.1</td><td>All six GitHub gates, all seven SEFL gates and all three turnover gates have no <code>decision</code>; none parked a stage.</td><td><span class="tag yes">confirmed</span></td></tr>
+    <tr><td>The SEFL walk skips <code>address</code>: H-06 beats H-04.</td><td>3.3, 5.1</td><td>The SEFL walk visited 6 of 7 stages and skipped <code>address</code>; H-06 was taken at <code>wait</code>.</td><td><span class="tag yes">confirmed</span></td></tr>
+    <tr><td>The GitHub ladder has no review stage; it opens the PR and merges in the same walk.</td><td>2.1</td><td>No <code>wait</code>, <code>address</code> or <code>approve</code> exists in this ladder, and the walk never asked for one.</td><td><span class="tag yes">pass</span></td></tr>
+    <tr><td>With the owner's bypass, GitHub reaches <code>MERGED</code> and the row is <code>done</code>.</td><td>4.2</td><td>The live delivery uses <code>gh pr merge --rebase --admin</code>; the stage's own check is <code>pr-merged</code>. The panel's landing rule is not a gate in this ladder.</td><td><span class="tag warn">live, not a gate read</span></td></tr>
+    <tr><td>Without the bypass, the merge is refused and the row reads <code>running</code> / STALE.</td><td>4.2</td><td>Not tested: this account holds the owner's bypass.</td><td><span class="tag warn">not tested</span></td></tr>
+    <tr><td>A correct <code>turnover</code> PR is left open and still reads <code>running</code> / STALE.</td><td>4.3</td><td>The turnover ladder walks 3 of 3 stages and ends on a <code>pr</code> artifact; the settle still demands <code>MERGED</code>.</td><td><span class="tag warn">still true, not run</span></td></tr>
+  </tbody>
+</table></div>
+
+<h3>2.3 What the walk proves, and what it does not</h3>
+<div class="two">
+  <div class="pass">
+    <h3>Proved</h3>
+    <ul>
+      <li>The shipped GitHub ladder has six stages, five sequence handoffs, no branch and no loop.</li>
+      <li>A walk from <code>commit</code> visits all six once and ends on <code>main</code>; nothing is skipped.</li>
+      <li>No gate in the GitHub, SEFL or turnover ladder carries a <code>decision</code> record, so none is a barrier.</li>
+      <li>The SEFL ladder's <code>address</code> stage is dead in the shipped document: H-06 wins at <code>wait</code>.</li>
+      <li>The GitHub ladder has no review stage, so the SEFL wait clock cannot be exercised by it.</li>
+    </ul>
+  </div>
+  <div class="pass">
+    <h3>Not proved</h3>
+    <ul>
+      <li>That a GitHub gate reads <code>pr-head</code>, <code>pr-open</code>, <code>pr-merged</code> or <code>main-moved</code>: the driver reads none of them.</li>
+      <li>That a merge without <code>--admin</code> refuses and parks the row: untested here.</li>
+      <li>That the SEFL <code>wait</code> registers, wakes and returns to <code>address</code>: the graph and the timer both say no.</li>
+      <li>That a correctly open <code>turnover</code> PR finishes: its last artifact is <code>pr</code> and the landing rule still demands <code>MERGED</code>.</li>
+      <li>That the panel's row finished <code>done</code> for this page: this delivery is not a queue row, so the panel's settle is not its witness.</li>
+    </ul>
+  </div>
+</div>
+
+<h3>2.4 The live half: this page's own landing</h3>
+<p>The walk above is the document's shape. The live half is the landing that carries this page, run in the same order with the same commands the ladder names. It is not a panel queue row, so the panel's <code>stageRuns</code> are not its clock; the stage ledger under <code>ledger/github-force-merge/</code> and the PR itself are the record.</p>
+
+<div class="tw"><table>
+  <thead><tr><th>#</th><th>Stage</th><th>The action run</th><th>What the stage reads</th></tr></thead>
+  <tbody>
+    <tr><td class="n">1</td><td><code>commit</code></td><td>One revertable commit on the branch, subject names the artifact, this page and the stage record in it.</td><td>The commit exists and its diff is the page plus the record; <code>git log --oneline origin/main..HEAD</code> is one commit before the version bump.</td></tr>
+    <tr><td class="n">2</td><td><code>version</code></td><td><code>node tools/version.mjs suggest</code>, then <code>apply patch</code>, then <code>check</code>.</td><td>The level is patch (a docs-only report); the number is 1.77.1, taken above <code>origin/main</code>'s 1.77.0 at the landing (the walk read 1.76.28), and the check exits 0.</td></tr>
+    <tr><td class="n">3</td><td><code>push</code></td><td><code>git push -u origin HEAD</code>.</td><td>The branch is on origin and the remote head equals the local head.</td></tr>
+    <tr><td class="n">4</td><td><code>pr</code></td><td><code>gh pr create --fill</code>; the body then names the four sections and the two gaps.</td><td>One PR is open from this branch, its base is <code>main</code>, and its head is the pushed commit.</td></tr>
+    <tr><td class="n">5</td><td><code>merge</code></td><td><code>gh pr merge --rebase --admin</code>.</td><td>The PR reads <code>MERGED</code>; the stage's <code>pr-merged</code> check is the PR's state.</td></tr>
+    <tr><td class="n">6</td><td><code>main</code></td><td><code>git fetch origin</code>; <code>git merge-base --is-ancestor &lt;merge&gt; origin/main</code>.</td><td>The merge commit is reachable from <code>origin/main</code>; <code>main-moved</code> is a git read, not a stage gate.</td></tr>
+  </tbody>
+</table></div>
+
+<div class="note">
+  <b>Why the live half does not claim a row state.</b>
+  <p>The <code>github-force-merge</code> ladder is a document and a set of stage actions; a manual landing performs the actions but does not create the panel's queue row, so there is no <code>stageRuns</code> array to quote and no row to finish. The PR is the artifact the <code>pr</code> stage declares, and its <code>MERGED</code> state is the only landing fact the ladder's last stage asks for. A page that invented a row would be repeating the previous attempt's mistake.</p>
+</div>
+
+<h2>3. Gap 5.1: the review loop cannot answer a comment</h2>
+<p>This gap was named in section 5.1 of the 2026-11-09 report. It has no Jira request, no queue row and no test. This section files it and prices it.</p>
+
+<h3>3.1 The defect</h3>
+<p>The SEFL ladder's <code>wait</code> stage has two ways out: H-04 is a <code>loop</code> to <code>address</code>, and H-06 is a <code>sequence</code> to <code>approve</code>. The driver takes the rail first: <code>edgeOutOf</code> sorts the outgoing edges by <code>EDGE_ORDER</code>, which is <code>sequence</code>, <code>return</code>, <code>loop</code> (<code>lib/task-pipeline-drive.js:185</code>). So the walk is <code>wait</code> &rarr; <code>approve</code>, and <code>address</code> is never entered. No gate routes the other way: G4 carries no <code>decision</code> and no <code>routes</code>. A reviewer's comment can arrive, be read once at the <code>wait</code> turn, and never be answered; the ladder walks on to the approval stage and then to the merge. The design document says the loop is <code>wait</code> &rarr; <code>address</code> &rarr; <code>wait</code> &rarr; <code>approve</code> (<code>docs/pipelines.md:319</code>); the executable document does not draw that walk.</p>
+<p>There is a second half the graph alone does not fix: the wait timer reads <code>stage.exit.check</code> (<code>lib/pipelines.js:667</code>, <code>lib/jobs.js:2297</code>), and a PDL stage declares an artifact, not an exit. So no wait is registered on a PDL <code>wait</code> stage in the first place. Even if one were seeded by hand, the timer's advance takes the next stage in the reading order, not the graph's handoff, and does not count a loop crossing (<code>lib/jobs.js:2400</code>). The comment cannot be answered because the panel never wakes the <code>address</code> stage, and if it did, the crossing would be uncounted. The test that covers the timer says so in its own comment: a PDL stage "names the artifact it writes, not the check that ends it, so the ladder timer has nothing to read for a PDL pipeline" (<code>test/pipeline-wait.test.js:144</code>).</p>
+
+<p class="source">Evidence: <code>nextStageOf</code> on the shipped bundle returns <code>wait -&gt; approve H-06 sequence</code>; <code>pipeline-bundle.seed.json</code> H-04 at line 4679, H-06 at line 4696, G4 at line 4741; <code>docs/pipelines.md:319</code>; <code>lib/task-pipeline-drive.js:185</code> and <code>:901</code>; <code>lib/pipelines.js:586</code>, <code>:667</code>; <code>lib/jobs.js:2297</code>, <code>:2400</code>.</p>
+
+<h3>3.2 What a fix touches, and what it costs</h3>
+<div class="tw"><table>
+  <thead><tr><th>Cut</th><th>What it changes</th><th>Files</th><th>Cost</th><th>Version</th><th>What it still misses</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><b>A. Route the wait turn</b></td>
+      <td>Give G4 a <code>decision</code> with outcomes <code>comment</code> and <code>approved</code> and routes <code>comment</code> &rarr; H-04, <code>approved</code> &rarr; H-06. The <code>wait</code> prompt writes the record from its one host read.</td>
+      <td><code>pipeline-bundle.seed.json</code> (G4 and the <code>wait</code> prompt), <code>test/pipeline-truth.test.js</code></td>
+      <td>0.5 day</td>
+      <td>patch</td>
+      <td>A comment that arrives after the <code>wait</code> turn is still missed. The worker is the decider, so the record can say <code>approved</code> without a host fact.</td>
+    </tr>
+    <tr>
+      <td><b>B. Wake the loop</b></td>
+      <td>Derive the wait from the PDL gate's <code>verified_by</code>; let the wait watch a set (<code>pr-comments</code> OR <code>pr-approved</code> at the head); make the timer advance through <code>nextStageOf</code> so the H-04 crossing is counted and the cap applies.</td>
+      <td><code>lib/pipelines.js</code> (<code>reviewWaitFor</code>, <code>readReviewExit</code>, <code>settleWait</code>), <code>lib/pipeline-bundle.js</code> (expose the gate), <code>lib/task-pipeline-drive.js</code> (register at stage start), <code>lib/jobs.js</code> (timer advance), <code>pipeline-bundle.seed.json</code> (G4/G6), tests <code>pipeline-wait</code>, <code>pipeline-truth</code>, <code>task-pipeline-drive</code></td>
+      <td>2-3 days</td>
+      <td>minor if the new wait kinds are reader-visible, otherwise patch</td>
+      <td>Nothing in this gap. It is the first time a PDL stage feeds the ladder timer, so the risk is in the shared timer, not in the graph.</td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p><b>Recommendation: B.</b> Cut A answers only the comment that is already on the PR when the <code>wait</code> turn runs; the defect is a comment that arrives later. Cut A is still worth landing as B's first commit, because the G4 decision and its routes are what B's timer will arrive at.</p>
+
+<h3>3.3 The request</h3>
+<div class="req">
+  <h3>Fix 5.1: a review comment must reach the address stage</h3>
+  <table>
+    <tbody>
+      <tr><th>Defect</th><td>The SEFL <code>wait</code> stage's H-06 sequence is taken before its H-04 loop, and no gate routes a comment back to <code>address</code>. The wait timer also has no <code>exit</code> to read on a PDL stage, so no wait is registered.</td></tr>
+      <tr><th>Fix</th><td>Cut B: derive the wait from the gate's <code>verified_by</code>, watch for a comment or an approval at the head, advance through <code>nextStageOf</code>, and count the H-04 crossing against its cap of 3. Cut A is the first commit.</td></tr>
+      <tr><th>Tests</th><td><code>test/pipeline-truth.test.js</code>: a <code>comment</code> verdict enters <code>address</code>, an <code>approved</code> verdict enters <code>approve</code>, and no verdict is refused rather than guessed. <code>test/pipeline-wait.test.js</code>: a PDL wait registers, a newer comment wakes it, an approval at the head wakes it, and a second sweep does not restart the hour. <code>test/task-pipeline-drive.test.js</code>: the timer crosses H-04 once, increments the count, and parks on the fourth entry.</td></tr>
+      <tr><th>Version</th><td>Minor for Cut B if the new wait kinds are reader-visible, because a new check that can fail a landing is a capability the repo did not have (<code>docs/versioning.md:159-161</code>); patch for Cut A.</td></tr>
+      <tr><th>Does not fix</th><td>The approval-at-the-head check (5.2), the open-by-design turnover terminal (4.3), or SEFL's own merge refusal.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h3>3.4 Checked, not fixed here</h3>
+<ul>
+  <li>The GitHub ladder has no <code>wait</code> or <code>address</code>, so today's walk does not exercise this gap. It is a SEFL-only defect.</li>
+  <li>PictureViewer PR 7 is the live specimen: nine open review comments, two of them BLOCKER, on the branch section 5 names. The ladder cannot answer any of them today.</li>
+  <li>The order-based advance in <code>sweepPipelineWaits</code> is a second defect under this one. Fixing the wait registration without changing the advance would wake <code>address</code> but never count the loop; the cap would not apply.</li>
+</ul>
+
+<h2>4. Gap 5.2: the conversion dropped four checks</h2>
+<p>This gap was named in section 5.2 of the 2026-11-09 report. It has no Jira request, no queue row and no test. This section files it and prices it.</p>
+
+<h3>4.1 The defect</h3>
+<p>The design's exits are stronger than the PDL gates. Each dropped check is a fact a reviewer relied on. The four distinct checks are below; <code>pr-head</code> is dropped at two stages, but it is one check.</p>
+
+<div class="tw"><table>
+  <thead><tr><th>Check</th><th>Stage that should read it</th><th>Gate that names it</th><th>What the driver reads today</th><th>What a wrong answer lets through</th></tr></thead>
+  <tbody>
+    <tr><td><code>pr-head</code></td><td><code>pr</code> and <code>address</code></td><td>G3 after <code>pr</code>; G5 after <code>address</code></td><td>Nothing. The stage advanced on <code>pr.md</code> or <code>address.md</code>.</td><td>A PR whose head is not the pushed commit; an address push that did not move the PR.</td></tr>
+    <tr><td><code>reviewers-exact</code></td><td><code>pr</code></td><td>G3</td><td>Nothing. The worker's prose is the only witness.</td><td>A PR with no reviewer, the wrong group, or an extra individual.</td></tr>
+    <tr><td><code>pr-approved</code></td><td><code>wait</code> / <code>approve</code></td><td>G4 (names <code>pr-comments</code> only), G6</td><td>Nothing. The approval gate is a pause with no decision.</td><td>An approval of an older commit, or no approval at all, reaches the merge.</td></tr>
+    <tr><td><code>main-moved</code></td><td><code>merge</code></td><td>G7 (names <code>pr-merged</code> only)</td><td>Nothing. The merge's ancestry check is the worker's prose.</td><td>A merge that did not land on the target branch, or landed on a different one.</td></tr>
+  </tbody>
+</table></div>
+<p class="small">Gate numbers in this table are the SEFL ladder's. The GitHub ladder uses its own G1 to G6, has no <code>address</code> stage, and shares only <code>pr-head</code> and <code>main-moved</code>.</p>
+
+<p>The GitHub walk shows the same pattern on the two checks it shares: <code>pr-head</code> and <code>main-moved</code>. The <code>pr</code> stage's prompt asks the worker to run <code>gh pr view --json state,headRefOid,baseRefName</code> and confirm the head; the <code>main</code> stage asks for <code>git fetch</code> and an ancestry check. Both are prose when they run, and the panel reads neither. A worker that skipped them would have produced the same green stage order.</p>
+
+<p class="source">Evidence: <code>docs/pipelines.md</code> sections 2.1 and 2.2; <code>pipeline-bundle.seed.json</code> gates G3, G4, G5, G7; <code>lib/pipelines.js:49-54</code> (the exit vocabulary) and <code>:70-75</code> (the schemas); <code>lib/pipelines.js:728</code> (<code>readReviewExit</code> handles <code>pr-comments</code>, <code>pr-approved</code> and <code>reviewers-exact</code> only); <code>lib/task-pipeline-drive.js:849</code> (a gate is a barrier only with a <code>decision</code>).</p>
+
+<h3>4.2 What a fix touches, and what it costs</h3>
+<div class="tw"><table>
+  <thead><tr><th>Cut</th><th>What it changes</th><th>Files</th><th>Cost</th><th>Version</th><th>Risk</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><b>A. Worker-written records</b></td>
+      <td>Add a <code>decision</code> path to G3 to G7 and have each stage worker write the record from its host read. The driver already reads a record and routes.</td>
+      <td><code>pipeline-bundle.seed.json</code> plus five prompt edits; <code>test/pipeline-truth.test.js</code></td>
+      <td>0.5-1 day</td>
+      <td>patch</td>
+      <td>The worker is the decider. A record that says <code>head-matches</code> is not a host read; this repeats the spoof the design's thin proxy warns about.</td>
+    </tr>
+    <tr>
+      <td><b>B. Panel-evaluated checks</b></td>
+      <td>Add a machine evaluator for the four named checks. <code>pr-approved</code> and <code>reviewers-exact</code> already exist in <code>readReviewExit</code>; add <code>pr-head</code> (compare <code>fromRef.latestCommit</code> to the pushed head) and <code>main-moved</code> (merge commit reachable from <code>origin/main</code>). Give each gate a <code>decision</code> with <code>decider: machine</code> and let the driver write the record.</td>
+      <td><code>lib/pipelines.js</code> (the four checks), <code>lib/task-pipeline-drive.js</code> (machine gate evaluation), <code>pipeline-bundle.seed.json</code> (G3 to G7), <code>lib/jobs.js</code> (host read); tests <code>pipeline-wait</code>, <code>task-pipeline-drive</code>, <code>pipeline-truth</code></td>
+      <td>1-2 days</td>
+      <td>minor, because the new gates can fail a landing</td>
+      <td>Do not build a general language for <code>verified_by</code>. Scope the evaluator to the four names; leave <code>command ...</code> and <code>commits &gt;= 1</code> to the worker.</td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p><b>Recommendation: B.</b> The point of the gate is that the panel, not the worker, is the witness. Cut A is cheaper but it does not close the gap; it moves the prose from the ledger into JSON. The four checks are small because two of them already exist, and the two new ones are one host read each.</p>
+
+<div class="note">
+  <b>The four checks are not equally cheap.</b>
+  <code>pr-approved</code> and <code>reviewers-exact</code> are already implemented in <code>readReviewExit</code> and tested by <code>test/pipeline-wait.test.js</code>; wiring them to a gate is the work. <code>pr-head</code> is a string compare against the pushed commit, which the push stage already knows. <code>main-moved</code> is the only one that needs a git read after the merge; the merge record can carry the merge sha and the target branch, and the check can run <code>git merge-base --is-ancestor</code> against a fresh <code>origin/main</code>.
+</div>
+
+<h3>4.3 The request</h3>
+<div class="req">
+  <h3>Fix 5.2: the four dropped checks must be host facts</h3>
+  <table>
+    <tbody>
+      <tr><th>Defect</th><td>The PR stage checks <code>pr-open</code> only, not <code>pr-head</code> or <code>reviewers-exact</code>; the wait checks <code>pr-comments</code> only, not <code>pr-approved</code> at the head; the merge checks <code>pr-merged</code> only, not <code>main-moved</code>. The panel reads no host fact at any of the four.</td></tr>
+      <tr><th>Fix</th><td>Cut B: one machine evaluator for the four names, each with a <code>decision</code> on its gate. <code>pr-approved</code> and <code>reviewers-exact</code> reuse <code>readReviewExit</code>; <code>pr-head</code> compares the pushed head to the PR head; <code>main-moved</code> asks git whether the merge is an ancestor of <code>origin/main</code>.</td></tr>
+      <tr><th>Tests</th><td><code>test/pipeline-wait.test.js</code>: an approval at an older commit does not advance; a reviewer set with one extra name does not advance. <code>test/task-pipeline-drive.test.js</code>: a <code>pr-head</code> gate refuses when the PR head is not the pushed commit; a <code>main-moved</code> gate refuses when the merge is not on the target branch. <code>test/pipeline-truth.test.js</code>: every shipped gate that names one of the four carries a <code>decision</code> and a machine decider.</td></tr>
+      <tr><th>Version</th><td>Minor, because the new gates can fail a landing (<code>docs/versioning.md:159-161</code>); patch if the evaluator is added without making the gates reader-visible.</td></tr>
+      <tr><th>Does not fix</th><td>The open-by-design turnover terminal (4.3), which is the same settle rule as <code>main-moved</code> but a different outcome.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h3>4.4 Checked, not fixed here</h3>
+<ul>
+  <li>The GitHub delivery is supposed to read the PR head and the main ancestry in its stage ledger. That is what makes the PR trustworthy; it is not what made the stage advance. The stage advanced on the artifact and the run.</li>
+  <li>The <code>turnover</code> ladder's last stage is also <code>kind: "pr"</code>, so a correctly open PR reads <code>running</code> / STALE. That is the same settle rule as 5.2's last check but a different defect; it is not one of the two gaps here. It needs a landing outcome that can be <code>OPEN</code> by design.</li>
+  <li>The exact reviewer set is the check most likely to be wrong on SEFL in practice: PR 7 already carries <code>code_review_java</code> and an individual <code>POORE</code> entry, and Alex's review is recorded there. If the check runs after an individual reviewer is added, it will read two names. The PR stage's check must run at open, before the approval adds an entry, or the expected set must include the individual. The test plan below decides this before it runs.</li>
+</ul>
+
+<h2>5. The SEFL approval refusal test plan</h2>
+<p>This is the test the 2026-11-09 report named and did not run. It is the SEFL ladder, not GitHub: the GitHub path is exercised by section 2, and the SEFL path is the one with no evidence and no terminal state. The branch is PictureViewer's SSO branch, and the reviewer is Alex Poore.</p>
+
+<h3>5.1 The specimen</h3>
+<div class="tw"><table>
+  <thead><tr><th>Fact</th><th>Value at 2026-11-09 23:30Z</th></tr></thead>
+  <tbody>
+    <tr><td>Repository</td><td><code>IT/pictureviewer</code></td></tr>
+    <tr><td>PR</td><td>7, <code>Java Code Review for PictureViewer 20261021_0005_DMR-39015_pictureViewerSso</code></td></tr>
+    <tr><td>Source branch</td><td><code>20261021_0005_DMR-39015_pictureViewerSso</code>, head <code>49f3ae77</code></td></tr>
+    <tr><td>Target</td><td><code>master</code>, tip <code>bb12884c</code></td></tr>
+    <tr><td>State</td><td><code>OPEN</code>, version 1</td></tr>
+    <tr><td>Reviewers</td><td><code>code_review_java</code> <code>UNAPPROVED</code> (never picked up); <code>POORE</code> <code>NEEDS_WORK</code> at <code>49f3ae77</code></td></tr>
+    <tr><td>Open comments</td><td>9, all <code>state: OPEN</code>; 2 <code>BLOCKER</code>, 7 <code>NORMAL</code>. The blockers are "No Approved Tech Spec Found" and "Missing Tests For SsoSessionClient".</td></tr>
+    <tr><td>Merge endpoint</td><td><code>canMerge: false</code>, outcome <code>CLEAN</code>; vetoes: "Requires all tasks to be resolved" and "Requires approvals".</td></tr>
+  </tbody>
+</table></div>
+
+<div class="warnbox">
+  <b>Do not conflate the two refusals.</b>
+  <p>The test's refusal is a permission refusal: the worker's account has no merge right on <code>master</code>. PR 7 would refuse today for two other reasons first: nine open comment tasks and a missing approval. If the merge POST is refused while those vetoes stand, the test proves nothing about permissions. The plan's precondition is that the task and approval vetoes are cleared, so the only refusal left is the one the test is about.</p>
+</div>
+
+<h3>5.2 Setup</h3>
+<ol>
+  <li><b>Choose the specimen.</b> Prefer a scratch branch cut from <code>49f3ae77</code>, for example <code>20261021_0005_DMR-39015_pictureViewerSso_refusal</code>, with a one-line docs change. It gives Alex something honest to approve and leaves PR 7's nine-comment thread untouched. Use PR 7 itself only if its two blockers are resolved first; that is the stronger live half, because it is the real turnover PR.</li>
+  <li><b>Open one PR into <code>master</code>.</b> Title <code>Java Code Review for PictureViewer &lt;branch&gt;</code>; reviewers exactly <code>["code_review_java"]</code> at open, with Alex Poore named as the reviewer in the row and in the PR's test procedure. Alex is the named reviewer; if he is a member of the group, the group entry is enough and his approval is recorded there. If the host requires his individual entry, add <code>POORE</code> and record the expected set as <code>["code_review_java", "POORE"]</code>; 5.2's <code>reviewers-exact</code> check must then be told which set is exact before the test runs, not after it fails.</li>
+  <li><b>Set the branch permission.</b> The worker's account gets read on the repository and write on the source branch, and no merge right on <code>master</code>. A repo owner has to set this; it is the only precondition the panel cannot create.</li>
+  <li><b>File the row.</b> On the panel, file a queue row onto <code>sefl-review-loop</code> at <code>branch</code> (or <code>pr</code> if the branch is already pushed), pointed at the PictureViewer worktree. The row is the test's record; it must name the PR and the reviewer.</li>
+</ol>
+
+<h3>5.3 The walk</h3>
+<ol>
+  <li>Let the ladder run <code>branch</code> &rarr; <code>push</code> &rarr; <code>pr</code>. At the <code>pr</code> stage, read the PR back: one PR, head equals the pushed commit, reviewers exactly the set decided in setup, four description sections.</li>
+  <li>At <code>wait</code>, read the tree's <code>pipelineWait</code>. It must carry <code>check: "pr-comments"</code>, <code>every: 3600000</code>, the thread and the branch, and no live run hold. Today it will not exist; that is the first expected failure.</li>
+  <li>Have Alex approve the exact head. If the head moves after his approval, the approval is stale; the test needs both cases. The clean case is an approval at the final head. The negative case is a second commit after the approval, so <code>lastReviewedCommit</code> no longer equals the head.</li>
+  <li>Arrive at <code>merge</code> with the clean approval. The worker POSTs the merge endpoint with the PR id and its current <code>version</code>. The account has no merge right, so the host answers 401 or 403 with a sentence. Record the status, the sentence, the PR id, the head, <code>master</code>'s sha before and after, and the fact that no retry was made.</li>
+  <li>Read <code>master</code> after: its sha is unchanged. Read the PR: still <code>OPEN</code>, approval at the head. Read the row: it is <code>parked</code> with a reason beginning <code>merge-refused:</code>, not <code>running</code>, not <code>done</code>, not STALE. The board still shows the PR URL.</li>
+</ol>
+
+<h3>5.4 Pass criteria</h3>
+<div class="tw"><table>
+  <thead><tr><th>#</th><th>Criterion</th><th>What it proves</th><th>Today</th></tr></thead>
+  <tbody>
+    <tr><td class="n">P1</td><td>With no comment, the order is <code>branch</code>, <code>push</code>, <code>pr</code>, <code>wait</code>, <code>approve</code>, <code>merge</code>. With a comment newer than <code>lastSeen</code>, the next sweep enters <code>address</code> then returns to <code>wait</code>. H-04 at most 3 times.</td><td>The loop is reachable and capped.</td><td><span class="tag no">fails</span> the comment case; <code>address</code> is unreachable.</td></tr>
+    <tr><td class="n">P2</td><td>Exactly one PR; reviewers exactly the set decided at open; four sections; <code>fromRef.latestCommit</code> equals the pushed head.</td><td>The PR shape the design asks for.</td><td><span class="tag yes">passes</span> if the worker follows the prompt.</td></tr>
+    <tr><td class="n">P3</td><td>The tree carries <code>pipelineWait</code> with <code>check: "pr-comments"</code>, <code>every: 3600000</code>, the thread and branch; a second sweep does not restart the hour.</td><td>The panel, not a sleeping worker, waits.</td><td><span class="tag no">fails</span>; a PDL stage has no <code>exit</code>, so no wait is registered.</td></tr>
+    <tr><td class="n">P4</td><td>The <code>address</code> run pushes exactly one commit and replies on the comment's id naming that commit. An older comment does not start it.</td><td>A comment is answered at the commit that answers it.</td><td><span class="tag no">fails</span>; <code>address</code> is never entered.</td></tr>
+    <tr><td class="n">P5</td><td>An approval at an older commit does not advance. An approval whose <code>lastReviewedCommit</code> equals the current head advances, and the stage record names the reviewer and the sha.</td><td>The approval belongs to the head it reviewed.</td><td><span class="tag no">fails</span>; the approval gate is a pause with no decision, and the stage has no exit check.</td></tr>
+    <tr><td class="n">P6</td><td>Exactly one merge POST. The 403 and its sentence are recorded in a machine-readable merge record. <code>pr-merged</code> is not written; the PR is still <code>OPEN</code>.</td><td>The refusal is a fact, not prose.</td><td><span class="tag no">fails</span>; the merge stage has one instruction and no refusal branch.</td></tr>
+    <tr><td class="n">P7</td><td>The row ends <code>parked</code> with a reason beginning <code>merge-refused:</code> and the host's sentence. Not <code>running</code>, not <code>done</code>, not STALE. The board shows the PR URL.</td><td>A terminal state exists for a refusal.</td><td><span class="tag no">fails</span>; the row reads <code>running</code> / STALE.</td></tr>
+    <tr><td class="n">P8</td><td>On the real host, <code>master</code>'s sha before and after are equal; the PR is <code>OPEN</code> with the approval at its head; the park reason quotes the host.</td><td>The live half, not just the fixture.</td><td><span class="tag warn">partial</span>; the sha half can pass, the park reason cannot.</td></tr>
+  </tbody>
+</table></div>
+
+<p class="small">The "today" column is the expected result against 1.76.28. A test that passes all eight today would be testing the fixture, not the pipeline. The fixture half (<code>test/pipeline-landing-sefl.test.js</code> and <code>test/fixtures/sefl-landing-host.mjs</code>) is the repeatable version; the live half on PictureViewer is the evidence that the fixture is not lying.</p>
+
+<h3>5.5 Falsifiers and cost</h3>
+<p><b>Falsifiers.</b> Any of these fails the test: a second PR for the same branch; a reviewer set that is not the set decided at open; a merge POST retried after the 403; <code>pr-merged</code> written without a <code>MERGED</code> read; the row marked <code>done</code>; <code>master</code>'s sha moved; or a final message that claims the work landed.</p>
+<p><b>Cost.</b> The fixture half is 1-2 days: a stub host, a scripted seat, eight assertions, and a ledger that names the run, the stage and the verdict at each step. The live half is half a day once the branch permission exists; the permission needs a repo owner. The test will fail today by design; it should be filed as a red test and turned green by 5.1 Cut B and 5.2 Cut B, not by weakening its assertions.</p>
+
+<div class="req">
+  <h3>Request: run the approval-to-refusal walk on PictureViewer</h3>
+  <table>
+    <tbody>
+      <tr><th>What</th><td>One real <code>sefl-review-loop</code> walk on <code>IT/pictureviewer</code>, branch <code>20261021_0005_DMR-39015_pictureViewerSso</code> or a scratch branch from <code>49f3ae77</code>, with Alex Poore as the reviewer and the worker's account refused on <code>master</code>.</td></tr>
+      <tr><th>Evidence</th><td>The PR id and URL, the reviewer set at open, Alex's approval and its <code>lastReviewedCommit</code>, the single merge POST and its 401/403 sentence, <code>master</code>'s sha before and after, and the row's park reason.</td></tr>
+      <tr><th>Version note</th><td>Test-only and docs-only: patch. The fixture is a new test file, which <code>docs/versioning.md</code> sets at patch; the live half changes no product code.</td></tr>
+      <tr><th>Test sweep</th><td>The test runs red first, with the eight criteria recorded. The full suite is not the witness for a SEFL host; the host's own reads are.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h2>6. The order of work</h2>
+<p>The two gaps share one host read and one wait record, so doing them together is cheaper than doing either alone. The test is the proof, and the live half is the evidence. Every cost below is an estimate; none has been run.</p>
+
+<div class="tw"><table>
+  <thead><tr><th>#</th><th>Move</th><th>Why now</th><th>Files</th><th>Cost</th><th>Depends on</th></tr></thead>
+  <tbody>
+    <tr><td class="n">1</td><td><b>5.1 Cut B and 5.2 Cut B as one change</b>: a PDL gate can feed the wait, the wait can watch comments or an approval at the head, the timer advances through the graph, and the four checks are machine-evaluated.</td><td>The same host read and the same record serve both; splitting them means reading the PR twice and testing the timer twice.</td><td><code>lib/pipelines.js</code>, <code>lib/pipeline-bundle.js</code>, <code>lib/task-pipeline-drive.js</code>, <code>lib/jobs.js</code>, <code>pipeline-bundle.seed.json</code></td><td>3-5 days</td><td>None</td></tr>
+    <tr><td class="n">2</td><td><b>The SEFL fixture test</b>: the stub host, the scripted seat, P1 to P8.</td><td>It is the repeatable half; it is red today and green after move 1.</td><td><code>test/pipeline-landing-sefl.test.js</code>, <code>test/fixtures/sefl-landing-host.mjs</code></td><td>1-2 days</td><td>Move 1 for a green run; write it red first.</td></tr>
+    <tr><td class="n">3</td><td><b>The live half on PictureViewer</b>: a scratch branch from <code>49f3ae77</code>, Alex approves at the head, the worker is refused on <code>master</code>.</td><td>The only step that proves the 403 against the real host.</td><td>PictureViewer worktree, branch permission, queue row</td><td>0.5 day plus owner</td><td>Move 1; the branch permission; Alex's approval.</td></tr>
+    <tr><td class="n">4</td><td><b>Optional stopgap</b>: G4 decision and routes, the <code>wait</code> prompt writes it.</td><td>Answers a comment already on the PR at the wait turn, without waiting for move 1.</td><td><code>pipeline-bundle.seed.json</code>, <code>test/pipeline-truth.test.js</code></td><td>0.5 day</td><td>None; but it does not close 5.1.</td></tr>
+    <tr><td class="n">5</td><td><b>The open-by-design terminal</b> for <code>turnover</code>.</td><td>A correct turnover PR reads <code>running</code> / STALE. This is the same settle rule as 5.2's <code>main-moved</code>, but a separate outcome.</td><td><code>lib/task-pipeline-drive.js</code>, <code>lib/assistant/queue.js</code></td><td>0.5-1 day</td><td>Decide the word for "landed open".</td></tr>
+  </tbody>
+</table></div>
+
+<p><b>Total for the two gaps and the test: 5-8 days.</b> That is 3-5 days for the shared fix, 1-2 for the fixture, and half a day plus a repo owner for the live half. The stopgap and the turnover terminal are optional and can land separately.</p>
+
+<h2>7. Limits of this page</h2>
+<ul>
+  <li>The GitHub result is a walk of the shipped document plus one manual landing. It is not a panel queue row: there are no <code>stageRuns</code>, no row <code>done</code>, and no panel clock. The PR is the landing's evidence.</li>
+  <li>No ladder walk landed earlier tonight. The check is in section 1; the parked row is the only one, and its branch is not on origin.</li>
+  <li>The GitHub landing used an account with the repository owner's bypass. It does not prove the ladder on an account without <code>--admin</code>; the report's prediction for that case (the row reads <code>running</code> / STALE) is still unproven.</li>
+  <li>The gates were inert because the shipped bundle's gates carry no <code>decision</code>. The walk proves stage order and artifact presence, not <code>pr-head</code>, <code>reviewers-exact</code>, <code>pr-approved</code> or <code>main-moved</code>.</li>
+  <li>The SEFL plan is a plan. No SEFL run was made for this page; the PictureViewer facts are a live read at 2026-11-09 23:30Z, and PR 7's comments and approval state can change.</li>
+  <li>The cost figures are estimates. None has been tested; they exist so a reader can reject them with a better number.</li>
+  <li>The landing base moved while the page was being written: <code>origin/main</code> went from <code>4dd79438</code> (1.76.28) to 1.77.0, a feature landing and its changelog render. The branch was rebased onto it and carries 1.77.1; the walk is still the 1.76.28 walk.</li>
+  <li>The page does not fix anything. It names the two gaps, the files a fix touches, the tests that would prove it, and the cost.</li>
+</ul>
+
+<h2>Sources</h2>
+<ul class="source">
+  <li><code>docs/reports/pipeline-execution-next-test-2026-11-09.html</code>: sections 2.1, 2.2, 3.1, 3.3, 4.2, 4.3, 5.1, 5.2 and 6. The stage map this page judges the walk against.</li>
+  <li><code>pipeline-bundle.seed.json</code>: <code>github-force-merge</code> at 4144, <code>sefl-review-loop</code> at 4427, <code>turnover</code> at 3803; H-04 at 4679, H-06 at 4696, G4 at 4741, G7 at 4768.</li>
+  <li><code>lib/task-pipeline-drive.js</code>: 30 (the landing rule), 185 (<code>EDGE_ORDER</code>), 849 (<code>gateAfter</code>), 901 (<code>nextStageOf</code>), 2196 (the finish path).</li>
+  <li><code>lib/pipelines.js</code>: 49-54 (the exit vocabulary), 70-75 (the exit schemas), 586 (<code>REVIEW_WAIT_CHECKS</code>), 667 (<code>reviewWaitFor</code>), 728 (<code>readReviewExit</code>), 744, 768, 779 (the three implemented checks).</li>
+  <li><code>lib/jobs.js</code>: 2297 (the wait registration), 2397 (<code>readReviewExit</code> call), 2400 (the timer's advance).</li>
+  <li><code>lib/assistant/queue.js</code>: 1504 (the settle's three cases), 1563 (<code>if (!merged) return t;</code>).</li>
+  <li><code>docs/pipelines.md</code>: 279 (the GitHub departure), 319 (the loop the document does not draw).</li>
+  <li><code>docs/versioning.md</code>: 159-161 (a new gate is a minor; a changed test is a patch).</li>
+  <li><code>test/pipeline-wait.test.js</code>: 144 (a PDL stage carries no exit; the timer has nothing to read).</li>
+  <li>PR 672, <code>JLRoper/agent-worktree-gui</code>: <code>fix: a child row on the chart draws one L, not two</code>, MERGED at 2026-11-09T23:08:04Z, merge commit <code>daaa137f</code>; main's <code>af1399d1</code> and <code>4dd79438</code>.</li>
+  <li>Row 58 and row 59, <code>assistant-3</code>: the parked <code>github-force-merge</code> walk and the ordinary landing row, read from <code>~/.wag/state/assistants/assistant-3/queue.json</code>.</li>
+  <li>PR 7, <code>IT/pictureviewer</code>: <code>20261021_0005_DMR-39015_pictureViewerSso</code> into <code>master</code>, head <code>49f3ae77</code>, target <code>bb12884c</code>, reviewers <code>code_review_java</code> and <code>POORE</code>, nine open comments, two BLOCKER, <code>canMerge: false</code> on tasks and approval. Read through the Bitbucket REST API at 2026-11-09 23:30Z.</li>
+  <li>The request sections follow the shapes of merged PRs 667 and 668 (a fix: defect, fix, tests, version, what it does not fix) and 670 (a report: what, gaps, next test, version note, test sweep).</li>
+</ul>
+
+<p class="small">Written 2026-11-09 in <code>wtgui/run-the-github-landing-sanity-test-on-fe8ce7</code>. The walk read <code>4dd79438</code> (1.76.28); <code>origin/main</code> moved to 1.77.0 before the landing, and this branch carries 1.77.1. The page is a report, not a product change; it names the code it read and the tests a fix would add.</p>
+
+</main>
+</body>
+</html>
