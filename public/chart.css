@@ -175,13 +175,16 @@ tbody td { padding: 7px 10px; border-bottom: 1px solid #1d222b; vertical-align: 
    The panel records the branch every tree was cut from (`row.parent`), so the board draws it: the child steps in
    under the parent row, one indent per level (the depth rides on the row as --child-depth, so a tree cut from a
    child steps in again without a second rule), and it keeps every cell it had — its own branch, its own verdict, its
-   own actions. The rail is the project's own glyph, moved in with the row, so the two hierarchies read as one. */
+   own actions.
+
+   ONE L, NOT A LADDER. A child row used to draw two: the project's rail glyph, moved in to its own depth
+   (the rule that follows), and the └ the row leads with (`.child-tick`, public/render-projects.js). Two L's on one
+   row read as a depth of two, and at the second tier they read as a rung of a ladder nobody drew. The rail is the
+   PROJECT's line and stops being a group marker at the moment a row hangs under another: a child draws no rail glyph
+   at all, and its single marker is the └ it leads with, which steps in with the cell's own padding - one indent per
+   deeper tier, and nothing extra. */
 #projects tbody tr.row.is-child > td.name { padding-left: calc(12px + 16px * var(--child-depth, 1)); }
-#projects tbody tr.row.is-child > td:first-child::before {
-  content: "\2514"; /* └ */
-  left: calc(-13px + 16px * var(--child-depth, 1));
-  color: #39485c;
-}
+#projects tbody tr.row.is-child > td:first-child::before { content: none; }
 /* A fold hides a whole group where it stands — the child rows AND the details, questions and offers hanging under
    them. Nothing leaves the document, which is the point: an open console, a half-typed reply and a scroll position
    are all still there when the group opens again. */
@@ -193,8 +196,9 @@ tr.is-fold-hidden { display: none !important; }
   color: #465668; font-size: 12px; line-height: 1;
 }
 /* The last row of a project closes the rail. `:has(~ tr.row)` ignores the detail rows that sit between
-   a row and the next one, which `:last-of-type` cannot do. */
-#projects tbody tr.row:not(:has(~ tr.row)) td:first-child::before { content: "\2514"; /* └ */ }
+   a row and the next one, which `:last-of-type` cannot do. A CHILD row is excluded: it draws no rail glyph at all
+   (the rule above), so closing the rail on one would put the ladder's first L back on exactly the rows that hang. */
+#projects tbody tr.row:not(.is-child):not(:has(~ tr.row)) td:first-child::before { content: "\2514"; /* └ */ }
 /* The row's tree glyph hangs in the wrapper's left inset, which is where the card's rail is. It used to have an
    `.is-scroll` variant that moved it inside the cell because a sideways scroller clipped it; the chart does not
    scroll inside the card any more, so the inset is always there to hang it in. */
