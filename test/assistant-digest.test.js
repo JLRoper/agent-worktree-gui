@@ -65,7 +65,7 @@ const run = (over = {}) => ({
   status: "running",
   startedAt: "2026-11-09T10:00:00.000Z",
   prompt: "land change 3",
-  worktreePath: "C:/test/repo-one",
+  worktreePath: ".worktrees/repo-one",
   finalMessage: "",
   lines: [
     { kind: "tool", text: "\u{1F4BB} terminal \u00b7 npm test", at: 1 },
@@ -200,7 +200,7 @@ test("the busiest realistic board fits one screen at the assistant float's defau
         status: "running",
         startedAt: new Date(Date.now() - i * 60_000).toISOString(),
         prompt: longPrompt,
-        worktreePath: `C:/test/repo-${i}`,
+        worktreePath: `.worktrees/repo-${i}`,
       }),
     );
   }
@@ -214,7 +214,7 @@ test("the busiest realistic board fits one screen at the assistant float's defau
         startedAt: new Date(Date.now() - (10 + i) * 60_000).toISOString(),
         endedAt: new Date(Date.now() - (9 + i) * 60_000).toISOString(),
         prompt: longPrompt,
-        worktreePath: `C:/test/repo-${i}`,
+        worktreePath: `.worktrees/repo-${i}`,
       }),
     );
   }
