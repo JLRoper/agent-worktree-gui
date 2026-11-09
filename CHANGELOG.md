@@ -4,16 +4,32 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.76.10 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.76.11 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-502 releases from v0.1.0 (2026-10-20) to v1.76.10 (2026-11-09), 1652 commits between the tags. Every release is anchored by an
+503 releases from v0.1.0 (2026-10-20) to v1.76.11 (2026-11-09), 1655 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.76.11 — 2026-11-09 · 3 commits
+
+[`f5dbe47`](https://github.com/JLRoper/agent-worktree-gui/commit/f5dbe477b1c34ce765cb049db2f9522d21d498e7) · [compare v1.76.10...v1.76.11](https://github.com/JLRoper/agent-worktree-gui/compare/v1.76.10...v1.76.11)
+
+### Added
+
+- feat: an unattached card names its worktree, and its picker offers it ([`2f1948e`](https://github.com/JLRoper/agent-worktree-gui/commit/2f1948e14c3abc73a911bddfdd1976c93b3171e1))
+
+### Fixed
+
+- fix: the job store is written atomically, so a reader never sees a fragment ([`f5dbe47`](https://github.com/JLRoper/agent-worktree-gui/commit/f5dbe477b1c34ce765cb049db2f9522d21d498e7))
+
+### Docs & tests
+
+- docs: render the changelog - 502 releases ([`2267267`](https://github.com/JLRoper/agent-worktree-gui/commit/2267267c466def09a9f12dc948d4fb71efa0d3f3))
 
 ## v1.76.10 — 2026-11-09 · 2 commits
 
