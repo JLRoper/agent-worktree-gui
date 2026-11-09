@@ -13,6 +13,9 @@ served straight from `public/`.
 Then open **http://127.0.0.1:7331**. The page itself — every control, chip and gesture — is documented in
 [docs/using-the-board.md](docs/using-the-board.md).
 
+The operational how-to for each project the panel carries — where its work lands, how it is built, tested and run —
+is a project runbook under [docs/runbooks/](docs/runbooks/README.md); `email-multi` is the first.
+
 ## Running it on another machine
 
 **Point an agent at it.** `SETUP.md` is written to be *executed* rather than read: exact commands, a
