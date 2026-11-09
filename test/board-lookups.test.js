@@ -187,6 +187,9 @@ function project() {
   doc.reset();
   chips.html = "<span class=chip>3 worktrees</span>";
   chips.chipsHtml = () => chips.html;
+  // `refreshChips` also refreshes the rules chip in the same head line (board-scaffold.js). It is stubbed here because
+  // THIS test measures the counts strip's own lookups; the rules chip's caching is measured on its own, below.
+  chips.refreshRulesChip = () => {};
   chips.topSlotHtml = () => ""; // nothing held back: no arrow
   const strip = doc.add(new Node({ "data-chips": "alpha" }));
   const slot = doc.add(new Node({ "data-age-slot": "alpha" }));
@@ -223,6 +226,49 @@ test("a section rebuilt from scratch is found again, never painted into a detach
   const other = doc.add(new Node({ "data-chips": "beta" }));
   chips.refreshChips("beta");
   assert.equal(other.innerHTML, chips.html, "and each name keeps its own node");
+});
+
+// ---- the rules chip: found once, then asked for by the node the last refresh kept -------------------------------
+// The chip sits in the project's second head line and is refreshed from the same per-snapshot path as the counts
+// strip, so it carries the same cost: a by-attribute lookup on every refresh would put ~2 more whole-document walks a
+// minute on a 105-project board. It goes through `projectNode`'s cache and rewrites only when its signature moved.
+const rulesCtx = { document: doc, CSS, Map, String, esc: (s) => String(s ?? ""), state: { projects: new Map(), bars: new Map() } };
+vm.createContext(rulesCtx);
+let rulesLoaded = false;
+function rulesChipDom() {
+  if (!rulesLoaded) {
+    const names = ["projectNode", "rulesFor", "rulesBarOpen", "barsOf", "rulesChipSig", "rulesChipHtml", "refreshRulesChip"];
+    vm.runInContext(names.map(grab).join("\n"), rulesCtx);
+    rulesLoaded = true;
+  }
+  doc.reset();
+  rulesCtx.state.projects.set("alpha", { name: "alpha", rules: ["one", "two"] });
+  rulesCtx.state.bars = new Map();
+  return doc.add(new Node({ "data-rules-chip": "alpha", "data-rules-sig": "2|0" }));
+}
+
+test("the second refresh of the rules chip asks the document nothing, and a moved count swaps it once", () => {
+  const chip = rulesChipDom();
+  rulesCtx.refreshRulesChip("alpha");
+  assert.equal(chip.writes, 0, "a chip whose count did not move is not rewritten");
+  const first = doc.queries;
+  assert.equal(first, 1, "the first refresh found the chip (and cached it)");
+  rulesCtx.refreshRulesChip("alpha");
+  assert.equal(doc.queries, first, "the next one asked the document nothing");
+
+  // A count that moved: one swap, and the new node carries the new signature.
+  rulesCtx.state.projects.set("alpha", { name: "alpha", rules: ["one", "two", "three"] });
+  Object.defineProperty(chip, "outerHTML", {
+    configurable: true,
+    set(html) {
+      chip.remove();
+      doc.add(new Node({ "data-rules-chip": "alpha", "data-rules-sig": /data-rules-sig="([^"]+)"/.exec(html)[1] }));
+    },
+  });
+  rulesCtx.refreshRulesChip("alpha");
+  const chips = doc.nodes.filter((n) => n.getAttribute("data-rules-chip") === "alpha");
+  assert.equal(chips.length, 1, "the old chip is gone, not duplicated");
+  assert.equal(chips[0].dataset.rulesSig, "3|0", "the new chip counts three rules");
 });
 
 // ---- pulseRow: the row from the map, the flash restarted without a forced layout ---------------------------------

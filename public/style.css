@@ -3019,6 +3019,46 @@ button.btn-host:focus-visible { outline: 1px solid #7fb2e8; outline-offset: 1px;
 .host-form button:hover:not(:disabled) { border-color: #3a4250; background: #262b34; }
 .host-form button:disabled { opacity: .55; cursor: progress; }
 
+/* ---- the rules chip, and its bar in the same grey strip ----------------------------------------------------- */
+/* The chip is drawn at ZERO too, so the control that gives a project its first rule is findable on a project that has
+   none. It is the host chip's pillow - same height, type scale and radius - so the second head line reads as one row
+   of facts, and it turns blue only while its bar is open, which is the state the reader pressed it into. */
+button.btn-rules {
+  margin-left: 6px;
+  padding: 1px 7px;
+  font: 10.5px/1.6 var(--mono);
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: #20242c;
+  color: var(--dimmer);
+  cursor: pointer;
+  white-space: nowrap;
+}
+button.btn-rules.has-rules { color: var(--dim); border-color: #333b47; }
+button.btn-rules:hover { color: var(--text); border-color: #3a4250; }
+button.btn-rules.is-open { color: #9ecbff; border-color: #1c3a56; background: var(--blue-bg); }
+button.btn-rules:focus-visible { outline: 1px solid #7fb2e8; outline-offset: 1px; }
+
+/* The stack under the head: bars are appended in open order and the newest is drawn FIRST, so a rules bar opened
+   while the host bar is up sits directly above it. The bars keep `.host-form`'s grey band, so the strip is the same
+   one the host chip has always opened; only the reading order inside the rules bar is a column. */
+.proj-bars { display: block; }
+.rules-form { flex-direction: column; align-items: stretch; gap: 6px; }
+.rules-form .host-line { max-width: none; min-width: 0; }
+.rules-form .rules-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.rules-form .rules-list { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.rules-form .rules-empty { font: 11px var(--mono); }
+.rules-form .rule-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+/* The row owns the width: the strip's `input { min-width: 220px }` is for the one-field mapping form, and inside a
+   row of three buttons it would push the controls off the card at a narrow zoom. */
+.rules-form input { min-width: 0; flex: 1 1 auto; }
+.rules-form .rule-n { flex: 0 0 auto; width: 18px; text-align: right; color: var(--dimmer); font-size: 10.5px; }
+.rules-form .rule-btn { flex: 0 0 auto; padding: 3px 8px; font: 11px var(--mono); line-height: 1.2; }
+.rules-form .rule-btn:disabled { opacity: .3; cursor: default; }
+.rules-form .rule-del:hover:not(:disabled) { border-color: var(--red); color: var(--red); }
+.rules-form .rules-add { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.rules-form .rules-add button { flex: 0 0 auto; }
+
 
 .foot {
   display: flex;
