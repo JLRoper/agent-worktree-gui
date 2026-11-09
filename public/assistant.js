@@ -3253,12 +3253,21 @@
     const rows = (model.stages || []).map((s) => pipeWindowStageRow(s, model)).join("");
     const elapsed = model.elapsed && model.elapsed.ok ? pipeWindowElapsedText(model.elapsed.ms) : "—";
     const entered = model.enteredAt ? pipeWindowStamp(model.enteredAt) : "";
+    // The row's clock, from `createdAt` — never `startedAt`, which a pipeline row rewrites at every stage move. It sits
+    // beside the stage's clock because the two answer different questions: "in this stage 5 m 32 s" and "on this row
+    // 1 h 19 m 44 s". A record with no readable createdAt draws no line at all rather than a zero.
+    const rowAge = model.sinceCreated && model.sinceCreated.ok ? pipeWindowElapsedText(model.sinceCreated.ms) : null;
+    const created = model.sinceCreated && model.sinceCreated.at ? pipeWindowStamp(model.sinceCreated.at) : "";
+    const rowClock = rowAge
+      ? `<span class="pipew-sub" data-pipew-rowclock="${esc(String(model.sinceCreated.ms ?? ""))}" title="from the row's own createdAt — the row's age, not the stage's${created ? ` (filed ${esc(created)})` : ""}">on this row ${esc(rowAge)}</span>`
+      : "";
     return `${head(`${current.position} of ${count} — ${current.title || current.id}`)}<div class="pipew-body">
       <div class="pipew-meta">
         <span class="pipew-pipe">${esc(model.pipeline.title || model.pipeline.id)} <code>${esc(model.pipeline.id)}</code></span>
         <span class="pipew-sub mono">stage ${esc(String(current.position))} of ${esc(String(count))} · ${esc(current.title || current.id)} <code>${esc(current.id)}</code></span>
         <span class="pipew-since">began ${esc(entered)}</span>
         <span class="pipew-sub">in this stage ${esc(elapsed)}</span>
+        ${rowClock}
       </div>
       ${pipeWindowPreviousLine(model.previous)}
       <ol class="pipew-stages">${rows}</ol>
@@ -3487,6 +3496,7 @@
             { label: "pipeline", value: `${model.pipeline.title || model.pipeline.id} (${model.pipeline.id})` },
             { label: "began", value: entered },
             { label: "in this stage", value: elapsed },
+            ...(model.sinceCreated && model.sinceCreated.ok ? [{ label: "on this row", value: fmtDur(model.sinceCreated.ms) }] : []),
             { label: "stages", value: String(count) },
           ]
         : [

@@ -165,6 +165,34 @@ test("the current stage carries the moment it began and an elapsed span the tick
   assert.equal(pipeWindowElapsedAt(9_000_000, at, at - 5_000), 9_000_000);
 });
 
+test("the row's own clock is drawn from createdAt, beside the stage's clock and never instead of it", () => {
+  const { pipelineWindowHtml } = buildWindow();
+  // Filed at 10:00 and in its stage since 12:30, read at 15:00: the row is five hours old, the stage two and a half.
+  const task = {
+    id: 7,
+    title: "carry the contract",
+    state: "running",
+    createdAt: "2026-11-03T10:00:00.000Z",
+    pipelineRun: { pipeline: "poc-to-uat", stage: "S3", enteredAt: "2026-11-03T12:30:00.000Z" },
+  };
+  const html = pipelineWindowHtml(buildTaskPipelineWindow(task, { source: bundle(), now: NOW }));
+  assert.match(html, /data-pipew-rowclock="18000000"/, "five hours, as the model computed it");
+  const text = plain(html);
+  assert.ok(text.includes("on this row 5h00m00s"), `the row's age is painted: ${text.slice(0, 200)}`);
+  assert.ok(text.includes("in this stage 2h30m00s"), "and the stage's span is still beside it");
+
+  // `startedAt` is the CURRENT run's stamp and every stage move clears it, so it must not move the row's clock: the
+  // same row with a start one minute before the clock still reads five hours.
+  const withStart = { ...task, startedAt: "2026-11-03T14:59:00.000Z" };
+  const same = pipelineWindowHtml(buildTaskPipelineWindow(withStart, { source: bundle(), now: NOW }));
+  assert.match(same, /data-pipew-rowclock="18000000"/, "startedAt is per-stage and never the row's clock");
+
+  // A record with no readable createdAt draws no row clock at all, rather than a zero that reads as "just filed".
+  const noStamp = { ...task, createdAt: null };
+  const bare = pipelineWindowHtml(buildTaskPipelineWindow(noStamp, { source: bundle(), now: NOW }));
+  assert.doesNotMatch(bare, /data-pipew-rowclock/);
+});
+
 test("a task with no pipeline says it is on the default path, and lists no stages", () => {
   const { pipelineWindowHtml } = buildWindow();
   for (const record of [
