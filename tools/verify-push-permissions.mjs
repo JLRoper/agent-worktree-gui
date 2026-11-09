@@ -141,7 +141,10 @@ try {
         await page.waitForFunction(
           (n) => {
             const f = document.querySelector(`[data-host-form="${CSS.escape(n)}"]`);
-            return Boolean(f && f.querySelector("[data-push-controls]") && /proposed from|no proposal/.test(f.querySelector("[data-host-line]")?.textContent || ""));
+            // The propose call's own answer, in the copy the row draws today: `<remoteUrl> -> <host>` when it has a
+            // proposal, `no proposal: <why>` when it does not. The old text this matched (`proposed from`) was
+            // retitled by 988b773 and the gate had been red on main since, at this line, before this branch existed.
+            return Boolean(f && f.querySelector("[data-push-controls]") && / -> |no proposal/.test(f.querySelector("[data-host-line]")?.textContent || ""));
           },
           name,
           { timeout: 20_000 },
