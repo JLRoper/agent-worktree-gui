@@ -33,6 +33,7 @@ import path from "node:path";
 import test from "node:test";
 import { ASSISTANT_THREAD, Assistant } from "../lib/assistant.js";
 import { parseActions } from "../lib/assistant/actions.js";
+import { NOTES_CAP } from "../lib/assistant/config.js";
 import { notesRelFor, readNotesFile, seedNotesFile, writeNotesFile } from "../lib/assistant/notes-file.js";
 import { PRIMARY_ASSISTANT, threadFor } from "../lib/assistants.js";
 import { sliceRegion } from "../tools/panel-testkit.mjs";
@@ -162,7 +163,8 @@ test("each assistant's preamble carries its OWN scratchpad — the eviction the 
   assert.ok(mine.includes("REVIEWER-PAD"), "#2's turn reads #2's pad");
   assert.ok(!mine.includes("shared line"), "and none of #1's blob");
   const theirs = assistant.preamble(PRIMARY_ASSISTANT);
-  assert.ok(theirs.includes(long.slice(0, 40)), "#1's turn still reads #1's pad");
+  // #1's store keeps the TAIL at the pad cap, so the head of an oversized legacy string is what a save now drops.
+  assert.ok(theirs.includes(long.slice(-NOTES_CAP).slice(0, 40)), "#1's turn still reads #1's pad, trimmed to the cap's tail");
   assert.ok(!theirs.includes("REVIEWER-PAD"), "and not #2's");
 });
 
@@ -270,16 +272,25 @@ test("legacy watches are resolved from the thread at read time, and the store is
   assert.deepEqual(onDisk.map((w) => w.id), ["w1", "w2", "w3"], "and its order");
 });
 
-test("the notes file's own shape: one path per assistant, beside its charter, capped like the string", async (t) => {
+test("the notes file's own shape: one path per assistant, beside its charter, capped at what a turn reads", async (t) => {
   assert.equal(notesRelFor("assistant-2").replace(/\\/g, "/"), "assistants/assistant-2/notes.md");
   const dir = await mkdtemp(path.join(os.tmpdir(), "wtgui-notes-"));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const file = path.join(dir, "assistants", "assistant-3", "notes.md");
-  assert.deepEqual(readNotesFile(file), { text: "", exists: false, chars: 0, error: null }, "an absent pad is empty, not an error");
-  const out = writeNotesFile(file, `${"a".repeat(8000)}TAIL`);
-  assert.equal(out.chars, 8000, "the cap is the string's own 8,000");
-  assert.ok(out.text.endsWith("TAIL"), "and it keeps the tail, as the store's own setNotes does");
-  assert.equal(readNotesFile(file).text, out.text, "the bytes read back are the bytes written");
+  assert.deepEqual(
+    readNotesFile(file),
+    { text: "", exists: false, chars: 0, cap: NOTES_CAP, over: false, error: null },
+    "an absent pad is empty, not an error",
+  );
+  const out = writeNotesFile(file, "a".repeat(NOTES_CAP));
+  assert.equal(out.chars, NOTES_CAP, "a pad exactly at the cap is kept whole");
+  assert.equal(readNotesFile(file).text.length, NOTES_CAP, "the bytes read back are the bytes written");
+  // One character more is REFUSED, not trimmed: the cap is what a turn reads, so the extra text would be bytes
+  // nobody sees, and a save that kept the tail would lose the part of the paste the reader was looking at.
+  const refused = writeNotesFile(file, `${"a".repeat(NOTES_CAP)}TAIL`);
+  assert.equal(refused.refused, true, "over the cap the save is refused");
+  assert.equal(refused.code, "notes-too-long");
+  assert.equal(readNotesFile(file).text.length, NOTES_CAP, "and the file on disk is exactly as it was");
 });
 
 // ---- the page: the Watches tab and the Pad tab, driven out of public/assistant.js -------------------
