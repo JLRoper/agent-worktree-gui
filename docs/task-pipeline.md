@@ -186,6 +186,12 @@ queue's own tick — asks `lib/task-pipeline-drive.js` three questions about eve
   STAGE. The row is written forward to the next stage in one write — `queued`, a fresh `enteredAt`, the visit counted,
   and the edge it crossed counted in `crossings` — and the settle does not see it again until that stage has a run of
   its own.
+- **what reads it live.** A row on a pipeline is read from its ROUND, not from the run its `runId` names alone:
+  `lib/assistant/queue.js` `roundLiveness` walks `stageRuns[]` newest first (each entry's `job` and `thread`), then the
+  row's `threads[]`, and the first run the store says is still going is the row's live job. A row whose named run has
+  ended therefore reads `running` while a later stage thread is working, and reads `settled` only when nothing the round
+  names is going. A round that names no thread of its own falls back to the row's own thread, and a row with no
+  `pipelineRun` keeps exactly the answer it had before the ledger existed.
 - **what stops it.** A capped loop at its cap, a gate that declares a decision record, a verdict the document cannot
   route, a failed run, a declared artifact that is not in the tree, a tree that is gone or claimed by another row, a
   routing change, or an assignment the bundle cannot resolve. Each is a named code and a structured decision on the

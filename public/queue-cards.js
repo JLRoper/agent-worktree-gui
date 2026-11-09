@@ -132,9 +132,11 @@ window.WMApp.queueCards = function queueCards(deps) {
       : t.state === "running"
         ? t.runBy === "run" && t.runId
           ? `running — run ${t.runId} is ${t.runStatus || "live"}: the row's verdict is read from that run, not from the thread it shares`
-          : t.guessed
-            ? "running — a run is carrying it, but the row names no run id: this verdict is a guess from its tree path or thread"
-            : "running — a run is carrying it; its agent's own status is on the facts line"
+          : t.runBy === "round"
+            ? `running - the round's ${t.runStage ? `stage ${t.runStage}` : "work"} is live${t.runThread ? ` on ${t.runThread}` : ""}: a pipeline row's verdict is read from its round's stage runs, not from the thread it started on`
+            : t.guessed
+              ? "running — a run is carrying it, but the row names no run id: this verdict is a guess from its tree path or thread"
+              : "running — a run is carrying it; its agent's own status is on the facts line"
         : t.state === "parked"
           ? "parked — stopped until the condition in the note is released; nothing starts it by itself"
           : t.state === "done"
@@ -316,8 +318,11 @@ window.WMApp.queueCards = function queueCards(deps) {
     const current = threads.length ? threads[threads.length - 1] : "";
     const onCurrent = thread === current;
     // The row's OWN run is what its chip says when the row names one and the verdict came from it (queue.js's
-    // `runningFlag`). Otherwise the chip keeps reading the newest turn on the thread, which is the old behaviour.
-    const rowRun = onCurrent && t?.runId && String(t?.runBy || "") === "run" ? { status: t.runStatus } : null;
+    // `runningFlag`). A pipeline row whose verdict came from its ROUND says the round's job in the same slot: the run
+    // the row names is the link it started on, and it is not the one going. Otherwise the chip keeps reading the
+    // newest turn on the thread, which is the old behaviour.
+    const roundLive = onCurrent && String(t?.runBy || "") === "round" && Boolean(t?.runJob) && !t?.guessed;
+    const rowRun = onCurrent && t?.state !== "queued" && roundLive ? { status: t.runStatus } : onCurrent && t?.runId && String(t?.runBy || "") === "run" ? { status: t.runStatus } : null;
     const job = rowRun || (jobs && typeof jobs.get === "function" ? jobs.get(thread) : null);
     const chip = queueAgentChip(job);
     const label = String(assistantThreadName(thread) || "").trim();
@@ -327,14 +332,18 @@ window.WMApp.queueCards = function queueCards(deps) {
     // What the row is ON, in the one word an id can be: the run id itself. Absent from a queued row (nothing is
     // running it), present on a running or parked one, and the record on a done one. `guessing` is the same slot with
     // the opposite claim: there is no run id, so the state above it was inferred from the tree path or the thread.
+    // A pipeline row read from its round shows the ROUND's job, because that is the run the verdict was read from.
+    const chipId = roundLive ? String(t.runJob) : String(t.runId || "");
     const runChip =
-      onCurrent && t?.runId && t?.state !== "queued"
-        ? `<span class="as-task-agent-run" data-as-qrun="${esc(String(t.runId))}" title="${esc(
-            `run ${t.runId} — the run this row names; ${t.state === "running" ? `its status (${t.runStatus || "unknown"}) is what the row's running/stale verdict is read from` : "kept as the record of the run this row was last on"}`,
-          )}">${esc(String(t.runId).length > 24 ? `${String(t.runId).slice(0, 23)}…` : String(t.runId))}</span>`
+      onCurrent && chipId && t?.state !== "queued"
+        ? `<span class="as-task-agent-run" data-as-qrun="${esc(chipId)}" title="${esc(
+            roundLive
+              ? `run ${chipId} - the run the round's ${t.runStage ? `stage ${t.runStage}` : "work"} is on${t.runThread ? ` (${t.runThread})` : ""}; the row's running/stale verdict is read from the round's stage runs, not from the thread it started on`
+              : `run ${chipId} — the run this row names; ${t.state === "running" ? `its status (${t.runStatus || "unknown"}) is what the row's running/stale verdict is read from` : "kept as the record of the run this row was last on"}`,
+          )}">${esc(chipId.length > 24 ? `${chipId.slice(0, 23)}…` : chipId)}</span>`
         : onCurrent && t?.state === "running" && t?.guessed
           ? `<span class="as-task-agent-run is-guess" title="${esc(
-              `no run id on this row — the running/stale verdict is a GUESS from ${t.runBy === "thread" ? `its thread (${thread})` : "a live run in its tree path"}; the next cut or resume writes the run id, and then this is evidence`,
+              `no run id on this row — the running/stale verdict is a GUESS from ${t.runBy === "thread" ? `its thread (${thread})` : t.runBy === "round" ? "a thread the round names" : "a live run in its tree path"}; the next cut or resume writes the run id, and then this is evidence`,
             )}">guessing</span>`
           : "";
     // The stopped chip is a real <button>: that IS the role, the tab stop and the Enter/Space activation in one
