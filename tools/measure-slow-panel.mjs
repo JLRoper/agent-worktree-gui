@@ -16,7 +16,7 @@
 // cadence of the bundle scan's deadline misses. Nothing here writes into the checkout: the discovery cache is
 // copied into a scratch folder and the tier book lives there too.
 //
-//   node tools/measure-slow-panel.mjs [--roots "C:/a;C:/b"] [--cache <projects.json>] [--public <dir>]
+//   node tools/measure-slow-panel.mjs [--roots "<root>;<root>"] [--cache <projects.json>] [--public <dir>]
 //                                     [--log <server.out.log>] [--workers 2] [--repeats 4]
 //                                     [--loaded-passes 2] [--max-pass-ms 180000] [--json] [--keep]
 //
@@ -165,7 +165,7 @@ function loadRepos() {
 // ---- 1. the discovery walk ---------------------------------------------------------------------------------
 async function measureDiscovery() {
   if (!ROOTS.length) {
-    say("  no scan roots: pass --roots \"C:/a;C:/b\" (this tree has no config.json and the primary checkout names none)");
+    say("  no scan roots: pass --roots \"<root>;<root>\" (this tree has no config.json and the primary checkout names none)");
     return { roots: [], idle: [], loaded: [] };
   }
   const registryCache = path.join(WORK, "projects.json");
