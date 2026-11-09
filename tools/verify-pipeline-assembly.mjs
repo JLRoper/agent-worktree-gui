@@ -193,6 +193,20 @@ try {
   git(repo, ["commit", "-qm", "the parent"]);
   const parentSha = git(repo, ["rev-parse", "HEAD"]);
 
+  // A REAL origin, so the round's parent tree is proved to be cut from `origin/main` and not from the checkout. The
+  // checkout is then moved AHEAD of the remote with work nobody pushed: that is the case the rule exists for, and a
+  // round that started from the checkout's tip would carry a commit the remote has never seen.
+  const originDir = path.join(sandbox, "origin.git");
+  git(sandbox, ["init", "-q", "--bare", originDir]);
+  git(repo, ["remote", "add", "origin", originDir]);
+  git(repo, ["push", "-q", "-u", "origin", "main"]);
+  write(path.join(repo, "local-only.md"), "unpushed local work\n");
+  git(repo, ["add", "-A"]);
+  git(repo, ["commit", "-qm", "local work the round must not see"]);
+  const checkoutTip = git(repo, ["rev-parse", "HEAD"]);
+  const originTip = git(repo, ["rev-parse", "origin/main"]);
+  is("the checkout is ahead of origin/main", [checkoutTip !== originTip, originTip], [true, parentSha]);
+
   const bundleFile = path.join(sandbox, "pipeline-bundle.json");
   const bundleDoc = { bundleVersion: 1, name: "assembly-proof", pipelines: [ROUND4, ROUND2, CONFLICT] };
   write(bundleFile, `${JSON.stringify(bundleDoc, null, 2)}\n`);
@@ -227,13 +241,48 @@ try {
     ["B1: work/B1.md", "I1: work/I1.md", "C1: work/C1.md", "K1: work/K1.md"],
   );
   is("the assembled branch starts at the round's frozen parent", git(assembled, ["rev-parse", `${run4.assembly.commit}~4`]), fourRound.row.pipelineRun.round.sha);
-  is("the round's frozen parent IS the parent branch's commit at the first cut", run4.round.sha, parentSha);
+  is("the round's frozen parent IS origin/main's commit at the first cut", run4.round.sha, parentSha);
+  is("and the round says which ref it cut from", run4.round.base, "origin/main");
+
+  // 1b. THE ROUND'S PARENT TREE: one real worktree, cut from origin/main, on the branch every stage was cut from -
+  // and the tree the assembly landed in. Its name is `<task-slug>-<tag>`, the round's own slug and tag.
+  const root = run4.round.parentPath;
+  ok("the round records its parent tree's path", Boolean(root) && existsSync(root), String(root));
+  is("the parent tree's directory is <task-slug>-<tag>", path.basename(root), `${run4.round.slug}-${run4.round.tag}`);
+  is("the parent tree's branch is the round's branch", git(root, ["rev-parse", "--abbrev-ref", "HEAD"]), run4.round.parent);
+  is("the round's branch is wtgui/<task-slug>-<tag>", run4.round.parent, `wtgui/${path.basename(root)}`);
+  // The tree's HEAD is the assembled tip by now; its ROOT is what proves where it was cut, and the checkout's tip is
+  // not in that history at all.
+  is("the parent tree's history starts at origin/main's commit, not the checkout's tip", git(root, ["merge-base", "HEAD", parentSha]), parentSha);
+  ok("the checkout's own tip is not in the round's parent tree", run4.round.sha !== checkoutTip);
+  ok("the checkout was ahead of origin/main when the round began", checkoutTip !== parentSha, `${checkoutTip.slice(0, 12)} vs ${parentSha.slice(0, 12)}`);
+  ok("unpushed local work is NOT in the round's parent tree", !existsSync(path.join(root, "local-only.md")));
+  is("the assembly happened IN the round's parent tree", [run4.assembly.path, run4.assembly.branch], [root, run4.round.parent]);
+  // Every stage child is named by the one function: Stage <n>: <title>, one directory per column of the document.
+  const stageTitles = { B1: "B1", I1: "I1", C1: "C1", K1: "K1" };
+  for (const [index, stageId] of ["B1", "I1", "C1", "K1"].entries()) {
+    const tree = run4.trees[stageId];
+    const dir = path.basename(tree.path);
+    is(`${stageId}'s tree is named for its stage and column`, dir, `${run4.round.slug}-stage-${index + 1}-${stageTitles[stageId].toLowerCase()}-${tree.tag}`);
+    is(`${stageId}'s tree branch is wtgui/<dir>`, tree.branch, `wtgui/${dir}`);
+    is(`${stageId}'s tree says what it is`, tree.display, `Stage ${index + 1}: ${stageTitles[stageId]}`);
+    is(`${stageId}'s tree hangs under the round's parent tree`, tree.parent, run4.round.parent);
+    is(`${stageId}'s tree starts at the round's parent tree's commit`, git(tree.path, ["merge-base", "HEAD", parentSha]), parentSha);
+  }
+  ok(
+    "every tree of the round carries its own six-hex tag, and the round one of its own",
+    new Set(Object.values(run4.trees).map((tree) => tree.tag)).size === 4 && /^[0-9a-f]{6}$/.test(run4.round.tag) && !Object.values(run4.trees).some((tree) => tree.tag === run4.round.tag),
+    Object.values(run4.trees).map((tree) => tree.tag).join(","),
+  );
 
   // 3. Nothing from another round: a landing on main AFTER the freeze, and a SECOND round's stage commits.
   write(path.join(repo, "landed-later.md"), "a landing after the round began\n");
   git(repo, ["add", "-A"]);
   git(repo, ["commit", "-qm", "a landing after the round began"]);
-  const laterSha = git(repo, ["rev-parse", "HEAD"]);
+  // Pushed, so the landing is what `origin/main` now says: a round that begins afterwards starts from THAT tip, and
+  // the first round's parent tree is still at the commit it was cut at.
+  git(repo, ["push", "-q", "origin", "main"]);
+  const laterSha = git(repo, ["rev-parse", "origin/main"]);
   ok("the parent branch moved after the round began", laterSha !== parentSha);
   ok("the late landing is NOT in the assembled branch", !existsSync(path.join(assembled, "landed-later.md")) && git(assembled, ["ls-tree", "--name-only", "HEAD", "landed-later.md"]) === "");
 
@@ -254,6 +303,11 @@ try {
   for (const stageId of ["B1", "I1"]) {
     is(`the second round's work/${stageId}.md is on its branch`, sha256(path.join(run2.assembly.path, `work/${stageId}.md`)), sha256(path.join(run2.trees[stageId].path, `work/${stageId}.md`)));
   }
+  // The second round has its OWN parent tree, cut from the moved origin/main, and it is not the first round's.
+  is("the second round's parent tree is its own directory", path.basename(run2.round.parentPath), `${run2.round.slug}-${run2.round.tag}`);
+  ok("and not the first round's tree", run2.round.parentPath !== run4.round.parentPath);
+  is("its parent tree's history starts at the tip origin/main had when it began", git(run2.round.parentPath, ["merge-base", "HEAD", laterSha]), laterSha);
+  is("its assembly is in that parent tree", [run2.assembly.path, run2.assembly.branch], [run2.round.parentPath, run2.round.parent]);
   // Nothing from the FIRST round is in the second round's branch: its files exist only on the first assembly.
   ok("the second round's branch carries no file of the first round beyond the shared stage names", !existsSync(path.join(run2.assembly.path, "work/C1.md")) && !existsSync(path.join(run2.assembly.path, "work/K1.md")));
   ok("and no commit of the first round is an ancestor of it", !isAncestor(run2.assembly.path, run4.assembly.commit, run2.assembly.commit));
@@ -288,16 +342,20 @@ try {
   is("the stage run records the assembly conflict code", decision && decision.code, "pipeline-assembly-conflict");
   ok("no assembly record was written for the refused round", !parked.pipelineRun.assembly);
   const branches = git(repo, ["branch", "--list", "wtgui/*"]).split("\n").filter(Boolean);
+  // One parent branch per round, plus one per stage tree: the assembly lands on the round's parent branch, so a
+  // refused assembly leaves no branch of its own behind.
   const expectedBranches =
-    Object.keys(run4.trees).length + 1 + Object.keys(run2.trees).length + 1 + Object.keys(parked.pipelineRun.trees || {}).length;
+    (1 + Object.keys(run4.trees).length) + (1 + Object.keys(run2.trees).length) + (1 + Object.keys(parked.pipelineRun.trees || {}).length);
   is("no assembly branch is left behind for the refused round", branches.length, expectedBranches);
+  ok("the refused round's parent tree is still there to look at", existsSync(parked.pipelineRun.round.parentPath), String(parked.pipelineRun.round.parentPath));
   ok("every stage tree ran local-only: the landing paragraph was never handed to one", built.assistant.remoteWrites.length > 0 && built.assistant.remoteWrites.every((value) => value === "local"), built.assistant.remoteWrites.join(", "));
 
   console.log(
     `\n      assembly: round4 ${run4.assembly.commit.slice(0, 12)} on ${run4.assembly.branch} (4 stages, ${git(assembled, ["rev-list", "--count", `${run4.assembly.base}..HEAD`])} commits) · ` +
       `round2 ${run2.assembly.commit.slice(0, 12)} on ${run2.assembly.branch} (2 stages) · conflict parked with ${(decision && decision.fact && (decision.fact.conflicts || []).join(", ")) || "work/shared.md"}`,
   );
-  console.log(`      two-stage round: branch ${run2.assembly.branch} at ${run2.assembly.commit}`);
+  console.log(`      two-stage round: directory ${run2.round.parentPath} · branch ${run2.assembly.branch} at ${run2.assembly.commit}`);
+  console.log(`      its stage children: ${Object.values(run2.trees).map((tree) => `${path.basename(tree.path)} (${tree.branch})`).join(" · ")}`);
 } catch (error) {
   failures += 1;
   console.log(`FAIL  the harness threw: ${String((error && error.stack) || error)}`);

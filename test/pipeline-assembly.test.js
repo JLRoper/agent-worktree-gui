@@ -172,6 +172,21 @@ test("a round already assembled is not assembled twice, and one stage's commit i
   );
   assert.deepEqual([one.offered, one.done, one.stages.length], [false, false, 1]);
   assert.match(one.why, /one stage of the round/);
+
+  // A round with a PARENT TREE is the exception, and it is the whole point of the parent tree: the branch that lands
+  // is the round's own, not the single stage's, so that one commit must be picked onto it.
+  const withParent = assemblyPlanOf(
+    rowOf({
+      pipeline: "round",
+      stage: "B1",
+      round: { parentPath: "/repo/.worktrees/the-round-a1b2c3", parent: "wtgui/the-round-a1b2c3", sha: base, at: CLOCK, by: "panel" },
+      visits: { B1: 1 },
+      stageRuns: [runEntry("B1", 1, "1".repeat(40), "wtgui/b1-x")],
+    }),
+    PIPELINE,
+  );
+  assert.deepEqual([withParent.offered, withParent.done, withParent.stages.length], [true, false, 1], "one stage, one commit, and a landing branch to carry it");
+  assert.equal(withParent.parentPath, "/repo/.worktrees/the-round-a1b2c3", "the plan names the tree to pick into");
 });
 
 test("a record with no round, and a fan-out's block, are not assembled: one tree model has no siblings to combine", () => {

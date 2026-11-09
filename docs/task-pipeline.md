@@ -34,6 +34,9 @@ record keeps the ledger of them:
 {
   "pipeline": "poc-to-uat", "stage": "S8", "enteredAt": "2026-11-05T12:00:00.000Z",
   "visits": { "S3": 1, "S4": 1, "S8": 2 },
+  "round": { "parentPath": "<repo>/.worktrees/carry-the-contract-a1b2c3", "parent": "wtgui/carry-the-contract-a1b2c3",
+             "slug": "carry-the-contract", "tag": "a1b2c3", "base": "origin/main", "sha": "9f3c1a2…",
+             "at": "2026-11-05T11:02:44.100Z", "by": "panel" },
   "tree": { "path": "<repo>/.worktrees/carry-the-contract-a1b2c3", "branch": "wtgui/carry-the-contract-a1b2c3",
             "startSha": "9f3c1a2", "cutAt": "2026-11-05T11:02:44.100Z", "by": "panel" },
   "route": "sha256:6b1f…",
@@ -79,9 +82,9 @@ record keeps the ledger of them:
   an abbreviated sha would be a display form two commits could share.
 - **`assembly` is the ONE branch a finished round lands** (`{ commit, base, branch, path, verified, stages[], skipped[] }`).
   A per-stage round's stages each commit on their own branch, so when the pipeline is over the driver asks for one
-  branch and the Assistant cherry-picks every stage run's `commit` onto it, in visit order, from the round's frozen
-  parent (see "The assembly" below). Written with `tree` and the row's `worktree` pointing at that branch: that is
-  what leaves the landing step a single branch, never the first stage's tree plus siblings nothing merges.
+  branch and the Assistant cherry-picks every stage run's `commit` onto the round's PARENT tree, in visit order (see
+  "The assembly" below). Written with `tree` and the row's `worktree` pointing at that branch: that is what leaves the
+  landing step a single branch, never the first stage's tree plus siblings nothing merges.
 
 ### The input manifest, read back
 
@@ -262,35 +265,73 @@ A verdict that ends the pipeline writes its own decision on the settled stage ru
 `fact: { kind: "verdict", outcome, edge, ended: true }`), so a reader can see WHICH word ended the loop. The row is then
 finished by the settle, on the landing rule it has always had.
 
-### The tree: one per stage, all cut from the round's frozen parent
+### The tree: a parent tree per round, and one child per stage
 
-**Every stage of a round works in its OWN tree.** A round is one run of a pipeline, from its first stage to its last;
-the first cut resolves the parent branch to a COMMIT and records it on the row (`pipelineRun.round = { parent, sha, at,
-by }`), and every later stage tree is cut at that commit. The parent branch is named for the reader and never
-re-resolved per stage.
+**A round cuts ONE parent tree first, then one child tree per stage.** A round is one run of a pipeline, from its
+first stage to its last. Before its first stage it cuts a real worktree on `.worktrees/<task-slug>-<tag>` (branch
+`wtgui/<task-slug>-<tag>`) **from `origin/main`**, and records that tree on the row:
 
-- The record is what makes a round a round. `round.parent` is the branch (usually `main`) and `round.sha` is what it
-  resolved to at the first cut. A commit that lands on the parent branch after that moment is **not** in a later
-  stage's tree, which is the defect this model exists to remove: with one shared tree and a re-resolved branch, a stage
-  cut mid-round started at whatever main was THEN.
-- The driver returns `ensureTree = { taskId, project, prompt, stage, base, parent, role }`. For a chain stage `role` is
-  `stage`, `base` is `round.sha` and `parent` is `round.parent`; the Assistant's `cutPipelineTree` calls the job store's
-  own `makeWorktree`, writes the tree under `pipelineRun.trees[stage]` (and `pipelineRun.tree` for the round's first,
-  which is the row's landing branch until the round is assembled), and journals it. Nothing is started by that step: a
-  cut with no start is a row with a tree and no thread — visible, named, re-startable. A cut that fails parks the row
-  with the cut's own sentence.
-- The parent is written into the panel's parent book with `parentSource: "cut"` — including when it is a main branch,
-  because a round's parent IS main. That is what the worktree chart nests a round's stage trees under: one group, one
-  indent in, under the row the round was cut from.
+```json
+"round": {
+  "parentPath": "<repo>/.worktrees/carry-the-form-a1b2c3",
+  "parent": "wtgui/carry-the-form-a1b2c3",
+  "slug": "carry-the-form", "tag": "a1b2c3", "display": "carry the form",
+  "base": "origin/main", "sha": "9f3c1a2d4e5f…", "at": "…", "by": "panel"
+}
+```
+
+- `parentPath` is the parent tree's directory, `parent` is its branch, and `sha` is the COMMIT `origin/main` resolved
+  to at the cut. A project with no `origin/main` (a fixture, a clone whose remote has not been fetched) falls back to
+  the checkout's own ref, and `base` says which ref was used, so a reader can tell the two cases apart.
+- **Every stage child is cut from that branch tip**, never from `origin/main` as it stands now. A commit that lands on
+  main after the round began is **not** in any tree of the round, which is the defect this model exists to remove: with
+  one shared tree and a re-resolved branch, a stage cut mid-round started at whatever main was THEN.
+- The parent tree is the round's landing branch: `pipelineRun.tree` and the row's `worktree` name it from the first cut,
+  and the assembly lands on it (below). A stage child is a work branch, never the landing branch.
+- The parent is written into the panel's parent book with `parentSource: "cut"`: the parent tree hangs under `main`
+  (the branch its commit came from, recorded while the cut itself names `origin/main`), and every stage child hangs
+  under the parent tree. That is one group per round in the worktree chart.
 - The lookup answers the stage's OWN tree, from `stageRuns[].tree.path` and then `pipelineRun.trees[stage]`. A stage
   with no tree yet is `needed` (the cut is the next step), and a tree that was recorded and is gone is
   `pipeline-tree-gone`, **never** a second cut and never the project checkout.
 - A row written before rounds existed has no `round` and keeps the model it was cut under: one tree, reused by every
   stage (`treeLookup`). A deploy therefore never re-cuts a row already in flight.
-- A tree path is claimed by every OPEN row whose run tree, `worktree` or **any stage tree on the record** normalises to
-  it (case-insensitively, across every assistant's queue). A start whose tree is claimed by a DIFFERENT open row parks
-  `pipeline-tree-claimed`, naming the other row: two stages in one tree is the one collision that corrupts work
-  silently.
+- A tree path is claimed by every OPEN row whose run tree, `worktree`, round `parentPath` or **any stage tree on the
+  record** normalises to it (case-insensitively, across every assistant's queue). A start whose tree is claimed by a
+  DIFFERENT open row parks `pipeline-tree-claimed`, naming the other row: two stages in one tree is the one collision
+  that corrupts work silently.
+
+#### `stageTreeName(round, stage, visit)`: one pure function names all of it
+
+`lib/stage-tree-name.js` exports **`stageTreeName(round, stage, visit)`**, which returns `{ display, dir, branch }`
+for any tree of a round. It is pure: no clock, no random tag, no counter, the same three strings in every process from
+the round's own `slug` and `tag`.
+
+| what | `display` | `dir` (under `.worktrees/`) | `branch` |
+|---|---|---|---|
+| the parent (`stage` is null) | the task's title | `<task-slug>-<tag>` | `wtgui/<task-slug>-<tag>` |
+| a stage child | `Stage <n>: <stageName>` | `<task-slug>-stage-<n>-<stage-slug>-<tag>` | `wtgui/<same dir>` |
+
+`<n>` is the stage's POSITION in the document (1-based), not a count of cuts, so a re-export that inserts a stage
+renumbers the directories honestly. A child's six-hex `<tag>` is **derived** from the round's tag, the stage id, its
+position and the visit (`stageTagOf`), never drawn at random: the tag is a tree's identity in the naming ledger and in
+the parent book, both of which key on the last six hex of a name, so two trees must never share one.
+
+**A re-run at the same visit reuses that name, with no `-2` suffix.** The cut takes a name rather than generating one
+(`Jobs.makeWorktree`'s `name` option), and a named directory that is already there and already on that branch is
+adopted as this cut's tree (`reused: true`); a directory holding anything else is refused by name. A later VISIT of
+the same stage derives a different tag, so a loop's second attempt is a second tree rather than a second name for one.
+
+The driver returns `ensureTree = { taskId, project, prompt, stage, base, parent, role, stageName, position, visit }`.
+For a chain stage `role` is `stage`, `base` is `round.parent` (the parent tree's branch) and `parent` is the same
+branch; `stageName`, `position` and `visit` are what the name is derived from. The Assistant's `cutPipelineTree` cuts
+the parent tree on the round's first cut and the stage's child tree on that cut and every later one, writes both under
+`pipelineRun.trees[stage]` / `pipelineRun.round`, and journals it. Nothing is started by that step: a cut with no start
+is a row with a tree and no thread: visible, named, re-startable. A cut that fails parks the row with the cut's own
+sentence.
+
+A block (a per-stage fan-out) keeps its own model: its lanes are cut from the block's one base and its join tree is the
+landing branch, so no round parent tree is cut for it.
 
 ### The handoff: a stage reads what the document says it reads
 
@@ -343,28 +384,34 @@ aggregator), one tree per stage, the base each was cut from, the one aggregate c
 comparison of each lane's report (sha256 and the blob object id), and a deliberate conflict that is refused by path.
 
 
-### The assembly: one branch for a per-stage round
+### The assembly: every stage's commits onto the round's parent tree, and land from it
 
 A round gives every stage its own tree, so a finished chain leaves N commits on N local branches, and the row's
-landing branch is the FIRST stage's tree - the only stage tree promoted to `pipelineRun.tree`. That branch carries the
-baseline and nothing after it. The ASSEMBLY closes the round: when the pipeline is over, the driver asks for one
-branch, and the Assistant builds it by cherry-picking every stage run's commit onto a branch cut from the round's
-frozen parent (`lib/pipeline-assembly.js`).
+landing branch is the round's PARENT tree - cut from origin/main before the first stage, and the one branch every stage
+was cut from. The ASSEMBLY closes the round: when the pipeline is over, the driver asks for one branch, and the
+Assistant cherry-picks every stage run's commit onto that parent tree, in visit order (`lib/pipeline-assembly.js`).
+The parent tree's own branch is then the branch that lands.
 
 - **The plan is the driver's** (`assemblyPlanOf`): the settled stage runs that carry a commit, in VISIT order and then
   by the stage's position in the document - baseline first, then implement, compare and correct. A loop's second visit
   of the baseline comes after the first visit's last stage, because that is the order the round actually ran. A stage
-  that settled without a commit is named in `skipped`, never invented into the branch.
-- **One branch, cut from the frozen parent.** The assembly tree is cut at `round.sha`, not at the parent branch as it
-  stands now, for the same reason every stage tree is: a commit that landed after the round began must not enter it. A
-  tree that is not at that commit is refused (`pipeline-assembly-input`) rather than picked into.
+  that settled without a commit is named in `skipped`, never invented into the branch. The plan carries `parentPath`
+  so the Assistant picks into the round's own tree rather than cutting a second one. A round WITH a parent tree is
+  assembled from one committed stage too - that stage's branch is not the landing branch, so its commit is picked
+  onto the parent tree like any other; a record with no parent tree keeps the older rule, where a single stage's own
+  tree already was the branch that lands.
+- **One branch, and it is the round's own.** The picks happen IN `round.parentPath`, which is still at `round.sha` -
+  no second cut, and no branch that starts anywhere but origin/main as the round found it. A tree that is not at that
+  commit (somebody committed in it, or it was reset) is refused (`pipeline-assembly-input`) rather than picked into; a
+  tree that is gone parks the row naming the path instead of cutting a replacement. A record written before the parent
+  tree existed (`round.parentPath` absent) keeps the old behaviour: one tree cut at `round.sha` for the assembly.
 - **The later stage wins a shared path.** A chain's later stage applies ON TOP of the earlier one, so for a path two
   stages both wrote, the assembled branch carries the LATER stage's version - that is what "each stage finishes what
   the last started" means, and it is the difference from a fan-out, where two lanes writing one path is a conflict by
   definition. Where the later stage changed the SAME LINES the earlier one changed, git cannot apply it: the pick is
-  aborted, the conflicting stage is not committed, the branch is removed, and the row parks
-  `pipeline-assembly-conflict` naming the path and the stages. A person decides which stage is right; the panel never
-  resolves a hunk by choosing a side.
+  aborted, the conflicting stage is not committed, the parent tree is left at `round.sha` (never removed - it is the
+  landing branch), and the row parks `pipeline-assembly-conflict` naming the path and the stages. A person decides
+  which stage is right; the panel never resolves a hunk by choosing a side.
 - **The record is the proof it happened.** `pipelineRun.assembly = { commit, base, branch, path, verified, stages[],
   skipped[] }` is written with `pipelineRun.tree` (the assembly's) and the row's `worktree`, so the landing step has ONE
   branch to push and merge. `verified` is the check that every path a picked stage changed is at HEAD with that
@@ -374,9 +421,11 @@ frozen parent (`lib/pipeline-assembly.js`).
   the ordinary landing rule - the same rule a fan-out's lanes follow.
 
 Proved end to end by `node tools/verify-pipeline-assembly.mjs`: a four-stage round driven through the Assistant and the
-driver on real trees, the assembly's history in the round's order, every stage's file byte-identical, a landing that
-happened after the freeze and a second round both absent from the branch, a two-stage round assembled the same way, and
-a deliberate same-lines conflict that parks the row with the path and leaves no branch behind.
+driver on real trees, with a real `origin` whose main the checkout is AHEAD of - the parent tree is at `origin/main`'s
+commit and holds none of the unpushed work, every stage child is named by `stageTreeName` and hangs under it, the
+assembly happens IN that tree and its history reads in the round's order with every stage's file byte-identical, a
+landing that happened after the freeze and a second round are both absent from the branch, a two-stage round assembles
+the same way, and a deliberate same-lines conflict parks the row with the path and leaves the parent tree where it was.
 
 
 ### The artifact: one new hard gate

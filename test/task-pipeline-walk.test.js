@@ -167,8 +167,11 @@ test("ping-pong walks three loop rounds through the sweep with no hand-start, an
 
   const row = await walk(h, id, { until: (r) => r.state === "parked" || r.state === "done" });
 
-  // Every stage boundary was crossed by the panel: one cut, then one start per visit, in the document's order.
-  assert.equal(h.state.cuts.length, 1, "the one tree the row works in was cut once");
+  // Every stage boundary was crossed by the panel: one start per visit, in the document's order. The TREES are the
+  // round's: its parent tree, then one per stage, and a loop's later visit reuses its stage's tree rather than
+  // cutting a fourth and a fifth, because the lookup answers by stage and this harness's cutter hands back one
+  // directory for all of them.
+  assert.equal(h.state.cuts.length, 3, "the round's parent tree, then one per stage");
   assert.deepEqual(
     h.state.started.map((s) => s.stage),
     ["draft", "critique", "draft", "critique", "draft", "critique", "draft", "critique"],

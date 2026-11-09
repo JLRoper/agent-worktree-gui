@@ -19,7 +19,7 @@
 // test/chart-nesting.test.js: it reads the record THIS file's cuts write.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -28,6 +28,7 @@ import { Jobs } from "../lib/jobs.js";
 import { ParentBook } from "../lib/parents.js";
 import { parseBundle } from "../lib/pipeline-bundle.js";
 import { pinOf } from "../lib/stage-pin.js";
+import { stageTreeName } from "../lib/stage-tree-name.js";
 import { beginStageRun, settleStageRun } from "../lib/task-pipeline.js";
 import { driveTaskPipelines, inputManifest, stagePrompt, stageTreeLookup } from "../lib/task-pipeline-drive.js";
 
@@ -152,20 +153,22 @@ test("a stage tree is cut at the round's frozen parent: a landing after the roun
   assert.equal(critiqueRec.parentSha, roundSha, "the record names the commit the round froze, not main's new tip");
 });
 
-test("the driver asks for the round's frozen commit, never the branch as it stands now", () => {
+test("the driver cuts the next stage from the round's parent tree, never from origin/main as it stands now", () => {
   const roundSha = "9f3c1a2d4e5f60718293a4b5c6d7e8f901234567";
+  const parentBranch = "wtgui/the-review-round-a1b2c3";
   // A row at its SECOND stage: the first settled, the tree for the second not cut yet. Its round was recorded at the
-  // first cut, and the commit still landed on the parent branch since - the driver must not care.
+  // first cut, with the parent TREE that round cut from origin/main - and origin/main still moved since. The driver
+  // must cut from the round's own branch, whose tip is the frozen commit, and never from main as it stands now.
   let task = row({
     pipelineRun: {
       pipeline: "review",
       stage: "C1",
       enteredAt: CLOCK,
       via: "h1",
-      round: { parent: "main", sha: roundSha, at: CLOCK, by: "panel" },
+      round: { parentPath: "repo/.worktrees/the-review-round-a1b2c3", parent: parentBranch, slug: "the-review-round", tag: "a1b2c3", base: "origin/main", sha: roundSha, at: CLOCK, by: "panel" },
       visits: { D1: 1, C1: 1 },
       trees: {
-        D1: { path: "repo/.worktrees/write-the-draft-a1b2c3", branch: "wtgui/write-the-draft-a1b2c3", startSha: roundSha, parent: "main" },
+        D1: { path: "repo/.worktrees/the-review-round-stage-1-draft-9d41f0", branch: "wtgui/the-review-round-stage-1-draft-9d41f0", startSha: roundSha, parent: parentBranch },
       },
       stageRuns: [{ id: "review/D1#1", stage: "D1", visit: 1, status: "done", thread: "T1", artifact: { id: "draft", path: "draft.md", present: true } }],
     },
@@ -179,9 +182,25 @@ test("the driver asks for the round's frozen commit, never the branch as it stan
   assert.equal(out.ensureTree.length, 1, "the cut is asked for");
   assert.equal(out.ensureTree[0].stage, "C1");
   assert.equal(out.ensureTree[0].role, "stage", "a chain stage's own tree, not the row's");
-  assert.equal(out.ensureTree[0].base, roundSha, "cut at the commit the round began at");
-  assert.equal(out.ensureTree[0].parent, "main", "and recorded under the round's parent");
+  assert.equal(out.ensureTree[0].base, parentBranch, "cut from the round's PARENT TREE's branch, not from origin/main");
+  assert.equal(out.ensureTree[0].parent, parentBranch, "and recorded under that branch, so the chart nests every stage of one round together");
+  // What the name needs: the document's column, the stage's own title, and the visit this cut is for.
+  assert.equal(out.ensureTree[0].position, 2);
+  assert.equal(out.ensureTree[0].stageName, "Critique");
+  assert.equal(out.ensureTree[0].visit, 1);
   assert.equal(out.starts.length, 0, "nothing starts until the tree exists");
+
+  // A record from before the parent tree existed records only the branch and the commit; it keeps that model.
+  const older = row({
+    pipelineRun: {
+      pipeline: "review", stage: "C1", enteredAt: CLOCK, via: "h1",
+      round: { parent: "main", sha: roundSha, at: CLOCK, by: "panel" },
+      visits: { D1: 1, C1: 1 }, trees: {},
+      stageRuns: [{ id: "review/D1#1", stage: "D1", visit: 1, status: "done", thread: "T1", artifact: { id: "draft", path: "draft.md", present: true } }],
+    },
+  });
+  const legacy = driveTaskPipelines([beginStageRun(older, { stage: "C1", at: CLOCK })], { bundle: parsed.bundle, jobs: [], isLive: () => false, at: CLOCK, unattended: true });
+  assert.equal(legacy.ensureTree[0].base, "main", "a record with no parentPath is cut from the branch it did record");
 });
 
 test("a critique stage receives the draft by declared input, and its own tree does not contain it", async (t) => {
@@ -255,4 +274,80 @@ test("a critique stage receives the draft by declared input, and its own tree do
   assert.match(prompt, new RegExp(`git show ${draftSha.slice(0, 12)}:draft\\.md`));
   // The workspace line still names the critique's OWN tree, so the reader can see the two are different directories.
   assert.ok(prompt.includes(`  tree        ${critiqueTree.path}   branch ${critiqueTree.branch}`), "the stage's own tree is named");
+});
+
+// The round's PARENT TREE: a real worktree, cut from origin/main, on the branch every stage child is cut from. The
+// checkout is moved AHEAD of the remote first, because that is the case the rule exists for - a round must not begin
+// at a commit the remote has never seen - and a project with no `origin/main` keeps the checkout's own ref.
+test("the round's parent tree is cut from origin/main, not from the checkout", async (t) => {
+  const r = repo(t);
+  const { jobs, parents } = cutter(t, r.dir);
+  const originDir = path.join(r.dir, ".origin.git");
+  execFileSync("git", ["init", "-q", "--bare", originDir], { stdio: ["ignore", "pipe", "pipe"] });
+  r.git("remote", "add", "origin", originDir.replace(/\\/g, "/"));
+  r.git("push", "-q", "-u", "origin", "main");
+  const originSha = r.git("rev-parse", "origin/main");
+  r.write("local-only.md", "unpushed local work\n");
+  r.git("add", "-A");
+  r.git("commit", "-qm", "local work nobody pushed");
+  const checkoutSha = r.git("rev-parse", "HEAD");
+  assert.notEqual(checkoutSha, originSha, "the fixture must move the checkout ahead of origin/main");
+
+  const name = stageTreeName({ slug: "carry-the-form", tag: "a1b2c3", title: "carry the form" }, null, 1);
+  const root = await jobs.makeWorktree(r.dir, "carry the form", { project: "demo", name, remote: "main", parent: "main", round: true });
+  assert.equal(path.basename(root.path), "carry-the-form-a1b2c3", "the parent tree's directory is <task-slug>-<tag>");
+  assert.equal(root.branch, "wtgui/carry-the-form-a1b2c3");
+  assert.equal(root.startRef, "origin/main", "cut from origin/main");
+  assert.equal(root.startSha, originSha, "and the sha is the remote's tip, not the checkout's");
+  assert.equal(r.git("-C", root.path, "rev-parse", "HEAD"), originSha);
+  assert.equal(existsSync(path.join(root.path, "local-only.md")), false, "unpushed local work is not in the round's tree");
+  // The chart hangs it under the branch the commit came FROM, which for a round's parent tree is the repository's
+  // main - the same row a turnover's trees hang under - while `startRef` records that it was cut from origin/main.
+  const rec = parents.get("demo", root.branch);
+  assert.equal(rec.parent, "main");
+  assert.equal(rec.parentSource, "cut");
+  assert.equal(rec.parentSha, originSha);
+
+  // A stage child is cut from THAT branch, and lands on its own name.
+  const child = stageTreeName({ slug: "carry-the-form", tag: "a1b2c3" }, { id: "S2", name: "implement", position: 2 }, 1);
+  const stage = await jobs.makeWorktree(r.dir, "carry the form", { project: "demo", name: child, from: root.branch, parent: root.branch });
+  assert.equal(path.basename(stage.path), child.dir);
+  assert.equal(stage.branch, child.branch);
+  assert.equal(r.git("-C", stage.path, "rev-parse", "HEAD"), originSha, "the stage starts at the round's branch tip");
+  assert.equal(parents.get("demo", stage.branch).parent, root.branch, "the stage tree nests under the round's parent tree");
+});
+
+// A re-run at the same visit asks for the same name, and the cut adopts the tree that name already is - never a `-2`.
+test("a re-run at the same visit reuses its tree's name, with no -2 beside it", async (t) => {
+  const r = repo(t);
+  const { jobs } = cutter(t, r.dir);
+  const round = { slug: "carry-the-form", tag: "a1b2c3" };
+  const name = stageTreeName(round, { id: "S2", name: "implement", position: 2 }, 1);
+
+  const first = await jobs.makeWorktree(r.dir, "carry the form", { project: "demo", name });
+  const again = await jobs.makeWorktree(r.dir, "carry the form", { project: "demo", name });
+  assert.equal(again.path, first.path, "the same visit is the same directory");
+  assert.equal(again.branch, first.branch, "and the same branch");
+  assert.equal(again.reused, true, "the second cut adopts the first tree rather than making another");
+  const dirs = readdirSync(path.join(r.dir, ".worktrees")).filter((entry) => entry.startsWith("carry-the-form-stage-2"));
+  assert.deepEqual(dirs, [name.dir], "one directory for one visit, no -2 suffix");
+
+  // A second VISIT is a second tree, because a visit is a second attempt.
+  const second = await jobs.makeWorktree(r.dir, "carry the form", { project: "demo", name: stageTreeName(round, { id: "S2", name: "implement", position: 2 }, 2) });
+  assert.notEqual(second.path, first.path);
+  assert.notEqual(second.branch, first.branch);
+});
+
+// The name is a name, not a claim on somebody else's work: a directory already holding another tree is refused.
+test("a named cut refuses a directory another tree already holds", async (t) => {
+  const r = repo(t);
+  const { jobs } = cutter(t, r.dir);
+  const name = stageTreeName({ slug: "carry-the-form", tag: "a1b2c3" }, { id: "S2", name: "implement", position: 2 }, 1);
+  const first = await jobs.makeWorktree(r.dir, "carry the form", { project: "demo", name });
+  // The same directory, a different branch: whatever holds it is not this round's tree.
+  await assert.rejects(
+    () => jobs.makeWorktree(r.dir, "carry the form", { project: "demo", name: { dir: name.dir, branch: "wtgui/someone-elses-work" } }),
+    /already there and holds branch/,
+  );
+  assert.equal(existsSync(first.path), true, "the tree that was there is still there");
 });
