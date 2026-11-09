@@ -4,16 +4,38 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.76.24 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.76.27 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-515 releases from v0.1.0 (2026-10-20) to v1.76.24 (2026-11-09), 1696 commits between the tags. Every release is anchored by an
+517 releases from v0.1.0 (2026-10-20) to v1.76.27 (2026-11-09), 1701 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.76.27 — 2026-11-09 · 1 commit
+
+[`3c0d4d8`](https://github.com/JLRoper/agent-worktree-gui/commit/3c0d4d884b031af6fd21a202630dc985d110a158) · [compare v1.76.25...v1.76.27](https://github.com/JLRoper/agent-worktree-gui/compare/v1.76.25...v1.76.27)
+
+### Added
+
+- feat: a clarify question links its URL and reads as one sentence ([`3c0d4d8`](https://github.com/JLRoper/agent-worktree-gui/commit/3c0d4d884b031af6fd21a202630dc985d110a158))
+
+## v1.76.25 — 2026-11-09 · 4 commits
+
+[`b122608`](https://github.com/JLRoper/agent-worktree-gui/commit/b122608741b8f2116bbe1150e40e475103a894ac) · [compare v1.76.24...v1.76.25](https://github.com/JLRoper/agent-worktree-gui/compare/v1.76.24...v1.76.25)
+
+### Docs & tests
+
+- docs: name the retest evidence without machine paths ([`64f6eaa`](https://github.com/JLRoper/agent-worktree-gui/commit/64f6eaa44c4a3753fbb2845cc5c10c43a21bb9e5))
+- docs: render the changelog - 515 releases ([`15368d8`](https://github.com/JLRoper/agent-worktree-gui/commit/15368d8f136c4ee68b1e342036c4c7b967739ee1))
+- docs: map the landing stages and name the SEFL refusal test ([`28cfab5`](https://github.com/JLRoper/agent-worktree-gui/commit/28cfab5c0e5cd8411092f24bef4650ab6470bf10))
+
+### Other
+
+- chore: 1.76.25 - the version this landing carries ([`b122608`](https://github.com/JLRoper/agent-worktree-gui/commit/b122608741b8f2116bbe1150e40e475103a894ac))
 
 ## v1.76.24 — 2026-11-09 · 2 commits
 
