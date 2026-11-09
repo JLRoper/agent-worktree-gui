@@ -97,6 +97,7 @@
     "seed:pipeline-bundle": "node tools/seed-pipeline-bundle.mjs",
     "test": "node --test --test-concurrency=4 test/*.test.js",
     "test:changed": "node tools/test-changed.mjs",
+    "test:module": "node tools/test-module.mjs",
     "test:e2e:task-window": "node --test --test-reporter=spec test/e2e/task-window.spec.mjs",
     "test:e2e:minimized-composer": "node --test --test-reporter=spec test/e2e/minimized-composer.spec.mjs",
     "test:e2e:deliverables-window": "node --test --test-reporter=spec test/e2e/deliverables-window.spec.mjs"
