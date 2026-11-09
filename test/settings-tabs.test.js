@@ -72,8 +72,8 @@ test("the two read-now buttons are in Settings, not in the top bar", () => {
 });
 
 test("one tab per data-settings-group key, in the markup's own order", () => {
-  assert.equal(tabs.length, 12, `the strip has twelve tabs, found ${tabs.length}`);
-  assert.equal(panels.length, 12, `the panel has twelve panels, found ${panels.length}`);
+  assert.equal(tabs.length, 13, `the strip has thirteen tabs, found ${tabs.length}`);
+  assert.equal(panels.length, 13, `the panel has thirteen panels, found ${panels.length}`);
   assert.equal(settings.split('role="tablist"').length - 1, 1, "one tab strip");
   assert.ok(tabs.every((t) => t.key), "each tab carries a stable data-settings-tab key");
   assert.ok(panels.every((p) => p.key), "each panel carries its data-settings-group key");
@@ -88,13 +88,13 @@ test("one tab per data-settings-group key, in the markup's own order", () => {
 });
 
 test("exactly one tab is selected, and only its panel is not hidden", () => {
-  assert.deepEqual(tabs.map((t) => t.selected), ["false", "true", "false", "false", "false", "false", "false", "false", "false", "false", "false", "false"],
+  assert.deepEqual(tabs.map((t) => t.selected), ["false", "false", "true", "false", "false", "false", "false", "false", "false", "false", "false", "false", "false"],
     "Display is the first visit's tab, and it is the only selected one");
   assert.equal(tabs.filter((t) => t.tabindex === "0").length, 1, "the strip is one Tab stop: one tab is reachable");
-  assert.equal(tabs[1].tabindex, "0");
-  assert.ok(tabs.filter((_, i) => i !== 1).every((t) => t.tabindex === "-1"), "the rest are roving stops");
-  assert.deepEqual(panels.map((p) => p.hidden), [true, false, true, true, true, true, true, true, true, true, true, true],
-    "the eleven other panels ship hidden, so the page never paints all twelve");
+  assert.equal(tabs[2].tabindex, "0");
+  assert.ok(tabs.filter((_, i) => i !== 2).every((t) => t.tabindex === "-1"), "the rest are roving stops");
+  assert.deepEqual(panels.map((p) => p.hidden), [true, true, false, true, true, true, true, true, true, true, true, true, true],
+    "the twelve other panels ship hidden, so the page never paints all thirteen");
 });
 
 test("the strip is styled by a class of its own, and the fold machinery is gone", () => {

@@ -12262,6 +12262,9 @@ function selectSettingsTab(key) {
   // The release notes are a file read on the server too. A tab the reader comes back to re-asks when the answer
   // is old; the first answer is fetched at boot, beside the other tabs' reads, so the search sees its rows.
   if (key === "updates" && Date.now() - changelogLoadedAt > 15000) void loadChangelog();
+  // The Prompt tab measures the built briefing on the server, so it is a read, refreshed when the reader comes back to
+  // a stale answer and loaded once at boot (the tab is drawn from the panel's own state, not from this page's).
+  if (key === "prompt" && Date.now() - promptBudgetLoadedAt > 15000) void loadPromptBudget();
 }
 
 // The per-tab counts the search hands over: a badge on the tab's chrome, and the same number in the tab's own
@@ -15747,6 +15750,9 @@ initBundlesPanel();
 // And the release notes: CHANGELOG.md at the panel root is the answer to "what changed since my build", and it is
 // read before the tab is opened for the same reason the other tabs are — the settings search counts every tab.
 void loadChangelog();
+// And the Prompt tab: it is a read of the briefing the panel would build, so it is measured once at boot beside the
+// others rather than left blank until the reader presses the tab.
+void loadPromptBudget();
 // The window's own gestures: the head drags it, the corner grip sizes it, and the rect is remembered in this browser.
 initSettingsWindow();
 // A second way in that is always on screen at the top left: the title opens Settings.
@@ -16128,6 +16134,122 @@ $("general-dock")?.addEventListener("change", () => {
   if (value !== "docked" && value !== "floating") return paintGeneralSettings(state.settings || {});
   void saveGeneralSettings({ dockMode: value }, "assistant pane");
 });
+
+// ---- Settings → Prompt: what one turn's prompt is built from, section by section ----------------
+// The Prompt tab is a PICTURE of the briefing the panel builds, not a second budget written here: the server measures
+// the sections with the same builder a turn uses (lib/assistant.js `promptBudget`) and hands over one model, so the
+// diagram and the prompt cannot disagree. Three turns are drawn because the same standing text sits under different
+// gates: the first turn of a session (the charter whole), an ordinary turn (a charter marker, the board's marker and
+// no queue digest) and the fourth wake (the queue digest and the board's full sweep both due).
+let promptBudgetLoadedAt = 0;
+
+const promptNumber = (n) => Number(n || 0).toLocaleString("en-US");
+const promptPercent = (share) => `${(Math.max(0, Number(share) || 0) * 100).toFixed(1)}%`;
+
+// One section: its name and its share on the head line, and a bar whose width IS the share. A section whose gate is
+// closed is drawn as the gate - named, with the size it would take when due - and contributes nothing to the total.
+function promptSectionHtml(section) {
+  const gated = Boolean(section.gated) && !section.chars;
+  const name = gated ? `${section.label} · gate closed` : section.label;
+  const value = gated
+    ? `gate closed${section.whenDue ? ` · ${promptNumber(section.whenDue)} when due` : ""}`
+    : `${promptNumber(section.chars)} · ${promptPercent(section.share)}`;
+  const width = Math.max(0, Math.min(100, (Number(section.share) || 0) * 100));
+  const title = `${section.label} — ${promptNumber(section.chars)} chars (${promptPercent(section.share)})${section.cap ? `; reserved against ${promptNumber(section.cap)}` : ""}${section.basis ? `; ${section.basis}` : ""}`;
+  return `<div class="prompt-section${gated ? " is-gated" : ""}" data-prompt-section="${esc(section.key)}" title="${esc(title)}">
+          <div class="prompt-section-head"><span class="prompt-section-name">${esc(name)}</span><span class="prompt-section-share mono">${esc(value)}</span></div>
+          <div class="prompt-track"><span class="prompt-fill" style="width:${width.toFixed(2)}%"></span></div>
+        </div>`;
+}
+
+// One turn: the prompt box, its two carriers inside it, and the sections inside those. Box-in-box is the reading:
+// the outer box is the whole prompt, each half is a carrier (system text / turn text) and each section is a box in it.
+function promptDiagramHtml(turn) {
+  const half = (name, label) => {
+    const sections = (turn.sections || []).filter((s) => s.half === name);
+    const total = Number(name === "system" ? turn.system : turn.turn) || 0;
+    return `<div class="prompt-half" data-prompt-half="${name}">
+            <div class="prompt-half-head"><span>${label}</span><span class="mono">${promptNumber(total)} chars · ${promptPercent(turn.total ? total / turn.total : 0)}</span></div>
+            ${sections.map(promptSectionHtml).join("")}
+          </div>`;
+  };
+  return `<article class="prompt-diagram" data-prompt-turn="${esc(turn.key)}">
+        <div class="prompt-diagram-head">
+          <span class="prompt-diagram-title">${esc(turn.label)}</span>
+          <span class="prompt-diagram-total mono">${promptNumber(turn.total)} chars</span>
+        </div>
+        <div class="prompt-box">
+          <div class="prompt-box-head"><span>the prompt</span><span class="mono">${promptNumber(turn.total)} chars · 100%</span></div>
+          ${half("system", "system text")}
+          ${half("turn", "turn text")}
+        </div>
+        <div class="prompt-diagram-note">${esc(turn.note || "")}</div>
+      </article>`;
+}
+
+function paintPromptBudget(model) {
+  const box = $("prompt-diagrams");
+  const summary = $("prompt-budget-summary");
+  const legend = $("prompt-budget-legend");
+  if (!box) return;
+  const turns = Array.isArray(model?.turns) ? model.turns : [];
+  if (!turns.length) {
+    if (summary) summary.textContent = "the panel returned no prompt sections";
+    box.innerHTML = "";
+    return;
+  }
+  box.innerHTML = turns.map(promptDiagramHtml).join("");
+  const at = (key) => turns.find((t) => t.key === key) || null;
+  const first = at("first") || turns[0];
+  const ordinary = at("ordinary");
+  const fourth = at("fourth");
+  if (summary) {
+    const parts = [`The first turn of a session carries ${promptNumber(first.total)} characters in ${first.sections.length} sections`];
+    if (ordinary) parts.push(`an ordinary turn ${promptNumber(ordinary.total)}`);
+    if (fourth) parts.push(`the fourth wake ${promptNumber(fourth.total)}`);
+    parts.push("The standing text is the same bytes in all three; only the charter, the queue digest and the board change shape.");
+    summary.textContent = parts.join("; ").replace("; The standing", ". The standing");
+    summary.classList.remove("bad");
+  }
+  if (legend) {
+    const b = model.budget || {};
+    const g = model.gates || {};
+    const bits = [];
+    if (b.charter !== undefined) bits.push(`charter ${promptNumber(b.charter)}`);
+    if (b.prompt !== undefined) bits.push(`role prompt ${promptNumber(b.prompt)}`);
+    if (b.board !== undefined) bits.push(`board ${promptNumber(b.board)}`);
+    if (b.projects !== undefined) bits.push(`projects ${promptNumber(b.projects)}`);
+    if (b.rules !== undefined) bits.push(`rules ${promptNumber(b.rules)}`);
+    if (b.notes !== undefined) bits.push(`notes ${promptNumber(b.notes)}`);
+    if (b.watches !== undefined) bits.push(`watches ${promptNumber(b.watches)}`);
+    if (b.queue !== undefined) bits.push(`queue ${promptNumber(b.queue)} (${g.queueRows || 5} rows)`);
+    const gates = [g.queueLabel ? `the queue digest is due ${g.queueLabel}` : "", g.boardLabel ? `the board's full digest ${g.boardLabel}` : ""].filter(Boolean).join("; ");
+    legend.textContent = `${bits.length ? `Caps the boxes are reserved against: ${bits.join(" · ")}. ` : ""}${gates ? `${gates[0].toUpperCase()}${gates.slice(1)}.` : ""} Sizes are characters; shares are of that turn's total.`;
+    legend.hidden = false;
+  }
+}
+
+async function loadPromptBudget() {
+  const box = $("prompt-diagrams");
+  const summary = $("prompt-budget-summary");
+  if (!box) return;
+  if (!box.childElementCount && summary) {
+    summary.textContent = "reading the prompt…";
+    summary.classList.remove("bad");
+  }
+  try {
+    const r = await apiFetch("/api/settings/prompt-budget", { timeoutMs: 10000 });
+    const model = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(model.error || `HTTP ${r.status}`);
+    paintPromptBudget(model);
+    promptBudgetLoadedAt = Date.now();
+  } catch (e) {
+    if (summary) {
+      summary.textContent = `the prompt budget could not be read: ${e.message}`;
+      summary.classList.add("bad");
+    }
+  }
+}
 
 const COLLAPSE_AFTER_MAX_UI = 3600;
 

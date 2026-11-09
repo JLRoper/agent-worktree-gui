@@ -10,7 +10,7 @@
 // two groups could never be compared without scrolling.
 //
 // WHAT IS DRIVEN, on a sandbox panel of this checkout in a real Chromium:
-//   * eleven tabs, one per `data-settings-group` key, in the markup's own order, with role=tablist/tab/tabpanel,
+//   * thirteen tabs, one per `data-settings-group` key, in the markup's own order, with role=tablist/tab/tabpanel,
 //     aria-controls/aria-labelledby, exactly one aria-selected, one roving tabindex=0 and exactly one panel drawn
 //   * a press selects a tab and shows only its panel, and remembers it under wtgui.settingsTab
 //   * ArrowLeft/ArrowRight (wrapping), Home/End move AND select, Enter/Space select, and the focus follows
@@ -34,8 +34,8 @@ import { startPanel } from "./panel-testkit.mjs";
 const WIDE = { width: 1400, height: 900 };
 const TAB_KEY = "wtgui.settingsTab";
 const RECT_KEY = "wtgui.settingsRect";
-const KEYS = ["display", "cards", "board", "repo", "data", "gateway", "skills", "updates", "permissions", "pipeline", "bundles"];
-const LABELS = ["Display", "Cards", "Board", "Repo", "Data", "Gateway", "Skills", "Updates", "Permissions", "Pipeline", "Bundles"];
+const KEYS = ["general", "prompt", "display", "cards", "board", "repo", "data", "gateway", "skills", "updates", "permissions", "pipeline", "bundles"];
+const LABELS = ["General", "Prompt", "Display", "Cards", "Board", "Repo", "Data", "Gateway", "Skills", "Updates", "Permissions", "Pipeline", "Bundles"];
 const MIN = { w: 320, h: 240 };
 const EDGE = 8;
 
@@ -175,15 +175,15 @@ async function main() {
         // ---- A. one tab per key, in the markup's order ---------------------------------------------------------
         const boot = await read(page);
         check(boot.stripRole === "tablist", "the strip is a tablist", boot.stripRole);
-        check(boot.tabCount === 11, "eleven tabs, one per group", `${boot.tabCount} tabs`);
-        check(boot.panelCount === 11, "eleven panels", `${boot.panelCount} panels`);
-        check(JSON.stringify(boot.tabKeys) === JSON.stringify(KEYS), "the tabs are the eleven keys, in markup order", boot.tabKeys.join(","));
+        check(boot.tabCount === 13, "thirteen tabs, one per group", `${boot.tabCount} tabs`);
+        check(boot.panelCount === 13, "thirteen panels", `${boot.panelCount} panels`);
+        check(JSON.stringify(boot.tabKeys) === JSON.stringify(KEYS), "the tabs are the thirteen keys, in markup order", boot.tabKeys.join(","));
         check(JSON.stringify(boot.panelKeys) === JSON.stringify(KEYS), "and the panels are in the same order", boot.panelKeys.join(","));
         check(JSON.stringify(boot.labels) === JSON.stringify(LABELS), "each tab carries its group's label", boot.labels.join(" / "));
-        check(boot.roles.length === 11 && boot.roles.every((r) => r === "tab"), "every tab has role=tab");
-        check(boot.panelCount === 11 && boot.panelRoles.every((r) => r === "tabpanel"), "every panel has role=tabpanel");
-        check(boot.tabCount === 11 && boot.controls.every((c, i) => c === `settings-panel-${boot.tabKeys[i]}`), "aria-controls ties each tab to its own panel");
-        check(boot.panelCount === 11 && boot.panelLabelled.every((l, i) => l === `settings-tab-${boot.panelKeys[i]}`), "and aria-labelledby names each panel by its tab");
+        check(boot.roles.length === 13 && boot.roles.every((r) => r === "tab"), "every tab has role=tab");
+        check(boot.panelCount === 13 && boot.panelRoles.every((r) => r === "tabpanel"), "every panel has role=tabpanel");
+        check(boot.tabCount === 13 && boot.controls.every((c, i) => c === `settings-panel-${boot.tabKeys[i]}`), "aria-controls ties each tab to its own panel");
+        check(boot.panelCount === 13 && boot.panelLabelled.every((l, i) => l === `settings-tab-${boot.panelKeys[i]}`), "and aria-labelledby names each panel by its tab");
         check(boot.stored === null, "a first visit writes no tab key just by loading", String(boot.stored));
         if (!boot.tabCount) {
           // 0.63.0's Settings is the seven folding groups: there is no strip to measure. Say so once and stop,
@@ -194,10 +194,10 @@ async function main() {
 
         await openSettings(page);
         const first = await read(page);
-        check(selectedKey(first) === "display", "Display is the tab a first visit lands on", selectedKey(first));
+        check(selectedKey(first) === "general", "General is the tab a first visit lands on", selectedKey(first));
         check(first.tabindex.filter((t) => t === "0").length === 1 && first.tabindex[0] === "0",
           "the strip is ONE Tab stop: the selected tab is the only tabindex=0", first.tabindex.join(","));
-        check(JSON.stringify(first.shown) === JSON.stringify(["display"]), "one panel on screen, and it is Display's", first.shown.join(","));
+        check(JSON.stringify(first.shown) === JSON.stringify(["general"]), "one panel on screen, and it is General's", first.shown.join(","));
 
         // ---- A2. the strip is a comfortable size, not a 9.5px eyebrow ------------------------------------------
         // The eight labels were 9.5px in a 3px 3px 4px box: the reader had to lean in to read DISPLAY ... UPDATES,
@@ -242,11 +242,11 @@ async function main() {
         const left = await keyAt("ArrowLeft");
         check(selectedKey(left) === "gateway", "ArrowLeft comes back", selectedKey(left));
         const home = await keyAt("Home");
-        check(selectedKey(home) === "display" && home.focusTab === "display", "Home takes the first tab", `${selectedKey(home)} focus ${home.focusTab}`);
+        check(selectedKey(home) === "general" && home.focusTab === "general", "Home takes the first tab", `${selectedKey(home)} focus ${home.focusTab}`);
         const end = await keyAt("End");
         check(selectedKey(end) === "bundles" && end.focusTab === "bundles", "End takes the last tab", `${selectedKey(end)} focus ${end.focusTab}`);
         const wrap = await keyAt("ArrowRight");
-        check(selectedKey(wrap) === "display", "ArrowRight on the last tab wraps to the first", selectedKey(wrap));
+        check(selectedKey(wrap) === "general", "ArrowRight on the last tab wraps to the first", selectedKey(wrap));
         await page.keyboard.press("ArrowLeft");
         await page.waitForTimeout(100);
         const backWrap = await read(page);
@@ -394,8 +394,8 @@ async function main() {
         await page.click('[data-settings-tab="updates"]');
         await page.waitForTimeout(200);
         const narrow = await read(page);
-        check(narrow.tabStyle && narrow.tabStyle.boxes.length === 11 && JSON.stringify(narrow.labels) === JSON.stringify(LABELS),
-          "all eleven labels are still on the strip at 640px", narrow.labels.join(" / "));
+        check(narrow.tabStyle && narrow.tabStyle.boxes.length === 13 && JSON.stringify(narrow.labels) === JSON.stringify(LABELS),
+          "all thirteen labels are still on the strip at 640px", narrow.labels.join(" / "));
         check(narrow.tabStyle && narrow.tabStyle.clipped.length === 0, "and none of them is clipped at 640px",
           narrow.tabStyle ? narrow.tabStyle.clipped.join(",") || "none clipped" : "no tab");
         check(narrow.tabStyle && narrow.tabStyle.rows >= 2, "the strip wraps to more than one row rather than scrolling",

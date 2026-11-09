@@ -997,6 +997,19 @@ a restart):
 | Updates | Update check | What this tab does when the panel is serving a different build than the one it loaded: **off**, **prompt** (the default — a chip offers the reload), or **auto** (reload as soon as the page is idle). Both modes hold the reload while a reply box or a held draft has text, or while a turn is streaming. Saved in this browser. |
 | Updates | Panel build · Check now | The build this tab is running, and what the panel serves now. **Check now** asks `GET /api/build` at once — it works even with the check set to off. |
 
+**The Prompt tab** is read-only, and it is the picture behind the General tab's **Turn briefing budget**. Three
+box-in-box diagrams draw the prompt one assistant turn is built from: the **first turn of a session** (the charter
+sent whole), an **ordinary turn** (the charter's one-line marker, the board's marker and no queue digest) and the
+**fourth wake** (the queue digest and the board's full digest both due, so it is the largest ordinary turn). The
+outer box is the whole prompt, the two inside it are its carriers — the standing `system` text and the `turn` text
+appended to the question — and every section inside them is labelled with its characters and its share of that
+turn. The caps are the panel's own constants, not the drawing's: the charter's 20,000 characters, the twelve rule
+seats at 200 characters each, the notes' 1,200-character clip, ten watches at 120, forty project lines, the role
+prompt's 8,000-character cap, the queue digest's rows and the board's 8,000-character budget. The sizes are measured
+by the same `Assistant.briefingParts` a real turn uses (`GET /api/settings/prompt-budget`) and opening the tab
+advances neither the charter's send record nor the board's sweep tick, so looking at the budget cannot turn the next
+real turn into a marker for text nobody was sent.
+
 **Written to the gateway's `config.yaml`** (the gateway re-reads them; a row whose file is not reachable from this
 machine is disabled, and its note gives the reason):
 
