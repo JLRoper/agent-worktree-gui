@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "why": "CHANGELOG.md is this repository's own history. A docs commit that carries a report for another project tells a reader of the panel nothing, and it arrives here by an agent copying the report it had just written for that project. A docs commit whose subject, or whose added or modified path, names one of the projects below is kept out of the changelog by tools/changelog.mjs, and .githooks/commit-msg refuses it at the commit. Deleting another project's report is this repository's own work and is not filtered: a deletion is how the reports leave.",
+  "note": "Adding a project is a deliberate edit a reviewer sees. A token is matched case-insensitively on a word boundary in the subject and in the path, with - _ . / and \\ read as word separators, so PictureViewer, picture-viewer and picture_viewer all match the one token.",
+  "projects": [
+    "pictureviewer",
+    "picture viewer",
+    "picture manager",
+    "pmw"
+  ]
+}

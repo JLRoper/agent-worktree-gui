@@ -11,6 +11,12 @@
 #     npm run hooks:install          # git config core.hooksPath .githooks
 # The hook is local: it binds this machine and this config, not another clone and not GitHub.
 # This repo has no CI, so nothing refuses a bad subject at PR time either.
+#
+# A SECOND GATE lives here too: a docs commit may not name another project. A report for PictureViewer that lands
+# in this repo's docs/ is listed in CHANGELOG.md as this panel's work; tools/changelog-scope.json names the
+# projects whose reports do not belong here, tools/changelog-scope.mjs judges the subject and the staged paths, and
+# tools/changelog.mjs reads the same list, so the gate and the render cannot disagree. Only exit 1 refuses: a tool
+# that cannot run its own check must not block a commit.
 
 msgfile="$1"
 [ -n "$msgfile" ] && [ -f "$msgfile" ] || exit 0
@@ -60,6 +66,20 @@ esac
 
 if [ "$length" -lt "$MIN_LENGTH" ]; then
     reject "only $length characters — too short to name a symptom (minimum $MIN_LENGTH)"
+fi
+
+# A docs commit that names another project is out of this repository's changelog. The list is
+# tools/changelog-scope.json; the rule and the paths it reads are tools/changelog-scope.mjs's, which is the same
+# module the renderer loads. Run against the staged files, so the path half is judged as well as the subject.
+root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+scope_tool="$root/tools/changelog-scope.mjs"
+if [ -f "$scope_tool" ] && command -v node >/dev/null 2>&1; then
+    scope_out=$(node "$scope_tool" --commit-msg "$msgfile" 2>&1)
+    scope_status=$?
+    if [ "$scope_status" -eq 1 ]; then
+        printf '%s\n' "$scope_out" >&2
+        exit 1
+    fi
 fi
 
 exit 0
