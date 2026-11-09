@@ -1,0 +1,142 @@
+TAP version 13
+# Subtest: the three named header controls share one label shape: a leading glyph and Title Case
+ok 1 - the three named header controls share one label shape: a leading glyph and Title Case
+  ---
+  duration_ms: 1.2749
+  type: 'test'
+  ...
+# Subtest: Pause is out of the header and in Settings, beside the rows it freezes
+ok 2 - Pause is out of the header and in Settings, beside the rows it freezes
+  ---
+  duration_ms: 0.5889
+  type: 'test'
+  ...
+# Subtest: the moved control keeps its handler: one press closes the stream, the next reconnects
+ok 3 - the moved control keeps its handler: one press closes the stream, the next reconnects
+  ---
+  duration_ms: 1.2
+  type: 'test'
+  ...
+# Subtest: scan roots: a folder added from the settings is written, re-scanned, and drawn under its own card
+ok 4 - scan roots: a folder added from the settings is written, re-scanned, and drawn under its own card
+  ---
+  duration_ms: 11589.1961
+  type: 'test'
+  ...
+# Subtest: scan roots: a project is re-scanned on its own clock, so a tree cut while no page looks still becomes a row
+ok 5 - scan roots: a project is re-scanned on its own clock, so a tree cut while no page looks still becomes a row
+  ---
+  duration_ms: 29765.9538
+  type: 'test'
+  ...
+# Subtest: the two read-now buttons are in Settings, not in the top bar
+ok 6 - the two read-now buttons are in Settings, not in the top bar
+  ---
+  duration_ms: 2.6603
+  type: 'test'
+  ...
+# Subtest: one tab per data-settings-group key, in the markup's own order
+ok 7 - one tab per data-settings-group key, in the markup's own order
+  ---
+  duration_ms: 0.9841
+  type: 'test'
+  ...
+# Subtest: exactly one tab is selected, and only its panel is not hidden
+ok 8 - exactly one tab is selected, and only its panel is not hidden
+  ---
+  duration_ms: 0.4593
+  type: 'test'
+  ...
+# Subtest: the strip is styled by a class of its own, and the fold machinery is gone
+ok 9 - the strip is styled by a class of its own, and the fold machinery is gone
+  ---
+  duration_ms: 1.5132
+  type: 'test'
+  ...
+# Subtest: the fold store is retired: nothing reads it, nothing writes it
+ok 10 - the fold store is retired: nothing reads it, nothing writes it
+  ---
+  duration_ms: 3.4073
+  type: 'test'
+  ...
+# Subtest: the search box is in the panel's fixed head and says what it searches
+ok 11 - the search box is in the panel's fixed head and says what it searches
+  ---
+  duration_ms: 0.4621
+  type: 'test'
+  ...
+# Subtest: an absent key selects the first tab, and painting at load writes nothing
+ok 12 - an absent key selects the first tab, and painting at load writes nothing
+  ---
+  duration_ms: 0.7842
+  type: 'test'
+  ...
+# Subtest: a remembered tab is restored, and the stored key is not rewritten
+ok 13 - a remembered tab is restored, and the stored key is not rewritten
+  ---
+  duration_ms: 0.1529
+  type: 'test'
+  ...
+# Subtest: a stored key that names no panel falls back to the first tab, not an empty window
+ok 14 - a stored key that names no panel falls back to the first tab, not an empty window
+  ---
+  duration_ms: 0.1409
+  type: 'test'
+  ...
+# Subtest: the old fold keys are inert: not read, not rewritten
+ok 15 - the old fold keys are inert: not read, not rewritten
+  ---
+  duration_ms: 0.1936
+  type: 'test'
+  ...
+# Subtest: a press selects the tab, shows its panel and remembers it
+ok 16 - a press selects the tab, shows its panel and remembers it
+  ---
+  duration_ms: 0.2141
+  type: 'test'
+  ...
+# Subtest: the arrows walk the strip (wrapping), Home/End take the ends, and Enter/Space select
+ok 17 - the arrows walk the strip (wrapping), Home/End take the ends, and Enter/Space select
+  ---
+  duration_ms: 0.2531
+  type: 'test'
+  ...
+# Subtest: the search is global: every tab counts its matches, and a match on another tab is revealed
+ok 18 - the search is global: every tab counts its matches, and a match on another tab is revealed
+  ---
+  duration_ms: 0.714
+  type: 'test'
+  ...
+# Subtest: a match on the tab already shown does not move the reader, and the counts stay per tab
+ok 19 - a match on the tab already shown does not move the reader, and the counts stay per tab
+  ---
+  duration_ms: 0.2246
+  type: 'test'
+  ...
+# Subtest: the search marks matches instead of re-rendering the row it is filtering
+ok 20 - the search marks matches instead of re-rendering the row it is filtering
+  ---
+  duration_ms: 0.2137
+  type: 'test'
+  ...
+# Subtest: Esc clears the box and leaves the panel's own Esc for an empty one
+ok 21 - Esc clears the box and leaves the panel's own Esc for an empty one
+  ---
+  duration_ms: 0.4649
+  type: 'test'
+  ...
+# Subtest: the ✕ clears the search and gives the caret back to the box
+ok 22 - the ✕ clears the search and gives the caret back to the box
+  ---
+  duration_ms: 0.2348
+  type: 'test'
+  ...
+1..22
+# tests 22
+# suites 0
+# pass 22
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 42021.5093

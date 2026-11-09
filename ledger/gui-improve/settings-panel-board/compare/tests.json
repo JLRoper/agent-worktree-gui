@@ -1,0 +1,62 @@
+{
+  "schema": "tests/1",
+  "command": "node --test --test-reporter=tap test/scan-roots.test.js test/settings-tabs.test.js test/header-controls.test.js",
+  "files": [
+    "test/scan-roots.test.js",
+    "test/settings-tabs.test.js",
+    "test/header-controls.test.js"
+  ],
+  "why": "The three suites the surface's own code and markup are pinned by: scan-roots drives the folders-the-board-scans setting end to end, settings-tabs pins the tab strip and the Board panel's rows, header-controls pins the Pause row that moved into the Board panel.",
+  "runs": [
+    {
+      "tree": "after tree: 44b4278 (the baseline) + the change-set's public/ hunks, archived to a scratch dir for the run",
+      "commit": "44b4278",
+      "changeSet": true,
+      "exit": 0,
+      "tests": 21,
+      "pass": 21,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0,
+      "durationMs": 11800.9761,
+      "log": "ledger/gui-improve/settings-panel-board/compare/tests-after.log",
+      "tapTail": [
+        "1..21",
+        "# tests 21",
+        "# suites 0",
+        "# pass 21",
+        "# fail 0",
+        "# cancelled 0",
+        "# skipped 0",
+        "# todo 0",
+        "# duration_ms 11800.9761"
+      ]
+    },
+    {
+      "tree": "stage tree a770d074 with the change-set's public/ hunks applied for the run, then reverted",
+      "commit": "a770d074",
+      "changeSet": true,
+      "exit": 0,
+      "tests": 22,
+      "pass": 22,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0,
+      "durationMs": 42021.5093,
+      "log": "ledger/gui-improve/settings-panel-board/compare/tests-current.log",
+      "tapTail": [
+        "1..22",
+        "# tests 22",
+        "# suites 0",
+        "# pass 22",
+        "# fail 0",
+        "# cancelled 0",
+        "# skipped 0",
+        "# todo 0",
+        "# duration_ms 42021.5093"
+      ]
+    }
+  ]
+}
