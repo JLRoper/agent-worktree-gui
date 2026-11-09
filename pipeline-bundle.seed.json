@@ -3299,7 +3299,7 @@
           "name": "Critic",
           "kind": "agent",
           "remit": "Read the draft against the brief and return notes, never a rewrite.",
-          "instructions": "Read the draft against the brief. One note per defect, each naming the sentence and the fix it needs. Do not rewrite the draft yourself; your notes are the next round's brief. Accept only when no note is left open."
+          "instructions": "Read the draft against the brief. One note per defect, each naming the sentence and the fix it needs. Do not rewrite the draft yourself; your notes are the next round's brief. Accept only when no note is left open. The brief's own text decides the word budget: never invent a ceiling, and treat 4,000 words as a runaway guard rather than a style rule."
         }
       ],
       "stages": [
@@ -3330,7 +3330,7 @@
           "id": "critique",
           "title": "Critique",
           "purpose": "Read the draft against the brief and return one note per defect.",
-          "prompt": "Read the draft against the brief and return one note per defect: the sentence, the defect, the fix it needs. Do not rewrite the draft. When no note is left open, accept it in one line and record that verdict where the gate asks for it, so the drafter can be told the round is over instead of writing another one. The notes are the artifact the next round reads.",
+          "prompt": "Read the draft against the brief and return one note per defect: the sentence, the defect, the fix it needs. Do not rewrite the draft. When no note is left open, accept it in one line and record that verdict where the gate asks for it, so the drafter can be told the round is over instead of writing another one. The notes are the artifact the next round reads. The word budget is the brief's own text: enforce the range or ceiling the brief states, and where it states none there is no default ceiling - do not invent one. 4,000 words is the panel's runaway guard rather than a style rule: past it, say the work has run away instead of cutting it to fit.",
           "artifact": {
             "id": "critique-notes",
             "kind": "file",
