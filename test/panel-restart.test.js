@@ -267,3 +267,21 @@ test("the controller tells the helper the outgoing pid and the port to free", ()
   const call = /panel-restart\.cjs[\s\S]{0,700}?String\(this\.config\.port/.exec(src);
   assert.ok(call, "the spawn of lib/panel-restart.cjs carries the parent pid and this panel's port");
 });
+
+// ONE pid, never the tree — the form the restart helper must use. The helper is a CHILD of the panel it is
+// replacing, so a /T kill of that panel takes the helper (and with it the replacement launch) down; this
+// pins the argv so a future edit cannot quietly put the tree back. The exec is faked and the subject is
+// this process's own pid (alive by definition, and never actually signalled).
+test("the one-pid kill the helper uses omits /T, and the default still takes the tree", async () => {
+  const calls = [];
+  const fake = async (cmd, args) => {
+    calls.push({ cmd, args });
+    return { ok: true, how: "stub kill" };
+  };
+  const one = await stopPid(process.pid, { platform: "win32", exec: fake, tree: false });
+  assert.equal(one.ok, true);
+  assert.deepEqual(calls[0], { cmd: "taskkill", args: ["/PID", String(process.pid), "/F"] }, "the helper's kill is the pid alone");
+  const whole = await stopPid(process.pid, { platform: "win32", exec: fake });
+  assert.equal(whole.ok, true);
+  assert.deepEqual(calls[1], { cmd: "taskkill", args: ["/PID", String(process.pid), "/T", "/F"] }, "the default still takes the tree");
+});
