@@ -4,16 +4,33 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.76.8 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.76.9 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-500 releases from v0.1.0 (2026-10-20) to v1.76.8 (2026-11-09), 1646 commits between the tags. Every release is anchored by an
+501 releases from v0.1.0 (2026-10-20) to v1.76.9 (2026-11-09), 1650 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.76.9 — 2026-11-09 · 4 commits
+
+[`f87a810`](https://github.com/JLRoper/agent-worktree-gui/commit/f87a8107d12c647e89006341ee8257df358803c6) · [compare v1.76.8...v1.76.9](https://github.com/JLRoper/agent-worktree-gui/compare/v1.76.8...v1.76.9)
+
+### Fixed
+
+- fix: a pipeline row's liveness reads its round, not its dead link ([`01c64b8`](https://github.com/JLRoper/agent-worktree-gui/commit/01c64b80a2d5b38694aebba29595bfa750fec6bc))
+
+### Docs & tests
+
+- docs: render the changelog - 499 releases ([`64d888c`](https://github.com/JLRoper/agent-worktree-gui/commit/64d888cae0b20706603897b4aa524927af60201f))
+- docs: render the changelog - 500 releases ([`d2f8b3d`](https://github.com/JLRoper/agent-worktree-gui/commit/d2f8b3d3b08f8f16d552ce5d6d9f4c303bb2b886))
+
+### Other
+
+- chore: 1.76.9 - the version this landing carries ([`f87a810`](https://github.com/JLRoper/agent-worktree-gui/commit/f87a8107d12c647e89006341ee8257df358803c6))
 
 ## v1.76.8 — 2026-11-09 · 2 commits
 
