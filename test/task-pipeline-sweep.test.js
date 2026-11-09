@@ -306,3 +306,27 @@ test("a stage's artifact decides its remote write: a document stage is local, a 
   assert.equal(state.started[1].remoteWrite, "pr", "S2's artifact IS the pull request, so it lands the way it always did");
   assert.equal(rowOf(added.id).pipelineRun.stage, "S2");
 });
+
+// The 38 m 38 s: the round-7 row was ADDED at 23:18:31 and put on its pipeline much later, and a crash between the two
+// writes would have left a queued row naming no stage. The queue now files a row ONTO a stage in one write, and this
+// proves the panel's add path performs it — one row, its stage already on it, and one journal line saying both.
+test("a row filed onto a stage by the queue is written once, and its stage is there before the first sweep", async (t) => {
+  const { assistant, state, rowOf, settleStarts } = harness(t);
+
+  const added = assistant.queueMutate("assistant-1", "add", { title: "filed on the first stage", project: "agent-worktree-gui", pipeline: "two", stage: "S1" });
+  assert.equal(added.ok, true, added.error || "");
+  const row = rowOf(added.task.id);
+  assert.equal(row.state, "queued");
+  assert.equal(row.pipelineRun.stage, "S1", "the row carries its stage from the moment it exists");
+  assert.equal(row.pipelineRun.enteredAt, row.createdAt, "one clock: the row's stamp and the stage's are the same instant");
+  assert.equal(row.pipelineRun.visits.S1, 1);
+  const lines = assistant.journal.filter((line) => line.kind === "queue").map((line) => String(line.text || ""));
+  assert.equal(lines.filter((text) => /added #/.test(text)).length, 1, "one add, one journal line");
+  assert.match(lines.find((text) => /added #/.test(text)) || "", /on two · S1/, "the line names the stage the row was filed on");
+
+  // And it is driven like any other pipeline row: the first sweep asks for the tree.
+  assistant.sweepQueues();
+  await settleStarts();
+  assert.equal(state.cuts.length, 1);
+  assert.equal(rowOf(added.task.id).pipelineRun.tree.path, state.tree);
+});
