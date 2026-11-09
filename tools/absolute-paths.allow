@@ -222,3 +222,4 @@ tools/verify-whole-tool-stream.mjs | 1 | probe: the tree this script was last ru
 tools/verify_cli_session_limit.py | 1 | probe: the tree this script was last run against, kept as its default argument
 config.example.json | 6 | template: the shipped copy of the reader config.json, whose folders are this machine's examples
 docs/perf/backend-2026-11-06.md | 5 | evidence: the perf audit records the live panel's data dir, its scratch folder and the exact commands it ran, which is what it reports
+docs/reviews/ping-pong-round-7-dossier-2026-11-09.html | 2 | review record: the two stage prompts verbatim, each naming the tree it ran in

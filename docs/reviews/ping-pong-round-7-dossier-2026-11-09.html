@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ping-pong round 7 dossier: the next steps, the two stage prompts as sent, and the draft</title>
+<style>
+  :root { --bg:#0e1116; --panel:#151a21; --panel2:#1b212a; --line:#2a3340; --text:#e6e9ef; --dim:#9aa5b4;
+           --dimmer:#6f7a89; --green:#7ee787; --red:#ff9c94; --amber:#f0c674; --blue:#9ecbff; --purple:#c8a6ff;
+           --mono:ui-monospace,"Cascadia Mono",Consolas,"SF Mono",Menlo,monospace;
+           --ui:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  * { box-sizing:border-box; }
+  html { background:var(--bg); }
+  body { margin:0; color:var(--text); font:15px/1.62 var(--ui); }
+  .wrap { max-width:1120px; margin:0 auto; padding:30px 24px 72px; }
+  a { color:var(--blue); text-decoration:none; } a:hover { text-decoration:underline; }
+  h1 { font-size:27px; line-height:1.22; margin:4px 0 8px; letter-spacing:-0.2px; }
+  h2 { font-size:19px; margin:44px 0 12px; padding-top:16px; border-top:1px solid var(--line); }
+  h3 { font-size:15.5px; margin:26px 0 8px; color:var(--blue); }
+  p { margin:9px 0; }
+  ul,ol { margin:8px 0 8px 22px; padding:0; } li { margin:6px 0; }
+  code,.mono { font-family:var(--mono); font-size:12.8px; }
+  code { background:var(--panel2); border:1px solid var(--line); border-radius:4px; padding:0 4px; }
+  pre { background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:12px 14px; overflow-x:auto;
+        font-family:var(--mono); font-size:12.4px; line-height:1.55; }
+  .kicker { color:var(--dimmer); font-size:12px; text-transform:uppercase; letter-spacing:0.12em; }
+  .sub { color:var(--dim); font-size:16px; margin:0 0 14px; max-width:960px; }
+  .meta { color:var(--dim); font-size:12.5px; }
+  .meta code { font-size:12px; }
+  nav { margin:18px 0 8px; padding:12px 16px; background:var(--panel); border:1px solid var(--line);
+        border-radius:8px; font-size:13px; line-height:1.9; }
+  nav b { color:var(--dimmer); font-weight:600; text-transform:uppercase; font-size:11px; letter-spacing:0.1em; }
+  nav a { margin:0 12px 0 0; display:inline-block; }
+  .lead { background:var(--panel); border:1px solid var(--line); border-left:4px solid var(--blue);
+          border-radius:8px; padding:14px 18px; margin:18px 0; }
+  .lead p { margin:5px 0; }
+  .lead .go { font-size:16px; }
+  .warn { background:#2a2414; border:1px solid #5c4d22; border-left:4px solid var(--amber);
+          border-radius:8px; padding:12px 18px; margin:16px 0; }
+  .warn h4 { color:var(--amber); margin:0 0 4px; }
+  .box { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px 18px; margin:14px 0; }
+  .tw { overflow-x:auto; margin:10px 0 16px; border:1px solid var(--line); border-radius:8px; }
+  table { border-collapse:collapse; width:100%; font-size:13px; }
+  th,td { text-align:left; vertical-align:top; padding:7px 10px; border-bottom:1px solid var(--line); }
+  th { background:var(--panel2); color:var(--dim); font-weight:600; font-size:12px;
+       text-transform:uppercase; letter-spacing:0.05em; }
+  tr:last-child td { border-bottom:0; }
+  .small { font-size:12.5px; color:var(--dim); }
+  .ok { color:var(--green); } .bad { color:var(--red); }
+  ol.steps { margin:14px 0 10px 26px; }
+  ol.steps > li { margin:14px 0; padding-left:4px; }
+  ol.steps > li > b { color:var(--text); }
+  ol.steps .why { display:block; color:var(--dim); font-size:13.5px; margin-top:2px; }
+  ol.steps .why::before { content:"Reason: "; color:var(--dimmer); }
+  .promptbox { border:1px solid var(--line); border-radius:10px; background:var(--panel); margin:18px 0; overflow:hidden; }
+  .phead { display:flex; gap:14px; align-items:flex-start; justify-content:space-between;
+           background:var(--panel2); border-bottom:1px solid var(--line); padding:11px 14px; }
+  .pmeta { font-size:13px; line-height:1.7; }
+  .pmeta .dot { color:var(--dimmer); margin:0 2px; }
+  .stagebadge { display:inline-block; font-size:11px; text-transform:uppercase; letter-spacing:0.08em;
+                color:var(--bg); background:var(--blue); border-radius:4px; padding:0 6px; margin-right:6px;
+                font-weight:700; }
+  button.copy { flex:0 0 auto; font:600 12px/1 var(--ui); color:var(--text); background:#232c37;
+                border:1px solid var(--line); border-radius:6px; padding:7px 12px; cursor:pointer; }
+  button.copy:hover { background:#2b3644; }
+  .pnote { color:var(--dimmer); font-size:12.2px; margin:0; padding:8px 14px 0; }
+  pre.prompt { margin:0; border:0; border-radius:0; background:transparent; padding:10px 14px 16px;
+               font-size:12.2px; line-height:1.52; white-space:pre-wrap; word-break:break-word;
+               tab-size:2; user-select:text; }
+  article.doc { background:var(--panel); border:1px solid var(--line); border-radius:10px;
+                padding:6px 26px 22px; margin:16px 0; }
+  article.doc h2.doc-h { border-top:0; margin-top:22px; padding-top:0; font-size:21px; }
+  article.doc p { font-size:14.6px; margin:12px 0; }
+  article.doc strong { color:#fff; }
+  article.doc .doc-unsure { border-left:3px solid var(--amber); padding-left:12px; color:var(--dim); }
+  .prov { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:10px; margin:14px 0 4px; }
+  .prov div { background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:10px 12px; }
+  .prov .k { color:var(--dimmer); font-size:11px; text-transform:uppercase; letter-spacing:0.08em; }
+  .prov .v { font-family:var(--mono); font-size:12.6px; margin-top:3px; word-break:break-all; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<p class="kicker">Agent board - round 7 dossier - 2026-11-09</p>
+<h1>Ping-pong round 7 dossier: the eight next steps, the two stage prompts as the panel sent them, and the accepted draft</h1>
+<p class="sub">Task #335 on Assistant #2's queue, pipeline <code>ping-pong</code>, project <code>agent-worktree-gui</code>. Three parts: what the run left to do, the two stage prompts read straight out of the job records, and <code>ledger/ping-pong/draft.md</code> from the round-7 tree rendered as a document rather than a quoted blob.</p>
+<p class="meta">row <code>#335</code> - tree <code>.worktrees/write-the-draft-the-brief-asks-for-in-94df79</code> - branch <code>wtgui/write-the-draft-the-brief-asks-for-in-94df79</code> at <code>cbc07d7</code> - prompts from <code>~/.wag/state/jobs.json</code> - page written 11/8/2026, 22:08:15 EST (2026-11-09T03:08:15Z UTC)</p>
+
+<div class="lead">
+<p class="go"><b>Round 7's review page:</b> <a href="ping-pong-round-7-2026-11-08.html">Ping-pong round 7: the same brief on the fixed panel, and the four defects' before and after</a></p>
+<p>The review carries the measurements behind every number this page cites: the six stage runs, the settle lags, the three verdict files and the row's own record. This dossier does not re-argue them; it collects what the run left open, the two prompts that drove it, and the document it accepted.</p>
+</div>
+
+<nav><b>Contents</b><br>
+<a href="#next">1. The assistant's recommended next steps</a><a href="#prompts">2. The two stage prompts, as sent</a><a href="#draft">3. The draft, rendered</a><a href="#evidence">How this page was built</a>
+</nav>
+
+<h2 id="next">1. The assistant's recommended next steps</h2>
+<p>Eight, in the order the assistant put them: the three structural fixes in the queue and the driver first, then the two the row's own record makes unavoidable, then the two cleanups a person still owes, and the budget last. Each reason is the round-7 number that argues for it.</p>
+
+<ol class="steps">
+<li><b>Make artifact paths visit-scoped, so <code>draft-r2.md</code> is not overwritten by draft#3.</b><span class="why">the round-7 tree already held <code>draft.md</code> from earlier rounds, so draft#3's commit is 9 insertions and 28 deletions on one shared path; the only per-round identity is the stage run's pin, never the path.</span></li>
+
+<li><b>State the artifact kind explicitly on every stage in the seed, rather than leaving it unstated.</b><span class="why">the row's own done reason reads "critique/1, kind unstated", and an unstated kind takes the driver's <code>local</code> default, so a stage that should push would silently not.</span></li>
+
+<li><b>Give a row an elapsed clock from <code>createdAt</code> instead of the last stage's <code>startedAt</code>.</b><span class="why">that field is backfilled at the <code>done</code> transition, so the row now reports 5 m 32 s of "time in stage" for a 38 m 02 s loop and starts 1 h 14 m 12 s after it was created.</span></li>
+
+<li><b>Collapse the pipeline row's two writes into one.</b><span class="why">the queue still does <code>add</code> and then <code>pipeline</code>, 38 m 38 s apart on this row, and a crash between them leaves a queued row with no stage and no stamp to prove the gap.</span></li>
+
+<li><b>Decide what a cap park should do on its own, since today it needs a person.</b><span class="why">the gate's <code>accept</code> ends a converged loop, but a loop still revising at the cap parks on <code>pipeline-cap</code> until someone sends <code>pipeline-release {release: "cap"}</code> - the one wait in the row with no automatic exit.</span></li>
+
+<li><b>Chase the cut-to-first-stage handoff, which went from 0.853 s in round 6 to 3 m 04.5 s in round 7.</b><span class="why">the round-6 fix fires its settle hook at the run's end, and nothing fires at the cut's end, so the first worker waits after the tree exists.</span></li>
+
+<li><b>Close PR <a href="https://github.com/JLRoper/agent-worktree-gui/pull/607">#607</a>, round 6's, which is still open though superseded.</b><span class="why">it has read <code>OPEN</code> against <code>main</code> since 2026-11-08T22:58:09Z; the round-7 fix stopped new PRs being opened and never touched the one round 6's defect produced.</span></li>
+
+<li><b>Replace the 600-word draft budget with a range, since the draft landed at 599 of 600.</b><span class="why">one word of headroom means a fourth visit could only cut, and the critic's own acceptance note records "599 of its 600 words" as a constraint rather than a target.</span></li>
+</ol>
+
+<p class="small">The measurements behind items 1 to 6 and 8 are the review's "What the fixes did not change" and "What got worse" sections; item 7 is the live <code>gh pr view 607</code> read, <code>state: OPEN</code>, <code>mergedAt: null</code>.</p>
+
+<h2 id="prompts">2. The two stage prompts, as the panel sent them</h2>
+<p>A stage's prompt is built per run, so a loop with three visits has six of them. The two blocks below are the pair the run ended on - <code>draft#3</code>, which wrote the accepted draft, and <code>critique#3</code>, which recorded the <code>accept</code> - copied out of the job records for task #335 with <code>jq</code>, not retyped. The table after them lists all six stage runs and the hash of each prompt, so the other four are identified even though they are not reproduced.</p>
+
+
+<div class="promptbox" id="box-draft">
+  <div class="phead">
+    <div class="pmeta">
+      <span class="stagebadge">draft</span>
+      <b>stage run <code>ping-pong/draft#3</code></b>
+      <span class="dot">-</span> job <code>cd8e1e91</code>
+      <span class="dot">-</span> agent run <code>run_9b180be59011477ba1b56b877f331178</code>
+      <span class="dot">-</span> 2,613 chars, 2,627 bytes
+      <span class="dot">-</span> prompt sha256 <code>0fbba25bc733e5c1</code>
+    </div>
+    <button class="copy" data-target="prompt-draft" type="button">Copy</button>
+  </div>
+  <p class="pnote">Exactly as the panel sent it: the job record's <code>prompt</code> field, stored with LF line endings and no trailing newline. Nothing in the text is changed; only the markup around it.</p>
+  <pre class="prompt" id="prompt-draft">Write the draft the brief asks for, in one pass, and name in a closing line what you are unsure of. On a later round the draft is rewritten against the critic's notes: a note you disagree with is answered in the draft itself, never ignored. Commit the draft on the branch.
+
+— Ping-pong: draft and critique: stage 1 of 2, Draft (ping-pong/draft), visit 3
+Queue task #335: Round 7: run the ping-pong again on the fixed panel
+
+INPUTS
+  handed on   critique-notes   ledger/ping-pong/critique.md   commit 5e0214fab555   blob fadfbf365516   sha256 99d86a1f56b0…   writer critic
+              (critique → draft, handoff H-02, loop — crossing 2 of a cap of 3; read it at 5e0214fab555:ledger/ping-pong/critique.md)
+  came back   the row arrived by H-02 from critique; the gate G1 after it declares ledger/ping-pong/verdict-r{{round}}.json — read it; the panel does not read it for you
+  earlier     draft   ledger/ping-pong/draft.md   commit 1d20a0800cd7   blob 1066eeff7af3   sha256 351f91a21338   (this stage, visit 2 — unchanged)
+  tree        C:/ProjectDevelopment/agent-worktree-gui/.worktrees/write-the-draft-the-brief-asks-for-in-94df79   branch wtgui/write-the-draft-the-brief-asks-for-in-94df79
+              HEAD 5e0214f   0 uncommitted files
+
+BRIEF: Write one short field note, 400-600 words, for an engineer who has never used this panel, explaining how a queue task moves through a pipeline stage by stage: the tree cut, the stage run, the settle, the loop edge and its cap, and the gate. Be concrete and cite the panel's own module names (lib/task-pipeline-drive.js, lib/task-pipeline.js, lib/assistant/queue.js). It is a note, not a tutorial: explain the mechanism and one place where it can surprise a reader.
+
+Write the file at ledger/ping-pong/draft.md in the tree you are given, and commit it on the branch. On later rounds, rewrite the draft line by line against ledger/ping-pong/critique.md; a note you disagree with is answered in the draft, never ignored.
+
+PROOF: ledger/ping-pong/draft.md exists in the tree, is 400-600 words, and every later round's draft answers the open notes from the critique.
+
+ROUND 7: same brief, same pipeline, on the fixed panel. Do not change the pipeline document or the stage prompts to make it pass - the point is to observe what the four fixes changed.
+
+TOOLS — this stage runs unattended: nobody is at the keyboard, and the platform refuses `execute_code` ("BLOCKED: this session runs on an unattended platform"). Use `terminal` for commands and `read_file`, `write_file` and `patch` for files. A refused tool costs a turn, so do not try one to see whether it works.</pre>
+</div>
+
+<div class="promptbox" id="box-critique">
+  <div class="phead">
+    <div class="pmeta">
+      <span class="stagebadge">critique</span>
+      <b>stage run <code>ping-pong/critique#3</code></b>
+      <span class="dot">-</span> job <code>70d3e982</code>
+      <span class="dot">-</span> agent run <code>run_fecb590ce2ed449e9f10ae4be80a4873</code>
+      <span class="dot">-</span> 2,866 chars, 2,882 bytes
+      <span class="dot">-</span> prompt sha256 <code>b153070dce8edf3b</code>
+    </div>
+    <button class="copy" data-target="prompt-critique" type="button">Copy</button>
+  </div>
+  <p class="pnote">Exactly as the panel sent it: the job record's <code>prompt</code> field, stored with LF line endings and no trailing newline. Nothing in the text is changed; only the markup around it.</p>
+  <pre class="prompt" id="prompt-critique">Read the draft against the brief and return one note per defect: the sentence, the defect, the fix it needs. Do not rewrite the draft. When no note is left open, accept it in one line and record that verdict where the gate asks for it, so the drafter can be told the round is over instead of writing another one. The notes are the artifact the next round reads.
+
+— Ping-pong: draft and critique: stage 2 of 2, Critique (ping-pong/critique), visit 3
+Queue task #335: Round 7: run the ping-pong again on the fixed panel
+
+INPUTS
+  handed on   draft   ledger/ping-pong/draft.md   commit 083283ba8494   blob d80d8df76c70   sha256 f32942729e85…   writer drafter
+              (draft → critique, handoff H-01, sequence; read it at 083283ba8494:ledger/ping-pong/draft.md)
+  earlier     critique-notes   ledger/ping-pong/critique.md   commit 5e0214fab555   blob fadfbf365516   sha256 99d86a1f56b0   (this stage, visit 2 — unchanged)
+  tree        C:/ProjectDevelopment/agent-worktree-gui/.worktrees/write-the-draft-the-brief-asks-for-in-94df79   branch wtgui/write-the-draft-the-brief-asks-for-in-94df79
+              HEAD 083283b   0 uncommitted files
+
+GATE
+  verdict     the gate G1 (Verdict) after this stage declares ledger/ping-pong/verdict-r3.json — write it as {"outcome": "accept" | "revise"}; the document routes accept → the pipeline ends here, revise → handoff H-02. The panel reads that word and never writes the record for you, so a run that ends without it leaves the row parked on the gate.
+
+BRIEF: Write one short field note, 400-600 words, for an engineer who has never used this panel, explaining how a queue task moves through a pipeline stage by stage: the tree cut, the stage run, the settle, the loop edge and its cap, and the gate. Be concrete and cite the panel's own module names (lib/task-pipeline-drive.js, lib/task-pipeline.js, lib/assistant/queue.js). It is a note, not a tutorial: explain the mechanism and one place where it can surprise a reader.
+
+Write the file at ledger/ping-pong/draft.md in the tree you are given, and commit it on the branch. On later rounds, rewrite the draft line by line against ledger/ping-pong/critique.md; a note you disagree with is answered in the draft, never ignored.
+
+PROOF: ledger/ping-pong/draft.md exists in the tree, is 400-600 words, and every later round's draft answers the open notes from the critique.
+
+ROUND 7: same brief, same pipeline, on the fixed panel. Do not change the pipeline document or the stage prompts to make it pass - the point is to observe what the four fixes changed.
+
+TOOLS — this stage runs unattended: nobody is at the keyboard, and the platform refuses `execute_code` ("BLOCKED: this session runs on an unattended platform"). Use `terminal` for commands and `read_file`, `write_file` and `patch` for files. A refused tool costs a turn, so do not try one to see whether it works.</pre>
+</div>
+
+<h3>The six stage runs and their prompts</h3>
+<div class="tw"><table>
+<tr><th>stage run</th><th>job</th><th>reproduced</th><th>chars</th><th>bytes</th><th>prompt sha256 (16)</th><th>job started (UTC)</th></tr>
+<tr><td><code>ping-pong/draft#1</code></td><td class="mono">5056fb50</td><td class="mono"></td><td>2,020</td><td>2,024</td><td class="mono">96ed832cb79acd10</td><td class="mono">00:00:14.733</td></tr>
+<tr><td><code>ping-pong/critique#1</code></td><td class="mono">67f39bdc</td><td class="mono"></td><td>2,706</td><td>2,720</td><td class="mono">09e4e57cb19f0629</td><td class="mono">00:03:40.086</td></tr>
+<tr><td><code>ping-pong/draft#2</code></td><td class="mono">2695c2a6</td><td class="mono"></td><td>2,613</td><td>2,627</td><td class="mono">b1958aca3f732a1c</td><td class="mono">00:14:22.652</td></tr>
+<tr><td><code>ping-pong/critique#2</code></td><td class="mono">f8daac13</td><td class="mono"></td><td>2,866</td><td>2,882</td><td class="mono">2ce8221bb52027d1</td><td class="mono">00:19:38.228</td></tr>
+<tr><td><code>ping-pong/draft#3</code></td><td class="mono">cd8e1e91</td><td class="mono">shown above</td><td>2,613</td><td>2,627</td><td class="mono">0fbba25bc733e5c1</td><td class="mono">00:28:25.735</td></tr>
+<tr><td><code>ping-pong/critique#3</code></td><td class="mono">70d3e982</td><td class="mono">shown above</td><td>2,866</td><td>2,882</td><td class="mono">b153070dce8edf3b</td><td class="mono">00:32:43.571</td></tr>
+</table></div>
+<p class="small">Read with <code>jq -r '.jobs[] | select(.id=="&lt;id&gt;") | .prompt' ~/.wag/state/jobs.json</code>; the hash is sha256 over the stored string's UTF-8 bytes (LF line endings, no trailing newline). A <code>jq -r</code> dump through this shell's pipe is not the same bytes - MSYS turns each newline into CRLF, 21 bytes more on the draft prompt - so the hashes above come from a JSON parse, not from hashing the dump. Each stage run id is the row's own <code>pipelineRun.stageRuns[].id</code>, and its <code>job</code> field is the id in the table.</p>
+
+<h2 id="draft">3. The draft, rendered</h2>
+<p><code>ledger/ping-pong/draft.md</code>, read from the round-7 tree at its accepted commit and rendered as headings and paragraphs with the inline code and bold lead-ins kept. Nothing in the text is edited; the only change is markup.</p>
+
+<div class="prov">
+<div><div class="k">file</div><div class="v">ledger/ping-pong/draft.md</div></div>
+<div><div class="k">words / bytes</div><div class="v">599 words, 3,776 bytes</div></div>
+<div><div class="k">sha256</div><div class="v">43c578c46f59376c3db6c9589d1cfbb1bd419f968ab355a32fa20a10bc244bd7</div></div>
+<div><div class="k">commit</div><div class="v">cbc07d7 (draft#3, 083283b)</div></div>
+</div>
+
+<article class="doc">
+<h2 class="doc-h">How a queue task moves through a pipeline stage</h2>
+<p>A task with a <code>pipelineRun</code> is driven, not started by its card. <code>driveTaskPipelines</code> in <code>lib/task-pipeline-drive.js</code> passes over the rows in <code>lib/assistant/queue.js</code> and returns what it wants done; <code>lib/assistant.js</code> does the git and the spawn.</p>
+<p><strong>The tree cut.</strong> The cut happens only when unattended: <code>unattended</code> is <code>settings.spawn === "auto"</code> (<code>lib/assistant.js</code>), so on ask or off no tree is cut and the row waits. On auto the front queued row's <code>stageTreeLookup</code> gives three answers. <code>needed</code> returns an <code>ensureTree</code> request; <code>cutPipelineTree</code> writes <code>pipelineRun.tree</code>; <code>lost</code>, a recorded path now gone, parks <code>pipeline-tree-gone</code> and is never cut again; no tree and no project parks <code>pipeline-no-target</code>. A cut is not repeated: the next pass starts with <code>existing: true</code>.</p>
+<p><strong>The stage run.</strong> <code>stagePrompt</code> builds the prompt; <code>beginStageRun</code> in <code>lib/task-pipeline.js</code> creates the entry before anything runs (id <code>&lt;pipeline&gt;/&lt;stage&gt;#&lt;visit&gt;</code>, thread, job, status and decision null). The pass stamps <code>startingAt</code> on the run and calls <code>settleStageRun</code> with the commit, tree facts and input manifest, no status. On admission <code>linkTaskRun</code> in <code>lib/assistant/queue.js</code> writes thread, worktree and run id and flips the row to <code>running</code> in one write; <code>linkSpawnTask</code> fills the entry in the same write.</p>
+<p><strong>The settle.</strong> The driver's pass is the fallback, not the owner. The link stamps a hold in the tree's pipeline record (<code>pipelineWait.kind: "run"</code>); the run's end stamps it and fires the sweep at once (<code>stampPipelineHold</code> to <code>onStageSettled</code> to <code>tickPipelineWaits</code>), so the book reads the settle and advances. <code>heldByBook</code> skips a row held on the same stage and visit inside <code>HOLD_OWNER_MS</code>; past that, or with the hold gone, the driver takes it. It prefers the open entry's thread; a settled one, or one from before the link, falls back to the row's newest, possibly a retry's. A done run gets <code>settleStageRun</code>: status, <code>settledAt</code>, the artifact (presence, hash, commit pin), tree facts and a <code>stage-settled</code> decision; an absent declared artifact parks before the graph is read.</p>
+<p><strong>The loop edge and its cap.</strong> <code>nextStageOf</code> takes at most one edge, in kind order, loop last. <code>enterStage</code> increments <code>visits[stage]</code> and, when an edge is crossed, <code>crossings[edge]</code>. <code>capOf</code> reads the number opening the cap and treats a progress label like "2 of 3 rounds", or anything unreadable, as a <code>CAP</code> park. At <code>used + 1 &gt; limit</code> the row parks on <code>{kind: "cap"}</code>, a manual hold; <code>releaseCapPark</code> zeroes the count, or a requeue re-parks.</p>
+<p><strong>The gate.</strong> <code>gateAfter</code> puts a decision between the stage and its edge. A missing record parks <code>{kind: "gate"}</code>, the one wait the driver re-reads first each pass. A present record at a routed gate has three answers: a route to an edge releases the row to <code>queued</code> and moves it in the same pass; a route to <code>null</code> ends the pipeline, finishing a non-PR stage on its own verdict and returning a <code>pr</code> stage to <code>running</code> for the landing rule; one the gate cannot route (not JSON, no outcome, missing handoff) parks <code>pipeline-verdict</code> and is re-read like a gate wait. A last stage with no edge out is <code>closing</code>: <code>nextStageOf</code> answers done before the gate, and the settle finishes the row. The seed's G1 is a barrier (its last stage's only edge is the loop), and its <code>accept</code> routes to <code>null</code>, ending the row.</p>
+<p><strong>The surprise.</strong> The loop keeps two counters that disagree: <code>{{round}}</code> in a gate path is the stage's visit; the cap counts crossings. A cap of "3 rounds" allows three crossings and four drafts, so the gate on the fourth critique asks for <code>verdict-r4.json</code>, and a <code>revise</code> there is the crossing that parks.</p>
+<p class="doc-unsure"><strong>Unsure:</strong> the hold and sweep race is untested from the modules.</p>
+</article>
+
+<p class="small">The hash is over the working copy in the round-7 tree, which is the file the stage run pinned: <code>bundle artifact.sha256</code> on <code>ping-pong/draft#3</code> reads <code>43c578c4...</code>, the same file. The committed blob hashes differently because the checkout is CRLF and the blob is LF.</p>
+
+<h2 id="evidence">How this page was built</h2>
+<pre>prompts   jq -r '.jobs[] | select(.id=="cd8e1e91") | .prompt' ~/.wag/state/jobs.json
+          jq -r '.jobs[] | select(.id=="70d3e982") | .prompt' ~/.wag/state/jobs.json
+          sha256  0fbba25bc733e5c1a105dc31d6e3d2871914d639b8be471e987671db70d882aa
+                  b153070dce8edf3b98bf175ae2da2bcd5694bbf7df0a2155b4f62768bcb3cf4a
+draft     git -C .worktrees/write-the-draft-the-brief-asks-for-in-94df79 log --oneline -1
+          cbc07d7 docs: the critique accepts the field note and records G1 accept
+          sha256sum ledger/ping-pong/draft.md
+          43c578c46f59376c3db6c9589d1cfbb1bd419f968ab355a32fa20a10bc244bd7
+row       ~/.wag/state/assistants/assistant-2/queue.json, task #335
+          createdAt 2026-11-08T23:18:31.249Z, startedAt 2026-11-09T00:32:43.749Z,
+          doneAt 2026-11-09T00:38:15.977Z, tree.cutAt 2026-11-08T23:57:09.145Z,
+          stageRuns[5] = 6 entries, artifacts draft.md and critique.md
+review    docs/reviews/ping-pong-round-7-2026-11-08.html</pre>
+<p class="small">The page is generated from those reads: the prompt blocks are the stored strings escaped for HTML, and the draft section is the file parsed into blocks. The copy button copies the block's own text content, so what a reader pastes is what the job record holds.</p>
+
+<script>
+document.querySelectorAll("button.copy").forEach(function (btn) {
+  btn.addEventListener("click", function () {
+    var el = document.getElementById(btn.dataset.target);
+    var text = el.textContent;
+    var done = function () {
+      var old = btn.textContent;
+      btn.textContent = "Copied";
+      setTimeout(function () { btn.textContent = old; }, 1400);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { fallback(); });
+    } else { fallback(); }
+    function fallback() {
+      var r = document.createRange();
+      r.selectNodeContents(el);
+      var s = window.getSelection();
+      s.removeAllRanges();
+      s.addRange(r);
+      try { document.execCommand("copy"); done(); } catch (e) { /* selection stays, reader can copy */ }
+    }
+  });
+});
+</script>
+</div>
+</body>
+</html>
