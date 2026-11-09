@@ -7259,7 +7259,13 @@ function aheadBehindCellHtml(row) {
 // answer. `test/pr-cell-none.test.js` holds it to the one word on every `remoteBranch` state.
 function prCellHtml(row) {
   if (!row.pr) return `<span class="dimmer">none</span>`;
-  const cls = row.pr.state === "OPEN" ? "pr-open" : "pr-merged";
+  // A CLOSED or SUPERSEDED PR is not this row's PR: there is no page to open and no merge to stand behind,
+  // so the cell reads the one word `none` exactly as it does for a branch with nothing at all. The server
+  // stops handing these over too (lib/project.js `prFor`); this is the page's own half of the same rule, so
+  // a row already written with a dead PR cannot draw one either.
+  const state = String(row.pr.state || "").toUpperCase();
+  if (state !== "OPEN" && state !== "MERGED") return `<span class="dimmer">none</span>`;
+  const cls = state === "OPEN" ? "pr-open" : "pr-merged";
   const text = `#${row.pr.number} ${row.pr.state}`;
   const why = row.prUrl ? "" : row.prWhy ? ` · no PR page: ${row.prWhy}` : "";
   const title = `${row.pr.title || ""}${prMatchNote(row.pr)}${why}`;

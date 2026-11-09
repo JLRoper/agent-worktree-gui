@@ -142,3 +142,20 @@ test("childSlug names a tree from its parent's branch, and a typed name through 
   assert.equal(childBranchFor("parent", "abc123"), "wtgui/parent-abc123");
   assert.equal(childPathFor("C:/proj/", "parent", "abc123"), "C:/proj/.worktrees/parent-abc123");
 });
+
+test("a cut onto a branch that already carries a PR takes a fresh name, not the dead PR's ref", async () => {
+  const { repo, parentSha } = sharedFixture;
+  // The closed PR's head lives on a remote ref: a branch exists on the remote while no LOCAL branch of the name
+  // does, which is the shape `git worktree add -b` happily reuses (it makes a second local branch of the same
+  // name and the board's PR lookup then matches the dead PR). The tag is named here because it is a name a test
+  // can hold; a spawn's UUID is not injectable.
+  git(repo, "update-ref", "refs/remotes/origin/wtgui/parent-970633", parentSha);
+  const cut = await cutChildWorktree({ repoDir: repo, parentBranch: "feat/parent", tag: "970633" });
+  assert.equal(cut.ok, true, cut.error);
+  assert.notEqual(cut.tag, "970633", "the cut took a fresh tag");
+  assert.notEqual(cut.branch, "wtgui/parent-970633", "and did not reuse the branch the dead PR stood on");
+  assert.equal(cut.branch, `wtgui/parent-${cut.tag}`, "the fresh name still follows the panel's shape");
+  assert.equal(existsSync(cut.path), true, "the tree exists under the fresh name");
+  // The remote ref is untouched: the cut moved its own name, not the PR's branch.
+  assert.equal(git(repo, "rev-parse", "refs/remotes/origin/wtgui/parent-970633"), parentSha);
+});
