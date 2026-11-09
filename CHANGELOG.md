@@ -17,20 +17,20 @@ has no tag.
 
 ## v1.77.0 — 2026-11-09 · 4 commits
 
-[`b066d27`](https://github.com/JLRoper/agent-worktree-gui/commit/b066d2716b3d6dc3bdc9381c19746a8c203b24ec) · [compare v1.76.28...v1.77.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.76.28...v1.77.0)
+[`b00d4be`](https://github.com/JLRoper/agent-worktree-gui/commit/b00d4be3278a9577cb6da0343bd4c2f9a8911643) · [compare v1.76.28...v1.77.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.76.28...v1.77.0)
 
 ### Added
 
-- feat: keep another project's docs commit out of the changelog ([`b5b871d`](https://github.com/JLRoper/agent-worktree-gui/commit/b5b871decacbd9a4487c5a9ab0ee66c7d512633b))
+- feat: keep another project's docs commit out of the changelog ([`e4aa989`](https://github.com/JLRoper/agent-worktree-gui/commit/e4aa989c263a9f41c5bdec005fbb18241f08cee9))
 
 ### Docs & tests
 
 - docs: render the changelog - 518 releases ([`4dd7943`](https://github.com/JLRoper/agent-worktree-gui/commit/4dd794383eddcbf685834cd30263b03ab37133de))
-- docs: delete the retest and deploy reports copied in from another project ([`a13b66a`](https://github.com/JLRoper/agent-worktree-gui/commit/a13b66ac480dcacdcb94e28254df706162310ad1))
+- docs: delete the retest and deploy reports copied in from another project ([`00e35f2`](https://github.com/JLRoper/agent-worktree-gui/commit/00e35f2c6f67c5512eec846d5954a69b96b2d5a5))
 
 ### Other
 
-- chore: 1.77.0 - the version this landing carries ([`b066d27`](https://github.com/JLRoper/agent-worktree-gui/commit/b066d2716b3d6dc3bdc9381c19746a8c203b24ec))
+- chore: 1.77.0 - the version this landing carries ([`b00d4be`](https://github.com/JLRoper/agent-worktree-gui/commit/b00d4be3278a9577cb6da0343bd4c2f9a8911643))
 
 ## v1.76.28 — 2026-11-09 · 3 commits
 
