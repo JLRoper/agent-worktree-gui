@@ -4,16 +4,29 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.70.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.70.1 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-471 releases from v0.1.0 (2026-10-20) to v1.70.0 (2026-11-08), 1553 commits between the tags. Every release is anchored by an
+472 releases from v0.1.0 (2026-10-20) to v1.70.1 (2026-11-09), 1556 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.70.1 — 2026-11-09 · 3 commits
+
+[`2e21ff2`](https://github.com/JLRoper/agent-worktree-gui/commit/2e21ff2700a370eb1a3124e12eca9b695566d9af) · [compare v1.70.0...v1.70.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.70.0...v1.70.1)
+
+### Added
+
+- feat: a queue edit can name the run, so a filed row reads its own run ([`2e21ff2`](https://github.com/JLRoper/agent-worktree-gui/commit/2e21ff2700a370eb1a3124e12eca9b695566d9af))
+
+### Docs & tests
+
+- test: the driver fixture names its tree relatively, so the path gate passes ([`85bdb0b`](https://github.com/JLRoper/agent-worktree-gui/commit/85bdb0b574ca6b5f9442fd900e03c1220f165ae9))
+- docs: render the changelog - 471 releases ([`9b672cf`](https://github.com/JLRoper/agent-worktree-gui/commit/9b672cfd7260653524c5de5b28b72b8c590ace0a))
 
 ## v1.70.0 — 2026-11-08 · 2 commits
 
