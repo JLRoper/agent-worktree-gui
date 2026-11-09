@@ -423,15 +423,24 @@ for (const btn of document.querySelectorAll("[data-top-set]")) {
   });
 }
 
-// ---- which of the chart's columns are drawn ------------------------------------------------------
+// ---- chart column switches: what the reader keeps, and the write that survives a slow panel ------
 // The choice lives in this panel's config.json (POST /api/settings/columns, `hiddenColumns`), like the refresh mode
 // and the age threshold above: one answer for every browser, and it survives a restart. The switches are BUILT from
-// CHART_COLUMNS, so a column cannot be added to the chart and left out of Settings — or named one thing in the table
+// CHART_COLUMNS, so a column cannot be added to the chart and left out of Settings - or named one thing in the table
 // and another in the row.
 function chartColumnsStored() {
   const raw = state.settings?.hiddenColumns;
   const hidden = new Set((Array.isArray(raw) ? raw : []).map((x) => String(x || "").toLowerCase()));
   return CHART_COLUMNS.filter((c) => hidden.has(c.id)).map((c) => c.id);
+}
+
+// The list a save in flight is trying to write. While it is set, the switches and the counter show THIS list rather
+// than the file's: a panel busy enough to miss the reply used to repaint the boxes from config.json a moment later,
+// so the reader watched the switch snap back, pressed it again, and the file kept the old list while two writes
+// queued behind the same slow loop. Only the server's answer (or a real, final failure) clears it - never a repaint.
+function chartColumnsPending() {
+  const pending = state.chartColsPending;
+  return Array.isArray(pending) ? pending.slice() : null;
 }
 
 // The owner column can be ON in the file and absent from the chart: it hides itself while it would be a column of
@@ -451,7 +460,10 @@ function chartColumnsSentence(hidden = chartColumnsStored()) {
 
 function paintChartColumns(note = "", bad = false) {
   const stored = chartColumnsStored();
-  const hidden = new Set(stored);
+  const pending = chartColumnsPending();
+  // A save in flight is drawn from the list it is writing, not from the file it is about to replace.
+  const shown = pending || stored;
+  const hidden = new Set(shown);
   const holder = $("chart-cols");
   if (holder) {
     if (!holder.childElementCount) {
@@ -463,45 +475,120 @@ function paintChartColumns(note = "", bad = false) {
     for (const box of holder.querySelectorAll("[data-chart-col]")) box.checked = !hidden.has(box.dataset.chartCol);
   }
   const count = $("chart-cols-count");
-  if (count) count.textContent = `${CHART_COLUMNS.length - stored.length}/${CHART_COLUMNS.length}`;
+  if (count) count.textContent = `${CHART_COLUMNS.length - shown.length}/${CHART_COLUMNS.length}`;
   const preview = $("chart-cols-preview");
   if (preview) {
     preview.textContent = bad
-      ? `NOT SAVED — ${note}. config.json still says: ${chartColumnsSentence()}.`
-      : note
-        ? `${note} — set in config.json, so it applies to every browser and survives a restart`
-        : `${chartColumnsSentence()} · set in config.json, so it applies to every browser and survives a restart`;
+      ? `NOT SAVED - ${note}. config.json still says: ${chartColumnsSentence(stored)}.`
+      : pending
+        ? `${note} - the switch keeps the value you set; config.json is written when the panel answers`
+        : note
+          ? `${note} - set in config.json, so it applies to every browser and survives a restart`
+          : `${chartColumnsSentence(stored)} · set in config.json, so it applies to every browser and survives a restart`;
     preview.classList.toggle("bad", bad);
   }
 }
 
-async function saveChartColumns(hidden) {
+// How long ONE attempt may take, and how long the row keeps trying before it reports a real failure. The route is a
+// single config write, so an answer that takes longer than this is the panel being busy with something else - project
+// discovery, a full scan, a bundle re-read - not the write being slow.
+const COLUMN_WRITE_TIMEOUT_MS = 8000;
+const COLUMN_WRITE_BUDGET_MS = 90000;
+// Wall clock spent waiting BEFORE each attempt: 0, 1, 3, 7, 15, 30, 45 and 60 s after the first press. The last
+// attempt starts a minute after the first, which is the "retry for at least a minute" this row promises; the budget
+// leaves room for its own deadline. An attempt that has STARTED is always allowed to finish.
+const COLUMN_WRITE_WAITS_MS = [0, 1000, 2000, 4000, 8000, 15000, 15000, 15000];
+
+// One attempt. A 2xx answer is the reconciled list; a 4xx is the panel ANSWERING and refusing (a hidden list it
+// cannot read, a write it will not make), which another try cannot change; anything else - the deadline, a killed
+// socket, a 5xx from a half-written config.json - is worth another try.
+async function postChartColumns(want) {
+  const r = await apiFetch(
+    "/api/settings/columns",
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ hidden: want }) },
+    { timeoutMs: COLUMN_WRITE_TIMEOUT_MS },
+  );
+  const d = await r.json().catch(() => ({}));
+  if (r.status >= 400 && r.status < 500) {
+    throw Object.assign(new Error(d.error || `HTTP ${r.status}`), { final: true });
+  }
+  if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+  return Array.isArray(d.hidden) ? d.hidden.slice() : want;
+}
+
+// The retry loop. Every clock is a parameter so a test can drive it without waiting a minute, and `superseded` lets
+// a newer press own the write: a retry for a switch the reader has already moved must not land after the newer one.
+async function writeChartColumns(want, {
+  send = postChartColumns,
+  sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  now = () => Date.now(),
+  waits = COLUMN_WRITE_WAITS_MS,
+  budgetMs = COLUMN_WRITE_BUDGET_MS,
+  onAttempt = () => {},
+  superseded = () => false,
+} = {}) {
+  const startedAt = now();
+  let attempts = 0;
+  let lastErr = null;
+  for (let i = 0; i < waits.length; i += 1) {
+    if (superseded()) return { superseded: true, attempts };
+    if (i) await sleep(waits[i]);
+    if (i && now() - startedAt > budgetMs) break;
+    attempts += 1;
+    onAttempt(attempts);
+    try {
+      return { hidden: await send(want), attempts };
+    } catch (err) {
+      lastErr = err;
+      if (err && err.final) break;
+    }
+  }
+  const seconds = Math.max(1, Math.round((now() - startedAt) / 1000));
+  throw Object.assign(
+    new Error(`the panel did not save it after ${attempts} tries over ${seconds}s: ${String((lastErr && lastErr.message) || lastErr || "no answer")}`),
+    { attempts, lastErr },
+  );
+}
+
+async function saveChartColumns(hidden, opts = {}) {
   // Canonical order, so the file does not depend on the order the reader clicked the switches.
   const ids = CHART_COLUMNS.map((c) => c.id);
   const want = ids.filter((id) => hidden.includes(id));
-  const preview = $("chart-cols-preview");
-  if (preview) {
-    preview.textContent = "saving…";
-    preview.classList.remove("bad");
-  }
+  // Every press owns a number: a retry loop for an older press must not overwrite a switch the reader moved while
+  // it waited, and its answer must not repaint the row the newer press is holding.
+  const mine = (state.chartColsSaveSeq || 0) + 1;
+  state.chartColsSaveSeq = mine;
+  state.chartColsPending = want.slice();
+  paintChartColumns("saving…");
   try {
-    const r = await apiFetch(
-      "/api/settings/columns",
-      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ hidden: want }) },
-      { timeoutMs: 10000 },
-    );
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
-    state.settings.hiddenColumns = Array.isArray(d.hidden) ? d.hidden.slice() : want;
+    const out = await writeChartColumns(want, {
+      ...opts,
+      superseded: () => state.chartColsSaveSeq !== mine,
+      onAttempt: (n) => {
+        if (n > 1) paintChartColumns(`still trying (attempt ${n})…`);
+      },
+    });
+    // A switch moved while this attempt was in flight belongs to the newer press: its answer, and this one, must not
+    // land on the row the newer press is holding. `superseded` is only tested between attempts, so the press that
+    // was already waiting on the socket is caught here, on the way out.
+    if (out.superseded || state.chartColsSaveSeq !== mine) return;
+    // The server's answer is the truth, not the list the page asked for: the route normalises the ids, their order
+    // and the action floor, so the boxes and the chart agree with what the next boot will read.
+    state.settings.hiddenColumns = out.hidden;
+    state.chartColsPending = null;
     // The chart is a TABLE: a hidden column is one missing cell in the header and in every row of every project, so
     // the board is rebuilt rather than patched. The column fit is scheduled by that rebuild.
     renderAll();
     paintChartColumns();
     showBanner(chartColumnsSentence(state.settings.hiddenColumns));
   } catch (err) {
+    if (state.chartColsSaveSeq !== mine) return;
+    // A genuine failure: the switch goes back to the file's list, and the row says what actually happened.
+    state.chartColsPending = null;
     paintChartColumns(String((err && err.message) || err), true);
   }
 }
+// ---- end chart column switches
 
 $("chart-cols")?.addEventListener("change", () => {
   const holder = $("chart-cols");
