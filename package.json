@@ -48,6 +48,7 @@
     "verify:pipelines-tab": "node tools/verify-pipelines-tab.mjs",
     "verify:pipeline-flow": "node tools/verify-pipeline-flow.mjs",
     "verify:pipeline-fanout": "node tools/verify-pipeline-fanout.mjs",
+    "verify:pipeline-assembly": "node tools/verify-pipeline-assembly.mjs",
     "verify:pipeline-walk": "node tools/verify-pipeline-walk.mjs",
     "bench:pipeline": "node tools/bench-pipeline.mjs",
     "verify:pipeline-dialog": "node tools/verify-pipeline-dialog-size.mjs",
