@@ -77,7 +77,7 @@ test("a held host is not asked: prIndex answers empty without a socket", async (
     ...seed,
     projects: { ...(seed.projects || {}), "email-multi": { host: "sefl-bitbucket", coordinates: { projectKey: "IT", repoSlug: "email-multi" } } },
   };
-  const project = { name: "email-multi", path: "C:/nope", host: "sefl-bitbucket", remote: "origin" };
+  const project = { name: "email-multi", path: "no-checkout", host: "sefl-bitbucket", remote: "origin" };
   let calls = 0;
   const realFetch = globalThis.fetch;
   const realToken = process.env.BITBUCKET_SEFL_TOKEN;
@@ -100,7 +100,7 @@ test("two timed-out list reads hold the host, and the third call never reaches f
     ...seed,
     projects: { ...(seed.projects || {}), "fleet-kafka": { host: "sefl-bitbucket", coordinates: { projectKey: "SA", repoSlug: "fleet-kafka" } } },
   };
-  const project = { name: "fleet-kafka", path: "C:/nope", host: "sefl-bitbucket", remote: "origin" };
+  const project = { name: "fleet-kafka", path: "no-checkout", host: "sefl-bitbucket", remote: "origin" };
   let calls = 0;
   const realFetch = globalThis.fetch;
   const realToken = process.env.BITBUCKET_SEFL_TOKEN;
