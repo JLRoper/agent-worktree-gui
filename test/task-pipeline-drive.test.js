@@ -37,6 +37,7 @@ import { parseBundle } from "../lib/pipeline-bundle.js";
 import {
   DRIVE_FAULTS,
   STARTING_AT,
+  capWakeLine,
   START_GRACE_MS,
   artifactOf,
   driveTaskPipelines,
@@ -520,6 +521,67 @@ test("a gate asks for its round's own record: round 1's file never answers round
   assert.equal(crossed.tasks[0].state, "queued");
   assert.equal(crossed.tasks[0].pipelineRun.stage, "S1", "round 2's own record releases it down the loop");
   assert.equal(crossed.tasks[0].pipelineRun.stageRuns.at(-1).decision.trigger, "gate-record");
+});
+
+// The round-7 dossier's fifth item, decided by the reader: a cap park still parks the row, but it must not be silent —
+// the reader is woken with ONE line naming the cap, the visits and the last verdict, instead of waiting for a person to
+// send `pipeline-release {release: "cap"}`. This pins the FACTS the line is built from: the park carries both, the row's
+// sentence names both, and the line is one line.
+test("a cap park carries the visits and the last verdict, and the reader's line names the cap, the visits and the verdict", (t) => {
+  const dir = tree(t, { artifacts: [2] });
+  mkdirSync(path.join(dir, "ledger", "gates"), { recursive: true });
+  writeFileSync(path.join(dir, "ledger", "gates", "G-r2.json"), JSON.stringify({ outcome: "revise" }));
+  const looped = bundleOf(
+    pipeline({
+      gates: [
+        {
+          id: "G",
+          name: "The call",
+          after: "S2",
+          artifact: "artifact-2",
+          decider: "seat",
+          decision: { id: "d", path: "ledger/gates/G-r{{round}}.json", schema: "decision/1", writer: "seat", outcomes: ["revise", "accept"], routes: { revise: "h2", accept: null } },
+        },
+      ],
+      handoffs: [
+        { id: "h1", from: "S1", to: "S2", artifact: "artifact-1", kind: "sequence" },
+        { id: "h2", from: "S2", to: "S1", artifact: "artifact-2", kind: "loop", cap: "1 round" },
+      ],
+    }),
+  );
+  const run = { pipeline: "two", stage: "S2", enteredAt: CLOCK, visits: { S1: 2, S2: 2 }, crossings: { h2: 1 } };
+  const jobs = [{ id: "j2", thread: "T2", status: "done", startedAt: "2026-11-03T15:50:00.000Z" }];
+  const out = drive([row({ worktree: dir, thread: "T1", threads: ["T1", "T2"], pipelineRun: run })], { bundle: looped, jobs, unattended: false });
+
+  const parked = out.tasks[0];
+  assert.equal(parked.state, "parked", "the loop is not converged, so the row stops rather than being moved");
+  const wait = parked.pipelineRun.waitingFor;
+  assert.equal(wait.kind, "cap");
+  assert.equal(wait.limit, 1);
+  assert.equal(wait.used, 1);
+  assert.deepEqual(wait.visits, { S1: 2, S2: 2 }, "the park carries what every stage's visit count was");
+  assert.equal(wait.verdict.outcome, "revise", "and the verdict the gate read on the way in");
+  assert.match(wait.verdict.path, /G-r2\.json$/, "the record the gate read travels with the park");
+  assert.match(parked.reason, /\(visits S1 2, S2 2; the last verdict was revise at .*G-r2\.json\)/, "the row's sentence names both");
+
+  // The line the reader's assistant is woken with: ONE line, and it names the cap, the visits and the verdict.
+  const line = capWakeLine({
+    id: parked.id,
+    title: parked.title,
+    pipeline: parked.pipelineRun.pipeline,
+    stage: parked.pipelineRun.stage,
+    edge: wait.edge,
+    limit: wait.limit,
+    used: wait.used,
+    visits: wait.visits,
+    verdict: wait.verdict,
+  });
+  assert.equal(/[\r\n]/.test(line), false, "one line, not a paragraph");
+  assert.match(line, /#1 carry the contract — two · S2 stopped at loop h2/);
+  assert.match(line, /a cap of 1 round, 1 crossing taken/);
+  assert.match(line, /visits S1 2, S2 2/);
+  assert.match(line, /the last verdict was revise at .*G-r2\.json/);
+  assert.match(line, /pipeline-release \{release: "cap"\}/, "the line says what the reader's answer would be");
 });
 
 test("a failed run parks the row instead of re-running the stage", () => {

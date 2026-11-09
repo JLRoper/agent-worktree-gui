@@ -259,6 +259,18 @@ test("a cap park is released by the reader's action, and the row starts again", 
   assert.equal(row.state, "parked");
   assert.equal(row.pipelineRun.waitingFor.kind, "cap");
 
+  // THE READER IS WOKEN. A cap park is the one wait a row cannot leave on its own, so the panel hands the reader's own
+  // assistant ONE line naming the cap, the visits and the last verdict — instead of the row sitting silent until a
+  // person sends pipeline-release {release: "cap"}. This loop has no gate, so the verdict half is honestly absent.
+  const capWakes = assistant.pendingWake.filter((w) => w.rule === "pipelinecap");
+  assert.equal(capWakes.length, 1, "one cap park, one wake — a parked row is not re-parked on the next pass");
+  assert.equal(capWakes[0].assistantId, "assistant-1", "the wake goes to the row's own assistant");
+  assert.match(capWakes[0].reason, /stopped at loop h-back/);
+  assert.match(capWakes[0].reason, /a cap of 1 round/);
+  assert.match(capWakes[0].reason, /visits S\d+ \d+/, "the line names what each stage's visit count was");
+  assert.doesNotMatch(capWakes[0].reason, /last verdict/, "no gate here, so no verdict to name");
+  assert.match(capWakes[0].reason, /pipeline-release \{release: "cap"\}/, "the line says what the reader's answer would be");
+
   // A requeue alone is not a release: the count is still at the cap, so the re-run parks again. (The start marker
   // from the parked stage is moved past its grace the way a real reader's requeue minutes later would be.)
   assistant.clock = () => T0 + 4 * 60 * 1000;
