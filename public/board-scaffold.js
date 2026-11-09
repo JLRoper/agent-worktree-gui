@@ -27,6 +27,11 @@
 //   the project header   headTitle, chipsHtml, hostChipHtml, hostPanelHtml, repaintHostPanel, proposeHostMapping and
 //                        saveHostMapping: the title's tooltip, the counts strip, the host chip, and the Discover
 //                        strip that proposes a mapping and writes one only when the reader presses
+//   the rules            rulesChipHtml, refreshRulesChip, rulesFor, projectBarsHtml, repaintBars, repaintBar,
+//                        barsOf, openBar, closeBar, proposeHostMapping's bar half, rulesBarHtml, ruleRowHtml,
+//                        toggleRulesBar, closeRulesBar, addRule, editRule, moveRule, deleteRule and saveProjectRules:
+//                        the chip beside the host chip, the grey strip's STACK of bars, and the editor in the rules
+//                        bar that adds, edits, reorders and deletes a project's one-line rules
 //   the row's detail     gitSubHtml (one folded file strip), DESC_SENTENCE_BREAK and descLines (the description as
 //                        bullets), refreshClock (the refresh journal's wall clock) and detailHtml, the whole
 //                        tr.detail block: merge state, description, TODO, liveness, the agent slots and the idle
@@ -38,8 +43,9 @@
 //
 // WHAT IT REACHES OUT FOR (by name, at call time, exactly as before the move)
 //
-//   state                the page's state literal: rows, jobs, projects, hosts, hostPanel, refreshOffers, todoOpen,
-//                        todoDraft, todoFactsOpen, gitOpen, gitSubOpen, liveOpen, openDescs, expandedProjects
+//   state                the page's state literal: rows, jobs, projects, hosts, hostPanel, bars, rulesBar,
+//                        refreshOffers, todoOpen, todoDraft, todoFactsOpen, gitOpen, gitSubOpen, liveOpen, openDescs,
+//                        expandedProjects
 //   the formatters       esc, keyOf, relTime and fmtAgo (public/core/dom-format.js)
 //   the record reads     conversations and panelAgentsByPath, chartTopLimit, chartTopSplit and wtColspan
 //                        (public/charts.js), orderedAgents and markUnder (public/render-projects.js)
@@ -394,30 +400,23 @@ function hostPanelHtml(name) {
     </div>`;
 }
 
+// The host bar lives INSIDE the grey strip's stack now (see "the rules bar" below), so its repaint is the stack's,
+// narrowed to one bar: a rule being saved must not rebuild the mapping form the reader is typing a coordinate into.
 function repaintHostPanel(name) {
-  const sec = document.querySelector(`section.project[data-project="${CSS.escape(name)}"]`);
-  if (!sec) return;
-  const html = hostPanelHtml(name);
-  const old = sec.querySelector("[data-host-form]");
-  if (old) {
-    if (html) old.outerHTML = html;
-    else old.remove();
-    return;
-  }
-  if (!html) return;
-  const head = sec.querySelector(".project-head.meta-line");
-  if (head) head.insertAdjacentHTML("afterend", html);
+  repaintBar(name, "host");
 }
 
 async function proposeHostMapping(name) {
   // A second press on the same chip closes the strip; it is a toggle, not a dialog.
   if (state.hostPanel?.project === name) {
     state.hostPanel = null;
+    closeBar(name, "host");
     repaintHostPanel(name);
     return;
   }
   const current = state.hosts?.projects?.[name] || {};
   state.hostPanel = { project: name, host: current.host || "", coords: "", line: "reading the remote…", busy: true };
+  openBar(name, "host");
   repaintHostPanel(name);
   try {
     const res = await apiFetch("/api/hosts/propose", {
@@ -478,6 +477,7 @@ async function saveHostMapping(name) {
       return;
     }
     state.hostPanel = null;
+    closeBar(name, "host");
     repaintHostPanel(name);
     showBanner(`host mapping: ${name} → ${host}${out.mapping?.links?.repo ? ` (${out.mapping.links.repo})` : ""}`);
     // The rows carry their link as a scan result, so the cells catch up on the next pass; this resync brings the new
@@ -487,6 +487,311 @@ async function saveHostMapping(name) {
     state.hostPanel = { ...state.hostPanel, busy: false, error: true, line: `could not write the mapping: ${e.message}` };
     repaintHostPanel(name);
   }
+}
+
+// ---- a project's rules: the chip, the bar, and the editor inside it --------------------------------------------
+// The rule list is the reader's, one line each, stored on the project's `projects[]` entry in config.json
+// (lib/project-rules.js). The snapshot carries it on the project record - lib/projects.js normalises the entry
+// discovery merged - so the chip can count it on the first paint with no round trip; `/api/project-rules` is the read
+// the bar opens with and the write every gesture goes through.
+//
+// The chip is ALWAYS drawn, zero included: a count that only appears once there is something to count is a control
+// the reader cannot find on the project they want to give a rule to. The bar it opens is the SAME grey strip the host
+// chip opens (`.host-form`), and the two share ONE stack per project so a rules bar opened while the host bar is up
+// sits directly ABOVE it - the most recently opened bar on top.
+// Only the editor's numbers BEFORE the first read answers (`/api/project-rules` carries the real pair, from
+// lib/project-rules.js, and `state.ruleCaps` replaces these the moment a bar is opened).
+const RULES_FALLBACK_CAPS = { max: 40, maxChars: 200 };
+
+function rulesCaps() {
+  const caps = state.ruleCaps;
+  return caps && Number.isFinite(caps.max) && Number.isFinite(caps.maxChars) ? caps : RULES_FALLBACK_CAPS;
+}
+
+// A project's list, as the page holds it. Absence reads as empty, the same rule lib/project-rules.js applies.
+function rulesFor(name) {
+  const list = state.projects.get(name)?.rules;
+  return Array.isArray(list) ? list : [];
+}
+
+function rulesBarOpen(name) {
+  return barsOf(name).includes("rules");
+}
+
+function rulesChipSig(name) {
+  return `${rulesFor(name).length}|${rulesBarOpen(name) ? "1" : "0"}`;
+}
+
+function rulesChipHtml(name) {
+  const n = rulesFor(name).length;
+  const open = rulesBarOpen(name);
+  const title = n
+    ? `${n} rule${n === 1 ? "" : "s"} for ${name} - one line each, read in this order. Click to open the rules bar and add, edit, reorder or delete one.`
+    : `${name} has no rules yet. Click to open the rules bar and write one - a one-line rule a worker in this project is meant to obey.`;
+  return `<button type="button" class="btn-rules${n ? " has-rules" : ""}${open ? " is-open" : ""}" data-rules-chip="${esc(name)}" data-rules-project="${esc(name)}" data-rules-sig="${esc(rulesChipSig(name))}" aria-expanded="${open ? "true" : "false"}" title="${esc(title)}">rules: ${n}</button>`;
+}
+
+// Repaint the chip in place when the count or the open state moved. The same reasoning as `refreshChips`: a snapshot
+// ticks every few seconds and rebuilding a node that reads exactly as it did is pure churn.
+//
+// The node is found through `projectNode` (public/dom.js) rather than a bare `document.querySelector`, because this
+// runs on that same per-snapshot path and a by-attribute walk cannot use the id/class fast paths: the cached node is
+// what makes the second refresh of a project ask the document NOTHING (test/board-lookups.test.js counts it).
+function refreshRulesChip(name) {
+  const el = projectNode("data-rules-chip", name);
+  if (!el) return;
+  if (el.dataset.rulesSig === rulesChipSig(name)) return;
+  el.outerHTML = rulesChipHtml(name);
+}
+
+// ---- the grey strip's stack ------------------------------------------------------------------------------------
+// `state.bars` is a Map of project -> the bar KINDS it has open, in the order they were opened. Rendering walks it
+// backwards, so the most recent bar is the top one. It is kept here, not only in the DOM, for the same reason the
+// host panel's proposal is: a section rebuild (a snapshot with a changed project set, another tab's save) redraws the
+// whole project from state, and a bar that lived only in the DOM would go away with the section.
+function barsOf(name) {
+  const list = state.bars?.get?.(name);
+  return Array.isArray(list) ? list : [];
+}
+
+function setBarOrder(name, kinds) {
+  if (!state.bars) state.bars = new Map();
+  if (kinds.length) state.bars.set(name, kinds);
+  else state.bars.delete(name);
+}
+
+// Opening a bar that is already up MOVES it to the top rather than adding a second copy.
+function openBar(name, kind) {
+  setBarOrder(name, [...barsOf(name).filter((k) => k !== kind), kind]);
+}
+
+function closeBar(name, kind) {
+  setBarOrder(name, barsOf(name).filter((k) => k !== kind));
+}
+
+// The stack itself. An empty stack draws nothing at all rather than an empty band.
+function projectBarsHtml(name) {
+  const kinds = barsOf(name).slice().reverse();
+  if (!kinds.length) return "";
+  const bars = kinds.map((kind) => (kind === "host" ? hostPanelHtml(name) : kind === "rules" ? rulesBarHtml(name) : "")).filter(Boolean);
+  if (!bars.length) return "";
+  return `<div class="proj-bars" data-bars="${esc(name)}">${bars.join("")}</div>`;
+}
+
+// Replace the whole stack: used when the ORDER moved (a bar was opened or closed), which no single-bar repaint can do.
+function repaintBars(name) {
+  const sec = document.querySelector(`section.project[data-project="${CSS.escape(name)}"]`);
+  if (!sec) return;
+  const html = projectBarsHtml(name);
+  const old = sec.querySelector("[data-bars]");
+  if (old) {
+    if (html) old.outerHTML = html;
+    else old.remove();
+    return;
+  }
+  if (!html) return;
+  const head = sec.querySelector(".project-head.meta-line");
+  if (head) head.insertAdjacentHTML("afterend", html);
+}
+
+// Replace ONE bar inside the stack, leaving its neighbours' nodes (and whatever the reader typed in them) alone.
+function repaintBar(name, kind) {
+  const holder = document.querySelector(`section.project[data-project="${CSS.escape(name)}"] [data-bars]`);
+  if (!holder) {
+    // No stack yet: this bar is the first one open for the project.
+    repaintBars(name);
+    return;
+  }
+  const html = kind === "host" ? hostPanelHtml(name) : kind === "rules" ? rulesBarHtml(name) : "";
+  const old = holder.querySelector(kind === "host" ? "[data-host-form]" : "[data-rules-bar]");
+  if (old) {
+    if (html) old.outerHTML = html;
+    else old.remove();
+  } else if (html) {
+    // A bar that was opened while this one was already up goes on top, which is the order `openBar` recorded.
+    holder.insertAdjacentHTML("afterbegin", html);
+  }
+  // The last bar to close takes the stack with it, rather than leaving an empty band in the card.
+  if (!holder.children.length) holder.remove();
+}
+
+// ---- the rules bar and its editor ------------------------------------------------------------------------------
+function ruleRowHtml(name, rule, i, count) {
+  const busy = state.rulesBar?.project === name && state.rulesBar.busy ? " disabled" : "";
+  const caps = rulesCaps();
+  return `<span class="rule-row" data-rule-row="${i}">
+      <span class="rule-n mono">${i + 1}</span>
+      <input class="mono rule-input" type="text" maxlength="${caps.maxChars}" data-rule-text="${i}" data-rule-project="${esc(name)}" value="${esc(rule)}"${busy} data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" spellcheck="false" aria-label="rule ${i + 1} for ${esc(name)}">
+      <button type="button" class="rule-btn" data-rule-move="up" data-rule-index="${i}" data-rule-project="${esc(name)}" title="move this rule up - the order is the order a worker reads them in"${busy || i === 0 ? " disabled" : ""}>↑</button>
+      <button type="button" class="rule-btn" data-rule-move="down" data-rule-index="${i}" data-rule-project="${esc(name)}" title="move this rule down"${busy || i === count - 1 ? " disabled" : ""}>↓</button>
+      <button type="button" class="rule-btn rule-del" data-rule-delete="${i}" data-rule-project="${esc(name)}" title="delete this rule"${busy}>✕</button>
+    </span>`;
+}
+
+function rulesLine(name) {
+  const n = rulesFor(name).length;
+  if (!n) return "no rules yet - one line each; the editor below adds one at a time";
+  return `${n} rule${n === 1 ? "" : "s"} - one line each, in this order`;
+}
+
+function rulesBarHtml(name) {
+  const bar = state.rulesBar;
+  if (!bar || bar.project !== name) return "";
+  const rules = rulesFor(name);
+  const busy = bar.busy ? " disabled" : "";
+  const caps = rulesCaps();
+  const rows = rules.map((rule, i) => ruleRowHtml(name, rule, i, rules.length)).join("");
+  return `<div class="host-form rules-form" data-rules-bar="${esc(name)}">
+      <span class="mono host-line${bar.error ? " clone-err" : ""}" data-rules-line>${esc(bar.line || rulesLine(name))}</span>
+      <span class="rules-body">
+        ${rules.length ? `<span class="rules-list">${rows}</span>` : `<span class="rules-empty mono dimmer">no rules for ${esc(name)} yet</span>`}
+        <span class="rules-add">
+          <input class="mono" type="text" maxlength="${caps.maxChars}" data-rules-new="${esc(name)}" placeholder="a one-line rule for ${esc(name)}"${busy} data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" spellcheck="false" aria-label="a new rule for ${esc(name)}">
+          <button type="button" data-rules-add="${esc(name)}" title="add this line to the project's rules"${busy}>add</button>
+          <button type="button" data-rules-close="${esc(name)}" title="close the rules bar">close</button>
+        </span>
+      </span>
+    </div>`;
+}
+
+async function toggleRulesBar(name) {
+  if (state.rulesBar?.project === name) {
+    closeRulesBar(name);
+    return;
+  }
+  state.rulesBar = { project: name, line: "reading the rules…", busy: false, error: false };
+  openBar(name, "rules");
+  repaintBars(name);
+  refreshRulesChip(name);
+  try {
+    const res = await apiFetch(`/api/project-rules?project=${encodeURIComponent(name)}`);
+    const out = await res.json().catch(() => ({}));
+    if (state.rulesBar?.project !== name) return;
+    if (!res.ok) {
+      state.rulesBar = { ...state.rulesBar, error: true, line: out.error || `could not read the rules (HTTP ${res.status})` };
+      repaintBar(name, "rules");
+      return;
+    }
+    // The caps travel with the read, so the editor's `maxlength` and the writer's refusal are one pair of numbers.
+    if (Number.isFinite(out.max) && Number.isFinite(out.maxChars)) state.ruleCaps = { max: out.max, maxChars: out.maxChars };
+    setRules(name, out.rules || []);
+    state.rulesBar = { project: name, busy: false, error: false, line: rulesLine(name) };
+    repaintBar(name, "rules");
+    refreshRulesChip(name);
+  } catch (e) {
+    if (state.rulesBar?.project !== name) return;
+    state.rulesBar = { ...state.rulesBar, busy: false, error: true, line: `could not read the rules: ${e.message}` };
+    repaintBar(name, "rules");
+  }
+}
+
+function closeRulesBar(name) {
+  if (state.rulesBar?.project === name) state.rulesBar = null;
+  closeBar(name, "rules");
+  repaintBars(name);
+  refreshRulesChip(name);
+}
+
+// The page's copy of a saved list: the project record the chip counts and the bar draws. A save is the server's
+// answer, never the request echoed back, so a rule the writer trimmed reads as the writer stored it.
+function setRules(name, rules) {
+  const p = state.projects.get(name);
+  if (p) p.rules = Array.isArray(rules) ? rules.slice() : [];
+}
+
+// ONE save, for every gesture. The whole list goes up in the reader's order; a refusal keeps the list the server
+// holds and puts the reason on the bar's own line, so a typed rule is never silently dropped.
+async function saveProjectRules(name, next, { line = "saving…" } = {}) {
+  const bar = state.rulesBar?.project === name ? state.rulesBar : { project: name };
+  state.rulesBar = { ...bar, busy: true, error: false, line };
+  repaintBar(name, "rules");
+  try {
+    const res = await apiFetch(
+      "/api/project-rules",
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: name, rules: next }) },
+      { timeoutMs: 20000 },
+    );
+    const out = await res.json().catch(() => ({}));
+    if (state.rulesBar?.project !== name) return false;
+    if (!res.ok) {
+      state.rulesBar = { ...state.rulesBar, busy: false, error: true, line: out.error || `could not save the rules (HTTP ${res.status})` };
+      repaintBar(name, "rules");
+      return false;
+    }
+    setRules(name, out.rules || []);
+    state.rulesBar = { project: name, busy: false, error: false, line: out.note || rulesLine(name) };
+    repaintBar(name, "rules");
+    refreshRulesChip(name);
+    return true;
+  } catch (e) {
+    if (state.rulesBar?.project !== name) return false;
+    state.rulesBar = { ...state.rulesBar, busy: false, error: true, line: `could not save the rules: ${e.message}` };
+    repaintBar(name, "rules");
+    return false;
+  }
+}
+
+// The add gesture: the new-rule box's text, read BEFORE anything repaints (a paint refills the boxes from state, and
+// the click has already moved the caret off the box).
+function addRule(name) {
+  const box = document.querySelector(`[data-rules-new="${CSS.escape(name)}"]`);
+  const text = String(box?.value || "").replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim();
+  if (!text) {
+    box?.focus();
+    return;
+  }
+  const caps = rulesCaps();
+  const rules = rulesFor(name);
+  if (rules.length >= caps.max) {
+    state.rulesBar = { ...(state.rulesBar || { project: name }), busy: false, error: true, line: `${name} already carries ${caps.max} rules - delete one before adding another` };
+    repaintBar(name, "rules");
+    return;
+  }
+  if (text.length > caps.maxChars) {
+    state.rulesBar = { ...(state.rulesBar || { project: name }), busy: false, error: true, line: `that line is ${text.length} characters - the cap is ${caps.maxChars}` };
+    repaintBar(name, "rules");
+    return;
+  }
+  void saveProjectRules(name, [...rules, text], { line: "adding…" });
+}
+
+// An edit arrives from the input's own `change` (blur or Enter). A box the reader emptied is a DELETION they did not
+// press ✕ on: nothing is posted, the stored line comes back, and the line says how to delete it. Posting the blank
+// would either store it (a rule nobody can read) or drop the row behind their back.
+function editRule(name, index, value) {
+  const rules = rulesFor(name);
+  const i = Number(index);
+  if (!Number.isInteger(i) || i < 0 || i >= rules.length) return;
+  const text = String(value ?? "").replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim();
+  if (!text) {
+    state.rulesBar = { ...(state.rulesBar || { project: name }), busy: false, error: true, line: "a rule cannot be blank - press ✕ on its row to delete it, or type the sentence you meant" };
+    repaintBar(name, "rules");
+    return;
+  }
+  if (text === rules[i]) return;
+  const next = rules.slice();
+  next[i] = text;
+  void saveProjectRules(name, next, { line: "saving…" });
+}
+
+// Reorder: one position up or down, in the reader's hand, saved at once. The arrows are disabled at the ends, so the
+// bounds check here is for a hand-written press only.
+function moveRule(name, index, dir) {
+  const rules = rulesFor(name);
+  const i = Number(index);
+  const j = dir === "up" ? i - 1 : i + 1;
+  if (!Number.isInteger(i) || i < 0 || i >= rules.length || j < 0 || j >= rules.length) return;
+  const next = rules.slice();
+  [next[i], next[j]] = [next[j], next[i]];
+  void saveProjectRules(name, next, { line: `moving rule ${i + 1} ${dir}…` });
+}
+
+function deleteRule(name, index) {
+  const rules = rulesFor(name);
+  const i = Number(index);
+  if (!Number.isInteger(i) || i < 0 || i >= rules.length) return;
+  const next = rules.filter((_, at) => at !== i);
+  void saveProjectRules(name, next, { line: "deleting…" });
 }
 
 // The row's detail block: the merge state, the description, the TODO strip, liveness and the agent slots.

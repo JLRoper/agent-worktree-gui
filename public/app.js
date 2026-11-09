@@ -192,6 +192,10 @@ window.WMApp.scaffold = {
   knownThreads, LIVE_STATUS, turnLive, approvalLive, convLive, agentsRunning, isAgentRunning, panelFor, isRowLive,
   hermesTitle, sigChips, paintRowChips, livenessLines, agentBadgeHtml, repaintAgentState,
   headTitle, chipsHtml, hostChipHtml, hostPanelHtml, repaintHostPanel, proposeHostMapping, saveHostMapping,
+  RULES_FALLBACK_CAPS, rulesCaps, rulesFor, rulesBarOpen, rulesChipSig, rulesChipHtml, refreshRulesChip,
+  barsOf, setBarOrder, openBar, closeBar, projectBarsHtml, repaintBars, repaintBar,
+  ruleRowHtml, rulesLine, rulesBarHtml, toggleRulesBar, closeRulesBar, setRules, saveProjectRules,
+  addRule, editRule, moveRule, deleteRule,
   gitSubHtml, DESC_SENTENCE_BREAK, descLines, TODO_GLYPH, todoAge, todoOldest, todoLine, todoPeekFor,
   repaintTodoBlock, todoBlockHtml, refreshClock, detailHtml,
   refreshOfferHtml, paintRefreshOffer, paintRefreshOffers, clearRefreshOffer,
@@ -295,6 +299,12 @@ const state = {
   // The open host-mapping strip, by project: { project, host, coords, line, error, busy }. Kept here, not only in the
   // DOM, so a snapshot repaint (every few seconds) does not wipe the proposal the reader is looking at.
   hostPanel: null,
+  // The grey strip under a project's head is a STACK of bars now, and the host bar is one of them. `bars` holds each
+  // project's open bar kinds in the order they were opened (rendered newest first); `rulesBar` is the rules bar's own
+  // edit state, and `ruleCaps` the two limits `/api/project-rules` answered with (null until the first read).
+  bars: new Map(),
+  rulesBar: null,
+  ruleCaps: null,
   spawn: {},
   paused: false,
   es: null,
@@ -9644,7 +9654,46 @@ document.addEventListener("click", async (e) => {
     e.stopPropagation();
     e.preventDefault();
     state.hostPanel = null;
+    closeBar(rhcancel.dataset.hostCancel, "host");
     repaintHostPanel(rhcancel.dataset.hostCancel);
+    return;
+  }
+  // The rules chip, and the editor in the bar it opens. The chip sits in the same header line as the host chip, so it
+  // stops propagation for the same reason: pressing "rules: 3" must not also collapse the project. The editor's four
+  // gestures are one line each here and one save each in board-scaffold.js (`saveProjectRules`).
+  const rrules = e.target.closest("[data-rules-project]");
+  if (rrules) {
+    e.stopPropagation();
+    e.preventDefault();
+    void toggleRulesBar(rrules.dataset.rulesProject);
+    return;
+  }
+  const rmove = e.target.closest("[data-rule-move]");
+  if (rmove) {
+    e.stopPropagation();
+    e.preventDefault();
+    moveRule(rmove.dataset.ruleProject, rmove.dataset.ruleIndex, rmove.dataset.ruleMove);
+    return;
+  }
+  const rdel = e.target.closest("[data-rule-delete]");
+  if (rdel) {
+    e.stopPropagation();
+    e.preventDefault();
+    deleteRule(rdel.dataset.ruleProject, rdel.dataset.ruleDelete);
+    return;
+  }
+  const radd = e.target.closest("[data-rules-add]");
+  if (radd) {
+    e.stopPropagation();
+    e.preventDefault();
+    addRule(radd.dataset.rulesAdd);
+    return;
+  }
+  const rclose = e.target.closest("[data-rules-close]");
+  if (rclose) {
+    e.stopPropagation();
+    e.preventDefault();
+    closeRulesBar(rclose.dataset.rulesClose);
     return;
   }
   // The clear button inside the folder search box: restore the full list and put the caret back.
@@ -16367,6 +16416,22 @@ document.addEventListener("change", (e) => {
   }
   const force = e.target.closest ? e.target.closest("[data-push-force]") : null;
   if (force) void savePushRepo(force.dataset.pushForce, { repo: force.dataset.pushForce, force: force.checked === true });
+});
+
+// A project's rules: the two events the editor needs. The clicks are in the board's own delegated handler (beside the
+// host chip's, because they are the same header line); these are the input's `change` - a rule is saved when its row
+// loses the caret or the reader presses Enter - and Enter in the "new rule" box, which adds rather than does nothing.
+document.addEventListener("change", (e) => {
+  const box = e.target.closest ? e.target.closest("[data-rule-text]") : null;
+  if (!box) return;
+  editRule(box.dataset.ruleProject, box.dataset.ruleText, box.value);
+});
+
+document.addEventListener("keydown", (e) => {
+  const box = e.target.closest ? e.target.closest("[data-rules-new]") : null;
+  if (!box || e.key !== "Enter") return;
+  e.preventDefault();
+  addRule(box.dataset.rulesNew);
 });
 
 // A fold is a rendering preference, not a setting: it is remembered for this page's lifetime only, and never posted.

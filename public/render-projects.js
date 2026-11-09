@@ -351,9 +351,9 @@ function projectSection(name) {
     </div>
     <div class="project-head meta-line">
       <span class="mono dim">${mainLine}</span><span class="spacer"></span>${board}${tip}
-      <span class="dimmer mono">${p.fetchNote ? esc(p.fetchNote) + " · " : ""}fetched ${relTime(p.fetchedAt)} ago</span>${hostChipHtml(name)}
+      <span class="dimmer mono">${p.fetchNote ? esc(p.fetchNote) + " · " : ""}fetched ${relTime(p.fetchedAt)} ago</span>${hostChipHtml(name)}${rulesChipHtml(name)}
     </div>
-    ${hostPanelHtml(name)}
+    ${projectBarsHtml(name)}
     <div class="wt-scroll">
       <table><thead><tr>${chartHeaderHtml()}</tr></thead><tbody data-tbody="${esc(name)}"></tbody></table>
     </div>
@@ -372,6 +372,9 @@ function refreshChips(name) {
       el._chipsHtml = html;
     }
   }
+  // The rules chip sits in the project's second head line rather than in this strip, and a snapshot (which repaints
+  // only the strip and the rows) is how a count saved in another tab arrives — so it is refreshed from here.
+  refreshRulesChip(name);
   // The chart's arrow (top-N collapse) depends on the same rows, so it is refreshed from the same place.
   refreshTopToggle(name);
 }
