@@ -1,0 +1,164 @@
+{
+ "assistantId": "assistant-1",
+ "plan": {
+  "version": 1,
+  "ops": [
+   {
+    "op": "merge",
+    "from": [
+     "12426ee2",
+     "955e80b1",
+     "8b29762a",
+     "e2d5e72a"
+    ],
+    "text": "Done is not landed: a run that ends done is finished only when gh pr view reads MERGED and origin/main moved, and it lands with npm run land:pr -- <n>, never a bare gh pr merge. MERGED (N commits) is a receipt for work already landed. After a restart, prove the served version changed.",
+    "safety": false
+   },
+   {
+    "op": "merge",
+    "from": [
+     "8229ed4a",
+     "0b73a0d7",
+     "3194d22e"
+    ],
+    "text": "Landing follows the remote: a GitHub repo lands with gh pr merge --rebase --admin; a SEFL Bitbucket repo by one turnover branch, worker branches rolled back locally and only that branch pushed. The LANDING block outranks the brief, and a refs-only task produces no commit and no PR.",
+    "safety": false
+   },
+   {
+    "op": "merge",
+    "from": [
+     "9f8fcec1",
+     "c0bbb585",
+     "9b4239ea"
+    ],
+    "text": "Read live state from /api/jobs, never logs/jobs.json: a row is in flight only with a running job for its run id or its tree, never by its thread name, and a MESSAGE line is a request until the job store shows the turn it should have started.",
+    "safety": false
+   },
+   {
+    "op": "merge",
+    "from": [
+     "f1fa6596",
+     "847590ac",
+     "c64760c1",
+     "76d22f69",
+     "b8317c43"
+    ],
+    "text": "A quiet npm test proves nothing, and a live --test child counts only when its start time matches the launch. An approval /api/approvals does not list is not a card, a 600-second expiry re-asked every ~10 minutes is a loop, and a watchdog naming a run that already ended is stale.",
+    "safety": false
+   },
+   {
+    "op": "merge",
+    "from": [
+     "25e72e9d",
+     "af73dd43",
+     "d1c3f2aa",
+     "22ac5ac7"
+    ],
+    "text": "Never cut a worktree to compare, export or clean up: use git archive or git show. A RELEASE line is a request for the worker's own tree only - proof it is done, never that the tree is gone. A throwaway load generator binds 127.0.0.1, is time-limited and is torn down in the same run.",
+    "safety": false
+   },
+   {
+    "op": "merge",
+    "from": [
+     "fc9b1457",
+     "c19ed160",
+     "c715a29f",
+     "bed1a11f"
+    ],
+    "text": "A parked row is a hold: it cannot be spawned, is not released by its blocker landing, and a sweep naming only parked rows reports a clean queue. Before spawning, check for a merged PR on the same files; finish one with a TO to the thread that owns the branch.",
+    "safety": false
+   },
+   {
+    "op": "merge",
+    "from": [
+     "95501040",
+     "9b850bac"
+    ],
+    "text": "Judge a failed row by outcome.reason and its tree, never by the status word: max_turns means the turns ran out mid-task, so look for committed work owed a push and a PR. A run of patches to one file is not a loop while node --check passes and each new symbol appears once.",
+    "safety": false
+   },
+   {
+    "op": "merge",
+    "from": [
+     "49315e64",
+     "2bf7cc4b"
+    ],
+    "text": "Every worker brief names the test files that cover the change and forbids the full suite; a full-suite run with no result after 20 minutes is cancelled. This checkout is CRLF with LF blobs, so a worker preserves the endings and proves byte identity against the blob, not the working copy.",
+    "safety": false
+   },
+   {
+    "op": "rewrite",
+    "from": [
+     "0e6b1ff0"
+    ],
+    "text": "Never push the oauth2-multi turnover branch 20260710_1338_DMR-39015_authorizationCodeFlowPCKE for any task: its history carries a real JWT private key in 25 commits plus a named OKTA_CLIENT_SECRET_VALUE, so a push publishes key material even when the tip tree is clean.",
+    "safety": true
+   },
+   {
+    "op": "rewrite",
+    "from": [
+     "f5906e09"
+    ],
+    "text": "Never write U+2014 or U+2013 anywhere - replies, commits, PR titles and bodies, comments, docs, logs or shell output. Use a plain ASCII hyphen; those characters become mojibake under cp1252.",
+    "safety": true
+   },
+   {
+    "op": "rewrite",
+    "from": [
+     "d2aecae2"
+    ],
+    "text": "Outside oauth2-multi, a tree cut from a non-landing branch still lands by PR against the landing branch, merged with gh pr merge --rebase --admin; the LANDING header names the source, not the target.",
+    "safety": true
+   },
+   {
+    "op": "keep",
+    "id": "1f352493"
+   },
+   {
+    "op": "charter",
+    "id": "166b076f",
+    "because": "a project-config artefact, read when a NO BASE REF row appears"
+   },
+   {
+    "op": "charter",
+    "id": "9d276977",
+    "because": "a gate-design precedent, not an every-turn answer"
+   },
+   {
+    "op": "charter",
+    "id": "dee507ca",
+    "because": "route mechanics, read when the assistant works its own queue"
+   },
+   {
+    "op": "charter",
+    "id": "eacf324a",
+    "because": "a definition of the pipeline lane, unrelated to the queue"
+   },
+   {
+    "op": "charter",
+    "id": "e63758d5",
+    "because": "the Director's own job, read by whoever routes work"
+   },
+   {
+    "op": "charter",
+    "id": "e345e893",
+    "because": "a self-quote of the superseded rule, kept as history"
+   },
+   {
+    "op": "charter",
+    "id": "c031995b",
+    "because": "the law of this pass; the reader's grant and the snapshot carry it"
+   },
+   {
+    "op": "charter",
+    "id": "5ce44ef6",
+    "because": "vocabulary for speaking about the queue, not a decision"
+   },
+   {
+    "op": "charter",
+    "id": "838355a8",
+    "because": "its decision is the manager role's tier-1 contract now, which rides every turn; the wording is kept here"
+   }
+  ]
+ }
+}
