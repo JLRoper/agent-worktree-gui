@@ -193,7 +193,9 @@ window.WMApp.scaffold = {
   hermesTitle, sigChips, paintRowChips, livenessLines, agentBadgeHtml, repaintAgentState,
   headTitle, chipsHtml, hostChipHtml, hostPanelHtml, repaintHostPanel, proposeHostMapping, saveHostMapping,
   RULES_FALLBACK_CAPS, rulesCaps, rulesFor, rulesBarOpen, rulesChipSig, rulesChipHtml, refreshRulesChip,
-  barsOf, setBarOrder, openBar, closeBar, projectBarsHtml, repaintBars, repaintBar,
+  boardOf, boardBarOpen, boardChipSig, boardChipHtml, refreshBoardChip, boardLine, boardBarHtml,
+  toggleBoardBar, closeBoardBar,
+  barsOf, setBarOrder, openBar, closeBar, barHtml, barSelector, projectBarsHtml, repaintBars, repaintBar,
   ruleRowHtml, rulesLine, rulesBarHtml, toggleRulesBar, closeRulesBar, setRules, saveProjectRules,
   addRule, editRule, moveRule, deleteRule,
   gitSubHtml, DESC_SENTENCE_BREAK, descLines, TODO_GLYPH, todoAge, todoOldest, todoLine, todoPeekFor,
@@ -9696,6 +9698,23 @@ document.addEventListener("click", async (e) => {
     e.stopPropagation();
     e.preventDefault();
     void toggleRulesBar(rrules.dataset.rulesProject);
+    return;
+  }
+  // The board chip and the claim list it opens: the third chip of the same head line, so it stops propagation for
+  // the same reason. The close button carries only its own attribute - the chip's `data-board-project` is what
+  // toggles, and the two must not both answer one press.
+  const rboard = e.target.closest("[data-board-project]");
+  if (rboard) {
+    e.stopPropagation();
+    e.preventDefault();
+    toggleBoardBar(rboard.dataset.boardProject);
+    return;
+  }
+  const rboardClose = e.target.closest("[data-board-close]");
+  if (rboardClose) {
+    e.stopPropagation();
+    e.preventDefault();
+    closeBoardBar(rboardClose.dataset.boardClose);
     return;
   }
   const rmove = e.target.closest("[data-rule-move]");

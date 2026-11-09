@@ -26,6 +26,15 @@ const recentDays = new Function("state", "RECENT_DAYS", `${cut("recentDays")}\nr
 
 const project = (name, tier) => ({ name, path: `/work/trees/${name}`, tier, activityAt: new Date().toISOString() });
 
+// The toggle itself lives beside the folder card in render-projects.js. Its label is now the one place the 7d
+// view's shortfall is stated: the header's own count is the folder's FULL count (rootChips), so the button that
+// folds the old projects away is where the reader is told how many it folded.
+const rootRecentButton = new Function(
+  "esc",
+  "recentDays",
+  `${cut("rootRecentButton", projectsSrc)}\nreturn rootRecentButton;`,
+)((s) => String(s ?? ""), recentDays);
+
 test("7d shows exactly the server's recent tier, and All shows everything", () => {
   const all = [project("fresh", "recent"), project("old", "old"), project("unclassified", undefined)];
   assert.deepEqual(
@@ -52,9 +61,28 @@ test("a project the server calls old stays hidden however recent its own timesta
 });
 
 test("the button's own label reads the window the server applies", () => {
+  state.settings = {};
   assert.equal(recentDays(), 7, "the fallback is the server's default");
   state.settings = { tierDays: 3 };
   assert.equal(recentDays(), 3, "a config that moves the window moves the label with it");
   state.settings = { tierDays: null };
   assert.equal(recentDays(), 7, "a snapshot without the key falls back to 7");
+  state.settings = {};
+});
+
+test("the 7d toggle carries the hidden count inside it, and All stays All", () => {
+  // The count used to be a chip at the far right of the folder header, a screen away from the control that folded
+  // the projects away. It now sits in the toggle's own label: "7d (12 hidden)".
+  const on = rootRecentButton("/work/trees", true, { hidden: 12, total: 40 });
+  assert.match(on, /^<button type="button" class="btn-root-recent on" data-root-recent="\/work\/trees"/);
+  assert.match(on, />7d \(12 hidden\)<\/button>$/, "the hidden count is inside the button that caused it");
+  assert.match(on, /title="showing 28 of 40 projects/, "its tooltip still says what the view shows of what");
+
+  const nothingHeld = rootRecentButton("/work/trees", true, { hidden: 0, total: 40 });
+  assert.match(nothingHeld, />7d<\/button>$/, "nothing hidden reads as the plain window, with no parenthetical");
+
+  const all = rootRecentButton("/work/trees", false, { hidden: 0, total: 40 });
+  assert.match(all, /^<button type="button" class="btn-root-recent" data-root-recent=/);
+  assert.match(all, />All<\/button>$/, "All is every project and holds nothing back");
+  assert.match(all, /title="showing all 40 projects/);
 });

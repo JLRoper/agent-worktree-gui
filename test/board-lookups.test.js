@@ -187,9 +187,11 @@ function project() {
   doc.reset();
   chips.html = "<span class=chip>3 worktrees</span>";
   chips.chipsHtml = () => chips.html;
-  // `refreshChips` also refreshes the rules chip in the same head line (board-scaffold.js). It is stubbed here because
-  // THIS test measures the counts strip's own lookups; the rules chip's caching is measured on its own, below.
+  // `refreshChips` also refreshes the rules and board chips in the same head line (board-scaffold.js). Both are
+  // stubbed here because THIS test measures the counts strip's own lookups; each chip's caching is measured on its
+  // own, below.
   chips.refreshRulesChip = () => {};
+  chips.refreshBoardChip = () => {};
   chips.topSlotHtml = () => ""; // nothing held back: no arrow
   const strip = doc.add(new Node({ "data-chips": "alpha" }));
   const slot = doc.add(new Node({ "data-age-slot": "alpha" }));
@@ -269,6 +271,76 @@ test("the second refresh of the rules chip asks the document nothing, and a move
   const chips = doc.nodes.filter((n) => n.getAttribute("data-rules-chip") === "alpha");
   assert.equal(chips.length, 1, "the old chip is gone, not duplicated");
   assert.equal(chips[0].dataset.rulesSig, "3|0", "the new chip counts three rules");
+});
+
+// ---- the board chip: the same cache, and the count it shows is the server's own split ---------------------------
+// The third chip of the project's second head line replaces a sentence that could not be pressed. It reads
+// `state.projects.get(name).board`, which lib/activity.js's projectBoardSummary fills in (live entries by PID, and
+// the stale count), so the chip never re-reads `.agentboard` itself. It is refreshed from the per-snapshot path, so
+// it carries the rules chip's cost exactly - and must not add a second whole-document walk per refresh.
+const boardCtx = {
+  document: doc,
+  CSS,
+  Map,
+  String,
+  Number,
+  Boolean,
+  esc: (s) => String(s ?? ""),
+  state: { projects: new Map(), bars: new Map() },
+};
+vm.createContext(boardCtx);
+let boardLoaded = false;
+function boardChipDom({ live = 1, dead = 2 } = {}) {
+  if (!boardLoaded) {
+    const names = ["projectNode", "boardOf", "boardBarOpen", "barsOf", "boardChipSig", "boardChipHtml", "refreshBoardChip"];
+    vm.runInContext(names.map(grab).join("\n"), boardCtx);
+    boardLoaded = true;
+  }
+  doc.reset();
+  const entries = Array.from({ length: live }, (_, i) => ({ pid: 4100 + i, goal: `claim ${i}` }));
+  boardCtx.state.projects.set("alpha", { name: "alpha", path: "/work/trees/alpha", board: { total: live + dead, live: entries, dead } });
+  boardCtx.state.bars = new Map();
+  return doc.add(new Node({ "data-board-chip": "alpha", "data-board-sig": `${live}|${dead}|0` }));
+}
+
+test("the board chip states the server's split, and its second refresh asks the document nothing", () => {
+  const chip = boardChipDom({ live: 1, dead: 2 });
+  boardCtx.refreshBoardChip("alpha");
+  assert.equal(chip.writes, 0, "a chip whose count did not move is not rewritten");
+  const first = doc.queries;
+  assert.equal(first, 1, "the first refresh found the chip (and cached it)");
+  boardCtx.refreshBoardChip("alpha");
+  assert.equal(doc.queries, first, "the next one asked the document nothing");
+
+  const html = boardCtx.boardChipHtml("alpha");
+  assert.match(html, />board: 1<\/button>$/, "the live count, in the same shape as host: and rules:");
+  assert.match(html, /class="btn-board is-live"/, "a live claim gets the live colour");
+  assert.match(html, /data-board-project="alpha"/, "the press resolves the project, as the other two chips do");
+  assert.match(html, /\(2 stale\)/, "the stale count is in the tooltip rather than a second number on the chip");
+
+  // A count that moved: one swap, and the new node carries the new signature and the new number.
+  boardCtx.state.projects.set("alpha", { name: "alpha", path: "/work/trees/alpha", board: { total: 5, live: [{ pid: 1 }, { pid: 2 }, { pid: 3 }], dead: 2 } });
+  Object.defineProperty(chip, "outerHTML", {
+    configurable: true,
+    set(text) {
+      chip.remove();
+      doc.add(new Node({ "data-board-chip": "alpha", "data-board-sig": /data-board-sig="([^"]+)"/.exec(text)[1] }));
+    },
+  });
+  boardCtx.refreshBoardChip("alpha");
+  const chips = doc.nodes.filter((n) => n.getAttribute("data-board-chip") === "alpha");
+  assert.equal(chips.length, 1, "the old chip is gone, not duplicated");
+  assert.equal(chips[0].dataset.boardSig, "3|2|0", "the new chip counts three live claims");
+});
+
+test("a project with no board summary draws no chip, and one with no live claims reads board: 0 (control)", () => {
+  boardChipDom({ live: 0, dead: 0 });
+  boardCtx.state.projects.set("empty", { name: "empty", path: "/work/trees/empty" });
+  assert.equal(boardCtx.boardChipHtml("empty"), "", "a record the server has not read yet draws nothing");
+  const none = boardCtx.boardChipHtml("alpha");
+  assert.match(none, />board: 0<\/button>$/, "no live claim is a zero, not a missing chip");
+  assert.doesNotMatch(none, /is-live/, "and not the live colour");
+  assert.match(none, /no live entries \(0 stale\)/, "the sentence it replaced survives in the tooltip");
 });
 
 // ---- pulseRow: the row from the map, the flash restarted without a forced layout ---------------------------------
