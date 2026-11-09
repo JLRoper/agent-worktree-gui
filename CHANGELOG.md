@@ -17,11 +17,11 @@ has no tag.
 
 ## v1.75.0 — 2026-11-09 · 4 commits
 
-[`c276e99`](https://github.com/JLRoper/agent-worktree-gui/commit/c276e999248db431a71ea06a1abf06a64e1f594b) · [compare v1.74.0...v1.75.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.74.0...v1.75.0)
+[`53b525b`](https://github.com/JLRoper/agent-worktree-gui/commit/53b525b42dfee0768be80b73fa6c5f23efb71bdd) · [compare v1.74.0...v1.75.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.74.0...v1.75.0)
 
 ### Added
 
-- feat: a round cuts one parent tree from origin/main, and one name describes its trees ([`ff588cb`](https://github.com/JLRoper/agent-worktree-gui/commit/ff588cba245fc2935838eab8f1692f227e1abd4d))
+- feat: a round cuts one parent tree from origin/main, and one name describes its trees ([`62b0a71`](https://github.com/JLRoper/agent-worktree-gui/commit/62b0a71513763b876aec1df206eabd03b9a159be))
 
 ### Fixed
 
@@ -33,7 +33,7 @@ has no tag.
 
 ### Other
 
-- chore: 1.75.0 - the version this landing carries ([`c276e99`](https://github.com/JLRoper/agent-worktree-gui/commit/c276e999248db431a71ea06a1abf06a64e1f594b))
+- chore: 1.75.0 - the version this landing carries ([`53b525b`](https://github.com/JLRoper/agent-worktree-gui/commit/53b525b42dfee0768be80b73fa6c5f23efb71bdd))
 
 ## v1.74.0 — 2026-11-09 · 3 commits
 
