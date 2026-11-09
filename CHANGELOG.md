@@ -4,16 +4,33 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.76.28 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.77.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-518 releases from v0.1.0 (2026-10-20) to v1.76.28 (2026-11-09), 1704 commits between the tags. Every release is anchored by an
+519 releases from v0.1.0 (2026-10-20) to v1.77.0 (2026-11-09), 1706 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.77.0 — 2026-11-09 · 4 commits
+
+[`b066d27`](https://github.com/JLRoper/agent-worktree-gui/commit/b066d2716b3d6dc3bdc9381c19746a8c203b24ec) · [compare v1.76.28...v1.77.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.76.28...v1.77.0)
+
+### Added
+
+- feat: keep another project's docs commit out of the changelog ([`b5b871d`](https://github.com/JLRoper/agent-worktree-gui/commit/b5b871decacbd9a4487c5a9ab0ee66c7d512633b))
+
+### Docs & tests
+
+- docs: render the changelog - 518 releases ([`4dd7943`](https://github.com/JLRoper/agent-worktree-gui/commit/4dd794383eddcbf685834cd30263b03ab37133de))
+- docs: delete the retest and deploy reports copied in from another project ([`a13b66a`](https://github.com/JLRoper/agent-worktree-gui/commit/a13b66ac480dcacdcb94e28254df706162310ad1))
+
+### Other
+
+- chore: 1.77.0 - the version this landing carries ([`b066d27`](https://github.com/JLRoper/agent-worktree-gui/commit/b066d2716b3d6dc3bdc9381c19746a8c203b24ec))
 
 ## v1.76.28 — 2026-11-09 · 3 commits
 
@@ -53,13 +70,9 @@ has no tag.
 
 - chore: 1.76.25 - the version this landing carries ([`b122608`](https://github.com/JLRoper/agent-worktree-gui/commit/b122608741b8f2116bbe1150e40e475103a894ac))
 
-## v1.76.24 — 2026-11-09 · 2 commits
+## v1.76.24 — 2026-11-09 · 1 commit
 
 [`f8df153`](https://github.com/JLRoper/agent-worktree-gui/commit/f8df15332ef91a8662ddd00216fc76d0af1d1a5f) · [compare v1.76.23...v1.76.24](https://github.com/JLRoper/agent-worktree-gui/compare/v1.76.23...v1.76.24)
-
-### Docs & tests
-
-- docs: PictureViewer and Picture Manager SSO retest on dev with deploy evidence (DMR-39015) ([`719425b`](https://github.com/JLRoper/agent-worktree-gui/commit/719425b4dd3519ec587c333ba1bfc65abc99a35a))
 
 ### Other
 
@@ -3497,14 +3510,13 @@ has no tag.
 
 - chore: 1.8.6 — the version this branch lands on ([`49b1176`](https://github.com/JLRoper/agent-worktree-gui/commit/49b117610258c33c6ed8e67c3b9e7fcae3efc1f5))
 
-## v1.8.5 — 2026-11-04 · 3 commits
+## v1.8.5 — 2026-11-04 · 2 commits
 
 [`3569b94`](https://github.com/JLRoper/agent-worktree-gui/commit/3569b9448af77fdaa56946d9cb9e5a3e39fc61e9) · [compare v1.8.4...v1.8.5](https://github.com/JLRoper/agent-worktree-gui/compare/v1.8.4...v1.8.5)
 
 ### Docs & tests
 
 - docs: render the changelog — 269 releases ([`4f6c6c3`](https://github.com/JLRoper/agent-worktree-gui/commit/4f6c6c36ccce8ed804a2f9a912e21d900ed6c6eb))
-- docs: PictureViewer + picture-manager-web dev deploy evidence and login walk (DMR-39015) ([`6f31b5c`](https://github.com/JLRoper/agent-worktree-gui/commit/6f31b5c147778535263bd89a30c8acdce6a6f17b))
 
 ### Other
 
