@@ -160,7 +160,7 @@ test("planTagMove anchors at the commit that declared the number, and never move
 
 function copyTools(dest) {
   mkdirSync(path.join(dest, "tools"), { recursive: true });
-  for (const f of ["land.mjs", "changelog.mjs", "release-history.mjs", "release-tag.mjs", "verify-version-tags.mjs"]) {
+  for (const f of ["land.mjs", "changelog.mjs", "changelog-scope.mjs", "changelog-scope.json", "release-history.mjs", "release-tag.mjs", "verify-version-tags.mjs"]) {
     writeFileSync(
       path.join(dest, "tools", f),
       readFileSync(path.join(ROOT, "tools", f), "utf8").split(CR + LF).join(LF),

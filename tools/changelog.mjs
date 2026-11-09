@@ -33,6 +33,14 @@
 // (chore:, a bare subject) under Other. Merge commits are dropped: a merge says how the work arrived, not what
 // changed.
 //
+// THE SCOPE IS THIS REPOSITORY'S OWN WORK. A docs commit that names another project - in its subject, or in a
+// path it adds or edits - is left out of the release it fell in, and a section the file already carries that
+// names one is rendered again rather than kept, so a report that already reached CHANGELOG.md is repaired by the
+// next forward render instead of waiting for a `--full` walk the landing cannot afford. The projects are listed
+// in tools/changelog-scope.json, one deliberate edit per project, and .githooks/commit-msg reads the same list and
+// refuses the commit: the render half is the repair, the hook half is the stop. A commit that DELETES another
+// project's report is this repo's own cleanup and stays in the changelog.
+//
 // THE LINKS COME FROM THE CLONE'S OWN REMOTES. The resolver takes the first remote whose URL is a GitHub one,
 // preferring `origin` when it exists: a clone whose GitHub remote is named otherwise is still a clone of the same
 // repository, and its changelog deserves its links. With links on — the default — and no GitHub remote to take them
@@ -46,6 +54,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { compareVersions, readReleaseHistory, repoRoot } from "./release-history.mjs";
+import { foreignCommit, loadScope, sectionNamesForeignProject } from "./changelog-scope.mjs";
 
 // The order a reader scans a release in: what is new, what was fixed, what got faster, what moved, what is
 // housekeeping. A group with no commits is not printed.
@@ -87,23 +96,37 @@ export function groupCommits(commits) {
 // one the file already carries (their sections are the file's, and their ranges are never listed), and `skip`
 // returns a release with no commits listed at all because its section is being kept verbatim. `previous` is still
 // read from the full walk, so a section rendered above the seed still names the tag it followed.
-export function collectReleases(versions, listCommits, { startIndex = 0, skip = null } = {}) {
+//
+// `scope` is tools/changelog-scope.mjs's list: a docs commit that names another project is not this repo's work
+// and is left out of the release it fell in, and `dropped` records how many were, so the CLI can say so rather
+// than the omission being invisible. A deletion of another project's report is not a match (the file's status is
+// D), which is what keeps the commit that removed the reports in the changelog.
+export function collectReleases(versions, listCommits, { startIndex = 0, skip = null, scope = null } = {}) {
   const seen = new Set();
   const releases = [];
   for (let i = startIndex; i < versions.length; i += 1) {
     const v = versions[i];
     const previous = i ? versions[i - 1].version : null;
     if (skip && skip(v)) {
-      releases.push({ ...v, previous, commits: [] });
+      releases.push({ ...v, previous, commits: [], dropped: 0 });
       continue;
     }
     const from = i ? versions[i - 1].sha : null;
-    const commits = listCommits(from, v.sha).filter((c) => {
+    const listed = listCommits(from, v.sha).filter((c) => {
       if (seen.has(c.sha)) return false;
       seen.add(c.sha);
       return true;
     });
-    releases.push({ ...v, previous, commits });
+    const commits = [];
+    let dropped = 0;
+    for (const c of listed) {
+      if (scope && foreignCommit(c, scope)) {
+        dropped += 1;
+        continue;
+      }
+      commits.push(c);
+    }
+    releases.push({ ...v, previous, commits, dropped });
   }
   return releases;
 }
@@ -381,6 +404,7 @@ export function renderRepo({ root = process.cwd(), ref = "HEAD", links = true, f
   if (links && !found.url) throw new NoGithubRemoteError(found.remotes);
   const repoUrl = links ? found.url : null;
   const common = { repoUrl, remote: links ? found.remote : null, remotes: found.remotes };
+  const scope = loadScope(root);
   const listAll = (from, to) => listCommits(root, from, to);
 
   const carried = full ? null : readChangelog(path.join(root, "CHANGELOG.md"));
@@ -393,7 +417,11 @@ export function renderRepo({ root = process.cwd(), ref = "HEAD", links = true, f
     // render whose commits the merge re-created, and the base's own render step exists to repair exactly that;
     // anything the ref does carry is the file's section, kept as it stands.
     const sections = seed.sections.filter((s) => sectionMatches(s, reachable));
-    const kept = new Set(sections.map((s) => s.version));
+    // A section whose bullets name another project is NOT kept: it is rendered again from its own range, where
+    // collectReleases leaves the foreign commits out. So a file that already carries the report repairs itself
+    // on the next forward render, without the minutes-long `--full` walk a landing cannot afford.
+    const keepable = sections.filter((s) => !sectionNamesForeignProject(s.text, scope));
+    const kept = new Set(keepable.map((s) => s.version));
     // The walk's own order decides where the file's oldest section starts: every version below it is history the
     // file deliberately begins after, so its range is never listed and its section is never regenerated. It starts
     // at the oldest version the file NAMES, not at the oldest the file still matches, so a section that stopped
@@ -401,21 +429,39 @@ export function renderRepo({ root = process.cwd(), ref = "HEAD", links = true, f
     const named = new Set(seed.sections.map((s) => s.version));
     const startIndex = history.versions.findIndex((v) => named.has(v.version));
     if (startIndex >= 0) {
-      const releases = collectReleases(history.versions, listAll, { startIndex, skip: (v) => kept.has(v.version) });
-      const forward = renderChangelogForward({ releases, sections, repoUrl });
-      return { ...common, releases, text: forward.text, releaseCount: releases.length, kept: forward.kept, rendered: forward.rendered, mode: "forward" };
+      const releases = collectReleases(history.versions, listAll, { startIndex, skip: (v) => kept.has(v.version), scope });
+      const forward = renderChangelogForward({ releases, sections: keepable, repoUrl });
+      return {
+        ...common,
+        scope,
+        releases,
+        text: forward.text,
+        releaseCount: releases.length,
+        kept: forward.kept,
+        rendered: forward.rendered,
+        dropped: droppedOf(releases),
+        mode: "forward",
+      };
     }
   }
-  const releases = collectReleases(history.versions, listAll);
+  const releases = collectReleases(history.versions, listAll, { scope });
   return {
     ...common,
+    scope,
     releases,
     text: renderChangelog({ releases, repoUrl }),
     releaseCount: releases.length,
     kept: 0,
     rendered: releases.map((r) => r.version),
+    dropped: droppedOf(releases),
     mode: "full",
   };
+}
+
+// How many commits the scope left out of a walk: the CLI says so on every render, so an omission is a printed
+// fact rather than a section that silently got shorter.
+function droppedOf(releases) {
+  return releases.reduce((n, r) => n + (r.dropped || 0), 0);
 }
 
 function readChangelog(file) {
@@ -426,21 +472,37 @@ function readChangelog(file) {
   }
 }
 
+// Every commit in the range, with the status and path of each file it changed. The paths are read in the SAME
+// `git log` as the subjects: the scope guard needs them to tell a commit that ADDS another project's report (out
+// of the changelog) from one that DELETES it (this repo's own cleanup), and a second pass over the range would
+// double the subprocesses a forward render already saves.
 function listCommits(root, from, to) {
   const range = from ? `${from}..${to}` : to;
-  const raw = execFileSync("git", ["log", "--reverse", "--no-merges", "--format=%H%x1f%ad%x1f%s", "--date=short", range], {
+  const raw = execFileSync("git", ["log", "--reverse", "--no-merges", "--name-status", "--format=%H%x1f%ad%x1f%s", "--date=short", range], {
     cwd: root,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "ignore"],
     maxBuffer: 64 * 1024 * 1024,
   });
-  return raw
-    .split("\n")
-    .filter(Boolean)
-    .map((line) => {
+  const commits = [];
+  let current = null;
+  for (const line of raw.split("\n")) {
+    if (!line) continue;
+    if (line.includes("\x1f")) {
       const [sha = "", date = "", subject = ""] = line.split("\x1f");
-      return { sha: sha.trim(), date: date.trim(), subject: subject.trim() };
-    });
+      current = { sha: sha.trim(), date: date.trim(), subject: subject.trim(), files: [] };
+      commits.push(current);
+      continue;
+    }
+    if (!current) continue;
+    // A / M / D line is "<status>\t<path>"; a rename or copy is "R100\t<from>\t<to>" and is judged by where the
+    // file went, because that is the path a reader of this release would open.
+    const [status = "", firstName = "", secondName = ""] = line.split("\t");
+    if (!status || !firstName) continue;
+    const renamed = status.startsWith("R") || status.startsWith("C");
+    current.files.push(renamed ? { status: status[0], from: firstName, path: secondName || firstName } : { status: status[0], path: firstName });
+  }
+  return commits;
 }
 
 function parseArgs(argv) {
@@ -491,7 +553,7 @@ function main(argv) {
     console.error("changelog: package.json's history came back empty — refusing to render a changelog of nothing");
     return 2;
   }
-  const { releases, repoUrl, remote, text, releaseCount, kept, rendered: renderedVersions, mode } = rendered;
+  const { releases, repoUrl, remote, text, releaseCount, kept, dropped, rendered: renderedVersions, mode } = rendered;
 
   if (opt.since) {
     const want = opt.since.replace(/^v/, "");
@@ -526,7 +588,8 @@ function main(argv) {
   const how = mode === "full" ? "full rebuild" : `${kept} kept, ${renderedVersions.length} rendered`;
   console.log(
     `changelog: wrote ${path.relative(root, out)} — ${releaseCount} releases (${how}), ${commits} commits, ` +
-      `${text.length} chars${repoUrl ? `, links from ${remote}` : ", no links: --no-links was asked for"}`,
+      `${text.length} chars${repoUrl ? `, links from ${remote}` : ", no links: --no-links was asked for"}` +
+      (dropped ? `, ${dropped} docs commit${dropped === 1 ? "" : "s"} named another project and ${dropped === 1 ? "was" : "were"} left out` : ""),
   );
   return 0;
 }
