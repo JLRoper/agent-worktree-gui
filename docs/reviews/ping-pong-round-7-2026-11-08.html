@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ping-pong round 7: the same brief on the fixed panel, and the four defects' before and after</title>
+<style>
+  :root { --bg:#0e1116; --panel:#151a21; --panel2:#1b212a; --line:#2a3340; --text:#e6e9ef; --dim:#9aa5b4;
+           --dimmer:#6f7a89; --green:#7ee787; --red:#ff9c94; --amber:#f0c674; --blue:#9ecbff; --purple:#c8a6ff;
+           --mono:ui-monospace,"Cascadia Mono",Consolas,"SF Mono",Menlo,monospace;
+           --ui:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  * { box-sizing:border-box; }
+  html { background:var(--bg); }
+  body { margin:0; color:var(--text); font:15px/1.62 var(--ui); }
+  .wrap { max-width:1120px; margin:0 auto; padding:30px 24px 72px; }
+  a { color:var(--blue); text-decoration:none; } a:hover { text-decoration:underline; }
+  h1 { font-size:27px; line-height:1.22; margin:4px 0 8px; letter-spacing:-0.2px; }
+  h2 { font-size:19px; margin:44px 0 12px; padding-top:16px; border-top:1px solid var(--line); }
+  h3 { font-size:15.5px; margin:26px 0 8px; color:var(--blue); }
+  p { margin:9px 0; }
+  ul,ol { margin:8px 0 8px 22px; padding:0; } li { margin:6px 0; }
+  code,.mono { font-family:var(--mono); font-size:12.8px; }
+  code { background:var(--panel2); border:1px solid var(--line); border-radius:4px; padding:0 4px; }
+  pre { background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:12px 14px; overflow-x:auto;
+         font-family:var(--mono); font-size:12.4px; line-height:1.55; }
+  .kicker { color:var(--dimmer); font-size:12px; text-transform:uppercase; letter-spacing:0.12em; }
+  .sub { color:var(--dim); font-size:16px; margin:0 0 14px; max-width:940px; }
+  .meta { color:var(--dim); font-size:12.5px; }
+  .meta code { font-size:12px; }
+  nav { margin:18px 0 8px; padding:12px 16px; background:var(--panel); border:1px solid var(--line);
+        border-radius:8px; font-size:13px; line-height:1.9; }
+  nav b { color:var(--dimmer); font-weight:600; text-transform:uppercase; font-size:11px; letter-spacing:0.1em; }
+  nav a { margin:0 10px 0 0; white-space:nowrap; }
+  .lead { background:var(--panel); border:1px solid var(--line); border-left:4px solid var(--blue);
+          border-radius:8px; padding:14px 18px; margin:18px 0; }
+  .lead p { margin:5px 0; }
+  .verdict { background:#13261a; border:1px solid #2f5f38; border-left:4px solid var(--green);
+             border-radius:8px; padding:13px 18px; margin:18px 0; }
+  .verdict h4 { color:var(--green); margin:0 0 4px; }
+  .warn { background:#2a2414; border:1px solid #5c4d22; border-left:4px solid var(--amber);
+          border-radius:8px; padding:12px 18px; margin:16px 0; }
+  .warn h4 { color:var(--amber); margin:0 0 4px; }
+  .box { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px 18px; margin:14px 0; }
+  .tw { overflow-x:auto; margin:10px 0 16px; border:1px solid var(--line); border-radius:8px; }
+  table { border-collapse:collapse; width:100%; font-size:13px; }
+  th,td { text-align:left; vertical-align:top; padding:7px 10px; border-bottom:1px solid var(--line); }
+  th { background:var(--panel2); color:var(--dim); font-weight:600; font-size:12px;
+       text-transform:uppercase; letter-spacing:0.05em; }
+  tr:last-child td { border-bottom:0; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin:14px 0; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px 14px; }
+  .card .n { font-family:var(--mono); font-size:19px; color:var(--green); }
+  .card .l { color:var(--dim); font-size:12px; margin-top:2px; }
+  .ok { color:var(--green); } .bad { color:var(--red); } .warnpill { color:var(--amber); }
+  .pill { display:inline-block; margin-left:6px; padding:0 6px; border-radius:999px; font-size:10.5px;
+          text-transform:uppercase; letter-spacing:0.04em; color:var(--amber); border:1px solid #5c4d22; background:#241f10; }
+  .small { font-size:12.5px; color:var(--dim); }
+</style>
+</head>
+<body>
+<div class="wrap">
+<p class="kicker">Agent board - pipeline run report - 2026-11-08</p>
+<h1>Ping-pong round 7: the same brief on the fixed panel, and the four defects' before and after</h1>
+<p class="sub">Task #335 on Assistant #2's queue, the <code>ping-pong</code> pipeline, project <code>agent-worktree-gui</code>. This page reads the row's six stage-run entries, the six job records, the three verdict files and the six commits, and puts each of the four round-6 defects beside its round-7 number.</p>
+<p class="meta">row <code>#335</code> - pipeline <code>ping-pong</code> - tree <code>.worktrees/write-the-draft-the-brief-asks-for-in-94df79</code> - branch <code>wtgui/write-the-draft-the-brief-asks-for-in-94df79</code> at <code>cbc07d7</code> - records read 2026-11-09 00:42Z (19:42 EST 2026-11-08)</p>
+
+<nav><b>Contents</b><br>
+<a href="#answer">The answer</a><a href="#four">The four defects, before and after</a><a href="#d1">1. Pushes and PRs</a><a href="#d2">2. The settle lag</a><a href="#d3">3. The refused tool</a><a href="#d4">4. How the loop ended</a><a href="#same">What did not change</a><a href="#worse">What got worse</a><a href="#record">The round's own record</a><a href="#limits">What this does not prove</a><a href="#evidence">The evidence</a>
+</nav>
+
+<h2 id="answer">The answer</h2>
+<div class="lead">
+<p><b>All four fixes held in the live run.</b> Round 7 ran the same brief on the same <code>ping-pong</code> pipeline and produced six stages over 38 minutes 02 seconds: three drafts and three critiques. Neither document stage pushed a branch or opened a PR. Every stage settled 0.073 to 0.133 seconds after its job ended. No run stream shows a refused tool call. The loop ended on the gate's own verdict at <code>2026-11-09T00:38:15.977Z</code>, an <code>accept</code> in <code>verdict-r3.json</code>, not at the cap.</p>
+<p><b>The row's own reason names the gate.</b> <code>doneBy: "panel"</code>, <code>reason: "pipeline ping-pong is over at critique - its artifact \"critique-notes\" (critique/1, kind unstated) is not a PR to land, so the row settles on the stage's own verdict"</code>. The row's <code>decision</code> on <code>ping-pong/critique#3</code> has <code>trigger: "verdict"</code>, <code>fact.outcome: "accept"</code>, <code>fact.ended: true</code>. The loop crossed <code>H-01</code> three times and <code>H-02</code> twice, with the cap of three rounds not reached.</p>
+<p><b>The cost moved into the loop.</b> Round 6 was cut off after two stages and 24 minutes; round 7 completed the loop in six stages and 38 minutes. The completion is the point, but it is 2.6 times the worker time and twice the stage count. The draft also finished at 599 words, one word under the brief's 600-word ceiling.</p>
+</div>
+
+<div class="grid">
+<div class="card"><div class="n">6</div><div class="l">stage runs in round 7 (3 draft, 3 critique)</div></div>
+<div class="card"><div class="n">0</div><div class="l">pushes and 0 PRs from the six stages</div></div>
+<div class="card"><div class="n">0.133 s</div><div class="l">worst job end to stage settle</div></div>
+<div class="card"><div class="n">0</div><div class="l">blocked tool calls in the six streams</div></div>
+<div class="card"><div class="n">3 / 2</div><div class="l">H-01 / H-02 crossings, cap 3 not reached</div></div>
+<div class="card"><div class="n">accept</div><div class="l">the gate's verdict that ended the row</div></div>
+</div>
+
+<h2 id="four">The four defects, before and after</h2>
+<div class="tw"><table>
+<tr><th>round-6 defect</th><th>before - task #333</th><th>after - task #335</th></tr>
+<tr><td><b>1. A stage's landing was not its artifact's</b>: every stage pushed and opened a PR</td><td>draft: 1 push and PR <a href="https://github.com/JLRoper/agent-worktree-gui/pull/607">#607</a> opened at <code>2026-11-08T22:58:09Z</code>; critique: 1 push and another <code>gh pr create</code> on the same branch. <b>2 pushes, 1 PR</b>, and #607 is still OPEN.</td><td>draft x3 and critique x3: <b>0 pushes, 0 PRs</b>. The branch has no remote and no upstream; <code>gh pr list --head ...94df79</code> returns <code>[]</code>. Every stage's final message says "nothing pushed" or "local-only".</td></tr>
+<tr><td><b>2. The settle lagged the run's own end</b></td><td>draft: job end <code>22:58:31.719Z</code> -> settle <code>22:59:23.923Z</code> = <b>52.204 s</b>; critique: <code>23:12:47.950Z</code> -> <code>23:13:27.140Z</code> = <b>39.190 s</b>.</td><td>six lags: <b>73, 84, 103, 133, 82, 90 ms</b> (max <b>0.133 s</b>, mean <b>0.094 s</b>). The <code>onStageSettled</code> hook fires the sweep at the run's end; the server log's own <code>pipeline hold</code> line lands on the same second.</td></tr>
+<tr><td><b>3. The unattended toolset named a tool it refuses</b></td><td>the critic's first call was <code>execute_code</code>, answered <code>BLOCKED: this session runs on an unattended platform (api_server)</code>. <b>1 blocked call</b>, one turn spent.</td><td><b>0 blocked calls</b> in the six stored streams and in the six final messages. All six prompts end with the <code>TOOLS</code> line naming <code>terminal</code>, <code>read_file</code>, <code>write_file</code>, <code>patch</code> and the refused <code>execute_code</code>.</td></tr>
+<tr><td><b>4. G1 could not be asked</b>, so the cap ended every round</td><td><code>gates[0].decision</code> was <code>null</code>; the critique's prose said "Not accepted in this round" and the driver still crossed <code>H-02</code> into draft visit 2 at <code>23:13:27.140Z</code>. The row was closed by the reader at <code>23:19:26.526Z</code> as "round 6 is superseded by round 7 (fix task #334)"; the draft#2 job was cancelled at <code>23:21:17.045Z</code>. No gate decision, no cap park.</td><td>G1 declares <code>ledger/ping-pong/verdict-r{{round}}.json</code>. Three records: <code>r1 revise</code>, <code>r2 revise</code>, <code>r3 accept</code>. The third visit's <code>accept</code> routed to <code>null</code> and finished the row at <code>00:38:15.977Z</code>; no cap park, one crossing to spare.</td></tr>
+</table></div>
+
+<h2 id="d1">1. Pushes and PRs: 2 and 1 before, 0 and 0 after</h2>
+<p><b>Before.</b> The round-6 drafter's final message reads "Pushed and opened PR #607 (OPEN, one file, +9 -28)". The round-6 critic's reads "PR 607 now carries the critique ... pushed, PR open against main". The PR was created at <code>2026-11-08T22:58:09Z</code> on branch <code>wtgui/write-the-draft-the-brief-asks-for-in-970633</code>, 1 file, +38 -82 at the read, and it is still OPEN against <code>main</code>. Two pushes reached <code>origin</code>; one distinct PR was opened; the second <code>gh pr create</code> met the first PR and edited its body.</p>
+<p><b>After.</b> The six round-7 stages carry six commits and no remote write: <code>d066c14</code>, <code>be934c1</code>, <code>1d20a08</code>, <code>5e0214f</code>, <code>083283b</code>, <code>cbc07d7</code>. <code>git ls-remote origin wtgui/write-the-draft-the-brief-asks-for-in-94df79</code> prints nothing, the branch has no upstream, and <code>gh pr list --head ...94df79 --state all</code> prints <code>[]</code>. The six final messages: "nothing was pushed and no PR was opened" (draft#1), "local-only, no push and no PR" (critique#1), "nothing pushed" (draft#2), "local-only; no push, no PR" (critique#2), "no push and no PR" (draft#3), "not pushed, no PR" (critique#3).</p>
+
+<h2 id="d2">2. The settle lag: 52.2 s and 39.2 s before, 0.073 to 0.133 s after</h2>
+<p><b>Before.</b> The round-6 draft's job <code>50a24831</code> ended <code>2026-11-08T22:58:31.719Z</code> and its stage settled <code>22:59:23.923Z</code>: <b>52.204 s</b>. The critique's job <code>889cc700</code> ended <code>23:12:47.950Z</code> and settled <code>23:13:27.140Z</code>: <b>39.190 s</b>. The wait was the panel's job card plus the 60-second ticker, not the worker.</p>
+<p><b>After.</b> Each of the six job ends and its stage's <code>settledAt</code> are on the same second:</p>
+<div class="tw"><table>
+<tr><th>stage run</th><th>job</th><th>job ended</th><th>stage settled</th><th>lag</th></tr>
+<tr><td><code>ping-pong/draft#1</code></td><td class="mono">5056fb50</td><td>00:03:38.969Z</td><td>00:03:39.042Z</td><td><span class="ok">0.073 s</span></td></tr>
+<tr><td><code>ping-pong/critique#1</code></td><td class="mono">67f39bdc</td><td>00:14:20.854Z</td><td>00:14:20.938Z</td><td><span class="ok">0.084 s</span></td></tr>
+<tr><td><code>ping-pong/draft#2</code></td><td class="mono">2695c2a6</td><td>00:19:36.398Z</td><td>00:19:36.501Z</td><td><span class="ok">0.103 s</span></td></tr>
+<tr><td><code>ping-pong/critique#2</code></td><td class="mono">f8daac13</td><td>00:28:22.223Z</td><td>00:28:22.356Z</td><td><span class="ok">0.133 s</span></td></tr>
+<tr><td><code>ping-pong/draft#3</code></td><td class="mono">cd8e1e91</td><td>00:32:41.912Z</td><td>00:32:41.994Z</td><td><span class="ok">0.082 s</span></td></tr>
+<tr><td><code>ping-pong/critique#3</code></td><td class="mono">70d3e982</td><td>00:38:15.887Z</td><td>00:38:15.977Z</td><td><span class="ok">0.090 s</span></td></tr>
+</table></div>
+<p class="small">All timestamps are the stored UTC stamps on the queue's <code>stageRuns[]</code> and <code>~/.wag/state/jobs.json</code>. The lag is <code>settledAt - endedAt</code>; the job duration is <code>endedAt - startedAt</code>. The server's log agrees: <code>00:03:39 pipeline hold for ... draft settled - the panel moved the row draft -> critique (queued)</code>.</p>
+
+<h2 id="d3">3. The refused tool: 1 blocked call before, 0 after</h2>
+<p><b>Before.</b> The round-6 critic's first call was <code>execute_code</code>, answered <i>BLOCKED: this session runs on an unattended platform (api_server) with no user present</i>. It cost a turn before the fallback to <code>terminal</code>; the round-6 review's speed-bump list carries the quote.</p>
+<p><b>After.</b> None of the six round-7 jobs' stored streams contains a <code>BLOCKED</code> line, and none of the six final messages mentions one. Every prompt ends with the same paragraph: <code>TOOLS - this stage runs unattended: nobody is at the keyboard, and the platform refuses `execute_code` ("BLOCKED: this session runs on an unattended platform"). Use `terminal` for commands and `read_file`, `write_file` and `patch` for files. A refused tool costs a turn, so do not try one to see whether it works.</code> The six prompts are the six stage starts; the line is in each.</p>
+
+<h2 id="d4">4. How the loop ended: a manual supersede before, the gate's accept after</h2>
+<p><b>Before.</b> The round-6 bundle's <code>ping-pong.gates[0]</code> carried <code>decision: null</code>, so <code>gateAfter</code> answered nothing and <code>H-02</code> was taken in kind order. The critique's own text said "Not accepted in this round"; the driver still entered draft visit 2 at <code>23:13:27.140Z</code>. The row was not ended by a gate or by the cap: the reader closed #333 at <code>2026-11-08T23:19:26.526Z</code> with the reason "round 6 is superseded by round 7 (fix task #334)", and the draft#2 job <code>ec56377a</code> was cancelled at <code>23:21:17.045Z</code>.</p>
+<p><b>After.</b> G1 declares a per-round record. The three verdict files in the draft tree:</p>
+<div class="tw"><table>
+<tr><th>record</th><th>bytes</th><th>sha256 (first 16)</th><th>outcome</th><th>written by</th></tr>
+<tr><td><code>ledger/ping-pong/verdict-r1.json</code></td><td>21</td><td class="mono">51afa75634f3c317</td><td class="warnpill">revise</td><td>critique#1, commit <code>be934c1</code></td></tr>
+<tr><td><code>ledger/ping-pong/verdict-r2.json</code></td><td>21</td><td class="mono">51afa75634f3c317</td><td class="warnpill">revise</td><td>critique#2, commit <code>5e0214f</code></td></tr>
+<tr><td><code>ledger/ping-pong/verdict-r3.json</code></td><td>21</td><td class="mono">90b487e7e05562e1</td><td><span class="ok">accept</span></td><td>critique#3, commit <code>cbc07d7</code></td></tr>
+</table></div>
+<p>The row's <code>stageRuns[5].decision</code> is <code>{"by":"panel","trigger":"verdict","code":null,"at":"2026-11-09T00:38:15.977Z","fact":{"kind":"verdict","gate":"G1","path":"...\\ledger\\ping-pong\\verdict-r3.json","outcome":"accept","handoff":null,"edge":"H-02","from":"critique","to":"draft","ended":true,...},"reason":"gate G1 placed its verdict at ...verdict-r3.json: \"accept\" - that outcome ends the loop H-02 (critique -> draft), so the pipeline is over and the settle finishes the row"}</code>. Crossings: <code>{"H-01":3,"H-02":2}</code>; visits: <code>{"draft":3,"critique":3}</code>; the cap of 3 rounds was not reached.</p>
+
+<h2 id="same">What the fixes did not change</h2>
+<ol>
+<li><b>The artifact path is still shared across rounds.</b> The round-7 tree was cut from <code>b98f6b0</code> and already held <code>ledger/ping-pong/draft.md</code>, <code>critique.md</code> and <code>run-log.md</code> (from earlier rounds). The first draft's commit <code>d066c14</code> is <b>9 insertions, 28 deletions</b> on one file: it overwrote the old draft, the same shape as round 6's drafter commit. The only per-round identity is the stage run's pin (commit, blob, sha256), never the path.</li>
+<li><b>The stage's artifact kind is still unstated in the seed.</b> The <code>ping-pong</code> stages declare <code>schema: "draft/1"</code> and <code>"critique/1"</code>, no <code>kind</code>. The row's own <code>done</code> reason says "critique/1, kind unstated". The driver's "local" is the default for an unstated kind, not a declared word; a stage that should push would have to declare <code>kind: "pr"</code>.</li>
+<li><b>The row's clock is still the stage's, not the round's.</b> <code>startedAt</code> is <code>2026-11-09T00:32:43.749Z</code>, 2.0 s after the draft#3 settle and 1 h 14 m 12 s after <code>createdAt</code>. The row's "time in stage" is 5 m 32 s; the round ran 38 m 02 s. The backfill at the <code>done</code> transition still hides the row's real start.</li>
+<li><b>A pipeline row still takes two writes.</b> The queue's actions are still <code>add</code> and <code>pipeline</code>; the row's <code>createdAt</code> is <code>2026-11-08T23:18:31.249Z</code> and its tree's <code>cutAt</code> is <code>23:57:09.145Z</code>, 38 m 38 s later. The assignment write's own stamp is not on the row, so a crash between the two still leaves a queued row with no stage.</li>
+<li><b>The cap is still a person's job.</b> The gate's <code>accept</code> ends a converged loop, but a loop that is still revising at the cap parks on <code>pipeline-cap</code> and needs <code>pipeline-release {release: "cap"}</code>. Round 7 used 2 of 3 crossings, so it never reached that branch.</li>
+<li><b>PR #607 is still open.</b> The fix stopped new PRs; it did not close the one round 6's defect produced. <code>gh pr view 607</code> reads <code>OPEN</code>, <code>mergedAt: null</code>, created <code>22:58:09Z</code>.</li>
+</ol>
+
+<h2 id="worse">What got worse</h2>
+<ol>
+<li><b>The cut-to-first-stage handoff.</b> Round 6's tree was cut <code>22:49:30.183Z</code> and its draft started <code>22:49:31.036Z</code>: <b>0.853 s</b>. Round 7's tree was cut <code>23:57:09.145Z</code> and its draft started <code>00:00:13.655Z</code>: <b>3 m 04.5 s</b>. The first worker waited 216 times as long after the tree. The round-6 fix's settle hook fires at the run's end, but nothing fires at the cut's end.</li>
+<li><b>The row's cost.</b> Six stages and 2,271 s of job time (37 m 51 s) against round 6's two stages and 1,338 s (22 m 18 s). The loop now completes, so this is the price of the completion, but the round is 2.6 times the worker time and twice the stage count.</li>
+<li><b>The draft's headroom.</b> The draft grew 588 -> 596 -> 599 words across the three visits. At 599 of the brief's 600 words it has one word left; the critic's own acceptance note reads "599 of its 600 words". A fourth visit would have had to cut, not add.</li>
+<li><b>The row's 1 h 19 m 44 s wall time.</b> The row was created <code>23:18:31.249Z</code>, cut <code>23:57:09.145Z</code>, first stage <code>00:00:13.655Z</code>, done <code>00:38:15.977Z</code>. The 38 m 38 s before the cut was the wait for the fix's landing (PR #611 merged <code>23:54:46Z</code>); the 3 m 04 s after the cut is the handoff above; the 38 m 02 s of stages is the loop. The row's own clock cannot show any of that.</li>
+</ol>
+
+<h2 id="record">The round's own record</h2>
+<div class="tw"><table>
+<tr><th>stage run</th><th>visit</th><th>thread</th><th>job</th><th>stage at</th><th>job end</th><th>settle</th><th>lag</th><th>commit</th><th>artifact</th></tr>
+<tr><td><code>ping-pong/draft#1</code></td><td>1</td><td class="mono">wtgui-write-the-draft-the-brief-as-733d5b</td><td class="mono">5056fb50</td><td>00:00:13.655Z</td><td>00:03:38.969Z</td><td>00:03:39.042Z</td><td>0.073 s</td><td class="mono">d066c14</td><td>588 w, <code>12198582</code></td></tr>
+<tr><td><code>ping-pong/critique#1</code></td><td>1</td><td class="mono">wtgui-read-the-draft-against-the-b-c48534</td><td class="mono">67f39bdc</td><td>00:03:39.042Z</td><td>00:14:20.854Z</td><td>00:14:20.938Z</td><td>0.084 s</td><td class="mono">be934c1</td><td>1648 w, <code>61808729</code></td></tr>
+<tr><td><code>ping-pong/draft#2</code></td><td>2</td><td class="mono">wtgui-write-the-draft-the-brief-as-6b7645</td><td class="mono">2695c2a6</td><td>00:14:20.938Z</td><td>00:19:36.398Z</td><td>00:19:36.501Z</td><td>0.103 s</td><td class="mono">1d20a08</td><td>596 w, <code>351f91a2</code></td></tr>
+<tr><td><code>ping-pong/critique#2</code></td><td>2</td><td class="mono">wtgui-read-the-draft-against-the-b-d2fca0</td><td class="mono">f8daac13</td><td>00:19:36.501Z</td><td>00:28:22.223Z</td><td>00:28:22.356Z</td><td>0.133 s</td><td class="mono">5e0214f</td><td>1039 w, <code>99d86a1f</code></td></tr>
+<tr><td><code>ping-pong/draft#3</code></td><td>3</td><td class="mono">wtgui-write-the-draft-the-brief-as-34e328</td><td class="mono">cd8e1e91</td><td>00:28:22.356Z</td><td>00:32:41.912Z</td><td>00:32:41.994Z</td><td>0.082 s</td><td class="mono">083283b</td><td>599 w, <code>43c578c4</code></td></tr>
+<tr><td><code>ping-pong/critique#3</code></td><td>3</td><td class="mono">wtgui-read-the-draft-against-the-b-0ba507</td><td class="mono">70d3e982</td><td>00:32:41.994Z</td><td>00:38:15.887Z</td><td>00:38:15.977Z</td><td>0.090 s</td><td class="mono">cbc07d7</td><td>258 w, <code>8e68fbaa</code></td></tr>
+</table></div>
+<p class="small">All times are 2026-11-09 UTC. The artifact column is the word count and the first eight hex digits of the stage run's <code>artifact.sha256</code>. The current <code>draft.md</code> hashes to <code>43c578c46f59376c3db6c9589d1cfbb1bd419f968ab355a32fa20a10bc244bd7</code> and the current <code>critique.md</code> to <code>8e68fbaabd60ca6776c67711edaf89173c9a4d00213c174b372a8aabcaf555f7</code>, matching <code>draft#3</code> and <code>critique#3</code>. The tree was clean (<code>dirty: 0</code>) at every settle.</p>
+
+<div class="verdict">
+<h4>The artifacts</h4>
+<p><code>ledger/ping-pong/draft.md</code> is 599 words, 3,776 bytes, 17 lines. It cites <code>lib/task-pipeline-drive.js</code>, <code>lib/task-pipeline.js</code> and <code>lib/assistant/queue.js</code> by name, walks the five beats the brief asked for and ends with its own uncertainty: "the hold and sweep race is untested from the modules." The last line is not a summary.</p>
+<p><code>ledger/ping-pong/critique.md</code> is 258 words, 1,595 bytes, 13 lines. It opens "Accepted. No note is left open", answers the three notes from visit 2 one by one, re-reads five claims against the code, and ends "G1 is recorded in <code>ledger/ping-pong/verdict-r3.json</code> as accept. The loop stops here; the drafter writes no round 8."</p>
+<p>The three verdict files are one-line JSON: <code>{"outcome":"revise"}</code>, <code>{"outcome":"revise"}</code>, <code>{"outcome":"accept"}</code>. The first two are byte-identical (sha256 <code>51afa756...</code>); the third is <code>90b487e7...</code>.</p>
+</div>
+
+<h2 id="limits">What this does not prove</h2>
+<ul>
+<li><b>The "cut to first stage" figure is one sample.</b> The 3 m 04 s could be the panel's slot or the fix's landing; the row's records carry the stamps but not the reason the spawn waited. Round 6's 0.853 s is the only comparison, and the round-6 tree was cut while the panel was idle.</li>
+<li><b>The blocked-call count reads the stored streams, not a full transcript.</b> The six jobs keep 63 to 120 display lines each; a refused call in the dropped head would not be in the count. The six final messages and the TOOLS line are the second read, and both say zero.</li>
+<li><b>The gate's accept is the critic's file, not the panel's judgement.</b> The row reads the file; it cannot tell whether the critic's "no note left open" was right. The panel's decision is <code>trigger: "verdict"</code> because the file exists and routes to <code>null</code>.</li>
+<li><b>The "what got worse" items are costs, not defects.</b> The 38 m 02 s is six real stages; the 599 words is a real draft. Neither is a fault in the four fixes, and neither is a reason to revert one.</li>
+<li><b>The row's <code>startedAt</code> is a backfill.</b> <code>setTaskState</code>'s <code>done</code> transition stamps <code>startedAt</code> when it was never set, so <code>00:32:43.749Z</code> is the last stage's start, not the row's. The real row time is <code>createdAt</code> to <code>doneAt</code>: 1 h 19 m 44 s.</li>
+</ul>
+
+<h2 id="evidence">The evidence</h2>
+<pre>Row:      ~/.wag/state/assistants/assistant-2/queue.json, task #335
+          state done, doneBy panel, createdAt 2026-11-08T23:18:31.249Z,
+          startedAt 2026-11-09T00:32:43.749Z, doneAt 2026-11-09T00:38:15.977Z,
+          pipelineRun.stageRuns[] 6 entries, visits {draft:3,critique:3},
+          crossings {H-01:3,H-02:2}, tree.startSha b98f6b0, tree.cutAt 23:57:09.145Z
+Jobs:     GET http://127.0.0.1:7331/api/jobs and ~/.wag/state/jobs.json
+          5056fb50 204.236 s, 67f39bdc 640.768 s, 2695c2a6 313.746 s,
+          f8daac13 523.995 s, cd8e1e91 256.177 s, 70d3e982 332.316 s
+Artifacts: C:/ProjectDevelopment/agent-worktree-gui/.worktrees/write-the-draft-the-brief-asks-for-in-94df79
+          ledger/ping-pong/draft.md, critique.md, verdict-r1.json, verdict-r2.json, verdict-r3.json
+Commits:  d066c14, be934c1, 1d20a08, 5e0214f, 083283b, cbc07d7 on wtgui/write-the-draft-the-brief-asks-for-in-94df79
+Bundle:   pipeline-bundle.seed.json, pipeline ping-pong; G1 decision at ledger/ping-pong/verdict-r{{round}}.json
+Before:   ~/.wag/state/assistants/assistant-2/queue.json, task #333; jobs 50a24831, 889cc700, ec56377a;
+          PR #607 https://github.com/JLRoper/agent-worktree-gui/pull/607 (OPEN)
+Server:   ~/.wag/logs/server.out.log, pipeline hold lines 1414-1521</pre>
+
+<p class="small">Round 6's review is beside this page as <a href="ping-pong-round-6-2026-11-08.html">ping-pong-round-6-2026-11-08.html</a>; the four fixes' landing report is <a href="ping-pong-round-6-fixes-2026-11-08.html">ping-pong-round-6-fixes-2026-11-08.html</a>.</p>
+</div>
+</body>
+</html>
