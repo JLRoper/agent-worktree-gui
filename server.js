@@ -17,6 +17,7 @@ import { Pool } from "./lib/pool.js";
 import { panelChildren } from "./lib/child-tree.js";
 import { portHolder, refusalLine } from "./lib/port-guard.js";
 import { worktreeList, prIndex, prFor } from "./lib/project.js";
+import { heldBack, failed as hostFailed, answered as hostAnswered, looksLikeHostTrouble } from "./lib/remote-backoff.js";
 import { Store } from "./lib/store.js";
 import { Scheduler } from "./lib/scheduler.js";
 import { ProjectRegistry } from "./lib/projects.js";
@@ -1894,6 +1895,9 @@ async function readReviewForPipelineWait({ tree, record, stage, wait }) {
   const listing = prListing(docOf(hosts), project);
   if (!listing.url) return { ok: false, why: listing.why || `host "${project.host || "?"}" has no pull-request endpoint` };
   const coords = listing.coordinates || {};
+  // A host that is not answering is not asked (lib/remote-backoff.js); named here so the catch can
+  // classify a thrown read against it too.
+  let hostId = null;
   try {
     if (listing.transport === "gh") {
       if (!coords.owner || !coords.repo) return { ok: false, why: `gh needs owner and repo coordinates, the host record supplies ${JSON.stringify(coords)}` };
@@ -1906,6 +1910,10 @@ async function readReviewForPipelineWait({ tree, record, stage, wait }) {
     }
     const token = listing.tokenEnv ? process.env[listing.tokenEnv] : null;
     if (!token) return { ok: false, why: `no token in ${listing.tokenEnv || "(api.tokenEnv is not set)"} — the pull request cannot be read` };
+    // The same hold the PR list keeps: a wait tick against a down host costs nothing instead of two 20 s sockets.
+    hostId = listing.id || project.host || null;
+    const hold = hostId ? heldBack(hostId) : false;
+    if (hold) return { ok: false, why: `host ${hostId} is not answering — its calls are held back for ${Math.max(1, Math.round(hold.ms / 60000))} more min` };
     const values = { base: listing.mapping?.base, projectKey: coords.projectKey, repoSlug: coords.repoSlug, pr: pr.number };
     const base = renderTemplate("{base}/rest/api/1.0/projects/{projectKey}/repos/{repoSlug}/pull-requests/{pr}", values);
     const headers = { Authorization: `Bearer ${token}`, Accept: "application/json" };
@@ -1915,9 +1923,12 @@ async function readReviewForPipelineWait({ tree, record, stage, wait }) {
     ]);
     if (!recordRes.ok) return { ok: false, why: `HTTP ${recordRes.status} from ${base}` };
     if (!activitiesRes.ok) return { ok: false, why: `HTTP ${activitiesRes.status} from ${base}/activities` };
+    if (hostId) hostAnswered(hostId);
     return observeBitbucketPr(await recordRes.json(), await activitiesRes.json());
   } catch (error) {
-    return { ok: false, why: `the pull request could not be read: ${String((error && error.message) || error)}` };
+    const why = String((error && error.message) || error);
+    if (hostId && looksLikeHostTrouble(why)) hostFailed(hostId, why);
+    return { ok: false, why: `the pull request could not be read: ${why}` };
   }
 }
 
