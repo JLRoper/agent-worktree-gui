@@ -253,3 +253,15 @@ test/round-tree-names.test.js | 2 | fixture: the worktree names the round test i
 tools/probe-pipeline-ledger.mjs | 1 | example: the usage line's tree folder, a placeholder a reader replaces
 tools/verify-round-tree-names.mjs | 1 | record: the checkout the verifier was run against
 docs/perf/slow-panel-2026-11-09.md | 3 | measurement record: the board's two scan roots and the scratch folder the harness ran from, as they were
+ledger/gui-improve/settings-panel-board/change-set.patch | 3 | record: the change-set quotes the stylesheet's measured comment and the surface's scan roots
+ledger/gui-improve/settings-panel-board/compare/after/capture.json | 36 | record: the after capture names the same scan roots and browser install
+ledger/gui-improve/settings-panel-board/compare/after/dom.json | 126 | record: the after DOM inventory quotes the scan roots' own paths and titles
+ledger/gui-improve/settings-panel-board/compare/after/style.css | 1 | record: the after stylesheet keeps the measured comment that names the painted folder
+ledger/gui-improve/settings-panel-board/compare/before/capture.json | 36 | record: the before capture names the same scan roots and browser install
+ledger/gui-improve/settings-panel-board/compare/before/dom.json | 126 | record: the before DOM inventory quotes the scan roots' own paths and titles
+ledger/gui-improve/settings-panel-board/compare/before/README.md | 6 | record: the before copy's README names the two folders it scanned
+ledger/gui-improve/settings-panel-board/compare/capture.mjs | 3 | probe: the browser and module folders the compare was run with, kept as its default environment
+ledger/gui-improve/settings-panel-board/compare/change-set.patch | 3 | record: the compare's change-set quotes the stylesheet's measured comment
+ledger/gui-improve/settings-panel-board/compare/comparison.json | 156 | record: the comparison quotes the scan roots and the measured comment on both sides
+ledger/gui-improve/settings-panel-board/compare/README.md | 7 | record: the compare's protocol names the two folders and the browser install it ran with
+ledger/gui-improve/settings-panel-board/compare/run.mjs | 9 | probe: the scan roots and the browser and module folders the compare was run with, kept as its defaults
