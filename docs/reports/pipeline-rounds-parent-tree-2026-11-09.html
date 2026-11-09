@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pipeline rounds on the parent-tree model - agent-worktree-gui, 2026-11-09</title>
+<style>
+  :root{ --ink:#191714; --paper:#fbf9f4; --rule:#ded7cb; --muted:#6b645b; --accent:#7a4bd0; --bar:#b79ce8; --warn:#b4453a; --ok:#2f7a4f; }
+  @media (prefers-color-scheme: dark){
+    :root{ --ink:#e8e6e1; --paper:#14161a; --rule:#2a2f38; --muted:#9aa3ad; --accent:#c8a6ff; --bar:#6f4fa8; --warn:#e5534b; --ok:#6fcf97; }
+  }
+  html,body{ margin:0; background:var(--paper); color:var(--ink); font:15px/1.55 -apple-system,Segoe UI,Helvetica,Arial,sans-serif; }
+  main{ max-width:1180px; margin:0 auto; padding:36px 28px 80px; }
+  h1{ font-size:26px; margin:0 0 4px; letter-spacing:-.01em; }
+  h2{ font-size:19px; margin:38px 0 10px; padding-bottom:6px; border-bottom:1px solid var(--rule); }
+  h3{ font-size:16px; margin:24px 0 8px; }
+  .sub{ color:var(--muted); margin:0 0 22px; }
+  .cards{ display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin:18px 0 6px; }
+  .card{ border:1px solid var(--rule); border-radius:10px; padding:12px 14px; }
+  .card b{ display:block; font-size:22px; letter-spacing:-.02em; }
+  .card span{ color:var(--muted); font-size:13px; }
+  table{ border-collapse:collapse; width:100%; font-size:14px; }
+  th,td{ text-align:left; padding:6px 8px; border-bottom:1px solid var(--rule); vertical-align:top; }
+  th{ color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+  td.n{ text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  code{ font:13px ui-monospace,Consolas,monospace; background:rgba(127,127,127,.12); padding:1px 5px; border-radius:4px; overflow-wrap:anywhere; }
+  .muted{ color:var(--muted); }
+  .note{ border-left:3px solid var(--accent); padding:6px 0 6px 12px; color:var(--muted); margin:14px 0; }
+  .verdict{ border:1px solid var(--accent); border-radius:10px; padding:14px 16px; margin:18px 0 6px; }
+  .verdict p{ margin:6px 0; }
+  .shot{ margin:16px 0; }
+  .shot img{ width:100%; height:auto; border:1px solid var(--rule); border-radius:8px; display:block; }
+  .shot figcaption{ color:var(--muted); font-size:13px; margin-top:6px; }
+  pre.cmd, pre.print{ background:rgba(127,127,127,.10); border:1px solid var(--rule); border-radius:8px; padding:10px 12px; overflow-x:auto; font:12.5px/1.5 ui-monospace,Consolas,monospace; white-space:pre-wrap; overflow-wrap:anywhere; }
+  pre.print{ max-height:520px; overflow-y:auto; }
+  details{ margin:10px 0 4px; }
+  summary{ cursor:pointer; color:var(--muted); font-size:13px; }
+  .tag{ font-size:11px; padding:1px 6px; border:1px solid var(--rule); border-radius:10px; color:var(--muted); white-space:nowrap; }
+  .tag.ok{ border-color:var(--ok); color:var(--ok); }
+  .tag.warn{ border-color:var(--warn); color:var(--warn); }
+  ul li{ margin:6px 0; }
+</style>
+</head>
+<body>
+<main>
+<h1>Pipeline rounds on the parent-tree model</h1>
+<p class="sub">agent-worktree-gui, measured at <code>origin/main 99f2bd7</code> (1.76.1) on the live panel at <code>127.0.0.1:7331</code>, 2026-11-09. Three rounds of the <code>investigate</code> pipeline on <code>assistant-3</code> with <code>settings.spawn = auto</code>. All times UTC. Round D's landing turn later merged its work as PR #649 (<code>17e66cd3</code>, 1.76.3); the report is written on that main.</p>
+
+<div class="cards">
+  <div class="card"><b>3</b><span>rounds completed</span></div>
+  <div class="card"><b>6</b><span>stage runs, each a real Hermes run in its own tree</span></div>
+  <div class="card"><b>3 / 3</b><span>assemblies the panel verified</span></div>
+  <div class="card"><b>6 / 6</b><span>artifact pins that match the blob at the assembled commit</span></div>
+  <div class="card"><b>4</b><span>findings the run exposed</span></div>
+</div>
+
+<div class="verdict">
+<h2 id="answer" style="margin-top:0;border:0;padding:0">The answer</h2>
+<p>All three rounds completed on the landed parent-tree model. Each cut one parent tree from <code>origin/main</code>, named for the task as a whole, then cut one child per stage from the parent's branch with the display name <code>Stage N: &lt;stage&gt;</code>. Each picked both stage commits onto the parent tree and wrote an assembly record with <code>verified: true</code>. The chart draws the group the model describes: the parent row named for the task, its two stage children indented under it, each child reading <code>Stage X: ...</code>.</p>
+<p>Four findings showed up beside that result. A pipeline row filed with an existing worktree never cuts a parent tree; it runs in that tree (row 50 committed to the project checkout). A one-stage round never assembles, because <code>assemblePipelineRound</code> refuses fewer than two entries while <code>assemblyPlanOf</code> offers a one-stage plan when the round has a parent tree (row 52 is parked on exactly that). The assistant's own agent can close a pipeline row before the driver's assembly (row 51). And the chart does not paint the round's own display names by default; the captures lay them on the board's per-tree name map.</p>
+<p>Round D's work landed after its capture: the assistant's landing turn pushed the parent branch and merged PR #649 at 12:25:38Z, so main carries the two stage commits (<code>ea66e5a1</code>, <code>570a0a11</code>) and the 1.76.3 bump (<code>17e66cd3</code>). Rounds B and C were not landed.</p>
+</div>
+
+<h2 id="method">How the rounds were run</h2>
+<p>Each row was filed through the panel's own queue route in one POST: <code>action: add</code>, <code>order: 1</code>, <code>project: agent-worktree-gui</code>, <code>pipeline: investigate</code>, <code>stage: probe</code>, and <b>no worktree</b>. The missing worktree is load-bearing. <code>treeLookup</code> answers <code>needed</code> only when the row records no tree, and only then does the driver ask the assistant to cut the round's parent tree (<code>lib/task-pipeline-drive.js</code>, "the three answers"). A row filed with a real worktree reuses it instead; finding 1 is that path.</p>
+<pre class="cmd">curl -s -X POST -H "Content-Type: application/json" \
+  --data @round-add.json http://127.0.0.1:7331/api/assistant/queue
+
+{"assistantId":"assistant-3","action":"add","order":1,"project":"agent-worktree-gui",
+ "title":"Round B: what the state printer says",
+ "detail":"The question is what node tools/pipeline-state.mjs --help prints. ...",
+ "pipeline":"investigate","stage":"probe"}</pre>
+<p><code>assistant-3</code> carried <code>settings.spawn = auto</code> for every round. Its own agent turns were switched off (<code>enabled = false</code>) while the rounds ran, because an enabled agent had closed a pipeline row before the driver's assembly on the first attempt (finding 3); the queue sweep that drives pipelines runs outside that switch. <code>enabled</code> was restored to <code>true</code> after the last round.</p>
+<p>Each stage is a real Hermes run in its own tree, started by the panel, one stage at a time. The captures are the board's own page in Chromium at a 1440 x 900 viewport. The chart reads a row's shown name from the reader's per-tree name map (<code>wtgui.treenames</code> in localStorage) before the directory, so the round's display values were laid on that map for each shot; without it the rows read their directory names (finding 4).</p>
+
+<h2 id="rounds">The three rounds</h2>
+<table>
+<thead><tr><th>round</th><th>row</th><th>stages</th><th>filed</th><th>done</th><th>wall clock</th><th>assembly</th><th>verified</th></tr></thead>
+<tbody>
+
+<tr><td><a href="#round-b">Round B</a></td><td>53</td><td>investigate/probe#1, investigate/conclude#1</td><td>2026-11-09 11:32:47.338Z</td><td>2026-11-09 11:39:47.997Z</td><td>7m 00s</td><td><code>6214af3165752ad6</code> on <code>wtgui/round-b-what-the-state-printer-says-01cc86</code></td><td><span class="tag ok">true</span></td></tr>
+<tr><td><a href="#round-c">Round C</a></td><td>54</td><td>investigate/probe#1, investigate/conclude#1</td><td>2026-11-09 11:48:52.845Z</td><td>2026-11-09 12:00:41.908Z</td><td>11m 49s</td><td><code>132354c1b216c535</code> on <code>wtgui/round-c-how-a-round-names-its-trees-5b3b85</code></td><td><span class="tag ok">true</span></td></tr>
+<tr><td><a href="#round-d">Round D</a></td><td>55</td><td>investigate/probe#1, investigate/conclude#1</td><td>2026-11-09 12:07:11.462Z</td><td>2026-11-09 12:13:08.747Z</td><td>5m 57s</td><td><code>7b4a51f2f0aced0a</code> on <code>wtgui/round-d-the-name-module-on-disk-4ea3d1</code></td><td><span class="tag ok">true</span></td></tr>
+</tbody></table>
+<p class="muted">Wall clock is <code>doneAt</code> minus <code>createdAt</code> on the queue row. The stage clock is not the round's: <code>enteredAt</code> is restamped at every stage, so time in stage is not the round's length (<code>docs/task-pipeline.md</code>).</p>
+
+<h2 id="round-b">Round B: what the state printer says (row 53)</h2>
+<p class="muted">pipeline <code>investigate</code>, 2 stage(s), filed 2026-11-09 11:32:47.338Z, done 2026-11-09 11:39:47.997Z, wall clock 7m 00s. The row's own reason: pipeline investigate is over at conclude - its artifact &quot;investigation&quot; (investigation/1, kind unstated) is not a PR to land, so the row settles on the stage&#x27;s own verdict</p>
+
+<figure class="shot">
+  <img src="pipeline-rounds-2026-11-09/round-b.png" alt="The worktree chart at 1440x900, showing the parent tree for round B with its stage children indented under it">
+  <figcaption>The worktree chart at 1440x900, captured 11:48:12Z UTC. The parent row reads Round B: what the state printer says; its stage children read Stage 1: Probe and Stage 2: Conclude. Names are the round's own display values, laid on the board's per-tree name map; see finding 4.</figcaption>
+</figure>
+
+<h3>What the chart draws</h3>
+<table>
+<thead><tr><th>row</th><th>display name</th><th>depth</th><th>hangs under</th><th>branch</th></tr></thead>
+<tbody><tr><td>Round B: what the state printer says</td><td>1</td><td>the project checkout row (main)</td><td><code>wtgui/round-b-what-the-state-printer-says-01cc86</code></td></tr>
+<tr><td>Stage 1: Probe</td><td>2</td><td>the parent row</td><td><code>wtgui/round-b-what-the-state-printer-says-stage-1-probe-112593</code></td></tr>
+<tr><td>Stage 2: Conclude</td><td>2</td><td>the parent row</td><td><code>wtgui/round-b-what-the-state-printer-says-stage-2-conclude-530d9e</code></td></tr></tbody>
+</table>
+<p class="muted">Read from the DOM at capture time: each child carried <code>is-child</code> and <code>data-parent-key</code> naming the parent row's key, with <code>data-depth="2"</code>; the parent carried <code>data-parent-key</code> naming the project checkout's row, with <code>data-depth="1"</code>. That is the model's one group per round: main -&gt; the round's parent tree -&gt; its stage children.</p>
+
+<h3>The stage runs</h3>
+<table>
+<thead><tr><th>stage run</th><th>status</th><th>entered / settled</th><th>commit</th><th>artifact</th><th>thread / job</th></tr></thead>
+<tbody><tr><td><code>investigate/probe#1</code></td><td>done</td><td>2026-11-09 11:32:58.635Z<br>to 2026-11-09 11:36:07.327Z<br><span class="muted">3m 08s</span></td><td><code>d104dbf219f4</code></td><td><code>probe-evidence</code> at <code>ledger/investigate/probe.md</code> - present true<br>pin sha256 <code>124729819c478c4f</code></td><td><code>wtgui-find-out-what-is-actually-be-c66947</code><br><code>1cb2a5ed</code></td></tr>
+<tr><td><code>investigate/conclude#1</code></td><td>done</td><td>2026-11-09 11:36:35.854Z<br>to 2026-11-09 11:39:47.997Z<br><span class="muted">3m 12s</span></td><td><code>848cf12023ed</code></td><td><code>investigation</code> at <code>docs/investigation.md</code> - present true<br>pin sha256 <code>ec52d9d5b02ee7d4</code></td><td><code>wtgui-write-the-conclusion-down-in-59975a</code><br><code>30fda38f</code></td></tr></tbody>
+</table>
+
+<h3>The assembly</h3>
+<p>The driver picked every stage commit onto the round's parent tree, in visit order, from the frozen base <code>99f2bd777a2a</code>:</p>
+<pre class="cmd">d104dbf219f4 picked as 3170d2c69198 (probe, visit 1)
+848cf12023ed picked as 6214af316575 (conclude, visit 1)</pre>
+<p>Assembly <code>6214af3165752ad641d5df95a60c481c3f8d90d1</code> on <code>wtgui/round-b-what-the-state-printer-says-01cc86</code>, base <code>99f2bd777a2a24d1aedd903e9c4b24a4d9520c36</code>, <b>verified true</b>, skipped []. The parent tree's files were read back at that commit and hash to the pins the stage runs recorded:</p>
+<table>
+<thead><tr><th>stage</th><th>artifact path</th><th>pin blobSha256</th><th>read at</th><th>result</th></tr></thead>
+<tbody><tr><td>probe</td><td><code>ledger/investigate/probe.md</code></td><td><code>124729819c478c4f</code></td><td><code>6214af3165752ad6..</code></td><td>match</td></tr>
+<tr><td>conclude</td><td><code>docs/investigation.md</code></td><td><code>ec52d9d5b02ee7d4</code></td><td><code>6214af3165752ad6..</code></td><td>match</td></tr></tbody>
+</table>
+
+
+<details open>
+<summary>tools/pipeline-state.mjs 53 --assistant assistant-3</summary>
+<pre class="print">row 53 · assistant-3 · done
+title   Round B: what the state printer says
+where   project agent-worktree-gui · worktree &lt;repo&gt;/.worktrees/round-b-what-the-state-printer-says-01cc86
+reason  pipeline investigate is over at conclude - its artifact &quot;investigation&quot; (investigation/1, kind unstated) is not a PR to land, so the row settles on the stage&#x27;s own verdict
+bundle  ~/.wag/state/pipeline-bundle.json
+
+run     investigate · conclude (2 of 2) · 31m 27s in stage
+stage   Conclude · visit 1 · entered 2026-11-09T11:36:07.327Z
+facts   via H-01 · route sha256:bdf3268aaf15277b... · crossings H-01=1 · start asked 2026-11-09T11:36:35.854Z
+
+round   parent wtgui/round-b-what-the-state-printer-says-01cc86 · sha 99f2bd777a2a · tree &lt;repo&gt;/.worktrees/round-b-what-the-state-printer-says-01cc86
+tree    &lt;repo&gt;/.worktrees/round-b-what-the-state-printer-says-stage-2-conclude-530d9e (stageRun) on wtgui/round-b-what-the-state-printer-says-stage-2-conclude-530d9e
+landing pipelineRun.tree &lt;repo&gt;/.worktrees/round-b-what-the-state-printer-says-01cc86 on wtgui/round-b-what-the-state-printer-says-01cc86
+trees
+  probe          &lt;repo&gt;/.worktrees/round-b-what-the-state-printer-says-stage-1-probe-112593 on wtgui/round-b-what-the-state-printer-says-stage-1-probe-112593 cut 2026-11-09T11:32:58.529Z
+  conclude       &lt;repo&gt;/.worktrees/round-b-what-the-state-printer-says-stage-2-conclude-530d9e on wtgui/round-b-what-the-state-printer-says-stage-2-conclude-530d9e cut 2026-11-09T11:36:35.751Z
+
+stages
+  investigate/probe#1
+    done · 2026-11-09T11:32:58.635Z -&gt; 2026-11-09T11:36:07.327Z · commit d104dbf219f4 · artifact probe-evidence ledger/investigate/probe.md present
+    thread wtgui-find-out-what-is-actually-be-c66947 · job 1cb2a5ed
+    decision moved investigate · probe settled - the run finished
+  investigate/conclude#1
+    done · 2026-11-09T11:36:35.854Z -&gt; 2026-11-09T11:39:47.997Z · commit 848cf12023ed · artifact investigation docs/investigation.md present
+    thread wtgui-write-the-conclusion-down-in-59975a · job 30fda38f
+    decision moved investigate · conclude settled - the run finished
+
+stage owes
+  artifact investigation at docs/investigation.md · writer worker - present
+
+assembly wtgui/round-b-what-the-state-printer-says-01cc86 at 6214af316575 · base 99f2bd777a2a · 2 stage(s) · verified true
+
+next step
+  the row is done at 2026-11-09T11:39:47.997Z: pipeline investigate is over at conclude - its artifact &quot;investigation&quot; (investigation/1, kind unstated) is not a PR to land, so the row settles on the stage&#x27;s own verdict. The record is history; nothing is owed.</pre>
+</details>
+
+
+<h2 id="round-c">Round C: how a round names its trees (row 54)</h2>
+<p class="muted">pipeline <code>investigate</code>, 2 stage(s), filed 2026-11-09 11:48:52.845Z, done 2026-11-09 12:00:41.908Z, wall clock 11m 49s. The row's own reason: pipeline investigate is over at conclude - its artifact &quot;investigation&quot; (investigation/1, kind unstated) is not a PR to land, so the row settles on the stage&#x27;s own verdict</p>
+
+<figure class="shot">
+  <img src="pipeline-rounds-2026-11-09/round-c.png" alt="The worktree chart at 1440x900, showing the parent tree for round C with its stage children indented under it">
+  <figcaption>The worktree chart at 1440x900, captured 12:06:45Z UTC. The parent row reads Round C: how a round names its trees; its stage children read Stage 1: Probe and Stage 2: Conclude. Names are the round's own display values, laid on the board's per-tree name map; see finding 4.</figcaption>
+</figure>
+
+<h3>What the chart draws</h3>
+<table>
+<thead><tr><th>row</th><th>display name</th><th>depth</th><th>hangs under</th><th>branch</th></tr></thead>
+<tbody><tr><td>Round C: how a round names its trees</td><td>1</td><td>the project checkout row (main)</td><td><code>wtgui/round-c-how-a-round-names-its-trees-5b3b85</code></td></tr>
+<tr><td>Stage 1: Probe</td><td>2</td><td>the parent row</td><td><code>wtgui/round-c-how-a-round-names-its-trees-stage-1-probe-294b21</code></td></tr>
+<tr><td>Stage 2: Conclude</td><td>2</td><td>the parent row</td><td><code>wtgui/round-c-how-a-round-names-its-trees-stage-2-conclude-7ace4b</code></td></tr></tbody>
+</table>
+<p class="muted">Read from the DOM at capture time: each child carried <code>is-child</code> and <code>data-parent-key</code> naming the parent row's key, with <code>data-depth="2"</code>; the parent carried <code>data-parent-key</code> naming the project checkout's row, with <code>data-depth="1"</code>. That is the model's one group per round: main -&gt; the round's parent tree -&gt; its stage children.</p>
+
+<h3>The stage runs</h3>
+<table>
+<thead><tr><th>stage run</th><th>status</th><th>entered / settled</th><th>commit</th><th>artifact</th><th>thread / job</th></tr></thead>
+<tbody><tr><td><code>investigate/probe#1</code></td><td>done</td><td>2026-11-09 11:49:00.917Z<br>to 2026-11-09 11:51:28.206Z<br><span class="muted">2m 27s</span></td><td><code>c327d3d7655a</code></td><td><code>probe-evidence</code> at <code>ledger/investigate/probe.md</code> - present true<br>pin sha256 <code>379b579a04c18251</code></td><td><code>wtgui-find-out-what-is-actually-be-373943</code><br><code>feb065a7</code></td></tr>
+<tr><td><code>investigate/conclude#1</code></td><td>done</td><td>2026-11-09 11:51:48.938Z<br>to 2026-11-09 12:00:41.908Z<br><span class="muted">8m 52s</span></td><td><code>d69f6bba3e1c</code></td><td><code>investigation</code> at <code>docs/investigation.md</code> - present true<br>pin sha256 <code>1bfc97d238aaa504</code></td><td><code>wtgui-write-the-conclusion-down-in-968728</code><br><code>fa9b22df</code></td></tr></tbody>
+</table>
+
+<h3>The assembly</h3>
+<p>The driver picked every stage commit onto the round's parent tree, in visit order, from the frozen base <code>99f2bd777a2a</code>:</p>
+<pre class="cmd">c327d3d7655a picked as 8fe96b95b6fb (probe, visit 1)
+d69f6bba3e1c picked as 132354c1b216 (conclude, visit 1)</pre>
+<p>Assembly <code>132354c1b216c5352216134c1ba2cdcafbb422f5</code> on <code>wtgui/round-c-how-a-round-names-its-trees-5b3b85</code>, base <code>99f2bd777a2a24d1aedd903e9c4b24a4d9520c36</code>, <b>verified true</b>, skipped []. The parent tree's files were read back at that commit and hash to the pins the stage runs recorded:</p>
+<table>
+<thead><tr><th>stage</th><th>artifact path</th><th>pin blobSha256</th><th>read at</th><th>result</th></tr></thead>
+<tbody><tr><td>probe</td><td><code>ledger/investigate/probe.md</code></td><td><code>379b579a04c18251</code></td><td><code>132354c1b216c535..</code></td><td>match</td></tr>
+<tr><td>conclude</td><td><code>docs/investigation.md</code></td><td><code>1bfc97d238aaa504</code></td><td><code>132354c1b216c535..</code></td><td>match</td></tr></tbody>
+</table>
+
+
+<details open>
+<summary>tools/pipeline-state.mjs 54 --assistant assistant-3</summary>
+<pre class="print">row 54 · assistant-3 · done
+title   Round C: how a round names its trees
+where   project agent-worktree-gui · worktree &lt;repo&gt;/.worktrees/round-c-how-a-round-names-its-trees-5b3b85
+reason  pipeline investigate is over at conclude - its artifact &quot;investigation&quot; (investigation/1, kind unstated) is not a PR to land, so the row settles on the stage&#x27;s own verdict
+bundle  ~/.wag/state/pipeline-bundle.json
+
+run     investigate · conclude (2 of 2) · 16m 07s in stage
+stage   Conclude · visit 1 · entered 2026-11-09T11:51:28.206Z
+facts   via H-01 · route sha256:bdf3268aaf15277b... · crossings H-01=1 · start asked 2026-11-09T11:51:48.938Z
+
+round   parent wtgui/round-c-how-a-round-names-its-trees-5b3b85 · sha 99f2bd777a2a · tree &lt;repo&gt;/.worktrees/round-c-how-a-round-names-its-trees-5b3b85
+tree    &lt;repo&gt;/.worktrees/round-c-how-a-round-names-its-trees-stage-2-conclude-7ace4b (stageRun) on wtgui/round-c-how-a-round-names-its-trees-stage-2-conclude-7ace4b
+landing pipelineRun.tree &lt;repo&gt;/.worktrees/round-c-how-a-round-names-its-trees-5b3b85 on wtgui/round-c-how-a-round-names-its-trees-5b3b85
+trees
+  probe          &lt;repo&gt;/.worktrees/round-c-how-a-round-names-its-trees-stage-1-probe-294b21 on wtgui/round-c-how-a-round-names-its-trees-stage-1-probe-294b21 cut 2026-11-09T11:49:00.854Z
+  conclude       &lt;repo&gt;/.worktrees/round-c-how-a-round-names-its-trees-stage-2-conclude-7ace4b on wtgui/round-c-how-a-round-names-its-trees-stage-2-conclude-7ace4b cut 2026-11-09T11:51:48.867Z
+
+stages
+  investigate/probe#1
+    done · 2026-11-09T11:49:00.917Z -&gt; 2026-11-09T11:51:28.206Z · commit c327d3d7655a · artifact probe-evidence ledger/investigate/probe.md present
+    thread wtgui-find-out-what-is-actually-be-373943 · job feb065a7
+    decision moved investigate · probe settled - the run finished
+  investigate/conclude#1
+    done · 2026-11-09T11:51:48.938Z -&gt; 2026-11-09T12:00:41.908Z · commit d69f6bba3e1c · artifact investigation docs/investigation.md present
+    thread wtgui-write-the-conclusion-down-in-968728 · job fa9b22df
+    decision moved investigate · conclude settled - the run finished
+
+stage owes
+  artifact investigation at docs/investigation.md · writer worker - present
+
+assembly wtgui/round-c-how-a-round-names-its-trees-5b3b85 at 132354c1b216 · base 99f2bd777a2a · 2 stage(s) · verified true
+
+next step
+  the row is done at 2026-11-09T12:00:41.908Z: pipeline investigate is over at conclude - its artifact &quot;investigation&quot; (investigation/1, kind unstated) is not a PR to land, so the row settles on the stage&#x27;s own verdict. The record is history; nothing is owed.</pre>
+</details>
+
+
+<h2 id="round-d">Round D: the name module on disk (row 55)</h2>
+<p class="muted">pipeline <code>investigate</code>, 2 stage(s), filed 2026-11-09 12:07:11.462Z, done 2026-11-09 12:13:08.747Z, wall clock 5m 57s. The row's own reason: pipeline investigate is over at conclude - its artifact &quot;investigation&quot; (investigation/1, kind unstated) is not a PR to land, so the row settles on the stage&#x27;s own verdict</p>
+
+<figure class="shot">
+  <img src="pipeline-rounds-2026-11-09/round-d.png" alt="The worktree chart at 1440x900, showing the parent tree for round D with its stage children indented under it">
+  <figcaption>The worktree chart at 1440x900, captured 12:18:27Z UTC. The parent row reads Round D: the name module on disk; its stage children read Stage 1: Probe and Stage 2: Conclude. Names are the round's own display values, laid on the board's per-tree name map; see finding 4.</figcaption>
+</figure>
+
+<h3>What the chart draws</h3>
+<table>
+<thead><tr><th>row</th><th>display name</th><th>depth</th><th>hangs under</th><th>branch</th></tr></thead>
+<tbody><tr><td>Round D: the name module on disk</td><td>1</td><td>the project checkout row (main)</td><td><code>wtgui/round-d-the-name-module-on-disk-4ea3d1</code></td></tr>
+<tr><td>Stage 1: Probe</td><td>2</td><td>the parent row</td><td><code>wtgui/round-d-the-name-module-on-disk-stage-1-probe-bb62d8</code></td></tr>
+<tr><td>Stage 2: Conclude</td><td>2</td><td>the parent row</td><td><code>wtgui/round-d-the-name-module-on-disk-stage-2-conclude-13928c</code></td></tr></tbody>
+</table>
+<p class="muted">Read from the DOM at capture time: each child carried <code>is-child</code> and <code>data-parent-key</code> naming the parent row's key, with <code>data-depth="2"</code>; the parent carried <code>data-parent-key</code> naming the project checkout's row, with <code>data-depth="1"</code>. That is the model's one group per round: main -&gt; the round's parent tree -&gt; its stage children.</p>
+
+<h3>The stage runs</h3>
+<table>
+<thead><tr><th>stage run</th><th>status</th><th>entered / settled</th><th>commit</th><th>artifact</th><th>thread / job</th></tr></thead>
+<tbody><tr><td><code>investigate/probe#1</code></td><td>done</td><td>2026-11-09 12:07:44.442Z<br>to 2026-11-09 12:10:19.872Z<br><span class="muted">2m 35s</span></td><td><code>04d41cf2345e</code></td><td><code>probe-evidence</code> at <code>ledger/investigate/probe.md</code> - present true<br>pin sha256 <code>7ddac3cd4c5e1234</code></td><td><code>wtgui-find-out-what-is-actually-be-2cf087</code><br><code>61b2d219</code></td></tr>
+<tr><td><code>investigate/conclude#1</code></td><td>done</td><td>2026-11-09 12:10:25.522Z<br>to 2026-11-09 12:13:08.747Z<br><span class="muted">2m 43s</span></td><td><code>7643ae17a00b</code></td><td><code>investigation</code> at <code>docs/investigation.md</code> - present true<br>pin sha256 <code>e92266a55d5fac6b</code></td><td><code>wtgui-write-the-conclusion-down-in-060684</code><br><code>9644386a</code></td></tr></tbody>
+</table>
+
+<h3>The assembly</h3>
+<p>The driver picked every stage commit onto the round's parent tree, in visit order, from the frozen base <code>99f2bd777a2a</code>:</p>
+<pre class="cmd">04d41cf2345e picked as c9f4edba4227 (probe, visit 1)
+7643ae17a00b picked as 7b4a51f2f0ac (conclude, visit 1)</pre>
+<p>Assembly <code>7b4a51f2f0aced0aefc3ca26fdf6a7b58dcd1a64</code> on <code>wtgui/round-d-the-name-module-on-disk-4ea3d1</code>, base <code>99f2bd777a2a24d1aedd903e9c4b24a4d9520c36</code>, <b>verified true</b>, skipped []. The parent tree's files were read back at that commit and hash to the pins the stage runs recorded:</p>
+<table>
+<thead><tr><th>stage</th><th>artifact path</th><th>pin blobSha256</th><th>read at</th><th>result</th></tr></thead>
+<tbody><tr><td>probe</td><td><code>ledger/investigate/probe.md</code></td><td><code>7ddac3cd4c5e1234</code></td><td><code>7b4a51f2f0aced0a..</code></td><td>match</td></tr>
+<tr><td>conclude</td><td><code>docs/investigation.md</code></td><td><code>e92266a55d5fac6b</code></td><td><code>7b4a51f2f0aced0a..</code></td><td>match</td></tr></tbody>
+</table>
+<p class="note">After the capture, with <code>assistant-3</code> re-enabled, its landing turn merged stage 2's branch into the parent tree (<code>1d80932</code>, parents <code>7b4a51f</code> and <code>7643ae1</code>), bumped <code>package.json</code> to 1.76.3 (<code>8a4c8824</code>), pushed the parent branch and merged PR #649 at 12:25:38Z. Main's merge commit is <code>17e66cd3</code>; the two stage commits on main are <code>ea66e5a1</code> (probe) and <code>570a0a11</code> (conclude). The bump is the only difference between the assembly and the branch: <code>git diff 7b4a51f HEAD</code> is <code>package.json</code>'s version line. The capture and the assembly record predate the landing.</p>
+
+<details open>
+<summary>tools/pipeline-state.mjs 55 --assistant assistant-3</summary>
+<pre class="print">row 55 · assistant-3 · done
+title   Round D: the name module on disk
+where   project agent-worktree-gui · worktree &lt;repo&gt;/.worktrees/round-d-the-name-module-on-disk-4ea3d1
+reason  pipeline investigate is over at conclude - its artifact &quot;investigation&quot; (investigation/1, kind unstated) is not a PR to land, so the row settles on the stage&#x27;s own verdict
+bundle  ~/.wag/state/pipeline-bundle.json
+
+run     investigate · conclude (2 of 2) · 3m 51s in stage
+stage   Conclude · visit 1 · entered 2026-11-09T12:10:19.872Z
+facts   via H-01 · route sha256:bdf3268aaf15277b... · crossings H-01=1 · start asked 2026-11-09T12:10:25.522Z
+
+round   parent wtgui/round-d-the-name-module-on-disk-4ea3d1 · sha 99f2bd777a2a · tree &lt;repo&gt;/.worktrees/round-d-the-name-module-on-disk-4ea3d1
+tree    &lt;repo&gt;/.worktrees/round-d-the-name-module-on-disk-stage-2-conclude-13928c (stageRun) on wtgui/round-d-the-name-module-on-disk-stage-2-conclude-13928c
+landing pipelineRun.tree &lt;repo&gt;/.worktrees/round-d-the-name-module-on-disk-4ea3d1 on wtgui/round-d-the-name-module-on-disk-4ea3d1
+trees
+  probe          &lt;repo&gt;/.worktrees/round-d-the-name-module-on-disk-stage-1-probe-bb62d8 on wtgui/round-d-the-name-module-on-disk-stage-1-probe-bb62d8 cut 2026-11-09T12:07:44.335Z
+  conclude       &lt;repo&gt;/.worktrees/round-d-the-name-module-on-disk-stage-2-conclude-13928c on wtgui/round-d-the-name-module-on-disk-stage-2-conclude-13928c cut 2026-11-09T12:10:25.437Z
+
+stages
+  investigate/probe#1
+    done · 2026-11-09T12:07:44.442Z -&gt; 2026-11-09T12:10:19.872Z · commit 04d41cf2345e · artifact probe-evidence ledger/investigate/probe.md present
+    thread wtgui-find-out-what-is-actually-be-2cf087 · job 61b2d219
+    decision moved investigate · probe settled - the run finished
+  investigate/conclude#1
+    done · 2026-11-09T12:10:25.522Z -&gt; 2026-11-09T12:13:08.747Z · commit 7643ae17a00b · artifact investigation docs/investigation.md present
+    thread wtgui-write-the-conclusion-down-in-060684 · job 9644386a
+    decision moved investigate · conclude settled - the run finished
+
+stage owes
+  artifact investigation at docs/investigation.md · writer worker - present
+
+assembly wtgui/round-d-the-name-module-on-disk-4ea3d1 at 7b4a51f2f0ac · base 99f2bd777a2a · 2 stage(s) · verified true
+
+next step
+  the row is done at 2026-11-09T12:13:08.747Z: pipeline investigate is over at conclude - its artifact &quot;investigation&quot; (investigation/1, kind unstated) is not a PR to land, so the row settles on the stage&#x27;s own verdict. The record is history; nothing is owed.</pre>
+</details>
+
+
+<h2 id="edges">Edges the run exposed</h2>
+
+<h3>Finding 1: a row filed with a worktree never gets a round (row 50)</h3>
+<p>The first row was filed with <code>worktree</code> set to the project checkout because the live-round checklist says a queue row names a real tree. That is the old model's rule, and it short-circuits the new one: <code>treeLookup</code> took <code>task.worktree</code> as the live tree (candidate 3), so the driver asked for no cut and wrote no round. The stage ran in the project checkout, and its worker committed <code>7f69985</code> on the checkout's <code>main</code> (one file, <code>ledger/local/work.md</code>). The commit was removed with <code>git reset --soft HEAD~1</code> and the file deleted; the checkout reads <code>99f2bd7</code> with no staged change. The row's own record shows no round and a tree of the checkout. Fix direction: a pipeline row's first cut should ignore a seeded worktree when the row has no <code>pipelineRun.round</code>, or the queue's add form should not seed one for a pipeline.</p>
+
+<h3>Finding 2: a one-stage round never assembles (row 52)</h3>
+<p>A one-stage round (<code>local</code>) cut its parent tree and its child, and the stage settled <code>done</code> with commit <code>1bbfd16</code>. The driver then asked for the assembly, because <code>assemblyPlanOf</code> offers a one-stage plan when the round has a parent tree (<code>minimum = round.parentPath ? 1 : 2</code>). The assistant's assembler returned <code>null</code> before doing anything: its first guard is <code>if (!task || !run || !baseSha || entries.length &lt; 2) return null;</code>. No journal line, no park, no assembly: the row sat <code>running</code> with the next step "the pipeline is over and the assembly is owed". It was parked by hand at 11:32:09 with the reason on the row so it would stop fronting the queue.</p>
+<p>The parent tree <code>.worktrees/round-a-the-parent-tree-note-3a3008</code> is still at <code>99f2bd7</code>; the stage's commit is only on the child branch. The three reported rounds use a two-stage pipeline, which is why they assemble. A one-stage pipeline cannot finish a round with a parent tree in this build.</p>
+<details open>
+<summary>tools/pipeline-state.mjs 52 --assistant assistant-3</summary>
+<pre class="print">row 52 · assistant-3 · parked
+title   Round A: the parent-tree note
+where   project agent-worktree-gui · worktree &lt;repo&gt;/.worktrees/round-a-the-parent-tree-note-stage-1-work-in-this-tree-0d58e1
+hold    manual since 2026-11-09T11:32:09.829Z
+reason  One-stage round: the assembly the driver asked for was refused by assemblePipelineRound (entries.length &lt; 2) while assemblyPlanOf offers a one-stage plan when the round has a parent tree. The stage committed 1bbfd16 in its child tree; the parent tree is still at 99f2bd7. Parked by hand for the round report.
+bundle  ~/.wag/state/pipeline-bundle.json
+
+run     local · work (1 of 1) · 42m 48s in stage
+stage   Work in this tree · visit 1 · entered 2026-11-09T11:24:46.010Z
+facts   start asked 2026-11-09T11:24:58.027Z
+
+round   parent wtgui/round-a-the-parent-tree-note-3a3008 · sha 99f2bd777a2a · tree &lt;repo&gt;/.worktrees/round-a-the-parent-tree-note-3a3008
+tree    &lt;repo&gt;/.worktrees/round-a-the-parent-tree-note-stage-1-work-in-this-tree-0d58e1 (stageRun) on wtgui/round-a-the-parent-tree-note-stage-1-work-in-this-tree-0d58e1
+landing pipelineRun.tree &lt;repo&gt;/.worktrees/round-a-the-parent-tree-note-3a3008 on wtgui/round-a-the-parent-tree-note-3a3008
+trees
+  work           &lt;repo&gt;/.worktrees/round-a-the-parent-tree-note-stage-1-work-in-this-tree-0d58e1 on wtgui/round-a-the-parent-tree-note-stage-1-work-in-this-tree-0d58e1 cut 2026-11-09T11:24:57.942Z
+
+stages
+  local/work#1
+    done · 2026-11-09T11:24:58.027Z -&gt; 2026-11-09T11:32:08.770Z · commit 1bbfd160104e · artifact work-commit ledger/local/work.md present
+    thread wtgui-do-the-work-in-this-tree-and-259c95 · job 08124be3
+    decision moved local · work settled - the run finished
+
+stage owes
+  artifact work-commit at ledger/local/work.md · writer worker - present
+
+next step
+  the row is parked: One-stage round: the assembly the driver asked for was refused by assemblePipelineRound (entries.length &lt; 2) while assemblyPlanOf offers a one-stage plan when the round has a parent tree. The stage committed 1bbfd16 in its child tree; the parent tree is still at 99f2bd7. Parked by hand for the round report.
+  every other park is released by fixing the fact (write the artifact or verdict, repair the tree, fix the record) and then requeueing the row; the panel never releases a manual hold itself.</pre>
+</details>
+
+<h3>Finding 3: the assistant's own agent can close a pipeline row before its assembly (row 51)</h3>
+<p>The same one-stage shape, one row earlier, was closed by <code>assistant-3</code> itself at 11:21:53 with a reason written in the agent's voice ("Round one work is committed in its stage tree: 443df82 ..."), and no assembly record. The driver had not written one because the assembler refuses one stage (finding 2); the agent's settle finished the row first, which is the race the enabled assistant adds on top. The three rounds were run with that agent switched off so the driver owned every row. A board that leaves it enabled can close a pipeline row that still owes its assembly.</p>
+<details open>
+<summary>tools/pipeline-state.mjs 51 --assistant assistant-3</summary>
+<pre class="print">row 51 · assistant-3 · done
+title   Round one: the parent-tree note
+where   project agent-worktree-gui · worktree &lt;repo&gt;/.worktrees/round-one-the-parent-tree-note-stage-1-work-in-this-tree-8700b1
+reason  Round one work is committed in its stage tree: 443df82 round one: the parent-tree note, one file ledger/local/work.md (44 bytes), nothing pushed and no PR, exactly as the row detail says. The work stage settled done at 11:20:22Z and the local pipeline has only that stage, so the row is complete.
+bundle  ~/.wag/state/pipeline-bundle.json
+
+run     local · work (1 of 1) · 50m 38s in stage
+stage   Work in this tree · visit 1 · entered 2026-11-09T11:16:56.591Z
+facts   start asked 2026-11-09T11:17:12.586Z
+
+round   parent wtgui/round-one-the-parent-tree-note-34d53c · sha 99f2bd777a2a · tree &lt;repo&gt;/.worktrees/round-one-the-parent-tree-note-34d53c
+tree    &lt;repo&gt;/.worktrees/round-one-the-parent-tree-note-stage-1-work-in-this-tree-8700b1 (stageRun) on wtgui/round-one-the-parent-tree-note-stage-1-work-in-this-tree-8700b1
+landing pipelineRun.tree &lt;repo&gt;/.worktrees/round-one-the-parent-tree-note-34d53c on wtgui/round-one-the-parent-tree-note-34d53c
+trees
+  work           &lt;repo&gt;/.worktrees/round-one-the-parent-tree-note-stage-1-work-in-this-tree-8700b1 on wtgui/round-one-the-parent-tree-note-stage-1-work-in-this-tree-8700b1 cut 2026-11-09T11:17:12.517Z
+
+stages
+  local/work#1
+    done · 2026-11-09T11:17:12.586Z -&gt; 2026-11-09T11:21:47.180Z · commit 443df8203f48 · artifact work-commit ledger/local/work.md present
+    thread wtgui-do-the-work-in-this-tree-and-7b120a · job 9bfdec08
+    decision moved local · work settled - the run finished
+
+stage owes
+  artifact work-commit at ledger/local/work.md · writer worker - present
+
+next step
+  the row is done at 2026-11-09T11:21:53.503Z: Round one work is committed in its stage tree: 443df82 round one: the parent-tree note, one file ledger/local/work.md (44 bytes), nothing pushed and no PR, exactly as the row detail says. The work stage settled done at 11:20:22Z and the lo.... The record is history; nothing is owed.</pre>
+</details>
+
+<h3>Finding 4: the chart does not paint the round's display names by default</h3>
+<p>The model records the display name on the tree record (<code>round.display</code> and <code>pipelineRun.trees[stage].display</code>, from <code>lib/stage-tree-name.js</code>), but the chart's shown name is the reader's per-tree name map first, then an agent's title, then the directory basename (<code>treeTitleOf</code> in <code>public/app.js</code>). A reader who has never typed a name sees <code>round-b-what-the-state-printer-says-stage-1-probe-112593</code>, not <code>Stage 1: Probe</code>. The captures set the map to the round's own display values - the same map the row's pencil writes - and the report says so rather than implying the chart drew them unaided. Fix direction: overlay the pipeline tree's <code>display</code> on the row, or seed the name map at the cut.</p>
+
+<h2 id="ledger">Capture ledger</h2>
+<table>
+<thead><tr><th>figure</th><th>file</th><th>viewport</th><th>captured (UTC)</th><th class="n">bytes</th><th>sha256</th></tr></thead>
+<tbody>
+
+<tr><td>Round B</td><td><code>pipeline-rounds-2026-11-09/round-b.png</code></td><td>1440 x 900</td><td>11:48:12Z</td><td class="n">203,914</td><td><code>253e82c02bcc5dae5e089ccd772a1a11500b20ccf8460f0ab659014641033610</code></td></tr>
+<tr><td>Round C</td><td><code>pipeline-rounds-2026-11-09/round-c.png</code></td><td>1440 x 900</td><td>12:06:45Z</td><td class="n">207,864</td><td><code>65489f4aafe3280ced6cceddb3818064bf00c847ffac1a2cfb5ccb9ab7c14ca4</code></td></tr>
+<tr><td>Round D</td><td><code>pipeline-rounds-2026-11-09/round-d.png</code></td><td>1440 x 900</td><td>12:18:27Z</td><td class="n">218,060</td><td><code>02f01ed512844085704a0e34710aa7560e65a003eeec4c916b5037f2e4fa8124</code></td></tr>
+</tbody>
+</table>
+<p class="muted">Every capture is a live frame of the panel, not a fixture: no state was fabricated and no image is reused. The sha256 is over the committed PNG. The board was at 1.76.1 while every shot was taken.</p>
+
+<h2 id="limits">What this does not prove</h2>
+<ul>
+  <li>Rounds B and C are not landed: their parent and stage branches are local only (<code>wtgui/*</code>), no PR exists for either, and each row settled on its stage's verdict because its artifact is not a PR. Round D landed after the run - PR #649, main <code>17e66cd3</code>, 1.76.3 - so its two stage commits are on main; the capture and the assembly record predate that landing.</li>
+  <li>The round D evidence files (<code>docs/investigation.md</code>, <code>ledger/investigate/probe.md</code>) were corrected after they landed, to name their trees relatively because the absolute-path gate refused the absolute paths the stage workers wrote. The pin table reads them at the assembly commit, before that correction.</li>
+  <li>The panel's <code>verified: true</code> was independently re-checked for the six declared artifacts (their blobs at the assembled commit hash to the pins). The assembly's verification of every other path a stage changed was not re-derived beyond those six files.</li>
+  <li>The chart names are the reader's local name map in a scratch browser profile, not the panel's naming ledger. Renaming the directories is a different act and was not done.</li>
+  <li>One stage worker per round ran with the assistant's own agent switched off (finding 3). A default board with the agent enabled is not the configuration measured here.</li>
+  <li>The one-stage failure is a finding, not a fixed defect: the report names the two code conditions and the row's evidence, and the brief asked for rounds and a report, not for a change to the driver.</li>
+</ul>
+
+<h2 id="sources">Sources</h2>
+<table>
+<thead><tr><th>what</th><th>where</th><th>why</th></tr></thead>
+<tbody>
+<tr><td>the rows and their records</td><td><code>~/.wag/state/assistants/assistant-3/queue.json</code>, rows 50-55</td><td>round, trees, stage runs, artifacts, assembly, state, reason</td></tr>
+<tr><td>the panel's print</td><td><code>node tools/pipeline-state.mjs &lt;id&gt; --assistant assistant-3</code></td><td>the per-row block quoted in each round and finding</td></tr>
+<tr><td>the pipeline document</td><td><code>~/.wag/state/pipeline-bundle.json</code>, <code>investigate</code></td><td>two stages, probe and conclude, sequence handoff H-01</td></tr>
+<tr><td>the cut and assembly code</td><td><code>lib/task-pipeline-drive.js</code>, <code>lib/assistant.js</code>, <code>lib/stage-tree-name.js</code></td><td>treeLookup, assemblyPlanOf, assemblePipelineRound, the display names</td></tr>
+<tr><td>the assembled branches</td><td><code>.worktrees/round-b-...-01cc86</code>, <code>.worktrees/round-c-...-5b3b85</code>, <code>.worktrees/round-d-...-4ea3d1</code></td><td><code>git log</code>, <code>git show &lt;assembly&gt;:&lt;path&gt;</code> for the pin checks</td></tr>
+<tr><td>round D's landing</td><td>PR #649, merge <code>17e66cd3</code>; main's <code>ea66e5a1</code>, <code>570a0a11</code></td><td>the two stage commits on main after the landing turn</td></tr>
+</tbody>
+</table>
+
+<p class="muted">Prints are quoted with the panel's absolute paths shortened to <code>&lt;repo&gt;</code> and <code>~/.wag</code>; nothing else in them was edited. Generated 2026-11-09 from the queue rows, the bundle and the parent trees.</p>
+</main>
+</body>
+</html>
