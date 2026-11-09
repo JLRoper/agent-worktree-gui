@@ -4131,16 +4131,27 @@ function isProjectRootRow(row) {
   return normPath(root).toLowerCase() === normPath(row.path).toLowerCase();
 }
 
-// The name the row shows: what the reader typed, else the agent's own title, else the directory. The project's own
-// checkout is exempt from both — it reads the folder's name, whatever agents have run in it and whatever was stored
-// against its key.
+// The name the row shows, in the order the board can trust: the ROUND's own record first, then a name the reader
+// typed into THIS browser, then the agent's own title, then the directory - which the caller falls back to when this
+// returns "".
+//
+// The record wins on purpose. A round's trees are named once, at the cut, from the queue task and the stage document:
+// the parent is the task's name and a child is "Stage <n>: <stage>" from its own position (lib/round-tree-names.js,
+// read off `pipelineRun.round` / `pipelineRun.trees`). A browser-local `wtgui.treenames` map cannot know any of that,
+// so every fresh profile used to draw the directory name instead, and two readers saw two different boards for one
+// round. A tree the record names paints the record's name; one it names with no display at all paints the directory
+// and nothing else. Trees no round cut carry no record, so the map and the agent's title still name everything else.
+// The project's own checkout is exempt from all of it - it reads the folder's name.
 function treeTitleOf(row) {
   if (isProjectRootRow(row)) return "";
+  const round = row.round && typeof row.round === "object" ? row.round : null;
+  if (round) return String(round.display || "").trim().slice(0, 120);
   const own = state.treeNames.get(keyOf(row.project, row.path));
   if (own) return own;
   const a = agentsFor(row)[0];
   return String(a?.latest?.title || a?.first?.title || "").trim();
 }
+// ---- end what a worktree is called on the board
 
 function loadSpawnHistory() {
   try {
