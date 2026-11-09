@@ -165,7 +165,7 @@ test("the driver asks for the round's frozen commit, never the branch as it stan
       round: { parent: "main", sha: roundSha, at: CLOCK, by: "panel" },
       visits: { D1: 1, C1: 1 },
       trees: {
-        D1: { path: "C:/demo/.worktrees/write-the-draft-a1b2c3", branch: "wtgui/write-the-draft-a1b2c3", startSha: roundSha, parent: "main" },
+        D1: { path: "repo/.worktrees/write-the-draft-a1b2c3", branch: "wtgui/write-the-draft-a1b2c3", startSha: roundSha, parent: "main" },
       },
       stageRuns: [{ id: "review/D1#1", stage: "D1", visit: 1, status: "done", thread: "T1", artifact: { id: "draft", path: "draft.md", present: true } }],
     },
