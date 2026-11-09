@@ -4,6 +4,7 @@
   "midSeconds": 45,
   "dormantSeconds": 90,
   "slowSeconds": 300,
+  "projectStaleSeconds": 900,
   "tierDays": 7,
   "tierBuckets": 60,
   "tierCheckSeconds": 60,

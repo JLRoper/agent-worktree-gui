@@ -404,6 +404,40 @@ test("POST /api/settings/push-project names a project the file does not know, an
   }
 });
 
+// A WORKTREE IS GOVERNED BY THE PROJECT THAT OWNS IT. `projectForPath` in server.js was an exact compare, so a guard
+// handed a tree's path — a worker's cwd in `.worktrees/<name>` — found no project at all and fell back to the shipped
+// `always-ask`, while the same project's own checkout answered allow-all. The question is about the project, not
+// about which of its checkouts it was asked from. Pinned on the route an assistant and the pre-push hook both ask.
+test("allow-push resolves a worktree of a project to that project's controls", async (t) => {
+  const board = await makeBoard();
+  try {
+    await withPanel(board, configFor(board), async (panel) => {
+      await waitForRepo(panel.base, "it-app", "git.sefl.com/IT");
+      const on = await post(panel.base, "/api/settings/push-project", { body: { project: "it-app", kind: "new", value: "allow-all" } });
+      assert.equal(on.status, 200, on.text);
+      const repo = path.join(board.repos, "it-app");
+      const tree = path.join(repo, ".worktrees", "work-1a2b3c");
+      runGit(repo, ["worktree", "add", "-q", "-b", "wtgui/work-1a2b3c", tree]);
+
+      const ask = (p) =>
+        fetch(`${panel.base}/api/remote-write/allow-push?path=${encodeURIComponent(slash(p))}&branch=${encodeURIComponent("wtgui/work-1a2b3c")}&new=1`).then((r) => r.json());
+      const fromTree = await ask(tree);
+      assert.equal(fromTree.project, "it-app", "a worktree of the project belongs to the project");
+      assert.equal(fromTree.permission, "allow", "…and its own control decides, not the shipped default");
+      assert.equal(fromTree.newSource, "project", "the answer names the project as the source");
+      assert.equal(fromTree.path, slash(tree), "the answer echoes the tree that was asked about");
+
+      // The checkout keeps answering as it did: the longest-prefix rule adds the tree, it does not move the project.
+      const fromCheckout = await ask(board.paths["it-app"]);
+      assert.equal(fromCheckout.project, "it-app");
+      assert.equal(fromCheckout.permission, "allow");
+      assert.equal(fromCheckout.newSource, "project");
+    });
+  } finally {
+    await rm(board.dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+  }
+});
+
 // A row with no path has to survive a BOOT, or the writer has traded a gate failure for a setting that disappears on
 // the next start. It does: the config is read, discovery finds the repository under a root by name, and the merge is
 // by name — `{ ...scanned, ...configured }` — so the path comes from the scan and the setting from the row.

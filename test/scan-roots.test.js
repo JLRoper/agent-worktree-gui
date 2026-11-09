@@ -15,11 +15,12 @@
 // a record without the tag. That is the difference between the board filing a project under the folder it was found
 // in and it guessing from a prefix.
 import assert from "node:assert/strict";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { git, post, readSource, ROOT, startPanel } from "../tools/panel-testkit.mjs";
+import { git, post, readSource, ROOT, startPanel, waitForRow } from "../tools/panel-testkit.mjs";
 
 const ROUTE = "/api/settings/scan-roots";
 
@@ -139,4 +140,67 @@ test("scan roots: a folder added from the settings is written, re-scanned, and d
   const after = await fetch(`${base}/api/config`).then((r) => r.json());
   assert.deepEqual(after.scanRoots, [empty.json.scanRootsFallbackPath], "/api/config reports the fallback as the effective root");
   assert.equal(after.scanRootsFallback, true);
+});
+
+// ---- the freshness floor: a project is read even when NO page is looking ---------------------------------------
+//
+// The incident this pins: /api/state at 04:43 carried agent-worktree-gui's rows as scanned at 18:23, and five trees
+// cut in between had no row at all. Nothing was wrong with the scan — nothing had ASKED for one. "visible" mode reads
+// only what a page reports, and with no report (a script reading /api/state, a tab left on another project) a project
+// is never read again; its row set is served from hours ago and every tree cut since is invisible.
+//
+// The floor: a recent-tier project whose rows were last READ longer than `projectStaleSeconds` ago is due for a full
+// pass whatever the page reports. This proves it end to end — the slow clock is an hour away and every row cadence is
+// an hour too, so the row that appears can only have come from the floor.
+test("scan roots: a project is re-scanned on its own clock, so a tree cut while no page looks still becomes a row", async (t) => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "wag-freshness-floor-"));
+  const repos = path.join(dir, "repos");
+  mkdirSync(repos, { recursive: true });
+  const proj = makeRepo(repos, "proj");
+  const panel = await startPanel({
+    dir,
+    config: {
+      scanMode: "visible",
+      // Nothing but the floor may read this project after boot.
+      slowSeconds: 3600,
+      worktreeSeconds: 3600,
+      midSeconds: 3600,
+      dormantSeconds: 3600,
+      registrySeconds: 3600,
+      fetchSeconds: -1,
+      projectStaleSeconds: 3,
+      threads: 1,
+      assistant: { enabled: false },
+    },
+  });
+  t.after(() => panel.stop());
+
+  await waitForRow(panel.base, "proj", proj, { what: "the project's own row" });
+  // No page has ever reported this project, and none will: that is the state the incident was served from.
+  const config = await fetch(`${panel.base}/api/config`).then((r) => r.json());
+  assert.equal(config.scanVisible?.active, false, "no page is reporting, so visible mode is not deciding anything");
+  assert.deepEqual(config.scanVisible?.projects || [], [], "…and nothing is on screen");
+
+  // The tree is cut the way the panel cuts one, AFTER the last scan, with the slow clock an hour away.
+  const tree = path.join(proj, ".worktrees", "cut-later-1a2b3c");
+  git(proj, "worktree", "add", "-q", "-b", "wtgui/cut-later-1a2b3c", tree);
+
+  // It becomes a row on the floor's next pass — no refresh click, no page, no restart. The predicate waits for the
+  // READ, not merely for the row: reconcile names a new tree before the pass reads it, and "a row exists" is not the
+  // claim this test makes.
+  const branch = "wtgui/cut-later-1a2b3c";
+  const row = await waitForRow(panel.base, "proj", tree, {
+    timeout: 40_000,
+    predicate: (r) => r.branch === branch && Boolean(r.scannedAt),
+    what: "the row for the tree cut after the last scan, read",
+  });
+  assert.equal(row.branch, branch, "the row was READ, not merely named");
+  assert.ok(row.scannedAt, "the row carries its own scan stamp");
+
+  // …and the project's own stamp says when it was last read, which is what the floor compares against.
+  const state = await fetch(`${panel.base}/api/state`).then((r) => r.json());
+  const project = state.projects.find((p) => p.name === "proj");
+  assert.ok(project, "the project is on the board");
+  assert.ok(Date.parse(project.lastScanAt || "") > 0, `the project carries its scan stamp: ${project.lastScanAt}`);
+  assert.ok(project.worktrees.some((w) => w.path.replace(/\\/g, "/").toLowerCase() === tree.replace(/\\/g, "/").toLowerCase()));
 });

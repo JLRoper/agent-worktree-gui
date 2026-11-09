@@ -29,6 +29,9 @@ import { gitIn, scanWorktree, setChildTracker } from "./lib/scan.js";
 // "Is this directory a tree of its own?" — asked before a reply is started, because a released tree's leftover
 // folder answers every `git` call from the project's primary checkout.
 import { replyTree } from "./lib/own-tree.js";
+// Which tree a run's work is in — cwd first, never a card owner that may be the checkout CONTAINING the tree
+// (lib/job-trees.js). Every guard on this side that asks the question reads it here.
+import { attachMeaning, filedOwnerPath, isInsidePath, jobTreePath, projectForTree, resolveJobTree, worktreeRootIn } from "./lib/job-trees.js";
 import { mergeLabel, mergePrompt } from "./lib/merge-prompt.js";
 import { verifyLabel, verifyPrompt } from "./lib/verify-prompt.js";
 import { answerDeletes, answerLine, answeredChecks } from "./lib/verify-landed.js";
@@ -734,6 +737,9 @@ const adoptedTrees = new Set();
 function adoptFromJob(evt) {
   if (evt?.type !== "job") return;
   const j = evt.job;
+  // Every card with a directory gets the tree question asked (cheap when everything is filed: a list and a lookup,
+  // no git). This is the half that catches a card whose tree was CUT but whose row never arrived.
+  if (j && (j.cwd || j.worktreePath)) scheduleJobTreeReconcile();
   if (!j || !j.worktreePath || adoptedTrees.has(j.worktreePath)) return;
   adoptedTrees.add(j.worktreePath);
   // The tree is created by THIS panel now, so the job knows its project directly — the worktree
@@ -742,6 +748,108 @@ function adoptFromJob(evt) {
   const project = registry.projects.find((p) => normPathKey(p.path) === normPathKey(j.projectPath || j.cwd));
   if (!project) return;
   void scheduler.adoptWorktree(project.name, j.worktreePath).catch(() => {});
+}
+
+// ---- a run's tree, and the row its card belongs on ---------------------------------------------------------------
+//
+// Two questions, answered from git's own registry rather than from the scan's luck:
+//
+//   1. a job whose tree has no ROW must not fall to the unattached list — `git worktree list` is asked, the tree is
+//      adopted (the same `scheduler.adoptWorktree` a spawn uses), and the card is filed on it. A tree cut out of
+//      band, or one cut while its project sat on the old tier, then shows up on the board with its card attached
+//      and no manual step;
+//   2. a card whose recorded owner is only the CHECKOUT CONTAINING its run must be moved onto the tree the run is
+//      in (lib/job-trees.js `filedOwnerPath`). That is the state the attach fallback left job 24695761 in.
+//
+// A miss is retried on a clock, not on every event: a job whose tree git does not list (a deleted tree, a scratch
+// folder) would otherwise spawn `git worktree list` on every line of its console.
+const jobTreeMisses = new Map(); // tree key -> ms of the last failed resolve
+let jobTreeReconciling = null;
+let jobTreeReconcileDue = null;
+function scheduleJobTreeReconcile() {
+  if (jobTreeReconcileDue) return;
+  jobTreeReconcileDue = setTimeout(() => {
+    jobTreeReconcileDue = null;
+    void reconcileJobTrees();
+  }, 1200);
+  jobTreeReconcileDue.unref?.();
+}
+function rowForTree(tree) {
+  const key = normPathKey(tree);
+  if (!key) return null;
+  for (const row of store.rows.values()) if (normPathKey(row.path) === key) return row;
+  return null;
+}
+async function reconcileJobTrees({ force = false } = {}) {
+  if (jobTreeReconciling) return jobTreeReconciling;
+  jobTreeReconciling = (async () => {
+    let changed = false;
+    for (const j of jobs.jobs.values()) {
+      if (!j || !j.thread) continue;
+      const tree = jobTreePath(j);
+      if (!tree) continue;
+      const key = normPathKey(tree);
+      const filed = filedOwnerPath(j);
+      if (normPathKey(filed) !== normPathKey(j.ownerPath || "")) {
+        // The owner record is the checkout that CONTAINS this run's worktree. File it on the tree instead — and
+        // fall through, because a card moved onto a tree still needs that tree to have a row.
+        jobs.setOwner(j.thread, filed);
+        changed = true;
+        log(`job ${j.id}: filed on ${cleanPath(filed)} — its run is in that worktree, not on the checkout that contains it`);
+      }
+      if (rowForTree(tree)) continue;
+      // A directory that is not there yet is a spawn still in flight, not a tree git should be asked about: no git
+      // call, and no miss recorded — the tree appears seconds later and the next pass sees it.
+      if (!existsSync(tree)) continue;
+      if (!force && Date.now() - (jobTreeMisses.get(key) || 0) < 12_000) continue;
+      const res = await resolveJobTree({ job: j, projects: registry.projects, listWorktrees: scheduler.listWorktrees });
+      if (!res.ok) {
+        jobTreeMisses.set(key, Date.now());
+        if (!j.jobTreeNote || j.jobTreeNote !== res.why) {
+          j.jobTreeNote = res.why;
+          log(`job ${j.id}: no row for ${cleanPath(tree)} — ${res.why} (card stays unattached)`);
+        }
+        continue;
+      }
+      const adopted = await scheduler.adoptWorktree(res.project.name, res.path).catch(() => false);
+      if (!adopted) {
+        jobTreeMisses.set(key, Date.now());
+        continue;
+      }
+      jobTreeMisses.delete(key);
+      delete j.jobTreeNote;
+      jobs.setOwner(j.thread, res.path);
+      changed = true;
+      log(`job ${j.id}: attached to ${cleanPath(res.path)} — the board had no row for its tree, so git worktree list answered`);
+    }
+    if (changed) broadcast({ type: "jobs", jobs: jobs.list() });
+  })().finally(() => {
+    jobTreeReconciling = null;
+  });
+  return jobTreeReconciling;
+}
+
+// WHAT AN ATTACH PRESS MEANS. The reader may pick any tree; what they may NOT do is file a run that sits in
+// `.worktrees/<name>` onto the checkout that contains it — that is the fallback that put job 24695761 on the main
+// row. When the press names a parent, the real tree is resolved (git worktree list), its row is created or claimed,
+// and the card is filed there; when git does not know the tree, the press is refused with the row named as missing
+// rather than quietly accepted. A sibling tree is a deliberate re-point and is left alone.
+async function resolveAttachTarget({ job, path: asked }) {
+  const root = worktreeRootIn(jobTreePath(job));
+  if (!root) return { ok: true, path: asked };
+  if (!isInsidePath(asked, root)) return { ok: true, path: asked };
+  const resolved = await resolveJobTree({ job, projects: registry.projects, listWorktrees: scheduler.listWorktrees });
+  const meaning = attachMeaning({ job, asked, resolved });
+  if (meaning.action === "refuse") return { ok: false, error: meaning.why };
+  if (meaning.action === "allow") return { ok: true, path: meaning.path };
+  const adopted = await scheduler.adoptWorktree(resolved.project.name, meaning.path).catch(() => false);
+  if (!adopted) {
+    return {
+      ok: false,
+      error: `the row for ${meaning.path} is missing — git lists the tree, but the board could not create its row, so the card was not filed on ${cleanPath(asked)}`,
+    };
+  }
+  return { ok: true, path: meaning.path, redirectedFrom: cleanPath(asked) };
 }
 // The restart controller: the queue, the provider-key preflight, the one-terminal-status snapshot, the
 // real-turn proof and the single resume wake. Declared before the assistant because the assistant is
@@ -801,7 +909,9 @@ function gonePointers(id) {
   const j = jobs.get(id);
   if (!j) return null;
   const store = scheduler.store;
-  const wanted = [j.worktreePath, j.ownerPath, j.cwd].filter(Boolean).map(normPathKey);
+  // The row to look for is the one carrying the RUN'S tree (cwd first): a card whose owner is the containing
+  // checkout must not make the board offer the checkout's row as the place that work is.
+  const wanted = [jobTreePath(j), j.worktreePath, j.cwd].filter(Boolean).map(normPathKey);
   // The rows are the store's, keyed by "<project>::<path>", so the search walks that store's own project names:
   // discovery publishes a project to the registry on its own clock, and a press must not miss a row that is already
   // on the board just because the registry has not named its project yet.
@@ -816,7 +926,7 @@ function gonePointers(id) {
   const row = found?.row || null;
   const pr = row?.pr || null;
   return {
-    worktree: row?.path || j.worktreePath || j.ownerPath || j.cwd || null,
+    worktree: row?.path || jobTreePath(j) || j.worktreePath || j.cwd || null,
     branch: row?.branch || j.branch || null,
     // The scan's PR index carries the number, the state and the title; the URL is the one form of a pointer the
     // console renders as a link, and it comes from the project's host record — the same template the board's PR cell
@@ -888,10 +998,24 @@ function policyForProjectPath(projectPath, project = null) {
 // `always-ask`, with `never` absolute and a repo force-override winning over the project's own (lib/push-permissions.js
 // `resolvePushPermissions`). Every surface that has to know — the guard's files, the card's selects, the permission
 // box, the assistant's endpoint — calls this one function rather than re-deriving precedence.
+// The project a path belongs to. The exact match is a project's OWN CHECKOUT; anything inside it is that project's
+// worktree, and a worktree is governed by the project that owns it. This used to be an exact compare, so a guard
+// handed a tree's path (a worker's cwd in `.worktrees/<name>`) found no project at all and fell back to the shipped
+// `always-ask` — a project whose controls allow a push would still be asked, purely because the question was asked
+// about its worktree instead of its checkout. Longest prefix wins, the same rule `projectOfTree` uses.
 function projectForPath(projectPath, project = null) {
   if (project) return project;
   const key = guardPathKey(projectPath);
-  return key ? registry.projects.find((p) => guardPathKey(p.path) === key) || null : null;
+  if (!key) return null;
+  const exact = registry.projects.find((p) => guardPathKey(p.path) === key) || null;
+  if (exact) return exact;
+  let best = null;
+  for (const p of registry.projects) {
+    const pk = guardPathKey(p.path);
+    if (!pk || !key.startsWith(`${pk}/`)) continue;
+    if (!best || pk.length > guardPathKey(best.path).length) best = p;
+  }
+  return best;
 }
 function pushPermissionsForPath(projectPath, project = null) {
   return resolvePushPermissions(projectForPath(projectPath, project), config);
@@ -1365,7 +1489,7 @@ const PREFIX_MOUNTS = [
   // ten writes that settle, steer, answer and file a card. The store, the token and the assistant are this file's,
   // and the tree and PR a reattach has to name come from the board's own rows, so all of them travel in beside the
   // transport helpers.
-  { prefix: JOBS_PATH, handles: createJobsRoutes({ jobs, config, assistant, broadcast, gonePointers, sendJson, readBody, authorised }) },
+  { prefix: JOBS_PATH, handles: createJobsRoutes({ jobs, config, assistant, broadcast, gonePointers, sendJson, readBody, authorised, resolveAttach: resolveAttachTarget }) },
   // The pipelines prefix (routes/pipelines.js), the third row lifted out of this file's own chain: the catalogue read
   // and the one save that replaces it. The store owns the live file and the logger records the save, so both travel in
   // beside the transport helpers; the version, the vocabularies and the loader's functions come with the module.
@@ -1846,8 +1970,9 @@ async function startThreadReply({ thread = "", text = "", displayPrompt = null, 
     budget: budget ?? first.budget ?? 1800,
     maxTurns: maxTurns ?? first.maxTurns,
     yolo: yolo ?? first.yolo,
-    // A reply continues the SAME agent, so it keeps the tree that agent was created for.
-    ownerPath: first.ownerPath || null,
+    // A reply continues the SAME agent, so it keeps the tree that agent was created for — as the CARD's field, so a
+    // parent checkout the old attach fallback recorded is not inherited by the reply (lib/job-trees.js).
+    ownerPath: filedOwnerPath(first) || null,
     // …and the paragraph about where that tree's branch goes has to quote the policy of ITS project, and its remote,
     // the way the spawn did. A reply that carried neither fell back to the global default and told a worker in a
     // project that ALLOWS pushes that a push "will park and then fail".
@@ -2474,7 +2599,8 @@ async function renameWorktree({ projectName, target, name, by = null, how = null
     .find(
       (j) =>
         isLiveJobStatus(j.status) &&
-        [j.cwd, j.ownerPath, j.worktreePath].filter(Boolean).some((p) => path.resolve(p) === oldPath),
+        jobTreePath(j) &&
+        path.resolve(jobTreePath(j)) === oldPath,
     );
   if (busy) return { error: `an agent is running in that worktree (${busy.id}) — stop it first`, status: 409 };
   // Claim it BEFORE the git work, and only for the automatic half: two events of one turn settle within a second of
@@ -2655,15 +2781,10 @@ naming = new WorktreeNaming({
   // that arrived before Hermes wrote the name — the 10-second sweep emits again as soon as it has one.
   titleFor: (job) => job.title || jobs.sessionInfoFor(job.thread).title,
   // A tree a live run is standing in cannot be moved by git, so the attempt waits for the settle rather than fail.
-  // All three of a card's tree fields are asked: `ownerPath || cwd` missed a live run whose owner was recorded
-  // elsewhere and whose cwd was the tree, which is a tree moved under a working agent — the other half of what the
-  // policy's own settle gate now refuses outright.
+  // The run's own directory is the answer (lib/job-trees.js): a card whose owner was recorded elsewhere is still a
+  // live run in the tree its cwd names.
   isBusy: (dir) =>
-    jobs.list().some(
-      (x) =>
-        isLiveJobStatus(x.status) &&
-        [x.ownerPath, x.worktreePath, x.cwd].filter(Boolean).some((p) => normPathKey(p) === normPathKey(dir)),
-    ),
+    jobs.list().some((x) => isLiveJobStatus(x.status) && jobTreePath(x) && normPathKey(jobTreePath(x)) === normPathKey(dir)),
   rename: (args) => renameWorktree(args),
   log,
   // The boot backfill: a tree that was here before this process must be written down before any restored run's
@@ -4042,7 +4163,7 @@ const server = createServer(async (req, res) => {
         // The job store decides what is LIVE, whatever git says about the tree: a run's own cwd (and the tree the
         // panel cut for it) is handed to the audit so a working agent's tree can never be offered as deletable. It
         // is read here, per request, and never cached with the audit — a run that started a second ago counts.
-        const liveCwds = jobs.runningJobs().flatMap((j) => [j.cwd, j.worktreePath, j.ownerPath]).filter(Boolean);
+        const liveCwds = jobs.runningJobs().map((j) => jobTreePath(j)).filter(Boolean);
         const audit = await auditRepo(target.path, { config, force: url.searchParams.get("fresh") === "1", liveCwds });
         return sendJson(res, 200, { project: target.name, path: target.path, tookMs: Date.now() - t0, ...audit });
       } catch (e) {
@@ -5645,7 +5766,7 @@ const server = createServer(async (req, res) => {
       // One merge agent per worktree: a second would race the first over the same base branch.
       const live = jobs
         .list()
-        .find((j) => isLiveJobStatus(j.status) && normPathKey(j.ownerPath || j.cwd) === normPathKey(worktree) && String(j.label || "").startsWith("MERGING into "));
+        .find((j) => isLiveJobStatus(j.status) && normPathKey(jobTreePath(j)) === normPathKey(worktree) && String(j.label || "").startsWith("MERGING into "));
       if (live) return sendJson(res, 409, { error: `an agent is already merging this worktree (${live.label || live.thread})` });
       const list = await gitIn(worktree, ["log", "--oneline", "-20", `${baseRef}..HEAD`], 20000);
       const commitList = list.ok ? list.out.split("\n").filter(Boolean) : [];
@@ -5789,7 +5910,7 @@ const server = createServer(async (req, res) => {
       // One check agent per worktree: a second would spend the gateway's run on the answer the first one is writing.
       const running = jobs
         .list()
-        .find((j) => isLiveJobStatus(j.status) && normPathKey(j.ownerPath || j.cwd) === normPathKey(worktree) && String(j.label || "").startsWith("CHECKING "));
+        .find((j) => isLiveJobStatus(j.status) && normPathKey(jobTreePath(j)) === normPathKey(worktree) && String(j.label || "").startsWith("CHECKING "));
       if (running) return sendJson(res, 409, { error: `an agent is already checking this worktree (${running.label || running.thread})` });
       const list = await gitIn(worktree, ["log", "--oneline", "-20", `${baseRef}..HEAD`], 20000);
       const commitList = list.ok ? list.out.split("\n").filter(Boolean) : [];
@@ -5984,6 +6105,9 @@ const server = createServer(async (req, res) => {
         await registry.refresh();
         await scheduler.start();
       }
+      // The cards are re-read against git's registry after a reload too: a tree cut while the panel was down has no
+      // row yet, and its card must not wait for a manual attach.
+      void reconcileJobTrees({ force: true });
       void sweepCheckedLandings();
       void sweepReleases("reload").catch(() => {});
       broadcast({ type: "snapshot", data: snapshot() });
@@ -6112,7 +6236,7 @@ async function sweepCheckedLandings() {
     const rows = jobs.list().map((s) => ({ ...s, finalMessage: jobs.get(s.id)?.finalMessage || s.completion?.final?.text || "" }));
     for (const { job, answer } of answeredChecks(rows, { acted: checkedAnswers })) {
       const live = jobs.get(job.id);
-      const tree = job.ownerPath || job.cwd || "";
+      const tree = jobTreePath(job) || "";
       const project = (tree && spawnFeature.projectForPath(tree)) || null;
       const row = project ? store.rowsFor(project.name).find((r) => normPathKey(r.path) === normPathKey(tree)) : null;
       const base = String(project?.mainBranch || "main");
@@ -6262,6 +6386,10 @@ try {
   for (const p of registry.projects) store.ensureProject(p);
   if (!config.defaultCwd) config.defaultCwd = registry.projects[0]?.path || process.cwd();
   await scheduler.start();
+  // A card whose tree has no row is matched against git's own worktree list at boot, and again on a slow clock (a
+  // tree cut while the panel was up is caught by the job event itself, see scheduleJobTreeReconcile).
+  void reconcileJobTrees({ force: true });
+  setInterval(() => void reconcileJobTrees(), 10_000).unref?.();
   // The stage timer's ticker (docs/pipelines.md §6): one interval for every waiting tree, started after the first
   // sweep so a boot that is still reading git does not also read a host. A wait registered before this restart is due
   // here too — it is in the tree book, not in the process.

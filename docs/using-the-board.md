@@ -1077,11 +1077,15 @@ time since the last evidence; the ring in **Next read** fills toward the next re
 and turns amber/red if a row is overdue — a long ring usually means the panel is busy, not that the row is stuck.
 
 With Settings → Board → **Refresh: only on screen**, those cadences apply only to projects in view: off-screen
-projects are not scanned at all, nothing is scanned while no page is open, and a project scrolled into view is read
-immediately. The config line then ends with `refresh on screen only`.
+projects are not scanned at the frequent cadence, and nothing is scanned while no page is open. That is a cadence, not
+a promise of invisibility: a recent project whose rows have not been **read** for `projectStaleSeconds` (15 minutes)
+is due for one full pass anyway, and a project's rows are read once at boot. Without that floor a board nobody was
+looking at served a ten-hour-old row set — and every worktree cut in those ten hours had no row, so its cards fell to
+the unattached list. A tree cut after a scan is also picked up by the panel's own job pass, which matches a card's
+directory against `git worktree list` and attaches the card to the real tree.
 
-Configured in `config.json` (`liveSeconds`, `worktreeSeconds`, `dormantSeconds`, `slowSeconds`, `fetchSeconds`,
-`refreshSeconds`), and the footer prints the values in use.
+Configured in `config.json` (`liveSeconds`, `worktreeSeconds`, `dormantSeconds`, `slowSeconds`, `projectStaleSeconds`,
+`fetchSeconds`, `refreshSeconds`), and the footer prints the values in use.
 
 `projects[].releaseWorktrees` is the one key that lets a worker's `RELEASE` line be acted on, and it is off unless it
 is literally `true` — a string, a `1` or a missing key all leave it closed. With it on, the panel still refuses
