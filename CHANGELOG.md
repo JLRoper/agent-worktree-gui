@@ -4,16 +4,28 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.76.19 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.76.20 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-510 releases from v0.1.0 (2026-10-20) to v1.76.19 (2026-11-09), 1684 commits between the tags. Every release is anchored by an
+511 releases from v0.1.0 (2026-10-20) to v1.76.20 (2026-11-09), 1686 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.76.20 — 2026-11-09 · 2 commits
+
+[`aefc490`](https://github.com/JLRoper/agent-worktree-gui/commit/aefc4900d9a70673209f8148a9bee8c07d9e7710) · [compare v1.76.19...v1.76.20](https://github.com/JLRoper/agent-worktree-gui/compare/v1.76.19...v1.76.20)
+
+### Docs & tests
+
+- docs: render the changelog - 510 releases ([`064eefa`](https://github.com/JLRoper/agent-worktree-gui/commit/064eefa3a1eed54707cf39cb437a1cca4da73c11))
+
+### Other
+
+- Record the email-multi rollup as the first project runbook ([`aefc490`](https://github.com/JLRoper/agent-worktree-gui/commit/aefc4900d9a70673209f8148a9bee8c07d9e7710))
 
 ## v1.76.19 — 2026-11-09 · 3 commits
 
