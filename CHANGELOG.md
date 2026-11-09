@@ -4,16 +4,45 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.70.1 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.70.5 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-472 releases from v0.1.0 (2026-10-20) to v1.70.1 (2026-11-09), 1556 commits between the tags. Every release is anchored by an
+475 releases from v0.1.0 (2026-10-20) to v1.70.5 (2026-11-09), 1561 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.70.5 — 2026-11-09 · 2 commits
+
+[`5be8c3c`](https://github.com/JLRoper/agent-worktree-gui/commit/5be8c3c27b6a1f2c6aa9232486aec10d7c056fd0) · [compare v1.70.3...v1.70.5](https://github.com/JLRoper/agent-worktree-gui/compare/v1.70.3...v1.70.5)
+
+### Fixed
+
+- fix: a CHARTER line lands in the charter of the assistant that wrote it ([`2cb1078`](https://github.com/JLRoper/agent-worktree-gui/commit/2cb10784e5f43e9f84efec23f589efe6e99a4270))
+
+### Other
+
+- chore: 1.70.5 - the version this landing carries ([`5be8c3c`](https://github.com/JLRoper/agent-worktree-gui/commit/5be8c3c27b6a1f2c6aa9232486aec10d7c056fd0))
+
+## v1.70.3 — 2026-11-09 · 1 commit
+
+[`a2c8eb8`](https://github.com/JLRoper/agent-worktree-gui/commit/a2c8eb8c8363724ee98821e61272e6c9d52fb5d7) · [compare v1.70.2...v1.70.3](https://github.com/JLRoper/agent-worktree-gui/compare/v1.70.2...v1.70.3)
+
+### Docs & tests
+
+- docs: correct the persistence claim in the panel overview ([`a2c8eb8`](https://github.com/JLRoper/agent-worktree-gui/commit/a2c8eb8c8363724ee98821e61272e6c9d52fb5d7))
+
+## v1.70.2 — 2026-11-09 · 2 commits
+
+[`9fbe8ee`](https://github.com/JLRoper/agent-worktree-gui/commit/9fbe8ee28be2e24360036885b9fabd507038c50b) · [compare v1.70.1...v1.70.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.70.1...v1.70.2)
+
+### Docs & tests
+
+- docs: render the changelog - 472 releases ([`422b45f`](https://github.com/JLRoper/agent-worktree-gui/commit/422b45fce2bb789387b9d2aa9802a14f001af84e))
+- docs: one page for the panel's vocabulary and file layout ([`9fbe8ee`](https://github.com/JLRoper/agent-worktree-gui/commit/9fbe8ee28be2e24360036885b9fabd507038c50b))
 
 ## v1.70.1 — 2026-11-09 · 3 commits
 
