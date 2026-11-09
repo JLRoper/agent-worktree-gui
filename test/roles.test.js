@@ -345,6 +345,29 @@ test("a role's prompt is what its turns begin with, and an assistant's own promp
   assert.ok(!assistant.preamble(PRIMARY_ASSISTANT).includes("Your role's prompt"), "an empty role prompt adds nothing to the turn");
 });
 
+test("both built-in roles carry a ten-to-twenty-line operating contract inside the tier-1 seat", async (t) => {
+  // The tier-1 seat is the every-turn contract: a fresh panel's role prompt must not be empty, because a contract
+  // that only lives in the charter is withheld on nineteen turns out of twenty. The cap is the seat the design
+  // budgets (section 3.2): a longer contract is a charter with a worse cadence.
+  const { assistant } = await panel(t);
+  for (const id of ["assistant-agent-manager", "assistant-director"]) {
+    const role = assistant.roles.find((r) => r.id === id);
+    assert.ok(role, `the ${id} role is seeded`);
+    const lines = role.prompt.split("\n");
+    assert.ok(lines.length >= 10 && lines.length <= 20, `${id} carries ten to twenty lines (${lines.length})`);
+    assert.ok(role.prompt.length <= 1472, `${id} fits the 1,472-character tier-1 seat (${role.prompt.length})`);
+    assert.doesNotMatch(role.prompt, /[\u2013\u2014]/, `${id} uses ASCII hyphens only`);
+  }
+  assert.ok(
+    assistant.roles.find((r) => r.id === "assistant-director").prompt.includes("QUEUE <assistant> | "),
+    "the Director's contract carries the two action lines it alone may use",
+  );
+  // #1 runs the manager role and has no prompt of its own, so the role's contract is what its turns begin with.
+  const briefing = assistant.preamble(PRIMARY_ASSISTANT);
+  assert.match(briefing, /Your role's prompt \(saved with the Agent Manager role/);
+  assert.ok(briefing.includes("A reader-written rule is rewritten or merged, never dropped."));
+});
+
 test("both copies refuse a save over the 20,000-character cap", async (t) => {
   const { assistant } = await panel(t);
   assistant.createAssistant({ roleId: "assistant-agent-manager" });
