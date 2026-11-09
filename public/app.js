@@ -1979,6 +1979,12 @@ function approvalDecided(turn) {
 // thing: there is no command to judge, the prompt is a sentence to read, and the answers are full
 // sentences. Light purple, not amber, so "answer me" and "allow this" never read as one interruption.
 //
+// A URL in the question is a LINK, not text: a question that names a report is answered by reading it,
+// and a reader who has to copy a path out of a card has already lost the point. `linkifyText` escapes
+// first and then wraps the http(s) URLs (public/core/dom-format.js), so the anchor carries the panel's
+// one link affordance and `data-open-url`, which the page's own click handler turns into a POST
+// /api/open-url - the OS browser opens the page instead of this tab navigating away from the board.
+//
 // The reader's picks (multi-select) and their typed "Other" answer survive a repaint: the card is
 // rebuilt from a poll the moment anything else about the turn changes, and losing a half-made
 // selection to that is the same bug as losing a draft.
@@ -2131,7 +2137,7 @@ function questionPrompt(turn, copy = "") {
   return `<div class="turn-question${sending ? " is-sending" : ""}" data-question-for="${esc(turn.id)}${esc(copy)}"${sending ? ' aria-busy="true"' : ""}>
     <div class="tq-head mono">${sending ? "⏳ sending your answer — the agent is being released" : "❓ waiting on you — the agent is parked until you answer"}</div>
     ${again}
-    <div class="tq-question">${esc(q.question || "(no question text)")}</div>
+    <div class="tq-question">${linkifyText(q.question || "(no question text)")}</div>
     ${rows ? `<div class="tq-choices${multi ? " is-multi" : ""}">${rows}</div>` : ""}
     <div class="tq-note mono${sending ? " is-sending" : ""}" data-qnote="${esc(note)}">${esc(sending ? "sending your answer, one moment..." : note)}</div>
     ${answerRow}

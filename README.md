@@ -697,6 +697,17 @@ sent together, and the box under them takes a typed answer of your own (`Enter` 
 collapses to `✓ answered: <what you said>`; a question that was answered elsewhere, withdrawn with the
 turn or timed out leaves `· question closed without an answer here`.
 
+The question is a sentence, and a URL in it is a **link**. The card renders the question through
+`linkifyText` (`public/core/dom-format.js`), so an `http(s)` URL arrives as the panel's own anchor -
+underline-dotted, opened through `POST /api/open-url` in the OS browser rather than by navigating this
+tab away from the board. A question that names a report can therefore be answered by opening it; there is
+nothing to copy out of the card.
+
+The wording rule is **one complete sentence naming the report and the decision wanted**. `lib/jobs.js`
+carries it into every spawned worker's brief beside the `clarify` instruction, and the card is where it
+shows: a question that needs two sentences is two questions, and one that names no decision is a progress
+report.
+
 Four pieces have to line up, and each one alone is a silent no-op:
 
 - `platform_toolsets.api_server` must include `clarify` in `<HERMES_HOME>/config.yaml`. The stock

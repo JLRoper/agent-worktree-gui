@@ -192,6 +192,7 @@ test("a tree cut from main is told to push for a pull request, on its first turn
   assert.match(body1, /cut from `main` — a landing branch, so do not merge into it/);
   assert.match(body1, /`git push -u origin HEAD` then `gh pr create --fill`/, "the push is spelled out with the project's own remote");
   assert.match(body1, /Remote writes are allowed for this project, so a push is not asked about/, "and it quotes the guard truthfully");
+  assert.match(body1, /the question is one complete sentence naming the report and the decision wanted/, "the clarify card's wording rule rides the brief");
   assert.doesNotMatch(body1, /LOCAL-ONLY|LOCALLY and do not push/, "nothing in the brief says this tree cannot push");
 
   // ---- the panel renames the branch (the slug changes, the six-hex tag stays) ----------------------------------
