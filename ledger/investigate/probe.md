@@ -1,6 +1,6 @@
 # Round D: the name module on disk - stage 1 probe
 
-Worktree: C:/ProjectDevelopment/agent-worktree-gui/.worktrees/round-d-the-name-module-on-disk-stage-1-probe-bb62d8
+Worktree: .worktrees/round-d-the-name-module-on-disk-stage-1-probe-bb62d8 (the stage's own tree, repo-relative)
 Branch: wtgui/round-d-the-name-module-on-disk-stage-1-probe-bb62d8
 HEAD at probe time: 99f2bd7 (docs: render the changelog - 496 releases)
 Working tree: clean (git status --porcelain printed nothing)

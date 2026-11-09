@@ -1,6 +1,6 @@
 # Round D: the name module on disk - stage 2 conclusion
 
-Worktree: C:/ProjectDevelopment/agent-worktree-gui/.worktrees/round-d-the-name-module-on-disk-stage-2-conclude-13928c
+Worktree: .worktrees/round-d-the-name-module-on-disk-stage-2-conclude-13928c (the stage's own tree, repo-relative)
 Branch: wtgui/round-d-the-name-module-on-disk-stage-2-conclude-13928c
 HEAD at conclusion time: 99f2bd7 (docs: render the changelog - 496 releases)
 Working tree before this file: clean (git status --porcelain printed nothing)
