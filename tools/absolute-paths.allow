@@ -99,7 +99,7 @@ test/assistant-profile.test.js | 4 | fixture: a drive path the test compares aga
 test/assistant-queue-directive.test.js | 2 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
 test/assistant-queue-pane.test.js | 2 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
 test/assistant-queue-ui.test.js | 9 | fixture: the tree the test builds or asserts on, named by hand so the comparison is readable
-test/assistant-queue.test.js | 22 | fixture: the tree the test builds or asserts on, named by hand so the comparison is readable
+test/assistant-queue.test.js | 24 | fixture: the tree the test builds or asserts on, named by hand so the comparison is readable
 test/base-ref.test.js | 1 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
 test/board-lookups.test.js | 8 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
 test/branch-cell.test.js | 3 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
@@ -244,3 +244,12 @@ ledger/gui-improve/compare/run.mjs | 9 | probe: the scan roots and the browser a
 public/style.css | 1 | comment: the measured before-state, quoting the folder name and chip the row painted as one word
 docs/investigation.md | 1 | record: the round D conclusion names the stage tree it concluded
 ledger/investigate/probe.md | 1 | record: the stage 1 probe names the tree it ran in
+ledger/gui-improve/general-presets/after/capture.mjs | 2 | record: the capture script names the browser install and the module folder it ran with
+ledger/gui-improve/general-presets/baseline/capture.mjs | 2 | record: the capture script names the browser install and the module folder it ran with
+ledger/gui-improve/general-presets/compare/capture.mjs | 2 | record: the capture script names the browser install and the module folder it ran with
+ledger/gui-improve/general-presets/compare/README.md | 2 | record: the compare's readme names the browser install and the module folder it ran with
+ledger/gui-improve/general-presets/compare/run.mjs | 3 | record: the compare's run script names the browser install, the module folder and the scratch run it used
+test/round-tree-names.test.js | 2 | fixture: the worktree names the round test is written against
+tools/probe-pipeline-ledger.mjs | 1 | example: the usage line's tree folder, a placeholder a reader replaces
+tools/verify-round-tree-names.mjs | 1 | record: the checkout the verifier was run against
+docs/perf/slow-panel-2026-11-09.md | 3 | measurement record: the board's two scan roots and the scratch folder the harness ran from, as they were
