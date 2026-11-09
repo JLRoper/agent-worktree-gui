@@ -46,20 +46,20 @@ pre{background:#0b0f14;border:1px solid var(--line);border-radius:8px;padding:12
 <h2>1. Build inputs</h2>
 <table>
 <tr><th>Repo</th><th>Branch / worktree</th><th>HEAD</th><th>Version</th><th>Artifact sha256</th><th>Size</th></tr>
-<tr><td>pictureviewer</td><td class="mono small">20261021_0005_DMR-39015_pictureViewerSso<br>C:/ProjectDevelopment/pictureviewer-20261021_0005_DMR-39015_pictureViewerSso</td><td class="mono">2956e19</td><td>2.4.1</td><td class="mono small">fca3a2fe3bf715fd5cda071c6956ec24e4850520ccd18d969d236aee9f277446</td><td>62,448,795</td></tr>
-<tr><td>picture-manager-web</td><td class="mono small">20261021_0005_DMR-39015_pictureManagerSso<br>C:/ProjectDevelopment/picture-manager-web-20261021_0005_DMR-39015_pictureManagerSso</td><td class="mono">2ddd840</td><td>1.5.0</td><td class="mono small">c10934ec90f90779c604b5f8c8992c9c091ffddf009eddd23c68345e7c809b6a</td><td>711,708</td></tr>
+<tr><td>pictureviewer</td><td class="mono small">20261021_0005_DMR-39015_pictureViewerSso<br><span class="small">own worktree beside the main checkout</span></td><td class="mono">2956e19</td><td>2.4.1</td><td class="mono small">fca3a2fe3bf715fd5cda071c6956ec24e4850520ccd18d969d236aee9f277446</td><td>62,448,795</td></tr>
+<tr><td>picture-manager-web</td><td class="mono small">20261021_0005_DMR-39015_pictureManagerSso<br><span class="small">own worktree beside the main checkout</span></td><td class="mono">2ddd840</td><td>1.5.0</td><td class="mono small">c10934ec90f90779c604b5f8c8992c9c091ffddf009eddd23c68345e7c809b6a</td><td>711,708</td></tr>
 <tr><td>Menu</td><td class="mono small">feature/menu-oauth2-gateway</td><td class="mono">1c9777f</td><td>1.12.0</td><td class="mono small">6c7d3e8312ce2b03a77c891c13f3efbd6770f722325e4577d7a039f4af95c26e</td><td>42,092,217</td></tr>
 <tr><td>oauth2-multi</td><td class="mono small">DMR-39015-turnover worktree (pinned)</td><td class="mono">9865e8a</td><td>1.2.1</td><td class="mono small">oauth2-core-1.2.1.jar bcbfa8a9e000cfea821d7b947cab4820a8c1e4a6c6ebc74d38e4b625c33e1e04</td><td>6,928,706<br><span class="small">oauth2-web.war</span></td></tr>
 </table>
 
 <div class="card">
 <div class="kv">
-<div>pictureviewer build</div><div><code>gradlew -g C:/Users/roper/.gradle clean assemble</code> - BUILD SUCCESSFUL, WAR built 16:02</div>
-<div>picture-manager-web build</div><div><code>gradlew -g C:/Users/roper/.gradle clean distZip</code> - BUILD SUCCESSFUL in 4m43s, zip built 16:06</div>
+<div>pictureviewer build</div><div><code>gradlew clean assemble</code> (GRADLE_USER_HOME set to the user .gradle) - BUILD SUCCESSFUL, WAR built 16:02</div>
+<div>picture-manager-web build</div><div><code>gradlew clean distZip</code> (GRADLE_USER_HOME set to the user .gradle) - BUILD SUCCESSFUL in 4m43s, zip built 16:06</div>
 <div>targeted tests, pictureviewer</div><div><code>:test --tests UnitTest_ValidateSsoUser --tests UnitTest_LegacyAuthWindow</code> - 9 tests, 0 failures (5 + 4)</div>
 <div>picture-manager-web content</div><div>Rebuilt zip is content-identical to the bundle already inside the WAR: all 10 files hash the same (app.c37f178e78ad8e0ed9da.js = 3ce22fe5...)</div>
 <div>oauth2-multi linkage</div><div>Neither app links oauth2-core (PictureViewer talks to the gateway over HTTP). The gateway WAR on both nodes carries oauth2-core-1.2.1.jar that is byte-identical to the turnover worktree build at 9865e8a, so the deployed gateway is the local branch build, not a Nexus snapshot.</div>
-<div>Menu WAR provenance</div><div>The deployed Menu.war is the local branch build: same sha256 as C:/ProjectDevelopment/Menu/build/libs/Menu-1.12.0.war, built 2026-11-06 21:29 from branch tip 1c9777f (2026-11-05 01:37).</div>
+<div>Menu WAR provenance</div><div>The deployed Menu.war is the local branch build: same sha256 as the local Menu build output under build/libs, built 2026-11-06 21:29 from branch tip 1c9777f (2026-11-05 01:37).</div>
 </div>
 </div>
 
@@ -175,19 +175,19 @@ GET /Menu/main.jsp                       (no cookie)
 </div>
 
 <h2>9. Reproduce</h2>
-<pre>cd C:/ProjectDevelopment/pictureviewer-20261021_0005_DMR-39015_pictureViewerSso
-gradlew.bat -g C:/Users/roper/.gradle --console=plain clean assemble
+<pre>cd &lt;pictureviewer worktree&gt;
+gradlew.bat --console=plain clean assemble
 
-cd C:/ProjectDevelopment/picture-manager-web-20261021_0005_DMR-39015_pictureManagerSso
-gradlew.bat -g C:/Users/roper/.gradle --console=plain clean distZip
+cd &lt;picture-manager-web worktree&gt;
+gradlew.bat --console=plain clean distZip
 
-# backup, swap, verify (per host): the scripts used for this run
-C:/Users/roper/AppData/Local/Temp/wag/ae4c7e39/deploy_pv.sh
-C:/Users/roper/AppData/Local/Temp/wag/ae4c7e39/deploy_pmw.sh
+# backup, swap, verify (per host): deploy_pv.sh and deploy_pmw.sh, written by this run outside the repo
+bash deploy_pv.sh
+bash deploy_pmw.sh
 
 # browser walk (Playwright, one push each)
-SCRATCH=C:/Users/roper/AppData/Local/Temp/wag/ae4c7e39 NODE_PATH=$(npm root -g) node drive5.js</pre>
+SCRATCH=&lt;run scratch dir&gt; NODE_PATH=$(npm root -g) node drive5.js</pre>
 
-<p class="sub">Evidence files: drive-report.json, drive4-report.json, drive5-report.json, shots/, shots2/, shots3/ under C:/Users/roper/AppData/Local/Temp/wag/ae4c7e39; deploy logs under builds/.</p>
+<p class="sub">Evidence: drive-report.json, drive4-report.json, drive5-report.json, the shots, shots2 and shots3 screenshot sets, and the build and deploy logs live in this run scratch directory outside the repo; the screenshot set is embedded in this page.</p>
 </div>
 </body></html>
