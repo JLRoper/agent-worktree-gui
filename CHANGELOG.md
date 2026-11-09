@@ -4,16 +4,29 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.67.4 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.67.5 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-460 releases from v0.1.0 (2026-10-20) to v1.67.4 (2026-11-08), 1523 commits between the tags. Every release is anchored by an
+461 releases from v0.1.0 (2026-10-20) to v1.67.5 (2026-11-08), 1526 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.67.5 — 2026-11-08 · 3 commits
+
+[`b6e5dfa`](https://github.com/JLRoper/agent-worktree-gui/commit/b6e5dfa8a558ca94c09aab50e67999506f1b7622) · [compare v1.67.4...v1.67.5](https://github.com/JLRoper/agent-worktree-gui/compare/v1.67.4...v1.67.5)
+
+### Fixed
+
+- fix: a manual park is not open work for the queue-idle sweep ([`b6e5dfa`](https://github.com/JLRoper/agent-worktree-gui/commit/b6e5dfa8a558ca94c09aab50e67999506f1b7622))
+
+### Docs & tests
+
+- docs: name the round's artifacts by the row's tree, not a drive path ([`893df56`](https://github.com/JLRoper/agent-worktree-gui/commit/893df56d1310e9d29e5d65a9973d79192a4b54c9))
+- docs: render the changelog - 460 releases ([`dcaaae7`](https://github.com/JLRoper/agent-worktree-gui/commit/dcaaae7705186ab7c1d174a5dd575038c271adb8))
 
 ## v1.67.4 — 2026-11-08 · 3 commits
 
