@@ -224,3 +224,21 @@ config.example.json | 6 | template: the shipped copy of the reader config.json, 
 docs/perf/backend-2026-11-06.md | 5 | evidence: the perf audit records the live panel's data dir, its scratch folder and the exact commands it ran, which is what it reports
 docs/reviews/ping-pong-round-7-dossier-2026-11-09.html | 2 | review record: the two stage prompts verbatim, each naming the tree it ran in
 test/remote-backoff.test.js | 2 | test fixture: a placeholder repository path that does not exist, and prIndex never opens it
+ledger/gui-improve/baseline/capture.json | 36 | record: the baseline's environment names the two scan roots and the browser install it was captured with
+ledger/gui-improve/baseline/capture.mjs | 3 | probe: the browser and module folders the capture was run with, kept as its default environment
+ledger/gui-improve/baseline/dom.json | 126 | record: the DOM inventory quotes the scan roots' own paths and titles
+ledger/gui-improve/baseline/README.md | 6 | record: the baseline's protocol names the two folders it scanned
+ledger/gui-improve/baseline/verdict.json | 1 | record: the verdict names the stage tree it was measured in
+ledger/gui-improve/change-set.patch | 3 | record: the change-set quotes the stylesheet's measured comment and the surface's scan roots
+ledger/gui-improve/compare/after/capture.json | 36 | record: the after capture names the same scan roots and browser install
+ledger/gui-improve/compare/after/dom.json | 126 | record: the after DOM inventory quotes the scan roots' own paths and titles
+ledger/gui-improve/compare/after/style.css | 1 | record: the after stylesheet keeps the measured comment that names the painted folder
+ledger/gui-improve/compare/before/capture.json | 36 | record: the before capture names the same scan roots and browser install
+ledger/gui-improve/compare/before/dom.json | 126 | record: the before DOM inventory quotes the scan roots' own paths and titles
+ledger/gui-improve/compare/before/README.md | 6 | record: the before copy's README names the two folders it scanned
+ledger/gui-improve/compare/capture.mjs | 3 | probe: the browser and module folders the compare was run with, kept as its default environment
+ledger/gui-improve/compare/change-set.patch | 3 | record: the compare's change-set quotes the stylesheet's measured comment
+ledger/gui-improve/compare/comparison.json | 156 | record: the comparison quotes the scan roots and the measured comment on both sides
+ledger/gui-improve/compare/README.md | 7 | record: the compare's protocol names the two folders and the browser install it ran with
+ledger/gui-improve/compare/run.mjs | 9 | probe: the scan roots and the browser and module folders the compare was run with, kept as its defaults
+public/style.css | 1 | comment: the measured before-state, quoting the folder name and chip the row painted as one word
