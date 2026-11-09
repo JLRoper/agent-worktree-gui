@@ -521,6 +521,19 @@ test("a task whose thread is live reads LIVE, never STALE", () => {
   assert.match(lines[0], /0 queued · 1 running · 0 parked · 0 done/, "and the header counts no stale task");
 });
 
+test("a row whose only PR is CLOSED reads PR none, never a merged claim", () => {
+  let q = addTask([], { title: "the dead PR", thread: "T1", worktree: "C:/wt" }).tasks;
+  q = setTaskState(q, 1, "running").tasks;
+  // The shape the board held for row 268: the scan still remembered the branch as MERGED (its commits were on
+  // main), and the PR attached to the branch was CLOSED with mergedAt null. The digest read "PR MERGED (3
+  // commits) #607" - a merged claim about a PR that never merged.
+  const rowFor = () => ({ path: "C:/wt", verdict: "MERGED (3 commits)", pr: { number: 607, state: "CLOSED" } });
+  const text = queueDigest(q, { isLive: (t) => t === "T1", rowFor }).join("\n");
+  assert.match(text, / · PR none · /);
+  assert.doesNotMatch(text, /#607/, "the dead PR's number is not on the row");
+  assert.doesNotMatch(text, /PR MERGED/, "and the row does not claim a merge the PR never made");
+});
+
 test("the digest is empty for an empty queue, and clamps a silly size", () => {
   assert.deepEqual(queueDigest([]), []);
   let q = [];

@@ -97,6 +97,41 @@ test("a branch with no PR reads none, and its neighbours' PRs are not lent to it
   assert.match(without.branchUrl, /browse\?at=refs\/heads\/20260928_confluence-doc-sync$/);
 });
 
+test("a branch whose only PR is CLOSED reads PR none, and a moved head is not lent a MERGED PR either", async () => {
+  const hosts = new Hosts({ file: null, seedFile: DEFAULT_SEED_FILE });
+  const { scheduler, store } = schedulerFor(hosts);
+  const branch = "wtgui/write-the-draft-the-brief-asks-for-in-970633";
+  const dead = buildPrIndex([
+    // The closed PR #607's head, exactly as the board listed it: CLOSED, mergedAt null. A row cut onto that head
+    // used to read "PR MERGED (3 commits) #607" because the brief accepted any PR the branch name found.
+    { number: 607, state: "CLOSED", mergedAt: null, headRefName: branch, headRefOid: "b83a547625db4dc9ba5bd6d0892f9a72d18e7a59", title: "the closed PR" },
+    // A MERGED PR whose merge was left behind: the row has committed past the PR's head, so the merge commit
+    // does not carry this row's work and the row must not wear the PR's number.
+    { number: 608, state: "MERGED", mergedAt: "2026-11-01T10:00:00Z", headRefName: "wtgui/kept-committing-abc123", headRefOid: "b83a547625db4dc9ba5bd6d0892f9a72d18e7a59", title: "the merge this branch left behind" },
+  ]);
+
+  const closed = rowFor(branch, "b83a547");
+  await scheduler.decorate(PROJECT, closed, new Set([branch]), dead);
+  assert.equal(closed.pr, null, "a CLOSED PR is not this row's PR");
+  assert.equal(closed.prUrl, null, "and it has no page to open");
+  store.patchProject(PROJECT.name, { path: PROJECT.path, remote: PROJECT.remote, mainBranch: PROJECT.mainBranch });
+  store.putRow(PROJECT.name, closed, "full");
+  const stored = store.snapshot().projects.find((p) => p.name === PROJECT.name).worktrees.find((w) => w.branch === branch);
+  assert.equal(stored.pr, null, "the store carries the same none the row read");
+
+  const moved = rowFor("wtgui/kept-committing-abc123", "9993308");
+  await scheduler.decorate(PROJECT, moved, new Set([moved.branch]), dead);
+  assert.equal(moved.pr, null, "a MERGED PR whose merge commit does not carry the row's work is not claimed");
+
+  // The same index still hands an OPEN PR to the branch that owns it, which is what the row's live work needs.
+  const open = rowFor("wtgui/kept-committing-abc123", "9f8e7d6");
+  const openIndex = buildPrIndex([
+    { number: 609, state: "OPEN", mergedAt: null, headRefName: "wtgui/kept-committing-abc123", headRefOid: "9f8e7d6abcd", title: "open work" },
+  ]);
+  await scheduler.decorate(PROJECT, open, new Set([open.branch]), openIndex);
+  assert.equal(open.pr?.number, 609, "an OPEN PR is still the row's PR");
+});
+
 test("an unmapped project keeps the PR number and drops the page, saying why", async () => {
   const hosts = new Hosts({ file: null, seedFile: DEFAULT_SEED_FILE });
   const { scheduler } = schedulerFor(hosts);
