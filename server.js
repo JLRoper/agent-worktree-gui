@@ -75,6 +75,10 @@ import {
   legacyDefaults,
 } from "./lib/push-permissions.js";
 import { installGuard, uninstallGuard, guardState, refreshGuardFiles, normTree } from "./lib/push-guard.js";
+// A project's own one-line rules: the config row's shape and the caps live with the module, the file write lives here.
+import { projectRulesRow, rulesFrom, validateRules } from "./lib/project-rules.js";
+// The rules prefix: the read the chip and the rules bar draw, and the one save that replaces a project's list.
+import { RULES_PATH, createProjectRulesRoutes } from "./routes/project-rules.js";
 import { safeUrl, openerFor, openerForFolder, chromeFor } from "./lib/open-url.js";
 import { errorStatus } from "./lib/errors.js";
 // The Matrix bridge's process lifecycle (start / stop / liveness / one --self-test). The protocol itself is the
@@ -1128,6 +1132,47 @@ async function setProjectPushSetting(name, patch, { by = "reader" } = {}) {
   return { ok: true, project: name, resolved: after, settings: settingsOut() };
 }
 
+// ONE PROJECT'S RULES, replaced wholesale. The list lives on the project's own `projects[]` row, so this is the same
+// read-modify-write `setProjectPushSetting` performs - with one difference that matters: the list is the reader's
+// ORDER, so the row is rebuilt from the request rather than merged key by key, and an empty list removes the key
+// (lib/project-rules.js `projectRulesRow` explains why absence is the empty value).
+//
+// The write has to reach FOUR places, or the chip lies until the next discovery pass: the file, the in-memory config
+// (what a restart would boot), the registry's record (what `/api/project-rules` answers from), and the store's project
+// record (what the snapshot carries, and what `patchProject` broadcasts as a `project` event so every other tab
+// repaints the section its chip is drawn in).
+async function setProjectRules(name, value, { by = "reader" } = {}) {
+  const project = (registry.projects || []).find((p) => p.name === name) || null;
+  if (!project) return { status: 404, error: `unknown project: ${name || "(none)"} - the rules belong to a project on this board` };
+  const checked = validateRules(value);
+  if (checked.error) return { status: 400, error: checked.error, rules: rulesFrom(project.rules) };
+  const raw = await readPanelConfigFile();
+  if (!Array.isArray(raw.projects)) raw.projects = [];
+  const at = raw.projects.findIndex((p) => p && p.name === name);
+  const existing = at >= 0 ? raw.projects[at] : null;
+  const entry = projectRulesRow(existing, name, checked.rules);
+  if (at >= 0) raw.projects[at] = entry;
+  else raw.projects.push(entry);
+  try {
+    await writeConfigAtomic(`${JSON.stringify(raw, null, 2)}\n`);
+  } catch (e) {
+    return { status: 500, error: `could not write the rules: ${String((e && e.message) || e)}`, rules: rulesFrom(project.rules) };
+  }
+  if (!Array.isArray(config.projects)) config.projects = [];
+  let live = config.projects.find((p) => p && p.name === name) || null;
+  if (!live) {
+    live = { name };
+    config.projects.push(live);
+  }
+  if (entry.rules) live.rules = entry.rules.slice();
+  else delete live.rules;
+  const rules = checked.rules.slice();
+  project.rules = rules;
+  store.patchProject(name, { rules: rules.slice() });
+  log(`project rules: ${name} -> ${rules.length} rule(s) (by ${by})`);
+  return { ok: true, project: name, rules };
+}
+
 // "Always allow" in the permission box is the same fact as the two controls saying allow-all for the project that
 // asked. It writes that project's own answer, not a global one: a grant the reader gave about one tree must not
 // open every other checkout on the board. Under a repo force-override the write is stored and REPORTED as not in
@@ -1324,6 +1369,10 @@ const PREFIX_MOUNTS = [
   // and the one save that replaces it. The store owns the live file and the logger records the save, so both travel in
   // beside the transport helpers; the version, the vocabularies and the loader's functions come with the module.
   { prefix: PIPELINES_PATH, handles: createPipelinesRoutes({ pipelines, config, sendJson, readBody, authorised, log }) },
+  // The rules prefix (routes/project-rules.js): a project's one-line rules, read for the header's chip and the rules
+  // bar, and replaced wholesale by the one save. The writer owns config.json and the live records, so it stays here
+  // and travels in; the module owns the paths, the status codes and the wire shape.
+  { prefix: RULES_PATH, handles: createProjectRulesRoutes({ getConfig: () => config, registry, setProjectRules, sendJson, readBody, authorised }) },
 ];
 // The reset's route: the gateway client, the store path and the single-flight map live in that module; this file only
 // hands the same transport helpers to it and mounts it below.
