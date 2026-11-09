@@ -544,6 +544,86 @@ function refreshRulesChip(name) {
   el.outerHTML = rulesChipHtml(name);
 }
 
+// ---- a project's board: the chip, and the claims it opens ------------------------------------------------------
+// The repo's own coordination board is `.agentboard/{PID}.json` at the checkout root (lib/activity.js
+// boardEntries): one file per claim, alive while its PID is in the process list. The server summarises it on the
+// project record (`p.board` = total / live[] / dead, projectBoardSummary), so the page has the split without a
+// round trip of its own.
+//
+// The chip replaces the sentence this head line used to carry - "board: no live entries (0 stale)" - and it is
+// the third chip of the line, after host: (where the links come from) and rules: (what a worker here is told):
+// "board: N" is who claims this repo right now. The sentence was the only one of the three facts you could not
+// press, so the one with records behind it had nowhere to go; the bar below is where they are listed.
+function boardOf(name) {
+  const b = state.projects.get(name)?.board;
+  if (!b) return null;
+  return { total: Number(b.total) || 0, live: Array.isArray(b.live) ? b.live : [], dead: Number(b.dead) || 0 };
+}
+
+function boardBarOpen(name) {
+  return barsOf(name).includes("board");
+}
+
+// The chip's node is kept and swapped only when what it reads moved - the count, the stale figure, or the bar's
+// open state - the same rule refreshRulesChip applies, on the same per-snapshot path.
+function boardChipSig(name) {
+  const b = boardOf(name);
+  return `${b ? b.live.length : "x"}|${b ? b.dead : "x"}|${boardBarOpen(name) ? "1" : "0"}`;
+}
+
+function boardChipHtml(name) {
+  const b = boardOf(name);
+  if (!b) return "";
+  const live = b.live.length;
+  const open = boardBarOpen(name);
+  const stale = b.dead ? ` (${b.dead} stale)` : "";
+  const title = live
+    ? `board: ${live} claim${live === 1 ? "" : "s"} in this repo's .agentboard name a PID that is alive right now${stale} - click to open the board and read who claims it`
+    : `board: no live entries${b.dead ? stale : " (0 stale)"} - no .agentboard claim in this repo names a live PID; click to open the board`;
+  return `<button type="button" class="btn-board${live ? " is-live" : ""}${open ? " is-open" : ""}" data-board-chip="${esc(name)}" data-board-project="${esc(name)}" data-board-sig="${esc(boardChipSig(name))}" aria-expanded="${open ? "true" : "false"}" title="${esc(title)}">board: ${live}</button>`;
+}
+
+function refreshBoardChip(name) {
+  const el = projectNode("data-board-chip", name);
+  if (!el) return;
+  if (el.dataset.boardSig === boardChipSig(name)) return;
+  el.outerHTML = boardChipHtml(name);
+}
+
+function boardLine(name, b) {
+  const dir = `${String(state.projects.get(name)?.path || name).replace(/\\/g, "/")}/.agentboard`;
+  if (!b) return `this project has no board summary yet - the next scan reads ${dir}`;
+  return `${b.live.length} live claim${b.live.length === 1 ? "" : "s"} · ${b.dead} stale · ${dir}`;
+}
+
+function boardBarHtml(name) {
+  if (!boardBarOpen(name)) return "";
+  const b = boardOf(name);
+  const rows = b ? b.live.map((e, i) => `<span class="board-row mono" data-board-entry="${i}"><span class="board-pid">pid ${esc(String(e.pid ?? "?"))}</span><span class="board-goal">${e.goal ? esc(String(e.goal)) : "<span class=\"dimmer\">no goal recorded</span>"}</span></span>`) : [];
+  const body = rows.length ? rows.join("") : `<span class="board-empty mono dimmer">${b ? `no live entries (${b.dead} stale)` : "not read yet"}</span>`;
+  return `<div class="host-form board-form" data-board-bar="${esc(name)}">
+      <span class="mono host-line" data-board-line>${esc(boardLine(name, b))}</span>
+      <span class="board-body">${body}</span>
+      <button type="button" data-board-close="${esc(name)}" title="close the board">close</button>
+    </div>`;
+}
+
+function toggleBoardBar(name) {
+  if (boardBarOpen(name)) {
+    closeBoardBar(name);
+    return;
+  }
+  openBar(name, "board");
+  repaintBars(name);
+  refreshBoardChip(name);
+}
+
+function closeBoardBar(name) {
+  closeBar(name, "board");
+  repaintBars(name);
+  refreshBoardChip(name);
+}
+
 // ---- the grey strip's stack ------------------------------------------------------------------------------------
 // `state.bars` is a Map of project -> the bar KINDS it has open, in the order they were opened. Rendering walks it
 // backwards, so the most recent bar is the top one. It is kept here, not only in the DOM, for the same reason the
@@ -569,11 +649,27 @@ function closeBar(name, kind) {
   setBarOrder(name, barsOf(name).filter((k) => k !== kind));
 }
 
+// One bar's markup and the attribute that finds its node, by kind. Three kinds now share the strip, so the two
+// places that used to spell the pair out in a ternary chain (`projectBarsHtml` and `repaintBar`) ask these instead:
+// a fourth kind is one line here, in both, and cannot be added to one and forgotten in the other.
+function barHtml(name, kind) {
+  if (kind === "host") return hostPanelHtml(name);
+  if (kind === "rules") return rulesBarHtml(name);
+  if (kind === "board") return boardBarHtml(name);
+  return "";
+}
+
+function barSelector(kind) {
+  if (kind === "host") return "[data-host-form]";
+  if (kind === "rules") return "[data-rules-bar]";
+  return "[data-board-bar]";
+}
+
 // The stack itself. An empty stack draws nothing at all rather than an empty band.
 function projectBarsHtml(name) {
   const kinds = barsOf(name).slice().reverse();
   if (!kinds.length) return "";
-  const bars = kinds.map((kind) => (kind === "host" ? hostPanelHtml(name) : kind === "rules" ? rulesBarHtml(name) : "")).filter(Boolean);
+  const bars = kinds.map((kind) => barHtml(name, kind)).filter(Boolean);
   if (!bars.length) return "";
   return `<div class="proj-bars" data-bars="${esc(name)}">${bars.join("")}</div>`;
 }
@@ -602,8 +698,8 @@ function repaintBar(name, kind) {
     repaintBars(name);
     return;
   }
-  const html = kind === "host" ? hostPanelHtml(name) : kind === "rules" ? rulesBarHtml(name) : "";
-  const old = holder.querySelector(kind === "host" ? "[data-host-form]" : "[data-rules-bar]");
+  const html = barHtml(name, kind);
+  const old = holder.querySelector(barSelector(kind));
   if (old) {
     if (html) old.outerHTML = html;
     else old.remove();

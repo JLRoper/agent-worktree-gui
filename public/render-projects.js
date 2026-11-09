@@ -264,7 +264,12 @@ function rootScanChip(scanning, days = recentDays()) {
   return `<span class="chip scan" title="${n} of this folder's projects have a commit inside the last ${days} days and are read on the frequent scan; every other project sits on the hourly stat gate">${n} scanning</span>`;
 }
 
-function rootChips(projects, hidden = 0, scanning = null) {
+// `total` is the folder's FULL project count and it is what the count chip states, whatever the 7d view is
+// holding back: the number beside the folder's path is the folder's, so it cannot shrink because the reader
+// chose a view. The shortfall that view creates belongs to the button that created it (rootRecentButton), and
+// the folder card no longer carries a live count at all - a live agent is a row's fact (the row's own chips and
+// the project's own chips say it), and the folder-level chip only repeated it one layer out.
+function rootChips(projects, { scanning = null, total = projects.length } = {}) {
   const names = new Set(projects.map((p) => p.name));
   const rows = [...state.rows.values()].filter((r) => names.has(r.project));
   const unmerged = rows.filter((r) => {
@@ -272,19 +277,30 @@ function rootChips(projects, hidden = 0, scanning = null) {
     return v && !v.startsWith("MERGED") && !v.startsWith("NO COMMITS") && v !== "ON MAIN" && v !== "RELEASED";
   }).length;
   const dirty = rows.filter((r) => r.dirty || r.untracked).length;
-  const live = rows.filter(isRowLive).length;
+  const full = Number.isFinite(Number(total)) ? Math.max(0, Math.round(Number(total))) : projects.length;
   const out = [
-    `<span class="chip">${projects.length} project${projects.length === 1 ? "" : "s"}</span>`,
+    `<span class="chip">${full} project${full === 1 ? "" : "s"}</span>`,
     rootScanChip(scanning),
     `<span class="chip">${rows.length} worktrees</span>`,
   ].filter(Boolean);
   if (unmerged) out.push(`<span class="chip bad">${unmerged} unmerged</span>`);
   if (dirty) out.push(`<span class="chip warn">${dirty} dirty</span>`);
-  if (live) out.push(`<span class="chip live">${live} live</span>`);
-  // In "last N days" mode the board shows the server's recent tier: a repo whose last commit is past the window
-  // is on the hourly stat gate and is folded away here. Saying which rule decided it beats an unexplained list.
-  if (hidden) out.push(`<span class="chip" title="projects with no commit in the last ${recentDays()} days - the hourly stat gate reads them once an hour, and opening one reads it now">${hidden} hidden</span>`);
   return out.join("");
+}
+
+// The folder's All/7d toggle. The count it hides lives INSIDE it now: in "last N days" mode the button says how
+// many projects the window is folding away, right where the reader pressed to fold them, instead of as a chip at
+// the far right of the header a screen away from the control that caused it. The project count beside the folder
+// path stays the FULL count (rootChips), so this button is the one place the difference is explained.
+function rootRecentButton(root, recentOnly, { hidden = 0, total = 0 } = {}) {
+  const days = recentDays();
+  const all = Math.max(0, Number(total) || 0);
+  const held = Math.max(0, Number(hidden) || 0);
+  const title = recentOnly
+    ? `showing ${Math.max(0, all - held)} of ${all} projects - only those with a commit in the last ${days} days; click to show every project`
+    : `showing all ${all} projects; click to show only those with a commit in the last ${days} days`;
+  const label = recentOnly ? `${days}d${held ? ` (${held} hidden)` : ""}` : "All";
+  return `<button type="button" class="btn-root-recent${recentOnly ? " on" : ""}" data-root-recent="${esc(root)}" title="${esc(title)}">${label}</button>`;
 }
 
 function rootSection(root, allProjects) {
@@ -296,14 +312,11 @@ function rootSection(root, allProjects) {
   // answers "how many of these am I reading often", which does not change when the reader toggles the filter.
   const scanning = allProjects.filter((p) => rootOf(p) === root && p.tier !== "old").length;
   const anyOpen = projects.some((p) => state.expandedProjects.has(p.name));
-  const recentTitle = recentOnly
-    ? `showing ${projects.length} of ${allProjects.length} projects - only those with a commit in the last ${recentDays()} days; click to show every project`
-    : `showing all ${allProjects.length} projects; click to show only those with a commit in the last ${recentDays()} days`;
   return `<section class="root-group${open ? "" : " collapsed"}" data-root="${esc(root)}">
     <div class="root-head" data-toggle-root="${esc(root)}" title="${open ? "collapse" : "expand"} ${esc(labelRoot(root))}">
       <span class="chev">${open ? "\u25be" : "\u25b8"}</span>
       <h2>${esc(labelRoot(root))}</h2>
-      <div class="chips">${rootChips(projects, hidden, scanning)}</div>
+      <div class="chips">${rootChips(projects, { scanning, total: allProjects.length })}</div>
       <span class="spacer"></span>
       <span class="root-filter" title="filter the projects in this folder by name or path — Escape clears it">
         <input class="root-search mono" data-root-search="${esc(root)}" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" spellcheck="false"
@@ -311,7 +324,7 @@ function rootSection(root, allProjects) {
         <button type="button" class="root-search-clear${rootFilterValue(root) ? " is-on" : ""}" data-root-search-clear="${esc(root)}" title="clear the filter">\u2715</button>
         <span class="root-count mono${rootFilterValue(root) ? " on" : ""}" data-root-count></span>
       </span>
-      <button type="button" class="btn-root-recent${recentOnly ? " on" : ""}" data-root-recent="${esc(root)}" title="${esc(recentTitle)}">${recentOnly ? `${recentDays()}d` : "All"}</button>
+      ${rootRecentButton(root, recentOnly, { hidden, total: allProjects.length })}
       <button type="button" class="btn-root-collapse" data-root-collapse="${esc(root)}" title="${anyOpen ? "collapse" : "expand"} every project in ${esc(labelRoot(root))} (${projects.length})">${anyOpen ? "Collapse all" : "Expand all"}</button>
       <button type="button" class="btn-root-clone" data-root-clone="${esc(root)}" title="clone a GitHub repo over ssh into ${esc(labelRoot(root))}">+</button>
     </div>
@@ -334,9 +347,6 @@ function projectSection(name) {
   const mainLine = p.localMain && p.remoteTip
     ? `local ${esc(p.mainBranch)} <code>${esc(p.localMain)}</code> · ${p.mainBehind ?? "?"} behind / ${p.mainAhead ?? "?"} ahead of remote`
     : p.error ? esc(p.error) : "local main unknown";
-  const board = p.board
-    ? `<span class="mono ${p.board.live?.length ? "sig-board-live" : "dimmer"}">board: ${p.board.live?.length ? p.board.live.map((e) => `pid ${e.pid}`).join(", ") : `no live entries (${p.board.dead} stale)`}</span>`
-    : "";
   const tip = p.remoteTip
     ? `<span class="mono dim">${esc(p.remoteRef || "")} <code>${esc(p.remoteTip)}</code> ${esc(String(p.remoteTipSubject || "").slice(0, 60))} · ${relTime(p.remoteTipDate)} ago</span>`
     : "";
@@ -350,8 +360,8 @@ function projectSection(name) {
       <span class="spacer"></span><div class="chips" data-chips="${esc(name)}">${chipsHtml(name)}</div>
     </div>
     <div class="project-head meta-line">
-      <span class="mono dim">${mainLine}</span><span class="spacer"></span>${board}${tip}
-      <span class="dimmer mono">${p.fetchNote ? esc(p.fetchNote) + " · " : ""}fetched ${relTime(p.fetchedAt)} ago</span>${hostChipHtml(name)}${rulesChipHtml(name)}
+      <span class="mono dim">${mainLine}</span><span class="spacer"></span>${tip}
+      <span class="dimmer mono">${p.fetchNote ? esc(p.fetchNote) + " · " : ""}fetched ${relTime(p.fetchedAt)} ago</span>${hostChipHtml(name)}${rulesChipHtml(name)}${boardChipHtml(name)}
     </div>
     ${projectBarsHtml(name)}
     <div class="wt-scroll">
@@ -372,6 +382,9 @@ function refreshChips(name) {
       el._chipsHtml = html;
     }
   }
+  // The board chip sits in the same second head line, for the same reason: a scan that found a claim appear or go
+  // stale moves a count this strip does not hold, and a snapshot is how that reading arrives.
+  refreshBoardChip(name);
   // The rules chip sits in the project's second head line rather than in this strip, and a snapshot (which repaints
   // only the strip and the rows) is how a count saved in another tab arrives — so it is refreshed from here.
   refreshRulesChip(name);

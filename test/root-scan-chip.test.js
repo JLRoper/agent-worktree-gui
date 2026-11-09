@@ -61,7 +61,7 @@ test("the folder header carries the scanning count beside the project count", ()
   // The chip builders moved to public/render-projects.js in step 7 of docs/reports/module-map-2026-11-07.html,
   // beside the folder card they draw.
   const src = readFileSync(new URL("../public/render-projects.js", import.meta.url), "utf8");
-  // Cut the two chip builders out of the page by their own boundaries: the folder-header section has no `end`
+  // Cut the chip builders out of the page by their own boundaries: the folder-header section has no `end`
   // marker, and a whole-region slice drags in a dozen functions these assertions do not need.
   const from = src.indexOf("function rootScanChip(");
   const to = src.indexOf("function rootSection(");
@@ -72,8 +72,9 @@ test("the folder header carries the scanning count beside the project count", ()
     "state",
     "isRowLive",
     "recentDays",
+    "esc",
     `${code}; return { rootScanChip, rootChips };`,
-  )(stubs, () => false, () => 7);
+  )(stubs, () => true, () => 7, (s) => String(s ?? ""));
 
   const chip = rootScanChip(17);
   assert.match(chip, /class="chip scan"/);
@@ -82,13 +83,22 @@ test("the folder header carries the scanning count beside the project count", ()
   assert.equal(rootScanChip(null), "", "no count renders nothing, not a zero");
   assert.match(rootScanChip(0), /0 scanning/);
 
-  const chips = rootChips([{ name: "a" }, { name: "b" }], 0, 1);
+  const chips = rootChips([{ name: "a" }, { name: "b" }], { scanning: 1 });
   assert.match(
     chips,
     /2 projects<\/span><span class="chip scan"[^>]*>1 scanning<\/span><span class="chip">0 worktrees/,
     "scanning sits immediately right of the project count",
   );
-  const hidden = rootChips([{ name: "a" }], 3);
-  assert.doesNotMatch(hidden, /chip scan/, "a caller that passes no count gets no chip");
-  assert.match(hidden, /3 hidden/);
+  assert.doesNotMatch(rootChips([{ name: "a" }], {}), /chip scan/, "a caller that passes no count gets no chip");
+
+  // The count beside the folder's path is the FOLDER's count, not the visible one: the 7d view folds projects
+  // away, and the header must not shrink with it. The shortfall is the toggle's to say (rootRecentButton).
+  const narrowed = rootChips([{ name: "a" }], { total: 3 });
+  assert.match(narrowed, /^<span class="chip">3 projects<\/span>/, "the full count, from the folder rather than the view");
+  assert.doesNotMatch(narrowed, /hidden/, "the hidden count is no longer a chip at the far right of the header");
+
+  // The folder card no longer counts liveness at all: a live agent is a row's fact, and the folder chip only
+  // repeated it one layer out. A live row must therefore draw no live chip here (a project card's own chips do).
+  stubs.rows.set("a::/work/trees/a", { project: "a", live: true });
+  assert.doesNotMatch(rootChips([{ name: "a" }], { total: 1 }), /chip live|1 live/, "no live chip on the folder card");
 });
