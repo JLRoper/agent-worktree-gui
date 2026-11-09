@@ -1,117 +1,209 @@
 change-set/1
 
-surface   Settings -> Board, the #settings-panel-board tab of the Settings window (#settings) on
-          http://127.0.0.1:7493/ (this stage's tree, panel 1.67.3). The baseline capture is from panel
-          1.71.0, but paintScanRoots' markup is byte-identical in both trees and neither had a CSS rule
-          for the block before this change.
-baseline  44b4278 (ledger/gui-improve/baseline/capture.json). The capture's manifest records the served
-          style.css as c9031470 (309,248 B) while the copy committed beside it is 07ac60dc (304,977 B);
-          both, and this stage tree's 94ac9d0 (302,378 B), have no rule for .settings-root, and the
-          capture's own css.json lists 0 rules whose selector names it, so the block is unstyled in
-          every copy and the target's numbers are the same whichever one is served. public/index.html
-          is 714e50c in the baseline and in this tree.
-applies   git apply -p1 from the repository root, on top of cbc07d7 (this stage's HEAD before the change)
-          or any tree whose public/index.html is 714e50c and whose style.css still has no
-          :where(#settings-panel-board) rule. The only difference between the baseline's committed
-          style.css and this tree's is the unrelated rules-chip block at line 3019, so the context
-          below sits identically in both.
-status    APPLIED in this tree: both files carry the change, so the after shots are of the applied
-          surface. To reproduce from a clean tree, apply this patch first; there is nothing left to
-          apply on this tree.
+surface   the Board's Unattached agents section (#agents), at 1440x900, in its open, expanded and
+          collapsed states - the surface the baseline measured
+baseline  da9f87a (the baseline stage's commit on wtgui/run-gui-improve-again-this-time-on-the-5ab4e1,
+          cut from 99f2bd7); ledger/gui-improve/baseline/capture.json there. The code it measured is
+          99f2bd7, this stage tree's base.
+applies   git apply -p1 from the repository root, on top of 99f2bd7 or any tree whose
+          public/app.js, public/render-jobs.js and lib/job-trees.js still carry the three regions
+          below.
+status    APPLIED in this tree: the three files carry the change, so re-running the baseline's
+          capture.mjs against this tree measures the after state. Nothing is left to apply here.
 
-Two files, one block: 13 new rules in public/style.css, all scoped to #settings-panel-board and kept at
-class weight with :where(), and two attributes on the add-folder input in public/index.html (a shorter
-placeholder and the full sentence in its title). public/app.js, lib/ and server.js are untouched, and the
-markup the roots rows are drawn from (app.js paintScanRoots) did not change - only what the CSS does with it.
+Three changes in three files. No painted element is added or removed, no CSS rule moves and no font size
+changes: the section still paints 85 elements open and 10 collapsed, and 10 px is still its smallest
+painted font in the open and expanded states (11 px in the collapsed bar, which is the baseline's
+own reading). The fixture and the protocol are the baseline's.
 
-Change 1 of 2 - the roots read as one control group
-  what moved: .settings-roots becomes a column of cards (4 px between them, 6 px above), and .settings-root
-    becomes a 28 px card: surface fill, 1 px line, 6 px radius, 8 px left padding, and a uniform 8 px gap
-    between its path, its state chip and its remove control. The path takes the row's slack (flex: 1 with
-    min-width: 0) and ellipsizes a path longer than that, with the full path kept in the markup's title;
-    the chip becomes a 10 px pill (the existing .bad variant gets a red border and fill); the ✕ becomes a
-    real 24x24 button with a hover fill instead of an unstyled UA button.
-  asked by: "The 'Folders the board scans' block must read as one control group: a visible gap between each
-    root's path, its state chip and its remove control" - the target sentence in
-    ledger/gui-improve/baseline/README.md ("The surface") and capture.json surface.change.
-  measured: path -> chip 0 -> 8 px; chip -> ✕ 3.84 -> 8 px; card height 28 -> 28 px (unchanged); ✕
-    31.8 x 28 -> 24 x 24 (the UA button's width had no relation to its glyph; 24 x 24 is the deliberate
-    target, and the title still names the folder). Identical at 1440x900, 1280x800 and 1024x768.
+Change 1 of 3 - the head names the project and the tree
+  what moved: the first fact of the card head's meta line, now built as `whyHomeless` in
+    public/render-jobs.js. A card whose cwd is `.worktrees/<name>` reads
+    `worktree feat-long-tree-name · beta` where it read `no worktree`; a plain directory keeps
+    `no worktree`, and a recorded owner that is not a row keeps `owner <path> (not in the scan)`.
+    The same false word was on the card whose tree the board HAS read, so that card now reads
+    `worktree feat-one · alpha` too. The head stays 27.75 px and the card 266.17 px tall; only the
+    meta span grows (191.34 to 349.69 px on the unread card, 283.70 px on the read one), inside the
+    head's own nowrap/ellipsis span.
+  asked by: "an unattached card whose cwd is a worktree the board has not read must say where that
+    directory actually is" - the first clause of the implement brief's change sentence.
 
-Change 2 of 2 - the add row uses the width it has left, so its hint is readable
-  what moved: .settings-roots-add becomes a flex row (6 px gap, 6 px above) whose input takes the remaining
-    width (flex: 1, min-width: 0) at 26 px tall and 11.5 px mono, with the button 26 px tall and flush to
-    row's right edge. The placeholder is shortened in public/index.html from "an absolute folder path
-    - e.g. the parent of your projects" to "an absolute folder path", and the full sentence is carried in
-    the input's title ("an absolute folder path, e.g. the parent of your projects. Enter adds it"), so the
-    example stays discoverable without competing with the field for width.
-  asked by: "and the add-folder field given the width its row has left so its hint is readable" - the same
-    target sentence, its second clause.
-  measured: input 154 -> 223.52 px (client 222) of the 310 px row; button 78.375 -> 80.48 px; space right
-    of the button 73.78 -> 0.00 px; the hint 382.66 px at the input's 12 px mono -> 145.42 px at 11.5 px,
-    inside the field's 222 px, so it paints whole (before: "an absolute folder pat"). The width alone could
-    not make the hint readable - 382.66 px does not fit even the whole 310 px row - so the hint was cut to
-    what the row can show and the rest kept in `title`. Identical at all three viewports.
+Change 2 of 3 - the picker offers the card's own tree
+  what moved: the attach press's on-demand picker build in public/app.js. When the card's cwd is
+    `.worktrees/<name>` and the board has no row at that path, the select now gets
+    `beta · feat-long-tree-name (not read)` as its first option, with the tree's real path as the
+    value, selected; Attach is enabled for it. The disabled `the row for feat-long-tree-name is
+    missing` placeholder (value "", selected, Attach disabled) is gone. The three board rows stay
+    below it, so the picker is still a picker: measured options 4 to 4, selected index 3 to 0,
+    selected text `beta · feat-long-tree-name (not read)`, Attach disabled to enabled. The select is
+    intrinsic-width, so replacing the long placeholder narrows it 325 to 268 px and moves the
+    49.45 x 21 Attach button from x 449.39 to 392.39; the row keeps its 24 px height and the button
+    its size.
+  asked by: "its attach picker must offer that card's own tree instead of four other trees and a
+    disabled placeholder" - the second clause of the same sentence.
 
-A consequence, not a third change: the Board panel's content is 14 px taller (scrollHeight 1599 -> 1613):
-6 px above the cards, 4 px between them and 6 px above the add row, less 2 px because the add row is 26 px
-tall where the unstyled row was 28 (button 78.38 x 28 -> 80.48 x 26, input 154 x 20 -> 223.52 x 26). The
-Settings window still opens at 340 x 520 with the block's title, both cards and the add row in view; no
-other row's own layout changed, and the rows below it sit 14 px lower.
+Change 3 of 3 - the press on that tree answers with the tree, not its parent
+  what moved: `attachMeaning` in lib/job-trees.js. A press that names the run's own tree is refused
+    honestly when the board has no row for it: the 409 used to describe that very tree as "only the
+    checkout that contains it" (the parent-row sentence, reached because the asked path equals the
+    run's root); it now names the tree, the checkout and the scan root that would give it a row.
+    Measured against the baseline fixture: "the row for <sandbox>/fixture/outside/beta/.worktrees/
+    feat-long-tree-name is missing - the board reads only the repositories directly inside a scan
+    root, and <sandbox>/fixture/outside/beta is not one of them, so it has never read that tree.
+    Add <sandbox>/fixture/outside under Settings > Board > Folders the board scans, then reload".
+    The press files nothing, as before. A press on the parent checkout keeps the old sentence (and
+    the test at test/assistant-queue-reattach.test.js:403 that names it).
+  asked by: the same second clause - offering the tree makes its press answerable. The baseline's
+    own target states the allowance: "or say plainly that the board has no row for it and what
+    would make one".
 
-The search state is unchanged: filling #settings-search with "flash" still hides the whole block
-(display: none on .settings-roots and .settings-roots-add), and clearing it restores the flex rows. Every
-selector is wrapped in :where() so these `display` declarations stay at class weight and the filter's
-`.settings-group .search-hidden { display: none }` still wins while the query is live.
+Which of the baseline's three states the change moves:
+  open      moves. The first card's head meta is the changed text (the surface shot differs); the
+            section still 1408 x 580.34 px with 85 painted elements, jobs 531.34 px, cards 266.17
+            and 265.17 px, smallest font 10 px.
+  expanded  moves. The picker's option set and the Attach press (disabled to enabled); the section
+            still 1408 x 609.34 px with 89 painted elements and smallest font 10 px.
+  collapsed does not move. The bar is untouched, it still paints 10 elements in 48 px, and the
+            surface shot's sha256 is identical to the baseline's
+            (d3c761fe9345c905e7e6e85aae8e90a5dd88bf9c006e35e9a2e93d23a37c08c6).
 
-Verified with a Playwright Chromium probe against this tree served on 127.0.0.1:7493 with a scratch config
-whose scanRoots are C:/CodeReviews and C:/sefl-mvn-local (the baseline's two), at the baseline's three
-viewports and its `open` and `search` states; the numbers above are that run's, and the surface shots of
-the applied tree were read to confirm the block paints as one group. The compare stage owns the final
-after set and the comparison page.
+Verification of the after state: the baseline's capture.mjs, run against this tree in a throwaway
+sandbox with the same fixture and steps, wrote an open card meta of
+`worktree feat-long-tree-name · beta · (default model)`, an expanded picker whose first option is
+`beta · feat-long-tree-name (not read)` with the tree's path as its value and four enabled options,
+and a collapsed surface shot byte-identical to the baseline's. A press on the offered tree was
+driven in the same sandbox; the banner quoted under change 3 is its answer. No test/*.test.js file
+was run for this stage (the brief forbids it); node --check passes on all three files, and the one
+test that names the parent-row sentence is untouched by this change.
 
 The diff follows.
-
-diff --git a/public/index.html b/public/index.html
-index dc87fe2..0f6db58 100644
---- a/public/index.html
-+++ b/public/index.html
-@@ -316,7 +316,7 @@
-         </div>
-         <div class="settings-roots" id="scan-roots"></div>
-         <div class="settings-roots-add">
--          <input type="text" id="scan-root-input" class="mono" placeholder="an absolute folder path — e.g. the parent of your projects" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" spellcheck="false" title="the absolute path of a folder to scan — Enter adds it">
-+          <input type="text" id="scan-root-input" class="mono" placeholder="an absolute folder path" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" spellcheck="false" title="an absolute folder path, e.g. the parent of your projects. Enter adds it">
-           <button type="button" id="btn-scan-root-add" title="add this folder to the list and re-discover its projects">Add folder</button>
-         </div>
-         <div class="settings-preview mono" id="scan-roots-preview">…</div>
-diff --git a/public/style.css b/public/style.css
-index 94ac9d0..5559e01 100644
---- a/public/style.css
-+++ b/public/style.css
-@@ -394,6 +394,25 @@ thead th,
- .settings-row input[type="url"]::placeholder, .settings-row input[type="password"]::placeholder, .settings-row input[type="text"]::placeholder { color: var(--dimmer); }
- .settings-row input[type="number"]:disabled { color: var(--dimmer); background: #0e1218; }
- .settings-unit { font-size: 11px; color: var(--dimmer); }
-+/* Settings → Board > "Folders the board scans": one card per root, and an add row that uses the width it has.
-+   The block had no rules at all, so the path's right edge WAS the chip's left edge (0 px - the row painted
-+   `C:/CodeReviewsexists`), the ✕ sat 3.84 px off the chip, and the add field kept the UA's 154 px, so its
-+   placeholder clipped to `an absolute folder pat` with 74 px of the row empty to the right of the button.
-+   Scoped to the Board panel and kept at class weight with :where(), so `.settings-group .search-hidden
-+   { display: none }` still wins over these `display` rules and a search that hides the block really hides it. */
-+:where(#settings-panel-board) .settings-roots { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
-+:where(#settings-panel-board) .settings-root { display: flex; align-items: center; gap: 8px; min-height: 28px; padding: 0 2px 0 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
-+:where(#settings-panel-board) .settings-root-path { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--text); }
-+:where(#settings-panel-board) .settings-root-chip { flex: none; padding: 0 6px; border: 1px solid #2c4a34; border-radius: 999px; background: #12251a; color: #7fd39a; font-size: 10px; line-height: 1.7; }
-+:where(#settings-panel-board) .settings-root-chip.bad { border-color: #57262a; background: #2a1517; color: #ff9c94; }
-+:where(#settings-panel-board) .settings-root-x { flex: none; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--dimmer); font: 12px/1 var(--mono); cursor: pointer; }
-+:where(#settings-panel-board) .settings-root-x:hover { background: var(--panel-2); color: var(--text); }
-+:where(#settings-panel-board) .settings-root-empty { margin-top: 6px; font-size: 11.5px; color: var(--dimmer); }
-+:where(#settings-panel-board) .settings-roots-add { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
-+:where(#settings-panel-board) .settings-roots-add input { flex: 1 1 auto; min-width: 0; box-sizing: border-box; height: 26px; padding: 4px 7px; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; font: 11.5px var(--mono); }
-+:where(#settings-panel-board) .settings-roots-add input::placeholder { color: var(--dimmer); }
-+:where(#settings-panel-board) .settings-roots-add button { flex: none; box-sizing: border-box; height: 26px; white-space: nowrap; padding: 0 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--text); font: 11px var(--mono); cursor: pointer; }
-+:where(#settings-panel-board) .settings-roots-add button:hover { border-color: #3b4757; }
- /* Settings → Updates > Release notes. One folded block per release, the newest open. The summary IS the heading a
-    reader scans — version, date, commit count — so a folded release still answers the three facts; the body is the
-    changelog's own group headings and bullets. `serving` marks the release this panel runs, which is the reader's
+diff --git a/lib/job-trees.js b/lib/job-trees.js
+index f1d4ebfa..1f7e0fbe 100644
+--- a/lib/job-trees.js
++++ b/lib/job-trees.js
+@@ -163,13 +163,29 @@ export async function resolveJobTree({ job = {}, projects = [], listWorktrees =
+  *              tree is returned, so the caller can create/claim its row and file the card there.
+  *   refuse   — the asked path is the parent of a run sitting in a worktree git does not list (or `ok:false` from
+  *              `resolveJobTree`): there is no real row to claim, so the press must say the row is missing rather
+- *              than quietly file the card on the checkout.
++ *              than quietly file the card on the checkout. The run's OWN tree is refused the same way when the
++ *              board has no project that contains it, but the sentence names the tree and what would give it a row.
+  */
+ export function attachMeaning({ job = {}, asked = "", resolved = null } = {}) {
+   const run = jobTreePath(job);
+   const root = worktreeRootIn(run);
+   if (!root) return { action: "allow", path: norm(asked), why: "" };
+   if (!isInsidePath(asked, root)) return { action: "allow", path: norm(asked), why: "" };
++  // The press names the run's OWN tree, not the checkout that contains it. When there is no row for it, the old
++  // sentence described the tree as "only the checkout that contains it", which is the opposite of what it is. Say
++  // what is missing and the one action that gives the tree a row: a scan root above the checkout, or git listing
++  // the tree under the project the board already knows.
++  if (key(asked) === key(root) && !resolved?.ok) {
++    const checkout = root.replace(/\/\.worktrees\/[^/]+$/i, "");
++    const parent = checkout.replace(/\/[^/]+$/, "");
++    return {
++      action: "refuse",
++      path: null,
++      why: resolved?.project
++        ? `the row for ${root} is missing - git worktree list for ${resolved.project.name} does not name that tree (${resolved.why || "no match"}), so the board has no row to file this card under`
++        : `the row for ${root} is missing - the board reads only the repositories directly inside a scan root, and ${checkout} is not one of them, so it has never read that tree. Add ${parent || checkout} under Settings > Board > Folders the board scans, then reload`,
++    };
++  }
+   if (resolved?.ok) {
+     const path = norm(resolved.path);
+     return { action: key(path) === key(asked) ? "allow" : "redirect", path, why: "" };
+diff --git a/public/app.js b/public/app.js
+index 6472108a..8d6c80bc 100644
+--- a/public/app.js
++++ b/public/app.js
+@@ -10015,37 +10015,36 @@ document.addEventListener("click", async (e) => {
+       if (fresh) {
+         // Built on demand: the card may be rendered before any worktree row exists.
+         const sel = fresh.querySelector("select");
++        const root = worktreeRootOf(cwd);
+         if (sel && !sel.options.length) sel.innerHTML = worktreeOptionsHtml();
++        // The picker's first answer is the tree the card is ALREADY in. When the board has no row for that tree,
++        // it is still the tree the attach is about, so offer it by name (project · tree) at the top of the list
++        // and select it, instead of opening on a disabled placeholder that names only the last path segment and
++        // leaving every other tree as the only thing the reader can press. The option value is the real tree
++        // path, so the press asks the server for that tree and the server's own refusal, if any, names it.
++        if (
++          sel &&
++          root &&
++          ![...sel.options].some((o) => o.value.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase() === root.toLowerCase())
++        ) {
++          const own = document.createElement("option");
++          own.value = root;
++          own.textContent = `${projectOfTree(root) || "worktree"} · ${root.split("/").pop()} (not read)`;
++          sel.insertBefore(own, sel.firstChild);
++        }
+         // Start from the tree the run is ACTUALLY in — its own `.worktrees/<name>` directory — and only then from the
+         // agent's recorded owner. Never from "whatever the list happens to start with": the first option is the
+         // project's own checkout, and a card for a run one directory down landed there with one press (job
+-        // 24695761). When the tree has no row yet, the picker says so instead of offering a parent.
++        // 24695761).
+         const want = matchWorktree(cwd)?.path || null;
+         const owner = conv && (conv.latest.ownerPath || conv.first.ownerPath);
+-        const root = worktreeRootOf(cwd);
+         const pick = (value) =>
+           value ? [...sel.options].find((o) => !o.disabled && o.value.toLowerCase() === String(value).toLowerCase()) || null : null;
+         const hit = pick(want) || (!root ? pick(owner) : null) || (root ? pick(root) : null);
+         const go = fresh.querySelector("[data-attach-go]");
+         if (sel) {
+-          delete sel.dataset.attachMissing;
+-          if (hit) {
+-            sel.value = hit.value;
+-            go?.removeAttribute("disabled");
+-          } else if (root) {
+-            // The row for the run's own tree is missing. The server creates it on a press (or refuses and says so);
+-            // the picker must not silently substitute the checkout above.
+-            const opt = document.createElement("option");
+-            opt.value = "";
+-            opt.disabled = true;
+-            opt.selected = true;
+-            opt.textContent = `— the row for ${root.split("/").pop()} is missing —`;
+-            sel.add(opt);
+-            sel.dataset.attachMissing = `the row for ${root} is missing — the board has not read that tree yet; press attach on the row once it appears, or reload the board`;
+-            go?.setAttribute("disabled", "disabled");
+-          } else {
+-            go?.removeAttribute("disabled");
+-          }
++          if (hit) sel.value = hit.value;
++          go?.removeAttribute("disabled");
+         }
+         sel?.focus();
+       }
+diff --git a/public/render-jobs.js b/public/render-jobs.js
+index 1190fbb6..296d9472 100644
+--- a/public/render-jobs.js
++++ b/public/render-jobs.js
+@@ -296,13 +296,27 @@ function conversationHtml(conv) {
+   // The run id is bookkeeping, but it is the id the reader quotes back to the gateway, and a row of its own
+   // cost a line of chrome for eight characters. It rides the cwd line now, beside the path it belongs to.
+   const runIdShort = latest.runId ? String(latest.runId).replace(/^run_/, "").slice(0, 8) : "";
++  // Why a card is in the unattached panel, said in the card's own terms. "no worktree" is false for a card whose
++  // cwd is `.worktrees/<name>`: the tree is right there in the path, and the board either has a row for it (the
++  // card is simply not attached) or has not read it yet. Name the project and the tree in the head's 12 px text,
++  // instead of leaving the only visible tree fact to the cwd line's 10.5 px path tail and its title attribute.
++  // The head stays path-derived on purpose: the first card paint can beat the scan, and a "not read" that was true
++  // then would sit there after the row arrived. The picker, built on the press, is where the live read state is said.
++  const cwdTree = worktreeRootOf(cwdHere);
++  const cwdTreeName = cwdTree ? cwdTree.split("/").pop() : "";
++  const cwdTreeProject = cwdTree ? projectOfTree(cwdTree) : "";
++  const whyHomeless = latest.ownerPath
++    ? `owner ${latest.ownerPath} (not in the scan)`
++    : cwdTree
++      ? `worktree ${cwdTreeName}${cwdTreeProject ? ` · ${cwdTreeProject}` : ""}`
++      : "no worktree";
+   // The head's meta line is built after the cwd line because the run id now lives there — it stays on this
+   // line only for a card with no cwd line to draw it on.
+   const meta = [
+     // cwd is no longer listed here: it has its own line under the card's head, on every card, titled
+     // or not.
+-    // Why this card is in the unattached panel: it has no worktree, or one that is not in the scan.
+-    homeless ? (latest.ownerPath ? `owner ${latest.ownerPath} (not in the scan)` : "no worktree") : null,
++    // Why this card is in the unattached panel: the answer is the `whyHomeless` fact built above.
++    homeless ? whyHomeless : null,
+     // With usage figures present the model leads that strip instead (it is what the numbers belong to);
+     // without them this line is the only place it can appear.
+     latest.stats ? null : latest.model ? `model ${latest.model}` : "(default model)",

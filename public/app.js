@@ -10015,37 +10015,36 @@ document.addEventListener("click", async (e) => {
       if (fresh) {
         // Built on demand: the card may be rendered before any worktree row exists.
         const sel = fresh.querySelector("select");
+        const root = worktreeRootOf(cwd);
         if (sel && !sel.options.length) sel.innerHTML = worktreeOptionsHtml();
+        // The picker's first answer is the tree the card is ALREADY in. When the board has no row for that tree,
+        // it is still the tree the attach is about, so offer it by name (project · tree) at the top of the list
+        // and select it, instead of opening on a disabled placeholder that names only the last path segment and
+        // leaving every other tree as the only thing the reader can press. The option value is the real tree
+        // path, so the press asks the server for that tree and the server's own refusal, if any, names it.
+        if (
+          sel &&
+          root &&
+          ![...sel.options].some((o) => o.value.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase() === root.toLowerCase())
+        ) {
+          const own = document.createElement("option");
+          own.value = root;
+          own.textContent = `${projectOfTree(root) || "worktree"} · ${root.split("/").pop()} (not read)`;
+          sel.insertBefore(own, sel.firstChild);
+        }
         // Start from the tree the run is ACTUALLY in — its own `.worktrees/<name>` directory — and only then from the
         // agent's recorded owner. Never from "whatever the list happens to start with": the first option is the
         // project's own checkout, and a card for a run one directory down landed there with one press (job
-        // 24695761). When the tree has no row yet, the picker says so instead of offering a parent.
+        // 24695761).
         const want = matchWorktree(cwd)?.path || null;
         const owner = conv && (conv.latest.ownerPath || conv.first.ownerPath);
-        const root = worktreeRootOf(cwd);
         const pick = (value) =>
           value ? [...sel.options].find((o) => !o.disabled && o.value.toLowerCase() === String(value).toLowerCase()) || null : null;
         const hit = pick(want) || (!root ? pick(owner) : null) || (root ? pick(root) : null);
         const go = fresh.querySelector("[data-attach-go]");
         if (sel) {
-          delete sel.dataset.attachMissing;
-          if (hit) {
-            sel.value = hit.value;
-            go?.removeAttribute("disabled");
-          } else if (root) {
-            // The row for the run's own tree is missing. The server creates it on a press (or refuses and says so);
-            // the picker must not silently substitute the checkout above.
-            const opt = document.createElement("option");
-            opt.value = "";
-            opt.disabled = true;
-            opt.selected = true;
-            opt.textContent = `— the row for ${root.split("/").pop()} is missing —`;
-            sel.add(opt);
-            sel.dataset.attachMissing = `the row for ${root} is missing — the board has not read that tree yet; press attach on the row once it appears, or reload the board`;
-            go?.setAttribute("disabled", "disabled");
-          } else {
-            go?.removeAttribute("disabled");
-          }
+          if (hit) sel.value = hit.value;
+          go?.removeAttribute("disabled");
         }
         sel?.focus();
       }

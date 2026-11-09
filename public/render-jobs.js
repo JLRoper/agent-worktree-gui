@@ -296,13 +296,27 @@ function conversationHtml(conv) {
   // The run id is bookkeeping, but it is the id the reader quotes back to the gateway, and a row of its own
   // cost a line of chrome for eight characters. It rides the cwd line now, beside the path it belongs to.
   const runIdShort = latest.runId ? String(latest.runId).replace(/^run_/, "").slice(0, 8) : "";
+  // Why a card is in the unattached panel, said in the card's own terms. "no worktree" is false for a card whose
+  // cwd is `.worktrees/<name>`: the tree is right there in the path, and the board either has a row for it (the
+  // card is simply not attached) or has not read it yet. Name the project and the tree in the head's 12 px text,
+  // instead of leaving the only visible tree fact to the cwd line's 10.5 px path tail and its title attribute.
+  // The head stays path-derived on purpose: the first card paint can beat the scan, and a "not read" that was true
+  // then would sit there after the row arrived. The picker, built on the press, is where the live read state is said.
+  const cwdTree = worktreeRootOf(cwdHere);
+  const cwdTreeName = cwdTree ? cwdTree.split("/").pop() : "";
+  const cwdTreeProject = cwdTree ? projectOfTree(cwdTree) : "";
+  const whyHomeless = latest.ownerPath
+    ? `owner ${latest.ownerPath} (not in the scan)`
+    : cwdTree
+      ? `worktree ${cwdTreeName}${cwdTreeProject ? ` · ${cwdTreeProject}` : ""}`
+      : "no worktree";
   // The head's meta line is built after the cwd line because the run id now lives there — it stays on this
   // line only for a card with no cwd line to draw it on.
   const meta = [
     // cwd is no longer listed here: it has its own line under the card's head, on every card, titled
     // or not.
-    // Why this card is in the unattached panel: it has no worktree, or one that is not in the scan.
-    homeless ? (latest.ownerPath ? `owner ${latest.ownerPath} (not in the scan)` : "no worktree") : null,
+    // Why this card is in the unattached panel: the answer is the `whyHomeless` fact built above.
+    homeless ? whyHomeless : null,
     // With usage figures present the model leads that strip instead (it is what the numbers belong to);
     // without them this line is the only place it can appear.
     latest.stats ? null : latest.model ? `model ${latest.model}` : "(default model)",

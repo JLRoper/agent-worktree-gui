@@ -4,56 +4,131 @@
   "stage": "baseline",
   "visit": 1,
   "surface": {
-    "brief": "Settings → Board (the #settings-panel-board tab) at http://127.0.0.1:7491/",
-    "briefText": "Run gui-improve again, this time on the Board tab of the panel General settings (settings-panel-board, data-settings-tab=\"board\"), using the new per-stage worktree architecture that is now on main: every stage cut from the one frozen parent, each stage tree recorded under its stage id so all of them stay attached in the chart. Walk baseline, implement, compare, review and correct through the panel driver, not as one local worker. Acceptance is the baseline capture at the recorded viewports and states, an implementation committed on its stage tree, a comparison page pairing every after shot with its before, the review gate free to reject with a note, and the change landed by PR so the improvement is code on main rather than only a ledger entry.",
-    "url": "http://127.0.0.1:7491/",
-    "selector": "#settings-panel-board",
-    "window": "#settings",
-    "change": "The 'Folders the board scans' block must read as one control group: a visible gap between each root's path, its state chip and its remove control, and the add-folder field given the width its row has left so its hint is readable.",
-    "changeSource": "Measured in this baseline: the root rows have no gap at all between the path and the 'exists' chip (0 px), 3.9 px between the chip and the remove ✕, and the add-folder input is 154 px of a 310 px row while its own placeholder needs 382.7 px, so it paints as 'an absolute folder pat…' and 74 px of the row stays empty. public/style.css has no rule for .settings-root/.settings-root-path/.settings-root-chip/.settings-root-x/.settings-roots-add at all — lib-side markup from public/app.js:15814-15821, unstyled.",
-    "reproduce": "The captured pixels are the served build's public/index.html, app.js and style.css (hashes in environment). To shoot the after state of an edit in this worktree, serve THIS worktree on a free port with its own PANEL_CONFIG (public/ is read per request; lib/ needs a restart) and follow the same steps at the same viewport and the same body scrollTop. The 340x520 surfaceFile depends only on the public files and the settings config the panel serves (the scan roots it lists), not on the live board behind the window.",
-    "scope": "The whole Settings window (#settings): its head, search box, tab strip and the visible Board panel. Hidden tabs are not painted and are excluded.",
-    "landing": "The change must land as code on main, not only as a change-set: apply it in this stage's tree, commit on that tree's branch, push the branch and open the PR against main with the comparison page linked from the PR body. A later correct visit that changes the accepted change-set must push to the same branch, so the PR head is the change the review accepted."
+    "brief": "The Board's Unattached agents section (#agents) at http://127.0.0.1:50375/",
+    "briefText": "Baseline stage of the gui-improve walk on the unattached-agents panel. Tonight a worker whose cwd was a worktree appeared in that section with no way to see which tree it belonged to. The round's brief: make the section say where an unattached card's directory actually is and offer the right tree.",
+    "url": "http://127.0.0.1:50375/",
+    "selector": "#agents",
+    "cardSelector": "#jobs .job[data-thread]",
+    "board": "the main board (no Settings window open); the section sits under the New agent card, above #projects",
+    "change": "The Unattached agents section must say where an unattached card's directory actually is, and its attach action must offer the tree that directory belongs to.",
+    "changeSource": "Measured in this baseline, on a card whose cwd is a worktree the board has not read: the head's meta line reads 'no worktree' while the card's own cwd line names a .worktrees path; the only visible tree fact is the 10.5 px dim tail of that line (full path only in its title attribute); and the attach picker opens on a disabled placeholder naming only the tree's last path segment, with Attach disabled and no option carrying the card's tree. The section head's hint also asserts the card has no worktree of its own.",
+    "reproduce": "This directory's capture.mjs boots its own sandbox of THIS tree and a fixture board (two scanned repos, one worktree each for the unread repo, two seeded unattached cards), then shoots the same three states. public/ is read per request by the panel; lib/ needs a restart. Re-run it against the implement stage's tree to produce the after set.",
+    "scope": "The whole #agents section: its .project-head bar and #jobs with every card. The rest of the board is in the full-page shot only."
+  },
+  "round": {
+    "branch": "wtgui/run-gui-improve-again-this-time-on-the-5ab4e1",
+    "base": "99f2bd777a2a24d1aedd903e9c4b24a4d9520c36",
+    "baseParent": "origin/main",
+    "note": "This stage tree is cut from origin/main alone. Before the stage ran, the branch carried one earlier commit on a Settings -> Board baseline cut at f0b80c7 (44b4278); that commit was preserved under the ref preserve/gui-improve-settings-board-baseline-44b4278 and removed from this branch by a reset to origin/main, so no other round's commits are in this branch's history. origin/main at capture time is 99f2bd7, one commit ahead of the tree's original cut, and the captured bytes are that commit's."
+  },
+  "supersedes": {
+    "path": "ledger/gui-improve/baseline/capture.json",
+    "previousSurface": "the task pipeline window's current-stage block (gui-improve, an earlier round)",
+    "previousSha256": "5f08576be42f7f294646c6c6e501f815998b663df4f46a11ae1c25e11a3dc4dc",
+    "previousBytes": 257234,
+    "previousCommittedAt": "6479816, 2026-11-09 02:55:06 -0500",
+    "note": "The pipeline's baseline artifact path is fixed, so this round replaces that file. Its siblings in this directory (pipeline-bundle.json, verdict.json and shots/*-pipeline*.png) are that earlier round's and are left untouched; they are not this stage's measurements."
+  },
+  "fixture": {
+    "root": "<sandbox>/fixture",
+    "scanRoots": [
+      "<sandbox>/fixture"
+    ],
+    "projects": {
+      "alpha": "<sandbox>/fixture/alpha",
+      "gamma": "<sandbox>/fixture/gamma",
+      "beta": "<sandbox>/fixture/outside/beta"
+    },
+    "rows": [
+      {
+        "project": "gamma",
+        "name": "gamma",
+        "path": "<sandbox>/fixture/gamma",
+        "branch": null
+      },
+      {
+        "project": "alpha",
+        "name": "alpha",
+        "path": "<sandbox>/fixture/alpha",
+        "branch": null
+      },
+      {
+        "project": "alpha",
+        "name": "feat-one",
+        "path": "<sandbox>/fixture/alpha/.worktrees/feat-one",
+        "branch": null
+      }
+    ],
+    "cards": [
+      {
+        "thread": "fixture-tree-worker",
+        "title": "unread-tree worker",
+        "cwd": "<sandbox>/fixture/outside/beta/.worktrees/feat-long-tree-name",
+        "ownerPath": null
+      },
+      {
+        "thread": "fixture-row-worker",
+        "title": "read-tree worker",
+        "cwd": "<sandbox>/fixture/alpha/.worktrees/feat-one",
+        "ownerPath": null
+      }
+    ],
+    "story": "alpha and gamma are scanned (alpha has the worktree feat-one). beta lives outside every scan root and has the worktree feat-long-tree-name, so the card pointed at it is a worker whose cwd is a worktree the board has no row for: tonight's shape.",
+    "scaleFactor": "Both counts are 1: the sandbox config's scanRoots and jobsFile are the only inputs."
   },
   "environment": {
     "browser": "Playwright Chromium 156.0.8078.4 (headless)",
     "deviceScaleFactor": 1,
-    "serverVersion": "1.71.0",
-    "serverUrl": "http://127.0.0.1:7491/",
-    "panelBuild": "191ceb6064ef",
-    "servedNote": "public/index.html is rewritten by the panel for cache-busting (stylesheet links carry ?v=<panel-build> and a meta panel-build tag is added), so its hash differs from the tree by that stamp and nothing else; app.js and style.css are byte-identical.",
+    "serverVersion": "1.76.1",
+    "serverUrl": "http://127.0.0.1:50375/",
+    "panelBuild": "5627cfbe3d6c",
+    "sandbox": {
+      "dir": "<sandbox>",
+      "jobsFile": "<sandbox>/logs/jobs.json",
+      "jobsRestored": 2,
+      "config": {
+        "scanRoots": [
+          "<sandbox>/fixture"
+        ],
+        "projects": [],
+        "threads": 2,
+        "jobsFile": "<sandbox>/logs/jobs.json"
+      },
+      "note": "A throwaway instance of this tree on a free port with its own store. The reader's own panel was not touched."
+    },
+    "servedNote": "public/index.html is rewritten by the panel for cache-busting (stylesheet links carry ?v=<panel-build> and a meta panel-build tag is added), so its hash differs from the tree by that stamp and nothing else; app.js and style.css are byte-identical to this tree.",
     "servedFiles": {
       "public/index.html": {
         "status": 200,
-        "sha256": "94abb2d1d963d2bceb1ce54d1631cbc87b57844130e30943d3e450f1322e2046",
-        "bytes": 129080,
+        "sha256": "e5b872833dc2973d383ab32cf6abd7770bb5b51e11841da1237e2fe397f86c14",
+        "bytes": 131260,
         "matchesTree": false
       },
       "public/app.js": {
         "status": 200,
-        "sha256": "6ab9451b18ae9deba3c252c2b3e660b6f2273c72c84a0781c18ae377fefe0ca6",
-        "bytes": 874681,
+        "sha256": "0dc40e49566ce18c9df7247cd9e235324c181567ee2dbd054c832aa5b638920e",
+        "bytes": 886971,
         "matchesTree": true
       },
       "public/style.css": {
         "status": 200,
-        "sha256": "c9031470361122f1a259a0d36e281ede1e7d7aa17791bffd0e880680f4a2917d",
-        "bytes": 309248,
+        "sha256": "02523ef4120925be231cc2b2a02f039ef434d8d813023eaa8c3c259be8afa4b9",
+        "bytes": 315475,
         "matchesTree": true
       }
     },
     "treeFiles": {
       "public/index.html": {
-        "sha256": "0ef3cddf633da06ecbaf8ca8c6ba004449112660e17b14bddc390ca43bad82e8",
-        "bytes": 128532
+        "sha256": "8c6a3bf4308778bd808d84d2b39e1e8396ccf7920fcff87433d4e70d205748e4",
+        "bytes": 130712
       },
       "public/app.js": {
-        "sha256": "6ab9451b18ae9deba3c252c2b3e660b6f2273c72c84a0781c18ae377fefe0ca6",
-        "bytes": 874681
+        "sha256": "0dc40e49566ce18c9df7247cd9e235324c181567ee2dbd054c832aa5b638920e",
+        "bytes": 886971
       },
       "public/style.css": {
-        "sha256": "c9031470361122f1a259a0d36e281ede1e7d7aa17791bffd0e880680f4a2917d",
-        "bytes": 309248
+        "sha256": "02523ef4120925be231cc2b2a02f039ef434d8d813023eaa8c3c259be8afa4b9",
+        "bytes": 315475
       }
     }
   },
@@ -62,47 +137,37 @@
       "name": "1440x900",
       "width": 1440,
       "height": 900
-    },
-    {
-      "name": "1280x800",
-      "width": 1280,
-      "height": 800
-    },
-    {
-      "name": "1024x768",
-      "width": 1024,
-      "height": 768
     }
   ],
   "states": [
     {
       "name": "open",
       "steps": [
-        "Fresh browser context at the viewport (no localStorage, so the settings window and tab are at their defaults).",
-        "goto http://127.0.0.1:7491/",
-        "wait for #btn-settings and for the first /api/state paint (2.5 s settle).",
-        "click #btn-settings to open the Settings window.",
-        "click #settings-tab-board (aria-selected=true on the Board tab; #settings-panel-board not hidden).",
-        "set #settings .settings-body scrollTop to 0 and wait two animation frames for layout to settle.",
-        "assert #settings is visible, #settings-panel-board is the only visible [data-settings-group], and #settings-search is empty."
+        "Fresh browser context at 1440x900, device scale factor 1 (no localStorage, so every section is at its default).",
+        "goto the panel base URL.",
+        "wait for #agents and for #jobs to hold two .job[data-thread] cards (the seeded unattached store).",
+        "assert #agents is not collapsed, #jobs is painted, no .attach-row is visible, and every card draws a .job-cwd line.",
+        "wait two animation frames, then a further 300 ms for the last paint."
       ]
     },
     {
-      "name": "presets",
+      "name": "expanded",
       "steps": [
         "Reach the open state exactly as above.",
-        "scroll #settings .settings-body so the first .settings-presets (the Board reorder pills) sits in the middle of the body: element.scrollIntoView({block:'center'}).",
-        "wait two animation frames and 250 ms; record the body's scrollTop in the inventory.",
-        "assert the Board tab is still selected and the panel is still the only visible group."
+        "click [data-attach-toggle=\"fixture-tree-worker\"] (the card whose cwd is a worktree the board has not read).",
+        "wait for that card's .attach-row to lose [hidden] and for its select to hold options.",
+        "assert the attach row is painted, the select is populated, and the Attach press carries its disabled state as measured.",
+        "wait two animation frames, then a further 300 ms for the last paint."
       ]
     },
     {
-      "name": "search",
+      "name": "collapsed",
       "steps": [
-        "Reach the open state exactly as above.",
-        "fill #settings-search with \"flash\" (the Board rows that answer it: Flash time, Flash on events, Grey flash).",
-        "wait 900 ms for the filter to paint, then assert the Board tab is still selected and the search badge reads the number of visible rows.",
-        "set #settings .settings-body scrollTop to 0 and wait two animation frames."
+        "Reach the expanded state exactly as above.",
+        "click .project-head[data-toggle-fixed=\"agents\"] (the section's own bar, not one of its buttons).",
+        "wait for #agents to carry .fixed-collapsed and for #jobs to report display:none and no painted box.",
+        "assert the bar is still painted and its label still names the section.",
+        "wait two animation frames, then a further 300 ms for the last paint."
       ]
     }
   ],
@@ -115,448 +180,285 @@
       },
       "state": "open",
       "steps": [
-        "Fresh browser context at the viewport (no localStorage, so the settings window and tab are at their defaults).",
-        "goto http://127.0.0.1:7491/",
-        "wait for #btn-settings and for the first /api/state paint (2.5 s settle).",
-        "click #btn-settings to open the Settings window.",
-        "click #settings-tab-board (aria-selected=true on the Board tab; #settings-panel-board not hidden).",
-        "set #settings .settings-body scrollTop to 0 and wait two animation frames for layout to settle.",
-        "assert #settings is visible, #settings-panel-board is the only visible [data-settings-group], and #settings-search is empty."
+        "Fresh browser context at 1440x900, device scale factor 1 (no localStorage, so every section is at its default).",
+        "goto the panel base URL.",
+        "wait for #agents and for #jobs to hold two .job[data-thread] cards (the seeded unattached store).",
+        "assert #agents is not collapsed, #jobs is painted, no .attach-row is visible, and every card draws a .job-cwd line.",
+        "wait two animation frames, then a further 300 ms for the last paint."
       ],
       "file": "ledger/gui-improve/baseline/shots/1440x900-open.png",
-      "sha256": "d62c6426f4b8bf6e0b18acb5a468aec487b6d38c21dbffba056e28c21c8457c7",
-      "bytes": 143234,
+      "sha256": "f1c8757bba9841d627f8bb458d9856193485f874133fe48277ec894ce62977a3",
+      "bytes": 148906,
       "pixels": {
         "width": 1440,
-        "height": 951
+        "height": 1383
       },
       "fullPage": true,
       "surfaceFile": "ledger/gui-improve/baseline/shots/1440x900-open-surface.png",
-      "surfaceSha256": "f054a442795a360cc0b99d2716d73079216f3e9c80580e25784994608d078fa2",
-      "surfaceBytes": 30003,
+      "surfaceSha256": "36fc1f714e16f66a666f4b71b1946996e58f4888d418e7ce942eacee4b12c763",
+      "surfaceBytes": 44479,
       "surfacePixels": {
-        "width": 340,
-        "height": 520
+        "width": 1408,
+        "height": 582
       },
       "pair": "surface",
-      "win": {
-        "x": 1084,
-        "y": 74,
-        "w": 340,
-        "h": 520,
-        "top": 74,
-        "bottom": 594,
-        "left": 1084,
-        "right": 1424
+      "section": {
+        "box": {
+          "x": 16,
+          "y": 319.6875,
+          "w": 1408,
+          "h": 580.34375,
+          "top": 319.6875,
+          "bottom": 900.03125,
+          "left": 16,
+          "right": 1424
+        },
+        "collapsed": false,
+        "headBox": {
+          "x": 17,
+          "y": 320.6875,
+          "w": 1406,
+          "h": 47,
+          "top": 320.6875,
+          "bottom": 367.6875,
+          "left": 17,
+          "right": 1423
+        },
+        "headText": "▾ Unattached agents agents with no worktree of their own — agents started in a worktree are listed under that worktree's row 2 unattached Minimize all Clear finished",
+        "label": "Unattached agents",
+        "pathHint": "agents with no worktree of their own — agents started in a worktree are listed under that worktree's row",
+        "chipText": "2 unattached"
       },
-      "panel": {
-        "x": 1099,
-        "y": 210,
-        "w": 310,
-        "h": 1598.921875,
-        "top": 210,
-        "bottom": 1808.921875,
-        "left": 1099,
-        "right": 1409
+      "jobs": {
+        "box": {
+          "x": 17,
+          "y": 367.6875,
+          "w": 1406,
+          "h": 531.34375,
+          "top": 367.6875,
+          "bottom": 899.03125,
+          "left": 17,
+          "right": 1423
+        },
+        "display": "block",
+        "hidden": false,
+        "scrollHeight": 531,
+        "childCount": 2
       },
-      "panelScrollHeight": 1599,
-      "bodyScrollHeight": 1617,
-      "bodyScrollTop": 0,
-      "visibleRows": 18,
-      "groups": [
+      "cardCount": 2,
+      "cards": [
         {
-          "label": "Board reorder ⓘ s",
-          "presetsBox": {
-            "x": 1099,
-            "y": 478.296875,
-            "w": 310,
-            "h": 21.84375,
-            "top": 478.296875,
-            "bottom": 500.140625,
-            "left": 1099,
+          "thread": "fixture-tree-worker",
+          "collapsed": false,
+          "box": {
+            "x": 17,
+            "y": 367.6875,
+            "w": 1406,
+            "h": 266.171875,
+            "top": 367.6875,
+            "bottom": 633.859375,
+            "left": 17,
+            "right": 1423
+          },
+          "headBox": {
+            "x": 31,
+            "y": 376.6875,
+            "w": 1378,
+            "h": 27.75,
+            "top": 376.6875,
+            "bottom": 404.4375,
+            "left": 31,
             "right": 1409
           },
-          "labelBox": {
-            "x": 1099,
-            "y": 444.296875,
-            "w": 310,
-            "h": 26,
-            "top": 444.296875,
-            "bottom": 470.296875,
-            "left": 1099,
-            "right": 1409
+          "title": null,
+          "pill": "complete",
+          "metaText": "no worktree · (default model)",
+          "metaTitle": null,
+          "cwd": {
+            "box": {
+              "x": 57,
+              "y": 404.4375,
+              "w": 1352,
+              "h": 17.390625,
+              "top": 404.4375,
+              "bottom": 421.828125,
+              "left": 57,
+              "right": 1409
+            },
+            "label": "cwd",
+            "pathText": "…/beta/.worktrees/feat-long-tree-name",
+            "pathTitle": null,
+            "pathBox": {
+              "x": 84.890625,
+              "y": 404.4375,
+              "w": 244.125,
+              "h": 17.390625,
+              "top": 404.4375,
+              "bottom": 421.828125,
+              "left": 84.890625,
+              "right": 329.015625
+            },
+            "pathClientWidth": 244,
+            "pathScrollWidth": 244,
+            "pathTruncated": false,
+            "lineTitle": "working directory: <sandbox>/fixture/outside/beta/.worktrees/feat-long-tree-name",
+            "rowChip": null,
+            "runChip": null,
+            "name": "fixture-tree-worker"
           },
-          "gapAbove": 8,
-          "gapBelow": 10,
-          "buttons": [
-            {
-              "text": "off",
-              "box": {
-                "x": 1099,
-                "y": 478.296875,
-                "w": 35.328125,
-                "h": 21.84375,
-                "top": 478.296875,
-                "bottom": 500.140625,
-                "left": 1099,
-                "right": 1134.328125
-              },
-              "cls": null
+          "attachToggle": {
+            "text": "⤵ attach",
+            "box": {
+              "x": 1213.328125,
+              "y": 377.40625,
+              "w": 66.078125,
+              "h": 20.296875,
+              "top": 377.40625,
+              "bottom": 397.703125,
+              "left": 1213.328125,
+              "right": 1279.40625
             },
-            {
-              "text": "5 s",
-              "box": {
-                "x": 1140.328125,
-                "y": 478.296875,
-                "w": 35.328125,
-                "h": 21.84375,
-                "top": 478.296875,
-                "bottom": 500.140625,
-                "left": 1140.328125,
-                "right": 1175.65625
-              },
-              "cls": null
+            "title": "attach this agent to a worktree — it then lives under that row"
+          },
+          "attachRow": {
+            "hidden": true,
+            "box": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0,
+              "top": 0,
+              "bottom": 0,
+              "left": 0,
+              "right": 0
             },
-            {
-              "text": "15 s",
+            "missing": null,
+            "selectedIndex": -1,
+            "selectedText": null,
+            "options": [],
+            "go": {
+              "text": "Attach",
+              "disabled": false,
               "box": {
-                "x": 1181.65625,
-                "y": 478.296875,
-                "w": 41.09375,
-                "h": 21.84375,
-                "top": 478.296875,
-                "bottom": 500.140625,
-                "left": 1181.65625,
-                "right": 1222.75
-              },
-              "cls": null
-            },
-            {
-              "text": "30 s",
-              "box": {
-                "x": 1228.75,
-                "y": 478.296875,
-                "w": 41.09375,
-                "h": 21.84375,
-                "top": 478.296875,
-                "bottom": 500.140625,
-                "left": 1228.75,
-                "right": 1269.84375
-              },
-              "cls": null
-            },
-            {
-              "text": "1 min",
-              "box": {
-                "x": 1275.84375,
-                "y": 478.296875,
-                "w": 46.875,
-                "h": 21.84375,
-                "top": 478.296875,
-                "bottom": 500.140625,
-                "left": 1275.84375,
-                "right": 1322.71875
-              },
-              "cls": null
+                "x": 0,
+                "y": 0,
+                "w": 0,
+                "h": 0,
+                "top": 0,
+                "bottom": 0,
+                "left": 0,
+                "right": 0
+              }
             }
-          ],
-          "widths": [
-            35.33,
-            35.33,
-            41.09,
-            41.09,
-            46.88
-          ],
-          "spread": 11.55,
-          "onCount": 0
+          }
         },
         {
-          "label": "Top worktrees per chart ⓘ rows",
-          "presetsBox": {
-            "x": 1099,
-            "y": 1152.4375,
-            "w": 310,
-            "h": 21.84375,
-            "top": 1152.4375,
-            "bottom": 1174.28125,
-            "left": 1099,
+          "thread": "fixture-row-worker",
+          "collapsed": false,
+          "box": {
+            "x": 17,
+            "y": 633.859375,
+            "w": 1406,
+            "h": 265.171875,
+            "top": 633.859375,
+            "bottom": 899.03125,
+            "left": 17,
+            "right": 1423
+          },
+          "headBox": {
+            "x": 31,
+            "y": 642.859375,
+            "w": 1378,
+            "h": 27.75,
+            "top": 642.859375,
+            "bottom": 670.609375,
+            "left": 31,
             "right": 1409
           },
-          "labelBox": {
-            "x": 1099,
-            "y": 1118.4375,
-            "w": 310,
-            "h": 26,
-            "top": 1118.4375,
-            "bottom": 1144.4375,
-            "left": 1099,
-            "right": 1409
+          "title": null,
+          "pill": "complete",
+          "metaText": "no worktree · (default model)",
+          "metaTitle": null,
+          "cwd": {
+            "box": {
+              "x": 57,
+              "y": 670.609375,
+              "w": 1352,
+              "h": 17.390625,
+              "top": 670.609375,
+              "bottom": 688,
+              "left": 57,
+              "right": 1409
+            },
+            "label": "cwd",
+            "pathText": "…/alpha/.worktrees/feat-one",
+            "pathTitle": null,
+            "pathBox": {
+              "x": 84.890625,
+              "y": 670.609375,
+              "w": 178.140625,
+              "h": 17.390625,
+              "top": 670.609375,
+              "bottom": 688,
+              "left": 84.890625,
+              "right": 263.03125
+            },
+            "pathClientWidth": 178,
+            "pathScrollWidth": 178,
+            "pathTruncated": false,
+            "lineTitle": "working directory: <sandbox>/fixture/alpha/.worktrees/feat-one",
+            "rowChip": null,
+            "runChip": null,
+            "name": "fixture-row-worker"
           },
-          "gapAbove": 8,
-          "gapBelow": 10,
-          "buttons": [
-            {
-              "text": "all",
-              "box": {
-                "x": 1099,
-                "y": 1152.4375,
-                "w": 35.328125,
-                "h": 21.84375,
-                "top": 1152.4375,
-                "bottom": 1174.28125,
-                "left": 1099,
-                "right": 1134.328125
-              },
-              "cls": null
+          "attachToggle": {
+            "text": "⤵ attach",
+            "box": {
+              "x": 1213.328125,
+              "y": 643.578125,
+              "w": 66.078125,
+              "h": 20.296875,
+              "top": 643.578125,
+              "bottom": 663.875,
+              "left": 1213.328125,
+              "right": 1279.40625
             },
-            {
-              "text": "3",
-              "box": {
-                "x": 1140.328125,
-                "y": 1152.4375,
-                "w": 23.78125,
-                "h": 21.84375,
-                "top": 1152.4375,
-                "bottom": 1174.28125,
-                "left": 1140.328125,
-                "right": 1164.109375
-              },
-              "cls": null
+            "title": "attach this agent to a worktree — it then lives under that row"
+          },
+          "attachRow": {
+            "hidden": true,
+            "box": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0,
+              "top": 0,
+              "bottom": 0,
+              "left": 0,
+              "right": 0
             },
-            {
-              "text": "5",
+            "missing": null,
+            "selectedIndex": -1,
+            "selectedText": null,
+            "options": [],
+            "go": {
+              "text": "Attach",
+              "disabled": false,
               "box": {
-                "x": 1170.109375,
-                "y": 1152.4375,
-                "w": 23.78125,
-                "h": 21.84375,
-                "top": 1152.4375,
-                "bottom": 1174.28125,
-                "left": 1170.109375,
-                "right": 1193.890625
-              },
-              "cls": null
-            },
-            {
-              "text": "10",
-              "box": {
-                "x": 1199.890625,
-                "y": 1152.4375,
-                "w": 29.546875,
-                "h": 21.84375,
-                "top": 1152.4375,
-                "bottom": 1174.28125,
-                "left": 1199.890625,
-                "right": 1229.4375
-              },
-              "cls": "on"
-            },
-            {
-              "text": "25",
-              "box": {
-                "x": 1235.4375,
-                "y": 1152.4375,
-                "w": 29.546875,
-                "h": 21.84375,
-                "top": 1152.4375,
-                "bottom": 1174.28125,
-                "left": 1235.4375,
-                "right": 1264.984375
-              },
-              "cls": null
+                "x": 0,
+                "y": 0,
+                "w": 0,
+                "h": 0,
+                "top": 0,
+                "bottom": 0,
+                "left": 0,
+                "right": 0
+              }
             }
-          ],
-          "widths": [
-            35.33,
-            23.78,
-            23.78,
-            29.55,
-            29.55
-          ],
-          "spread": 11.55,
-          "onCount": 1
+          }
         }
       ],
-      "roots": [
-        {
-          "cls": "settings-root",
-          "box": {
-            "x": 1099,
-            "y": 240.125,
-            "w": 310,
-            "h": 28,
-            "top": 240.125,
-            "bottom": 268.125,
-            "left": 1099,
-            "right": 1409
-          },
-          "kids": [
-            {
-              "tag": "span",
-              "cls": "mono settings-root-path",
-              "text": "C:/CodeReviews",
-              "box": {
-                "x": 1099,
-                "y": 248.125,
-                "w": 92.375,
-                "h": 14,
-                "top": 248.125,
-                "bottom": 262.125,
-                "left": 1099,
-                "right": 1191.375
-              },
-              "title": "C:/CodeReviews"
-            },
-            {
-              "tag": "span",
-              "cls": "settings-root-chip",
-              "text": "exists",
-              "box": {
-                "x": 1191.375,
-                "y": 244.125,
-                "w": 33.765625,
-                "h": 19,
-                "top": 244.125,
-                "bottom": 263.125,
-                "left": 1191.375,
-                "right": 1225.140625
-              },
-              "title": null
-            },
-            {
-              "tag": "button",
-              "cls": "settings-root-x",
-              "text": "✕",
-              "box": {
-                "x": 1228.984375,
-                "y": 240.125,
-                "w": 31.8125,
-                "h": 28,
-                "top": 240.125,
-                "bottom": 268.125,
-                "left": 1228.984375,
-                "right": 1260.796875
-              },
-              "title": "stop scanning C:/CodeReviews — the projects under it leave the board"
-            }
-          ],
-          "gaps": [
-            0,
-            3.84
-          ],
-          "minGap": 0
-        },
-        {
-          "cls": "settings-root",
-          "box": {
-            "x": 1099,
-            "y": 268.125,
-            "w": 310,
-            "h": 28,
-            "top": 268.125,
-            "bottom": 296.125,
-            "left": 1099,
-            "right": 1409
-          },
-          "kids": [
-            {
-              "tag": "span",
-              "cls": "mono settings-root-path",
-              "text": "C:/sefl-mvn-local",
-              "box": {
-                "x": 1099,
-                "y": 276.125,
-                "w": 112.171875,
-                "h": 14,
-                "top": 276.125,
-                "bottom": 290.125,
-                "left": 1099,
-                "right": 1211.171875
-              },
-              "title": "C:/sefl-mvn-local"
-            },
-            {
-              "tag": "span",
-              "cls": "settings-root-chip",
-              "text": "exists",
-              "box": {
-                "x": 1211.171875,
-                "y": 272.125,
-                "w": 33.765625,
-                "h": 19,
-                "top": 272.125,
-                "bottom": 291.125,
-                "left": 1211.171875,
-                "right": 1244.9375
-              },
-              "title": null
-            },
-            {
-              "tag": "button",
-              "cls": "settings-root-x",
-              "text": "✕",
-              "box": {
-                "x": 1248.78125,
-                "y": 268.125,
-                "w": 31.8125,
-                "h": 28,
-                "top": 268.125,
-                "bottom": 296.125,
-                "left": 1248.78125,
-                "right": 1280.59375
-              },
-              "title": "stop scanning C:/sefl-mvn-local — the projects under it leave the board"
-            }
-          ],
-          "gaps": [
-            0,
-            3.84
-          ],
-          "minGap": 0
-        }
-      ],
-      "rootAdd": {
-        "row": {
-          "x": 1099,
-          "y": 296.125,
-          "w": 310,
-          "h": 28,
-          "top": 296.125,
-          "bottom": 324.125,
-          "left": 1099,
-          "right": 1409
-        },
-        "input": {
-          "x": 1099,
-          "y": 301.125,
-          "w": 154,
-          "h": 20,
-          "top": 301.125,
-          "bottom": 321.125,
-          "left": 1099,
-          "right": 1253
-        },
-        "inputClientWidth": 150,
-        "inputBoxSizing": "border-box",
-        "placeholder": "an absolute folder path — e.g. the parent of your projects",
-        "placeholderPx": 382.66,
-        "placeholderRoom": 146,
-        "placeholderFits": false,
-        "button": {
-          "box": {
-            "x": 1256.84375,
-            "y": 296.125,
-            "w": 78.375,
-            "h": 28,
-            "top": 296.125,
-            "bottom": 324.125,
-            "left": 1256.84375,
-            "right": 1335.21875
-          },
-          "text": "Add folder"
-        },
-        "rowFree": 73.78
-      },
+      "overflow": [],
       "errors": []
     },
     {
@@ -565,447 +467,312 @@
         "width": 1440,
         "height": 900
       },
-      "state": "presets",
+      "state": "expanded",
       "steps": [
         "Reach the open state exactly as above.",
-        "scroll #settings .settings-body so the first .settings-presets (the Board reorder pills) sits in the middle of the body: element.scrollIntoView({block:'center'}).",
-        "wait two animation frames and 250 ms; record the body's scrollTop in the inventory.",
-        "assert the Board tab is still selected and the panel is still the only visible group."
+        "click [data-attach-toggle=\"fixture-tree-worker\"] (the card whose cwd is a worktree the board has not read).",
+        "wait for that card's .attach-row to lose [hidden] and for its select to hold options.",
+        "assert the attach row is painted, the select is populated, and the Attach press carries its disabled state as measured.",
+        "wait two animation frames, then a further 300 ms for the last paint."
       ],
-      "file": "ledger/gui-improve/baseline/shots/1440x900-presets.png",
-      "sha256": "f26355e0fb878e206ed199b699809a4b80643cc4b550d864044119fde70a7048",
-      "bytes": 144474,
+      "file": "ledger/gui-improve/baseline/shots/1440x900-expanded.png",
+      "sha256": "429a317b5fb6c42e3ebbe40538fa3b8e7e058a875502214e27b2b5a568b38bfc",
+      "bytes": 152698,
       "pixels": {
         "width": 1440,
-        "height": 956
+        "height": 1417
       },
       "fullPage": true,
-      "surfaceFile": "ledger/gui-improve/baseline/shots/1440x900-presets-surface.png",
-      "surfaceSha256": "7837f323e613bae9fd9448e4dd8858979d0baa94289c8d2ecc0d1f9ee2fbc087",
-      "surfaceBytes": 30277,
+      "surfaceFile": "ledger/gui-improve/baseline/shots/1440x900-expanded-surface.png",
+      "surfaceSha256": "e1fae4c8029b32984f3e4c95885e379e098b018f9518af6bf60e019dbf30b29a",
+      "surfaceBytes": 48432,
       "surfacePixels": {
-        "width": 340,
-        "height": 520
+        "width": 1408,
+        "height": 611
       },
       "pair": "surface",
-      "win": {
-        "x": 1084,
-        "y": 74,
-        "w": 340,
-        "h": 520,
-        "top": 74,
-        "bottom": 594,
-        "left": 1084,
-        "right": 1424
+      "section": {
+        "box": {
+          "x": 16,
+          "y": 290.6875,
+          "w": 1408,
+          "h": 609.34375,
+          "top": 290.6875,
+          "bottom": 900.03125,
+          "left": 16,
+          "right": 1424
+        },
+        "collapsed": false,
+        "headBox": {
+          "x": 17,
+          "y": 291.6875,
+          "w": 1406,
+          "h": 47,
+          "top": 291.6875,
+          "bottom": 338.6875,
+          "left": 17,
+          "right": 1423
+        },
+        "headText": "▾ Unattached agents agents with no worktree of their own — agents started in a worktree are listed under that worktree's row 2 unattached Minimize all Clear finished",
+        "label": "Unattached agents",
+        "pathHint": "agents with no worktree of their own — agents started in a worktree are listed under that worktree's row",
+        "chipText": "2 unattached"
       },
-      "panel": {
-        "x": 1099,
-        "y": 120,
-        "w": 310,
-        "h": 1598.921875,
-        "top": 120,
-        "bottom": 1718.921875,
-        "left": 1099,
-        "right": 1409
+      "jobs": {
+        "box": {
+          "x": 17,
+          "y": 338.6875,
+          "w": 1406,
+          "h": 560.34375,
+          "top": 338.6875,
+          "bottom": 899.03125,
+          "left": 17,
+          "right": 1423
+        },
+        "display": "block",
+        "hidden": false,
+        "scrollHeight": 560,
+        "childCount": 2
       },
-      "panelScrollHeight": 1599,
-      "bodyScrollHeight": 1617,
-      "bodyScrollTop": 90,
-      "visibleRows": 18,
-      "groups": [
+      "cardCount": 2,
+      "cards": [
         {
-          "label": "Board reorder ⓘ s",
-          "presetsBox": {
-            "x": 1099,
-            "y": 388.296875,
-            "w": 310,
-            "h": 21.84375,
-            "top": 388.296875,
-            "bottom": 410.140625,
-            "left": 1099,
+          "thread": "fixture-tree-worker",
+          "collapsed": false,
+          "box": {
+            "x": 17,
+            "y": 338.6875,
+            "w": 1406,
+            "h": 295.171875,
+            "top": 338.6875,
+            "bottom": 633.859375,
+            "left": 17,
+            "right": 1423
+          },
+          "headBox": {
+            "x": 31,
+            "y": 347.6875,
+            "w": 1378,
+            "h": 27.75,
+            "top": 347.6875,
+            "bottom": 375.4375,
+            "left": 31,
             "right": 1409
           },
-          "labelBox": {
-            "x": 1099,
-            "y": 354.296875,
-            "w": 310,
-            "h": 26,
-            "top": 354.296875,
-            "bottom": 380.296875,
-            "left": 1099,
-            "right": 1409
+          "title": null,
+          "pill": "complete",
+          "metaText": "no worktree · (default model)",
+          "metaTitle": null,
+          "cwd": {
+            "box": {
+              "x": 57,
+              "y": 375.4375,
+              "w": 1352,
+              "h": 17.390625,
+              "top": 375.4375,
+              "bottom": 392.828125,
+              "left": 57,
+              "right": 1409
+            },
+            "label": "cwd",
+            "pathText": "…/beta/.worktrees/feat-long-tree-name",
+            "pathTitle": null,
+            "pathBox": {
+              "x": 84.890625,
+              "y": 375.4375,
+              "w": 244.125,
+              "h": 17.390625,
+              "top": 375.4375,
+              "bottom": 392.828125,
+              "left": 84.890625,
+              "right": 329.015625
+            },
+            "pathClientWidth": 244,
+            "pathScrollWidth": 244,
+            "pathTruncated": false,
+            "lineTitle": "working directory: <sandbox>/fixture/outside/beta/.worktrees/feat-long-tree-name",
+            "rowChip": null,
+            "runChip": null,
+            "name": "fixture-tree-worker"
           },
-          "gapAbove": 8,
-          "gapBelow": 10,
-          "buttons": [
-            {
-              "text": "off",
-              "box": {
-                "x": 1099,
-                "y": 388.296875,
-                "w": 35.328125,
-                "h": 21.84375,
-                "top": 388.296875,
-                "bottom": 410.140625,
-                "left": 1099,
-                "right": 1134.328125
-              },
-              "cls": null
+          "attachToggle": {
+            "text": "⤵ attach",
+            "box": {
+              "x": 1213.328125,
+              "y": 348.40625,
+              "w": 66.078125,
+              "h": 20.296875,
+              "top": 348.40625,
+              "bottom": 368.703125,
+              "left": 1213.328125,
+              "right": 1279.40625
             },
-            {
-              "text": "5 s",
-              "box": {
-                "x": 1140.328125,
-                "y": 388.296875,
-                "w": 35.328125,
-                "h": 21.84375,
-                "top": 388.296875,
-                "bottom": 410.140625,
-                "left": 1140.328125,
-                "right": 1175.65625
-              },
-              "cls": null
+            "title": "attach this agent to a worktree — it then lives under that row"
+          },
+          "attachRow": {
+            "hidden": false,
+            "box": {
+              "x": 49,
+              "y": 398.828125,
+              "w": 1360,
+              "h": 24,
+              "top": 398.828125,
+              "bottom": 422.828125,
+              "left": 49,
+              "right": 1409
             },
-            {
-              "text": "15 s",
-              "box": {
-                "x": 1181.65625,
-                "y": 388.296875,
-                "w": 41.09375,
-                "h": 21.84375,
-                "top": 388.296875,
-                "bottom": 410.140625,
-                "left": 1181.65625,
-                "right": 1222.75
+            "missing": "the row for <sandbox>/fixture/outside/beta/.worktrees/feat-long-tree-name is missing — the board has not read that tree yet; press attach on the row once it appears, or reload the board",
+            "selectedIndex": 3,
+            "selectedText": "— the row for feat-long-tree-name is missing —",
+            "options": [
+              {
+                "value": "<sandbox>/fixture/alpha",
+                "text": "alpha · alpha (main)",
+                "selected": false,
+                "disabled": false
               },
-              "cls": null
-            },
-            {
-              "text": "30 s",
-              "box": {
-                "x": 1228.75,
-                "y": 388.296875,
-                "w": 41.09375,
-                "h": 21.84375,
-                "top": 388.296875,
-                "bottom": 410.140625,
-                "left": 1228.75,
-                "right": 1269.84375
+              {
+                "value": "<sandbox>/fixture/alpha/.worktrees/feat-one",
+                "text": "alpha · feat-one (feat-one)",
+                "selected": false,
+                "disabled": false
               },
-              "cls": null
-            },
-            {
-              "text": "1 min",
-              "box": {
-                "x": 1275.84375,
-                "y": 388.296875,
-                "w": 46.875,
-                "h": 21.84375,
-                "top": 388.296875,
-                "bottom": 410.140625,
-                "left": 1275.84375,
-                "right": 1322.71875
+              {
+                "value": "<sandbox>/fixture/gamma",
+                "text": "gamma · gamma (main)",
+                "selected": false,
+                "disabled": false
               },
-              "cls": null
+              {
+                "value": "",
+                "text": "— the row for feat-long-tree-name is missing —",
+                "selected": true,
+                "disabled": true
+              }
+            ],
+            "go": {
+              "text": "Attach",
+              "disabled": true,
+              "box": {
+                "x": 449.390625,
+                "y": 400.328125,
+                "w": 49.453125,
+                "h": 21,
+                "top": 400.328125,
+                "bottom": 421.328125,
+                "left": 449.390625,
+                "right": 498.84375
+              }
             }
-          ],
-          "widths": [
-            35.33,
-            35.33,
-            41.09,
-            41.09,
-            46.88
-          ],
-          "spread": 11.55,
-          "onCount": 0
+          }
         },
         {
-          "label": "Top worktrees per chart ⓘ rows",
-          "presetsBox": {
-            "x": 1099,
-            "y": 1062.4375,
-            "w": 310,
-            "h": 21.84375,
-            "top": 1062.4375,
-            "bottom": 1084.28125,
-            "left": 1099,
+          "thread": "fixture-row-worker",
+          "collapsed": false,
+          "box": {
+            "x": 17,
+            "y": 633.859375,
+            "w": 1406,
+            "h": 265.171875,
+            "top": 633.859375,
+            "bottom": 899.03125,
+            "left": 17,
+            "right": 1423
+          },
+          "headBox": {
+            "x": 31,
+            "y": 642.859375,
+            "w": 1378,
+            "h": 27.75,
+            "top": 642.859375,
+            "bottom": 670.609375,
+            "left": 31,
             "right": 1409
           },
-          "labelBox": {
-            "x": 1099,
-            "y": 1028.4375,
-            "w": 310,
-            "h": 26,
-            "top": 1028.4375,
-            "bottom": 1054.4375,
-            "left": 1099,
-            "right": 1409
+          "title": null,
+          "pill": "complete",
+          "metaText": "no worktree · (default model)",
+          "metaTitle": null,
+          "cwd": {
+            "box": {
+              "x": 57,
+              "y": 670.609375,
+              "w": 1352,
+              "h": 17.390625,
+              "top": 670.609375,
+              "bottom": 688,
+              "left": 57,
+              "right": 1409
+            },
+            "label": "cwd",
+            "pathText": "…/alpha/.worktrees/feat-one",
+            "pathTitle": null,
+            "pathBox": {
+              "x": 84.890625,
+              "y": 670.609375,
+              "w": 178.140625,
+              "h": 17.390625,
+              "top": 670.609375,
+              "bottom": 688,
+              "left": 84.890625,
+              "right": 263.03125
+            },
+            "pathClientWidth": 178,
+            "pathScrollWidth": 178,
+            "pathTruncated": false,
+            "lineTitle": "working directory: <sandbox>/fixture/alpha/.worktrees/feat-one",
+            "rowChip": null,
+            "runChip": null,
+            "name": "fixture-row-worker"
           },
-          "gapAbove": 8,
-          "gapBelow": 10,
-          "buttons": [
-            {
-              "text": "all",
-              "box": {
-                "x": 1099,
-                "y": 1062.4375,
-                "w": 35.328125,
-                "h": 21.84375,
-                "top": 1062.4375,
-                "bottom": 1084.28125,
-                "left": 1099,
-                "right": 1134.328125
-              },
-              "cls": null
+          "attachToggle": {
+            "text": "⤵ attach",
+            "box": {
+              "x": 1213.328125,
+              "y": 643.578125,
+              "w": 66.078125,
+              "h": 20.296875,
+              "top": 643.578125,
+              "bottom": 663.875,
+              "left": 1213.328125,
+              "right": 1279.40625
             },
-            {
-              "text": "3",
-              "box": {
-                "x": 1140.328125,
-                "y": 1062.4375,
-                "w": 23.78125,
-                "h": 21.84375,
-                "top": 1062.4375,
-                "bottom": 1084.28125,
-                "left": 1140.328125,
-                "right": 1164.109375
-              },
-              "cls": null
+            "title": "attach this agent to a worktree — it then lives under that row"
+          },
+          "attachRow": {
+            "hidden": true,
+            "box": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0,
+              "top": 0,
+              "bottom": 0,
+              "left": 0,
+              "right": 0
             },
-            {
-              "text": "5",
+            "missing": null,
+            "selectedIndex": -1,
+            "selectedText": null,
+            "options": [],
+            "go": {
+              "text": "Attach",
+              "disabled": false,
               "box": {
-                "x": 1170.109375,
-                "y": 1062.4375,
-                "w": 23.78125,
-                "h": 21.84375,
-                "top": 1062.4375,
-                "bottom": 1084.28125,
-                "left": 1170.109375,
-                "right": 1193.890625
-              },
-              "cls": null
-            },
-            {
-              "text": "10",
-              "box": {
-                "x": 1199.890625,
-                "y": 1062.4375,
-                "w": 29.546875,
-                "h": 21.84375,
-                "top": 1062.4375,
-                "bottom": 1084.28125,
-                "left": 1199.890625,
-                "right": 1229.4375
-              },
-              "cls": "on"
-            },
-            {
-              "text": "25",
-              "box": {
-                "x": 1235.4375,
-                "y": 1062.4375,
-                "w": 29.546875,
-                "h": 21.84375,
-                "top": 1062.4375,
-                "bottom": 1084.28125,
-                "left": 1235.4375,
-                "right": 1264.984375
-              },
-              "cls": null
+                "x": 0,
+                "y": 0,
+                "w": 0,
+                "h": 0,
+                "top": 0,
+                "bottom": 0,
+                "left": 0,
+                "right": 0
+              }
             }
-          ],
-          "widths": [
-            35.33,
-            23.78,
-            23.78,
-            29.55,
-            29.55
-          ],
-          "spread": 11.55,
-          "onCount": 1
+          }
         }
       ],
-      "roots": [
-        {
-          "cls": "settings-root",
-          "box": {
-            "x": 1099,
-            "y": 150.125,
-            "w": 310,
-            "h": 28,
-            "top": 150.125,
-            "bottom": 178.125,
-            "left": 1099,
-            "right": 1409
-          },
-          "kids": [
-            {
-              "tag": "span",
-              "cls": "mono settings-root-path",
-              "text": "C:/CodeReviews",
-              "box": {
-                "x": 1099,
-                "y": 158.125,
-                "w": 92.375,
-                "h": 14,
-                "top": 158.125,
-                "bottom": 172.125,
-                "left": 1099,
-                "right": 1191.375
-              },
-              "title": "C:/CodeReviews"
-            },
-            {
-              "tag": "span",
-              "cls": "settings-root-chip",
-              "text": "exists",
-              "box": {
-                "x": 1191.375,
-                "y": 154.125,
-                "w": 33.765625,
-                "h": 19,
-                "top": 154.125,
-                "bottom": 173.125,
-                "left": 1191.375,
-                "right": 1225.140625
-              },
-              "title": null
-            },
-            {
-              "tag": "button",
-              "cls": "settings-root-x",
-              "text": "✕",
-              "box": {
-                "x": 1228.984375,
-                "y": 150.125,
-                "w": 31.8125,
-                "h": 28,
-                "top": 150.125,
-                "bottom": 178.125,
-                "left": 1228.984375,
-                "right": 1260.796875
-              },
-              "title": "stop scanning C:/CodeReviews — the projects under it leave the board"
-            }
-          ],
-          "gaps": [
-            0,
-            3.84
-          ],
-          "minGap": 0
-        },
-        {
-          "cls": "settings-root",
-          "box": {
-            "x": 1099,
-            "y": 178.125,
-            "w": 310,
-            "h": 28,
-            "top": 178.125,
-            "bottom": 206.125,
-            "left": 1099,
-            "right": 1409
-          },
-          "kids": [
-            {
-              "tag": "span",
-              "cls": "mono settings-root-path",
-              "text": "C:/sefl-mvn-local",
-              "box": {
-                "x": 1099,
-                "y": 186.125,
-                "w": 112.171875,
-                "h": 14,
-                "top": 186.125,
-                "bottom": 200.125,
-                "left": 1099,
-                "right": 1211.171875
-              },
-              "title": "C:/sefl-mvn-local"
-            },
-            {
-              "tag": "span",
-              "cls": "settings-root-chip",
-              "text": "exists",
-              "box": {
-                "x": 1211.171875,
-                "y": 182.125,
-                "w": 33.765625,
-                "h": 19,
-                "top": 182.125,
-                "bottom": 201.125,
-                "left": 1211.171875,
-                "right": 1244.9375
-              },
-              "title": null
-            },
-            {
-              "tag": "button",
-              "cls": "settings-root-x",
-              "text": "✕",
-              "box": {
-                "x": 1248.78125,
-                "y": 178.125,
-                "w": 31.8125,
-                "h": 28,
-                "top": 178.125,
-                "bottom": 206.125,
-                "left": 1248.78125,
-                "right": 1280.59375
-              },
-              "title": "stop scanning C:/sefl-mvn-local — the projects under it leave the board"
-            }
-          ],
-          "gaps": [
-            0,
-            3.84
-          ],
-          "minGap": 0
-        }
-      ],
-      "rootAdd": {
-        "row": {
-          "x": 1099,
-          "y": 206.125,
-          "w": 310,
-          "h": 28,
-          "top": 206.125,
-          "bottom": 234.125,
-          "left": 1099,
-          "right": 1409
-        },
-        "input": {
-          "x": 1099,
-          "y": 211.125,
-          "w": 154,
-          "h": 20,
-          "top": 211.125,
-          "bottom": 231.125,
-          "left": 1099,
-          "right": 1253
-        },
-        "inputClientWidth": 150,
-        "inputBoxSizing": "border-box",
-        "placeholder": "an absolute folder path — e.g. the parent of your projects",
-        "placeholderPx": 382.66,
-        "placeholderRoom": 146,
-        "placeholderFits": false,
-        "button": {
-          "box": {
-            "x": 1256.84375,
-            "y": 206.125,
-            "w": 78.375,
-            "h": 28,
-            "top": 206.125,
-            "bottom": 234.125,
-            "left": 1256.84375,
-            "right": 1335.21875
-          },
-          "text": "Add folder"
-        },
-        "rowFree": 73.78
-      },
+      "overflow": [],
       "errors": []
     },
     {
@@ -1014,2347 +781,771 @@
         "width": 1440,
         "height": 900
       },
-      "state": "search",
+      "state": "collapsed",
       "steps": [
-        "Reach the open state exactly as above.",
-        "fill #settings-search with \"flash\" (the Board rows that answer it: Flash time, Flash on events, Grey flash).",
-        "wait 900 ms for the filter to paint, then assert the Board tab is still selected and the search badge reads the number of visible rows.",
-        "set #settings .settings-body scrollTop to 0 and wait two animation frames."
+        "Reach the expanded state exactly as above.",
+        "click .project-head[data-toggle-fixed=\"agents\"] (the section's own bar, not one of its buttons).",
+        "wait for #agents to carry .fixed-collapsed and for #jobs to report display:none and no painted box.",
+        "assert the bar is still painted and its label still names the section.",
+        "wait two animation frames, then a further 300 ms for the last paint."
       ],
-      "file": "ledger/gui-improve/baseline/shots/1440x900-search.png",
-      "sha256": "a05104a8369665373cd638c8ddebba2ce53ab76b3e8d38991fb174676c9479dc",
-      "bytes": 121872,
+      "file": "ledger/gui-improve/baseline/shots/1440x900-collapsed.png",
+      "sha256": "c2f91419b2def82e335d765a904fec2df11caf256347a74ca0d0e85c96dafad0",
+      "bytes": 112557,
       "pixels": {
         "width": 1440,
-        "height": 956
+        "height": 900
       },
       "fullPage": true,
-      "surfaceFile": "ledger/gui-improve/baseline/shots/1440x900-search-surface.png",
-      "surfaceSha256": "2d62ec289a8be5ebf07da39c5934c78cf984e46ea451adedf60be761e9f94dc9",
-      "surfaceBytes": 12949,
+      "surfaceFile": "ledger/gui-improve/baseline/shots/1440x900-collapsed-surface.png",
+      "surfaceSha256": "d3c761fe9345c905e7e6e85aae8e90a5dd88bf9c006e35e9a2e93d23a37c08c6",
+      "surfaceBytes": 7164,
       "surfacePixels": {
-        "width": 340,
-        "height": 520
+        "width": 1408,
+        "height": 49
       },
       "pair": "surface",
-      "win": {
-        "x": 1084,
-        "y": 74,
-        "w": 340,
-        "h": 520,
-        "top": 74,
-        "bottom": 594,
-        "left": 1084,
-        "right": 1424
+      "section": {
+        "box": {
+          "x": 16,
+          "y": 347.6875,
+          "w": 1408,
+          "h": 48,
+          "top": 347.6875,
+          "bottom": 395.6875,
+          "left": 16,
+          "right": 1424
+        },
+        "collapsed": true,
+        "headBox": {
+          "x": 17,
+          "y": 348.6875,
+          "w": 1406,
+          "h": 46,
+          "top": 348.6875,
+          "bottom": 394.6875,
+          "left": 17,
+          "right": 1423
+        },
+        "headText": "▸ Unattached agents agents with no worktree of their own — agents started in a worktree are listed under that worktree's row 2 unattached Minimize all Clear finished",
+        "label": "Unattached agents",
+        "pathHint": "agents with no worktree of their own — agents started in a worktree are listed under that worktree's row",
+        "chipText": "2 unattached"
       },
-      "panel": {
-        "x": 1099,
-        "y": 210,
-        "w": 310,
-        "h": 100,
-        "top": 210,
-        "bottom": 310,
-        "left": 1099,
-        "right": 1409
+      "jobs": {
+        "box": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0,
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        },
+        "display": "none",
+        "hidden": false,
+        "scrollHeight": 0,
+        "childCount": 2
       },
-      "panelScrollHeight": 100,
-      "bodyScrollHeight": 387,
-      "bodyScrollTop": 0,
-      "visibleRows": 3,
-      "groups": [],
-      "roots": [],
-      "rootAdd": null,
-      "errors": []
-    },
-    {
-      "viewport": "1280x800",
-      "viewportSize": {
-        "width": 1280,
-        "height": 800
-      },
-      "state": "open",
-      "steps": [
-        "Fresh browser context at the viewport (no localStorage, so the settings window and tab are at their defaults).",
-        "goto http://127.0.0.1:7491/",
-        "wait for #btn-settings and for the first /api/state paint (2.5 s settle).",
-        "click #btn-settings to open the Settings window.",
-        "click #settings-tab-board (aria-selected=true on the Board tab; #settings-panel-board not hidden).",
-        "set #settings .settings-body scrollTop to 0 and wait two animation frames for layout to settle.",
-        "assert #settings is visible, #settings-panel-board is the only visible [data-settings-group], and #settings-search is empty."
-      ],
-      "file": "ledger/gui-improve/baseline/shots/1280x800-open.png",
-      "sha256": "4460e58b32e79c36211e1551e6a3d86da73c075fb327783584cd14b01c1b44ce",
-      "bytes": 143980,
-      "pixels": {
-        "width": 1280,
-        "height": 999
-      },
-      "fullPage": true,
-      "surfaceFile": "ledger/gui-improve/baseline/shots/1280x800-open-surface.png",
-      "surfaceSha256": "61d18c409d08008947aff46bd5039b5a89dc9bcc0d4c46cfd5e0ac8e47154dad",
-      "surfaceBytes": 30003,
-      "surfacePixels": {
-        "width": 340,
-        "height": 520
-      },
-      "pair": "surface",
-      "win": {
-        "x": 924,
-        "y": 74,
-        "w": 340,
-        "h": 520,
-        "top": 74,
-        "bottom": 594,
-        "left": 924,
-        "right": 1264
-      },
-      "panel": {
-        "x": 939,
-        "y": 210,
-        "w": 310,
-        "h": 1598.921875,
-        "top": 210,
-        "bottom": 1808.921875,
-        "left": 939,
-        "right": 1249
-      },
-      "panelScrollHeight": 1599,
-      "bodyScrollHeight": 1617,
-      "bodyScrollTop": 0,
-      "visibleRows": 18,
-      "groups": [
+      "cardCount": 2,
+      "cards": [
         {
-          "label": "Board reorder ⓘ s",
-          "presetsBox": {
-            "x": 939,
-            "y": 478.296875,
-            "w": 310,
-            "h": 21.84375,
-            "top": 478.296875,
-            "bottom": 500.140625,
-            "left": 939,
-            "right": 1249
+          "thread": "fixture-tree-worker",
+          "collapsed": false,
+          "box": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0,
+            "top": 0,
+            "bottom": 0,
+            "left": 0,
+            "right": 0
           },
-          "labelBox": {
-            "x": 939,
-            "y": 444.296875,
-            "w": 310,
-            "h": 26,
-            "top": 444.296875,
-            "bottom": 470.296875,
-            "left": 939,
-            "right": 1249
+          "headBox": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0,
+            "top": 0,
+            "bottom": 0,
+            "left": 0,
+            "right": 0
           },
-          "gapAbove": 8,
-          "gapBelow": 10,
-          "buttons": [
-            {
-              "text": "off",
-              "box": {
-                "x": 939,
-                "y": 478.296875,
-                "w": 35.328125,
-                "h": 21.84375,
-                "top": 478.296875,
-                "bottom": 500.140625,
-                "left": 939,
-                "right": 974.328125
-              },
-              "cls": null
+          "title": null,
+          "pill": "complete",
+          "metaText": "no worktree · (default model)",
+          "metaTitle": null,
+          "cwd": {
+            "box": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0,
+              "top": 0,
+              "bottom": 0,
+              "left": 0,
+              "right": 0
             },
-            {
-              "text": "5 s",
-              "box": {
-                "x": 980.328125,
-                "y": 478.296875,
-                "w": 35.328125,
-                "h": 21.84375,
-                "top": 478.296875,
-                "bottom": 500.140625,
-                "left": 980.328125,
-                "right": 1015.65625
-              },
-              "cls": null
+            "label": "cwd",
+            "pathText": "…/beta/.worktrees/feat-long-tree-name",
+            "pathTitle": null,
+            "pathBox": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0,
+              "top": 0,
+              "bottom": 0,
+              "left": 0,
+              "right": 0
             },
-            {
-              "text": "15 s",
-              "box": {
-                "x": 1021.65625,
-                "y": 478.296875,
-                "w": 41.09375,
-                "h": 21.84375,
-                "top": 478.296875,
-                "bottom": 500.140625,
-                "left": 1021.65625,
-                "right": 1062.75
-              },
-              "cls": null
+            "pathClientWidth": 0,
+            "pathScrollWidth": 0,
+            "pathTruncated": false,
+            "lineTitle": "working directory: <sandbox>/fixture/outside/beta/.worktrees/feat-long-tree-name",
+            "rowChip": null,
+            "runChip": null,
+            "name": "fixture-tree-worker"
+          },
+          "attachToggle": {
+            "text": "⤵ attach",
+            "box": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0,
+              "top": 0,
+              "bottom": 0,
+              "left": 0,
+              "right": 0
             },
-            {
-              "text": "30 s",
-              "box": {
-                "x": 1068.75,
-                "y": 478.296875,
-                "w": 41.09375,
-                "h": 21.84375,
-                "top": 478.296875,
-                "bottom": 500.140625,
-                "left": 1068.75,
-                "right": 1109.84375
-              },
-              "cls": null
+            "title": "attach this agent to a worktree — it then lives under that row"
+          },
+          "attachRow": {
+            "hidden": false,
+            "box": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0,
+              "top": 0,
+              "bottom": 0,
+              "left": 0,
+              "right": 0
             },
-            {
-              "text": "1 min",
-              "box": {
-                "x": 1115.84375,
-                "y": 478.296875,
-                "w": 46.875,
-                "h": 21.84375,
-                "top": 478.296875,
-                "bottom": 500.140625,
-                "left": 1115.84375,
-                "right": 1162.71875
+            "missing": "the row for <sandbox>/fixture/outside/beta/.worktrees/feat-long-tree-name is missing — the board has not read that tree yet; press attach on the row once it appears, or reload the board",
+            "selectedIndex": 3,
+            "selectedText": "— the row for feat-long-tree-name is missing —",
+            "options": [
+              {
+                "value": "<sandbox>/fixture/alpha",
+                "text": "alpha · alpha (main)",
+                "selected": false,
+                "disabled": false
               },
-              "cls": null
+              {
+                "value": "<sandbox>/fixture/alpha/.worktrees/feat-one",
+                "text": "alpha · feat-one (feat-one)",
+                "selected": false,
+                "disabled": false
+              },
+              {
+                "value": "<sandbox>/fixture/gamma",
+                "text": "gamma · gamma (main)",
+                "selected": false,
+                "disabled": false
+              },
+              {
+                "value": "",
+                "text": "— the row for feat-long-tree-name is missing —",
+                "selected": true,
+                "disabled": true
+              }
+            ],
+            "go": {
+              "text": "Attach",
+              "disabled": true,
+              "box": {
+                "x": 0,
+                "y": 0,
+                "w": 0,
+                "h": 0,
+                "top": 0,
+                "bottom": 0,
+                "left": 0,
+                "right": 0
+              }
             }
-          ],
-          "widths": [
-            35.33,
-            35.33,
-            41.09,
-            41.09,
-            46.88
-          ],
-          "spread": 11.55,
-          "onCount": 0
+          }
         },
         {
-          "label": "Top worktrees per chart ⓘ rows",
-          "presetsBox": {
-            "x": 939,
-            "y": 1152.4375,
-            "w": 310,
-            "h": 21.84375,
-            "top": 1152.4375,
-            "bottom": 1174.28125,
-            "left": 939,
-            "right": 1249
+          "thread": "fixture-row-worker",
+          "collapsed": false,
+          "box": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0,
+            "top": 0,
+            "bottom": 0,
+            "left": 0,
+            "right": 0
           },
-          "labelBox": {
-            "x": 939,
-            "y": 1118.4375,
-            "w": 310,
-            "h": 26,
-            "top": 1118.4375,
-            "bottom": 1144.4375,
-            "left": 939,
-            "right": 1249
+          "headBox": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0,
+            "top": 0,
+            "bottom": 0,
+            "left": 0,
+            "right": 0
           },
-          "gapAbove": 8,
-          "gapBelow": 10,
-          "buttons": [
-            {
-              "text": "all",
-              "box": {
-                "x": 939,
-                "y": 1152.4375,
-                "w": 35.328125,
-                "h": 21.84375,
-                "top": 1152.4375,
-                "bottom": 1174.28125,
-                "left": 939,
-                "right": 974.328125
-              },
-              "cls": null
+          "title": null,
+          "pill": "complete",
+          "metaText": "no worktree · (default model)",
+          "metaTitle": null,
+          "cwd": {
+            "box": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0,
+              "top": 0,
+              "bottom": 0,
+              "left": 0,
+              "right": 0
             },
-            {
-              "text": "3",
-              "box": {
-                "x": 980.328125,
-                "y": 1152.4375,
-                "w": 23.78125,
-                "h": 21.84375,
-                "top": 1152.4375,
-                "bottom": 1174.28125,
-                "left": 980.328125,
-                "right": 1004.109375
-              },
-              "cls": null
+            "label": "cwd",
+            "pathText": "…/alpha/.worktrees/feat-one",
+            "pathTitle": null,
+            "pathBox": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0,
+              "top": 0,
+              "bottom": 0,
+              "left": 0,
+              "right": 0
             },
-            {
-              "text": "5",
-              "box": {
-                "x": 1010.109375,
-                "y": 1152.4375,
-                "w": 23.78125,
-                "h": 21.84375,
-                "top": 1152.4375,
-                "bottom": 1174.28125,
-                "left": 1010.109375,
-                "right": 1033.890625
-              },
-              "cls": null
+            "pathClientWidth": 0,
+            "pathScrollWidth": 0,
+            "pathTruncated": false,
+            "lineTitle": "working directory: <sandbox>/fixture/alpha/.worktrees/feat-one",
+            "rowChip": null,
+            "runChip": null,
+            "name": "fixture-row-worker"
+          },
+          "attachToggle": {
+            "text": "⤵ attach",
+            "box": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0,
+              "top": 0,
+              "bottom": 0,
+              "left": 0,
+              "right": 0
             },
-            {
-              "text": "10",
-              "box": {
-                "x": 1039.890625,
-                "y": 1152.4375,
-                "w": 29.546875,
-                "h": 21.84375,
-                "top": 1152.4375,
-                "bottom": 1174.28125,
-                "left": 1039.890625,
-                "right": 1069.4375
-              },
-              "cls": "on"
+            "title": "attach this agent to a worktree — it then lives under that row"
+          },
+          "attachRow": {
+            "hidden": true,
+            "box": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0,
+              "top": 0,
+              "bottom": 0,
+              "left": 0,
+              "right": 0
             },
-            {
-              "text": "25",
+            "missing": null,
+            "selectedIndex": -1,
+            "selectedText": null,
+            "options": [],
+            "go": {
+              "text": "Attach",
+              "disabled": false,
               "box": {
-                "x": 1075.4375,
-                "y": 1152.4375,
-                "w": 29.546875,
-                "h": 21.84375,
-                "top": 1152.4375,
-                "bottom": 1174.28125,
-                "left": 1075.4375,
-                "right": 1104.984375
-              },
-              "cls": null
+                "x": 0,
+                "y": 0,
+                "w": 0,
+                "h": 0,
+                "top": 0,
+                "bottom": 0,
+                "left": 0,
+                "right": 0
+              }
             }
-          ],
-          "widths": [
-            35.33,
-            23.78,
-            23.78,
-            29.55,
-            29.55
-          ],
-          "spread": 11.55,
-          "onCount": 1
+          }
         }
       ],
-      "roots": [
-        {
-          "cls": "settings-root",
-          "box": {
-            "x": 939,
-            "y": 240.125,
-            "w": 310,
-            "h": 28,
-            "top": 240.125,
-            "bottom": 268.125,
-            "left": 939,
-            "right": 1249
-          },
-          "kids": [
-            {
-              "tag": "span",
-              "cls": "mono settings-root-path",
-              "text": "C:/CodeReviews",
-              "box": {
-                "x": 939,
-                "y": 248.125,
-                "w": 92.375,
-                "h": 14,
-                "top": 248.125,
-                "bottom": 262.125,
-                "left": 939,
-                "right": 1031.375
-              },
-              "title": "C:/CodeReviews"
-            },
-            {
-              "tag": "span",
-              "cls": "settings-root-chip",
-              "text": "exists",
-              "box": {
-                "x": 1031.375,
-                "y": 244.125,
-                "w": 33.765625,
-                "h": 19,
-                "top": 244.125,
-                "bottom": 263.125,
-                "left": 1031.375,
-                "right": 1065.140625
-              },
-              "title": null
-            },
-            {
-              "tag": "button",
-              "cls": "settings-root-x",
-              "text": "✕",
-              "box": {
-                "x": 1068.984375,
-                "y": 240.125,
-                "w": 31.8125,
-                "h": 28,
-                "top": 240.125,
-                "bottom": 268.125,
-                "left": 1068.984375,
-                "right": 1100.796875
-              },
-              "title": "stop scanning C:/CodeReviews — the projects under it leave the board"
-            }
-          ],
-          "gaps": [
-            0,
-            3.84
-          ],
-          "minGap": 0
-        },
-        {
-          "cls": "settings-root",
-          "box": {
-            "x": 939,
-            "y": 268.125,
-            "w": 310,
-            "h": 28,
-            "top": 268.125,
-            "bottom": 296.125,
-            "left": 939,
-            "right": 1249
-          },
-          "kids": [
-            {
-              "tag": "span",
-              "cls": "mono settings-root-path",
-              "text": "C:/sefl-mvn-local",
-              "box": {
-                "x": 939,
-                "y": 276.125,
-                "w": 112.171875,
-                "h": 14,
-                "top": 276.125,
-                "bottom": 290.125,
-                "left": 939,
-                "right": 1051.171875
-              },
-              "title": "C:/sefl-mvn-local"
-            },
-            {
-              "tag": "span",
-              "cls": "settings-root-chip",
-              "text": "exists",
-              "box": {
-                "x": 1051.171875,
-                "y": 272.125,
-                "w": 33.765625,
-                "h": 19,
-                "top": 272.125,
-                "bottom": 291.125,
-                "left": 1051.171875,
-                "right": 1084.9375
-              },
-              "title": null
-            },
-            {
-              "tag": "button",
-              "cls": "settings-root-x",
-              "text": "✕",
-              "box": {
-                "x": 1088.78125,
-                "y": 268.125,
-                "w": 31.8125,
-                "h": 28,
-                "top": 268.125,
-                "bottom": 296.125,
-                "left": 1088.78125,
-                "right": 1120.59375
-              },
-              "title": "stop scanning C:/sefl-mvn-local — the projects under it leave the board"
-            }
-          ],
-          "gaps": [
-            0,
-            3.84
-          ],
-          "minGap": 0
-        }
-      ],
-      "rootAdd": {
-        "row": {
-          "x": 939,
-          "y": 296.125,
-          "w": 310,
-          "h": 28,
-          "top": 296.125,
-          "bottom": 324.125,
-          "left": 939,
-          "right": 1249
-        },
-        "input": {
-          "x": 939,
-          "y": 301.125,
-          "w": 154,
-          "h": 20,
-          "top": 301.125,
-          "bottom": 321.125,
-          "left": 939,
-          "right": 1093
-        },
-        "inputClientWidth": 150,
-        "inputBoxSizing": "border-box",
-        "placeholder": "an absolute folder path — e.g. the parent of your projects",
-        "placeholderPx": 382.66,
-        "placeholderRoom": 146,
-        "placeholderFits": false,
-        "button": {
-          "box": {
-            "x": 1096.84375,
-            "y": 296.125,
-            "w": 78.375,
-            "h": 28,
-            "top": 296.125,
-            "bottom": 324.125,
-            "left": 1096.84375,
-            "right": 1175.21875
-          },
-          "text": "Add folder"
-        },
-        "rowFree": 73.78
-      },
-      "errors": []
-    },
-    {
-      "viewport": "1280x800",
-      "viewportSize": {
-        "width": 1280,
-        "height": 800
-      },
-      "state": "presets",
-      "steps": [
-        "Reach the open state exactly as above.",
-        "scroll #settings .settings-body so the first .settings-presets (the Board reorder pills) sits in the middle of the body: element.scrollIntoView({block:'center'}).",
-        "wait two animation frames and 250 ms; record the body's scrollTop in the inventory.",
-        "assert the Board tab is still selected and the panel is still the only visible group."
-      ],
-      "file": "ledger/gui-improve/baseline/shots/1280x800-presets.png",
-      "sha256": "ad5b1eb46e2ae867719bdbde3aae523840871bf3439970a6f0e9b446db3c9a20",
-      "bytes": 144660,
-      "pixels": {
-        "width": 1280,
-        "height": 1004
-      },
-      "fullPage": true,
-      "surfaceFile": "ledger/gui-improve/baseline/shots/1280x800-presets-surface.png",
-      "surfaceSha256": "6c6a3c3d71b9349a7f3437ff744cff351e2d4159ef4761bec603df959cd5f664",
-      "surfaceBytes": 30354,
-      "surfacePixels": {
-        "width": 340,
-        "height": 520
-      },
-      "pair": "surface",
-      "win": {
-        "x": 924,
-        "y": 74,
-        "w": 340,
-        "h": 520,
-        "top": 74,
-        "bottom": 594,
-        "left": 924,
-        "right": 1264
-      },
-      "panel": {
-        "x": 939,
-        "y": 120,
-        "w": 310,
-        "h": 1598.921875,
-        "top": 120,
-        "bottom": 1718.921875,
-        "left": 939,
-        "right": 1249
-      },
-      "panelScrollHeight": 1599,
-      "bodyScrollHeight": 1617,
-      "bodyScrollTop": 90,
-      "visibleRows": 18,
-      "groups": [
-        {
-          "label": "Board reorder ⓘ s",
-          "presetsBox": {
-            "x": 939,
-            "y": 388.296875,
-            "w": 310,
-            "h": 21.84375,
-            "top": 388.296875,
-            "bottom": 410.140625,
-            "left": 939,
-            "right": 1249
-          },
-          "labelBox": {
-            "x": 939,
-            "y": 354.296875,
-            "w": 310,
-            "h": 26,
-            "top": 354.296875,
-            "bottom": 380.296875,
-            "left": 939,
-            "right": 1249
-          },
-          "gapAbove": 8,
-          "gapBelow": 10,
-          "buttons": [
-            {
-              "text": "off",
-              "box": {
-                "x": 939,
-                "y": 388.296875,
-                "w": 35.328125,
-                "h": 21.84375,
-                "top": 388.296875,
-                "bottom": 410.140625,
-                "left": 939,
-                "right": 974.328125
-              },
-              "cls": null
-            },
-            {
-              "text": "5 s",
-              "box": {
-                "x": 980.328125,
-                "y": 388.296875,
-                "w": 35.328125,
-                "h": 21.84375,
-                "top": 388.296875,
-                "bottom": 410.140625,
-                "left": 980.328125,
-                "right": 1015.65625
-              },
-              "cls": null
-            },
-            {
-              "text": "15 s",
-              "box": {
-                "x": 1021.65625,
-                "y": 388.296875,
-                "w": 41.09375,
-                "h": 21.84375,
-                "top": 388.296875,
-                "bottom": 410.140625,
-                "left": 1021.65625,
-                "right": 1062.75
-              },
-              "cls": null
-            },
-            {
-              "text": "30 s",
-              "box": {
-                "x": 1068.75,
-                "y": 388.296875,
-                "w": 41.09375,
-                "h": 21.84375,
-                "top": 388.296875,
-                "bottom": 410.140625,
-                "left": 1068.75,
-                "right": 1109.84375
-              },
-              "cls": null
-            },
-            {
-              "text": "1 min",
-              "box": {
-                "x": 1115.84375,
-                "y": 388.296875,
-                "w": 46.875,
-                "h": 21.84375,
-                "top": 388.296875,
-                "bottom": 410.140625,
-                "left": 1115.84375,
-                "right": 1162.71875
-              },
-              "cls": null
-            }
-          ],
-          "widths": [
-            35.33,
-            35.33,
-            41.09,
-            41.09,
-            46.88
-          ],
-          "spread": 11.55,
-          "onCount": 0
-        },
-        {
-          "label": "Top worktrees per chart ⓘ rows",
-          "presetsBox": {
-            "x": 939,
-            "y": 1062.4375,
-            "w": 310,
-            "h": 21.84375,
-            "top": 1062.4375,
-            "bottom": 1084.28125,
-            "left": 939,
-            "right": 1249
-          },
-          "labelBox": {
-            "x": 939,
-            "y": 1028.4375,
-            "w": 310,
-            "h": 26,
-            "top": 1028.4375,
-            "bottom": 1054.4375,
-            "left": 939,
-            "right": 1249
-          },
-          "gapAbove": 8,
-          "gapBelow": 10,
-          "buttons": [
-            {
-              "text": "all",
-              "box": {
-                "x": 939,
-                "y": 1062.4375,
-                "w": 35.328125,
-                "h": 21.84375,
-                "top": 1062.4375,
-                "bottom": 1084.28125,
-                "left": 939,
-                "right": 974.328125
-              },
-              "cls": null
-            },
-            {
-              "text": "3",
-              "box": {
-                "x": 980.328125,
-                "y": 1062.4375,
-                "w": 23.78125,
-                "h": 21.84375,
-                "top": 1062.4375,
-                "bottom": 1084.28125,
-                "left": 980.328125,
-                "right": 1004.109375
-              },
-              "cls": null
-            },
-            {
-              "text": "5",
-              "box": {
-                "x": 1010.109375,
-                "y": 1062.4375,
-                "w": 23.78125,
-                "h": 21.84375,
-                "top": 1062.4375,
-                "bottom": 1084.28125,
-                "left": 1010.109375,
-                "right": 1033.890625
-              },
-              "cls": null
-            },
-            {
-              "text": "10",
-              "box": {
-                "x": 1039.890625,
-                "y": 1062.4375,
-                "w": 29.546875,
-                "h": 21.84375,
-                "top": 1062.4375,
-                "bottom": 1084.28125,
-                "left": 1039.890625,
-                "right": 1069.4375
-              },
-              "cls": "on"
-            },
-            {
-              "text": "25",
-              "box": {
-                "x": 1075.4375,
-                "y": 1062.4375,
-                "w": 29.546875,
-                "h": 21.84375,
-                "top": 1062.4375,
-                "bottom": 1084.28125,
-                "left": 1075.4375,
-                "right": 1104.984375
-              },
-              "cls": null
-            }
-          ],
-          "widths": [
-            35.33,
-            23.78,
-            23.78,
-            29.55,
-            29.55
-          ],
-          "spread": 11.55,
-          "onCount": 1
-        }
-      ],
-      "roots": [
-        {
-          "cls": "settings-root",
-          "box": {
-            "x": 939,
-            "y": 150.125,
-            "w": 310,
-            "h": 28,
-            "top": 150.125,
-            "bottom": 178.125,
-            "left": 939,
-            "right": 1249
-          },
-          "kids": [
-            {
-              "tag": "span",
-              "cls": "mono settings-root-path",
-              "text": "C:/CodeReviews",
-              "box": {
-                "x": 939,
-                "y": 158.125,
-                "w": 92.375,
-                "h": 14,
-                "top": 158.125,
-                "bottom": 172.125,
-                "left": 939,
-                "right": 1031.375
-              },
-              "title": "C:/CodeReviews"
-            },
-            {
-              "tag": "span",
-              "cls": "settings-root-chip",
-              "text": "exists",
-              "box": {
-                "x": 1031.375,
-                "y": 154.125,
-                "w": 33.765625,
-                "h": 19,
-                "top": 154.125,
-                "bottom": 173.125,
-                "left": 1031.375,
-                "right": 1065.140625
-              },
-              "title": null
-            },
-            {
-              "tag": "button",
-              "cls": "settings-root-x",
-              "text": "✕",
-              "box": {
-                "x": 1068.984375,
-                "y": 150.125,
-                "w": 31.8125,
-                "h": 28,
-                "top": 150.125,
-                "bottom": 178.125,
-                "left": 1068.984375,
-                "right": 1100.796875
-              },
-              "title": "stop scanning C:/CodeReviews — the projects under it leave the board"
-            }
-          ],
-          "gaps": [
-            0,
-            3.84
-          ],
-          "minGap": 0
-        },
-        {
-          "cls": "settings-root",
-          "box": {
-            "x": 939,
-            "y": 178.125,
-            "w": 310,
-            "h": 28,
-            "top": 178.125,
-            "bottom": 206.125,
-            "left": 939,
-            "right": 1249
-          },
-          "kids": [
-            {
-              "tag": "span",
-              "cls": "mono settings-root-path",
-              "text": "C:/sefl-mvn-local",
-              "box": {
-                "x": 939,
-                "y": 186.125,
-                "w": 112.171875,
-                "h": 14,
-                "top": 186.125,
-                "bottom": 200.125,
-                "left": 939,
-                "right": 1051.171875
-              },
-              "title": "C:/sefl-mvn-local"
-            },
-            {
-              "tag": "span",
-              "cls": "settings-root-chip",
-              "text": "exists",
-              "box": {
-                "x": 1051.171875,
-                "y": 182.125,
-                "w": 33.765625,
-                "h": 19,
-                "top": 182.125,
-                "bottom": 201.125,
-                "left": 1051.171875,
-                "right": 1084.9375
-              },
-              "title": null
-            },
-            {
-              "tag": "button",
-              "cls": "settings-root-x",
-              "text": "✕",
-              "box": {
-                "x": 1088.78125,
-                "y": 178.125,
-                "w": 31.8125,
-                "h": 28,
-                "top": 178.125,
-                "bottom": 206.125,
-                "left": 1088.78125,
-                "right": 1120.59375
-              },
-              "title": "stop scanning C:/sefl-mvn-local — the projects under it leave the board"
-            }
-          ],
-          "gaps": [
-            0,
-            3.84
-          ],
-          "minGap": 0
-        }
-      ],
-      "rootAdd": {
-        "row": {
-          "x": 939,
-          "y": 206.125,
-          "w": 310,
-          "h": 28,
-          "top": 206.125,
-          "bottom": 234.125,
-          "left": 939,
-          "right": 1249
-        },
-        "input": {
-          "x": 939,
-          "y": 211.125,
-          "w": 154,
-          "h": 20,
-          "top": 211.125,
-          "bottom": 231.125,
-          "left": 939,
-          "right": 1093
-        },
-        "inputClientWidth": 150,
-        "inputBoxSizing": "border-box",
-        "placeholder": "an absolute folder path — e.g. the parent of your projects",
-        "placeholderPx": 382.66,
-        "placeholderRoom": 146,
-        "placeholderFits": false,
-        "button": {
-          "box": {
-            "x": 1096.84375,
-            "y": 206.125,
-            "w": 78.375,
-            "h": 28,
-            "top": 206.125,
-            "bottom": 234.125,
-            "left": 1096.84375,
-            "right": 1175.21875
-          },
-          "text": "Add folder"
-        },
-        "rowFree": 73.78
-      },
-      "errors": []
-    },
-    {
-      "viewport": "1280x800",
-      "viewportSize": {
-        "width": 1280,
-        "height": 800
-      },
-      "state": "search",
-      "steps": [
-        "Reach the open state exactly as above.",
-        "fill #settings-search with \"flash\" (the Board rows that answer it: Flash time, Flash on events, Grey flash).",
-        "wait 900 ms for the filter to paint, then assert the Board tab is still selected and the search badge reads the number of visible rows.",
-        "set #settings .settings-body scrollTop to 0 and wait two animation frames."
-      ],
-      "file": "ledger/gui-improve/baseline/shots/1280x800-search.png",
-      "sha256": "a493676838d49bf35b50778c915c0c0acf90b31736de3fbc7a6c8e42994195ec",
-      "bytes": 122752,
-      "pixels": {
-        "width": 1280,
-        "height": 1004
-      },
-      "fullPage": true,
-      "surfaceFile": "ledger/gui-improve/baseline/shots/1280x800-search-surface.png",
-      "surfaceSha256": "561a532072d03e19f462e7f88eccc383b01b7267354d8a5d213397b97d3a7d7e",
-      "surfaceBytes": 12953,
-      "surfacePixels": {
-        "width": 340,
-        "height": 520
-      },
-      "pair": "surface",
-      "win": {
-        "x": 924,
-        "y": 74,
-        "w": 340,
-        "h": 520,
-        "top": 74,
-        "bottom": 594,
-        "left": 924,
-        "right": 1264
-      },
-      "panel": {
-        "x": 939,
-        "y": 210,
-        "w": 310,
-        "h": 100,
-        "top": 210,
-        "bottom": 310,
-        "left": 939,
-        "right": 1249
-      },
-      "panelScrollHeight": 100,
-      "bodyScrollHeight": 387,
-      "bodyScrollTop": 0,
-      "visibleRows": 3,
-      "groups": [],
-      "roots": [],
-      "rootAdd": null,
-      "errors": []
-    },
-    {
-      "viewport": "1024x768",
-      "viewportSize": {
-        "width": 1024,
-        "height": 768
-      },
-      "state": "open",
-      "steps": [
-        "Fresh browser context at the viewport (no localStorage, so the settings window and tab are at their defaults).",
-        "goto http://127.0.0.1:7491/",
-        "wait for #btn-settings and for the first /api/state paint (2.5 s settle).",
-        "click #btn-settings to open the Settings window.",
-        "click #settings-tab-board (aria-selected=true on the Board tab; #settings-panel-board not hidden).",
-        "set #settings .settings-body scrollTop to 0 and wait two animation frames for layout to settle.",
-        "assert #settings is visible, #settings-panel-board is the only visible [data-settings-group], and #settings-search is empty."
-      ],
-      "file": "ledger/gui-improve/baseline/shots/1024x768-open.png",
-      "sha256": "3b3aba11a66dba9042c9292a00ce881ea3201c79141bbf9716dfdd91902247d0",
-      "bytes": 144814,
-      "pixels": {
-        "width": 1024,
-        "height": 1103
-      },
-      "fullPage": true,
-      "surfaceFile": "ledger/gui-improve/baseline/shots/1024x768-open-surface.png",
-      "surfaceSha256": "9630de490e7f66753fc5827aad68bd097a1549ae6a0a5bf8b01595e48064b1d1",
-      "surfaceBytes": 30004,
-      "surfacePixels": {
-        "width": 340,
-        "height": 520
-      },
-      "pair": "surface",
-      "win": {
-        "x": 668,
-        "y": 74,
-        "w": 340,
-        "h": 520,
-        "top": 74,
-        "bottom": 594,
-        "left": 668,
-        "right": 1008
-      },
-      "panel": {
-        "x": 683,
-        "y": 210,
-        "w": 310,
-        "h": 1598.921875,
-        "top": 210,
-        "bottom": 1808.921875,
-        "left": 683,
-        "right": 993
-      },
-      "panelScrollHeight": 1599,
-      "bodyScrollHeight": 1617,
-      "bodyScrollTop": 0,
-      "visibleRows": 18,
-      "groups": [
-        {
-          "label": "Board reorder ⓘ s",
-          "presetsBox": {
-            "x": 683,
-            "y": 478.296875,
-            "w": 310,
-            "h": 21.84375,
-            "top": 478.296875,
-            "bottom": 500.140625,
-            "left": 683,
-            "right": 993
-          },
-          "labelBox": {
-            "x": 683,
-            "y": 444.296875,
-            "w": 310,
-            "h": 26,
-            "top": 444.296875,
-            "bottom": 470.296875,
-            "left": 683,
-            "right": 993
-          },
-          "gapAbove": 8,
-          "gapBelow": 10,
-          "buttons": [
-            {
-              "text": "off",
-              "box": {
-                "x": 683,
-                "y": 478.296875,
-                "w": 35.328125,
-                "h": 21.84375,
-                "top": 478.296875,
-                "bottom": 500.140625,
-                "left": 683,
-                "right": 718.328125
-              },
-              "cls": null
-            },
-            {
-              "text": "5 s",
-              "box": {
-                "x": 724.328125,
-                "y": 478.296875,
-                "w": 35.328125,
-                "h": 21.84375,
-                "top": 478.296875,
-                "bottom": 500.140625,
-                "left": 724.328125,
-                "right": 759.65625
-              },
-              "cls": null
-            },
-            {
-              "text": "15 s",
-              "box": {
-                "x": 765.65625,
-                "y": 478.296875,
-                "w": 41.09375,
-                "h": 21.84375,
-                "top": 478.296875,
-                "bottom": 500.140625,
-                "left": 765.65625,
-                "right": 806.75
-              },
-              "cls": null
-            },
-            {
-              "text": "30 s",
-              "box": {
-                "x": 812.75,
-                "y": 478.296875,
-                "w": 41.09375,
-                "h": 21.84375,
-                "top": 478.296875,
-                "bottom": 500.140625,
-                "left": 812.75,
-                "right": 853.84375
-              },
-              "cls": null
-            },
-            {
-              "text": "1 min",
-              "box": {
-                "x": 859.84375,
-                "y": 478.296875,
-                "w": 46.875,
-                "h": 21.84375,
-                "top": 478.296875,
-                "bottom": 500.140625,
-                "left": 859.84375,
-                "right": 906.71875
-              },
-              "cls": null
-            }
-          ],
-          "widths": [
-            35.33,
-            35.33,
-            41.09,
-            41.09,
-            46.88
-          ],
-          "spread": 11.55,
-          "onCount": 0
-        },
-        {
-          "label": "Top worktrees per chart ⓘ rows",
-          "presetsBox": {
-            "x": 683,
-            "y": 1152.4375,
-            "w": 310,
-            "h": 21.84375,
-            "top": 1152.4375,
-            "bottom": 1174.28125,
-            "left": 683,
-            "right": 993
-          },
-          "labelBox": {
-            "x": 683,
-            "y": 1118.4375,
-            "w": 310,
-            "h": 26,
-            "top": 1118.4375,
-            "bottom": 1144.4375,
-            "left": 683,
-            "right": 993
-          },
-          "gapAbove": 8,
-          "gapBelow": 10,
-          "buttons": [
-            {
-              "text": "all",
-              "box": {
-                "x": 683,
-                "y": 1152.4375,
-                "w": 35.328125,
-                "h": 21.84375,
-                "top": 1152.4375,
-                "bottom": 1174.28125,
-                "left": 683,
-                "right": 718.328125
-              },
-              "cls": null
-            },
-            {
-              "text": "3",
-              "box": {
-                "x": 724.328125,
-                "y": 1152.4375,
-                "w": 23.78125,
-                "h": 21.84375,
-                "top": 1152.4375,
-                "bottom": 1174.28125,
-                "left": 724.328125,
-                "right": 748.109375
-              },
-              "cls": null
-            },
-            {
-              "text": "5",
-              "box": {
-                "x": 754.109375,
-                "y": 1152.4375,
-                "w": 23.78125,
-                "h": 21.84375,
-                "top": 1152.4375,
-                "bottom": 1174.28125,
-                "left": 754.109375,
-                "right": 777.890625
-              },
-              "cls": null
-            },
-            {
-              "text": "10",
-              "box": {
-                "x": 783.890625,
-                "y": 1152.4375,
-                "w": 29.546875,
-                "h": 21.84375,
-                "top": 1152.4375,
-                "bottom": 1174.28125,
-                "left": 783.890625,
-                "right": 813.4375
-              },
-              "cls": "on"
-            },
-            {
-              "text": "25",
-              "box": {
-                "x": 819.4375,
-                "y": 1152.4375,
-                "w": 29.546875,
-                "h": 21.84375,
-                "top": 1152.4375,
-                "bottom": 1174.28125,
-                "left": 819.4375,
-                "right": 848.984375
-              },
-              "cls": null
-            }
-          ],
-          "widths": [
-            35.33,
-            23.78,
-            23.78,
-            29.55,
-            29.55
-          ],
-          "spread": 11.55,
-          "onCount": 1
-        }
-      ],
-      "roots": [
-        {
-          "cls": "settings-root",
-          "box": {
-            "x": 683,
-            "y": 240.125,
-            "w": 310,
-            "h": 28,
-            "top": 240.125,
-            "bottom": 268.125,
-            "left": 683,
-            "right": 993
-          },
-          "kids": [
-            {
-              "tag": "span",
-              "cls": "mono settings-root-path",
-              "text": "C:/CodeReviews",
-              "box": {
-                "x": 683,
-                "y": 248.125,
-                "w": 92.375,
-                "h": 14,
-                "top": 248.125,
-                "bottom": 262.125,
-                "left": 683,
-                "right": 775.375
-              },
-              "title": "C:/CodeReviews"
-            },
-            {
-              "tag": "span",
-              "cls": "settings-root-chip",
-              "text": "exists",
-              "box": {
-                "x": 775.375,
-                "y": 244.125,
-                "w": 33.765625,
-                "h": 19,
-                "top": 244.125,
-                "bottom": 263.125,
-                "left": 775.375,
-                "right": 809.140625
-              },
-              "title": null
-            },
-            {
-              "tag": "button",
-              "cls": "settings-root-x",
-              "text": "✕",
-              "box": {
-                "x": 812.984375,
-                "y": 240.125,
-                "w": 31.8125,
-                "h": 28,
-                "top": 240.125,
-                "bottom": 268.125,
-                "left": 812.984375,
-                "right": 844.796875
-              },
-              "title": "stop scanning C:/CodeReviews — the projects under it leave the board"
-            }
-          ],
-          "gaps": [
-            0,
-            3.84
-          ],
-          "minGap": 0
-        },
-        {
-          "cls": "settings-root",
-          "box": {
-            "x": 683,
-            "y": 268.125,
-            "w": 310,
-            "h": 28,
-            "top": 268.125,
-            "bottom": 296.125,
-            "left": 683,
-            "right": 993
-          },
-          "kids": [
-            {
-              "tag": "span",
-              "cls": "mono settings-root-path",
-              "text": "C:/sefl-mvn-local",
-              "box": {
-                "x": 683,
-                "y": 276.125,
-                "w": 112.171875,
-                "h": 14,
-                "top": 276.125,
-                "bottom": 290.125,
-                "left": 683,
-                "right": 795.171875
-              },
-              "title": "C:/sefl-mvn-local"
-            },
-            {
-              "tag": "span",
-              "cls": "settings-root-chip",
-              "text": "exists",
-              "box": {
-                "x": 795.171875,
-                "y": 272.125,
-                "w": 33.765625,
-                "h": 19,
-                "top": 272.125,
-                "bottom": 291.125,
-                "left": 795.171875,
-                "right": 828.9375
-              },
-              "title": null
-            },
-            {
-              "tag": "button",
-              "cls": "settings-root-x",
-              "text": "✕",
-              "box": {
-                "x": 832.78125,
-                "y": 268.125,
-                "w": 31.8125,
-                "h": 28,
-                "top": 268.125,
-                "bottom": 296.125,
-                "left": 832.78125,
-                "right": 864.59375
-              },
-              "title": "stop scanning C:/sefl-mvn-local — the projects under it leave the board"
-            }
-          ],
-          "gaps": [
-            0,
-            3.84
-          ],
-          "minGap": 0
-        }
-      ],
-      "rootAdd": {
-        "row": {
-          "x": 683,
-          "y": 296.125,
-          "w": 310,
-          "h": 28,
-          "top": 296.125,
-          "bottom": 324.125,
-          "left": 683,
-          "right": 993
-        },
-        "input": {
-          "x": 683,
-          "y": 301.125,
-          "w": 154,
-          "h": 20,
-          "top": 301.125,
-          "bottom": 321.125,
-          "left": 683,
-          "right": 837
-        },
-        "inputClientWidth": 150,
-        "inputBoxSizing": "border-box",
-        "placeholder": "an absolute folder path — e.g. the parent of your projects",
-        "placeholderPx": 382.66,
-        "placeholderRoom": 146,
-        "placeholderFits": false,
-        "button": {
-          "box": {
-            "x": 840.84375,
-            "y": 296.125,
-            "w": 78.375,
-            "h": 28,
-            "top": 296.125,
-            "bottom": 324.125,
-            "left": 840.84375,
-            "right": 919.21875
-          },
-          "text": "Add folder"
-        },
-        "rowFree": 73.78
-      },
-      "errors": []
-    },
-    {
-      "viewport": "1024x768",
-      "viewportSize": {
-        "width": 1024,
-        "height": 768
-      },
-      "state": "presets",
-      "steps": [
-        "Reach the open state exactly as above.",
-        "scroll #settings .settings-body so the first .settings-presets (the Board reorder pills) sits in the middle of the body: element.scrollIntoView({block:'center'}).",
-        "wait two animation frames and 250 ms; record the body's scrollTop in the inventory.",
-        "assert the Board tab is still selected and the panel is still the only visible group."
-      ],
-      "file": "ledger/gui-improve/baseline/shots/1024x768-presets.png",
-      "sha256": "cab53ff5e0f0bdcc35f21dfce6186f462a5faa9b44ed74682936c30618b8c0b2",
-      "bytes": 144511,
-      "pixels": {
-        "width": 1024,
-        "height": 1108
-      },
-      "fullPage": true,
-      "surfaceFile": "ledger/gui-improve/baseline/shots/1024x768-presets-surface.png",
-      "surfaceSha256": "e5630e693f845e03b9e2dd362e1905716906d7ba31e6cffd877241e41e04eaf3",
-      "surfaceBytes": 30284,
-      "surfacePixels": {
-        "width": 340,
-        "height": 520
-      },
-      "pair": "surface",
-      "win": {
-        "x": 668,
-        "y": 74,
-        "w": 340,
-        "h": 520,
-        "top": 74,
-        "bottom": 594,
-        "left": 668,
-        "right": 1008
-      },
-      "panel": {
-        "x": 683,
-        "y": 120,
-        "w": 310,
-        "h": 1598.921875,
-        "top": 120,
-        "bottom": 1718.921875,
-        "left": 683,
-        "right": 993
-      },
-      "panelScrollHeight": 1599,
-      "bodyScrollHeight": 1617,
-      "bodyScrollTop": 90,
-      "visibleRows": 18,
-      "groups": [
-        {
-          "label": "Board reorder ⓘ s",
-          "presetsBox": {
-            "x": 683,
-            "y": 388.296875,
-            "w": 310,
-            "h": 21.84375,
-            "top": 388.296875,
-            "bottom": 410.140625,
-            "left": 683,
-            "right": 993
-          },
-          "labelBox": {
-            "x": 683,
-            "y": 354.296875,
-            "w": 310,
-            "h": 26,
-            "top": 354.296875,
-            "bottom": 380.296875,
-            "left": 683,
-            "right": 993
-          },
-          "gapAbove": 8,
-          "gapBelow": 10,
-          "buttons": [
-            {
-              "text": "off",
-              "box": {
-                "x": 683,
-                "y": 388.296875,
-                "w": 35.328125,
-                "h": 21.84375,
-                "top": 388.296875,
-                "bottom": 410.140625,
-                "left": 683,
-                "right": 718.328125
-              },
-              "cls": null
-            },
-            {
-              "text": "5 s",
-              "box": {
-                "x": 724.328125,
-                "y": 388.296875,
-                "w": 35.328125,
-                "h": 21.84375,
-                "top": 388.296875,
-                "bottom": 410.140625,
-                "left": 724.328125,
-                "right": 759.65625
-              },
-              "cls": null
-            },
-            {
-              "text": "15 s",
-              "box": {
-                "x": 765.65625,
-                "y": 388.296875,
-                "w": 41.09375,
-                "h": 21.84375,
-                "top": 388.296875,
-                "bottom": 410.140625,
-                "left": 765.65625,
-                "right": 806.75
-              },
-              "cls": null
-            },
-            {
-              "text": "30 s",
-              "box": {
-                "x": 812.75,
-                "y": 388.296875,
-                "w": 41.09375,
-                "h": 21.84375,
-                "top": 388.296875,
-                "bottom": 410.140625,
-                "left": 812.75,
-                "right": 853.84375
-              },
-              "cls": null
-            },
-            {
-              "text": "1 min",
-              "box": {
-                "x": 859.84375,
-                "y": 388.296875,
-                "w": 46.875,
-                "h": 21.84375,
-                "top": 388.296875,
-                "bottom": 410.140625,
-                "left": 859.84375,
-                "right": 906.71875
-              },
-              "cls": null
-            }
-          ],
-          "widths": [
-            35.33,
-            35.33,
-            41.09,
-            41.09,
-            46.88
-          ],
-          "spread": 11.55,
-          "onCount": 0
-        },
-        {
-          "label": "Top worktrees per chart ⓘ rows",
-          "presetsBox": {
-            "x": 683,
-            "y": 1062.4375,
-            "w": 310,
-            "h": 21.84375,
-            "top": 1062.4375,
-            "bottom": 1084.28125,
-            "left": 683,
-            "right": 993
-          },
-          "labelBox": {
-            "x": 683,
-            "y": 1028.4375,
-            "w": 310,
-            "h": 26,
-            "top": 1028.4375,
-            "bottom": 1054.4375,
-            "left": 683,
-            "right": 993
-          },
-          "gapAbove": 8,
-          "gapBelow": 10,
-          "buttons": [
-            {
-              "text": "all",
-              "box": {
-                "x": 683,
-                "y": 1062.4375,
-                "w": 35.328125,
-                "h": 21.84375,
-                "top": 1062.4375,
-                "bottom": 1084.28125,
-                "left": 683,
-                "right": 718.328125
-              },
-              "cls": null
-            },
-            {
-              "text": "3",
-              "box": {
-                "x": 724.328125,
-                "y": 1062.4375,
-                "w": 23.78125,
-                "h": 21.84375,
-                "top": 1062.4375,
-                "bottom": 1084.28125,
-                "left": 724.328125,
-                "right": 748.109375
-              },
-              "cls": null
-            },
-            {
-              "text": "5",
-              "box": {
-                "x": 754.109375,
-                "y": 1062.4375,
-                "w": 23.78125,
-                "h": 21.84375,
-                "top": 1062.4375,
-                "bottom": 1084.28125,
-                "left": 754.109375,
-                "right": 777.890625
-              },
-              "cls": null
-            },
-            {
-              "text": "10",
-              "box": {
-                "x": 783.890625,
-                "y": 1062.4375,
-                "w": 29.546875,
-                "h": 21.84375,
-                "top": 1062.4375,
-                "bottom": 1084.28125,
-                "left": 783.890625,
-                "right": 813.4375
-              },
-              "cls": "on"
-            },
-            {
-              "text": "25",
-              "box": {
-                "x": 819.4375,
-                "y": 1062.4375,
-                "w": 29.546875,
-                "h": 21.84375,
-                "top": 1062.4375,
-                "bottom": 1084.28125,
-                "left": 819.4375,
-                "right": 848.984375
-              },
-              "cls": null
-            }
-          ],
-          "widths": [
-            35.33,
-            23.78,
-            23.78,
-            29.55,
-            29.55
-          ],
-          "spread": 11.55,
-          "onCount": 1
-        }
-      ],
-      "roots": [
-        {
-          "cls": "settings-root",
-          "box": {
-            "x": 683,
-            "y": 150.125,
-            "w": 310,
-            "h": 28,
-            "top": 150.125,
-            "bottom": 178.125,
-            "left": 683,
-            "right": 993
-          },
-          "kids": [
-            {
-              "tag": "span",
-              "cls": "mono settings-root-path",
-              "text": "C:/CodeReviews",
-              "box": {
-                "x": 683,
-                "y": 158.125,
-                "w": 92.375,
-                "h": 14,
-                "top": 158.125,
-                "bottom": 172.125,
-                "left": 683,
-                "right": 775.375
-              },
-              "title": "C:/CodeReviews"
-            },
-            {
-              "tag": "span",
-              "cls": "settings-root-chip",
-              "text": "exists",
-              "box": {
-                "x": 775.375,
-                "y": 154.125,
-                "w": 33.765625,
-                "h": 19,
-                "top": 154.125,
-                "bottom": 173.125,
-                "left": 775.375,
-                "right": 809.140625
-              },
-              "title": null
-            },
-            {
-              "tag": "button",
-              "cls": "settings-root-x",
-              "text": "✕",
-              "box": {
-                "x": 812.984375,
-                "y": 150.125,
-                "w": 31.8125,
-                "h": 28,
-                "top": 150.125,
-                "bottom": 178.125,
-                "left": 812.984375,
-                "right": 844.796875
-              },
-              "title": "stop scanning C:/CodeReviews — the projects under it leave the board"
-            }
-          ],
-          "gaps": [
-            0,
-            3.84
-          ],
-          "minGap": 0
-        },
-        {
-          "cls": "settings-root",
-          "box": {
-            "x": 683,
-            "y": 178.125,
-            "w": 310,
-            "h": 28,
-            "top": 178.125,
-            "bottom": 206.125,
-            "left": 683,
-            "right": 993
-          },
-          "kids": [
-            {
-              "tag": "span",
-              "cls": "mono settings-root-path",
-              "text": "C:/sefl-mvn-local",
-              "box": {
-                "x": 683,
-                "y": 186.125,
-                "w": 112.171875,
-                "h": 14,
-                "top": 186.125,
-                "bottom": 200.125,
-                "left": 683,
-                "right": 795.171875
-              },
-              "title": "C:/sefl-mvn-local"
-            },
-            {
-              "tag": "span",
-              "cls": "settings-root-chip",
-              "text": "exists",
-              "box": {
-                "x": 795.171875,
-                "y": 182.125,
-                "w": 33.765625,
-                "h": 19,
-                "top": 182.125,
-                "bottom": 201.125,
-                "left": 795.171875,
-                "right": 828.9375
-              },
-              "title": null
-            },
-            {
-              "tag": "button",
-              "cls": "settings-root-x",
-              "text": "✕",
-              "box": {
-                "x": 832.78125,
-                "y": 178.125,
-                "w": 31.8125,
-                "h": 28,
-                "top": 178.125,
-                "bottom": 206.125,
-                "left": 832.78125,
-                "right": 864.59375
-              },
-              "title": "stop scanning C:/sefl-mvn-local — the projects under it leave the board"
-            }
-          ],
-          "gaps": [
-            0,
-            3.84
-          ],
-          "minGap": 0
-        }
-      ],
-      "rootAdd": {
-        "row": {
-          "x": 683,
-          "y": 206.125,
-          "w": 310,
-          "h": 28,
-          "top": 206.125,
-          "bottom": 234.125,
-          "left": 683,
-          "right": 993
-        },
-        "input": {
-          "x": 683,
-          "y": 211.125,
-          "w": 154,
-          "h": 20,
-          "top": 211.125,
-          "bottom": 231.125,
-          "left": 683,
-          "right": 837
-        },
-        "inputClientWidth": 150,
-        "inputBoxSizing": "border-box",
-        "placeholder": "an absolute folder path — e.g. the parent of your projects",
-        "placeholderPx": 382.66,
-        "placeholderRoom": 146,
-        "placeholderFits": false,
-        "button": {
-          "box": {
-            "x": 840.84375,
-            "y": 206.125,
-            "w": 78.375,
-            "h": 28,
-            "top": 206.125,
-            "bottom": 234.125,
-            "left": 840.84375,
-            "right": 919.21875
-          },
-          "text": "Add folder"
-        },
-        "rowFree": 73.78
-      },
-      "errors": []
-    },
-    {
-      "viewport": "1024x768",
-      "viewportSize": {
-        "width": 1024,
-        "height": 768
-      },
-      "state": "search",
-      "steps": [
-        "Reach the open state exactly as above.",
-        "fill #settings-search with \"flash\" (the Board rows that answer it: Flash time, Flash on events, Grey flash).",
-        "wait 900 ms for the filter to paint, then assert the Board tab is still selected and the search badge reads the number of visible rows.",
-        "set #settings .settings-body scrollTop to 0 and wait two animation frames."
-      ],
-      "file": "ledger/gui-improve/baseline/shots/1024x768-search.png",
-      "sha256": "7fbdb22526c2bdde0ac1e902bb739dea0f279040fb0554fec3d1e287ae546d0a",
-      "bytes": 126126,
-      "pixels": {
-        "width": 1024,
-        "height": 1137
-      },
-      "fullPage": true,
-      "surfaceFile": "ledger/gui-improve/baseline/shots/1024x768-search-surface.png",
-      "surfaceSha256": "373509537c39155b08a510ae5fa418b126aeadc33a865b4cf5872146631131fd",
-      "surfaceBytes": 12951,
-      "surfacePixels": {
-        "width": 340,
-        "height": 520
-      },
-      "pair": "surface",
-      "win": {
-        "x": 668,
-        "y": 74,
-        "w": 340,
-        "h": 520,
-        "top": 74,
-        "bottom": 594,
-        "left": 668,
-        "right": 1008
-      },
-      "panel": {
-        "x": 683,
-        "y": 210,
-        "w": 310,
-        "h": 100,
-        "top": 210,
-        "bottom": 310,
-        "left": 683,
-        "right": 993
-      },
-      "panelScrollHeight": 100,
-      "bodyScrollHeight": 387,
-      "bodyScrollTop": 0,
-      "visibleRows": 3,
-      "groups": [],
-      "roots": [],
-      "rootAdd": null,
+      "overflow": [],
       "errors": []
     }
   ],
+  "measurements": {
+    "sectionOpen": {
+      "box": {
+        "x": 16,
+        "y": 319.6875,
+        "w": 1408,
+        "h": 580.34375,
+        "top": 319.6875,
+        "bottom": 900.03125,
+        "left": 16,
+        "right": 1424
+      },
+      "headBox": {
+        "x": 17,
+        "y": 320.6875,
+        "w": 1406,
+        "h": 47,
+        "top": 320.6875,
+        "bottom": 367.6875,
+        "left": 17,
+        "right": 1423
+      },
+      "label": "Unattached agents",
+      "pathHint": "agents with no worktree of their own — agents started in a worktree are listed under that worktree's row",
+      "collapsed": false,
+      "jobsBox": {
+        "x": 17,
+        "y": 367.6875,
+        "w": 1406,
+        "h": 531.34375,
+        "top": 367.6875,
+        "bottom": 899.03125,
+        "left": 17,
+        "right": 1423
+      },
+      "jobsScrollHeight": 531,
+      "cards": 2,
+      "paintedElements": 85,
+      "minFontSize": 10
+    },
+    "cardUnreadTree": {
+      "thread": "fixture-tree-worker",
+      "collapsed": false,
+      "box": {
+        "x": 17,
+        "y": 367.6875,
+        "w": 1406,
+        "h": 266.171875,
+        "top": 367.6875,
+        "bottom": 633.859375,
+        "left": 17,
+        "right": 1423
+      },
+      "headBox": {
+        "x": 31,
+        "y": 376.6875,
+        "w": 1378,
+        "h": 27.75,
+        "top": 376.6875,
+        "bottom": 404.4375,
+        "left": 31,
+        "right": 1409
+      },
+      "title": null,
+      "pill": "complete",
+      "metaText": "no worktree · (default model)",
+      "metaTitle": null,
+      "cwd": {
+        "box": {
+          "x": 57,
+          "y": 404.4375,
+          "w": 1352,
+          "h": 17.390625,
+          "top": 404.4375,
+          "bottom": 421.828125,
+          "left": 57,
+          "right": 1409
+        },
+        "label": "cwd",
+        "pathText": "…/beta/.worktrees/feat-long-tree-name",
+        "pathTitle": null,
+        "pathBox": {
+          "x": 84.890625,
+          "y": 404.4375,
+          "w": 244.125,
+          "h": 17.390625,
+          "top": 404.4375,
+          "bottom": 421.828125,
+          "left": 84.890625,
+          "right": 329.015625
+        },
+        "pathClientWidth": 244,
+        "pathScrollWidth": 244,
+        "pathTruncated": false,
+        "lineTitle": "working directory: <sandbox>/fixture/outside/beta/.worktrees/feat-long-tree-name",
+        "rowChip": null,
+        "runChip": null,
+        "name": "fixture-tree-worker"
+      },
+      "attachToggle": {
+        "text": "⤵ attach",
+        "box": {
+          "x": 1213.328125,
+          "y": 377.40625,
+          "w": 66.078125,
+          "h": 20.296875,
+          "top": 377.40625,
+          "bottom": 397.703125,
+          "left": 1213.328125,
+          "right": 1279.40625
+        },
+        "title": "attach this agent to a worktree — it then lives under that row"
+      },
+      "attachRow": {
+        "hidden": true,
+        "box": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0,
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        },
+        "missing": null,
+        "selectedIndex": -1,
+        "selectedText": null,
+        "options": [],
+        "go": {
+          "text": "Attach",
+          "disabled": false,
+          "box": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0,
+            "top": 0,
+            "bottom": 0,
+            "left": 0,
+            "right": 0
+          }
+        }
+      }
+    },
+    "cardReadTree": {
+      "thread": "fixture-row-worker",
+      "collapsed": false,
+      "box": {
+        "x": 17,
+        "y": 633.859375,
+        "w": 1406,
+        "h": 265.171875,
+        "top": 633.859375,
+        "bottom": 899.03125,
+        "left": 17,
+        "right": 1423
+      },
+      "headBox": {
+        "x": 31,
+        "y": 642.859375,
+        "w": 1378,
+        "h": 27.75,
+        "top": 642.859375,
+        "bottom": 670.609375,
+        "left": 31,
+        "right": 1409
+      },
+      "title": null,
+      "pill": "complete",
+      "metaText": "no worktree · (default model)",
+      "metaTitle": null,
+      "cwd": {
+        "box": {
+          "x": 57,
+          "y": 670.609375,
+          "w": 1352,
+          "h": 17.390625,
+          "top": 670.609375,
+          "bottom": 688,
+          "left": 57,
+          "right": 1409
+        },
+        "label": "cwd",
+        "pathText": "…/alpha/.worktrees/feat-one",
+        "pathTitle": null,
+        "pathBox": {
+          "x": 84.890625,
+          "y": 670.609375,
+          "w": 178.140625,
+          "h": 17.390625,
+          "top": 670.609375,
+          "bottom": 688,
+          "left": 84.890625,
+          "right": 263.03125
+        },
+        "pathClientWidth": 178,
+        "pathScrollWidth": 178,
+        "pathTruncated": false,
+        "lineTitle": "working directory: <sandbox>/fixture/alpha/.worktrees/feat-one",
+        "rowChip": null,
+        "runChip": null,
+        "name": "fixture-row-worker"
+      },
+      "attachToggle": {
+        "text": "⤵ attach",
+        "box": {
+          "x": 1213.328125,
+          "y": 643.578125,
+          "w": 66.078125,
+          "h": 20.296875,
+          "top": 643.578125,
+          "bottom": 663.875,
+          "left": 1213.328125,
+          "right": 1279.40625
+        },
+        "title": "attach this agent to a worktree — it then lives under that row"
+      },
+      "attachRow": {
+        "hidden": true,
+        "box": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0,
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        },
+        "missing": null,
+        "selectedIndex": -1,
+        "selectedText": null,
+        "options": [],
+        "go": {
+          "text": "Attach",
+          "disabled": false,
+          "box": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0,
+            "top": 0,
+            "bottom": 0,
+            "left": 0,
+            "right": 0
+          }
+        }
+      }
+    },
+    "attachPicker": {
+      "hidden": false,
+      "box": {
+        "x": 49,
+        "y": 398.828125,
+        "w": 1360,
+        "h": 24,
+        "top": 398.828125,
+        "bottom": 422.828125,
+        "left": 49,
+        "right": 1409
+      },
+      "missing": "the row for <sandbox>/fixture/outside/beta/.worktrees/feat-long-tree-name is missing — the board has not read that tree yet; press attach on the row once it appears, or reload the board",
+      "selectedIndex": 3,
+      "selectedText": "— the row for feat-long-tree-name is missing —",
+      "options": [
+        {
+          "value": "<sandbox>/fixture/alpha",
+          "text": "alpha · alpha (main)",
+          "selected": false,
+          "disabled": false
+        },
+        {
+          "value": "<sandbox>/fixture/alpha/.worktrees/feat-one",
+          "text": "alpha · feat-one (feat-one)",
+          "selected": false,
+          "disabled": false
+        },
+        {
+          "value": "<sandbox>/fixture/gamma",
+          "text": "gamma · gamma (main)",
+          "selected": false,
+          "disabled": false
+        },
+        {
+          "value": "",
+          "text": "— the row for feat-long-tree-name is missing —",
+          "selected": true,
+          "disabled": true
+        }
+      ],
+      "go": {
+        "text": "Attach",
+        "disabled": true,
+        "box": {
+          "x": 449.390625,
+          "y": 400.328125,
+          "w": 49.453125,
+          "h": 21,
+          "top": 400.328125,
+          "bottom": 421.328125,
+          "left": 449.390625,
+          "right": 498.84375
+        }
+      }
+    },
+    "attachPickerAssert": {
+      "hidden": false,
+      "painted": true,
+      "options": [
+        {
+          "text": "alpha · alpha (main)",
+          "value": "<sandbox>/fixture/alpha",
+          "disabled": false
+        },
+        {
+          "text": "alpha · feat-one (feat-one)",
+          "value": "<sandbox>/fixture/alpha/.worktrees/feat-one",
+          "disabled": false
+        },
+        {
+          "text": "gamma · gamma (main)",
+          "value": "<sandbox>/fixture/gamma",
+          "disabled": false
+        },
+        {
+          "text": "— the row for feat-long-tree-name is missing —",
+          "value": "",
+          "disabled": true
+        }
+      ],
+      "selectedText": "— the row for feat-long-tree-name is missing —",
+      "missing": "the row for <sandbox>/fixture/outside/beta/.worktrees/feat-long-tree-name is missing — the board has not read that tree yet; press attach on the row once it appears, or reload the board",
+      "goDisabled": true
+    },
+    "collapsed": {
+      "section": {
+        "box": {
+          "x": 16,
+          "y": 347.6875,
+          "w": 1408,
+          "h": 48,
+          "top": 347.6875,
+          "bottom": 395.6875,
+          "left": 16,
+          "right": 1424
+        },
+        "collapsed": true,
+        "headBox": {
+          "x": 17,
+          "y": 348.6875,
+          "w": 1406,
+          "h": 46,
+          "top": 348.6875,
+          "bottom": 394.6875,
+          "left": 17,
+          "right": 1423
+        },
+        "headText": "▸ Unattached agents agents with no worktree of their own — agents started in a worktree are listed under that worktree's row 2 unattached Minimize all Clear finished",
+        "label": "Unattached agents",
+        "pathHint": "agents with no worktree of their own — agents started in a worktree are listed under that worktree's row",
+        "chipText": "2 unattached"
+      },
+      "jobs": {
+        "box": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0,
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        },
+        "display": "none",
+        "hidden": false,
+        "scrollHeight": 0,
+        "childCount": 2
+      },
+      "cardCount": 2,
+      "paintedElements": 10
+    },
+    "overflow": {
+      "open": [],
+      "expanded": [],
+      "collapsed": []
+    }
+  },
+  "target": {
+    "problem": "An unattached card whose cwd is a worktree the board has not read gives the reader no way to see which tree it is in, and its attach action offers every other tree instead.",
+    "measured": {
+      "sectionHint": "agents with no worktree of their own — agents started in a worktree are listed under that worktree's row",
+      "headMetaOfTreeCard": "no worktree · (default model)",
+      "cwdPathVisible": "…/beta/.worktrees/feat-long-tree-name",
+      "cwdPathWidthPx": 244.125,
+      "cwdLineFontPx": 10.5,
+      "cwdPathTruncated": false,
+      "fullPathOnlyInTitle": true,
+      "rowChipShown": false,
+      "pickerOptionCount": 4,
+      "pickerOffersCardTree": false,
+      "pickerSelectedText": "— the row for feat-long-tree-name is missing —",
+      "attachPressDisabled": true
+    },
+    "ask": "The section must say where an unattached card's directory actually is (the project and the tree, in visible text, not only a 10.5 px path tail and a title attribute) and its attach action must offer the tree that directory belongs to, or say plainly that the board has no row for it and what would make one."
+  },
   "inventory": {
     "dom": {
       "file": "ledger/gui-improve/baseline/dom.json",
-      "sha256": "04b1c0eb827d5d7e38d4db929ed933169af6a2d8d4d408dd968a298748a59f4f",
-      "bytes": 1170508,
-      "elements": 1266
+      "sha256": "71c1b423632797e7d7eca4b8298295734caa5a613683194faacc968acb469d4f",
+      "bytes": 176297,
+      "elements": 184
     },
     "css": {
       "file": "ledger/gui-improve/baseline/css.json",
-      "sha256": "998bbe43350e8f6cc3abe741af0e632ba25dd22130ad526ab65d034ca80c71ab",
-      "bytes": 4866540,
-      "elements": 1236
+      "sha256": "449651d1dc828352d0c861e4041f039478e641315250617ce0c5a55ebc95bf3e",
+      "bytes": 1084126,
+      "elements": 184
     },
     "stylesheet": {
       "file": "ledger/gui-improve/baseline/style.css",
-      "sha256": "c9031470361122f1a259a0d36e281ede1e7d7aa17791bffd0e880680f4a2917d",
-      "bytes": 309248
+      "sha256": "02523ef4120925be231cc2b2a02f039ef434d8d813023eaa8c3c259be8afa4b9",
+      "bytes": 315475,
+      "servedSha256": "02523ef4120925be231cc2b2a02f039ef434d8d813023eaa8c3c259be8afa4b9",
+      "matchesTree": true
     },
-    "per_viewport": {
-      "1440x900": {
-        "open": {
-          "elements": 181,
-          "cssElements": 176,
-          "rulesMatched": 35,
-          "panelScrollHeight": 1599,
-          "bodyScrollHeight": 1617,
-          "visibleRows": 18,
-          "groupSpreads": [
-            {
-              "label": "Board reorder ⓘ s",
-              "spread": 11.55,
-              "gapAbove": 8,
-              "gapBelow": 10
-            },
-            {
-              "label": "Top worktrees per chart ⓘ rows",
-              "spread": 11.55,
-              "gapAbove": 8,
-              "gapBelow": 10
-            }
-          ],
-          "roots": [
-            {
-              "cls": "settings-root",
-              "h": 28,
-              "minGap": 0,
-              "gaps": [
-                0,
-                3.84
-              ]
-            },
-            {
-              "cls": "settings-root",
-              "h": 28,
-              "minGap": 0,
-              "gaps": [
-                0,
-                3.84
-              ]
-            }
-          ],
-          "rootAdd": {
-            "inputWidth": 154,
-            "inputClientWidth": 150,
-            "placeholderPx": 382.66,
-            "placeholderRoom": 146,
-            "placeholderFits": false,
-            "buttonWidth": 78.375,
-            "rowFree": 73.78
-          }
-        },
-        "presets": {
-          "elements": 181,
-          "cssElements": 176,
-          "rulesMatched": 35,
-          "panelScrollHeight": 1599,
-          "bodyScrollHeight": 1617,
-          "visibleRows": 18,
-          "groupSpreads": [
-            {
-              "label": "Board reorder ⓘ s",
-              "spread": 11.55,
-              "gapAbove": 8,
-              "gapBelow": 10
-            },
-            {
-              "label": "Top worktrees per chart ⓘ rows",
-              "spread": 11.55,
-              "gapAbove": 8,
-              "gapBelow": 10
-            }
-          ],
-          "roots": [
-            {
-              "cls": "settings-root",
-              "h": 28,
-              "minGap": 0,
-              "gaps": [
-                0,
-                3.84
-              ]
-            },
-            {
-              "cls": "settings-root",
-              "h": 28,
-              "minGap": 0,
-              "gaps": [
-                0,
-                3.84
-              ]
-            }
-          ],
-          "rootAdd": {
-            "inputWidth": 154,
-            "inputClientWidth": 150,
-            "placeholderPx": 382.66,
-            "placeholderRoom": 146,
-            "placeholderFits": false,
-            "buttonWidth": 78.375,
-            "rowFree": 73.78
-          }
-        },
-        "search": {
-          "elements": 60,
-          "cssElements": 60,
-          "rulesMatched": 28,
-          "panelScrollHeight": 100,
-          "bodyScrollHeight": 387,
-          "visibleRows": 3,
-          "groupSpreads": [],
-          "roots": [],
-          "rootAdd": null
-        }
+    "rules": 2132,
+    "sheets": [
+      {
+        "index": 0,
+        "href": "http://127.0.0.1:50375/style.css?v=5627cfbe3d6c",
+        "owner": "link",
+        "id": null,
+        "ruleCount": 1894
       },
-      "1280x800": {
-        "open": {
-          "elements": 181,
-          "cssElements": 176,
-          "rulesMatched": 35,
-          "panelScrollHeight": 1599,
-          "bodyScrollHeight": 1617,
-          "visibleRows": 18,
-          "groupSpreads": [
-            {
-              "label": "Board reorder ⓘ s",
-              "spread": 11.55,
-              "gapAbove": 8,
-              "gapBelow": 10
-            },
-            {
-              "label": "Top worktrees per chart ⓘ rows",
-              "spread": 11.55,
-              "gapAbove": 8,
-              "gapBelow": 10
-            }
-          ],
-          "roots": [
-            {
-              "cls": "settings-root",
-              "h": 28,
-              "minGap": 0,
-              "gaps": [
-                0,
-                3.84
-              ]
-            },
-            {
-              "cls": "settings-root",
-              "h": 28,
-              "minGap": 0,
-              "gaps": [
-                0,
-                3.84
-              ]
-            }
-          ],
-          "rootAdd": {
-            "inputWidth": 154,
-            "inputClientWidth": 150,
-            "placeholderPx": 382.66,
-            "placeholderRoom": 146,
-            "placeholderFits": false,
-            "buttonWidth": 78.375,
-            "rowFree": 73.78
-          }
-        },
-        "presets": {
-          "elements": 181,
-          "cssElements": 176,
-          "rulesMatched": 35,
-          "panelScrollHeight": 1599,
-          "bodyScrollHeight": 1617,
-          "visibleRows": 18,
-          "groupSpreads": [
-            {
-              "label": "Board reorder ⓘ s",
-              "spread": 11.55,
-              "gapAbove": 8,
-              "gapBelow": 10
-            },
-            {
-              "label": "Top worktrees per chart ⓘ rows",
-              "spread": 11.55,
-              "gapAbove": 8,
-              "gapBelow": 10
-            }
-          ],
-          "roots": [
-            {
-              "cls": "settings-root",
-              "h": 28,
-              "minGap": 0,
-              "gaps": [
-                0,
-                3.84
-              ]
-            },
-            {
-              "cls": "settings-root",
-              "h": 28,
-              "minGap": 0,
-              "gaps": [
-                0,
-                3.84
-              ]
-            }
-          ],
-          "rootAdd": {
-            "inputWidth": 154,
-            "inputClientWidth": 150,
-            "placeholderPx": 382.66,
-            "placeholderRoom": 146,
-            "placeholderFits": false,
-            "buttonWidth": 78.375,
-            "rowFree": 73.78
-          }
-        },
-        "search": {
-          "elements": 60,
-          "cssElements": 60,
-          "rulesMatched": 28,
-          "panelScrollHeight": 100,
-          "bodyScrollHeight": 387,
-          "visibleRows": 3,
-          "groupSpreads": [],
-          "roots": [],
-          "rootAdd": null
-        }
+      {
+        "index": 1,
+        "href": "http://127.0.0.1:50375/chart.css?v=5627cfbe3d6c",
+        "owner": "link",
+        "id": null,
+        "ruleCount": 177
       },
-      "1024x768": {
-        "open": {
-          "elements": 181,
-          "cssElements": 176,
-          "rulesMatched": 35,
-          "panelScrollHeight": 1599,
-          "bodyScrollHeight": 1617,
-          "visibleRows": 18,
-          "groupSpreads": [
-            {
-              "label": "Board reorder ⓘ s",
-              "spread": 11.55,
-              "gapAbove": 8,
-              "gapBelow": 10
-            },
-            {
-              "label": "Top worktrees per chart ⓘ rows",
-              "spread": 11.55,
-              "gapAbove": 8,
-              "gapBelow": 10
-            }
-          ],
-          "roots": [
-            {
-              "cls": "settings-root",
-              "h": 28,
-              "minGap": 0,
-              "gaps": [
-                0,
-                3.84
-              ]
-            },
-            {
-              "cls": "settings-root",
-              "h": 28,
-              "minGap": 0,
-              "gaps": [
-                0,
-                3.84
-              ]
-            }
-          ],
-          "rootAdd": {
-            "inputWidth": 154,
-            "inputClientWidth": 150,
-            "placeholderPx": 382.66,
-            "placeholderRoom": 146,
-            "placeholderFits": false,
-            "buttonWidth": 78.375,
-            "rowFree": 73.78
-          }
-        },
-        "presets": {
-          "elements": 181,
-          "cssElements": 176,
-          "rulesMatched": 35,
-          "panelScrollHeight": 1599,
-          "bodyScrollHeight": 1617,
-          "visibleRows": 18,
-          "groupSpreads": [
-            {
-              "label": "Board reorder ⓘ s",
-              "spread": 11.55,
-              "gapAbove": 8,
-              "gapBelow": 10
-            },
-            {
-              "label": "Top worktrees per chart ⓘ rows",
-              "spread": 11.55,
-              "gapAbove": 8,
-              "gapBelow": 10
-            }
-          ],
-          "roots": [
-            {
-              "cls": "settings-root",
-              "h": 28,
-              "minGap": 0,
-              "gaps": [
-                0,
-                3.84
-              ]
-            },
-            {
-              "cls": "settings-root",
-              "h": 28,
-              "minGap": 0,
-              "gaps": [
-                0,
-                3.84
-              ]
-            }
-          ],
-          "rootAdd": {
-            "inputWidth": 154,
-            "inputClientWidth": 150,
-            "placeholderPx": 382.66,
-            "placeholderRoom": 146,
-            "placeholderFits": false,
-            "buttonWidth": 78.375,
-            "rowFree": 73.78
-          }
-        },
-        "search": {
-          "elements": 60,
-          "cssElements": 60,
-          "rulesMatched": 28,
-          "panelScrollHeight": 100,
-          "bodyScrollHeight": 387,
-          "visibleRows": 3,
-          "groupSpreads": [],
-          "roots": [],
-          "rootAdd": null
-        }
+      {
+        "index": 2,
+        "href": "http://127.0.0.1:50375/core/pipeline-card.css?v=5627cfbe3d6c",
+        "owner": "link",
+        "id": null,
+        "ruleCount": 51
       }
-    }
+    ]
   },
   "notes": {
-    "shotPair": "shots[*].file is a full-page screenshot of the whole live board with the Settings window at its recorded win rect; shots[*].surfaceFile is the 340x520 Settings window alone and is the stable pair to diff. The board changes between captures; the Settings window does not.",
-    "servedIndex": "The served public/index.html differs from the tree only by the panel's cache-busting stamp (?v=<panel-build> on stylesheet links and a meta panel-build tag); app.js and style.css are byte-identical to this tree."
+    "shotPair": "shots[*].file is a full-page shot of the whole board; shots[*].surfaceFile is the #agents section alone and is the stable pair to diff. The section depends only on the seeded store and the fixture board, so the pair repeats across captures of the same build.",
+    "relativeText": "The seeded cards carry fixed startedAt/endedAt instants and no lastActiveAt, so no relative age or duration text is drawn on them; a compare run still masks any duration text the console may grow.",
+    "phantomRows": "The board draws the whole fixture, but only the two seeded cards are in #jobs; nothing else in the section is live."
   },
   "incomplete": [],
-  "recorded_at": "2026-11-09T06:38:58.801Z"
+  "recorded_at": "2026-11-09T12:03:39.413Z"
 }

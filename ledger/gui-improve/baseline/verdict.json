@@ -1,93 +1,159 @@
 {
-  "gate": "G1",
-  "outcome": "recorded",
-  "pipeline": "gui-improve",
-  "stage": "baseline",
-  "visit": 1,
-  "surface": "#settings-panel-board (Settings → Board)",
-  "server": "http://127.0.0.1:7491/",
-  "panelVersion": "1.71.0",
-  "panelBuild": "191ceb6064ef",
+ "outcome": "recorded",
+ "evidence": {
+  "capture": {
+   "file": "ledger/gui-improve/baseline/capture.json",
+   "sha256": "5f08576be42f7f294646c6c6e501f815998b663df4f46a11ae1c25e11a3dc4dc",
+   "bytes": 257234
+  },
   "viewports": [
-    "1440x900",
-    "1280x800",
-    "1024x768"
+   "1440x900",
+   "1280x900",
+   "1024x900",
+   "1600x900"
   ],
-  "states": [
-    "open",
-    "presets",
-    "search"
-  ],
-  "shots": 9,
-  "shot_pairs": 9,
-  "files_checked": 18,
-  "files_missing": [],
-  "elements": 1266,
-  "css_elements": 1236,
-  "elements_per_viewport": {
-    "1440x900": {
-      "open": {
-        "elements": 181,
-        "cssElements": 176
-      },
-      "presets": {
-        "elements": 181,
-        "cssElements": 176
-      },
-      "search": {
-        "elements": 60,
-        "cssElements": 60
-      }
-    },
-    "1280x800": {
-      "open": {
-        "elements": 181,
-        "cssElements": 176
-      },
-      "presets": {
-        "elements": 181,
-        "cssElements": 176
-      },
-      "search": {
-        "elements": 60,
-        "cssElements": 60
-      }
-    },
-    "1024x768": {
-      "open": {
-        "elements": 181,
-        "cssElements": 176
-      },
-      "presets": {
-        "elements": 181,
-        "cssElements": 176
-      },
-      "search": {
-        "elements": 60,
-        "cssElements": 60
-      }
-    }
-  },
-  "target": "The 'Folders the board scans' block must read as one control group: a visible gap between each root's path, its state chip and its remove control, and the add-folder field given the width its row has left so its hint is readable.",
-  "target_numbers": {
-    "root_gaps": [
-      0,
-      3.84
-    ],
-    "add_input_width": 154,
-    "add_placeholder_px": 382.66,
-    "add_placeholder_room": 146,
-    "add_row_free": 73.78
-  },
-  "capture": "ledger/gui-improve/baseline/capture.json",
-  "capture_sha256": "d309bdf733ce09186940874bfe901b2ccedbaf5b5a09994d91274b664a07263a",
-  "capture_bytes": 98456,
+  "shots": 4,
+  "inventory_elements": 268,
   "incomplete": [],
-  "checked_at": "2026-11-09T06:39:57.389955Z",
-  "round": {
-    "parent": "main",
-    "sha": "f0b80c7d74480a389fcce38f39cf2b5471a03d1e",
-    "stage_tree": "baseline"
-  },
-  "stage_tree": "C:/ProjectDevelopment/agent-worktree-gui/.worktrees/run-gui-improve-again-this-time-on-the-5ab4e1"
+  "measured": {
+   "interleaved": [
+    {
+     "viewport": "1440x900",
+     "lines": [
+      {
+       "top": 194.88,
+       "kids": [
+        "pipew-visit mono",
+        "pipew-live"
+       ]
+      }
+     ]
+    },
+    {
+     "viewport": "1280x900",
+     "lines": [
+      {
+       "top": 194.88,
+       "kids": [
+        "pipew-visit mono",
+        "pipew-live"
+       ]
+      }
+     ]
+    },
+    {
+     "viewport": "1024x900",
+     "lines": [
+      {
+       "top": 194.88,
+       "kids": [
+        "pipew-visit mono",
+        "pipew-live"
+       ]
+      }
+     ]
+    },
+    {
+     "viewport": "1600x900",
+     "lines": [
+      {
+       "top": 194.88,
+       "kids": [
+        "pipew-visit mono",
+        "pipew-live"
+       ]
+      }
+     ]
+    }
+   ],
+   "not_on_own_line": [
+    {
+     "viewport": "1440x900",
+     "own": {
+      "pipew-visit": {
+       "top": 194.88,
+       "alone": false,
+       "overflowsBox": true
+      },
+      "pipew-live": {
+       "top": 194.88,
+       "alone": false,
+       "overflowsBox": false
+      },
+      "pipew-artifact": {
+       "top": 282.83,
+       "alone": true,
+       "overflowsBox": false
+      }
+     }
+    },
+    {
+     "viewport": "1280x900",
+     "own": {
+      "pipew-visit": {
+       "top": 194.88,
+       "alone": false,
+       "overflowsBox": true
+      },
+      "pipew-live": {
+       "top": 194.88,
+       "alone": false,
+       "overflowsBox": false
+      },
+      "pipew-artifact": {
+       "top": 282.83,
+       "alone": true,
+       "overflowsBox": false
+      }
+     }
+    },
+    {
+     "viewport": "1024x900",
+     "own": {
+      "pipew-visit": {
+       "top": 194.88,
+       "alone": false,
+       "overflowsBox": true
+      },
+      "pipew-live": {
+       "top": 194.88,
+       "alone": false,
+       "overflowsBox": false
+      },
+      "pipew-artifact": {
+       "top": 282.83,
+       "alone": true,
+       "overflowsBox": false
+      }
+     }
+    },
+    {
+     "viewport": "1600x900",
+     "own": {
+      "pipew-visit": {
+       "top": 194.88,
+       "alone": false,
+       "overflowsBox": true
+      },
+      "pipew-live": {
+       "top": 194.88,
+       "alone": false,
+       "overflowsBox": false
+      },
+      "pipew-artifact": {
+       "top": 282.83,
+       "alone": true,
+       "overflowsBox": false
+      }
+     }
+    }
+   ],
+   "card_widths": {
+    "1440x900": 780,
+    "1280x900": 780,
+    "1024x900": 780,
+    "1600x900": 780
+   }
+  }
+ }
 }

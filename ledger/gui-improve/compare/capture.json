@@ -1,0 +1,1555 @@
+{
+  "schema": "capture/1",
+  "pipeline": "gui-improve",
+  "stage": "compare",
+  "visit": 1,
+  "surface": {
+    "brief": "The Board's Unattached agents section (#agents) at http://127.0.0.1:65362/",
+    "briefText": "Baseline stage of the gui-improve walk on the unattached-agents panel. Tonight a worker whose cwd was a worktree appeared in that section with no way to see which tree it belonged to. The round's brief: make the section say where an unattached card's directory actually is and offer the right tree.",
+    "url": "http://127.0.0.1:65362/",
+    "selector": "#agents",
+    "cardSelector": "#jobs .job[data-thread]",
+    "board": "the main board (no Settings window open); the section sits under the New agent card, above #projects",
+    "change": "The Unattached agents section must say where an unattached card's directory actually is, and its attach action must offer the tree that directory belongs to.",
+    "changeSource": "Measured in this baseline, on a card whose cwd is a worktree the board has not read: the head's meta line reads 'no worktree' while the card's own cwd line names a .worktrees path; the only visible tree fact is the 10.5 px dim tail of that line (full path only in its title attribute); and the attach picker opens on a disabled placeholder naming only the tree's last path segment, with Attach disabled and no option carrying the card's tree. The section head's hint also asserts the card has no worktree of its own.",
+    "reproduce": "This directory's capture.mjs boots its own sandbox of THIS tree (the stage tree with the implement stage's change-set applied) and the baseline's fixture board (two scanned repos, one worktree each for the unread repo, two seeded unattached cards), then shoots the same three states the baseline shot. public/ is read per request by the panel; lib/ needs a restart.",
+    "scope": "The whole #agents section: its .project-head bar and #jobs with every card. The rest of the board is in the full-page shot only."
+  },
+  "round": {
+    "branch": "wtgui/round-c-how-a-round-names-its-trees-5b3b85",
+    "base": "99f2bd777a2a24d1aedd903e9c4b24a4d9520c36",
+    "baseParent": "origin/main",
+    "note": "This stage tree is the round parent (132354c1, two docs commits on 99f2bd7) and its public/, lib/ and server.js are byte-identical to the baseline's base 99f2bd7: git diff --stat 99f2bd7 HEAD -- public lib server.js is empty. The change-set (d813b435, ledger/gui-improve/change-set.patch) was applied to this tree with git apply -p1, so the after shots are the baseline's build plus that patch and nothing else."
+  },
+  "changeSet": {
+    "file": "ledger/gui-improve/change-set.patch",
+    "commit": "d813b435",
+    "tree": "the-implement-stage-of-the-unattached-61851d",
+    "bytes": 14474,
+    "note": "The implement stage's artefact, read at the named commit and applied to this tree as a patch. It is not re-committed here: this branch records the comparison and the patched product files, and the patch itself stays on the implement stage's commit."
+  },
+  "supersedes": {
+    "path": "ledger/gui-improve/compare/capture.json",
+    "previousSurface": "the task pipeline window's card (gui-improve, an earlier round)",
+    "note": "The pipeline's compare artefact paths are fixed, so this round replaces capture.json, comparison.json, comparison.html and verdict.json in this directory. The earlier round's pipeline shots (shots/*-pipeline*.png), pipeline-bundle.json and style.css are left untouched; they are not this stage's measurements."
+  },
+  "fixture": {
+    "root": "<sandbox>/fixture",
+    "scanRoots": [
+      "<sandbox>/fixture"
+    ],
+    "projects": {
+      "alpha": "<sandbox>/fixture/alpha",
+      "gamma": "<sandbox>/fixture/gamma",
+      "beta": "<sandbox>/fixture/outside/beta"
+    },
+    "rows": [
+      {
+        "project": "gamma",
+        "name": "gamma",
+        "path": "<sandbox>/fixture/gamma",
+        "branch": null
+      },
+      {
+        "project": "alpha",
+        "name": "alpha",
+        "path": "<sandbox>/fixture/alpha",
+        "branch": null
+      },
+      {
+        "project": "alpha",
+        "name": "feat-one",
+        "path": "<sandbox>/fixture/alpha/.worktrees/feat-one",
+        "branch": null
+      }
+    ],
+    "cards": [
+      {
+        "thread": "fixture-tree-worker",
+        "title": "unread-tree worker",
+        "cwd": "<sandbox>/fixture/outside/beta/.worktrees/feat-long-tree-name",
+        "ownerPath": null
+      },
+      {
+        "thread": "fixture-row-worker",
+        "title": "read-tree worker",
+        "cwd": "<sandbox>/fixture/alpha/.worktrees/feat-one",
+        "ownerPath": null
+      }
+    ],
+    "story": "alpha and gamma are scanned (alpha has the worktree feat-one). beta lives outside every scan root and has the worktree feat-long-tree-name, so the card pointed at it is a worker whose cwd is a worktree the board has no row for: tonight's shape.",
+    "scaleFactor": "Both counts are 1: the sandbox config's scanRoots and jobsFile are the only inputs."
+  },
+  "environment": {
+    "browser": "Playwright Chromium 156.0.8078.4 (headless)",
+    "deviceScaleFactor": 1,
+    "serverVersion": "1.76.1",
+    "serverUrl": "http://127.0.0.1:65362/",
+    "panelBuild": "005a5f590f3d",
+    "sandbox": {
+      "dir": "<sandbox>",
+      "jobsFile": "<sandbox>/logs/jobs.json",
+      "jobsRestored": 2,
+      "config": {
+        "scanRoots": [
+          "<sandbox>/fixture"
+        ],
+        "projects": [],
+        "threads": 2,
+        "jobsFile": "<sandbox>/logs/jobs.json"
+      },
+      "note": "A throwaway instance of this tree on a free port with its own store. The reader's own panel was not touched."
+    },
+    "servedNote": "public/index.html is rewritten by the panel for cache-busting (stylesheet links carry ?v=<panel-build> and a meta panel-build tag is added), so its hash differs from the tree by that stamp and nothing else; app.js and style.css are byte-identical to this tree.",
+    "servedFiles": {
+      "public/index.html": {
+        "status": 200,
+        "sha256": "a368e48efa70212758ffe3f7f6b78010e06827e887d1d4174cf75031e3eba999",
+        "bytes": 131260,
+        "matchesTree": false
+      },
+      "public/app.js": {
+        "status": 200,
+        "sha256": "91e8c712a30d8107693219e93a5aa0a46593cb5f74edc377a6c758a631917c87",
+        "bytes": 887031,
+        "matchesTree": true
+      },
+      "public/style.css": {
+        "status": 200,
+        "sha256": "02523ef4120925be231cc2b2a02f039ef434d8d813023eaa8c3c259be8afa4b9",
+        "bytes": 315475,
+        "matchesTree": true
+      }
+    },
+    "treeFiles": {
+      "public/index.html": {
+        "sha256": "8c6a3bf4308778bd808d84d2b39e1e8396ccf7920fcff87433d4e70d205748e4",
+        "bytes": 130712
+      },
+      "public/app.js": {
+        "sha256": "91e8c712a30d8107693219e93a5aa0a46593cb5f74edc377a6c758a631917c87",
+        "bytes": 887031
+      },
+      "public/style.css": {
+        "sha256": "02523ef4120925be231cc2b2a02f039ef434d8d813023eaa8c3c259be8afa4b9",
+        "bytes": 315475
+      }
+    }
+  },
+  "viewports": [
+    {
+      "name": "1440x900",
+      "width": 1440,
+      "height": 900
+    }
+  ],
+  "states": [
+    {
+      "name": "open",
+      "steps": [
+        "Fresh browser context at 1440x900, device scale factor 1 (no localStorage, so every section is at its default).",
+        "goto the panel base URL.",
+        "wait for #agents and for #jobs to hold two .job[data-thread] cards (the seeded unattached store).",
+        "assert #agents is not collapsed, #jobs is painted, no .attach-row is visible, and every card draws a .job-cwd line.",
+        "wait two animation frames, then a further 300 ms for the last paint."
+      ]
+    },
+    {
+      "name": "expanded",
+      "steps": [
+        "Reach the open state exactly as above.",
+        "click [data-attach-toggle=\"fixture-tree-worker\"] (the card whose cwd is a worktree the board has not read).",
+        "wait for that card's .attach-row to lose [hidden] and for its select to hold options.",
+        "assert the attach row is painted, the select is populated, and the Attach press carries its disabled state as measured.",
+        "wait two animation frames, then a further 300 ms for the last paint."
+      ]
+    },
+    {
+      "name": "collapsed",
+      "steps": [
+        "Reach the expanded state exactly as above.",
+        "click .project-head[data-toggle-fixed=\"agents\"] (the section's own bar, not one of its buttons).",
+        "wait for #agents to carry .fixed-collapsed and for #jobs to report display:none and no painted box.",
+        "assert the bar is still painted and its label still names the section.",
+        "wait two animation frames, then a further 300 ms for the last paint."
+      ]
+    }
+  ],
+  "shots": [
+    {
+      "viewport": "1440x900",
+      "viewportSize": {
+        "width": 1440,
+        "height": 900
+      },
+      "state": "open",
+      "steps": [
+        "Fresh browser context at 1440x900, device scale factor 1 (no localStorage, so every section is at its default).",
+        "goto the panel base URL.",
+        "wait for #agents and for #jobs to hold two .job[data-thread] cards (the seeded unattached store).",
+        "assert #agents is not collapsed, #jobs is painted, no .attach-row is visible, and every card draws a .job-cwd line.",
+        "wait two animation frames, then a further 300 ms for the last paint."
+      ],
+      "file": "ledger/gui-improve/compare/shots/1440x900-open.png",
+      "sha256": "62721cca19497745d708071b589c0acdff2ca9a6bdb9cc972fabafee8594ebb9",
+      "bytes": 152158,
+      "pixels": {
+        "width": 1440,
+        "height": 1418
+      },
+      "fullPage": true,
+      "surfaceFile": "ledger/gui-improve/compare/shots/1440x900-open-surface.png",
+      "surfaceSha256": "3901b17dfca41dd37e4be52634613e8b6223171ead0f04b0f7c5f4cb1c1bb872",
+      "surfaceBytes": 45441,
+      "surfacePixels": {
+        "width": 1408,
+        "height": 582
+      },
+      "pair": "surface",
+      "section": {
+        "box": {
+          "x": 16,
+          "y": 319.6875,
+          "w": 1408,
+          "h": 580.34375,
+          "top": 319.6875,
+          "bottom": 900.03125,
+          "left": 16,
+          "right": 1424
+        },
+        "collapsed": false,
+        "headBox": {
+          "x": 17,
+          "y": 320.6875,
+          "w": 1406,
+          "h": 47,
+          "top": 320.6875,
+          "bottom": 367.6875,
+          "left": 17,
+          "right": 1423
+        },
+        "headText": "▾ Unattached agents agents with no worktree of their own — agents started in a worktree are listed under that worktree's row 2 unattached Minimize all Clear finished",
+        "label": "Unattached agents",
+        "pathHint": "agents with no worktree of their own — agents started in a worktree are listed under that worktree's row",
+        "chipText": "2 unattached"
+      },
+      "jobs": {
+        "box": {
+          "x": 17,
+          "y": 367.6875,
+          "w": 1406,
+          "h": 531.34375,
+          "top": 367.6875,
+          "bottom": 899.03125,
+          "left": 17,
+          "right": 1423
+        },
+        "display": "block",
+        "hidden": false,
+        "scrollHeight": 531,
+        "childCount": 2
+      },
+      "cardCount": 2,
+      "cards": [
+        {
+          "thread": "fixture-tree-worker",
+          "collapsed": false,
+          "box": {
+            "x": 17,
+            "y": 367.6875,
+            "w": 1406,
+            "h": 266.171875,
+            "top": 367.6875,
+            "bottom": 633.859375,
+            "left": 17,
+            "right": 1423
+          },
+          "headBox": {
+            "x": 31,
+            "y": 376.6875,
+            "w": 1378,
+            "h": 27.75,
+            "top": 376.6875,
+            "bottom": 404.4375,
+            "left": 31,
+            "right": 1409
+          },
+          "title": null,
+          "pill": "complete",
+          "metaText": "worktree feat-long-tree-name · beta · (default model)",
+          "metaTitle": null,
+          "cwd": {
+            "box": {
+              "x": 57,
+              "y": 404.4375,
+              "w": 1352,
+              "h": 17.390625,
+              "top": 404.4375,
+              "bottom": 421.828125,
+              "left": 57,
+              "right": 1409
+            },
+            "label": "cwd",
+            "pathText": "…/beta/.worktrees/feat-long-tree-name",
+            "pathTitle": null,
+            "pathBox": {
+              "x": 84.890625,
+              "y": 404.4375,
+              "w": 244.125,
+              "h": 17.390625,
+              "top": 404.4375,
+              "bottom": 421.828125,
+              "left": 84.890625,
+              "right": 329.015625
+            },
+            "pathClientWidth": 244,
+            "pathScrollWidth": 244,
+            "pathTruncated": false,
+            "lineTitle": "working directory: <sandbox>/fixture/outside/beta/.worktrees/feat-long-tree-name",
+            "rowChip": null,
+            "runChip": null,
+            "name": "fixture-tree-worker"
+          },
+          "attachToggle": {
+            "text": "⤵ attach",
+            "box": {
+              "x": 1213.328125,
+              "y": 377.40625,
+              "w": 66.078125,
+              "h": 20.296875,
+              "top": 377.40625,
+              "bottom": 397.703125,
+              "left": 1213.328125,
+              "right": 1279.40625
+            },
+            "title": "attach this agent to a worktree — it then lives under that row"
+          },
+          "attachRow": {
+            "hidden": true,
+            "box": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0,
+              "top": 0,
+              "bottom": 0,
+              "left": 0,
+              "right": 0
+            },
+            "missing": null,
+            "selectedIndex": -1,
+            "selectedText": null,
+            "options": [],
+            "go": {
+              "text": "Attach",
+              "disabled": false,
+              "box": {
+                "x": 0,
+                "y": 0,
+                "w": 0,
+                "h": 0,
+                "top": 0,
+                "bottom": 0,
+                "left": 0,
+                "right": 0
+              }
+            }
+          }
+        },
+        {
+          "thread": "fixture-row-worker",
+          "collapsed": false,
+          "box": {
+            "x": 17,
+            "y": 633.859375,
+            "w": 1406,
+            "h": 265.171875,
+            "top": 633.859375,
+            "bottom": 899.03125,
+            "left": 17,
+            "right": 1423
+          },
+          "headBox": {
+            "x": 31,
+            "y": 642.859375,
+            "w": 1378,
+            "h": 27.75,
+            "top": 642.859375,
+            "bottom": 670.609375,
+            "left": 31,
+            "right": 1409
+          },
+          "title": null,
+          "pill": "complete",
+          "metaText": "worktree feat-one · alpha · (default model)",
+          "metaTitle": null,
+          "cwd": {
+            "box": {
+              "x": 57,
+              "y": 670.609375,
+              "w": 1352,
+              "h": 17.390625,
+              "top": 670.609375,
+              "bottom": 688,
+              "left": 57,
+              "right": 1409
+            },
+            "label": "cwd",
+            "pathText": "…/alpha/.worktrees/feat-one",
+            "pathTitle": null,
+            "pathBox": {
+              "x": 84.890625,
+              "y": 670.609375,
+              "w": 178.140625,
+              "h": 17.390625,
+              "top": 670.609375,
+              "bottom": 688,
+              "left": 84.890625,
+              "right": 263.03125
+            },
+            "pathClientWidth": 178,
+            "pathScrollWidth": 178,
+            "pathTruncated": false,
+            "lineTitle": "working directory: <sandbox>/fixture/alpha/.worktrees/feat-one",
+            "rowChip": null,
+            "runChip": null,
+            "name": "fixture-row-worker"
+          },
+          "attachToggle": {
+            "text": "⤵ attach",
+            "box": {
+              "x": 1213.328125,
+              "y": 643.578125,
+              "w": 66.078125,
+              "h": 20.296875,
+              "top": 643.578125,
+              "bottom": 663.875,
+              "left": 1213.328125,
+              "right": 1279.40625
+            },
+            "title": "attach this agent to a worktree — it then lives under that row"
+          },
+          "attachRow": {
+            "hidden": true,
+            "box": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0,
+              "top": 0,
+              "bottom": 0,
+              "left": 0,
+              "right": 0
+            },
+            "missing": null,
+            "selectedIndex": -1,
+            "selectedText": null,
+            "options": [],
+            "go": {
+              "text": "Attach",
+              "disabled": false,
+              "box": {
+                "x": 0,
+                "y": 0,
+                "w": 0,
+                "h": 0,
+                "top": 0,
+                "bottom": 0,
+                "left": 0,
+                "right": 0
+              }
+            }
+          }
+        }
+      ],
+      "overflow": [],
+      "errors": []
+    },
+    {
+      "viewport": "1440x900",
+      "viewportSize": {
+        "width": 1440,
+        "height": 900
+      },
+      "state": "expanded",
+      "steps": [
+        "Reach the open state exactly as above.",
+        "click [data-attach-toggle=\"fixture-tree-worker\"] (the card whose cwd is a worktree the board has not read).",
+        "wait for that card's .attach-row to lose [hidden] and for its select to hold options.",
+        "assert the attach row is painted, the select is populated, and the Attach press carries its disabled state as measured.",
+        "wait two animation frames, then a further 300 ms for the last paint."
+      ],
+      "file": "ledger/gui-improve/compare/shots/1440x900-expanded.png",
+      "sha256": "256ec281b34fd5012f432730ec0e1fed16e55bc89c41ef6735309ac28afc8074",
+      "bytes": 155070,
+      "pixels": {
+        "width": 1440,
+        "height": 1452
+      },
+      "fullPage": true,
+      "surfaceFile": "ledger/gui-improve/compare/shots/1440x900-expanded-surface.png",
+      "surfaceSha256": "e72f746893f2afcf37d86f59929fb82559491e96c6608b423c573892c3436483",
+      "surfaceBytes": 49201,
+      "surfacePixels": {
+        "width": 1408,
+        "height": 611
+      },
+      "pair": "surface",
+      "section": {
+        "box": {
+          "x": 16,
+          "y": 290.6875,
+          "w": 1408,
+          "h": 609.34375,
+          "top": 290.6875,
+          "bottom": 900.03125,
+          "left": 16,
+          "right": 1424
+        },
+        "collapsed": false,
+        "headBox": {
+          "x": 17,
+          "y": 291.6875,
+          "w": 1406,
+          "h": 47,
+          "top": 291.6875,
+          "bottom": 338.6875,
+          "left": 17,
+          "right": 1423
+        },
+        "headText": "▾ Unattached agents agents with no worktree of their own — agents started in a worktree are listed under that worktree's row 2 unattached Minimize all Clear finished",
+        "label": "Unattached agents",
+        "pathHint": "agents with no worktree of their own — agents started in a worktree are listed under that worktree's row",
+        "chipText": "2 unattached"
+      },
+      "jobs": {
+        "box": {
+          "x": 17,
+          "y": 338.6875,
+          "w": 1406,
+          "h": 560.34375,
+          "top": 338.6875,
+          "bottom": 899.03125,
+          "left": 17,
+          "right": 1423
+        },
+        "display": "block",
+        "hidden": false,
+        "scrollHeight": 560,
+        "childCount": 2
+      },
+      "cardCount": 2,
+      "cards": [
+        {
+          "thread": "fixture-tree-worker",
+          "collapsed": false,
+          "box": {
+            "x": 17,
+            "y": 338.6875,
+            "w": 1406,
+            "h": 295.171875,
+            "top": 338.6875,
+            "bottom": 633.859375,
+            "left": 17,
+            "right": 1423
+          },
+          "headBox": {
+            "x": 31,
+            "y": 347.6875,
+            "w": 1378,
+            "h": 27.75,
+            "top": 347.6875,
+            "bottom": 375.4375,
+            "left": 31,
+            "right": 1409
+          },
+          "title": null,
+          "pill": "complete",
+          "metaText": "worktree feat-long-tree-name · beta · (default model)",
+          "metaTitle": null,
+          "cwd": {
+            "box": {
+              "x": 57,
+              "y": 375.4375,
+              "w": 1352,
+              "h": 17.390625,
+              "top": 375.4375,
+              "bottom": 392.828125,
+              "left": 57,
+              "right": 1409
+            },
+            "label": "cwd",
+            "pathText": "…/beta/.worktrees/feat-long-tree-name",
+            "pathTitle": null,
+            "pathBox": {
+              "x": 84.890625,
+              "y": 375.4375,
+              "w": 244.125,
+              "h": 17.390625,
+              "top": 375.4375,
+              "bottom": 392.828125,
+              "left": 84.890625,
+              "right": 329.015625
+            },
+            "pathClientWidth": 244,
+            "pathScrollWidth": 244,
+            "pathTruncated": false,
+            "lineTitle": "working directory: <sandbox>/fixture/outside/beta/.worktrees/feat-long-tree-name",
+            "rowChip": null,
+            "runChip": null,
+            "name": "fixture-tree-worker"
+          },
+          "attachToggle": {
+            "text": "⤵ attach",
+            "box": {
+              "x": 1213.328125,
+              "y": 348.40625,
+              "w": 66.078125,
+              "h": 20.296875,
+              "top": 348.40625,
+              "bottom": 368.703125,
+              "left": 1213.328125,
+              "right": 1279.40625
+            },
+            "title": "attach this agent to a worktree — it then lives under that row"
+          },
+          "attachRow": {
+            "hidden": false,
+            "box": {
+              "x": 49,
+              "y": 398.828125,
+              "w": 1360,
+              "h": 24,
+              "top": 398.828125,
+              "bottom": 422.828125,
+              "left": 49,
+              "right": 1409
+            },
+            "missing": null,
+            "selectedIndex": 0,
+            "selectedText": "beta · feat-long-tree-name (not read)",
+            "options": [
+              {
+                "value": "<sandbox>/fixture/outside/beta/.worktrees/feat-long-tree-name",
+                "text": "beta · feat-long-tree-name (not read)",
+                "selected": true,
+                "disabled": false
+              },
+              {
+                "value": "<sandbox>/fixture/alpha",
+                "text": "alpha · alpha (main)",
+                "selected": false,
+                "disabled": false
+              },
+              {
+                "value": "<sandbox>/fixture/alpha/.worktrees/feat-one",
+                "text": "alpha · feat-one (feat-one)",
+                "selected": false,
+                "disabled": false
+              },
+              {
+                "value": "<sandbox>/fixture/gamma",
+                "text": "gamma · gamma (main)",
+                "selected": false,
+                "disabled": false
+              }
+            ],
+            "go": {
+              "text": "Attach",
+              "disabled": false,
+              "box": {
+                "x": 392.390625,
+                "y": 400.328125,
+                "w": 49.453125,
+                "h": 21,
+                "top": 400.328125,
+                "bottom": 421.328125,
+                "left": 392.390625,
+                "right": 441.84375
+              }
+            }
+          }
+        },
+        {
+          "thread": "fixture-row-worker",
+          "collapsed": false,
+          "box": {
+            "x": 17,
+            "y": 633.859375,
+            "w": 1406,
+            "h": 265.171875,
+            "top": 633.859375,
+            "bottom": 899.03125,
+            "left": 17,
+            "right": 1423
+          },
+          "headBox": {
+            "x": 31,
+            "y": 642.859375,
+            "w": 1378,
+            "h": 27.75,
+            "top": 642.859375,
+            "bottom": 670.609375,
+            "left": 31,
+            "right": 1409
+          },
+          "title": null,
+          "pill": "complete",
+          "metaText": "worktree feat-one · alpha · (default model)",
+          "metaTitle": null,
+          "cwd": {
+            "box": {
+              "x": 57,
+              "y": 670.609375,
+              "w": 1352,
+              "h": 17.390625,
+              "top": 670.609375,
+              "bottom": 688,
+              "left": 57,
+              "right": 1409
+            },
+            "label": "cwd",
+            "pathText": "…/alpha/.worktrees/feat-one",
+            "pathTitle": null,
+            "pathBox": {
+              "x": 84.890625,
+              "y": 670.609375,
+              "w": 178.140625,
+              "h": 17.390625,
+              "top": 670.609375,
+              "bottom": 688,
+              "left": 84.890625,
+              "right": 263.03125
+            },
+            "pathClientWidth": 178,
+            "pathScrollWidth": 178,
+            "pathTruncated": false,
+            "lineTitle": "working directory: <sandbox>/fixture/alpha/.worktrees/feat-one",
+            "rowChip": null,
+            "runChip": null,
+            "name": "fixture-row-worker"
+          },
+          "attachToggle": {
+            "text": "⤵ attach",
+            "box": {
+              "x": 1213.328125,
+              "y": 643.578125,
+              "w": 66.078125,
+              "h": 20.296875,
+              "top": 643.578125,
+              "bottom": 663.875,
+              "left": 1213.328125,
+              "right": 1279.40625
+            },
+            "title": "attach this agent to a worktree — it then lives under that row"
+          },
+          "attachRow": {
+            "hidden": true,
+            "box": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0,
+              "top": 0,
+              "bottom": 0,
+              "left": 0,
+              "right": 0
+            },
+            "missing": null,
+            "selectedIndex": -1,
+            "selectedText": null,
+            "options": [],
+            "go": {
+              "text": "Attach",
+              "disabled": false,
+              "box": {
+                "x": 0,
+                "y": 0,
+                "w": 0,
+                "h": 0,
+                "top": 0,
+                "bottom": 0,
+                "left": 0,
+                "right": 0
+              }
+            }
+          }
+        }
+      ],
+      "overflow": [],
+      "errors": []
+    },
+    {
+      "viewport": "1440x900",
+      "viewportSize": {
+        "width": 1440,
+        "height": 900
+      },
+      "state": "collapsed",
+      "steps": [
+        "Reach the expanded state exactly as above.",
+        "click .project-head[data-toggle-fixed=\"agents\"] (the section's own bar, not one of its buttons).",
+        "wait for #agents to carry .fixed-collapsed and for #jobs to report display:none and no painted box.",
+        "assert the bar is still painted and its label still names the section.",
+        "wait two animation frames, then a further 300 ms for the last paint."
+      ],
+      "file": "ledger/gui-improve/compare/shots/1440x900-collapsed.png",
+      "sha256": "556c2c24344c602227d574c974d63290adba807f18593d1f66845e00038dc7e0",
+      "bytes": 112934,
+      "pixels": {
+        "width": 1440,
+        "height": 900
+      },
+      "fullPage": true,
+      "surfaceFile": "ledger/gui-improve/compare/shots/1440x900-collapsed-surface.png",
+      "surfaceSha256": "d3c761fe9345c905e7e6e85aae8e90a5dd88bf9c006e35e9a2e93d23a37c08c6",
+      "surfaceBytes": 7164,
+      "surfacePixels": {
+        "width": 1408,
+        "height": 49
+      },
+      "pair": "surface",
+      "section": {
+        "box": {
+          "x": 16,
+          "y": 347.6875,
+          "w": 1408,
+          "h": 48,
+          "top": 347.6875,
+          "bottom": 395.6875,
+          "left": 16,
+          "right": 1424
+        },
+        "collapsed": true,
+        "headBox": {
+          "x": 17,
+          "y": 348.6875,
+          "w": 1406,
+          "h": 46,
+          "top": 348.6875,
+          "bottom": 394.6875,
+          "left": 17,
+          "right": 1423
+        },
+        "headText": "▸ Unattached agents agents with no worktree of their own — agents started in a worktree are listed under that worktree's row 2 unattached Minimize all Clear finished",
+        "label": "Unattached agents",
+        "pathHint": "agents with no worktree of their own — agents started in a worktree are listed under that worktree's row",
+        "chipText": "2 unattached"
+      },
+      "jobs": {
+        "box": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0,
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        },
+        "display": "none",
+        "hidden": false,
+        "scrollHeight": 0,
+        "childCount": 2
+      },
+      "cardCount": 2,
+      "cards": [
+        {
+          "thread": "fixture-tree-worker",
+          "collapsed": false,
+          "box": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0,
+            "top": 0,
+            "bottom": 0,
+            "left": 0,
+            "right": 0
+          },
+          "headBox": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0,
+            "top": 0,
+            "bottom": 0,
+            "left": 0,
+            "right": 0
+          },
+          "title": null,
+          "pill": "complete",
+          "metaText": "worktree feat-long-tree-name · beta · (default model)",
+          "metaTitle": null,
+          "cwd": {
+            "box": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0,
+              "top": 0,
+              "bottom": 0,
+              "left": 0,
+              "right": 0
+            },
+            "label": "cwd",
+            "pathText": "…/beta/.worktrees/feat-long-tree-name",
+            "pathTitle": null,
+            "pathBox": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0,
+              "top": 0,
+              "bottom": 0,
+              "left": 0,
+              "right": 0
+            },
+            "pathClientWidth": 0,
+            "pathScrollWidth": 0,
+            "pathTruncated": false,
+            "lineTitle": "working directory: <sandbox>/fixture/outside/beta/.worktrees/feat-long-tree-name",
+            "rowChip": null,
+            "runChip": null,
+            "name": "fixture-tree-worker"
+          },
+          "attachToggle": {
+            "text": "⤵ attach",
+            "box": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0,
+              "top": 0,
+              "bottom": 0,
+              "left": 0,
+              "right": 0
+            },
+            "title": "attach this agent to a worktree — it then lives under that row"
+          },
+          "attachRow": {
+            "hidden": false,
+            "box": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0,
+              "top": 0,
+              "bottom": 0,
+              "left": 0,
+              "right": 0
+            },
+            "missing": null,
+            "selectedIndex": 0,
+            "selectedText": "beta · feat-long-tree-name (not read)",
+            "options": [
+              {
+                "value": "<sandbox>/fixture/outside/beta/.worktrees/feat-long-tree-name",
+                "text": "beta · feat-long-tree-name (not read)",
+                "selected": true,
+                "disabled": false
+              },
+              {
+                "value": "<sandbox>/fixture/alpha",
+                "text": "alpha · alpha (main)",
+                "selected": false,
+                "disabled": false
+              },
+              {
+                "value": "<sandbox>/fixture/alpha/.worktrees/feat-one",
+                "text": "alpha · feat-one (feat-one)",
+                "selected": false,
+                "disabled": false
+              },
+              {
+                "value": "<sandbox>/fixture/gamma",
+                "text": "gamma · gamma (main)",
+                "selected": false,
+                "disabled": false
+              }
+            ],
+            "go": {
+              "text": "Attach",
+              "disabled": false,
+              "box": {
+                "x": 0,
+                "y": 0,
+                "w": 0,
+                "h": 0,
+                "top": 0,
+                "bottom": 0,
+                "left": 0,
+                "right": 0
+              }
+            }
+          }
+        },
+        {
+          "thread": "fixture-row-worker",
+          "collapsed": false,
+          "box": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0,
+            "top": 0,
+            "bottom": 0,
+            "left": 0,
+            "right": 0
+          },
+          "headBox": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0,
+            "top": 0,
+            "bottom": 0,
+            "left": 0,
+            "right": 0
+          },
+          "title": null,
+          "pill": "complete",
+          "metaText": "worktree feat-one · alpha · (default model)",
+          "metaTitle": null,
+          "cwd": {
+            "box": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0,
+              "top": 0,
+              "bottom": 0,
+              "left": 0,
+              "right": 0
+            },
+            "label": "cwd",
+            "pathText": "…/alpha/.worktrees/feat-one",
+            "pathTitle": null,
+            "pathBox": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0,
+              "top": 0,
+              "bottom": 0,
+              "left": 0,
+              "right": 0
+            },
+            "pathClientWidth": 0,
+            "pathScrollWidth": 0,
+            "pathTruncated": false,
+            "lineTitle": "working directory: <sandbox>/fixture/alpha/.worktrees/feat-one",
+            "rowChip": null,
+            "runChip": null,
+            "name": "fixture-row-worker"
+          },
+          "attachToggle": {
+            "text": "⤵ attach",
+            "box": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0,
+              "top": 0,
+              "bottom": 0,
+              "left": 0,
+              "right": 0
+            },
+            "title": "attach this agent to a worktree — it then lives under that row"
+          },
+          "attachRow": {
+            "hidden": true,
+            "box": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0,
+              "top": 0,
+              "bottom": 0,
+              "left": 0,
+              "right": 0
+            },
+            "missing": null,
+            "selectedIndex": -1,
+            "selectedText": null,
+            "options": [],
+            "go": {
+              "text": "Attach",
+              "disabled": false,
+              "box": {
+                "x": 0,
+                "y": 0,
+                "w": 0,
+                "h": 0,
+                "top": 0,
+                "bottom": 0,
+                "left": 0,
+                "right": 0
+              }
+            }
+          }
+        }
+      ],
+      "overflow": [],
+      "errors": []
+    }
+  ],
+  "measurements": {
+    "sectionOpen": {
+      "box": {
+        "x": 16,
+        "y": 319.6875,
+        "w": 1408,
+        "h": 580.34375,
+        "top": 319.6875,
+        "bottom": 900.03125,
+        "left": 16,
+        "right": 1424
+      },
+      "headBox": {
+        "x": 17,
+        "y": 320.6875,
+        "w": 1406,
+        "h": 47,
+        "top": 320.6875,
+        "bottom": 367.6875,
+        "left": 17,
+        "right": 1423
+      },
+      "label": "Unattached agents",
+      "pathHint": "agents with no worktree of their own — agents started in a worktree are listed under that worktree's row",
+      "collapsed": false,
+      "jobsBox": {
+        "x": 17,
+        "y": 367.6875,
+        "w": 1406,
+        "h": 531.34375,
+        "top": 367.6875,
+        "bottom": 899.03125,
+        "left": 17,
+        "right": 1423
+      },
+      "jobsScrollHeight": 531,
+      "cards": 2,
+      "paintedElements": 85,
+      "minFontSize": 10
+    },
+    "cardUnreadTree": {
+      "thread": "fixture-tree-worker",
+      "collapsed": false,
+      "box": {
+        "x": 17,
+        "y": 367.6875,
+        "w": 1406,
+        "h": 266.171875,
+        "top": 367.6875,
+        "bottom": 633.859375,
+        "left": 17,
+        "right": 1423
+      },
+      "headBox": {
+        "x": 31,
+        "y": 376.6875,
+        "w": 1378,
+        "h": 27.75,
+        "top": 376.6875,
+        "bottom": 404.4375,
+        "left": 31,
+        "right": 1409
+      },
+      "title": null,
+      "pill": "complete",
+      "metaText": "worktree feat-long-tree-name · beta · (default model)",
+      "metaTitle": null,
+      "cwd": {
+        "box": {
+          "x": 57,
+          "y": 404.4375,
+          "w": 1352,
+          "h": 17.390625,
+          "top": 404.4375,
+          "bottom": 421.828125,
+          "left": 57,
+          "right": 1409
+        },
+        "label": "cwd",
+        "pathText": "…/beta/.worktrees/feat-long-tree-name",
+        "pathTitle": null,
+        "pathBox": {
+          "x": 84.890625,
+          "y": 404.4375,
+          "w": 244.125,
+          "h": 17.390625,
+          "top": 404.4375,
+          "bottom": 421.828125,
+          "left": 84.890625,
+          "right": 329.015625
+        },
+        "pathClientWidth": 244,
+        "pathScrollWidth": 244,
+        "pathTruncated": false,
+        "lineTitle": "working directory: <sandbox>/fixture/outside/beta/.worktrees/feat-long-tree-name",
+        "rowChip": null,
+        "runChip": null,
+        "name": "fixture-tree-worker"
+      },
+      "attachToggle": {
+        "text": "⤵ attach",
+        "box": {
+          "x": 1213.328125,
+          "y": 377.40625,
+          "w": 66.078125,
+          "h": 20.296875,
+          "top": 377.40625,
+          "bottom": 397.703125,
+          "left": 1213.328125,
+          "right": 1279.40625
+        },
+        "title": "attach this agent to a worktree — it then lives under that row"
+      },
+      "attachRow": {
+        "hidden": true,
+        "box": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0,
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        },
+        "missing": null,
+        "selectedIndex": -1,
+        "selectedText": null,
+        "options": [],
+        "go": {
+          "text": "Attach",
+          "disabled": false,
+          "box": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0,
+            "top": 0,
+            "bottom": 0,
+            "left": 0,
+            "right": 0
+          }
+        }
+      }
+    },
+    "cardReadTree": {
+      "thread": "fixture-row-worker",
+      "collapsed": false,
+      "box": {
+        "x": 17,
+        "y": 633.859375,
+        "w": 1406,
+        "h": 265.171875,
+        "top": 633.859375,
+        "bottom": 899.03125,
+        "left": 17,
+        "right": 1423
+      },
+      "headBox": {
+        "x": 31,
+        "y": 642.859375,
+        "w": 1378,
+        "h": 27.75,
+        "top": 642.859375,
+        "bottom": 670.609375,
+        "left": 31,
+        "right": 1409
+      },
+      "title": null,
+      "pill": "complete",
+      "metaText": "worktree feat-one · alpha · (default model)",
+      "metaTitle": null,
+      "cwd": {
+        "box": {
+          "x": 57,
+          "y": 670.609375,
+          "w": 1352,
+          "h": 17.390625,
+          "top": 670.609375,
+          "bottom": 688,
+          "left": 57,
+          "right": 1409
+        },
+        "label": "cwd",
+        "pathText": "…/alpha/.worktrees/feat-one",
+        "pathTitle": null,
+        "pathBox": {
+          "x": 84.890625,
+          "y": 670.609375,
+          "w": 178.140625,
+          "h": 17.390625,
+          "top": 670.609375,
+          "bottom": 688,
+          "left": 84.890625,
+          "right": 263.03125
+        },
+        "pathClientWidth": 178,
+        "pathScrollWidth": 178,
+        "pathTruncated": false,
+        "lineTitle": "working directory: <sandbox>/fixture/alpha/.worktrees/feat-one",
+        "rowChip": null,
+        "runChip": null,
+        "name": "fixture-row-worker"
+      },
+      "attachToggle": {
+        "text": "⤵ attach",
+        "box": {
+          "x": 1213.328125,
+          "y": 643.578125,
+          "w": 66.078125,
+          "h": 20.296875,
+          "top": 643.578125,
+          "bottom": 663.875,
+          "left": 1213.328125,
+          "right": 1279.40625
+        },
+        "title": "attach this agent to a worktree — it then lives under that row"
+      },
+      "attachRow": {
+        "hidden": true,
+        "box": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0,
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        },
+        "missing": null,
+        "selectedIndex": -1,
+        "selectedText": null,
+        "options": [],
+        "go": {
+          "text": "Attach",
+          "disabled": false,
+          "box": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0,
+            "top": 0,
+            "bottom": 0,
+            "left": 0,
+            "right": 0
+          }
+        }
+      }
+    },
+    "attachPicker": {
+      "hidden": false,
+      "box": {
+        "x": 49,
+        "y": 398.828125,
+        "w": 1360,
+        "h": 24,
+        "top": 398.828125,
+        "bottom": 422.828125,
+        "left": 49,
+        "right": 1409
+      },
+      "missing": null,
+      "selectedIndex": 0,
+      "selectedText": "beta · feat-long-tree-name (not read)",
+      "options": [
+        {
+          "value": "<sandbox>/fixture/outside/beta/.worktrees/feat-long-tree-name",
+          "text": "beta · feat-long-tree-name (not read)",
+          "selected": true,
+          "disabled": false
+        },
+        {
+          "value": "<sandbox>/fixture/alpha",
+          "text": "alpha · alpha (main)",
+          "selected": false,
+          "disabled": false
+        },
+        {
+          "value": "<sandbox>/fixture/alpha/.worktrees/feat-one",
+          "text": "alpha · feat-one (feat-one)",
+          "selected": false,
+          "disabled": false
+        },
+        {
+          "value": "<sandbox>/fixture/gamma",
+          "text": "gamma · gamma (main)",
+          "selected": false,
+          "disabled": false
+        }
+      ],
+      "go": {
+        "text": "Attach",
+        "disabled": false,
+        "box": {
+          "x": 392.390625,
+          "y": 400.328125,
+          "w": 49.453125,
+          "h": 21,
+          "top": 400.328125,
+          "bottom": 421.328125,
+          "left": 392.390625,
+          "right": 441.84375
+        }
+      }
+    },
+    "attachPickerAssert": {
+      "hidden": false,
+      "painted": true,
+      "options": [
+        {
+          "text": "beta · feat-long-tree-name (not read)",
+          "value": "<sandbox>/fixture/outside/beta/.worktrees/feat-long-tree-name",
+          "disabled": false
+        },
+        {
+          "text": "alpha · alpha (main)",
+          "value": "<sandbox>/fixture/alpha",
+          "disabled": false
+        },
+        {
+          "text": "alpha · feat-one (feat-one)",
+          "value": "<sandbox>/fixture/alpha/.worktrees/feat-one",
+          "disabled": false
+        },
+        {
+          "text": "gamma · gamma (main)",
+          "value": "<sandbox>/fixture/gamma",
+          "disabled": false
+        }
+      ],
+      "selectedText": "beta · feat-long-tree-name (not read)",
+      "missing": null,
+      "goDisabled": false
+    },
+    "collapsed": {
+      "section": {
+        "box": {
+          "x": 16,
+          "y": 347.6875,
+          "w": 1408,
+          "h": 48,
+          "top": 347.6875,
+          "bottom": 395.6875,
+          "left": 16,
+          "right": 1424
+        },
+        "collapsed": true,
+        "headBox": {
+          "x": 17,
+          "y": 348.6875,
+          "w": 1406,
+          "h": 46,
+          "top": 348.6875,
+          "bottom": 394.6875,
+          "left": 17,
+          "right": 1423
+        },
+        "headText": "▸ Unattached agents agents with no worktree of their own — agents started in a worktree are listed under that worktree's row 2 unattached Minimize all Clear finished",
+        "label": "Unattached agents",
+        "pathHint": "agents with no worktree of their own — agents started in a worktree are listed under that worktree's row",
+        "chipText": "2 unattached"
+      },
+      "jobs": {
+        "box": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0,
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        },
+        "display": "none",
+        "hidden": false,
+        "scrollHeight": 0,
+        "childCount": 2
+      },
+      "cardCount": 2,
+      "paintedElements": 10
+    },
+    "overflow": {
+      "open": [],
+      "expanded": [],
+      "collapsed": []
+    }
+  },
+  "target": {
+    "problem": "An unattached card whose cwd is a worktree the board has not read gives the reader no way to see which tree it is in, and its attach action offers every other tree instead.",
+    "measured": {
+      "sectionHint": "agents with no worktree of their own — agents started in a worktree are listed under that worktree's row",
+      "headMetaOfTreeCard": "worktree feat-long-tree-name · beta · (default model)",
+      "cwdPathVisible": "…/beta/.worktrees/feat-long-tree-name",
+      "cwdPathWidthPx": 244.125,
+      "cwdLineFontPx": 10.5,
+      "cwdPathTruncated": false,
+      "fullPathOnlyInTitle": true,
+      "rowChipShown": false,
+      "pickerOptionCount": 4,
+      "pickerOffersCardTree": true,
+      "pickerSelectedText": "beta · feat-long-tree-name (not read)",
+      "attachPressDisabled": false
+    },
+    "ask": "The section must say where an unattached card's directory actually is (the project and the tree, in visible text, not only a 10.5 px path tail and a title attribute) and its attach action must offer the tree that directory belongs to, or say plainly that the board has no row for it and what would make one."
+  },
+  "inventory": {
+    "dom": {
+      "file": "ledger/gui-improve/compare/dom.json",
+      "sha256": "e5e5322ac5bdd8351501d014041f9ebdf951bb67c22fcaa7fa95225daf190e88",
+      "bytes": 176549,
+      "elements": 184
+    },
+    "css": {
+      "file": "ledger/gui-improve/compare/css.json",
+      "sha256": "e9dc1d4641669c3a4f2a934fc24438c2e8b6f8b30ce7171becb9ed7d9a3639f7",
+      "bytes": 1084088,
+      "elements": 184
+    },
+    "stylesheet": {
+      "file": "ledger/gui-improve/compare/style.css",
+      "sha256": "02523ef4120925be231cc2b2a02f039ef434d8d813023eaa8c3c259be8afa4b9",
+      "bytes": 315475,
+      "servedSha256": "02523ef4120925be231cc2b2a02f039ef434d8d813023eaa8c3c259be8afa4b9",
+      "matchesTree": true
+    },
+    "rules": 2132,
+    "sheets": [
+      {
+        "index": 0,
+        "href": "http://127.0.0.1:65362/style.css?v=005a5f590f3d",
+        "owner": "link",
+        "id": null,
+        "ruleCount": 1894
+      },
+      {
+        "index": 1,
+        "href": "http://127.0.0.1:65362/chart.css?v=005a5f590f3d",
+        "owner": "link",
+        "id": null,
+        "ruleCount": 177
+      },
+      {
+        "index": 2,
+        "href": "http://127.0.0.1:65362/core/pipeline-card.css?v=005a5f590f3d",
+        "owner": "link",
+        "id": null,
+        "ruleCount": 51
+      }
+    ]
+  },
+  "notes": {
+    "shotPair": "shots[*].file is a full-page shot of the whole board; shots[*].surfaceFile is the #agents section alone and is the stable pair to diff. The section depends only on the seeded store and the fixture board, so the pair repeats across captures of the same build.",
+    "relativeText": "The seeded cards carry fixed startedAt/endedAt instants and no lastActiveAt, so no relative age or duration text is drawn on them; a compare run still masks any duration text the console may grow.",
+    "phantomRows": "The board draws the whole fixture, but only the two seeded cards are in #jobs; nothing else in the section is live."
+  },
+  "incomplete": [],
+  "recorded_at": "2026-11-09T13:10:01.571Z"
+}
