@@ -57,7 +57,8 @@ function harness(t, { spawn = "auto" } = {}) {
   const dir = mkdtempSync(path.join(os.tmpdir(), "wtgui-pipeline-sweep-"));
   const bundleFile = path.join(dir, "pipeline-bundle.json");
   writeFileSync(bundleFile, JSON.stringify(bundleDoc));
-  const state = { board: [], started: [], rows: [], cuts: [], tree: path.join(dir, "trees", "carry-the-contract-a1b2c3") };
+  // `tree` is the ROUND'S PARENT TREE, written by the first cut of a round; `stageTrees` are its children.
+  const state = { board: [], started: [], rows: [], cuts: [], tree: null, stageTrees: [] };
   const jobs = {
     list: () => state.board,
     firstOfThread: (thread) => state.board.find((j) => j.thread === thread) || null,
@@ -69,18 +70,28 @@ function harness(t, { spawn = "auto" } = {}) {
     get: () => null,
     clarify: { state: () => null },
     // The cut the design makes its own step: a directory and a branch, and the artifacts both stages will settle
-    // with (a stage that ends `done` without its artifact parks, by design). ONE TREE PER STAGE: every call makes its
-    // own directory, records the `from` and `parent` it was handed, and answers the branch and parent a real
-    // `Jobs.makeWorktree` answers — the round's frozen parent is read off the second call's `from`.
+    // with (a stage that ends `done` without its artifact parks, by design). A ROUND cuts a PARENT tree first (the
+    // call with `round: true` and a `remote`), then one child per stage, all named by `stageTreeName` on the row, so
+    // the name the caller passed is the directory and branch this answers.
     makeWorktree: async (repoDir, prompt, opts = {}) => {
       const n = state.cuts.length + 1;
-      const branch = n === 1 ? "wtgui/carry-the-contract-a1b2c3" : `wtgui/carry-the-contract-s${n}-b${n}`;
-      const tree = n === 1 ? state.tree : path.join(dir, "trees", `carry-the-contract-s${n}-b${n}`);
-      state.cuts.push({ repoDir, prompt, from: opts.from || null, parent: opts.parent || null, tree, branch });
+      const named = opts.name && opts.name.dir ? { dir: opts.name.dir, branch: opts.name.branch } : null;
+      const dirName = named ? named.dir : `carry-the-contract-s${n}-b${n}`;
+      const branch = named ? named.branch : `wtgui/${dirName}`;
+      const tree = path.join(dir, "trees", dirName);
+      state.cuts.push({ repoDir, prompt, from: opts.from || null, parent: opts.parent || null, remote: opts.remote || null, round: opts.round === true, tree, branch, dir: dirName });
+      if (!state.tree) state.tree = tree; // the first cut of a round IS its parent tree
+      else state.stageTrees.push(tree);
       mkdirSync(path.join(tree, "out"), { recursive: true });
       writeFileSync(path.join(tree, "out", "1.json"), JSON.stringify({ stage: 1 }));
       writeFileSync(path.join(tree, "out", "2.json"), JSON.stringify({ stage: 2 }));
-      return { path: tree, branch, startSha: ROUND_SHA, parentName: "main" };
+      return {
+        path: tree,
+        branch,
+        startSha: ROUND_SHA,
+        startRef: opts.round === true ? "origin/main" : opts.from || null,
+        parentName: opts.parent || (opts.round === true ? "origin/main" : "main"),
+      };
     },
   };
   const assistant = new Assistant({
@@ -125,25 +136,38 @@ test("a pipeline task's tree is cut first, then its stage is started, advanced o
   //    because nothing fired at the cut's end — the row sat until the next queue tick, and a restart in between.
   assistant.sweepQueues();
   await settleStarts();
-  assert.equal(state.cuts.length, 1, "the assistant cut exactly one tree");
-  assert.match(state.cuts[0].prompt, /Do stage 1\./);
+  // TWO cuts for one round's start: the round's PARENT tree from origin/main, then the first stage's own child of it.
+  assert.equal(state.cuts.length, 2, "the round's parent tree, then the stage's own tree");
+  assert.equal(state.cuts[0].round, true, "the first cut IS the round's parent tree");
+  assert.equal(state.cuts[0].remote, "main", "cut from origin/main, never from the checkout's tip");
+  assert.equal(state.cuts[0].from, null, "the parent tree names no start ref: the remote decides it");
+  assert.equal(state.cuts[1].round, false, "the stage's tree is a child, not a second round");
+  assert.equal(state.cuts[1].from, state.cuts[0].branch, "cut from the round's parent branch tip");
+  assert.equal(state.cuts[1].parent, state.cuts[0].branch, "and recorded under it, so the chart nests one round together");
+  assert.match(state.cuts[1].dir, /^carry-the-contract-stage-1-stage-1-[0-9a-f]{6}$/, "the child is named Stage 1 of the document");
+  assert.match(state.cuts[0].prompt, /carry the contract/i);
   let row = rowOf(added.id);
-  assert.equal(row.pipelineRun.tree.path, state.tree, "the path is written on the row BEFORE any start");
-  assert.equal(row.pipelineRun.tree.branch, "wtgui/carry-the-contract-a1b2c3");
+  assert.equal(row.pipelineRun.round.parentPath, state.cuts[0].tree, "the round records its parent tree's path");
+  assert.equal(row.pipelineRun.round.parent, state.cuts[0].branch, "and the branch that lands");
+  assert.equal(row.pipelineRun.round.sha, ROUND_SHA);
+  assert.equal(row.pipelineRun.round.base, "origin/main", "the record says which ref the round was cut from");
+  assert.equal(row.pipelineRun.tree.path, state.cuts[0].tree, "the PARENT TREE is the row's landing tree from the first cut");
+  assert.equal(row.pipelineRun.tree.branch, state.cuts[0].branch);
+  assert.equal(row.pipelineRun.trees.S1.path, state.cuts[1].tree, "the stage's own child is on the record too");
   assert.equal(state.started.length, 1, "the cut's end asks for the start — no second sweep, no timer");
 
-  // 2. A second sweep is a no-op: the tree is not cut again and the stage is not started twice.
+  // 2. A second sweep is a no-op: the trees are not cut again and the stage is not started twice.
   assistant.sweepQueues();
   await settleStarts();
-  assert.equal(state.cuts.length, 1, "the tree step is not called twice");
+  assert.equal(state.cuts.length, 2, "the tree step is not called twice");
   assert.equal(state.started.length, 1, "the stage is started once");
   assert.equal(state.started[0].taskId, added.id, "the spawn names the queue row it serves");
-  assert.equal(state.started[0].target, state.tree);
+  assert.equal(state.started[0].target, state.cuts[1].tree, "the stage runs in its OWN tree, never the parent's");
   assert.equal(state.started[0].existing, true);
   assert.match(state.started[0].prompt, /Do stage 1\./);
   assert.match(state.started[0].prompt, new RegExp(`Queue task #${added.id}: carry the contract`));
   assert.match(state.started[0].prompt, /INPUTS\n/);
-  assert.match(state.started[0].prompt, /tree {8}.*carry-the-contract-a1b2c3/, "the prompt quotes the tree the stage inherits");
+  assert.match(state.started[0].prompt, /tree {8}.*carry-the-contract-stage-1-stage-1-/, "the prompt quotes the tree the stage inherits");
 
   row = rowOf(added.id);
   assert.equal(row.state, "running", "the cut linked the row running with its thread");
@@ -165,20 +189,25 @@ test("a pipeline task's tree is cut first, then its stage is started, advanced o
   assert.equal(state.started.length, 2, "the second stage was started by the panel, not left for the assistant");
   assert.match(state.started[1].prompt, /Do stage 2\./);
   assert.equal(state.started[1].taskId, added.id);
-  assert.equal(state.started[1].target, state.cuts[1].tree, "the second stage runs in ITS OWN tree");
-  assert.notEqual(state.started[1].target, state.tree, "and never in the first stage's tree");
-  assert.equal(state.cuts.length, 2, "one tree per stage of the round");
-  assert.equal(state.cuts[1].from, ROUND_SHA, "cut at the commit the round began at, not at the branch as it stands now");
-  assert.equal(state.cuts[1].parent, "main", "and recorded as a child of the round's parent, so the chart nests it");
+  assert.equal(state.started[1].target, state.cuts[2].tree, "the second stage runs in ITS OWN tree");
+  assert.notEqual(state.started[1].target, state.cuts[1].tree, "and never in the first stage's tree");
+  assert.equal(state.cuts.length, 3, "the parent tree, then one child per stage of the round");
+  assert.equal(state.cuts[2].from, state.cuts[0].branch, "cut from the round's parent tree's branch, never from origin/main as it stands now");
+  assert.equal(state.cuts[2].parent, state.cuts[0].branch, "and recorded as a child of the round's parent tree, so the chart nests every stage of one round");
+  assert.notEqual(state.cuts[2].from, "main", "the parent branch is the round's own, not the project's main");
+  assert.match(state.cuts[2].dir, /^carry-the-contract-stage-2-stage-2-[0-9a-f]{6}$/, "named Stage 2 of the document");
   assert.equal(row.pipelineRun.round.sha, ROUND_SHA, "the round's parent commit is on the record, once");
-  assert.equal(row.pipelineRun.trees.S1.path, state.tree);
-  assert.equal(row.pipelineRun.trees.S2.path, state.cuts[1].tree);
+  assert.equal(row.pipelineRun.round.parentPath, state.cuts[0].tree, "and it is still the parent tree the round began in");
+  assert.equal(row.pipelineRun.trees.S1.path, state.cuts[1].tree);
+  assert.equal(row.pipelineRun.trees.S2.path, state.cuts[2].tree);
 
   // 4. The last stage settles. The driver has nothing after it, so the queue's own settle finishes the row — the
   //    same transition it has always made, on the row that is now done. The landing rule is unchanged: a row with a
   //    tree is done when that tree's PR reads MERGED, and the tree it reads is the one the LAST stage ran in.
   state.board[1].status = "done";
-  state.rows.push({ path: state.cuts[1].tree, verdict: "MERGED" });
+  // The landing read finds MERGED for the tree the work is on: the last stage's child, and the round's parent tree
+  // the assembly would land on (the stub's runs record no commit, so this round has nothing to assemble).
+  for (const where of [state.cuts[1].tree, rowOf(added.id).worktree, state.tree].filter(Boolean)) state.rows.push({ path: where, verdict: "MERGED" });
   assistant.sweepQueues();
   await settleStarts();
 
@@ -331,7 +360,11 @@ test("a stage's artifact decides its remote write: a document stage is local, a 
   assistant.sweepQueues();
   await settleStarts();
   assert.equal(state.started.length, 2, "the next stage was started by the same sweep");
-  assert.equal(state.started[1].remoteWrite, "pr", "S2's artifact IS the pull request, so it lands the way it always did");
+  // Even the stage whose artifact IS the pull request runs local-only: its branch is one of the round's stage
+  // branches, and the branch that lands is the round's parent tree, which the assembly carries every stage onto
+  // (docs/task-pipeline.md, "Stage branches are local only"). A stage that pushed here would open a PR holding one
+  // stage of the round and leave the rest unlanded.
+  assert.equal(state.started[1].remoteWrite, "local", "a stage tree is local-only, whatever its artifact declares");
   assert.equal(rowOf(added.id).pipelineRun.stage, "S2");
 });
 
@@ -355,8 +388,8 @@ test("a row filed onto a stage by the queue is written once, and its stage is th
   // And it is driven like any other pipeline row: the first sweep asks for the tree.
   assistant.sweepQueues();
   await settleStarts();
-  assert.equal(state.cuts.length, 1);
-  assert.equal(rowOf(added.task.id).pipelineRun.tree.path, state.tree);
+  assert.equal(state.cuts.length, 2, "the round's parent tree, then the stage's own child");
+  assert.equal(rowOf(added.task.id).pipelineRun.tree.path, state.cuts[0].tree, "the row's landing tree is the round's parent tree");
 });
 
 // The cut's end is the handoff (round 7's item 6): the tree write is followed, in the same turn, by the pass that asks
@@ -376,7 +409,7 @@ test("a cut asks for its stage at once, and the handoff does not loop", async (t
   assistant.sweepQueues();
   await settleStarts();
 
-  assert.equal(state.cuts.length, 1, "one tree, cut once");
+  assert.equal(state.cuts.length, 2, "the round's parent tree and the stage's child, cut once each");
   assert.equal(state.started.length, 1, "and the stage started without a second pass from a timer");
   assert.equal(passes, 2, "the outer pass, then the handoff's own — which asks for nothing further");
 });
