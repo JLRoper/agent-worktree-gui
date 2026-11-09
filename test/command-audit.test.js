@@ -14,6 +14,8 @@ import path from "node:path";
 import test from "node:test";
 import { ASSISTANT_THREAD, Assistant } from "../lib/assistant.js";
 import { auditCounts, gaps } from "../lib/assistant/audit.js";
+import { ASSISTANT_DIRECTOR_ID } from "../lib/roles.js";
+import { PRIMARY_ASSISTANT } from "../lib/assistants.js";
 
 const settle = (ms = 40) => new Promise((r) => setTimeout(r, ms));
 
@@ -172,6 +174,63 @@ test("a restart mid-turn reports unactioned on the next pass, and enforce replay
   // Never a third attempt: a replay that ran once is history, however often the clock is asked.
   await assistant.checkCommandAudit([cut]);
   await settle();
+  assert.equal(kinds(assistant, "command-replay").length, 1);
+});
+
+test("a turn killed on assistant 2's thread has its QUEUE line replayed on the next wake", async (t) => {
+  // The 18:28 loss: the sweep read only ASSISTANT_THREAD, so a turn a restart cut in half on any other
+  // assistant's thread was never reconciled and the QUEUE line it wrote was never carried out. #2 is the
+  // Director here because QUEUE is the one line whose effect is visible as a row (and the one the loss named).
+  const { assistant } = await board(t);
+  assistant.createAssistant({ roleId: ASSISTANT_DIRECTOR_ID });
+  assistant.setSettings({ commandAudit: "enforce" });
+  const second = assistant.threadOf("assistant-2");
+  assert.notEqual(second, ASSISTANT_THREAD, "the second assistant has a thread of its own");
+
+  const cut = {
+    id: "turn-cut-2",
+    thread: second,
+    assistantId: "assistant-2",
+    turn: 1,
+    status: "interrupted",
+    startedAt: new Date(Date.now() - 120_000).toISOString(),
+    endedAt: null,
+    lines: [{ kind: "text", text: "QUEUE #1 | re-land the docs branch", at: Date.now() - 60_000 }],
+  };
+  // A worker's turn is not an assistant's: the sweep must still leave it alone.
+  const worker = {
+    id: "job-worker",
+    thread: "wtgui-a-worker",
+    status: "done",
+    startedAt: new Date(Date.now() - 120_000).toISOString(),
+    endedAt: new Date(Date.now() - 60_000).toISOString(),
+    lines: [{ kind: "text", text: "QUEUE #1 | a worker cannot file this", at: Date.now() - 61_000 }],
+  };
+
+  const first = await assistant.checkCommandAudit([cut, worker]);
+  assert.equal(first.length, 1, "the pass names the killed #2 turn");
+  assert.equal(cards(assistant)[0].turnId, "turn-cut-2");
+  assert.equal(cards(assistant)[0].thread, second, "and files the card on #2, not on #1");
+  assert.equal(cards(assistant)[0].assistantId, "assistant-2");
+  assert.ok(assistant.findAudit("turn-cut-2"), "the ledger is opened from the stored lines");
+  assert.ok(assistant.findAudit("turn-cut-2").replay, "enforce arms the replay for the NEXT pass");
+  assert.equal(assistant.findAudit("job-worker"), null, "a worker's turn gets no audit");
+  assert.equal(assistant.queueView(PRIMARY_ASSISTANT).tasks.length, 0, "nothing filed yet");
+
+  // The next wake: the QUEUE line nothing accounted for is carried out, once.
+  await assistant.checkCommandAudit([cut, worker]);
+  assert.equal(kinds(assistant, "command-replay").length, 1);
+  const queue = assistant.queueView(PRIMARY_ASSISTANT);
+  assert.equal(queue.tasks.length, 1, "the row the killed turn asked for exists");
+  assert.match(queue.tasks[0].title, /re-land the docs branch/);
+  assert.equal(queue.tasks[0].createdBy, "assistant-2", "filed as the turn's own assistant");
+  assert.equal(gaps(assistant.findAudit("turn-cut-2")).length, 0, "and the ledger says it landed");
+  assert.equal(cards(assistant)[0].status, "done", "the red card closes");
+
+  // Never a third row: the replay is once, however often the clock is asked.
+  await assistant.checkCommandAudit([cut, worker]);
+  await settle();
+  assert.equal(assistant.queueView(PRIMARY_ASSISTANT).tasks.length, 1);
   assert.equal(kinds(assistant, "command-replay").length, 1);
 });
 
