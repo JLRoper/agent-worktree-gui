@@ -84,7 +84,7 @@
 <p class="kicker">Agent board - round 7 dossier - 2026-11-09</p>
 <h1>Ping-pong round 7 dossier: the eight next steps, the two stage prompts as the panel sent them, and the accepted draft</h1>
 <p class="sub">Task #335 on Assistant #2's queue, pipeline <code>ping-pong</code>, project <code>agent-worktree-gui</code>. Three parts: what the run left to do, the two stage prompts read straight out of the job records, and <code>ledger/ping-pong/draft.md</code> from the round-7 tree rendered as a document rather than a quoted blob.</p>
-<p class="meta">row <code>#335</code> - tree <code>.worktrees/write-the-draft-the-brief-asks-for-in-94df79</code> - branch <code>wtgui/write-the-draft-the-brief-asks-for-in-94df79</code> at <code>cbc07d7</code> - prompts from <code>~/.wag/state/jobs.json</code> - page written 11/8/2026, 22:08:15 EST (2026-11-09T03:08:15Z UTC)</p>
+<p class="meta">row <code>#335</code> - tree <code>.worktrees/write-the-draft-the-brief-asks-for-in-94df79</code> - branch <code>wtgui/write-the-draft-the-brief-asks-for-in-94df79</code> at <code>cbc07d7</code> - prompts from <code>~/.wag/state/jobs.json</code> - page written 11/8/2026, 22:12:01 EST (2026-11-09T03:12:01Z UTC)</p>
 
 <div class="lead">
 <p class="go"><b>Round 7's review page:</b> <a href="ping-pong-round-7-2026-11-08.html">Ping-pong round 7: the same brief on the fixed panel, and the four defects' before and after</a></p>
@@ -99,7 +99,7 @@
 <p>Eight, in the order the assistant put them: the three structural fixes in the queue and the driver first, then the two the row's own record makes unavoidable, then the two cleanups a person still owes, and the budget last. Each reason is the round-7 number that argues for it.</p>
 
 <ol class="steps">
-<li><b>Make artifact paths visit-scoped, so <code>draft-r2.md</code> is not overwritten by draft#3.</b><span class="why">the round-7 tree already held <code>draft.md</code> from earlier rounds, so draft#3's commit is 9 insertions and 28 deletions on one shared path; the only per-round identity is the stage run's pin, never the path.</span></li>
+<li><b>Make artifact paths visit-scoped, so <code>draft-r2.md</code> is not overwritten by draft#3.</b><span class="why">the round-7 tree already held <code>draft.md</code> from earlier rounds, so all three drafts wrote that one path - draft#1 replaced it with 9 insertions and 28 deletions, draft#2 rewrote 8 lines, draft#3 rewrote 7 - and the only per-round identity is the stage run's pin, never the path.</span></li>
 
 <li><b>State the artifact kind explicitly on every stage in the seed, rather than leaving it unstated.</b><span class="why">the row's own done reason reads "critique/1, kind unstated", and an unstated kind takes the driver's <code>local</code> default, so a stage that should push would silently not.</span></li>
 
