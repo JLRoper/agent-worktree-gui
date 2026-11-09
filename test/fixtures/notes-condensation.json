@@ -1,0 +1,184 @@
+{
+  "note": "One-time condensation of the four assistant scratchpads (2026-11-09). Kept in the repo so the tests can prove the two halves of the claim: each pad fits the cap a turn reads, and every durable item it held is readable in that assistant charter. Paths are relative to the panel state directory (~/.wag/state).",
+  "at": "2026-11-09",
+  "cap": 1200,
+  "section": "## Durable facts moved from the scratchpad (2026-11-09)",
+  "assistants": [
+    {
+      "id": "assistant-1",
+      "pad": "assistant.json#notes",
+      "charter": "assistant-charter.md",
+      "beforeBytes": 8000,
+      "afterBytes": 609,
+      "afterChars": 607,
+      "items": [
+        {
+          "id": "slow-suites",
+          "marker": "push-permissions take 4-6 minutes per file"
+        },
+        {
+          "id": "one-worker-per-tree",
+          "marker": "does not refuse a resume cut into a tree that already has a live run"
+        },
+        {
+          "id": "re-wake-loop",
+          "marker": "Short run, no commits is the signature"
+        },
+        {
+          "id": "gateway-slow-side",
+          "marker": "Read /api/jobs latency beside /v1/capabilities"
+        },
+        {
+          "id": "spawn-cut-by-restart",
+          "marker": "harvest never runs"
+        },
+        {
+          "id": "null-lastevent",
+          "marker": "lastEventAt null while the child is alive"
+        },
+        {
+          "id": "silent-success",
+          "marker": "Judge it by the PR and the tree"
+        }
+      ]
+    },
+    {
+      "id": "assistant-2",
+      "pad": "assistants/assistant-2/notes.md",
+      "charter": "assistants/assistant-2/charter.md",
+      "beforeBytes": 8002,
+      "afterBytes": 513,
+      "afterChars": 509,
+      "items": [
+        {
+          "id": "stage-worktrees",
+          "marker": "each cut from the round's frozen parent"
+        },
+        {
+          "id": "chart-nesting",
+          "marker": "a test pins that nesting"
+        },
+        {
+          "id": "cap-park",
+          "marker": "naming the cap, the visit counts and the last verdict"
+        },
+        {
+          "id": "word-budget",
+          "marker": "4,000-word runaway guard"
+        },
+        {
+          "id": "row-write-once",
+          "marker": "its clock is the row's createdAt"
+        },
+        {
+          "id": "runid-on-edit",
+          "marker": "linkTaskRun sets it at a cut or resume"
+        },
+        {
+          "id": "rule-owner-open",
+          "marker": "RULE line from a non-primary turn still lands"
+        },
+        {
+          "id": "boot-regrowth",
+          "marker": "grows about 1,000 characters per boot"
+        },
+        {
+          "id": "spawn-leads-with-id",
+          "marker": "A SPAWN leads with its task id"
+        },
+        {
+          "id": "no-stage-picker",
+          "marker": "no stage picker"
+        }
+      ]
+    },
+    {
+      "id": "assistant-3",
+      "pad": "assistants/assistant-3/notes.md",
+      "charter": "assistants/assistant-3/charter.md",
+      "beforeBytes": 6263,
+      "afterBytes": 660,
+      "afterChars": 658,
+      "items": [
+        {
+          "id": "state-not-clone",
+          "marker": "stale clone-side copy with different ids"
+        },
+        {
+          "id": "queue-curl-guard",
+          "marker": "upload a secret or credential file"
+        },
+        {
+          "id": "no-jenkins",
+          "marker": "no Jenkins ever"
+        },
+        {
+          "id": "pre-push-version",
+          "marker": "core.hooksPath is unset in the primary checkout"
+        },
+        {
+          "id": "absolute-paths-gate",
+          "marker": "builds its expected paths from its own root"
+        },
+        {
+          "id": "two-in-one-tree",
+          "marker": "second entry there means another assistant bypassed"
+        },
+        {
+          "id": "optym-master",
+          "marker": "docs and code do not land on master"
+        },
+        {
+          "id": "matrix-tls",
+          "marker": "verification never disabled"
+        },
+        {
+          "id": "matrix-argv",
+          "marker": "argv caps at 32,767 characters"
+        },
+        {
+          "id": "restart-cadence",
+          "marker": "refuses a bounce when the two already agree"
+        },
+        {
+          "id": "em-dash-ban",
+          "marker": "U+2014 and U+2013 are banned"
+        }
+      ]
+    },
+    {
+      "id": "assistant-5",
+      "pad": "assistants/assistant-5/notes.md",
+      "charter": "assistants/assistant-5/charter.md",
+      "beforeBytes": 8000,
+      "afterBytes": 492,
+      "afterChars": 488,
+      "items": [
+        {
+          "id": "ghost-rows",
+          "marker": "ghost rows on every pass"
+        },
+        {
+          "id": "cancel-not-live",
+          "marker": "answers ok:false for a run that is not live"
+        },
+        {
+          "id": "holds-cannot-be-written",
+          "marker": "drops hold"
+        },
+        {
+          "id": "park-check-holder",
+          "marker": "until no other live run holds the same file"
+        },
+        {
+          "id": "refused-spawn-alive",
+          "marker": "A refused SPAWN is evidence the run is alive"
+        },
+        {
+          "id": "pipeline-end",
+          "marker": "pipelineRun.round holds the frozen parent and sha"
+        }
+      ]
+    }
+  ]
+}

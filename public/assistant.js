@@ -1508,7 +1508,8 @@
   // The pad for one assistant, or null while its file is being read. #1 never needs a read: its text is in the state
   // every paint already carries.
   function padFor(id) {
-    if (id === FIRST_ASSISTANT) return { assistantId: id, notes: state.assistant?.notes || "", file: false, path: "", exists: true, error: null };
+    if (id === FIRST_ASSISTANT)
+      return { assistantId: id, notes: state.assistant?.notes || "", file: false, path: "", exists: true, cap: Number(state.assistant?.notesCap) || 0, error: null };
     const hit = padNotes.get(id);
     if (hit) {
       loadPadNotes(id); // a stale hit re-reads behind this paint
@@ -1536,14 +1537,21 @@
     // first /api/assistant answer has not landed yet.
     const rules = (Array.isArray(owner?.rules) ? owner.rules : a.rules) || [];
     const pad = padFor(who);
+    // How full the pad is, against the SAME cap a turn reads it at. The box says the number and Save is refused
+    // past it — the server refuses it too (413), so this is the same rule drawn before the press rather than a
+    // second opinion. padOver is the value at PAINT time; the input listener below keeps it current while typing.
+    const padCap = Number(pad?.cap) || 0;
+    const padLen = String(pad?.notes || "").length;
+    const padOver = padCap > 0 && padLen > padCap;
     const notesGroup = pad
       ? `<div class="as-group">
         <h4>Notes — read on every turn</h4>
-        <textarea class="as-note-box" id="${padId("as-notes", who)}" rows="6" placeholder="What it should remember: how this project deploys, which agents are doing what, an answer you gave today…">${esc(pad.notes || "")}</textarea>
+        <textarea class="as-note-box" id="${padId("as-notes", who)}" data-as-padbox="${esc(who)}" data-as-cap="${padCap}" rows="6" placeholder="What it should remember: how this project deploys, which agents are doing what, an answer you gave today…">${esc(pad.notes || "")}</textarea>
         <div class="as-actions">
-          <button id="${padId("btn-as-notes", who)}" data-as-padsave="${esc(who)}" type="button" class="primary">Save notes</button>
-          <span class="as-hint" title="${esc(pad.path || "")}">${pad.file ? "kept in this assistant's own notes.md" : "kept on the server in assistant.json"}</span>
+          <button id="${padId("btn-as-notes", who)}" data-as-padsave="${esc(who)}" type="button" class="primary"${padOver ? " disabled" : ""}>Save notes</button>
+          <span class="as-hint${padOver ? " is-bad" : ""}" data-as-padcap="${esc(who)}" title="${esc(pad.path || "")}">${padCap ? `${padLen}/${padCap} chars — a turn reads exactly ${padCap}${padOver ? " · over the cap, Save is refused" : ""}` : ""}</span>
           <span class="as-err" id="${padId("as-pad-err", who)}">${esc(pad.error || "")}</span>
+          <span class="as-hint">${pad.file ? "kept in this assistant's own notes.md" : "kept on the server in assistant.json"}</span>
         </div>
       </div>`
       : `<div class="as-group">
@@ -4174,11 +4182,19 @@
 
     if (t.id === "btn-as-notes" || t.dataset.asPadsave) {
       const who = isAssistant(t.dataset.asPadsave) ? t.dataset.asPadsave : selectedSessionId();
-      const text = String(as$(padId("as-notes", who))?.value || "");
+      const box = as$(padId("as-notes", who));
+      const text = String(box?.value || "");
+      const cap = Number(box?.dataset?.asCap) || 0;
+      if (cap > 0 && text.length > cap) {
+        // The cap is what a turn reads, so an over-cap paste is refused HERE as well as on the route: a reader
+        // who pasted past it has to prune, not discover later that the panel kept a tail they never saw.
+        setErr(padId("as-pad-err", who), `the notes are ${text.length} characters and the cap is ${cap} — prune the oldest lines and save again`);
+        return;
+      }
       t.disabled = true;
       try {
         // The save goes to the assistant the pad is showing. #1 keeps its store's string; an extra assistant writes
-        // its own notes.md, and the answer carries the text it actually kept (the cap trims the oldest lines).
+        // its own notes.md, and the answer carries the text it actually kept.
         const d = await asPost("/api/assistant/notes", { text, assistantId: who });
         // The answer carries the whole assistant state beside the pad; the cache keeps only the pad.
         if (who !== FIRST_ASSISTANT) padNotes.set(who, { ...d, assistant: undefined, at: Date.now() });
@@ -4586,6 +4602,23 @@
     const roleField = e.target.closest?.("#as-role-name, #as-role-description, #as-role-prompt, #as-role-text");
     if (roleField) {
       noteRoleInput();
+      return;
+    }
+    // The pad: the size against the cap, and Save disabled the moment the text is over it. No full render — that
+    // would empty the box under the caret.
+    const padBox = e.target.closest?.("[data-as-padbox]");
+    if (padBox) {
+      const who = padBox.dataset.asPadbox;
+      const cap = Number(padBox.dataset.asCap) || 0;
+      const len = String(padBox.value || "").length;
+      const over = cap > 0 && len > cap;
+      const hint = document.querySelector(`[data-as-padcap="${CSS.escape(who)}"]`);
+      if (hint) {
+        hint.textContent = cap ? `${len}/${cap} chars — a turn reads exactly ${cap}${over ? " · over the cap, Save is refused" : ""}` : "";
+        hint.classList.toggle("is-bad", over);
+      }
+      const btn = document.querySelector(`[data-as-padsave="${CSS.escape(who)}"]`);
+      if (btn) btn.disabled = over;
       return;
     }
     // A typed answer to a parked question: the Send button has to come alive as soon as there is one, or the

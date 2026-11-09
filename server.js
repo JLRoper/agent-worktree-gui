@@ -3766,7 +3766,10 @@ const server = createServer(async (req, res) => {
         const notes = assistant.setNotesFor(body.assistantId, body.text);
         return sendJson(res, 200, { ...notes, assistant: assistant.state() });
       } catch (e) {
-        return sendJson(res, 400, { error: String((e && e.message) || e) });
+        // 413 over the cap, the same refusal the charter raises: too big is not the same as broken, and the Pad
+        // tab says which. Anything else (an unknown assistant) is a 400.
+        const code = (e && e.code) === "notes-too-long" ? 413 : 400;
+        return sendJson(res, code, { error: String((e && e.message) || e) });
       }
     }
 
