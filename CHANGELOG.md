@@ -4,16 +4,33 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.76.5 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.76.7 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-498 releases from v0.1.0 (2026-10-20) to v1.76.5 (2026-11-09), 1640 commits between the tags. Every release is anchored by an
+499 releases from v0.1.0 (2026-10-20) to v1.76.7 (2026-11-09), 1644 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.76.7 — 2026-11-09 · 4 commits
+
+[`04c737c`](https://github.com/JLRoper/agent-worktree-gui/commit/04c737cac2a6da08922c7dc4cce8ad70b950e399) · [compare v1.76.5...v1.76.7](https://github.com/JLRoper/agent-worktree-gui/compare/v1.76.5...v1.76.7)
+
+### Fixed
+
+- fix: the round D evidence names its trees relatively ([`3dc8304`](https://github.com/JLRoper/agent-worktree-gui/commit/3dc830480a43167a35c1070e9ec8c30fe8a78d0e))
+
+### Docs & tests
+
+- docs: render the changelog - 498 releases ([`7611c37`](https://github.com/JLRoper/agent-worktree-gui/commit/7611c37b790c78cdbf2cef58ba7cbcf76d977733))
+- docs: 1.76.7 - patch: three rounds on the parent-tree model ([`04c737c`](https://github.com/JLRoper/agent-worktree-gui/commit/04c737cac2a6da08922c7dc4cce8ad70b950e399))
+
+### Other
+
+- chore: allowlist two round-D records for the paths they name ([`d64f878`](https://github.com/JLRoper/agent-worktree-gui/commit/d64f878b037dd9b0120f7906c902f70e56c9652b))
 
 ## v1.76.5 — 2026-11-09 · 6 commits
 
