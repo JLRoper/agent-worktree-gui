@@ -66,3 +66,17 @@ test("a PR keeps its number, its state and its page", () => {
   assert.doesNotMatch(plain, /<a\b/);
   assert.match(plain, /no host mapping for prooflib/);
 });
+
+test("a CLOSED or SUPERSEDED PR reads the one word `none`, never a number", () => {
+  // The row a dead PR's number used to be written on: the PR exists by name, but it was closed without a merge,
+  // so there is no page to open and no landed work to claim. `none` is the whole answer.
+  for (const state of ["CLOSED", "SUPERSEDED", "DECLINED"]) {
+    const html = prCellHtml(row({ pr: { number: 607, state, title: "the closed PR" }, prUrl: "https://example.invalid/pull/607" }));
+    assert.equal(text(html), "none", `${state} is not a PR this row may name`);
+    assert.doesNotMatch(html, /<a\b/, `${state} has no page to open`);
+    assert.doesNotMatch(html, /#607/, `${state} does not carry the dead number`);
+  }
+  // MERGED is still a PR the row may name: this rule is about dead PRs, not about hiding history.
+  const merged = prCellHtml(row({ pr: { number: 7, state: "MERGED" }, prUrl: "https://example.invalid/pull/7" }));
+  assert.equal(text(merged), "#7 MERGED");
+});
