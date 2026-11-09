@@ -112,22 +112,23 @@ test("a pipeline task's tree is cut first, then its stage is started, advanced o
   assert.equal(assigned.ok, true, assigned.error || "");
   assert.equal(rowOf(added.id).pipelineRun.stage, "S1");
 
-  // 1. The first sweep ASKS for the tree: nothing is started, and the request names the row's project.
+  // 1. The first sweep ASKS for the tree, and the CUT'S OWN END asks for the stage: the tree is written on the row
+  //    first, and the same handoff then starts the worker in it. Round 7's first stage waited 3 m 04.5 s after its tree
+  //    because nothing fired at the cut's end — the row sat until the next queue tick, and a restart in between.
   assistant.sweepQueues();
   await settleStarts();
-  assert.equal(state.started.length, 0, "no worker is started before the tree exists");
   assert.equal(state.cuts.length, 1, "the assistant cut exactly one tree");
   assert.match(state.cuts[0].prompt, /Do stage 1\./);
   let row = rowOf(added.id);
   assert.equal(row.pipelineRun.tree.path, state.tree, "the path is written on the row BEFORE any start");
   assert.equal(row.pipelineRun.tree.branch, "wtgui/carry-the-contract-a1b2c3");
-  assert.equal(row.state, "queued", "a cut with no start is a row with a tree and no thread — visible and re-startable");
+  assert.equal(state.started.length, 1, "the cut's end asks for the start — no second sweep, no timer");
 
-  // 2. The next sweep starts the stage IN that tree, on the existing-tree path.
+  // 2. A second sweep is a no-op: the tree is not cut again and the stage is not started twice.
   assistant.sweepQueues();
   await settleStarts();
   assert.equal(state.cuts.length, 1, "the tree step is not called twice");
-  assert.equal(state.started.length, 1, "the stage's worker was started");
+  assert.equal(state.started.length, 1, "the stage is started once");
   assert.equal(state.started[0].taskId, added.id, "the spawn names the queue row it serves");
   assert.equal(state.started[0].target, state.tree);
   assert.equal(state.started[0].existing, true);
@@ -341,4 +342,26 @@ test("a row filed onto a stage by the queue is written once, and its stage is th
   await settleStarts();
   assert.equal(state.cuts.length, 1);
   assert.equal(rowOf(added.task.id).pipelineRun.tree.path, state.tree);
+});
+
+// The cut's end is the handoff (round 7's item 6): the tree write is followed, in the same turn, by the pass that asks
+// for the stage's worker. It must also not LOOP — the handoff's own pass finds `startingAt` on the row and asks nothing
+// further, so one cut costs exactly two passes.
+test("a cut asks for its stage at once, and the handoff does not loop", async (t) => {
+  const { assistant, state, settleStarts } = harness(t);
+  const added = assistant.queueMutate("assistant-1", "add", { title: "hand off at the cut", project: "agent-worktree-gui" }).task;
+  putOnPipeline(assistant, added.id, "S1");
+
+  let passes = 0;
+  const real = assistant.sweepQueues.bind(assistant);
+  assistant.sweepQueues = () => {
+    passes += 1;
+    return real();
+  };
+  assistant.sweepQueues();
+  await settleStarts();
+
+  assert.equal(state.cuts.length, 1, "one tree, cut once");
+  assert.equal(state.started.length, 1, "and the stage started without a second pass from a timer");
+  assert.equal(passes, 2, "the outer pass, then the handoff's own — which asks for nothing further");
 });
