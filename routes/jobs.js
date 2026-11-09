@@ -43,7 +43,7 @@ const { PARKED: STEER_PARKED, PAST_BOUNDARY: STEER_PAST_BOUNDARY, GONE: STEER_GO
 /** The prefix every path below sits under, and the row the mount table in server.js matches on. */
 export const JOBS_PATH = "/api/jobs";
 
-export function createJobsRoutes({ jobs, config = {}, assistant, broadcast, gonePointers, sendJson, readBody, authorised } = {}) {
+export function createJobsRoutes({ jobs, config = {}, assistant, broadcast, gonePointers, sendJson, readBody, authorised, resolveAttach = null } = {}) {
   if (!jobs) throw new Error("createJobsRoutes needs the Jobs store");
   if (typeof sendJson !== "function" || typeof readBody !== "function" || typeof authorised !== "function") {
     throw new Error("createJobsRoutes needs sendJson, readBody and authorised from the server's transport");
@@ -173,12 +173,13 @@ export function createJobsRoutes({ jobs, config = {}, assistant, broadcast, gone
       }
       const body = await readBody(req);
       const thread = String(body.thread || "").trim();
-      const target = String(body.path || "").trim();
+      let target = String(body.path || "").trim();
       if (!thread) {
         sendJson(res, 400, { error: "thread is required" });
         return true;
       }
-      if (!jobs.firstOfThread(thread)) {
+      const job = jobs.firstOfThread(thread);
+      if (!job) {
         sendJson(res, 404, { error: `unknown thread: ${thread}` });
         return true;
       }
@@ -188,6 +189,24 @@ export function createJobsRoutes({ jobs, config = {}, assistant, broadcast, gone
         broadcast({ type: "jobs", jobs: jobs.list() });
         sendJson(res, 200, { ok: true, ownerPath: null, turns: r.turns, jobs: jobs.list() });
         return true;
+      }
+      // THE PARENT-ROW RULE. A run sitting in `.worktrees/<name>` may not be filed on the checkout that CONTAINS
+      // that tree: the fallback that did so is what put job 24695761 on the main row. The composition root answers
+      // ({ok:false} = the row is missing and the press is refused; a different path = the real tree, whose row it
+      // created or claimed). A panel built without one keeps the plain behaviour, and a reader's re-point at any
+      // OTHER tree is theirs.
+      const asked = target;
+      let redirectedFrom = null;
+      if (typeof resolveAttach === "function") {
+        const answer = await resolveAttach({ job, path: target });
+        if (!answer.ok) {
+          sendJson(res, 409, { ok: false, error: answer.error, asked, rowMissing: true, cwd: job.cwd || null });
+          return true;
+        }
+        if (answer.path && answer.path.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase() !== asked.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase()) {
+          redirectedFrom = asked;
+          target = answer.path;
+        }
       }
       try {
         if (!(await stat(target)).isDirectory()) {
@@ -210,7 +229,7 @@ export function createJobsRoutes({ jobs, config = {}, assistant, broadcast, gone
       }
       const r = jobs.setOwner(thread, target);
       broadcast({ type: "jobs", jobs: jobs.list() });
-      sendJson(res, 200, { ok: true, ownerPath: r.ownerPath, turns: r.turns, jobs: jobs.list() });
+      sendJson(res, 200, { ok: true, ownerPath: r.ownerPath, asked, redirectedFrom, turns: r.turns, jobs: jobs.list() });
       return true;
     }
 

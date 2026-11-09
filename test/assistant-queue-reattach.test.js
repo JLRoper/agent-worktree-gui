@@ -16,9 +16,11 @@
 //      verdict and starts nothing, and a wake refused after a clear never claims a run;
 //   5. one press, one reset: a second press while the first is out sends nothing.
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
-import { sliceRegion } from "../tools/panel-testkit.mjs";
+import { configureRepo, git as runGit, post as postJson, slash as sl, sliceRegion, startPanel as boot, waitForRow as waitRow } from "../tools/panel-testkit.mjs";
 
 const cards = readFileSync(new URL("../public/queue-cards.js", import.meta.url), "utf8");
 const region = sliceRegion(cards, "the queue sub-tab");
@@ -219,4 +221,302 @@ test("another assistant is never touched", async () => {
   assert.equal(posts[0].route, "/api/assistants/assistant-2/reset", "the card's own assistant is the only one reset");
   assert.equal(posts[1].body.assistantId, "assistant-2", "…and the only one woken");
   assert.ok(!posts.some((p) => p.route.includes("assistant-1") || p.body?.assistantId === "assistant-1"), "calls never reach #1");
+});
+
+// ---- the ATTACH control's own fallback: a run in a worktree is never filed on the checkout above it --------------
+//
+// Job 24695761: ownerPath was the project's own checkout, cwd `.../.worktrees/take-the-surface-...`. The
+// board had no row for the tree, and the page's `matchWorktree()` matched the CHECKOUT — the tree's own directory is
+// inside it — so one press filed the card on the main row with no picker and no question. These are the two halves
+// of that rule: the page's match (sliced out of public/app.js, so the shipped function is what runs) and the server's
+// answer to the press (the real panel, over HTTP).
+// The page's own matcher, sliced out of the shipped file (no copy), driven against a board of rows.
+const appSource = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+const filing = sliceRegion(appSource, "job tree filing");
+const pageNorm = (p) => String(p || "").replace(/\\/g, "/").replace(/\/+$/, "");
+// A repo-relative placeholder, not a folder on the machine that wrote this test: the matcher keys on the string, and
+// naming a drive letter here would trip the absolute-paths gate on a fixture nothing opens.
+const checkout = "tree-fixture/checkout";
+const tree = `${checkout}/.worktrees/take-the-surface-the-task-brief-names-856f1f`;
+
+function filingFor(rows) {
+  const board = { rows: new Map(rows.map((p) => [`proj::${p}`, { path: p, project: "proj", name: p.split("/").pop() }])) };
+  return new Function("normPath", "state", `${filing}\nreturn { worktreeRootOf, matchWorktree };`)(pageNorm, board);
+}
+
+test("the page's match never takes the checkout that CONTAINS a run's worktree", () => {
+  // The checkout's row is present (it always is), and it is a prefix of the tree's path. The old deepest-prefix match
+  // answered with it; the tree's own row did not exist, which is exactly the incident's shape.
+  const withoutRow = filingFor([checkout]);
+  assert.equal(withoutRow.matchWorktree(`${tree}/lib`), null, "no row at the tree means NO match — never the parent");
+  assert.equal(withoutRow.worktreeRootOf(`${tree}/lib`), tree, "the .worktrees directory names the tree itself");
+
+  // With the tree's row there, the deepest match is the tree — not the checkout and not the subdirectory.
+  const withRow = filingFor([checkout, tree]);
+  assert.equal(withRow.matchWorktree(`${tree}/lib`)?.path, tree);
+  assert.equal(withRow.matchWorktree(tree)?.path, tree);
+  // A directory OUTSIDE `.worktrees` keeps the old rule: the deepest containing row, so a run in the checkout's own
+  // `lib/` is still the checkout's.
+  assert.equal(withRow.matchWorktree(`${checkout}/lib`)?.path, checkout);
+});
+
+test("a press naming the checkout above a run's worktree is answered with the REAL tree, and its row is created", async (t) => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "wag-attach-parent-"));
+  const repos = path.join(dir, "repos");
+  const proj = path.join(repos, "proj");
+  mkdirSync(proj, { recursive: true });
+  runGit(proj, ["init", "-q", "-b", "main"]);
+  configureRepo(proj);
+  writeFileSync(path.join(proj, "README.md"), "# proj\n", "utf8");
+  runGit(proj, ["add", "-A"]);
+  runGit(proj, ["commit", "-q", "-m", "base"]);
+
+  const treePath = path.join(proj, ".worktrees", "take-the-surface-856f1f");
+  const thread = "T-24695761";
+  // The card the panel comes back to: its run was in the tree, the tree has no row, and the recorded owner is the
+  // checkout — the state the old attach fallback left behind.
+  mkdirSync(path.join(dir, "logs"), { recursive: true });
+  writeFileSync(
+    path.join(dir, "logs", "jobs.json"),
+    JSON.stringify({
+      savedAt: new Date().toISOString(),
+      jobs: [
+        {
+          id: "job_24695761",
+          thread,
+          turn: 1,
+          status: "done",
+          prompt: "work in the tree",
+          cwd: sl(treePath),
+          ownerPath: sl(proj),
+          projectPath: sl(proj),
+          startedAt: new Date(Date.now() - 60_000).toISOString(),
+          endedAt: new Date(Date.now() - 30_000).toISOString(),
+          lines: [],
+        },
+      ],
+    }),
+    "utf8",
+  );
+
+  const panel = await boot({
+    dir,
+    config: {
+      scanRoots: [sl(repos)],
+      projects: [{ name: "proj", path: sl(proj), mainBranch: "main", remote: null }],
+      // Nothing but the job-tree pass may read this project: the slow clock is an hour away and so is every row
+      // cadence, so a row for the tree can only come from the attach press itself.
+      slowSeconds: 3600,
+      worktreeSeconds: 3600,
+      midSeconds: 3600,
+      dormantSeconds: 3600,
+      registrySeconds: 3600,
+      fetchSeconds: -1,
+      threads: 1,
+      assistant: { enabled: false },
+    },
+  });
+  t.after(() => panel.stop());
+
+  await waitRow(panel.base, "proj", proj, { what: "the project's own row" });
+  // The tree is cut AFTER boot, so the board has no row for it — the incident's shape.
+  runGit(proj, ["worktree", "add", "-q", "-b", "wtgui/take-the-surface-856f1f", treePath]);
+
+  // The press the reader made: the checkout, because that is what the picker/default offered.
+  const answer = await postJson(panel.base, "/api/jobs/attach", { body: { thread, path: sl(proj) } });
+  assert.equal(answer.status, 200, `the press is accepted and answered with the real tree: ${answer.text}`);
+  assert.equal(sl(answer.json.ownerPath), sl(treePath), "the card is filed on the worktree its run is in");
+  assert.equal(sl(answer.json.redirectedFrom), sl(proj), "…and the answer says which path it refused to use");
+  // The row is created/claimed by that press, so the card has somewhere to live.
+  const row = await waitRow(panel.base, "proj", treePath, { what: "the row the press created for the tree" });
+  assert.equal(sl(row.path), sl(treePath));
+
+  // …and the card reads as that tree's, not the checkout's: the same field the page files cards by.
+  const state = await fetch(`${panel.base}/api/state`).then((r) => r.json());
+  const card = state.jobs.find((j) => j.thread === thread);
+  assert.ok(card, "the card is in the snapshot");
+  assert.equal(sl(card.ownerPath), sl(treePath), "the card is filed where its run is — never on the parent row");
+  assert.equal(sl(card.cwd), sl(treePath));
+});
+
+test("a press naming the checkout is REFUSED when git does not know the run's tree — the row is missing, said so", async (t) => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "wag-attach-missing-"));
+  const repos = path.join(dir, "repos");
+  const proj = path.join(repos, "proj");
+  mkdirSync(proj, { recursive: true });
+  runGit(proj, ["init", "-q", "-b", "main"]);
+  configureRepo(proj);
+  writeFileSync(path.join(proj, "README.md"), "# proj\n", "utf8");
+  runGit(proj, ["add", "-A"]);
+  runGit(proj, ["commit", "-q", "-m", "base"]);
+
+  // A leftover folder where a tree used to be: it exists, and `git worktree list` does NOT name it.
+  const husk = path.join(proj, ".worktrees", "gone-1a2b3c");
+  mkdirSync(husk, { recursive: true });
+  const thread = "T-99999999";
+  mkdirSync(path.join(dir, "logs"), { recursive: true });
+  writeFileSync(
+    path.join(dir, "logs", "jobs.json"),
+    JSON.stringify({
+      savedAt: new Date().toISOString(),
+      jobs: [
+        {
+          id: "job_gone",
+          thread,
+          turn: 1,
+          status: "done",
+          prompt: "work in the tree",
+          cwd: sl(husk),
+          ownerPath: null,
+          projectPath: sl(proj),
+          startedAt: new Date(Date.now() - 60_000).toISOString(),
+          endedAt: new Date(Date.now() - 30_000).toISOString(),
+          lines: [],
+        },
+      ],
+    }),
+    "utf8",
+  );
+
+  const panel = await boot({
+    dir,
+    config: {
+      scanRoots: [sl(repos)],
+      projects: [{ name: "proj", path: sl(proj), mainBranch: "main", remote: null }],
+      slowSeconds: 3600,
+      worktreeSeconds: 3600,
+      midSeconds: 3600,
+      dormantSeconds: 3600,
+      registrySeconds: 3600,
+      fetchSeconds: -1,
+      threads: 1,
+      assistant: { enabled: false },
+    },
+  });
+  t.after(() => panel.stop());
+  await waitRow(panel.base, "proj", proj, { what: "the project's own row" });
+
+  const answer = await postJson(panel.base, "/api/jobs/attach", { body: { thread, path: sl(proj) } });
+  assert.equal(answer.status, 409, `the press is refused rather than filed on the checkout: ${answer.text}`);
+  assert.equal(answer.json.rowMissing, true, "the answer carries the verdict the page paints");
+  assert.match(answer.json.error, /row for .*gone-1a2b3c is missing/i, "the sentence names the tree whose row is missing");
+  assert.match(answer.json.error, /only the checkout that contains it/i, "…and why the checkout is not the answer");
+  assert.equal(answer.json.ownerPath, undefined, "nothing was filed");
+
+  // And the card is still on the unattached list rather than on the checkout's row.
+  const state = await fetch(`${panel.base}/api/state`).then((r) => r.json());
+  const card = state.jobs.find((j) => j.thread === thread);
+  assert.equal(card.ownerPath, null, "the card was not moved anywhere");
+  rmSync(husk, { recursive: true, force: true });
+});
+
+test("a card whose tree has no row is attached by git's own worktree list — a tree cut after boot, no manual step", async (t) => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "wag-attach-auto-"));
+  const repos = path.join(dir, "repos");
+  const proj = path.join(repos, "proj");
+  mkdirSync(proj, { recursive: true });
+  runGit(proj, ["init", "-q", "-b", "main"]);
+  configureRepo(proj);
+  writeFileSync(path.join(proj, "README.md"), "# proj\n", "utf8");
+  runGit(proj, ["add", "-A"]);
+  runGit(proj, ["commit", "-q", "-m", "base"]);
+
+  const treePath = path.join(proj, ".worktrees", "cut-after-boot-9f9f9f");
+  const thread = "T-AUTO-1";
+  // The run's card is restored by the panel; its directory does not exist yet — a spawn whose tree is still being
+  // cut, or a card that came back before the scan caught up. Nothing here names the tree to the panel but its own
+  // record: no attach press, no refresh, no page.
+  mkdirSync(path.join(dir, "logs"), { recursive: true });
+  writeFileSync(
+    path.join(dir, "logs", "jobs.json"),
+    JSON.stringify({
+      savedAt: new Date().toISOString(),
+      jobs: [
+        {
+          id: "job_auto",
+          thread,
+          turn: 1,
+          status: "done",
+          prompt: "work in the tree",
+          cwd: sl(treePath),
+          ownerPath: null,
+          projectPath: sl(proj),
+          startedAt: new Date(Date.now() - 60_000).toISOString(),
+          endedAt: new Date(Date.now() - 30_000).toISOString(),
+          lines: [],
+        },
+      ],
+    }),
+    "utf8",
+  );
+
+  const panel = await boot({
+    dir,
+    config: {
+      scanRoots: [sl(repos)],
+      projects: [{ name: "proj", path: sl(proj), mainBranch: "main", remote: null }],
+      // The scan cannot be what attaches this card: the slow clock is an hour away and so is every row cadence, so
+      // the row and the owner can only have come from the job-tree pass.
+      slowSeconds: 3600,
+      worktreeSeconds: 3600,
+      midSeconds: 3600,
+      dormantSeconds: 3600,
+      registrySeconds: 3600,
+      fetchSeconds: -1,
+      threads: 1,
+      assistant: { enabled: false },
+    },
+  });
+  t.after(() => panel.stop());
+  await waitRow(panel.base, "proj", proj, { what: "the project's own row" });
+
+  // The tree is cut now, the way any spawn or a hand-run `git worktree add` cuts one.
+  runGit(proj, ["worktree", "add", "-q", "-b", "wtgui/cut-after-boot-9f9f9f", treePath]);
+
+  // The row appears AND the card is filed on it, with no attach press anywhere in this test.
+  const row = await waitRow(panel.base, "proj", treePath, { timeout: 40_000, what: "the row the job-tree pass created" });
+  assert.equal(sl(row.path), sl(treePath));
+  const until = Date.now() + 40_000;
+  let card = null;
+  for (;;) {
+    const state = await fetch(`${panel.base}/api/state`).then((r) => r.json());
+    card = state.jobs.find((j) => j.thread === thread) || null;
+    if (card && sl(card.ownerPath) === sl(treePath)) break;
+    if (Date.now() > until) break;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  assert.ok(card, "the card is in the snapshot");
+  assert.equal(sl(card.ownerPath), sl(treePath), "the card attached itself to the tree git lists — no manual step");
+});
+
+// ---- every guard that asks "which tree is this card in" reads the run's cwd --------------------------------------
+//
+// The second half of job 24695761: a card whose ownerPath was the checkout made every such guard answer the READER's
+// checkout — the collage of the board's own rules (two agents in one tree, the worktree-removal holder, a release's
+// busy check, the leftover sweep, a TODO list, a report path) all read the parent. They are one function now
+// (lib/job-trees.js `jobTreePath`), and these are the shipped readers, not copies.
+test("the tree guards read the run's cwd — a mis-attached card is never working in the checkout", async () => {
+  const { treeOfJob, liveJobsInTree } = await import("../lib/jobs.js");
+  const { jobHoldingTree } = await import("../lib/worktrees.js");
+  const { treeTail } = await import("../lib/assistant/read.js");
+  const { reportRepos } = await import("../lib/completion.js");
+  const { filedOwnerPath, jobTreePath } = await import("../lib/job-trees.js");
+
+  // The incident's card: cwd is a subdirectory of the tree, ownerPath is the checkout that CONTAINS the tree.
+  const job = { id: "job_24695761", thread: "T-1", status: "running", cwd: `${tree}/lib`, ownerPath: checkout };
+  assert.equal(jobTreePath(job), tree, "the run is in the tree, not in the checkout");
+  assert.equal(filedOwnerPath(job), tree, "…and the card is filed there, not on the parent row");
+  assert.equal(treeOfJob(job), tree.toLowerCase(), "the ownership key is the tree");
+
+  // One worker per tree: the checkout has nobody in it, the tree has this run.
+  assert.deepEqual(liveJobsInTree([job], checkout), [], "no live agent is counted in the main checkout");
+  assert.deepEqual(liveJobsInTree([job], tree).map((j) => j.id), ["job_24695761"]);
+
+  // A removed worktree is refused only when a run really is in it.
+  assert.equal(jobHoldingTree([job], checkout), null, "the checkout is not held by this run");
+  assert.equal(jobHoldingTree([job], tree)?.id, "job_24695761", "the tree it is in IS held");
+
+  // A report may sit in the tree (lib/completion.js `reportRepos`) and the digest names the tree (treeTail).
+  assert.deepEqual(reportRepos(job), [tree, `${tree}/lib`], "the report's repo list is the run's tree, never the checkout");
+  assert.equal(treeTail(job), ".worktrees/take-the-surface-the-task-brief-names-856f1f", "the digest names the worktree, not the checkout");
 });

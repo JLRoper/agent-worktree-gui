@@ -4836,11 +4836,29 @@ function focusNewTurn(thread, turnId) {
   }
 }
 
+// ---- job tree filing: the worktree a card's directory belongs to
+// The worktree a path names when it sits inside a `.worktrees` folder: `<checkout>/.worktrees/<name>`. This is the
+// panel's own layout, and it is the one place a path's TREE is knowable without asking the server.
+function worktreeRootOf(dir) {
+  const m = /^(.*?)\/\.worktrees\/([^/]+)(?:\/|$)/i.exec(normPath(dir).replace(/\\/g, "/"));
+  return m ? `${m[1]}/.worktrees/${m[2]}` : null;
+}
+
 // The worktree an agent's directory belongs to: an exact match on the row path, or the deepest row
 // containing it (an agent started in a subdirectory still belongs to that worktree).
+//
+// A `.worktrees/<name>` directory is the exception that matters: only the row AT that tree may claim it. The
+// checkout that CONTAINS the tree is a path prefix, and taking it as the match is what filed job 24695761 on the
+// main row — a card for a run one directory down was silently attached to the reader's own checkout with no picker
+// and no question. No row at the tree means NO match: the press opens the picker, and the server refuses or
+// redirects rather than accepting the parent.
 function matchWorktree(dir) {
   const d = normPath(dir).toLowerCase();
   if (!d) return null;
+  const root = worktreeRootOf(d);
+  if (root) {
+    return [...state.rows.values()].find((r) => normPath(r.path).toLowerCase() === root) || null;
+  }
   let best = null;
   for (const r of state.rows.values()) {
     const p = normPath(r.path).toLowerCase();
@@ -4849,12 +4867,19 @@ function matchWorktree(dir) {
   }
   return best;
 }
+// ---- end job tree filing
 
 // Attach an unattached agent to a worktree: it then lives under that row, owned like any other.
 async function attachAgent(thread, pathOverride = null) {
   const sel = document.querySelector(`[data-attach-path="${CSS.escape(thread)}"]`);
-  const path = pathOverride || sel?.value;
-  if (!path) return false;
+  // A picker showing the "row is missing" placeholder (`disabled`, value "") must never post that value as a path:
+  // the message it carries is the answer, and the server is not asked to file the card anywhere.
+  const chosen = sel && sel.selectedOptions ? sel.selectedOptions[0] : null;
+  const path = pathOverride || (chosen && !chosen.disabled ? chosen.value : "");
+  if (!path) {
+    showBanner(`attach ${thread}: ${sel?.dataset?.attachMissing || "choose a worktree first"}`);
+    return false;
+  }
   try {
     const r = await apiFetch("/api/jobs/attach", {
       method: "POST",
@@ -4865,6 +4890,11 @@ async function attachAgent(thread, pathOverride = null) {
     if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
     invalidatePanelMap();
     await resync();
+    // The server may have ANSWERED with a different tree than the press named: the run is in `.worktrees/<name>`
+    // and the press named the checkout containing it. Say so — the reader's intent was a row, not that parent.
+    if (d.redirectedFrom) {
+      showNote(`that run is in ${String(path).split("/").pop()}, not ${String(d.redirectedFrom).split("/").pop()} — the card is filed on its own worktree`);
+    }
     return true;
   } catch (err) {
     showBanner(`attach ${thread}: ${err.message}`);
@@ -9961,12 +9991,36 @@ document.addEventListener("click", async (e) => {
         // Built on demand: the card may be rendered before any worktree row exists.
         const sel = fresh.querySelector("select");
         if (sel && !sel.options.length) sel.innerHTML = worktreeOptionsHtml();
-        // Start from the agent's current owner when the scan does not show it, so "attach" is a
-        // deliberate re-point rather than a silent move to whatever the list happens to start with.
+        // Start from the tree the run is ACTUALLY in — its own `.worktrees/<name>` directory — and only then from the
+        // agent's recorded owner. Never from "whatever the list happens to start with": the first option is the
+        // project's own checkout, and a card for a run one directory down landed there with one press (job
+        // 24695761). When the tree has no row yet, the picker says so instead of offering a parent.
+        const want = matchWorktree(cwd)?.path || null;
         const owner = conv && (conv.latest.ownerPath || conv.first.ownerPath);
-        if (sel && owner) {
-          const hit = [...sel.options].find((o) => o.value.toLowerCase() === String(owner).toLowerCase());
-          if (hit) sel.value = hit.value;
+        const root = worktreeRootOf(cwd);
+        const pick = (value) =>
+          value ? [...sel.options].find((o) => !o.disabled && o.value.toLowerCase() === String(value).toLowerCase()) || null : null;
+        const hit = pick(want) || (!root ? pick(owner) : null) || (root ? pick(root) : null);
+        const go = fresh.querySelector("[data-attach-go]");
+        if (sel) {
+          delete sel.dataset.attachMissing;
+          if (hit) {
+            sel.value = hit.value;
+            go?.removeAttribute("disabled");
+          } else if (root) {
+            // The row for the run's own tree is missing. The server creates it on a press (or refuses and says so);
+            // the picker must not silently substitute the checkout above.
+            const opt = document.createElement("option");
+            opt.value = "";
+            opt.disabled = true;
+            opt.selected = true;
+            opt.textContent = `— the row for ${root.split("/").pop()} is missing —`;
+            sel.add(opt);
+            sel.dataset.attachMissing = `the row for ${root} is missing — the board has not read that tree yet; press attach on the row once it appears, or reload the board`;
+            go?.setAttribute("disabled", "disabled");
+          } else {
+            go?.removeAttribute("disabled");
+          }
         }
         sel?.focus();
       }
