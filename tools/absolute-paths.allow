@@ -242,3 +242,5 @@ ledger/gui-improve/compare/comparison.json | 156 | record: the comparison quotes
 ledger/gui-improve/compare/README.md | 7 | record: the compare's protocol names the two folders and the browser install it ran with
 ledger/gui-improve/compare/run.mjs | 9 | probe: the scan roots and the browser and module folders the compare was run with, kept as its defaults
 public/style.css | 1 | comment: the measured before-state, quoting the folder name and chip the row painted as one word
+docs/investigation.md | 1 | record: the round D conclusion names the stage tree it concluded
+ledger/investigate/probe.md | 1 | record: the stage 1 probe names the tree it ran in
