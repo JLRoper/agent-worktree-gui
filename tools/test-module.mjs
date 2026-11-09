@@ -15,7 +15,7 @@
 //   npm run test:module lib/jobs.js            # run what names or imports lib/jobs.js
 //   npm run test:module lib/jobs.js --list     # print the set, run nothing
 //   npm run test:module jobs.js --list         # a bare name resolves when it is unique in the tree
-//   npm run test:module lib/jobs.js --root C:/other/checkout   # another tree (the tests use this)
+//   npm run test:module lib/jobs.js --root <another checkout>   # another tree (the tests use this)
 //
 // Exit codes: the run's own status; 2 for a path this tree does not have (or one that names more than one file); 0
 // for a set that is empty.
