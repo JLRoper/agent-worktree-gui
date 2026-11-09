@@ -1,0 +1,40 @@
+{
+  "schema": "tests/1",
+  "command": "node --test --test-reporter=tap test/scan-roots.test.js test/settings-tabs.test.js test/header-controls.test.js",
+  "files": [
+    "test/scan-roots.test.js",
+    "test/settings-tabs.test.js",
+    "test/header-controls.test.js"
+  ],
+  "why": "The three suites the surface's own code and markup are pinned by: scan-roots drives the folders-the-board-scans setting end to end, settings-tabs pins the tab strip and the Board panel's rows, header-controls pins the Pause row that moved into the Board panel.",
+  "runs": [
+    {
+      "tree": "after tree: 44b4278 (the baseline) + the change-set's public/ hunks",
+      "commit": "44b4278",
+      "changeSet": true,
+      "exit": 0,
+      "tests": 21,
+      "pass": 21,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0,
+      "durationMs": 2986.2754,
+      "log": "ledger/gui-improve/compare/tests-after.log"
+    },
+    {
+      "tree": "stage tree 99f2bd7 with the change-set's public/ hunks applied for the run",
+      "commit": "99f2bd7",
+      "changeSet": true,
+      "exit": 0,
+      "tests": 22,
+      "pass": 22,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0,
+      "durationMs": 11500.9879,
+      "log": "ledger/gui-improve/compare/tests-current.log"
+    }
+  ]
+}
