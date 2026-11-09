@@ -77,6 +77,11 @@ record keeps the ledger of them:
   the stage started with, and a later reading of the tree cannot reconstruct it.
 - **`commit` on the stage run is the tree's HEAD at settle, full-length.** It is the pin the stage's handoff carries;
   an abbreviated sha would be a display form two commits could share.
+- **`assembly` is the ONE branch a finished round lands** (`{ commit, base, branch, path, verified, stages[], skipped[] }`).
+  A per-stage round's stages each commit on their own branch, so when the pipeline is over the driver asks for one
+  branch and the Assistant cherry-picks every stage run's `commit` onto it, in visit order, from the round's frozen
+  parent (see "The assembly" below). Written with `tree` and the row's `worktree` pointing at that branch: that is
+  what leaves the landing step a single branch, never the first stage's tree plus siblings nothing merges.
 
 ### The input manifest, read back
 
@@ -271,8 +276,9 @@ re-resolved per stage.
 - The driver returns `ensureTree = { taskId, project, prompt, stage, base, parent, role }`. For a chain stage `role` is
   `stage`, `base` is `round.sha` and `parent` is `round.parent`; the Assistant's `cutPipelineTree` calls the job store's
   own `makeWorktree`, writes the tree under `pipelineRun.trees[stage]` (and `pipelineRun.tree` for the round's first,
-  the row's landing branch), and journals it. Nothing is started by that step: a cut with no start is a row with a tree
-  and no thread — visible, named, re-startable. A cut that fails parks the row with the cut's own sentence.
+  which is the row's landing branch until the round is assembled), and journals it. Nothing is started by that step: a
+  cut with no start is a row with a tree and no thread — visible, named, re-startable. A cut that fails parks the row
+  with the cut's own sentence.
 - The parent is written into the panel's parent book with `parentSource: "cut"` — including when it is a main branch,
   because a round's parent IS main. That is what the worktree chart nests a round's stage trees under: one group, one
   indent in, under the row the round was cut from.
@@ -335,6 +341,42 @@ has.
 Proved end to end, on real trees, by `node tools/verify-pipeline-fanout.mjs`: a 3-stage fan-out (two lanes and an
 aggregator), one tree per stage, the base each was cut from, the one aggregate commit and its parents, a byte-for-byte
 comparison of each lane's report (sha256 and the blob object id), and a deliberate conflict that is refused by path.
+
+
+### The assembly: one branch for a per-stage round
+
+A round gives every stage its own tree, so a finished chain leaves N commits on N local branches, and the row's
+landing branch is the FIRST stage's tree - the only stage tree promoted to `pipelineRun.tree`. That branch carries the
+baseline and nothing after it. The ASSEMBLY closes the round: when the pipeline is over, the driver asks for one
+branch, and the Assistant builds it by cherry-picking every stage run's commit onto a branch cut from the round's
+frozen parent (`lib/pipeline-assembly.js`).
+
+- **The plan is the driver's** (`assemblyPlanOf`): the settled stage runs that carry a commit, in VISIT order and then
+  by the stage's position in the document - baseline first, then implement, compare and correct. A loop's second visit
+  of the baseline comes after the first visit's last stage, because that is the order the round actually ran. A stage
+  that settled without a commit is named in `skipped`, never invented into the branch.
+- **One branch, cut from the frozen parent.** The assembly tree is cut at `round.sha`, not at the parent branch as it
+  stands now, for the same reason every stage tree is: a commit that landed after the round began must not enter it. A
+  tree that is not at that commit is refused (`pipeline-assembly-input`) rather than picked into.
+- **The later stage wins a shared path.** A chain's later stage applies ON TOP of the earlier one, so for a path two
+  stages both wrote, the assembled branch carries the LATER stage's version - that is what "each stage finishes what
+  the last started" means, and it is the difference from a fan-out, where two lanes writing one path is a conflict by
+  definition. Where the later stage changed the SAME LINES the earlier one changed, git cannot apply it: the pick is
+  aborted, the conflicting stage is not committed, the branch is removed, and the row parks
+  `pipeline-assembly-conflict` naming the path and the stages. A person decides which stage is right; the panel never
+  resolves a hunk by choosing a side.
+- **The record is the proof it happened.** `pipelineRun.assembly = { commit, base, branch, path, verified, stages[],
+  skipped[] }` is written with `pipelineRun.tree` (the assembly's) and the row's `worktree`, so the landing step has ONE
+  branch to push and merge. `verified` is the check that every path a picked stage changed is at HEAD with that
+  stage's blob - or absent, when the stage deleted it. A second assembly for the same frozen parent is refused.
+- **Stage branches are local only.** A stage tree's run is never handed the landing paragraph, whatever its artifact
+  declares: the PR a mid-round stage would open holds that stage alone. The branch that lands is the assembly's, by
+  the ordinary landing rule - the same rule a fan-out's lanes follow.
+
+Proved end to end by `node tools/verify-pipeline-assembly.mjs`: a four-stage round driven through the Assistant and the
+driver on real trees, the assembly's history in the round's order, every stage's file byte-identical, a landing that
+happened after the freeze and a second round both absent from the branch, a two-stage round assembled the same way, and
+a deliberate same-lines conflict that parks the row with the path and leaves no branch behind.
 
 
 ### The artifact: one new hard gate

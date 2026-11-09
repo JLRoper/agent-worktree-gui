@@ -1195,3 +1195,112 @@ test("a task with no pipeline is untouched by the tree and route checks", () => 
   assert.equal(out.starts.length, 0);
   assert.equal(out.ensureTree.length, 0);
 });
+
+// ---- a finished per-stage ROUND owes one assembly ---------------------------------------------------------------
+// Every stage of a round runs in its own tree (lib/task-pipeline-drive.js `roundOf`), so a finished round leaves N
+// commits on N local branches. The landing step must be handed ONE branch: when the pipeline is over, the driver asks
+// for the assembly (lib/pipeline-assembly.js) and does not finish the row on that pass - the next pass reads the
+// assembly record and takes the ordinary end.
+
+const CHAIN = {
+  id: "round",
+  title: "Baseline, implement, compare, correct",
+  stages: [stage(1), stage(2), stage(3), stage(4)],
+  gates: [],
+  handoffs: [
+    { id: "h1", from: "S1", to: "S2", artifact: "artifact-1", kind: "sequence" },
+    { id: "h2", from: "S2", to: "S3", artifact: "artifact-2", kind: "sequence" },
+    { id: "h3", from: "S3", to: "S4", artifact: "artifact-3", kind: "sequence" },
+  ],
+};
+
+const ROUND_SHA = "5".repeat(40);
+const COMMITS = { S1: "1".repeat(40), S2: "2".repeat(40), S3: "3".repeat(40), S4: "4".repeat(40) };
+
+// A row at the END of a four-stage round: every stage settled in its own tree at its own commit. The last stage's
+// tree is a real directory holding the artifact it declares, because a settle is only 'done' over one.
+function finishedRound(t, over = {}) {
+  const last = tree(t, { artifacts: [4] });
+  const stageRuns = ["S1", "S2", "S3", "S4"].map((id, index) => ({
+    id: `round/${id}#1`,
+    stage: id,
+    visit: 1,
+    status: "done",
+    thread: `T${index + 1}`,
+    job: `j-${index + 1}`,
+    commit: COMMITS[id],
+    tree: { path: index === 3 ? last : `${last}-${id}`, branch: `wtgui/${id.toLowerCase()}-abc123` },
+    artifact: { id: `artifact-${id.slice(1)}`, path: `out/${id.slice(1)}.json`, present: true },
+  }));
+  return row({
+    // The LEGACY field is the FIRST thread of the list (lib/assistant/queue.js `normThreads`), and the run carrying
+    // the row now is the LAST: T4, the stage that just settled.
+    thread: "T1",
+    threads: ["T1", "T2", "T3", "T4"],
+    worktree: last,
+    pipelineRun: {
+      pipeline: "round",
+      stage: "S4",
+      enteredAt: CLOCK,
+      round: { parent: "main", sha: ROUND_SHA, at: CLOCK, by: "panel" },
+      visits: { S1: 1, S2: 1, S3: 1, S4: 1 },
+      trees: { S4: { path: last, branch: "wtgui/s4-abc123" } },
+      stageRuns,
+    },
+    ...over,
+  });
+}
+
+test("a finished round asks for ONE assembly, in visit order, and is not finished on that pass", (t) => {
+  const task = finishedRound(t);
+  const out = driveTaskPipelines([task], { bundle: bundleOf(CHAIN), jobs: [{ id: "j-4", thread: "T4", status: "done", startedAt: CLOCK }], isLive: () => false, at: CLOCK, unattended: true });
+  assert.equal(out.assemblies.length, 1, "the round's stages are on their own branches, so one assembly is owed");
+  const request = out.assemblies[0];
+  assert.equal(request.taskId, task.id);
+  assert.equal(request.base, ROUND_SHA, "cut from the round's frozen parent");
+  assert.equal(request.parent, "main", "and recorded under the branch it came from");
+  assert.deepEqual(request.stages.map((entry) => [entry.stage, entry.commit]), [["S1", COMMITS.S1], ["S2", COMMITS.S2], ["S3", COMMITS.S3], ["S4", COMMITS.S4]], "baseline first, then implement, compare and correct");
+  assert.equal(out.tasks[0].state, "running", "the row is NOT finished before its one branch exists");
+  assert.equal(out.changed.length, 0, "and it did not move");
+});
+
+test("once the assembly is recorded the round finishes, and a second assembly is never asked for", (t) => {
+  const task = finishedRound(t);
+  const assembled = {
+    ...task,
+    pipelineRun: {
+      ...task.pipelineRun,
+      tree: { path: "/trees/assembled", branch: "wtgui/round-9f8e7d" },
+      assembly: { commit: "a".repeat(40), base: ROUND_SHA, branch: "wtgui/round-9f8e7d", path: "/trees/assembled", verified: true },
+    },
+  };
+  const out = driveTaskPipelines([assembled], { bundle: bundleOf(CHAIN), jobs: [{ id: "j-4", thread: "T4", status: "done", startedAt: CLOCK }], isLive: () => false, at: CLOCK, unattended: true });
+  assert.equal(out.assemblies.length, 0, "the record is the proof it happened");
+  assert.equal(out.tasks[0].state, "done", "the round is over and its one branch is on the row");
+  assert.match(out.tasks[0].reason, /not a PR to land/, "finished on the last stage's own verdict");
+});
+
+test("a stage in its OWN tree never lands by itself: its branch is assembled, not pushed", (t) => {
+  // The PR a mid-round stage would open holds that stage alone. A stage tree is local only, so the landing paragraph
+  // is never handed to it - the assembly's branch is the one that lands (lib/pipeline-assembly.js rule 5).
+  const first = tree(t, { artifacts: [1] });
+  const task = row({
+    state: "queued",
+    thread: null,
+    threads: [],
+    worktree: first,
+    pipelineRun: {
+      pipeline: "round",
+      stage: "S1",
+      enteredAt: CLOCK,
+      round: { parent: "main", sha: ROUND_SHA, at: CLOCK, by: "panel" },
+      visits: { S1: 1 },
+      trees: { S1: { path: first, branch: "wtgui/s1-abc123" } },
+      stageRuns: [],
+    },
+  });
+  const prPipeline = bundleOf({ ...CHAIN, stages: CHAIN.stages.map((entry) => ({ ...entry, artifact: { ...entry.artifact, kind: "pr" } })) });
+  const out = driveTaskPipelines([task], { bundle: prPipeline, jobs: [], isLive: () => false, at: CLOCK, unattended: true });
+  assert.equal(out.starts.length, 1);
+  assert.equal(out.starts[0].remoteWrite, "local", "a stage tree is never the branch that lands");
+});
