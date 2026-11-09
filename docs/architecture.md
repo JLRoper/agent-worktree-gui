@@ -492,20 +492,24 @@ follow three rules:
    `BUNDLE_VERSION`, `PROFILES_VERSION`, `PROFILE_VERSION`, `QUEUE_VERSION`, `ASSISTANTS_VERSION`,
    `STORE_VERSION` (the assistant) — a store that changes shape declares it, so a reader can
    refuse or migrate rather than half-load.
-2. **Atomic replacement.** Write to a temp file, `renameSync` over the target. Eighteen modules do
-   this (`todos`, `locks`, `parents`, `tree-names`, `descriptions`, `steward`, `worktrees`,
+2. **Atomic replacement.** Write to a temp file, fsync it, `rename` over the target. Nineteen modules
+   do this (`todos`, `locks`, `parents`, `tree-names`, `descriptions`, `steward`, `worktrees`,
    `refresh-row`, `restart`, `hermes-config`, `roles`, `pipelines`, `provider-profiles`,
-   `assistants`, and the assistant's four files); a crash mid-write leaves the previous good file,
-   never a truncated one.
+   `assistants`, `jobs`, and the assistant's four files); a crash mid-write leaves the previous good
+   file, never a truncated one.
 3. **One writer.** The panel is the only process that writes these files, so the classic file-race
    problem does not exist — as `lib/todos.js` says out loud: every writer in the fleet (the
    assistant, every worker's harvested final message, the reader's own edits) goes through this one
    Node process, so the module serialises by construction.
 
-The job store is the exception worth naming: `jobs.json` is written directly with a `savedAt`
-stamp and carries no version, because a lost job card is recoverable from the gateway (the run is
-still there) and a shape change is handled by tolerance at load rather than by refusal. It is the
-one file whose loss the panel is designed to survive rather than to prevent.
+The job store keeps one exception of its own: `jobs.json` is written with a `savedAt` stamp and
+carries no version, because a lost job card is recoverable from the gateway (the run is still there)
+and a shape change is handled by tolerance at load rather than by refusal. Its WRITES are atomic like
+every other file's, and that is not decoration: `jobs.json` was caught at exactly 1,048,576 bytes with
+its JSON cut mid-string, then at 0 bytes, then at 524,288 bytes inside one minute, and any reader or
+restart landing in that window got a fragment it could not parse. `lib/jobs.js` therefore writes the
+payload to a temp file beside the target, fsyncs it, and renames it over the target, in one chain per
+path. Growth stays bounded by the count it keeps (`KEEP_JOBS`), never by a byte cap.
 
 There is no database, no migration framework, and no lock file. A store that goes wrong can be
 debugged with `less`. The cost is that nothing enforces the single-writer invariant if a second
