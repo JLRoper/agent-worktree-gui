@@ -4,16 +4,29 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.76.18 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.76.19 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-509 releases from v0.1.0 (2026-10-20) to v1.76.18 (2026-11-09), 1681 commits between the tags. Every release is anchored by an
+510 releases from v0.1.0 (2026-10-20) to v1.76.19 (2026-11-09), 1684 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.76.19 — 2026-11-09 · 3 commits
+
+[`c7a9639`](https://github.com/JLRoper/agent-worktree-gui/commit/c7a9639c89542cd22048d4756178212604756fac) · [compare v1.76.18...v1.76.19](https://github.com/JLRoper/agent-worktree-gui/compare/v1.76.18...v1.76.19)
+
+### Docs & tests
+
+- docs: render the changelog - 509 releases ([`a6ffaf2`](https://github.com/JLRoper/agent-worktree-gui/commit/a6ffaf2495e0cdbf6fc2cff861f881d8b587c587))
+- docs: the Board round's corrected ledger lands under its own dir ([`c7a9639`](https://github.com/JLRoper/agent-worktree-gui/commit/c7a9639c89542cd22048d4756178212604756fac))
+
+### Other
+
+- chore: the absolute-path gate reads clean on this tree again ([`3e9e316`](https://github.com/JLRoper/agent-worktree-gui/commit/3e9e316739d2e5fce3f54a7a4cf238b69d498196))
 
 ## v1.76.18 — 2026-11-09 · 10 commits
 
