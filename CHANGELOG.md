@@ -4,16 +4,30 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.76.1 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.76.3 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-496 releases from v0.1.0 (2026-10-20) to v1.76.1 (2026-11-09), 1630 commits between the tags. Every release is anchored by an
+497 releases from v0.1.0 (2026-10-20) to v1.76.3 (2026-11-09), 1634 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.76.3 — 2026-11-09 · 4 commits
+
+[`17e66cd`](https://github.com/JLRoper/agent-worktree-gui/commit/17e66cd3367a4202379459d31e7ed9a841fafd28) · [compare v1.76.1...v1.76.3](https://github.com/JLRoper/agent-worktree-gui/compare/v1.76.1...v1.76.3)
+
+### Docs & tests
+
+- docs: render the changelog - 496 releases ([`99f2bd7`](https://github.com/JLRoper/agent-worktree-gui/commit/99f2bd777a2a24d1aedd903e9c4b24a4d9520c36))
+- docs: probe evidence for round D stage 1 - name module line count and last commit ([`ea66e5a`](https://github.com/JLRoper/agent-worktree-gui/commit/ea66e5a11c97280f1a0a4cf5e75f3e278ab982c6))
+- docs: conclude round D - the name module is 95 lines, unchanged since 62b0a71 ([`570a0a1`](https://github.com/JLRoper/agent-worktree-gui/commit/570a0a119de81385933cca9413ee0faea582bea1))
+
+### Other
+
+- chore: 1.76.3 - the version this landing carries ([`17e66cd`](https://github.com/JLRoper/agent-worktree-gui/commit/17e66cd3367a4202379459d31e7ed9a841fafd28))
 
 ## v1.76.1 — 2026-11-09 · 3 commits
 
