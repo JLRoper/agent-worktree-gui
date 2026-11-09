@@ -421,3 +421,48 @@ test("an unresolved record can be repaired by assigning a pipeline, and the cont
   assert.match(html, /<option value="poc-to-uat" selected/, "and defaults to a pipeline the bundle DOES hold, not the broken one");
   assert.match(html, /data-pipew-apply/);
 });
+
+// The stage row is a three-column grid: the ordinal, the title, the position. Every line UNDER the title must be told
+// to span the two wide columns, or the row's own placement cursor drops it into the 18 px ordinal column — where its
+// text is 18 px wide and paints across the line beside it. That is the defect the block shipped with: the visit line
+// and the decision line were the only two children the placement rule did not name, so "visit 1 · gui-improve/
+// baseline#1" and "in this stage 41m41s since …" both landed on one line, interleaving as "visin this stage …".
+test("every line under the current stage's title is placed on its own row, not auto-placed into the ordinal column", () => {
+  const { pipelineWindowHtml } = buildWindow();
+  // Two records, so the row is drawn with EVERY child it can hold: a stage-run decision (the decision line), a visit
+  // (the visit line) and a gate after the stage (the gate line). `pipew-since`/`pipew-warn` are painted INSIDE the
+  // elapsed line, so they are inline text and not grid children.
+  const rowFor = (run) =>
+    htmlStage(pipelineWindowHtml(buildTaskPipelineWindow({ id: 7, title: "carry the contract", state: "running", pipelineRun: run }, { source: bundle(), now: NOW })), run.stage);
+  const decided = rowFor({
+    pipeline: "poc-to-uat",
+    stage: "S3",
+    enteredAt: "2026-11-03T12:30:00.000Z",
+    visits: { S3: 1 },
+    stageRuns: [{ id: "poc-to-uat/S3#1", stage: "S3", visit: 1, decision: { reason: "the loop asked for another pass", code: "again" } }],
+  });
+  const gated = rowFor({ pipeline: "poc-to-uat", stage: "S2", enteredAt: "2026-11-03T12:30:00.000Z", visits: { S2: 1 } });
+  const INLINE = new Set(["pipew-since", "pipew-warn"]);
+  const children = [...new Set([...`${decided}${gated}`.matchAll(/<span class="(pipew-[a-z-]+)/g)].map((m) => m[1]))].filter((c) => !INLINE.has(c));
+  // The head trio is the one line that is MEANT to be three cells: 1 · Baseline · 1 of 5.
+  const HEAD = new Set(["pipew-n", "pipew-name", "pipew-pos"]);
+  assert.deepEqual(
+    [...children].sort(),
+    ["pipew-artifact", "pipew-decision", "pipew-gate", "pipew-live", "pipew-n", "pipew-name", "pipew-phase", "pipew-pos", "pipew-visit"],
+    "the row's children are the nine the stylesheet has to place",
+  );
+
+  const css = readFileSync(new URL("../public/style.css", import.meta.url), "utf8");
+  // The rule that gives a child its own line: a selector list carrying `grid-column: 2 / -1`.
+  const placed = new Set();
+  for (const rule of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    if (!/(^|;)\s*grid-column:\s*2\s*\/\s*-1\s*(;|$)/.test(rule[2])) continue;
+    for (const name of rule[1].matchAll(/\.(pipew-[a-z-]+)/g)) placed.add(name[1]);
+  }
+  const loose = children.filter((name) => !HEAD.has(name) && !placed.has(name));
+  assert.deepEqual(loose, [], "a child the grid rule does not name is auto-placed into the ordinal column and paints over the line beside it");
+  // Named explicitly, because these two are the ones that shipped unplaced.
+  assert.ok(placed.has("pipew-visit"), "the visit line spans the row like every other line under the title");
+  assert.ok(placed.has("pipew-decision"), "the decision line does too");
+  for (const name of HEAD) assert.ok(!placed.has(name), `${name} stays in the head line, where the title sits beside it`);
+});

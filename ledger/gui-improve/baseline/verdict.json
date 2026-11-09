@@ -1,0 +1,159 @@
+{
+ "outcome": "recorded",
+ "evidence": {
+  "capture": {
+   "file": "ledger/gui-improve/baseline/capture.json",
+   "sha256": "5f08576be42f7f294646c6c6e501f815998b663df4f46a11ae1c25e11a3dc4dc",
+   "bytes": 257234
+  },
+  "viewports": [
+   "1440x900",
+   "1280x900",
+   "1024x900",
+   "1600x900"
+  ],
+  "shots": 4,
+  "inventory_elements": 268,
+  "incomplete": [],
+  "measured": {
+   "interleaved": [
+    {
+     "viewport": "1440x900",
+     "lines": [
+      {
+       "top": 194.88,
+       "kids": [
+        "pipew-visit mono",
+        "pipew-live"
+       ]
+      }
+     ]
+    },
+    {
+     "viewport": "1280x900",
+     "lines": [
+      {
+       "top": 194.88,
+       "kids": [
+        "pipew-visit mono",
+        "pipew-live"
+       ]
+      }
+     ]
+    },
+    {
+     "viewport": "1024x900",
+     "lines": [
+      {
+       "top": 194.88,
+       "kids": [
+        "pipew-visit mono",
+        "pipew-live"
+       ]
+      }
+     ]
+    },
+    {
+     "viewport": "1600x900",
+     "lines": [
+      {
+       "top": 194.88,
+       "kids": [
+        "pipew-visit mono",
+        "pipew-live"
+       ]
+      }
+     ]
+    }
+   ],
+   "not_on_own_line": [
+    {
+     "viewport": "1440x900",
+     "own": {
+      "pipew-visit": {
+       "top": 194.88,
+       "alone": false,
+       "overflowsBox": true
+      },
+      "pipew-live": {
+       "top": 194.88,
+       "alone": false,
+       "overflowsBox": false
+      },
+      "pipew-artifact": {
+       "top": 282.83,
+       "alone": true,
+       "overflowsBox": false
+      }
+     }
+    },
+    {
+     "viewport": "1280x900",
+     "own": {
+      "pipew-visit": {
+       "top": 194.88,
+       "alone": false,
+       "overflowsBox": true
+      },
+      "pipew-live": {
+       "top": 194.88,
+       "alone": false,
+       "overflowsBox": false
+      },
+      "pipew-artifact": {
+       "top": 282.83,
+       "alone": true,
+       "overflowsBox": false
+      }
+     }
+    },
+    {
+     "viewport": "1024x900",
+     "own": {
+      "pipew-visit": {
+       "top": 194.88,
+       "alone": false,
+       "overflowsBox": true
+      },
+      "pipew-live": {
+       "top": 194.88,
+       "alone": false,
+       "overflowsBox": false
+      },
+      "pipew-artifact": {
+       "top": 282.83,
+       "alone": true,
+       "overflowsBox": false
+      }
+     }
+    },
+    {
+     "viewport": "1600x900",
+     "own": {
+      "pipew-visit": {
+       "top": 194.88,
+       "alone": false,
+       "overflowsBox": true
+      },
+      "pipew-live": {
+       "top": 194.88,
+       "alone": false,
+       "overflowsBox": false
+      },
+      "pipew-artifact": {
+       "top": 282.83,
+       "alone": true,
+       "overflowsBox": false
+      }
+     }
+    }
+   ],
+   "card_widths": {
+    "1440x900": 780,
+    "1280x900": 780,
+    "1024x900": 780,
+    "1600x900": 780
+   }
+  }
+ }
+}
