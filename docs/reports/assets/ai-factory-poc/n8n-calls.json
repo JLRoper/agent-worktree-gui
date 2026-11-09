@@ -1,0 +1,524 @@
+{
+ "note": "Requests and responses recorded by the n8n POC run on 2026-11-09. Credential material (owner password, API key, session cookie, owner email) is replaced with <redacted>; every other byte is as recorded.",
+ "base_url": "http://127.0.0.1:5678",
+ "n8n_version": "2.46.6",
+ "call_count": 19,
+ "calls": [
+  {
+   "step": "1-owner-setup",
+   "auth": "none",
+   "request": {
+    "method": "POST",
+    "path": "/rest/owner/setup",
+    "headers": {
+     "Accept": "application/json",
+     "Content-Type": "application/json"
+    },
+    "body": {
+     "email": "<redacted>",
+     "firstName": "POC",
+     "lastName": "Owner",
+     "password": "<redacted>"
+    },
+    "body_sha256": "9b82f57215603cbc378bf2fdbaec86a4256c52b7757f9f013555c26b809746ac"
+   },
+   "response": {
+    "status": 200,
+    "bytes": 4870,
+    "content_type": null,
+    "body": "{\"data\":{\"kind\":\"person\",\"createdAt\":\"2026-11-06T20:49:35.556Z\",\"id\":\"bf4af7a6-523e-4597-9ee7-9537e88233b4\",\"email\":\"<owner-email>\",\"firstName\":\"POC\",\"lastName\":\"Owner\",\"personalizationAnswers\":null,\"settings\":{\"userActivated\":false},\"disabled\":false,\"mfaEnabled\":false,\"lastActiveAt\":\"2026-11-09T06:55:34.340Z\",\"isPending\":false,\"role\":\"global:owner\",\"signInType\":\"email\",\"isOwner\":true,\"featureFlags\":{\"120_credential_descriptions\":false,\"130_attach_skills_to_assistant\":false},\"featureFlagPayloads\":{},\"globalScopes\":[\"agent:create\",\"agent:delete\",\"agent:execute\",\"agent:export\",\"agent:list\",\"agent:manage\",\"agent:publish\",\"agent:read\",\"agent:unpublish\",\"agent:update\",\"aiAssistant:manage\",\"aiPreference:create\",\"aiPreference:delete\",\"aiPreference:list\",\"aiPreference:read\",\"aiPreference:update\",\"annotationTag:create\",\"annotationTag:delete\",\"annotationTag:list\",\"annotationTag:read\",\"annotationTag:update\",\"apiKey:create\",\"apiKey:manage\",\"apiKey:update\",\"app:create\",\"app:delete\",\"app:list\",\"app:read\",\"app:update\",\"auditLogs:manage\",\"banner:dismiss\",\"breakingChanges:list\",\"breakingChanges:migrate\",\"chatHub:manage\",\"chatHub:message\",\"chatHubAgent:create\",\"chatHubAgent:delete\",\"chatHubAgent:list\",\"chatHubAgent:read\",\"chatHubAgent:update\",\"community:register\",\"communityPackage:install\",\"communityPackage:list\",\"communityPackage:uninstall\",\"communityPackage:update\",\"credential:connect\",\"credential:create\",\"credential:createEndUser\",\"credential:delete\",\"credential:list\",\"credential:manageInstance\",\"credential:move\",\"credential:read\",\"credential:share\",\"credential:shareGlobally\",\"credential:unshare\",\"credential:update\",\"credential:use\",\"credentialResolver:create\",\"credentialResolver:delete\",\"credentialResolver:list\",\"credentialResolver:read\",\"credentialResolver:update\",\"credentialTypePolicy:manage\",\"dataTable:create\",\"dataTable:delete\",\"dataTable:list\",\"dataTable:listProject\",\"dataTable:read\",\"dataTable:readColumn\",\"dataTable:readRow\",\"dataTable:update\",\"dataTable:writeColumn\",\"dataTable:writeRow\",\"encryptionKey:manage\",\"eventBusDestination:create\",\"eventBusDestination:delete\",\"eventBusDestination:list\",\"eventBusDestination:read\",\"eventBusDestination:test\",\"eventBusDestination:update\",\"execution:delete\",\"execution:list\",\"execution:read\",\"execution:reveal\",\"externalSecret:list\",\"externalSecretsProvider:create\",\"externalSecretsProvider:delete\",\"externalSecretsProvider:list\",\"externalSecretsProvider:read\",\"externalSecretsProvider:sync\",\"externalSecretsProvider:update\",\"folder:create\",\"folder:delete\",\"folder:list\",\"folder:move\",\"folder:read\",\"folder:update\",\"gitConnection:approveReviews\",\"gitConnection:clone\",\"gitConnection:create\",\"gitConnection:delete\",\"gitConnection:discover\",\"gitConnection:list\",\"gitConnection:manageProjects\",\"gitConnection:pull\",\"gitConnection:push\",\"gitConnection:read\",\"gitConnection:readReviews\",\"gitConnection:update\",\"insights:list\",\"insights:read\",\"instanceAi:gateway\",\"instanceAi:manage\",\"instanceAi:message\",\"ldap:manage\",\"ldap:sync\",\"license:manage\",\"logStreaming:manage\",\"mcp:manage\",\"mcp:oauth\",\"mcpApiKey:create\",\"mcpApiKey:rotate\",\"nodeTypePolicy:manage\",\"oidc:manage\",\"orchestration:manage\",\"orchestration:read\",\"otel:manage\",\"project:create\",\"project:delete\",\"project:export\",\"project:list\",\"project:manageMembers\",\"project:read\",\"project:update\",\"projectAiPreference:create\",\"projectAiPreference:delete\",\"projectAiPreference:list\",\"projectAiPreference:read\",\"projectAiPreference:update\",\"projectSkill:create\",\"projectSkill:delete\",\"projectSkill:list\",\"projectSkill:read\",\"projectSkill:update\",\"projectVariable:create\",\"projectVariable:delete\",\"projectVariable:list\",\"projectVariable:read\",\"projectVariable:update\",\"provisioning:manage\",\"role:list\",\"role:manage\",\"role:read\",\"roleMappingRule:create\",\"roleMappingRule:delete\",\"roleMappingRule:list\",\"roleMappingRule:read\",\"roleMappingRule:update\",\"saml:manage\",\"scim:manage\",\"securityAudit:generate\",\"securitySettings:manage\",\"skill:create\",\"skill:delete\",\"skill:list\",\"skill:read\",\"skill:update\",\"sourceControl:manage\",\"sourceControl:pull\",\"sourceControl:push\",\"sourceControl:read\",\"tag:create\",\"tag:delete\",\"tag:list\",\"tag:read\",\"tag:update\",\"trustedSource:create\",\"trustedSource:delete\",\"trustedSource:list\",\"trustedSource:read\",\"trustedSource:update\",\"user:changeRole\",\"user:create\",\"user:delete\",\"user:enforceMfa\",\"user:generateInviteLink\",\"user:list\",\"user:read\",\"user:resetPassword\",\"user:update\",\"variable:create\",\"variable:delete\",\"variable:list\",\"variable:read\",\"variable:update\",\"workersView:manage\",\"workflow:create\",\"workflow:delete\",\"workflow:disableRedaction\",\"workflow:enableRedaction\",\"workflow:execute\",\"workflow:execute-chat\",\"workflow:export\",\"workflow:import\",\"workflow:list\",\"workflow:move\",\"workflow:publish\",\"workflow:read\",\"workflow:share\",\"workflow:unpublish\",\"workflow:unshare\",\"workflow:update\"],\"mfaAuthenticated\":false}}"
+   },
+   "latency_ms": 744.2
+  },
+  {
+   "step": "2-me",
+   "auth": "none",
+   "request": {
+    "method": "GET",
+    "path": "/rest/me",
+    "headers": {
+     "Accept": "application/json"
+    },
+    "body": null,
+    "body_sha256": null
+   },
+   "response": {
+    "status": 404,
+    "bytes": 146,
+    "content_type": null,
+    "body": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<title>Error</title>\n</head>\n<body>\n<pre>Cannot GET /rest/me</pre>\n</body>\n</html>\n"
+   },
+   "latency_ms": 57.5
+  },
+  {
+   "step": "3-api-v1-with-session-cookie",
+   "auth": "none",
+   "request": {
+    "method": "GET",
+    "path": "/api/v1/workflows",
+    "headers": {
+     "Accept": "application/json"
+    },
+    "body": null,
+    "body_sha256": null
+   },
+   "response": {
+    "status": 200,
+    "bytes": 29,
+    "content_type": null,
+    "body": "{\"data\":[],\"nextCursor\":null}"
+   },
+   "latency_ms": 363.5
+  },
+  {
+   "step": "4-api-keys-list",
+   "auth": "none",
+   "request": {
+    "method": "GET",
+    "path": "/rest/api-keys",
+    "headers": {
+     "Accept": "application/json"
+    },
+    "body": null,
+    "body_sha256": null
+   },
+   "response": {
+    "status": 200,
+    "bytes": 89,
+    "content_type": null,
+    "body": "{\"data\":{\"items\":[],\"counts\":{\"mine\":0,\"all\":0},\"totals\":{\"mine\":0,\"all\":0},\"owners\":[]}}"
+   },
+   "latency_ms": 31.8
+  },
+  {
+   "step": "5-login",
+   "auth": "session",
+   "request": {
+    "method": "POST",
+    "path": "/rest/login",
+    "headers": {
+     "Accept": "application/json",
+     "Content-Type": "application/json"
+    },
+    "body": {
+     "emailOrLdapLoginId": "<redacted>",
+     "password": "<redacted>"
+    },
+    "body_sha256": "8fbd64965add68bb32c5a1cfa4e384b930b1616cd3150e2d4a7ab092d14377c2"
+   },
+   "response": {
+    "status": 200,
+    "bytes": 4856,
+    "content_type": null,
+    "body": "{\"data\":{\"kind\":\"person\",\"createdAt\":\"2026-11-06T20:49:35.556Z\",\"id\":\"bf4af7a6-523e-4597-9ee7-9537e88233b4\",\"email\":\"<owner-email>\",\"firstName\":\"POC\",\"lastName\":\"Owner\",\"personalizationAnswers\":null,\"settings\":{\"userActivated\":false},\"disabled\":false,\"mfaEnabled\":false,\"lastActiveAt\":\"2026-11-09\",\"isPending\":false,\"role\":\"global:owner\",\"signInType\":\"email\",\"isOwner\":true,\"featureFlags\":{\"120_credential_descriptions\":false,\"130_attach_skills_to_assistant\":false},\"featureFlagPayloads\":{},\"globalScopes\":[\"agent:create\",\"agent:delete\",\"agent:execute\",\"agent:export\",\"agent:list\",\"agent:manage\",\"agent:publish\",\"agent:read\",\"agent:unpublish\",\"agent:update\",\"aiAssistant:manage\",\"aiPreference:create\",\"aiPreference:delete\",\"aiPreference:list\",\"aiPreference:read\",\"aiPreference:update\",\"annotationTag:create\",\"annotationTag:delete\",\"annotationTag:list\",\"annotationTag:read\",\"annotationTag:update\",\"apiKey:create\",\"apiKey:manage\",\"apiKey:update\",\"app:create\",\"app:delete\",\"app:list\",\"app:read\",\"app:update\",\"auditLogs:manage\",\"banner:dismiss\",\"breakingChanges:list\",\"breakingChanges:migrate\",\"chatHub:manage\",\"chatHub:message\",\"chatHubAgent:create\",\"chatHubAgent:delete\",\"chatHubAgent:list\",\"chatHubAgent:read\",\"chatHubAgent:update\",\"community:register\",\"communityPackage:install\",\"communityPackage:list\",\"communityPackage:uninstall\",\"communityPackage:update\",\"credential:connect\",\"credential:create\",\"credential:createEndUser\",\"credential:delete\",\"credential:list\",\"credential:manageInstance\",\"credential:move\",\"credential:read\",\"credential:share\",\"credential:shareGlobally\",\"credential:unshare\",\"credential:update\",\"credential:use\",\"credentialResolver:create\",\"credentialResolver:delete\",\"credentialResolver:list\",\"credentialResolver:read\",\"credentialResolver:update\",\"credentialTypePolicy:manage\",\"dataTable:create\",\"dataTable:delete\",\"dataTable:list\",\"dataTable:listProject\",\"dataTable:read\",\"dataTable:readColumn\",\"dataTable:readRow\",\"dataTable:update\",\"dataTable:writeColumn\",\"dataTable:writeRow\",\"encryptionKey:manage\",\"eventBusDestination:create\",\"eventBusDestination:delete\",\"eventBusDestination:list\",\"eventBusDestination:read\",\"eventBusDestination:test\",\"eventBusDestination:update\",\"execution:delete\",\"execution:list\",\"execution:read\",\"execution:reveal\",\"externalSecret:list\",\"externalSecretsProvider:create\",\"externalSecretsProvider:delete\",\"externalSecretsProvider:list\",\"externalSecretsProvider:read\",\"externalSecretsProvider:sync\",\"externalSecretsProvider:update\",\"folder:create\",\"folder:delete\",\"folder:list\",\"folder:move\",\"folder:read\",\"folder:update\",\"gitConnection:approveReviews\",\"gitConnection:clone\",\"gitConnection:create\",\"gitConnection:delete\",\"gitConnection:discover\",\"gitConnection:list\",\"gitConnection:manageProjects\",\"gitConnection:pull\",\"gitConnection:push\",\"gitConnection:read\",\"gitConnection:readReviews\",\"gitConnection:update\",\"insights:list\",\"insights:read\",\"instanceAi:gateway\",\"instanceAi:manage\",\"instanceAi:message\",\"ldap:manage\",\"ldap:sync\",\"license:manage\",\"logStreaming:manage\",\"mcp:manage\",\"mcp:oauth\",\"mcpApiKey:create\",\"mcpApiKey:rotate\",\"nodeTypePolicy:manage\",\"oidc:manage\",\"orchestration:manage\",\"orchestration:read\",\"otel:manage\",\"project:create\",\"project:delete\",\"project:export\",\"project:list\",\"project:manageMembers\",\"project:read\",\"project:update\",\"projectAiPreference:create\",\"projectAiPreference:delete\",\"projectAiPreference:list\",\"projectAiPreference:read\",\"projectAiPreference:update\",\"projectSkill:create\",\"projectSkill:delete\",\"projectSkill:list\",\"projectSkill:read\",\"projectSkill:update\",\"projectVariable:create\",\"projectVariable:delete\",\"projectVariable:list\",\"projectVariable:read\",\"projectVariable:update\",\"provisioning:manage\",\"role:list\",\"role:manage\",\"role:read\",\"roleMappingRule:create\",\"roleMappingRule:delete\",\"roleMappingRule:list\",\"roleMappingRule:read\",\"roleMappingRule:update\",\"saml:manage\",\"scim:manage\",\"securityAudit:generate\",\"securitySettings:manage\",\"skill:create\",\"skill:delete\",\"skill:list\",\"skill:read\",\"skill:update\",\"sourceControl:manage\",\"sourceControl:pull\",\"sourceControl:push\",\"sourceControl:read\",\"tag:create\",\"tag:delete\",\"tag:list\",\"tag:read\",\"tag:update\",\"trustedSource:create\",\"trustedSource:delete\",\"trustedSource:list\",\"trustedSource:read\",\"trustedSource:update\",\"user:changeRole\",\"user:create\",\"user:delete\",\"user:enforceMfa\",\"user:generateInviteLink\",\"user:list\",\"user:read\",\"user:resetPassword\",\"user:update\",\"variable:create\",\"variable:delete\",\"variable:list\",\"variable:read\",\"variable:update\",\"workersView:manage\",\"workflow:create\",\"workflow:delete\",\"workflow:disableRedaction\",\"workflow:enableRedaction\",\"workflow:execute\",\"workflow:execute-chat\",\"workflow:export\",\"workflow:import\",\"workflow:list\",\"workflow:move\",\"workflow:publish\",\"workflow:read\",\"workflow:share\",\"workflow:unpublish\",\"workflow:unshare\",\"workflow:update\"],\"mfaAuthenticated\":false}}"
+   },
+   "latency_ms": 207.9
+  },
+  {
+   "step": "6-api-key-scopes",
+   "auth": "session",
+   "request": {
+    "method": "GET",
+    "path": "/rest/api-keys/scopes",
+    "headers": {
+     "Accept": "application/json"
+    },
+    "body": null,
+    "body_sha256": null
+   },
+   "response": {
+    "status": 200,
+    "bytes": 2131,
+    "content_type": null,
+    "body": "{\"data\":[\"agent:export\",\"communityPackage:install\",\"communityPackage:list\",\"communityPackage:uninstall\",\"communityPackage:update\",\"credential:create\",\"credential:delete\",\"credential:list\",\"credential:move\",\"credential:read\",\"credential:update\",\"credentialTypePolicy:manage\",\"dataTable:create\",\"dataTable:delete\",\"dataTable:list\",\"dataTable:read\",\"dataTable:update\",\"eventBusDestination:create\",\"eventBusDestination:delete\",\"eventBusDestination:list\",\"eventBusDestination:read\",\"eventBusDestination:test\",\"eventBusDestination:update\",\"execution:delete\",\"execution:list\",\"execution:read\",\"folder:create\",\"folder:delete\",\"folder:list\",\"folder:read\",\"folder:update\",\"gitConnection:clone\",\"gitConnection:create\",\"gitConnection:delete\",\"gitConnection:discover\",\"gitConnection:list\",\"gitConnection:manageProjects\",\"gitConnection:pull\",\"gitConnection:push\",\"gitConnection:read\",\"gitConnection:update\",\"insights:read\",\"ldap:manage\",\"ldap:sync\",\"nodeTypePolicy:manage\",\"oidc:manage\",\"otel:manage\",\"project:create\",\"project:delete\",\"project:export\",\"project:list\",\"project:manageMembers\",\"project:update\",\"role:list\",\"role:manage\",\"role:read\",\"roleMappingRule:create\",\"roleMappingRule:delete\",\"roleMappingRule:list\",\"roleMappingRule:update\",\"saml:manage\",\"securityAudit:generate\",\"securitySettings:manage\",\"sourceControl:pull\",\"sourceControl:push\",\"sourceControl:read\",\"tag:create\",\"tag:delete\",\"tag:list\",\"tag:read\",\"tag:update\",\"user:changeRole\",\"user:create\",\"user:delete\",\"user:list\",\"user:read\",\"variable:create\",\"variable:delete\",\"variable:list\",\"variable:update\",\"workflow:create\",\"workflow:delete\",\"workflow:export\",\"workflow:import\",\"workflow:list\",\"workflow:move\",\"workflow:read\",\"workflow:update\",\"workflowTags:update\",\"workflowTags:list\",\"executionTags:update\",\"executionTags:list\",\"workflow:activate\",\"workflow:deactivate\",\"execution:retry\",\"execution:stop\",\"testRun:read\",\"testRun:list\",\"testRun:create\",\"testRun:cancel\",\"dataTableRow:create\",\"dataTableRow:read\",\"dataTableRow:update\",\"dataTableRow:delete\",\"dataTableRow:upsert\",\"dataTableColumn:create\",\"dataTableColumn:read\",\"dataTableColumn:update\",\"dataTableColumn:delete\"]}"
+   },
+   "latency_ms": 44.0
+  },
+  {
+   "step": "7-api-key-create",
+   "auth": "session",
+   "request": {
+    "method": "POST",
+    "path": "/rest/api-keys",
+    "headers": {
+     "Accept": "application/json",
+     "Content-Type": "application/json"
+    },
+    "body": {
+     "label": "poc-ai-factory-machine",
+     "scopes": [
+      "credential:create",
+      "credential:delete",
+      "credential:list",
+      "credential:move",
+      "credential:read",
+      "credential:update",
+      "execution:delete",
+      "execution:list",
+      "execution:read",
+      "project:create",
+      "project:delete",
+      "project:export",
+      "project:list",
+      "project:manageMembers",
+      "project:update",
+      "tag:create",
+      "tag:delete",
+      "tag:list",
+      "tag:read",
+      "tag:update",
+      "variable:create",
+      "variable:delete",
+      "variable:list",
+      "variable:update",
+      "workflow:create",
+      "workflow:delete",
+      "workflow:export",
+      "workflow:import",
+      "workflow:list",
+      "workflow:move",
+      "workflow:read",
+      "workflow:update",
+      "workflow:activate",
+      "workflow:deactivate",
+      "execution:retry",
+      "execution:stop"
+     ],
+     "expiresAt": null
+    },
+    "body_sha256": "fea02865d12836736b4fccb7d46ce0b5d562bf2103a25e82858581dbed28b25e"
+   },
+   "response": {
+    "status": 200,
+    "bytes": 1187,
+    "content_type": null,
+    "body": "{\"data\":{\"updatedAt\":\"2026-11-09T07:07:06.721Z\",\"createdAt\":\"2026-11-09T07:07:06.721Z\",\"id\":\"Ma27KWs1IsfdVKqz\",\"userId\":\"bf4af7a6-523e-4597-9ee7-9537e88233b4\",\"label\":\"poc-ai-factory-machine\",\"scopes\":[\"credential:create\",\"credential:delete\",\"credential:list\",\"credential:move\",\"credential:read\",\"credential:update\",\"execution:delete\",\"execution:list\",\"execution:read\",\"project:create\",\"project:delete\",\"project:export\",\"project:list\",\"project:manageMembers\",\"project:update\",\"tag:create\",\"tag:delete\",\"tag:list\",\"tag:read\",\"tag:update\",\"variable:create\",\"variable:delete\",\"variable:list\",\"variable:update\",\"workflow:create\",\"workflow:delete\",\"workflow:export\",\"workflow:import\",\"workflow:list\",\"workflow:move\",\"workflow:read\",\"workflow:update\",\"workflow:activate\",\"workflow:deactivate\",\"execution:retry\",\"execution:stop\"],\"apiKey\":\"******ABik\",\"audience\":\"public-api\",\"lastUsedAt\":null,\"rawApiKey\":\"<redacted>\",\"expiresAt\":null}}"
+   },
+   "latency_ms": 111.7
+  },
+  {
+   "step": "A-root",
+   "auth": "none",
+   "request": {
+    "method": "GET",
+    "path": "/",
+    "headers": {
+     "Accept": "application/json"
+    },
+    "body": null,
+    "body_sha256": null
+   },
+   "response": {
+    "status": 200,
+    "bytes": 1618,
+    "content_type": null,
+    "body": "<!DOCTYPE html>\n<html lang=\"en\">\n\t<head>\n\t\t<meta charset=\"utf-8\" />\n\t\t<meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\" />\n\t\t<meta name=\"viewport\" content=\"width=device-width,initial-scale=1.0\" />\n\t\t<link rel=\"icon\" href=\"/favicon.ico\" />\n\t\t<meta name=\"n8n:config:rest-endpoint\" content=\"cmVzdA==\"><meta name=\"n8n:config:sentry\" content=\"<redacted>\">\n\t\t<link rel=\"stylesheet\" href=\"/static/prefers-color-scheme.css\" nonce=\"{{CSP_NONCE}}\">\n\t\t<script src=\"/static/base-path.js\" type=\"text/javascript\" nonce=\"{{CSP_NONCE}}\"></script>\n\t\t<script src=\"/static/posthog.init.js\" type=\"text/javascript\" nonce=\"{{CSP_NONCE}}\"></script>\n\n\t\t<title>n8n.io - Workflow Automation</title>\n\t\t<meta property=\"csp-nonce\" nonce=\"{{CSP_NONCE}}\">\n\t\t<script type=\"module\" crossorigin src=\"/assets/index-DNGW_w8H.js\" nonce=\"{{CSP_NONCE}}\"></script>\n\t\t<link rel=\"modulepreload\" crossorigin href=\"/assets/rolldown-runtime-Cnm24cU6.js\" nonce=\"{{CSP_NONCE}}\">\n\t\t<link rel=\"modulepreload\" crossorigin href=\"/assets/vendor-DCP8XXb4.js\" nonce=\"{{CSP_NONCE}}\">\n\t\t<link rel=\"modulepreload\" crossorigin href=\"/assets/app-CPTfHB2X.js\" nonce=\"{{CSP_NONCE}}\">\n\t\t<link rel=\"stylesheet\" crossorigin href=\"/assets/vendor-BpMiN8nO.css\" nonce=\"{{CSP_NONCE}}\">\n\t\t<link rel=\"stylesheet\" crossorigin href=\"/assets/app-BzuqMBt9.css\" nonce=\"{{CSP_NONCE}}\">\n\t</head>\n\t<body>\n\t\t<noscript>\n\t\t\t<strong\n\t\t\t\t>We're sorry but the n8n Editor-UI doesn't work properly without JavaScript enabled. Please\n\t\t\t\tenable it to continue.</strong\n\t\t\t>\n\t\t</noscript>\n\t\t<div id=\"app\"></div>\n\t</body>\n</html>\n"
+   },
+   "latency_ms": 57.9
+  },
+  {
+   "step": "B-rest-settings",
+   "auth": "none",
+   "request": {
+    "method": "GET",
+    "path": "/rest/settings",
+    "headers": {
+     "Accept": "application/json"
+    },
+    "body": null,
+    "body_sha256": null
+   },
+   "response": {
+    "status": 200,
+    "bytes": 476,
+    "content_type": null,
+    "body": "{\"data\":{\"settingsMode\":\"public\",\"defaultLocale\":\"en\",\"userManagement\":{\"authenticationMethod\":\"email\",\"showSetupOnFirstLoad\":false,\"smtpSetup\":false,\"passwordMinLength\":8},\"sso\":{\"saml\":{\"loginEnabled\":false},\"ldap\":{\"loginEnabled\":false,\"loginLabel\":\"\"},\"oidc\":{\"loginEnabled\":false,\"loginUrl\":\"http://localhost:5678/rest/sso/oidc/login\"}},\"authCookie\":{\"secure\":false},\"previewMode\":false,\"enterprise\":{\"saml\":false,\"ldap\":false,\"oidc\":false},\"communityNodesEnabled\":true}}"
+   },
+   "latency_ms": 17.7
+  },
+  {
+   "step": "C-api-v1-no-credentials",
+   "auth": "none",
+   "request": {
+    "method": "GET",
+    "path": "/api/v1/workflows",
+    "headers": {
+     "Accept": "application/json"
+    },
+    "body": null,
+    "body_sha256": null
+   },
+   "response": {
+    "status": 401,
+    "bytes": 26,
+    "content_type": null,
+    "body": "{\"message\":\"Unauthorized\"}"
+   },
+   "latency_ms": 11.6
+  },
+  {
+   "step": "D-api-v1-with-key",
+   "auth": "api-key",
+   "request": {
+    "method": "GET",
+    "path": "/api/v1/workflows",
+    "headers": {
+     "Accept": "application/json",
+     "X-N8N-API-KEY": "<redacted>"
+    },
+    "body": null,
+    "body_sha256": null
+   },
+   "response": {
+    "status": 200,
+    "bytes": 29,
+    "content_type": null,
+    "body": "{\"data\":[],\"nextCursor\":null}"
+   },
+   "latency_ms": 52.2
+  },
+  {
+   "step": "E-workflow-create",
+   "auth": "api-key",
+   "request": {
+    "method": "POST",
+    "path": "/api/v1/workflows",
+    "headers": {
+     "Accept": "application/json",
+     "Content-Type": "application/json",
+     "X-N8N-API-KEY": "<redacted>"
+    },
+    "body": {
+     "name": "AI Factory POC - webhook echo",
+     "nodes": [
+      {
+       "parameters": {
+        "httpMethod": "POST",
+        "path": "poc-ai-factory",
+        "responseMode": "responseNode",
+        "options": {}
+       },
+       "name": "Webhook",
+       "type": "n8n-nodes-base.webhook",
+       "typeVersion": 2,
+       "position": [
+        -300,
+        0
+       ],
+       "webhookId": "poc-ai-factory-webhook"
+      },
+      {
+       "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const item = $input.first().json;\nconst body = (item && item.body) || {};\nconst items = Array.isArray(body.items) ? body.items : [];\nconst score = Number(body.score || 0);\nconst name = String(body.name || '');\nreturn [{ json: {\n  ok: true,\n  received: { name: name, score: score, itemCount: items.length },\n  computed: { doubledScore: score * 2, nameUpper: name.toUpperCase(), itemsSorted: items.slice().sort() },\n  servedBy: 'n8n-poc-webhook',\n  processedAt: new Date().toISOString()\n} }];"
+       },
+       "name": "Shape result",
+       "type": "n8n-nodes-base.code",
+       "typeVersion": 2,
+       "position": [
+        0,
+        0
+       ]
+      },
+      {
+       "parameters": {
+        "respondWith": "firstIncomingItem",
+        "options": {}
+       },
+       "name": "Respond to Webhook",
+       "type": "n8n-nodes-base.respondToWebhook",
+       "typeVersion": 1.1,
+       "position": [
+        300,
+        0
+       ]
+      }
+     ],
+     "connections": {
+      "Webhook": {
+       "main": [
+        [
+         {
+          "node": "Shape result",
+          "type": "main",
+          "index": 0
+         }
+        ]
+       ]
+      },
+      "Shape result": {
+       "main": [
+        [
+         {
+          "node": "Respond to Webhook",
+          "type": "main",
+          "index": 0
+         }
+        ]
+       ]
+      }
+     },
+     "settings": {
+      "executionOrder": "v1"
+     },
+     "staticData": null
+    },
+    "body_sha256": "a1992f5debe0283016340f05d92d8d469440e9e519ba7294dda7452d093d23cb"
+   },
+   "response": {
+    "status": 200,
+    "bytes": 2283,
+    "content_type": null,
+    "body": "{\"id\":\"obtlKZkEdITo7Xtr\",\"name\":\"AI Factory POC - webhook echo\",\"description\":null,\"active\":false,\"activeVersionId\":null,\"createdAt\":\"2026-11-09T07:10:23.368Z\",\"updatedAt\":\"2026-11-09T07:10:23.368Z\",\"isArchived\":false,\"versionId\":\"8cf6a64f-4f0a-4e8a-a57c-0fc7c0df2a5b\",\"versionCounter\":1,\"sourceWorkflowId\":null,\"triggerCount\":0,\"nodes\":[{\"name\":\"Webhook\",\"webhookId\":\"poc-ai-factory-webhook\",\"type\":\"n8n-nodes-base.webhook\",\"typeVersion\":2,\"position\":[-300,0],\"parameters\":{\"httpMethod\":\"POST\",\"path\":\"poc-ai-factory\",\"responseMode\":\"responseNode\",\"options\":{}},\"id\":\"ec4eb942-edb2-4b1a-af9a-0a8aa9e5317f\"},{\"name\":\"Shape result\",\"type\":\"n8n-nodes-base.code\",\"typeVersion\":2,\"position\":[0,0],\"parameters\":{\"mode\":\"runOnceForAllItems\",\"jsCode\":\"const item = $input.first().json;\\nconst body = (item && item.body) || {};\\nconst items = Array.isArray(body.items) ? body.items : [];\\nconst score = Number(body.score || 0);\\nconst name = String(body.name || '');\\nreturn [{ json: {\\n  ok: true,\\n  received: { name: name, score: score, itemCount: items.length },\\n  computed: { doubledScore: score * 2, nameUpper: name.toUpperCase(), itemsSorted: items.slice().sort() },\\n  servedBy: 'n8n-poc-webhook',\\n  processedAt: new Date().toISOString()\\n} }];\"},\"id\":\"0ceaf5ad-b1c2-42e7-b67a-11fa488f5c15\"},{\"name\":\"Respond to Webhook\",\"type\":\"n8n-nodes-base.respondToWebhook\",\"typeVersion\":1.1,\"position\":[300,0],\"parameters\":{\"respondWith\":\"firstIncomingItem\",\"options\":{}},\"id\":\"87ca9ab8-3269-4835-b7b4-08529aa91080\"}],\"connections\":{\"Webhook\":{\"main\":[[{\"node\":\"Shape result\",\"type\":\"main\",\"index\":0}]]},\"Shape result\":{\"main\":[[{\"node\":\"Respond to Webhook\",\"type\":\"main\",\"index\":0}]]}},\"nodeGroups\":[],\"settings\":{\"executionOrder\":\"v1\"},\"staticData\":null,\"pinData\":null,\"meta\":null,\"tags\":[],\"shared\":[{\"role\":\"workflow:owner\",\"workflowId\":\"obtlKZkEdITo7Xtr\",\"projectId\":\"kN1861pGJbWoNz6P\",\"project\":{\"id\":\"kN1861pGJbWoNz6P\",\"name\":\"POC Owner <<owner-email>>\",\"type\":\"personal\",\"icon\":null,\"description\":null,\"customTelemetryTags\":[],\"creatorId\":\"bf4af7a6-523e-4597-9ee7-9537e88233b4\",\"createdAt\":\"2026-11-06T20:49:36.211Z\",\"updatedAt\":\"2026-11-09T06:55:34.784Z\"},\"createdAt\":\"2026-11-09T07:10:23.374Z\",\"updatedAt\":\"2026-11-09T07:10:23.374Z\"}],\"activeVersion\":null,\"parentFolder\":null}"
+   },
+   "latency_ms": 221.7
+  },
+  {
+   "step": "F-workflow-get",
+   "auth": "api-key",
+   "request": {
+    "method": "GET",
+    "path": "/api/v1/workflows/obtlKZkEdITo7Xtr",
+    "headers": {
+     "Accept": "application/json",
+     "X-N8N-API-KEY": "<redacted>"
+    },
+    "body": null,
+    "body_sha256": null
+   },
+   "response": {
+    "status": 200,
+    "bytes": 2283,
+    "content_type": null,
+    "body": "{\"id\":\"obtlKZkEdITo7Xtr\",\"name\":\"AI Factory POC - webhook echo\",\"description\":null,\"active\":false,\"activeVersionId\":null,\"createdAt\":\"2026-11-09T07:10:23.368Z\",\"updatedAt\":\"2026-11-09T07:10:23.368Z\",\"isArchived\":false,\"versionId\":\"8cf6a64f-4f0a-4e8a-a57c-0fc7c0df2a5b\",\"versionCounter\":1,\"sourceWorkflowId\":null,\"triggerCount\":0,\"nodes\":[{\"name\":\"Webhook\",\"webhookId\":\"poc-ai-factory-webhook\",\"type\":\"n8n-nodes-base.webhook\",\"typeVersion\":2,\"position\":[-300,0],\"parameters\":{\"httpMethod\":\"POST\",\"path\":\"poc-ai-factory\",\"responseMode\":\"responseNode\",\"options\":{}},\"id\":\"ec4eb942-edb2-4b1a-af9a-0a8aa9e5317f\"},{\"name\":\"Shape result\",\"type\":\"n8n-nodes-base.code\",\"typeVersion\":2,\"position\":[0,0],\"parameters\":{\"mode\":\"runOnceForAllItems\",\"jsCode\":\"const item = $input.first().json;\\nconst body = (item && item.body) || {};\\nconst items = Array.isArray(body.items) ? body.items : [];\\nconst score = Number(body.score || 0);\\nconst name = String(body.name || '');\\nreturn [{ json: {\\n  ok: true,\\n  received: { name: name, score: score, itemCount: items.length },\\n  computed: { doubledScore: score * 2, nameUpper: name.toUpperCase(), itemsSorted: items.slice().sort() },\\n  servedBy: 'n8n-poc-webhook',\\n  processedAt: new Date().toISOString()\\n} }];\"},\"id\":\"0ceaf5ad-b1c2-42e7-b67a-11fa488f5c15\"},{\"name\":\"Respond to Webhook\",\"type\":\"n8n-nodes-base.respondToWebhook\",\"typeVersion\":1.1,\"position\":[300,0],\"parameters\":{\"respondWith\":\"firstIncomingItem\",\"options\":{}},\"id\":\"87ca9ab8-3269-4835-b7b4-08529aa91080\"}],\"connections\":{\"Webhook\":{\"main\":[[{\"node\":\"Shape result\",\"type\":\"main\",\"index\":0}]]},\"Shape result\":{\"main\":[[{\"node\":\"Respond to Webhook\",\"type\":\"main\",\"index\":0}]]}},\"nodeGroups\":[],\"settings\":{\"executionOrder\":\"v1\"},\"staticData\":null,\"pinData\":null,\"meta\":null,\"tags\":[],\"shared\":[{\"role\":\"workflow:owner\",\"workflowId\":\"obtlKZkEdITo7Xtr\",\"projectId\":\"kN1861pGJbWoNz6P\",\"project\":{\"id\":\"kN1861pGJbWoNz6P\",\"name\":\"POC Owner <<owner-email>>\",\"type\":\"personal\",\"icon\":null,\"description\":null,\"customTelemetryTags\":[],\"creatorId\":\"bf4af7a6-523e-4597-9ee7-9537e88233b4\",\"createdAt\":\"2026-11-06T20:49:36.211Z\",\"updatedAt\":\"2026-11-09T06:55:34.784Z\"},\"createdAt\":\"2026-11-09T07:10:23.374Z\",\"updatedAt\":\"2026-11-09T07:10:23.374Z\"}],\"activeVersion\":null,\"parentFolder\":null}"
+   },
+   "latency_ms": 37.9
+  },
+  {
+   "step": "G-workflow-publish",
+   "auth": "api-key",
+   "request": {
+    "method": "POST",
+    "path": "/api/v1/workflows/obtlKZkEdITo7Xtr/publish",
+    "headers": {
+     "Accept": "application/json",
+     "Content-Type": "application/json",
+     "X-N8N-API-KEY": "<redacted>"
+    },
+    "body": {},
+    "body_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+   },
+   "response": {
+    "status": 200,
+    "bytes": 3648,
+    "content_type": null,
+    "body": "{\"id\":\"obtlKZkEdITo7Xtr\",\"name\":\"AI Factory POC - webhook echo\",\"description\":null,\"active\":true,\"activeVersionId\":\"8cf6a64f-4f0a-4e8a-a57c-0fc7c0df2a5b\",\"createdAt\":\"2026-11-09T07:10:23.368Z\",\"updatedAt\":\"2026-11-09T07:10:23.368Z\",\"isArchived\":false,\"versionId\":\"8cf6a64f-4f0a-4e8a-a57c-0fc7c0df2a5b\",\"versionCounter\":1,\"sourceWorkflowId\":null,\"triggerCount\":0,\"nodes\":[{\"name\":\"Webhook\",\"webhookId\":\"poc-ai-factory-webhook\",\"type\":\"n8n-nodes-base.webhook\",\"typeVersion\":2,\"position\":[-300,0],\"parameters\":{\"httpMethod\":\"POST\",\"path\":\"poc-ai-factory\",\"responseMode\":\"responseNode\",\"options\":{}},\"id\":\"ec4eb942-edb2-4b1a-af9a-0a8aa9e5317f\"},{\"name\":\"Shape result\",\"type\":\"n8n-nodes-base.code\",\"typeVersion\":2,\"position\":[0,0],\"parameters\":{\"mode\":\"runOnceForAllItems\",\"jsCode\":\"const item = $input.first().json;\\nconst body = (item && item.body) || {};\\nconst items = Array.isArray(body.items) ? body.items : [];\\nconst score = Number(body.score || 0);\\nconst name = String(body.name || '');\\nreturn [{ json: {\\n  ok: true,\\n  received: { name: name, score: score, itemCount: items.length },\\n  computed: { doubledScore: score * 2, nameUpper: name.toUpperCase(), itemsSorted: items.slice().sort() },\\n  servedBy: 'n8n-poc-webhook',\\n  processedAt: new Date().toISOString()\\n} }];\"},\"id\":\"0ceaf5ad-b1c2-42e7-b67a-11fa488f5c15\"},{\"name\":\"Respond to Webhook\",\"type\":\"n8n-nodes-base.respondToWebhook\",\"typeVersion\":1.1,\"position\":[300,0],\"parameters\":{\"respondWith\":\"firstIncomingItem\",\"options\":{}},\"id\":\"87ca9ab8-3269-4835-b7b4-08529aa91080\"}],\"connections\":{\"Webhook\":{\"main\":[[{\"node\":\"Shape result\",\"type\":\"main\",\"index\":0}]]},\"Shape result\":{\"main\":[[{\"node\":\"Respond to Webhook\",\"type\":\"main\",\"index\":0}]]}},\"nodeGroups\":[],\"settings\":{\"executionOrder\":\"v1\"},\"staticData\":null,\"pinData\":null,\"meta\":null,\"activeVersion\":{\"versionId\":\"8cf6a64f-4f0a-4e8a-a57c-0fc7c0df2a5b\",\"workflowId\":\"obtlKZkEdITo7Xtr\",\"nodes\":[{\"name\":\"Webhook\",\"webhookId\":\"poc-ai-factory-webhook\",\"type\":\"n8n-nodes-base.webhook\",\"typeVersion\":2,\"position\":[-300,0],\"parameters\":{\"httpMethod\":\"POST\",\"path\":\"poc-ai-factory\",\"responseMode\":\"responseNode\",\"options\":{}},\"id\":\"ec4eb942-edb2-4b1a-af9a-0a8aa9e5317f\"},{\"name\":\"Shape result\",\"type\":\"n8n-nodes-base.code\",\"typeVersion\":2,\"position\":[0,0],\"parameters\":{\"mode\":\"runOnceForAllItems\",\"jsCode\":\"const item = $input.first().json;\\nconst body = (item && item.body) || {};\\nconst items = Array.isArray(body.items) ? body.items : [];\\nconst score = Number(body.score || 0);\\nconst name = String(body.name || '');\\nreturn [{ json: {\\n  ok: true,\\n  received: { name: name, score: score, itemCount: items.length },\\n  computed: { doubledScore: score * 2, nameUpper: name.toUpperCase(), itemsSorted: items.slice().sort() },\\n  servedBy: 'n8n-poc-webhook',\\n  processedAt: new Date().toISOString()\\n} }];\"},\"id\":\"0ceaf5ad-b1c2-42e7-b67a-11fa488f5c15\"},{\"name\":\"Respond to Webhook\",\"type\":\"n8n-nodes-base.respondToWebhook\",\"typeVersion\":1.1,\"position\":[300,0],\"parameters\":{\"respondWith\":\"firstIncomingItem\",\"options\":{}},\"id\":\"87ca9ab8-3269-4835-b7b4-08529aa91080\"}],\"connections\":{\"Webhook\":{\"main\":[[{\"node\":\"Shape result\",\"type\":\"main\",\"index\":0}]]},\"Shape result\":{\"main\":[[{\"node\":\"Respond to Webhook\",\"type\":\"main\",\"index\":0}]]}},\"nodeGroups\":[],\"authors\":\"POC Owner\",\"name\":null,\"description\":null,\"autosaved\":false,\"createdAt\":\"2026-11-09T07:10:23.377Z\",\"updatedAt\":\"2026-11-09T07:10:23.377Z\",\"workflowPublishHistory\":[{\"id\":1,\"workflowId\":\"obtlKZkEdITo7Xtr\",\"versionId\":\"8cf6a64f-4f0a-4e8a-a57c-0fc7c0df2a5b\",\"event\":\"activated\",\"userId\":\"bf4af7a6-523e-4597-9ee7-9537e88233b4\",\"createdAt\":\"2026-11-09T07:10:24.089Z\"}]}}"
+   },
+   "latency_ms": 656.9
+  },
+  {
+   "step": "H-workflow-get-after-publish",
+   "auth": "api-key",
+   "request": {
+    "method": "GET",
+    "path": "/api/v1/workflows/obtlKZkEdITo7Xtr",
+    "headers": {
+     "Accept": "application/json",
+     "X-N8N-API-KEY": "<redacted>"
+    },
+    "body": null,
+    "body_sha256": null
+   },
+   "response": {
+    "status": 200,
+    "bytes": 4136,
+    "content_type": null,
+    "body": "{\"id\":\"obtlKZkEdITo7Xtr\",\"name\":\"AI Factory POC - webhook echo\",\"description\":null,\"active\":true,\"activeVersionId\":\"8cf6a64f-4f0a-4e8a-a57c-0fc7c0df2a5b\",\"createdAt\":\"2026-11-09T07:10:23.368Z\",\"updatedAt\":\"2026-11-09T07:10:23.368Z\",\"isArchived\":false,\"versionId\":\"8cf6a64f-4f0a-4e8a-a57c-0fc7c0df2a5b\",\"versionCounter\":1,\"sourceWorkflowId\":null,\"triggerCount\":0,\"nodes\":[{\"name\":\"Webhook\",\"webhookId\":\"poc-ai-factory-webhook\",\"type\":\"n8n-nodes-base.webhook\",\"typeVersion\":2,\"position\":[-300,0],\"parameters\":{\"httpMethod\":\"POST\",\"path\":\"poc-ai-factory\",\"responseMode\":\"responseNode\",\"options\":{}},\"id\":\"ec4eb942-edb2-4b1a-af9a-0a8aa9e5317f\"},{\"name\":\"Shape result\",\"type\":\"n8n-nodes-base.code\",\"typeVersion\":2,\"position\":[0,0],\"parameters\":{\"mode\":\"runOnceForAllItems\",\"jsCode\":\"const item = $input.first().json;\\nconst body = (item && item.body) || {};\\nconst items = Array.isArray(body.items) ? body.items : [];\\nconst score = Number(body.score || 0);\\nconst name = String(body.name || '');\\nreturn [{ json: {\\n  ok: true,\\n  received: { name: name, score: score, itemCount: items.length },\\n  computed: { doubledScore: score * 2, nameUpper: name.toUpperCase(), itemsSorted: items.slice().sort() },\\n  servedBy: 'n8n-poc-webhook',\\n  processedAt: new Date().toISOString()\\n} }];\"},\"id\":\"0ceaf5ad-b1c2-42e7-b67a-11fa488f5c15\"},{\"name\":\"Respond to Webhook\",\"type\":\"n8n-nodes-base.respondToWebhook\",\"typeVersion\":1.1,\"position\":[300,0],\"parameters\":{\"respondWith\":\"firstIncomingItem\",\"options\":{}},\"id\":\"87ca9ab8-3269-4835-b7b4-08529aa91080\"}],\"connections\":{\"Webhook\":{\"main\":[[{\"node\":\"Shape result\",\"type\":\"main\",\"index\":0}]]},\"Shape result\":{\"main\":[[{\"node\":\"Respond to Webhook\",\"type\":\"main\",\"index\":0}]]}},\"nodeGroups\":[],\"settings\":{\"executionOrder\":\"v1\"},\"staticData\":null,\"pinData\":null,\"meta\":null,\"tags\":[],\"shared\":[{\"role\":\"workflow:owner\",\"workflowId\":\"obtlKZkEdITo7Xtr\",\"projectId\":\"kN1861pGJbWoNz6P\",\"project\":{\"id\":\"kN1861pGJbWoNz6P\",\"name\":\"POC Owner <<owner-email>>\",\"type\":\"personal\",\"icon\":null,\"description\":null,\"customTelemetryTags\":[],\"creatorId\":\"bf4af7a6-523e-4597-9ee7-9537e88233b4\",\"createdAt\":\"2026-11-06T20:49:36.211Z\",\"updatedAt\":\"2026-11-09T06:55:34.784Z\"},\"createdAt\":\"2026-11-09T07:10:23.374Z\",\"updatedAt\":\"2026-11-09T07:10:23.374Z\"}],\"activeVersion\":{\"versionId\":\"8cf6a64f-4f0a-4e8a-a57c-0fc7c0df2a5b\",\"workflowId\":\"obtlKZkEdITo7Xtr\",\"nodes\":[{\"name\":\"Webhook\",\"webhookId\":\"poc-ai-factory-webhook\",\"type\":\"n8n-nodes-base.webhook\",\"typeVersion\":2,\"position\":[-300,0],\"parameters\":{\"httpMethod\":\"POST\",\"path\":\"poc-ai-factory\",\"responseMode\":\"responseNode\",\"options\":{}},\"id\":\"ec4eb942-edb2-4b1a-af9a-0a8aa9e5317f\"},{\"name\":\"Shape result\",\"type\":\"n8n-nodes-base.code\",\"typeVersion\":2,\"position\":[0,0],\"parameters\":{\"mode\":\"runOnceForAllItems\",\"jsCode\":\"const item = $input.first().json;\\nconst body = (item && item.body) || {};\\nconst items = Array.isArray(body.items) ? body.items : [];\\nconst score = Number(body.score || 0);\\nconst name = String(body.name || '');\\nreturn [{ json: {\\n  ok: true,\\n  received: { name: name, score: score, itemCount: items.length },\\n  computed: { doubledScore: score * 2, nameUpper: name.toUpperCase(), itemsSorted: items.slice().sort() },\\n  servedBy: 'n8n-poc-webhook',\\n  processedAt: new Date().toISOString()\\n} }];\"},\"id\":\"0ceaf5ad-b1c2-42e7-b67a-11fa488f5c15\"},{\"name\":\"Respond to Webhook\",\"type\":\"n8n-nodes-base.respondToWebhook\",\"typeVersion\":1.1,\"position\":[300,0],\"parameters\":{\"respondWith\":\"firstIncomingItem\",\"options\":{}},\"id\":\"87ca9ab8-3269-4835-b7b4-08529aa91080\"}],\"connections\":{\"Webhook\":{\"main\":[[{\"node\":\"Shape result\",\"type\":\"main\",\"index\":0}]]},\"Shape result\":{\"main\":[[{\"node\":\"Respond to Webhook\",\"type\":\"main\",\"index\":0}]]}},\"nodeGroups\":[],\"authors\":\"POC Owner\",\"name\":null,\"description\":null,\"autosaved\":false,\"createdAt\":\"2026-11-09T07:10:23.377Z\",\"updatedAt\":\"2026-11-09T07:10:23.377Z\",\"workflowPublishHistory\":[{\"id\":1,\"workflowId\":\"obtlKZkEdITo7Xtr\",\"versionId\":\"8cf6a64f-4f0a-4e8a-a57c-0fc7c0df2a5b\",\"event\":\"activated\",\"userId\":\"bf4af7a6-523e-4597-9ee7-9537e88233b4\",\"createdAt\":\"2026-11-09T07:10:24.089Z\"}]},\"parentFolder\":null}"
+   },
+   "latency_ms": 121.8
+  },
+  {
+   "step": "I-webhook-call",
+   "auth": "none",
+   "request": {
+    "method": "POST",
+    "path": "/webhook/poc-ai-factory",
+    "headers": {
+     "Accept": "application/json",
+     "Content-Type": "application/json"
+    },
+    "body": "{\"name\":\"Ada Lovelace\",\"score\":21,\"items\":[\"beta\",\"alpha\",\"gamma\"],\"note\":\"ai factory poc\",\"nested\":{\"a\":1,\"b\":true}}",
+    "body_sha256": "fe77ed4ba3e25f2ea7b0fe2d5c0236fc8a1b1420bf01d5e8859ffe0409d80987"
+   },
+   "response": {
+    "status": 200,
+    "bytes": 238,
+    "content_type": "application/json; charset=utf-8",
+    "body": "{\"ok\":true,\"received\":{\"name\":\"Ada Lovelace\",\"score\":21,\"itemCount\":3},\"computed\":{\"doubledScore\":42,\"nameUpper\":\"ADA LOVELACE\",\"itemsSorted\":[\"alpha\",\"beta\",\"gamma\"]},\"servedBy\":\"n8n-poc-webhook\",\"processedAt\":\"2026-11-09T07:11:18.196Z\"}"
+   },
+   "latency_ms": 848.3
+  },
+  {
+   "step": "J-webhook-get-method",
+   "auth": "none",
+   "request": {
+    "method": "GET",
+    "path": "/webhook/poc-ai-factory",
+    "headers": {
+     "Accept": "application/json"
+    },
+    "body": null,
+    "body_sha256": null
+   },
+   "response": {
+    "status": 404,
+    "bytes": 110,
+    "content_type": "application/json; charset=utf-8",
+    "body": "{\"code\":404,\"message\":\"This webhook is not registered for GET requests. Did you mean to make a POST request?\"}"
+   },
+   "latency_ms": 29.5
+  },
+  {
+   "step": "K-executions-list",
+   "auth": "api-key",
+   "request": {
+    "method": "GET",
+    "path": "/api/v1/executions?workflowId=obtlKZkEdITo7Xtr&includeData=false",
+    "headers": {
+     "Accept": "application/json",
+     "X-N8N-API-KEY": "<redacted>"
+    },
+    "body": null,
+    "body_sha256": null
+   },
+   "response": {
+    "status": 200,
+    "bytes": 254,
+    "content_type": "application/json; charset=utf-8",
+    "body": "{\"data\":[{\"id\":\"1\",\"finished\":true,\"mode\":\"webhook\",\"retryOf\":null,\"retrySuccessId\":null,\"status\":\"success\",\"startedAt\":\"2026-11-09T07:11:17.550Z\",\"stoppedAt\":\"2026-11-09T07:11:18.212Z\",\"workflowId\":\"obtlKZkEdITo7Xtr\",\"waitTill\":null}],\"nextCursor\":null}"
+   },
+   "latency_ms": 52.5
+  },
+  {
+   "step": "L-workflow-final",
+   "auth": "api-key",
+   "request": {
+    "method": "GET",
+    "path": "/api/v1/workflows/obtlKZkEdITo7Xtr",
+    "headers": {
+     "Accept": "application/json",
+     "X-N8N-API-KEY": "<redacted>"
+    },
+    "body": null,
+    "body_sha256": null
+   },
+   "response": {
+    "status": 200,
+    "bytes": 4136,
+    "content_type": "application/json; charset=utf-8",
+    "body": "{\"id\":\"obtlKZkEdITo7Xtr\",\"name\":\"AI Factory POC - webhook echo\",\"description\":null,\"active\":true,\"activeVersionId\":\"8cf6a64f-4f0a-4e8a-a57c-0fc7c0df2a5b\",\"createdAt\":\"2026-11-09T07:10:23.368Z\",\"updatedAt\":\"2026-11-09T07:10:23.368Z\",\"isArchived\":false,\"versionId\":\"8cf6a64f-4f0a-4e8a-a57c-0fc7c0df2a5b\",\"versionCounter\":1,\"sourceWorkflowId\":null,\"triggerCount\":1,\"nodes\":[{\"name\":\"Webhook\",\"webhookId\":\"poc-ai-factory-webhook\",\"type\":\"n8n-nodes-base.webhook\",\"typeVersion\":2,\"position\":[-300,0],\"parameters\":{\"httpMethod\":\"POST\",\"path\":\"poc-ai-factory\",\"responseMode\":\"responseNode\",\"options\":{}},\"id\":\"ec4eb942-edb2-4b1a-af9a-0a8aa9e5317f\"},{\"name\":\"Shape result\",\"type\":\"n8n-nodes-base.code\",\"typeVersion\":2,\"position\":[0,0],\"parameters\":{\"mode\":\"runOnceForAllItems\",\"jsCode\":\"const item = $input.first().json;\\nconst body = (item && item.body) || {};\\nconst items = Array.isArray(body.items) ? body.items : [];\\nconst score = Number(body.score || 0);\\nconst name = String(body.name || '');\\nreturn [{ json: {\\n  ok: true,\\n  received: { name: name, score: score, itemCount: items.length },\\n  computed: { doubledScore: score * 2, nameUpper: name.toUpperCase(), itemsSorted: items.slice().sort() },\\n  servedBy: 'n8n-poc-webhook',\\n  processedAt: new Date().toISOString()\\n} }];\"},\"id\":\"0ceaf5ad-b1c2-42e7-b67a-11fa488f5c15\"},{\"name\":\"Respond to Webhook\",\"type\":\"n8n-nodes-base.respondToWebhook\",\"typeVersion\":1.1,\"position\":[300,0],\"parameters\":{\"respondWith\":\"firstIncomingItem\",\"options\":{}},\"id\":\"87ca9ab8-3269-4835-b7b4-08529aa91080\"}],\"connections\":{\"Webhook\":{\"main\":[[{\"node\":\"Shape result\",\"type\":\"main\",\"index\":0}]]},\"Shape result\":{\"main\":[[{\"node\":\"Respond to Webhook\",\"type\":\"main\",\"index\":0}]]}},\"nodeGroups\":[],\"settings\":{\"executionOrder\":\"v1\"},\"staticData\":null,\"pinData\":null,\"meta\":null,\"tags\":[],\"shared\":[{\"role\":\"workflow:owner\",\"workflowId\":\"obtlKZkEdITo7Xtr\",\"projectId\":\"kN1861pGJbWoNz6P\",\"project\":{\"id\":\"kN1861pGJbWoNz6P\",\"name\":\"POC Owner <<redacted>>\",\"type\":\"personal\",\"icon\":null,\"description\":null,\"customTelemetryTags\":[],\"creatorId\":\"bf4af7a6-523e-4597-9ee7-9537e88233b4\",\"createdAt\":\"2026-11-06T20:49:36.211Z\",\"updatedAt\":\"2026-11-09T06:55:34.784Z\"},\"createdAt\":\"2026-11-09T07:10:23.374Z\",\"updatedAt\":\"2026-11-09T07:10:23.374Z\"}],\"activeVersion\":{\"versionId\":\"8cf6a64f-4f0a-4e8a-a57c-0fc7c0df2a5b\",\"workflowId\":\"obtlKZkEdITo7Xtr\",\"nodes\":[{\"name\":\"Webhook\",\"webhookId\":\"poc-ai-factory-webhook\",\"type\":\"n8n-nodes-base.webhook\",\"typeVersion\":2,\"position\":[-300,0],\"parameters\":{\"httpMethod\":\"POST\",\"path\":\"poc-ai-factory\",\"responseMode\":\"responseNode\",\"options\":{}},\"id\":\"ec4eb942-edb2-4b1a-af9a-0a8aa9e5317f\"},{\"name\":\"Shape result\",\"type\":\"n8n-nodes-base.code\",\"typeVersion\":2,\"position\":[0,0],\"parameters\":{\"mode\":\"runOnceForAllItems\",\"jsCode\":\"const item = $input.first().json;\\nconst body = (item && item.body) || {};\\nconst items = Array.isArray(body.items) ? body.items : [];\\nconst score = Number(body.score || 0);\\nconst name = String(body.name || '');\\nreturn [{ json: {\\n  ok: true,\\n  received: { name: name, score: score, itemCount: items.length },\\n  computed: { doubledScore: score * 2, nameUpper: name.toUpperCase(), itemsSorted: items.slice().sort() },\\n  servedBy: 'n8n-poc-webhook',\\n  processedAt: new Date().toISOString()\\n} }];\"},\"id\":\"0ceaf5ad-b1c2-42e7-b67a-11fa488f5c15\"},{\"name\":\"Respond to Webhook\",\"type\":\"n8n-nodes-base.respondToWebhook\",\"typeVersion\":1.1,\"position\":[300,0],\"parameters\":{\"respondWith\":\"firstIncomingItem\",\"options\":{}},\"id\":\"87ca9ab8-3269-4835-b7b4-08529aa91080\"}],\"connections\":{\"Webhook\":{\"main\":[[{\"node\":\"Shape result\",\"type\":\"main\",\"index\":0}]]},\"Shape result\":{\"main\":[[{\"node\":\"Respond to Webhook\",\"type\":\"main\",\"index\":0}]]}},\"nodeGroups\":[],\"authors\":\"POC Owner\",\"name\":null,\"description\":null,\"autosaved\":false,\"createdAt\":\"2026-11-09T07:10:23.377Z\",\"updatedAt\":\"2026-11-09T07:10:23.377Z\",\"workflowPublishHistory\":[{\"id\":1,\"workflowId\":\"obtlKZkEdITo7Xtr\",\"versionId\":\"8cf6a64f-4f0a-4e8a-a57c-0fc7c0df2a5b\",\"event\":\"activated\",\"userId\":\"bf4af7a6-523e-4597-9ee7-9537e88233b4\",\"createdAt\":\"2026-11-09T07:10:24.089Z\"}]},\"parentFolder\":null}"
+   },
+   "latency_ms": 37.0
+  }
+ ]
+}
