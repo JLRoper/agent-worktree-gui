@@ -4,16 +4,33 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.70.5 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.70.6 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-475 releases from v0.1.0 (2026-10-20) to v1.70.5 (2026-11-09), 1561 commits between the tags. Every release is anchored by an
+476 releases from v0.1.0 (2026-10-20) to v1.70.6 (2026-11-09), 1565 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.70.6 — 2026-11-09 · 4 commits
+
+[`ec1a9a9`](https://github.com/JLRoper/agent-worktree-gui/commit/ec1a9a959c8d312f4ffb27d4cfe34028da200a61) · [compare v1.70.5...v1.70.6](https://github.com/JLRoper/agent-worktree-gui/compare/v1.70.5...v1.70.6)
+
+### Added
+
+- feat: the two built-in roles seed a tier-1 operating contract ([`f68b6a9`](https://github.com/JLRoper/agent-worktree-gui/commit/f68b6a90ac97269ef002db0ee08a4e50bae92e89))
+
+### Docs & tests
+
+- docs: render the changelog - 475 releases ([`59cda08`](https://github.com/JLRoper/agent-worktree-gui/commit/59cda086d3e2eb6f5b794ab50eff4309a898667c))
+- docs: stage two writes both role prompts and consolidates Assistant #1 to twelve ([`0d6e181`](https://github.com/JLRoper/agent-worktree-gui/commit/0d6e181a044188751f8cef6ccd2198dd64b65172))
+
+### Other
+
+- chore: 1.70.6 - the version this landing carries ([`ec1a9a9`](https://github.com/JLRoper/agent-worktree-gui/commit/ec1a9a959c8d312f4ffb27d4cfe34028da200a61))
 
 ## v1.70.5 — 2026-11-09 · 2 commits
 
