@@ -72,15 +72,18 @@ function readerMain(argv) {
   const started = process.hrtime.bigint();
   const until = Date.now() + runMs;
   while (Date.now() < until) {
-    let text;
+    let whole;
     try {
-      text = readFileSync(file, "utf8");
+      // The Buffer, not a decoded string: `whole.length` is the on-disk byte count without a second pass over a
+      // megabyte, and JSON.parse decodes it once. That is what lets this loop hold several hundred reads a second
+      // against a payload this size instead of just reaching it.
+      whole = readFileSync(file);
     } catch {
       readErrors += 1;
       continue;
     }
     reads += 1;
-    const bytes = bytesOf(text);
+    const bytes = whole.length;
     if (bytes < minBytes) minBytes = bytes;
     if (bytes > maxBytes) maxBytes = bytes;
     if (bytes === 0) emptyReads += 1;
@@ -89,7 +92,7 @@ function readerMain(argv) {
     const seen = sizes.get(bytes) || 0;
     if (seen || sizes.size < 24) sizes.set(bytes, seen + 1);
     try {
-      JSON.parse(text);
+      JSON.parse(whole);
       parsed += 1;
     } catch {
       parseErrors += 1;
