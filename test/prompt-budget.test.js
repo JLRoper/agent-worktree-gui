@@ -109,7 +109,7 @@ test("the model draws the first turn of a session, an ordinary turn and the four
   assert.deepEqual(model.turns.map((x) => x.key), ["first", "ordinary", "fourth"], "three turns, in reading order");
   assert.deepEqual(model.gates.queueRows, 5);
   assert.equal(model.gates.queueWakes, 2, "the queue gate is the settings default");
-  assert.equal(model.gates.boardWakes, 4, "the board's full sweep is the settings default");
+  assert.equal(model.gates.boardWakes, undefined, "the board is not gated: its tail rides every turn");
 
   for (const turn of model.turns) {
     assert.equal(turn.total, turn.system + turn.turn, `${turn.key}: the prompt is its two halves`);
@@ -166,20 +166,20 @@ test("the gates move exactly the sections they govern, and nothing else", async 
   assert.equal(sectionOf(ordinary, "queue").gated, true, "and says its gate is closed");
   assert.equal(sectionOf(ordinary, "queue").whenDue, sectionOf(first, "queue").chars, "naming what the next due wake takes");
   assert.equal(sectionOf(ordinary, "charter").basis, "the one-line marker");
-  assert.equal(sectionOf(ordinary, "board").basis, "the one-line marker");
+  assert.equal(sectionOf(ordinary, "board").basis, "the tail message, every turn");
   assert.ok(sectionOf(ordinary, "charter").chars < sectionOf(first, "charter").chars, "the marker is smaller than the text");
-  assert.ok(sectionOf(ordinary, "board").chars < sectionOf(first, "board").chars, "the board marker is smaller than the digest");
+  assert.equal(sectionOf(ordinary, "board").chars, sectionOf(first, "board").chars, "the board is the same tail message on both");
 
   // The fourth wake is the ordinary turn with the queue and board gates open, and the charter still a
   // marker: that is why it is drawn beside the other two.
   assert.equal(sectionOf(fourth, "queue").chars, sectionOf(first, "queue").chars, "the fourth wake's queue is due");
-  assert.equal(sectionOf(fourth, "board").chars, sectionOf(first, "board").chars, "the fourth wake's board is the full digest");
+  assert.equal(sectionOf(fourth, "board").chars, sectionOf(first, "board").chars, "and the fourth wake's board too");
   assert.equal(sectionOf(fourth, "charter").chars, sectionOf(ordinary, "charter").chars, "the charter is still a marker");
   // The arithmetic is exact to the section texts; the assembled totals also carry the newlines that
   // join them, so the difference between the two diagrams is allowed those few characters.
   const queueBytes = sectionOf(first, "queue").chars;
   const charterSaved = sectionOf(first, "charter").chars - sectionOf(ordinary, "charter").chars;
-  const boardSaved = sectionOf(first, "board").chars - sectionOf(ordinary, "board").chars;
+  const boardSaved = 0; // the board's tail is the same block on every turn, so it saves nothing and costs nothing
   assert.ok(
     Math.abs(fourth.total - (ordinary.total + queueBytes + boardSaved)) <= 4,
     `the fourth wake's extra bytes are the queue and the board's full digest (${fourth.total} vs ${ordinary.total} + ${queueBytes} + ${boardSaved})`,

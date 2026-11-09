@@ -283,7 +283,7 @@ Route families, and what each one is allowed to touch:
 | **Settings** | `/api/settings/*`, `/api/reload`, `/api/settings/remote-branches` | `config.json` (one key) or `<HERMES_HOME>/config.yaml` (one line) |
 | **Worktree commands** | `/api/worktree/{child,rollup,rebase,rename,delete,lock,merge,verify-landed}` | git, and the panel's ledgers |
 | **Agent control** | `/api/jobs/{steer,approve,answer,cancel,reattach}`, `/api/agents` | the gateway, never git |
-| **Assistant** | `/api/assistant/*` | the scratchpad, the charter, the message board |
+| **Assistant** | `/api/assistant/*` (the queue, the digest transcript, and the read tool at `/api/assistant/read`) | the scratchpad, the charter, the message board, the digest transcript on every turn |
 | **Permission boxes** | `/api/approvals/*`, `/api/remote-write/*` | in-memory questions + one settings write on `always` |
 
 Two rules hold across the table:

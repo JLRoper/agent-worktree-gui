@@ -113,7 +113,7 @@ try {
   const rows = created.map((body, i) => {
     const appended = body.preamble ? `${String(body.preamble).trim()}${sep}${body.prompt}` : String(body.prompt);
     const system = body.system ? String(body.system) : "";
-    const board = /The board right now:\n\[Board unchanged/.test(appended) ? "marker" : /The board right now:/.test(appended) ? "full" : "none";
+    const board = /The board tail \(one message this turn\):/.test(appended) ? "tail" : "none";
     return {
       turn: i + 1,
       appended: bytes(appended),

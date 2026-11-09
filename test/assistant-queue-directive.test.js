@@ -152,7 +152,7 @@ test("a preamble built after a restart leads with the queue, and a live thread r
 
   const lead = text.indexOf("Read your queue first");
   const digest = text.indexOf("Your task queue (");
-  const board = text.indexOf("The board right now:");
+  const board = text.indexOf("The board tail (one message this turn):");
   assert.ok(lead >= 0, "the preamble says to read the queue first");
   assert.ok(digest > lead, "the digest follows that line");
   assert.ok(board > digest, "and both come before the board summary");

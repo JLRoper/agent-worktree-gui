@@ -44,7 +44,7 @@ const board = (n = 400) => Array.from({ length: n }, (_, i) => `row ${i}: a work
 test("a budget of zero is the old behaviour: the turn is sent whole", async (t) => {
   const assistant = await panel(t, { briefingBudgetChars: 0 });
   const text = assistant.turnBriefing(PRIMARY_ASSISTANT, { queue: true, board: board() });
-  assert.match(text, /The board right now:/, "the board block is there");
+  assert.match(text, /The board tail \(one message this turn\):/, "the board block is there");
   assert.doesNotMatch(text, /briefing cut at/, "and nothing claims it was cut");
 });
 
@@ -52,7 +52,7 @@ test("a turn that fits the budget is untouched", async (t) => {
   const roomy = await panel(t, { briefingBudgetChars: 40_000 });
   const text = roomy.turnBriefing(PRIMARY_ASSISTANT, { board: board(20) });
   assert.doesNotMatch(text, /briefing cut at/, "a turn inside its budget carries no cut sentence");
-  assert.match(text, /The board right now:/, "and its board block is still the digest");
+  assert.match(text, /The board tail \(one message this turn\):/, "and its board block is still the tail");
   assert.ok(text.length < 40_000, "the fixture turn is far smaller than the ceiling");
 });
 

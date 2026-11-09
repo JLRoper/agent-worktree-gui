@@ -107,6 +107,9 @@ import { QUEUE_PATH, createQueueRoutes } from "./routes/assistant-queue.js";
 // The delete control's one write: a dry run that names what would go, and the real press that archives the
 // assistant and takes it out of the roster. The module owns the refusals and the archive; this file only mounts it.
 import { DELETE_PATH, createDeleteRoutes } from "./routes/assistant-delete.js";
+// The digest tail and its READ tool: two GETs over one assistant's transcript and the turn a row's pointer names.
+// The module is a reader only - every append is the Assistant's - so mounting it cannot change what a turn says.
+import { DIGEST_PATH, READ_PATH, createDigestRoutes } from "./routes/assistant-digest.js";
 // The state read's prefix, cut into routes/ beside the queue and the delete control: one module for /api/state and
 // its /api/audit alias, and one table row each because the alias shares no prefix with the path the board polls.
 import { STATE_PATH, AUDIT_PATH, createStateRoutes } from "./routes/state.js";
@@ -1479,6 +1482,10 @@ const PREFIX_MOUNTS = [
   // Deleting one assistant (routes/assistant-delete.js). The dry run and the real press are one handler; the
   // module refuses on live work, archives the four files and writes the roster before the directory goes.
   { prefix: DELETE_PATH, handles: createDeleteRoutes({ assistant, config, sendJson, readBody, authorised }) },
+  // The digest tail's two reads (routes/assistant-digest.js): the transcript itself, and the read tool that answers
+  // a row's pointer with the sending turn's final message and last few tool calls.
+  { prefix: DIGEST_PATH, handles: createDigestRoutes({ assistant, config, sendJson, authorised }) },
+  { prefix: READ_PATH, handles: createDigestRoutes({ assistant, config, sendJson, authorised }) },
   // The state read (routes/state.js), which is the snapshot and nothing else: the store, the registry, the jobs and
   // the assistants are this file's own, so the assembled snapshot stays here and travels in as a function.
   { prefix: STATE_PATH, handles: stateRoutes },

@@ -115,12 +115,12 @@ test("the standing briefing is the run's system text, and nothing that moves rid
 
   // …and the two blocks that move on a schedule are NOT in it: at the head of the prompt they would change the prefix
   // and cost the cache for the whole thread behind them.
-  assert.ok(!job.system.includes("The board right now:"), "the board is not standing text");
+  assert.ok(!job.system.includes("The board tail (one message this turn):"), "the board is not standing text");
   assert.ok(!job.system.includes("Charter —"), "nor is the charter");
 
   // The per-turn input is the digest, the board, the charter and the question. None of the standing text is repeated.
   assert.ok(job.preamble.includes("Your task queue (1 queued"), "the turn carries the queue digest");
-  assert.ok(job.preamble.includes("The board right now:"), "and the board");
+  assert.ok(job.preamble.includes("The board tail (one message this turn):"), "and the board");
   assert.ok(job.preamble.includes("Charter — the long tier"), "and the charter, whole on the first turn");
   assert.ok(!job.preamble.includes("Standing rules (written by the reader"), "the rules are not appended to the thread");
   assert.ok(!job.preamble.includes(NOTE), "nor the scratchpad");
@@ -140,7 +140,7 @@ test("a wake that skips the digest appends the board and the charter and nothing
   for (const job of without) {
     assert.ok(!job.preamble.includes("Your task queue is YOURS"), "the standing directive is never appended");
     assert.ok(!job.preamble.includes(RULE), "nor the standing rules");
-    assert.match(job.preamble, /The board right now:/, "the skipped wake still says what the board is");
+    assert.match(job.preamble, /The board tail \(one message this turn\):/, "the skipped wake still says what the board is");
     assert.match(job.preamble, /Charter — the long tier/, "and where the charter stands");
   }
   for (const job of created) assert.ok(job.system.includes(RULE), "every wake still carries the standing text");
@@ -159,17 +159,13 @@ test("queueSweepEveryNWakes defaults to 2 and the setting still overrides it", a
   assert.deepEqual(all, [true, true, true, true], "1 still means every wake");
 });
 
-test("digestSweepEveryNWakes defaults to 4 and still sends the full board on its sweep", async (t) => {
+test("the board's tail rides every turn, and the settings cannot gate it away", async (t) => {
   const { assistant } = await panel(t);
-  assert.equal(assistant.settingsFor(PRIMARY_ASSISTANT).digestSweepEveryNWakes, 4, "the default is one sweep in four");
+  assert.equal(assistant.settingsFor(PRIMARY_ASSISTANT).digestSweepEveryNWakes, undefined, "the board has no sweep gate any more");
   const boards = [];
   for (let i = 0; i < 8; i += 1) boards.push(assistant.boardForTurn(PRIMARY_ASSISTANT, SWEEP));
-  // Sweep 1 is full because the signature is new to this session; 4 and 8 are the Nth sweeps.
-  assert.equal(boards[0], assistant.digest(), "the first sweep describes the board in full");
-  assert.match(boards[1], /^\[Board unchanged/, "the second is the marker");
-  assert.equal(boards[3], assistant.digest(), "the fourth sweep is the Nth, in full");
-  assert.equal(boards[7], assistant.digest(), "and so is the eighth");
-  assert.equal(boards.filter((b) => /^\[Board unchanged/.test(b)).length, 5, "the other five are markers");
+  for (const [i, board] of boards.entries()) assert.match(board, /^Board tail /, `turn ${i + 1} carries the tail, not a marker`);
+  assert.equal(assistant.digestTail(PRIMARY_ASSISTANT).length, 8, "and every turn appended its own message to the transcript");
 });
 
 test("preamble() is still the whole briefing, in the order a turn reads it", async (t) => {
@@ -177,11 +173,11 @@ test("preamble() is still the whole briefing, in the order a turn reads it", asy
   const text = assistant.preamble(PRIMARY_ASSISTANT);
   assert.ok(text.includes(RULE), "the rules are there");
   assert.ok(text.includes("Your task queue (1 queued"), "the digest is there");
-  assert.ok(text.includes("The board right now:"), "the board is there");
+  assert.ok(text.includes("The board tail (one message this turn):"), "the board is there");
   assert.ok(text.includes("Charter — the long tier"), "and the charter");
   assert.ok(text.indexOf("Your task queue is YOURS") < text.indexOf("Your task queue (1 queued"), "the directive precedes the digest");
-  assert.ok(text.indexOf("Your task queue (1 queued") < text.indexOf("The board right now:"), "and the board follows the digest");
-  assert.ok(text.indexOf("The board right now:") < text.indexOf("Charter — the long tier"), "the charter follows the board");
+  assert.ok(text.indexOf("Your task queue (1 queued") < text.indexOf("The board tail (one message this turn):"), "and the board follows the digest");
+  assert.ok(text.indexOf("The board tail (one message this turn):") < text.indexOf("Charter — the long tier"), "the charter follows the board");
   assert.ok(text.indexOf("Charter — the long tier") < text.indexOf("A restart re-attaches runs"), "and the moving blocks precede the standing rest");
 });
 
@@ -272,11 +268,11 @@ test("the POST carries the standing briefing as `instructions`, and the moving b
   assert.ok(body, "a run was posted to the stub");
 
   assert.ok(String(body.instructions || "").includes(RULE), "the standing rules ride on `instructions`");
-  assert.ok(!String(body.instructions || "").includes("The board right now:"), "the board does not");
+  assert.ok(!String(body.instructions || "").includes("The board tail (one message this turn):"), "the board does not");
   assert.ok(!String(body.instructions || "").includes("Charter —"), "and neither does the charter");
   assert.ok(!String(body.input || "").includes(RULE), "and not in the run's input");
   assert.ok(String(body.input || "").includes("Your task queue (1 queued"), "the input carries the queue digest");
-  assert.ok(String(body.input || "").includes("The board right now:"), "and the board");
+  assert.ok(String(body.input || "").includes("The board tail (one message this turn):"), "and the board");
   assert.ok(String(body.input || "").includes("Charter — the long tier"), "and the charter");
   assert.ok(String(body.input || "").includes(QUESTION), "and the question");
   assert.equal(body.session_id, "panel-assistant", "on the assistant's own thread");
@@ -311,8 +307,9 @@ test("the system block is the same bytes on every wake of a session", async (t) 
 
   const turns = new Set(created.map((job) => job.preamble));
   assert.equal(turns.size > 1, true, "the turn text does move");
-  assert.equal(created.filter((job) => job.preamble.includes("- (no agents on the board)")).length, 3, "the board in full on its first sweep and every fourth after it");
-  assert.equal(created.filter((job) => job.preamble.includes("[Board unchanged")).length, 5, "and the marker on the other five");
+  assert.equal(created.filter((job) => job.preamble.includes("The board tail (one message this turn):")).length, 8, "every turn carries the board's tail");
+  assert.equal(created.filter((job) => job.preamble.includes("- (no agents on the board)")).length, 8, "and an empty board says so on every one");
+  assert.equal(created.filter((job) => job.preamble.includes("[Board unchanged")).length, 0, "there is no marker any more: the gate it belonged to is gone");
   assert.equal(created.filter((job) => job.preamble.includes("CHARTER-BODY: the append tax")).length, 1, "the charter whole once, on the first turn");
   assert.equal(created.filter((job) => job.preamble.includes("unchanged and withheld this turn")).length, 7, "and the marker on the other seven");
 });
