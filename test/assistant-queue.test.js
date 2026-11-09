@@ -367,6 +367,101 @@ test("the settle judges the row's own run, not its thread's newest record", () =
   assert.match(settled[0].reason, /run ended failed/);
 });
 
+// ---- a pipeline row reads its ROUND, not the thread it started on ------------------------------------------
+//
+// Tonight #48, #345, #260 and #264 each read as a dead run while their round was live on a later stage thread. The
+// row's `runId` names the run of ONE link - usually the stage that just ended - so a reader that stops there calls the
+// row dead and invites a hand to cancel work that is running. These four are the brief's proofs plus the settle's half.
+
+const ROUND_TREE = "round-fixture/tree";
+const roundTask = (over = {}) => ({
+  id: 48,
+  title: "the round",
+  state: "running",
+  files: [],
+  thread: "T-stage-one",
+  threads: ["T-stage-one", "T-stage-two"],
+  runId: "run_stage_one",
+  attempts: 0,
+  worktree: ROUND_TREE,
+  pipelineRun: {
+    pipeline: "gui-improve",
+    stage: "review",
+    stageRuns: [
+      { id: "gui-improve/baseline#1", stage: "baseline", visit: 1, thread: "T-stage-one", job: "job-one", status: "done", settledAt: "2026-11-09T11:00:00.000Z" },
+      { id: "gui-improve/review#1", stage: "review", visit: 1, thread: "T-stage-two", job: "job-two", status: null, decision: null },
+    ],
+  },
+  ...over,
+});
+const roundJobs = (stageStatus = "running") => [
+  { id: "job-one", runId: "run_stage_one", thread: "T-stage-one", status: "done", startedAt: "2026-11-09T10:00:00.000Z", endedAt: "2026-11-09T11:00:00.000Z" },
+  { id: "job-two", runId: "run_stage_two", thread: "T-stage-two", status: stageStatus, startedAt: "2026-11-09T11:05:00.000Z", ...(stageStatus === "done" ? { endedAt: "2026-11-09T11:47:00.000Z" } : {}) },
+];
+
+test("a pipeline row whose original thread ended reads running from its round's live stage thread", () => {
+  // The run the row names has ended; the stage the round moved to is going on a later thread. Reading `runId` alone
+  // called this row a dead run - the defect the brief names, on #48's shape.
+  const [row] = decorateTasks([roundTask()], { jobs: roundJobs("running"), isLive: (t) => t === "T-stage-two" });
+  assert.equal(row.stale, undefined, "the round's stage thread is live, so the row is running");
+  assert.equal(row.runBy, "round", "the verdict came from the round's ledger, not from the dead link");
+  assert.equal(row.runStatus, "running");
+  assert.equal(row.runStage, "review");
+  assert.equal(row.runThread, "T-stage-two");
+  assert.equal(row.runJob, "run_stage_two", "the card can name the run the round is actually on");
+  assert.equal(row.guessed, undefined, "a ledger entry that names its job is evidence, not a guess");
+});
+
+test("a pipeline row whose round is settled reads settled, naming the stage and never the original link", () => {
+  const [row] = decorateTasks([roundTask()], { jobs: roundJobs("done"), isLive: () => false });
+  assert.equal(row.stale, true, "nothing the round names is going, so the row is settled work");
+  assert.equal(row.runBy, "round");
+  assert.equal(row.runStatus, "done");
+  assert.match(row.staleWhy, /the round is settled: stage review ended done/);
+  assert.doesNotMatch(row.staleWhy, /run run_stage_one ended/, "the sentence is about the round, not the dead link");
+});
+
+test("a pipeline row whose round cut no thread falls back to its own thread exactly as before", () => {
+  // A record written before the ledger, or a row put on a pipeline that has not started: the round names nothing of
+  // its own, so the row's own thread is the answer, and it is still marked as the guess it is.
+  const legacy = roundTask({ pipelineRun: { pipeline: "gui-improve", stage: "baseline" }, threads: ["T-stage-one"], runId: null });
+  const [guessed] = decorateTasks([legacy], { jobs: [], isLive: (t) => t === "T-stage-one" });
+  assert.equal(guessed.runBy, "thread");
+  assert.equal(guessed.guessed, true);
+  assert.equal(guessed.stale, undefined);
+  // …and one of those with a named live run keeps the run's own answer.
+  const named = roundTask({ pipelineRun: { pipeline: "gui-improve", stage: "baseline" }, threads: ["T-stage-one"] });
+  const [byRun] = decorateTasks([named], { jobs: [{ id: "job-one", runId: "run_stage_one", thread: "T-stage-one", status: "running", startedAt: "2026-11-09T10:00:00.000Z" }], isLive: () => false });
+  assert.equal(byRun.runBy, "run");
+  assert.equal(byRun.stale, undefined);
+});
+
+test("a row with no pipelineRun keeps the answer it always had", () => {
+  const plain = { id: 49, title: "no round", state: "running", files: [], thread: "T-plain", threads: ["T-plain"], worktree: ROUND_TREE };
+  const live = { id: "job-plain", runId: "run_plain", thread: "T-plain", status: "running", startedAt: "2026-11-09T10:00:00.000Z" };
+  const [running] = decorateTasks([{ ...plain, runId: "run_plain" }], { jobs: [live], isLive: () => false });
+  assert.equal(running.stale, undefined);
+  assert.equal(running.runBy, "run", "a row off a pipeline is still read from the run it names");
+  assert.equal(running.runStage, undefined, "no round, no round fields");
+  const done = { id: "job-done", runId: "run_done", thread: "T-plain", status: "done", startedAt: "2026-11-09T09:00:00.000Z", endedAt: "2026-11-09T09:30:00.000Z" };
+  const [settled] = decorateTasks([{ ...plain, runId: "run_done" }], { jobs: [done], isLive: () => true });
+  assert.equal(settled.stale, true);
+  assert.equal(settled.runBy, "run");
+  assert.match(settled.staleWhy, /run run_done ended done/, "the old sentence is untouched for a row with no round");
+});
+
+test("the settle leaves a pipeline row alone while its round is live, even though the named link failed", () => {
+  const task = roundTask({ runId: "run_stage_one" });
+  const jobs = [
+    { id: "job-one", runId: "run_stage_one", thread: "T-stage-one", status: "failed", startedAt: "2026-11-09T10:00:00.000Z", endedAt: "2026-11-09T11:00:00.000Z" },
+    roundJobs("running")[1],
+  ];
+  const { tasks: after, changed } = settleTasks([task], { jobs, isLive: () => true });
+  assert.equal(changed.length, 0, "the round is still going, so nothing is settled");
+  assert.equal(after[0].state, "running");
+  assert.equal(after[0].attempts, 0);
+});
+
 // ---- conflict --------------------------------------------------------------------------------------------
 
 test("a queued task whose files touch a running task's files is skipped with the blocker named", () => {

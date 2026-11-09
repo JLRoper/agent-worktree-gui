@@ -224,6 +224,31 @@ test("the current agent's sub-row names the RUN the row is on, beside the thread
   assert.ok(stale.includes("STALE — run run_fail0001 ended failed"), "and the sentence names the run");
 });
 
+test("a pipeline row draws the ROUND's run, not the dead link it names", () => {
+  const { queueTaskHtml } = build();
+  // The row's `runId` is the stage that ended; the round moved on. The chip beside the thread must name the run the
+  // verdict was read from, because a reader who sees the dead id has no way to tell live work from cancelled work.
+  const html = queueTaskHtml(
+    "assistant-1",
+    { id: 30, title: "the round", state: "running", files: [], threads: ["T-old", "T-live"], runId: "run_old", runBy: "round", runStatus: "running", runStage: "review", runThread: "T-live", runJob: "run_new" },
+    jobs([
+      ["T-old", { status: "done" }],
+      ["T-live", { status: "running" }],
+    ]),
+  );
+  assert.ok(html.includes('data-as-qrun="run_new"'), "the chip names the run the round is on");
+  assert.ok(!html.includes('data-as-qrun="run_old"'), "the dead link is not passed off as the live one");
+  assert.ok(html.includes(">run_new</span>"), "…in the text beside the thread");
+  assert.match(html, /title="[^"]*the round's stage review is live on T-live/, "the head says where the verdict came from");
+  // A settled round says so in the row's own note, with the stage that ended.
+  const settled = queueTaskHtml(
+    "assistant-1",
+    { id: 31, title: "the round, settled", state: "running", files: [], threads: ["T-old", "T-live"], runId: "run_old", runBy: "round", runStatus: "done", stale: true, staleWhy: "the round is settled: stage review ended done 11:47 on thread T-live" },
+    jobs([["T-live", { status: "done" }]]),
+  );
+  assert.ok(settled.includes("the round is settled: stage review ended done"), "the note names the round's last stage");
+});
+
 test("a row with no run id says it is guessing instead of passing a thread match off as evidence", () => {
   const { queueTaskHtml } = build();
   const guessing = queueTaskHtml(
