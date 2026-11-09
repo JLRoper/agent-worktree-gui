@@ -594,6 +594,7 @@ function toggleChildFold(key) {
   saveFoldedParents();
   syncChildGroups(row.project);
 }
+// ---- end children under their parent
 
 function rowHtml(row, forceOwner = false) {
   const isOpen = state.expanded.has(keyOf(row.project, row.path));

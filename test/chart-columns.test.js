@@ -151,8 +151,14 @@ test("a config that hides every column still draws one, and it is the actions ce
 test("every column-spanning row asks for the shown count, never a literal 10", () => {
   // Four rows widen to the whole table: the delete question, the lock refusal, the refresh offer and an expanded
   // worktree's detail. A literal there is what leaves one of them short of the last column.
-  assert.equal((src.match(/colspan="10"/g) || []).length, 0);
-  assert.equal((src.match(/colspan="\$\{wtColspan\(\)\}"/g) || []).length, 4);
+  //
+  // The rows are built in TWO files now: the split that moved the board's scaffolding into public/board-scaffold.js
+  // took the detail row and the refresh offer with it, and this pin kept reading public/app.js alone — so it counted
+  // 2 of 4 and failed on a page whose four rows were all correct. Read the file that carries each row.
+  const board = readFileSync(new URL("../public/board-scaffold.js", import.meta.url), "utf8");
+  const spanning = `${src}\n${board}`;
+  assert.equal((spanning.match(/colspan="10"/g) || []).length, 0);
+  assert.equal((spanning.match(/colspan="\$\{wtColspan\(\)\}"/g) || []).length, 4);
 });
 
 test("POST /api/settings/columns stores the choice in config.json and survives a restart", async (t) => {
