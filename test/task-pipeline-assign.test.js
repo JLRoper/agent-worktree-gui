@@ -24,7 +24,7 @@ import test from "node:test";
 
 import { parseBundle, readBundle } from "../lib/pipeline-bundle.js";
 import { resolveTaskPipeline } from "../lib/task-pipeline.js";
-import { ASSIGN_FAULTS, assignTaskPipeline, clearTaskPipeline, pipelineCatalogue } from "../lib/task-pipeline-assign.js";
+import { ASSIGN_FAULTS, addTaskOnPipeline, assignTaskPipeline, clearTaskPipeline, pipelineCatalogue } from "../lib/task-pipeline-assign.js";
 
 const stage = (n, title) => ({
   id: `S${n}`,
@@ -108,6 +108,40 @@ test("assigning writes one record with the clock it was given, and leaves the ca
   assert.deepEqual(tasks[1], { id: 8, title: "unassigned work" }, "another task is untouched");
   assert.equal(out.tasks.length, 2);
   assert.equal(out.tasks[1].pipelineRun, undefined, "no task is retro-assigned by another task's press");
+});
+
+// The round-7 row's 38 m 38 s: `add` filed it at 23:18:31 and `pipeline` put it on a stage much later, with a crash
+// window in between that would have left a queued row naming no stage. Filing ONTO a stage is one act now, and the two
+// stamps it writes are the same instant by construction.
+test("filing a task onto a stage is ONE write with ONE stamp: createdAt and enteredAt cannot disagree", () => {
+  const out = addTaskOnPipeline([], { title: "file it straight onto the stage", detail: "the round-7 gap", project: "agent-worktree-gui" }, {
+    by: "reader",
+    at: AT,
+    nextId: 335,
+    source: source(),
+    pipeline: "poc-to-uat",
+    stage: "S2",
+  });
+  assert.equal(out.duplicate, undefined);
+  assert.equal(out.tasks.length, 1, "one row, in one list, written once");
+  assert.equal(out.nextId, 336);
+  const row = out.task;
+  assert.equal(row.id, 335);
+  assert.equal(row.state, "queued");
+  assert.equal(row.createdAt, "2026-11-03T15:00:00.000Z");
+  assert.deepEqual(row.pipelineRun, { pipeline: "poc-to-uat", stage: "S2", enteredAt: "2026-11-03T15:00:00.000Z", visits: { S2: 1 } });
+  assert.equal(row.createdAt, row.pipelineRun.enteredAt, "the row's age and its stage's clock start together");
+
+  // A refusal is thrown BEFORE anything is returned: there is no half-filed row for a crash to strand.
+  assert.throws(() => addTaskOnPipeline([], { title: "lands nowhere" }, { at: AT, source: source(), pipeline: "poc-to-uat", stage: "S99" }), /holds no stage/);
+  assert.throws(() => addTaskOnPipeline([], { title: "no bundle" }, { at: AT, source: null, pipeline: "poc-to-uat", stage: "S2" }), (err) => err.code === ASSIGN_FAULTS.BUNDLE);
+
+  // A turn line already carried is not filed a second time, and not re-assigned either.
+  const first = addTaskOnPipeline([], { title: "from a turn", detail: "" }, { at: AT, nextId: 9, carriedKey: "turn-1|queue|0", source: source(), pipeline: "poc-to-uat", stage: "S1" });
+  const again = addTaskOnPipeline(first.tasks, { title: "from a turn", detail: "" }, { at: AT, nextId: first.nextId, carriedKey: "turn-1|queue|0", source: source(), pipeline: "poc-to-uat", stage: "S2" });
+  assert.equal(again.duplicate, true);
+  assert.equal(again.tasks.length, 1, "one row for one carried line");
+  assert.equal(again.tasks[0].pipelineRun.stage, "S1", "the duplicate is not re-assigned to the second stage");
 });
 
 test("the same pipeline and stage twice does not rewrite the stored stamp", () => {

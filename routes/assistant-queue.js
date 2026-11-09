@@ -12,8 +12,10 @@
 //   POST /api/assistant/queue                     {assistantId?, action, ...} - add | edit | state | reassign |
 //                                                reorder | pipeline | pipeline-release | delete. `add` and `edit` take
 //                                                an optional `project` (the panel writes it at a cut, a script may post
-//                                                a path), and `pipeline` puts a task on a stage or clears it back to
-//                                                assistant-decides.
+//                                                a path), and `add` also takes `pipeline` + `stage`: a row can be FILED
+//                                                onto a stage in the one write that creates it, instead of an add and a
+//                                                pipeline write with a crash window between them. `pipeline` puts an
+//                                                existing task on a stage or clears it back to assistant-decides.
 //
 // `assistant.queueView`/`queueMutate` own the file path and the read-modify-write; this adapter owns the status codes
 // and the wire shape. A refusal carries the same sentence the Assistant would have thrown, so a failed write in the
