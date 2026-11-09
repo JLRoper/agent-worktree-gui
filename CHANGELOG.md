@@ -4,16 +4,39 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.76.16 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.76.18 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-508 releases from v0.1.0 (2026-10-20) to v1.76.16 (2026-11-09), 1671 commits between the tags. Every release is anchored by an
+509 releases from v0.1.0 (2026-10-20) to v1.76.18 (2026-11-09), 1681 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.76.18 — 2026-11-09 · 10 commits
+
+[`ee60551`](https://github.com/JLRoper/agent-worktree-gui/commit/ee605519c2398705cfe5259a2d567a1e328b9450) · [compare v1.76.16...v1.76.18](https://github.com/JLRoper/agent-worktree-gui/compare/v1.76.16...v1.76.18)
+
+### Fixed
+
+- fix: the host hold covers every path, and a restart helper no longer kills itself ([`d937726`](https://github.com/JLRoper/agent-worktree-gui/commit/d9377266b42299a768bae6b92b622a880a76628b))
+- fix: the chart paints a round's own names from the record, not from one browser ([`5ed7f60`](https://github.com/JLRoper/agent-worktree-gui/commit/5ed7f60440347f27c0ccc731e4b6c62e8b2ed514))
+- fix: a settings write survives a slow panel instead of being called unsaved ([`3b33c85`](https://github.com/JLRoper/agent-worktree-gui/commit/3b33c85cf53af66df5cb9fc010ecd180ba64cf51))
+- fix: discovery waits for the loop once, not once per folder ([`8399c24`](https://github.com/JLRoper/agent-worktree-gui/commit/8399c24f7eec6a37482e8ffae509e87e8c96ccc7))
+
+### Docs & tests
+
+- docs: render the changelog - 507 releases ([`2bb2c65`](https://github.com/JLRoper/agent-worktree-gui/commit/2bb2c6556133d32fea71b07450ce92386ba7c545))
+- docs: render the changelog - 508 releases ([`0439983`](https://github.com/JLRoper/agent-worktree-gui/commit/0439983964d43aa2cc9ed62ae82ee15d9302f996))
+- test: measure the slow panel's two passes and prove the settings write end to end ([`a5467ee`](https://github.com/JLRoper/agent-worktree-gui/commit/a5467ee4e2ba705b2f368809aa3cfa3c02dae0ba))
+- docs: the 5.8 s discovery and the 1200 ms bundle scan, measured ([`5abf476`](https://github.com/JLRoper/agent-worktree-gui/commit/5abf4763a321a92c6c993d9570fbf5376f03cfd0))
+
+### Other
+
+- chore: 1.76.15 - the version this landing carries ([`00039bc`](https://github.com/JLRoper/agent-worktree-gui/commit/00039bc82a83fb57b6462dda31940f12eb703b70))
+- chore: 1.76.18 - the version this landing carries ([`ee60551`](https://github.com/JLRoper/agent-worktree-gui/commit/ee605519c2398705cfe5259a2d567a1e328b9450))
 
 ## v1.76.16 — 2026-11-09 · 3 commits
 
