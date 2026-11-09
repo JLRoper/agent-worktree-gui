@@ -1,94 +1,63 @@
 {
- "outcome": "improved",
- "evidence": {
-  "reasons": [
-   "every viewport: the visit line, the clock and the artifact line each own a line, nothing paints outside its box, the element set and control names are unchanged, the only text that moved is the live clock, and both test runs are green"
+  "gate": "G2",
+  "outcome": "improved",
+  "pipeline": "gui-improve",
+  "stage": "compare",
+  "visit": 1,
+  "surface": "settings-panel-board",
+  "baseline": "44b4278",
+  "after": "44b4278 + change-set (public/index.html, public/style.css)",
+  "viewports": [
+    "1440x900",
+    "1280x800",
+    "1024x768"
   ],
-  "blocks": {
-   "1440x900": {
-    "before_interleaved": 1,
-    "after_interleaved": 0,
-    "ownLines": {
-     "pipew-visit": {
-      "top": 194.88,
-      "alone": true,
-      "overflowsBox": false
-     },
-     "pipew-live": {
-      "top": 210.38,
-      "alone": true,
-      "overflowsBox": false
-     },
-     "pipew-artifact": {
-      "top": 228.31,
-      "alone": true,
-      "overflowsBox": false
-     }
-    }
-   },
-   "1280x900": {
-    "before_interleaved": 1,
-    "after_interleaved": 0,
-    "ownLines": {
-     "pipew-visit": {
-      "top": 194.88,
-      "alone": true,
-      "overflowsBox": false
-     },
-     "pipew-live": {
-      "top": 210.38,
-      "alone": true,
-      "overflowsBox": false
-     },
-     "pipew-artifact": {
-      "top": 228.31,
-      "alone": true,
-      "overflowsBox": false
-     }
-    }
-   },
-   "1024x900": {
-    "before_interleaved": 1,
-    "after_interleaved": 0,
-    "ownLines": {
-     "pipew-visit": {
-      "top": 194.88,
-      "alone": true,
-      "overflowsBox": false
-     },
-     "pipew-live": {
-      "top": 210.38,
-      "alone": true,
-      "overflowsBox": false
-     },
-     "pipew-artifact": {
-      "top": 228.31,
-      "alone": true,
-      "overflowsBox": false
-     }
-    }
-   },
-   "1600x900": {
-    "before_interleaved": 1,
-    "after_interleaved": 0,
-    "ownLines": {
-     "pipew-visit": {
-      "top": 194.88,
-      "alone": true,
-      "overflowsBox": false
-     },
-     "pipew-live": {
-      "top": 210.38,
-      "alone": true,
-      "overflowsBox": false
-     },
-     "pipew-artifact": {
-      "top": 228.31,
-      "alone": true,
-      "overflowsBox": false
-     }
-    }
-   }
-  }
- }
+  "states": [
+    "open",
+    "presets",
+    "search"
+  ],
+  "pairs": 9,
+  "shots": 18,
+  "pixels_moved": 98317,
+  "pixels_compared": 1591200,
+  "tests": {
+    "command": "node --test --test-reporter=tap test/scan-roots.test.js test/settings-tabs.test.js test/header-controls.test.js",
+    "runs": [
+      {
+        "tree": "after tree: 44b4278 (the baseline) + the change-set's public/ hunks",
+        "exit": 0,
+        "tests": 21,
+        "pass": 21,
+        "fail": 0
+      },
+      {
+        "tree": "stage tree 99f2bd7 with the change-set's public/ hunks applied for the run",
+        "exit": 0,
+        "tests": 22,
+        "pass": 22,
+        "fail": 0
+      }
+    ]
+  },
+  "evidence": [
+    "root 1: row height 28 -> 28 px; gaps before [0, 3.84] -> after [8, 8] px (min gap 0 -> 8)",
+    "root 2: row height 28 -> 28 px; gaps before [0, 3.84] -> after [8, 8] px (min gap 0 -> 8)",
+    "add row: input 154 -> 223.52 px wide, button 78.38 -> 80.48 px, width left unused 73.78 -> 0 px",
+    "add hint: \"an absolute folder path — e.g. the parent of your projects\" measures 382.66 px in 146 px of room (fits: false) -> \"an absolute folder path\" measures 145.42 px in 208 px (fits: true)",
+    "Board panel content height 1598.92 -> 1612.92 px; scrollHeight 1599 -> 1613 px (the 14 px the change-set predicted)",
+    "markup: #scan-root-input placeholder \"an absolute folder path — e.g. the parent of your projects\" -> \"an absolute folder path\"; title \"the absolute path of a folder to scan — Enter adds it\" -> \"an absolute folder path, e.g. the parent of your projects. Enter adds it\" (the full sentence moves into title, so the hint keeps its example)",
+    "surface pixels moved: 98317 of 1591200 (6.179%) across 9 surface pairs; per pair 1440x900/open 27243, 1440x900/presets 5536, 1440x900/search 6, 1280x800/open 27235, 1280x800/presets 5530, 1280x800/search 0, 1024x768/open 27237, 1024x768/presets 5530, 1024x768/search 0",
+    "DOM inventory: 181 -> 181 elements per pair, 53 -> 53 controls; added/removed 0; intended name changes 6, unexpected 0",
+    "CSS inventory: 13 rules added, 0 removed (2,087 -> 2100); 13 painted elements changed computed style at 1440x900 open (the block and its parts, and the Board panel's height); :root variables changed 0",
+    "tests: after tree: 44b4278 (the baseline) + the change-set's public/ hunks: exit 0, 21 pass, 0 fail, 21 total; stage tree 99f2bd7 with the change-set's public/ hunks applied for the run: exit 0, 22 pass, 0 fail, 22 total",
+    "observation: path font: the rule asks for 11.5px, but .mono's 12px wins at equal specificity, so the path paints at 12px (before: 12px); the row's gaps, width and ellipsis are unaffected"
+  ],
+  "observations": [
+    "path font: the rule asks for 11.5px, but .mono's 12px wins at equal specificity, so the path paints at 12px (before: 12px); the row's gaps, width and ellipsis are unaffected"
+  ],
+  "regressions": [],
+  "comparison": "ledger/gui-improve/compare/comparison.json",
+  "page": "ledger/gui-improve/compare/comparison.html",
+  "checked_at": "2026-11-09T11:23:49.895Z"
 }
