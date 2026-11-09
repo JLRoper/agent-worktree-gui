@@ -137,6 +137,15 @@ test("the seed's three small pipelines are complete: 2-3 stages each, with the c
     ["merge", "pr"],
     ["main", "pr"],
   ]);
+  // The GitHub ladder is a straight rail, not a branching graph: every handoff is a sequence, so a walk from
+  // `commit` visits all six stages once and there is no loop to cross. This is the invariant the landing sanity
+  // test reads off a live run; pinning it here means a later edit to the seed cannot quietly add a back edge.
+  const github = byId.get("github-force-merge");
+  assert.deepEqual(
+    github.handoffs.map((entry) => entry.kind),
+    ["sequence", "sequence", "sequence", "sequence", "sequence"],
+    "the GitHub ladder has no loop: every handoff is a sequence",
+  );
   assert.deepEqual(
     ladder("sefl-review-loop"),
     [
