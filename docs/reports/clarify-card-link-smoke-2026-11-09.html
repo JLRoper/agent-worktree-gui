@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data: file:">
+<title>The clarify card's question link - smoke test report, 2026-11-09</title>
+<style>
+  :root{ color-scheme:dark; --ink:#e8e6e1; --paper:#14161a; --rule:#2a2f38; --muted:#9aa3ad; --accent:#c8a6ff; --warn:#e5534b; --ok:#57d38c; --sunk:#1a1d22; }
+  html,body{ margin:0; background:var(--paper); color:var(--ink); font:15px/1.55 -apple-system,Segoe UI,Helvetica,Arial,sans-serif; }
+  main{ max-width:1000px; margin:0 auto; padding:36px 28px 80px; }
+  h1{ font-size:26px; margin:0 0 4px; letter-spacing:-.01em; }
+  h2{ font-size:19px; margin:36px 0 10px; padding-bottom:6px; border-bottom:1px solid var(--rule); }
+  .sub{ color:var(--muted); margin:0 0 22px; }
+  p,li{ margin:8px 0; }
+  code{ font:13px ui-monospace,Consolas,monospace; background:rgba(127,127,127,.12); padding:1px 5px; border-radius:4px; }
+  table{ border-collapse:collapse; width:100%; font-size:14px; }
+  th,td{ text-align:left; padding:7px 9px; border-bottom:1px solid var(--rule); vertical-align:top; }
+  th{ color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+  td.v{ white-space:nowrap; font-family:ui-monospace,Consolas,monospace; font-size:13px; }
+  .pass{ color:var(--ok); }
+  .note{ border-left:3px solid var(--accent); padding:6px 0 6px 12px; color:var(--muted); margin:14px 0; }
+  .note b{ color:var(--ink); }
+  figure{ margin:18px 0 8px; }
+  figure img{ display:block; max-width:100%; border:1px solid var(--rule); border-radius:8px; background:var(--sunk); }
+  figcaption{ color:var(--muted); font-size:13px; margin-top:8px; }
+  a{ color:var(--accent); }
+  figure.card-shot{ max-width:760px; }
+</style>
+</head>
+<body>
+<main>
+<h1>The clarify card's question link</h1>
+<p class="sub">Smoke test report - 2026-11-09 - one URL in a question, rendered as a link and clicked, not asserted</p>
+
+<h2>What was wrong</h2>
+<p>A clarify card is where a parked agent asks for a decision, and the decision often needs the thing the
+question names: a report, a page, a run. The card drew its question with <code>esc()</code> only, so a URL in
+the question came out as text. The reader's only move was to select it, copy it, and paste it into a browser -
+on a card whose whole job is to hand the reader the decision.</p>
+
+<h2>What changed</h2>
+<ul>
+  <li><code>public/app.js</code> <code>questionPrompt</code> renders the question through
+      <code>linkifyText</code> (<code>public/core/dom-format.js</code>). That helper escapes the text first and
+      then wraps each <code>http(s)</code> URL in the panel's own anchor: class <code>out-link</code>,
+      <code>target="_blank"</code>, <code>rel="noreferrer noopener"</code>, and <code>data-open-url</code>.</li>
+  <li>The anchor is the same one the console and the turn cards already use, so it looks and behaves like every
+      other link on the board. The page's click handler turns <code>data-open-url</code> into
+      <code>POST /api/open-url</code>, which opens the page in the OS browser: the board never navigates away
+      from the run the question belongs to.</li>
+  <li>Nothing else about the card changed: the choices, the typed answer, the countdown, the re-ask line and the
+      answered/closed rows are untouched.</li>
+</ul>
+
+<h2>The wording rule</h2>
+<p>A clarify question is <b>one complete sentence naming the report and the decision wanted</b>. It is set in
+the brief every spawned worker receives, beside the instruction to use the tool at all
+(<code>lib/jobs.js</code>):</p>
+<div class="note"><b>Use <code>clarify</code> when a genuine direction decision is needed, never as a progress
+report; the question is one complete sentence naming the report and the decision wanted, so when the reader
+asked for a report it carries that report's .html path and offers two to four numbered next directions as the
+choices, which is the pattern the reader wants for open-ended research and investigation work.</b></div>
+<p>The same rule is written down beside the card's description in <code>README.md</code>. The sentence is what
+makes the link work: one question, naming the report, ending on the decision - a second sentence is a second
+question, and a question that names no decision is a progress report.</p>
+
+<h2>How it is proved</h2>
+<table>
+  <tr><th>Check</th><th>What ran</th><th>Result</th></tr>
+  <tr>
+    <td>The same cases against the base the branch was cut from</td>
+    <td><code>git archive origin/main</code> into a scratch export, this test file copied in,
+        <code>node --test test/clarify-question-link.test.js</code> run there</td>
+    <td class="v">2 pass, 5 fail</td>
+  </tr>
+  <tr>
+    <td>The shipped question row renders the URL as an anchor, escapes markup, keeps sentence punctuation out
+        of the link, and leaves the choices alone</td>
+    <td><code>node --test test/clarify-question-link.test.js</code> - the real <code>questionPrompt</code>,
+        <code>esc</code> and <code>linkifyText</code> sliced out of the shipped files</td>
+    <td class="v pass">7 pass, 0 fail</td>
+  </tr>
+  <tr>
+    <td>The anchor is clickable and opens the report</td>
+    <td><code>node tools/verify-clarify-card-link.mjs</code> - the shipped row on the shipped
+        <code>public/style.css</code>, in Chromium; the link's attributes and computed style read, the link
+        clicked, and the page it opened captured</td>
+    <td class="v pass">19 pass, 0 fail</td>
+  </tr>
+  <tr>
+    <td>The rule rides every worker's brief</td>
+    <td><code>test/brief-follows-the-policy.test.js</code> - the composed spawn input read out of a stub gateway</td>
+    <td class="v pass">pass</td>
+  </tr>
+</table>
+
+<figure class="card-shot">
+  <img src="assets/clarify-card-link-2026-11-09/card.png" alt="A clarify card in the panel's style: waiting on you, the one-sentence question with the report URL drawn as an underlined blue link, and three answer rows.">
+  <figcaption><b>Figure 1.</b> The card. The question is one sentence; the report's URL is an underlined link,
+  not text to copy. The card is the shipped <code>questionPrompt</code> markup on the shipped
+  <code>public/style.css</code>.</figcaption>
+</figure>
+
+<figure>
+  <p><b>Figure 2.</b> The page that same link opened when it was clicked -
+  <a href="assets/clarify-card-link-2026-11-09/opened.png">the capture of the opened report</a>.</p>
+</figure>
+
+<h2>What was not changed, and what this does not claim</h2>
+<ul>
+  <li>A URL in a <i>choice</i> is still the choice's text: the answer rows are labels the agent offers, and a
+      link inside a button is a click that answers the question by accident waiting to happen.</li>
+  <li>Only <code>http(s)</code> URLs are linked. A <code>file:</code> path or a bare path stays text, because the
+      panel has no safe way to promise a browser can open one.</li>
+  <li>Re-run the two commands above to reproduce every row. The captures are written under
+      <code>docs/reports/assets/clarify-card-link-2026-11-09/</code>.</li>
+</ul>
+</main>
+</body>
+</html>
