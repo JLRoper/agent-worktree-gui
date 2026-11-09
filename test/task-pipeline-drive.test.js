@@ -894,6 +894,10 @@ test("a last stage that declares no PR settles its row on the stage's own verdic
   assert.match(out.tasks[0].reason, /pipeline two is over at S2/);
   assert.match(out.tasks[0].reason, /artifact "artifact-2"/);
   assert.match(out.tasks[0].reason, /not a PR to land/);
+  // The sentence SAYS the kind is unstated when the document never declared one. That word is the only thing that
+  // stops a stage which should have pushed from silently taking the driver's local default (round 7's row read
+  // "critique/1, kind unstated" for exactly this reason), so it is pinned rather than smoothed away.
+  assert.match(out.tasks[0].reason, /kind unstated/);
   assert.equal(out.tasks[0].pipelineRun.waitingFor, null, "a finished row is waiting on nothing");
   assert.equal(out.tasks[0].pipelineRun.stageRuns.at(-1).status, "done", "the last stage's run is still recorded");
   assert.equal(out.starts.length, 0, "the pipeline does not invent a stage after it");
@@ -905,6 +909,19 @@ test("a last stage that declares no PR settles its row on the stage's own verdic
   // Nothing is left for the settle to do, and it cannot undo the end: a done row is not running.
   const settled = settleTasks(out.tasks, { jobs: done, isLive: () => false, at: CLOCK, rowFor: () => null });
   assert.equal(settled.tasks[0].state, "done");
+});
+
+test("a stage that STATES its artifact kind is read by that word, and the finished row says which one", (t) => {
+  const dir = tree(t, { artifacts: [2] });
+  // The same two-stage pipeline, with the last stage's artifact declared instead of left unstated: `file` is a
+  // document in the tree, so the stage has no PR to land and the driver finishes the row on its own verdict — the
+  // behaviour an unstated kind got by default, now earned by the document's own word.
+  const doc = pipeline({ stages: [stage(1), { ...stage(2), artifact: { ...stage(2).artifact, kind: "file" } }] });
+  const out = drive([row({ worktree: dir, pipelineRun: { pipeline: "two", stage: "S2", enteredAt: "2026-11-03T15:00:00.000Z" } })], { bundle: bundleOf(doc) });
+
+  assert.equal(out.tasks[0].state, "done", "a file stage has no PR to land, so the settle finishes it here");
+  assert.match(out.tasks[0].reason, /\(out\/1, kind file\)/, "the sentence names the kind the document declared");
+  assert.doesNotMatch(out.tasks[0].reason, /unstated/, "a stated kind is never reported as an omission");
 });
 
 test("a last stage whose artifact IS a PR is left to the landing rule", (t) => {

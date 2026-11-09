@@ -22,7 +22,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { readBundle } from "../lib/pipeline-bundle.js";
+import { ARTIFACT_KINDS, readBundle } from "../lib/pipeline-bundle.js";
 import { assignTaskPipeline } from "../lib/task-pipeline-assign.js";
 import { resolveTaskPipeline } from "../lib/task-pipeline.js";
 
@@ -114,18 +114,50 @@ test("the seed's three small pipelines are complete: 2-3 stages each, with the c
   assert.deepEqual(verdict.decision.routes, { accept: null, revise: "H-02" }, "accept ends the loop; revise crosses the back edge");
   assert.equal(verdict.decision.path, "ledger/ping-pong/verdict-r{{round}}.json", "one record per round, so a stale verdict cannot answer the next one");
 
-  // The landing ladders declare `kind: "pr"` on the stages that ACT on the remote. That is the word the driver reads to
-  // decide a stage's landing paragraph (`lib/branch-policy.js`'s third case), and a push stage told "do not push"
-  // would be a pipeline that cannot do its own job. The commit/version/branch stages declare nothing: they are local
-  // commits, and "commit and report, do not push" is exactly what they are.
-  const ladder = (id) => byId.get(id).stages.map((entry) => [entry.id, entry.artifact.kind || null]);
-  assert.deepEqual(ladder("turnover"), [["commit", null], ["push", "pr"], ["pr", "pr"]]);
-  assert.deepEqual(ladder("github-force-merge"), [["commit", null], ["version", null], ["push", "pr"], ["pr", "pr"], ["merge", "pr"], ["main", "pr"]]);
+  // EVERY stage states what its artifact is. The driver reads that word to decide the stage's landing paragraph: `pr`
+  // is the pull request that carries the work, and any other kind is a file or a tree in the workspace whose stage
+  // never pushes. The round-7 row's done reason read "critique/1, kind unstated" because the ping-pong's two stages
+  // declared no kind at all — an omission that takes the driver's local default silently (docs/reviews/
+  // ping-pong-round-7-dossier-2026-11-09.html, item 2). So the seed now names one on every stage, from the loader's
+  // own vocabulary, and this is the pin that keeps a later edit from dropping it.
+  for (const pipeline of source.bundle.pipelines) {
+    for (const entry of pipeline.stages) {
+      assert.ok(entry.artifact.kind, `${pipeline.id}/${entry.id} declares an artifact kind, not an unstated default`);
+      assert.ok(ARTIFACT_KINDS.includes(entry.artifact.kind), `${pipeline.id}/${entry.id} states one of ${ARTIFACT_KINDS.join(", ")} — got ${JSON.stringify(entry.artifact.kind)}`);
+    }
+  }
+  const ladder = (id) => byId.get(id).stages.map((entry) => [entry.id, entry.artifact.kind]);
+  assert.deepEqual(ladder("turnover"), [["commit", "file"], ["push", "pr"], ["pr", "pr"]]);
+  assert.deepEqual(ladder("github-force-merge"), [
+    ["commit", "file"],
+    ["version", "file"],
+    ["push", "pr"],
+    ["pr", "pr"],
+    ["merge", "pr"],
+    ["main", "pr"],
+  ]);
   assert.deepEqual(
     ladder("sefl-review-loop"),
-    [["branch", null], ["push", "pr"], ["pr", "pr"], ["wait", null], ["address", "pr"], ["approve", null], ["merge", "pr"]],
+    [
+      ["branch", "file"],
+      ["push", "pr"],
+      ["pr", "pr"],
+      ["wait", "file"],
+      ["address", "pr"],
+      ["approve", "file"],
+      ["merge", "pr"],
+    ],
     "the read-only stages of the review loop stay local: they neither push nor open anything",
   );
+  // The two stages this round measured, named directly: a document stage is `file`, and the row that finishes on its
+  // own verdict can now say WHICH kind it finished on.
+  assert.deepEqual(pingPong.stages.map((entry) => [entry.id, entry.artifact.kind]), [["draft", "file"], ["critique", "file"]]);
+  // A directory artifact is a `tree`, not a file with a trailing slash: the panel resolves both, but the word says what
+  // the stage produced.
+  const poc = source.bundle.pipelines[0];
+  assert.equal(poc.stages.find((entry) => entry.id === "S2").artifact.kind, "tree");
+  assert.equal(poc.stages.find((entry) => entry.id === "S3").artifact.kind, "tree");
+  assert.equal(poc.stages.find((entry) => entry.id === "S4").artifact.kind, "file");
 });
 
 test("a task assigned from the seed reads its stage, its position of 13 and its elapsed span from the stored stamp", () => {

@@ -1656,6 +1656,7 @@
         {
           "artifact": {
             "id": "charter",
+            "kind": "file",
             "path": "ledger/charters/charter.md",
             "schema": "charter/1",
             "sha256": "sha256:1f0a9c4d2b77",
@@ -1763,6 +1764,7 @@
         {
           "artifact": {
             "id": "change-log",
+            "kind": "file",
             "path": "ledger/change-log.json",
             "schema": "change-log/1",
             "sha256": "sha256:c03d7e5a1b90",
@@ -1871,6 +1873,7 @@
         {
           "artifact": {
             "id": "frozen-export",
+            "kind": "tree",
             "path": "exports/poc-0007/",
             "schema": "export/1",
             "sha256": "sha256:4b1e0c9a7d21",
@@ -1988,6 +1991,7 @@
         {
           "artifact": {
             "id": "semantic-layer",
+            "kind": "tree",
             "path": "layer/",
             "schema": "layer/1",
             "sha256": "sha256:9f2c8b41e6d0",
@@ -2126,6 +2130,7 @@
         {
           "artifact": {
             "id": "module-plan",
+            "kind": "file",
             "path": "ledger/module-plan.md",
             "schema": "module-plan/1",
             "sha256": "sha256:5d90a7c3e142",
@@ -2245,6 +2250,7 @@
         {
           "artifact": {
             "id": "skeleton",
+            "kind": "file",
             "path": "ledger/skeleton-manifest.json",
             "schema": "skeleton/1",
             "sha256": "sha256:a3b51d8f0c76",
@@ -2361,6 +2367,7 @@
         {
           "artifact": {
             "id": "module-build",
+            "kind": "file",
             "path": "ledger/builds/S6-module.json",
             "schema": "build/1",
             "sha256": "sha256:e77c2a91b4d8",
@@ -2489,6 +2496,7 @@
         {
           "artifact": {
             "id": "dal-verdict",
+            "kind": "file",
             "path": "ledger/dal/V-0004.json",
             "schema": "dal-verdict/1",
             "sha256": "sha256:2c6f8d10ab35",
@@ -2610,6 +2618,7 @@
         {
           "artifact": {
             "id": "finding-set",
+            "kind": "file",
             "path": "ledger/findings/F-0018.json",
             "schema": "finding/2",
             "sha256": "sha256:a71b3e0d59f4",
@@ -2747,6 +2756,7 @@
         {
           "artifact": {
             "id": "verdict",
+            "kind": "file",
             "path": "ledger/verdicts/V-0001.json",
             "schema": "verdict/1",
             "sha256": "sha256:d02e6c47b918",
@@ -2876,6 +2886,7 @@
         {
           "artifact": {
             "id": "parity-report",
+            "kind": "file",
             "path": "ledger/parity-report.md",
             "schema": "parity/1",
             "sha256": "sha256:3f8a2d61e0b9",
@@ -3009,6 +3020,7 @@
         {
           "artifact": {
             "id": "install-verdict",
+            "kind": "file",
             "path": "ledger/install/V-0002.json",
             "schema": "install/1",
             "sha256": "sha256:b640e1f27d58",
@@ -3138,6 +3150,7 @@
         {
           "artifact": {
             "id": "signed-dod",
+            "kind": "file",
             "path": "ledger/dod/V-0005.json",
             "schema": "dod/1",
             "sha256": "sha256:ff30c7a2418b",
@@ -3297,6 +3310,7 @@
           "prompt": "Write the draft the brief asks for, in one pass, and name in a closing line what you are unsure of. On a later round the draft is rewritten against the critic's notes: a note you disagree with is answered in the draft itself, never ignored. Commit the draft on the branch.",
           "artifact": {
             "id": "draft",
+            "kind": "file",
             "path": "ledger/ping-pong/draft.md",
             "schema": "draft/1",
             "writer": "drafter"
@@ -3319,6 +3333,7 @@
           "prompt": "Read the draft against the brief and return one note per defect: the sentence, the defect, the fix it needs. Do not rewrite the draft. When no note is left open, accept it in one line and record that verdict where the gate asks for it, so the drafter can be told the round is over instead of writing another one. The notes are the artifact the next round reads.",
           "artifact": {
             "id": "critique-notes",
+            "kind": "file",
             "path": "ledger/ping-pong/critique.md",
             "schema": "critique/1",
             "writer": "critic"
@@ -3414,6 +3429,7 @@
           "prompt": "Reproduce the fault the task names, against this tree as it stands, and record the exact command, its output and the failure it shows in the probe report. If it does not reproduce, say so in the report and stop — that is the answer, not a reason to guess at one.",
           "artifact": {
             "id": "probe-report",
+            "kind": "file",
             "path": "ledger/probe-fix/report.md",
             "schema": "probe-report/1",
             "writer": "prober"
@@ -3436,6 +3452,7 @@
           "prompt": "Read the probe report, then change only what its reproduction points at. Re-run the same command and paste its output into the report as the proof. A change the report does not point at is out of scope; raise it instead of making it.",
           "artifact": {
             "id": "fix-patch",
+            "kind": "file",
             "path": "ledger/probe-fix/patch.diff",
             "schema": "patch/1",
             "writer": "fixer"
@@ -3505,6 +3522,7 @@
           "prompt": "Write the manuscript the brief asks for, in one pass, and commit it on the branch. When a rejection comes back, change exactly what the reviewer's notes name and answer the rest in one line each; do not rewrite what was accepted.",
           "artifact": {
             "id": "manuscript",
+            "kind": "file",
             "path": "ledger/author-review/manuscript.md",
             "schema": "manuscript/1",
             "writer": "author"
@@ -3527,6 +3545,7 @@
           "prompt": "Read the manuscript against the brief and decide. Accept it in one line, or reject it with one note per defect: the sentence, the defect, the fix it needs. A rejection names every defect it counts; the author can only fix what you wrote down. Do not edit the manuscript.",
           "artifact": {
             "id": "review-notes",
+            "kind": "file",
             "path": "ledger/author-review/review.md",
             "schema": "review/1",
             "writer": "reviewer"
@@ -3555,6 +3574,7 @@
           "prompt": "Apply the reviewer's accepted notes to the manuscript as changes, and commit them. Add nothing the notes do not ask for, and do not re-open a decision the reviewer already made. Finish with the acceptance line from the review and the diff that carries it.",
           "artifact": {
             "id": "revision",
+            "kind": "file",
             "path": "ledger/author-review/revision.md",
             "schema": "revision/1",
             "writer": "reviser"
@@ -3651,6 +3671,7 @@
           "prompt": "Do the work in this tree and stop there.\n\nCommit what you changed in one revertable commit on this tree's branch, then report what you did: the files you touched, the commands you ran and their real results. Where this prompt carries a LANDING paragraph, that paragraph is the only instruction about pushing and opening a pull request: follow it exactly.",
           "artifact": {
             "id": "work-commit",
+            "kind": "file",
             "path": "ledger/local/work.md",
             "schema": "work-commit/1",
             "writer": "worker"
@@ -3701,6 +3722,7 @@
           "prompt": "Find out what is actually being asked.\n\nRead, run and probe in this tree. Record what you ran and what it really returned — the capture, the script, the artefact. Commit the evidence on this tree's branch in one revertable commit. Do not push the main branch and do not open a pull request.",
           "artifact": {
             "id": "probe-evidence",
+            "kind": "file",
             "path": "ledger/investigate/probe.md",
             "schema": "probe-evidence/1",
             "writer": "worker"
@@ -3723,6 +3745,7 @@
           "prompt": "Write the conclusion down in docs/investigation.md: what you found, what you ruled out, and what should happen next. Commit it on this tree's branch and report it in a few lines. Do not push.",
           "artifact": {
             "id": "investigation",
+            "kind": "file",
             "path": "docs/investigation.md",
             "schema": "investigation/1",
             "writer": "worker"
@@ -3797,6 +3820,7 @@
           "prompt": "Commit everything in this tree on this tree's branch in one revertable commit whose subject names the symptom.\n\nDo not push yet.",
           "artifact": {
             "id": "commit-record",
+            "kind": "file",
             "path": "ledger/turnover/commit.md",
             "schema": "commit-record/1",
             "writer": "worker"
@@ -3941,6 +3965,7 @@
           "prompt": "Find out what is actually being asked.\n\nRead, run and probe in this tree. Record what you ran and what it really returned — the capture, the script, the artefact. Commit the evidence on this tree's branch in one revertable commit. Do not push yet.",
           "artifact": {
             "id": "probe-evidence",
+            "kind": "file",
             "path": "ledger/github-investigate/probe.md",
             "schema": "probe-evidence/1",
             "writer": "worker"
@@ -3963,6 +3988,7 @@
           "prompt": "Write the conclusion down in docs/investigation.md: what you found, what you ruled out, and what should happen next. Commit it on this tree's branch and report it in a few lines. This tree stays local until the reader turns the conclusion into a turnover.",
           "artifact": {
             "id": "investigation",
+            "kind": "file",
             "path": "docs/investigation.md",
             "schema": "investigation/1",
             "writer": "worker"
@@ -4037,6 +4063,7 @@
           "prompt": "Find out what is actually being asked.\n\nRead, run and probe in this tree, on this tree's branch, from the host repository this project maps to. Record what you ran and what it really returned. Commit the evidence on this tree's branch in one revertable commit. Do not push yet.",
           "artifact": {
             "id": "probe-evidence",
+            "kind": "file",
             "path": "ledger/sefl-investigate/probe.md",
             "schema": "probe-evidence/1",
             "writer": "worker"
@@ -4059,6 +4086,7 @@
           "prompt": "Write the conclusion down in docs/investigation.md: what you found, what you ruled out, and what should happen next. Commit it on this tree's branch and report it in a few lines. This tree stays local until the reader turns the conclusion into a turnover.",
           "artifact": {
             "id": "investigation",
+            "kind": "file",
             "path": "docs/investigation.md",
             "schema": "investigation/1",
             "writer": "worker"
@@ -4133,6 +4161,7 @@
           "prompt": "Commit everything in this tree on this tree's branch, one revertable commit whose subject names the symptom.",
           "artifact": {
             "id": "commit-record",
+            "kind": "file",
             "path": "ledger/github-force-merge/commit.md",
             "schema": "commit-record/1",
             "writer": "worker"
@@ -4155,6 +4184,7 @@
           "prompt": "Run `node tools/version.mjs suggest`, judge the level against what changed, apply it in the same commit and put the reason in the commit body. The stage is done when `node tools/version.mjs check` exits 0.",
           "artifact": {
             "id": "version-bump",
+            "kind": "file",
             "path": "ledger/github-force-merge/version.md",
             "schema": "version-bump/1",
             "writer": "worker"
@@ -4421,6 +4451,7 @@
           "prompt": "Rename this tree's branch to YYYYMMDD_HHMM_<TICKET>_<desc> and nothing else: the cut's own local time, the ticket id the work names, and <desc> as lowercase words joined by underscores. Example: 20261102_1431_ABC-1234_fix_login_redirect. Then report the new name.",
           "artifact": {
             "id": "branch-name",
+            "kind": "file",
             "path": "ledger/sefl-review-loop/branch.md",
             "schema": "branch-name/1",
             "writer": "worker"
@@ -4502,6 +4533,7 @@
           "prompt": "Read the PR's activities once (the landing doctrine names the endpoint). Report what arrived, then END the turn: say plainly that nothing has arrived if nothing has. Do not sleep, do not poll in a loop, and do not merge — the panel re-checks on its own clock and wakes this thread when there is something to answer.",
           "artifact": {
             "id": "review-activity",
+            "kind": "file",
             "path": "ledger/sefl-review-loop/wait.md",
             "schema": "review-activity/1",
             "writer": "worker"
@@ -4565,6 +4597,7 @@
           "prompt": "Nothing to say: wait for the head to be reviewed. The stage ends when an approval exists whose lastReviewedCommit equals the PR's current head. Report the reviewer and the commit they approved.",
           "artifact": {
             "id": "approval",
+            "kind": "file",
             "path": "ledger/sefl-review-loop/approve.md",
             "schema": "approval/1",
             "writer": "worker"
