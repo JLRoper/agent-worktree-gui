@@ -311,6 +311,13 @@ first stage to its last. Before its first stage it cuts a real worktree on `.wor
 - The lookup answers the stage's OWN tree, from `stageRuns[].tree.path` and then `pipelineRun.trees[stage]`. A stage
   with no tree yet is `needed` (the cut is the next step), and a tree that was recorded and is gone is
   `pipeline-tree-gone`, **never** a second cut and never the project checkout.
+- **The panel cuts every tree a round works in; a row's `worktree` never names one before that cut.** A queue row can
+  carry a `worktree` when it is FILED (the old model's advice, "a queue row names a real tree"), and a stage that ran
+  there is how row 50 of the 2026-11-09 round report committed into the project checkout. `treeLookup` therefore
+  honours `worktree` only once the record shows the row has STARTED - a stage run entry, a `startingAt` request, or a
+  state only a link writes (`running`) - because all three are the panel's own writes. A queued pipeline row with no
+  tree of its own answers `needed` whatever the field says: its first cut cuts the round's parent tree, and the field
+  is a filing hint, not evidence of a tree the panel cut.
 - A row written before rounds existed has no `round` and keeps the model it was cut under: one tree, reused by every
   stage (`treeLookup`). A deploy therefore never re-cuts a row already in flight.
 - A tree path is claimed by every OPEN row whose run tree, `worktree`, round `parentPath` or **any stage tree on the
@@ -507,6 +514,15 @@ The settle's landing rule is unchanged. At the last stage the driver has nothing
 settle finishes the row: a row with a tree is `done` when that tree's PR reads **MERGED**, and a row with no tree is
 done when its run settles. That is what keeps a pipeline row open through every stage and closed only when the work
 has actually landed — the same bar every other row has.
+
+**While a round is live the driver owns the row's state.** A round with a parent tree lands from ONE assembled branch,
+and until that branch is on the record the row holds N stage branches and no branch a landing step could push. So the
+two writers that are not the driver test `roundOwesAssembly` (lib/task-pipeline.js) before they close anything:
+`POST /api/assistant/queue` answers a `done` with a 400 naming the round and its unassembled branches, and
+`settleTasks` leaves the row `running` even when a stage tree's PR reads MERGED. Row 51 of the 2026-11-09 round report
+is the defect: an assistant's own turn closed a one-stage round whose only commit was on the stage tree, and the round
+never assembled. The driver asks for the assembly first and settles the row itself; a round that has to stop is
+**parked**, not closed, and the park is the record a person releases.
 
 ### The keys the driver keeps on the record
 

@@ -21,7 +21,7 @@
 //      `createdBy` and owning nobody — and neither a re-read nor a later edit hands it to the queue's own assistant.
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -1121,4 +1121,82 @@ test("an edit through the queue route writes the run id, and the row then reads 
   const back = (await route.call({ method: "GET", query: "?assistantId=assistant-1" })).payload.queue.tasks[0];
   assert.equal(back.runBy, "tree", "a cleared run id returns the row to the tree fallback");
   assert.equal(back.guessed, true);
+});
+
+// ---- a live round's row belongs to the DRIVER ---------------------------------------------------------------
+// Row 51 of the 2026-11-09 round report: the assistant's own turn closed a pipeline row that still owed its
+// assembly, with a reason in the agent's voice, while the round's only branch was the stage tree's. A round with a
+// parent tree lands from ONE assembled branch (docs/task-pipeline.md, "The assembly"), so until that branch is on
+// the row there is nothing a landing step could push. The driver asks for the assembly and settles the row itself;
+// every other writer - the agent's own turn through this route, and the panel's own clock - is refused or left
+// alone, and `parked` remains the way to stop a round that should not go on.
+
+const ROUND_SHA = "9".repeat(40);
+
+// The row 51 shape: one stage of a round, its stage tree the only tree, the parent tree recorded, no assembly yet.
+const roundRow = (dir) => ({
+  id: 1,
+  title: "round one: the parent-tree note",
+  detail: "",
+  state: "running",
+  thread: "T1",
+  threads: ["T1"],
+  worktree: path.join(dir, "round-one-stage-1-work-abc123"),
+  project: "agent-worktree-gui",
+  files: [],
+  attempts: 0,
+  reason: "",
+  hold: null,
+  pipelineRun: {
+    pipeline: "local",
+    stage: "work",
+    enteredAt: "2026-11-09T11:17:12.586Z",
+    round: {
+      parentPath: path.join(dir, "round-one-abc123"),
+      parent: "wtgui/round-one-abc123",
+      slug: "round-one",
+      tag: "abc123",
+      base: "origin/main",
+      sha: ROUND_SHA,
+      at: "2026-11-09T11:17:12.517Z",
+      by: "panel",
+    },
+    trees: { work: { path: path.join(dir, "round-one-stage-1-work-abc123"), branch: "wtgui/round-one-stage-1-work-abc123" } },
+    stageRuns: [{ id: "local/work#1", stage: "work", visit: 1, at: "2026-11-09T11:17:12.586Z", thread: "T1", job: "j1", status: "done", commit: "443df8203f48" }],
+  },
+});
+
+test("an agent turn cannot close a live round before its assembly is on the row", async (t) => {
+  const { dir, assistant } = await panelAssistant(t, "wtgui-queue-round-");
+  const route = queueTransport(assistant);
+  const file = path.join(dir, "assistants", "assistant-1", "queue.json");
+  await mkdir(path.dirname(file), { recursive: true });
+  await writeFile(file, JSON.stringify({ version: 3, nextId: 2, tasks: [roundRow(dir)] }), "utf8");
+
+  // The agent's own turn: the door row 51 came through, with a reason of its own.
+  const closed = await route.call({
+    method: "POST",
+    body: { assistantId: "assistant-1", action: "state", id: 1, state: "done", reason: "the work stage settled and the local pipeline has only that stage, so the row is complete" },
+  });
+  assert.equal(closed.status, 400, JSON.stringify(closed.payload));
+  assert.match(closed.payload.error, /assembl/, "the refusal names the assembly the round still owes");
+  assert.equal(JSON.parse(readFileSync(file, "utf8")).tasks[0].state, "running", "the row is still the driver's");
+
+  // The panel's own clock reads the same fact: a MERGED PR is not the round's assembly either.
+  const settled = settleTasks([roundRow(dir)], {
+    jobs: [{ id: "j1", thread: "T1", status: "done", startedAt: "2026-11-09T11:17:12.586Z", endedAt: "2026-11-09T11:21:47.180Z" }],
+    rowFor: () => ({ path: path.join(dir, "round-one-stage-1-work-abc123"), verdict: "MERGED" }),
+    isLive: () => false,
+    at: at("2026-11-09T11:21:53.503Z"),
+  });
+  assert.equal(settled.tasks[0].state, "running", "the queue's clock does not close a round that is not assembled");
+  assert.equal(settled.changed.length, 0);
+
+  // With the assembly on the row the same press closes it: the refusal is about the round, not about the writer.
+  const assembled = roundRow(dir);
+  assembled.pipelineRun.assembly = { commit: "a".repeat(40), base: ROUND_SHA, branch: "wtgui/round-one-abc123", path: assembled.pipelineRun.round.parentPath, verified: true };
+  await writeFile(file, JSON.stringify({ version: 3, nextId: 2, tasks: [assembled] }), "utf8");
+  const after = await route.call({ method: "POST", body: { assistantId: "assistant-1", action: "state", id: 1, state: "done", reason: "the round is assembled and its one branch is on the row" } });
+  assert.equal(after.status, 200, JSON.stringify(after.payload));
+  assert.equal(JSON.parse(readFileSync(file, "utf8")).tasks[0].state, "done");
 });
