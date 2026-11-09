@@ -15,3 +15,8 @@ data/roles/** -text
 # checkout as they were written, scoped to these folders so no existing file's checkout changes.
 tools/vendor/** -text
 docs/pipelines/viz/** -text
+
+# The gui-improve change-set is a diff a reader applies to the tree, and a CRLF checkout breaks it:
+# `git apply` then matches nothing, because every context line ends in a CR the file does not have.
+# `-text` keeps the patch's own bytes so `git apply -p1` works from any checkout of this branch.
+ledger/**/*.patch -text

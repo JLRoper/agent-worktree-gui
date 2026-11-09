@@ -1,0 +1,45 @@
+{
+  "gate": "G2",
+  "outcome": "improved",
+  "pipeline": "gui-improve",
+  "stage": "compare",
+  "visit": 1,
+  "surface": "settings-panel-general",
+  "baseline": "21d6423e0e8f",
+  "after": "c065c4f",
+  "viewports": [
+    "1440x900",
+    "1280x800",
+    "1024x768"
+  ],
+  "states": [
+    "open",
+    "search"
+  ],
+  "pairs": 6,
+  "shots": 12,
+  "pixels_moved": 26537,
+  "pixels_compared": 1060800,
+  "tests": {
+    "command": "node --test --test-reporter=tap test/settings-tabs.test.js test/assistant-dock-setting.test.js",
+    "exit_code": 0,
+    "pass": 24,
+    "fail": 0,
+    "total": 24
+  },
+  "evidence": [
+    "Scan workers ⓘ threads: pill widths 23.78 / 23.78 / 23.78 / 23.78 (spread 0) → 73 / 73 / 73 / 73 (spread 0); gap above/below 8/0 → 2/6",
+    "Row refresh ⓘ s: pill widths 35.33 / 41.09 / 41.09 / 46.88 (spread 11.55) → 73 / 73 / 73 / 73 (spread 0); gap above/below 8/0 → 2/6",
+    "Turn briefing budget ⓘ chars: pill widths 35.33 / 29.55 / 35.33 / 35.33 (spread 5.78) → 73 / 73 / 73 / 73 (spread 0); gap above/below 8/10 → 2/10",
+    "General panel content height 453.06 → 447.06 px; body/panel scroll heights 471/453 → 465/447",
+    "last strip bottom vs the body's visible bottom: 598.28 vs 593 → 592.28 vs 593 (clipped before)",
+    "surface pixels moved: 26537 of 1060800 (2.502%) across 6 pairs; per pair 1440x900/open 3560, 1440x900/search 5277, 1280x800/open 3554, 1280x800/search 5271, 1024x768/open 3579, 1024x768/search 5296",
+    "DOM inventory: 72 → 72 elements per pair; role/name/text changes on controls: 0; elements added/removed: 0",
+    "CSS inventory: 2 rules added, 0 removed; 16 painted elements changed style (the three strips, their twelve buttons, and the General panel's height); :root variables changed: 0",
+    "tests: node --test --test-reporter=tap test/settings-tabs.test.js test/assistant-dock-setting.test.js → exit 0, 24 pass, 0 fail, 24 total"
+  ],
+  "regressions": [],
+  "comparison": "ledger/gui-improve/compare/comparison.json",
+  "page": "ledger/gui-improve/compare/comparison.html",
+  "checked_at": "2026-11-09T05:54:03.390Z"
+}

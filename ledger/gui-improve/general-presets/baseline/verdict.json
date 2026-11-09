@@ -1,0 +1,37 @@
+{
+  "gate": "G1",
+  "outcome": "recorded",
+  "pipeline": "gui-improve",
+  "stage": "baseline",
+  "visit": 1,
+  "surface": "#settings-panel-general (Settings → General)",
+  "viewports": [
+    "1440x900",
+    "1280x800",
+    "1024x768"
+  ],
+  "states": [
+    "open",
+    "search"
+  ],
+  "shots": 6,
+  "elements": 390,
+  "elements_per_viewport": {
+    "1440x900": {
+      "open": 72,
+      "search": 58
+    },
+    "1280x800": {
+      "open": 72,
+      "search": 58
+    },
+    "1024x768": {
+      "open": 72,
+      "search": 58
+    }
+  },
+  "capture": "ledger/gui-improve/baseline/capture.json",
+  "capture_sha256": "785ae2c97a47ad0556d7bedf79f4b78d7516f7649467ebbf0c2e7f3a7fa4e8a8",
+  "capture_bytes": 48482,
+  "checked_at": "2026-11-09T05:15:50.269676Z"
+}

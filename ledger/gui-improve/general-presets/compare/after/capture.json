@@ -1,0 +1,1713 @@
+{
+  "schema": "capture/1",
+  "pipeline": "gui-improve",
+  "stage": "compare",
+  "visit": 1,
+  "surface": {
+    "brief": "Settings → General (the #settings-panel-general tab) at http://127.0.0.1:7393/",
+    "briefText": "Run gui-improve again on the General settings tab, this time for real: the task text must allow the implement and correct stages to write in public/ and lib/ and to commit on a branch, the compare stage must take its after shots at the same viewports and states the baseline recorded, the review gate must be free to reject with a note, and the change must land by PR with the comparison page showing before, after and diff for every pair, so the improvement is code on main rather than a ledger entry.",
+    "url": "http://127.0.0.1:7393/",
+    "selector": "#settings-panel-general",
+    "window": "#settings",
+    "change": "each preset row must read as part of the control above it, and its pills must share one width",
+    "changeSource": "Carried from the first gui-improve run on this tab. The change-set (ledger/gui-improve/change-set.patch) is applied in this tree at c065c4f: public/style.css carries the two scoped rules, and this capture is of that applied surface.",
+    "before": {
+      "capture": "ledger/gui-improve/baseline/capture.json",
+      "captureSha256": "785ae2c97a47ad0556d7bedf79f4b78d7516f7649467ebbf0c2e7f3a7fa4e8a8",
+      "commit": "21d6423e0e8f",
+      "dom": "ledger/gui-improve/baseline/dom.json",
+      "css": "ledger/gui-improve/baseline/css.json",
+      "stylesheetSha256": "90c7a88727445ad1bd8385960dc1fc1f9f70a1331ff6795a0eb9cab19d53850d"
+    },
+    "reproduce": "The captured pixels are the served build's public/index.html, app.js and style.css (hashes in environment). To shoot the after state of an edit in this worktree, serve THIS worktree on a free port with its own PANEL_CONFIG (public/ is read per request; lib/ needs a restart) and follow the same steps at the same viewport. The 340x520 surfaceFile depends only on the public files, not on the live board behind the window.",
+    "scope": "The whole Settings window (#settings): its head, search box, tab strip and the visible General panel. Hidden tabs are not painted and are excluded."
+  },
+  "environment": {
+    "browser": "Playwright Chromium 156.0.8078.4 (headless)",
+    "deviceScaleFactor": 1,
+    "serverVersion": "1.69.1",
+    "serverUrl": "http://127.0.0.1:7393/",
+    "panelBuild": "6182c1b9d98e",
+    "servedNote": "public/index.html is rewritten by the panel for cache-busting (stylesheet links carry ?v=<panel-build> and a meta panel-build tag is added), so its hash differs from the tree by that stamp and nothing else; app.js and style.css are byte-identical.",
+    "servedFiles": {
+      "public/index.html": {
+        "status": 200,
+        "sha256": "1019abc1a43d967c56725f469bf5d76dff1d925491fac5d4f2d8e64f0e0abab5",
+        "bytes": 129080,
+        "matchesTree": false
+      },
+      "public/app.js": {
+        "status": 200,
+        "sha256": "b9c1e1327c861ed8932764d11dabee006c819bd2fde597a73bcc31df6b3724ab",
+        "bytes": 871726,
+        "matchesTree": true
+      },
+      "public/style.css": {
+        "status": 200,
+        "sha256": "53e11ef96ac25520625120e1c69b13305bf972075cf042118c7aa91246c7f94d",
+        "bytes": 307672,
+        "matchesTree": true
+      }
+    },
+    "treeFiles": {
+      "public/index.html": {
+        "sha256": "0ef3cddf633da06ecbaf8ca8c6ba004449112660e17b14bddc390ca43bad82e8",
+        "bytes": 128532
+      },
+      "public/app.js": {
+        "sha256": "b9c1e1327c861ed8932764d11dabee006c819bd2fde597a73bcc31df6b3724ab",
+        "bytes": 871726
+      },
+      "public/style.css": {
+        "sha256": "53e11ef96ac25520625120e1c69b13305bf972075cf042118c7aa91246c7f94d",
+        "bytes": 307672
+      }
+    }
+  },
+  "viewports": [
+    {
+      "name": "1440x900",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "name": "1280x800",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "name": "1024x768",
+      "width": 1024,
+      "height": 768
+    }
+  ],
+  "states": [
+    {
+      "name": "open",
+      "steps": [
+        "Fresh browser context at the viewport (no localStorage, so the settings window and tab are at their defaults).",
+        "goto http://127.0.0.1:7393/",
+        "wait for #btn-settings and for the first /api/state paint (2.5 s settle).",
+        "click #btn-settings to open the Settings window.",
+        "click #settings-tab-general (aria-selected=true on the General tab; #settings-panel-general not hidden).",
+        "set #settings .settings-body scrollTop to 0 and wait two animation frames for layout to settle.",
+        "assert #settings is visible, #settings-panel-general is the only visible [data-settings-group], and #settings-search is empty."
+      ]
+    },
+    {
+      "name": "search",
+      "steps": [
+        "Reach the open state exactly as above.",
+        "fill #settings-search with \"budget\" (the one General row that answers it: Turn briefing budget).",
+        "wait 900 ms for the filter to paint, then assert the General tab is still selected, the search badge reads 1, and only that row paints.",
+        "set #settings .settings-body scrollTop to 0 and wait two animation frames."
+      ]
+    }
+  ],
+  "shots": [
+    {
+      "viewport": "1440x900",
+      "viewportSize": {
+        "width": 1440,
+        "height": 900
+      },
+      "state": "open",
+      "steps": [
+        "Fresh browser context at the viewport (no localStorage, so the settings window and tab are at their defaults).",
+        "goto http://127.0.0.1:7393/",
+        "wait for #btn-settings and for the first /api/state paint (2.5 s settle).",
+        "click #btn-settings to open the Settings window.",
+        "click #settings-tab-general (aria-selected=true on the General tab; #settings-panel-general not hidden).",
+        "set #settings .settings-body scrollTop to 0 and wait two animation frames for layout to settle.",
+        "assert #settings is visible, #settings-panel-general is the only visible [data-settings-group], and #settings-search is empty."
+      ],
+      "file": "ledger/gui-improve/compare/after/shots/1440x900-open.png",
+      "sha256": "5845f3274416d78dc3d39a34cd407897aa1eb8cea561daa28d3cec9a6609a7a8",
+      "bytes": 134257,
+      "pixels": {
+        "width": 1440,
+        "height": 900
+      },
+      "fullPage": true,
+      "surfaceFile": "ledger/gui-improve/compare/after/shots/1440x900-open-surface.png",
+      "surfaceSha256": "d9fb05c43e6b8bd0ea70624386aa12f208b413d260d3fe16d27ea69fa35a1dcf",
+      "surfaceBytes": 30257,
+      "surfacePixels": {
+        "width": 340,
+        "height": 520
+      },
+      "pair": "surface",
+      "win": {
+        "x": 1084,
+        "y": 74,
+        "w": 340,
+        "h": 520,
+        "top": 74,
+        "bottom": 594,
+        "left": 1084,
+        "right": 1424
+      },
+      "panel": {
+        "x": 1099,
+        "y": 210,
+        "w": 310,
+        "h": 447.0625,
+        "top": 210,
+        "bottom": 657.0625,
+        "left": 1099,
+        "right": 1409
+      },
+      "panelScrollHeight": 447,
+      "bodyScrollHeight": 465,
+      "visibleRows": 4,
+      "groups": [
+        {
+          "label": "Scan workers ⓘ threads",
+          "presetsBox": {
+            "x": 1099,
+            "y": 458.75,
+            "w": 310,
+            "h": 21.84375,
+            "top": 458.75,
+            "bottom": 480.59375,
+            "left": 1099,
+            "right": 1409
+          },
+          "labelBox": {
+            "x": 1099,
+            "y": 430.75,
+            "w": 310,
+            "h": 26,
+            "top": 430.75,
+            "bottom": 456.75,
+            "left": 1099,
+            "right": 1409
+          },
+          "gapAbove": 2,
+          "gapBelow": 6,
+          "buttons": [
+            {
+              "text": "2",
+              "box": {
+                "x": 1099,
+                "y": 458.75,
+                "w": 73,
+                "h": 21.84375,
+                "top": 458.75,
+                "bottom": 480.59375,
+                "left": 1099,
+                "right": 1172
+              },
+              "cls": null
+            },
+            {
+              "text": "3",
+              "box": {
+                "x": 1178,
+                "y": 458.75,
+                "w": 73,
+                "h": 21.84375,
+                "top": 458.75,
+                "bottom": 480.59375,
+                "left": 1178,
+                "right": 1251
+              },
+              "cls": null
+            },
+            {
+              "text": "5",
+              "box": {
+                "x": 1257,
+                "y": 458.75,
+                "w": 73,
+                "h": 21.84375,
+                "top": 458.75,
+                "bottom": 480.59375,
+                "left": 1257,
+                "right": 1330
+              },
+              "cls": null
+            },
+            {
+              "text": "8",
+              "box": {
+                "x": 1336,
+                "y": 458.75,
+                "w": 73,
+                "h": 21.84375,
+                "top": 458.75,
+                "bottom": 480.59375,
+                "left": 1336,
+                "right": 1409
+              },
+              "cls": null
+            }
+          ],
+          "widths": [
+            73,
+            73,
+            73,
+            73
+          ],
+          "spread": 0,
+          "onCount": 0
+        },
+        {
+          "label": "Row refresh ⓘ s",
+          "presetsBox": {
+            "x": 1099,
+            "y": 514.59375,
+            "w": 310,
+            "h": 21.84375,
+            "top": 514.59375,
+            "bottom": 536.4375,
+            "left": 1099,
+            "right": 1409
+          },
+          "labelBox": {
+            "x": 1099,
+            "y": 486.59375,
+            "w": 310,
+            "h": 26,
+            "top": 486.59375,
+            "bottom": 512.59375,
+            "left": 1099,
+            "right": 1409
+          },
+          "gapAbove": 2,
+          "gapBelow": 6,
+          "buttons": [
+            {
+              "text": "5 s",
+              "box": {
+                "x": 1099,
+                "y": 514.59375,
+                "w": 73,
+                "h": 21.84375,
+                "top": 514.59375,
+                "bottom": 536.4375,
+                "left": 1099,
+                "right": 1172
+              },
+              "cls": null
+            },
+            {
+              "text": "15 s",
+              "box": {
+                "x": 1178,
+                "y": 514.59375,
+                "w": 73,
+                "h": 21.84375,
+                "top": 514.59375,
+                "bottom": 536.4375,
+                "left": 1178,
+                "right": 1251
+              },
+              "cls": null
+            },
+            {
+              "text": "30 s",
+              "box": {
+                "x": 1257,
+                "y": 514.59375,
+                "w": 73,
+                "h": 21.84375,
+                "top": 514.59375,
+                "bottom": 536.4375,
+                "left": 1257,
+                "right": 1330
+              },
+              "cls": null
+            },
+            {
+              "text": "1 min",
+              "box": {
+                "x": 1336,
+                "y": 514.59375,
+                "w": 73,
+                "h": 21.84375,
+                "top": 514.59375,
+                "bottom": 536.4375,
+                "left": 1336,
+                "right": 1409
+              },
+              "cls": null
+            }
+          ],
+          "widths": [
+            73,
+            73,
+            73,
+            73
+          ],
+          "spread": 0,
+          "onCount": 0
+        },
+        {
+          "label": "Turn briefing budget ⓘ chars",
+          "presetsBox": {
+            "x": 1099,
+            "y": 570.4375,
+            "w": 310,
+            "h": 21.84375,
+            "top": 570.4375,
+            "bottom": 592.28125,
+            "left": 1099,
+            "right": 1409
+          },
+          "labelBox": {
+            "x": 1099,
+            "y": 542.4375,
+            "w": 310,
+            "h": 26,
+            "top": 542.4375,
+            "bottom": 568.4375,
+            "left": 1099,
+            "right": 1409
+          },
+          "gapAbove": 2,
+          "gapBelow": 10,
+          "buttons": [
+            {
+              "text": "off",
+              "box": {
+                "x": 1099,
+                "y": 570.4375,
+                "w": 73,
+                "h": 21.84375,
+                "top": 570.4375,
+                "bottom": 592.28125,
+                "left": 1099,
+                "right": 1172
+              },
+              "cls": null
+            },
+            {
+              "text": "8k",
+              "box": {
+                "x": 1178,
+                "y": 570.4375,
+                "w": 73,
+                "h": 21.84375,
+                "top": 570.4375,
+                "bottom": 592.28125,
+                "left": 1178,
+                "right": 1251
+              },
+              "cls": null
+            },
+            {
+              "text": "16k",
+              "box": {
+                "x": 1257,
+                "y": 570.4375,
+                "w": 73,
+                "h": 21.84375,
+                "top": 570.4375,
+                "bottom": 592.28125,
+                "left": 1257,
+                "right": 1330
+              },
+              "cls": null
+            },
+            {
+              "text": "32k",
+              "box": {
+                "x": 1336,
+                "y": 570.4375,
+                "w": 73,
+                "h": 21.84375,
+                "top": 570.4375,
+                "bottom": 592.28125,
+                "left": 1336,
+                "right": 1409
+              },
+              "cls": null
+            }
+          ],
+          "widths": [
+            73,
+            73,
+            73,
+            73
+          ],
+          "spread": 0,
+          "onCount": 0
+        }
+      ],
+      "errors": []
+    },
+    {
+      "viewport": "1440x900",
+      "viewportSize": {
+        "width": 1440,
+        "height": 900
+      },
+      "state": "search",
+      "steps": [
+        "Reach the open state exactly as above.",
+        "fill #settings-search with \"budget\" (the one General row that answers it: Turn briefing budget).",
+        "wait 900 ms for the filter to paint, then assert the General tab is still selected, the search badge reads 1, and only that row paints.",
+        "set #settings .settings-body scrollTop to 0 and wait two animation frames."
+      ],
+      "file": "ledger/gui-improve/compare/after/shots/1440x900-search.png",
+      "sha256": "8c7fd5500baf1592c2064cb77d572d623d86a74604ef50179fa8f276b1f7b03b",
+      "bytes": 115324,
+      "pixels": {
+        "width": 1440,
+        "height": 900
+      },
+      "fullPage": true,
+      "surfaceFile": "ledger/gui-improve/compare/after/shots/1440x900-search-surface.png",
+      "surfaceSha256": "2531aa0cdbb94b096fca0fdc81e5c7c772055d79b31e6536e70255d61a1981fa",
+      "surfaceBytes": 16574,
+      "surfacePixels": {
+        "width": 340,
+        "height": 520
+      },
+      "pair": "surface",
+      "win": {
+        "x": 1084,
+        "y": 74,
+        "w": 340,
+        "h": 520,
+        "top": 74,
+        "bottom": 594,
+        "left": 1084,
+        "right": 1424
+      },
+      "panel": {
+        "x": 1099,
+        "y": 210,
+        "w": 310,
+        "h": 126.625,
+        "top": 210,
+        "bottom": 336.625,
+        "left": 1099,
+        "right": 1409
+      },
+      "panelScrollHeight": 127,
+      "bodyScrollHeight": 387,
+      "visibleRows": 1,
+      "groups": [
+        {
+          "label": "Turn briefing budget ⓘ chars",
+          "presetsBox": {
+            "x": 1099,
+            "y": 250,
+            "w": 310,
+            "h": 21.84375,
+            "top": 250,
+            "bottom": 271.84375,
+            "left": 1099,
+            "right": 1409
+          },
+          "labelBox": {
+            "x": 1099,
+            "y": 222,
+            "w": 310,
+            "h": 26,
+            "top": 222,
+            "bottom": 248,
+            "left": 1099,
+            "right": 1409
+          },
+          "gapAbove": 2,
+          "gapBelow": 10,
+          "buttons": [
+            {
+              "text": "off",
+              "box": {
+                "x": 1099,
+                "y": 250,
+                "w": 73,
+                "h": 21.84375,
+                "top": 250,
+                "bottom": 271.84375,
+                "left": 1099,
+                "right": 1172
+              },
+              "cls": null
+            },
+            {
+              "text": "8k",
+              "box": {
+                "x": 1178,
+                "y": 250,
+                "w": 73,
+                "h": 21.84375,
+                "top": 250,
+                "bottom": 271.84375,
+                "left": 1178,
+                "right": 1251
+              },
+              "cls": null
+            },
+            {
+              "text": "16k",
+              "box": {
+                "x": 1257,
+                "y": 250,
+                "w": 73,
+                "h": 21.84375,
+                "top": 250,
+                "bottom": 271.84375,
+                "left": 1257,
+                "right": 1330
+              },
+              "cls": null
+            },
+            {
+              "text": "32k",
+              "box": {
+                "x": 1336,
+                "y": 250,
+                "w": 73,
+                "h": 21.84375,
+                "top": 250,
+                "bottom": 271.84375,
+                "left": 1336,
+                "right": 1409
+              },
+              "cls": null
+            }
+          ],
+          "widths": [
+            73,
+            73,
+            73,
+            73
+          ],
+          "spread": 0,
+          "onCount": 0
+        }
+      ],
+      "errors": []
+    },
+    {
+      "viewport": "1280x800",
+      "viewportSize": {
+        "width": 1280,
+        "height": 800
+      },
+      "state": "open",
+      "steps": [
+        "Fresh browser context at the viewport (no localStorage, so the settings window and tab are at their defaults).",
+        "goto http://127.0.0.1:7393/",
+        "wait for #btn-settings and for the first /api/state paint (2.5 s settle).",
+        "click #btn-settings to open the Settings window.",
+        "click #settings-tab-general (aria-selected=true on the General tab; #settings-panel-general not hidden).",
+        "set #settings .settings-body scrollTop to 0 and wait two animation frames for layout to settle.",
+        "assert #settings is visible, #settings-panel-general is the only visible [data-settings-group], and #settings-search is empty."
+      ],
+      "file": "ledger/gui-improve/compare/after/shots/1280x800-open.png",
+      "sha256": "53e5ee075586760cd8545f91b7bd35c3e326dc36b6aaadc309ffd45dd9b70371",
+      "bytes": 133935,
+      "pixels": {
+        "width": 1280,
+        "height": 874
+      },
+      "fullPage": true,
+      "surfaceFile": "ledger/gui-improve/compare/after/shots/1280x800-open-surface.png",
+      "surfaceSha256": "31d4b1e9cfb53fe5d654b36eee628f6f57ac0ab5550b4aca825bc93290340579",
+      "surfaceBytes": 30272,
+      "surfacePixels": {
+        "width": 340,
+        "height": 520
+      },
+      "pair": "surface",
+      "win": {
+        "x": 924,
+        "y": 74,
+        "w": 340,
+        "h": 520,
+        "top": 74,
+        "bottom": 594,
+        "left": 924,
+        "right": 1264
+      },
+      "panel": {
+        "x": 939,
+        "y": 210,
+        "w": 310,
+        "h": 447.0625,
+        "top": 210,
+        "bottom": 657.0625,
+        "left": 939,
+        "right": 1249
+      },
+      "panelScrollHeight": 447,
+      "bodyScrollHeight": 465,
+      "visibleRows": 4,
+      "groups": [
+        {
+          "label": "Scan workers ⓘ threads",
+          "presetsBox": {
+            "x": 939,
+            "y": 458.75,
+            "w": 310,
+            "h": 21.84375,
+            "top": 458.75,
+            "bottom": 480.59375,
+            "left": 939,
+            "right": 1249
+          },
+          "labelBox": {
+            "x": 939,
+            "y": 430.75,
+            "w": 310,
+            "h": 26,
+            "top": 430.75,
+            "bottom": 456.75,
+            "left": 939,
+            "right": 1249
+          },
+          "gapAbove": 2,
+          "gapBelow": 6,
+          "buttons": [
+            {
+              "text": "2",
+              "box": {
+                "x": 939,
+                "y": 458.75,
+                "w": 73,
+                "h": 21.84375,
+                "top": 458.75,
+                "bottom": 480.59375,
+                "left": 939,
+                "right": 1012
+              },
+              "cls": null
+            },
+            {
+              "text": "3",
+              "box": {
+                "x": 1018,
+                "y": 458.75,
+                "w": 73,
+                "h": 21.84375,
+                "top": 458.75,
+                "bottom": 480.59375,
+                "left": 1018,
+                "right": 1091
+              },
+              "cls": null
+            },
+            {
+              "text": "5",
+              "box": {
+                "x": 1097,
+                "y": 458.75,
+                "w": 73,
+                "h": 21.84375,
+                "top": 458.75,
+                "bottom": 480.59375,
+                "left": 1097,
+                "right": 1170
+              },
+              "cls": null
+            },
+            {
+              "text": "8",
+              "box": {
+                "x": 1176,
+                "y": 458.75,
+                "w": 73,
+                "h": 21.84375,
+                "top": 458.75,
+                "bottom": 480.59375,
+                "left": 1176,
+                "right": 1249
+              },
+              "cls": null
+            }
+          ],
+          "widths": [
+            73,
+            73,
+            73,
+            73
+          ],
+          "spread": 0,
+          "onCount": 0
+        },
+        {
+          "label": "Row refresh ⓘ s",
+          "presetsBox": {
+            "x": 939,
+            "y": 514.59375,
+            "w": 310,
+            "h": 21.84375,
+            "top": 514.59375,
+            "bottom": 536.4375,
+            "left": 939,
+            "right": 1249
+          },
+          "labelBox": {
+            "x": 939,
+            "y": 486.59375,
+            "w": 310,
+            "h": 26,
+            "top": 486.59375,
+            "bottom": 512.59375,
+            "left": 939,
+            "right": 1249
+          },
+          "gapAbove": 2,
+          "gapBelow": 6,
+          "buttons": [
+            {
+              "text": "5 s",
+              "box": {
+                "x": 939,
+                "y": 514.59375,
+                "w": 73,
+                "h": 21.84375,
+                "top": 514.59375,
+                "bottom": 536.4375,
+                "left": 939,
+                "right": 1012
+              },
+              "cls": null
+            },
+            {
+              "text": "15 s",
+              "box": {
+                "x": 1018,
+                "y": 514.59375,
+                "w": 73,
+                "h": 21.84375,
+                "top": 514.59375,
+                "bottom": 536.4375,
+                "left": 1018,
+                "right": 1091
+              },
+              "cls": null
+            },
+            {
+              "text": "30 s",
+              "box": {
+                "x": 1097,
+                "y": 514.59375,
+                "w": 73,
+                "h": 21.84375,
+                "top": 514.59375,
+                "bottom": 536.4375,
+                "left": 1097,
+                "right": 1170
+              },
+              "cls": null
+            },
+            {
+              "text": "1 min",
+              "box": {
+                "x": 1176,
+                "y": 514.59375,
+                "w": 73,
+                "h": 21.84375,
+                "top": 514.59375,
+                "bottom": 536.4375,
+                "left": 1176,
+                "right": 1249
+              },
+              "cls": null
+            }
+          ],
+          "widths": [
+            73,
+            73,
+            73,
+            73
+          ],
+          "spread": 0,
+          "onCount": 0
+        },
+        {
+          "label": "Turn briefing budget ⓘ chars",
+          "presetsBox": {
+            "x": 939,
+            "y": 570.4375,
+            "w": 310,
+            "h": 21.84375,
+            "top": 570.4375,
+            "bottom": 592.28125,
+            "left": 939,
+            "right": 1249
+          },
+          "labelBox": {
+            "x": 939,
+            "y": 542.4375,
+            "w": 310,
+            "h": 26,
+            "top": 542.4375,
+            "bottom": 568.4375,
+            "left": 939,
+            "right": 1249
+          },
+          "gapAbove": 2,
+          "gapBelow": 10,
+          "buttons": [
+            {
+              "text": "off",
+              "box": {
+                "x": 939,
+                "y": 570.4375,
+                "w": 73,
+                "h": 21.84375,
+                "top": 570.4375,
+                "bottom": 592.28125,
+                "left": 939,
+                "right": 1012
+              },
+              "cls": null
+            },
+            {
+              "text": "8k",
+              "box": {
+                "x": 1018,
+                "y": 570.4375,
+                "w": 73,
+                "h": 21.84375,
+                "top": 570.4375,
+                "bottom": 592.28125,
+                "left": 1018,
+                "right": 1091
+              },
+              "cls": null
+            },
+            {
+              "text": "16k",
+              "box": {
+                "x": 1097,
+                "y": 570.4375,
+                "w": 73,
+                "h": 21.84375,
+                "top": 570.4375,
+                "bottom": 592.28125,
+                "left": 1097,
+                "right": 1170
+              },
+              "cls": null
+            },
+            {
+              "text": "32k",
+              "box": {
+                "x": 1176,
+                "y": 570.4375,
+                "w": 73,
+                "h": 21.84375,
+                "top": 570.4375,
+                "bottom": 592.28125,
+                "left": 1176,
+                "right": 1249
+              },
+              "cls": null
+            }
+          ],
+          "widths": [
+            73,
+            73,
+            73,
+            73
+          ],
+          "spread": 0,
+          "onCount": 0
+        }
+      ],
+      "errors": []
+    },
+    {
+      "viewport": "1280x800",
+      "viewportSize": {
+        "width": 1280,
+        "height": 800
+      },
+      "state": "search",
+      "steps": [
+        "Reach the open state exactly as above.",
+        "fill #settings-search with \"budget\" (the one General row that answers it: Turn briefing budget).",
+        "wait 900 ms for the filter to paint, then assert the General tab is still selected, the search badge reads 1, and only that row paints.",
+        "set #settings .settings-body scrollTop to 0 and wait two animation frames."
+      ],
+      "file": "ledger/gui-improve/compare/after/shots/1280x800-search.png",
+      "sha256": "e5517ed639e6f860b5bc1f2301c07be20f5e1e5aedd3a1e30e7911b642ea461f",
+      "bytes": 116168,
+      "pixels": {
+        "width": 1280,
+        "height": 879
+      },
+      "fullPage": true,
+      "surfaceFile": "ledger/gui-improve/compare/after/shots/1280x800-search-surface.png",
+      "surfaceSha256": "2194766d1cdb00c87b8afb5447269877dd00473717f940084d6dfa729c3a381a",
+      "surfaceBytes": 16584,
+      "surfacePixels": {
+        "width": 340,
+        "height": 520
+      },
+      "pair": "surface",
+      "win": {
+        "x": 924,
+        "y": 74,
+        "w": 340,
+        "h": 520,
+        "top": 74,
+        "bottom": 594,
+        "left": 924,
+        "right": 1264
+      },
+      "panel": {
+        "x": 939,
+        "y": 210,
+        "w": 310,
+        "h": 126.625,
+        "top": 210,
+        "bottom": 336.625,
+        "left": 939,
+        "right": 1249
+      },
+      "panelScrollHeight": 127,
+      "bodyScrollHeight": 387,
+      "visibleRows": 1,
+      "groups": [
+        {
+          "label": "Turn briefing budget ⓘ chars",
+          "presetsBox": {
+            "x": 939,
+            "y": 250,
+            "w": 310,
+            "h": 21.84375,
+            "top": 250,
+            "bottom": 271.84375,
+            "left": 939,
+            "right": 1249
+          },
+          "labelBox": {
+            "x": 939,
+            "y": 222,
+            "w": 310,
+            "h": 26,
+            "top": 222,
+            "bottom": 248,
+            "left": 939,
+            "right": 1249
+          },
+          "gapAbove": 2,
+          "gapBelow": 10,
+          "buttons": [
+            {
+              "text": "off",
+              "box": {
+                "x": 939,
+                "y": 250,
+                "w": 73,
+                "h": 21.84375,
+                "top": 250,
+                "bottom": 271.84375,
+                "left": 939,
+                "right": 1012
+              },
+              "cls": null
+            },
+            {
+              "text": "8k",
+              "box": {
+                "x": 1018,
+                "y": 250,
+                "w": 73,
+                "h": 21.84375,
+                "top": 250,
+                "bottom": 271.84375,
+                "left": 1018,
+                "right": 1091
+              },
+              "cls": null
+            },
+            {
+              "text": "16k",
+              "box": {
+                "x": 1097,
+                "y": 250,
+                "w": 73,
+                "h": 21.84375,
+                "top": 250,
+                "bottom": 271.84375,
+                "left": 1097,
+                "right": 1170
+              },
+              "cls": null
+            },
+            {
+              "text": "32k",
+              "box": {
+                "x": 1176,
+                "y": 250,
+                "w": 73,
+                "h": 21.84375,
+                "top": 250,
+                "bottom": 271.84375,
+                "left": 1176,
+                "right": 1249
+              },
+              "cls": null
+            }
+          ],
+          "widths": [
+            73,
+            73,
+            73,
+            73
+          ],
+          "spread": 0,
+          "onCount": 0
+        }
+      ],
+      "errors": []
+    },
+    {
+      "viewport": "1024x768",
+      "viewportSize": {
+        "width": 1024,
+        "height": 768
+      },
+      "state": "open",
+      "steps": [
+        "Fresh browser context at the viewport (no localStorage, so the settings window and tab are at their defaults).",
+        "goto http://127.0.0.1:7393/",
+        "wait for #btn-settings and for the first /api/state paint (2.5 s settle).",
+        "click #btn-settings to open the Settings window.",
+        "click #settings-tab-general (aria-selected=true on the General tab; #settings-panel-general not hidden).",
+        "set #settings .settings-body scrollTop to 0 and wait two animation frames for layout to settle.",
+        "assert #settings is visible, #settings-panel-general is the only visible [data-settings-group], and #settings-search is empty."
+      ],
+      "file": "ledger/gui-improve/compare/after/shots/1024x768-open.png",
+      "sha256": "30c77048f8c01944d5bb99233e40db3d363902f427320185c12ef0952fdf1248",
+      "bytes": 133523,
+      "pixels": {
+        "width": 1024,
+        "height": 1012
+      },
+      "fullPage": true,
+      "surfaceFile": "ledger/gui-improve/compare/after/shots/1024x768-open-surface.png",
+      "surfaceSha256": "35b2c0b6486eeccca74d929f28081a79b1ce681680e16793cadb65a6f23195e8",
+      "surfaceBytes": 30265,
+      "surfacePixels": {
+        "width": 340,
+        "height": 520
+      },
+      "pair": "surface",
+      "win": {
+        "x": 668,
+        "y": 74,
+        "w": 340,
+        "h": 520,
+        "top": 74,
+        "bottom": 594,
+        "left": 668,
+        "right": 1008
+      },
+      "panel": {
+        "x": 683,
+        "y": 210,
+        "w": 310,
+        "h": 447.0625,
+        "top": 210,
+        "bottom": 657.0625,
+        "left": 683,
+        "right": 993
+      },
+      "panelScrollHeight": 447,
+      "bodyScrollHeight": 465,
+      "visibleRows": 4,
+      "groups": [
+        {
+          "label": "Scan workers ⓘ threads",
+          "presetsBox": {
+            "x": 683,
+            "y": 458.75,
+            "w": 310,
+            "h": 21.84375,
+            "top": 458.75,
+            "bottom": 480.59375,
+            "left": 683,
+            "right": 993
+          },
+          "labelBox": {
+            "x": 683,
+            "y": 430.75,
+            "w": 310,
+            "h": 26,
+            "top": 430.75,
+            "bottom": 456.75,
+            "left": 683,
+            "right": 993
+          },
+          "gapAbove": 2,
+          "gapBelow": 6,
+          "buttons": [
+            {
+              "text": "2",
+              "box": {
+                "x": 683,
+                "y": 458.75,
+                "w": 73,
+                "h": 21.84375,
+                "top": 458.75,
+                "bottom": 480.59375,
+                "left": 683,
+                "right": 756
+              },
+              "cls": null
+            },
+            {
+              "text": "3",
+              "box": {
+                "x": 762,
+                "y": 458.75,
+                "w": 73,
+                "h": 21.84375,
+                "top": 458.75,
+                "bottom": 480.59375,
+                "left": 762,
+                "right": 835
+              },
+              "cls": null
+            },
+            {
+              "text": "5",
+              "box": {
+                "x": 841,
+                "y": 458.75,
+                "w": 73,
+                "h": 21.84375,
+                "top": 458.75,
+                "bottom": 480.59375,
+                "left": 841,
+                "right": 914
+              },
+              "cls": null
+            },
+            {
+              "text": "8",
+              "box": {
+                "x": 920,
+                "y": 458.75,
+                "w": 73,
+                "h": 21.84375,
+                "top": 458.75,
+                "bottom": 480.59375,
+                "left": 920,
+                "right": 993
+              },
+              "cls": null
+            }
+          ],
+          "widths": [
+            73,
+            73,
+            73,
+            73
+          ],
+          "spread": 0,
+          "onCount": 0
+        },
+        {
+          "label": "Row refresh ⓘ s",
+          "presetsBox": {
+            "x": 683,
+            "y": 514.59375,
+            "w": 310,
+            "h": 21.84375,
+            "top": 514.59375,
+            "bottom": 536.4375,
+            "left": 683,
+            "right": 993
+          },
+          "labelBox": {
+            "x": 683,
+            "y": 486.59375,
+            "w": 310,
+            "h": 26,
+            "top": 486.59375,
+            "bottom": 512.59375,
+            "left": 683,
+            "right": 993
+          },
+          "gapAbove": 2,
+          "gapBelow": 6,
+          "buttons": [
+            {
+              "text": "5 s",
+              "box": {
+                "x": 683,
+                "y": 514.59375,
+                "w": 73,
+                "h": 21.84375,
+                "top": 514.59375,
+                "bottom": 536.4375,
+                "left": 683,
+                "right": 756
+              },
+              "cls": null
+            },
+            {
+              "text": "15 s",
+              "box": {
+                "x": 762,
+                "y": 514.59375,
+                "w": 73,
+                "h": 21.84375,
+                "top": 514.59375,
+                "bottom": 536.4375,
+                "left": 762,
+                "right": 835
+              },
+              "cls": null
+            },
+            {
+              "text": "30 s",
+              "box": {
+                "x": 841,
+                "y": 514.59375,
+                "w": 73,
+                "h": 21.84375,
+                "top": 514.59375,
+                "bottom": 536.4375,
+                "left": 841,
+                "right": 914
+              },
+              "cls": null
+            },
+            {
+              "text": "1 min",
+              "box": {
+                "x": 920,
+                "y": 514.59375,
+                "w": 73,
+                "h": 21.84375,
+                "top": 514.59375,
+                "bottom": 536.4375,
+                "left": 920,
+                "right": 993
+              },
+              "cls": null
+            }
+          ],
+          "widths": [
+            73,
+            73,
+            73,
+            73
+          ],
+          "spread": 0,
+          "onCount": 0
+        },
+        {
+          "label": "Turn briefing budget ⓘ chars",
+          "presetsBox": {
+            "x": 683,
+            "y": 570.4375,
+            "w": 310,
+            "h": 21.84375,
+            "top": 570.4375,
+            "bottom": 592.28125,
+            "left": 683,
+            "right": 993
+          },
+          "labelBox": {
+            "x": 683,
+            "y": 542.4375,
+            "w": 310,
+            "h": 26,
+            "top": 542.4375,
+            "bottom": 568.4375,
+            "left": 683,
+            "right": 993
+          },
+          "gapAbove": 2,
+          "gapBelow": 10,
+          "buttons": [
+            {
+              "text": "off",
+              "box": {
+                "x": 683,
+                "y": 570.4375,
+                "w": 73,
+                "h": 21.84375,
+                "top": 570.4375,
+                "bottom": 592.28125,
+                "left": 683,
+                "right": 756
+              },
+              "cls": null
+            },
+            {
+              "text": "8k",
+              "box": {
+                "x": 762,
+                "y": 570.4375,
+                "w": 73,
+                "h": 21.84375,
+                "top": 570.4375,
+                "bottom": 592.28125,
+                "left": 762,
+                "right": 835
+              },
+              "cls": null
+            },
+            {
+              "text": "16k",
+              "box": {
+                "x": 841,
+                "y": 570.4375,
+                "w": 73,
+                "h": 21.84375,
+                "top": 570.4375,
+                "bottom": 592.28125,
+                "left": 841,
+                "right": 914
+              },
+              "cls": null
+            },
+            {
+              "text": "32k",
+              "box": {
+                "x": 920,
+                "y": 570.4375,
+                "w": 73,
+                "h": 21.84375,
+                "top": 570.4375,
+                "bottom": 592.28125,
+                "left": 920,
+                "right": 993
+              },
+              "cls": null
+            }
+          ],
+          "widths": [
+            73,
+            73,
+            73,
+            73
+          ],
+          "spread": 0,
+          "onCount": 0
+        }
+      ],
+      "errors": []
+    },
+    {
+      "viewport": "1024x768",
+      "viewportSize": {
+        "width": 1024,
+        "height": 768
+      },
+      "state": "search",
+      "steps": [
+        "Reach the open state exactly as above.",
+        "fill #settings-search with \"budget\" (the one General row that answers it: Turn briefing budget).",
+        "wait 900 ms for the filter to paint, then assert the General tab is still selected, the search badge reads 1, and only that row paints.",
+        "set #settings .settings-body scrollTop to 0 and wait two animation frames."
+      ],
+      "file": "ledger/gui-improve/compare/after/shots/1024x768-search.png",
+      "sha256": "f4e5fca9566bccb0c2738649a153a21e92dd62df0fba523f82b1372cf23c5aa5",
+      "bytes": 116066,
+      "pixels": {
+        "width": 1024,
+        "height": 1017
+      },
+      "fullPage": true,
+      "surfaceFile": "ledger/gui-improve/compare/after/shots/1024x768-search-surface.png",
+      "surfaceSha256": "d3e7aab0b251fcf426744037dec983db5cda03c5d80070970446246157564be0",
+      "surfaceBytes": 16579,
+      "surfacePixels": {
+        "width": 340,
+        "height": 520
+      },
+      "pair": "surface",
+      "win": {
+        "x": 668,
+        "y": 74,
+        "w": 340,
+        "h": 520,
+        "top": 74,
+        "bottom": 594,
+        "left": 668,
+        "right": 1008
+      },
+      "panel": {
+        "x": 683,
+        "y": 210,
+        "w": 310,
+        "h": 126.625,
+        "top": 210,
+        "bottom": 336.625,
+        "left": 683,
+        "right": 993
+      },
+      "panelScrollHeight": 127,
+      "bodyScrollHeight": 387,
+      "visibleRows": 1,
+      "groups": [
+        {
+          "label": "Turn briefing budget ⓘ chars",
+          "presetsBox": {
+            "x": 683,
+            "y": 250,
+            "w": 310,
+            "h": 21.84375,
+            "top": 250,
+            "bottom": 271.84375,
+            "left": 683,
+            "right": 993
+          },
+          "labelBox": {
+            "x": 683,
+            "y": 222,
+            "w": 310,
+            "h": 26,
+            "top": 222,
+            "bottom": 248,
+            "left": 683,
+            "right": 993
+          },
+          "gapAbove": 2,
+          "gapBelow": 10,
+          "buttons": [
+            {
+              "text": "off",
+              "box": {
+                "x": 683,
+                "y": 250,
+                "w": 73,
+                "h": 21.84375,
+                "top": 250,
+                "bottom": 271.84375,
+                "left": 683,
+                "right": 756
+              },
+              "cls": null
+            },
+            {
+              "text": "8k",
+              "box": {
+                "x": 762,
+                "y": 250,
+                "w": 73,
+                "h": 21.84375,
+                "top": 250,
+                "bottom": 271.84375,
+                "left": 762,
+                "right": 835
+              },
+              "cls": null
+            },
+            {
+              "text": "16k",
+              "box": {
+                "x": 841,
+                "y": 250,
+                "w": 73,
+                "h": 21.84375,
+                "top": 250,
+                "bottom": 271.84375,
+                "left": 841,
+                "right": 914
+              },
+              "cls": null
+            },
+            {
+              "text": "32k",
+              "box": {
+                "x": 920,
+                "y": 250,
+                "w": 73,
+                "h": 21.84375,
+                "top": 250,
+                "bottom": 271.84375,
+                "left": 920,
+                "right": 993
+              },
+              "cls": null
+            }
+          ],
+          "widths": [
+            73,
+            73,
+            73,
+            73
+          ],
+          "spread": 0,
+          "onCount": 0
+        }
+      ],
+      "errors": []
+    }
+  ],
+  "inventory": {
+    "dom": {
+      "file": "ledger/gui-improve/compare/after/dom.json",
+      "sha256": "2aae9bff3397d37c2ff5bf9d433efe07591032afb6329115e882ae96a963681c",
+      "bytes": 369333,
+      "elements": 390
+    },
+    "css": {
+      "file": "ledger/gui-improve/compare/after/css.json",
+      "sha256": "01d1caf5b6f6dfe3050498e828cd7880ef363d73592bcc63071add4d419456d0",
+      "bytes": 1799088,
+      "elements": 384
+    },
+    "stylesheet": {
+      "file": "ledger/gui-improve/compare/after/style.css",
+      "sha256": "53e11ef96ac25520625120e1c69b13305bf972075cf042118c7aa91246c7f94d",
+      "bytes": 307672
+    },
+    "per_viewport": {
+      "1440x900": {
+        "open": {
+          "elements": 72,
+          "cssElements": 70,
+          "rulesMatched": 30,
+          "panelScrollHeight": 447,
+          "bodyScrollHeight": 465,
+          "visibleRows": 4,
+          "groupSpreads": [
+            {
+              "label": "Scan workers ⓘ threads",
+              "spread": 0,
+              "gapAbove": 2,
+              "gapBelow": 6
+            },
+            {
+              "label": "Row refresh ⓘ s",
+              "spread": 0,
+              "gapAbove": 2,
+              "gapBelow": 6
+            },
+            {
+              "label": "Turn briefing budget ⓘ chars",
+              "spread": 0,
+              "gapAbove": 2,
+              "gapBelow": 10
+            }
+          ]
+        },
+        "search": {
+          "elements": 58,
+          "cssElements": 58,
+          "rulesMatched": 32,
+          "panelScrollHeight": 127,
+          "bodyScrollHeight": 387,
+          "visibleRows": 1,
+          "groupSpreads": [
+            {
+              "label": "Turn briefing budget ⓘ chars",
+              "spread": 0,
+              "gapAbove": 2,
+              "gapBelow": 10
+            }
+          ]
+        }
+      },
+      "1280x800": {
+        "open": {
+          "elements": 72,
+          "cssElements": 70,
+          "rulesMatched": 30,
+          "panelScrollHeight": 447,
+          "bodyScrollHeight": 465,
+          "visibleRows": 4,
+          "groupSpreads": [
+            {
+              "label": "Scan workers ⓘ threads",
+              "spread": 0,
+              "gapAbove": 2,
+              "gapBelow": 6
+            },
+            {
+              "label": "Row refresh ⓘ s",
+              "spread": 0,
+              "gapAbove": 2,
+              "gapBelow": 6
+            },
+            {
+              "label": "Turn briefing budget ⓘ chars",
+              "spread": 0,
+              "gapAbove": 2,
+              "gapBelow": 10
+            }
+          ]
+        },
+        "search": {
+          "elements": 58,
+          "cssElements": 58,
+          "rulesMatched": 32,
+          "panelScrollHeight": 127,
+          "bodyScrollHeight": 387,
+          "visibleRows": 1,
+          "groupSpreads": [
+            {
+              "label": "Turn briefing budget ⓘ chars",
+              "spread": 0,
+              "gapAbove": 2,
+              "gapBelow": 10
+            }
+          ]
+        }
+      },
+      "1024x768": {
+        "open": {
+          "elements": 72,
+          "cssElements": 70,
+          "rulesMatched": 30,
+          "panelScrollHeight": 447,
+          "bodyScrollHeight": 465,
+          "visibleRows": 4,
+          "groupSpreads": [
+            {
+              "label": "Scan workers ⓘ threads",
+              "spread": 0,
+              "gapAbove": 2,
+              "gapBelow": 6
+            },
+            {
+              "label": "Row refresh ⓘ s",
+              "spread": 0,
+              "gapAbove": 2,
+              "gapBelow": 6
+            },
+            {
+              "label": "Turn briefing budget ⓘ chars",
+              "spread": 0,
+              "gapAbove": 2,
+              "gapBelow": 10
+            }
+          ]
+        },
+        "search": {
+          "elements": 58,
+          "cssElements": 58,
+          "rulesMatched": 32,
+          "panelScrollHeight": 127,
+          "bodyScrollHeight": 387,
+          "visibleRows": 1,
+          "groupSpreads": [
+            {
+              "label": "Turn briefing budget ⓘ chars",
+              "spread": 0,
+              "gapAbove": 2,
+              "gapBelow": 10
+            }
+          ]
+        }
+      }
+    }
+  },
+  "notes": {
+    "instance": "Captured against a throwaway second instance of THIS checkout (tools/panel-testkit.mjs startPanel): free port, own PANEL_CONFIG and own store under the scratch dir, assistant/gateway off. It serves public/app.js and public/style.css byte-identical to this tree (hashes in environment.servedFiles). The live panel on 7331 serves a different build and was not touched.",
+    "board": "The sandbox config carries no projects (projects: []), so the board behind the Settings window is empty. That is why shots[*].file (the full-page record) is not pixel-comparable with the baseline's full-page shot; the Settings window is, and its rect is recorded in shots[*].win so the compare stage can diff that region out of each full-page shot.",
+    "shotPair": "shots[*].file is a full-page record with the Settings window at its recorded win rect; shots[*].surfaceFile is the 340x520 Settings window alone and is the stable pair to diff. Every pair here has the same viewport, state, steps and asserts as its baseline counterpart.",
+    "servedIndex": "The served public/index.html differs from the tree only by the panel's cache-busting stamp (?v=<panel-build> on stylesheet links and a meta panel-build tag); app.js and style.css are byte-identical to this tree."
+  },
+  "incomplete": [],
+  "recorded_at": "2026-11-09T05:44:38.254Z"
+}

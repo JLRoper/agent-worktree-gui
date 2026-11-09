@@ -1,0 +1,67 @@
+change-set/1
+
+surface   Settings → General — the #settings-panel-general tab of the Settings window (#settings) on
+          http://127.0.0.1:7331/ (agent-worktree-gui 1.69.1)
+baseline  21d6423e0e8f (ledger/gui-improve/baseline/capture.json); public/style.css blob 94ac9d0
+applies   git apply -p1 from the repository root, on top of 21d6423 or any tree whose
+          public/style.css is still the baseline's
+status    APPLIED in this tree: public/style.css already carries both rules, so the compare stage's
+          after shots are of the applied surface. To reproduce them from a clean tree, apply this
+          patch to 21d6423 first; on this tree there is nothing left to apply.
+
+One file, two rules, both scoped to #settings-panel-general. Nothing else in public/, lib/ or
+server.js is touched, and no markup changes: the pills are still the buttons the panel already renders.
+
+Change 1 of 2 — the preset strip hugs the field it sets
+  what moved: #settings-panel-general .settings-presets becomes a grid strip with margin 2px above and
+    6px below, where .settings-presets was flex with margin-top: 8px and no bottom margin. Rows carry
+    no bottom margin either, so the old 8/0 put a strip 8 px under the field it sets and 0 px over the
+    field below it — the pills sat closer to the next control than to their own. 2/6 reverses that.
+    The selector is wrapped in :where() so it keeps class weight and the search filter's
+    .settings-group .search-hidden { display: none } still wins over display: grid; without that the
+    hidden rows' strips stayed painted in the search state (seen and fixed during this stage).
+  asked by: "each preset row must read as part of the control above it" — the change sentence this
+    surface's brief carries (ledger/gui-improve/baseline/README.md:11, capture.json surface.change).
+  measured: gap above/below per group 8/0 → 2/6, and 2/10 for the last group (against the preview's
+    own 10 px top margin), identically at 1440x900, 1280x800 and 1024x768.
+
+Change 2 of 2 — one width for every pill
+  what moved: the strip is a single row of equal 1fr columns (grid-auto-flow: column) and each button
+    is width: 100%, min-width: 0, padding 1px 6px, overflow hidden with ellipsis. Labels of different
+    length now fill the same segment instead of setting the segment's width.
+  asked by: "and its pills must share one width" — the same sentence, its second clause.
+  measured: pill widths in the 1440x900 open shot were Scan workers 23.78 ×4 (spread 0), Row refresh
+    35.33 / 41.09 / 41.09 / 46.88 (spread 11.55), Turn briefing budget 35.33 / 29.55 / 35.33 / 35.33
+    (spread 5.78) → 73.00 ×4 in all three strips, spread 0.00, at every viewport.
+
+A consequence, not a third change: the strips are 6 px shorter in total, so the last strip ends at
+592.28 inside the 593 px visible body instead of 598.28 — the 5.28 px clip the baseline recorded at
+open is gone. No rule was added for it.
+
+The surface's own tests still pass: node --test test/settings-tabs.test.js
+test/assistant-dock-setting.test.js → 24 pass, 0 fail.
+
+Verification capture of the applied surface (same viewports, states and asserts as the baseline) is in
+ledger/gui-improve/after/; the compare stage owns the final after set and the comparison page.
+
+The diff follows.
+diff --git a/public/style.css b/public/style.css
+index 94ac9d0..b9791de 100644
+--- a/public/style.css
++++ b/public/style.css
+@@ -436,6 +436,15 @@ thead th,
+ .settings-cols label:hover { color: var(--text); }
+ .settings-cols input { flex: none; accent-color: #4a90d9; }
+ .settings-presets { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
++/* Settings → General: the preset strip under a number field is part of that field, not of the row below.
++   Rows carry no bottom margin, so one strip's 8 px above and 0 px below put the pills closer to the NEXT
++   field than to the one they set (app.js:12385 already filters a preset row with the row above it). The
++   strip now hugs its field and holds air below, and every pill is one equal segment of the strip, so
++   "5 s" and "1 min" cannot read as different-sized controls. Scoped to General: the other tabs' strips
++   were not captured and are left as they were. `:where()` keeps the selector at class weight, so the
++   search filter's `.settings-group .search-hidden { display: none }` still wins over this `display: grid`. */
++:where(#settings-panel-general) .settings-presets { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; margin: 2px 0 6px; }
++:where(#settings-panel-general) .settings-presets button { width: 100%; min-width: 0; padding: 1px 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+ .settings-presets button { padding: 1px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--dim); font: 10.5px/1.7 var(--mono); cursor: pointer; }
+ .settings-presets button:hover { color: var(--text); border-color: #3b4757; }
+ .settings-presets button.on { border-color: var(--q-line); color: var(--q-head); background: var(--surface); }
