@@ -1,7 +1,9 @@
 change-set/1
 
 surface   Settings -> Board, the #settings-panel-board tab of the Settings window (#settings) on
-          http://127.0.0.1:7493/ (this stage's tree, panel 1.71.0)
+          http://127.0.0.1:7493/ (this stage's tree, panel 1.67.3). The baseline capture is from panel
+          1.71.0, but paintScanRoots' markup is byte-identical in both trees and neither had a CSS rule
+          for the block before this change.
 baseline  44b4278 (ledger/gui-improve/baseline/capture.json). The capture's manifest records the served
           style.css as c9031470 (309,248 B) while the copy committed beside it is 07ac60dc (304,977 B);
           both, and this stage tree's 94ac9d0 (302,378 B), have no rule for .settings-root, and the
@@ -18,9 +20,9 @@ status    APPLIED in this tree: both files carry the change, so the after shots 
           apply on this tree.
 
 Two files, one block: 13 new rules in public/style.css, all scoped to #settings-panel-board and kept at
-class weight with :where(), and one placeholder string in public/index.html. public/app.js, lib/ and
-server.js are untouched, and the markup the roots rows are drawn from (app.js paintScanRoots) did not
-change - only what the CSS does with it.
+class weight with :where(), and two attributes on the add-folder input in public/index.html (a shorter
+placeholder and the full sentence in its title). public/app.js, lib/ and server.js are untouched, and the
+markup the roots rows are drawn from (app.js paintScanRoots) did not change - only what the CSS does with it.
 
 Change 1 of 2 - the roots read as one control group
   what moved: .settings-roots becomes a column of cards (4 px between them, 6 px above), and .settings-root
@@ -39,20 +41,23 @@ Change 1 of 2 - the roots read as one control group
 Change 2 of 2 - the add row uses the width it has left, so its hint is readable
   what moved: .settings-roots-add becomes a flex row (6 px gap, 6 px above) whose input takes the remaining
     width (flex: 1, min-width: 0) at 26 px tall and 11.5 px mono, with the button 26 px tall and flush to
-    the row's right edge. The placeholder is shortened in public/index.html from "an absolute folder path
-    - e.g. the parent of your projects" to "an absolute folder path"; the full sentence stays in the
-    input's title.
+    row's right edge. The placeholder is shortened in public/index.html from "an absolute folder path
+    - e.g. the parent of your projects" to "an absolute folder path", and the full sentence is carried in
+    the input's title ("an absolute folder path, e.g. the parent of your projects. Enter adds it"), so the
+    example stays discoverable without competing with the field for width.
   asked by: "and the add-folder field given the width its row has left so its hint is readable" - the same
     target sentence, its second clause.
   measured: input 154 -> 223.52 px (client 222) of the 310 px row; button 78.375 -> 80.48 px; space right
-    of the button 73.78 -> 0.00 px; the hint 382.66 px at the UA's 13.33 px mono -> 145.42 px at 11.5 px,
+    of the button 73.78 -> 0.00 px; the hint 382.66 px at the input's 12 px mono -> 145.42 px at 11.5 px,
     inside the field's 222 px, so it paints whole (before: "an absolute folder pat"). The width alone could
     not make the hint readable - 382.66 px does not fit even the whole 310 px row - so the hint was cut to
     what the row can show and the rest kept in `title`. Identical at all three viewports.
 
-A consequence, not a third change: the Board panel's content is 14 px taller (scrollHeight 1599 -> 1613)
-from the 6 px above the cards, the 4 px between them and the 6 px above the add row. The Settings window
-still opens at 340 x 520 with the block's title, both cards and the add row in view, and no other row moved.
+A consequence, not a third change: the Board panel's content is 14 px taller (scrollHeight 1599 -> 1613):
+6 px above the cards, 4 px between them and 6 px above the add row, less 2 px because the add row is 26 px
+tall where the unstyled row was 28 (button 78.38 x 28 -> 80.48 x 26, input 154 x 20 -> 223.52 x 26). The
+Settings window still opens at 340 x 520 with the block's title, both cards and the add row in view; no
+other row's own layout changed, and the rows below it sit 14 px lower.
 
 The search state is unchanged: filling #settings-search with "flash" still hides the whole block
 (display: none on .settings-roots and .settings-roots-add), and clearing it restores the flex rows. Every
@@ -68,7 +73,7 @@ after set and the comparison page.
 The diff follows.
 
 diff --git a/public/index.html b/public/index.html
-index dc87fe2..218881a 100644
+index dc87fe2..0f6db58 100644
 --- a/public/index.html
 +++ b/public/index.html
 @@ -316,7 +316,7 @@
@@ -76,12 +81,12 @@ index dc87fe2..218881a 100644
          <div class="settings-roots" id="scan-roots"></div>
          <div class="settings-roots-add">
 -          <input type="text" id="scan-root-input" class="mono" placeholder="an absolute folder path — e.g. the parent of your projects" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" spellcheck="false" title="the absolute path of a folder to scan — Enter adds it">
-+          <input type="text" id="scan-root-input" class="mono" placeholder="an absolute folder path" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" spellcheck="false" title="the absolute path of a folder to scan — Enter adds it">
++          <input type="text" id="scan-root-input" class="mono" placeholder="an absolute folder path" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" spellcheck="false" title="an absolute folder path, e.g. the parent of your projects. Enter adds it">
            <button type="button" id="btn-scan-root-add" title="add this folder to the list and re-discover its projects">Add folder</button>
          </div>
          <div class="settings-preview mono" id="scan-roots-preview">…</div>
 diff --git a/public/style.css b/public/style.css
-index 94ac9d0..13336f8 100644
+index 94ac9d0..5559e01 100644
 --- a/public/style.css
 +++ b/public/style.css
 @@ -394,6 +394,25 @@ thead th,
@@ -89,7 +94,7 @@ index 94ac9d0..13336f8 100644
  .settings-row input[type="number"]:disabled { color: var(--dimmer); background: #0e1218; }
  .settings-unit { font-size: 11px; color: var(--dimmer); }
 +/* Settings → Board > "Folders the board scans": one card per root, and an add row that uses the width it has.
-+   The block had no rules at all, so the path's right edge WAS the chip's left edge (0 px — the row painted
++   The block had no rules at all, so the path's right edge WAS the chip's left edge (0 px - the row painted
 +   `C:/CodeReviewsexists`), the ✕ sat 3.84 px off the chip, and the add field kept the UA's 154 px, so its
 +   placeholder clipped to `an absolute folder pat` with 74 px of the row empty to the right of the button.
 +   Scoped to the Board panel and kept at class weight with :where(), so `.settings-group .search-hidden

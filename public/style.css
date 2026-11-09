@@ -432,7 +432,7 @@ thead th,
 .settings-row input[type="number"]:disabled { color: var(--dimmer); background: #0e1218; }
 .settings-unit { font-size: 11px; color: var(--dimmer); }
 /* Settings → Board > "Folders the board scans": one card per root, and an add row that uses the width it has.
-   The block had no rules at all, so the path's right edge WAS the chip's left edge (0 px — the row painted
+   The block had no rules at all, so the path's right edge WAS the chip's left edge (0 px - the row painted
    `C:/CodeReviewsexists`), the ✕ sat 3.84 px off the chip, and the add field kept the UA's 154 px, so its
    placeholder clipped to `an absolute folder pat` with 74 px of the row empty to the right of the button.
    Scoped to the Board panel and kept at class weight with :where(), so `.settings-group .search-hidden
