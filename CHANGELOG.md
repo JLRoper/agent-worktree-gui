@@ -4,16 +4,25 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.73.4 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.73.5 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-490 releases from v0.1.0 (2026-10-20) to v1.73.4 (2026-11-09), 1611 commits between the tags. Every release is anchored by an
+491 releases from v0.1.0 (2026-10-20) to v1.73.5 (2026-11-09), 1613 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.73.5 — 2026-11-09 · 2 commits
+
+[`2a40bb8`](https://github.com/JLRoper/agent-worktree-gui/commit/2a40bb8cbb17cd9b34ca762ff3ae9619be0323c4) · [compare v1.73.4...v1.73.5](https://github.com/JLRoper/agent-worktree-gui/compare/v1.73.4...v1.73.5)
+
+### Docs & tests
+
+- docs: render the changelog - 490 releases ([`f6a2ab8`](https://github.com/JLRoper/agent-worktree-gui/commit/f6a2ab87fe2e987b2ff9966e46b393fe72a018bb))
+- docs: 1.73.5 - patch: the AI factory POC report and API examples ([`2a40bb8`](https://github.com/JLRoper/agent-worktree-gui/commit/2a40bb8cbb17cd9b34ca762ff3ae9619be0323c4))
 
 ## v1.73.4 — 2026-11-09 · 2 commits
 
