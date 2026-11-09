@@ -314,6 +314,46 @@ test("a link with no run id keeps the id already on the row, and a resume replac
   assert.equal(resumed.task.runId, "run_second", "a resume hands the row the run that is actually doing it");
 });
 
+test("an edit can write the run id a filed row names, and clearing it puts the row back on its tree", () => {
+  // A row FILED after the fact - a reader's add, a script, a stage - was never cut, so `linkTaskRun` never ran for it
+  // and it carries no run id however plainly its title names one. Before this door the only way to attach the run was
+  // to re-cut the task; the row now names it through `edit`, and every read below is the row's own decorated verdict.
+  const tree = "queue-edit-fixture/filed-tree";
+  const filed = addTask([], { title: "filed after the fact", thread: "T-filed", worktree: tree });
+  const { tasks: running } = setTaskState(filed.tasks, 1, "running");
+  const treeRun = { id: "job-tree0002", runId: "run_tree0002", thread: "T-somebody-else", status: "running", worktreePath: tree };
+  const namedRun = { id: "job-named0002", runId: "run_named0002", thread: "T-filed", status: "running", startedAt: "2026-11-08T10:00:00.000Z" };
+
+  // The row as it reads before the edit: no run id, so the live run standing in its TREE is the guess it gets.
+  const [before] = decorateTasks(running, { jobs: [treeRun, namedRun], isLive: () => false });
+  assert.equal(before.runId, null);
+  assert.equal(before.runBy, "tree", "with no run id the row can only be read through its tree");
+  assert.equal(before.guessed, true);
+
+  // The edit writes the run the row actually names, normalised by the same trim every other read of the id uses…
+  assert.equal(editTask(running, 1, { runId: "  run_padded  " }).task.runId, "run_padded", "the id is trimmed like every other read of it");
+  const linked = editTask(running, 1, { runId: namedRun.runId });
+  assert.equal(linked.task.runId, namedRun.runId);
+  assert.equal(linked.task.state, "running", "an edit says WHICH run; starting the row stays setTaskState's decision");
+  const [after] = decorateTasks(linked.tasks, { jobs: [treeRun, namedRun], isLive: () => false });
+  assert.equal(after.stale, undefined, "the row's own run is running, so the row reads running");
+  assert.equal(after.runBy, "run", "…from that run's status, not from the tree guess it replaced");
+  assert.equal(after.guessed, undefined, "an answer read from the row's run is evidence, not a guess");
+
+  // A title edit that says nothing about the run leaves it alone, exactly as `project` does…
+  const retitled = editTask(linked.tasks, 1, { title: "filed after the fact, renamed" });
+  assert.equal(retitled.task.runId, namedRun.runId, "a title edit cannot erase the run the row is on");
+
+  // …and clearing it is how a row goes back to the fallback a file written before the field reads as.
+  for (const cleared of [null, ""]) {
+    const back = editTask(linked.tasks, 1, { runId: cleared });
+    assert.equal(back.task.runId, null, `runId ${JSON.stringify(cleared)} clears back to "no run id"`);
+    const [guess] = decorateTasks(back.tasks, { jobs: [treeRun, namedRun], isLive: () => false });
+    assert.equal(guess.runBy, "tree", "a cleared run id returns the row to the tree fallback");
+    assert.equal(guess.guessed, true, "and the fallback is still marked as the guess it is");
+  }
+});
+
 test("the settle judges the row's own run, not its thread's newest record", () => {
   const { tasks } = addTask([], { title: "settle me", thread: THREAD });
   const { tasks: running } = setTaskState(tasks, 1, "running");
@@ -764,15 +804,16 @@ function queueTransport(assistant) {
   return { call, sent };
 }
 
-// One Assistant over a temp state directory, with the two collaborators a queue read asks for: no jobs, no board.
-async function panelAssistant(t, prefix) {
+// One Assistant over a temp state directory, with the two collaborators a read needs: the job records it may judge a
+// row against, and no board.
+async function panelAssistant(t, prefix, { jobs = [] } = {}) {
   const dir = await mkdtemp(path.join(os.tmpdir(), prefix));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const assistantFile = path.join(dir, "assistant.json");
   await writeFile(assistantFile, JSON.stringify({ version: 2, settings: {}, notes: "", rules: [], watches: [], alerts: [], journal: [] }));
   const assistant = new Assistant({
     config: { jobsFile: path.join(dir, "jobs.json"), assistantFile },
-    jobs: { list: () => [], firstOfThread: () => null, create: async (body) => ({ id: "job-1", ...body }) },
+    jobs: { list: () => jobs, firstOfThread: () => null, create: async (body) => ({ id: "job-1", ...body }) },
     getProjects: () => [],
     onLog: () => {},
   });
@@ -873,4 +914,53 @@ test("a row filed by another assistant is not re-owned by the queue that holds i
   assert.equal(after.title, "filed from outside, edited");
   assert.equal(after.createdBy, "assistant-2", "an edit by the reader does not rewrite who filed it");
   assert.equal(after.owner, null, "and does not give the row to the assistant whose queue holds it");
+});
+
+// The row that was filed rather than cut (#338 is the real one): POST `edit` now carries `runId`, so the row can name
+// the run doing the work instead of being read through whatever live run happens to stand in its tree. This drives
+// the ROUTE, not `editTask`, because the defect these three facts guard is a field dropped between the POST and the
+// file - the row's JSON has to hold the id, and the queue's own answer has to be read from it.
+test("an edit through the queue route writes the run id, and the row then reads the run it names", async (t) => {
+  const tree = "queue-edit-runid/filed-tree";
+  const thread = "T-edited-run";
+  const run = { id: "job-edit0001", runId: "run-edit0001", thread, status: "running", startedAt: "2026-11-08T10:00:00.000Z" };
+  // A different live record sitting in the same tree: it is what the row guesses at while it has no run id, and it is
+  // what the row must stop naming once the edit does.
+  const treeRun = { id: "job-tree0009", runId: "run_tree0009", thread: "T-elsewhere", status: "running", worktreePath: tree };
+  const { dir, assistant } = await panelAssistant(t, "wtgui-queue-edit-run-", { jobs: [treeRun, run] });
+  const route = queueTransport(assistant);
+  const file = path.join(dir, "assistants", "assistant-1", "queue.json");
+
+  const filed = await route.call({ method: "POST", body: { assistantId: "assistant-1", action: "add", title: "filed after the fact", thread, worktree: tree } });
+  assert.equal(filed.status, 200, JSON.stringify(filed.payload));
+  assert.equal(filed.payload.task.runId, null, "a filed row is on no run yet");
+  const started = await route.call({ method: "POST", body: { assistantId: "assistant-1", action: "state", id: 1, state: "running" } });
+  assert.equal(started.status, 200, JSON.stringify(started.payload));
+
+  // Before the edit: running, but with no run id, so the tree run is the guess.
+  const guessed = (await route.call({ method: "GET", query: "?assistantId=assistant-1" })).payload.queue.tasks[0];
+  assert.equal(guessed.runBy, "tree", "a running row with no run id still falls back to its tree");
+  assert.equal(guessed.guessed, true);
+
+  // The edit writes the run this row actually names, and the FILE carries it - not only the route's answer.
+  const edited = await route.call({ method: "POST", body: { assistantId: "assistant-1", action: "edit", id: 1, runId: run.runId } });
+  assert.equal(edited.status, 200, JSON.stringify(edited.payload));
+  assert.equal(edited.payload.task.runId, run.runId);
+  assert.equal(JSON.parse(readFileSync(file, "utf8")).tasks[0].runId, run.runId, "the run id reached the queue file");
+
+  const live = (await route.call({ method: "GET", query: "?assistantId=assistant-1" })).payload.queue.tasks[0];
+  assert.equal(live.stale, undefined, "the row reads running against the run it names");
+  assert.equal(live.runBy, "run");
+  assert.equal(live.runStatus, "running");
+  assert.equal(live.guessed, undefined, "evidence from that run, not a tree guess");
+  assert.equal(live.worktree, tree, "every other field the edit did not name is untouched");
+
+  // Clearing it is the way back: the row returns to the fallback the tree guess is, and the file says so.
+  const cleared = await route.call({ method: "POST", body: { assistantId: "assistant-1", action: "edit", id: 1, runId: "" } });
+  assert.equal(cleared.status, 200, JSON.stringify(cleared.payload));
+  assert.equal(cleared.payload.task.runId, null);
+  assert.equal(JSON.parse(readFileSync(file, "utf8")).tasks[0].runId, null, "a cleared run id is written as null, not left behind");
+  const back = (await route.call({ method: "GET", query: "?assistantId=assistant-1" })).payload.queue.tasks[0];
+  assert.equal(back.runBy, "tree", "a cleared run id returns the row to the tree fallback");
+  assert.equal(back.guessed, true);
 });
