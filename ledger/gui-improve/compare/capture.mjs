@@ -1,65 +1,62 @@
-// gui-improve compare capture - Settings -> Board, headless Chromium (the AFTER set).
+// gui-improve compare capture - the Board's Unattached agents section, headless Chromium.
 //
-// Feeds ledger/gui-improve/compare/after/{capture.json,dom.json,css.json,shots/*.png}. It only reads the page:
-// it opens Settings, selects the Board tab, scrolls the panel body (for the presets state) and (for the
-// search state) types "flash" into the search box. No setting is saved; nothing on the server is written.
+// The baseline's own script, re-pointed at this stage tree: writes
+// ledger/gui-improve/compare/{capture.json,dom.json,css.json,style.css,shots/*.png}. It boots its own
+// throwaway panel instance through tools/panel-testkit.mjs (the real server.js of THIS tree), builds the
+// same git fixture with two worktrees, and seeds the same two unattached cards. Nothing in public/,
+// lib/ or server.js is written by this script.
 //
-// This is the baseline capture script with only its output paths and stage name changed: same viewports,
-// same states, same steps and asserts. It runs against the after tree (44b4278 + the change-set), not this
-// checkout; run.mjs boots that tree and points PANEL_BASE at it.
-//
-//   PLAYWRIGHT_BROWSERS_PATH=C:/Users/roper/AppData/Local/ms-playwright \
-//   NODE_PATH=C:/Users/roper/AppData/Roaming/npm/node_modules \
+// Run from the repo root:
+//   PLAYWRIGHT_BROWSERS_PATH="$LOCALAPPDATA/ms-playwright" NODE_PATH="$APPDATA/npm/node_modules" \
 //   node ledger/gui-improve/compare/capture.mjs
 //
-// BASE_URL defaults to http://127.0.0.1:7331/ and can be overridden with PANEL_BASE.
+// PANEL_BASE overrides the panel URL: with it set the script does NOT boot anything and shoots that instance
+// (which must be serving this tree, or environment.servedFiles will say matchesTree false).
+// The protocol (viewports, states, steps, fixture, assertions) is the baseline's, unchanged.
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile, stat } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { freePort, git, slash, startPanel } from "../../../tools/panel-testkit.mjs";
 import { withBrowser } from "../../../tools/browser.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "../../..");
-const BASE = (process.env.PANEL_BASE || "http://127.0.0.1:7331/").replace(/\/?$/, "/");
-const OUT = path.join(HERE, "after");
-await mkdir(OUT, { recursive: true });
+const OUT = HERE;
+const FIXED_BASE = process.env.PANEL_BASE ? process.env.PANEL_BASE.replace(/\/?$/, "/") : null;
 
-const VIEWPORTS = [
-  { name: "1440x900", width: 1440, height: 900 },
-  { name: "1280x800", width: 1280, height: 800 },
-  { name: "1024x768", width: 1024, height: 768 },
-];
+const VIEWPORTS = [{ name: "1440x900", width: 1440, height: 900 }];
 
 const STATES = [
   {
     name: "open",
     steps: [
-      "Fresh browser context at the viewport (no localStorage, so the settings window and tab are at their defaults).",
-      "goto " + BASE,
-      "wait for #btn-settings and for the first /api/state paint (2.5 s settle).",
-      "click #btn-settings to open the Settings window.",
-      "click #settings-tab-board (aria-selected=true on the Board tab; #settings-panel-board not hidden).",
-      "set #settings .settings-body scrollTop to 0 and wait two animation frames for layout to settle.",
-      "assert #settings is visible, #settings-panel-board is the only visible [data-settings-group], and #settings-search is empty.",
+      "Fresh browser context at 1440x900, device scale factor 1 (no localStorage, so every section is at its default).",
+      "goto the panel base URL.",
+      "wait for #agents and for #jobs to hold two .job[data-thread] cards (the seeded unattached store).",
+      "assert #agents is not collapsed, #jobs is painted, no .attach-row is visible, and every card draws a .job-cwd line.",
+      "wait two animation frames, then a further 300 ms for the last paint.",
     ],
   },
   {
-    name: "presets",
+    name: "expanded",
     steps: [
       "Reach the open state exactly as above.",
-      "scroll #settings .settings-body so the first .settings-presets (the Board reorder pills) sits in the middle of the body: element.scrollIntoView({block:'center'}).",
-      "wait two animation frames and 250 ms; record the body's scrollTop in the inventory.",
-      "assert the Board tab is still selected and the panel is still the only visible group.",
+      "click [data-attach-toggle=\"fixture-tree-worker\"] (the card whose cwd is a worktree the board has not read).",
+      "wait for that card's .attach-row to lose [hidden] and for its select to hold options.",
+      "assert the attach row is painted, the select is populated, and the Attach press carries its disabled state as measured.",
+      "wait two animation frames, then a further 300 ms for the last paint.",
     ],
   },
   {
-    name: "search",
+    name: "collapsed",
     steps: [
-      "Reach the open state exactly as above.",
-      'fill #settings-search with "flash" (the Board rows that answer it: Flash time, Flash on events, Grey flash).',
-      "wait 900 ms for the filter to paint, then assert the Board tab is still selected and the search badge reads the number of visible rows.",
-      "set #settings .settings-body scrollTop to 0 and wait two animation frames.",
+      "Reach the expanded state exactly as above.",
+      "click .project-head[data-toggle-fixed=\"agents\"] (the section's own bar, not one of its buttons).",
+      "wait for #agents to carry .fixed-collapsed and for #jobs to report display:none and no painted box.",
+      "assert the bar is still painted and its label still names the section.",
+      "wait two animation frames, then a further 300 ms for the last paint.",
     ],
   },
 ];
@@ -83,31 +80,123 @@ const STYLE_PROPS = [
 ];
 
 const sha256 = (buf) => createHash("sha256").update(buf).digest("hex");
+const SLASH = (p) => String(p).replace(/\\/g, "/");
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Throwaway root for the fixture and the sandbox store. WAG_SCRATCH lets a run keep them under a named
+// folder; the OS temp dir is the default so the committed script carries no machine path.
+const SCRATCH = process.env.WAG_SCRATCH || os.tmpdir();
+let PANEL = null;
 
-function rectOf(r) {
-  return r
-    ? { x: r.x, y: r.y, w: r.width, h: r.height, top: r.top, bottom: r.bottom, left: r.left, right: r.right }
-    : null;
+// Every path the page shows under the sandbox is written as "<sandbox>/..." in the ledger: the folder is a
+// throwaway on one machine, and a committed record must not carry a drive letter a reader cannot open. The
+// measurements (boxes, fonts, option wording) are otherwise untouched: only the prefix of a string changes.
+function desandbox(value, sandbox) {
+  const forms = [SLASH(sandbox), String(sandbox)];
+  const swap = (s) => forms.reduce((acc, f) => acc.split(f).join("<sandbox>"), s);
+  if (typeof value === "string") return swap(value);
+  if (Array.isArray(value)) return value.map((v) => desandbox(v, sandbox));
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, desandbox(v, sandbox)]));
+  }
+  return value;
 }
 
-// Runs inside the page. Kept self-contained: it is serialised by page.evaluate.
-function collectInventory({ styleProps }) {
-  const painted = (el) => {
-    const shown = (n) => {
-      if (!n.getClientRects().length) return false;
-      const cs = getComputedStyle(n);
-      return cs.display !== "none" && cs.visibility !== "hidden";
-    };
-    if (el.tagName === "OPTION") {
-      const sel = el.closest("select");
-      return !!sel && shown(sel);
-    }
-    return shown(el);
+// ---------------------------------------------------------------------------------------------
+// The fixture: two scanned repos (one with a worktree) and one repo OUTSIDE the scan root whose
+// worktree is the card's directory. Rows the board knows: alpha main, alpha feat-one, gamma main.
+// The missing row is the point: tonight's card was in a tree the board had not read yet.
+// ---------------------------------------------------------------------------------------------
+async function buildFixture(dir) {
+  await rm(dir, { recursive: true, force: true });
+  await mkdir(path.join(dir, "outside"), { recursive: true });
+  const repos = {
+    alpha: path.join(dir, "alpha"),
+    gamma: path.join(dir, "gamma"),
+    beta: path.join(dir, "outside", "beta"),
   };
+  for (const [name, repo] of Object.entries(repos)) {
+    await mkdir(repo, { recursive: true });
+    git(repo, "init", "-q", "-b", "main");
+    await writeFile(path.join(repo, "README.md"), `# ${name}\n\nfixture repository for the unattached-agents baseline\n`, "utf8");
+    git(repo, "add", "-A");
+    git(repo, "commit", "-q", "-m", `fixture: ${name}`);
+  }
+  git(repos.alpha, "worktree", "add", "-q", path.join(repos.alpha, ".worktrees", "feat-one"), "-b", "feat-one");
+  git(repos.beta, "worktree", "add", "-q", path.join(repos.beta, ".worktrees", "feat-long-tree-name"), "-b", "feat-long-tree-name");
+  return {
+    root: SLASH(dir),
+    projects: { alpha: SLASH(repos.alpha), gamma: SLASH(repos.gamma), beta: SLASH(repos.beta) },
+    scanned: [SLASH(path.join(repos.alpha, ".worktrees", "feat-one")), SLASH(path.join(repos.gamma))],
+    unreadWorktree: SLASH(path.join(repos.beta, ".worktrees", "feat-long-tree-name")),
+  };
+}
+
+function jobsFixture(fixture) {
+  const at = "2026-11-09T03:10:00.000Z";
+  const card = (id, thread, title, cwd, prompt) => ({
+    id,
+    thread,
+    turn: 1,
+    reply: false,
+    existing: false,
+    revived: false,
+    assistant: false,
+    prompt,
+    cwd,
+    worktree: null,
+    worktreePath: null,
+    ownerPath: null,
+    ownerPending: false,
+    projectPath: null,
+    clarifyUnavailable: false,
+    runId: null,
+    approvalDone: null,
+    questionDone: null,
+    sessionId: thread,
+    status: "done",
+    exitCode: 0,
+    fatal: null,
+    title,
+    label: title,
+    startedAt: at,
+    endedAt: at,
+    lines: [],
+  });
+  return {
+    savedAt: at,
+    jobs: [
+      card(
+        "11111111",
+        "fixture-tree-worker",
+        "unread-tree worker",
+        fixture.unreadWorktree,
+        "Tighten the attach control on this card.",
+      ),
+      card(
+        "22222222",
+        "fixture-row-worker",
+        "read-tree worker",
+        fixture.scanned[0],
+        "Move the cwd line above the console.",
+      ),
+    ],
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Page-side readers. Self-contained: serialised by page.evaluate.
+// ---------------------------------------------------------------------------------------------
+function collectInventory({ styleProps }) {
   const clean = (s, n = 400) => String(s || "").replace(/\s+/g, " ").trim().slice(0, n);
   const rect = (el) => {
+    if (!el) return null;
     const b = el.getBoundingClientRect();
     return { x: b.x, y: b.y, w: b.width, h: b.height, top: b.top, bottom: b.bottom, left: b.left, right: b.right };
+  };
+  const painted = (el) => {
+    if (!el || !el.getClientRects().length) return false;
+    const cs = getComputedStyle(el);
+    return cs.display !== "none" && cs.visibility !== "hidden";
   };
   const roleOf = (el) => {
     const explicit = el.getAttribute("role");
@@ -117,217 +206,151 @@ function collectInventory({ styleProps }) {
     if (tag === "select") return "combobox";
     if (tag === "option") return "option";
     if (tag === "a") return "link";
-    if (tag === "h1" || tag === "h2" || tag === "h3" || tag === "h4") return "heading";
-    if (tag === "input") {
-      const t = (el.getAttribute("type") || "text").toLowerCase();
-      if (t === "number") return "spinbutton";
-      if (t === "search") return "searchbox";
-      if (t === "checkbox") return "checkbox";
-      if (t === "radio") return "radio";
-      return "textbox";
-    }
+    if (tag === "h1" || tag === "h2" || tag === "h3") return "heading";
     return null;
   };
   const nameOf = (el) => {
-    const by = el.getAttribute("aria-labelledby");
-    if (by) {
-      const t = by.split(/\s+/).map((id) => document.getElementById(id)?.textContent || "").join(" ");
-      if (clean(t)) return { name: clean(t), source: "aria-labelledby" };
-    }
     const al = el.getAttribute("aria-label");
     if (al && clean(al)) return { name: clean(al), source: "aria-label" };
     const tag = el.tagName.toLowerCase();
-    if (tag === "input" || tag === "select" || tag === "textarea") {
-      const lab = el.id ? document.querySelector(`label[for="${CSS.escape(el.id)}"]`) : el.closest("label");
-      if (lab) {
-        const clone = lab.cloneNode(true);
-        clone.querySelectorAll("input,select,textarea,option").forEach((n) => n.remove());
-        const t = clean(clone.textContent);
-        if (t) return { name: t, source: "label" };
-      }
-      if (el.getAttribute("placeholder")) return { name: clean(el.getAttribute("placeholder")), source: "placeholder" };
-      if (el.getAttribute("title")) return { name: clean(el.getAttribute("title")), source: "title" };
-      return { name: "", source: "none" };
-    }
+    if (tag === "button" || tag === "a") return { name: clean(el.textContent), source: "text" };
     if (el.getAttribute("title") && !clean(el.textContent)) return { name: clean(el.getAttribute("title")), source: "title" };
     return { name: clean(el.textContent), source: "text" };
   };
 
-  const win = document.getElementById("settings");
-  const panel = document.getElementById("settings-panel-board");
-  const body = win ? win.querySelector(".settings-body") : null;
-  const scope = win || document;
+  const section = document.getElementById("agents");
+  const head = section ? section.querySelector(".project-head") : null;
+  const jobs = document.getElementById("jobs");
+  const sectionBox = rect(section);
+  const headBox = rect(head);
+  const jobsBox = rect(jobs);
 
-  // 1. DOM inventory — every element on the Settings surface, plus the option rows inside a select.
   const elements = [];
-  const all = [scope, ...scope.querySelectorAll("*")];
-  for (const el of all) {
-    if (!painted(el)) continue;
-    const cs = getComputedStyle(el);
-    const nm = nameOf(el);
-    const b = rect(el);
-    elements.push({
-      tag: el.tagName.toLowerCase(),
-      id: el.id || null,
-      cls: el.getAttribute("class") || null,
-      role: roleOf(el),
-      name: nm.name,
-      nameSource: nm.source,
-      text: clean(el.textContent),
-      box: b,
-      painted: el.tagName === "OPTION" ? false : true,
-      fontSize: cs.fontSize,
-      display: cs.display,
-      hidden: !!el.hidden,
-      disabled: !!el.disabled,
-      value: "value" in el && !["button", "div", "span"].includes(el.tagName.toLowerCase()) ? String(el.value).slice(0, 120) : null,
-      checked: "checked" in el ? !!el.checked : null,
-      ariaSelected: el.getAttribute("aria-selected"),
-    });
+  if (section) {
+    for (const el of [section, ...section.querySelectorAll("*")]) {
+      if (!painted(el)) continue;
+      const cs = getComputedStyle(el);
+      const nm = nameOf(el);
+      elements.push({
+        tag: el.tagName.toLowerCase(),
+        id: el.id || null,
+        cls: el.getAttribute("class") || null,
+        role: roleOf(el),
+        name: nm.name,
+        nameSource: nm.source,
+        text: clean(el.textContent),
+        box: rect(el),
+        fontSize: cs.fontSize,
+        display: cs.display,
+        hidden: !!el.hidden,
+        disabled: !!el.disabled,
+        value: el.tagName === "SELECT" ? String(el.value).slice(0, 240) : null,
+        ariaExpanded: el.getAttribute("aria-expanded"),
+        title: el.getAttribute("title") || null,
+      });
+    }
   }
 
-  // 2. The General tab's own measurements. These are what a comparison can prove numerically.
-  const panelRect = panel ? rect(panel) : null;
-  const bodyRect = body ? rect(body) : null;
-  const rows = [];
-  const groups = [];
+  const cards = section
+    ? [...section.querySelectorAll(".job[data-thread]")].map((card) => {
+        const thread = card.dataset.thread;
+        const cwd = card.querySelector(".job-cwd");
+        const cwdPath = card.querySelector(".job-cwd .cwd-path");
+        const meta = card.querySelector(".job-head > span.mono.dim");
+        const toggle = card.querySelector("[data-attach-toggle]");
+        const row = card.querySelector("[data-attach-row]");
+        const sel = row ? row.querySelector("select[data-attach-path]") : null;
+        const go = row ? row.querySelector("[data-attach-go]") : null;
+        const cpBox = rect(cwdPath);
+        return {
+          thread,
+          collapsed: card.classList.contains("collapsed"),
+          box: rect(card),
+          headBox: rect(card.querySelector(".job-head")),
+          title: clean(card.querySelector(".job-title")?.textContent) || null,
+          pill: clean(card.querySelector(".job-head .pill")?.textContent) || null,
+          metaText: meta ? clean(meta.textContent) : null,
+          metaTitle: meta?.getAttribute("title") || null,
+          cwd: cwd
+            ? {
+                box: rect(cwd),
+                label: clean(cwd.querySelector(".cwd-label")?.textContent) || null,
+                pathText: clean(cwdPath?.textContent) || null,
+                pathTitle: cwdPath?.getAttribute("title") || null,
+                pathBox: cpBox,
+                pathClientWidth: cwdPath ? cwdPath.clientWidth : null,
+                pathScrollWidth: cwdPath ? cwdPath.scrollWidth : null,
+                pathTruncated: cwdPath ? cwdPath.scrollWidth > cwdPath.clientWidth + 1 : null,
+                lineTitle: cwd.getAttribute("title") || null,
+                rowChip: clean(cwd.querySelector(".cwd-row")?.textContent) || null,
+                runChip: clean(cwd.querySelector(".cwd-run")?.textContent) || null,
+                name: clean(cwd.querySelector(".thread-name")?.textContent) || null,
+              }
+            : null,
+          attachToggle: toggle
+            ? { text: clean(toggle.textContent), box: rect(toggle), title: toggle.getAttribute("title") || null }
+            : null,
+          attachRow: row
+            ? {
+                hidden: !!row.hidden,
+                box: rect(row),
+                missing: sel?.dataset?.attachMissing || null,
+                selectedIndex: sel ? sel.selectedIndex : null,
+                selectedText: sel && sel.selectedOptions[0] ? clean(sel.selectedOptions[0].textContent) : null,
+                options: sel
+                  ? [...sel.options].map((o) => ({ value: o.value, text: clean(o.textContent), selected: o.selected, disabled: o.disabled }))
+                  : [],
+                go: go ? { text: clean(go.textContent), disabled: !!go.disabled, box: rect(go) } : null,
+              }
+            : null,
+        };
+      })
+    : [];
+
   const overflow = [];
-  const visibleRows = [];
-  if (panel) {
-    for (const row of panel.querySelectorAll(".settings-row")) {
-      if (!painted(row)) continue;
-      const label = clean(row.querySelector("span")?.textContent || row.textContent);
-      const control = row.querySelector("input,select,textarea");
-      const rb = rect(row);
-      const cb = control ? rect(control) : null;
-      visibleRows.push(label);
-      rows.push({ label, box: rb, control: control ? { tag: control.tagName.toLowerCase(), id: control.id || null, box: cb, right: cb.right } : null });
-      if (cb && (cb.right > panelRect.right + 0.5 || cb.left < panelRect.left - 0.5)) {
-        overflow.push({ kind: "row-control-outside-panel", label, box: cb, panelRight: panelRect.right });
+  if (sectionBox) {
+    for (const el of section ? section.querySelectorAll("*") : []) {
+      if (!painted(el)) continue;
+      const b = rect(el);
+      if (b.w === 0 && b.h === 0) continue;
+      if (b.right > sectionBox.right + 0.5) {
+        overflow.push({ kind: "past-section-right", tag: el.tagName.toLowerCase(), cls: el.getAttribute("class"), box: b });
       }
     }
-    for (const presets of panel.querySelectorAll(".settings-presets")) {
-      if (!painted(presets)) continue;
-      const labelEl = presets.previousElementSibling;
-      const next = presets.nextElementSibling;
-      const pb = rect(presets);
-      const lb = labelEl ? rect(labelEl) : null;
-      const nb = next && painted(next) ? rect(next) : null;
-      const buttons = [...presets.querySelectorAll("button")].map((b) => ({
-        text: clean(b.textContent),
-        box: rect(b),
-        cls: b.getAttribute("class"),
-      }));
-      const widths = buttons.map((b) => Math.round(b.box.w * 100) / 100);
-      const spread = widths.length ? Math.round((Math.max(...widths) - Math.min(...widths)) * 100) / 100 : 0;
-      groups.push({
-        label: clean(labelEl?.textContent || ""),
-        presetsBox: pb,
-        labelBox: lb,
-        gapAbove: lb ? Math.round((pb.top - lb.bottom) * 100) / 100 : null,
-        gapBelow: nb ? Math.round((nb.top - pb.bottom) * 100) / 100 : panelRect ? Math.round((panelRect.bottom - pb.bottom) * 100) / 100 : null,
-        buttons,
-        widths,
-        spread,
-        onCount: buttons.filter((b) => /(^|\s)on(\s|$)/.test(b.cls || "")).length,
-      });
-      if (pb.right > panelRect.right + 0.5) overflow.push({ kind: "presets-outside-panel", box: pb, panelRight: panelRect.right });
-      if (bodyRect && pb.bottom > bodyRect.bottom + 0.5) overflow.push({ kind: "presets-clipped-by-body", box: pb, bodyBottom: bodyRect.bottom });
-    }
-    for (const el of panel.querySelectorAll("*")) {
-      if (!painted(el) || el.tagName === "OPTION") continue;
-      const b = rect(el);
-      if (b.width === 0 && b.height === 0) continue;
-      if (b.right > (bodyRect?.right ?? panelRect.right) + 0.5) overflow.push({ kind: "past-body-right", tag: el.tagName.toLowerCase(), id: el.id || null, box: b });
+    for (const p of section ? section.querySelectorAll(".cwd-path") : []) {
+      if (!painted(p)) continue;
+      if (p.scrollWidth > p.clientWidth + 1) {
+        overflow.push({ kind: "cwd-path-ellipsized", text: clean(p.textContent), scrollWidth: p.scrollWidth, clientWidth: p.clientWidth });
+      }
     }
   }
-  const textEls = elements.filter((e) => e.painted && e.text && e.box.w > 0 && e.box.h > 0);
-  const minFontSize = textEls.length ? Math.min(...textEls.map((e) => parseFloat(e.fontSize) || 999)) : null;
-
-  // 3. The scan-roots block, the target this baseline records. Every root row's parts are measured
-  // separately: the gap between a path and its state chip, and between the chip and the remove control,
-  // is the defect a reader sees as "C:/ProjectDevelopmentexists ✕". The add row's input is measured
-  // against the hint it carries, so "the field is too narrow to read its own placeholder" is a number.
-  const roots = [];
-  const rootsEl = document.getElementById("scan-roots");
-  if (rootsEl) {
-    for (const el of [...rootsEl.children]) {
-      if (!painted(el)) continue;
-      const kids = [...el.children].filter(painted).map((k) => ({
-        tag: k.tagName.toLowerCase(),
-        cls: k.getAttribute("class"),
-        text: clean(k.textContent, 120),
-        box: rect(k),
-        title: k.getAttribute("title") || null,
-      }));
-      const gaps = [];
-      for (let i = 1; i < kids.length; i++) gaps.push(Math.round((kids[i].box.left - kids[i - 1].box.right) * 100) / 100);
-      roots.push({ cls: el.getAttribute("class"), box: rect(el), kids, gaps, minGap: gaps.length ? Math.min(...gaps) : null });
-    }
-  }
-  const rootInput = document.getElementById("scan-root-input");
-  const addBtn = document.getElementById("btn-scan-root-add");
-  const addRow = panel ? panel.querySelector(".settings-roots-add") : null;
-  let rootAdd = null;
-  if (rootInput && painted(rootInput)) {
-    const cs = getComputedStyle(rootInput);
-    const canvas = document.createElement("canvas").getContext("2d");
-    canvas.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
-    const hint = rootInput.getAttribute("placeholder") || "";
-    const pad = parseFloat(cs.paddingLeft || 0) + parseFloat(cs.paddingRight || 0) + parseFloat(cs.borderLeftWidth || 0) + parseFloat(cs.borderRightWidth || 0);
-    const avail = rootInput.clientWidth - parseFloat(cs.paddingLeft || 0) - parseFloat(cs.paddingRight || 0);
-    const hintPx = canvas.measureText(hint).width;
-    rootAdd = {
-      row: addRow ? rect(addRow) : null,
-      input: rect(rootInput),
-      inputClientWidth: rootInput.clientWidth,
-      inputBoxSizing: cs.boxSizing,
-      placeholder: hint,
-      placeholderPx: Math.round(hintPx * 100) / 100,
-      placeholderRoom: Math.round(avail * 100) / 100,
-      placeholderFits: hintPx <= avail,
-      button: addBtn ? { box: rect(addBtn), text: clean(addBtn.textContent, 40) } : null,
-      rowFree: addRow && addBtn && rootInput ? Math.round((rect(addRow).right - rect(addBtn).right) * 100) / 100 : null,
-    };
-  }
-
-  const search = document.getElementById("settings-search");
-  const activeTab = document.querySelector("[role='tab'][aria-selected='true']");
+  const textEls = elements.filter((e) => e.text && e.box.w > 0 && e.box.h > 0);
   return {
     viewport: { width: innerWidth, height: innerHeight },
     url: location.href,
-    win: win ? rect(win) : null,
-    winScrollHeight: win ? win.scrollHeight : null,
-    body: bodyRect,
-    bodyScrollHeight: body ? body.scrollHeight : null,
-    bodyScrollTop: body ? body.scrollTop : null,
-    panel: panelRect,
-    panelScrollHeight: panel ? panel.scrollHeight : null,
-    activeTab: activeTab?.dataset?.settingsTab || null,
-    visibleGroups: [...document.querySelectorAll("[data-settings-group]")].filter((p) => !p.hidden).map((p) => p.dataset.settingsGroup),
-    search: {
-      value: search ? search.value : null,
-      count: [...document.querySelectorAll(".settings-tab")].find((t) => t.dataset.settingsTab === "board")?.querySelector(".settings-tab-count")?.textContent || null,
-    },
-    tabCounts: [...document.querySelectorAll(".settings-tab")].map((t) => ({
-      tab: t.dataset.settingsTab,
-      count: t.querySelector(".settings-tab-count")?.textContent || null,
-      badgeVisible: t.querySelector(".settings-tab-count") ? !t.querySelector(".settings-tab-count").hidden : false,
-      selected: t.getAttribute("aria-selected") === "true",
-    })),
+    scrollY: document.scrollingElement ? document.scrollingElement.scrollTop : window.scrollY,
+    docHeight: document.documentElement.scrollHeight,
+    section: section
+      ? {
+          box: sectionBox,
+          collapsed: section.classList.contains("collapsed") || section.classList.contains("fixed-collapsed"),
+          headBox,
+          headText: clean(head?.textContent),
+          label: clean(head?.querySelector("h2")?.textContent) || null,
+          pathHint: clean(head?.querySelector(".path")?.textContent) || null,
+          chipText: clean(head?.querySelector(".chips")?.textContent) || null,
+        }
+      : null,
+    jobs: jobsBox ? { box: jobsBox, display: getComputedStyle(jobs).display, hidden: !!jobs.hidden, scrollHeight: jobs.scrollHeight, childCount: jobs.children.length } : null,
+    cardCount: cards.length,
+    cards,
     elementCount: elements.length,
-    visibleRows: visibleRows.length,
-    rows,
-    groups,
-    roots,
-    rootAdd,
+    minFontSize: textEls.length ? Math.min(...textEls.map((e) => parseFloat(e.fontSize) || 999)) : null,
     overflow,
-    minFontSize,
     elements,
   };
 }
 
-// Runs inside the page: the computed style of every painted element plus the rules that select it.
 function collectCss({ styleProps }) {
   const painted = (el) => {
     if (el.tagName === "OPTION") return false;
@@ -339,20 +362,13 @@ function collectCss({ styleProps }) {
     const b = el.getBoundingClientRect();
     return { x: b.x, y: b.y, w: b.width, h: b.height, top: b.top, bottom: b.bottom, left: b.left, right: b.right };
   };
-
-  // Flatten every rule a selector can come from, keeping the sheet and the media condition it sits under.
   const rules = [];
   const sheets = [];
   const atRules = [];
   const walk = (list, sheetIndex, media) => {
     for (const rule of list) {
       if (rule.type === CSSRule.STYLE_RULE) {
-        rules.push({
-          sheet: sheetIndex,
-          media: media || null,
-          selector: rule.selectorText,
-          style: rule.style.cssText,
-        });
+        rules.push({ sheet: sheetIndex, media: media || null, selector: rule.selectorText, style: rule.style.cssText });
       } else if (rule.type === CSSRule.MEDIA_RULE) {
         walk(rule.cssRules, sheetIndex, `${media ? media + " and " : ""}${rule.conditionText || rule.media?.mediaText || ""}`);
       } else if (rule.type === CSSRule.SUPPORTS_RULE) {
@@ -374,14 +390,12 @@ function collectCss({ styleProps }) {
       sheets.push({ index: i, href: sheet.href || null, owner: sheet.ownerNode?.tagName?.toLowerCase() || null, id: sheet.ownerNode?.id || null, ruleCount: null, error: String(e.message || e) });
     }
   });
-
   const vars = {};
   const rootCs = getComputedStyle(document.documentElement);
   for (let i = 0; i < rootCs.length; i++) {
     const prop = rootCs.item(i);
     if (prop.startsWith("--")) vars[prop] = rootCs.getPropertyValue(prop).trim();
   }
-
   const styleOf = (el) => {
     const cs = getComputedStyle(el);
     const out = {};
@@ -405,11 +419,9 @@ function collectCss({ styleProps }) {
       left: cs.left,
     };
   };
-
   const elements = [];
-  const win = document.getElementById("settings") || document;
-  const all = [win, ...win.querySelectorAll("*")];
-  for (const el of all) {
+  const section = document.getElementById("agents") || document;
+  for (const el of [section, ...section.querySelectorAll("*")]) {
     if (!painted(el)) continue;
     const matched = [];
     for (let i = 0; i < rules.length; i++) {
@@ -433,76 +445,167 @@ function collectCss({ styleProps }) {
   return { sheets, rules, atRules, variables: vars, elementCount: elements.length, elements };
 }
 
-const run = await withBrowser(async ({ browser, playwright }) => {
-  const shots = [];
-  const dom = { schema: "dom-inventory/1", surface: "#settings (Settings window) with #settings-panel-board visible", per_viewport: {} };
-  const css = { schema: "css-inventory/1", surface: "#settings", per_viewport: {} };
-  const version = await (await fetch(new URL("api/config", BASE))).json();
-  const browserVersion = await browser.version();
+// ---------------------------------------------------------------------------------------------
+const pngSize = (buf) => ({ width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) });
 
-  for (const vp of VIEWPORTS) {
-    const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, deviceScaleFactor: 1 });
-    const page = await context.newPage();
+async function main() {
+  // A fixed sandbox name, not mkdtemp: the fixture paths are written into the manifest and into the picker's
+  // missing-row message, and a compare run must read the same paths as this baseline. Removed and rebuilt per run.
+  const sandbox = path.join(SCRATCH, "wag-unattached-baseline");
+  await rm(sandbox, { recursive: true, force: true });
+  const fixtureDir = path.join(sandbox, "fixture");
+  const fixture = await buildFixture(fixtureDir);
+  const jobsFile = path.join(sandbox, "logs", "jobs.json");
+  await mkdir(path.dirname(jobsFile), { recursive: true });
+  await writeFile(jobsFile, JSON.stringify(jobsFixture(fixture), null, 2) + "\n", "utf8");
+
+  let panel = null;
+  let base = FIXED_BASE;
+  if (!base) {
+    const port = await freePort();
+    panel = await startPanel({
+      dir: sandbox,
+      port,
+      keep: true,
+      config: {
+        scanRoots: [fixture.root],
+        threads: 2,
+        worktreeSeconds: 60,
+        midSeconds: 60,
+        dormantSeconds: 60,
+        slowSeconds: 60,
+        refreshSeconds: 60,
+        fetchSeconds: 60,
+        jobsFile,
+        matrix: null,
+      },
+    });
+    PANEL = panel;
+    base = panel.base + "/";
+  }
+
+  // The board is ready when the two scanned projects and their worktree rows are in /api/state.
+  const stateDeadline = Date.now() + 120_000;
+  let state = null;
+  const rowsOf = (s) => (Array.isArray(s?.projects) ? s.projects : []).flatMap((p) => (p.worktrees || []).map((w) => ({ ...w, project: p.name })));
+  for (;;) {
+    const r = await fetch(new URL("api/state", base));
+    state = await r.json().catch(() => null);
+    const rows = rowsOf(state);
+    const names = rows.map((x) => x.name);
+    if (names.includes("feat-one") && names.includes("gamma")) break;
+    if (Date.now() > stateDeadline) {
+      throw new Error(`board never read the fixture: rows ${JSON.stringify(names)}`);
+    }
+    await sleep(400);
+  }
+  const rowsSeen = rowsOf(state).map((r) => ({ project: r.project, name: r.name, path: SLASH(r.path), branch: r.branch || null }));
+
+  const run = await withBrowser(async ({ page, browser }) => {
+    const shots = [];
+    const dom = { schema: "dom-inventory/1", surface: "#agents (Unattached agents section) on the board", per_viewport: {} };
+    const css = { schema: "css-inventory/1", surface: "#agents", per_viewport: {} };
+    const version = await (await fetch(new URL("api/config", base))).json();
+    const browserVersion = await browser.version();
+    const vp = VIEWPORTS[0];
     const errors = [];
     page.on("pageerror", (e) => errors.push(String(e.message || e)));
-    page.on("console", (m) => { if (m.type() === "error" && !/favicon/i.test(m.text())) errors.push(m.text()); });
-
+    page.on("console", (m) => {
+      if (m.type() === "error" && !/favicon/i.test(m.text())) errors.push(m.text());
+    });
     dom.per_viewport[vp.name] = {};
     css.per_viewport[vp.name] = {};
 
-    try {
-      await page.goto(BASE, { waitUntil: "domcontentloaded", timeout: 45000 });
-      await page.waitForSelector("#btn-settings", { timeout: 30000 });
-      await page.waitForTimeout(2500);
-      await page.click("#btn-settings");
-      await page.waitForTimeout(500);
-      await page.click("#settings-tab-board");
-      await page.waitForTimeout(700);
+    await page.goto(base, { waitUntil: "domcontentloaded", timeout: 45000 });
+    await page.waitForSelector("#agents", { timeout: 30000 });
+    await page.waitForFunction(() => document.querySelectorAll("#jobs .job[data-thread]").length === 2, null, { timeout: 30000 });
+    // The store and the socket both repaint #jobs wholesale once the snapshot lands; a click on the first
+    // paint lands on a node the next repaint throws away. Read until two consecutive reads agree.
+    const sectionKey = () =>
+      page.evaluate(() =>
+        [...document.querySelectorAll("#jobs .job[data-thread]")]
+          .map((c) => `${c.dataset.thread}|${c.querySelector(".cwd-path")?.textContent || ""}|${c.className}`)
+          .join("~"),
+      );
+    let prevKey = null;
+    for (let i = 0; i < 10; i++) {
+      const key = await sectionKey();
+      if (prevKey === key) break;
+      prevKey = key;
+      await page.waitForTimeout(400);
+    }
+    // The socket's first snapshot lands after the store's own paint; a repaint after that throws away a
+    // JS-set attach row. Let the first full sync pass before anything is pressed.
+    await page.waitForTimeout(2500);
 
-      const settle = async () => {
-        await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-      };
+    const settle = () => page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    const readInventory = () => page.evaluate(collectInventory, { styleProps: STYLE_PROPS });
+    const readCss = () => page.evaluate(collectCss, { styleProps: STYLE_PROPS });
 
-      const assertOpen = async () => {
-        const ok = await page.evaluate(() => {
-          const win = document.getElementById("settings");
-          const panel = document.getElementById("settings-panel-board");
-          const active = document.querySelector("[role='tab'][aria-selected='true']");
-          return {
-            winVisible: !!win && !win.classList.contains("hidden") && !!win.getClientRects().length,
-            panelVisible: !!panel && !panel.hidden && !!panel.getClientRects().length,
-            activeTab: active?.dataset?.settingsTab || null,
-            visibleGroups: [...document.querySelectorAll("[data-settings-group]")].filter((p) => !p.hidden).map((p) => p.dataset.settingsGroup),
-          };
-        });
-        if (!ok.winVisible || !ok.panelVisible || ok.activeTab !== "board") throw new Error(`open state not reached at ${vp.name}: ${JSON.stringify(ok)}`);
-        return ok;
-      };
-
-      const pngSize = (buf) => ({ width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) });
-      const snapshot = async (stateName, inv, cssInv) => {
-        const base = `${vp.name}-${stateName}`;
-        const pageFile = `ledger/gui-improve/compare/after/shots/${base}.png`;
-        const surfaceFile = `ledger/gui-improve/compare/after/shots/${base}-surface.png`;
-        // The whole page first (literal fullPage), then the Settings window: the stable pair the comparison reads.
-        await page.screenshot({ path: path.join(OUT, "shots", `${base}.png`), fullPage: true, animations: "disabled", caret: "hide" });
-        await page.locator("#settings").screenshot({ path: path.join(OUT, "shots", `${base}-surface.png`), animations: "disabled", caret: "hide" });
-        const pageBuf = await readFile(path.join(OUT, "shots", `${base}.png`));
-        const surfaceBuf = await readFile(path.join(OUT, "shots", `${base}-surface.png`));
-
-        dom.per_viewport[vp.name][stateName] = {
-          viewport: { name: vp.name, width: vp.width, height: vp.height },
-          state: stateName,
-          steps: STATES.find((s) => s.name === stateName).steps,
-          ...inv,
+    const assertOpen = async () => {
+      const ok = await page.evaluate(() => {
+        const s = document.getElementById("agents");
+        const j = document.getElementById("jobs");
+        const cards = [...document.querySelectorAll("#jobs .job[data-thread]")];
+        return {
+          section: !!s,
+          collapsed: !!s && (s.classList.contains("collapsed") || s.classList.contains("fixed-collapsed")),
+          jobsPainted: !!j && j.getClientRects().length > 0,
+          cards: cards.length,
+          cwdLines: cards.filter((c) => c.querySelector(".job-cwd .cwd-path")).length,
+          attachRowsVisible: [...document.querySelectorAll("#jobs .attach-row")].filter((r) => !r.hidden && r.getClientRects().length).length,
         };
+      });
+      if (!ok.section || ok.collapsed || !ok.jobsPainted) throw new Error(`open state not reached at ${vp.name}: ${JSON.stringify(ok)}`);
+      if (ok.cards !== 2 || ok.cwdLines !== 2) throw new Error(`open state at ${vp.name}: ${ok.cards} cards, ${ok.cwdLines} cwd lines (expected 2/2)`);
+      if (ok.attachRowsVisible !== 0) throw new Error(`open state at ${vp.name}: ${ok.attachRowsVisible} attach rows already visible`);
+      return ok;
+    };
+
+    const attachState = () =>
+      page.evaluate(() => {
+        const row = document.querySelector('[data-attach-row="fixture-tree-worker"]');
+        const sel = row ? row.querySelector("select[data-attach-path]") : null;
+        return { ok: !!row && !row.hidden && !!sel && sel.options.length > 0, hidden: !!row?.hidden, options: sel ? sel.options.length : 0 };
+      });
+    const ensureAttachOpen = async () => {
+      for (let i = 0; i < 6; i++) {
+        const st = await attachState();
+        if (st.ok) return st;
+        await page.click('[data-attach-toggle="fixture-tree-worker"]');
+        await page.waitForTimeout(400);
+      }
+      return attachState();
+    };
+
+    const snapshot = async (stateName) => {
+      const baseName = `${vp.name}-${stateName}`;
+      const pageFile = `ledger/gui-improve/compare/shots/${baseName}.png`;
+      const surfaceFile = `ledger/gui-improve/compare/shots/${baseName}-surface.png`;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (stateName === "expanded") await ensureAttachOpen();
+        await settle();
+        await page.waitForTimeout(300);
+        await page.screenshot({ path: path.join(OUT, "shots", `${baseName}.png`), fullPage: true, animations: "disabled", caret: "hide" });
+        await page.locator("#agents").screenshot({ path: path.join(OUT, "shots", `${baseName}-surface.png`), animations: "disabled", caret: "hide" });
+        const inv = await readInventory();
+        // A repaint between the press and this read rebuilds the card with the row hidden again: retry the
+        // whole shot rather than record an empty expand.
+        if (stateName === "expanded") {
+          const row = inv.cards.find((c) => c.thread === "fixture-tree-worker")?.attachRow;
+          if (!row || row.hidden) continue;
+        }
+        const pageBuf = await readFile(path.join(OUT, "shots", `${baseName}.png`));
+        const surfaceBuf = await readFile(path.join(OUT, "shots", `${baseName}-surface.png`));
+        const cssInv = await readCss();
+        const steps = STATES.find((s) => s.name === stateName).steps;
+        dom.per_viewport[vp.name][stateName] = { viewport: { name: vp.name, width: vp.width, height: vp.height }, state: stateName, steps, ...inv };
         css.per_viewport[vp.name][stateName] = {
           viewport: { name: vp.name, width: vp.width, height: vp.height },
           state: stateName,
           elementCount: cssInv.elementCount,
           elements: cssInv.elements,
         };
-        // The stylesheet and its rules are identical in every context; keep one copy at the top level.
         if (!css.sheets) {
           css.sheets = cssInv.sheets;
           css.rules = cssInv.rules;
@@ -513,7 +616,7 @@ const run = await withBrowser(async ({ browser, playwright }) => {
           viewport: vp.name,
           viewportSize: { width: vp.width, height: vp.height },
           state: stateName,
-          steps: STATES.find((s) => s.name === stateName).steps,
+          steps,
           file: pageFile,
           sha256: sha256(pageBuf),
           bytes: pageBuf.length,
@@ -524,199 +627,290 @@ const run = await withBrowser(async ({ browser, playwright }) => {
           surfaceBytes: surfaceBuf.length,
           surfacePixels: pngSize(surfaceBuf),
           pair: "surface",
-          win: inv.win,
-          panel: inv.panel,
-          panelScrollHeight: inv.panelScrollHeight,
-          bodyScrollHeight: inv.bodyScrollHeight,
-          bodyScrollTop: inv.bodyScrollTop,
-          visibleRows: inv.visibleRows,
-          groups: inv.groups,
-          roots: inv.roots,
-          rootAdd: inv.rootAdd,
+          section: inv.section,
+          jobs: inv.jobs,
+          cardCount: inv.cardCount,
+          cards: inv.cards,
+          overflow: inv.overflow,
           errors: [...errors],
         });
+        return inv;
+      }
+      throw new Error(`snapshot ${stateName} at ${vp.name}: the state did not hold for three attempts`);
+    };
+
+    // open
+    await assertOpen();
+    await snapshot("open");
+
+    // expanded: the card whose cwd is a worktree the board has not read. A repaint can replace the card
+    // between the click and the read, so the press is repeated until the row and its options are on the page.
+    const opened = await ensureAttachOpen();
+    if (!opened.ok) throw new Error(`expanded state at ${vp.name}: ${JSON.stringify(opened)}`);
+    const expandedCheck = await page.evaluate(() => {
+      const row = document.querySelector('[data-attach-row="fixture-tree-worker"]');
+      const sel = row?.querySelector("select[data-attach-path]");
+      const go = row?.querySelector("[data-attach-go]");
+      return {
+        hidden: !!row?.hidden,
+        painted: !!row && row.getClientRects().length > 0,
+        options: sel ? [...sel.options].map((o) => ({ text: o.textContent.trim(), value: o.value, disabled: o.disabled })) : [],
+        selectedText: sel?.selectedOptions?.[0]?.textContent?.trim() || null,
+        missing: sel?.dataset?.attachMissing || null,
+        goDisabled: !!go?.disabled,
       };
+    });
+    if (expandedCheck.hidden || !expandedCheck.painted || expandedCheck.options.length < 1) {
+      throw new Error(`expanded state at ${vp.name}: ${JSON.stringify(expandedCheck)}`);
+    }
+    await snapshot("expanded");
 
-      // A settings block is rebuilt wholesale by the board's scan (the repaint rule): a read that lands
-      // mid-rebuild sees the roots list empty. Read until two consecutive reads agree on the block.
-      const stableInventory = async (when) => {
-        let prev = null;
-        for (let attempt = 0; attempt < 8; attempt++) {
-          const now = await page.evaluate(collectInventory, { styleProps: STYLE_PROPS });
-          const key = JSON.stringify({ roots: now.roots, rootAdd: now.rootAdd, panelScrollHeight: now.panelScrollHeight, rows: now.visibleRows });
-          if (prev && prev.key === key) return now;
-          prev = { key, now };
-          await page.waitForTimeout(250);
-        }
-        throw new Error(`${when} at ${vp.name}: the settings block never settled — the roots list kept changing`);
-      };
+    // collapsed: the section's own bar.
+    await page.click('.project-head[data-toggle-fixed="agents"]');
+    await page.waitForFunction(
+      () => {
+        const s = document.getElementById("agents");
+        const j = document.getElementById("jobs");
+        return !!s && s.classList.contains("fixed-collapsed") && !!j && j.getClientRects().length === 0;
+      },
+      null,
+      { timeout: 10000 },
+    );
+    await snapshot("collapsed");
 
-      // state: open — capture it before the scroll and search states change the DOM.
-      await assertOpen();
-      await page.evaluate(() => { const b = document.querySelector("#settings .settings-body"); if (b) b.scrollTop = 0; });
-      await settle();
-      await page.waitForTimeout(300);
-      await assertOpen();
-      const openInv = await stableInventory("open");
-      if (!openInv.roots.length) throw new Error(`open state at ${vp.name}: the scan-roots list is empty — nothing to capture`);
-      const openCss = await page.evaluate(collectCss, { styleProps: STYLE_PROPS });
-      await snapshot("open", openInv, openCss);
+    return { shots, dom, css, version, browserVersion, rowsSeen, expandedCheck };
+  }, { viewport: { width: 1440, height: 900 }, headless: true });
 
-      // state: presets — the pill row under the Board reorder control, centred so the row above it,
-      // the pills and the preview below are all in the one 340x520 window.
-      await page.evaluate(() => {
-        const p = document.querySelector("#settings-panel-board .settings-presets");
-        if (p) p.scrollIntoView({ block: "center" });
-      });
-      await settle();
-      await page.waitForTimeout(250);
-      await assertOpen();
-      const presetsInv = await stableInventory("presets");
-      if (!(presetsInv.bodyScrollTop > 0)) throw new Error(`presets state at ${vp.name}: the body did not scroll (scrollTop ${presetsInv.bodyScrollTop})`);
-      const presetsCss = await page.evaluate(collectCss, { styleProps: STYLE_PROPS });
-      await snapshot("presets", presetsInv, presetsCss);
-
-      // state: search
-      await page.evaluate(() => { const b = document.querySelector("#settings .settings-body"); if (b) b.scrollTop = 0; });
-      await page.fill("#settings-search", "flash");
-      await page.waitForTimeout(900);
-      await page.evaluate(() => { const b = document.querySelector("#settings .settings-body"); if (b) b.scrollTop = 0; });
-      await settle();
-      await page.waitForTimeout(250);
-      await assertOpen();
-      const searchInv = await stableInventory("search");
-      if (searchInv.visibleRows < 1) throw new Error(`search state at ${vp.name}: ${searchInv.visibleRows} rows visible, expected at least 1`);
-      const searchCss = await page.evaluate(collectCss, { styleProps: STYLE_PROPS });
-      await snapshot("search", searchInv, searchCss);
-    } finally {
-      await context.close().catch(() => {});
+  const incomplete = [];
+  for (const vp of VIEWPORTS) {
+    for (const st of STATES) {
+      const shot = run.shots.find((s) => s.viewport === vp.name && s.state === st.name);
+      const d = run.dom.per_viewport[vp.name]?.[st.name];
+      const c = run.css.per_viewport[vp.name]?.[st.name];
+      if (!shot) incomplete.push({ viewport: vp.name, state: st.name, missing: "shot" });
+      if (!d || !d.elementCount) incomplete.push({ viewport: vp.name, state: st.name, missing: "dom-inventory" });
+      if (!c || !c.elementCount) incomplete.push({ viewport: vp.name, state: st.name, missing: "css-inventory" });
     }
   }
-  return { shots, dom, css, version, browserVersion };
-}, { viewport: { width: 1440, height: 900 }, headless: true });
 
-// Sanity: every viewport × state must have a shot and an element in both inventories.
-const incomplete = [];
-for (const vp of VIEWPORTS) {
-  for (const st of STATES) {
-    const shot = run.shots.find((s) => s.viewport === vp.name && s.state === st.name);
-    const d = run.dom.per_viewport[vp.name]?.[st.name];
-    const c = run.css.per_viewport[vp.name]?.[st.name];
-    if (!shot) incomplete.push({ viewport: vp.name, state: st.name, missing: "shot" });
-    if (!d || !d.elementCount) incomplete.push({ viewport: vp.name, state: st.name, missing: "dom-inventory" });
-    if (!c || !c.elementCount) incomplete.push({ viewport: vp.name, state: st.name, missing: "css-inventory" });
+  await mkdir(path.join(OUT, "shots"), { recursive: true });
+  const domOut = desandbox(run.dom, sandbox);
+  const cssOut = desandbox(run.css, sandbox);
+  await writeFile(path.join(OUT, "dom.json"), JSON.stringify(domOut, null, 2) + "\n", "utf8");
+  await writeFile(path.join(OUT, "css.json"), JSON.stringify(cssOut, null, 2) + "\n", "utf8");
+  const [domBuf, cssBuf, styleBuf] = await Promise.all([
+    readFile(path.join(OUT, "dom.json")),
+    readFile(path.join(OUT, "css.json")),
+    readFile(path.join(ROOT, "public/style.css")),
+  ]);
+  await writeFile(path.join(OUT, "style.css"), styleBuf);
+
+  const treeFiles = {};
+  for (const name of ["public/index.html", "public/app.js", "public/style.css"]) {
+    const buf = await readFile(path.join(ROOT, name));
+    treeFiles[name] = { sha256: sha256(buf), bytes: buf.length };
   }
-}
-
-await writeFile(path.join(OUT, "dom.json"), JSON.stringify(run.dom, null, 2) + "\n", "utf8");
-await writeFile(path.join(OUT, "css.json"), JSON.stringify(run.css, null, 2) + "\n", "utf8");
-
-const [domBuf, cssBuf, styleBuf] = await Promise.all([
-  readFile(path.join(OUT, "dom.json")),
-  readFile(path.join(OUT, "css.json")),
-  readFile(path.join(ROOT, "public/style.css")),
-]);
-await writeFile(path.join(OUT, "style.css"), styleBuf);
-
-const treeFiles = {};
-for (const name of ["public/index.html", "public/app.js", "public/style.css"]) {
-  const buf = await readFile(path.join(ROOT, name));
-  treeFiles[name] = { sha256: sha256(buf), bytes: buf.length };
-}
-const served = {};
-let panelBuild = null;
-for (const [url, name] of [["", "public/index.html"], ["app.js", "public/app.js"], ["style.css", "public/style.css"]]) {
-  const res = await fetch(new URL(url, BASE));
-  const buf = Buffer.from(await res.arrayBuffer());
-  if (name === "public/index.html") {
-    const text = buf.toString("utf8");
-    panelBuild = /<meta name="panel-build" content="([^"]+)"/.exec(text)?.[1] || null;
+  const served = {};
+  let panelBuild = null;
+  for (const [url, name] of [["", "public/index.html"], ["app.js", "public/app.js"], ["style.css", "public/style.css"]]) {
+    const res = await fetch(new URL(url, base));
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (name === "public/index.html") {
+      const text = buf.toString("utf8");
+      panelBuild = /<meta name="panel-build" content="([^"]+)"/.exec(text)?.[1] || null;
+    }
+    served[name] = { status: res.status, sha256: sha256(buf), bytes: buf.length, matchesTree: sha256(buf) === treeFiles[name].sha256 };
   }
-  served[name] = { status: res.status, sha256: sha256(buf), bytes: buf.length, matchesTree: sha256(buf) === treeFiles[name].sha256 };
+
+  const open = run.dom.per_viewport[VIEWPORTS[0].name].open;
+  const expanded = run.dom.per_viewport[VIEWPORTS[0].name].expanded;
+  const collapsed = run.dom.per_viewport[VIEWPORTS[0].name].collapsed;
+  const cardOf = (inv, thread) => inv.cards.find((c) => c.thread === thread) || null;
+
+  const capture = {
+    schema: "capture/1",
+    pipeline: "gui-improve",
+    stage: "compare",
+    visit: 1,
+    surface: {
+      brief: "The Board's Unattached agents section (#agents) at " + base,
+      briefText:
+        "Baseline stage of the gui-improve walk on the unattached-agents panel. Tonight a worker whose cwd was a worktree appeared in that section with no way to see which tree it belonged to. The round's brief: make the section say where an unattached card's directory actually is and offer the right tree.",
+      url: base,
+      selector: "#agents",
+      cardSelector: "#jobs .job[data-thread]",
+      board: "the main board (no Settings window open); the section sits under the New agent card, above #projects",
+      change:
+        "The Unattached agents section must say where an unattached card's directory actually is, and its attach action must offer the tree that directory belongs to.",
+      changeSource:
+        "Measured in this baseline, on a card whose cwd is a worktree the board has not read: the head's meta line reads 'no worktree' while the card's own cwd line names a .worktrees path; the only visible tree fact is the 10.5 px dim tail of that line (full path only in its title attribute); and the attach picker opens on a disabled placeholder naming only the tree's last path segment, with Attach disabled and no option carrying the card's tree. The section head's hint also asserts the card has no worktree of its own.",
+      reproduce:
+        "This directory's capture.mjs boots its own sandbox of THIS tree (the stage tree with the implement stage's change-set applied) and the baseline's fixture board (two scanned repos, one worktree each for the unread repo, two seeded unattached cards), then shoots the same three states the baseline shot. public/ is read per request by the panel; lib/ needs a restart.",
+      scope: "The whole #agents section: its .project-head bar and #jobs with every card. The rest of the board is in the full-page shot only.",
+    },
+    round: {
+      branch: "wtgui/round-c-how-a-round-names-its-trees-5b3b85",
+      base: "99f2bd777a2a24d1aedd903e9c4b24a4d9520c36",
+      baseParent: "origin/main",
+      note:
+        "This stage tree is the round parent (132354c1, two docs commits on 99f2bd7) and its public/, lib/ and server.js are byte-identical to the baseline's base 99f2bd7: git diff --stat 99f2bd7 HEAD -- public lib server.js is empty. The change-set (d813b435, ledger/gui-improve/change-set.patch) was applied to this tree with git apply -p1, so the after shots are the baseline's build plus that patch and nothing else.",
+    },
+    changeSet: {
+      file: "ledger/gui-improve/change-set.patch",
+      commit: "d813b435",
+      tree: "the-implement-stage-of-the-unattached-61851d",
+      bytes: 14474,
+      note:
+        "The implement stage's artefact, read at the named commit and applied to this tree as a patch. It is not re-committed here: this branch records the comparison and the patched product files, and the patch itself stays on the implement stage's commit.",
+    },
+    supersedes: {
+      path: "ledger/gui-improve/compare/capture.json",
+      previousSurface: "the task pipeline window's card (gui-improve, an earlier round)",
+      note:
+        "The pipeline's compare artefact paths are fixed, so this round replaces capture.json, comparison.json, comparison.html and verdict.json in this directory. The earlier round's pipeline shots (shots/*-pipeline*.png), pipeline-bundle.json and style.css are left untouched; they are not this stage's measurements.",
+    },
+    fixture: {
+      root: fixture.root,
+      scanRoots: [fixture.root],
+      projects: fixture.projects,
+      rows: run.rowsSeen,
+      cards: jobsFixture(fixture).jobs.map((j) => ({ thread: j.thread, title: j.title, cwd: j.cwd, ownerPath: j.ownerPath })),
+      story:
+        "alpha and gamma are scanned (alpha has the worktree feat-one). beta lives outside every scan root and has the worktree feat-long-tree-name, so the card pointed at it is a worker whose cwd is a worktree the board has no row for: tonight's shape.",
+      scaleFactor: "Both counts are 1: the sandbox config's scanRoots and jobsFile are the only inputs.",
+    },
+    environment: {
+      browser: `Playwright Chromium ${run.browserVersion} (headless)`,
+      deviceScaleFactor: 1,
+      serverVersion: run.version.version,
+      serverUrl: base,
+      panelBuild,
+      sandbox: {
+        dir: SLASH(sandbox),
+        jobsFile: SLASH(jobsFile),
+        jobsRestored: 2,
+        config: { scanRoots: [fixture.root], projects: [], threads: 2, jobsFile: SLASH(jobsFile) },
+        note: "A throwaway instance of this tree on a free port with its own store. The reader's own panel was not touched.",
+      },
+      servedNote:
+        "public/index.html is rewritten by the panel for cache-busting (stylesheet links carry ?v=<panel-build> and a meta panel-build tag is added), so its hash differs from the tree by that stamp and nothing else; app.js and style.css are byte-identical to this tree.",
+      servedFiles: served,
+      treeFiles,
+    },
+    viewports: VIEWPORTS.map((v) => ({ name: v.name, width: v.width, height: v.height })),
+    states: STATES.map((s) => ({ name: s.name, steps: s.steps })),
+    shots: run.shots,
+    measurements: {
+      sectionOpen: {
+        box: open.section.box,
+        headBox: open.section.headBox,
+        label: open.section.label,
+        pathHint: open.section.pathHint,
+        collapsed: open.section.collapsed,
+        jobsBox: open.jobs.box,
+        jobsScrollHeight: open.jobs.scrollHeight,
+        cards: open.cardCount,
+        paintedElements: open.elementCount,
+        minFontSize: open.minFontSize,
+      },
+      cardUnreadTree: cardOf(open, "fixture-tree-worker"),
+      cardReadTree: cardOf(open, "fixture-row-worker"),
+      attachPicker: cardOf(expanded, "fixture-tree-worker")?.attachRow || null,
+      attachPickerAssert: run.expandedCheck,
+      collapsed: {
+        section: collapsed.section,
+        jobs: collapsed.jobs,
+        cardCount: collapsed.cardCount,
+        paintedElements: collapsed.elementCount,
+      },
+      overflow: { open: open.overflow, expanded: expanded.overflow, collapsed: collapsed.overflow },
+    },
+    target: {
+      problem:
+        "An unattached card whose cwd is a worktree the board has not read gives the reader no way to see which tree it is in, and its attach action offers every other tree instead.",
+      measured: {
+        sectionHint: open.section.pathHint,
+        headMetaOfTreeCard: cardOf(open, "fixture-tree-worker")?.metaText || null,
+        cwdPathVisible: cardOf(open, "fixture-tree-worker")?.cwd?.pathText || null,
+        cwdPathWidthPx: cardOf(open, "fixture-tree-worker")?.cwd?.pathBox?.w ?? null,
+        cwdLineFontPx: 10.5,
+        cwdPathTruncated: cardOf(open, "fixture-tree-worker")?.cwd?.pathTruncated ?? null,
+        fullPathOnlyInTitle: Boolean(cardOf(open, "fixture-tree-worker")?.cwd?.lineTitle),
+        rowChipShown: Boolean(cardOf(open, "fixture-tree-worker")?.cwd?.rowChip),
+        pickerOptionCount: (cardOf(expanded, "fixture-tree-worker")?.attachRow?.options || []).length,
+        pickerOffersCardTree: (cardOf(expanded, "fixture-tree-worker")?.attachRow?.options || []).some((o) => /feat-long-tree-name/.test(o.value)),
+        pickerSelectedText: cardOf(expanded, "fixture-tree-worker")?.attachRow?.selectedText || null,
+        attachPressDisabled: Boolean(cardOf(expanded, "fixture-tree-worker")?.attachRow?.go?.disabled),
+      },
+      ask:
+        "The section must say where an unattached card's directory actually is (the project and the tree, in visible text, not only a 10.5 px path tail and a title attribute) and its attach action must offer the tree that directory belongs to, or say plainly that the board has no row for it and what would make one.",
+    },
+    inventory: {
+      dom: {
+        file: "ledger/gui-improve/compare/dom.json",
+        sha256: sha256(domBuf),
+        bytes: domBuf.length,
+        elements: Object.values(run.dom.per_viewport).reduce((n, v) => n + Object.values(v).reduce((m, s) => m + s.elementCount, 0), 0),
+      },
+      css: {
+        file: "ledger/gui-improve/compare/css.json",
+        sha256: sha256(cssBuf),
+        bytes: cssBuf.length,
+        elements: Object.values(run.css.per_viewport).reduce((n, v) => n + Object.values(v).reduce((m, s) => m + s.elementCount, 0), 0),
+      },
+      stylesheet: {
+        file: "ledger/gui-improve/compare/style.css",
+        sha256: sha256(styleBuf),
+        bytes: styleBuf.length,
+        servedSha256: served["public/style.css"].sha256,
+        matchesTree: served["public/style.css"].matchesTree,
+      },
+      rules: run.css.rules.length,
+      sheets: run.css.sheets,
+    },
+    notes: {
+      shotPair:
+        "shots[*].file is a full-page shot of the whole board; shots[*].surfaceFile is the #agents section alone and is the stable pair to diff. The section depends only on the seeded store and the fixture board, so the pair repeats across captures of the same build.",
+      relativeText:
+        "The seeded cards carry fixed startedAt/endedAt instants and no lastActiveAt, so no relative age or duration text is drawn on them; a compare run still masks any duration text the console may grow.",
+      phantomRows:
+        "The board draws the whole fixture, but only the two seeded cards are in #jobs; nothing else in the section is live.",
+    },
+    incomplete,
+    recorded_at: new Date().toISOString(),
+  };
+  await writeFile(path.join(OUT, "capture.json"), JSON.stringify(desandbox(capture, sandbox), null, 2) + "\n", "utf8");
+
+  return {
+    shots: capture.shots.length,
+    states: capture.states.map((s) => s.name),
+    fixtureRows: run.rowsSeen,
+    served,
+    metrics: {
+      sectionOpen: { box: open.section.box, cards: open.cardCount, elements: open.elementCount },
+      cardUnreadTree: {
+        metaText: cardOf(open, "fixture-tree-worker")?.metaText,
+        cwdPath: cardOf(open, "fixture-tree-worker")?.cwd?.pathText,
+        cwdLineTitle: cardOf(open, "fixture-tree-worker")?.cwd?.lineTitle,
+      },
+      attachPicker: capture.measurements.attachPicker,
+      collapsed: { section: collapsed.section.box, jobs: collapsed.jobs },
+    },
+    incomplete,
+    files: {
+      capture: { bytes: (await stat(path.join(OUT, "capture.json"))).size },
+      dom: capture.inventory.dom,
+      css: capture.inventory.css,
+    },
+    sandbox: SLASH(sandbox),
+  };
 }
 
-const capture = {
-  schema: "capture/1",
-  pipeline: "gui-improve",
-  stage: "compare",
-  visit: 1,
-  surface: {
-    brief: "Settings → Board (the #settings-panel-board tab) at " + BASE + ", with the change-set applied",
-    briefText:
-      "Run gui-improve again, this time on the Board tab of the panel General settings (settings-panel-board, data-settings-tab=\"board\"), using the new per-stage worktree architecture that is now on main: every stage cut from the one frozen parent, each stage tree recorded under its stage id so all of them stay attached in the chart. Walk baseline, implement, compare, review and correct through the panel driver, not as one local worker. Acceptance is the baseline capture at the recorded viewports and states, an implementation committed on its stage tree, a comparison page pairing every after shot with its before, the review gate free to reject with a note, and the change landed by PR so the improvement is code on main rather than only a ledger entry.",
-    url: BASE,
-    selector: "#settings-panel-board",
-    window: "#settings",
-    change: "The 'Folders the board scans' block must read as one control group: a visible gap between each root's path, its state chip and its remove control, and the add-folder field given the width its row has left so its hint is readable.",
-    changeSource:
-      "Measured in this baseline: the root rows have no gap at all between the path and the 'exists' chip (0 px), 3.9 px between the chip and the remove ✕, and the add-folder input is 154 px of a 310 px row while its own placeholder needs 382.7 px, so it paints as 'an absolute folder pat…' and 74 px of the row stays empty. public/style.css has no rule for .settings-root/.settings-root-path/.settings-root-chip/.settings-root-x/.settings-roots-add at all — lib-side markup from public/app.js:15814-15821, unstyled.",
-    reproduce:
-      "The captured pixels are the served build's public/index.html, app.js and style.css (hashes in environment). To shoot the after state of an edit in this worktree, serve THIS worktree on a free port with its own PANEL_CONFIG (public/ is read per request; lib/ needs a restart) and follow the same steps at the same viewport and the same body scrollTop. The 340x520 surfaceFile depends only on the public files and the settings config the panel serves (the scan roots it lists), not on the live board behind the window.",
-    scope: "The whole Settings window (#settings): its head, search box, tab strip and the visible Board panel. Hidden tabs are not painted and are excluded.",
-  },
-  environment: {
-    browser: `Playwright Chromium ${run.browserVersion} (headless)`,
-    deviceScaleFactor: 1,
-    serverVersion: run.version.version,
-    serverUrl: BASE,
-    panelBuild,
-    servedNote:
-      "public/index.html is rewritten by the panel for cache-busting (stylesheet links carry ?v=<panel-build> and a meta panel-build tag is added), so its hash differs from the tree by that stamp and nothing else; app.js and style.css are byte-identical.",
-    servedFiles: served,
-    treeFiles,
-  },
-  viewports: VIEWPORTS.map((v) => ({ name: v.name, width: v.width, height: v.height })),
-  states: STATES.map((s) => ({ name: s.name, steps: s.steps })),
-  shots: run.shots,
-  inventory: {
-    dom: { file: "ledger/gui-improve/compare/after/dom.json", sha256: sha256(domBuf), bytes: domBuf.length, elements: Object.values(run.dom.per_viewport).reduce((n, v) => n + Object.values(v).reduce((m, s) => m + s.elementCount, 0), 0) },
-    css: { file: "ledger/gui-improve/compare/after/css.json", sha256: sha256(cssBuf), bytes: cssBuf.length, elements: Object.values(run.css.per_viewport).reduce((n, v) => n + Object.values(v).reduce((m, s) => m + s.elementCount, 0), 0) },
-    stylesheet: { file: "ledger/gui-improve/compare/after/style.css", sha256: sha256(styleBuf), bytes: styleBuf.length },
-    per_viewport: Object.fromEntries(
-      VIEWPORTS.map((vp) => [vp.name, Object.fromEntries(STATES.map((st) => [st.name, {
-        elements: run.dom.per_viewport[vp.name][st.name].elementCount,
-        cssElements: run.css.per_viewport[vp.name][st.name].elementCount,
-        rulesMatched: [...new Set(run.css.per_viewport[vp.name][st.name].elements.flatMap((e) => e.matchedRules))].length,
-        panelScrollHeight: run.dom.per_viewport[vp.name][st.name].panelScrollHeight,
-        bodyScrollHeight: run.dom.per_viewport[vp.name][st.name].bodyScrollHeight,
-        visibleRows: run.dom.per_viewport[vp.name][st.name].visibleRows,
-        groupSpreads: run.dom.per_viewport[vp.name][st.name].groups.map((g) => ({ label: g.label, spread: g.spread, gapAbove: g.gapAbove, gapBelow: g.gapBelow })),
-        roots: (run.dom.per_viewport[vp.name][st.name].roots || []).map((r) => ({ cls: r.cls, h: r.box.h, minGap: r.minGap, gaps: r.gaps })),
-        rootAdd: run.dom.per_viewport[vp.name][st.name].rootAdd
-          ? {
-              inputWidth: run.dom.per_viewport[vp.name][st.name].rootAdd.input.w,
-              inputClientWidth: run.dom.per_viewport[vp.name][st.name].rootAdd.inputClientWidth,
-              placeholderPx: run.dom.per_viewport[vp.name][st.name].rootAdd.placeholderPx,
-              placeholderRoom: run.dom.per_viewport[vp.name][st.name].rootAdd.placeholderRoom,
-              placeholderFits: run.dom.per_viewport[vp.name][st.name].rootAdd.placeholderFits,
-              buttonWidth: run.dom.per_viewport[vp.name][st.name].rootAdd.button?.box?.w ?? null,
-              rowFree: run.dom.per_viewport[vp.name][st.name].rootAdd.rowFree,
-            }
-          : null,
-      }]))]),
-    ),
-  },
-  notes: {
-    shotPair:
-      "shots[*].file is a full-page screenshot of the whole live board with the Settings window at its recorded win rect; shots[*].surfaceFile is the 340x520 Settings window alone and is the stable pair to diff. The board changes between captures; the Settings window does not.",
-    servedIndex:
-      "The served public/index.html differs from the tree only by the panel's cache-busting stamp (?v=<panel-build> on stylesheet links and a meta panel-build tag); app.js and style.css are byte-identical to this tree.",
-  },
-  incomplete,
-  recorded_at: new Date().toISOString(),
-};
-await writeFile(path.join(OUT, "capture.json"), JSON.stringify(capture, null, 2) + "\n", "utf8");
-
-console.log(JSON.stringify({
-  shots: capture.shots.length,
-  viewports: capture.viewports.map((v) => v.name),
-  states: capture.states.map((s) => s.name),
-  inventory: capture.inventory.per_viewport,
-  incomplete,
-  files: {
-    capture: { bytes: (await stat(path.join(OUT, "capture.json"))).size },
-    dom: capture.inventory.dom,
-    css: capture.inventory.css,
-  },
-  served,
-}, null, 2));
+let result;
+try {
+  result = await main();
+} finally {
+  // The sandbox is kept (keep: true) for a re-run; the panel process is stopped here, never left listening.
+  if (PANEL) await PANEL.stop();
+}
+console.log(JSON.stringify(result, null, 2));
