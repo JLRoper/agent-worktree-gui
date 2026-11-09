@@ -431,6 +431,25 @@ thead th,
 .settings-row input[type="url"]::placeholder, .settings-row input[type="password"]::placeholder, .settings-row input[type="text"]::placeholder { color: var(--dimmer); }
 .settings-row input[type="number"]:disabled { color: var(--dimmer); background: #0e1218; }
 .settings-unit { font-size: 11px; color: var(--dimmer); }
+/* Settings → Board > "Folders the board scans": one card per root, and an add row that uses the width it has.
+   The block had no rules at all, so the path's right edge WAS the chip's left edge (0 px — the row painted
+   `C:/CodeReviewsexists`), the ✕ sat 3.84 px off the chip, and the add field kept the UA's 154 px, so its
+   placeholder clipped to `an absolute folder pat` with 74 px of the row empty to the right of the button.
+   Scoped to the Board panel and kept at class weight with :where(), so `.settings-group .search-hidden
+   { display: none }` still wins over these `display` rules and a search that hides the block really hides it. */
+:where(#settings-panel-board) .settings-roots { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+:where(#settings-panel-board) .settings-root { display: flex; align-items: center; gap: 8px; min-height: 28px; padding: 0 2px 0 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+:where(#settings-panel-board) .settings-root-path { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--text); }
+:where(#settings-panel-board) .settings-root-chip { flex: none; padding: 0 6px; border: 1px solid #2c4a34; border-radius: 999px; background: #12251a; color: #7fd39a; font-size: 10px; line-height: 1.7; }
+:where(#settings-panel-board) .settings-root-chip.bad { border-color: #57262a; background: #2a1517; color: #ff9c94; }
+:where(#settings-panel-board) .settings-root-x { flex: none; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--dimmer); font: 12px/1 var(--mono); cursor: pointer; }
+:where(#settings-panel-board) .settings-root-x:hover { background: var(--panel-2); color: var(--text); }
+:where(#settings-panel-board) .settings-root-empty { margin-top: 6px; font-size: 11.5px; color: var(--dimmer); }
+:where(#settings-panel-board) .settings-roots-add { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+:where(#settings-panel-board) .settings-roots-add input { flex: 1 1 auto; min-width: 0; box-sizing: border-box; height: 26px; padding: 4px 7px; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; font: 11.5px var(--mono); }
+:where(#settings-panel-board) .settings-roots-add input::placeholder { color: var(--dimmer); }
+:where(#settings-panel-board) .settings-roots-add button { flex: none; box-sizing: border-box; height: 26px; white-space: nowrap; padding: 0 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--text); font: 11px var(--mono); cursor: pointer; }
+:where(#settings-panel-board) .settings-roots-add button:hover { border-color: #3b4757; }
 /* Settings → Updates > Release notes. One folded block per release, the newest open. The summary IS the heading a
    reader scans — version, date, commit count — so a folded release still answers the three facts; the body is the
    changelog's own group headings and bullets. `serving` marks the release this panel runs, which is the reader's
