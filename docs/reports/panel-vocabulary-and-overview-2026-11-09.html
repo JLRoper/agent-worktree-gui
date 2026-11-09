@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
+<title>Panel vocabulary and overview - agent-worktree-gui, 2026-11-09</title>
+<style>
+  :root{ color-scheme:dark; --ink:#e8e6e1; --paper:#14161a; --rule:#2a2f38; --muted:#9aa3ad; --accent:#c8a6ff; --bar:#6f4fa8; --warn:#e5534b; --sunk:#1a1d22; }
+  html,body{ margin:0; background:var(--paper); color:var(--ink); font:15px/1.55 -apple-system,Segoe UI,Helvetica,Arial,sans-serif; }
+  main{ max-width:1080px; margin:0 auto; padding:36px 28px 80px; }
+  h1{ font-size:26px; margin:0 0 4px; letter-spacing:-.01em; }
+  h2{ font-size:19px; margin:38px 0 10px; padding-bottom:6px; border-bottom:1px solid var(--rule); }
+  h3{ font-size:16px; margin:24px 0 8px; }
+  .sub{ color:var(--muted); margin:0 0 22px; }
+  .cards{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin:18px 0 6px; }
+  .card{ border:1px solid var(--rule); border-radius:10px; padding:12px 14px; }
+  .card b{ display:block; font-size:22px; letter-spacing:-.02em; }
+  .card span{ color:var(--muted); font-size:13px; }
+  table{ border-collapse:collapse; width:100%; font-size:14px; }
+  th,td{ text-align:left; padding:6px 8px; border-bottom:1px solid var(--rule); vertical-align:top; }
+  th{ color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+  td.n{ text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  code{ font:13px ui-monospace,Consolas,monospace; background:rgba(127,127,127,.12); padding:1px 5px; border-radius:4px; }
+  .note{ border-left:3px solid var(--accent); padding:6px 0 6px 12px; color:var(--muted); margin:14px 0; }
+  .note b{ color:var(--ink); }
+  ol,ul{ padding-left:22px; }
+  ol li, ul li{ margin:6px 0; }
+  dl.terms{ display:grid; grid-template-columns:170px 1fr; column-gap:20px; margin:0; }
+  dl.terms dt{ font:12px ui-monospace,Consolas,monospace; color:var(--accent); padding:11px 0 3px; border-top:1px solid var(--rule); }
+  dl.terms dd{ margin:0; padding:11px 0 3px; border-top:1px solid var(--rule); }
+  dl.terms dd p{ margin:0; }
+  @media (max-width:640px){ dl.terms{ grid-template-columns:1fr; } dl.terms dt{ padding-bottom:0; } dl.terms dd{ border-top:0; padding-top:2px; } }
+  ol.flow{ list-style:none; padding:0; margin:8px 0 0; counter-reset:step; }
+  ol.flow li{ position:relative; margin:0 0 0 17px; padding:8px 0 14px 30px; border-left:2px solid var(--rule); }
+  ol.flow li:last-child{ border-left-color:transparent; padding-bottom:0; }
+  ol.flow li::before{ counter-increment:step; content:counter(step); position:absolute; left:-15px; top:8px; width:28px; height:28px; border:1px solid var(--rule); border-radius:50%; background:var(--paper); color:var(--accent); font:13px/26px ui-monospace,Consolas,monospace; text-align:center; }
+  ol.flow b{ display:block; }
+  ol.flow span{ color:var(--muted); font-size:14px; }
+  .pair{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:16px 0 6px; }
+  .pair .card p{ margin:8px 0 0; font-size:14px; }
+  .pair .card h3{ margin:0 0 2px; font-size:15px; }
+  @media (max-width:720px){ .pair{ grid-template-columns:1fr; } }
+  .stages{ color:var(--muted); font-size:12px; }
+  .tag{ font-size:11px; padding:1px 6px; border:1px solid var(--rule); border-radius:10px; color:var(--muted); white-space:nowrap; }
+  .tag.yes{ border-color:var(--accent); color:var(--accent); }
+  .source{ font:12px ui-monospace,Consolas,monospace; color:var(--muted); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Panel vocabulary and overview</h1>
+<p class="sub">Written 2026-11-09 from the panel's own files: <code>config.json</code>, the state directory under <code>~/.wag</code>, and the pipeline bundle that directory holds. Every path and count below names the file it was read from. No product code was changed to produce this page.</p>
+
+<div class="cards">
+  <div class="card"><b>7331</b><span>the panel's port, from <code>config.json</code></span></div>
+  <div class="card"><b>8642</b><span>the gateway's Runs API, the default in <code>lib/hermes-runtime.js</code></span></div>
+  <div class="card"><b>~/.wag</b><span>the data directory, the default in <code>lib/paths.js</code></span></div>
+  <div class="card"><b>12</b><span>pipelines in the bundle, counted from the file</span></div>
+  <div class="card"><b>4</b><span>assistants with a directory, listed under <code>~/.wag/state/assistants</code></span></div>
+  <div class="card"><b>4</b><span>projects configured in <code>config.json</code></span></div>
+</div>
+
+<h2>1. The panel in one pass</h2>
+<p>The panel is two things: the Node server started from <code>server.js</code>, listening on port 7331, and the browser board that server serves. The server scans the projects it was told about with worker threads, keeps the result in <code>~/.wag</code>, and pushes each change to the open page over SSE as one patched table row. The HTTP layer never runs git itself; a slow scan cannot stall a request (<code>docs/architecture.md</code>).</p>
+<p>The gateway is Hermes on port 8642, and it is the half that executes a run. The panel POSTs <code>/v1/runs</code> and gets a run id at once, reads the run's events over a server-sent stream, and posts a steer or a stop to the same run. The gateway owns the model, the tools and the turn; the panel owns the handle (<code>lib/jobs.js</code>, <code>lib/hermes-runtime.js</code>).</p>
+<p>What the panel records is what it can draw again after a restart: every job, every queue, every TODO, every lock, the naming ledger and the pipeline records. All of it lives under <code>~/.wag</code>, outside every checkout, so replacing or re-cloning a repository does not take the board's history with it (<code>lib/paths.js</code>). On boot the page is redrawn from those files, not from the gateway's memory.</p>
+<div class="note"><b>The one-sentence version.</b> The panel records what happened in <code>~/.wag</code> and draws it back; the gateway executes the runs; the board is the shared view of both.</div>
+
+<h2>2. The vocabulary</h2>
+<p>Nineteen nouns, each defined against the file that owns it. Where two nouns are usually confused, the entry says which one is the record and which one is the activity.</p>
+
+<dl class="terms">
+  <dt>panel</dt>
+  <dd><p>The Node server started from <code>server.js</code>, plus the browser board it serves on port 7331. It scans projects, stores rows and jobs under <code>~/.wag</code>, and pushes changes to the page. Its HTTP layer does not run git; the scans run in worker threads (<code>docs/architecture.md</code>). Port from <code>config.json</code>.</p></dd>
+
+  <dt>gateway</dt>
+  <dd><p>Hermes' HTTP Runs API, default <code>http://127.0.0.1:8642</code> (<code>lib/hermes-runtime.js</code>). It executes a run: <code>POST /v1/runs</code> returns a run id, <code>GET /v1/runs/&lt;id&gt;/events</code> streams the tool and message events, and steer and stop are separate POSTs. The panel supervises; the gateway does the work.</p></dd>
+
+  <dt>assistant</dt>
+  <dd><p>A named agent the panel runs as a real Hermes thread: a charter, notes, its own queue, its own settings, and a set of sentry rules that watch the board. Assistant #1 runs on the thread <code>panel-assistant</code>; the others are separate assistants with their own directories. An assistant reads the board and files or starts work through the panel's own routes; it never runs git itself (<code>README.md</code>, <code>lib/assistant/</code>).</p></dd>
+
+  <dt>queue</dt>
+  <dd><p>One assistant's task list, kept at <code>~/.wag/state/assistants/&lt;id&gt;/queue.json</code>. Every assistant has one, #1 included; there is no legacy second list. The file holds the tasks, their order, their holds and the run each open task is on (<code>lib/assistant/queue.js</code>).</p></dd>
+
+  <dt>task</dt>
+  <dd><p>One row of a queue, carrying <code>id</code>, <code>title</code>, <code>detail</code>, <code>state</code>, <code>owner</code>, <code>thread</code>, <code>threads</code>, <code>runId</code>, <code>worktree</code>, <code>files</code>, <code>lane</code>, <code>hold</code>, <code>order</code>, <code>attempts</code> and <code>reason</code>, with the created, started and done stamps beside them. <code>state</code> is <code>queued</code>, <code>running</code>, <code>parked</code> or <code>done</code>; <code>stale</code> and <code>conflict</code> are derived at read time and never written to the file. The id is monotonic per queue (<code>lib/assistant/queue.js</code>).</p></dd>
+
+  <dt>row</dt>
+  <dd><p>The board's record of one worktree: branch, head, ahead and behind counts, dirty files, verdict, <code>mergeable</code> and sync state. <code>Store.putRow</code> is the one place a row is assembled, and a row is keyed <code>&lt;project&gt;::&lt;path&gt;</code>. It is a claim with the evidence attached, not a database record (<code>docs/architecture.md</code>).</p></dd>
+
+  <dt>hold and park</dt>
+  <dd><p>A park is a task in state <code>parked</code> with a reason. The hold is the testable half of that park: <code>{kind, value, since}</code>, where <code>kind</code> is <code>thread</code>, <code>job</code>, <code>task</code>, <code>path</code> or <code>manual</code>. The panel releases the row when the named thing stops being true. A <code>manual</code> hold, or no hold at all, is never released by the panel: "needs a decision" is not a condition that becomes false (<code>lib/assistant/queue.js</code>).</p></dd>
+
+  <dt>run</dt>
+  <dd><p>One attempt executed through the gateway, recorded as a job in <code>jobs.json</code>. Its id is the gateway's <code>run_</code> id, or the panel's job id when the gateway gave none, and a task's <code>runId</code> names the run carrying it now. A run has one status and one ending; a task can outlive several runs (<code>lib/jobs.js</code>, <code>lib/assistant/queue.js</code>).</p></dd>
+
+  <dt>turn</dt>
+  <dd><p>One exchange inside a run: the input, the tool calls it makes, the streamed output and the terminal event with its usage. The usage readout above the reply box is a turn's readout, not a thread's; a thread is many turns (<code>README.md</code>).</p></dd>
+
+  <dt>thread</dt>
+  <dd><p>A Hermes session id, and the panel's name for that conversation: <code>wtgui-&lt;words&gt;-&lt;tag&gt;</code> for a worker, <code>panel-assistant</code> for #1. A reply is a new run on the same <code>session_id</code>, in the same directory, so the conversation continues instead of starting again (<code>README.md</code>).</p></dd>
+
+  <dt>session</dt>
+  <dd><p>The gateway's record of one conversation, the thing <code>hermes sessions list</code> lists. In the panel a thread name IS the session id, so thread and session name the same object from two sides (<code>docs/architecture.md</code>).</p></dd>
+
+  <dt>card</dt>
+  <dd><p>The drawn unit of the board. A queue card is one task with its state, chips and actions; a job card is one run with its console, turns, usage and its approval or clarify boxes. Each job card is a conversation, and the console under it is the turn being drawn (<code>README.md</code>, <code>public/queue-cards.js</code>).</p></dd>
+
+  <dt>tree</dt>
+  <dd><p>One git worktree on disk: a directory with a branch checked out, and the unit a run's <code>cwd</code> points at. A row is the board's record of a tree, and a tree is dropped only after two consecutive discovery passes omit it, never because one listing failed or came back empty (<code>README.md</code>).</p></dd>
+
+  <dt>branch</dt>
+  <dd><p>The git ref a tree has checked out. The panel names its own branches <code>wtgui/&lt;slug&gt;-&lt;tag&gt;</code>, and the pipeline's kind (<code>local</code>, <code>investigation</code>, <code>turnover</code>) says what a branch may do: commit and stop, commit and report, or push and land through a pull request (<code>docs/pipelines.md</code>).</p></dd>
+
+  <dt>pipeline</dt>
+  <dd><p>A named definition of ordered stages. The panel reads two shapes: the ladder in <code>pipelines.json</code> over <code>pipelines.seed.json</code> (a kind, stages, exit checks) and the PDL document in <code>pipeline-bundle.json</code> (stages, gates, handoffs, artifacts). The two do not share ids, and neither validator accepts the other's document (<code>docs/pipeline-sources.md</code>).</p></dd>
+
+  <dt>stage</dt>
+  <dd><p>One ordered step of a pipeline. In the ladder a stage carries a title, a prompt and an exit check; in a PDL document it carries an artifact, an owner role, its inputs and a done list. The ladder refuses a stage with no exit check at save time; a bundle refuses a stage with no name, prompt or artifact at load time (<code>lib/pipelines.js</code>, <code>lib/pipeline-bundle.js</code>).</p></dd>
+
+  <dt>gate</dt>
+  <dd><p>A PDL record that ends a stage: its id, the stage it follows, who decides, what it reads, what it refuses, and the artifact the decision is written to. The ladder's equivalent is the stage's exit check, a named test in a closed vocabulary (<code>lib/pipeline-bundle.js</code>, <code>lib/pipelines.js</code>).</p></dd>
+
+  <dt>bundle</dt>
+  <dd><p>One authored PDL document set, imported as a whole: <code>~/.wag/state/pipeline-bundle.json</code>, shaped <code>{bundleVersion, name, pipelines[]}</code>. <code>parseBundle</code> refuses a bad bundle whole, with a code and a locator, because half a bundle is a stage order that disagrees with its own gates (<code>lib/pipeline-bundle.js</code>).</p></dd>
+
+  <dt>catalogue</dt>
+  <dd><p>The ladder definitions: <code>pipelines.json</code> over the committed <code>pipelines.seed.json</code>. <code>validatePipeline</code> drops a bad definition by id and keeps the rest, because a reader hand-edits that file and one typo must not empty the board. The Settings pipeline tab draws both lists from <code>GET /api/pipelines</code>: PDL first, then the built-in ladders (<code>lib/pipelines.js</code>, <code>docs/pipeline-sources.md</code>).</p></dd>
+</dl>
+
+<h2>3. How a task becomes a run</h2>
+<p>The path is four objects and one decision. The decision is the verdict: a run ending is not the same fact as the work landing, and the panel settles a task on the second one, not the first.</p>
+
+<ol class="flow">
+  <li><b>task filed</b><span>A queue row is written in state <code>queued</code>, by the reader or by an assistant's own QUEUE line. It gets the next id in that queue, and optionally its files, its lane and its project.</span></li>
+  <li><b>assigned</b><span>The task may be put on a bundle pipeline and a stage. The assignment writes <code>pipelineRun</code> and stamps <code>enteredAt</code>; assigning the same stage again changes nothing, including the stamp. This is a read of the bundle, not a rewrite of the task's history (<code>lib/task-pipeline-assign.js</code>).</span></li>
+  <li><b>run started</b><span>The panel starts a run through the gateway. The job gets a thread (the session id) and a run id, and <code>linkTaskRun</code> writes that run id on the task and moves it to <code>running</code> (<code>lib/jobs.js</code>, <code>lib/assistant/queue.js</code>).</span></li>
+  <li><b>card drawn</b><span>The job card renders the run's turns, console, usage and any approval or clarify box. The queue card renders the task's state and the agent chip for the run carrying it; one task can show a dead attempt and a live retry on the same thread, because the chip reads the named run, not the thread name (<code>public/queue-cards.js</code>).</span></li>
+  <li><b>verdict</b><span>When the named run ends, the panel settles the task. Run <code>done</code> plus a tree whose row reads <code>MERGED</code>, or no tree to land: the task is <code>done</code>. Run <code>done</code> but the row is not <code>MERGED</code>: the task stays <code>running</code> and reads stale, and landing it is the assistant's judgement. Run failed: the task goes back to <code>queued</code> with <code>attempts + 1</code> and the reason (<code>lib/assistant/queue.js</code>, <code>settleTasks</code>).</span></li>
+</ol>
+
+<h3>The two pairings that get confused</h3>
+<div class="pair">
+  <div class="card">
+    <h3>task is not run</h3>
+    <p>A task is the work item: one stable id, its own history (<code>threads[]</code>, <code>movedFrom[]</code>, <code>attempts</code>). A run is one attempt: one run id, one status, one ending. One task can outlive several runs. That is why <code>runId</code> exists, and why a live retry on the same thread must not settle a row whose own run has failed.</p>
+  </div>
+  <div class="card">
+    <h3>thread is not tree</h3>
+    <p>A thread is a conversation (a Hermes session id). A tree is a directory with a branch. The board keys a row by the tree and the run by the thread and its run id. Renaming a tree moves the directory and the branch and keeps the six-hex tag; continuing a thread starts another turn in the same session. A tree can host a repair turn on another thread, and a thread's record outlives any one tree.</p>
+  </div>
+</div>
+
+<h2>4. Where everything lives</h2>
+<p>The panel has two directories and one rule for finding them: <code>lib/paths.js</code> resolves both once, and every durable file is derived from one of them. The table below names the file each claim was read from.</p>
+<table>
+<tr><th>What</th><th>Path</th><th>Read from</th></tr>
+<tr><td>Config file</td><td><code>&lt;checkout&gt;/config.json</code></td><td><code>lib/paths.js</code>: <code>PANEL_CONFIG</code>, then <code>&lt;dataDir&gt;/config.json</code>, then the checkout's. This install has no <code>~/.wag/config.json</code>, so it reads the checkout's copy.</td></tr>
+<tr><td>Data directory</td><td><code>~/.wag</code></td><td><code>lib/paths.js</code>: <code>dataDir</code>, then <code>WAG_HOME</code>, then the default. <code>config.json</code> names no <code>dataDir</code>, so the default is in force.</td></tr>
+<tr><td>State directory</td><td><code>~/.wag/state</code></td><td><code>lib/paths.js</code> <code>statePaths</code>, split layout. A second instance started with <code>PANEL_CONFIG</code> uses the flat layout instead.</td></tr>
+<tr><td>Job store</td><td><code>~/.wag/state/jobs.json</code></td><td><code>lib/paths.js</code> <code>jobsFile</code>; the file the job cards and the queue's run lookups read.</td></tr>
+<tr><td>One assistant</td><td><code>~/.wag/state/assistants/&lt;id&gt;/</code></td><td>Directory listing. Each holds <code>settings.json</code> (what its turns run on), <code>charter.md</code> (its standing rules), <code>notes.md</code> (its scratchpad), <code>queue.json</code> (its task list), and <code>tickets.json</code> when it watches tickets (<code>lib/assistant/profile.js</code>, <code>lib/assistant/notes-file.js</code>, <code>lib/assistant/queue.js</code>, <code>lib/ticket-watch.js</code>).</td></tr>
+<tr><td>Assistant #1's older pair</td><td><code>~/.wag/state/assistant.json</code>, <code>~/.wag/state/assistant-charter.md</code></td><td><code>lib/assistant/store-file.js</code>, <code>lib/assistant/profile.js</code>: #1's record and charter stay at the state root; a later assistant's live under its own directory.</td></tr>
+<tr><td>Pipeline bundle</td><td><code>~/.wag/state/pipeline-bundle.json</code></td><td><code>lib/paths.js</code> <code>pipelineBundleFile</code> default. This is the file section 5 counts.</td></tr>
+<tr><td>Ladder catalogue</td><td><code>~/.wag/state/pipelines.json</code> over <code>pipelines.seed.json</code></td><td><code>lib/paths.js</code> <code>pipelinesFile</code>; <code>lib/pipelines.js</code> for the seed and the merge.</td></tr>
+<tr><td>Pipeline records</td><td><code>~/.wag/state/pipeline-records.json</code></td><td><code>lib/paths.js</code> <code>pipelineRecordsFile</code>: where each tree stands in a pipeline, keyed by its path.</td></tr>
+<tr><td>Logs</td><td><code>~/.wag/logs</code></td><td><code>node tools/where.mjs</code>, which resolves the same layout the booted server uses.</td></tr>
+</table>
+
+<h3>The projects <code>config.json</code> names</h3>
+<p>Discovery also scans every git repo under the two configured roots, and an entry in <code>projects[]</code> overrides what discovery finds for that name. Four entries are configured:</p>
+<table>
+<tr><th>Name</th><th>Remote</th><th>PR repo</th><th>Branch policy</th><th>Defaults</th></tr>
+<tr><td>heroes-js</td><td><code>github</code></td><td><code>JLRoper/vigilant-palm-tree</code></td><td><code>allow</code></td><td>turnover <code>github-force-merge</code>, investigation <code>github-investigate</code></td></tr>
+<tr><td>agent-worktree-gui</td><td><code>origin</code></td><td><code>JLRoper/agent-worktree-gui</code></td><td><code>allow</code>, and <code>allowPushWithoutAsking</code></td><td>turnover <code>github-force-merge</code>, investigation <code>github-investigate</code>; <code>releaseWorktrees</code> true</td></tr>
+<tr><td>optym-integration-multi</td><td>none named</td><td>none</td><td>new branches <code>always-ask</code></td><td>none</td></tr>
+<tr><td>Menu</td><td>none named</td><td>none</td><td>new and existing branches <code>allow-name-gate</code></td><td>none</td></tr>
+</table>
+<div class="note"><b>Standing policy is the fallback.</b> <code>config.json</code> sets <code>remoteBranchPolicy</code> to <code>allow</code> for the install, and a project's own keys override it. That is why the four rows above can differ without any of them being a second global setting.</div>
+
+<h2>5. The pipelines the bundle holds right now</h2>
+<p>This section is a snapshot of one file, not a description of the code. Read on 2026-11-09: <code>~/.wag/state/pipeline-bundle.json</code>, 183,334 bytes, sha256 <code>e7cd4baca6c982c2</code> at the head, <code>bundleVersion</code> 1, bundle name <code>POC to UAT</code>, and an empty top-level <code>roles[]</code> (each pipeline carries its own roster). The file holds 12 pipelines: one studio project with a 13-stage design, and eleven catalogue-shaped definitions that name an id and a title.</p>
+<table>
+<tr><th>Id</th><th>Title and stages</th><th class="n">Stages</th><th class="n">Gates</th><th class="n">Handoffs</th><th class="n">Roles</th></tr>
+<tr><td><code>poc-to-uat</code></td><td><b>POC to UAT</b><br><span class="stages">S0 Intake and charter, S1 POC build, S2 Freeze and export, S3 Reverse-engineer, S4 Work breakdown, S5 Instantiate the model, S6 Implement per module, S7 DAL review and SQL verify, S8 Code review rounds, S9 Rewrite to green, S10 Playwright UI parity, S11 Delivery to UAT, S12 UAT sign-off</span></td><td class="n">13</td><td class="n">5</td><td class="n">15</td><td class="n">28</td></tr>
+<tr><td><code>ping-pong</code></td><td><b>Ping-pong: draft and critique</b><br><span class="stages">draft, critique</span></td><td class="n">2</td><td class="n">1</td><td class="n">2</td><td class="n">2</td></tr>
+<tr><td><code>probe-fix</code></td><td><b>Probe, then fix</b><br><span class="stages">probe, fix</span></td><td class="n">2</td><td class="n">0</td><td class="n">1</td><td class="n">2</td></tr>
+<tr><td><code>author-review-revise</code></td><td><b>Author, review, revise</b><br><span class="stages">author, review, revise</span></td><td class="n">3</td><td class="n">1</td><td class="n">3</td><td class="n">3</td></tr>
+<tr><td><code>local</code></td><td><b>Local work</b><br><span class="stages">work</span></td><td class="n">1</td><td class="n">1</td><td class="n">0</td><td class="n">1</td></tr>
+<tr><td><code>investigate</code></td><td><b>Investigation</b><br><span class="stages">probe, conclude</span></td><td class="n">2</td><td class="n">2</td><td class="n">1</td><td class="n">1</td></tr>
+<tr><td><code>turnover</code></td><td><b>Turnover</b><br><span class="stages">commit, push, pr</span></td><td class="n">3</td><td class="n">3</td><td class="n">2</td><td class="n">1</td></tr>
+<tr><td><code>github-investigate</code></td><td><b>GitHub investigation</b><br><span class="stages">probe, conclude</span></td><td class="n">2</td><td class="n">2</td><td class="n">1</td><td class="n">1</td></tr>
+<tr><td><code>sefl-investigate</code></td><td><b>SEFL investigation</b><br><span class="stages">probe, conclude</span></td><td class="n">2</td><td class="n">2</td><td class="n">1</td><td class="n">1</td></tr>
+<tr><td><code>github-force-merge</code></td><td><b>GitHub force merge</b><br><span class="stages">commit, version, push, pr, merge, main</span></td><td class="n">6</td><td class="n">6</td><td class="n">5</td><td class="n">1</td></tr>
+<tr><td><code>sefl-review-loop</code></td><td><b>SEFL review loop</b><br><span class="stages">branch, push, pr, wait, address, approve, merge</span></td><td class="n">7</td><td class="n">7</td><td class="n">7</td><td class="n">2</td></tr>
+<tr><td><code>gui-improve</code></td><td><b>GUI improvement, vision-verified</b><br><span class="stages">baseline, implement, compare, review, correct</span></td><td class="n">5</td><td class="n">3</td><td class="n">6</td><td class="n">3</td></tr>
+</table>
+<div class="note"><b>Bundle, not catalogue.</b> These are PDL documents, so they carry gates, handoffs and artifacts; the ladder in <code>pipelines.json</code> carries a kind and exit checks instead. The two sets share no ids today. <code>docs/pipeline-sources.md</code> records 4 pipelines at the time it was written; the live file holds 12, so that table is a snapshot, not the current count.</div>
+<p>The 13-stage project is the one with the full PDL shape: <code>external_inputs</code> names three artifacts no stage in the document writes (the POC snapshot, the repository's pinned branch head, and the POC crawl), and its roles carry the allow and deny lists each stage's worker runs under. The other eleven are the small, named pipelines a queue row can be put on: draft and critique, probe and fix, author review revise, and the ladder's own turns of work expressed as stages.</p>
+
+<h2>Where these facts came from</h2>
+<table>
+<tr><th>File</th><th>What was read out of it</th></tr>
+<tr><td><code>config.json</code></td><td>The port 7331, the four project entries and their policy keys, the absence of <code>dataDir</code>.</td></tr>
+<tr><td><code>lib/paths.js</code></td><td>The config resolution order, the <code>~/.wag</code> default, the split layout, every state file's default name, the bundle path.</td></tr>
+<tr><td><code>lib/hermes-runtime.js</code></td><td>The gateway URL default, <code>http://127.0.0.1:8642</code>.</td></tr>
+<tr><td><code>~/.wag/state</code> (listing)</td><td>The four assistant directories, the archived fifth, and the files each directory holds.</td></tr>
+<tr><td><code>~/.wag/state/pipeline-bundle.json</code></td><td><code>bundleVersion</code>, the bundle name, the 12 pipeline records, every stage, gate, handoff and role count in section 5.</td></tr>
+<tr><td><code>lib/assistant/queue.js</code></td><td>The task fields and states, the four hold kinds, <code>linkTaskRun</code>, and the <code>settleTasks</code> rules quoted in section 3.</td></tr>
+<tr><td><code>lib/pipeline-bundle.js</code>, <code>lib/pipelines.js</code></td><td>The bundle versus catalogue split and the two validators' different failure modes.</td></tr>
+<tr><td><code>docs/architecture.md</code>, <code>README.md</code>, <code>docs/pipeline-sources.md</code></td><td>The panel and gateway halves, the row and thread definitions, the tree naming rule, the two pipeline shapes.</td></tr>
+</table>
+
+<p class="sub" style="margin-top:34px">Written 2026-11-09 for the reader who needs the panel's nouns and its file layout in one place. The bundle section is a snapshot of a file the reader edits: re-read <code>~/.wag/state/pipeline-bundle.json</code> before quoting a count from it.</p>
+
+</main>
+</body>
+</html>
