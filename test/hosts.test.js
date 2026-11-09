@@ -12,6 +12,7 @@ import {
   DEFAULT_SEED_FILE,
   HOST_TOKENS,
   Hosts,
+  hostIdFor,
   linkFor,
   mappingView,
   mergeDocs,
@@ -292,4 +293,22 @@ test("an unmapped project's prompt says so, and authorises nothing on a remote n
   assert.match(prompt, /do not treat PHASE 4's push of master as authorised/);
   assert.ok(!/github\.com|git\.sefl\.com/.test(prompt), "an unmapped project must not be sent to a guessed host");
   assert.ok(!/code_review_java/.test(prompt));
+});
+
+// The id the host backoff holds on and the fetch/ls-remote/PR paths must all agree about: the same resolution
+// `listing.id` carries into the PR path, asked of the document directly. A registry object has no `.host`, so
+// this helper (2026-11-09) is what keeps a fetch from dialling a host the backoff is holding.
+test("hostIdFor resolves the host a project's calls key on, and null when nothing is mapped", () => {
+  const doc = {
+    hosts: seed.hosts,
+    projects: {
+      Menu: { host: "github", coordinates: { owner: "someone", repo: "Menu" } },
+      optym: { host: "sefl-bitbucket", coordinates: { projectKey: "IT", repoSlug: "optym-integration-multi" } },
+    },
+    warnings: [],
+  };
+  assert.equal(hostIdFor(doc, { name: "Menu" }), "github");
+  assert.equal(hostIdFor(doc, { name: "optym" }), "sefl-bitbucket");
+  assert.equal(hostIdFor(doc, { name: "email-handler-openvms" }), null, "an unmapped project holds nothing");
+  assert.equal(hostIdFor(null, { name: "Menu" }), null, "no document, no hold");
 });
