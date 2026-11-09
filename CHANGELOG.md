@@ -4,16 +4,50 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.76.13 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.76.15 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-505 releases from v0.1.0 (2026-10-20) to v1.76.13 (2026-11-09), 1660 commits between the tags. Every release is anchored by an
+507 releases from v0.1.0 (2026-10-20) to v1.76.15 (2026-11-09), 1668 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.76.15 — 2026-11-09 · 2 commits
+
+[`00039bc`](https://github.com/JLRoper/agent-worktree-gui/commit/00039bc82a83fb57b6462dda31940f12eb703b70) · [compare v1.76.14...v1.76.15](https://github.com/JLRoper/agent-worktree-gui/compare/v1.76.14...v1.76.15)
+
+### Fixed
+
+- fix: the host hold covers every path, and a restart helper no longer kills itself ([`d937726`](https://github.com/JLRoper/agent-worktree-gui/commit/d9377266b42299a768bae6b92b622a880a76628b))
+
+### Other
+
+- chore: 1.76.15 - the version this landing carries ([`00039bc`](https://github.com/JLRoper/agent-worktree-gui/commit/00039bc82a83fb57b6462dda31940f12eb703b70))
+
+## v1.76.14 — 2026-11-09 · 6 commits
+
+[`b7394d4`](https://github.com/JLRoper/agent-worktree-gui/commit/b7394d4ce87931d342ed580773cdae341c6f6ec9) · [compare v1.76.12...v1.76.14](https://github.com/JLRoper/agent-worktree-gui/compare/v1.76.12...v1.76.14)
+
+### Added
+
+- feat: read the fleet's token cache story out of agent.log ([`e6a1a70`](https://github.com/JLRoper/agent-worktree-gui/commit/e6a1a706d22230ab2a597fb276a194a4e30c4a9a))
+
+### Fixed
+
+- fix: a one-stage round with a parent tree assembles instead of being refused ([`b7394d4`](https://github.com/JLRoper/agent-worktree-gui/commit/b7394d4ce87931d342ed580773cdae341c6f6ec9))
+
+### Docs & tests
+
+- docs: render the changelog - 504 releases ([`ed8eb1f`](https://github.com/JLRoper/agent-worktree-gui/commit/ed8eb1f3f2eaaf67fb499d5fc6a66b2d59e41fdd))
+- docs: render the changelog - 505 releases ([`b2ff5d4`](https://github.com/JLRoper/agent-worktree-gui/commit/b2ff5d4a7882dd0de3f48a6f2ead47bacc086485))
+- docs: render the changelog - 505 releases ([`bbd31fe`](https://github.com/JLRoper/agent-worktree-gui/commit/bbd31fe6c6e7333ab24cf38010a44ac37cadd781))
+
+### Other
+
+- chore: 1.76.13 - the version this landing carries ([`897dc66`](https://github.com/JLRoper/agent-worktree-gui/commit/897dc66dbee525b5924b747da064fa9e56008609))
 
 ## v1.76.13 — 2026-11-09 · 3 commits
 
