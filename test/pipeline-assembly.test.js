@@ -26,6 +26,8 @@ import { Jobs } from "../lib/jobs.js";
 import { ParentBook } from "../lib/parents.js";
 import { parseBundle } from "../lib/pipeline-bundle.js";
 import { ASSEMBLY_FAULTS, assembleStages, assemblyMessage, assemblyOrder, assemblyRecord } from "../lib/pipeline-assembly.js";
+import { Assistant } from "../lib/assistant.js";
+import { writeQueueFile } from "../lib/assistant/queue.js";
 import { assemblyPlanOf } from "../lib/task-pipeline-drive.js";
 import { settleStageRun } from "../lib/task-pipeline.js";
 
@@ -424,4 +426,66 @@ test("an assembly tree that is not at the round's frozen parent is refused: the 
   const result = assembleStages({ tree: wrongTree.path, base: roundSha, stages: [{ stage: "B1", visit: 1, commit: one }], message: "assembly" });
   assert.deepEqual([result.ok, result.code], [false, ASSEMBLY_FAULTS.SHAPE]);
   assert.match(result.reason, /not at the round's frozen parent/);
+});
+
+test("a ONE-stage round with a parent tree assembles: its one commit is picked onto the parent branch", async (t) => {
+  const r = repo(t);
+  const jobs = cutter(t, r.dir);
+  const roundSha = r.git("rev-parse", "main");
+
+  // The round's own tree, cut first and named on the record; its single stage hangs under it.
+  const parent = await jobs.makeWorktree(r.dir, "the round's parent tree", { project: "demo", from: roundSha });
+  assert.equal(r.at(parent.path, "rev-parse", "HEAD"), roundSha, "the parent tree starts at the round's frozen parent");
+  const stageTree = await jobs.makeWorktree(r.dir, "the round's one stage", { project: "demo", from: roundSha, parent: parent.branch });
+  const commit = worker(r, stageTree.path, "work/one.md", "# one\n");
+
+  const run = {
+    pipeline: "round",
+    stage: "B1",
+    round: { parent: parent.branch, parentPath: parent.path, sha: roundSha, at: CLOCK, by: "panel" },
+    visits: { B1: 1 },
+    stageRuns: [runEntry("B1", 1, commit, stageTree.branch)],
+  };
+  // THE PLAN AND THE ASSEMBLER MUST AGREE. A round with a parent tree offers its single stage, because the parent
+  // branch is what lands and the stage's own branch is not; the assembler used to refuse that same one-entry plan
+  // with `entries.length < 2` and answer null, so the offer was re-made on every sweep and the parent never moved.
+  const plan = assemblyPlanOf(rowOf(run), PIPELINE);
+  assert.deepEqual([plan.offered, plan.stages.length], [true, 1], plan.why || "");
+
+  const stateDir = mkdtempSync(path.join(tmpdir(), "wag-assembly-state-"));
+  const assistant = new Assistant({
+    config: { dataDir: stateDir, dataLayout: "flat", jobsFile: path.join(stateDir, "jobs.json"), assistantFile: path.join(stateDir, "assistant.json") },
+    jobs,
+    getProjects: () => [{ name: "demo", path: r.dir }],
+    onLog: () => {},
+    onEvent: () => {},
+  });
+  t.after(() => {
+    for (const timer of [assistant.wakeTimer, assistant.timer, assistant.persistTimer, assistant.settleTimer]) clearTimeout(timer);
+    rmSync(stateDir, { recursive: true, force: true });
+  });
+  writeQueueFile(assistant.queuePathOf(assistant.assistantRecord()), [{ ...rowOf(run), worktree: stageTree.path }], 2);
+
+  // The request the driver's `assemblies` line hands over, field for field.
+  const written = await assistant.assemblePipelineRound(null, {
+    taskId: 1,
+    stage: "B1",
+    base: plan.base,
+    parent: plan.parent,
+    parentPath: plan.parentPath,
+    stages: plan.stages,
+    title: "the round",
+    project: "demo",
+  });
+  assert.ok(written && written.pipelineRun && written.pipelineRun.assembly, "the assembler accepted the plan it was offered");
+  const assembly = written.pipelineRun.assembly;
+  // THE PARENT TREE RECEIVED THE STAGE'S COMMIT: its branch is one commit above the round's frozen parent, and that
+  // commit carries the stage's own blob.
+  assert.equal(r.at(parent.path, "rev-parse", "HEAD"), assembly.commit, "the round's parent branch carries the assembly");
+  assert.equal(r.at(parent.path, "rev-parse", `${assembly.commit}^`), roundSha, "picked onto the round's frozen parent, not onto main's tip");
+  assert.equal(existsSync(path.join(parent.path, "work/one.md")), true, "the stage's file is on the parent tree");
+  assert.equal(r.at(parent.path, "rev-parse", "HEAD:work/one.md"), r.at(stageTree.path, "rev-parse", "HEAD:work/one.md"), "the file is the stage's own blob");
+  assert.equal(written.worktree, parent.path, "the row's worktree is the branch that lands");
+  // ...and the round now reads as assembled: the plan offers no second assembly for it.
+  assert.equal(assemblyPlanOf(written, PIPELINE).offered, false);
 });
