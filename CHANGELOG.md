@@ -4,16 +4,45 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.71.11 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.71.13 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-482 releases from v0.1.0 (2026-10-20) to v1.71.11 (2026-11-09), 1585 commits between the tags. Every release is anchored by an
+484 releases from v0.1.0 (2026-10-20) to v1.71.13 (2026-11-09), 1594 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.71.13 — 2026-11-09 · 2 commits
+
+[`eb65ff3`](https://github.com/JLRoper/agent-worktree-gui/commit/eb65ff3da53141a9ff79237e6f05342e6aa3f0da) · [compare v1.71.12...v1.71.13](https://github.com/JLRoper/agent-worktree-gui/compare/v1.71.12...v1.71.13)
+
+### Fixed
+
+- fix: the gate's own paths - a checkout placeholder, and a fixture path it reads ([`929a81a`](https://github.com/JLRoper/agent-worktree-gui/commit/929a81a58fad5b6d6db8048d41e24428c44ae9fd))
+- fix: the run's own tree decides its row, and a missing row is cut into the board ([`eb65ff3`](https://github.com/JLRoper/agent-worktree-gui/commit/eb65ff3da53141a9ff79237e6f05342e6aa3f0da))
+
+## v1.71.12 — 2026-11-09 · 7 commits
+
+[`ed23e54`](https://github.com/JLRoper/agent-worktree-gui/commit/ed23e54d32a95324772ed30cbe1a1f6ebf08f209) · [compare v1.71.11...v1.71.12](https://github.com/JLRoper/agent-worktree-gui/compare/v1.71.11...v1.71.12)
+
+### Added
+
+- feat: focused tests follow imports, and the worker brief runs them while it works ([`749cd2e`](https://github.com/JLRoper/agent-worktree-gui/commit/749cd2e19d375ff5852525d3d741c0a70e740d25))
+
+### Docs & tests
+
+- docs: the gui-improve walk, measured from row 256's own records ([`69fcca3`](https://github.com/JLRoper/agent-worktree-gui/commit/69fcca30c2760d17a35b26fd6da95eb9d9517a10))
+- docs: count the report's evidence in blobs, and keep its commands relative ([`d4f8217`](https://github.com/JLRoper/agent-worktree-gui/commit/d4f8217e038858c6ad2807463aa6c7ea64df20ff))
+- docs: render the changelog - 481 releases ([`1e986af`](https://github.com/JLRoper/agent-worktree-gui/commit/1e986af0c46763e0cca0ccf0e0561a83dc2e6729))
+- docs: render the changelog - 482 releases ([`f2bbaec`](https://github.com/JLRoper/agent-worktree-gui/commit/f2bbaec6c1153ec7d66d947d00516c652da89358))
+
+### Other
+
+- chore: 1.71.9 - the version this landing carries ([`36537ce`](https://github.com/JLRoper/agent-worktree-gui/commit/36537cee2e5500afc249baa512eea0674b962d8b))
+- chore: 1.71.12 - the version this landing carries ([`ed23e54`](https://github.com/JLRoper/agent-worktree-gui/commit/ed23e54d32a95324772ed30cbe1a1f6ebf08f209))
 
 ## v1.71.11 — 2026-11-09 · 2 commits
 
