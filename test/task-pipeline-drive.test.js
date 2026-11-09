@@ -713,6 +713,21 @@ test("the front row that carries a pipeline asks for a tree, and starts in it on
   assert.equal(started.ensureTree.length, 0, "the tree step is not called again: the row already names one");
 });
 
+test("a row filed with a worktree still cuts the round's parent tree before its first stage", (t) => {
+  // The report's row 50: a row FILED with `worktree` naming the project checkout. The lookup took the field at its
+  // word, no cut was asked for, and the stage committed into the checkout's main. A pipeline row's work happens in a
+  // tree cut for its round, and the first cut is what makes the round - so a filed path is a hint, never the tree.
+  const filed = tree(t); // the checkout the row was filed against: a real directory, and no tree of this round
+  const out = drive([row({ state: "queued", thread: null, threads: [], worktree: filed })]);
+
+  assert.equal(out.starts.length, 0, "the stage is not started in the tree the row was filed against");
+  assert.equal(out.ensureTree.length, 1, "the first cut is owed before anything runs");
+  assert.equal(out.ensureTree[0].role, "row", "and the first cut is the round's parent tree");
+  assert.equal(out.ensureTree[0].base, null, "cut from origin/main, so the cut names no base");
+  assert.equal(out.ensureTree[0].parent, null, "and no parent branch: the parent tree is the round's first tree");
+  assert.equal(treeLookup(out.tasks[0]).needed, true, "the row has no tree of its own until the panel cuts one");
+});
+
 test("a row with a tree starts the next stage IN that tree", (t) => {
   const dir = tree(t, { artifacts: [1] });
   const out = drive([row({ worktree: dir })]);
