@@ -284,6 +284,48 @@ test("a start creates the ledger entry, and a retry of the same visit reuses it 
   assert.equal(again[0].at, "2026-11-03T12:34:00.000Z");
 });
 
+// The round-4 defect: a start that had already LINKED a thread failed the dedupe (`thread` is set), so a retry or a
+// second start minted a second entry under the SAME `poc-to-uat/S3#1`, and the next settle - which matched stage and
+// visit alone - stamped its thread onto that entry. The critic's thread and job landed on the drafter's record.
+test("two starts in one visit on different threads are two runs, two ids, and a settle stamps only its own", () => {
+  const base = { id: "job-1", [TASK_PIPELINE_FIELD]: { pipeline: "poc-to-uat", stage: "S3", enteredAt: "2026-11-03T12:30:00.000Z" } };
+  const first = beginStageRun(base, { stage: "S3", thread: "thread-A", at: "2026-11-03T12:31:00.000Z" });
+  const second = beginStageRun(first, { stage: "S3", thread: "thread-B", at: "2026-11-03T12:33:00.000Z" });
+  const runs = stageRunsOf(second[TASK_PIPELINE_FIELD]);
+  assert.equal(runs.length, 2, "a start whose thread is already on the entry is a SECOND attempt, not a retry of the first");
+  assert.deepEqual(runs.map((entry) => entry.thread), ["thread-A", "thread-B"]);
+  assert.deepEqual(runs.map((entry) => entry.id), ["poc-to-uat/S3#1", "poc-to-uat/S3#1.2"], "the first attempt keeps its id; the next is suffixed");
+  assert.equal(new Set(runs.map((entry) => entry.id)).size, 2, "no two entries in one ledger may share an id");
+
+  // The settle names thread A: only A's entry is touched. B's run is still B's, and still open.
+  const settled = settleStageRun(second, { stage: "S3", visit: 1, thread: "thread-A", status: "done", at: "2026-11-03T13:00:00.000Z" });
+  const after = stageRunsOf(settled[TASK_PIPELINE_FIELD]);
+  const a = after.find((entry) => entry.thread === "thread-A");
+  const b = after.find((entry) => entry.thread === "thread-B");
+  assert.equal(a.id, "poc-to-uat/S3#1");
+  assert.equal(a.status, "done");
+  assert.equal(b.id, "poc-to-uat/S3#1.2");
+  assert.equal(b.status, null, "the other thread's run is not settled by A's settle");
+  assert.equal(after.filter((entry) => entry.thread === "thread-A").length, 1);
+  assert.equal(after.filter((entry) => entry.thread === "thread-B").length, 1);
+
+  // A settle for a thread the ledger has never seen creates ITS entry rather than stamping the nearest one.
+  const stranger = settleStageRun(settled, { stage: "S3", visit: 1, thread: "thread-C", job: "job-c", status: "failed", at: "2026-11-03T13:05:00.000Z" });
+  const withC = stageRunsOf(stranger[TASK_PIPELINE_FIELD]);
+  const c = withC.find((entry) => entry.thread === "thread-C");
+  assert.ok(c, "a settle for an unrecorded thread records that thread");
+  assert.equal(c.id, "poc-to-uat/S3#1.3");
+  assert.equal(c.job, "job-c");
+  assert.equal(c.status, "failed");
+  assert.equal(withC.find((entry) => entry.thread === "thread-B").status, null, "and B is still untouched");
+  assert.equal(new Set(withC.map((entry) => entry.id)).size, 3);
+
+  // The view names the run the row is IN - the newest attempt - and still answers the first-attempt id for a record
+  // written before the ledger existed.
+  assert.equal(resolveTaskPipeline(stranger, { bundle, now: NOW }).stageRunId, "poc-to-uat/S3#1.3");
+  assert.equal(resolveTaskPipeline({ id: "job-2", [TASK_PIPELINE_FIELD]: { pipeline: "poc-to-uat", stage: "S3", enteredAt: "2026-11-03T12:30:00.000Z" } }, { bundle, now: NOW }).stageRunId, "poc-to-uat/S3#1");
+});
+
 test("the settle fills the entry: thread, job, status, artifact, tree facts and the decision", () => {
   const started = beginStageRun({ id: "job-1", [TASK_PIPELINE_FIELD]: { pipeline: "poc-to-uat", stage: "S3", enteredAt: "2026-11-03T12:30:00.000Z" } }, { at: "2026-11-03T12:31:00.000Z" });
   const decision = { by: "panel", trigger: "stage-settled", code: null, at: "2026-11-03T13:00:00.000Z", fact: { kind: "run-status" }, reason: "stage S3 settled — the run finished" };

@@ -46,6 +46,7 @@ import { TreeNames, describeNaming, tagOf, treeKey, autoNameRefusal, namingState
 // One slug rule for a tree's name, shared by the cut (lib/jobs.js `makeWorktree`) and the rename here, so a tree
 // cut for a task and a tree renamed after it are spelled the same way: whole words, cut between them.
 import { treeSlug } from "./lib/tree-slug.js";
+import { roundTreeKey } from "./lib/round-tree-names.js";
 import { WorktreeNaming } from "./lib/worktree-naming.js";
 import { DEFAULT_OWNER, Locks, describeLock, rebaseKey, writerLocks } from "./lib/locks.js";
 import { rebaseWorktree } from "./lib/rebase.js";
@@ -727,12 +728,13 @@ function guard(what, fn) {
   }
 }
 
-// Every row that leaves the panel carries its owner, on BOTH paths a row travels. `withAssistantOwners` overlays the
-// rows a snapshot carries, and a `row` frame REPLACES the page's row object wholesale (public/core/sse.js queueRow ->
-// placeRow): a tree whose first scan reaches the page before any snapshot has seen it would draw the bare fallback
-// name — the chart cell without its "(Manager 1)", the bullet without its "— Manager" — until the next snapshot, and
-// a board nobody polls never gets one. Observed as a 2-of-4 flake in tools/verify-chart-columns.mjs.
-store.onEvent((evt) => (evt?.type === "row" ? broadcast({ ...evt, row: ownerOnRow(evt.project, evt.row) }) : broadcast(evt)));
+// Every row that leaves the panel carries its owner and the round's name for it, on BOTH paths a row travels.
+// `withAssistantOwners` and `withRoundNames` overlay the rows a snapshot carries, and a `row` frame REPLACES the
+// page's row object wholesale (public/core/sse.js queueRow -> placeRow): a tree whose first scan reaches the page
+// before any snapshot has seen it would draw the bare fallback name: the chart cell without its "(Manager 1)", the
+// bullet without its manager label, the title as the directory, until the next snapshot, and a board nobody polls
+// never gets one. Observed as a 2-of-4 flake in tools/verify-chart-columns.mjs.
+store.onEvent((evt) => (evt?.type === "row" ? broadcast({ ...evt, row: rowExtras(evt.project, evt.row) }) : broadcast(evt)));
 
 // A `-w` agent's worktree exists a few seconds after spawn; adopt it into the board right then so the
 // card can be opened under a row instead of waiting for a discovery pass.
@@ -2989,12 +2991,35 @@ function withAssistantOwners(snap) {
   return snap;
 }
 
-// The same overlay for the other two ways a row reaches a browser: the store's per-row event (the scanner's own row,
-// which knows nothing about owners) and the reconcile route's answer. `assistant` is constructed after the store
-// listener that calls this, and a row event can only come from a scan, so the null check is a guard, not a path.
-function ownerOnRow(projectName, row) {
-  if (!row || !assistant) return row;
-  return { ...row, assistant: assistantForRow(projectName, row) };
+// The same overlay for the other ways a row reaches a browser: the store's per-row event (the scanner's own row,
+// which knows nothing about owners or rounds) and the reconcile route's answer. `assistant` is constructed after the
+// store listener that calls this, and a row event can only come from a scan, so the null check is a guard, not a path.
+//
+// The ROUND's name for a tree rides here for the same reason the owner does: `pipelineRun.round` and
+// `pipelineRun.trees` are written at the cut, and lib/round-tree-names.js reads one display name per tree out of
+// them. A `row` frame replaces the page's row wholesale, so a name stamped only into the snapshot would be erased by
+// the next scan of that tree; the page paints `row.round.display` (public/app.js `treeTitleOf`).
+function rowExtras(projectName, row) {
+  if (!row) return row;
+  if (!assistant) return row;
+  const out = { ...row, assistant: assistantForRow(projectName, row) };
+  const rec = typeof assistant.roundNames === "function" ? assistant.roundNames().get(roundTreeKey(out.path)) : null;
+  if (rec) out.round = rec;
+  else delete out.round;
+  return out;
+}
+
+// The same round names, overlaid on the rows a snapshot carries.
+function withRoundNames(snap) {
+  const names = assistant && typeof assistant.roundNames === "function" ? assistant.roundNames() : new Map();
+  for (const project of snap.projects || []) {
+    for (const row of project.worktrees || []) {
+      const rec = names.get(roundTreeKey(row.path));
+      if (rec) row.round = rec;
+      else delete row.round;
+    }
+  }
+  return snap;
 }
 
 // What the panel itself knows about a tree's name — who gave it and when — is in no git repository, so it travels
@@ -3133,8 +3158,9 @@ function snapshot() {
       ),
     ),
   );
-  // The owner rides the snapshot like the lock does: one more per-row field the page can read without a second call.
-  return withAssistantOwners(snap);
+  // The owner and the round's name ride the snapshot like the lock does: per-row fields the page can read without a
+  // second call. Both are applied last so no earlier overlay resets them.
+  return withRoundNames(withAssistantOwners(snap));
 }
 
 const heartbeat = setInterval(() => {
@@ -5682,7 +5708,7 @@ const server = createServer(async (req, res) => {
       else delete out.description;
       out.refreshJournal = refreshLog.recent(rowKey, REFRESH_LINES_SHOWN);
       // Every open board agrees with the click, not only the tab that made it.
-      broadcast({ type: "row", project: project.name, row: ownerOnRow(project.name, out), changed: true });
+      broadcast({ type: "row", project: project.name, row: rowExtras(project.name, out), changed: true });
 
       log(`row reconcile: ${project.name} ${after.path} — ${lines.join(" · ")}`);
       return sendJson(res, 200, {

@@ -7,7 +7,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { roundNameOf, stageTagOf, stageTreeName } from "../lib/stage-tree-name.js";
+import { roundNameOf, stageDisplayName, stageTagOf, stageTreeName } from "../lib/stage-tree-name.js";
 
 const ROUND = { slug: "carry-the-form", tag: "a1b2c3", title: "carry the form" };
 
@@ -93,6 +93,31 @@ test("the round's slug comes from the task title when the record has none yet", 
   assert.deepEqual(named, { slug: "carry-the-form-end-to-end", tag: "a1b2c3", title: "Carry the form, end to end." });
   const name = stageTreeName(named, null, 1);
   assert.equal(name.dir, "carry-the-form-end-to-end-a1b2c3");
+});
+
+test("the child's display has ONE spelling, shared by the cut and by a row read back from the record", () => {
+  const stage = { id: "S2", name: "implement", position: 2 };
+  const name = stageTreeName(ROUND, stage, 1);
+  assert.equal(stageDisplayName({ position: 2, name: "implement" }), "Stage 2: implement");
+  assert.equal(name.display, stageDisplayName({ position: 2, name: "implement" }));
+  // The words ride BESIDE the id in the record: a row read back months later can render "Stage 2: implement" from
+  // the record alone, and the id it names (S2) may be no part of what a reader should see.
+  assert.equal(name.stageName, "implement");
+  assert.equal(name.position, 2);
+  assert.equal(name.stage, "S2");
+});
+
+test("stageDisplayName invents neither half: no position or no name answers null", () => {
+  assert.equal(stageDisplayName({ position: 1, name: "probe" }), "Stage 1: probe");
+  assert.equal(stageDisplayName({ position: 0, name: "probe" }), null);
+  assert.equal(stageDisplayName({ position: -1, name: "probe" }), null);
+  assert.equal(stageDisplayName({ position: 2.5, name: "probe" }), null);
+  assert.equal(stageDisplayName({ name: "probe" }), null);
+  assert.equal(stageDisplayName({ position: 2, name: "   " }), null);
+  assert.equal(stageDisplayName({}), null);
+  assert.equal(stageDisplayName(), null);
+  // The label is trimmed, never padded: a name typed with spaces still lands as the words a reader sees.
+  assert.equal(stageDisplayName({ position: 3, name: "  review  " }), "Stage 3: review");
 });
 
 test("stageTagOf is stable and depends on the visit as well as the stage", () => {
