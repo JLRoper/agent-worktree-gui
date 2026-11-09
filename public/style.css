@@ -3783,7 +3783,12 @@ button.btn-rules:focus-visible { outline: 1px solid #7fb2e8; outline-offset: 1px
 .pipew-n { font-family: var(--mono); font-size: 10px; color: var(--dimmer); }
 .pipew-name { font-weight: 600; min-width: 0; }
 .pipew-pos { font-family: var(--mono); font-size: 9.5px; color: var(--dimmer); white-space: nowrap; }
-.pipew-phase, .pipew-live, .pipew-artifact, .pipew-gate { grid-column: 2 / -1; font-size: 10px; color: var(--dim); }
+/* The row is a three-column grid — the ordinal, the title, the position — and every line UNDER the title is placed by
+   the rule below, never left to auto-placement. `grid-column: 2 / -1` is what makes each of them a line of its own;
+   a child this rule does not name (the visit line and the decision line were the two) is auto-placed into the 18 px
+   ordinal column by the row's own placement cursor, where its text is 18 px wide and overflows: the visit line was
+   painted across the elapsed line, which is how "visit" and "in this stage" came to read as "visin this stage". */
+.pipew-phase, .pipew-live, .pipew-visit, .pipew-decision, .pipew-artifact, .pipew-gate { grid-column: 2 / -1; font-size: 10px; color: var(--dim); }
 .pipew-phase { color: var(--dimmer); }
 .pipew-live { color: #cfe0ff; font-size: 11px; }
 .pipew-live b { font-family: var(--mono); }
