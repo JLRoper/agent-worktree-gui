@@ -4,16 +4,36 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.74.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.75.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-493 releases from v0.1.0 (2026-10-20) to v1.74.0 (2026-11-09), 1619 commits between the tags. Every release is anchored by an
+494 releases from v0.1.0 (2026-10-20) to v1.75.0 (2026-11-09), 1623 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.75.0 — 2026-11-09 · 4 commits
+
+[`c276e99`](https://github.com/JLRoper/agent-worktree-gui/commit/c276e999248db431a71ea06a1abf06a64e1f594b) · [compare v1.74.0...v1.75.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.74.0...v1.75.0)
+
+### Added
+
+- feat: a round cuts one parent tree from origin/main, and one name describes its trees ([`ff588cb`](https://github.com/JLRoper/agent-worktree-gui/commit/ff588cba245fc2935838eab8f1692f227e1abd4d))
+
+### Fixed
+
+- fix: the digest test and its measurement name trees relatively ([`51e3004`](https://github.com/JLRoper/agent-worktree-gui/commit/51e3004f3b165e3bacb8619d7b18d7f059df8535))
+
+### Docs & tests
+
+- docs: render the changelog - 493 releases ([`0af2307`](https://github.com/JLRoper/agent-worktree-gui/commit/0af2307ac80feece92d3e1210575b87aedb200a1))
+
+### Other
+
+- chore: 1.75.0 - the version this landing carries ([`c276e99`](https://github.com/JLRoper/agent-worktree-gui/commit/c276e999248db431a71ea06a1abf06a64e1f594b))
 
 ## v1.74.0 — 2026-11-09 · 3 commits
 
