@@ -6415,13 +6415,15 @@ try {
 
 // The exit path, shared by a signal and a panel restart: the replacement has to be able to bind the
 // port, so nothing waits on the SSE clients beyond the same two seconds this always allowed.
-function shutdown(code = 0) {
+// Async since 2026-11-09: the child sweep awaits kills that no longer block the event loop
+// (lib/child-tree.js `killTree`), and the restart controller awaits this promise exactly as before.
+async function shutdown(code = 0) {
   log(`shutting down (exit ${code})`);
   // Every helper this panel started dies with it, tree and all: a scan's git, a push's hook, a check agent's
   // helper. Before the pool and the listener go, so nothing is left writing into a tree that is about to be
   // released. `killAllSync` on `exit` is the backstop for an exit that never reaches here.
   try {
-    const killed = panelChildren.killAll("the panel is shutting down");
+    const killed = await panelChildren.killAll("the panel is shutting down");
     if (killed) log(`child processes killed on shutdown: ${killed}`);
   } catch (e) {
     log(`child process cleanup failed: ${String((e && e.message) || e)}`);
@@ -6443,7 +6445,7 @@ function shutdown(code = 0) {
 }
 
 for (const sig of ["SIGINT", "SIGTERM"]) {
-  process.on(sig, () => shutdown(0));
+  process.on(sig, () => void shutdown(0));
 }
 // A path out of the process that never reaches shutdown() (a thrown boot, `process.exit` from a route): the
 // registry gets one synchronous sweep so a helper cannot outlive the panel it was started for.
@@ -6456,7 +6458,7 @@ process.once("exit", () => {
 });
 if (process.env.PANEL_PARENT_WATCH_STDIN === "1") {
   process.stdin.resume();
-  process.stdin.on("end", () => shutdown(0));
-  process.stdin.on("close", () => shutdown(0));
-  process.stdin.on("error", () => shutdown(0));
+  process.stdin.on("end", () => void shutdown(0));
+  process.stdin.on("close", () => void shutdown(0));
+  process.stdin.on("error", () => void shutdown(0));
 }

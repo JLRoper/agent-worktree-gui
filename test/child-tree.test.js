@@ -15,7 +15,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { ChildTree, HELPER_LIMITS, kindOf, pidAlive, scopeForJob } from "../lib/child-tree.js";
+import { ChildTree, HELPER_LIMITS, killTree, kindOf, pidAlive, scopeForJob } from "../lib/child-tree.js";
 import { Jobs } from "../lib/jobs.js";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -168,7 +168,7 @@ test("shutdown kills every scope, grandchild and adopted pid alike", async (t) =
   assert.ok(tree.adopt("scan:2", adoptedPid, { kind: "git", label: "the worker's git" }), "a pid reported by a worker is adopted");
 
   assert.ok(pidAlive(kidA) && pidAlive(kidB) && pidAlive(adoptedPid), "every process is real before the shutdown");
-  const killed = tree.killAll("test shutdown");
+  const killed = await tree.killAll("test shutdown");
 
   assert.equal(killed, 3, "every live entry is killed");
   await gone(entries[0].pid);
@@ -191,4 +191,14 @@ test("shutdown kills every scope, grandchild and adopted pid alike", async (t) =
   await waitFor(() => latePid !== null, { what: "the late child to be started" });
   await gone(latePid);
   assert.equal(tree.size, 0, "a child asked to start after the close is never registered");
+});
+
+// The kill path answers a pid that is already gone WITHOUT spawning anything. The "(already gone)" case was
+// most of the kill traffic, and on this machine every spawn costs a filtered `CreateProcess` (~0.5-1.3 s)
+// that used to block the panel's loop — so "cheap enough" is the property, and the how-string is the proof:
+// a taskkill that ran and failed would answer "taskkill (already gone)", a skip answers "gone before the kill".
+test("a pid that is already gone is answered without spawning a kill", async () => {
+  const out = await killTree(999_999_999);
+  assert.equal(out.ok, true);
+  assert.equal(out.how, "gone before the kill");
 });
