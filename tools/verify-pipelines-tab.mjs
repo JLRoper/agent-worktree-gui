@@ -73,7 +73,7 @@ try {
   // (1) The tab is in the strip. On 0.80.0 this is the first red line.
   const tabCount = await page.evaluate(() => document.querySelectorAll("[data-settings-tab]").length);
   const hasPipeline = await page.evaluate(() => Boolean(document.querySelector('[data-settings-tab="pipeline"]')));
-  check(tabCount === 11, "the strip has eleven tabs, the Pipeline one included", `${tabCount} tabs`);
+  check(tabCount === 13, "the strip has thirteen tabs, the Pipeline one included", `${tabCount} tabs`);
   check(hasPipeline, "the Pipeline tab is in the strip");
   if (!hasPipeline) throw new Error("no [data-settings-tab=pipeline] — this is a build without the tab");
 

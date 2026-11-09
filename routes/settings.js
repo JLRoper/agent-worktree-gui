@@ -32,6 +32,7 @@
 //   POST /api/settings/cleanup            {agentCleanup} - the board's veto on an agent releasing its own tree.
 //   POST /api/settings/chart-top          {count} - how many trees a project's chart draws before its arrow.
 //   POST /api/settings/collapse-after     {seconds} - how long a collapsed parent keeps its children's folds.
+//   GET  /api/settings/prompt-budget    the prompt's sections, caps and the three turns the Prompt tab draws.
 //   POST /api/settings/general            {threads?, worktreeSeconds?, briefingBudgetChars?} - the scan knobs.
 //   POST /api/settings/columns            {hidden} - which of the chart's columns are not drawn.
 //
@@ -691,6 +692,21 @@ export function createSettingsRoutes({
       log(`collapse cascade: ${seconds ? `a parent collapsed for ${seconds}s minimizes every card under it` : "off — a collapsed parent leaves its cards as they are"}`);
       broadcast({ type: "settings", settings: settingsOut() });
       sendJson(res, 200, { ok: true, seconds, settings: settingsOut() });
+      return true;
+    }
+
+    // ---- the prompt's own budget, for the Prompt tab ------------------------------------------
+    // Read on demand: it measures the assistant's NEXT turn, so the answer is stale the moment a rule,
+    // a note, a watch, a project or the charter changes. `promptBudget()` is READ-ONLY - it does not
+    // advance the charter's send record or the board's sweep tick - so opening the tab cannot make the
+    // next real turn a marker for text nobody was sent. The caps and the section table live in
+    // lib/assistant/prompt-budget.js, which the briefing builder itself imports.
+    if (route === "/api/settings/prompt-budget" && req.method === "GET") {
+      try {
+        sendJson(res, 200, assistant.promptBudget());
+      } catch (err) {
+        sendJson(res, 500, { error: `the prompt budget could not be measured: ${(err && err.message) || String(err)}` });
+      }
       return true;
     }
 

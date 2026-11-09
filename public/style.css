@@ -366,6 +366,43 @@ thead th,
 .settings-row.settings-gap { margin-top: 12px; }
 .settings-row select { flex: 1; min-width: 0; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; font: 12px var(--mono); }
 .settings-preview { margin-top: 10px; padding: 9px 10px; border: 1px dashed var(--line); border-radius: 6px; font-size: 13px; color: var(--text); }
+
+/* ---- Settings > Prompt: three box-in-box budget diagrams ------------------------------------
+   The outer box is the whole prompt, the two inside it are its carriers (system text and turn text),
+   and each section is a box inside its carrier whose BAR is its share of the turn. The window is a
+   340px popover, so the three diagrams stack; at a wider drag they still wrap rather than scroll. */
+.prompt-summary { margin-top: 10px; font-size: 12px; line-height: 1.5; }
+.prompt-summary.bad { border-color: var(--red); color: var(--red); }
+.prompt-legend { margin-top: 10px; border-color: #232c38; color: var(--dimmer); font-size: 11px; line-height: 1.55; }
+.prompt-legend[hidden] { display: none; }
+.prompt-diagrams { display: grid; gap: 12px; margin-top: 12px; }
+.prompt-diagram { border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); padding: 8px; }
+.prompt-diagram-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.prompt-diagram-title { font-size: 12px; font-weight: 600; color: var(--text); }
+.prompt-diagram-total { flex: none; font-size: 10.5px; color: var(--dim); }
+.prompt-diagram-note { margin-top: 6px; font-size: 10.5px; line-height: 1.45; color: var(--dimmer); }
+.prompt-box { border: 1px solid #2c3645; border-radius: 7px; background: var(--surface); padding: 6px; }
+.prompt-box-head { display: flex; justify-content: space-between; gap: 6px; margin-bottom: 5px; font: 9.5px var(--mono); letter-spacing: .05em; text-transform: uppercase; color: var(--dimmer); }
+.prompt-half { border: 1px dashed #2e3a4a; border-radius: 6px; padding: 5px 6px 6px; margin-top: 6px; }
+.prompt-half[data-prompt-half="system"] { border-color: #2f4159; }
+.prompt-half[data-prompt-half="turn"] { border-color: #453c2a; }
+.prompt-half-head { display: flex; justify-content: space-between; gap: 6px; margin-bottom: 4px; font-size: 10px; color: var(--dim); }
+.prompt-section { margin-top: 4px; border: 1px solid #232c38; border-radius: 4px; padding: 3px 4px 4px; background: #121821; }
+.prompt-section-head { display: flex; justify-content: space-between; gap: 6px; font-size: 10px; color: var(--dim); }
+.prompt-section-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prompt-section-share { flex: none; color: var(--dimmer); font-size: 9.5px; }
+.prompt-track { height: 4px; margin-top: 3px; border-radius: 2px; background: #0b0f14; overflow: hidden; }
+.prompt-fill { display: block; height: 100%; border-radius: 2px; background: var(--blue); }
+.prompt-half[data-prompt-half="turn"] .prompt-fill { background: var(--violet); }
+.prompt-section[data-prompt-section="rules"] .prompt-fill { background: #2ea043; }
+.prompt-section[data-prompt-section="notes"] .prompt-fill { background: #8b7bd8; }
+.prompt-section[data-prompt-section="projects"] .prompt-fill { background: #5b8def; }
+.prompt-section[data-prompt-section="queue"] .prompt-fill { background: var(--amber); }
+.prompt-section[data-prompt-section="board"] .prompt-fill { background: var(--green); }
+.prompt-section[data-prompt-section="charter"] .prompt-fill { background: var(--violet); }
+.prompt-section.is-gated { border-style: dashed; }
+.prompt-section.is-gated .prompt-track { background: repeating-linear-gradient(90deg, #1c2531 0 3px, transparent 3px 6px); }
+.prompt-section.is-gated .prompt-fill { display: none; }
 /* The contrast slider, and a strip of the six layers it moves - each swatch reads the variable it changes, so
    the preview is the setting, not a drawing of it. */
 .settings-row input[type="range"] { flex: 1; min-width: 0; height: 18px; accent-color: #4a90d9; }
