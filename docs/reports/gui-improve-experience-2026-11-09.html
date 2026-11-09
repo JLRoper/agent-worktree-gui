@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
+<title>The gui-improve walk - agent-worktree-gui, 2026-11-09</title>
+<style>
+  :root{ color-scheme:dark; --ink:#e8e6e1; --paper:#14161a; --rule:#2a2f38; --muted:#9aa3ad; --accent:#c8a6ff; --bar:#6f4fa8; --warn:#e5534b; --sunk:#1a1d22; }
+  html,body{ margin:0; background:var(--paper); color:var(--ink); font:15px/1.55 -apple-system,Segoe UI,Helvetica,Arial,sans-serif; }
+  main{ max-width:1080px; margin:0 auto; padding:36px 28px 80px; }
+  h1{ font-size:26px; margin:0 0 4px; letter-spacing:-.01em; }
+  h2{ font-size:19px; margin:38px 0 10px; padding-bottom:6px; border-bottom:1px solid var(--rule); }
+  h3{ font-size:16px; margin:24px 0 8px; }
+  .sub{ color:var(--muted); margin:0 0 22px; }
+  .cards{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin:18px 0 6px; }
+  .card{ border:1px solid var(--rule); border-radius:10px; padding:12px 14px; }
+  .card b{ display:block; font-size:22px; letter-spacing:-.02em; }
+  .card span{ color:var(--muted); font-size:13px; }
+  table{ border-collapse:collapse; width:100%; font-size:14px; }
+  th,td{ text-align:left; padding:6px 8px; border-bottom:1px solid var(--rule); vertical-align:top; }
+  th{ color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+  td.n{ text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  code{ font:13px ui-monospace,Consolas,monospace; background:rgba(127,127,127,.12); padding:1px 5px; border-radius:4px; }
+  .note{ border-left:3px solid var(--accent); padding:6px 0 6px 12px; color:var(--muted); margin:14px 0; }
+  .note b{ color:var(--ink); }
+  ol,ul{ padding-left:22px; }
+  ol li, ul li{ margin:6px 0; }
+  dl.terms{ display:grid; grid-template-columns:170px 1fr; column-gap:20px; margin:0; }
+  dl.terms dt{ font:12px ui-monospace,Consolas,monospace; color:var(--accent); padding:11px 0 3px; border-top:1px solid var(--rule); }
+  dl.terms dd{ margin:0; padding:11px 0 3px; border-top:1px solid var(--rule); }
+  dl.terms dd p{ margin:0; }
+  @media (max-width:640px){ dl.terms{ grid-template-columns:1fr; } dl.terms dt{ padding-bottom:0; } dl.terms dd{ border-top:0; padding-top:2px; } }
+  ol.flow{ list-style:none; padding:0; margin:8px 0 0; counter-reset:step; }
+  ol.flow li{ position:relative; margin:0 0 0 17px; padding:8px 0 14px 30px; border-left:2px solid var(--rule); }
+  ol.flow li:last-child{ border-left-color:transparent; padding-bottom:0; }
+  ol.flow li::before{ counter-increment:step; content:counter(step); position:absolute; left:-15px; top:8px; width:28px; height:28px; border:1px solid var(--rule); border-radius:50%; background:var(--paper); color:var(--accent); font:13px/26px ui-monospace,Consolas,monospace; text-align:center; }
+  ol.flow b{ display:block; }
+  ol.flow span{ color:var(--muted); font-size:14px; }
+  .pair{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:16px 0 6px; }
+  .pair .card p{ margin:8px 0 0; font-size:14px; }
+  .pair .card h3{ margin:0 0 2px; font-size:15px; }
+  @media (max-width:720px){ .pair{ grid-template-columns:1fr; } }
+  .stages{ color:var(--muted); font-size:12px; }
+  .tag{ font-size:11px; padding:1px 6px; border:1px solid var(--rule); border-radius:10px; color:var(--muted); white-space:nowrap; }
+  .tag.yes{ border-color:var(--accent); color:var(--accent); }
+  .source{ font:12px ui-monospace,Consolas,monospace; color:var(--muted); }
+  /* additions for this page */
+  .box{ border:1px solid var(--rule); border-radius:10px; padding:14px 16px; margin:20px 0 0; background:var(--sunk); }
+  .box h2{ margin:0 0 8px; border:0; padding:0; font-size:17px; }
+  .box p{ margin:8px 0 0; }
+  .box p.big{ font-size:18px; margin:2px 0 0; }
+  .verdict{ border-left:4px solid var(--accent); }
+  .warnbox{ border-left:4px solid var(--warn); }
+  .wide{ overflow-x:auto; }
+  .wide table{ min-width:720px; }
+  table.fixed{ table-layout:fixed; }
+  table.fixed td, table.fixed th{ overflow-wrap:anywhere; }
+  .small{ font-size:12.5px; color:var(--muted); }
+  .ok{ color:#7ee2a8; }
+  .bad{ color:var(--warn); }
+  blockquote{ margin:12px 0; padding:10px 14px; border-left:3px solid var(--bar); background:var(--sunk); max-width:110ch; }
+  blockquote p{ margin:0; }
+  blockquote .src{ display:block; margin-top:8px; color:var(--muted); font-size:12.5px; }
+  pre{ background:var(--sunk); border:1px solid var(--rule); border-radius:8px; padding:10px 12px; overflow-x:auto; font:12.5px/1.55 ui-monospace,Consolas,monospace; white-space:pre-wrap; overflow-wrap:anywhere; }
+  figure.fig{ margin:18px 0 6px; }
+  figure.fig svg{ width:100%; height:auto; display:block; }
+  figure.fig .lbl{ fill:#9aa3ad; font:12px ui-monospace,Consolas,monospace; }
+  figure.fig .seg{ fill:#e8e6e1; font:11.5px ui-monospace,Consolas,monospace; text-anchor:middle; }
+  figure.fig .pct{ fill:#9aa3ad; font:11px ui-monospace,Consolas,monospace; text-anchor:middle; }
+  figcaption{ color:var(--muted); font-size:12.5px; margin-top:8px; }
+  .kicker{ color:var(--accent); font:12px ui-monospace,Consolas,monospace; letter-spacing:.06em; text-transform:uppercase; }
+  @media print{ :root{ color-scheme:light; --paper:#fff; --ink:#111; --muted:#555; --rule:#ccc; --sunk:#f5f5f5; --accent:#5b3d8a; } .wide{ overflow:visible; } .wide table{ min-width:0; } }
+</style>
+</head>
+<body>
+<main>
+<h1>The gui-improve walk: 71m 40s, four verdicts, nothing on main</h1>
+<p class="sub">Row #256 of assistant 1 in agent-worktree-gui. Created 04:26:18 UTC, tree cut 04:54:12, settled 06:05:52. Every figure is read from the run's own record at the review commit <code>d38413d</code> of the tree it walked (cut from <code>10a83c2</code>); the four stage commits are <code>21d6423</code>, <code>c065c4f</code>, <code>61b1bbc</code>, <code>d38413d</code>.</p>
+
+<div class="box verdict">
+  <h2>Verdict</h2>
+  <p class="big">The pipeline proved the change and did not land it.</p>
+  <p>Four stage runs, four first-time verdicts, three handoffs crossed, no note. 71m 39.6s of stage time and 19,563,676 tokens bought a 9-line CSS change, a measured before and after, and an accepted verdict. They did not buy a commit on main: the branch holds all four stage commits, and <code>main:public/style.css:438</code> is still the flex rule the change replaces. The row settled <code>done</code> on the review gate's word, and its own reason says why: the review artifact &ldquo;is not a PR to land&rdquo;.</p>
+  <p>The rejected first attempt this row was expected to show is not in its records. Section 4 says so with the four readings that establish it, and quotes the one reject this pipeline does have, from the proof run 45 minutes earlier.</p>
+</div>
+
+<div class="cards"><div class="card"><b>4</b><span>stage runs, one visit each</span></div><div class="card"><b>3</b><span>crossings: H-01, H-02, H-03</span></div><div class="card"><b>71m 39.6s</b><span>stage time, 71m 03.8s in the workers</span></div><div class="card"><b>19,563,676</b><span>tokens, 164,807 output</span></div><div class="card"><b>24.4 MB</b><span>ledger: 76 files, 48 PNGs</span></div><div class="card"><b>9 / 0</b><span>lines added, lines on main</span></div></div>
+
+<h2 id="pipeline">1. The pipeline the run was pinned to</h2>
+<p><code>gui-improve</code> is one of 12 pipeline documents in the bundle at <code>~/.wag/state/pipeline-bundle.json</code>. The run recorded the document it started under as route <code>sha256:1bdc54c4&hellip;</code>; the graph below is the document the bundle holds today for that id.</p>
+<div class="wide"><table class="fixed"><colgroup><col style="width:14%"><col style="width:13%"><col style="width:38%"><col style="width:10%"><col style="width:25%"></colgroup>
+    <thead><tr><th>stage</th><th>role</th><th>artifact</th><th>gate after</th><th>outcomes</th></tr></thead>
+    <tbody>
+      <tr><td>baseline</td><td>surveyor</td><td><code>ledger/gui-improve/baseline/capture.json</code></td><td>G1</td><td>recorded / unusable</td></tr>
+      <tr><td>implement</td><td>implementer</td><td><code>ledger/gui-improve/change-set.patch</code></td><td>none</td><td>-</td></tr>
+      <tr><td>compare</td><td>surveyor</td><td><code>ledger/gui-improve/compare/comparison.json</code></td><td>G2</td><td>improved / unchanged / regressed</td></tr>
+      <tr><td>review</td><td>reviewer</td><td><code>ledger/gui-improve/review.md</code></td><td>G3</td><td>accept / reject</td></tr>
+      <tr><td>correct</td><td>implementer</td><td><code>ledger/gui-improve/correction.md</code></td><td>none</td><td>-</td></tr>
+    </tbody></table></div>
+<p>Three roles cover five stages: the surveyor is spawned for baseline and compare, the implementer for implement and correct, the reviewer once. The gates are the only places a stage hands over, and every handoff carries the artifact it moves. Two loops carry caps, H-04 at 3 rounds and H-06 at 3 corrections.</p>
+<div class="wide"><table class="fixed"><colgroup><col style="width:8%"><col style="width:34%"><col style="width:14%"><col style="width:16%"><col style="width:18%"></colgroup>
+    <thead><tr><th>edge</th><th>from &rarr; to</th><th>kind</th><th>cap</th><th>crossed in this walk</th></tr></thead>
+    <tbody>
+      <tr><td>H-01</td><td>baseline &rarr; implement</td><td>sequence</td><td>-</td><td><b>1</b></td></tr>
+      <tr><td>H-02</td><td>implement &rarr; compare</td><td>sequence</td><td>-</td><td><b>1</b></td></tr>
+      <tr><td>H-03</td><td>compare &rarr; review</td><td>sequence</td><td>-</td><td><b>1</b></td></tr>
+      <tr><td>H-04</td><td>compare &rarr; implement</td><td>loop</td><td>3 rounds</td><td>0</td></tr>
+      <tr><td>H-05</td><td>review &rarr; correct</td><td>sequence</td><td>-</td><td>0</td></tr>
+      <tr><td>H-06</td><td>correct &rarr; compare</td><td>loop</td><td>3 corrections</td><td>0</td></tr>
+    </tbody></table></div>
+<p>Neither loop was walked in this run, and neither was the reject edge: all four stage runs are visit 1. G1 and G2 are machine gates that read a verdict file. G3 is the reviewer's gate, but its own <code>verified_by</code> is already written as a machine check of the note's shape: &ldquo;an acceptance leaves no note open, and every rejection note names a surface, a defect, evidence and a fix&rdquo;. That sentence matters in section 6: half of G3 is specified as a script.</p>
+
+<h2 id="walk">2. The walk, stage by stage</h2>
+<p>One tree was cut at 04:54:12 and never replaced: every stage ran in <code>take-the-surface-the-task-brief-names-856f1f</code> (branch <code>wtgui/take-the-surface-the-task-brief-names-856f1f</code>), and each stage put its artifact in its own commit. The row had been waiting 27m 53.9s before the tree was cut: it was created at 04:26:18 by assistant-5, and a row created later the same hour (#257 at 04:53:12) started within 1m 20s. The row carries no hold flag, and the record does not say what the panel was doing in between.</p>
+<figure class="fig">
+<svg viewBox="0 0 960 160" role="img" aria-label="Stage time and token spend, to scale">
+<text x="56" y="16" class="lbl">Stage time, 71m 39.6s</text>
+<rect x="56.0" y="26" width="273.1" height="26" fill="#3d2f57" stroke="#2a2f38"/>
+<text x="192.5" y="43" class="seg">baseline 22m 14.2s</text>
+<text x="192.5" y="68" class="pct">31.0%</text>
+<rect x="329.1" y="26" width="169.5" height="26" fill="#3d2f57" stroke="#2a2f38"/>
+<text x="413.8" y="43" class="seg">implement 13m 48.4s</text>
+<text x="413.8" y="68" class="pct">19.3%</text>
+<rect x="498.6" y="26" width="305.7" height="26" fill="#3d2f57" stroke="#2a2f38"/>
+<text x="651.4" y="43" class="seg">compare 24m 53.5s</text>
+<text x="651.4" y="68" class="pct">34.7%</text>
+<rect x="804.3" y="26" width="131.7" height="26" fill="#3d2f57" stroke="#2a2f38"/>
+<text x="870.1" y="43" class="seg">review 10m 43.6s</text>
+<text x="870.1" y="68" class="pct">15.0%</text>
+<text x="56" y="86" class="lbl">Tokens, 19,563,676</text>
+<rect x="56.0" y="96" width="342.1" height="26" fill="#2c3a4f" stroke="#2a2f38"/>
+<text x="227.0" y="113" class="seg">baseline</text>
+<text x="227.0" y="138" class="pct">38.9%</text>
+<rect x="398.1" y="96" width="136.1" height="26" fill="#2c3a4f" stroke="#2a2f38"/>
+<text x="466.1" y="113" class="seg">implement</text>
+<text x="466.1" y="138" class="pct">15.5%</text>
+<rect x="534.2" y="96" width="298.8" height="26" fill="#2c3a4f" stroke="#2a2f38"/>
+<text x="683.6" y="113" class="seg">compare</text>
+<text x="683.6" y="138" class="pct">34.0%</text>
+<rect x="833.0" y="96" width="103.0" height="26" fill="#2c3a4f" stroke="#2a2f38"/>
+<text x="884.5" y="113" class="seg">review</text>
+<text x="884.5" y="138" class="pct">11.7%</text>
+<text x="56" y="156" class="lbl">04:54:12 to 06:05:52 UTC, four stage runs, three crossings</text>
+</svg>
+<figcaption>Measured: stage entry to settle, and the four jobs' token totals. Both bars are drawn from the same records as the table below; the percentages are each stage's share.</figcaption>
+</figure>
+<div class="wide"><table class="fixed"><colgroup><col style="width:13%"><col style="width:18%"><col style="width:11%"><col style="width:11%"><col style="width:9%"><col style="width:17%"><col style="width:8%"><col style="width:13%"></colgroup>
+    <thead><tr><th>stage</th><th>entered &rarr; settled (UTC)</th><th>stage</th><th>worker</th><th>spawn wait</th><th>tokens</th><th>share</th><th>commit</th></tr></thead>
+    <tbody>
+      <tr><td><b>baseline</b><br><span class="small">visit 1</span></td><td>04:54:12 &rarr; 05:16:27</td><td>22m 14.2s</td><td>22m 06.1s</td><td>2.7s</td><td>7,604,947<br><span class="small">55,793 out</span></td><td>38.9%</td><td><code>21d6423</code><br><span class="small">capture.json</span></td></tr>
+      <tr><td><b>implement</b><br><span class="small">visit 1</span></td><td>05:16:27 &rarr; 05:30:15</td><td>13m 48.4s</td><td>13m 40.0s</td><td>7.4s</td><td>3,025,599<br><span class="small">28,220 out</span></td><td>15.5%</td><td><code>c065c4f</code><br><span class="small">change-set.patch</span></td></tr>
+      <tr><td><b>compare</b><br><span class="small">visit 1</span></td><td>05:30:15 &rarr; 05:55:08</td><td>24m 53.5s</td><td>24m 49.6s</td><td>3.8s</td><td>6,643,285<br><span class="small">58,602 out</span></td><td>34.0%</td><td><code>61b1bbc</code><br><span class="small">comparison.json</span></td></tr>
+      <tr><td><b>review</b><br><span class="small">visit 1</span></td><td>05:55:08 &rarr; 06:05:52</td><td>10m 43.6s</td><td>10m 28.1s</td><td>15.3s</td><td>2,289,845<br><span class="small">22,192 out</span></td><td>11.7%</td><td><code>d38413d</code><br><span class="small">review.md</span></td></tr>
+      <tr><td><b>total</b></td><td>04:54:12 &rarr; 06:05:52</td><td><b>71m 39.6s</b></td><td><b>71m 03.8s</b></td><td>29.1s</td><td><b>19,563,676</b><br><span class="small">164,807 out</span></td><td>100%</td><td><b>4 commits</b></td></tr>
+    </tbody></table></div>
+<p class="small">Stage time is the row's own clock (stage entered to settled); worker time is the job's start to end; spawn wait is the gap between them. Token totals are the four jobs' sums from <code>jobs.json</code>.</p>
+
+<h3>Baseline: 22m 14.2s, 7,604,947 tokens, 390 elements recorded</h3>
+<dl class="terms">
+      <dt>asked</dt><dd>&ldquo;Take the surface the task brief names - never one you assumed - in headless Chromium, and capture it BEFORE any change.&rdquo; The row's task text names neither a viewport nor a state: it says only that compare must shoot &ldquo;the same viewports and states the baseline recorded&rdquo;. So the protocol is the surveyor's choice, and the row's requirement is that compare inherit it: 3 viewports (1440x900, 1280x800, 1024x768) and 2 states (open, search), recorded in <code>comparison.json</code> as <code>protocol.sameAsBaseline: true</code>.</dd>
+      <dt>produced</dt><dd><code>baseline/capture.json</code> (48,482 bytes) and <code>verdict.json</code>: 6 capture pairs, 12 PNGs (a surface and a full-page shot per pair), 390 inventoried elements (72 open, 58 search, per viewport). Committed <code>21d6423</code>.</dd>
+      <dt>cost</dt><dd>22m 14.2s stage, 22m 06.1s worker, 2.7s spawn wait. 7,604,947 tokens (38.9% of the walk), 55,793 output.</dd>
+      <dt>handed on</dt><dd>H-01 to implement, artifact sha <code>785ae2c9&hellip;</code>. The implement run's <code>inputs</code> record the same sha and the edge <code>H-01</code>.</dd>
+      <dt>gate</dt><dd>G1 <code>recorded</code> at 05:15:50. The gate checks that every recorded viewport has a shot whose file exists and that both inventories name at least one element.</dd>
+</dl>
+<p>The stage also recorded the defect nobody asked about: an overflow entry <code>presets-clipped-by-body</code>, the last strip's bottom at <code>598.28125</code> against a body bottom of <code>593</code>. It is the only entry in the baseline's overflow list, and it is what makes the after set's missing entry a measurement rather than a claim.</p>
+
+<h3>Implement: 13m 48.4s, 3,025,599 tokens, 9 inserted lines</h3>
+<dl class="terms">
+      <dt>asked</dt><dd>&ldquo;Read the brief and the baseline capture, and make the improvement the brief asks for on the surface the brief names. Write the change as one change-set - a patch a reader can apply to the surface - with a note per change&hellip;&rdquo;. The row's task text allowed this stage to write in <code>public/</code> and <code>lib/</code> and to commit on the branch, which is why the change is a commit and not only a patch.</dd>
+      <dt>produced</dt><dd><code>change-set.patch</code> (5,120 bytes; 1 file, 9 insertions, 0 deletions) and an after set of its own, <code>ledger/gui-improve/after/</code> (18 files, 4.0 MB). Committed <code>c065c4f</code>, the only commit in the walk that touches <code>public/</code>.</dd>
+      <dt>cost</dt><dd>13m 48.4s stage, 13m 40.0s worker, 7.4s spawn wait. 3,025,599 tokens (15.5%), 28,220 output.</dd>
+      <dt>handed on</dt><dd>H-02 to compare, artifact sha <code>c9eedbfa&hellip;</code>; compare's <code>inputs</code> record it with edge <code>H-02</code>.</dd>
+      <dt>gate</dt><dd>None directly: G2 sits after compare. But this stage did catch a defect in its own first attempt, the search-filter paint bug quoted in section 3.</dd>
+</dl>
+<p>The patch's own header is honest about a wart: &ldquo;status APPLIED in this tree: public/style.css already carries both rules, so the compare stage's after shots are of the applied surface. To reproduce them from a clean tree, apply this patch to <code>21d6423</code> first; on this tree there is nothing left to apply.&rdquo; The artifact cannot be applied where it ships.</p>
+
+<h3>Compare: 24m 53.5s, 6,643,285 tokens, 2.502% of the surface moved</h3>
+<dl class="terms">
+      <dt>asked</dt><dd>&ldquo;Re-shoot the same surface at the same viewports in the same states with the change-set applied and nothing else changed. Diff each after shot against its before shot and each inventory against its baseline counterpart&hellip;&rdquo;</dd>
+      <dt>produced</dt><dd><code>comparison.json</code> (schema <code>comparison/1</code>), <code>comparison.html</code>, <code>verdict.json</code>, 12 diff PNGs and a fresh after set: 6 pairs, 12 shots. Committed <code>61b1bbc</code>, the largest commit of the walk (36 files).</dd>
+      <dt>cost</dt><dd>24m 53.5s stage, 24m 49.6s worker, 3.8s spawn wait. 6,643,285 tokens (34.0%), 58,602 output.</dd>
+      <dt>measured</dt><dd>26,537 of 1,060,800 surface pixels moved (2.502%), per pair 3560, 5277, 3554, 5271, 3579, 5296. DOM 72 &rarr; 72 elements, 20/20 controls identical, 2 CSS rules added and 0 removed, 16 painted elements changed, 52 <code>:root</code> variables unchanged. Tests: 24 pass, 0 fail, exit 0. The same three preset strips: pill widths spread 11.55 and 5.78 px &rarr; 0.00, gaps 8/0 &rarr; 2/6.</dd>
+      <dt>gate</dt><dd>G2 <code>improved</code> at 05:54:03, routed to H-03. </dd>
+</dl>
+
+<h3>Review: 10m 43.6s, 2,289,845 tokens, 0 notes</h3>
+<dl class="terms">
+      <dt>asked</dt><dd>&ldquo;Read the comparison and the change-set against the brief and decide. Accept in one line, or reject with one note per defect: the surface, the defect, the evidence and the fix it needs&hellip; Do not edit the change-set.&rdquo;</dd>
+      <dt>produced</dt><dd>Two files and 16 inserted lines: <code>review.md</code> (9 lines) and <code>review-verdict.json</code> (7 lines). Committed <code>d38413d</code>.</dd>
+      <dt>cost</dt><dd>10m 43.6s stage, 10m 28.1s worker, 15.3s spawn wait. 2,289,845 tokens (11.7%), 22,192 output.</dd>
+      <dt>checked</dt><dd>Eight items: patch scope and round trip against <code>21d6423:public/style.css</code> (patched sha256 <code>53e11ef9&hellip;</code> equals the captured after stylesheet), the six pairs' shot hashes and 340x520 dimensions, the diff files, the comparison page's six sections, the capture protocol against the baseline's, DOM 72/72 and 20/20 controls, panel height 453.06 &rarr; 447.06, and the tests re-run on HEAD at 24 pass.</dd>
+      <dt>gate</dt><dd>G3 <code>accept</code> with <code>notes: 0</code> at 06:03:39; <code>accept</code> routes to nothing, so the pipeline ended and the row settled at 06:05:52.</dd>
+</dl>
+<p>So the walk's shape is three sequence edges and no loop. The pipeline that can reject, correct and re-compare never had to; what it recorded is the best case.</p>
+
+<h2 id="caught">3. What the pipeline caught that one worker would have missed</h2>
+<p>None of these changed a verdict: every gate accepted on the first pass. They changed what the acceptance is worth. Each row names the record that carries it, and what a single worker's report would have said instead.</p>
+<div class="wide"><table class="fixed"><colgroup><col style="width:21%"><col style="width:47%"><col style="width:32%"></colgroup>
+    <thead><tr><th>caught</th><th>where the record shows it</th><th>what a single worker's report would have said</th></tr></thead>
+    <tbody>
+      <tr><td>A strip that stayed painted under the search filter</td><td>change-set.patch, Change 1: &ldquo;&hellip; without that the hidden rows' strips stayed painted in the search state (seen and fixed during this stage).&rdquo; The selector is wrapped in <code>:where()</code> to keep class weight, so <code>.settings-group .search-hidden{display:none}</code> still wins over <code>display:grid</code>.</td><td>the open panel at 340 px. Nothing about that view asks the worker to type &ldquo;budget&rdquo; into the filter and look at the rows it removes.</td></tr>
+      <tr><td>A 5.28 px clip at the window's bottom edge</td><td>baseline recorded <code>overflow[0]</code> = <code>presets-clipped-by-body</code>, bottom <code>598.28125</code> against <code>bodyBottom 593</code>; the after set has no overflow entry, and review checked &ldquo;the last strip no longer clipped&rdquo;.</td><td>&ldquo;looks better&rdquo;. A 5 px clip inside a 340&times;520 window is not visible in a glance, and it was not in the brief.</td></tr>
+      <tr><td>The patch is the change that was measured</td><td>review.md: &ldquo;patch scope and round trip against 21d6423:public/style.css (patched sha256 53e11ef9&hellip; equals the captured after stylesheet)&rdquo;.</td><td>&ldquo;I changed the CSS in the same commit&rdquo;, which nothing can falsify after the fact.</td></tr>
+      <tr><td>Nothing else moved</td><td>comparison.json integrity: 72 &rarr; 72 elements, 0 role/name/text changes, 0 added or removed, 2 CSS rules added and 0 removed, 52 <code>:root</code> variables unchanged, <code>noNewOverflow: true</code>, <code>minFontNotSmaller: true</code>; 24 tests pass, 0 fail.</td><td>a report of what it changed. The absence of collateral change is not something a single worker reports, because it has nothing to compare against.</td></tr>
+      <tr><td>A change the machine gate passed and the reviewer rejected</td><td>proof run, 04:09: a G2 <code>improved</code> with 44 checks and 0 failed, tests exit 0, then a G3 <code>reject</code> with one note (&sect;4). The reviewer's criterion was not in G2's 44 checks.</td><td>one opinion, formed once. Here two roles read the same evidence and disagreed, and the disagreement was recorded, corrected and re-measured.</td></tr>
+    </tbody></table></div>
+<p><b>What it did not catch.</b> G2's checks are the protocol's checks, and a defect outside the protocol is invisible to it. The proof run's 20 px panel growth passed 44 of 44 checks before the reviewer rejected it (&sect;4). This walk's G2 has three target booleans and four integrity booleans; none of them is a height budget, so the same defect class would pass again. The pipeline's catch is uneven by construction: it catches what its capture protocol photographs, and everything else falls to the reviewer.</p>
+<p><b>A second blind spot is structural.</b> The row never names a viewport or a state; it requires only that compare shoot the ones the baseline recorded. A baseline that recorded one viewport in one state would satisfy the row, and nothing in G1 or G2 asks whether the protocol is broad enough to see the defect the brief describes. This walk was lucky in its protocol, not checked by it.</p>
+
+<h2 id="honesty">4. The honesty check: the reject that is not in this run</h2>
+<p>The row's brief asks for a review gate that is <em>free</em> to reject with a note: &ldquo;the review gate must be free to reject with a note&rdquo;. It does not ask for a reject, and the walk produced none. Four readings establish that, and none of them is an inference:</p>
+<div class="wide"><table class="fixed"><colgroup><col style="width:26%"><col style="width:74%"></colgroup>
+    <thead><tr><th>record</th><th>what it reads</th></tr></thead>
+    <tbody>
+      <tr><td><code>review-verdict.json</code></td><td><code>"outcome": "accept"</code>, <code>"notes": 0</code>, <code>"comparison": "improved"</code></td></tr>
+      <tr><td><code>review.md</code></td><td>"ACCEPT ... No note open." at 06:03:39.284Z</td></tr>
+      <tr><td><code>pipelineRun.stageRuns</code></td><td>four runs, each <code>visit: 1</code>; crossings H-01 1, H-02 1, H-03 1</td></tr>
+      <tr><td><code>row.reason</code></td><td>&ldquo;its artifact review-notes (review/1, kind file) is not a PR to land, so the row settles on the stage's own verdict&rdquo;</td></tr>
+    </tbody></table></div>
+<p>So the centrepiece this row was expected to carry - a first attempt rejected, a note written, a correction forced - is not in #256. If it is anywhere, it is in the proof run that put <code>gui-improve</code> into the bundle 45 minutes earlier, and there it is.</p>
+
+<h3>The one reject this pipeline has</h3>
+<p><code>add-generic-gui-pipeline-to-bundle-4c4680</code> holds the ledger of <code>gui-improve</code>'s first run: 7 stage runs, visits <code>{baseline:1, implement:1, compare:2, review:2, correct:1}</code>, crossings <code>{H-01:1, H-02:1, H-03:2, H-05:1, H-06:1}</code>. Review visit 1, at 04:09:27, rejected with one note. Quoted from the correct stage's record, which is where it survives:</p>
+<blockquote>
+  <p>the change grows the General panel by 20px at 1440x900 (453px before, 473px after), and the last preset row's pills end at 598px before and 614px after against a 594px window — the row must keep the 8px footprint it already had, split in favour of the space below it. fix: css: #settings-panel-general .settings-presets { margin-top: 3px; margin-bottom: 5px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px 6px; }</p>
+  <span class="src">correction.md, gui-improve visit 1, under &ldquo;notes read: 1&rdquo;. The rule it replaced is quoted in full in that file.</span>
+</blockquote>
+<p>The note is quoted from <code>correction.md</code> and not from the reviewer's own file because the reviewer's file was overwritten. What survives, and what does not:</p>
+<div class="wide"><table class="fixed"><colgroup><col style="width:18%"><col style="width:12%"><col style="width:70%"></colgroup>
+    <thead><tr><th>record</th><th>state</th><th>what it carries</th></tr></thead>
+    <tbody>
+      <tr><td><code>correction.md</code></td><td>intact</td><td>the note verbatim, &ldquo;notes read: 1&rdquo;, the rule it replaced, the change-set's new sha256 <code>c0cc7d69&hellip;</code></td></tr>
+      <tr><td><code>run-ledger.json</code></td><td>intact</td><td><code>workerRuns</code> run-04 stdout "review: reject - 1 note(s)"; the journal and steps show reject &rarr; correct &rarr; compare &rarr; review</td></tr>
+      <tr><td><code>README.md</code></td><td>intact</td><td>the run table, row 4: &ldquo;G3 reject - 1 note: the change grew the panel by 20 px&hellip;&rdquo;</td></tr>
+      <tr><td><code>review.md</code></td><td><b>overwritten</b></td><td>now visit 2's accept; visit 1's reject text is gone</td></tr>
+      <tr><td><code>review-verdict.json</code></td><td><b>overwritten</b></td><td>now <code>accept</code> / <code>notes: 0</code>; visit 1's reject is gone</td></tr>
+      <tr><td>git history</td><td><b>none</b></td><td><code>ledger/gui-improve/</code> is untracked in that worktree (<code>git status</code>: <code>?? ledger/gui-improve/</code>), so no commit holds the rejected blobs</td></tr>
+    </tbody></table></div>
+<p>What the reject did: correct replaced one rule (margins 4/14 &rarr; 3/5, keeping the row's 8 px footprint), compare re-shot and called it <code>improved</code> (44 checks, 0 failed, tests exit 0), and review accepted on visit 2. The run took 1m 03.3s end to end, 52.1s of it in seven seats - and the seats were scripts (<code>job-run-01</code> to <code>job-run-07</code>, 422 to 17,966 ms each), so it proves the mechanism, not the labour.</p>
+
+<h3>What the reject set, and where it shows up in #256</h3>
+<p>The criterion the note set is the one #256's implement satisfies: 2 px above and 6 px below, an 8 px footprint like the old 8/0, where the earlier first attempt used 4/14 and grew the panel by 20 px. The review then checked the two numbers the note had named: panel height 453.06 &rarr; 447.06 with no growth, and the last strip's bottom at 592.28 inside the 593 px body. It is convergence, not instruction: this walk's <code>inputs</code> list only the baseline, and the note sits in another worktree, so the implementer could not have read it. What the earlier reject proves is that the criterion is discoverable from the same measurements, and that only the reviewer applied it. That is the centrepiece of the pipeline's record even though it belongs to an earlier run: the one time one gate overruled another.</p>
+<p>The earlier run's change also never landed: its own baseline README says &ldquo;that run's change never landed&rdquo;, and <code>main:public/style.css:438</code> confirms it. Two accepted walks, zero lines on main.</p>
+
+<h2 id="friction">5. What got in the way, or felt wasteful</h2>
+<ol>
+  <li><b>27m 53.9s before the first stage ran.</b> The row was created at 04:26:18 and its tree cut at 04:54:12. It carries no hold flag, and #257, created 26 minutes later, started in 1m 20s. The record does not say why. That wait is 28% of the 99m 33.6s from row to verdict.</li>
+  <li><b>The walk's output is not a landing.</b> <code>main:public/style.css:438</code> is still the flex rule; the branch is only local; there is no PR for it; the row's reason says the review artifact &ldquo;is not a PR to land&rdquo;. The row's brief asked for &ldquo;code on main rather than a ledger entry&rdquo; and did not get it.</li>
+  <li><b>24.4 MB of evidence for 9 lines.</b> 76 files, 48 PNGs (14.8 MB). Baseline 14.6 MB, compare 5.7 MB, implement's own after set 4.0 MB, patch 5,120 bytes.</li>
+  <li><b>Full-page shots the diff cannot use.</b> The six baseline full-page PNGs are 15,859 to 17,304 px tall (122,336,992 px); the after set is 874 to 1,017 px (6,913,536 px). <code>comparison.json</code> says the full-page record &ldquo;is not pixel-comparable with the baseline's full-page shot&rdquo; and that the 340x520 <code>surfaceFile</code> &ldquo;is the stable pair to diff&rdquo;. The baseline full-page set is 115.3 times the comparable pixels.</li>
+  <li><b>The implement stage's after set was thrown away.</b> 18 files, 4,040,362 bytes, committed in <code>c065c4f</code>. Its README says compare &ldquo;may overwrite this directory&rdquo;; compare shot its own set on a different port (7393 against 7391), and <code>comparison.json</code>'s <code>inputs.after</code> points there. No later stage reads it.</li>
+  <li><b>The review re-derived what compare recorded.</b> Five of its eight checked items restate <code>comparison.json</code> values, one is the comparison page's own sections, one re-runs compare's test command. The patch round trip is the one genuinely new check. Cost: 10m 43.6s, 2,289,845 tokens, 22,192 output, for 16 inserted lines.</li>
+  <li><b>The change-set cannot be applied where it ships.</b> Its status line says &ldquo;APPLIED in this tree ... on this tree there is nothing left to apply&rdquo;, so review had to round-trip it against <code>21d6423:public/style.css</code>. A reader who opens the artifact in the tree that produced it has nothing to run.</li>
+  <li><b>The row's visits cannot see rework inside a stage.</b> <code>{baseline:1, implement:1, compare:1, review:1}</code>, while implement found and fixed a defect before committing. Visits count commits, not attempts, so &ldquo;right first time&rdquo; is not distinguishable from &ldquo;fixed before anyone looked&rdquo;.</li>
+  <li><b>Two stages that had already decided kept the row.</b> Review's verdict file is stamped 06:03:39 and the panel settled at 06:05:52 (2m 13.3s later); compare's is stamped 05:54:03 and settled at 05:55:08 (1m 5.6s later). Both settles land within 0.3 s of the job's own end, so the wait is the run, not the gate: 3m 18.9s, 4.6% of the walk. The spawn gaps between stages are minor by comparison: 29.1s across four stages.</li>
+</ol>
+
+<h2 id="ranked">6. Ranked improvements, with the evidence beside each</h2>
+<p>Ranked by what the records show each would save on a walk like this one. Effort is not scored: none of these was built or timed, and every &ldquo;what it saves&rdquo; figure is an estimate from the measurements above.</p>
+<div class="wide"><table class="fixed"><colgroup><col style="width:4%"><col style="width:27%"><col style="width:47%"><col style="width:22%"></colgroup>
+    <thead><tr><th>#</th><th>improvement</th><th>evidence</th><th>what it saves (estimate)</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td><b>Land in the pipeline.</b> Give gui-improve a terminal stage (or route G3's <code>accept</code>) that pushes the branch, opens the PR and runs <code>npm run land:pr</code>. The tools already exist; the document has no stage that calls them.</td><td><code>main:public/style.css:438</code> is still <code>.settings-presets{display:flex;...margin-top:8px}</code>; <code>git branch --contains d38413d</code> lists only the wtgui branch; <code>gh pr list --head wtgui/take-the-surface-the-task-brief-names-856f1f --state all</code> is <code>[]</code>; the row's own reason says the review artifact &ldquo;is not a PR to land&rdquo;; the row's brief asked for &ldquo;code on main rather than a ledger entry&rdquo;.</td><td>the walk's whole value. Two accepted walks, zero lines on main.</td></tr>
+      <tr><td>2</td><td><b>Script the objective half of G3.</b> Keep the reviewer for judgement; move the hashes, counts, page sections and round trip into a script that runs before the seat is spawned, and refuse to spawn on a failure.</td><td>of the eight items review.md lists as checked, five restate values <code>comparison.json</code> already carries, one is the comparison page's own sections, one is the patch round trip (genuinely new), one re-runs compare's own test command. Cost: 10m 43.6s, 2,289,845 tokens, 22,192 out for 2 files and 16 inserted lines.</td><td>about 10 minutes and 2.3M tokens per accepted walk. Keep the reviewer: &sect;4's reject is the case where the agent beat the machine.</td></tr>
+      <tr><td>3</td><td><b>Capture for the diff, not for the archive.</b> Drop the full-page shot, or shoot it at a fixed content height. The 340&times;520 surface pair is the only picture the diff can use.</td><td>the 6 baseline full-page PNGs are 15,859 to 17,304 px tall (122,336,992 px) against a 874 to 1,017 px after set (6,913,536 px), and comparison.json says the full-page record &ldquo;is not pixel-comparable&rdquo; while <code>surfaceFile</code> &ldquo;is the stable pair to diff&rdquo;. The baseline directory is 14.6 MB of the 24.4 MB ledger.</td><td>about 14 MB per run committed to git, and part of the baseline's 22m 14.2s.</td></tr>
+      <tr><td>4</td><td><b>Let compare own the only after set.</b> Make the implement stage's verification a smoke check (the panel opens, no console error), not a full capture.</td><td>implement committed <code>ledger/gui-improve/after/</code>: 18 files, 4,040,362 bytes. Its README says &ldquo;the compare stage owns the final after set ... it may overwrite this directory&rdquo;, and no later stage reads it: <code>comparison.json</code> <code>inputs.after.capture</code> points at <code>compare/after/capture.json</code>, shot on a different port (7391 vs 7393).</td><td>about 4.0 MB per run, and part of the implement stage's 13m 48.4s.</td></tr>
+      <tr><td>5</td><td><b>Settle on the decision file, not the run's last message.</b> A stage that has written its verdict should not hold the row for the rest of its turn.</td><td>review's verdict file is stamped 06:03:39.284Z and the panel settled at 06:05:52.564Z (2m 13.3s later); compare's is stamped 05:54:03.390Z and settled at 05:55:08.996Z (1m 5.6s later). Both settles land within 0.3 s of the job's own end, so the wait is the job, not the gate.</td><td>3m 18.9s of a 71m 39.6s walk, 4.6%, in stages that had already decided.</td></tr>
+      <tr><td>6</td><td><b>Put the reviewer's invariants into G2.</b> A height budget and a clip check are arithmetic on the recorded DOM, not judgement.</td><td>proof run: G2 <code>improved</code> with 44 checks and 0 failed, then G3 rejected for growing the panel 20 px (453 &rarr; 473) and pushing the strip from 598 to 614 against a 594 px window. This walk's G2 has three target booleans and four integrity booleans; none of them is a height budget, so the same defect class would pass again.</td><td>a reject round trip: in the proof run, correct + compare + review = 3,261 + 17,966 + 422 ms of scripted seats; with agents, three more stage visits.</td></tr>
+      <tr><td>7</td><td><b>Record the attempt, not just the commit.</b> Count a stage's own retries so visits reflect work done.</td><td>the row reads <code>{baseline:1, implement:1, compare:1, review:1}</code>, but the implement stage found and fixed a defect in its own first attempt before committing (&ldquo;seen and fixed during this stage&rdquo;). The record's granularity is the commit, so &ldquo;right first time&rdquo; and &ldquo;fixed before anyone saw it&rdquo; are the same row.</td><td>the pipeline's ability to compare stages on first-time-right, which is exactly what 1/1/1/1 currently claims.</td></tr>
+    </tbody></table></div>
+
+<h2 id="limits">7. What this page does not claim</h2>
+<ul>
+  <li>One walk of one pipeline on one surface in one assistant's queue. Nothing here generalises to the other 11 pipelines in the bundle.</li>
+  <li>Token counts are the panel's per-job totals from <code>jobs.json</code> (input + output). They are not a billing statement, and no cache split is recorded.</li>
+  <li>The proof run's seven seats were scripts. Its 1m 03.3s says nothing about what an agent review costs; this run's 10m 43.6s does.</li>
+  <li>The 27m 53.9s before the tree was cut has no recorded cause. The row has no hold flag and a later row started within 80 seconds, so queue order does not explain it; the record does not say what the panel was doing.</li>
+  <li>Whether the CSS should land is not judged here. The page judges the pipeline's output, not its taste.</li>
+  <li>The pipeline's proof is strong. Calling part of it wasteful is a claim about the parts no later stage reads, not about the parts that make the verdict checkable.</li>
+  <li>Times are UTC as the panel records them; the tree's commits are dated in local time (-0500), so the commit dates and the stage times differ by five hours.</li>
+</ul>
+
+<h2 id="sources">8. Sources</h2>
+<div class="wide"><table class="fixed"><colgroup><col style="width:34%"><col style="width:66%"></colgroup>
+    <thead><tr><th>record</th><th>what it establishes</th></tr></thead>
+    <tbody>
+      <tr><td><code>~/.wag/state/assistants/assistant-1/queue.json</code></td><td>row 256: <code>createdAt</code>, <code>detail</code>, <code>state</code>, <code>reason</code>, and <code>pipelineRun</code> (visits, crossings, four stageRuns with artifact sha256, commits and decisions).</td></tr>
+      <tr><td><code>~/.wag/state/jobs.json</code></td><td>the four jobs <code>24695761</code>, <code>fd67f1a9</code>, <code>349317f5</code>, <code>0b684d3d</code>: start, end and token totals.</td></tr>
+      <tr><td><code>~/.wag/state/pipeline-bundle.json</code></td><td>the <code>gui-improve</code> document: 5 stages, 3 roles, 3 gates, 6 edges, the two loop caps, and G3's own <code>verified_by</code>.</td></tr>
+      <tr><td><code>ledger/gui-improve/baseline/</code></td><td>capture.json (48,482 bytes), verdict.json (6 pairs, 390 elements), and the <code>overflow[0]</code> clip.</td></tr>
+      <tr><td><code>ledger/gui-improve/change-set.patch</code></td><td>1 file, 9 insertions; the <code>:where()</code> note; the &ldquo;APPLIED in this tree ... nothing left to apply&rdquo; status.</td></tr>
+      <tr><td><code>ledger/gui-improve/compare/</code></td><td>comparison.json and verdict.json: 26,537 / 1,060,800 px, integrity booleans, tests, and the full-page note.</td></tr>
+      <tr><td><code>ledger/gui-improve/review.md</code>, <code>review-verdict.json</code></td><td>accept, 0 notes, the round trip and the checks list.</td></tr>
+      <tr><td><code>&hellip;/add-generic-gui-pipeline-to-bundle-4c4680/ledger/gui-improve/</code></td><td>the proof run: correction.md (the reject note verbatim), run-ledger.json (7 stage runs, worker ms, reject stdout), README.md (the run table).</td></tr>
+      <tr><td><code>main:public/style.css</code></td><td>line 438 still the flex rule the walk's change replaces.</td></tr>
+    </tbody></table></div>
+
+<h3>Re-deriving the figures</h3>
+<pre>git -C C:/ProjectDevelopment/agent-worktree-gui/.worktrees/take-the-surface-the-task-brief-names-856f1f log --oneline 10a83c2..d38413d
+git -C C:/ProjectDevelopment/agent-worktree-gui show main:public/style.css | sed -n '438p'
+gh pr list --head wtgui/take-the-surface-the-task-brief-names-856f1f --state all   # run inside the repo
+du -sb C:/ProjectDevelopment/agent-worktree-gui/.worktrees/take-the-surface-the-task-brief-names-856f1f/ledger/gui-improve
+python -c "import json;d=json.load(open(r'C:/Users/roper/.wag/state/assistants/assistant-1/queue.json'));t=[x for x in d['tasks'] if x['id']==256][0];print(t['pipelineRun']['visits'],t['pipelineRun']['crossings'])"</pre>
+<p class="small">The last command prints the visits and crossings; the token and time figures come from the same row's <code>stageRuns</code> joined to <code>jobs.json</code> by job id, and the byte counts from <code>du -sb</code> over the ledger.</p>
+
+<p class="source" style="margin-top:34px">Written 2026-11-09 on branch <code>wtgui/write-docs-reports-gui-improve-2d699e</code>. One self-contained file: no scripts, no fonts, no network. The page was rendered from the records named above; its counts are computed from them, not typed.</p>
+
+</main>
+</body>
+</html>
