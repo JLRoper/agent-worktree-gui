@@ -85,7 +85,7 @@
   <p>The rejected first attempt this row was expected to show is not in its records. Section 4 says so with the four readings that establish it, and quotes the one reject this pipeline does have, from the proof run 45 minutes earlier.</p>
 </div>
 
-<div class="cards"><div class="card"><b>4</b><span>stage runs, one visit each</span></div><div class="card"><b>3</b><span>crossings: H-01, H-02, H-03</span></div><div class="card"><b>71m 39.6s</b><span>stage time, 71m 03.8s in the workers</span></div><div class="card"><b>19,563,676</b><span>tokens, 164,807 output</span></div><div class="card"><b>24.4 MB</b><span>ledger: 76 files, 48 PNGs</span></div><div class="card"><b>9 / 0</b><span>lines added, lines on main</span></div></div>
+<div class="cards"><div class="card"><b>4</b><span>stage runs, one visit each</span></div><div class="card"><b>3</b><span>crossings: H-01, H-02, H-03</span></div><div class="card"><b>71m 39.6s</b><span>stage time, 71m 03.8s in the workers</span></div><div class="card"><b>19,563,676</b><span>tokens, 164,807 output</span></div><div class="card"><b>24.4 MB</b><span>ledger: 75 files, 48 PNGs</span></div><div class="card"><b>9 / 0</b><span>lines added, lines on main</span></div></div>
 
 <h2 id="pipeline">1. The pipeline the run was pinned to</h2>
 <p><code>gui-improve</code> is one of 12 pipeline documents in the bundle at <code>~/.wag/state/pipeline-bundle.json</code>. The run recorded the document it started under as route <code>sha256:1bdc54c4&hellip;</code>; the graph below is the document the bundle holds today for that id.</p>
@@ -248,7 +248,7 @@
 <ol>
   <li><b>27m 53.9s before the first stage ran.</b> The row was created at 04:26:18 and its tree cut at 04:54:12. It carries no hold flag, and #257, created 26 minutes later, started in 1m 20s. The record does not say why. That wait is 28% of the 99m 33.6s from row to verdict.</li>
   <li><b>The walk's output is not a landing.</b> <code>main:public/style.css:438</code> is still the flex rule; the branch is only local; there is no PR for it; the row's reason says the review artifact &ldquo;is not a PR to land&rdquo;. The row's brief asked for &ldquo;code on main rather than a ledger entry&rdquo; and did not get it.</li>
-  <li><b>24.4 MB of evidence for 9 lines.</b> 76 files, 48 PNGs (14.8 MB). Baseline 14.6 MB, compare 5.7 MB, implement's own after set 4.0 MB, patch 5,120 bytes.</li>
+  <li><b>24.4 MB of evidence for 9 lines.</b> The commit carries 75 files and 24,383,004 bytes of blobs, 48 of them PNGs (14.8 MB on disk). A <code>du</code> of the checkout reads 24,401,037: the difference is CRLF expansion plus the ignored <code>compare/tests.log</code>. Baseline 14.6 MB, compare 5.7 MB, implement's own after set 4.0 MB, patch 5,120 bytes.</li>
   <li><b>Full-page shots the diff cannot use.</b> The six baseline full-page PNGs are 15,859 to 17,304 px tall (122,336,992 px); the after set is 874 to 1,017 px (6,913,536 px). <code>comparison.json</code> says the full-page record &ldquo;is not pixel-comparable with the baseline's full-page shot&rdquo; and that the 340x520 <code>surfaceFile</code> &ldquo;is the stable pair to diff&rdquo;. The baseline full-page set is 115.3 times the comparable pixels.</li>
   <li><b>The implement stage's after set was thrown away.</b> 18 files, 4,040,362 bytes, committed in <code>c065c4f</code>. Its README says compare &ldquo;may overwrite this directory&rdquo;; compare shot its own set on a different port (7393 against 7391), and <code>comparison.json</code>'s <code>inputs.after</code> points there. No later stage reads it.</li>
   <li><b>The review re-derived what compare recorded.</b> Five of its eight checked items restate <code>comparison.json</code> values, one is the comparison page's own sections, one re-runs compare's test command. The patch round trip is the one genuinely new check. Cost: 10m 43.6s, 2,289,845 tokens, 22,192 output, for 16 inserted lines.</li>
@@ -298,12 +298,12 @@
     </tbody></table></div>
 
 <h3>Re-deriving the figures</h3>
-<pre>git -C C:/ProjectDevelopment/agent-worktree-gui/.worktrees/take-the-surface-the-task-brief-names-856f1f log --oneline 10a83c2..d38413d
-git -C C:/ProjectDevelopment/agent-worktree-gui show main:public/style.css | sed -n '438p'
-gh pr list --head wtgui/take-the-surface-the-task-brief-names-856f1f --state all   # run inside the repo
-du -sb C:/ProjectDevelopment/agent-worktree-gui/.worktrees/take-the-surface-the-task-brief-names-856f1f/ledger/gui-improve
-python -c "import json;d=json.load(open(r'C:/Users/roper/.wag/state/assistants/assistant-1/queue.json'));t=[x for x in d['tasks'] if x['id']==256][0];print(t['pipelineRun']['visits'],t['pipelineRun']['crossings'])"</pre>
-<p class="small">The last command prints the visits and crossings; the token and time figures come from the same row's <code>stageRuns</code> joined to <code>jobs.json</code> by job id, and the byte counts from <code>du -sb</code> over the ledger.</p>
+<pre>git log --oneline 10a83c2..d38413d
+git show main:public/style.css | sed -n '438p'
+gh pr list --head wtgui/take-the-surface-the-task-brief-names-856f1f --state all
+git ls-tree -r -l d38413d -- ledger/gui-improve | awk '{s+=$4;n++} END {print n, s}'
+python -c "import json,os;d=json.load(open(os.path.expanduser('~/.wag/state/assistants/assistant-1/queue.json')));t=[x for x in d['tasks'] if x['id']==256][0];print(t['pipelineRun']['visits'],t['pipelineRun']['crossings'])"</pre>
+<p class="small">Run these in the repository root. The last command prints the visits and crossings; the ledger command prints <b>75</b> and <b>24383004</b>, the bytes the commit carries; the token and time figures come from the same row's <code>stageRuns</code> joined to <code>jobs.json</code> by job id.</p>
 
 <p class="source" style="margin-top:34px">Written 2026-11-09 on branch <code>wtgui/write-docs-reports-gui-improve-2d699e</code>. One self-contained file: no scripts, no fonts, no network. The page was rendered from the records named above; its counts are computed from them, not typed.</p>
 
