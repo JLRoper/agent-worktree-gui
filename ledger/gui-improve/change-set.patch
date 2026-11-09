@@ -1,0 +1,112 @@
+change-set/1
+
+surface   Settings -> Board, the #settings-panel-board tab of the Settings window (#settings) on
+          http://127.0.0.1:7493/ (this stage's tree, panel 1.71.0)
+baseline  44b4278 (ledger/gui-improve/baseline/capture.json). The capture's manifest records the served
+          style.css as c9031470 (309,248 B) while the copy committed beside it is 07ac60dc (304,977 B);
+          both, and this stage tree's 94ac9d0 (302,378 B), have no rule for .settings-root, and the
+          capture's own css.json lists 0 rules whose selector names it, so the block is unstyled in
+          every copy and the target's numbers are the same whichever one is served. public/index.html
+          is 714e50c in the baseline and in this tree.
+applies   git apply -p1 from the repository root, on top of cbc07d7 (this stage's HEAD before the change)
+          or any tree whose public/index.html is 714e50c and whose style.css still has no
+          :where(#settings-panel-board) rule. The only difference between the baseline's committed
+          style.css and this tree's is the unrelated rules-chip block at line 3019, so the context
+          below sits identically in both.
+status    APPLIED in this tree: both files carry the change, so the after shots are of the applied
+          surface. To reproduce from a clean tree, apply this patch first; there is nothing left to
+          apply on this tree.
+
+Two files, one block: 13 new rules in public/style.css, all scoped to #settings-panel-board and kept at
+class weight with :where(), and one placeholder string in public/index.html. public/app.js, lib/ and
+server.js are untouched, and the markup the roots rows are drawn from (app.js paintScanRoots) did not
+change - only what the CSS does with it.
+
+Change 1 of 2 - the roots read as one control group
+  what moved: .settings-roots becomes a column of cards (4 px between them, 6 px above), and .settings-root
+    becomes a 28 px card: surface fill, 1 px line, 6 px radius, 8 px left padding, and a uniform 8 px gap
+    between its path, its state chip and its remove control. The path takes the row's slack (flex: 1 with
+    min-width: 0) and ellipsizes a path longer than that, with the full path kept in the markup's title;
+    the chip becomes a 10 px pill (the existing .bad variant gets a red border and fill); the ✕ becomes a
+    real 24x24 button with a hover fill instead of an unstyled UA button.
+  asked by: "The 'Folders the board scans' block must read as one control group: a visible gap between each
+    root's path, its state chip and its remove control" - the target sentence in
+    ledger/gui-improve/baseline/README.md ("The surface") and capture.json surface.change.
+  measured: path -> chip 0 -> 8 px; chip -> ✕ 3.84 -> 8 px; card height 28 -> 28 px (unchanged); ✕
+    31.8 x 28 -> 24 x 24 (the UA button's width had no relation to its glyph; 24 x 24 is the deliberate
+    target, and the title still names the folder). Identical at 1440x900, 1280x800 and 1024x768.
+
+Change 2 of 2 - the add row uses the width it has left, so its hint is readable
+  what moved: .settings-roots-add becomes a flex row (6 px gap, 6 px above) whose input takes the remaining
+    width (flex: 1, min-width: 0) at 26 px tall and 11.5 px mono, with the button 26 px tall and flush to
+    the row's right edge. The placeholder is shortened in public/index.html from "an absolute folder path
+    - e.g. the parent of your projects" to "an absolute folder path"; the full sentence stays in the
+    input's title.
+  asked by: "and the add-folder field given the width its row has left so its hint is readable" - the same
+    target sentence, its second clause.
+  measured: input 154 -> 223.52 px (client 222) of the 310 px row; button 78.375 -> 80.48 px; space right
+    of the button 73.78 -> 0.00 px; the hint 382.66 px at the UA's 13.33 px mono -> 145.42 px at 11.5 px,
+    inside the field's 222 px, so it paints whole (before: "an absolute folder pat"). The width alone could
+    not make the hint readable - 382.66 px does not fit even the whole 310 px row - so the hint was cut to
+    what the row can show and the rest kept in `title`. Identical at all three viewports.
+
+A consequence, not a third change: the Board panel's content is 14 px taller (scrollHeight 1599 -> 1613)
+from the 6 px above the cards, the 4 px between them and the 6 px above the add row. The Settings window
+still opens at 340 x 520 with the block's title, both cards and the add row in view, and no other row moved.
+
+The search state is unchanged: filling #settings-search with "flash" still hides the whole block
+(display: none on .settings-roots and .settings-roots-add), and clearing it restores the flex rows. Every
+selector is wrapped in :where() so these `display` declarations stay at class weight and the filter's
+`.settings-group .search-hidden { display: none }` still wins while the query is live.
+
+Verified with a Playwright Chromium probe against this tree served on 127.0.0.1:7493 with a scratch config
+whose scanRoots are C:/CodeReviews and C:/sefl-mvn-local (the baseline's two), at the baseline's three
+viewports and its `open` and `search` states; the numbers above are that run's, and the surface shots of
+the applied tree were read to confirm the block paints as one group. The compare stage owns the final
+after set and the comparison page.
+
+The diff follows.
+
+diff --git a/public/index.html b/public/index.html
+index dc87fe2..218881a 100644
+--- a/public/index.html
++++ b/public/index.html
+@@ -316,7 +316,7 @@
+         </div>
+         <div class="settings-roots" id="scan-roots"></div>
+         <div class="settings-roots-add">
+-          <input type="text" id="scan-root-input" class="mono" placeholder="an absolute folder path — e.g. the parent of your projects" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" spellcheck="false" title="the absolute path of a folder to scan — Enter adds it">
++          <input type="text" id="scan-root-input" class="mono" placeholder="an absolute folder path" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" spellcheck="false" title="the absolute path of a folder to scan — Enter adds it">
+           <button type="button" id="btn-scan-root-add" title="add this folder to the list and re-discover its projects">Add folder</button>
+         </div>
+         <div class="settings-preview mono" id="scan-roots-preview">…</div>
+diff --git a/public/style.css b/public/style.css
+index 94ac9d0..13336f8 100644
+--- a/public/style.css
++++ b/public/style.css
+@@ -394,6 +394,25 @@ thead th,
+ .settings-row input[type="url"]::placeholder, .settings-row input[type="password"]::placeholder, .settings-row input[type="text"]::placeholder { color: var(--dimmer); }
+ .settings-row input[type="number"]:disabled { color: var(--dimmer); background: #0e1218; }
+ .settings-unit { font-size: 11px; color: var(--dimmer); }
++/* Settings → Board > "Folders the board scans": one card per root, and an add row that uses the width it has.
++   The block had no rules at all, so the path's right edge WAS the chip's left edge (0 px — the row painted
++   `C:/CodeReviewsexists`), the ✕ sat 3.84 px off the chip, and the add field kept the UA's 154 px, so its
++   placeholder clipped to `an absolute folder pat` with 74 px of the row empty to the right of the button.
++   Scoped to the Board panel and kept at class weight with :where(), so `.settings-group .search-hidden
++   { display: none }` still wins over these `display` rules and a search that hides the block really hides it. */
++:where(#settings-panel-board) .settings-roots { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
++:where(#settings-panel-board) .settings-root { display: flex; align-items: center; gap: 8px; min-height: 28px; padding: 0 2px 0 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
++:where(#settings-panel-board) .settings-root-path { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--text); }
++:where(#settings-panel-board) .settings-root-chip { flex: none; padding: 0 6px; border: 1px solid #2c4a34; border-radius: 999px; background: #12251a; color: #7fd39a; font-size: 10px; line-height: 1.7; }
++:where(#settings-panel-board) .settings-root-chip.bad { border-color: #57262a; background: #2a1517; color: #ff9c94; }
++:where(#settings-panel-board) .settings-root-x { flex: none; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--dimmer); font: 12px/1 var(--mono); cursor: pointer; }
++:where(#settings-panel-board) .settings-root-x:hover { background: var(--panel-2); color: var(--text); }
++:where(#settings-panel-board) .settings-root-empty { margin-top: 6px; font-size: 11.5px; color: var(--dimmer); }
++:where(#settings-panel-board) .settings-roots-add { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
++:where(#settings-panel-board) .settings-roots-add input { flex: 1 1 auto; min-width: 0; box-sizing: border-box; height: 26px; padding: 4px 7px; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; font: 11.5px var(--mono); }
++:where(#settings-panel-board) .settings-roots-add input::placeholder { color: var(--dimmer); }
++:where(#settings-panel-board) .settings-roots-add button { flex: none; box-sizing: border-box; height: 26px; white-space: nowrap; padding: 0 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--text); font: 11px var(--mono); cursor: pointer; }
++:where(#settings-panel-board) .settings-roots-add button:hover { border-color: #3b4757; }
+ /* Settings → Updates > Release notes. One folded block per release, the newest open. The summary IS the heading a
+    reader scans — version, date, commit count — so a folded release still answers the three facts; the body is the
+    changelog's own group headings and bullets. `serving` marks the release this panel runs, which is the reader's
