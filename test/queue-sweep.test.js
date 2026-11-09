@@ -251,6 +251,67 @@ test("an idle queue with nothing open is not a wake", async (t) => {
   assert.equal(said.length, 0);
 });
 
+// A MANUAL PARK IS A DECISION, NOT WORK. Nothing about it can become false, so no sweep can ever act on it, and
+// counting it as open made the failsafe spend a full turn every queueIdleMinutes to answer that the queue is
+// clean. The board this row was written from held three of them (#116, #175, #213) and fired four such turns in
+// one day.
+test("a queue of only manual parks fires no idle alert, at any interval", async (t) => {
+  const parks = [
+    { id: 116, title: "parked for the reader", state: "parked", hold: { kind: "manual", value: "" }, reason: "not before the release" },
+    { id: 175, title: "parked again", state: "parked", hold: { kind: "manual", value: "" }, reason: "waiting on a human" },
+    { id: 213, title: "and once more", state: "parked", hold: { kind: "manual", value: "" }, reason: "later" },
+  ];
+  const { assistant, said } = await board(t, { tasks: parks });
+  assert.equal(assistant.openQueueRows("assistant-1").length, 0, "a manual park is not a row that needs a decision");
+  const start = assistant.bootedAt;
+  for (const minutes of [1, 29, 31, 60, 240, 1440]) {
+    assert.equal(
+      assistant.checkQueueIdle(start + minutes * MINUTE, []),
+      null,
+      `${minutes} min: three manual parks are not a queue with work left`,
+    );
+  }
+  await wait(250);
+  assert.equal(said.length, 0, "and no turn was spent saying the queue is clean");
+});
+
+test("one queued row still fires the alert, and a manual park beside it is not counted", async (t) => {
+  const rows = [
+    { id: 42, title: "start the sweep", state: "queued" },
+    { id: 116, title: "parked for the reader", state: "parked", hold: { kind: "manual", value: "" } },
+  ];
+  const { assistant, said } = await board(t, { tasks: rows });
+  const alert = assistant.checkQueueIdle(assistant.bootedAt + 31 * MINUTE, []);
+  assert.ok(alert && alert.rule === "queuesweep", "a queued row is work left on a quiet board");
+  assert.match(alert.title, /1 row still open/, "the park does not make it two");
+  assert.match(alert.detail, /#42/, "the row that is work is named");
+  assert.doesNotMatch(alert.detail, /#116/, "and the manual park is not");
+  await wait();
+  assert.equal(said.length, 1, "the sweep still goes out");
+  assert.match(said[0].text, /2\. Every RUNNING row/, "carrying the same four checks");
+});
+
+// The other half of the rule: a park that NAMES a blocker row is a row the sweep can unpark, so it stays open
+// and the alert names it.
+test("a parked row that names its blocker is still open work, and is named in the alert", async (t) => {
+  const rows = [
+    { id: 60, title: "the blocker", state: "queued" },
+    { id: 61, title: "waits on the blocker", state: "parked", hold: { kind: "task", value: "#60" }, reason: "after #60" },
+  ];
+  const { assistant, said } = await board(t, { tasks: rows });
+  const alert = assistant.checkQueueIdle(assistant.bootedAt + 31 * MINUTE, []);
+  assert.ok(alert && alert.rule === "queuesweep", "a park with a named blocker is work a sweep can act on");
+  assert.match(alert.title, /2 rows still open/);
+  assert.match(alert.detail, /#61/, "the parked row is named, so the sweep knows which park to test");
+  assert.ok(
+    alert.evidence.some((e) => e.label === "#61" && /parked/.test(e.value)),
+    "and it reads as parked on its blocker",
+  );
+  await wait();
+  assert.equal(said.length, 1);
+  assert.match(said[0].text, /4\. Every PARKED row: is the row it names as its blocker done\?/, "the four checks are unchanged");
+});
+
 test("a sweep never becomes a second run on a live thread", async (t) => {
   const { assistant, said, rows } = await board(t);
   // The assistant is mid-turn: a run of its own is live on its thread.
