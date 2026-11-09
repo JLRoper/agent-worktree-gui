@@ -58,6 +58,8 @@
     "verify:pipeline-catalogue": "node tools/verify-pipeline-catalogue.mjs",
     "verify:pdl-pipelines": "node tools/verify-pdl-pipelines.mjs",
     "verify:settings-skills": "node tools/verify-settings-skills.mjs",
+    "verify:settings-retry": "node tools/verify-settings-retry.mjs",
+    "measure:slow-panel": "node tools/measure-slow-panel.mjs",
     "verify:new-project": "node tools/verify-new-project.mjs",
     "verify:banner-timeout": "node tools/verify-banner-timeout.mjs",
     "verify:assistant-2-chat": "node tools/verify-assistant-2-chat.mjs",
