@@ -119,3 +119,62 @@ test("a two-stage round's trees are recorded as children of the round's parent, 
   assert.equal(groupCtxOf(tree, secondKey).hidden, true, "and the second");
   assert.equal(groupCtxOf(tree, mainKey).hidden, false, "the parent stays on screen");
 });
+
+// ---- the TITLE each of those rows paints ---------------------------------------------------------------------------
+//
+// The grouping above decides WHERE a round's trees are drawn; the title decides what each row is CALLED. That half is
+// `treeTitleOf` in public/app.js, a pure read of the row plus the page's stores, so it is proved at the same seam: the
+// real function, sliced out of the page, with a stub `state` under it. The case that matters is the one a fresh browser
+// is in - an EMPTY `wtgui.treenames` map - where the row must still read the round's own name.
+const appSource = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+const namingRegion = sliceRegion(appSource, "what a worktree is called on the board");
+const nameState = { projects: new Map(), treeNames: new Map() };
+const { treeTitleOf } = new Function("state", "keyOf", "agentsFor", "normPath", `${namingRegion}; return { treeTitleOf };`)(
+  nameState,
+  keyOf,
+  () => [],
+  (p) => String(p || "").replace(/\\/g, "/").replace(/\/+$/, ""),
+);
+// render-projects.js `rowHtml`'s own fallback: a title of "" draws the row's directory name.
+const shownNameOf = (row) => treeTitleOf(row) || row.name;
+const ROOT = "/repo/demo";
+const roundRow = (tail, round) => ({ project: "demo", path: `${ROOT}/.worktrees/${tail}`, name: tail, round });
+
+test("an empty treenames map still paints a round's own names, not the directory", () => {
+  nameState.projects = new Map([["demo", { path: ROOT }]]);
+  nameState.treeNames = new Map(); // a browser that has never typed a name
+
+  const parent = roundRow("round-a-052254", { role: "parent", display: "274: parent row reads the task name" });
+  const child = roundRow("round-a-stage-2-implement-9d41f0", { role: "stage", position: 2, display: "Stage 2: implement" });
+
+  assert.equal(treeTitleOf(parent), "274: parent row reads the task name");
+  assert.equal(treeTitleOf(child), "Stage 2: implement");
+  // The directory name is the fallback, so a row painting it is exactly what a fresh profile did before the record.
+  assert.notEqual(shownNameOf(parent), parent.name);
+  assert.notEqual(shownNameOf(child), child.name);
+});
+
+test("the record wins over a name typed into this browser; a record with no display leaves the directory", () => {
+  nameState.projects = new Map([["demo", { path: ROOT }]]);
+  nameState.treeNames = new Map([[keyOf("demo", `${ROOT}/.worktrees/round-a-052254`), "typed by hand in this profile"]]);
+
+  const parent = roundRow("round-a-052254", { role: "parent", display: "274: parent row reads the task name" });
+  assert.equal(treeTitleOf(parent), "274: parent row reads the task name", "the round's record is the board's name");
+
+  // A record that names the tree but carries no words: the page paints nothing, and the row shows the directory.
+  const bare = roundRow("round-a-legacy-1a2b3c", { role: "parent", display: null });
+  assert.equal(treeTitleOf(bare), "");
+  assert.equal(shownNameOf(bare), "round-a-legacy-1a2b3c");
+});
+
+test("a tree no round cut keeps the name the reader typed, then the agent's title", () => {
+  nameState.projects = new Map([["demo", { path: ROOT }]]);
+  nameState.treeNames = new Map([[keyOf("demo", `${ROOT}/.worktrees/plain-0a1b2c`), "typed by hand in this profile"]]);
+  assert.equal(treeTitleOf({ project: "demo", path: `${ROOT}/.worktrees/plain-0a1b2c`, name: "plain-0a1b2c" }), "typed by hand in this profile");
+  assert.equal(treeTitleOf({ project: "demo", path: `${ROOT}/.worktrees/other-0a1b2c`, name: "other-0a1b2c" }), "");
+});
+
+test("the project's own checkout keeps the folder's name whatever the record says", () => {
+  nameState.projects = new Map([["demo", { path: ROOT }]]);
+  assert.equal(treeTitleOf({ project: "demo", path: `${ROOT}/`, name: "demo", round: { role: "parent", display: "a round name" } }), "");
+});
