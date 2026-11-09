@@ -153,6 +153,56 @@ test("setTaskState stamps the timestamps each state owns", () => {
   assert.equal(requeued.task.doneBy, null);
 });
 
+// The round-4 defect: `linkTaskRun` unconditionally wrote `running` and cleared `hold`/`reason`, so a park written
+// while the spawn was linking was erased. The row then said a run had started and the gate it was waiting on was
+// gone from the record - and a park is the reader's decision, not a state the link may overrule.
+test("a link fills facts and leaves a park exactly as it was", () => {
+  const { tasks: added } = addTask([], { title: "the gate" }, { at: at("2024-05-01T10:00:00Z"), nextId: 11 });
+  const parked = setTaskState(added, 11, "parked", { hold: { kind: "manual", value: "" }, reason: "the gate could not be read", at: at("2024-05-01T10:05:00Z") });
+  const linked = linkTaskRun(parked.tasks, 11, { thread: "thread-X", runId: "run_abc123", worktree: "C:/trees/x", project: "menu", at: at("2024-05-01T10:06:00Z") });
+  assert.equal(linked.task.state, "parked", "a link is not a state transition");
+  assert.deepEqual(linked.task.hold, { kind: "manual", value: "", since: "2024-05-01T10:05:00.000Z" });
+  assert.equal(linked.task.reason, "the gate could not be read");
+  // ...and the facts it exists to record are all there.
+  assert.equal(linked.task.thread, "thread-X");
+  assert.equal(linked.task.runId, "run_abc123");
+  assert.equal(linked.task.worktree, "C:/trees/x");
+  assert.equal(linked.task.project, "menu");
+  assert.equal(linked.task.startedAt, "2024-05-01T10:06:00.000Z", "the start is still a fact the link records");
+
+  // The spawn's own path is unchanged: a queued row becomes running, with its start stamped and the hold cleared.
+  const { tasks: queued } = addTask([], { title: "go" }, { at: at("2024-05-01T10:00:00Z") });
+  const begun = linkTaskRun(queued, 1, { thread: "thread-Y", runId: "run_def456", at: at("2024-05-01T10:01:00Z") });
+  assert.equal(begun.task.state, "running");
+  assert.equal(begun.task.hold, null);
+  assert.equal(begun.task.reason, "");
+  assert.equal(begun.task.startedAt, "2024-05-01T10:01:00.000Z");
+});
+
+// The round-4 rows read 0 s for a 20 m 21 s job and a 14 m 00 s job, both stamped after the job had already ended:
+// the done branch backfilled `startedAt` with the done clock, so a row closed by hand before it ever ran claimed a
+// zero-length run. `startedAt` is the RUN's clock, written by a start and by nothing else.
+test("done keeps the start it has and never backfills one", () => {
+  const { tasks: handCut } = addTask([], { title: "hand cut" }, { at: at("2024-05-01T09:00:00Z") });
+  const closed = setTaskState(handCut, 1, "done", { by: "reader", reason: "closed by hand", at: at("2024-05-01T09:20:00Z") });
+  assert.equal(closed.task.startedAt, null, "a row that never started finishes with no start, not a zero-length run");
+  assert.equal(closed.task.doneAt, "2024-05-01T09:20:00.000Z");
+  assert.equal(closed.task.doneBy, "reader");
+
+  const { tasks: ran } = addTask([], { title: "really ran" }, { at: at("2024-05-01T09:00:00Z") });
+  const running = setTaskState(ran, 1, "running", { at: at("2024-05-01T09:02:00Z") });
+  const finished = setTaskState(running.tasks, 1, "done", { at: at("2024-05-01T09:22:00Z") });
+  assert.equal(finished.task.startedAt, "2024-05-01T09:02:00.000Z", "the run's own start survives the done");
+  assert.equal(finished.task.doneAt, "2024-05-01T09:22:00.000Z");
+  assert.equal(Date.parse(finished.task.doneAt) - Date.parse(finished.task.startedAt), 20 * 60_000, "20 minutes, not 0");
+
+  // A done row with no start is drawn as unknown, never as 0 s: the read paths a card uses do not throw on it.
+  const [decorated] = decorateTasks([closed.task], { isLive: () => false });
+  assert.equal(decorated.state, "done");
+  assert.equal(decorated.startedAt, null);
+  assert.doesNotThrow(() => queueDigest([closed.task], { isLive: () => false }));
+});
+
 test("setTaskState reports no change for the state it is already in, and refuses an unknown one", () => {
   const { tasks: added } = addTask([], { title: "t" });
   const same = setTaskState(added, 1, "queued");

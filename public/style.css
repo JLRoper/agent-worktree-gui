@@ -492,6 +492,15 @@ thead th,
 .settings-cols label:hover { color: var(--text); }
 .settings-cols input { flex: none; accent-color: #4a90d9; }
 .settings-presets { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+/* Settings → General: the preset strip under a number field is part of that field, not of the row below.
+   Rows carry no bottom margin, so one strip's 8 px above and 0 px below put the pills closer to the NEXT
+   field than to the one they set (app.js:12385 already filters a preset row with the row above it). The
+   strip now hugs its field and holds air below, and every pill is one equal segment of the strip, so
+   "5 s" and "1 min" cannot read as different-sized controls. Scoped to General: the other tabs' strips
+   were not captured and are left as they were. `:where()` keeps the selector at class weight, so the
+   search filter's `.settings-group .search-hidden { display: none }` still wins over this `display: grid`. */
+:where(#settings-panel-general) .settings-presets { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; margin: 2px 0 6px; }
+:where(#settings-panel-general) .settings-presets button { width: 100%; min-width: 0; padding: 1px 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .settings-presets button { padding: 1px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--dim); font: 10.5px/1.7 var(--mono); cursor: pointer; }
 .settings-presets button:hover { color: var(--text); border-color: #3b4757; }
 .settings-presets button.on { border-color: var(--q-line); color: var(--q-head); background: var(--surface); }

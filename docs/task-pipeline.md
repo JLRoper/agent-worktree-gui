@@ -57,13 +57,24 @@ record keeps the ledger of them:
 }
 ```
 
-- **The id is a string, `<pipeline>/<stage>#<visit>`.** `visit` comes from `visits[stage]`, incremented by the same
-  write that sets `enteredAt` — so a loop back into S8 is `#2`, the first entry is still `#1`, and a bundle re-export
+- **The id is a string, `<pipeline>/<stage>#<visit>`, and a later attempt of that visit is
+  `<pipeline>/<stage>#<visit>.<attempt>`.** `visit` comes from `visits[stage]`, incremented by the same
+  write that sets `enteredAt` - so a loop back into S8 is `#2`, the first entry is still `#1`, and a bundle re-export
   that inserts a stage renumbers nothing. Every user of the id (a journal line, a park's sentence, a test) names the
-  same thing.
+  same thing. The attempt suffix exists because ONE VISIT CAN BE STARTED MORE THAN ONCE - a spawn that failed before
+  the link, a retry after a start that had already linked a thread - and two entries sharing `#<visit>` let a settle
+  stamp whichever one the stage/visit match reached. The first attempt keeps the bare id, so every stored record and
+  every journal line naming `p/s1#1` still names one run, and no two entries in one ledger share an id.
 - **An entry is created when the START is asked for**, not when it settles: a stage that never started still names the
   attempt, and a start that was refused leaves its refusal on the record. `thread` and `job` are filled at the link.
-  A retry of the same visit reuses the entry — a retry is an attempt, not a visit.
+  A retry of the SAME attempt reuses its entry (the same thread, or a start that names no thread onto an entry that
+  names none either) - a retry is an attempt, not a visit. A start whose thread is already on an open entry is the
+  NEXT attempt: it gets its own id rather than overwriting the run that already linked.
+- **A settle names its own run, in order**: the entry on that thread, then the entry on that job, then the newest
+  open entry for the visit, and only then a new attempt (created on the spot, because the settle is the moment the
+  panel learned those facts). A settle never rewrites an entry whose non-empty thread or job is a different one. The
+  view's `stageRunId` is the id of the attempt the row is IN - the newest entry for the visit - and falls back to
+  `#<visit>` for a record written before the ledger existed.
 - **`stageRuns` is capped at 30, newest last, and the cap is the WRITER's** (`lib/task-pipeline.js`), because
   `pickTask` carries the record verbatim. A dropped entry increments `runsDropped`, the one number the cap must not lose.
 - **A record written before this existed reads as one visit of its stage**, an empty ledger and `route: null`. Nothing
