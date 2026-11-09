@@ -17,7 +17,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { parseBundle } from "../lib/pipeline-bundle.js";
-import { ASSISTANT_DECIDES, STAGE_RUNS_MAX, TASK_PIPELINE_FIELD, assignPipeline, beginStageRun, elapsedInStage, enterStage, resolveTaskPipeline, settleStageRun, stageRunId, stageRunsOf, visitsOf } from "../lib/task-pipeline.js";
+import { ASSISTANT_DECIDES, STAGE_RUNS_MAX, TASK_PIPELINE_FIELD, assignPipeline, beginStageRun, elapsedInStage, elapsedSince, enterStage, resolveTaskPipeline, settleStageRun, stageRunId, stageRunsOf, visitsOf } from "../lib/task-pipeline.js";
 
 // A thirteen-stage pipeline, because "stage 4 of 13" is the shape a card has to be able to say and a one-stage fixture
 // would pass while the position maths is wrong.
@@ -45,6 +45,38 @@ const bundle = parseBundle({
 // The fixed clock every elapsed assertion is made against: 15:00Z on the same day the task entered S3.
 const NOW = new Date("2026-11-03T15:00:00.000Z");
 const task = () => ({ id: "job-1", [TASK_PIPELINE_FIELD]: { pipeline: "poc-to-uat", stage: "S3", enteredAt: "2026-11-03T12:30:00.000Z" } });
+
+// The round-7 row's own numbers: created 2026-11-08T23:18:31.249Z, its LAST stage started 00:32:43.749Z, done
+// 00:38:15.977Z. The stage clock read 5 m 32 s while the row had existed for 1 h 19 m 44 s, because `startedAt` is the
+// current run's and every stage move clears it (`setTaskState("queued")`). The row's age is `createdAt`'s, and this is
+// the pin that keeps the two clocks apart.
+test("a row's own clock is read from createdAt, never from the stage's startedAt", () => {
+  const created = "2026-11-03T12:00:00.000Z";
+  const row = { ...task(), id: "job-9", createdAt: created, startedAt: "2026-11-03T14:59:00.000Z" };
+  const view = resolveTaskPipeline(row, { bundle, now: NOW });
+  assert.equal(view.sinceCreated.ok, true);
+  assert.equal(view.sinceCreated.at, created, "the stamp the number came from travels with it");
+  assert.equal(view.sinceCreated.ms, 3 * 3_600_000, "three hours from createdAt to the clock");
+  assert.equal(view.elapsed.ms, 9_000_000, "the stage's clock is still its own: 2h30 from enteredAt");
+  assert.notEqual(view.sinceCreated.ms, view.elapsed.ms, "the row's age and the stage's span are two facts");
+
+  // `startedAt` does not move it: the same row with a later start reads the same age.
+  const laterStart = resolveTaskPipeline({ ...row, startedAt: "2026-11-03T14:00:00.000Z" }, { bundle, now: NOW });
+  assert.equal(laterStart.sinceCreated.ms, view.sinceCreated.ms);
+
+  // Every mode carries it, because it is the ROW's clock and not the pipeline's: the default path has one too.
+  const plain = resolveTaskPipeline({ id: 5, createdAt: created }, { bundle, now: NOW });
+  assert.equal(plain.mode, ASSISTANT_DECIDES);
+  assert.equal(plain.sinceCreated.ms, 3 * 3_600_000, "a row with no pipeline still has an age");
+
+  // A record with no createdAt answers a refusal and a null — never a zero that would read as "just filed".
+  const none = resolveTaskPipeline({ ...task(), id: "job-10" }, { bundle, now: NOW });
+  assert.equal(none.sinceCreated.ok, false);
+  assert.equal(none.sinceCreated.ms, null);
+  assert.equal(none.sinceCreated.at, null);
+  assert.match(none.sinceCreated.reason, /no createdAt/);
+  assert.equal(elapsedSince(created, { now: NOW }).ms, 3 * 3_600_000);
+});
 
 test("a task with no pipeline reads assistant-decides", () => {
   for (const record of [{}, { id: "job-2" }, { id: "job-3", [TASK_PIPELINE_FIELD]: null }]) {
