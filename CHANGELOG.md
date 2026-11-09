@@ -4,16 +4,57 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.76.21 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.76.24 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-512 releases from v0.1.0 (2026-10-20) to v1.76.21 (2026-11-09), 1688 commits between the tags. Every release is anchored by an
+515 releases from v0.1.0 (2026-10-20) to v1.76.24 (2026-11-09), 1696 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.76.24 — 2026-11-09 · 2 commits
+
+[`f8df153`](https://github.com/JLRoper/agent-worktree-gui/commit/f8df15332ef91a8662ddd00216fc76d0af1d1a5f) · [compare v1.76.23...v1.76.24](https://github.com/JLRoper/agent-worktree-gui/compare/v1.76.23...v1.76.24)
+
+### Docs & tests
+
+- docs: PictureViewer and Picture Manager SSO retest on dev with deploy evidence (DMR-39015) ([`719425b`](https://github.com/JLRoper/agent-worktree-gui/commit/719425b4dd3519ec587c333ba1bfc65abc99a35a))
+
+### Other
+
+- chore: 1.76.24 - the version this landing carries ([`f8df153`](https://github.com/JLRoper/agent-worktree-gui/commit/f8df15332ef91a8662ddd00216fc76d0af1d1a5f))
+
+## v1.76.23 — 2026-11-09 · 2 commits
+
+[`e1ed843`](https://github.com/JLRoper/agent-worktree-gui/commit/e1ed843c86f770ae0a16d47085855cf0c6417e5e) · [compare v1.76.22...v1.76.23](https://github.com/JLRoper/agent-worktree-gui/compare/v1.76.22...v1.76.23)
+
+### Fixed
+
+- fix: the command audit sweeps every assistant thread ([`ee9ad56`](https://github.com/JLRoper/agent-worktree-gui/commit/ee9ad56736274036ee1ef2ec7dfeea0cfc35347d))
+
+### Other
+
+- chore: 1.76.23 - the version this landing carries ([`e1ed843`](https://github.com/JLRoper/agent-worktree-gui/commit/e1ed843c86f770ae0a16d47085855cf0c6417e5e))
+
+## v1.76.22 — 2026-11-09 · 4 commits
+
+[`a129ffd`](https://github.com/JLRoper/agent-worktree-gui/commit/a129ffdc7fcb0d07e4924f3e629da56429442861) · [compare v1.76.21...v1.76.22](https://github.com/JLRoper/agent-worktree-gui/compare/v1.76.21...v1.76.22)
+
+### Fixed
+
+- fix: a held steer survives a turn somebody else starts ([`bf51d5f`](https://github.com/JLRoper/agent-worktree-gui/commit/bf51d5f8daa9a6b75077118fd1d5c6dd27247c59))
+
+### Docs & tests
+
+- docs: the Board round's pipeline report, measured from its own ledger ([`63264c8`](https://github.com/JLRoper/agent-worktree-gui/commit/63264c812e84663587cd751e56bed4e65b8a4e6e))
+- docs: render the changelog - 512 releases ([`b6f17ba`](https://github.com/JLRoper/agent-worktree-gui/commit/b6f17ba8a5ef89c47f73ddc103ca22c331e37c4f))
+
+### Other
+
+- chore: 1.76.22 - the version this landing carries ([`a129ffd`](https://github.com/JLRoper/agent-worktree-gui/commit/a129ffdc7fcb0d07e4924f3e629da56429442861))
 
 ## v1.76.21 — 2026-11-09 · 2 commits
 
