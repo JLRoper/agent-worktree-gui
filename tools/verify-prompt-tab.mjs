@@ -230,7 +230,7 @@ async function main() {
         check(/gate closed/i.test(gated?.share || ""), "and says the gate is closed", gated?.share);
         const fourth = dom.diagrams.find((d) => d.key === "fourth");
         const board = fourth?.sections.find((s) => s.key === "board");
-        check(!board?.gated && /full digest/i.test(board?.title || ""), "the fourth wake carries the board's full digest", board?.title || "no board");
+        check(!board?.gated && /tail/i.test(board?.title || ""), "the board rides every turn as one tail message", board?.title || "no board");
         const charterFirst = dom.diagrams[0]?.sections.find((s) => s.key === "charter");
         check(/sent in full/i.test(charterFirst?.title || ""), "the first turn carries the charter in full", charterFirst?.title || "no charter");
         const charterOrdinary = ordinary?.sections.find((s) => s.key === "charter");

@@ -16158,8 +16158,8 @@ $("general-dock")?.addEventListener("change", () => {
 // The Prompt tab is a PICTURE of the briefing the panel builds, not a second budget written here: the server measures
 // the sections with the same builder a turn uses (lib/assistant.js `promptBudget`) and hands over one model, so the
 // diagram and the prompt cannot disagree. Three turns are drawn because the same standing text sits under different
-// gates: the first turn of a session (the charter whole), an ordinary turn (a charter marker, the board's marker and
-// no queue digest) and the fourth wake (the queue digest and the board's full sweep both due).
+// gates: the first turn of a session (the charter whole), an ordinary turn (a charter marker and no queue digest) and
+// the fourth wake (the queue digest due). The board is the same tail message in all three, which is the point of it.
 let promptBudgetLoadedAt = 0;
 
 const promptNumber = (n) => Number(n || 0).toLocaleString("en-US");
@@ -16226,7 +16226,7 @@ function paintPromptBudget(model) {
     const parts = [`The first turn of a session carries ${promptNumber(first.total)} characters in ${first.sections.length} sections`];
     if (ordinary) parts.push(`an ordinary turn ${promptNumber(ordinary.total)}`);
     if (fourth) parts.push(`the fourth wake ${promptNumber(fourth.total)}`);
-    parts.push("The standing text is the same bytes in all three; only the charter, the queue digest and the board change shape.");
+    parts.push("The standing text is the same bytes in all three and the board is the same tail message; only the charter and the queue digest change shape.");
     summary.textContent = parts.join("; ").replace("; The standing", ". The standing");
     summary.classList.remove("bad");
   }
@@ -16242,7 +16242,7 @@ function paintPromptBudget(model) {
     if (b.notes !== undefined) bits.push(`notes ${promptNumber(b.notes)}`);
     if (b.watches !== undefined) bits.push(`watches ${promptNumber(b.watches)}`);
     if (b.queue !== undefined) bits.push(`queue ${promptNumber(b.queue)} (${g.queueRows || 5} rows)`);
-    const gates = [g.queueLabel ? `the queue digest is due ${g.queueLabel}` : "", g.boardLabel ? `the board's full digest ${g.boardLabel}` : ""].filter(Boolean).join("; ");
+    const gates = [g.queueLabel ? `the queue digest is due ${g.queueLabel}` : "", "the board tail rides every turn"].filter(Boolean).join("; ");
     legend.textContent = `${bits.length ? `Caps the boxes are reserved against: ${bits.join(" · ")}. ` : ""}${gates ? `${gates[0].toUpperCase()}${gates.slice(1)}.` : ""} Sizes are characters; shares are of that turn's total.`;
     legend.hidden = false;
   }
