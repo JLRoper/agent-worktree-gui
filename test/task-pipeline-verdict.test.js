@@ -411,7 +411,11 @@ function pingPongHarness(t, { outcomes = ["accept"] } = {}) {
       const marks = spec.prompt.match(/\(([\w.-]+)\/([\w.-]+)\)(?:, visit (\d+))?/) || [];
       const stageId = marks[2];
       const visit = Number(marks[3] || 1);
-      const rel = stageId === "draft" ? "ledger/ping-pong/draft.md" : "ledger/ping-pong/critique.md";
+      // The file is the one the prompt's ARTIFACT line names: the declared path with this visit's `{{round}}` filled.
+      // A hard-coded path here would be the defect the seed's visit-scoped paths fix.
+      const named = /^ {2}writes {6}\S+ {3}(\S+) {3}\(/m.exec(spec.prompt);
+      assert.ok(named, `the stage prompt names the file it writes: ${spec.prompt.slice(0, 300)}`);
+      const rel = named[1];
       mkdirSync(path.dirname(path.join(spec.target, ...rel.split("/"))), { recursive: true });
       writeFileSync(path.join(spec.target, ...rel.split("/")), `# ${stageId} visit ${visit}\n`);
       if (stageId === "critique") {
