@@ -21,8 +21,8 @@ after(() => rmSync(root, { recursive: true, force: true }));
 const DAY = 864e5;
 const scanRoot = path.join(root, "repos").replace(/\\/g, "/");
 
-function makeRepo(name, ageDays) {
-  const dir = path.join(scanRoot, name);
+function makeRepo(name, ageDays, parent = scanRoot) {
+  const dir = path.join(parent, name);
   mkdirSync(dir, { recursive: true });
   const stamp = new Date(Date.now() - ageDays * DAY).toISOString();
   const env = { ...process.env, GIT_AUTHOR_DATE: stamp, GIT_COMMITTER_DATE: stamp };
@@ -262,4 +262,64 @@ test("a discovery pass over known records starts no git at all", async () => {
   assert.equal(second.length, 2);
   assert.equal(spawns, seeding, "a second pass reuses every record: not one git process");
   assert.equal(second.find((project) => project.name === "old-repo").tier, "old", "and the old repo is on the gate, not the scan cadence");
+});
+
+test("the pass carries its own timing breakdown, so a slow discovery says where it went", async () => {
+  // The row that asked for this: "discovery runs 5.8 s across 177 projects". A total alone cannot say whether the
+  // walk, the per-project row scan or the store write paid for it; the phases can, and they are what the panel's log
+  // now prints beside the count (tools/measure-slow-panel.mjs reads the same record).
+  const first = await registry.discover();
+  const pass = registry.lastPass;
+  assert.ok(pass, "a completed pass leaves a record");
+  assert.equal(pass.projects, first.length, "the record counts the projects the pass returned");
+  assert.equal(pass.probed, 0, "both repos are known by now, so nothing was probed");
+  for (const key of ["totalMs", "readdirMs", "statMs", "rowsMs", "ensureMs", "saveMs"]) {
+    assert.equal(typeof pass[key], "number", `${key} is a number`);
+    assert.ok(pass[key] >= 0, `${key} is not negative`);
+  }
+  assert.ok(pass.statMs > 0, "the walk stats every entry it sees, and that cost is recorded");
+  assert.ok(pass.totalMs >= pass.statMs, "the phases cannot add up to more than the pass");
+  assert.match(pass.at, /^\d{4}-\d\d-\d\dT/, "the record says when the pass ran");
+});
+
+test("a root of many folders maps each batched stat back to its own folder", async () => {
+  // The stats are one batch now: on a loaded box the old chain of 369 awaits measured 3699 ms of a 3719 ms pass,
+  // because each await re-entered the panel's loop (tools/measure-slow-panel.mjs). A batch is read by position, so
+  // the property that needs pinning is that a non-repo, a linked worktree and a repo in the same list each keep
+  // their own answer and none of them shift the others. The cache names the eight repos, so this pass probes no
+  // git at all and the test measures one readdir plus one batch of stats, like the panel's steady state.
+  const flat = path.join(root, "flat").replace(/\\/g, "/");
+  mkdirSync(flat, { recursive: true });
+  const known = [];
+  for (let i = 0; i < 24; i += 1) {
+    const name = `folder-${String(i).padStart(2, "0")}`;
+    const dir = path.join(flat, name);
+    mkdirSync(dir, { recursive: true });
+    if (i % 3 === 0) {
+      mkdirSync(path.join(dir, ".git"), { recursive: true });
+      known.push({ name, path: dir.replace(/\\/g, "/"), root: flat, activityAt: new Date().toISOString(), tier: "recent" });
+    } else if (i === 1) {
+      // A `.git` FILE: a linked worktree, whose rows belong to the project that owns it.
+      writeFileSync(path.join(dir, ".git"), `gitdir: ${path.join(scanRoot, "new-repo", ".git")}\n`);
+    }
+  }
+  const flatCache = path.join(stateDir, "flat-projects.json");
+  writeFileSync(flatCache, JSON.stringify({ savedAt: new Date().toISOString(), projects: known }), "utf8");
+  const flatRegistry = new ProjectRegistry({
+    getConfig: () => ({ scanRoots: [flat], projects: [], tierDays: 7, tierBuckets: 1, tierCheckSeconds: 1 }),
+    store: new Store(),
+    onLog: () => {},
+    cacheFile: flatCache,
+    tierFile: path.join(stateDir, "flat-tiers.json"),
+  });
+  const list = await flatRegistry.discover();
+  assert.deepEqual(list.map((p) => p.name).sort(), known.map((p) => p.name).sort(), "every repo folder is a project, under its own name");
+  assert.equal(flatRegistry.lastPass.probed, 0, "the cache names them all, so the batch is the only disk work");
+  const skippedHere = (flatRegistry.skipped || []).filter((s) => String(s.dir).startsWith(flat));
+  assert.equal(skippedHere.length, 16, "the 15 plain folders and the linked worktree are reported, once each");
+  const linked = skippedHere.find((s) => s.dir.endsWith("folder-01"));
+  assert.ok(linked && /linked worktree/.test(linked.why), "the .git FILE folder is a linked worktree, not a project");
+  const plain = skippedHere.filter((s) => /not a git repo/.test(s.why));
+  assert.equal(plain.length, 15, "a folder with no .git is 'not a git repo', by its own path");
+  assert.deepEqual(plain.map((s) => path.basename(s.dir)).sort(), [...Array(24).keys()].filter((i) => i % 3 !== 0 && i !== 1).map((i) => `folder-${String(i).padStart(2, "0")}`).sort(), "each answer belongs to the folder it was asked about");
 });
