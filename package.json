@@ -99,6 +99,7 @@
     "verify:action-harvest": "node tools/verify-action-harvest.mjs",
     "verify:restart-line-harvest": "node tools/verify-restart-line-harvest.mjs",
     "verify:worktree-row-actions": "node tools/verify-worktree-row-actions.mjs",
+    "verify:focus-mode": "node tools/verify-focus-mode.mjs",
     "verify:role-pane": "node tools/verify-role-pane.mjs",
     "verify:assistant-director": "node tools/verify-assistant-director.mjs",
     "verify:assistant-rename": "node tools/verify-assistant-rename.mjs",
