@@ -115,6 +115,7 @@ test/console-tail-pin.test.js | 1 | fixture: the tree the test builds or asserts
 test/deliverables-ui.test.js | 1 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
 test/deliverables.test.js | 18 | fixture: the tree the test builds or asserts on, named by hand so the comparison is readable
 test/exited-wake.test.js | 2 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/focus-mode.test.js | 25 | fixture: the checkout paths the resolution compares against - slash and case folding cannot be asserted on a relative name
 test/gateway-permissions.test.js | 4 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
 test/harness.test.js | 1 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
 test/harvest-gate.test.js | 2 | fixture: the tree the test builds or asserts on, named by hand so the comparison is readable
