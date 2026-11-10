@@ -243,7 +243,7 @@ ledger/gui-improve/compare/README.md | 7 | record: the compare's protocol names 
 ledger/gui-improve/compare/run.mjs | 9 | probe: the scan roots and the browser and module folders the compare was run with, kept as its defaults
 public/style.css | 1 | comment: the measured before-state, quoting the folder name and chip the row painted as one word
 docs/investigation.md | 1 | record: the round D conclusion names the stage tree it concluded
-ledger/investigate/probe.md | 1 | record: the stage 1 probe names the tree it ran in
+ledger/investigate/probe.md | 5 | record: the rung 7 probe names the trees it ran in, its script and the panel's queue file
 ledger/gui-improve/general-presets/after/capture.mjs | 2 | record: the capture script names the browser install and the module folder it ran with
 ledger/gui-improve/general-presets/baseline/capture.mjs | 2 | record: the capture script names the browser install and the module folder it ran with
 ledger/gui-improve/general-presets/compare/capture.mjs | 2 | record: the capture script names the browser install and the module folder it ran with
