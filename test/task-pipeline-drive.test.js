@@ -1267,6 +1267,74 @@ const CHAIN = {
 const ROUND_SHA = "5".repeat(40);
 const COMMITS = { S1: "1".repeat(40), S2: "2".repeat(40), S3: "3".repeat(40), S4: "4".repeat(40) };
 
+// The shape sefl-review-loop has, cut to what the REMOTE decision needs: a work stage, then the two stages whose
+// artifact IS the pull request (push and pr). Both act on the round's parent tree, so the ref the first pushes is the
+// head the second opens its PR from.
+const prStage = (n) => ({ ...stage(n), artifact: { ...stage(n).artifact, kind: "pr" } });
+const ROUND_BRANCH = "wtgui/carry-the-contract-9f8e7d";
+const PR_CHAIN = {
+  id: "land",
+  title: "Branch, push, open the pull request",
+  stages: [stage(1), prStage(2), prStage(3)],
+  gates: [],
+  handoffs: [
+    { id: "h1", from: "S1", to: "S2", artifact: "artifact-1", kind: "sequence" },
+    { id: "h2", from: "S2", to: "S3", artifact: "artifact-2", kind: "sequence" },
+  ],
+};
+
+// A round of that chain on ONE parent tree: S1 settled in its own stage child at COMMITS.S1, and `at(stage, runs)`
+// answers the record standing on a stage. `assembled` says whether the round's one branch has been written yet - the
+// driver asks for it before a pr-kind stage starts when it has not (lib/task-pipeline-drive.js `assemblyPlanOf`).
+function prChainRig(t) {
+  const parent = tree(t, { artifacts: [1, 2, 3] });
+  const first = tree(t, { artifacts: [1] });
+  const s1 = {
+    id: "land/S1#1",
+    stage: "S1",
+    visit: 1,
+    at: CLOCK,
+    thread: "T1",
+    job: "j1",
+    status: "done",
+    commit: COMMITS.S1,
+    tree: { path: first, branch: "wtgui/s1-abc123" },
+    artifact: { id: "artifact-1", path: "out/1.json", present: true, sha256: "a".repeat(64), commit: COMMITS.S1 },
+  };
+  const s2 = {
+    id: "land/S2#1",
+    stage: "S2",
+    visit: 1,
+    at: CLOCK,
+    thread: "T2",
+    job: "j2",
+    status: "done",
+    commit: COMMITS.S2,
+    tree: { path: parent, branch: ROUND_BRANCH },
+    artifact: { id: "artifact-2", path: "out/2.json", present: true, sha256: "b".repeat(64), commit: COMMITS.S2 },
+  };
+  const at = (where, stageRuns, { assembled = true, over = {} } = {}) =>
+    row({
+      state: "queued",
+      thread: null,
+      threads: [],
+      worktree: parent,
+      pipelineRun: {
+        pipeline: "land",
+        stage: where,
+        enteredAt: CLOCK,
+        round: { parentPath: parent, parent: ROUND_BRANCH, sha: ROUND_SHA, base: "origin/main", at: CLOCK, by: "panel" },
+        visits: { S1: 1, S2: 1, S3: 1 },
+        tree: { path: parent, branch: ROUND_BRANCH },
+        trees: { S1: { path: first, branch: "wtgui/s1-abc123" } },
+        ...(assembled ? { assembly: { commit: "f".repeat(40), base: ROUND_SHA, branch: ROUND_BRANCH, path: parent, verified: true } } : {}),
+        stageRuns,
+      },
+      ...over,
+    });
+  return { parent, first, s1, s2, at };
+}
+
 // A row at the END of a four-stage round: every stage settled in its own tree at its own commit. The last stage's
 // tree is a real directory holding the artifact it declares, because a settle is only 'done' over one.
 function finishedRound(t, over = {}) {
@@ -1330,27 +1398,126 @@ test("once the assembly is recorded the round finishes, and a second assembly is
   assert.match(out.tasks[0].reason, /not a PR to land/, "finished on the last stage's own verdict");
 });
 
-test("a stage in its OWN tree never lands by itself: its branch is assembled, not pushed", (t) => {
-  // The PR a mid-round stage would open holds that stage alone. A stage tree is local only, so the landing paragraph
-  // is never handed to it - the assembly's branch is the one that lands (lib/pipeline-assembly.js rule 5).
+test("a work stage in its OWN tree never lands by itself: its branch is assembled, not pushed", (t) => {
+  // The PR a mid-round work stage would open holds that stage alone. A stage tree is local only, so the landing
+  // paragraph is never handed to it - the assembly's branch is the one that lands (lib/pipeline-assembly.js rule 5).
+  // The round here has a PARENT TREE, which is the model every new round is cut under: the rule is the work stage's,
+  // not the old record's.
+  const parent = tree(t);
   const first = tree(t, { artifacts: [1] });
   const task = row({
     state: "queued",
     thread: null,
     threads: [],
-    worktree: first,
+    worktree: parent,
     pipelineRun: {
       pipeline: "round",
       stage: "S1",
       enteredAt: CLOCK,
-      round: { parent: "main", sha: ROUND_SHA, at: CLOCK, by: "panel" },
+      round: { parentPath: parent, parent: "wtgui/round-9f8e7d", sha: ROUND_SHA, base: "origin/main", at: CLOCK, by: "panel" },
       visits: { S1: 1 },
+      tree: { path: parent, branch: "wtgui/round-9f8e7d" },
       trees: { S1: { path: first, branch: "wtgui/s1-abc123" } },
       stageRuns: [],
     },
   });
-  const prPipeline = bundleOf({ ...CHAIN, stages: CHAIN.stages.map((entry) => ({ ...entry, artifact: { ...entry.artifact, kind: "pr" } })) });
-  const out = driveTaskPipelines([task], { bundle: prPipeline, jobs: [], isLive: () => false, at: CLOCK, unattended: true });
+  const out = driveTaskPipelines([task], { bundle: bundleOf(CHAIN), jobs: [], isLive: () => false, at: CLOCK, unattended: true });
   assert.equal(out.starts.length, 1);
+  assert.equal(out.starts[0].target, first, "the work stage still runs in its own stage child");
   assert.equal(out.starts[0].remoteWrite, "local", "a stage tree is never the branch that lands");
+  assert.equal(out.assemblies.length, 0, "and a work stage asks for no assembly to start");
 });
+
+test("a pr-kind stage in a chain acts on the round's parent tree, never a fresh stage child", (t) => {
+  // THE DEFECT rows 66 and 67 hit: filed with no worktree, the driver cut one tree per stage at the round's base and
+  // handed every stage the local-only paragraph, so sefl-review-loop's push (job ffaabbf3) and pr (3733218c) could
+  // never act. A stage whose artifact IS the pull request acts on the branch that LANDS: the round's parent tree,
+  // assembled from every stage before it. Its own stage child is never cut and never named.
+  const rig = prChainRig(t);
+  const out = driveTaskPipelines([rig.at("S2", [rig.s1])], { bundle: bundleOf(PR_CHAIN), jobs: [], isLive: () => false, at: CLOCK, unattended: true });
+  assert.equal(out.starts.length, 1);
+  const start = out.starts[0];
+  assert.equal(start.stage, "S2");
+  assert.equal(start.remoteWrite, "pr", "a pr stage is told to push the branch it acts on");
+  assert.equal(start.target, rig.parent, "its workspace is the round's parent tree, not a stage child");
+  assert.equal(start.tree.branch, ROUND_BRANCH, "and the branch it pushes is the round's own");
+  assert.match(start.prompt, new RegExp(ROUND_BRANCH), "the worker is told the ref it is about to push");
+  assert.equal(out.ensureTree.length, 0, "no fresh stage child is cut for it");
+  assert.equal(start.isolation, undefined, "and it is not a fan-out lane");
+});
+
+test("a pr-kind stage is not started until the round's settled work is on the branch it pushes", (t) => {
+  // The parent tree is still at the round's frozen base until the assembly runs: a push now would publish a branch
+  // holding none of the round's work, and the row's one PR would have nothing in it. So the assembly is asked for
+  // FIRST, at the stage that is about to push, and that stage is not started on the same pass.
+  const rig = prChainRig(t);
+  const out = driveTaskPipelines([rig.at("S2", [rig.s1], { assembled: false })], { bundle: bundleOf(PR_CHAIN), jobs: [], isLive: () => false, at: CLOCK, unattended: true });
+  assert.equal(out.starts.length, 0, "nothing is started before the branch has the round on it");
+  assert.equal(out.assemblies.length, 1, "the round's one branch is asked for instead");
+  const request = out.assemblies[0];
+  assert.equal(request.stage, "S2", "the request names the stage that will push it");
+  assert.equal(request.parentPath, rig.parent, "and picks into the round's parent tree");
+  assert.equal(request.parent, ROUND_BRANCH);
+  assert.equal(request.base, ROUND_SHA, "cut from the round's frozen parent, never origin/main as it stands now");
+  assert.deepEqual(request.stages.map((entry) => entry.stage), ["S1"], "every settled stage's commit is in the plan");
+
+  // Once the assembly is recorded, the same row starts the pr stage on that one branch.
+  const after = driveTaskPipelines([rig.at("S2", [rig.s1], { assembled: true })], { bundle: bundleOf(PR_CHAIN), jobs: [], isLive: () => false, at: CLOCK, unattended: true });
+  assert.equal(after.assemblies.length, 0, "a recorded assembly is never asked for twice");
+  assert.equal(after.starts[0].target, rig.parent);
+  assert.equal(after.starts[0].remoteWrite, "pr");
+});
+
+test("the push and the pr stage of one round are one head: the row opens exactly ONE PR", (t) => {
+  // Two stages of sefl-review-loop declare `kind: "pr"` (push and pr). Both act on the round's parent tree, on the
+  // round's own branch, so the ref the first pushes IS the head the second opens a PR from: one branch, one PR. Two
+  // stage branches would have been two PRs, each holding one stage of the round.
+  const rig = prChainRig(t);
+  const push = driveTaskPipelines([rig.at("S2", [rig.s1])], { bundle: bundleOf(PR_CHAIN), jobs: [], isLive: () => false, at: CLOCK, unattended: true }).starts[0];
+  const pr = driveTaskPipelines([rig.at("S3", [rig.s1, rig.s2])], { bundle: bundleOf(PR_CHAIN), jobs: [], isLive: () => false, at: CLOCK, unattended: true }).starts[0];
+  assert.equal(push.stage, "S2");
+  assert.equal(pr.stage, "S3");
+  assert.equal(push.remoteWrite, "pr");
+  assert.equal(pr.remoteWrite, "pr", "the pr stage is told to open one, not to stay local");
+  const heads = new Set([`${push.target} ${push.tree.branch}`, `${pr.target} ${pr.tree.branch}`]);
+  assert.equal(heads.size, 1, "one branch, so one PR head - the head the push stage pushed");
+  assert.deepEqual([...heads], [`${rig.parent} ${ROUND_BRANCH}`], "and it is the branch the round's assembly writes");
+});
+
+test("a fan-out lane is local-only whatever its artifact declares", (t) => {
+  // rule 5 of lib/pipeline-fanout.js is the invariant the round's fix must not move: a lane branch exists to be
+  // merged into the aggregate, never pushed. Its artifact kind cannot change that, because the lane is not the
+  // branch that lands - the aggregate is.
+  const lane = tree(t, { artifacts: [1] });
+  const bundle = bundleOf({
+    id: "reports",
+    title: "Reports",
+    isolation: "per-stage",
+    stages: [prStage(1), prStage(2), stage(3)],
+    gates: [],
+    handoffs: [
+      { id: "h1", from: "S1", to: "S3", artifact: "artifact-1", kind: "sequence" },
+      { id: "h2", from: "S2", to: "S3", artifact: "artifact-2", kind: "sequence" },
+    ],
+  });
+  const task = row({
+    state: "queued",
+    thread: null,
+    threads: [],
+    pipelineRun: {
+      pipeline: "reports",
+      stage: "S1",
+      enteredAt: CLOCK,
+      visits: { S1: 1 },
+      fanout: { base: "b".repeat(40), fork: null, lanes: ["S1", "S2"], join: "S3" },
+      trees: { S1: { path: lane, branch: "wtgui/lane-a-abc123" } },
+    },
+  });
+  const out = driveTaskPipelines([task], { bundle, jobs: [], isLive: () => false, at: CLOCK, unattended: true });
+  assert.equal(out.starts.length, 1);
+  assert.equal(out.starts[0].target, lane, "the lane runs in its own tree");
+  assert.equal(out.starts[0].remoteWrite, "local", "and a lane branch is never pushed, whatever it declares");
+  assert.equal(out.starts[0].isolation, "per-stage");
+  assert.equal(out.assemblies.length, 0, "a fan-out has one merge, not a round's assembly");
+});
+

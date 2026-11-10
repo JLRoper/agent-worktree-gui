@@ -78,8 +78,12 @@ tree cut from a turnover branch it says "merge into … locally and do not push"
 wins over both: a pipeline stage whose declared artifact kind is not `pr` has nothing to land, so its worker is told
 to commit on the stage branch and report the commit — no push and no pull request. The driver says which case it is
 (`remoteWrite: "local"` on the start, `pr` for a stage whose artifact IS the pull request), and `lib/jobs.js` renders
-the one paragraph. Before that, a document stage was handed the parent's paragraph and opened a PR for a file in the
-ledger. The seed's landing ladders (`turnover`, `github-force-merge`, `sefl-review-loop`) therefore declare
+the one paragraph. A stage in its own tree of a round is `local` whatever it declares, because its branch is assembled
+into the round's parent tree; `pr` is for the stage that acts on the branch which lands, which under a round is the
+round's parent tree, under the round's own branch (lib/task-pipeline-drive.js `stageTreeLookup`), so the push and the
+PR of one row are one branch and one PR. The assembly that puts the round's settled work on that branch is asked for
+before such a stage starts. Before that, a document stage was handed the parent's paragraph and opened a PR for a file
+in the ledger. The seed's landing ladders (`turnover`, `github-force-merge`, `sefl-review-loop`) therefore declare
 `kind: "pr"` on the stages that act on the remote — a push stage told "do not push" is a pipeline that cannot do its
 own job — and declare nothing on their commit stages, which are local commits and are told to stop there.
 A pipeline's prompt carries the WORK and defers to that paragraph; it never restates the landing rule.

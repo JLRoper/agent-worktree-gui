@@ -386,7 +386,8 @@ The model above is every pipeline's: one tree per stage, cut at the round's froz
 `isolation: "per-stage"` in its bundle, and then the CONCURRENT part of its graph — and only that part — is treated as a
 block: the lanes start from ONE base instead of a chain's per-stage order, and the aggregator merges them in one commit.
 The flag changes how a fork/join is walked and merged; it is not what gives a stage its own directory, which every stage
-has.
+has - with one exception, the stage whose artifact IS the pull request: it acts in the round's parent tree, the branch
+that lands, and is never cut a stage child (see "Stage branches are local only", below).
 
 - **The block.** A stage with two or more non-loop successors is the fork; the lanes are its successors, and the join is
   the earliest stage, in reading order, that every lane can reach. No fork stage and two or more roots is the same block
@@ -423,9 +424,9 @@ comparison of each lane's report (sha256 and the blob object id), and a delibera
 
 A round gives every stage its own tree, so a finished chain leaves N commits on N local branches, and the row's
 landing branch is the round's PARENT tree - cut from origin/main before the first stage, and the one branch every stage
-was cut from. The ASSEMBLY closes the round: when the pipeline is over, the driver asks for one branch, and the
-Assistant cherry-picks every stage run's commit onto that parent tree, in visit order (`lib/pipeline-assembly.js`).
-The parent tree's own branch is then the branch that lands.
+was cut from. The ASSEMBLY closes the round: when the pipeline is over, or before a `pr` stage starts, whichever comes
+first, the driver asks for one branch, and the Assistant cherry-picks every stage run's commit onto that parent tree,
+in visit order (`lib/pipeline-assembly.js`). The parent tree's own branch is then the branch that lands.
 
 - **The plan is the driver's** (`assemblyPlanOf`): the settled stage runs that carry a commit, in VISIT order and then
   by the stage's position in the document - baseline first, then implement, compare and correct. A loop's second visit
@@ -454,6 +455,13 @@ The parent tree's own branch is then the branch that lands.
 - **Stage branches are local only.** A stage tree's run is never handed the landing paragraph, whatever its artifact
   declares: the PR a mid-round stage would open holds that stage alone. The branch that lands is the assembly's, by
   the ordinary landing rule - the same rule a fan-out's lanes follow.
+- **The one exception is the stage whose artifact IS the pull request.** A stage declaring `kind: "pr"` has no work of
+  its own to keep local: its work is to push and open the PR. Under a chain it is handed the round's PARENT tree, on
+  the round's own branch (`stageTreeLookup` answers `round.parentPath` and `round.parent`, and never cuts it a stage
+  child), and the driver asks for the assembly BEFORE that stage starts when the round still owes it, so the push
+  publishes the branch that holds the round's work. Every `pr` stage of one round therefore acts on ONE branch, and
+  the row opens ONE pull request from it, with the head the push stage pushed. A work stage in its own tree and a
+  fan-out's lane are unchanged: local only, always.
 
 Proved end to end by `node tools/verify-pipeline-assembly.mjs`: a four-stage round driven through the Assistant and the
 driver on real trees, with a real `origin` whose main the checkout is AHEAD of - the parent tree is at `origin/main`'s

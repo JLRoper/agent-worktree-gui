@@ -190,17 +190,18 @@ test("a pipeline task's tree is cut first, then its stage is started, advanced o
   assert.equal(state.started.length, 2, "the second stage was started by the panel, not left for the assistant");
   assert.match(state.started[1].prompt, /Do stage 2\./);
   assert.equal(state.started[1].taskId, added.id);
-  assert.equal(state.started[1].target, state.cuts[2].tree, "the second stage runs in ITS OWN tree");
+  // S2's artifact IS the pull request (`kind: "pr"`), so it acts on the branch that LANDS: the round's parent tree, on
+  // the round's own branch. A pr-kind stage is never handed a stage child and never cuts one - the defect that made
+  // sefl-review-loop's push and pr stages refuse was exactly this stage being answered its own child (rows 66, 67).
+  assert.equal(state.started[1].target, state.cuts[0].tree, "the second stage acts on the round's parent tree");
   assert.notEqual(state.started[1].target, state.cuts[1].tree, "and never in the first stage's tree");
-  assert.equal(state.cuts.length, 3, "the parent tree, then one child per stage of the round");
-  assert.equal(state.cuts[2].from, state.cuts[0].branch, "cut from the round's parent tree's branch, never from origin/main as it stands now");
-  assert.equal(state.cuts[2].parent, state.cuts[0].branch, "and recorded as a child of the round's parent tree, so the chart nests every stage of one round");
-  assert.notEqual(state.cuts[2].from, "main", "the parent branch is the round's own, not the project's main");
-  assert.match(state.cuts[2].dir, /^carry-the-contract-stage-2-stage-2-[0-9a-f]{6}$/, "named Stage 2 of the document");
+  assert.equal(state.started[1].remoteWrite, "pr", "it is the stage that pushes that branch and opens the PR");
+  assert.equal(state.cuts.length, 2, "the parent tree, then the first (work) stage's child - the pr stage cuts none");
   assert.equal(row.pipelineRun.round.sha, ROUND_SHA, "the round's parent commit is on the record, once");
   assert.equal(row.pipelineRun.round.parentPath, state.cuts[0].tree, "and it is still the parent tree the round began in");
   assert.equal(row.pipelineRun.trees.S1.path, state.cuts[1].tree);
-  assert.equal(row.pipelineRun.trees.S2.path, state.cuts[2].tree);
+  assert.equal(row.pipelineRun.trees.S2, undefined, "no stage child is recorded for the pr stage: it acts in the parent tree");
+  assert.equal(row.pipelineRun.tree.path, state.cuts[0].tree, "the row still lands from the round's parent tree");
 
   // 4. The last stage settles. The driver has nothing after it, so the queue's own settle finishes the row — the
   //    same transition it has always made, on the row that is now done. The landing rule is unchanged: a row with a
@@ -361,11 +362,12 @@ test("a stage's artifact decides its remote write: a document stage is local, a 
   assistant.sweepQueues();
   await settleStarts();
   assert.equal(state.started.length, 2, "the next stage was started by the same sweep");
-  // Even the stage whose artifact IS the pull request runs local-only: its branch is one of the round's stage
-  // branches, and the branch that lands is the round's parent tree, which the assembly carries every stage onto
-  // (docs/task-pipeline.md, "Stage branches are local only"). A stage that pushed here would open a PR holding one
-  // stage of the round and leave the rest unlanded.
-  assert.equal(state.started[1].remoteWrite, "local", "a stage tree is local-only, whatever its artifact declares");
+  // The stage whose artifact IS the pull request is the one that ACTS ON THE REMOTE, and it acts on the branch that
+  // lands: the round's parent tree, never a stage child. That is what lets sefl-review-loop's push and pr stages push
+  // the assembled branch and open ONE PR from it (rows 66 and 67, jobs ffaabbf3 and 3733218c: both refused while every
+  // stage of a round was answered its own tree and the local-only paragraph).
+  assert.equal(state.started[1].remoteWrite, "pr", "a pr stage is told to push the branch that lands");
+  assert.equal(state.started[1].target, state.cuts[0].tree, "in the round's parent tree, not a fresh stage child");
   assert.equal(rowOf(added.id).pipelineRun.stage, "S2");
 });
 
