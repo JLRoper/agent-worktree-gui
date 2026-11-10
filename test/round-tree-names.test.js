@@ -138,3 +138,36 @@ test("a record with no task title still names its parent from the round it holds
   const noDisplay = { id: 7, pipelineRun: { round: round({ display: "" }) } };
   assert.equal(only(roundTreeNames([noDisplay]), PARENT).display, "round-a");
 });
+
+// ---- the GROUPING the chart draws, read from the same record as the name -------------------------------------------
+//
+// The edge used to arrive only with a scanned row (`row.parent`, from `parents.json` through lib/scan.js): a board
+// that had just booted named every tree and grouped none of them until each row's scan landed, and a stage tree the
+// parent book never recorded never grouped at all. The queue task holds the same fact - `round.parentPath` is the
+// parent tree, and every `trees[...]` entry hangs under it - so the read carries it beside the name.
+test("the round's parent tree groups under nothing and every stage child groups under the parent tree", () => {
+  const names = roundTreeNames([
+    task(7, { round: round(), trees: { S1: { path: STAGE1, position: 1, stageName: "probe" }, S2: { path: STAGE2, position: 2, stageName: "implement" } } }),
+  ]);
+  assert.equal(only(names, PARENT).parentPath, null, "the parent tree is a sibling of the checkout, never its child");
+  assert.equal(only(names, STAGE1).parentPath, PARENT);
+  assert.equal(only(names, STAGE2).parentPath, PARENT);
+});
+
+test("a child that records its own parent path keeps the edge its cut wrote", () => {
+  // A re-homed stage: the tree was cut under one round and now records a different parent. The tree's own words beat
+  // the round's, exactly as the name does.
+  const elsewhere = `${Q}/round-b-9f8e7d`;
+  const names = roundTreeNames([
+    task(7, { round: round(), trees: { S2: { path: STAGE2, position: 2, stageName: "implement", parentPath: elsewhere } } }),
+  ]);
+  assert.equal(only(names, STAGE2).parentPath, elsewhere);
+});
+
+test("a round with no parentPath groups nothing, rather than guessing a parent from a neighbour", () => {
+  // Records written before parent trees existed have no parent path at all. A stage child of such a round belongs to
+  // a parent tree nobody recorded, and an edge invented from the path would put it under a row that is not its own.
+  const names = roundTreeNames([task(7, { round: { parent: "main", sha: "abc123" }, tree: { path: PARENT }, trees: { S1: { path: STAGE1 } } })]);
+  assert.equal(only(names, PARENT).parentPath, null);
+  assert.equal(only(names, STAGE1).parentPath, null);
+});

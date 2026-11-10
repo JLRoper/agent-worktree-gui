@@ -399,7 +399,7 @@ function refreshChips(name) {
 // hangs under it, one indent in, with its own chips and its own actions, and the parent carries the fold that puts
 // the group out of sight.
 //
-// Three rules keep the picture honest:
+// Four rules keep the picture honest:
 //   • a GUESS still groups. Grouping is a picture, not a write — the UNMERGED chip already refuses to roll into a
 //     backfilled parent — and a reader looking for the tree cut from this one wants it here whether the record was
 //     watched or guessed. Only the tooltip says which it was.
@@ -408,21 +408,47 @@ function refreshChips(name) {
 //     row that is not drawn or disappearing with it.
 //   • a record can point in a circle (two backfilled guesses). The loop is broken where it closes: the row that would
 //     be its own ancestor is drawn at the top level, because a row cannot hang under itself.
+//   • MAIN IS NEVER A ROW'S PARENT. The checkout's own row IS main, so a tree cut from main is its SIBLING, not its
+//     child: the round's frozen parent tree is that case, and every stage tree of the round hangs under the parent
+//     tree instead. A book written before the cut stopped recording `main` (lib/jobs.js `round: true`) still names
+//     it, and refusing the edge here is what draws the sibling picture for that board without a migration - the same
+//     rule lib/parents.js has always applied to a roll-up target.
+//   • A ROUND'S OWN RECORD NAMES ITS CHILDREN. `row.round.parentPath` is read from the queue task that cut the tree
+//     (lib/round-tree-names.js), the same record the row's NAME comes from. The branch edge above arrives only with a
+//     scanned row, so a board that has just booted drew every name and no group until each row's scan landed - and a
+//     stage tree the parent book never recorded had no group at all. The record is exact (the panel cut the tree), so
+//     it wins over a scanned branch edge; the same "parent must be a drawn row of this project" rule still applies.
 function childTreeOf(project) {
   const byBranch = new Map();
+  const byPath = new Map();
   for (const r of state.rows.values()) {
     if (r.project !== project) continue;
+    const k = keyOf(project, r.path);
+    const p = normPath(r.path).toLowerCase();
+    if (p && !byPath.has(p)) byPath.set(p, k);
     const b = String(r.branch || "").trim();
     if (!b) continue;
-    const k = keyOf(project, r.path);
     if (!byBranch.has(b)) byBranch.set(b, k);
   }
+  // The project's own main branch, and the names every project calls it. `state.projects` carries `mainBranch` from
+  // the scan (a repo whose main is `dev` says so); the four literal names are the floor under a project the page has
+  // not seen yet.
+  const mainBranch = String(state.projects?.get?.(project)?.mainBranch || "").trim();
+  const turnover = (b) => b === mainBranch || /^(master|main|trunk|develop)$/i.test(b);
   const parentOf = new Map();
   for (const r of state.rows.values()) {
     if (r.project !== project) continue;
+    const k = keyOf(project, r.path);
+    // A round child's edge is the record's own: the tree was cut for this round, from the parent tree's branch.
+    const roundParent = r.round && typeof r.round === "object" ? normPath(r.round.parentPath || "").toLowerCase() : "";
+    if (roundParent) {
+      const pk = byPath.get(roundParent);
+      if (pk && pk !== k) parentOf.set(k, pk);
+      continue;
+    }
     const par = String(r.parent || "").trim();
     if (!par) continue;
-    const k = keyOf(project, r.path);
+    if (turnover(par)) continue;
     const pk = byBranch.get(par);
     if (pk && pk !== k) parentOf.set(k, pk);
   }

@@ -33,6 +33,7 @@
     "verify:clarify-card-link": "node tools/verify-clarify-card-link.mjs",
     "verify:matrix-bridge": "node tools/verify-matrix-bridge.mjs",
     "verify:child-rows": "node tools/verify-child-rows.mjs",
+    "verify:round-tree-layout": "node tools/verify-round-tree-layout.mjs",
     "version:tag": "node tools/version.mjs tag",
     "version:backfill": "node tools/version.mjs backfill",
     "audit:child-process": "node tools/child-process-audit.mjs",
