@@ -1210,11 +1210,11 @@ function placeRow(project, row, { flash = false } = {}) {
   const holder = document.createElement("tbody");
   holder.innerHTML = rowHtml(row);
   const newTr = holder.firstElementChild;
-  // A row the chart is holding back is not on the chart, so nothing of it may be drawn - the state, the chips and
-  // the agents still know the row (they always did; the row is only held out of the drawing). A newer activity can
-  // have moved this row below another one, or the reader can have just asked this chart to hold the rest back, and
-  // either way the row has to leave the DOM here rather than wait for the next full rebuild of the project.
-  if (rowTopHidden(row)) {
+  // A row that is not drawn is not built: the chart may hold it below its top N, and focus mode holds back every row
+  // whose tree has no live panel (public/app.js's focusHidesRow). The state, the chips and the agents still know the
+  // row (they always did; only the drawing is narrowed), and a newer activity can have changed either answer since the
+  // last paint - so the row has to leave the DOM here rather than wait for the next full rebuild of the project.
+  if (rowTopHidden(row) || focusHidesRow(row)) {
     const gone = state.rowEls.get(key);
     if (gone) {
       state.detailEls.get(key)?.remove();
@@ -1226,6 +1226,7 @@ function placeRow(project, row, { flash = false } = {}) {
     // has to say so now rather than leave them indented under a row that is no longer on the chart.
     syncChildGroups(project);
     refreshChips(project);
+    paintFocusSection(project);
     return;
   }
   const old = state.rowEls.get(key);
@@ -1334,6 +1335,9 @@ function placeRow(project, row, { flash = false } = {}) {
   }
   reorder(project);
   refreshChips(project);
+  // The row that just arrived can be the first of its project the narrowed board keeps, so the project may have to
+  // come back out of the mode's own hiding (a no-op while the mode is off).
+  paintFocusSection(project);
   // This row's cells may hold more or less than they did (a longer verdict, a chip that appeared): re-measure, once
   // per frame however many rows of this project arrived in the same tick.
   scheduleColumnFit(tbody.closest("table"));
@@ -1416,7 +1420,7 @@ function renderProjectRows(name, { typing = null } = {}) {
   // Rows below the chart's top N are not built at all: the chart draws what it is showing, and the arrow in the
   // legend below it is what brings the rest back, in the same order they were chosen (see rowTopHidden). The ranking
   // above still sees them, so a row that comes back to life takes its place in the order the moment it is drawn again.
-  const rowsInOrder = chartDrawOrder(name);
+  const rowsInOrder = chartDrawOrder(name).filter((r) => !focusHidesRow(r));
   if (stabilizeOn() && projectHasOpenRow(name) && prevRowKeys.length) {
     const pos = new Map(prevRowKeys.map((k, i) => [k, i]));
     rowsInOrder.sort(
@@ -1469,6 +1473,9 @@ function renderProjectRows(name, { typing = null } = {}) {
     // The header is still on screen and its rows are not: measure it anyway, so opening the project later does not
     // start from the percentage fallback.
     fitColumns(tbody.closest("table"));
+    // A collapsed project is hidden by focus mode exactly when none of its rows is kept, and that answer does not
+    // depend on the rows being built.
+    paintFocusSection(name);
     return;
   }
   const live = new Set(built.map((b) => b.key));
@@ -1527,4 +1534,6 @@ function renderProjectRows(name, { typing = null } = {}) {
   // …and the ⟳'s offer card was a child of this tbody too. It lives in state, so put it back under its row instead of
   // letting a repaint answer the question for the reader.
   paintRefreshOffers(name);
+  // The section follows its rows: kept while one of them is, hidden otherwise (a no-op while the mode is off).
+  paintFocusSection(name);
 }

@@ -288,6 +288,11 @@ const state = {
   jumpThread: null,
   rows: new Map(),
   expanded: new Set(),
+  // Focus mode: a double-click on the top header bar narrows the board to the worktrees a live panel is working in
+  // (see the focus-mode section below the listeners). `focusSig` is the kept tree set as it was last painted, so a
+  // job starting or finishing repaints the board once rather than once per event.
+  focusMode: false,
+  focusSig: "",
   rowEls: new Map(),
   detailEls: new Map(),
   // The open "remove this worktree?" row, by row key. It lives in the table between the row and its
@@ -9427,6 +9432,37 @@ $("btn-pause")?.addEventListener("click", () => {
 });
 paintPauseButton();
 
+// The project head's single-click fold, and the one press it must refuse: a click that landed inside the TOP BAR.
+// The header carries its own gesture now (a double-click toggles focus mode, see the focus-mode section below), and
+// the guard is stated here rather than left to event order or a timer, so the two clicks a double-click produces can
+// never be read as a fold behind the header. Everything else about the press is unchanged, Ctrl+click's hue included.
+function foldProjectFromClick(e) {
+  if (!e?.target?.closest) return false;
+  if (e.target.closest(".topbar")) return false;
+  const phead = e.target.closest(".project-head[data-toggle-project]");
+  if (!phead) return false;
+  const name = phead.dataset.toggleProject;
+  // Ctrl+click themes the box instead of folding it, so a colour is one gesture away and cannot be
+  // mistaken for the open/close click. Shift drops the colour again.
+  if ((e.ctrlKey || e.metaKey) && !e.target.closest("button, input, select, textarea, a, label")) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.shiftKey) {
+      state.projectHues.delete(name);
+      saveProjectHues();
+      applyProjectHue(name);
+      showBanner(`${name}: colour cleared`);
+    } else {
+      const hue = rollProjectHue(name);
+      applyProjectHue(name);
+      showBanner(`${name}: themed hue ${hue}° — Ctrl+click again for another, Ctrl+Shift+click to clear`);
+    }
+    return true;
+  }
+  keepInPlace(() => document.querySelector(`.project-head[data-toggle-project="${CSS.escape(name)}"]`), () => toggleProject(name));
+  return true;
+}
+
 document.addEventListener("click", async (e) => {
   // A click is the reader taking over: stop chasing the box a spawn wanted focused. Clicking inside
   // that agent's own card keeps the target, so reading its output does not undo it.
@@ -9800,29 +9836,9 @@ document.addEventListener("click", async (e) => {
     jumpToPanelAgent(panelJump.dataset.jumpPanel, { running: panelJump.dataset.jumpRunning === "1" });
     return;
   }
-  const phead = e.target.closest(".project-head[data-toggle-project]");
-  if (phead) {
-    const name = phead.dataset.toggleProject;
-    // Ctrl+click themes the box instead of folding it, so a colour is one gesture away and cannot be
-    // mistaken for the open/close click. Shift drops the colour again.
-    if ((e.ctrlKey || e.metaKey) && !e.target.closest("button, input, select, textarea, a, label")) {
-      e.preventDefault();
-      e.stopPropagation();
-      if (e.shiftKey) {
-        state.projectHues.delete(name);
-        saveProjectHues();
-        applyProjectHue(name);
-        showBanner(`${name}: colour cleared`);
-      } else {
-        const hue = rollProjectHue(name);
-        applyProjectHue(name);
-        showBanner(`${name}: themed hue ${hue}° — Ctrl+click again for another, Ctrl+Shift+click to clear`);
-      }
-      return;
-    }
-    keepInPlace(() => document.querySelector(`.project-head[data-toggle-project="${CSS.escape(name)}"]`), () => toggleProject(name));
-    return;
-  }
+  // The project head's fold, with its own guard: a press inside the top bar is the header's double-click gesture,
+  // never a fold. `foldProjectFromClick` returns whether it took the press.
+  if (foldProjectFromClick(e)) return;
   // The fixed cards (New agent / Agents): the title row collapses them, but their own controls
   // (Minimize all, Clear finished, the chips) must keep working.
   const fixedHead = e.target.closest("[data-toggle-fixed]");
@@ -10743,6 +10759,148 @@ document.addEventListener("dblclick", (e) => {
   e.stopPropagation();
   void openModelPop(btn.dataset.modelPick, btn);
 });
+
+// ---- focus mode: the trees a live panel is working in ------------------------------------------
+//
+// A double-click on the TOP HEADER BAR toggles a narrowed board: only the worktree rows whose tree has at least one
+// live panel are drawn, each one under its own project, and a project with no such row is hidden. The evidence is the
+// job list the page already polls - `state.jobs`, filled by the snapshot and every job frame (GET /api/jobs serves
+// the same records) - so the mode adds no flag to a row, no second endpoint and no clock of its own. It is a VIEW:
+// the answer moves when a turn starts or stops, which is exactly when the page already repaints.
+//
+// The tree is read from the job's OWN `worktreePath`, never from `cwd` or `ownerPath`: a card attached by the old
+// fallback carries the checkout that CONTAINS its tree, and believing that would keep a parent's row alive for a run
+// in a child. Paths are compared whole, after slash and case normalisation, so `/a/b-c` never matches `/a/b`.
+
+// The tree a job is in, normalised for comparison, or "" when the record carries none. A job with no worktree path
+// is a run in a plain checkout the board has no row for, so it can keep nothing alive.
+function focusTreeOfJob(job) {
+  const p = job?.worktreePath;
+  return typeof p === "string" && p.trim() ? normPath(p).toLowerCase() : "";
+}
+
+// The trees the narrowed board keeps: one live turn is a live panel. `turnLive` is the page's own status answer
+// (running, starting, waiting, waiting_for_approval, queued - and a turn still parked on an approval).
+function liveFocusTrees(jobs = null) {
+  const trees = new Set();
+  for (const job of jobs || state.jobs.values()) {
+    if (!turnLive(job)) continue;
+    const tree = focusTreeOfJob(job);
+    if (tree) trees.add(tree);
+  }
+  return trees;
+}
+
+// Is this row one of them? Exact path equality, both sides through the same normaliser.
+function focusKeepsRow(row, trees = null) {
+  const tree = normPath(row?.path || "").toLowerCase();
+  return Boolean(tree) && (trees || liveFocusTrees()).has(tree);
+}
+
+function focusModeOn() {
+  return Boolean(state.focusMode);
+}
+
+// A row the mode does not draw leaves the document the way a row the chart holds below its top N does: state, chips
+// and agents still know it, only the drawing is narrowed.
+function focusHidesRow(row) {
+  return focusModeOn() && !focusKeepsRow(row);
+}
+
+// A project belongs to the narrowed board while at least one of its rows does. Counted from state.rows rather than
+// from the document, so a collapsed project (which has no row nodes) answers exactly like an open one.
+function projectHasFocusRow(name) {
+  for (const row of state.rows.values()) if (row.project === name && focusKeepsRow(row)) return true;
+  return false;
+}
+
+function paintFocusSection(name) {
+  const sec = projectNode("data-project", name);
+  if (!sec) return;
+  sec.classList.toggle("is-focus-out", focusModeOn() && !projectHasFocusRow(name));
+}
+
+function paintFocusSections() {
+  for (const name of state.projects.keys()) paintFocusSection(name);
+}
+
+// The kept set as one string: a turn starting or stopping moves it, a card's progress inside a turn does not.
+function focusSignature(trees = null) {
+  return [...(trees || liveFocusTrees())].sort().join("|");
+}
+
+// A turn starting or stopping changes which trees the narrowed board draws, and no row is rebuilt for it. Repaint
+// only when the SET moved: repainting every project on every event would cost a full board rebuild per token.
+function repaintFocus() {
+  if (!focusModeOn()) return;
+  const sig = focusSignature();
+  if (sig === state.focusSig) return;
+  state.focusSig = sig;
+  for (const name of state.projects.keys()) {
+    renderProjectRows(name);
+    paintFocusSection(name);
+    refreshChips(name);
+  }
+  reorderProjects();
+}
+
+// Every open worktree row folds on the way in: the mode is a list of live trees, and an open row would otherwise keep
+// a console (and the rebuild that goes with it) inside the narrowed board. The state is the record; the nodes are
+// taken down here rather than left to the repaint, so a row the mode hides cannot keep its detail until then.
+function collapseOpenRows() {
+  clearEveryCollapseCascade();
+  for (const key of [...state.expanded]) {
+    state.detailEls.get(key)?.remove();
+    state.detailEls.delete(key);
+    state.rowEls.get(key)?.classList.remove("expanded");
+  }
+  state.expanded.clear();
+}
+
+function setFocusMode(on, { announce = true } = {}) {
+  const want = Boolean(on);
+  if (want === focusModeOn()) return;
+  state.focusMode = want;
+  state.focusSig = "";
+  if (want) collapseOpenRows();
+  document.body?.classList.toggle("focus-mode", want);
+  const bar = document.querySelector(".topbar");
+  if (bar) {
+    bar.title = want
+      ? "focus mode: only the worktrees with a live panel are drawn - double-click this bar to show every worktree"
+      : "double-click this bar to show only the worktrees with a live panel (focus mode)";
+  }
+  for (const name of state.projects.keys()) {
+    renderProjectRows(name);
+    paintFocusSection(name);
+  }
+  reorderProjects();
+  if (announce) {
+    showBanner(
+      want
+        ? "focus mode: only worktrees with a live panel are drawn - double-click the header bar to show every worktree"
+        : "focus mode off: every worktree is drawn again",
+    );
+  }
+}
+
+function toggleFocusMode() {
+  setFocusMode(!focusModeOn());
+}
+
+// The header's double-click, registered after the model readout's own listener above. It returns for anything that is
+// not the top bar, so the readout keeps its event and a single click on it stays a single click; inside the bar it
+// also leaves the bar's own controls alone, so Assistant/Settings/Human keep their double-clicks too.
+function onHeaderDoubleClick(e) {
+  if (!e?.target?.closest) return;
+  if (!e.target.closest(".topbar")) return;
+  if (e.target.closest("button, a, input, select, textarea, label, #title-settings")) return;
+  e.preventDefault();
+  e.stopPropagation();
+  toggleFocusMode();
+}
+document.addEventListener("dblclick", onHeaderDoubleClick);
+// ---- end focus mode
 
 // The reply and spawn boxes grow a line at a time as the draft gets longer.
 document.addEventListener("input", (e) => {
