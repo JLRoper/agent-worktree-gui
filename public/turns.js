@@ -40,7 +40,7 @@
 //   jobLines, isBookkeeping   the lines a folded turn is summarised from.
 //   linkifyText               the compact card's last tool line and answer.
 //   wtTurnFold                the fold book (public/core/turn-fold.js).
-//   renderConversation        the two switches repaint the one thread they changed.
+//   renderConversation        the two switches repaint the one card they changed, and the press hands it that card.
 //
 // THE LOAD CONTRACT. public/index.html loads CLASSIC scripts, so the page is one global scope: a top-level
 // `function` here is a window property and a top-level `let` is a binding every other script reads by bare name.
@@ -402,13 +402,16 @@ function thinkingOn(thread) {
   return thinkDefault();
 }
 
-function setThinking(thread, on) {
+function setThinking(thread, on, card = null) {
   try {
     localStorage.setItem(`wtgui.think.${thread}`, on ? "1" : "0");
   } catch {
     /* the choice just will not persist */
   }
-  renderConversation(thread);
+  // Repaint the card the press came from, not whatever card a lookup by thread finds first: a thread can be drawn
+  // in more than one host (the float owns its assistants, the board owns the rest), and the reader's press must
+  // change the card under the pointer.
+  renderConversation(thread, { card });
 }
 
 // ---- one stream ------------------------------------------------------------------------------

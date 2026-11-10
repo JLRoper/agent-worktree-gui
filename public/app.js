@@ -10680,7 +10680,9 @@ document.addEventListener("click", async (e) => {
     e.preventDefault();
     e.stopPropagation();
     const thread = thinkBtn.dataset.thinkThread;
-    setThinking(thread, !thinkingOn(thread));
+    // The card the press came from travels with the choice, so the repaint lands under the pointer even when the same
+    // thread is drawn somewhere else as well.
+    setThinking(thread, !thinkingOn(thread), thinkBtn.closest(".job[data-thread]"));
     return;
   }
   // The 🌊 beside it: the same press, a different choice — draw this card as one stream, or as it always was.
