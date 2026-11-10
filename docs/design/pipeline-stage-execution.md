@@ -271,11 +271,12 @@ hidden assumption (§8, Q1).
 
 **The exception, and its boundary: a fan-out block.** This decision is about a CHAIN — stages that each finish what the
 last one started. It does not reach a graph's concurrent part: two stages that are siblings, neither reading the
-other's files, should not take turns in one tree. A pipeline that declares `isolation: "per-stage"` gives such a block
-one tree per lane, all cut from the same base, and one merge in the aggregator's tree. The default stays `shared`, a
-chain under `per-stage` still keeps this one tree, and the block is refused by name (running `shared`) when the graph
-is not one flat fork/join — so nothing here changes the model above for a row that does not draw one.
-`lib/pipeline-fanout.js` is the rule, `lib/pipeline-aggregate.js` the merge, and
+other's files, should not take turns in one tree. A pipeline that DRAWS such a block gets one tree per lane, all cut
+from the same base, and one merge in the aggregator's tree. The walk follows the graph: `isolation: "per-stage"` used to
+be the only way in, but under a round every stage already has its own tree, so a drawn block is walked without the flag.
+The block is refused by name (running `shared`) when the graph is not one flat fork/join, and a record written before
+rounds keeps its one tree, where the block is not walked and the lane it never ran is REFUSED at the stage that reads
+it. `lib/pipeline-fanout.js` is the rule, `lib/pipeline-aggregate.js` the merge, and
 [`docs/task-pipeline.md`](../task-pipeline.md) the record's fields.
 
 ### 3.2 When a tree is created, and why it is created *before* the start
@@ -488,7 +489,7 @@ Every pass asks one question per row — *what does this stage's fact license?* 
 | the row's tree is claimed by another open row | park | `pipeline-tree-claimed` | the other row's id and title |
 | the bundle cannot resolve the record | park | `pipeline-unresolved` | the contract's own sentence, and the kind |
 | the routing fingerprint moved since the row entered | park | `pipeline-changed` | both fingerprints, and the fields that decide routing |
-| the input's pinned commit is not in this tree, or its blob is not the one recorded | park | `pipeline-refuse-input` | the artifact, the commit, and that the branch moved |
+| the input's pinned commit is not in this tree, or its blob is not the one recorded, or a declared input was settled by no run and is not in this tree either | park | `pipeline-refuse-input` | the artifact, the commit and that the branch moved; or the artifact and that nothing has settled it, and the stage run settles `refused` |
 | the start was refused by the spawner | park | `pipeline-start-refused` | the refusal, and that nothing was started |
 | the start is in flight (`startingAt` inside the grace) | wait | `pipeline-starting` | a note only, never a park |
 | `auto` is off | move, no start | — | the row advances and waits, as it does today |

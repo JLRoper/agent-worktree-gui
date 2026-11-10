@@ -146,6 +146,13 @@ before the pin existed carries no commit and is not parked: a record that could 
 refusal. A stage that writes an artifact and leaves it uncommitted records `uncommitted: true`; the next stage is told
 there is no blob at the pin, which is a fact a reader can fix by committing, not a silent substitution.
 
+The manifest is also where a MISSING input is caught. Every entry the document declares is resolved before the start:
+an artifact with a declared path, which no settled run of the pipeline has produced and which the stage's own tree does
+not hold, refuses the start (`pipeline-refuse-input`) and settles that stage run `refused`. That is the shape a fork
+leaves behind when its second lane is never walked: the terminal stage would otherwise be handed half its inputs, run
+anyway, and let the row read `done` over work it was never given. "Settled" is the writer's own record, so a record from
+before pins existed (`present: true`, no commit) is still a claim about the artifact and is not a refusal.
+
 ## Three answers, and no fourth
 
 `lib/task-pipeline.js` resolves a record against a loaded bundle:
@@ -394,12 +401,20 @@ handed.
 
 ### The fan-out: a per-stage block, and the one merge
 
-The model above is every pipeline's: one tree per stage, cut at the round's frozen parent. A pipeline may ALSO declare
-`isolation: "per-stage"` in its bundle, and then the CONCURRENT part of its graph — and only that part — is treated as a
-block: the lanes start from ONE base instead of a chain's per-stage order, and the aggregator merges them in one commit.
-The flag changes how a fork/join is walked and merged; it is not what gives a stage its own directory, which every stage
-has - with one exception, the stage whose artifact IS the pull request: it acts in the round's parent tree, the branch
-that lands, and is never cut a stage child (see "Stage branches are local only", below).
+The model above is every pipeline's: one tree per stage, cut at the round's frozen parent. A pipeline may ALSO draw a
+CONCURRENT part of its graph (a stage with two or more successors that converge on a later stage), and that part is
+walked as a BLOCK: the lanes start from ONE base instead of a chain's per-stage order, and the aggregator merges them in
+one commit. The block is not what gives a stage its own directory, which every stage has - with one exception, the stage
+whose artifact IS the pull request: it acts in the round's parent tree, the branch that lands, and is never cut a stage
+child (see "Stage branches are local only", below).
+
+The walk is decided by the GRAPH, not by a flag. `isolation: "per-stage"` used to be the only way into a block, while one
+tree per row was every pipeline's default; under a round every stage already has its own tree, so a document that draws
+a fork and says nothing else is walked as a block too. What still decides it is the row's workspace model: a row that
+runs one tree per stage (a round) walks the block it draws, and a record written BEFORE rounds keeps the row's one tree,
+where the lanes would share a directory. There the block is not walked, and the lane a later stage reads is refused by
+name (see `pipeline-refuse-input`) instead of being silently left out. `per-stage` keeps its own meaning for a row with
+no round: it is what lets that row walk a block on trees it does not otherwise have.
 
 - **The block.** A stage with two or more non-loop successors is the fork; the lanes are its successors, and the join is
   the earliest stage, in reading order, that every lane can reach. No fork stage and two or more roots is the same block
@@ -430,6 +445,9 @@ that lands, and is never cut a stage child (see "Stage branches are local only",
 Proved end to end, on real trees, by `node tools/verify-pipeline-fanout.mjs`: a 3-stage fan-out (two lanes and an
 aggregator), one tree per stage, the base each was cut from, the one aggregate commit and its parents, a byte-for-byte
 comparison of each lane's report (sha256 and the blob object id), and a deliberate conflict that is refused by path.
+`node tools/verify-pipeline-fork.mjs` proves the other half on the four-stage POC's document, which declares no
+`isolation` at all: the drive visits S220, S221 and S222 before S223, both lanes are cut from the fork's settled commit,
+and a row that cannot walk the block has its terminal stage refused rather than settled `done`.
 
 
 ### The assembly: every stage's commits onto the round's parent tree, and land from it
@@ -518,7 +536,7 @@ it legitimate; `fact` is structured and small.
 | `pipeline-tree-claimed` | another open row claims the same tree | the other row's id and title |
 | `pipeline-unresolved` | the record names a pipeline or stage the bundle does not hold | the contract's own sentence |
 | `pipeline-changed` | the routing fingerprint moved since the row entered | both fingerprints |
-| `pipeline-refuse-input` | the handed-on artifact's recorded commit is not in this tree, or its blob is not the one recorded | the artifact, the commit it is pinned to, and that the branch moved |
+| `pipeline-refuse-input` | the handed-on artifact's recorded commit is not in this tree, or its blob is not the one recorded, or an input the document declares was settled by no run and is not in this tree either | the artifact, the commit it is pinned to and that the branch moved, or the artifact and that nothing has settled it; the stage run settles `refused` |
 | `pipeline-start-refused` | the spawner or the cut refused | the refusal, and that nothing was started |
 | `pipeline-starting` | a start is in flight inside the grace | a note only, never a park |
 
