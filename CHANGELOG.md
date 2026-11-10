@@ -4,16 +4,46 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.77.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.79.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-519 releases from v0.1.0 (2026-10-20) to v1.77.0 (2026-11-09), 1706 commits between the tags. Every release is anchored by an
+521 releases from v0.1.0 (2026-10-20) to v1.79.0 (2026-11-09), 1713 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.79.0 — 2026-11-09 · 3 commits
+
+[`b36532d`](https://github.com/JLRoper/agent-worktree-gui/commit/b36532d3442699de887b5ee1b0203158a99fe4c6) · [compare v1.77.1...v1.79.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.77.1...v1.79.0)
+
+### Added
+
+- feat: ERROR/WARN/INFO/DEBUG/TRACE levels + stall and stream diagnostics ([`e9f8dfd`](https://github.com/JLRoper/agent-worktree-gui/commit/e9f8dfd7acbc4be7616d528bc704415dae2e008f))
+
+### Docs & tests
+
+- docs: record the ladder's push and PR stages ([`b2f0ab2`](https://github.com/JLRoper/agent-worktree-gui/commit/b2f0ab2829393e4b4135e46d307b4cd1d5f8383a))
+
+### Other
+
+- chore: 1.79.0 - the version this landing carries ([`b36532d`](https://github.com/JLRoper/agent-worktree-gui/commit/b36532d3442699de887b5ee1b0203158a99fe4c6))
+
+## v1.77.1 — 2026-11-09 · 4 commits
+
+[`52e3127`](https://github.com/JLRoper/agent-worktree-gui/commit/52e31277c9287eb71e3a8d608a3991081005bf9c) · [compare v1.77.0...v1.77.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.77.0...v1.77.1)
+
+### Docs & tests
+
+- docs: render the changelog - 519 releases ([`a9d54d1`](https://github.com/JLRoper/agent-worktree-gui/commit/a9d54d194f760e5c343e3e7ec2abe8dace3620a9))
+- docs: render the changelog - 519 releases ([`57de1d5`](https://github.com/JLRoper/agent-worktree-gui/commit/57de1d5413af6bc9753af881df752f831b4dc03f))
+- docs: walk the GitHub ladder and file its two next moves ([`4ff3ab7`](https://github.com/JLRoper/agent-worktree-gui/commit/4ff3ab7e9727ce941fed5e3a7910dc9daa00039a))
+
+### Other
+
+- chore: 1.77.1 - the version this landing carries ([`52e3127`](https://github.com/JLRoper/agent-worktree-gui/commit/52e31277c9287eb71e3a8d608a3991081005bf9c))
 
 ## v1.77.0 — 2026-11-09 · 4 commits
 
