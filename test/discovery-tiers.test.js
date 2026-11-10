@@ -11,6 +11,7 @@ import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { ProjectRegistry } from "../lib/projects.js";
+import { repoKeyForProject } from "../lib/push-permissions.js";
 import { Scheduler } from "../lib/scheduler.js";
 import { Store } from "../lib/store.js";
 import { gitIn } from "../lib/scan.js";
@@ -262,6 +263,49 @@ test("a discovery pass over known records starts no git at all", async () => {
   assert.equal(second.length, 2);
   assert.equal(spawns, seeding, "a second pass reuses every record: not one git process");
   assert.equal(second.find((project) => project.name === "old-repo").tier, "old", "and the old repo is on the gate, not the scan cadence");
+});
+
+test("a cached record with a remote but no URL is asked once, and then the cache answers", async () => {
+  // The repo section a project's push pair comes from - git.sefl.com/IT, git.sefl.com/SA - is picked by the project's
+  // remote URL (lib/push-permissions.js repoKeyForProject). A record written before the cache carried that field
+  // keeps `remote` with no `remoteUrl`, so a reused record would sit in "any other remote" for good and the section's
+  // pair could never reach it. One `remote get-url` closes that, and only one: the answer is saved with the list.
+  const url = "ssh://git.sefl.com/SA/fleet-kafka.git";
+  const backfillRoot = path.join(root, "backfill").replace(/\\/g, "/");
+  const dir = makeRepo("sa-repo", 0, backfillRoot);
+  execFileSync("git", ["-C", dir, "remote", "add", "origin", url], { stdio: "ignore" });
+  const cache = path.join(stateDir, "backfill-projects.json");
+  writeFileSync(
+    cache,
+    JSON.stringify({
+      savedAt: new Date().toISOString(),
+      projects: [{ name: "sa-repo", path: dir, root: backfillRoot, remote: "origin", remoteUrl: null, activityAt: new Date().toISOString(), tier: "recent" }],
+    }),
+    "utf8",
+  );
+  let spawns = 0;
+  const backfill = new ProjectRegistry({
+    getConfig: () => ({ scanRoots: [backfillRoot], projects: [], tierDays: 7, tierBuckets: 1, tierCheckSeconds: 1 }),
+    store: new Store(),
+    onLog: () => {},
+    cacheFile: cache,
+    tierFile: path.join(stateDir, "backfill-tiers.json"),
+    git: (cwd, args) => {
+      spawns += 1;
+      return gitIn(cwd, args);
+    },
+  });
+  const first = await backfill.discover();
+  const rec = first.find((project) => project.name === "sa-repo");
+  assert.equal(rec.remoteUrl, url, "the reused record was completed from its own origin");
+  assert.equal(repoKeyForProject(rec), "git.sefl.com/SA", "and the push controls can now find its section");
+  assert.equal(backfill.lastPass.backfilled, 1, "the pass says what it backfilled");
+
+  const afterFirst = spawns;
+  const second = await backfill.discover();
+  assert.equal(second.find((project) => project.name === "sa-repo").remoteUrl, url, "the answer survives the save");
+  assert.equal(spawns, afterFirst, "a record the cache can answer for costs no git at all");
+  assert.equal(backfill.lastPass.backfilled, 0, "nothing left to fill");
 });
 
 test("the pass carries its own timing breakdown, so a slow discovery says where it went", async () => {
