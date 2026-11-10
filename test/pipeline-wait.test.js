@@ -23,6 +23,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { Jobs } from "../lib/jobs.js";
+import { nextStageOf } from "../lib/task-pipeline-drive.js";
 import {
   QUIET_WAKE_AFTER_MS,
   WAIT_CLAIM_GRACE_MS,
@@ -76,6 +77,24 @@ const LOOP = {
 };
 const CATALOGUE = { get: (id) => (String(id) === LOOP.id ? LOOP : null) };
 
+// The SAME loop with the graph the shipped document draws (H-04 wait → address as a capped loop, H-05 back to wait,
+// H-06 on to approve), plus the gate that names the comment check. The ladder fixture above has no handoffs, which is
+// why the sweep's reading-order fallback still covers it; these tests are what hold the timer to the SAME rail the
+// driver walks when a definition DOES draw one.
+const GRAPHED = {
+  ...LOOP,
+  id: "sefl-review-loop-graphed",
+  gates: [{ id: "G4", after: "wait", verifiedBy: "pr-comments" }],
+  handoffs: [
+    { id: "H-03", from: "pr", to: "wait", kind: "sequence" },
+    { id: "H-04", from: "wait", to: "address", kind: "loop", cap: "3 rounds" },
+    { id: "H-05", from: "address", to: "wait", kind: "sequence" },
+    { id: "H-06", from: "wait", to: "approve", kind: "sequence" },
+    { id: "H-07", from: "approve", to: "merge", kind: "sequence" },
+  ],
+};
+const GRAPHED_CATALOGUE = { get: (id) => (String(id) === GRAPHED.id ? GRAPHED : null) };
+
 function waitRecord(over = {}) {
   return {
     stage: "wait",
@@ -95,12 +114,12 @@ function waitRecord(over = {}) {
 }
 
 // A tree in the durable book, on the `wait` stage of the review loop, with the record the panel would have written.
-function board(t, { stage = "wait", wait = waitRecord(), recordOver = {}, onStageSettled = null } = {}) {
+function board(t, { stage = "wait", wait = waitRecord(), recordOver = {}, onStageSettled = null, catalogue = CATALOGUE } = {}) {
   const dir = mkdtempSync(path.join(os.tmpdir(), "wtgui-wait-"));
   const records = new PipelineRecords({ file: path.join(dir, "pipeline-records.json") });
   const jobs = new Jobs({ config: { jobsFile: path.join(dir, "jobs.json"), defaultCwd: dir }, onLog: () => {}, onStageSettled });
   jobs.pipelineRecords = records;
-  jobs.pipelines = CATALOGUE;
+  jobs.pipelines = catalogue;
   const record = {
     id: LOOP.id,
     stage,
@@ -314,6 +333,78 @@ test("a due wake reads the PR once and ADVANCES the stage with the next stage's 
   assert.ok(!woke[0].text.includes("{{branch}}"), "no hole is handed to the worker");
   assert.match(woke[0].displayPrompt, /address: a comment arrived/);
   assert.equal(jobs.jobs.size, 0, "the sweep itself starts no card and holds no run: the wake is the turn");
+});
+
+// ---- §6.3b gap 5.1: the timer advances through the rail ------------------------------------------------------------
+// A wait stage draws TWO ways out, and the kind order takes the approval unless the review's own fact is read first.
+// These tests are the timer's half of the rail: a comment newer than lastSeen must take H-04 to the answer stage,
+// the answer stage returns by H-05, and the fourth crossing is refused by H-04's cap.
+const commentAt = (at) => ({ ok: true, pr: { number: 312, state: "OPEN", headRefOid: "a".repeat(40), reviewers: [], comments: [{ at }], approvals: [] } });
+
+test("a comment newer than lastSeen takes H-04 to the answer stage, not H-06 to approve; H-05 returns it to wait", async (t) => {
+  const { records, jobs } = board(t, { catalogue: GRAPHED_CATALOGUE, recordOver: { id: GRAPHED.id } });
+  const woke = [];
+
+  const out = await jobs.sweepPipelineWaits({
+    now: T0 + WAIT_FIRST_MS,
+    readReview: () => commentAt(iso(T0 + HOUR / 2)),
+    wake: (turn) => (woke.push(turn), { ok: true, job: { id: "wake1" } }),
+    promptValues: ({ wait }) => ({ branch: wait.branch, project: "agent-worktree-gui", pr: 312 }),
+  });
+
+  assert.equal(out.advanced, 1);
+  const record = records.get(TREE, { fresh: true });
+  assert.equal(record.stage, "address", "a comment newer than lastSeen routes to the answer stage, ahead of any approval");
+  assert.equal(record.crossings["H-04"], 1, "the timer counts the crossing it took, or the cap is not real");
+  assert.equal(record.history.at(-1).stage, "address");
+  assert.match(record.history.at(-1).why, /a comment arrived/);
+  assert.equal(woke.length, 1);
+  assert.match(woke[0].text, new RegExp(`answer the new comments on ${BRANCH} and push`), "the answer stage's own instruction");
+
+  // The answer stage returns to wait on the rail's own edge, and the next wait is the one that can take an approval.
+  const back = nextStageOf(GRAPHED, record);
+  assert.equal(back.ok, true);
+  assert.equal(back.stage.id, "wait");
+  assert.equal(back.handoff.id, "H-05", "address rejoins at wait; nothing else is reachable from it");
+});
+
+test("H-04 is crossed at most three times; the fourth comment closes the wait instead of looping again", async (t) => {
+  const { records, jobs } = board(t, { catalogue: GRAPHED_CATALOGUE, recordOver: { id: GRAPHED.id } });
+  const woke = [];
+  // Each round reseeds the wait the way the driver's own pass would after address -> wait, carrying the crossings the
+  // timer wrote. The comment is always newer than that round's lastSeen.
+  const round = (n, lastSeen, crossings) => {
+    const now = T0 + n * WAIT_FIRST_MS;
+    records.set(TREE, {
+      id: GRAPHED.id,
+      stage: "wait",
+      since: iso(now - WAIT_FIRST_MS),
+      history: [],
+      ...(crossings ? { crossings: { ...crossings } } : {}),
+      pipelineWait: waitRecord({ at: iso(now - WAIT_FIRST_MS), lastSeen }),
+    });
+    return jobs.sweepPipelineWaits({
+      now,
+      readReview: () => commentAt(iso(now - WAIT_FIRST_MS / 2)),
+      wake: (turn) => (woke.push(turn), { ok: true }),
+      promptValues: () => ({ branch: BRANCH }),
+    });
+  };
+
+  assert.equal((await round(1, iso(T0 - HOUR), null)).advanced, 1);
+  assert.equal(records.get(TREE, { fresh: true }).crossings["H-04"], 1);
+  assert.equal((await round(2, iso(T0), { "H-04": 1 })).advanced, 1);
+  assert.equal(records.get(TREE, { fresh: true }).crossings["H-04"], 2);
+  assert.equal((await round(3, iso(T0 + HOUR), { "H-04": 2 })).advanced, 1);
+  assert.equal(records.get(TREE, { fresh: true }).crossings["H-04"], 3, "three crossings, the cap's own number");
+
+  const fourth = await round(4, iso(T0 + 2 * HOUR), { "H-04": 3 });
+  assert.equal(fourth.advanced, 0, "a fourth crossing is past the cap");
+  assert.equal(fourth.refused, 1);
+  assert.equal(woke.length, 3, "the fourth comment wakes nobody");
+  const held = records.get(TREE, { fresh: true });
+  assert.equal(held.stage, "wait", "the row stops where it is, for a person");
+  assert.equal(held.pipelineWait, undefined, "and the wait is closed, so no tick keeps asking the same question");
 });
 
 // ---- §6.4 the next check, and nothing else -----------------------------------------------------------------------
