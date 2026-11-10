@@ -290,6 +290,9 @@ do on its own, the pipeline is the standing instruction the reader gave this pro
 | 5 | `merge` | `gh pr merge --rebase --admin` | `pr-merged` |
 | 6 | `main` | `git fetch origin {{main}}` and confirm the merge is on it | `main-moved` |
 
+All five handoffs are `sequence`: a row that enters at `commit` visits the six stages once each, in this table's
+order, and there is no loop to cross.
+
 Two details are load-bearing and belong in the stage's own prompt, not in a general one:
 
 - **`--admin` is the ruleset's bypass, not a preference.** The repo's ruleset (`Owner only`, id `25783530`, per

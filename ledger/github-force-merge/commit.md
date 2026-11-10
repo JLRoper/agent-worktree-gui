@@ -1,42 +1,63 @@
 # github-force-merge stage 1 of 6: commit
 
-Stage: `commit` (visit 1), pipeline `github-force-merge`, row #58 in assistant-3's queue.
-Tree: `C:/ProjectDevelopment/agent-worktree-gui/.worktrees/github-landing-sanity-0bbdd3` (repo-relative `.worktrees/github-landing-sanity-0bbdd3`).
-Branch: `wtgui/github-landing-sanity-0bbdd3`.
-Base and HEAD before this commit: `b1226087` ("chore: 1.76.25 - the version this landing carries"), 0 commits behind `origin/main` at the read.
-Working tree before this commit: one modified file, `test/pipeline-bundle-seed.test.js` (9 insertions, 0 deletions).
+Stage: `commit` (visit 1), pipeline `github-force-merge`, row #1 in assistant-3's queue.
+Tree: the repo-relative worktree `.worktrees/pipeline-row-rung-2-6f9dd4`, in the agent-worktree-gui clone.
+Branch: `wtgui/pipeline-row-rung-2-6f9dd4`.
+Base and HEAD before this commit: `23fbe197` ("docs: render the changelog - 529 releases"), which is also `origin/main`
+at the read, so the branch was 0 commits behind and 0 ahead.
+Working tree before this commit: one modified file, `docs/pipelines.md` (3 insertions, 0 deletions).
+`package.json` reads 1.80.8, and this commit does not move it.
+
+This row is the ladder walked as a queue row: six stages once, in order, `commit -> version -> push -> pr -> merge
+-> main`. This stage is the first rung, and H-01 is the only edge out of `commit`, handing its `commit-record` to
+`version`.
 
 ## The symptom this commit names
 
-The shipped `github-force-merge` ladder is the panel's GitHub turnover rail: six stages that must be walked once,
-in order. Nothing in the seed test pinned the shape of its handoffs, so a later edit could turn one hop into a loop
-(or add a branch) and the seed test would still pass, while a live walk from `commit` would re-enter a stage it had
-already run, re-pushing or re-merging. The change is one assertion pinning that every handoff in the ladder is a
-`sequence`, which is the same statement as "a walk from `commit` visits all six stages once and there is no loop to
-cross".
+The `github-force-merge` section of `docs/pipelines.md` gives the six stages and what each one does, but it never
+says what kind the five handoffs between them are. A reader of that table can hold either model: a straight rail
+that visits each stage once, or a graph with a back edge, because the seed's handoffs carry a `kind` the prose did
+not mention. The shipped `pipeline-bundle.seed.json` has had five `sequence` handoffs since the ladder landed, so the
+document was understating a property the panel already depends on: a row that enters at `commit` visits all six
+stages once, in the table's order, and there is no loop to cross. The change is one paragraph stating that next to
+the table it describes. No seed edit and no product code: the document already had this shape, and the prose now
+says it.
 
 ## The change
 
-`test/pipeline-bundle-seed.test.js`, in "the seed's three small pipelines are complete: 2-3 stages each, with the
-capped loops their names promise", immediately after the ladder's artifact-kind pin:
+`docs/pipelines.md`, immediately after the ladder table:
 
-```js
-const github = byId.get("github-force-merge");
-assert.deepEqual(
-  github.handoffs.map((entry) => entry.kind),
-  ["sequence", "sequence", "sequence", "sequence", "sequence"],
-  "the GitHub ladder has no loop: every handoff is a sequence",
-);
+```text
+All five handoffs are `sequence`: a row that enters at `commit` visits the six stages once each, in this table's
+order, and there is no loop to cross.
 ```
 
-No product code, no seed edit: the document already has this shape, and the assertion is the pin that keeps it.
+"Five" is the count of the edges, not the stages: six stages chained end to end carry five handoffs, which is the
+number of rows in the table minus one.
 
 ## The ladder walk, recorded from the shipped document
 
-The walk was read through the panel's own loader (`readBundle` in `lib/pipeline-bundle.js`), not from the raw JSON,
-so the graph below is the document the panel resolves from `pipeline-bundle.seed.json`.
+Read through the panel's own loader (`readBundle` in `lib/pipeline-bundle.js`), not from the raw JSON, so this is
+the document the panel resolves from `pipeline-bundle.seed.json`. The probe was a scratch file outside the tree and
+is not committed. Its output on the seed as committed:
 
-Order and artifacts, one row per stage:
+    stages: commit -> version -> push -> pr -> merge -> main
+    handoffs: 5 kinds: sequence,sequence,sequence,sequence,sequence
+    all sequence: true
+    walk: commit -> version -> push -> pr -> merge -> main
+    visited 6 of 6 stages; revisions: 0
+    edges: H-01,H-02,H-03,H-04,H-05
+    edge artifacts: H-01 commit->version commit-record; H-02 version->push version-bump;
+    H-03 push->pr pushed-branch; H-04 pr->merge pull-request; H-05 merge->main merge-record
+    walk matches the doc table's order: true
+    WALK OK
+    exit 0
+
+The probe refused a revisit, a branch (a stage with more than one outgoing handoff), any handoff whose `kind` is not
+`sequence`, and a walk that does not land on all six stages. It exited 0 on the seed as committed, which is the
+sentence the new paragraph adds to the document.
+
+Order and artifacts, one row per stage, read from the same bundle:
 
 | # | stage | title | artifact | schema | kind | path written | handoff in |
 |---|-------|-------|----------|--------|------|--------------|------------|
@@ -47,85 +68,97 @@ Order and artifacts, one row per stage:
 | 5 | `merge` | Merge | `merge-record` | `merge-record/1` | `pr` | `ledger/github-force-merge/merge.md` | H-04 |
 | 6 | `main` | Confirm main moved | `main-moved` | `main-moved/1` | `pr` | `ledger/github-force-merge/main.md` | H-05 |
 
-The five handoffs, all `sequence`, chained H-01 `commit` to `version`, H-02 `version` to `push`, H-03 `push` to `pr`,
-H-04 `pr` to `merge`, H-05 `merge` to `main`. The walk script's output on the seed as committed:
+This record replaces the earlier walk's `commit.md` at the same path, because the ladder writes one fixed path per
+stage. The file it replaced named a machine folder, and this one does not: everything above is repo-relative, so
+`tools/absolute-paths.mjs` has nothing new to refuse. The allowlist line that existed only because that earlier
+record named a machine folder is removed in the same commit, so the permission does not outlive the path it was
+granted for; a line left at count 2 over a file that holds none would let a later edit quietly name two again.
 
-    stages visited: 6 of 6
-    handoffs: 5 all sequence: true
-    revisits: 0
-    1. commit - commit-record (file/commit-record/1) -> ledger/github-force-merge/commit.md
-    2. version - version-bump (file/version-bump/1) -> ledger/github-force-merge/version.md
-    3. push - pushed-branch (pr/pushed-branch/1) -> ledger/github-force-merge/push.md
-    4. pr - pull-request (pr/pull-request/1) -> ledger/github-force-merge/pr.md
-    5. merge - merge-record (pr/merge-record/1) -> ledger/github-force-merge/merge.md
-    6. main - main-moved (pr/main-moved/1) -> ledger/github-force-merge/main.md
-    order: commit -> version -> push -> pr -> merge -> main
-    WALK OK
+## The landing is local-only by this stage's instruction
 
-The script refused a revisit, a branch (more than one outgoing handoff), a non-`sequence` edge and a handoff whose
-artifact is not the one the stage writes; it exited 0. `push` declares its artifact's kind as `pr` even though the
-stage itself is a push: the kind describes the landing, and the seed's own pin in the same test already asserts it.
+The queue line for this row ends "Land by PR against main", and the LANDING line this stage was started with
+overrides it for this tree: the artifact is not a pull request, so the tree is local-only, and this stage commits
+here and reports the commit. Nothing was pushed, no pull request was opened, and no tag or remote ref moved. The
+ladder's later stages own any push, pull request and merge, and this stage did not pre-empt them. The remote agrees:
+the branch is 1 commit ahead of `origin/main` and `git ls-remote --heads origin` prints nothing for it.
 
 ## The timing
 
-All stamps are UTC. The panel is the clock: these two are read from its own books, and the rest are this stage's.
+All stamps are UTC. The panel is the clock for the first three rows; the rest are this stage's own.
 
 | event | stamp | source |
 |-------|-------|--------|
-| row #58 entered `commit` visit 1 | 2026-11-09T22:29:38.384Z | `~/.wag/state/assistants/assistant-3/queue.json`, `pipelineRun.enteredAt` |
-| stage run `github-force-merge/commit#1` stamped | 2026-11-09T22:29:40.098Z | same file, `pipelineRun.stageRuns[0].at` / `startingAt` |
-| job `3615f3f1` started | 2026-11-09T22:29:41.037Z | `~/.wag/state/jobs.json` |
-| first command in this tree (HEAD, status, origin/main read) | 2026-11-09T22:31:54Z | this run |
-| this commit created | 2026-11-09T22:32:44Z | the commit's own committer stamp, `git log -1 --format=%cI` |
+| row #1 entered `commit` visit 1 | 2026-11-10T03:24:23.727Z | the panel's queue file, `pipelineRun.enteredAt` |
+| stage run `github-force-merge/commit#1` stamped | 2026-11-10T03:24:25.112Z | same file, `pipelineRun.stageRuns[0].at` / `startingAt` |
+| job `b24d0e2c` started | 2026-11-10T03:24:26.218Z | the panel's `jobs.json` |
+| clock read in this tree | 2026-11-10T03:24:58Z | this run |
+| ladder walk green | 2026-11-10T03:28:42Z | this run |
+| this commit created | 2026-11-10T03:32:46Z | the commit's own author stamp, `git log -1 --format=%aI`, preserved through the amend that wrote these last lines |
 
-Span: 3 minutes 4 seconds from the stage run's stamp to the commit, 3 minutes 3 seconds from the job's start.
 The remaining five stages' timings are not in this file: each is stamped by the panel when that stage's own run
-starts and settles (`stageRuns[].at` and the entry's settle), and stage 1 cannot measure a clock it never held.
-Nothing after this stage was hand-started: the walk above is the document's graph, read and checked, not five stages
-run for real. Running `push`, `pr`, `merge` and `main` for real is what the panel's driver does, with the permission
-boxes that only the reader can grant.
+starts and settles, and stage 1 cannot measure a clock it never held. Nothing after this stage was hand-started for
+this record: the walk above is the document's graph, read and checked, not five stages run for real.
 
 ## Commands run, and their exact result
 
-    node -e '...'            # stage/handoff read from pipeline-bundle.seed.json: 6 stages, 5 sequence handoffs
+    git status --short                          # M docs/pipelines.md, one modified file
+    git rev-parse HEAD                          # 23fbe1974b89420c3357add805760673b2754959
+    git rev-parse origin/main                   # 23fbe1974b89420c3357add805760673b2754959
+    git rev-list --left-right --count origin/main...HEAD   # 0 0
 
-    npm run test:module test/pipeline-bundle-seed.test.js
-    > agent-worktree-gui@1.76.25 test:module
-    > node tools/test-module.mjs test/pipeline-bundle-seed.test.js
-    test:module - test/pipeline-bundle-seed.test.js: 1 test file name or import it.
-      test/pipeline-bundle-seed.test.js  (named itself)
-      seed-pipeline-bundle: C:\Users\roper\AppData\Local\Temp\wtgui-seed-UUphUZ\pipeline-bundle.json already exists
-      - leave it alone, or pass --force to replace it with the shipped seed
-    pass 6, fail 0, duration_ms 456.0761
-    test:module - 1 file(s), 0.5s, exit 0
+    node <scratch>/walk-github-ladder.mjs       # quoted above; WALK OK, exit 0
 
-    node walk-github-force-merge.mjs   # the walk quoted above; exit 0
+    npm run test:changed
+    test:changed - 3 changed files against origin/main:
+      docs/pipelines.md
+      ledger/github-force-merge/commit.md
+      tools/absolute-paths.allow
+    test:changed - 4 test files name or import the diff (4 by name, 0 by import):
+      test/absolute-paths.test.js  (names tools/absolute-paths.allow)
+      test/pipeline-chip.test.js  (names docs/pipelines.md)
+      test/pipeline-wait.test.js  (names docs/pipelines.md)
+      test/pipelines.test.js  (names docs/pipelines.md)
+    tests 65, pass 65, fail 0, duration_ms 14777.9394
+    test:changed - 4 file(s), 14.9s, exit 0
 
-    npm run test:changed -- --list
-    test:changed - 1 changed file against origin/main:
-      test/pipeline-bundle-seed.test.js
-    test:changed - no test names or imports any of them. That is a sentence, not a pass: run npm test if the
-    change is broad.
+    node tools/absolute-paths.mjs
+    absolute-paths: clean - 1461 tracked files, 1309 paths in 249 allowlisted files, none new
+    exit 0
 
-The last line is why the focused run was `test:module` on the file itself rather than `test:changed`: the only
-changed file is the test, so the module run is the whole of what the diff can break, and it is green. The full suite
-is stage 1's to run only if the reader asks for it; this stage changed one assertion inside one test file.
+    node tools/absolute-paths.mjs --rev HEAD
+    absolute-paths: clean - 1461 files at HEAD, 1309 paths in 249 allowlisted files, none new
+    exit 0
+
+    git ls-remote --heads origin refs/heads/wtgui/pipeline-row-rung-2-6f9dd4
+    (prints nothing, exit 0: the branch is not on origin, so nothing was pushed)
+    git rev-list --left-right --count origin/main...HEAD
+    0 1
+
+The focused set is green, 65 tests and no failure. `test/absolute-paths.test.js` is in the set only because the
+allowlist line was removed, and it is the test that proves this repository's own tree still passes with it gone.
 
 ## What this commit holds
 
-One commit on top of `b1226087`, subject naming the symptom:
+One commit on top of `23fbe197`, subject naming the symptom:
 
-    test: the GitHub ladder has no loop to cross - every handoff is a sequence
+    docs: the GitHub ladder has no loop to cross - all five handoffs are sequence
 
-Two files: `test/pipeline-bundle-seed.test.js` (the assertion, 9 insertions) and this record. It is one revertable
-commit; a revert removes only the pin and this file, and no product code depends on either.
+Three files. `docs/pipelines.md` carries the one paragraph (3 insertions). This record is the stage's artifact.
+`tools/absolute-paths.allow` loses one line, the permission the earlier walk's `commit.md` needed and this record
+does not. It is one revertable commit; a revert restores the paragraph, the earlier record and the allowlist line,
+and no product code depends on any of them.
+
+The number is not bumped here: this stage's ladder puts the bump in stage 2 (`version`), which reads this record and
+applies the level in its own commit. The expected level for this landing is `patch`, 1.80.8 to 1.80.9, and the tree
+still reads 1.80.8 so that stage can take it.
 
 The commit's own sha is not written here: this file is inside the commit, so a hash written in it could only be the
-hash of some other commit. The panel stamps it on the stage run (`pipelineRun.stageRuns[0].commit`) when the stage
-settles, and `git log --oneline b1226087..HEAD` answers it in the tree.
+hash of some other commit. The panel stamps it on the stage run when the stage settles, and
+`git log --oneline 23fbe197..HEAD` answers it in the tree.
 
 ## What the next stage reads
 
 `version` reads this artifact as its declared input (`commit-record`, schema `commit-record/1`, read-only) and
-writes `ledger/github-force-merge/version.md`. The version level is judged against this commit: one assertion in a
-test file, no product code, so the level is a patch, not a minor.
+writes `ledger/github-force-merge/version.md`. The level is judged against this commit: one paragraph of prose under
+`docs/`, which `docs/versioning.md` sets at patch ("a doc - anything under `docs/`"), so the level is a patch and not
+a minor. A minor would need a new gate or a new capability; this paragraph states a property the seed already had.

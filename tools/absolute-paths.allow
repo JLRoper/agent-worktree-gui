@@ -265,4 +265,3 @@ ledger/gui-improve/settings-panel-board/compare/change-set.patch | 3 | record: t
 ledger/gui-improve/settings-panel-board/compare/comparison.json | 156 | record: the comparison quotes the scan roots and the measured comment on both sides
 ledger/gui-improve/settings-panel-board/compare/README.md | 7 | record: the compare's protocol names the two folders and the browser install it ran with
 ledger/gui-improve/settings-panel-board/compare/run.mjs | 9 | probe: the scan roots and the browser and module folders the compare was run with, kept as its defaults
-ledger/github-force-merge/commit.md | 2 | record: stage 1's commit record for the github-force-merge ladder, handed on pinned at sha256 a7d6b07ab125, so its tree path names where that stage ran and is not rewritten
