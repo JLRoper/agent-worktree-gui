@@ -137,15 +137,21 @@
   <h2>What was run</h2>
   <table>
     <tr><th>run</th><th>answer</th></tr>
-    <tr><td><code>node --test test/task-pipeline-drive.test.js test/task-pipeline.test.js test/pipeline-wait.test.js</code></td>
-        <td>all pass, including five new tests: the block walk, the legacy one-tree inverse, the join's two lanes, the
-        terminal refusal, and the same stage starting once its inputs are there</td></tr>
-    <tr><td><code>node tools/verify-pipeline-fork.mjs</code></td><td>22 checks, 0 failed</td></tr>
-    <tr><td><code>npm run test:module lib/task-pipeline-drive.js</code></td>
-        <td>70 files; the only failures are the two known reds on this base branch (a profile whitelist test and a
-        command-audit test that start no run), both failing at <code>HEAD</code> before this change</td></tr>
-    <tr><td><code>npm test</code></td><td>the full suite, once, before the pull request: recorded with the landing
-        notes</td></tr>
+    <tr><td><code>node --test test/task-pipeline-drive.test.js test/task-pipeline.test.js test/pipeline-wait.test.js</code> on this tree</td>
+        <td>85 tests, 85 pass, including five new tests: the block walk, the legacy one-tree inverse, the join's two lanes,
+        the terminal refusal, and the same stage starting once its inputs are there</td></tr>
+    <tr><td>the same three files on the merged round branch</td><td>98 tests, 98 pass</td></tr>
+    <tr><td><code>node tools/verify-pipeline-fork.mjs</code> on both</td><td>22 checks, 0 failed, on this tree and on the
+        merged round branch</td></tr>
+    <tr><td><code>npm run test:module lib/task-pipeline-drive.js</code> on this tree</td>
+        <td>616 tests, 614 pass, 2 fail: the profile whitelist test and the SPAWN-unactioned command audit, both red at
+        <code>HEAD</code> before this change (confirmed by stashing it)</td></tr>
+    <tr><td><code>npm test</code> on this tree</td>
+        <td>2297 tests, 2287 pass, 10 fail, and every one of them red at <code>HEAD</code> before this change: the two
+        above, the whitelist route, the owner-from-the-server test, the paths config key, the reasoning restart, the
+        harness wiring, the gateway-permissions file, the repo allowlist and the commit-dash test</td></tr>
+    <tr><td>the merged round branch's module set</td><td>951 tests, 948 pass, 3 fail: this tree's two reds plus the
+        round's own paths-config-key and reasoning-restart reds</td></tr>
   </table>
 
   <div class="note"><strong>Not pushed.</strong> This tree's branch was merged into
