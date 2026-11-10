@@ -1,0 +1,19 @@
+{
+  "schema": "verdict/1",
+  "gate": "G1",
+  "pipeline": "ping-pong",
+  "round": 2,
+  "stage": "critique",
+  "outcome": "accept",
+  "accepted": true,
+  "openNotes": 0,
+  "notes": "critique-notes",
+  "notesPath": "ledger/ping-pong/critique.md",
+  "draftPath": "ledger/ping-pong/draft.md",
+  "draftCommit": "2af8c11bd6f402cea4cf7d4c7716f361bb42aa0b",
+  "draftRewritten": true,
+  "rewrittenAgainst": "ledger/ping-pong/critique.md at 9888b9bc",
+  "by": "critic",
+  "at": "2026-11-10T06:22:30.000Z",
+  "reason": "round 1's one note is answered in the draft and no note is open, so the pipeline is over at this stage"
+}
