@@ -1,0 +1,521 @@
+{
+  "what": "round 70 of the ping-pong pipeline, walked local only through the panel's own modules",
+  "readAt": "2026-11-10T06:30:31.557Z",
+  "bundle": {
+    "path": "C:/Users/roper/.wag/state/pipeline-bundle.json",
+    "sha256": "3c2c16b7dac43fd568ae881627ef67b8d8ee2e3463b29c210cc1411dd3c84857",
+    "pipelines": 13
+  },
+  "round": {
+    "parentPath": "C:/ProjectDevelopment/agent-worktree-gui/.worktrees/run-row-70-exactly-as-written-local-only-19d782",
+    "parent": "wtgui/run-row-70-exactly-as-written-local-only-19d782",
+    "slug": "run-row-70-exactly-as-written-local-only",
+    "tag": "19d782",
+    "base": "origin/main",
+    "sha": "1c5c53c7089e186943ad45822cfea36705e7b86b",
+    "display": "Stage 1: Draft",
+    "at": "2026-11-10T06:14:33.278Z",
+    "by": "panel"
+  },
+  "visits": [
+    {
+      "key": "draft#1",
+      "stage": "draft",
+      "visit": 1,
+      "artifactPath": "ledger/ping-pong/draft.md",
+      "verdictPath": null,
+      "tree": "C:/ProjectDevelopment/agent-worktree-gui/.worktrees/run-row-70-exactly-as-written-local-only-stage-1-draft-1de511",
+      "branch": "wtgui/run-row-70-exactly-as-written-local-only-stage-1-draft-1de511",
+      "commit": "d27bfc8d746b2bd3a98a0a87e4b1329fdbd42734",
+      "commitAt": "2026-11-10T01:19:18-05:00",
+      "commitsOverBase": 1,
+      "dirty": 0,
+      "artifact": {
+        "path": "ledger/ping-pong/draft.md",
+        "present": true,
+        "blob": "2ebed22e56113179cef20441cfa0bf120328f693",
+        "sha256": "3afbe9de633dae09bdc3f5f8f675f135128a4543373f6895b3ef669c45417fe7",
+        "workingTree": "f554cca3bbea95fb443ab7c43240427c808fffcd50b10878a66f8e35988c5825",
+        "words": 494
+      },
+      "verdict": null
+    },
+    {
+      "key": "critique#1",
+      "stage": "critique",
+      "visit": 1,
+      "artifactPath": "ledger/ping-pong/critique.md",
+      "verdictPath": "ledger/ping-pong/verdict-r1.json",
+      "tree": "C:/ProjectDevelopment/agent-worktree-gui/.worktrees/run-row-70-exactly-as-written-local-only-stage-2-critique-6635d7",
+      "branch": "wtgui/run-row-70-exactly-as-written-local-only-stage-2-critique-6635d7",
+      "commit": "9888b9bc142df790247df251551ec416a1e07d75",
+      "commitAt": "2026-11-10T01:22:30-05:00",
+      "commitsOverBase": 1,
+      "dirty": 0,
+      "artifact": {
+        "path": "ledger/ping-pong/critique.md",
+        "present": true,
+        "blob": "52cbe921fce3c50cc6be2a68445abacfad431313",
+        "sha256": "236f8a873be235eb811ae5eb30949748ac8f1c31aa092f0c897816cb7bec93e4",
+        "workingTree": "236f8a873be235eb811ae5eb30949748ac8f1c31aa092f0c897816cb7bec93e4",
+        "words": 410
+      },
+      "verdict": {
+        "path": "ledger/ping-pong/verdict-r1.json",
+        "schema": "verdict/1",
+        "gate": "G1",
+        "pipeline": "ping-pong",
+        "round": 1,
+        "stage": "critique",
+        "outcome": "revise",
+        "accepted": false,
+        "openNotes": 1,
+        "notes": "critique-notes",
+        "notesPath": "ledger/ping-pong/critique.md",
+        "draftPath": "ledger/ping-pong/draft.md",
+        "draftCommit": "d27bfc8d746b2bd3a98a0a87e4b1329fdbd42734",
+        "draftRewritten": false,
+        "by": "critic",
+        "at": "2026-11-10T06:19:52.000Z",
+        "reason": "note 1 is open: the cap counts crossings of H-02, not the drafter's visits, and the draft has not been rewritten against it"
+      }
+    },
+    {
+      "key": "draft#2",
+      "stage": "draft",
+      "visit": 2,
+      "artifactPath": "ledger/ping-pong/draft.md",
+      "verdictPath": null,
+      "tree": "C:/ProjectDevelopment/agent-worktree-gui/.worktrees/run-row-70-exactly-as-written-local-only-stage-1-draft-676235",
+      "branch": "wtgui/run-row-70-exactly-as-written-local-only-stage-1-draft-676235",
+      "commit": "2af8c11bd6f402cea4cf7d4c7716f361bb42aa0b",
+      "commitAt": "2026-11-10T01:24:30-05:00",
+      "commitsOverBase": 2,
+      "dirty": 0,
+      "artifact": {
+        "path": "ledger/ping-pong/draft.md",
+        "present": true,
+        "blob": "b0e00f40fa4dfc0f8f081bd28400ab276bc837e9",
+        "sha256": "97cab49725ea810164624636eb51ed26e19aeb52fe54c41be7d0d3a63bc2cf96",
+        "workingTree": "2ea4645beaeaa0b81918c1d130dddac272096692eb28318dafa1dd4df1689b50",
+        "words": 623
+      },
+      "verdict": null
+    },
+    {
+      "key": "critique#2",
+      "stage": "critique",
+      "visit": 2,
+      "artifactPath": "ledger/ping-pong/critique.md",
+      "verdictPath": "ledger/ping-pong/verdict-r2.json",
+      "tree": "C:/ProjectDevelopment/agent-worktree-gui/.worktrees/run-row-70-exactly-as-written-local-only-stage-2-critique-59a317",
+      "branch": "wtgui/run-row-70-exactly-as-written-local-only-stage-2-critique-59a317",
+      "commit": "966b3f5b1da2b4b36e4a078f9620e71e6c60af62",
+      "commitAt": "2026-11-10T01:24:51-05:00",
+      "commitsOverBase": 2,
+      "dirty": 0,
+      "artifact": {
+        "path": "ledger/ping-pong/critique.md",
+        "present": true,
+        "blob": "7b5a1e0f013c8ff2b608d5001c46edd7ade71f75",
+        "sha256": "238c459cd5e2d06fd86184170e2ade83e546721ee11c3cd153edf0748a0bf7ce",
+        "workingTree": "238c459cd5e2d06fd86184170e2ade83e546721ee11c3cd153edf0748a0bf7ce",
+        "words": 294
+      },
+      "verdict": {
+        "path": "ledger/ping-pong/verdict-r2.json",
+        "schema": "verdict/1",
+        "gate": "G1",
+        "pipeline": "ping-pong",
+        "round": 2,
+        "stage": "critique",
+        "outcome": "accept",
+        "accepted": true,
+        "openNotes": 0,
+        "notes": "critique-notes",
+        "notesPath": "ledger/ping-pong/critique.md",
+        "draftPath": "ledger/ping-pong/draft.md",
+        "draftCommit": "2af8c11bd6f402cea4cf7d4c7716f361bb42aa0b",
+        "draftRewritten": true,
+        "rewrittenAgainst": "ledger/ping-pong/critique.md at 9888b9bc",
+        "by": "critic",
+        "at": "2026-11-10T06:22:30.000Z",
+        "reason": "round 1's one note is answered in the draft and no note is open, so the pipeline is over at this stage"
+      }
+    }
+  ],
+  "reads": [
+    {
+      "after": "draft#1",
+      "record": {
+        "pipeline": "ping-pong",
+        "stage": "draft",
+        "enteredAt": "2026-11-10T06:14:33.278Z",
+        "visits": {
+          "draft": 1
+        },
+        "crossings": {}
+      },
+      "question": "nextStageOf(pipeline, pipelineRun, { worktree: <this visit's tree> })",
+      "answer": {
+        "ok": true,
+        "done": false,
+        "stage": {
+          "id": "critique",
+          "title": "Critique",
+          "position": 2,
+          "prompt": "Read the draft against the brief and return one note per defect: the sentence, the defect, the fix it needs. Do not rewrite the draft. When no note is left open, accept it in one line and record that verdict where the gate asks for it, so the drafter can be told the round is over instead of writing another one. The notes are the artifact the next round reads.",
+          "promptFrom": "stage",
+          "role": "critic",
+          "artifact": {
+            "id": "critique-notes",
+            "path": "ledger/ping-pong/critique.md",
+            "schema": "critique/1",
+            "writer": "critic",
+            "sha256": null,
+            "kind": null
+          },
+          "reads": [
+            {
+              "artifact": "draft",
+              "location": null,
+              "mutability": "read-only",
+              "sha256": null
+            }
+          ]
+        },
+        "handoff": {
+          "id": "H-01",
+          "from": "draft",
+          "to": "critique",
+          "artifact": "draft",
+          "kind": "sequence",
+          "cap": null
+        }
+      }
+    },
+    {
+      "after": "critique#1",
+      "record": {
+        "pipeline": "ping-pong",
+        "stage": "critique",
+        "enteredAt": "2026-11-10T06:19:18.000Z",
+        "visits": {
+          "draft": 1,
+          "critique": 1
+        },
+        "crossings": {
+          "H-01": 1
+        }
+      },
+      "question": "nextStageOf(pipeline, pipelineRun, { worktree: <this visit's tree> })",
+      "answer": {
+        "ok": true,
+        "done": false,
+        "stage": {
+          "id": "draft",
+          "title": "Draft",
+          "position": 1,
+          "prompt": "Write the draft the brief asks for, in one pass, and name in a closing line what you are unsure of. On a later round the draft is rewritten against the critic's notes: a note you disagree with is answered in the draft itself, never ignored. Commit the draft on the branch.",
+          "promptFrom": "stage",
+          "role": "drafter",
+          "artifact": {
+            "id": "draft",
+            "path": "ledger/ping-pong/draft.md",
+            "schema": "draft/1",
+            "writer": "drafter",
+            "sha256": null,
+            "kind": null
+          },
+          "reads": []
+        },
+        "handoff": {
+          "id": "H-02",
+          "from": "critique",
+          "to": "draft",
+          "artifact": "critique-notes",
+          "kind": "loop",
+          "cap": "3 rounds"
+        },
+        "verdict": {
+          "gate": "G1",
+          "path": "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\run-row-70-exactly-as-written-local-only-stage-2-critique-6635d7\\ledger\\ping-pong\\verdict-r1.json",
+          "outcome": "revise",
+          "handoff": "H-02",
+          "edge": "H-02",
+          "from": "critique",
+          "to": "draft",
+          "ended": false
+        }
+      }
+    },
+    {
+      "after": "draft#2",
+      "record": {
+        "pipeline": "ping-pong",
+        "stage": "draft",
+        "enteredAt": "2026-11-10T06:20:22.000Z",
+        "visits": {
+          "draft": 2,
+          "critique": 1
+        },
+        "crossings": {
+          "H-01": 1,
+          "H-02": 1
+        }
+      },
+      "question": "nextStageOf(pipeline, pipelineRun, { worktree: <this visit's tree> })",
+      "answer": {
+        "ok": true,
+        "done": false,
+        "stage": {
+          "id": "critique",
+          "title": "Critique",
+          "position": 2,
+          "prompt": "Read the draft against the brief and return one note per defect: the sentence, the defect, the fix it needs. Do not rewrite the draft. When no note is left open, accept it in one line and record that verdict where the gate asks for it, so the drafter can be told the round is over instead of writing another one. The notes are the artifact the next round reads.",
+          "promptFrom": "stage",
+          "role": "critic",
+          "artifact": {
+            "id": "critique-notes",
+            "path": "ledger/ping-pong/critique.md",
+            "schema": "critique/1",
+            "writer": "critic",
+            "sha256": null,
+            "kind": null
+          },
+          "reads": [
+            {
+              "artifact": "draft",
+              "location": null,
+              "mutability": "read-only",
+              "sha256": null
+            }
+          ]
+        },
+        "handoff": {
+          "id": "H-01",
+          "from": "draft",
+          "to": "critique",
+          "artifact": "draft",
+          "kind": "sequence",
+          "cap": null
+        }
+      }
+    },
+    {
+      "after": "critique#2",
+      "record": {
+        "pipeline": "ping-pong",
+        "stage": "critique",
+        "enteredAt": "2026-11-10T06:20:58.000Z",
+        "visits": {
+          "draft": 2,
+          "critique": 2
+        },
+        "crossings": {
+          "H-01": 2,
+          "H-02": 1
+        }
+      },
+      "question": "nextStageOf(pipeline, pipelineRun, { worktree: <this visit's tree> })",
+      "answer": {
+        "ok": true,
+        "done": true,
+        "closing": null,
+        "verdict": {
+          "gate": "G1",
+          "path": "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\run-row-70-exactly-as-written-local-only-stage-2-critique-59a317\\ledger\\ping-pong\\verdict-r2.json",
+          "outcome": "accept",
+          "handoff": null,
+          "edge": "H-02",
+          "from": "critique",
+          "to": "draft",
+          "ended": true
+        }
+      }
+    }
+  ],
+  "crossings": {
+    "H-01": 2,
+    "H-02": 1
+  },
+  "visitsCounted": {
+    "draft": 2,
+    "critique": 2
+  },
+  "cap": {
+    "edge": "H-02",
+    "text": "3 rounds",
+    "limit": 3,
+    "why": null
+  },
+  "gate": {
+    "id": "G1",
+    "name": "Verdict",
+    "after": "critique",
+    "artifact": "critique-notes",
+    "outcomes": [
+      "accept",
+      "revise"
+    ],
+    "routes": {
+      "accept": null,
+      "revise": "H-02"
+    },
+    "recordAsDeclared": {
+      "found": true,
+      "path": "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\run-row-70-exactly-as-written-local-only-stage-2-critique-6635d7\\ledger\\ping-pong\\verdict-r1.json",
+      "shown": "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\run-row-70-exactly-as-written-local-only-stage-2-critique-6635d7\\ledger\\ping-pong\\verdict-r1.json",
+      "file": "ledger/ping-pong/verdict-r1.json",
+      "reason": null
+    },
+    "recordThisVisit": {
+      "found": true,
+      "path": "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\run-row-70-exactly-as-written-local-only-stage-2-critique-59a317\\ledger\\ping-pong\\verdict-r2.json",
+      "shown": "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\run-row-70-exactly-as-written-local-only-stage-2-critique-59a317\\ledger\\ping-pong\\verdict-r2.json",
+      "file": "ledger/ping-pong/verdict-r2.json",
+      "reason": null
+    },
+    "recordNotYetWritten": {
+      "found": false,
+      "path": null,
+      "shown": "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\run-row-70-exactly-as-written-local-only-stage-2-critique-59a317\\ledger\\ping-pong\\verdict-r3.json",
+      "file": null,
+      "reason": null
+    },
+    "declares": {
+      "id": "ping-pong-verdict",
+      "path": "ledger/ping-pong/verdict-r{{round}}.json",
+      "schema": "verdict/1",
+      "writer": "critic",
+      "sha256": null,
+      "outcomes": [
+        "accept",
+        "revise"
+      ],
+      "routes": {
+        "accept": null,
+        "revise": "H-02"
+      }
+    },
+    "fields": {
+      "inDocument": [
+        "after",
+        "artifact",
+        "decider",
+        "decision",
+        "id",
+        "name",
+        "refuses_when",
+        "verified_by"
+      ],
+      "keptByLoader": [
+        "after",
+        "artifact",
+        "decider",
+        "decision",
+        "id",
+        "name",
+        "verifiedBy"
+      ],
+      "droppedByLoader": [
+        "refuses_when",
+        "verified_by"
+      ]
+    },
+    "firstCheck": {
+      "question": "nextStageOf(ping-pong, critique visit 1, { worktree: a tree holding critique.md and no record })",
+      "answer": {
+        "ok": false,
+        "done": false,
+        "code": "pipeline-gate",
+        "gate": {
+          "id": "G1",
+          "name": "Verdict",
+          "after": "critique",
+          "artifact": "critique-notes",
+          "decider": "critic",
+          "verifiedBy": "machine",
+          "decision": {
+            "id": "ping-pong-verdict",
+            "path": "ledger/ping-pong/verdict-r{{round}}.json",
+            "schema": "verdict/1",
+            "writer": "critic",
+            "sha256": null,
+            "outcomes": [
+              "accept",
+              "revise"
+            ],
+            "routes": {
+              "accept": null,
+              "revise": "H-02"
+            }
+          }
+        },
+        "path": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\053bfd65\\no-record\\ledger\\ping-pong\\verdict-r1.json",
+        "reason": "gate G1 (Verdict) follows critique and declares a decision record at C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\053bfd65\\no-record\\ledger\\ping-pong\\verdict-r1.json — the code does not decide it, and the record has not been written"
+      }
+    }
+  },
+  "edgesTaken": {
+    "H-01": 2,
+    "H-02": 1
+  },
+  "loopCounter": {
+    "edge": "H-02",
+    "crossings": 1,
+    "limit": 3
+  },
+  "assemblyPlan": {
+    "offered": true,
+    "done": false,
+    "why": null,
+    "base": "1c5c53c7089e186943ad45822cfea36705e7b86b",
+    "parent": "wtgui/run-row-70-exactly-as-written-local-only-19d782",
+    "parentPath": "C:/ProjectDevelopment/agent-worktree-gui/.worktrees/run-row-70-exactly-as-written-local-only-19d782",
+    "stages": [
+      {
+        "stage": "draft",
+        "visit": 1,
+        "commit": "d27bfc8d746b2bd3a98a0a87e4b1329fdbd42734",
+        "branch": "wtgui/run-row-70-exactly-as-written-local-only-stage-1-draft-1de511",
+        "position": 1
+      },
+      {
+        "stage": "critique",
+        "visit": 1,
+        "commit": "9888b9bc142df790247df251551ec416a1e07d75",
+        "branch": "wtgui/run-row-70-exactly-as-written-local-only-stage-2-critique-6635d7",
+        "position": 2
+      },
+      {
+        "stage": "draft",
+        "visit": 2,
+        "commit": "2af8c11bd6f402cea4cf7d4c7716f361bb42aa0b",
+        "branch": "wtgui/run-row-70-exactly-as-written-local-only-stage-1-draft-676235",
+        "position": 1
+      },
+      {
+        "stage": "critique",
+        "visit": 2,
+        "commit": "966b3f5b1da2b4b36e4a078f9620e71e6c60af62",
+        "branch": "wtgui/run-row-70-exactly-as-written-local-only-stage-2-critique-59a317",
+        "position": 2
+      }
+    ],
+    "skipped": []
+  },
+  "closing": {
+    "done": true,
+    "verdict": {
+      "gate": "G1",
+      "path": "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\run-row-70-exactly-as-written-local-only-stage-2-critique-59a317\\ledger\\ping-pong\\verdict-r2.json",
+      "outcome": "accept",
+      "handoff": null,
+      "edge": "H-02",
+      "from": "critique",
+      "to": "draft",
+      "ended": true
+    }
+  }
+}

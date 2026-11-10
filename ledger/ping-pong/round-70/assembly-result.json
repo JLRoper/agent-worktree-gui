@@ -1,0 +1,49 @@
+{
+  "ok": true,
+  "code": null,
+  "commit": "cf3cd11cd416bed8ccc3a9f384c1300d0c213782",
+  "base": "1c5c53c7089e186943ad45822cfea36705e7b86b",
+  "tree": "1c5c53c7089e186943ad45822cfea36705e7b86b",
+  "stages": [
+    {
+      "stage": "draft",
+      "visit": 1,
+      "branch": "wtgui/run-row-70-exactly-as-written-local-only-stage-1-draft-1de511",
+      "from": "d27bfc8d746b2bd3a98a0a87e4b1329fdbd42734",
+      "commit": "9a95980068380bdd176833f3b6019846675ead3e"
+    },
+    {
+      "stage": "critique",
+      "visit": 1,
+      "branch": "wtgui/run-row-70-exactly-as-written-local-only-stage-2-critique-6635d7",
+      "from": "9888b9bc142df790247df251551ec416a1e07d75",
+      "commit": "e769574e97765978c49373a9953db3005e756f67"
+    },
+    {
+      "stage": "draft",
+      "visit": 2,
+      "branch": "wtgui/run-row-70-exactly-as-written-local-only-stage-1-draft-676235",
+      "from": "2af8c11bd6f402cea4cf7d4c7716f361bb42aa0b",
+      "commit": "068e06ebe9cb7df66fe889fb6eb2da209ca9dd4b"
+    },
+    {
+      "stage": "critique",
+      "visit": 2,
+      "branch": "wtgui/run-row-70-exactly-as-written-local-only-stage-2-critique-59a317",
+      "from": "966b3f5b1da2b4b36e4a078f9620e71e6c60af62",
+      "commit": "cf3cd11cd416bed8ccc3a9f384c1300d0c213782"
+    }
+  ],
+  "skipped": [],
+  "paths": [
+    "ledger/ping-pong/critique.md",
+    "ledger/ping-pong/draft.md",
+    "ledger/ping-pong/verdict-r1.json",
+    "ledger/ping-pong/verdict-r2.json"
+  ],
+  "mismatches": [],
+  "verified": true,
+  "message": "stage assembly: 4 stage commits of ping-pong (draft, critique, draft, critique) on the round's parent 1c5c53c7089e",
+  "at": "2026-11-10T06:27:13.224Z",
+  "reason": null
+}
