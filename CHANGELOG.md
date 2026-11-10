@@ -4,16 +4,24 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.79.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.80.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-521 releases from v0.1.0 (2026-10-20) to v1.79.0 (2026-11-09), 1713 commits between the tags. Every release is anchored by an
+523 releases from v0.1.0 (2026-10-20) to v1.80.0 (2026-11-09), 1717 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.80.0 — 2026-11-09 · 1 commit
+
+[`548f8a6`](https://github.com/JLRoper/agent-worktree-gui/commit/548f8a6edaaca9fd86286fddc2d1844b9e2049bb) · [compare v1.78.0...v1.80.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.78.0...v1.80.0)
+
+### Other
+
+- chore: 1.80.0 - the version this landing carries ([`548f8a6`](https://github.com/JLRoper/agent-worktree-gui/commit/548f8a6edaaca9fd86286fddc2d1844b9e2049bb))
 
 ## v1.79.0 — 2026-11-09 · 3 commits
 
@@ -30,6 +38,22 @@ has no tag.
 ### Other
 
 - chore: 1.79.0 - the version this landing carries ([`b36532d`](https://github.com/JLRoper/agent-worktree-gui/commit/b36532d3442699de887b5ee1b0203158a99fe4c6))
+
+## v1.78.0 — 2026-11-09 · 3 commits
+
+[`bf4b57b`](https://github.com/JLRoper/agent-worktree-gui/commit/bf4b57b0d7401677f13c35027a903459355ee96e) · [compare v1.79.0...v1.78.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.79.0...v1.78.0)
+
+### Added
+
+- feat: the update chip expands into the releases a reload would pick up ([`bf4b57b`](https://github.com/JLRoper/agent-worktree-gui/commit/bf4b57b0d7401677f13c35027a903459355ee96e))
+
+### Docs & tests
+
+- docs: render the changelog - 521 releases ([`47ee919`](https://github.com/JLRoper/agent-worktree-gui/commit/47ee919b6c5b4840aa2a50d8c8afac285c4fcb60))
+
+### Other
+
+- Cut the round's parent tree for a filed row, and keep a live round's row from settling ([`4b06bbe`](https://github.com/JLRoper/agent-worktree-gui/commit/4b06bbec9632ea1870ac91a56603b1f33fcf72fd))
 
 ## v1.77.1 — 2026-11-09 · 4 commits
 
