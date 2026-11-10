@@ -508,6 +508,37 @@ test("a merged PR closes the wait, and a prompt whose hole is empty refuses to a
   }
 });
 
+test("a DECLINED read is stamped on the tree's record and outlives the wait it closes", async (t) => {
+  // Row 67: the pull request read DECLINED, the wait closed, and the driver - which has no reader of its own - walked
+  // the row on to approve and merge. The read is stamped BEFORE the wait is cleared, so the fact the driver needs is
+  // still on the record after the wait it came from is gone.
+  const { records, jobs } = board(t);
+  const woke = [];
+  const out = await jobs.sweepPipelineWaits({
+    now: T0 + WAIT_FIRST_MS,
+    readReview: () => ({ ok: true, pr: { number: 7, state: "DECLINED", headRefOid: "9".repeat(40), reviewers: [], comments: [], approvals: [] } }),
+    wake: (turn) => (woke.push(turn), { ok: true }),
+  });
+  assert.equal(out.closed, 1);
+  assert.equal(out.advanced, 0, "a declined PR advances nothing");
+  assert.equal(woke.length, 0, "and wakes nobody: there is nothing left to answer");
+
+  const record = records.get(TREE, { fresh: true });
+  assert.equal(record.pipelineWait, undefined, "the wait is closed");
+  assert.ok(record.reviewRead, "the read is on the record, not inside the wait that was just cleared");
+  assert.equal(record.reviewRead.stage, "wait");
+  assert.equal(record.reviewRead.check, "pr-comments");
+  assert.equal(record.reviewRead.state, "DECLINED", "the host's own word");
+  assert.equal(record.reviewRead.closed, "declined");
+  assert.equal(record.reviewRead.advanced, false);
+  assert.equal(record.reviewRead.at, iso(T0 + WAIT_FIRST_MS), "stamped at the read, so a later visit can tell itself apart");
+
+  const read = jobs.reviewReadFor(TREE, "wait", { enteredAt: iso(T0) });
+  assert.equal(read.state, "DECLINED", "the driver's question answers with the same fact");
+  assert.equal(jobs.reviewReadFor(TREE, "approve", { enteredAt: iso(T0) }), null, "a read of one stage is not an answer about another");
+  assert.equal(jobs.reviewReadFor(TREE, "wait", { enteredAt: iso(T0 + 2 * HOUR) }), null, "nor about a later visit of the same stage");
+});
+
 test("six quiet hours is ONE status wake that does not advance the stage", async (t) => {
   const { records, jobs } = board(t, { wait: waitRecord({ at: iso(T0 + 5 * HOUR), every: 4 * HOUR }) });
   const woke = [];
