@@ -376,3 +376,55 @@ test("a hand move on the same pipeline keeps the ledger and the crossings; anoth
   assert.equal(other[TASK_PIPELINE_FIELD].stageRuns, undefined);
   assert.deepEqual(visitsOf(other[TASK_PIPELINE_FIELD]), { S1: 1 });
 });
+
+// The row-79 defect: the mint counted attempts within ONE stage and visit, so two runs of the same stage in two
+// different TREES were written as one entry - the second begin reused the open entry (there is no thread to tell them
+// apart), the second settle overwrote the first tree's facts, and the ledger answered one id for two runs. A stage run
+// is identified by the visit AND the tree it ran in; a run in another tree is another attempt. The tree names here are
+// relative on purpose: the ledger only compares them, and a fixture must not name a folder on the machine that wrote it.
+test("two runs of one stage in two trees are two runs, with two ids", () => {
+  const base = { id: "row-79", [TASK_PIPELINE_FIELD]: { pipeline: "poc-to-uat", stage: "S3", enteredAt: "2026-11-10T10:00:00.000Z" } };
+  const first = settleStageRun(beginStageRun(base, { stage: "S3", at: "2026-11-10T10:01:00.000Z" }), {
+    stage: "S3",
+    tree: { path: "trees/one", branch: "stage/one" },
+    commit: "1".repeat(40),
+  });
+  const second = settleStageRun(beginStageRun(first, { stage: "S3", at: "2026-11-10T10:05:00.000Z" }), {
+    stage: "S3",
+    tree: { path: "trees/two", branch: "stage/two" },
+    commit: "2".repeat(40),
+  });
+  const runs = stageRunsOf(second[TASK_PIPELINE_FIELD]);
+  assert.equal(runs.length, 2, "a stage run in a second tree is a second run, not the first one rewritten");
+  assert.deepEqual(runs.map((entry) => entry.tree.path), ["trees/one", "trees/two"], "each entry keeps the tree it ran in");
+  assert.equal(new Set(runs.map((entry) => entry.id)).size, 2, "one id names one run: two runs of one stage cannot share an id");
+
+  // The other half of the same rule, which already held: a second VISIT is a second run too.
+  const revisit = beginStageRun({ ...second, [TASK_PIPELINE_FIELD]: { ...second[TASK_PIPELINE_FIELD], visits: { S3: 2 } } }, { stage: "S3", at: "2026-11-10T11:00:00.000Z" });
+  const all = stageRunsOf(revisit[TASK_PIPELINE_FIELD]);
+  assert.equal(all.length, 3, "a second visit is a third run");
+  assert.equal(new Set(all.map((entry) => entry.id)).size, 3, "and it gets an id of its own");
+});
+
+// The row-79 defect, third of the three: a settle that has to CREATE the entry wrote the entry's `at` from the
+// settle's own clock, so a run nothing recorded starting reported its end as its start - duration 0 and an
+// interrupted run drawn as one that never worked. The settle never invents a start: a caller that knows it hands it
+// in, and one that does not leaves the start unknown.
+test("a stage run's start is never invented at its settle", () => {
+  const task = { id: "row-79", [TASK_PIPELINE_FIELD]: { pipeline: "poc-to-uat", stage: "S3", enteredAt: "2026-11-10T10:00:00.000Z" } };
+  const settled = settleStageRun(task, { stage: "S3", thread: "thread-X", job: "job-x", status: "done", at: "2026-11-10T13:00:00.000Z" });
+  const entry = stageRunsOf(settled[TASK_PIPELINE_FIELD])[0];
+  assert.equal(entry.settledAt, "2026-11-10T13:00:00.000Z", "the settle's own clock is the settledAt");
+  assert.equal(entry.at, null, "the settle is not the start: a run nothing recorded starting has no start, not a zero-length one");
+
+  const handed = settleStageRun(task, {
+    stage: "S3",
+    thread: "thread-Y",
+    status: "interrupted",
+    startedAt: "2026-11-10T10:40:00.000Z",
+    at: "2026-11-10T13:00:00.000Z",
+  });
+  const second = stageRunsOf(handed[TASK_PIPELINE_FIELD])[0];
+  assert.equal(second.at, "2026-11-10T10:40:00.000Z", "a caller that knows the start writes the start");
+  assert.equal(Date.parse(second.settledAt) - Date.parse(second.at), 140 * 60_000, "so an interrupted run reads its own 2h20m, not 0");
+});
