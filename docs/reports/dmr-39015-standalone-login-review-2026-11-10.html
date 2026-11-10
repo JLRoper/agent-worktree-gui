@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DMR-39015: can Picture Viewer and Picture Manager sign in without Menu?</title>
+<style>
+:root { color-scheme: dark; --bg:#0d1117; --card:#161b22; --line:#30363d; --ink:#e6edf3; --dim:#8b949e; --acc:#58a6ff; --ok:#3fb950; --bad:#f85149; --warn:#d29922; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.55 -apple-system,Segoe UI,Roboto,sans-serif; }
+.wrap { max-width:1150px; margin:0 auto; padding:40px 28px 64px; }
+h1 { font-size:30px; line-height:1.2; margin:0 0 6px; }
+h2 { font-size:19px; margin:36px 0 10px; border-bottom:1px solid var(--line); padding-bottom:6px; }
+h3 { font-size:16px; margin:22px 0 6px; color:var(--acc); }
+.sub { color:var(--dim); margin:0 0 22px; }
+.card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:16px 18px; margin:14px 0; }
+.answer { border-left:3px solid var(--ok); }
+.no { border-left:3px solid var(--bad); }
+.warncard { border-left:3px solid var(--warn); }
+.grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:12px; }
+.k { color:var(--dim); font-size:12px; text-transform:uppercase; letter-spacing:.06em; }
+.v { font-size:15px; margin-top:2px; }
+code, pre { font-family:ui-monospace,SFMono-Regular,Consolas,monospace; }
+code { background:#21262d; padding:1px 5px; border-radius:4px; font-size:13px; }
+pre { background:#0b0f14; border:1px solid var(--line); border-radius:8px; padding:14px; overflow:auto; font-size:12.5px; line-height:1.5; }
+ul, ol { margin:8px 0; padding-left:22px; }
+li { margin:4px 0; }
+table { border-collapse:collapse; width:100%; font-size:14px; margin:10px 0; }
+td, th { border-bottom:1px solid var(--line); text-align:left; padding:7px 8px; vertical-align:top; overflow-wrap:anywhere; }
+th { color:var(--dim); font-weight:600; }
+.pass { color:var(--ok); }
+.fail { color:var(--bad); }
+.dim { color:var(--dim); }
+.mono { font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:12.5px; }
+.pill { display:inline-block; border:1px solid var(--line); border-radius:999px; padding:0 8px; font-size:11.5px; letter-spacing:.03em; white-space:nowrap; }
+.p-crit { color:var(--bad); border-color:#6e2b28; }
+.p-high { color:var(--warn); border-color:#5c4813; }
+.p-med { color:var(--acc); border-color:#1f4b7a; }
+.p-low { color:var(--dim); }
+.p-prov { color:var(--ok); border-color:#1f5c2e; }
+.p-unp { color:var(--warn); border-color:#5c4813; }
+.big { font-size:17px; }
+#findings { table-layout:fixed; }
+#findings td, #findings th { overflow-wrap:anywhere; }
+#findings th:nth-child(1), #findings td:nth-child(1) { width:3%; }
+#findings th:nth-child(2), #findings td:nth-child(2) { width:11%; }
+#findings th:nth-child(3), #findings td:nth-child(3) { width:9%; }
+#findings th:nth-child(4), #findings td:nth-child(4) { width:8%; }
+#findings th:nth-child(5), #findings td:nth-child(5) { width:29%; }
+#findings th:nth-child(6), #findings td:nth-child(6) { width:27%; }
+#findings th:nth-child(7), #findings td:nth-child(7) { width:13%; }
+</style></head><body><div class="wrap">
+
+<h1>DMR-39015: can Picture Viewer and Picture Manager sign in without Menu?</h1>
+<p class="sub">Read-only review of the local SSO changes in two SEFL applications. No fix was written and no commit, push or pull request was made in either reviewed checkout. Picture Viewer is read at the pinned commit <code>49f3ae7</code> (branch <code>20261021_0005_DMR-39015_pictureViewerSso</code>, PR 7); Picture Manager is read at PR head <code>01ad4fb</code> (branch <code>20261021_0005_DMR-39015_pictureManagerSso</code>, PR 5).</p>
+
+<div class="card grid">
+  <div><div class="k">Picture Viewer</div><div class="v"><code>pictureviewer</code><br>PR 7, head <code>37f19ca</code>, read at <code>49f3ae7</code></div></div>
+  <div><div class="k">Picture Manager</div><div class="v"><code>picture-manager-web</code><br>PR 5, head <code>01ad4fb</code>, base <code>c18ddc5</code></div></div>
+  <div><div class="k">Gateway reference</div><div class="v"><code>oauth2-multi</code> at <code>b438740</code></div></div>
+  <div><div class="k">Menu reference</div><div class="v"><code>Menu</code> working tree, SSO bootstrap and <code>seflSessionGuardian.js</code></div></div>
+  <div><div class="k">Run</div><div class="v">2026-11-10, from the <code>wag</code> review worktree</div></div>
+  <div><div class="k">Proof labels</div><div class="v"><span class="pill p-prov">PROVEN</span> read at the cited lines or reproduced; <span class="pill p-unp">UNPROVEN</span> depends on a deployment or runtime I could not observe</div></div>
+</div>
+
+<h2>1. The two verdicts</h2>
+
+<div class="card no">
+<p class="big"><strong>Picture Viewer: no. It cannot start a standalone oauth2-multi sign-in.</strong></p>
+<p>It can <em>consume</em> a gateway session that already exists when the page is opened top-level: <code>GETAUTHMODE</code> reports <code>sso:true</code> from the cookie's presence (<code>PictureViewerActions.java:291-296</code>) and the page then mints a Picture Viewer token through <code>getTokenSso</code> (<code>login.js:50-53</code>). What is missing is any way to <em>create</em> that session. There is no <code>JwtAuthFilter</code> in the deployment descriptor (<code>WEB-INF/web.xml:3-16</code> declares only the PictureViewer servlet), no server-side redirect to <code>/oauth2/login</code>, and <code>index.jsp</code> never renders a <code>window.SEFL_AUTH</code> block; the only producer of that block is Menu (<code>SsoAuthJson.java:75-102</code>, <code>seflSessionGuardian.js:500-515</code>).</p>
+<p><strong>Where it stops:</strong> <code>login.js:45-58</code>. With no <code>window.SEFL_AUTH</code> in any frame and no cookie, <code>getAuthMode</code> returns <code>sso:false</code>; if the migration window is closed the same response has <code>legacyAuthAllowed:false</code>, and the code calls <code>showSignInThroughMenu()</code> (<code>login.js:188-194</code>). The login dialog's only button does the same thing (<code>login.js:360-372</code>). Inside the window the legacy branch needs a Menu opener with a stored password (<code>login.js:60-67</code>, <code>161-180</code>), which a standalone visitor does not have.</p>
+<p><strong>The Menu path works</strong> when all three conditions hold: Menu is in SSO mode, Menu and the app are same-origin so <code>window.top.SEFL_AUTH</code> is readable, and the <code>SEFL_AUTH_TOKEN</code> cookie reaches the servlet so the server-to-server call to <code>/oauth2/session</code> succeeds. The third condition is the one I could not test here.</p>
+</div>
+
+<div class="card no">
+<p class="big"><strong>Picture Manager: no, and it cannot even consume an existing gateway session top-level.</strong></p>
+<p>The SSO branch in <code>mounted()</code> is gated on being framed: <code>window.top &amp;&amp; window.top !== window &amp;&amp; window.top.SEFL_AUTH</code> (<code>src/App.vue:99</code>). When the page is the top window that expression is false, and the <code>else</code> branch it falls to is also framed-only (<code>src/App.vue:129-130</code>). A top-level visit does nothing at all: no mint, no error, no domain list. With a valid gateway cookie on the request the page still does nothing, because <code>getTokenSso()</code> is only reached from the framed branch (<code>src/App.vue:105</code>) and re-checks the frame itself (<code>src/App.vue:114-116</code>).</p>
+<p><strong>Where it stops:</strong> <code>src/App.vue:99</code>, then <code>129-130</code>. Framed by something that is not Menu, it shows "Need to access through Menu for authorization." (<code>:132-134</code>). That message is the whole standalone story.</p>
+<p><strong>The Menu path works only inside the Menu frame.</strong> The token is minted and then discarded: the success handler goes straight to <code>getDocumentation(...)</code> (<code>:121-124</code>) and never stores the token, and the <code>seflMenuUsername</code> key passed to axios (<code>:174</code>) is not a header, so axios ignores it. What actually authenticates the later upload is not established by this change (see finding 13).</p>
+</div>
+
+<h2>2. The two paths, stage by stage</h2>
+
+<table>
+<tr><th>Stage</th><th>Picture Viewer</th><th>Picture Manager</th></tr>
+<tr><td>How the browser gets a gateway session</td><td class="fail">Not in this app. No filter, no redirect, no claims render (<code>web.xml:3-16</code>, <code>index.jsp</code>). Only an existing Menu session is usable.</td><td class="fail">Not in this app and not in its host: the static page has no bootstrap (<code>public/index.html</code>) and inherits Picture Viewer's missing filter.</td></tr>
+<tr><td>How the app learns it is in SSO mode</td><td>Parent-frame claims first (<code>login.js:45-48</code>), otherwise <code>GETAUTHMODE</code> cookie presence (<code>:50-53</code>).</td><td>Parent-frame claims only (<code>App.vue:99</code>). No <code>getAuthMode</code> call exists in this repo.</td></tr>
+<tr><td>How the app token is minted</td><td><code>POST /PictureViewer/servlet/getTokenSso</code> (<code>login.js:95-131</code>, <code>PictureViewerActions.java:268-289</code>).</td><td><code>GET /PictureViewer/servlet/getTokenSso?forceOracle=false</code> (<code>App.vue:118</code>). Same server action.</td></tr>
+<tr><td>What the server does</td><td colspan="2">Reads the <code>SEFL_AUTH_TOKEN</code> cookie, forwards it to <code>https://&lt;host&gt;/oauth2/session</code>, requires <code>authenticated:true</code> and <code>userSAMAccountName</code>, resolves an employee id, then calls <code>PictureViewerJwtUtils.getNewToken(new ValidateSsoUser(...))</code> (<code>SsoSessionClient.java:47-89</code>, <code>PictureViewerActions.java:272-275</code>).</td></tr>
+<tr><td>What the client does with the token</td><td>Parses it, stores it in <code>localStorage</code>, publishes <code>pictureViewer_tokenUpdated</code>, enables the UI (<code>login.js:279-301</code>, <code>433-435</code>).</td><td class="fail">Discards it. The next call is <code>getDocumentation</code> (<code>App.vue:121-124</code>).</td></tr>
+<tr><td>Fallback if SSO fails</td><td class="fail">None once the claims branch is taken; otherwise legacy only while the window is open (<code>login.js:60-68</code>).</td><td class="fail">None once the claims branch is taken; the legacy branch is not attempted (<code>App.vue:99-108</code>).</td></tr>
+<tr><td>Standalone</td><td class="fail">No initiation; consumption only.</td><td class="fail">Nothing at all.</td></tr>
+</table>
+
+<h2>3. getAuthMode and getTokenSso</h2>
+
+<table>
+<tr><th>Action</th><th>Login required</th><th>Returns</th><th>What the client does</th><th>Finding</th></tr>
+<tr><td class="mono">GETAUTHMODE<br>Actions.java:291-296</td><td>No. <code>PictureViewerActions.verifyLoginCredentials()</code> returns false (<code>Actions.java:143-146</code>), so every action on this servlet runs for anyone.</td><td><code>{"error":false,"sso":&lt;cookie present&gt;,"legacyAuthAllowed":&lt;date gate&gt;}</code>. <code>sso</code> is presence only, never verification (<code>SsoSessionClient.java:35-45</code>).</td><td>PV: picks SSO on <code>sso</code>, otherwise legacy or the Menu message (<code>login.js:50-58</code>). PMW: not used.</td><td><span class="pill p-med">9</span> an expired cookie still selects SSO, so the mint fails with an error and legacy is never offered.</td></tr>
+<tr><td class="mono">GETTOKENSSO<br>Actions.java:268-289</td><td>No. It authenticates from the cookie, not from a session.</td><td>Success: <code>{"error":false,"token":"..."}</code>. Failure: <code>{"error":true,"errorMsg":"&lt;exception message&gt;"}</code>.</td><td>PV and PMW both read <code>error</code> and <code>token</code> or <code>errorMsg</code>.</td><td><span class="pill p-med">8</span> exception text returned to an unauthenticated caller; failures are not logged.</td></tr>
+</table>
+
+<p>The mint is <strong>synchronous inside the servlet thread</strong>: a connect timeout and a read timeout of 5 seconds each (<code>SsoSessionClient.java:30</code>, <code>110-112</code>). Under load every SSO mint holds a Tomcat worker for up to 10 seconds. I did not test this.</p>
+
+<h2>4. Claim names each side reads</h2>
+
+<table>
+<tr><th>Producer</th><th>Field</th><th>Consumer</th><th>What it is used for</th></tr>
+<tr><td rowspan="8">Gateway <code>/oauth2/session</code><br><code>SessionPayload</code></td><td><code>error</code></td><td>both</td><td>Ignored; they read <code>authenticated</code> instead.</td></tr>
+<tr><td><code>authenticated</code></td><td>PV server</td><td>Required true (<code>SsoSessionClient.java:61-63</code>).</td></tr>
+<tr><td><code>userSAMAccountName</code></td><td>PV server</td><td>Required; becomes the PV token's <code>user</code> claim (<code>:65-68</code>, <code>PictureViewerJwtUtils.java:122</code>).</td></tr>
+<tr><td><code>employeeID</code></td><td>PV server</td><td>Becomes <code>userId</code>; may be absent on pre-G3 tokens, then LDAP fills it (<code>SsoSessionClient.java:70-86</code>).</td></tr>
+<tr><td><code>preferredUsername</code></td><td>PV server at <code>49f3ae7</code> only</td><td>Used as an employee-id candidate only when it matches <code>\d+</code> (<code>:72-75</code>). Removed at <code>37f19ca</code>.</td></tr>
+<tr><td><code>sub</code>, <code>email</code>, <code>name</code>, <code>givenName</code>, <code>familyName</code></td><td>nobody</td><td>Read by neither app.</td></tr>
+<tr><td><code>expiresAt</code>, <code>authTime</code></td><td>nobody</td><td>Read by neither app, which is why the PV token can outlive the gateway session (finding 6).</td></tr>
+<tr><td><code>issuedAt</code>, <code>idTokenHintPresent</code></td><td>nobody</td><td>Read by neither app.</td></tr>
+<tr><td>Menu <code>window.SEFL_AUTH</code><br><code>SsoAuthJson.java:95-101</code></td><td><code>userSAMAccountName</code></td><td>PV + PMW clients</td><td>The only field either client tests for truthiness (<code>login.js:150</code>, <code>App.vue:104</code>).</td></tr>
+<tr><td>Menu block</td><td><code>sub</code>, <code>employeeID</code>, <code>email</code>, <code>name</code>, <code>givenName</code>, <code>familyName</code>, <code>authTime</code>, <code>expiresAt</code></td><td>nobody</td><td>Emitted, never read by either app.</td></tr>
+<tr><td>Picture Viewer JWT</td><td><code>user</code>, <code>userId</code>, group and domain claims</td><td>the app and <code>picture-viewer-lib</code></td><td><code>user</code> from the SAM; <code>userId</code> from the employee id (<code>PictureViewerJwtUtils.java:122-124</code>).</td></tr>
+</table>
+
+<p><strong>The one real claim mismatch</strong> is a missing field, not a renamed one: the gateway only emits <code>employeeID</code> for G3 tokens, so pre-G3 sessions depend on an LDAP lookup (<code>SsoSessionClient.java:77-86</code>). The PR description says the code never reads <code>preferred_username</code>; that is true at <code>37f19ca</code> and false at the pinned <code>49f3ae7</code> (<code>:72-75</code>).</p>
+
+<h2>5. Session and cookie handling</h2>
+
+<div class="card">
+<ul>
+<li><strong>Nothing in either app creates or refreshes a gateway session.</strong> No call to <code>/oauth2/session/renew</code>, no <code>/oauth2/session/app/register</code>, no <code>guardian-lite.js</code>. The gateway's logout and revocation are invisible to both apps.</li>
+<li><strong>The app token outlives the gateway session.</strong> <code>TOKEN_LIFESPAN</code> is a fixed 20 minutes (<code>PictureViewerJwtUtils.java:40</code>); neither <code>SsoSessionClient</code> nor <code>ValidateSsoUser</code> carries the gateway's <code>expiresAt</code>. The worst case is a 20-minute window after logout or revocation.</li>
+<li><strong>Picture Viewer's Logout is local only.</strong> <code>processLogout</code> clears <code>localStorage</code> and the UI (<code>login.js:321-328</code>); it does not call <code>/oauth2/logout</code> and does not clear the cookie. The next Load finds the cookie and silently mints the same identity again.</li>
+<li><strong>A stored token wins over a different SSO user.</strong> <code>checkForAutoLogin</code> accepts any stored token whose <code>exp</code> is in the future (<code>login.js:35-40</code>, <code>399-417</code>) without comparing it to the current claim. On a shared workstation the previous user's token, and the previous user's domain permissions, survive for up to 20 minutes.</li>
+<li><strong>Cookie lookup is name-only and plain-name-only.</strong> <code>authCookie</code> returns the first cookie called <code>SEFL_AUTH_TOKEN</code> and ignores path and duplicates (<code>SsoSessionClient.java:91-102</code>). The gateway can also issue <code>SEFL_AUTH_TOKEN__&lt;clientId&gt;</code> (<code>SsoCookieHelper.java:42-68</code>), which this code never reads. Menu uses the default client, so today this is latent.</li>
+<li><strong>The gateway is contacted over a URL derived from request headers.</strong> <code>X-Forwarded-Host</code> first, then <code>getServerName()</code> (<code>SsoSessionClient.java:146</code>). The cookie is then sent to that host (<code>:115</code>). A host value beginning with <code>localhost</code> keeps the scheme at <code>http</code> (<code>:150-153</code>), so a crafted value such as <code>localhost.attacker.example</code> would send the live token in clear text.</li>
+<li><strong>No HTTP session is involved.</strong> The servlet is stateless for this flow; <code>web.xml:17-21</code> sets a 10-minute session timeout that the SSO path does not use. Good for fixation, irrelevant for revocation.</li>
+</ul>
+</div>
+
+<h2>6. Ranked findings</h2>
+<p><span class="pill p-prov">PROVEN</span> means I read it at the cited lines or reproduced it with a command. <span class="pill p-unp">UNPROVEN</span> means the code path is clear but the trigger depends on a deployment or runtime I did not observe.</p>
+
+<table id="findings">
+<tr><th>#</th><th>Severity</th><th>App</th><th>Kind</th><th>Finding</th><th>Where</th><th>Proof</th></tr>
+
+<tr><td>1</td><td><span class="pill p-crit">CRITICAL</span></td><td>PV</td><td>Path gap</td><td>No standalone sign-in can be started. An unauthenticated top-level visitor ends at "Please sign in through SEFL Menu" with no redirect to the gateway.</td><td class="mono">web.xml:3-16<br>index.jsp:38-41<br>login.js:45-58, 188-194, 360-372</td><td><span class="pill p-prov">PROVEN</span></td></tr>
+
+<tr><td>2</td><td><span class="pill p-crit">CRITICAL</span></td><td>PMW</td><td>Path gap</td><td>No standalone path at all, and no consumption of an existing gateway session top-level: both branches are framed-only. A top-level visit is silent.</td><td class="mono">App.vue:99-108<br>App.vue:113-116<br>App.vue:129-130</td><td><span class="pill p-prov">PROVEN</span></td></tr>
+
+<tr><td>3</td><td><span class="pill p-high">HIGH</span></td><td>both</td><td>Defect</td><td>The browser-visible claim gate runs before any server check, so a present <code>SEFL_AUTH</code> plus a missing or stale cookie takes the SSO branch, fails, and never falls back to legacy.</td><td class="mono">login.js:45-48, 181-187<br>accessControl.js:334-337<br>App.vue:99-105, 118-126</td><td><span class="pill p-prov">PROVEN</span> code path<br><span class="pill p-unp">UNPROVEN</span> trigger</td></tr>
+
+<tr><td>4</td><td><span class="pill p-high">HIGH</span></td><td>PV</td><td>Defect</td><td>The Azure sign-in form is removed client-side while its server actions stay enabled inside the window. <code>landing.html</code> still forwards <code>access_token</code> to an <code>index.jsp</code> that now ignores it.</td><td class="mono">index.jsp:38-41<br>landing.html:26-43<br>login.js:360-372<br>Actions.java:255, 300</td><td><span class="pill p-prov">PROVEN</span></td></tr>
+
+<tr><td>5</td><td><span class="pill p-high">HIGH</span></td><td>PV</td><td>Defect</td><td>"Logout" does not end the gateway session, and the stored token is accepted for any identity until it expires. A second user on the same browser inherits the first user's session and permissions.</td><td class="mono">login.js:321-328<br>login.js:35-40, 399-417<br>login.js:433-435</td><td><span class="pill p-prov">PROVEN</span></td></tr>
+
+<tr><td>6</td><td><span class="pill p-high">HIGH</span></td><td>PV</td><td>Defect</td><td>The app token is a fixed 20 minutes regardless of the gateway session's expiry or revocation. No renewal, no registration, no <code>expiresAt</code> check.</td><td class="mono">PictureViewerJwtUtils.java:40<br>SsoSessionClient.java:47-89<br>Actions.java:272-275</td><td><span class="pill p-prov">PROVEN</span></td></tr>
+
+<tr><td>7</td><td><span class="pill p-high">HIGH</span></td><td>PV</td><td>Defect</td><td>The gateway URL trusts <code>X-Forwarded-Host</code> or <code>Host</code> and forwards the session cookie to it; a <code>localhost</code> prefix keeps the request in clear text.</td><td class="mono">SsoSessionClient.java:140-158<br>(host 146, cookie 115, http 150-153)</td><td><span class="pill p-prov">PROVEN</span> code<br><span class="pill p-unp">UNPROVEN</span> exploitability</td></tr>
+
+<tr><td>8</td><td><span class="pill p-med">MEDIUM</span></td><td>PV</td><td>Defect</td><td><code>getTokenSso</code> returns <code>ex.getMessage()</code> to an unauthenticated caller and writes no log line on failure, so an SSO outage leaves no server-side trace.</td><td class="mono">Actions.java:282-289</td><td><span class="pill p-prov">PROVEN</span></td></tr>
+
+<tr><td>9</td><td><span class="pill p-med">MEDIUM</span></td><td>PV</td><td>Defect</td><td><code>GETAUTHMODE</code> reports <code>sso</code> from cookie presence, not validity. An expired cookie selects SSO, the mint fails, and the legacy path is not offered.</td><td class="mono">Actions.java:291-296<br>SsoSessionClient.java:35-45<br>login.js:50-53</td><td><span class="pill p-prov">PROVEN</span></td></tr>
+
+<tr><td>10</td><td><span class="pill p-med">MEDIUM</span></td><td>PV</td><td>Defect</td><td>The legacy gate fails closed when the <code>WEB/sefl-gateway</code> row is missing or unreadable, so a deployment without the row disables <code>GETTOKEN</code>, <code>GETTOKENOAUTH</code>, <code>GETCLIENTID</code> and <code>GETTOKENUSER</code> immediately, whatever the gateway toggle says.</td><td class="mono">LegacyAuthWindow.java:47-49, 62-72<br>Actions.java:243, 255, 300, 313</td><td><span class="pill p-prov">PROVEN</span> code<br><span class="pill p-unp">UNPROVEN</span> row state</td></tr>
+
+<tr><td>11</td><td><span class="pill p-med">MEDIUM</span></td><td>PV</td><td>Defect</td><td>The two gates read the same row on different clocks: Menu fixes <code>ldapMigrationUntil</code> at context init, Picture Viewer reads it per request. Extending the window needs a Menu restart and the two can disagree.</td><td class="mono">SsoAuthBootstrapListener.java:315, 403, 640-660<br>LegacyAuthWindow.java:47-49</td><td><span class="pill p-prov">PROVEN</span></td></tr>
+
+<tr><td>12</td><td><span class="pill p-med">MEDIUM</span></td><td>PV</td><td>Defect</td><td>SSO login still depends on LDAP: the employee id fallback and the group and domain claims are LDAP lookups, so an LDAP outage fails the SSO mint even though the gateway has already verified the identity.</td><td class="mono">SsoSessionClient.java:77-86<br>PictureViewerJwtUtils.java:122-124</td><td><span class="pill p-prov">PROVEN</span></td></tr>
+
+<tr><td>13</td><td><span class="pill p-med">MEDIUM</span></td><td>PMW</td><td>Defect</td><td>The minted token is discarded and the <code>seflMenuUsername</code> key passed to axios is not a header, so axios ignores it. Nothing in this repo proves what authenticates the upload that follows.</td><td class="mono">App.vue:118-124<br>App.vue:172-174</td><td><span class="pill p-prov">PROVEN</span> code<br><span class="pill p-unp">UNPROVEN</span> impact</td></tr>
+
+<tr><td>14</td><td><span class="pill p-low">LOW</span></td><td>PMW</td><td>Defect</td><td><code>window.top.SEFL_AUTH</code> is read without a <code>try</code>, so any cross-origin parent throws <code>SecurityError</code> and aborts <code>mounted()</code>. Same at <code>getTokenSso</code>. Picture Viewer guards all three frame reads.</td><td class="mono">App.vue:99, 104<br>App.vue:114, 118<br>login.js:132-155</td><td><span class="pill p-prov">PROVEN</span> JS semantics<br><span class="pill p-unp">UNPROVEN</span> deployment</td></tr>
+
+<tr><td>15</td><td><span class="pill p-low">LOW</span></td><td>PV</td><td>Defect</td><td>Cookie lookup takes the first plain-name match and ignores client-scoped cookies and duplicate paths, so the token forwarded to the gateway may not be the one the browser would have sent to the gateway.</td><td class="mono">SsoSessionClient.java:29, 91-102<br>SsoCookieHelper.java:42-68</td><td><span class="pill p-prov">PROVEN</span> code<br><span class="pill p-unp">UNPROVEN</span> client config</td></tr>
+
+<tr><td>16</td><td><span class="pill p-low">LOW</span></td><td>PV</td><td>Docs</td><td><code>GETAUTHMODE</code> is absent from <code>API_OVERVIEW.md</code> (0 occurrences) and the artifact version is 2.4.1 in <code>gradle.properties</code> but 2.4.0 throughout the specification.</td><td class="mono">gradle.properties:2<br>API_OVERVIEW.md (no row)<br>TECHNICAL_SPECIFICATIONS.md:6, 7, 92, 160</td><td><span class="pill p-prov">PROVEN</span></td></tr>
+
+<tr><td>17</td><td><span class="pill p-low">LOW</span></td><td>PV</td><td>Hygiene</td><td>The PR description is stale: it names head <code>2956e19</code> and 11 tests; the branch head is <code>37f19ca</code> with 18 tests. Its "never preferred_username" claim is false at the pinned commit.</td><td class="mono">PR 7 description<br>SsoSessionClient.java:72-75</td><td><span class="pill p-prov">PROVEN</span></td></tr>
+
+<tr><td>18</td><td><span class="pill p-low">LOW</span></td><td>PMW</td><td>Hygiene</td><td>No tests exist in the repo (0 matches over 10 files), so the new branch ships unverified. <code>CODE_REVIEW.md</code> 1.1 already records this.</td><td class="mono">test:unit output<br>CODE_REVIEW.md</td><td><span class="pill p-prov">PROVEN</span></td></tr>
+
+<tr><td>19</td><td><span class="pill p-low">LOW</span></td><td>PV</td><td>Nit</td><td>The <code>37f19ca</code> comment says Jettison's <code>optString</code> turns an explicit null into the string "null". On the pinned 1.5.4 it returns a null <code>String</code>. The guard is still correct; the stated reason is not.</td><td class="mono">SsoSessionClient.37f19ca:100-108</td><td><span class="pill p-prov">PROVEN</span> by probe</td></tr>
+
+<tr><td>20</td><td><span class="pill p-low">LOW</span></td><td>PV</td><td>Nit</td><td>The login dialog's username and password fields do nothing in either mode; with SSO as the only path they are now a trap rather than a fallback.</td><td class="mono">login.js:329-374</td><td><span class="pill p-prov">PROVEN</span></td></tr>
+</table>
+
+<h3>Why rank 3 matters more than its trigger suggests</h3>
+<p>Menu only emits <code>window.SEFL_AUTH</code> when the gateway stamped a SAM claim (<code>SsoAuthJson.java:75-82</code>), so in a healthy same-origin frame the claims and the cookie appear together. The dangerous cases are the ones where they do not: a cookie scoped to a different host, a cookie dropped by <code>SameSite</code>, a cookie cleared while the page stays open, or a Menu page rendered in SSO mode in front of an app on another vhost. In every one of those the client takes the SSO branch, gets an error, and the legacy path that would have worked is never tried. Picture Viewer's <code>accessControl.js:334-337</code> has the same shape with an explicit OR.</p>
+
+<h3>Why rank 4 is a legacy break, not a retirement</h3>
+<p>Inside the migration window the server deliberately keeps <code>GETTOKENOAUTH</code> and <code>GETCLIENTID</code> alive (<code>Actions.java:255-265</code>, <code>300-309</code>), but the page removes both entry points: the dialog no longer calls <code>getOauthClient</code> (<code>login.js:360-372</code>) and <code>index.jsp</code> no longer reads <code>access_token</code> (<code>:38-41</code>). <code>landing.html:43</code> still builds <code>?access_token=...</code>, so an old Azure redirect now lands on a page that ignores its token. The window's promise is "legacy still works until the date"; for the Azure form it does not.</p>
+
+<h2>7. Legacy forms the change touches</h2>
+
+<table>
+<tr><th>Legacy form</th><th>Entry point</th><th>Inside the window</th><th>After the window</th><th>Where</th></tr>
+<tr><td>Menu opener LDAP credentials (main viewer)</td><td><code>window.opener.top.SeflMenu.getPassword()</code></td><td class="pass">Preserved, but only with a Menu opener that still holds a password</td><td class="fail">Retired JSON, "Legacy ... sign-in has ended"</td><td class="mono">login.js:60-67, 161-180<br>Actions.java:243-253, 395</td></tr>
+<tr><td>Menu opener LDAP credentials (Picture Book)</td><td><code>startAutoLogin</code></td><td class="pass">Preserved under the same opener condition</td><td class="fail">Retired JSON</td><td class="mono">accessControl.js:332-346<br>Actions.java:243</td></tr>
+<tr><td>Picture Book typed LDAP dialog</td><td>Login button</td><td class="pass">Preserved; posts <code>getToken</code></td><td class="fail">Server returns the retired JSON and the dialog shows it</td><td class="mono">accessControl.js:197-232, 265</td></tr>
+<tr><td><code>?uzr=</code> auto-login (main viewer)</td><td><code>index.jsp</code> <code>autoLogin</code></td><td class="pass">Preserved, but now requires a successful <code>GETAUTHMODE</code> first</td><td class="fail">Server refuses <code>getTokenUser</code></td><td class="mono">index.jsp:44<br>login.js:71-82<br>Actions.java:313-317</td></tr>
+<tr><td><code>?uzr=</code> auto-login (Picture Book)</td><td><code>pictureBook.jsp</code> <code>index_uzr</code></td><td class="pass">Preserved, same new dependency on <code>GETAUTHMODE</code></td><td class="fail">Server refuses</td><td class="mono">pictureBook.jsp:17<br>accessControl.js:23-36</td></tr>
+<tr><td>Azure sign-in from the login dialog</td><td>Login button to <code>login.microsoftonline.com</code></td><td class="fail">Already removed; the button now shows the Menu message</td><td class="fail">Removed</td><td class="mono">login.js:360-372<br>Actions.java:300-309</td></tr>
+<tr><td>Azure redirect landing</td><td><code>landing.html</code> to <code>index.jsp?access_token=</code></td><td class="fail">Token ignored, so the landing is a dead end</td><td class="fail">Dead end</td><td class="mono">landing.html:26-43<br>index.jsp:38-41</td></tr>
+<tr><td>PMW password path</td><td><code>SeflMenu.getPassword()</code> to <code>getToken</code></td><td class="pass">Preserved only when the frame has no <code>SEFL_AUTH</code></td><td class="fail">Server refuses</td><td class="mono">App.vue:140-153<br>Actions.java:243</td></tr>
+<tr><td>PMW access-token path</td><td><code>SeflMenu.getAccessToken()</code> to <code>getTokenOAuth</code></td><td class="fail">In SSO mode the value is unset, so it posts <code>uzr=undefined</code> and fails; no fallback</td><td class="fail">Server refuses</td><td class="mono">App.vue:150-157<br>Actions.java:255</td></tr>
+<tr><td><code>GETTOKENUSER</code> never-expiring backdoor</td><td>Any caller with a username</td><td class="fail">Open, gated only by the date row</td><td class="pass">Closed</td><td class="mono">Actions.java:313-317<br>LegacyAuthWindow.java:47-49</td></tr>
+</table>
+
+<p><strong>The migration row is now load-bearing for both apps.</strong> Picture Viewer's four legacy actions and PMW's two paths all depend on <code>WEB/sefl-gateway/OAUTH_LDAP_MIGRATION_UNTIL</code> being present and readable. The gateway itself only requires that row when <code>ldapMigrationEnabled</code> is true; Picture Viewer requires it unconditionally, in the sense that a missing row closes legacy (<code>LegacyAuthWindow.java:62-72</code>). Deploy order matters: row first, then the war.</p>
+
+<h2>8. What I ran, and what it answered</h2>
+
+<table>
+<tr><th>Command</th><th>Where</th><th>Answer</th></tr>
+<tr><td class="mono">./gradlew compileJava --offline</td><td>pictureviewer at <code>37f19ca</code></td><td class="pass">BUILD SUCCESSFUL</td></tr>
+<tr><td class="mono">./gradlew test --offline --tests 'com.sefl.picture.viewer.servlet.UnitTest_*'</td><td>pictureviewer at <code>37f19ca</code></td><td class="pass">BUILD SUCCESSFUL; 18 tests, 0 skipped, 0 failures (JSONMapper 2, LegacyAuthWindow 5, SsoSessionClient 7, ValidateSsoUser 4)</td></tr>
+<tr><td class="mono">npx vue-cli-service lint --no-fix src/App.vue</td><td>picture-manager-web at <code>01ad4fb</code></td><td>2 errors, both pre-existing <code>no-unused-vars</code> at <code>App.vue:218</code> and <code>:314</code>, neither line touched by this change</td></tr>
+<tr><td class="mono">npx vue-cli-service test:unit</td><td>picture-manager-web at <code>01ad4fb</code></td><td class="fail">"No tests found", 0 matches over 10 files</td></tr>
+<tr><td class="mono">Jettison 1.5.4 probe on <code>{"employeeID":null}</code></td><td>scratch</td><td><code>has=true</code>, <code>isNull=true</code>, <code>optString(key,"")</code> returns a null <code>String</code>, not <code>"null"</code></td></tr>
+<tr><td class="mono">Bitbucket build status</td><td>both heads</td><td>PV <code>37f19ca</code> SUCCESSFUL build 7; PMW <code>01ad4fb</code> SUCCESSFUL build 4; <code>49f3ae7</code> has no published status</td></tr>
+</table>
+
+<p><code>git status --porcelain</code> stayed empty in both checkouts after the runs; the builds wrote only ignored <code>build/</code> and <code>node_modules</code> output. I made no commit, push or pull request in either repository.</p>
+
+<h2>9. What I did NOT test</h2>
+
+<div class="card warncard">
+<ul>
+<li>No live Okta or Menu sign-in, no 2FA, no browser session at all. Neither page was run.</li>
+<li>No HTTP call to <code>/oauth2/session</code>. I did not verify that the Picture Viewer server can reach the gateway host, nor that the SEFL Apache forwards <code>X-Forwarded-Host</code> as the code expects.</li>
+<li>No deployment of either artifact and no DEV click-through. Both dev URLs were left untouched.</li>
+<li>No check of any <code>WEB/sefl-gateway</code> row in any environment: <code>OAUTH_LDAP_MIGRATION_UNTIL</code>, the feature toggle, the cookie domain, or the client id.</li>
+<li>No pictureviewer build at the pinned <code>49f3ae7</code>. I compiled and tested <code>37f19ca</code> only; the delta is small but unbuilt.</li>
+<li>No JavaScript test of either client, because neither repo has one. Picture Manager has no test files at all.</li>
+<li>No cross-origin frame test, so the <code>SecurityError</code> in finding 14 was reasoned from the language, not observed.</li>
+<li>No load or concurrency test of the 5-second synchronous gateway call, so thread exhaustion is unmeasured.</li>
+<li>No proof of what authenticates the Picture Manager upload after the token is discarded: I did not exercise <code>/Documentation</code> or the Images service.</li>
+<li>No proof that a non-default client id is ever in play, so the scoped-cookie gap in finding 15 remains latent.</li>
+<li>No verification of the property manager cache TTL, so finding 11's "per request" means "per call to the cached manager", whose refresh interval I did not find in the sources I unpacked.</li>
+<li>No check of external callers of <code>GETTOKEN</code>, <code>GETTOKENOAUTH</code>, <code>GETCLIENTID</code> or <code>GETTOKENUSER</code>. The in-repo callers are enumerated above; bookmarks and other systems are not.</li>
+</ul>
+</div>
+
+<h2>10. Unproven assumptions</h2>
+
+<table>
+<tr><th>Assumption</th><th>Why it is unproven</th><th>What would settle it</th></tr>
+<tr><td>The gateway cookie actually reaches the servlet in dev and prod.</td><td>Depends on the cookie Domain row and the Apache route for <code>/PictureViewer</code>; I read neither.</td><td>One DEV request with the browser cookie list and a server-side log of <code>hasAuthCookie</code>.</td></tr>
+<tr><td><code>X-Forwarded-Host</code> can carry an attacker-chosen value through the SEFL proxy.</td><td>The code trusts it, but a proxy that overwrites it would remove the primitive.</td><td>A request with a foreign Host header through the real vhost plus a tcpdump or a log of the outbound URL.</td></tr>
+<tr><td>An expired gateway cookie is still sent by the browser.</td><td><code>SessionResource</code> returns 200 with <code>authenticated:false</code>; whether the browser keeps the cookie after expiry depends on its Max-Age handling.</td><td>Wait out a token TTL in a real browser and read <code>document.cookie</code> names and <code>GETAUTHMODE</code>.</td></tr>
+<tr><td>The migration row is missing in some environment.</td><td>Finding 10's behavior is proven; the row state is not.</td><td>Read the row in DEV, QA, UAT and PROD.</td></tr>
+<tr><td>Menu's <code>getPassword()</code> is empty in SSO mode.</td><td>Read from the Vault bootstrap path, not observed in a live Menu.</td><td>Open Menu in SSO mode and print <code>SeflMenu.getPassword()</code>.</td></tr>
+<tr><td>The Picture Manager upload does not need the discarded token.</td><td>Nothing in the repo proves what <code>/Documentation</code> or the Images service requires.</td><td>Run an upload in DEV with and without the token.</td></tr>
+<tr><td>A second user on the same browser actually meets the stored token.</td><td>The code path is proven; shared-workstation use is a deployment fact.</td><td>Sign in as A, close the tab, sign in as B, reload.</td></tr>
+<tr><td>The <code>preferredUsername</code> fallback at <code>49f3ae7</code> never matches a real Okta account.</td><td>It only applies to numeric values, and I have no sample of the claim for this population.</td><td>One real <code>/oauth2/session</code> payload for a pre-G3 user.</td></tr>
+<tr><td>No other system calls the legacy actions.</td><td>I grepped only these two repos.</td><td>Apache access logs for the four action names over 30 days.</td></tr>
+</table>
+
+<h2>11. Delta between the pinned commit and the PR head</h2>
+
+<p>The PR's current head is <code>37f19ca</code> ("identity from the gateway employeeID claim, with SsoSessionClient tests"), one commit after the pinned <code>49f3ae7</code>. The delta does not change either verdict.</p>
+
+<ul>
+<li><strong>Identity:</strong> <code>preferredUsername</code> is no longer used as an employee-id candidate; a pre-G3 session now goes straight to the LDAP lookup (<code>SsoSessionClient.37f19ca:61-74</code>). This removes the only use of <code>preferredUsername</code> and makes the PR description true at the head.</li>
+<li><strong>Null handling:</strong> a new <code>optionalString</code> treats a JSON null like an absent field (<code>:100-108</code>). The behavior at <code>49f3ae7</code> was already safe because <code>trimmed(null)</code> returns <code>""</code>, and my 1.5.4 probe shows <code>optString</code> does not produce the string <code>"null"</code>. The guard is harmless; the comment's reason is wrong. This is finding 19.</li>
+<li><strong>Tests:</strong> <code>UnitTest_SsoSessionClient</code> adds 7 tests over the claim precedence, the missing-SAM and unauthenticated branches. It does not cover <code>fetchSession</code>, the URL construction, the cookie scan, or the servlet action. The suite is 18 tests at the head and green.</li>
+<li><strong>Style:</strong> the new comments use em dashes where the rest of the file uses hyphens. Cosmetic, but it is the only place in either change where the punctuation changes.</li>
+</ul>
+
+<h2>12. Bottom line</h2>
+
+<div class="card answer">
+<p><strong>Neither app can sign in with oauth2-multi as a standalone consumer.</strong> Picture Viewer can reuse an existing gateway session when opened top-level, but it cannot create one; Picture Manager cannot even reuse one, because its SSO branch only runs inside a frame. The Menu path is the designed path and the code says so: the specification describes the browser as "Picture Manager inside SEFL Menu", and both clients read Menu's <code>window.SEFL_AUTH</code> rather than a token Menu hands them.</p>
+<p><strong>If standalone is a requirement, it is a design change, not a bug fix:</strong> install the gateway's <code>JwtAuthFilter</code> with a <code>loginUrl</code> so an unauthenticated top-level request is redirected to <code>/oauth2/login</code>, render the <code>sefl.auth.*</code> attributes into <code>window.SEFL_AUTH</code> on the app's own page, and remove the "sign in through Menu" dead end. That is the pattern the gateway's integration guide documents for a standalone consumer (sections 3, 3b and 5c of <code>INTEGRATION-jwt-auth-filter</code>; 5c is the gateway-served <code>sso-guardian-lite.js</code> that registers the app session and renews it top-level). I have not written that change, as instructed.</p>
+<p><strong>The defects that would bite before then</strong> are the fallback loss (3), the dead Azure form inside the window (4), the shared-browser token inheritance (5), and the 20-minute token that ignores gateway revocation (6). The rest are medium and low: error text, cookie presence, the fail-closed row, the two clocks, the LDAP dependency, the discarded PMW token, and documentation drift.</p>
+</div>
+
+</div></body></html>
