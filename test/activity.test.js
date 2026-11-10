@@ -14,9 +14,14 @@ test("an unreadable state.db yields an empty value and one explanatory line", as
   process.env.HERMES_HOME = home;
   const seen = [];
   const realError = console.error;
+  const realLog = console.log;
+  // The line now leaves through the shared leveled logger (lib/activity.js warnOnce -> logger.warn),
+  // whose sink is console.log; console.error stays spied for any module that still writes there.
   console.error = (...a) => seen.push(a.join(" "));
+  console.log = (...a) => seen.push(a.join(" "));
   t.after(async () => {
     console.error = realError;
+    console.log = realLog;
     if (previousHome === undefined) delete process.env.HERMES_HOME;
     else process.env.HERMES_HOME = previousHome;
     await rm(home, { recursive: true, force: true });

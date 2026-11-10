@@ -11,6 +11,8 @@ import { cpus, homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { StringDecoder } from "node:string_decoder";
 import { fileURLToPath } from "node:url";
+import { logger, log, parseLevel } from "./lib/log.js";
+import { createLoopLag, withActivity, markActivity, currentActivity } from "./lib/loop-lag.js";
 import { Pool } from "./lib/pool.js";
 // Every helper process this panel starts is registered here: it carries a hard ceiling and dies with its
 // scope (a job that settled, a scan, the panel on the way out). See lib/child-tree.js for the leak it ends.
@@ -314,7 +316,19 @@ const CONFIG_PATH = CONFIG_FILE.path;
 // guard in test/paths.test.js fails on any other `path.dirname(CONFIG_PATH)`.
 const CONFIG_DIR = path.dirname(CONFIG_PATH);
 
-const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
+// The level has to be in force BEFORE the boot prints its own first lines, so the config is peeked
+// synchronously here — WAG_LOG_LEVEL (environment) beats config.json `logging.level`, and loadConfig
+// re-applies the fully normalised value later. Levels and line shapes: lib/log.js.
+function bootLogLevel() {
+  const fromEnv = String(process.env.WAG_LOG_LEVEL || "").trim();
+  if (fromEnv) return parseLevel(fromEnv);
+  try {
+    return parseLevel(JSON.parse(readFileSync(CONFIG_PATH, "utf8"))?.logging?.level);
+  } catch {
+    return "info";
+  }
+}
+logger.setLevel(bootLogLevel());
 // The child supervisor writes through the panel's own log, so a killed helper is one line beside every other
 // boot/shutdown line rather than a second stream.
 panelChildren.setLog((line) => log(line));
@@ -385,6 +399,24 @@ function collapseAfterSecondsFrom(value) {
   return Math.min(COLLAPSE_AFTER_MAX, Math.round(n));
 }
 
+// Logging: which lines are printed (five levels, see lib/log.js) and the two thresholds that turn
+// "the page stopped answering" into a log line — `stallWarnMs` for one event-loop stall and
+// `slowRequestMs` for one request. An unreadable value falls back to the default, never to 0:
+// a typo must not switch the instrument off.
+const LOG_DEFAULTS = { level: "info", stallWarnMs: 1000, slowRequestMs: 1000 };
+function loggingSettingsFrom(value) {
+  const v = value && typeof value === "object" ? value : {};
+  const num = (x, d) => {
+    const n = Number(x);
+    return Number.isFinite(n) && n > 0 ? n : d;
+  };
+  return {
+    level: parseLevel(v.level, LOG_DEFAULTS.level),
+    stallWarnMs: num(v.stallWarnMs, LOG_DEFAULTS.stallWarnMs),
+    slowRequestMs: num(v.slowRequestMs, LOG_DEFAULTS.slowRequestMs),
+  };
+}
+
 async function loadConfig() {
   // A fresh clone may have no config.json yet: start on defaults and say so, rather than dying.
   let cfg;
@@ -424,6 +456,7 @@ async function loadConfig() {
   // collapsed parent, and when it fires every card under that parent is written into the browser's remembered fold
   // set. Server-side like the age threshold below, so it survives a restart and applies to every browser.
   cfg.collapseAfterSeconds = collapseAfterSecondsFrom(cfg.collapseAfterSeconds);
+  cfg.logging = loggingSettingsFrom(cfg.logging);
   // HOW THE ASSISTANT'S PANE IS DRAWN: one `docked` rail or one `floating` window for the WHOLE panel, out of this
   // file because it is the panel's own frame and not any assistant's. ABSENT is not `docked` here: it means the
   // panel has never made this choice, which is what lets a per-assistant value written by the older build be
@@ -588,6 +621,18 @@ async function patchPanelConfig(patch) {
 }
 
 let config = await loadConfig();
+// The fully normalised level, now that the file has been read through loadConfig's own rules.
+logger.setLevel(config.logging.level);
+// The loop-lag sampler: one timer, and the only thing that turns "the page stopped answering" into
+// evidence — the panel serves every request from one event loop, so a stall here delays every
+// handler behind it. Stall lines carry the activity breadcrumb the scan passes set
+// (lib/loop-lag.js), and GET /api/diagnostics reports the rolling stats.
+const loopLag = createLoopLag({
+  warnMs: config.logging.stallWarnMs,
+  onStall: ({ ms, at, activity }) =>
+    logger.warn(`event loop stalled ${Math.round(ms)}ms (at ${new Date(at).toISOString().slice(11, 19)}Z, activity: ${activity})`),
+});
+loopLag.start();
 // ---- one panel per port, asked before this one touches anything ----------------------------------
 // Before the data directory is created, the store migrated or a single job read: a second copy of this panel (or a
 // sandbox started on the reader's port) has to stop HERE, not after it has loaded the reader's jobs.json. On Windows
@@ -704,12 +749,20 @@ function rebuildPool(threads) {
 
 const clients = new Set();
 
+// What /api/diagnostics reports about the page's own connection: connect/disconnect counts, the
+// last snapshot build, write errors, and the recent slow requests — the frontend's yellow dot,
+// made countable.
+const streamMetrics = { connected: 0, disconnected: 0, writeErrors: 0, lastConnectAt: null, lastDisconnectAt: null, lastDisconnectHeldMs: null, lastSnapshot: null };
+const slowRequests = [];
+const SLOW_REQUESTS_KEPT = 20;
+
 function broadcast(evt) {
   const frame = `event: ${evt.type}\ndata: ${JSON.stringify(evt)}\n\n`;
   for (const res of clients) {
     try {
       res.write(frame);
     } catch {
+      streamMetrics.writeErrors += 1;
       clients.delete(res);
     }
   }
@@ -3169,7 +3222,9 @@ const heartbeat = setInterval(() => {
     try {
       res.write(`event: heartbeat\ndata: ${JSON.stringify(payload)}\n\n`);
     } catch {
+      streamMetrics.writeErrors += 1;
       clients.delete(res);
+      logger.debug(`stream: heartbeat write failed — client dropped (${clients.size} streaming)`);
     }
   }
 }, 5000);
@@ -3267,6 +3322,21 @@ const bootPass = new Promise((r) => {
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, "http://localhost");
   const route = url.pathname;
+  // How long this request took, and which ones the page can feel: below the threshold it is one
+  // `debug` line; at or above it, one `warn` and a slot in the ring /api/diagnostics serves.
+  // `/api/stream` is excluded — it is a long-lived attach, not a request taking minutes.
+  const reqStartedAt = process.hrtime.bigint();
+  res.once("finish", () => {
+    if (route === "/api/stream") return;
+    const ms = Number(process.hrtime.bigint() - reqStartedAt) / 1e6;
+    if (ms >= config.logging.slowRequestMs) {
+      slowRequests.push({ at: new Date().toISOString(), method: req.method, route, ms: Math.round(ms) });
+      if (slowRequests.length > SLOW_REQUESTS_KEPT) slowRequests.shift();
+      logger.warn(`slow request: ${req.method} ${route} took ${Math.round(ms)}ms`);
+    } else {
+      logger.debug(`${req.method} ${route} ${Math.round(ms)}ms`);
+    }
+  });
   if (req.method === "POST" && route !== "/api/reload") {
     bootPassCanSatisfyReload = false;
   }
@@ -3299,6 +3369,24 @@ const server = createServer(async (req, res) => {
 
     if (route === "/api/health") {
       return sendJson(res, 200, { ok: true, host: config.host, projects: registry.projects.map((p) => p.name), settings: settingsOut(), clients: clients.size });
+    }
+
+    // What the panel knows about its own health, in one read: the loop's worst stall in the last
+    // minute and ten, the slow requests the page felt, the stream counters and the pass running
+    // now. This exists so "the page froze" has numbers to read instead of a stopwatch and a guess.
+    if (route === "/api/diagnostics" && req.method === "GET") {
+      return sendJson(res, 200, {
+        ok: true,
+        version: VERSION,
+        pid: process.pid,
+        uptimeSeconds: Math.round(process.uptime()),
+        logLevel: logger.level,
+        activity: currentActivity(),
+        loopLag: loopLag.stats(),
+        slowRequests: { thresholdMs: config.logging.slowRequestMs, kept: slowRequests.length, recent: slowRequests.slice(-10) },
+        stream: { clients: clients.size, ...streamMetrics },
+        memoryMB: Math.round(process.memoryUsage().rss / 1048576),
+      });
     }
 
     // The build this process is serving: the page carries the version it loaded with, polls this,
@@ -6131,6 +6219,7 @@ const server = createServer(async (req, res) => {
       } else {
         await bootPass;
         config = nextConfig;
+        logger.setLevel(nextConfig.logging.level);
         scheduler.stop();
         pool.close();
         pool = new Pool(config.threads);
@@ -6192,7 +6281,7 @@ const server = createServer(async (req, res) => {
       }
     }
 
-    if (route === "/api/stream") return handleStream(req, res, { clients, snapshot });
+    if (route === "/api/stream") return handleStream(req, res, { clients, snapshot, metrics: streamMetrics });
 
     return serveStatic(req, res, route, build);
   } catch (e) {
@@ -6461,6 +6550,7 @@ async function shutdown(code = 0) {
   }
   stopPipelineWaitTicker();
   clearInterval(heartbeat);
+  loopLag.stop();
   try {
     pool.close();
   } catch {
