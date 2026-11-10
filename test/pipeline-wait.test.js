@@ -836,3 +836,122 @@ test("the PDL row's 3-crossing cap is the same one the ladder pays: the fourth c
   assert.equal(record.stage, "work", "the row stays where it was for a decision");
   assert.equal(record.pipelineWait, undefined, "the wait is closed rather than looped forever");
 });
+
+// Rung 3 of docs/reports/pipeline-execution-next-moves-2026-11-10.html section 2.3. The approval at the head: a live
+// PDL row at `approve` registers its wait from G6 (`pr-approved`) - the stage carries no `exit`, and that is not a
+// reason to skip the wait - and an approval is the exit only when it is AT the PR's current head. Two observations go
+// through the SAME settle path: an approval at the previous head (no advance, no wake, the wait stays on the timer),
+// then an approval at the current head (the row enters merge by H-07, the record naming the reviewer and the head, and
+// the wait cleared). A sweep after the advance must not re-enter merge.
+test("an approval gates approve only at the PR's current head", async (t) => {
+  const APPROVE = PDL_LOOP.stages.find((s) => s.id === "approve");
+  const G6 = reviewGateFor(PDL_LOOP, "approve");
+  assert.ok(APPROVE && G6, "the shipped document holds the approve stage and the gate after it");
+  assert.equal(APPROVE.exit, undefined, "a PDL stage declares an artifact, not an exit: G6 is where the check is named");
+  assert.equal(G6.verifiedBy, "pr-approved");
+  assert.equal(G6.decider, "reviewer");
+
+  const HEAD = "b7c1d2e3" + "f".repeat(32);
+  const PREVIOUS = "0a1b2c3d" + "e".repeat(32);
+  const HOLD_AT = T0 - 30 * 60_000;
+  const { dir, records, jobs } = board(t, {
+    stage: "work",
+    wait: null,
+    recordOver: { id: "local" },
+    catalogue: { get: () => null },
+    config: { pipelineBundleFile: BUNDLE },
+  });
+  // The book a live PDL row has at approve: the cut wrote `local · work`, and the hold names the document and stage.
+  jobs.holdPipelineStageRun({ tree: TREE, pipeline: "sefl-review-loop", stage: "approve", visit: 1, thread: THREAD, job: "job-approve-1", at: iso(HOLD_AT) });
+
+  // (1) the settle registers the wait from G6, with the HOLD's clock - not the tree's cut - as lastSeen.
+  const wait = jobs.registerPipelineWait({ id: "job-approve-1", ownerPath: TREE, thread: THREAD, branch: BRANCH }, { now: T0 });
+  assert.ok(wait, "the stage has no exit of its own and G6 still names the reviewer's check, so the row waits");
+  assert.equal(wait.check, "pr-approved");
+  assert.equal(wait.stage, "approve");
+  assert.equal(wait.gate, "G6", "the wait names the gate it read, not an exit the stage does not have");
+  assert.equal(wait.pipeline, "sefl-review-loop", "a `local` tree record cannot name the document the stage came from");
+  assert.equal(wait.thread, THREAD);
+  assert.equal(wait.branch, BRANCH);
+  assert.equal(wait.lastSeen, iso(HOLD_AT), "the clock is the stage's entry (the hold), not the tree's cut at T0");
+  assert.equal(records.get(TREE, { fresh: true }).id, "local", "registering the wait does not rewrite the tree's rung");
+  const onDisk = JSON.parse(readFileSync(path.join(dir, "pipeline-records.json"), "utf8"));
+  assert.equal(onDisk.trees[TREE].pipelineWait.check, "pr-approved", "the wait is durable on the tree");
+  assert.equal(onDisk.trees[TREE].pipelineWait.gate, "G6");
+
+  // Two observations, one settle path. The older approval is the negative case and runs first.
+  const observations = [
+    { ok: true, pr: { number: 42, state: "OPEN", headRefOid: HEAD, reviewers: [], comments: [], approvals: [{ by: "code_review_java", commit: PREVIOUS, at: iso(T0 - 2 * HOUR) }] } },
+    { ok: true, pr: { number: 42, state: "OPEN", headRefOid: HEAD, reviewers: [], comments: [], approvals: [{ by: "code_review_java", commit: HEAD, at: iso(T0 + 2 * HOUR) }] } },
+  ];
+  let read = 0;
+  const woke = [];
+  const sweep = (now) =>
+    jobs.sweepPipelineWaits({
+      now,
+      readReview: () => observations[read++],
+      wake: (turn) => {
+        woke.push(turn);
+        return { ok: true, job: { id: `wake-approve-${woke.length}` } };
+      },
+    });
+
+  // (2) an approval at the PREVIOUS head is not an approval of this head: no advance, no wake, and the wait stays on
+  // the timer for the next check rather than being cleared.
+  const older = await sweep(T0 + WAIT_FIRST_MS);
+  assert.equal(older.advanced, 0, "an approval at the previous head did not advance the stage");
+  assert.equal(older.woke, 0, "and nothing was started: the answer is a reschedule, not a run");
+  assert.equal(older.rescheduled, 1);
+  assert.equal(woke.length, 0);
+  const still = records.get(TREE, { fresh: true }).pipelineWait;
+  assert.ok(still, "the wait is still on the record");
+  assert.equal(still.stage, "approve", "the row stays at approve");
+  assert.equal(still.check, "pr-approved");
+  assert.equal(still.attempts, 1);
+  assert.equal(still.lastSeen, iso(HOLD_AT), "an unapproved head does not move the clock the approval is measured against");
+  assert.equal(waitDueAt(still), T0 + WAIT_FIRST_MS + 2 * HOUR, "the wait stays due, on its doubled interval");
+  assert.equal(records.get(TREE, { fresh: true }).history.length, 1, "the record did not hop");
+
+  // (3) the head approval: the rail's only edge out of approve is H-07, and that is the edge the settle takes.
+  const step = nextStageOf(PDL_LOOP, { ...records.get(TREE, { fresh: true }), stage: "approve" }, { review: { observation: observations[1], lastSeen: still.lastSeen } });
+  assert.equal(step.ok, true);
+  assert.equal(step.stage.id, "merge");
+  assert.equal(step.handoff.id, "H-07", "the approval crosses the approval edge, not the comment loop");
+
+  const head = await sweep(waitDueAt(still));
+  assert.equal(head.advanced, 1, "the approval at the head advanced the stage");
+  assert.equal(head.woke, 1, "the advance is a wake on the same thread, not a second run of approve");
+  assert.equal(woke.length, 1);
+  assert.equal(woke[0].thread, THREAD);
+  assert.match(woke[0].displayPrompt, /sefl-review-loop · merge/, "the wake names the document's next stage");
+  const moved = records.get(TREE, { fresh: true });
+  assert.equal(moved.stage, "merge", "approve → merge, read off the PDL document's H-07");
+  assert.equal(moved.id, "local", "the tree record's rung is still the cut's");
+  assert.equal(moved.pipelineWait, undefined, "the wait is cleared with the hop");
+  assert.equal(moved.history.length, 2);
+  const hop = moved.history[1];
+  assert.equal(hop.stage, "merge");
+  assert.match(hop.why, /^code_review_java approved b7c1d2e3$/, "the record names the reviewer and the head (its 8-character sha, the abbreviation the report's own records use)");
+  assert.ok(!hop.why.includes(PREVIOUS.slice(0, 8)), "and the sha it names is the head's, not the earlier approval's");
+  assert.equal(moved.crossings, undefined, "the approval took the sequence, so no loop crossing was charged");
+
+  // (4) a sweep after the advance: nothing is due, the host is not read, no second run starts, and merge is not
+  // entered again.
+  const after = await jobs.sweepPipelineWaits({
+    now: T0 + 4 * HOUR,
+    readReview: () => {
+      throw new Error("no wait is due, so the host must not be read");
+    },
+    wake: () => {
+      throw new Error("no wait is due, so no run may be started");
+    },
+  });
+  assert.equal(after.checked, 0);
+  assert.equal(after.advanced, 0);
+  assert.equal(after.woke, 0);
+  assert.equal(woke.length, 1, "no second run");
+  const settled = records.get(TREE, { fresh: true });
+  assert.equal(settled.stage, "merge");
+  assert.equal(settled.history.length, 2, "merge was entered once");
+  assert.equal(settled.pipelineWait, undefined);
+});
