@@ -88,6 +88,9 @@ test("the repository section is read from the remote URL, with `other` and `none
     ["git@git.sefl.com:IT/email-multi.git", "git.sefl.com/IT"],
     ["ssh://git@git.sefl.com/SA/infra.git", "git.sefl.com/SA"],
     ["https://git.sefl.com/IT/email-multi", "git.sefl.com/IT"],
+    ["ssh://git.sefl.com:7999/IT/oauth2-multi.git", "git.sefl.com/IT"],
+    ["ssh://git.sefl.com:7999/sa/fleet-kafka.git", "git.sefl.com/SA"],
+    ["ssh://git.sefl.com:22/it/x.git", "git.sefl.com/IT"],
     ["git@github.com:JLRoper/agent-worktree-gui.git", "github/JLRoper"],
     ["https://github.com/Somebody/else.git", "other"],
     ["https://gitlab.com/a/b.git", "other"],
@@ -118,6 +121,64 @@ test("a project's own value beats the repo default, and a force-override beats t
   assert.equal(forced.newBranches, "always-ask", "force makes the repo's value win");
   assert.equal(forced.newSource, "repo-force");
   assert.equal(forced.projectNewBranches, "allow-name-gate", "and the project's own answer is still reported, replaced not erased");
+});
+
+test("the installed matrix: IT asks on an existing branch and forces it, SA gates a new name and asks on an existing one", () => {
+  // config.json's `pushPermissions.repos` is the reader's file, not this repo's, so the matrix it carries is pinned
+  // HERE: the four cells are the whole of the behaviour, and a resolver change that quietly moved one of them would
+  // otherwise stay invisible until somebody pushed. IT keeps `force: true` - its own projects cannot vote their way
+  // out of the pair - and SA states the pair without it, so an SA project's own value still wins.
+  const MATRIX = {
+    pushPermissions: {
+      repos: {
+        "git.sefl.com/IT": { newBranches: "allow-name-gate", existingBranches: "always-ask", force: true },
+        "git.sefl.com/SA": { newBranches: "allow-name-gate", existingBranches: "always-ask" },
+      },
+    },
+  };
+  const itProject = { name: "it-app", remoteUrl: "ssh://git.sefl.com/IT/web-service-multi.git" };
+  const saProject = { name: "sa-app", remoteUrl: "ssh://git.sefl.com/SA/fleet-kafka.git" };
+
+  for (const [label, project] of [["IT", itProject], ["SA", saProject]]) {
+    const r = resolvePushPermissions(project, MATRIX);
+    assert.equal(r.repo, `git.sefl.com/${label}`, `${label} is its own section`);
+    assert.equal(r.newBranches, "allow-name-gate", `${label}: a new branch goes through the name gate`);
+    assert.equal(r.existingBranches, "always-ask", `${label}: an existing branch is asked about`);
+  }
+
+  // IT's force flag is part of the matrix: a project stating its own pair is replaced, not consulted.
+  const forced = resolvePushPermissions({ ...itProject, pushNewBranches: "allow-all", pushExistingBranches: "allow-all" }, MATRIX);
+  assert.equal(forced.forced, true);
+  assert.equal(forced.newBranches, "allow-name-gate");
+  assert.equal(forced.existingBranches, "always-ask");
+  assert.equal(forced.newSource, "repo-force");
+  // …while SA does not force, so an SA project that states its own answer keeps it.
+  const saOwn = resolvePushPermissions({ ...saProject, pushExistingBranches: "never" }, MATRIX);
+  assert.equal(saOwn.forced, false);
+  assert.equal(saOwn.existingBranches, "never");
+
+  // EVERY OTHER HOST is untouched: no section, no legacy key, so the shipped default - which asks - is the answer.
+  for (const url of ["https://github.com/Somebody/else.git", "https://gitlab.com/a/b.git", "ssh://sefl.com/SOMETHING/x.git"]) {
+    const r = resolvePushPermissions({ name: "elsewhere", remoteUrl: url }, MATRIX);
+    assert.equal(MATRIX.pushPermissions.repos[r.repo], undefined, `${url} has no section in this matrix (it reads as ${r.repo})`);
+    assert.equal(r.newBranches, "always-ask", `${url} is not governed by a section`);
+    assert.equal(r.existingBranches, "always-ask", url);
+    assert.equal(r.newSource, "default", "the shipped default, not a legacy migration");
+    assert.equal(r.legacy, false, `${url}: the shipped default is not a migration`);
+  }
+  const noRemote = resolvePushPermissions({ name: "local-only" }, MATRIX);
+  assert.equal(noRemote.repo, "none");
+  assert.equal(noRemote.newBranches, "always-ask");
+
+  // THE FOUR CELLS, through the function a push actually meets. A new branch whose name passes the gate is
+  // allowed without a box; an existing branch asks; a new branch that fails the gate asks; another host always asks.
+  assert.equal(permissionForPush(resolvePushPermissions(itProject, MATRIX), { branch: "20261110_0930_ABC-1234_fix_login", isNew: true }), "allow");
+  assert.equal(permissionForPush(resolvePushPermissions(itProject, MATRIX), { branch: "main", isNew: true }), "allow");
+  assert.equal(permissionForPush(resolvePushPermissions(itProject, MATRIX), { branch: "20261110_0930_ABC-1234_fix_login", isNew: false }), "ask");
+  assert.equal(permissionForPush(resolvePushPermissions(itProject, MATRIX), { branch: "wtgui/free-form-name-588511", isNew: true }), "ask");
+  assert.equal(permissionForPush(resolvePushPermissions(saProject, MATRIX), { branch: "20261110_0930_ABC-1234_fix_login", isNew: true }), "allow");
+  assert.equal(permissionForPush(resolvePushPermissions(saProject, MATRIX), { branch: "wtgui/free-form-name-588511", isNew: true }), "ask");
+  assert.equal(permissionForPush(resolvePushPermissions({ name: "elsewhere", remoteUrl: "https://gitlab.com/a/b.git" }, MATRIX), { branch: "20261110_0930_ABC-1234_fix_login", isNew: true }), "ask");
 });
 
 test("never is absolute: it beats a force-override and a project's allow-all", () => {

@@ -89,6 +89,14 @@ the guard's `namegate` file, so the hook's `grep -E` and the resolver's `RegExp`
 | `remoteBranchPolicy: "allow"`, or `allowPushWithoutAsking: true` | `allow-all` / `allow-all` |
 | `remoteBranchPolicy: "local-only"`, or nothing | `always-ask` / `always-ask` |
 
+**Where `<key>` comes from.** `repoKeyForRemoteUrl` reads the URL of the project's remote and keeps the host plus its
+first path segment, which is what makes `git.sefl.com/IT/...` and `git.sefl.com/SA/...` two sections and every other
+host `other`. Discovery stores that URL on the project record as `remoteUrl`; a cached record written before the field
+existed is completed ONCE - one `remote get-url` for that record, then saved with the list - because a record carrying
+a remote and no URL would otherwise read as `other` for good, and its section's pair could never reach it. A
+`projects[].remoteUrl` in `config.json` pins the same field for a project discovery cannot read (one outside every
+`scanRoots` folder).
+
 Where to see it: `settings.pushPermissions` in `GET /api/config` and in every snapshot — the values, each repository
 section with its defaults and force flag, and every project's RESOLVED pair. `GET /api/remote-write/allow-push?path=…`
 (or `?project=…`, plus `?branch=…&new=1`) says what a push would meet (`permission: allow|ask|refuse`).
