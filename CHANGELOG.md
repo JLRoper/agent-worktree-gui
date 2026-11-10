@@ -4,16 +4,73 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.80.9 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.80.12 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-530 releases from v0.1.0 (2026-10-20) to v1.80.9 (2026-11-09), 1738 commits between the tags. Every release is anchored by an
+533 releases from v0.1.0 (2026-10-20) to v1.80.12 (2026-11-10), 1759 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.80.12 — 2026-11-10 · 7 commits
+
+[`ea6dbe1`](https://github.com/JLRoper/agent-worktree-gui/commit/ea6dbe12fc7920f34255e26d6cd54cb3801987c6) · [compare v1.80.11...v1.80.12](https://github.com/JLRoper/agent-worktree-gui/compare/v1.80.11...v1.80.12)
+
+### Fixed
+
+- fix: read Bitbucket's epoch-ms stamps and nested reviewers in a live wait ([`595e491`](https://github.com/JLRoper/agent-worktree-gui/commit/595e4911612074d78892b5467cf88a974e03364c))
+- fix: a round groups its trees from its own record, not a scan ([`d635378`](https://github.com/JLRoper/agent-worktree-gui/commit/d635378a9e2fa718cb0036383d270ce930fa4f94))
+- fix: a pr-kind stage under a round acts on the assembled branch ([`d113b3b`](https://github.com/JLRoper/agent-worktree-gui/commit/d113b3bf4a8cd6d88b2470ee0039b87cc879b542))
+- fix: a git.sefl.com port is part of the host, and a cached record gets its URL ([`3d51ade`](https://github.com/JLRoper/agent-worktree-gui/commit/3d51ade0062c00ee7d978704e1715dfd9aadcbc1))
+
+### Docs & tests
+
+- docs: rung 7 one-stage round ([`5794ecb`](https://github.com/JLRoper/agent-worktree-gui/commit/5794ecb536e526cc860a3a65b40f3388ad04fd5c))
+- docs: recover rung 1's gate test and prove it already landed ([`e709b42`](https://github.com/JLRoper/agent-worktree-gui/commit/e709b42a6d26a328596488cac01f41a2724d50d7))
+
+### Other
+
+- chore: 1.80.12 - the version this landing carries ([`ea6dbe1`](https://github.com/JLRoper/agent-worktree-gui/commit/ea6dbe12fc7920f34255e26d6cd54cb3801987c6))
+
+## v1.80.11 — 2026-11-10 · 2 commits
+
+[`1c5c53c`](https://github.com/JLRoper/agent-worktree-gui/commit/1c5c53c7089e186943ad45822cfea36705e7b86b) · [compare v1.80.10...v1.80.11](https://github.com/JLRoper/agent-worktree-gui/compare/v1.80.10...v1.80.11)
+
+### Docs & tests
+
+- docs: the DMR-39015 standalone login review - two verdicts and 20 ranked findings ([`46eeeb7`](https://github.com/JLRoper/agent-worktree-gui/commit/46eeeb7d9c6fff34bf5d0c1c042e1ebb277992b2))
+
+### Other
+
+- chore: 1.80.11 - the version this landing carries ([`1c5c53c`](https://github.com/JLRoper/agent-worktree-gui/commit/1c5c53c7089e186943ad45822cfea36705e7b86b))
+
+## v1.80.10 — 2026-11-09 · 12 commits
+
+[`0ca789b`](https://github.com/JLRoper/agent-worktree-gui/commit/0ca789b0fbca27bf58184f64758e24526e06f18a) · [compare v1.80.9...v1.80.10](https://github.com/JLRoper/agent-worktree-gui/compare/v1.80.9...v1.80.10)
+
+### Fixed
+
+- fix: the gate's allowlist records the rung 7 probe's five paths ([`b934e4e`](https://github.com/JLRoper/agent-worktree-gui/commit/b934e4ef687b9d424fa2ebecc48000c8e1130763))
+- fix: a landing ladder filed with a work branch runs there, not in a cut round ([`062dbb2`](https://github.com/JLRoper/agent-worktree-gui/commit/062dbb27b1dd54b8095dad27f60e4a4ddad29334))
+
+### Docs & tests
+
+- docs: record the ladder's push stage ([`c0777e8`](https://github.com/JLRoper/agent-worktree-gui/commit/c0777e898619f8194995c00beefc9c0a4d058555))
+- docs: record the ladder's pr stage ([`2fceb7e`](https://github.com/JLRoper/agent-worktree-gui/commit/2fceb7e0d5032e1e2c44ff7939d3ad4c0a4d8a4c))
+- docs: render the changelog - 530 releases ([`00d9410`](https://github.com/JLRoper/agent-worktree-gui/commit/00d94108c43cb4a0e923f0d45bb9ee03bf027719))
+- docs: probe evidence for rung 7 - the round row, its stage indent, and the fields behind them ([`f64a4f7`](https://github.com/JLRoper/agent-worktree-gui/commit/f64a4f7c7872744efa5819121fb4205cae0a5f02))
+- docs: conclude round 7 - the indent is row.parent joined by branch, not the round record ([`e7f51f5`](https://github.com/JLRoper/agent-worktree-gui/commit/e7f51f57c1759f268a20701a1c77bb7351e5eace))
+- test: an approval gates approve only at the PR's current head ([`6c619dc`](https://github.com/JLRoper/agent-worktree-gui/commit/6c619dcda8756555fd63150e136608192a366ed0))
+- docs: record the ladder's merge stage ([`d1aec82`](https://github.com/JLRoper/agent-worktree-gui/commit/d1aec8220930ea5e93237985b5df48ebd29e3d24))
+- docs: record the ladder's main stage - the merge is on main ([`7fdc96a`](https://github.com/JLRoper/agent-worktree-gui/commit/7fdc96acb90faf27ee0856968e9cda7d47af0dbe))
+- docs: the rung 2 report - the GitHub ladder walked as one queue row ([`3c09eb1`](https://github.com/JLRoper/agent-worktree-gui/commit/3c09eb12629ee9936396a40d5fcb614b44785021))
+
+### Other
+
+- chore: 1.80.10 - the version this landing carries ([`0ca789b`](https://github.com/JLRoper/agent-worktree-gui/commit/0ca789b0fbca27bf58184f64758e24526e06f18a))
 
 ## v1.80.9 — 2026-11-09 · 3 commits
 
