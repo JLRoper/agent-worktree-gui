@@ -37,6 +37,7 @@ import { parseBundle } from "../lib/pipeline-bundle.js";
 import {
   DRIVE_FAULTS,
   STARTING_AT,
+  WAITING_FOR,
   capWakeLine,
   START_GRACE_MS,
   artifactOf,
@@ -278,6 +279,101 @@ test("the wait book owns the advance while it holds the row, and the driver is t
   assert.equal(otherStage.tasks[0].pipelineRun.stage, "S2", "a hold naming S2 does not hold the settle of S1");
   const otherVisit = drive([row({ worktree: dir })], { waitFor: () => hold({ visit: 2 }), at: at(60_000) });
   assert.equal(otherVisit.tasks[0].pipelineRun.stage, "S2", "and neither does one naming a later visit of the same stage");
+});
+
+test("a review wait holds the row with no window, and a DECLINED read ends the walk on it", (t) => {
+  // The shipped review loop, driven at its `wait` stage - the stage whose exit is the reviewer's answer. Row 67 walked
+  // from here to approve and then merge on a pull request that read DECLINED, because nothing told the driver the read
+  // had happened at all. These are the two facts that stop it: a review wait is the book's for as long as it exists,
+  // and a read that ENDED the pull request is the end of the walk.
+  const doc = JSON.parse(readFileSync(new URL("../pipeline-bundle.seed.json", import.meta.url), "utf8"));
+  const parsed = parseBundle(doc, { file: "pipeline-bundle.seed.json" });
+  assert.equal(parsed.ok, true, parsed.reason || "the shipped seed must parse");
+  const loop = parsed.bundle.pipelines.find((p) => p.id === "sefl-review-loop");
+  assert.ok(loop, "the review loop ships in the PDL bundle");
+
+  const dir = mkdtempSync(path.join(tmpdir(), "wag-declined-"));
+  mkdirSync(path.join(dir, "ledger", "sefl-review-loop"), { recursive: true });
+  writeFileSync(path.join(dir, "ledger", "sefl-review-loop", "wait.md"), "wait\n");
+  t.after(() => rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }));
+
+  const waiting = (over = {}) =>
+    row({
+      worktree: dir,
+      pipelineRun: {
+        pipeline: "sefl-review-loop",
+        stage: "wait",
+        enteredAt: "2026-11-03T15:00:00.000Z",
+        visits: { branch: 1, push: 1, pr: 1, wait: 1 },
+        stageRuns: [{ id: "sefl-review-loop/wait#1", stage: "wait", visit: 1, at: "2026-11-03T15:00:00.000Z", thread: "T1", job: "j1", status: null, decision: null }],
+      },
+      ...over,
+    });
+  const drive = (over = {}) =>
+    driveTaskPipelines([waiting()], { bundle: parsed.bundle, jobs: done, isLive: () => false, at: CLOCK, unattended: true, ...over });
+  const live = { kind: "review", stage: "wait", check: "pr-comments", pipeline: "sefl-review-loop", thread: "T1", at: CLOCK, every: 3_600_000 };
+  const declined = { stage: "wait", check: "pr-comments", pipeline: "sefl-review-loop", state: "DECLINED", closed: "declined", advanced: false, cannotTell: false, why: "the pull request is DECLINED", at: CLOCK };
+
+  // 1. The wait is live and no read exists yet: the timer owns the stage, so nothing moves and nothing is dispatched.
+  //    Without this the driver advances on the run's `done` seconds after the stage ends, long before the first read.
+  const held = drive({ waitFor: () => live });
+  assert.equal(held.changed.length, 0, "a review wait is the book's to read, not this pass's to settle");
+  assert.equal(held.tasks[0].state, "running");
+  assert.equal(held.tasks[0].pipelineRun.stage, "wait");
+  assert.equal(held.tasks[0].pipelineRun.stageRuns.length, 1, "no later stageRun is created under a live wait");
+  assert.equal(held.starts.length, 0, "and nothing is dispatched");
+
+  // ...and there is no first-refusal window to outlast: the wait is not a clock, it is the only reader of the exit.
+  const late = drive({ waitFor: () => live, at: new Date(Date.parse(CLOCK) + HOLD_OWNER_MS + 60_000) });
+  assert.equal(late.changed.length, 0, "a review wait holds past the hold owner's window");
+  assert.equal(late.starts.length, 0);
+
+  // 2. The timer has read the pull request and stamped DECLINED. The wait is gone, the read is not: the walk ends on
+  //    this stage, with the host's word in the reason and no stage after it.
+  const ended = drive({ waitFor: () => null, reviewOf: () => declined });
+  const task = ended.tasks[0];
+  assert.equal(task.state, "parked");
+  assert.equal(task.pipelineRun.stage, "wait", "the row stays on the stage that read the decline");
+  assert.deepEqual(task.pipelineRun.stageRuns.map((r) => `${r.stage}#${r.visit}`), ["wait#1"], "no later stageRun is created");
+  assert.equal(ended.starts.length, 0, "and no stage is dispatched");
+  assert.equal(ended.changed.length, 1);
+  assert.equal(ended.changed[0].to, "parked");
+  assert.equal(ended.changed[0].code, DRIVE_FAULTS.DECLINED);
+  assert.match(task.reason, /DECLINED/, "the row's reason names the declined read");
+  assert.match(task.reason, /pr-comments/, "and the check the stage was waiting on");
+  assert.match(task.reason, /no later stage is entered and nothing is dispatched/);
+  assert.equal(task[WAITING_FOR], undefined, "nothing the panel can watch releases a declined pull request");
+  const entry = task.pipelineRun.stageRuns.find((r) => r.stage === "wait");
+  assert.equal(entry.status, "done", "the run that settled is still recorded as the one that ended the walk");
+  assert.equal(entry.decision.code, DRIVE_FAULTS.DECLINED);
+  assert.equal(entry.decision.trigger, "declined");
+  assert.equal(entry.decision.fact.kind, "review");
+  assert.equal(entry.decision.fact.state, "DECLINED");
+  assert.equal(entry.decision.fact.closed, "declined");
+});
+
+test("a read that could not be made, or a merged pull request, is not a declined one", (t) => {
+  // The refusal is the ENDED pull request and nothing else. A host that could not answer must not end a walk (that is
+  // the fail-closed rule the stage exists for), and a MERGED PR is the landing rule's business, not this one's.
+  const doc = JSON.parse(readFileSync(new URL("../pipeline-bundle.seed.json", import.meta.url), "utf8"));
+  const parsed = parseBundle(doc, { file: "pipeline-bundle.seed.json" });
+  const loop = parsed.bundle.pipelines.find((p) => p.id === "sefl-review-loop");
+  const waitStage = loop.stages.find((s) => s.id === "wait");
+
+  const refused = nextStageOf(loop, { stage: "wait" }, { review: { stamped: { stage: "wait", check: "pr-comments", state: null, closed: null, advanced: false, cannotTell: true, why: "HTTP 503" } } });
+  assert.equal(refused.ok, true, "a read that cannot tell leaves the rail alone");
+  assert.equal(refused.stage.id, "approve", "the edge it always took");
+
+  const merged = nextStageOf(loop, { stage: "wait" }, { review: { stamped: { stage: "wait", check: "pr-comments", state: "MERGED", closed: "merged", advanced: false } } });
+  assert.equal(merged.ok, true, "a MERGED pull request is the landing rule's, not a declined walk's");
+  assert.equal(merged.stage.id, "approve");
+
+  const declined = nextStageOf(loop, { stage: "wait" }, { review: { stamped: { stage: "wait", check: "pr-comments", state: "CLOSED", closed: "declined", advanced: false } } });
+  assert.equal(declined.ok, false);
+  assert.equal(declined.code, DRIVE_FAULTS.DECLINED);
+  assert.equal(declined.read.state, "CLOSED", "a PR closed without a merge is the same end: no answer can arrive");
+  assert.equal(waitStage.exit, undefined, "the check comes from the gate after the stage");
+  assert.match(declined.reason, /pr-comments/);
 });
 
 test("a queued row over a settled stage still parks on the cap it has reached", (t) => {

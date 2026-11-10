@@ -326,6 +326,14 @@ and the `pr` stage re-opens the reviewer list rather than adding to it.
 approval of the head: the loop is `wait → address → wait → approve`, and it is the exit check `pr-approved`
 (approval whose `lastReviewedCommit` equals the head) that ends it, never a count of comments answered.
 
+**A pull request that has ENDED is not a review still in flight.** `wait` and `approve` both wait on a PR that is
+open; when the panel's own read finds it `DECLINED` (or `CLOSED` without a merge), the answer those stages exist for
+can never arrive, so the walk ends where the read was taken: the row parks with the host's own word in its reason, no
+later stage is entered, nothing is dispatched, and the loop's answer edge (`wait → address`, capped at 3) is not taken
+either. The document draws no route for this case - a gate's `routes` map is a seat's verdict, and a closed PR writes
+none - so the panel's rule is the one that applies. What does NOT end the walk: a read that could not be made (the
+fail-closed rule, §1.3) and a `MERGED` PR, which is the landing rule's business and not the loop's.
+
 ---
 
 ## 3. The worktree/job record
@@ -549,6 +557,19 @@ ends, the panel records a re-check on the tree:
 - **It is not the assistant's wake.** The re-check wakes the WORKER's thread; the board assistant's rules
   (`lib/assistant.js` `wake`, `isOwnRun`) are about a card, not a stage, and the re-check must never be answered by
   a wake of the assistant's own.
+- **A pull request that has ENDED ends the walk.** A read of `DECLINED`, or `CLOSED` without a merge, is not "nothing
+  arrived": the answer the stage exists for can never come. The re-check closes, the row parks on the read with the
+  host's own word (and the check that was being waited on) in its reason, and no later stage is entered and nothing is
+  dispatched. `MERGED` is not this case - that is the landing rule's, on the stage whose artifact is the PR.
+
+The read is STAMPED, not just acted on. The timer is the only reader of a review exit, and the driver - the pass that
+moves a queue row - has no host reader of its own. So every read is written onto the tree's own record
+(`reviewRead: {stage, check, state, advanced, closed, cannotTell, seen, why, at}`) BEFORE the wait is settled: a read
+that ends the PR clears the wait, and the reason the walk stopped has to outlive the record it came from. The driver
+asks for that fact (`lib/jobs.js` `reviewReadFor`, scoped to the stage and to this visit) and hands it to
+`nextStageOf`, so the two owners of one advance cannot choose different edges - and can never advance a stage whose
+exit the host has made unreachable. A review wait therefore holds the driver for its whole life, with no first-refusal
+window: a run hold is a clock the driver can fall back on, and this is not one.
 
 The result, in one line: **a 30-minute wait costs wakes and not a parked run** — nothing at all if the reviewer is
 quiet, one short turn when they answer, and never a run that has to stay alive to remember what it was waiting for.

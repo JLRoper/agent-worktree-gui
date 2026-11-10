@@ -33,11 +33,11 @@ const iso = (ms) => new Date(ms).toISOString();
 const HEAD = "a".repeat(40);
 
 // The observation `readReviewExit` reads, in the shape lib/pipelines.js normalises a host payload to.
-const observation = ({ comment = null, approved = false } = {}) => ({
+const observation = ({ state = "OPEN", comment = null, approved = false } = {}) => ({
   ok: true,
   pr: {
     number: 7,
-    state: "OPEN",
+    state,
     headRefOid: HEAD,
     reviewers: [],
     comments: comment ? [{ at: comment, by: "rev" }] : [],
@@ -134,4 +134,59 @@ test("H-04 is crossed at most three times, and the fourth comment stops the walk
   assert.equal(walked.stopped.limit, 3);
   assert.match(walked.stopped.reason, /at its cap of 3 rounds/);
   assert.equal(walked.record.stage, "wait", "the row stops on wait, for a person, rather than looping again");
+});
+
+// The fourth claim, and the one row 67 filed: a pull request that has ENDED is not a review the loop can keep waiting
+// for. The walk stepped wait -> approve -> merge on a DECLINED read (state DECLINED, open false, closed true), and the
+// only thing that stopped the merge run writing to SEFL was a steer. The document draws no route for this case - the
+// gates name comment and approval checks, and neither can fire on a closed PR - so the panel's rule is the one to take:
+// the walk ends where the read was taken, with the reason naming it.
+test("a DECLINED pull request ends the loop at wait: no edge, no approve, no merge", () => {
+  const declined = walk("branch", { reviews: [{ observation: observation({ state: "DECLINED" }), lastSeen: iso(T0) }] });
+  assert.equal(declined.stopped.code, "pipeline-declined");
+  assert.equal(declined.stopped.stage.id, "wait", "the row stops on the stage that read the decline");
+  assert.equal(declined.stopped.read.state, "DECLINED");
+  assert.equal(declined.stopped.read.closed, "declined");
+  assert.equal(declined.stopped.read.check, "pr-comments", "the check the stage waited on");
+  assert.match(declined.stopped.reason, /DECLINED/);
+  assert.match(declined.stopped.reason, /no later stage is entered/);
+  assert.deepEqual(
+    declined.hops.map((hop) => `${hop.from}->${hop.to}`),
+    ["branch->push", "push->pr", "pr->wait"],
+    "the walk stops at wait: approve and merge are never entered",
+  );
+  assert.equal(declined.record.stage, "wait");
+  assert.equal(declined.record.crossings["H-04"], undefined, "and the answer edge is not taken either");
+});
+
+test("the same read ends the loop at approve, and a PR closed without a merge is the same end", () => {
+  const declined = nextStageOf(LOOP, { stage: "approve" }, { review: { observation: observation({ state: "DECLINED" }) } });
+  assert.equal(declined.ok, false);
+  assert.equal(declined.code, "pipeline-declined");
+  assert.equal(declined.stage.id, "approve");
+  assert.match(declined.reason, /pr-approved/, "the reason names the check approve was waiting on");
+
+  const closed = nextStageOf(LOOP, { stage: "wait" }, { review: { observation: observation({ state: "CLOSED" }) } });
+  assert.equal(closed.code, "pipeline-declined", "a PR closed without a merge can never answer either");
+  assert.equal(closed.read.state, "CLOSED");
+
+  // Fail-closed, and only the ENDED PR: a host that cannot be read leaves the rail exactly as it was.
+  const unreadable = walk("branch", { reviews: [{ observation: { ok: false, why: "HTTP 503 from the host" }, lastSeen: iso(T0) }] });
+  assert.equal(unreadable.hops.find((hop) => hop.from === "wait").to, "approve", "a read that cannot tell does not end the walk");
+  assert.ok(unreadable.done);
+});
+
+test("the book's stamped read takes the loop edge, and a declined one ends the walk at the same stages", () => {
+  // The driver has no reader: it is handed the read the timer stamped (lib/jobs.js `reviewReadFor`), under `stamped`.
+  const advanced = nextStageOf(LOOP, { stage: "wait" }, { review: { stamped: { stage: "wait", check: "pr-comments", state: "OPEN", advanced: true, closed: null } } });
+  assert.equal(advanced.ok, true);
+  assert.equal(advanced.stage.id, "address", "a stamped comment takes H-04, the same edge the timer's observation takes");
+  assert.equal(advanced.handoff.kind, "loop");
+
+  const quiet = nextStageOf(LOOP, { stage: "wait" }, { review: { stamped: { stage: "wait", check: "pr-comments", state: "OPEN", advanced: false, closed: null } } });
+  assert.equal(quiet.stage.id, "approve", "nothing newer than lastSeen is the approval rail");
+
+  const ended = nextStageOf(LOOP, { stage: "wait" }, { review: { stamped: { stage: "wait", check: "pr-comments", state: "DECLINED", advanced: false, closed: "declined" } } });
+  assert.equal(ended.code, "pipeline-declined");
+  assert.equal(ended.read.stage, "wait");
 });
