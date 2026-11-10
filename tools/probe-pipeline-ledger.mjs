@@ -49,4 +49,30 @@ const running = setTaskState(reallyRan, 1, "running", { by: "assistant-1", at: a
 const finished = setTaskState(running.tasks, 1, "done", { by: "assistant-1", at: at("2026-11-09T09:22:00Z") });
 say(`  started -> done: startedAt=${finished.task.startedAt} doneAt=${finished.task.doneAt} runMs=${span(finished.task)}`);
 
+// ---- row 79: one visit, two TREES - two runs, two ids, and each keeps its own tree -------------------------------
+const treeBase = { id: "row-79", pipelineRun: { pipeline: "p", stage: "s1", enteredAt: "2026-11-09T10:00:00.000Z" } };
+const treeOne = settleStageRun(beginStageRun(treeBase, { stage: "s1", at: "2026-11-09T10:01:00.000Z" }), {
+  stage: "s1",
+  tree: { path: "trees/one", branch: "stage/one" },
+  commit: "1".repeat(40),
+});
+const treeTwo = settleStageRun(beginStageRun(treeOne, { stage: "s1", at: "2026-11-09T10:05:00.000Z" }), {
+  stage: "s1",
+  tree: { path: "trees/two", branch: "stage/two" },
+  commit: "2".repeat(40),
+});
+const twoTrees = stageRunsOf(treeTwo.pipelineRun);
+say("row 79 - two starts of one visit in two trees, no thread named yet");
+for (const entry of twoTrees) say(`  ${JSON.stringify({ id: entry.id, tree: entry.tree ? entry.tree.path : null, status: entry.status || null })}`);
+say(`  distinct ids: ${new Set(twoTrees.map((entry) => entry.id)).size} of ${twoTrees.length}`);
+
+// ---- row 79: a settle that has to CREATE the entry does not invent the start -------------------------------------
+const invented = stageRunsOf(settleStageRun(treeBase, { stage: "s1", thread: "thread-Z", status: "interrupted", at: "2026-11-09T13:00:00.000Z" }).pipelineRun)[0];
+say("row 79 - a settle for a run nothing recorded starting");
+say(`  at=${invented.at} settledAt=${invented.settledAt}`);
+const handed = stageRunsOf(
+  settleStageRun(treeBase, { stage: "s1", thread: "thread-Y", status: "interrupted", startedAt: "2026-11-09T10:40:00.000Z", at: "2026-11-09T13:00:00.000Z" }).pipelineRun,
+)[0];
+say(`  handed a start: at=${handed.at} settledAt=${handed.settledAt} runMs=${Date.parse(handed.settledAt) - Date.parse(handed.at)}`);
+
 console.log(lines.join("\n"));
