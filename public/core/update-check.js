@@ -12,6 +12,15 @@
 // while a turn is still writing into a console. Either one HOLDS the chip — it appears, says why,
 // and acts when the page goes idle.
 //
+// THE CHIP'S SECOND HALF. Hovering it (or focusing its Reload button) opens the build a reload would
+// put into service - the release number and the short hash, like "1.76.25 · d25f985c" - and one line
+// for every release between the build this tab is running and the build on disk: that release's top
+// non-docs CHANGELOG.md bullet, or "no changelog line found" when it has none. The shell stamps the
+// release number this tab was served as (meta panel-version), because the build hash cannot say which
+// release those bytes were; GET /api/build answers the range from a changelog parse it holds against
+// the file's mtime, so this page's 30 second poll never reads the file. The rows themselves are pure
+// data (`buildRows`, exported for test/update-check.test.js) - no document is needed to decide them.
+//
 // The decision itself is pure (`reloadDecision`, exported on globalThis.wtUpdateCheck) so
 // test/update-check.test.js can drive every combination without a browser; everything below the
 // export is the page half, and it is skipped when there is no document (the node import).
@@ -38,7 +47,32 @@
     return { action: "prompt", hold: false, reason: "prompt" };
   }
 
-  root.wtUpdateCheck = { MODES, DEFAULT_MODE, normaliseMode, reloadDecision };
+  const NO_LINE = "no changelog line found";
+
+  // What the expanded chip says, as data. `head` is the build a reload would put into service - the
+  // release number and the short hash - and `rows` is one line per release between this tab's build
+  // and that one. A release with no non-docs bullet is still a row: the sentence is the answer, a
+  // blank line is not. `note` says why there are no rows, which is a different thing from none.
+  function buildRows({ served: answer = null, loadedSemver = "" } = {}) {
+    const restart = (answer && answer.restart) || {};
+    const semver = restart.semver || (answer && answer.semver) || "";
+    const hash = shortHash(restart.version || (answer && answer.version));
+    const rows = [];
+    const releases = answer && Array.isArray(answer.releases) ? answer.releases : [];
+    for (const release of releases) {
+      if (!release || !release.version) continue;
+      rows.push({ version: String(release.version), line: release.note ? String(release.note) : NO_LINE });
+    }
+    const since = (answer && answer.since) || (loadedSemver ? String(loadedSemver) : "");
+    const note = rows.length
+      ? ""
+      : !since
+        ? "this tab did not name the version it is running"
+        : "no released version between this build and the one on disk";
+    return { head: semver ? `${semver} · ${hash}` : hash, rows, note };
+  }
+
+  root.wtUpdateCheck = { MODES, DEFAULT_MODE, normaliseMode, reloadDecision, buildRows, NO_LINE };
 
   if (typeof document === "undefined") return; // node:test imports the function only
 
@@ -47,6 +81,7 @@
   const WATCH_MS = 2_000;
 
   let loaded = ""; // the version this tab loaded with
+  let loadedSemver = ""; // the release this tab was served as (the shell's panel-version meta)
   let served = null; // the last /api/build answer
   let pollTimer = 0;
   let watchTimer = 0;
@@ -55,6 +90,12 @@
 
   function short(v) {
     return v ? String(v).slice(0, 12) : "unknown";
+  }
+
+  // The expanded panel names the build the way a reader says it: the release number and the first
+  // eight characters of the hash they would be on after a reload.
+  function shortHash(v) {
+    return v ? String(v).slice(0, 8) : "unknown";
   }
 
   function readMode() {
@@ -81,6 +122,13 @@
     const tagged = document.querySelector('script[src*="?v="]');
     const m = tagged && /[?&]v=([^&#]+)/.exec(tagged.getAttribute("src") || "");
     return m ? m[1] : "";
+  }
+
+  // The release this tab was served as. A shell from a panel older than this one carries no
+  // panel-version meta; the chip then names the disk build alone rather than inventing a range.
+  function metaSemver() {
+    const meta = document.querySelector('meta[name="panel-version"]');
+    return (meta && meta.getAttribute("content")) || "";
   }
 
   // Is there text in this page that a reload would destroy? Deliberately explicit rather than a
@@ -158,12 +206,52 @@
     el = document.createElement("div");
     el.id = "update-chip";
     el.className = "update-chip hidden";
-    el.setAttribute("role", "status");
-    el.setAttribute("aria-live", "polite");
-    el.innerHTML = '<span class="uc-text"></span><button type="button" class="uc-reload">Reload</button>';
+    // The live region is the chip's SENTENCE, not the chip: the panel is hover-only content and a
+    // reader on a screen reader should not be read a release list they did not ask for.
+    el.innerHTML =
+      '<span class="uc-text" role="status" aria-live="polite"></span>' +
+      '<button type="button" class="uc-reload">Reload</button>' +
+      '<div class="uc-panel">' +
+      '<div class="uc-restart"></div>' +
+      '<ul class="uc-releases"></ul>' +
+      '<div class="uc-empty"></div>' +
+      "</div>";
     el.querySelector(".uc-reload").addEventListener("click", () => reloadOnto());
     document.body.appendChild(el);
     return el;
+  }
+
+  let painted = "";
+
+  // Repainted only when its content moved: paint() runs every two seconds while the chip is up, and
+  // rebuilding the list under a hovering reader would steal the panel's scroll position.
+  function paintPanel() {
+    const el = document.getElementById("update-chip");
+    if (!el) return;
+    const rows = buildRows({ served, loadedSemver });
+    const key = JSON.stringify(rows);
+    if (key === painted) return;
+    painted = key;
+    const head = el.querySelector(".uc-restart");
+    if (head) head.textContent = rows.head;
+    const list = el.querySelector(".uc-releases");
+    if (list) {
+      while (list.firstChild) list.removeChild(list.firstChild);
+      for (const row of rows.rows) {
+        const item = document.createElement("li");
+        const version = document.createElement("span");
+        version.className = "uc-ver";
+        version.textContent = row.version;
+        const line = document.createElement("span");
+        line.className = "uc-line";
+        line.textContent = row.line;
+        item.appendChild(version);
+        item.appendChild(line);
+        list.appendChild(item);
+      }
+    }
+    const empty = el.querySelector(".uc-empty");
+    if (empty) empty.textContent = rows.note;
   }
 
   function paint(decision) {
@@ -175,6 +263,7 @@
     const btn = el.querySelector(".uc-reload");
     btn.disabled = Boolean(decision.hold);
     btn.title = decision.hold ? `reload this tab once ${why} is gone` : "reload this tab onto the new build";
+    paintPanel();
     el.classList.remove("hidden");
   }
 
@@ -242,7 +331,10 @@
     try {
       // The page's own transport: the deadline, the token and the 403 sentence are the same facts
       // every other call uses. A read needs no token, so this changes nothing about the guard.
-      const r = await apiFetch("/api/build", { cache: "no-store" }, { timeoutMs: 8000 });
+      // The tab names the release it was served as, so the server can list the releases between it
+      // and the build on disk. A tab from a shell that carried no number asks without it.
+      const query = loadedSemver ? `?since=${encodeURIComponent(loadedSemver)}` : "";
+      const r = await apiFetch(`/api/build${query}`, { cache: "no-store" }, { timeoutMs: 8000 });
       if (!r.ok) throw new Error(`the panel answered ${r.status}`);
       const d = await r.json();
       if (!d || !d.version) throw new Error("the answer carried no build version");
@@ -273,6 +365,7 @@
 
   function init() {
     loaded = metaVersion();
+    loadedSemver = metaSemver();
     paintVersionRow();
     const select = document.getElementById("update-mode");
     if (select) {
