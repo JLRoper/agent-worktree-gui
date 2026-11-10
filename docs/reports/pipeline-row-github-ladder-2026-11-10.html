@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The GitHub ladder as one queue row - rung 2</title>
+<style>
+  :root{ color-scheme:dark; --ink:#e8e6e1; --paper:#14161a; --rule:#2a2f38; --muted:#9aa3ad; --accent:#c8a6ff; --bar:#6f4fa8; --warn:#e5534b; --good:#6fcf97; --sunk:#1a1d22; }
+  html,body{ margin:0; background:var(--paper); color:var(--ink); font:15px/1.55 -apple-system,Segoe UI,Helvetica,Arial,sans-serif; }
+  main{ max-width:1140px; margin:0 auto; padding:36px 28px 80px; }
+  h1{ font-size:26px; margin:0 0 4px; letter-spacing:-.01em; }
+  h2{ font-size:19px; margin:38px 0 10px; padding-bottom:6px; border-bottom:1px solid var(--rule); }
+  h3{ font-size:16px; margin:24px 0 8px; }
+  .sub{ color:var(--muted); margin:0 0 22px; max-width:960px; }
+  .cards{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin:18px 0 6px; }
+  .card{ border:1px solid var(--rule); border-radius:10px; padding:12px 14px; }
+  .card b{ display:block; font-size:22px; letter-spacing:-.02em; }
+  .card span{ color:var(--muted); font-size:13px; }
+  table{ border-collapse:collapse; width:100%; font-size:14px; }
+  .tw{ overflow-x:auto; margin:8px 0 4px; }
+  th,td{ text-align:left; padding:6px 8px; border-bottom:1px solid var(--rule); vertical-align:top; }
+  th{ color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+  td.n{ text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  code{ font:13px ui-monospace,Consolas,monospace; background:rgba(127,127,127,.12); padding:1px 5px; border-radius:4px; overflow-wrap:anywhere; }
+  .verdict{ border-left:3px solid var(--accent); padding:10px 0 10px 14px; margin:18px 0 6px; }
+  .verdict b{ display:block; margin-bottom:4px; }
+  .note{ border-left:3px solid var(--accent); padding:6px 0 6px 12px; color:var(--muted); margin:14px 0; }
+  .note b{ color:var(--ink); }
+  .warnbox{ border-left:3px solid var(--warn); padding:6px 0 6px 12px; margin:14px 0; }
+  .warnbox b{ color:var(--warn); }
+  ol,ul{ padding-left:22px; }
+  ol li, ul li{ margin:6px 0; }
+  .tag{ font-size:11px; padding:1px 6px; border:1px solid var(--rule); border-radius:10px; color:var(--muted); white-space:nowrap; }
+  .tag.yes{ border-color:var(--good); color:var(--good); }
+  .tag.no{ border-color:var(--warn); color:var(--warn); }
+  .small{ font-size:13px; color:var(--muted); }
+  .two{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media (max-width:760px){ .two{ grid-template-columns:1fr; } }
+  pre.cmd{ background:rgba(127,127,127,.10); border:1px solid var(--rule); border-radius:8px; padding:10px 12px; overflow-x:auto; font:12.5px/1.5 ui-monospace,Consolas,monospace; white-space:pre-wrap; overflow-wrap:anywhere; }
+  .chain{ font:15px ui-monospace,Consolas,monospace; margin:10px 0 2px; }
+</style>
+</head>
+<body>
+<main>
+<h1>The GitHub ladder as one queue row</h1>
+<p class="sub">Rung 2 of the pipeline-execution next moves, report section 2.2. A row filed on
+<code>github-force-merge</code> at stage <code>commit</code> was driven through <code>driveTaskPipelines</code>, the sweep
+that moves the panel's queue, not through the resolver. Base <code>origin/main</code> <code>23fbe197</code>
+(1.80.8), walked 03:24:25Z to 04:39:30Z on 2026-11-10, collected
+04:41:06Z.</p>
+
+<div class="verdict">
+  <b>The row read <code>done</code>: six stage runs in document order, one visit each, five crossings, no skip and no loop.</b>
+  The stages made a real commit, a real version bump, a real push, a real pull request and a real merge on
+  <code>JLRoper/agent-worktree-gui</code>: 2 PRs merged, the merged commit <code>2fceb7e0</code> is on
+  <code>origin/main</code>, and <code>1.80.9</code> is the version main carries. Total wall clock 75 minutes.
+</div>
+
+<div class="cards">
+  <div class="card"><b>6</b><span>stage runs on the row</span></div>
+  <div class="card"><b>6/6</b><span>settled done</span></div>
+  <div class="card"><b>5/5</b><span>handoffs crossed once</span></div>
+  <div class="card"><b>0</b><span>stages skipped</span></div>
+  <div class="card"><b>0</b><span>loops (no revisit)</span></div>
+  <div class="card"><b>0</b><span>rounds cut</span></div>
+</div>
+
+<h2>1. The row as the panel read it</h2>
+<p class="chain"><code>commit</code> &rarr; <code>version</code> &rarr; <code>push</code> &rarr; <code>pr</code> &rarr; <code>merge</code> &rarr; <code>main</code></p>
+<p class="small">Row 1 <code>Rung 2: the GitHub ladder as a queue row</code>, state <code>done</code>,
+reason <code>PR reads MERGED (squash/rebase, 6 commits)</code>, order 1, project agent-worktree-gui, thread
+<code>wtgui-commit-everything-in-this-tr-0ae87a</code>, done at 04:39:30Z. No round: <code>round</code> is absent from the run, so
+the row stays on the shared model. Tree <code>.../pipeline-row-rung-2-6f9dd4</code> on branch
+<code>wtgui/pipeline-row-rung-2-6f9dd4</code>, which is the tree the row was filed with.</p>
+
+<div class="tw">
+<table>
+<tr><th>stage run</th><th>stage</th><th>status</th><th class="n">started</th><th class="n">settled</th><th class="n">held</th><th>commit at start</th><th>tree after</th></tr>
+<tr><td><code>github-force-merge/commit#1</code></td><td>commit</td><td><span class='tag yes'>done</span></td><td class='n'>03:24:25</td><td class='n'>03:35:45</td><td class='n'>11m 20s</td><td class='n'><code>f3612b1233</code></td><td>clean at <code>f3612b12</code></td></tr><tr><td><code>github-force-merge/version#1</code></td><td>version</td><td><span class='tag yes'>done</span></td><td class='n'>03:35:45</td><td class='n'>03:43:50</td><td class='n'>8m 05s</td><td class='n'><code>fefe40018c</code></td><td>clean at <code>fefe4001</code></td></tr><tr><td><code>github-force-merge/push#1</code></td><td>push</td><td><span class='tag yes'>done</span></td><td class='n'>03:43:50</td><td class='n'>03:49:14</td><td class='n'>5m 24s</td><td class='n'><code>58972a93a0</code></td><td>clean at <code>58972a93</code></td></tr><tr><td><code>github-force-merge/pr#1</code></td><td>pr</td><td><span class='tag yes'>done</span></td><td class='n'>03:49:14</td><td class='n'>04:03:56</td><td class='n'>14m 42s</td><td class='n'><code>005d4d9bef</code></td><td>clean at <code>005d4d9b</code></td></tr><tr><td><code>github-force-merge/merge#1</code></td><td>merge</td><td><span class='tag yes'>done</span></td><td class='n'>04:03:56</td><td class='n'>04:14:52</td><td class='n'>10m 56s</td><td class='n'><code>20f6afcf52</code></td><td>clean at <code>20f6afcf</code></td></tr><tr><td><code>github-force-merge/main#1</code></td><td>main</td><td><span class='tag yes'>done</span></td><td class='n'>04:14:52</td><td class='n'>04:39:30</td><td class='n'>24m 38s</td><td class='n'><code>89eb3afe81</code></td><td>clean at <code>89eb3afe</code></td></tr>
+</table>
+</div>
+<p class="small">One run entry per stage, created in this order by the sweep as each previous stage settled. The held
+column is the stage's own wall clock. All stamps UTC on 2026-11-10.</p>
+
+<h2>2. The crossings</h2>
+<div class="tw">
+<table>
+<tr><th>handoff</th><th>from &rarr; to</th><th class="n">crossings</th><th>verdict</th></tr>
+<tr><td><code>H-01</code></td><td>commit &rarr; version</td><td class='n'>1</td><td><span class='tag yes'>crossed once</span></td></tr><tr><td><code>H-02</code></td><td>version &rarr; push</td><td class='n'>1</td><td><span class='tag yes'>crossed once</span></td></tr><tr><td><code>H-03</code></td><td>push &rarr; pr</td><td class='n'>1</td><td><span class='tag yes'>crossed once</span></td></tr><tr><td><code>H-04</code></td><td>pr &rarr; merge</td><td class='n'>1</td><td><span class='tag yes'>crossed once</span></td></tr><tr><td><code>H-05</code></td><td>merge &rarr; main</td><td class='n'>1</td><td><span class='tag yes'>crossed once</span></td></tr>
+</table>
+</div>
+<p class="small">Every handoff is declared <code>sequence</code>, so each answers <code>advance</code> when its stage
+settles and the sweep walks it. The row's <code>via</code> named the handoff it had just crossed: it ended on
+<code>H-05</code>. A <code>loop</code> handoff would show more than one crossing and would re-open an
+earlier stage; none did, and each stage has exactly one run entry, which is what "no skip and no loop" looks like in the
+row's own record.</p>
+
+<h3>The row's own record (condensed: the full object is in the evidence file)</h3>
+<pre class="cmd">{
+ &quot;pipeline&quot;: &quot;github-force-merge&quot;,
+ &quot;stage&quot;: &quot;main&quot;,
+ &quot;enteredAt&quot;: &quot;2026-11-10T04:14:52.484Z&quot;,
+ &quot;visits&quot;: {
+  &quot;commit&quot;: 1,
+  &quot;version&quot;: 1,
+  &quot;push&quot;: 1,
+  &quot;pr&quot;: 1,
+  &quot;merge&quot;: 1,
+  &quot;main&quot;: 1
+ },
+ &quot;tree&quot;: {
+  &quot;path&quot;: &quot;.../pipeline-row-rung-2-6f9dd4&quot;,
+  &quot;branch&quot;: &quot;wtgui/pipeline-row-rung-2-6f9dd4&quot;
+ },
+ &quot;crossings&quot;: {
+  &quot;H-01&quot;: 1,
+  &quot;H-02&quot;: 1,
+  &quot;H-03&quot;: 1,
+  &quot;H-04&quot;: 1,
+  &quot;H-05&quot;: 1
+ },
+ &quot;route&quot;: &quot;sha256:e87c4512aa792cb3ff31b66b1ab57f73ee7e788154fc4fe10b1d7ccbc18acc6a&quot;,
+ &quot;via&quot;: &quot;H-05&quot;,
+ &quot;startingAt&quot;: &quot;2026-11-10T04:14:52.484Z&quot;,
+ &quot;stageRuns&quot;: [
+  {
+   &quot;id&quot;: &quot;github-force-merge/commit#1&quot;,
+   &quot;stage&quot;: &quot;commit&quot;,
+   &quot;visit&quot;: 1,
+   &quot;at&quot;: &quot;2026-11-10T03:24:25.112Z&quot;,
+   &quot;settledAt&quot;: &quot;2026-11-10T03:35:45.317Z&quot;,
+   &quot;status&quot;: &quot;done&quot;,
+   &quot;commit&quot;: &quot;f3612b1233&quot;,
+   &quot;job&quot;: &quot;b24d0e2c&quot;,
+   &quot;tree&quot;: {
+    &quot;head&quot;: &quot;f3612b12&quot;,
+    &quot;dirty&quot;: 0
+   },
+   &quot;decision&quot;: &quot;stage-settled&quot;
+  },
+  {
+   &quot;id&quot;: &quot;github-force-merge/version#1&quot;,
+   &quot;stage&quot;: &quot;version&quot;,
+   &quot;visit&quot;: 1,
+   &quot;at&quot;: &quot;2026-11-10T03:35:45.317Z&quot;,
+   &quot;settledAt&quot;: &quot;2026-11-10T03:43:50.825Z&quot;,
+   &quot;status&quot;: &quot;done&quot;,
+   &quot;commit&quot;: &quot;fefe40018c&quot;,
+   &quot;job&quot;: &quot;e8f29b04&quot;,
+   &quot;tree&quot;: {
+    &quot;head&quot;: &quot;fefe4001&quot;,
+    &quot;dirty&quot;: 0
+   },
+   &quot;decision&quot;: &quot;stage-settled&quot;
+  },
+  {
+   &quot;id&quot;: &quot;github-force-merge/push#1&quot;,
+   &quot;stage&quot;: &quot;push&quot;,
+   &quot;visit&quot;: 1,
+   &quot;at&quot;: &quot;2026-11-10T03:43:50.825Z&quot;,
+   &quot;settledAt&quot;: &quot;2026-11-10T03:49:14.090Z&quot;,
+   &quot;status&quot;: &quot;done&quot;,
+   &quot;commit&quot;: &quot;58972a93a0&quot;,
+   &quot;job&quot;: &quot;0aa282c6&quot;,
+   &quot;tree&quot;: {
+    &quot;head&quot;: &quot;58972a93&quot;,
+    &quot;dirty&quot;: 0
+   },
+   &quot;decision&quot;: &quot;stage-settled&quot;
+  },
+  {
+   &quot;id&quot;: &quot;github-force-merge/pr#1&quot;,
+   &quot;stage&quot;: &quot;pr&quot;,
+   &quot;visit&quot;: 1,
+   &quot;at&quot;: &quot;2026-11-10T03:49:14.090Z&quot;,
+   &quot;settledAt&quot;: &quot;2026-11-10T04:03:56.129Z&quot;,
+   &quot;status&quot;: &quot;done&quot;,
+   &quot;commit&quot;: &quot;005d4d9bef&quot;,
+   &quot;job&quot;: &quot;f2005785&quot;,
+   &quot;tree&quot;: {
+    &quot;head&quot;: &quot;005d4d9b&quot;,
+    &quot;dirty&quot;: 0
+   },
+   &quot;decision&quot;: &quot;stage-settled&quot;
+  },
+  {
+   &quot;id&quot;: &quot;github-force-merge/merge#1&quot;,
+   &quot;stage&quot;: &quot;merge&quot;,
+   &quot;visit&quot;: 1,
+   &quot;at&quot;: &quot;2026-11-10T04:03:56.129Z&quot;,
+   &quot;settledAt&quot;: &quot;2026-11-10T04:14:52.484Z&quot;,
+   &quot;status&quot;: &quot;done&quot;,
+   &quot;commit&quot;: &quot;20f6afcf52&quot;,
+   &quot;job&quot;: &quot;e11e39eb&quot;,
+   &quot;tree&quot;: {
+    &quot;head&quot;: &quot;20f6afcf&quot;,
+    &quot;dirty&quot;: 0
+   },
+   &quot;decision&quot;: &quot;stage-settled&quot;
+  },
+  {
+   &quot;id&quot;: &quot;github-force-merge/main#1&quot;,
+   &quot;stage&quot;: &quot;main&quot;,
+   &quot;visit&quot;: 1,
+   &quot;at&quot;: &quot;2026-11-10T04:14:52.484Z&quot;,
+   &quot;settledAt&quot;: &quot;2026-11-10T04:39:30.426Z&quot;,
+   &quot;status&quot;: &quot;done&quot;,
+   &quot;commit&quot;: &quot;89eb3afe81&quot;,
+   &quot;job&quot;: &quot;067da824&quot;,
+   &quot;tree&quot;: {
+    &quot;head&quot;: &quot;89eb3afe&quot;,
+    &quot;dirty&quot;: 0
+   },
+   &quot;decision&quot;: &quot;stage-settled&quot;
+  }
+ ]
+}</pre>
+
+<h2>3. What refused, and what changed</h2>
+<p>The row was filed with a real work branch. The driver at <code>origin/main</code> refused it: a queued pipeline row
+with no tree of its own answered <code>needed</code>, so the sweep asked for a round's parent tree and no stage could
+start. That is the same lookup that let row 50 of the 2026-11-09 round report commit into the project checkout, because
+it took the filed <code>worktree</code> at its word.</p>
+
+<div class="two">
+<div>
+<h3>Before: the driver at origin/main</h3>
+<pre class="cmd">ensureTree: 1 cut owed
+  { role: "row", base: null, parent: null }
+starts: 0
+row.tree: null
+row.stageRuns: []</pre>
+<p class="small">Same row, same tree facts, same probe: the filed tree is ignored and a round cut is owed.</p>
+</div>
+<div>
+<h3>After: this tree's driver</h3>
+<pre class="cmd">ensureTree: 0
+starts: 1, in the filed tree (existing: true)
+row.tree: {&quot;path&quot;: &quot;.../pipeline-row-rung-2-6f9dd4&quot;, &quot;branch&quot;: &quot;wtgui/pipeline-row-rung-2-6f9dd4&quot;}
+row.stageRuns: [&quot;commit&quot;]</pre>
+<p class="small">The stage starts in the filed tree, no round, and the branch is recorded and named in the brief.</p>
+</div>
+</div>
+
+<p><code>filedTreeOf</code> in <code>lib/task-pipeline-drive.js</code> reads that one case, and only under four facts: the
+row is queued and has not started; the pipeline is not <code>per-stage</code>, because a per-stage round still cuts one
+child per stage; the directory exists; and the panel's own git read answers a branch for it that is not a trunk. A filed
+path on <code>main</code>, which is the checkout from row 50, is still refused and still cuts the round's parent tree.
+The stage brief also names the branch now: it read a field the lookup never sets, so every brief had said
+<code>(unknown)</code> even when the row carried the branch.</p>
+
+<p>The change is <code>04e3a150</code> on this tree's branch: <code>lib/task-pipeline-drive.js</code>,
+<code>test/task-pipeline-drive.test.js</code>, and the paragraph in <code>docs/task-pipeline.md</code> that said a row's
+<code>worktree</code> never names a tree before the cut.</p>
+
+<h2>4. The landing on the scratch repo</h2>
+<div class="tw">
+<table>
+<tr><th>pull request</th><th>title</th><th>state</th><th class="n">merged</th><th>merge commit</th></tr>
+<tr><td><a href='https://github.com/JLRoper/agent-worktree-gui/pull/684'>#684</a></td><td>docs: the GitHub ladder has no loop to cross</td><td><span class='tag yes'>MERGED</span></td><td class='n'>04:04:55</td><td><code>2fceb7e0d503</code></td></tr><tr><td><a href='https://github.com/JLRoper/agent-worktree-gui/pull/686'>#686</a></td><td>docs: record the ladder&#x27;s main stage - the merge is on main</td><td><span class='tag yes'>MERGED</span></td><td class='n'>04:38:42</td><td><code>7fdc96acb90f</code></td></tr>
+</table>
+</div>
+<p class="small">Two PRs, because the ladder lands twice: PR 684 carries the docs one-liner, the version bump and the
+commit, push and PR records; PR 686 carries the merge and main records that the last two stages write after PR 684 was
+merged. Both were merged with <code>gh pr merge --rebase --admin</code> against <code>main</code>, by JLRoper.</p>
+
+<h3>origin/main after the row finished</h3>
+<pre class="cmd">7fdc96ac docs: record the ladder&#x27;s main stage - the merge is on main
+d1aec822 docs: record the ladder&#x27;s merge stage
+6c619dcd test: an approval gates approve only at the PR&#x27;s current head
+e7f51f57 docs: conclude round 7 - the indent is row.parent joined by branch, not the round record
+f64a4f7c docs: probe evidence for rung 7 - the round row, its stage indent, and the fields behind them
+00d94108 docs: render the changelog - 530 releases
+2fceb7e0 docs: record the ladder&#x27;s pr stage
+c0777e89 docs: record the ladder&#x27;s push stage
+780df958 chore: 1.80.9 - the version this landing carries
+76df7441 docs: the GitHub ladder has no loop to cross - all five handoffs are sequence
+23fbe197 docs: render the changelog - 529 releases
+7bbe7876 test: the GitHub gate walks as a barrier and a router, not a pause</pre>
+<p class="small"><code>origin/main</code> is <code>7fdc96acb90f</code>, 10 commits above
+<code>23fbe197</code>, version <code>1.80.9</code>. 2fceb7e0 is an ancestor of origin/main (exit 0). Four of those commits are
+another row's work that landed while this one ran, which is why the count is ten and not six: the ancestor relation
+against <code>2fceb7e0</code> is the fact that holds, not the tip's sha.</p>
+
+<h2>5. Tests</h2>
+<ul>
+  <li><code>node --test test/task-pipeline-drive.test.js</code>: 49 tests, 49 pass, 0 fail.</li>
+  <li>The 16 tests that name <code>lib/task-pipeline-drive.js</code>: 163 tests, 163 pass, 0 fail.</li>
+  <li><code>node tools/absolute-paths.mjs</code>: clean, 1461 tracked files, no new absolute path.</li>
+</ul>
+<p class="small">That is the focused set the brief names (the driver and task-pipeline tests), and it answered green.
+The full suite was left to the ladder, whose stages ran it and recorded what it said; their numbers are below because
+they are the honest state of this repo, not a green tick.</p>
+<div class="tw">
+<table>
+<tr><th>run</th><th class="n">tests</th><th class="n">pass</th><th class="n">fail</th><th>what the failures are</th></tr>
+<tr><td><code>npm run test:changed</code> at <code>fefe4001</code></td><td class="n">230</td><td class="n">229</td><td class="n">1</td><td><code>test/harness.test.js</code>, a LIVE GATE script nothing runs; proved the same on an archive of <code>origin/main</code></td></tr>
+<tr><td><code>npm test</code> at <code>fefe4001</code></td><td class="n">2360</td><td class="n">2353</td><td class="n">7</td><td>the same 7 files answer 7 failures on an archive of <code>origin/main</code></td></tr>
+<tr><td><code>npm test</code> at <code>89eb3afe</code></td><td class="n">2361</td><td class="n">2353</td><td class="n">8</td><td>5 main already carries, 1 needs a <code>config.json</code> a worktree does not have, 2 were parallel-run crashes that pass alone</td></tr>
+</table>
+</div>
+<div class="note"><b>The main stage's sweep hung, and that is worth knowing.</b> Its <code>npm test</code> stopped
+writing at 23:28:39 local with a leaked child holding the runner: <code>node --use-largepages=off
+--trace-event-file-pattern=node_trace.${rotation}.log --v8-pool-size=4 --node-snapshot ...</code>. Two other
+<code>npm test</code> runs on this host, started at 14:25 and 19:52, are still holding the same kind of child. Killing
+that one child released the runner, which then finished with exit 1 and the failures in the table. So the full suite on
+this host can wedge on a leaked child, and a stage that waits for it waits forever.</div>
+
+<h2>6. What this does not prove</h2>
+<div class="warnbox"><b>The row ran on a second panel instance, not the reader's.</b> The fix under review is what makes
+the row walk, and the reader's panel runs <code>origin/main</code>'s driver. So a panel was booted from this tree on port
+7332 with a copied store (one project, one assistant, an empty queue, its own state directory) and the row was filed
+there through <code>POST /api/assistant/queue</code>. The reader's panel was not restarted and its board is unchanged.
+The evidence is that panel's <code>queue.json</code> and <code>jobs.json</code> plus the real GitHub effects above.</div>
+<div class="warnbox"><b>The version gate did not run.</b> The scratch tree was cut by hand with
+<code>git worktree add</code>, so it carries no <code>core.hooksPath</code> and no pre-commit version check. The version
+stage's own <code>node tools/version.mjs</code> calls did run and chose 1.80.9 over 1.80.8.</div>
+<div class="warnbox"><b>The gates cannot refuse.</b> All six gates are declared with no decision, so the row paused at
+none; a ladder with a decision gate would answer <code>pause</code> and wait for a reader, which no sweep can give
+itself.</div>
+<div class="warnbox"><b>This tree's version is unchanged.</b> The scratch landing took main to 1.80.9 and created the tag
+<code>v1.80.9</code> in the shared repo; this tree still carries 1.80.8 and no bump. Its landing is the reader's
+call.</div>
+
+<h2>7. Commands behind the numbers</h2>
+<pre class="cmd">node --test test/task-pipeline-drive.test.js
+npm run test:changed -- --list
+node .../ce969122/probe.mjs file:///.../round-c-how-a-round-names-its-trees-stage-2-conclude-7ace4b .../pipeline-row-rung-2-6f9dd4 queued
+curl -s -X POST http://127.0.0.1:7332/api/assistant/queue --data-binary @row-add.json
+gh pr list --head wtgui/pipeline-row-rung-2-6f9dd4 --state all -R JLRoper/agent-worktree-gui
+git merge-base --is-ancestor 2fceb7e0 origin/main</pre>
+<p class="source">Evidence: evidence2.json beside the sandbox store, the sandbox store under
+.../ce969122/panel/data/state, and the GitHub API through <code>gh</code>. Written 2026-11-10.</p>
+</main>
+</body>
+</html>
