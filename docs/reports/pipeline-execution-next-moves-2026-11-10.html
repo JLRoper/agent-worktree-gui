@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
+<title>Pipeline execution next moves: what the ladder has proved, and the tests it implies - 2026-11-10</title>
+<style>
+  :root{ color-scheme:dark; --ink:#e8e6e1; --paper:#14161a; --rule:#2a2f38; --muted:#9aa3ad; --accent:#c8a6ff; --bar:#6f4fa8; --warn:#e5534b; --good:#6fcf97; --sunk:#1a1d22; }
+  html,body{ margin:0; background:var(--paper); color:var(--ink); font:15px/1.55 -apple-system,Segoe UI,Helvetica,Arial,sans-serif; }
+  main{ max-width:1140px; margin:0 auto; padding:36px 28px 80px; }
+  h1{ font-size:26px; margin:0 0 4px; letter-spacing:-.01em; }
+  h2{ font-size:19px; margin:38px 0 10px; padding-bottom:6px; border-bottom:1px solid var(--rule); }
+  h3{ font-size:16px; margin:24px 0 8px; }
+  .sub{ color:var(--muted); margin:0 0 22px; max-width:960px; }
+  .cards{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin:18px 0 6px; }
+  .card{ border:1px solid var(--rule); border-radius:10px; padding:12px 14px; }
+  .card b{ display:block; font-size:22px; letter-spacing:-.02em; }
+  .card span{ color:var(--muted); font-size:13px; }
+  table{ border-collapse:collapse; width:100%; font-size:14px; }
+  .tw{ overflow-x:auto; margin:8px 0 4px; }
+  th,td{ text-align:left; padding:6px 8px; border-bottom:1px solid var(--rule); vertical-align:top; }
+  th{ color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+  td.n{ text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  code{ font:13px ui-monospace,Consolas,monospace; background:rgba(127,127,127,.12); padding:1px 5px; border-radius:4px; overflow-wrap:anywhere; }
+  .verdict{ border-left:3px solid var(--accent); padding:10px 0 10px 14px; margin:18px 0 6px; }
+  .verdict b{ display:block; margin-bottom:4px; }
+  .note{ border-left:3px solid var(--accent); padding:6px 0 6px 12px; color:var(--muted); margin:14px 0; }
+  .note b{ color:var(--ink); }
+  .warnbox{ border-left:3px solid var(--warn); padding:6px 0 6px 12px; margin:14px 0; }
+  .warnbox b{ color:var(--warn); }
+  ol,ul{ padding-left:22px; }
+  ol li, ul li{ margin:6px 0; }
+  .tag{ font-size:11px; padding:1px 6px; border:1px solid var(--rule); border-radius:10px; color:var(--muted); white-space:nowrap; }
+  .tag.yes{ border-color:var(--good); color:var(--good); }
+  .tag.no{ border-color:var(--warn); color:var(--warn); }
+  .tag.warn{ border-color:var(--bar); color:var(--accent); }
+  .source{ font:12px ui-monospace,Consolas,monospace; color:var(--muted); }
+  .lead{ color:var(--muted); }
+  .small{ font-size:13px; color:var(--muted); }
+  .pass{ border:1px solid var(--rule); border-radius:10px; padding:12px 16px; margin:12px 0; background:var(--sunk); }
+  .pass h3{ margin:0 0 4px; }
+  .pass p{ margin:0 0 6px; }
+  .pass ol{ margin:6px 0 0; }
+  .pass li{ margin:4px 0; }
+  .two{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media (max-width:760px){ .two{ grid-template-columns:1fr; } }
+  .k{ color:var(--accent); font-weight:600; }
+  pre.cmd{ background:rgba(127,127,127,.10); border:1px solid var(--rule); border-radius:8px; padding:10px 12px; overflow-x:auto; font:12.5px/1.5 ui-monospace,Consolas,monospace; white-space:pre-wrap; overflow-wrap:anywhere; }
+  .rung{ border-top:1px solid var(--rule); margin-top:30px; padding-top:4px; }
+  .rung h3{ font-size:17px; }
+  .rung .num{ color:var(--accent); }
+  .evidence{ color:var(--muted); font-size:13px; }
+  .walk th, .walk td:nth-child(2), .walk td:nth-child(4), .walk td:nth-child(6){ white-space:nowrap; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Pipeline execution next moves: what the ladder has proved, and the tests it implies</h1>
+<p class="sub">What the panel's landing ladders have proved since the 2026-11-09 stage map and round report, read at <code>origin/main 33d9f8d9</code> (1.80.7) on 2026-11-10 02:12Z. Then the next moves as one ordered ladder: eight tests, each naming what it proves, the acceptance evidence it needs, and the queue row it implies. No product code was changed to produce this page.</p>
+
+<div class="cards">
+  <div class="card"><b>6 of 6</b><span>GitHub stages visited, 0 skipped, 0 loops</span></div>
+  <div class="card"><b>0 of 6</b><span>GitHub gates carrying a decision record</span></div>
+  <div class="card"><b>3</b><span>review-wait changes landed since 2026-11-09 (#677, #680, #681)</span></div>
+  <div class="card"><b>28 / 28</b><span>review-wait tests passing at this read</span></div>
+  <div class="card"><b>11 / 11</b><span>chart and seed tests passing at this read</span></div>
+</div>
+
+<div class="verdict">
+  <b>The short answer</b>
+  <p>The ladder has proved its shape and its reviewer path. The GitHub walk visits all six stages with no skip and no loop, but it reads no gate: all six gates are pauses because none carries a decision record. The review loop now has both halves of a wait, the edge that takes a comment back to <code>address</code> (PR #677) and the registration that lets a live PDL row register that wait (PR #681), with H-04 crossed at most three times and the fourth refused. The round parent is now cut from <code>origin/main</code> and recorded as <code>parentRef: "origin/main"</code>, so it draws beside main instead of nesting under it (PR #680). What the ladder still has not proved is the terminal: a gate that can refuse, an approval that gates the merge on a real row, a comment answered end to end, a refused merge recorded and parked, and a PR that is correct because it stays open. The eight rungs below are those tests, in the order each one unlocks the next.</p>
+</div>
+
+<h2 id="proved">1. What the ladder has proved since 2026-11-09</h2>
+<p>Three landings and one test change since the 2026-11-09 reports are the evidence. Each claim below names the commit or PR behind it, and the test that keeps it. The read is <code>origin/main 33d9f8d9</code>; the two reports this page continues are <code>docs/reports/pipeline-execution-next-test-2026-11-09.html</code> and <code>docs/reports/pipeline-rounds-parent-tree-2026-11-09.html</code>.</p>
+
+<h3 id="walk">1.1 The GitHub landing walk: 6 of 6 stages, no skips, no loops, 0 of 6 gates with a decision</h3>
+<p>The shipped <code>github-force-merge</code> ladder is six stages and five handoffs. A walk from <code>commit</code> through the panel's own resolver enters all six once, in the document's order, and ends on <code>main</code>. That result was recorded at <code>4ff3ab7e</code> (<i>docs: walk the GitHub ladder and file its two next moves</i>, 2026-11-09 19:06 -0500), and the shape was pinned by <code>a5412657</code> (<i>test: the GitHub ladder has no loop to cross - every handoff is a sequence</i>, 2026-11-09 20:20 -0500). Re-walked at <code>33d9f8d9</code> for this page, it still reads the same.</p>
+
+<div class="tw"><table class="walk">
+  <thead><tr><th>#</th><th>Stage</th><th>Artifact kind</th><th>Gate</th><th><code>verified_by</code></th><th><code>decision</code>?</th><th>Handoff out</th></tr></thead>
+  <tbody>
+    <tr><td class="n">1</td><td><code>commit</code></td><td><code>file</code></td><td>G1</td><td><code>commits &gt;= 1</code></td><td><span class="tag no">no</span></td><td>H-01 <code>sequence</code></td></tr>
+    <tr><td class="n">2</td><td><code>version</code></td><td><code>file</code></td><td>G2</td><td><code>command node tools/version.mjs check</code></td><td><span class="tag no">no</span></td><td>H-02 <code>sequence</code></td></tr>
+    <tr><td class="n">3</td><td><code>push</code></td><td><code>pr</code></td><td>G3</td><td><code>pushed</code></td><td><span class="tag no">no</span></td><td>H-03 <code>sequence</code></td></tr>
+    <tr><td class="n">4</td><td><code>pr</code></td><td><code>pr</code></td><td>G4</td><td><code>pr-open</code></td><td><span class="tag no">no</span></td><td>H-04 <code>sequence</code></td></tr>
+    <tr><td class="n">5</td><td><code>merge</code></td><td><code>pr</code></td><td>G5</td><td><code>pr-merged</code></td><td><span class="tag no">no</span></td><td>H-05 <code>sequence</code></td></tr>
+    <tr><td class="n">6</td><td><code>main</code></td><td><code>pr</code></td><td>G6</td><td><code>main-moved</code></td><td><span class="tag no">no</span></td><td>ends here</td></tr>
+  </tbody>
+</table></div>
+
+<pre class="cmd">bundle: SEFL pipelines | bundleVersion 1 | pipelines 11
+
+=== github-force-merge ===
+declared order: commit -&gt; version -&gt; push -&gt; pr -&gt; merge -&gt; main
+gates with a decision record: 0 of 6
+1. commit  | artifact file | gate G1 | verified_by commits &gt;= 1                          | barrier no | H-01 sequence commit-&gt;version
+2. version | artifact file | gate G2 | verified_by command node tools/version.mjs check   | barrier no | H-02 sequence version-&gt;push
+3. push    | artifact pr   | gate G3 | verified_by pushed                              | barrier no | H-03 sequence push-&gt;pr
+4. pr      | artifact pr   | gate G4 | verified_by pr-open                             | barrier no | H-04 sequence pr-&gt;merge
+5. merge   | artifact pr   | gate G5 | verified_by pr-merged                           | barrier no | H-05 sequence merge-&gt;main
+6. main    | artifact pr   | gate G6 | verified_by main-moved                          | barrier no | ends here
+stages visited: 6 of 6
+order: commit -&gt; version -&gt; push -&gt; pr -&gt; merge -&gt; main
+skipped: none
+loops taken: none</pre>
+
+<p class="source">Probe: <code>readBundle</code> from <code>lib/pipeline-bundle.js:522</code> plus <code>nextStageOf</code> from <code>lib/task-pipeline-drive.js:928</code>, one call per stage at <code>origin/main 33d9f8d9</code>. The <code>barrier</code> column asks <code>gateAfter</code> (<code>lib/task-pipeline-drive.js:876</code>), whose only test is whether the gate carries an object <code>decision</code>. The pin is <code>test/pipeline-bundle-seed.test.js:140-148</code>: every handoff in this ladder is a <code>sequence</code>, so a walk from <code>commit</code> visits all six once and there is no loop to cross.</p>
+
+<div class="two">
+  <div class="pass">
+    <h3>Proved</h3>
+    <ul>
+      <li>The GitHub ladder has six stages and five sequence handoffs; no stage is skipped and no loop is taken.</li>
+      <li>The gates are pauses, not checks: <code>gateAfter</code> returns null for all six because none carries a <code>decision</code>, so the driver advances on the stage's run and its artifact.</li>
+      <li>The stage order is stable across the 2026-11-09 walk and this read; the seed test pins the five-sequence shape.</li>
+    </ul>
+  </div>
+  <div class="pass">
+    <h3>Not proved</h3>
+    <ul>
+      <li>That any GitHub gate can refuse a stage. The <code>verified_by</code> sentences are not read by the driver.</li>
+      <li>That a queue row walks the ladder. The 2026-11-09 walk was a resolver read, not a panel row: there are no <code>stageRuns</code> and no row <code>done</code>.</li>
+      <li>That <code>pr-head</code> or <code>main-moved</code> is a host fact. Both are worker prose at the stages that name them.</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="waits">1.2 The review waits: both halves of a wait are now registered</h3>
+<p>The 2026-11-09 report named the review loop's gap as two halves: the graph took H-06 to <code>approve</code> before H-04 to <code>address</code>, and the timer read <code>stage.exit.check</code>, which a PDL stage does not have. The two landings closed one half each. They are complementary, and neither alone is a live row.</p>
+
+<div class="tw"><table>
+  <thead><tr><th>Landing</th><th>What it changed</th><th>Merge</th><th>The tests that keep it</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><b>PR #677</b><br><span class="small"><i>fix: route a review comment to the answer stage before the approval</i></span></td>
+      <td><code>edgeOutOf</code> and <code>nextStageOf</code> take the wait's review fact: a comment newer than the wait's <code>lastSeen</code> takes H-04 to <code>address</code>, ahead of H-06 to <code>approve</code>. The timer advances through the same rail, so a due wait enters <code>address</code> by H-04, counts the crossing, and the fourth crossing is refused by H-04's cap with the wait closed for a decision.</td>
+      <td><code>bb9cbe7a</code><br><span class="small">2026-11-10T01:04:11Z</span></td>
+      <td><code>test/pipeline-review-loop.test.js:86</code> (comment enters <code>address</code>, returns to <code>wait</code>, then reaches <code>approve</code>); <code>:123</code> (H-04 at most three times, the fourth stops the walk at the cap); <code>test/pipeline-wait.test.js:361</code>, <code>:388</code></td>
+    </tr>
+    <tr>
+      <td><b>PR #681</b><br><span class="small"><i>fix: register a review wait for a live PDL row</i></span></td>
+      <td><code>reviewExitOf</code> reads the review fact from the document the stage came from: a ladder stage's <code>exit</code>, or the gate after a PDL stage (<code>verified_by</code>), found by <code>reviewGateFor</code>. <code>registerPipelineWait</code> names the PDL document on the wait, because a PDL row's tree is cut <code>local</code> and never moves. <code>reviewWaitStage</code> and the sweep resolve the definition from the wait's pipeline first, and the sweep walks <code>nextStageOf</code> at the stage the wait names. H-04, H-05 and the 3-crossing cap are unchanged.</td>
+      <td><code>858ebf37</code><br><span class="small">2026-11-10T01:39:22Z</span></td>
+      <td><code>test/pipeline-wait.test.js:746</code> (a PDL row's wait stage registers G4's review fact and names the document); <code>:781</code> (a newer comment sends the sweep to <code>address</code>, H-05 returns it); <code>:818</code> (the fourth comment closes the wait at the same cap)</td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p>The code paths at this read:</p>
+<ul>
+  <li><code>lib/task-pipeline-drive.js:213</code> <code>reviewEdgeOutOf</code> gives the rail the review fact before the kind order; <code>:928</code> <code>nextStageOf</code> takes it, and <code>:1049-1073</code> enforces the loop's cap.</li>
+  <li><code>lib/pipelines.js:709</code> <code>reviewGateFor</code> and <code>:726</code> <code>reviewExitOf</code> read the gate's <code>verified_by</code> when the stage has no <code>exit</code>; <code>:586</code> is the closed review-check set (<code>pr-comments</code>, <code>pr-approved</code>, <code>reviewers-exact</code>).</li>
+  <li><code>lib/jobs.js:2325</code> <code>registerPipelineWait</code> writes the wait on the tree record; <code>:2472</code> is the sweep's <code>nextStageOf</code> call.</li>
+</ul>
+
+<div class="note">
+  <b>The two halves, in one sentence.</b>
+  PR #677 makes the edge exist; PR #681 makes the timer able to name it. A live PDL row is still the missing witness: the tests use a tree record and a definition, not a queue row that has run two comments through <code>address</code>.
+</div>
+
+<h3 id="parent">1.3 The round parent: <code>parentRef: "origin/main"</code>, beside main and not under it</h3>
+<p>Before PR #680 a pipeline round's parent tree was recorded with <code>parent: "main"</code>, so the worktree chart nested every round under the checkout's <code>main</code> row. The landing changed the cut and the record, not the chart's grouping rule.</p>
+
+<ul>
+  <li><code>lib/assistant.js</code>'s round <code>makeWorktree</code> call drops <code>parent: "main"</code>; <code>lib/jobs.js</code> no longer falls back to <code>branchNameOf(start.ref)</code> for a round, and a cut from a remote-tracking ref records the ref but no chart parent (<code>refNamesLocalBranch: false</code>).</li>
+  <li><code>lib/parents.js:278-290</code> <code>record</code> writes <code>parent: null</code>, <code>parentRef: "origin/main"</code>, <code>parentSha</code> at the remote's tip, and <code>parentSource: "unknown"</code>; the record's <code>why</code> names the ref and says it is not a local branch to roll into.</li>
+  <li>A refresh that agrees "no parent" no longer blanks the <code>parentRef</code> the cut wrote.</li>
+</ul>
+
+<p>The test is <code>test/chart-nesting.test.js:129</code> (<i>a live round's parent draws beside main, and its two stage trees hang under the round</i>). It runs a live round through <code>Assistant.cutPipelineTree</code> against a real repository whose <code>origin/main</code> is a real remote-tracking ref and whose checkout is ahead of it, so the two tips differ. Its assertions are the acceptance evidence:</p>
+
+<pre class="cmd">round.base       = "origin/main"        // cut from the remote ref, not the checkout
+round.sha        = &lt;origin tip&gt;         // and at the remote's tip
+parentRec.parent = null                 // the round records NO local parent
+parentRec.parentRef = "origin/main"     // and records the ref it was cut from
+parentRec.parentSha = &lt;origin tip&gt;      // with the commit that ref resolved to
+parentRec.parentSource = "unknown"      // a remote-tracking ref is not a roll-up target
+page tree.parentOf(round) = undefined   // the round is a top-level row, BESIDE main
+page tree.childrenOf(main) = []         // main has no children: not nested under it
+page tree.parentOf(stage1) = round      // stage 1 hangs under the round
+page tree.parentOf(stage2) = round      // stage 2 does too
+page nestRowKeys(...) = [main, round, stage1, stage2]</pre>
+
+<p class="source">Run at this read: <code>node --test test/chart-nesting.test.js test/pipeline-bundle-seed.test.js</code> -> 11 tests, 11 pass, 0 fail. The one-stage assembly guard also moved: <code>lib/assistant.js:1912</code> now reads <code>round.parentPath ? 1 : 2</code>, so the parent-tree report's finding 2 (a one-stage round never assembles) no longer holds at this read.</p>
+
+<h3 id="ledger">1.4 The ledger: claim, evidence, and what the evidence does not prove</h3>
+<div class="tw"><table>
+  <thead><tr><th>Claim since 2026-11-09</th><th>The commit or PR behind it</th><th>What the evidence is</th><th>What it does not prove</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>The GitHub ladder walks 6 of 6 stages, 0 skipped, 0 loops, and 0 of 6 gates carry a decision record.</td>
+      <td><code>4ff3ab7e</code> (the walk page), <code>a5412657</code> (the sequence pin), re-walked at <code>33d9f8d9</code></td>
+      <td>The probe transcript above; <code>test/pipeline-bundle-seed.test.js:140-148</code>; <code>gateAfter</code> at <code>lib/task-pipeline-drive.js:876</code></td>
+      <td>That a gate can refuse; that a queue row walks the ladder (rung 2).</td>
+    </tr>
+    <tr>
+      <td>The review loop takes a comment back to <code>address</code> by H-04, returns by H-05, counts the crossing, and refuses the fourth.</td>
+      <td>PR #677, merge <code>bb9cbe7a</code></td>
+      <td><code>test/pipeline-review-loop.test.js:86</code>, <code>:123</code>; <code>test/pipeline-wait.test.js:361</code>, <code>:388</code>; 28/28 review-wait tests pass at this read</td>
+      <td>That a live row registers the wait; that the <code>address</code> run answers the comment (rung 4).</td>
+    </tr>
+    <tr>
+      <td>A live PDL row registers a review wait from the gate's <code>verified_by</code>, names its document, and the sweep takes H-04 for a newer comment.</td>
+      <td>PR #681, merge <code>858ebf37</code></td>
+      <td><code>lib/pipelines.js:709</code>, <code>:726</code>; <code>lib/jobs.js:2325</code>, <code>:2472</code>; <code>test/pipeline-wait.test.js:746</code>, <code>:781</code>, <code>:818</code></td>
+      <td>That the approval at the head gates the merge (rung 3); that two comments run end to end on one row (rung 4).</td>
+    </tr>
+    <tr>
+      <td>A round's parent tree is cut from <code>origin/main</code> and recorded as <code>parentRef: "origin/main"</code> with no local parent, so the chart draws it beside main.</td>
+      <td>PR #680, merge <code>fe7b0e9e</code>; commit <code>718e6337</code></td>
+      <td><code>lib/parents.js:278-290</code>; <code>test/chart-nesting.test.js:129</code>; 11/11 chart and seed tests pass at this read</td>
+      <td>That a live round draws it (rung 7); that every round's display name paints without the reader's map (a separate assertion in the same test).</td>
+    </tr>
+  </tbody>
+</table></div>
+
+<div class="warnbox">
+  <b>What is still unproved, in one list.</b>
+  <p>A gate on the shipped GitHub ladder that can refuse (0 of 6 carry a decision); an approval at the head that gates a real row; a comment answered by an <code>address</code> run on a live row; a refused merge that is a machine-readable record and a parked row; a PR that is correct because it stays open; and a live round drawn beside main. Those are the eight rungs below, in the order each one makes the next possible.</p>
+</div>
+
+<h2 id="ladder">2. The next moves, as an ordered ladder</h2>
+<p>Each rung is one test. The order is not the order of the report's sections; it is the order in which a passing rung leaves the next one possible. Rungs 1 and 2 are the GitHub document and its driver. Rungs 3 and 4 are the reviewer's two remaining answers. Rungs 5 and 6 are the refused merge and its terminal. Rung 7 is the round on the board. Rung 8 is the PR that is correct because it stays open.</p>
+
+<div class="tw"><table>
+  <thead><tr><th>Rung</th><th>Test</th><th>Proves</th><th>Closes</th><th>The row it implies</th></tr></thead>
+  <tbody>
+    <tr><td class="n">1</td><td>The first GitHub gate that decides</td><td>A gate with a <code>decision</code> is a barrier and a router, not a pause</td><td>The 0-of-6 headline on the GitHub ladder</td><td><code>github-force-merge</code> at <code>push</code>, scratch tree</td></tr>
+    <tr><td class="n">2</td><td>The GitHub ladder as a queue row</td><td>The driver, not just the resolver, walks the six stages once</td><td>The walk's missing <code>stageRuns</code></td><td><code>github-force-merge</code> at <code>commit</code>, scratch tree</td></tr>
+    <tr><td class="n">3</td><td>The approval at the head</td><td>An approval gates <code>approve</code> only at the PR's current head</td><td>P5 from the 2026-11-09 test plan</td><td><code>sefl-review-loop</code> at <code>approve</code>, PictureViewer scratch tree</td></tr>
+    <tr><td class="n">4</td><td>The comment loop on one live PDL row</td><td>One row answers two comments, counts H-04, and stops at the cap</td><td>P1, P3 and P4 end to end</td><td><code>sefl-review-loop</code> at <code>branch</code>, scratch SEFL repo</td></tr>
+    <tr><td class="n">5</td><td>The refusal record</td><td>A refused merge is a JSON fact, not prose, and is not retried</td><td>P6</td><td><code>sefl-review-loop</code> at <code>merge</code>, refusal branch</td></tr>
+    <tr><td class="n">6</td><td>The park on the refusal</td><td>A refused merge ends <code>parked</code> with <code>merge-refused:</code>, not running and STALE</td><td>P7</td><td>The same row as rung 5</td></tr>
+    <tr><td class="n">7</td><td>The live round beside main</td><td>The round's <code>parentRef</code> and the chart agree on a live row</td><td>#680's live half</td><td><code>investigate</code> at <code>probe</code>, no worktree</td></tr>
+    <tr><td class="n">8</td><td>The open-by-design terminal</td><td>A <code>pr</code> stage that says leave it open finishes <code>done</code> on OPEN</td><td>The <code>turnover</code> gap</td><td><code>turnover</code> at <code>commit</code>, scratch tree</td></tr>
+  </tbody>
+</table></div>
+
+<div class="rung">
+<h3><span class="num">2.1 Rung 1.</span> The first GitHub gate that decides</h3>
+<p class="lead">What it proves: a gate whose <code>decision</code> is an object is a barrier and a router on the GitHub ladder, not a pause, and the shipped 0 of 6 is a document fact rather than a driver limitation.</p>
+
+<div class="pass">
+  <h3>The test</h3>
+  <p><code>test/pipeline-github-gate.test.js</code>, new. It writes a temporary copy of <code>pipeline-bundle.seed.json</code> in which G3 (<code>after: "push"</code>) carries:</p>
+  <pre class="cmd">decision: {
+  path: "ledger/gates/G3-{{run_id}}.json",
+  outcomes: ["pushed", "refused"],
+  routes: { pushed: "H-03", refused: null }
+}</pre>
+  <p>It walks <code>github-force-merge</code> from <code>push</code> three times: before the record, after <code>{"outcome":"refused"}</code>, and after <code>{"outcome":"pushed"}</code>. The shipped seed is not edited; a second assertion reads it and pins the six null decisions.</p>
+</div>
+
+<div class="tw"><table>
+  <tbody>
+    <tr><th>Acceptance evidence</th><td>
+      <ol>
+        <li>Before the record: <code>nextStageOf</code> answers <code>ok: false</code>, <code>code: "pipeline-gate"</code>, <code>gate.id: "G3"</code>, and the expanded path <code>ledger/gates/G3-&lt;run&gt;.json</code>. The row's decision carries the same sentence.</li>
+        <li>After <code>{"outcome":"refused"}</code>: the walk ends, no <code>pr</code> stage is entered, and the reason names the refused verdict. The PR is not opened.</li>
+        <li>After <code>{"outcome":"pushed"}</code>: the walk enters <code>pr</code> by H-03 exactly once. The record is read from the tree, not from the stage's prose.</li>
+        <li>The shipped <code>github-force-merge</code> still has six gates and zero <code>decision</code> objects. A seed edit that adds one without a path fails the test.</li>
+      </ol>
+    </td></tr>
+    <tr><th>The row it implies</th><td>assistant-3, <code>github-force-merge</code>, stage <code>push</code>, filed WITH a scratch worktree (so the ladder runs in that tree and cuts no round). The row's detail names G3's path; the seat writes the record after the push. The row parks at <code>pipeline-gate</code> until it does.</td></tr>
+    <tr><th>Depends on</th><td>Nothing. The gate mechanism already works in <code>author-review-revise</code> and <code>ping-pong</code>; this test applies it to the ladder that has none.</td></tr>
+    <tr><th>Falsifier</th><td>The walk enters <code>pr</code> on <code>push.md</code> without the record; a refused record still enters <code>pr</code>; the record is written twice for one visit.</td></tr>
+    <tr><th>What it does not prove</th><td>That a machine, rather than the worker, writes the record from a host read. That is the four-check evaluator the 2026-11-09 page recommended (5.2 Cut B), and it is a separate test.</td></tr>
+  </tbody>
+</table></div>
+</div>
+
+<div class="rung">
+<h3><span class="num">2.2 Rung 2.</span> The GitHub ladder as a queue row</h3>
+<p class="lead">What it proves: the panel's driver, not only the resolver, walks all six stages once, with real <code>stageRuns</code>, five crossings, one PR, a MERGED read, and a row that finishes <code>done</code>.</p>
+
+<div class="pass">
+  <h3>The test</h3>
+  <p>One queue row filed on the panel against a scratch project, with a real worktree, pipeline <code>github-force-merge</code>, stage <code>commit</code>. The change is one line in a docs file, so the version stage has a patch to carry. The row is filed WITH a worktree on purpose: a landing ladder runs in the tree it was filed with, and it must not cut a round (the 2026-11-09 round report's finding 1 is the inverse case).</p>
+</div>
+
+<div class="tw"><table>
+  <tbody>
+    <tr><th>Acceptance evidence</th><td>
+      <ol>
+        <li>Six stage runs in the row: <code>commit</code>, <code>version</code>, <code>push</code>, <code>pr</code>, <code>merge</code>, <code>main</code>, each <code>done</code>, each visit 1, entered in the document's order.</li>
+        <li>Five crossings, one each: H-01 to H-05. No loop, no skip. The row's <code>via</code> on each stage names the handoff it arrived by.</li>
+        <li>Exactly one PR, base <code>main</code>, head the pushed commit, state <code>MERGED</code>; the merge commit is reachable from <code>origin/main</code>.</li>
+        <li>The row ends <code>done</code> with a reason naming the PR. No stage parks: the six shipped gates are pauses and read no record.</li>
+        <li>The row's <code>pipelineRun.round</code> is absent; the tree is the filed worktree, not a cut round.</li>
+      </ol>
+    </td></tr>
+    <tr><th>The row it implies</th><td>Itself: assistant-3, <code>github-force-merge</code>, stage <code>commit</code>, worktree <code>&lt;repo&gt;/.worktrees/&lt;scratch&gt;</code> on a scratch branch. The detail names the one-line docs change and the expected version level.</td></tr>
+    <tr><th>Depends on</th><td>Nothing product-side. The ladder's merge stage uses <code>gh pr merge --rebase --admin</code>; the account that runs the row must hold the repository owner's bypass, or the merge stage fails and the row parks (which would itself be rung 6's evidence).</td></tr>
+    <tr><th>Falsifier</th><td>A second PR; a row still <code>running</code> after main moved; a stage skipped or visited twice; the version stage bumping below <code>origin/main</code>'s version.</td></tr>
+    <tr><th>What it does not prove</th><td>That a gate on this ladder can refuse. The shipped six cannot; rung 1 is the test for that.</td></tr>
+  </tbody>
+</table></div>
+</div>
+
+<div class="rung">
+<h3><span class="num">2.3 Rung 3.</span> The approval at the head</h3>
+<p class="lead">What it proves: on a live PDL row at <code>approve</code>, the settle registers a wait from G6's <code>verified_by: pr-approved</code>, an approval at an older commit does not advance, and an approval at the current head enters <code>merge</code> by H-07 with the reviewer and the sha recorded.</p>
+
+<div class="pass">
+  <h3>The test</h3>
+  <p>A new case in <code>test/pipeline-wait.test.js</code>, using the PDL definition the #681 case already builds (<code>branch</code> to <code>merge</code>, G4 <code>pr-comments</code>, G6 <code>pr-approved</code>) and a tree record cut <code>local - work</code>. The stage is <code>approve</code>; the hold names <code>sefl-review-loop - approve</code>. Two observations: one approval at the previous head, one at the current head.</p>
+</div>
+
+<div class="tw"><table>
+  <tbody>
+    <tr><th>Acceptance evidence</th><td>
+      <ol>
+        <li>The settle writes <code>pipelineWait.check: "pr-approved"</code> from G6, with the hold's clock as <code>lastSeen</code>, the thread, the branch, and <code>pipeline: "sefl-review-loop"</code>. A stage with no <code>exit</code> is not a reason to skip the wait.</li>
+        <li>The older approval: <code>advanced: false</code>, the wait stays due, no run is started, and the row stays at <code>approve</code>.</li>
+        <li>The head approval: <code>advanced: true</code>; the next sweep enters <code>merge</code> by H-07; the stage record names the reviewer and the head sha; the wait is cleared.</li>
+        <li>A second sweep after the advance does not re-enter <code>merge</code> and does not start a second run.</li>
+      </ol>
+    </td></tr>
+    <tr><th>The row it implies</th><td>assistant-3, <code>sefl-review-loop</code>, stage <code>approve</code>, PictureViewer scratch tree. The negative case runs first: an approval at the previous head, read once, no advance. Then the reviewer approves the current head.</td></tr>
+    <tr><th>Depends on</th><td>PR #681's <code>reviewExitOf</code> and <code>registerPipelineWait</code>; both are on <code>main</code>.</td></tr>
+    <tr><th>Falsifier</th><td>An older approval advances; no approval advances; the wait reads the stage's missing <code>exit</code> instead of G6; a run is started instead of a wake.</td></tr>
+    <tr><th>What it does not prove</th><td>That the whole row, from <code>branch</code> to <code>merge</code>, walks with a comment in the middle. Rung 4 is that walk.</td></tr>
+  </tbody>
+</table></div>
+</div>
+
+<div class="rung">
+<h3><span class="num">2.4 Rung 4.</span> The comment loop on one live PDL row</h3>
+<p class="lead">What it proves: one row, one tree and one PR answer two reviewer comments through <code>address</code>, return to <code>wait</code> both times, count H-04 twice, and stop at the cap on the fourth comment instead of looping again.</p>
+
+<div class="pass">
+  <h3>The test</h3>
+  <p>A queue row on a scratch SEFL repository, pipeline <code>sefl-review-loop</code>, stage <code>branch</code>, filed with the worktree that carries the branch. Two comments are seeded on the PR at known times, both newer than the wait's <code>lastSeen</code>. The walk is read from the row's own <code>stageRuns</code> and the PR's comments, not from a fixture's log.</p>
+</div>
+
+<div class="tw"><table>
+  <tbody>
+    <tr><th>Acceptance evidence</th><td>
+      <ol>
+        <li>Stage order: <code>branch</code>, <code>push</code>, <code>pr</code>, <code>wait</code>, <code>address</code>, <code>wait</code>, <code>address</code>, <code>wait</code>, <code>approve</code>, <code>merge</code>. No stage skipped. H-04 = 2, H-05 = 2.</li>
+        <li>Each <code>address</code> run pushes exactly one commit and replies on the comment's id naming that commit. A comment older than <code>lastSeen</code> does not start an <code>address</code> run.</li>
+        <li>Exactly one PR. Reviewers exactly <code>["code_review_java"]</code>; the description has all four sections; <code>fromRef.latestCommit</code> equals the last pushed head.</li>
+        <li>A third comment enters <code>address</code> (H-04 = 3). A fourth closes the wait: no fourth <code>address</code> run starts, no wake is sent, and the row stops at <code>wait</code> for a person. The wait is cleared, so no tick keeps asking the same question. The queue row's own state is the next assertion; the cap test proves the stage and the wait, not the park.</li>
+        <li>The no-comment case still takes H-06 to <code>approve</code>; the older-comment case leaves the rail alone.</li>
+      </ol>
+    </td></tr>
+    <tr><th>The row it implies</th><td>Itself: assistant-3, <code>sefl-review-loop</code>, stage <code>branch</code>, SEFL scratch worktree, reviewers exactly <code>code_review_java</code>, two seeded comments. The detail names the PR id and the two comment ids.</td></tr>
+    <tr><th>Depends on</th><td>PR #677 and #681, both on <code>main</code>. The reviewer must be reachable and the repository must allow the worker to push its branch and comment, but not to merge.</td></tr>
+    <tr><th>Falsifier</th><td>A second PR; an <code>address</code> run with two commits; a reply that does not name its commit; a fifth <code>address</code> run; the row <code>done</code> while the PR is still OPEN.</td></tr>
+    <tr><th>What it does not prove</th><td>That the merge is refused and parked. The loop can end at <code>merge</code> and stop there; rungs 5 and 6 are the refusal.</td></tr>
+  </tbody>
+</table></div>
+</div>
+
+<div class="rung">
+<h3><span class="num">2.5 Rung 5.</span> The refusal record</h3>
+<p class="lead">What it proves: a refused merge is one POST, one machine-readable JSON record, and no <code>pr-merged</code> artifact. The 403 is a fact the driver can read, not a sentence in a markdown ledger.</p>
+
+<div class="pass">
+  <h3>The test</h3>
+  <p><code>test/pipeline-landing-sefl.test.js</code> and <code>test/fixtures/sefl-landing-host.mjs</code>, the fixture half the 2026-11-09 page planned. The host holds PR 42, head <code>b7c1...</code>, an approval at the head, and a merge endpoint that answers <code>403</code> with <code>You do not have permission to merge pull request 42 into refs/heads/master</code>. The row is at <code>merge</code>.</p>
+</div>
+
+<div class="tw"><table>
+  <tbody>
+    <tr><th>Acceptance evidence</th><td>
+      <ol>
+        <li>Exactly one merge POST. No retry after the 403, and no second request in a later sweep.</li>
+        <li><code>ledger/sefl-review-loop/merge.json</code> carries <code>status: "refused"</code>, <code>http: 403</code>, <code>hostMessage</code> with the host's sentence, <code>pr: 42</code>, <code>head: "b7c1..."</code>, <code>mainBefore</code> and <code>mainAfter</code> equal.</li>
+        <li><code>pr-merged</code> is not written. The PR still reads <code>OPEN</code>; <code>master</code>'s sha before and after are equal.</li>
+        <li>The driver reads <code>status</code>, not prose: a record whose <code>status</code> is missing is a refusal the driver names, not an empty success.</li>
+      </ol>
+    </td></tr>
+    <tr><th>The row it implies</th><td>assistant-3, <code>sefl-review-loop</code>, stage <code>merge</code>, the refusal branch in the PictureViewer scratch tree. The worker holds repository read and branch write, and no merge right on <code>master</code>.</td></tr>
+    <tr><th>Depends on</th><td>The merge stage's artifact changes from <code>merge.md</code> (kind <code>pr</code>) to a JSON record. That is a product change, and the test is red until it lands.</td></tr>
+    <tr><th>Falsifier</th><td>A second POST; <code>pr-merged</code> written without a MERGED read; <code>mainAfter</code> different from <code>mainBefore</code>; the record is markdown.</td></tr>
+    <tr><th>What it does not prove</th><td>That the row reaches a terminal state. A record alone leaves the settle's MERGED rule untouched; rung 6 is the park.</td></tr>
+  </tbody>
+</table></div>
+</div>
+
+<div class="rung">
+<h3><span class="num">2.6 Rung 6.</span> The park on the refusal</h3>
+<p class="lead">What it proves: a refused merge has a terminal state. The row ends <code>parked</code> with a reason beginning <code>merge-refused:</code> and the host's sentence, and it is not <code>running</code>, not STALE, and not <code>done</code>.</p>
+
+<div class="pass">
+  <h3>The test</h3>
+  <p>The same fixture and the same row as rung 5, read after the settle. The assertion is on the row's state and reason, and on the board's row, not only on the driver's return value. Today the settle's landing rule is <code>const merged = !t.worktree || /^MERGED/i.test(verdict); if (!merged) return t;</code> (<code>lib/assistant/queue.js:1571-1572</code>), so a refused merge leaves the row running; there is no <code>merge-refused</code> string in <code>lib/</code> at this read.</p>
+</div>
+
+<div class="tw"><table>
+  <tbody>
+    <tr><th>Acceptance evidence</th><td>
+      <ol>
+        <li>The row is <code>parked</code>, <code>doneAt</code> null, with <code>reason</code> starting <code>merge-refused:</code> and quoting the host's sentence.</li>
+        <li>The row is not displayed STALE: its last run ended <code>done</code>, and the park is the panel's decision, not a dead run.</li>
+        <li>The board still shows the PR URL. The tree's verdict remains <code>OPEN</code>; <code>master</code>'s sha is unchanged.</li>
+        <li>A requeue after the permission is fixed is the only exit. The panel never releases a manual hold on its own.</li>
+      </ol>
+    </td></tr>
+    <tr><th>The row it implies</th><td>The same row as rung 5: assistant-3, <code>sefl-review-loop</code> at <code>merge</code> on the refusal branch. The row's park reason is the test's primary evidence.</td></tr>
+    <tr><th>Depends on</th><td>Rung 5's record. The settle reads the record's <code>status</code>, then writes the park; without the record there is nothing to read but prose.</td></tr>
+    <tr><th>Falsifier</th><td>The row reads running or STALE; <code>done</code> without a MERGED read; the PR URL disappears from the board; the park is a manual hold the panel wrote without the host sentence.</td></tr>
+    <tr><th>What it does not prove</th><td>That an OPEN PR which is correct by design also finishes. Rung 8 is that case.</td></tr>
+  </tbody>
+</table></div>
+</div>
+
+<div class="rung">
+<h3><span class="num">2.7 Rung 7.</span> The live round beside main</h3>
+<p class="lead">What it proves: on the live board, a round cut from <code>origin/main</code> draws as a top-level row beside main, with both stage trees one indent under it, and its <code>parentRef</code> survives a refresh. The unit test proves the records and the grouping; the capture proves the board.</p>
+
+<div class="pass">
+  <h3>The test</h3>
+  <p>A two-stage <code>investigate</code> round filed through the queue with no worktree (the method the 2026-11-09 round report used), plus a one-stage <code>local</code> round to prove the assembly guard. The capture is the board's own page at 1440 x 900, with an empty <code>wtgui.treenames</code> map so the round paints its own display name.</p>
+</div>
+
+<div class="tw"><table>
+  <tbody>
+    <tr><th>Acceptance evidence</th><td>
+      <ol>
+        <li><code>pipelineRun.round.base: "origin/main"</code>, <code>sha</code> at the remote's tip, and <code>parentPath</code> the round's tree. The stage trees' records name the round's branch as <code>parent</code> and <code>cut</code> as <code>parentSource</code>.</li>
+        <li><code>branch-parents.json</code> for the round: <code>parent: null</code>, <code>parentRef: "origin/main"</code>, <code>parentSha</code> at the remote's tip, <code>parentSource: "unknown"</code>. A <code>refresh</code> does not blank the ref.</li>
+        <li>DOM: the round row has no <code>data-parent-key</code> pointing at main; it is top-level. Each stage row carries <code>data-parent-key</code> equal to the round's key and <code>data-depth="2"</code>. Folding the round hides only the stages.</li>
+        <li>The one-stage round assembles: one entry, <code>verified: true</code>, a commit on the parent tree. The old refusal (<code>entries.length &lt; 2</code>) is gone; <code>lib/assistant.js:1912</code> reads <code>round.parentPath ? 1 : 2</code>.</li>
+        <li>The 1440 x 900 capture shows the round's display name without a typed name map.</li>
+      </ol>
+    </td></tr>
+    <tr><th>The row it implies</th><td>assistant-3, <code>investigate</code>, stage <code>probe</code>, filed with NO worktree, two stages. The one-stage round is a second row, <code>local</code> at <code>work</code>, also no worktree.</td></tr>
+    <tr><th>Depends on</th><td>PR #680's cut and record; both on <code>main</code>. A real <code>origin/main</code> whose tip differs from the checkout's HEAD, so the test can tell the two apart.</td></tr>
+    <tr><th>Falsifier</th><td>The round nested under main; a stage hanging under main; the refresh blanks <code>parentRef</code>; the one-stage round parks on the assembly; the row reads the directory name instead of the round's display.</td></tr>
+    <tr><th>What it does not prove</th><td>That every round's display name is painted in every browser profile. The same file has an empty-map case; the capture is one profile.</td></tr>
+  </tbody>
+</table></div>
+</div>
+
+<div class="rung">
+<h3><span class="num">2.8 Rung 8.</span> The open-by-design terminal</h3>
+<p class="lead">What it proves: a <code>pr</code> stage whose document says the PR stays open finishes <code>done</code> on <code>OPEN</code>, and a <code>pr</code> stage that requires a merge still refuses to finish without one. The two outcomes are told apart by one machine-readable word, not by the worker's prose.</p>
+
+<div class="pass">
+  <h3>The test</h3>
+  <p>A <code>turnover</code> row on a scratch repository, filed with the worktree that carries the branch. The ladder's last stage declares <code>kind: "pr"</code> and its prompt says "Leave it open: this definition does not merge." The test first asserts the document's word for that outcome, then runs the row and reads the PR and the row. The negative case is a <code>github-force-merge</code> row whose last stage requires MERGED, left OPEN: it must still read running and STALE.</p>
+</div>
+
+<div class="tw"><table>
+  <tbody>
+    <tr><th>Acceptance evidence</th><td>
+      <ol>
+        <li>The document carries one machine-readable word for "open by design" on the last stage. The two candidates are <code>stage.lands: "open"</code> and <code>artifact.open: true</code>; the test must pick one before the row runs, and the seed and the driver must agree on it.</li>
+        <li>The row ends <code>done</code> with the PR still <code>OPEN</code>; the reason names the word and the PR URL; the board is not STALE.</li>
+        <li>A <code>github-force-merge</code> row on an OPEN PR still reads running and STALE: the word is not a blanket "any open PR finishes".</li>
+        <li>The settle's MERGED rule is unchanged for a <code>pr</code> stage without the word (<code>lib/assistant/queue.js:1571</code>).</li>
+      </ol>
+    </td></tr>
+    <tr><th>The row it implies</th><td>assistant-3, <code>turnover</code>, stage <code>commit</code>, scratch worktree. The PR is opened by the ladder's <code>pr</code> stage and left open; the row's done reason is the evidence.</td></tr>
+    <tr><th>Depends on</th><td>A decision on the word, then a small change to the seed and the settle. It also shares the settle with rung 6, so the two should land in one pass over <code>lib/assistant/queue.js</code>.</td></tr>
+    <tr><th>Falsifier</th><td>The row <code>done</code> without the word; the word also finishes a ladder that must merge; the PR is OPEN but the board says STALE.</td></tr>
+    <tr><th>What it does not prove</th><td>That a human reviewer would call the open PR correct. The test proves the panel's terminal, not the reviewer's judgment.</td></tr>
+  </tbody>
+</table></div>
+</div>
+
+<h2 id="order">3. The order, and the first row to file</h2>
+<p>The ladder is ordered by dependency, not by size. Rung 1 is first because the GitHub walk's headline is a gate that cannot refuse; a passing rung 1 makes rung 2's row honest about what its six gates do. Rung 4 is the integration test that uses rungs 1 and 3; it depends on the #677 and #681 code already on main, but it is the first test that reads a real row's <code>stageRuns</code>. Rungs 5 and 6 are one product cut seen twice: the record first, the park second. Rung 7 is independent of the review loop and proves #680 on the board. Rung 8 is last because it needs a decision on the word and shares the settle with rung 6.</p>
+
+<div class="tw"><table>
+  <thead><tr><th>Order</th><th>Rung</th><th>Makes possible</th><th>Blocked by</th></tr></thead>
+  <tbody>
+    <tr><td class="n">1</td><td>The first GitHub gate that decides</td><td>Rung 2's row can say what its gates do; the four-check evaluator has a place to land</td><td>Nothing</td></tr>
+    <tr><td class="n">2</td><td>The GitHub ladder as a queue row</td><td>The driver's six stage runs are the baseline for every later ladder test</td><td>An account with the owner's bypass</td></tr>
+    <tr><td class="n">3</td><td>The approval at the head</td><td>Rung 4's final hop to <code>merge</code> is gated by a real approval</td><td>Nothing</td></tr>
+    <tr><td class="n">4</td><td>The comment loop on one live PDL row</td><td>The loop's end-to-end evidence, and the row that can carry rungs 5 and 6</td><td>A scratch SEFL repo and a reviewer</td></tr>
+    <tr><td class="n">5</td><td>The refusal record</td><td>Rung 6 has a fact to read</td><td>The merge artifact change</td></tr>
+    <tr><td class="n">6</td><td>The park on the refusal</td><td>A terminal state for the refused merge</td><td>Rung 5</td></tr>
+    <tr><td class="n">7</td><td>The live round beside main</td><td>The board's own evidence for #680</td><td>A round and a capture</td></tr>
+    <tr><td class="n">8</td><td>The open-by-design terminal</td><td>The <code>turnover</code> row can finish</td><td>The word, and rung 6's settle pass</td></tr>
+  </tbody>
+</table></div>
+
+<div class="note">
+  <b>The first row to file.</b>
+  Rung 1's row: assistant-3, <code>github-force-merge</code>, stage <code>push</code>, a scratch worktree and branch, detail naming G3's decision path <code>ledger/gates/G3-&lt;run&gt;.json</code>. The test is written first; the row is the live half that proves the parked gate on the panel's own clock, not just in the resolver.
+</div>
+
+<h2 id="limits">4. Limits of this page</h2>
+<ul>
+  <li>The walk and the route probes are reads of <code>origin/main 33d9f8d9</code>'s shipped bundle through its own loader and resolver. They are not panel queue rows: the walk has no <code>stageRuns</code> and no row <code>done</code>, which is exactly why rung 2 exists.</li>
+  <li>The tests run for this page are the targeted set behind the three landings: <code>pipeline-review-loop</code> and <code>pipeline-wait</code> (28 tests, 28 pass), and <code>chart-nesting</code> and <code>pipeline-bundle-seed</code> (11 tests, 11 pass). The full suite is the delivery's own gate; it is not the witness for a SEFL host.</li>
+  <li>PR #677's own proof was 25 tests, 25 pass, with 4 failures against the base libs; that is the PR body's record, not a rerun on this branch. The 28/28 above is the read at <code>33d9f8d9</code>.</li>
+  <li>The eight rows are proposals. None has been filed, and none of the acceptance evidence has been captured. A test that passes all eight today would be testing the fixture, not the ladder.</li>
+  <li>The order is a dependency order, not a cost estimate. Rung 4 and rung 7 need a real host and a capture; the others are fixture or unit tests. No day estimates are given because none was measured.</li>
+  <li>The merge refusal's 403 is a code-path claim until rung 5 runs against a branch permission that excludes the worker. The fixture is the repeatable half; the live half is the evidence.</li>
+  <li>This page does not fix anything. It states what the three landings proved, names the terminal the ladder still lacks, and lays out the tests that would prove it.</li>
+</ul>
+
+<h2 id="sources">Sources</h2>
+<ul class="source">
+  <li><code>docs/reports/pipeline-execution-next-test-2026-11-09.html</code>: sections 2.1, 2.2, 3, 4, 5.1, 5.2 and 6. The stage map and the P1-P8 test plan this page continues.</li>
+  <li><code>docs/reports/pipeline-rounds-parent-tree-2026-11-09.html</code>: the round model, findings 1 to 4, and the one-stage assembly finding (now fixed by <code>lib/assistant.js:1912</code>).</li>
+  <li><code>docs/reports/pipeline-next-moves-2026-11-09.html</code>: the GitHub walk, the two gap requests, and the SEFL approval-to-refusal plan.</li>
+  <li><code>pipeline-bundle.seed.json</code>: <code>github-force-merge</code> at 4144, <code>sefl-review-loop</code> at 4427, <code>turnover</code> at 3803; H-04 at 4679, H-06 at 4696, G4 at 4741, G7 at 4768.</li>
+  <li><code>lib/task-pipeline-drive.js</code>: 213 (<code>reviewEdgeOutOf</code>), 876 (<code>gateAfter</code>), 928 (<code>nextStageOf</code>), 1049-1073 (the cap), 1224 (<code>assemblyPlanOf</code>).</li>
+  <li><code>lib/pipelines.js</code>: 586 (<code>REVIEW_WAIT_CHECKS</code>), 674 (<code>reviewWaitFor</code>), 709 (<code>reviewGateFor</code>), 726 (<code>reviewExitOf</code>), 771 (<code>readReviewExit</code>).</li>
+  <li><code>lib/jobs.js</code>: 2219 (<code>reviewWaitStage</code>), 2325 (<code>registerPipelineWait</code>), 2472 (the sweep's <code>nextStageOf</code>).</li>
+  <li><code>lib/parents.js</code>: 278-290 (<code>record</code>, <code>parentRef</code>, <code>parentSource</code>, <code>refNamesLocalBranch</code>); <code>lib/assistant.js</code>: 1897-1913 (<code>assemblePipelineRound</code>, the one-stage minimum).</li>
+  <li><code>lib/assistant/queue.js</code>: 1571-1572 (the settle's MERGED rule; the line rungs 6 and 8 change).</li>
+  <li>PR #677, <i>fix: route a review comment to the answer stage before the approval</i>, MERGED 2026-11-10T01:04:11Z, merge <code>bb9cbe7a</code>.</li>
+  <li>PR #680, <i>Record a round's parent tree beside main, not under it</i>, MERGED 2026-11-10T01:25:08Z, merge <code>fe7b0e9e</code>; commit <code>718e6337</code>.</li>
+  <li>PR #681, <i>fix: register a review wait for a live PDL row</i>, MERGED 2026-11-10T01:39:22Z, merge <code>858ebf37</code>.</li>
+  <li><code>4ff3ab7e</code>, <i>docs: walk the GitHub ladder and file its two next moves</i>, 2026-11-09 19:06 -0500; <code>a5412657</code>, <i>test: the GitHub ladder has no loop to cross - every handoff is a sequence</i>, 2026-11-09 20:20 -0500.</li>
+  <li><code>test/pipeline-bundle-seed.test.js</code>: 140-148 (five sequences, no loop); <code>test/pipeline-review-loop.test.js</code>: 86, 123; <code>test/pipeline-wait.test.js</code>: 361, 388, 746, 781, 818; <code>test/chart-nesting.test.js</code>: 129.</li>
+  <li>Atlassian, <i>Permission</i> (Bitbucket Server API), and <i>Merge a pull request</i>: repository read allows creating a pull request when read is held on both repositories; repository write allows pushing and merging; branch permissions can restrict who may merge to a branch.</li>
+</ul>
+
+<p class="small">Written 2026-11-10 in <code>wtgui/round-one-the-parent-tree-note-34d53c</code> at <code>origin/main 33d9f8d9</code> (1.80.7). The page is a report, not a product change; the only code it names is the code it read, and the rows it proposes are not filed.</p>
+
+</main>
+</body>
+</html>
