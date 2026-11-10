@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The fork that was drawn and never walked - pipeline diagnosis, 2026-11-10</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 48px 28px 72px; background: #0d1117; color: #c9d1d9;
+         font: 15px/1.6 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  main { max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 26px; line-height: 1.25; margin: 0 0 6px; color: #f0f6fc; font-weight: 650; }
+  h2 { font-size: 18px; margin: 40px 0 10px; color: #f0f6fc; font-weight: 600;
+       border-bottom: 1px solid #21262d; padding-bottom: 6px; }
+  h3 { font-size: 15px; margin: 22px 0 6px; color: #e6edf3; font-weight: 600; }
+  p, li { color: #c9d1d9; }
+  .sub { color: #8b949e; margin: 0 0 26px; font-size: 14px; }
+  code, pre { font-family: "Cascadia Code", Consolas, "SF Mono", Menlo, monospace; font-size: 13px; }
+  code { background: #161b22; border: 1px solid #21262d; border-radius: 4px; padding: 1px 5px; color: #79c0ff; }
+  pre { background: #161b22; border: 1px solid #21262d; border-radius: 8px; padding: 14px 16px;
+        overflow-x: auto; line-height: 1.45; color: #c9d1d9; }
+  pre .bad { color: #ff7b72; }
+  pre .good { color: #7ee787; }
+  pre .dim { color: #8b949e; }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0 4px; font-size: 14px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid #21262d; vertical-align: top; }
+  th { color: #8b949e; font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; }
+  .verdict { border-left: 3px solid #7ee787; background: #101a14; padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; }
+  .note { border-left: 3px solid #d29922; background: #1c1710; padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; }
+  .tag { display: inline-block; font-size: 12px; padding: 1px 7px; border-radius: 999px;
+         border: 1px solid #30363d; color: #8b949e; margin-right: 6px; }
+  ul { padding-left: 22px; }
+  footer { margin-top: 44px; color: #6e7681; font-size: 13px; border-top: 1px solid #21262d; padding-top: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>The fork that was drawn and never walked</h1>
+  <p class="sub">Why the four-stage POC drive ran S220, S221 and S223 with no S222, and why a stage that is refused its
+  input now settles <code>refused</code> instead of <code>done</code>. Measured 2026-11-10 on real trees, one tree per
+  stage, driven by the real <code>driveTaskPipelines</code>.</p>
+
+  <h2>The report in five lines</h2>
+  <ul>
+    <li>The document is not at fault: its four handoffs, two lanes and one join are a block <code>fanOutOf</code>
+        reads correctly, with or without an <code>isolation</code> field.</li>
+    <li>The isolation MODE is not the cause either: the row already ran one tree per stage, which is the only thing a
+        block needs.</li>
+    <li>The cause is the driver's fan-out gate. <code>fanOutStateOf</code> answered <code>null</code> for every
+        pipeline that was not <code>isolation: "per-stage"</code>, so the walk treated a drawn fork as a CHAIN and took
+        the first edge out of S220 for ever.</li>
+    <li>Second defect, same shape: the terminal stage was handed one of the two artifacts it declares and started
+        anyway, so the row read <code>done</code> over work it was never given.</li>
+    <li>Both are fixed: the drawn block is walked by the graph, and an input no run settled is refused, with the stage
+        run settling <code>refused</code>.</li>
+  </ul>
+
+  <h2>What the drive showed before the fix</h2>
+  <p>The document, as the POC wrote it: S220 forks into S221 (data records) and S222 (access records); S223 joins them
+  and declares both as inputs. No <code>isolation</code> field. One row, driven pass by pass, every pass against real
+  worktrees cut with the panel's own <code>Jobs.makeWorktree</code>.</p>
+
+  <pre><span class="bad">ledger   S220#1 done · S221#1 done · S223#1 done</span>
+<span class="bad">trees    S220, S221, S223            (three, not four)</span>
+<span class="bad">S222     no entry, no tree, no commit</span>
+<span class="bad">S223     inputs: a221 by edge h221 · a222 declared, no writer, no pin</span>
+<span class="bad">row      done</span></pre>
+
+  <p>That is the reported failure exactly: the lane is missing, the join takes the data records without the access
+  records, and the row closes. What it did NOT do is refuse: with no pin to check, the start had nothing to check
+  against, so S223 ran on half its inputs and settled <code>done</code>.</p>
+
+  <h2>The diagnosis, and what it rules out</h2>
+
+  <h3>The document's crossings: correct</h3>
+  <p><code>fanOutOf</code> on this document answers a block: fork <code>S220</code>, lanes
+  <code>[S221, S222]</code>, join <code>S223</code>, base derived from the fork's settled commit. Nothing about the
+  graph needed changing, and no edge was mis-declared. The same answer comes back whether or not the document writes
+  <code>isolation</code>: the flag was never part of the shape.</p>
+
+  <h3>The isolation mode: correct for this row</h3>
+  <p>The row carried a round, so every stage already had its own tree - the only workspace fact a block needs. A
+  <code>per-stage</code> document on the same row produced four stages and a 3-parent aggregate before this change and
+  after it. The mode was not selecting the wrong walk; it was being asked a question it does not own.</p>
+
+  <h3>The driver's fan-out gate: the cause</h3>
+  <p><code>fanOutStateOf(pipeline, run)</code> returned <code>null</code> unless
+  <code>isolationOf(pipeline) === "per-stage"</code>. With <code>null</code>, the walk is a chain: <code>nextStageOf</code>
+  takes the first non-loop edge out of the fork's settled stage, so the second lane is never entered, no tree is cut for
+  it, and the join downstream is reached by one lane's edge only. The bug is one boolean in the driver's plan
+  derivation, and the loss is silent because a chain has no way to say "this stage had two inbound edges".</p>
+
+  <div class="verdict"><strong>The fix, first rule.</strong> The graph decides the walk, and the row's workspace model
+  decides whether it can be walked: a row that runs one tree per stage (a round) walks the block its document draws,
+  and <code>isolation: "per-stage"</code> remains the way a record with no round gets that model. A record written
+  before rounds keeps its one tree, where the lanes would share a directory - there the block is not walked, and the
+  second rule catches what was dropped.</div>
+
+  <h2>The second defect: a stage handed half its inputs settled done</h2>
+  <p>The input manifest already resolved every declared entry, and it already recorded <code>a222</code> as absent with
+  no pin. Nothing read that fact at the start: the pin check ran on the ONE edge the row arrived by (<code>h221</code>),
+  which resolved, so the stage started. The manifest was written on the run and then ignored.</p>
+
+  <div class="verdict"><strong>The fix, second rule.</strong> Every entry the document declares is resolved before the
+  start. An artifact with a declared path, which no settled run of the pipeline has produced and which the stage's own
+  tree does not hold, is refused <code>pipeline-refuse-input</code>, and that stage run settles
+  <code>refused</code>. A writer's own record - including one from before pins existed, which says
+  <code>present: true</code> and nothing else - is still a claim about the artifact and is not a refusal.</div>
+
+  <h2>Proof 1: the same four-stage drive now walks both lanes</h2>
+  <p><code>node tools/verify-pipeline-fork.mjs</code>, same document, same driver, real trees.</p>
+
+  <pre><span class="good">ledger   S220#1 done · S221#1 done · S222#1 done · S223#1 done</span>
+<span class="good">trees    S220, S221, S222, S223      (four distinct directories)</span>
+<span class="good">cuts     both lanes from the fork's settled commit</span>
+<span class="good">aggregate one commit, 3 parents (base + S221 + S222), pre-flight clean, verified</span>
+<span class="good">S223     inputs: a220 by h220a · a221 at its lane commit · a222 at its lane commit</span>
+<span class="good">assembly none owed: the join's tree is the one merge that lands</span>
+<span class="good">row      done at S223</span></pre>
+
+  <h2>Proof 2: a refused terminal input reads refused, not done</h2>
+  <p>The same document on a row that cannot walk the block (a record written before rounds, one tree). Nothing in the
+  code was special-cased for this row: the block is not walked, the access records are absent, and the new rule
+  refuses.</p>
+
+  <pre><span class="good">ledger   S220#1 done · S221#1 done · S223#1 refused</span>
+<span class="good">decision pipeline-refuse-input, fact kind input, artifact a222 (out/access-records.json)</span>
+<span class="good">row      parked</span>
+<span class="good">reason   "stage S223 cannot start: it is handed a222 (out/access-records.json). No run of this
+          pipeline has settled it, and this stage's tree does not hold it, so the row refuses the
+          input and settles refused, not done"</span>
+<span class="good">worker   never started</span></pre>
+
+  <p>Before the change the same row read: <code>S223#1 done</code>, row <code>done</code>, worker started. The
+  difference is one word in the ledger and the whole verdict of the row.</p>
+
+  <h2>What was run</h2>
+  <table>
+    <tr><th>run</th><th>answer</th></tr>
+    <tr><td><code>node --test test/task-pipeline-drive.test.js test/task-pipeline.test.js test/pipeline-wait.test.js</code></td>
+        <td>all pass, including five new tests: the block walk, the legacy one-tree inverse, the join's two lanes, the
+        terminal refusal, and the same stage starting once its inputs are there</td></tr>
+    <tr><td><code>node tools/verify-pipeline-fork.mjs</code></td><td>22 checks, 0 failed</td></tr>
+    <tr><td><code>npm run test:module lib/task-pipeline-drive.js</code></td>
+        <td>70 files; the only failures are the two known reds on this base branch (a profile whitelist test and a
+        command-audit test that start no run), both failing at <code>HEAD</code> before this change</td></tr>
+    <tr><td><code>npm test</code></td><td>the full suite, once, before the pull request: recorded with the landing
+        notes</td></tr>
+  </table>
+
+  <div class="note"><strong>Not pushed.</strong> This tree's branch was merged into
+  <code>wtgui/round-c-how-a-round-names-its-trees-5b3b85</code> locally and left there. That branch has not landed, and a
+  remote branch of this tree would be a branch on the shared remote nobody asked for; the reader decides when the round
+  branch lands.</div>
+
+  <footer>The fork defect: <code>lib/task-pipeline-drive.js</code> <code>fanOutStateOf</code> and the start's input
+  manifest check. Proof: <code>tools/verify-pipeline-fork.mjs</code> and the five tests above.</footer>
+</main>
+</body>
+</html>

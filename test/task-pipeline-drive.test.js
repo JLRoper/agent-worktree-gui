@@ -1617,3 +1617,175 @@ test("a fan-out lane is local-only whatever its artifact declares", (t) => {
   assert.equal(out.assemblies.length, 0, "a fan-out has one merge, not a round's assembly");
 });
 
+// ---- the FORK: a drawn block is walked by the GRAPH, and a missing input is refused --------------
+//
+// The four-stage POC's document, as it was written: S220 forks into two lanes (S221 the data records, S222 the access
+// records) and S223 joins them, reading both. It declares NO `isolation`, and that alone decided the walk:
+// `fanOutStateOf` answered null for every pipeline that was not `per-stage`, `nextStageOf` followed the FIRST edge out
+// of the fork, S222 never ran, and S223 - handed the data records and not the access records - started anyway, so the
+// row read `done` with the ledger showing S220#1, S221#1 and S223#1 and no S222 entry at all.
+//
+// Two rules come out of that, and they are different rules for different rows:
+//
+//   1. Under a ROUND every stage already has its own tree, so the block is walked whenever the document DRAWS one:
+//      `isolation` said where the trees come from, never whether the lanes exist. A record written BEFORE rounds keeps
+//      the row's one tree, where the lanes would share a directory, so the block is not walked there.
+//   2. Wherever the block is NOT walked, the stage that reads a lane is REFUSED rather than started: an input the
+//      document declares, which no settled run pinned and the stage's tree does not hold, is a refusal
+//      (`pipeline-refuse-input`) and the stage run settles `refused`. At the terminal stage that is the difference
+//      between a row that reports work it was never handed and one that says it was refused.
+const FORK_STAGE = (n, reads = []) => ({
+  id: `S${n}`,
+  title: `Stage ${n}`,
+  prompt: `Work stage ${n}.`,
+  artifact: { id: `a${n}`, path: `out/${n}.json`, schema: "out/1", writer: `w${n}` },
+  ...(reads.length ? { inputs: { read: reads.map((artifact) => ({ artifact })) } } : {}),
+});
+
+const FORK = {
+  id: "fork",
+  title: "Four stages, two lanes",
+  stages: [FORK_STAGE(220), FORK_STAGE(221, ["a220"]), FORK_STAGE(222, ["a220"]), FORK_STAGE(223, ["a221", "a222"])],
+  gates: [],
+  handoffs: [
+    { id: "h220a", from: "S220", to: "S221", artifact: "a220", kind: "sequence" },
+    { id: "h220b", from: "S220", to: "S222", artifact: "a220", kind: "sequence" },
+    { id: "h221", from: "S221", to: "S223", artifact: "a221", kind: "sequence" },
+    { id: "h222", from: "S222", to: "S223", artifact: "a222", kind: "sequence" },
+  ],
+};
+
+const forkRow = (over = {}) =>
+  row({
+    state: "queued",
+    thread: null,
+    threads: [],
+    worktree: null,
+    pipelineRun: { pipeline: "fork", stage: "S220", enteredAt: CLOCK, visits: { S220: 1 }, trees: {}, stageRuns: [] },
+    ...over,
+  });
+
+const ROUND = { parent: "main", sha: ROUND_SHA, at: CLOCK, by: "panel" };
+
+test("a block the document draws is walked under a round, whether or not it declares an isolation", () => {
+  const out = driveTaskPipelines([forkRow({ pipelineRun: { ...forkRow().pipelineRun, round: ROUND } })], {
+    bundle: bundleOf(FORK),
+    jobs: [],
+    isLive: () => false,
+    at: CLOCK,
+    unattended: true,
+  });
+  assert.equal(out.ensureTree.length, 1, "the first stage's tree is asked for, as it always is");
+  assert.equal(out.ensureTree[0].role, "fork", "and it is the FORK's cut: the graph drew a block and the row can walk it");
+  assert.deepEqual(out.ensureTree[0].plans && out.ensureTree[0].plans.lanes, ["S221", "S222"], "both lanes are named, so neither is dropped");
+  assert.equal(out.ensureTree[0].plans && out.ensureTree[0].plans.join, "S223", "with the join the lanes converge on");
+});
+
+test("a record written before rounds keeps its one tree, so its block is not walked", () => {
+  // The inverse of the rule: no round, no `per-stage` - the lanes would share the row's directory, so the block cannot
+  // be walked. The row still gets a tree, and the refusal below is what stops a stage reading half its inputs.
+  const out = driveTaskPipelines([forkRow()], { bundle: bundleOf(FORK), jobs: [], isLive: () => false, at: CLOCK, unattended: true });
+  assert.equal(out.ensureTree.length, 1);
+  assert.equal(out.ensureTree[0].role, "row", "one tree for the row, as that record's model says");
+  assert.equal(out.ensureTree[0].plans, null, "no block is recorded on a tree that cannot hold it");
+});
+
+test("the join of a block is handed BOTH lanes, not the one edge the walk arrived by", (t) => {
+  const dir = tree(t);
+  const laneRun = (n, commit, branch) => ({
+    id: `fork/S${n}#1`,
+    stage: `S${n}`,
+    visit: 1,
+    status: "done",
+    commit,
+    tree: { path: `${dir}-s${n}`, branch },
+    artifact: { id: `a${n}`, path: `out/${n}.json`, present: true },
+  });
+  const at = (stage, over = {}) =>
+    row({
+      state: "queued",
+      thread: null,
+      threads: [],
+      worktree: null,
+      pipelineRun: {
+        pipeline: "fork",
+        stage,
+        enteredAt: CLOCK,
+        round: ROUND,
+        visits: { S220: 1, S221: 1, S222: 1, S223: 1 },
+        trees: {},
+        stageRuns: [
+          laneRun(220, "1".repeat(40), "wtgui/s220-abc123"),
+          laneRun(221, "2".repeat(40), "wtgui/s221-abc123"),
+          laneRun(222, "3".repeat(40), "wtgui/s222-abc123"),
+        ],
+        ...over,
+      },
+    });
+  const cut = driveTaskPipelines([at("S223")], { bundle: bundleOf(FORK), jobs: [], isLive: () => false, at: CLOCK, unattended: true });
+  assert.equal(cut.ensureTree.length, 1);
+  assert.equal(cut.ensureTree[0].role, "join", "the lane that converges is the join");
+  assert.equal(cut.ensureTree[0].base, "1".repeat(40), "cut from the fork's commit, so both lanes are ahead of it");
+  const owed = driveTaskPipelines([at("S223", { trees: { S223: { path: dir, branch: "wtgui/s223-abc123" } } })], {
+    bundle: bundleOf(FORK),
+    jobs: [],
+    isLive: () => false,
+    at: CLOCK,
+    unattended: true,
+  });
+  assert.equal(owed.aggregates.length, 1, "the merge is owed before the join's worker runs");
+  assert.deepEqual(
+    owed.aggregates[0].branches.map((branch) => [branch.stage, branch.branch, branch.commit]),
+    [["S221", "wtgui/s221-abc123", "2".repeat(40)], ["S222", "wtgui/s222-abc123", "3".repeat(40)]],
+    "both lanes are merged, each at the commit its own run settled",
+  );
+  assert.equal(owed.starts.length, 0, "and the stage is not started against an unmerged tree");
+});
+
+test("a stage handed an artifact nothing settled is refused, and its run settles refused rather than done", (t) => {
+  // The terminal stage of the POC, on a row whose block could not be walked: the data records are in the tree, the
+  // access records are not, and no run settled them. Before this rule the stage started anyway, `inputManifest` recorded
+  // `a222` as `present: false`, and the row read `done`.
+  const dir = tree(t, { artifacts: [221] });
+  const task = row({
+    state: "queued",
+    thread: null,
+    threads: [],
+    worktree: dir,
+    // A start was asked for this stage and no thread ever linked (the spawner's failure, an hour back): the row RECORDS
+    // that it started, which is what makes its filed tree the tree the lookup answers, and the grace the driver grants a
+    // live start has long passed. That is the state a reader sees before the driver asks again, and it is the ask this
+    // test is about.
+    pipelineRun: { pipeline: "fork", stage: "S223", enteredAt: CLOCK, visits: { S223: 1 }, trees: {}, stageRuns: [], [STARTING_AT]: "2026-11-03T15:00:00.000Z" },
+  });
+  const out = driveTaskPipelines([task], { bundle: bundleOf(FORK), jobs: [], isLive: () => false, at: CLOCK, unattended: true });
+  assert.equal(out.starts.length, 0, "the stage is not started");
+  assert.equal(out.tasks[0].state, "parked", "the row is parked, not done");
+  assert.equal(out.changed[0] && out.changed[0].code, DRIVE_FAULTS.REFUSE_INPUT);
+  const entry = (out.tasks[0].pipelineRun.stageRuns || []).find((run) => run.stage === "S223");
+  assert.ok(entry, "the refusal is on the ledger, not only on the row");
+  assert.equal(entry.status, "refused", "and it reads refused, not as a run that never ended");
+  assert.match(out.tasks[0].reason, /a222/, "naming the artifact it was handed");
+  assert.match(out.tasks[0].reason, /refused, not done/, "and what the row did about it");
+  assert.match(out.tasks[0].reason, /No run of this pipeline has settled it/, "with the fact, not a guess");
+});
+
+test("the same stage starts once the tree holds what the document says it reads", (t) => {
+  // The other half of the rule: the refusal is about an ABSENT input, not about reading a declared one. Both files in
+  // the tree, both entries resolved, and the stage is started - so the check cannot become a stage that never runs.
+  const dir = tree(t, { artifacts: [221, 222] });
+  const task = row({
+    state: "queued",
+    thread: null,
+    threads: [],
+    worktree: dir,
+    // A start was asked for this stage and no thread ever linked (the spawner's failure, an hour back): the row RECORDS
+    // that it started, which is what makes its filed tree the tree the lookup answers, and the grace the driver grants a
+    // live start has long passed. That is the state a reader sees before the driver asks again, and it is the ask this
+    // test is about.
+    pipelineRun: { pipeline: "fork", stage: "S223", enteredAt: CLOCK, visits: { S223: 1 }, trees: {}, stageRuns: [], [STARTING_AT]: "2026-11-03T15:00:00.000Z" },
+  });
+  const out = driveTaskPipelines([task], { bundle: bundleOf(FORK), jobs: [], isLive: () => false, at: CLOCK, unattended: true });
+  assert.equal(out.starts.length, 1, "both inputs are there, so the stage runs");
+  assert.equal(out.starts[0].stage, "S223");
+});
