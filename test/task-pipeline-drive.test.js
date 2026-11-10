@@ -713,12 +713,35 @@ test("the front row that carries a pipeline asks for a tree, and starts in it on
   assert.equal(started.ensureTree.length, 0, "the tree step is not called again: the row already names one");
 });
 
-test("a row filed with a worktree still cuts the round's parent tree before its first stage", (t) => {
+test("a landing ladder filed with a work branch runs in that tree instead of cutting a round", (t) => {
+  // The 2026-11-10 next-moves report, rung 2: a `shared` ladder (github-force-merge and its siblings) reuses ONE tree
+  // for every stage, and a reader who files its row with a real worktree means that tree. The filed path used to be a
+  // hint only, so the six-stage GitHub ladder cut a round nobody wanted and ran its stages in a tree no reader named.
+  const dir = tree(t, { artifacts: [1] });
+  const branch = "wtgui/carry-the-contract-abc123";
+  const out = drive([row({ state: "queued", thread: null, threads: [], worktree: dir })], {
+    treeOf: () => ({ branch, commit: "9".repeat(40), head: "9999999", dirty: 0 }),
+  });
+
+  assert.equal(out.ensureTree.length, 0, "a shared pipeline reuses one tree: there is no round to cut");
+  assert.equal(out.starts.length, 1, "the first stage starts on the same pass");
+  assert.equal(out.starts[0].target, dir, "and it starts in the tree the row was filed with");
+  assert.equal(out.starts[0].existing, true);
+  assert.equal(out.tasks[0].pipelineRun.round, undefined, "no round is recorded: the row stays on the shared model");
+  assert.equal(out.tasks[0].pipelineRun.tree.path, dir, "the row's own field names the filed tree from the first move");
+  assert.equal(out.tasks[0].pipelineRun.tree.branch, branch, "the branch comes from the panel's git read, not a guess");
+  assert.equal(out.tasks[0].pipelineRun.stageRuns[0].tree.path, dir, "the ledger entry names the same tree");
+  assert.match(out.starts[0].prompt, new RegExp(`branch ${branch}`), "the worker is told the branch it is in");
+});
+
+test("a row filed with the project checkout still cuts the round's parent tree", (t) => {
   // The report's row 50: a row FILED with `worktree` naming the project checkout. The lookup took the field at its
-  // word, no cut was asked for, and the stage committed into the checkout's main. A pipeline row's work happens in a
-  // tree cut for its round, and the first cut is what makes the round - so a filed path is a hint, never the tree.
+  // word, no cut was asked for, and the stage committed into the checkout's main. The filed-tree rule reads the
+  // tree's BRANCH for exactly this case: a trunk is never a stage's tree, whatever the filing form said.
   const filed = tree(t); // the checkout the row was filed against: a real directory, and no tree of this round
-  const out = drive([row({ state: "queued", thread: null, threads: [], worktree: filed })]);
+  const out = drive([row({ state: "queued", thread: null, threads: [], worktree: filed })], {
+    treeOf: () => ({ branch: "main", commit: "9".repeat(40), head: "9999999", dirty: 0 }),
+  });
 
   assert.equal(out.starts.length, 0, "the stage is not started in the tree the row was filed against");
   assert.equal(out.ensureTree.length, 1, "the first cut is owed before anything runs");
@@ -726,6 +749,18 @@ test("a row filed with a worktree still cuts the round's parent tree before its 
   assert.equal(out.ensureTree[0].base, null, "cut from origin/main, so the cut names no base");
   assert.equal(out.ensureTree[0].parent, null, "and no parent branch: the parent tree is the round's first tree");
   assert.equal(treeLookup(out.tasks[0]).needed, true, "the row has no tree of its own until the panel cuts one");
+});
+
+test("a per-stage pipeline filed with a work branch still cuts its own child trees", (t) => {
+  const filed = tree(t);
+  const perStage = bundleOf(pipeline({ isolation: "per-stage" }));
+  const out = drive([row({ state: "queued", thread: null, threads: [], worktree: filed })], {
+    bundle: perStage,
+    treeOf: () => ({ branch: "wtgui/carry-the-contract-abc123", commit: "9".repeat(40), head: "9999999", dirty: 0 }),
+  });
+
+  assert.equal(out.starts.length, 0, "one filed tree cannot stand in for a per-stage round's children");
+  assert.equal(out.ensureTree.length, 1, "a per-stage round cuts the tree its first stage runs in");
 });
 
 test("a row with a tree starts the next stage IN that tree", (t) => {

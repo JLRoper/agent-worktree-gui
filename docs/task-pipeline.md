@@ -316,13 +316,19 @@ first stage to its last. Before its first stage it cuts a real worktree on `.wor
 - The lookup answers the stage's OWN tree, from `stageRuns[].tree.path` and then `pipelineRun.trees[stage]`. A stage
   with no tree yet is `needed` (the cut is the next step), and a tree that was recorded and is gone is
   `pipeline-tree-gone`, **never** a second cut and never the project checkout.
-- **The panel cuts every tree a round works in; a row's `worktree` never names one before that cut.** A queue row can
-  carry a `worktree` when it is FILED (the old model's advice, "a queue row names a real tree"), and a stage that ran
-  there is how row 50 of the 2026-11-09 round report committed into the project checkout. `treeLookup` therefore
-  honours `worktree` only once the record shows the row has STARTED - a stage run entry, a `startingAt` request, or a
-  state only a link writes (`running`) - because all three are the panel's own writes. A queued pipeline row with no
-  tree of its own answers `needed` whatever the field says: its first cut cuts the round's parent tree, and the field
-  is a filing hint, not evidence of a tree the panel cut.
+- **The panel cuts every tree a round works in; a row's `worktree` never names one before that cut - except on a
+  `shared` ladder, which runs in the tree it was filed with.** A queue row can carry a `worktree` when it is FILED
+  (the old model's advice, "a queue row names a real tree"), and a stage that ran there is how row 50 of the
+  2026-11-09 round report committed into the project checkout. `treeLookup` therefore honours `worktree` only once the
+  record shows the row has STARTED - a stage run entry, a `startingAt` request, or a state only a link writes
+  (`running`) - because all three are the panel's own writes. A queued pipeline row with no tree of its own answers
+  `needed` whatever the field says: its first cut cuts the round's parent tree, and the field is a filing hint, not
+  evidence of a tree the panel cut.
+  **One exception, and it is the landing ladders.** A `shared` pipeline reuses ONE tree for every stage, so a row
+  filed with a real work branch may run there instead of cutting a round it does not need (`filedTreeOf` in
+  `lib/task-pipeline-drive.js`). The field is not taken at its word: the directory must exist, the panel's own git
+  read (`treeOf`) must answer a branch for it, and that branch must not be a trunk - row 50's checkout on `main` is
+  still refused, and a `per-stage` pipeline still cuts its children because one filed tree cannot stand in for them.
 - A row written before rounds existed has no `round` and keeps the model it was cut under: one tree, reused by every
   stage (`treeLookup`). A deploy therefore never re-cuts a row already in flight.
 - A tree path is claimed by every OPEN row whose run tree, `worktree`, round `parentPath` or **any stage tree on the
