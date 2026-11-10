@@ -1,0 +1,18 @@
+{
+  "schema": "verdict/1",
+  "gate": "G1",
+  "pipeline": "ping-pong",
+  "round": 1,
+  "stage": "critique",
+  "outcome": "revise",
+  "accepted": false,
+  "openNotes": 1,
+  "notes": "critique-notes",
+  "notesPath": "ledger/ping-pong/critique.md",
+  "draftPath": "ledger/ping-pong/draft.md",
+  "draftCommit": "d27bfc8d746b2bd3a98a0a87e4b1329fdbd42734",
+  "draftRewritten": false,
+  "by": "critic",
+  "at": "2026-11-10T06:19:52.000Z",
+  "reason": "note 1 is open: the cap counts crossings of H-02, not the drafter's visits, and the draft has not been rewritten against it"
+}
