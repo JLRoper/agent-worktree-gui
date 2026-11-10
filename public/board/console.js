@@ -1855,6 +1855,18 @@ async function loadThinkingAfter(turn) {
 }
 
 // One turn's thoughts, from the store, bounded by the turn's own clock.
+//
+// The session the STORE is read under is the turn's own Hermes session, never the card's thread. A worker run is
+// started with the thread as its session, so the two are the same string there; an assistant's turns run under a
+// session the gateway named from the prompt, so asking the store for `panel-assistant-5` answers "nothing recorded"
+// while that turn's own session holds its blocks. That is what made only the one assistant whose session matched its
+// thread show any reasoning at all.
+//
+// Visibility is a different question with a different answer (see `thinkHtml`): the 🧠 switch belongs to the CARD.
+function thinkingSessionFor(turn) {
+  return String(turn?.sessionId || turn?.thread || turn?.id || "");
+}
+
 async function loadThinking(turn, copy = "") {
   const key = turnKey(turn, copy);
   if (state.thinkLoading.has(turn.id)) return;
@@ -1868,7 +1880,7 @@ async function loadThinking(turn, copy = "") {
     // Bounded by the turn's own clock, which stops where the next turn began (an interrupted turn has no endedAt).
     const { from, to } = turnBounds(turn);
     const r = await apiFetch(
-      `/api/thinking?thread=${encodeURIComponent(turn.thread || turn.id)}&from=${from}&to=${to}`,
+      `/api/thinking?thread=${encodeURIComponent(thinkingSessionFor(turn))}&from=${from}&to=${to}`,
     );
     if (r.ok) {
       const d = await r.json();
@@ -2006,12 +2018,12 @@ function syncStreamConsole(out, body, stick) {
   return true;
 }
 
-function paintStreamConsole(turn, copy = "") {
+function paintStreamConsole(turn, copy = "", thread = turn.thread || turn.id) {
   const out = placedNodes("pre.job-out").find((el) => el.dataset.out === `${turn.id}${copy}`);
   if (!out) return false;
   const all = jobLines(turn.id).filter((l) => !isBookkeeping(l));
   const stick = consolePinned(`${turn.id}${copy}`) || wireConsole(out)._atBottom !== false;
-  syncStreamConsole(out, streamBodyHtml(turn, all.slice(-300), all.length > 300), stick);
+  syncStreamConsole(out, streamBodyHtml(turn, all.slice(-300), all.length > 300, thread), stick);
   if (stick) stickSoon(out);
   paintToBottom(out);
   return true;
@@ -2114,12 +2126,18 @@ function syncThinkBlock(el, fresh) {
 
 function paintThink(turn, copy = "") {
   const key = turnKey(turn, copy);
+  // The block (or, in the 🌊 mode, the console that carries the reasoning) is drawn inside ONE card, and that card's
+  // thread is the value its 🧠 wrote. Reading the choice back from the node the turn actually belongs to is what keeps
+  // the repaint and the button on one key, whatever the turn's own thread says.
+  const block = document.querySelector(`details.think[data-think-turn="${CSS.escape(key)}"]`);
+  const consoleOut = block ? null : document.querySelector(`pre.job-out[data-out="${CSS.escape(turn.id)}${CSS.escape(copy)}"]`);
+  const thread = (block || consoleOut)?.closest(".job[data-thread]")?.dataset.thread || turn.thread || turn.id;
   // The 🌊 draws the reasoning inside the console, so that is the thing to repaint — there is no block on the page.
-  if (streamOn(turn.thread || turn.id) && paintStreamConsole(turn, copy)) return;
-  const el = document.querySelector(`details.think[data-think-turn="${CSS.escape(key)}"]`);
+  if (streamOn(thread) && paintStreamConsole(turn, copy, thread)) return;
+  const el = block;
   if (!el) return;
   const holder = document.createElement("div");
-  holder.innerHTML = thinkHtml(turn, copy);
+  holder.innerHTML = thinkHtml(turn, copy, thread);
   const fresh = holder.firstElementChild;
   if (!fresh) return;
   const body = el.querySelector(".think-body");
@@ -2148,9 +2166,12 @@ function thinkOpenFor(turn, key) {
   return turnLive(turn);
 }
 
-function thinkHtml(turn, copy = "") {
+function thinkHtml(turn, copy = "", thread = turn.thread || turn.id) {
   const key = turnKey(turn, copy);
-  if (!thinkingOn(turn.thread || turn.id)) return "";
+  // The CARD's thread, handed down from the renderer. It is the same value the 🧠 beside this block writes, so a press
+  // always flips the block drawn under it: a turn that carries a thread of its own (an assistant's turns run under a
+  // session the gateway named) or carries none must not answer for the card's choice.
+  if (!thinkingOn(thread)) return "";
   const entry = state.thinkCache.get(turn.id);
   const blocks = entry?.blocks || [];
   const open = thinkOpenFor(turn, key);

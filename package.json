@@ -41,6 +41,7 @@
     "verify:console-render": "node tools/verify-console-render.mjs",
     "verify:flicker": "node tools/verify-console-flicker.mjs",
     "verify:stream-default": "node tools/verify-stream-default.mjs",
+    "verify:think-toggle-cards": "node tools/verify-think-toggle-cards.mjs",
     "verify:two-assistants": "node tools/verify-two-assistants-e2e.mjs",
     "verify:wake-ladder": "node tools/verify-wake-ladder.mjs",
     "verify:settings-window": "node tools/verify-settings-window.mjs",

@@ -52,10 +52,9 @@
 // belongs to, so a reader's selection in an earlier paragraph survives the turn growing under it. A run of call pieces
 // is the exception the group IS: those pieces are collected into one group node, which is what "a rule above and a
 // rule below the group" means.
-function streamBodyHtml(turn, lines, windowFull = false) {
+function streamBodyHtml(turn, lines, windowFull = false, thread = turn.thread || turn.id) {
   const W = globalThis.wtStream;
   if (!W || typeof W.merge !== "function" || typeof W.pieces !== "function") return "";
-  const thread = turn.thread || turn.id;
   // Reasoning joins the stream only while the 🧠 is on: with it off, the console's own one-line preview is the only
   // trace of what the agent thought, exactly as in the condensed view.
   const blocks = thinkingOn(thread) ? state.thinkCache.get(turn.id)?.blocks || [] : [];
@@ -169,14 +168,18 @@ function condensedBodyHtml(turn, lines, busy, storeSeen) {
   return parts.join("") || '<div class="jl jl-dim" data-wait="1">waiting for output…</div>';
 }
 
-function turnBody(turn, copy = "") {
+// `thread` is the CARD's own thread, and it is the one identity the two switches on that card share: the 🧠 beside
+// this body writes its answer under the card's thread, so the body must read the answer back from the same value.
+// A turn's own `thread` can differ (an assistant's turns run under a session of their own) or be absent, which is
+// why this is handed down from `conversationHtml` rather than guessed here.
+function turnBody(turn, copy = "", thread = turn.thread || turn.id) {
   const all = jobLines(turn.id).filter((l) => !isBookkeeping(l));
   // A window, cut on a burst boundary rather than a line count: windowLines keeps the call line of the burst the
   // window would otherwise open inside, so that burst is still a group with a head row and a remembered state.
   const lines = windowLines(all);
   const running = turnLive(turn);
   // The 🌊: this card draws ONE stream, so the reasoning is not a block above the console — it is in it.
-  const stream = streamOn(turn.thread || turn.id) && Boolean(globalThis.wtStream);
+  const stream = streamOn(thread) && Boolean(globalThis.wtStream);
   // Which started tool call has no result yet. Parallel calls interleave, so count starts and
   // completions per tool name instead of assuming "the last line is the running one".
   const busy = running ? inflightToolIndex(lines) : -1;
@@ -184,9 +187,9 @@ function turnBody(turn, copy = "") {
   // paragraph, then another patch burst, and the second one must start after the first one's rows.
   const storeSeen = new Map();
   const body = stream
-    ? streamBodyHtml(turn, lines, lines.length < all.length)
+    ? streamBodyHtml(turn, lines, lines.length < all.length, thread)
     : condensedBodyHtml(turn, lines, busy, storeSeen);
-  return (stream ? "" : thinkHtml(turn, copy)) +
+  return (stream ? "" : thinkHtml(turn, copy, thread)) +
     // `out-tab` carries the 18px left tab the console itself has, so the wrapper is the console's box: the chip
     // centred in the wrapper is centred in the console, not 9px off it.
     `<div class="out-wrap out-tab" data-copy><pre class="job-out" data-out="${esc(turn.id)}${esc(copy)}">${body}</pre>${consoleToolsHtml()}${toBottomBtnHtml()}</div>` +
@@ -219,7 +222,7 @@ function turnBlock(conv, turn, index, copy = "") {
   return `<div class="${cls}" data-turn="${esc(turn.id)}">${turnHead(turn, index, true, copy, true)}` +
     // The request stays on the head line whether the turn is open or folded: it is the turn's title either
     // way, and the open form used to drop it onto its own row, which pushed the transcript down for nothing.
-    `${turnAttachmentsHtml(turn)}${turnBody(turn, copy)}</div>`;
+    `${turnAttachmentsHtml(turn)}${turnBody(turn, copy, conv.thread)}</div>`;
 }
 
 function conversationHtml(conv) {
@@ -853,9 +856,11 @@ function paintCardMeta(el, conv) {
   }
 }
 
-function renderConversation(thread, { scroll = false } = {}) {
+function renderConversation(thread, { scroll = false, card = null } = {}) {
   const conv = conversations().find((c) => c.thread === thread);
-  const el = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`);
+  // A press that knows which card it came from repaints THAT card. Looking the thread up in the document can only
+  // find one of two hosts, and the reader pressed in the other one.
+  const el = card && card.isConnected ? card : document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`);
   if (!conv) return renderJobs();
   if (!el) {
     // The assistant's card lives in the floating panel, not in #jobs. Rebuilding the unattached list would
