@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Where a round's grouping lives, and why a restart lost it</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 40px 24px 64px; background: #14161a; color: #d9dde3;
+         font: 15px/1.62 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  main { max-width: 960px; margin: 0 auto; }
+  h1 { font-size: 26px; line-height: 1.25; margin: 0 0 6px; color: #f2f5f8; letter-spacing: -0.01em; }
+  .sub { color: #97a0ab; margin: 0 0 32px; font-size: 14px; }
+  h2 { font-size: 17px; margin: 36px 0 10px; color: #f2f5f8; }
+  p { margin: 0 0 12px; }
+  code { font: 13px/1.5 "Cascadia Mono", Consolas, monospace; background: #1d2026; border: 1px solid #2b3038;
+         border-radius: 4px; padding: 1px 5px; color: #e6e9ee; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0 6px; font-size: 14px; }
+  th, td { text-align: left; vertical-align: top; padding: 9px 10px; border-bottom: 1px solid #2b3038; }
+  th { color: #9aa4b0; font-weight: 600; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.04em; }
+  td code { background: #191c21; }
+  .box { border: 1px solid #2b3038; border-left: 3px solid #6ea8fe; background: #181b20;
+         border-radius: 6px; padding: 14px 16px; margin: 18px 0; }
+  .box.bad { border-left-color: #e06c75; }
+  .box.good { border-left-color: #7ec699; }
+  .box h3 { margin: 0 0 6px; font-size: 14px; color: #f2f5f8; }
+  ul { margin: 6px 0 12px; padding-left: 22px; }
+  li { margin: 4px 0; }
+  pre { margin: 10px 0 0; padding: 12px 14px; background: #101215; border: 1px solid #262b33;
+        border-radius: 6px; overflow-x: auto; font: 12.5px/1.55 "Cascadia Mono", Consolas, monospace; color: #cfd6de; }
+  .muted { color: #8b949e; }
+  .ok { color: #7ec699; }
+  .no { color: #e06c75; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Where a round's grouping lives, and why a restart lost it</h1>
+  <p class="sub">agent-worktree-gui, branch <code>wtgui/round-c-how-a-round-names-its-trees-stage-1-probe-294b21</code>,
+  on top of <code>68c7bf5d</code>. State root in this report: <code>C:/Users/roper/.wag/state</code>.</p>
+
+  <h2>The finding</h2>
+  <p>A round names two things about its trees: what each row is called, and which row it hangs under. The name was
+  moved onto the queue task in the names cut. The grouping never was, so the two facts come from different stores and
+  only one of them is read on every snapshot. After a full node restart the names are still painted because the
+  snapshot reads them from a file; the group is missing because the edge is a field a <em>scan</em> writes, and a
+  freshly discovered row has not been scanned yet.</p>
+
+  <h2>Where the names are stored</h2>
+  <table>
+    <tr><th>Store</th><th>Key</th><th>Who reads it</th></tr>
+    <tr>
+      <td><code>&lt;state&gt;/assistants/&lt;id&gt;/queue.json</code><br><span class="muted">the queue task that cut the trees</span></td>
+      <td>parent tree: <code>tasks[].pipelineRun.round.display</code><br>
+          stage child: <code>tasks[].pipelineRun.trees[&lt;stageId&gt;].stageName</code> and <code>.position</code>
+          (drawn as <code>Stage &lt;n&gt;: &lt;name&gt;</code>), with <code>.display</code> as the fallback</td>
+      <td><code>lib/round-tree-names.js</code> <code>roundTreeNames()</code>, behind <code>assistant.roundNames()</code>,
+          stamped on every row as <code>row.round</code> by <code>server.js</code> <code>withRoundNames()</code></td>
+    </tr>
+    <tr>
+      <td><code>&lt;state&gt;/tree-names.json</code><br><span class="muted">the naming ledger (not the chart's title)</span></td>
+      <td><code>trees["&lt;project&gt;::&lt;tag&gt;"]</code> with <code>name</code>, <code>dir</code>, <code>branch</code></td>
+      <td><code>lib/tree-names.js</code> <code>forTree()</code>, stamped as <code>row.named</code>; it says what the tree's
+          directory and branch were named, and stops the auto-namer touching the tree again</td>
+    </tr>
+  </table>
+  <p>The queue read is keyed by the normalised tree path (<code>roundTreeKey</code>: forward slashes, no trailing
+  slash, lower case), so it matches the row on Windows and on Linux alike.</p>
+
+  <h2>Where the grouping was stored</h2>
+  <table>
+    <tr><th>Store</th><th>Key</th><th>Who reads it</th></tr>
+    <tr>
+      <td><code>&lt;state&gt;/parents.json</code><br><span class="muted">the parent book</span></td>
+      <td>written as <code>records[]</code>; held in memory and looked up by <code>parentKey</code> =
+          <code>&lt;project&gt;::&lt;branch&gt;</code>, with <code>parent</code>, <code>parentSource</code>,
+          <code>parentRef</code>, <code>parentSha</code>, <code>why</code></td>
+      <td><code>ParentBook.rowsFor(project)</code> into the scan context (<code>lib/scheduler.js</code> <code>ctxFor</code>),
+          through <code>lib/scan.js</code> <code>parentFor()</code>, onto the scanned row as <code>row.parent</code>;
+          the chart groups by branch in <code>public/render-projects.js</code> <code>childTreeOf()</code></td>
+    </tr>
+    <tr>
+      <td><code>&lt;state&gt;/branch-parents.json</code><br><span class="muted">the landing book (not the chart)</span></td>
+      <td><code>"tag:&lt;6 hex&gt;"</code> or <code>"tree:&lt;path&gt;"</code>, with <code>parent</code>, <code>branch</code>,
+          <code>tree</code></td>
+      <td><code>lib/jobs.js</code> for the landing paragraph; nothing on the board draws from it</td>
+    </tr>
+  </table>
+
+  <h2>Why the grouping did not survive</h2>
+  <div class="box bad">
+    <h3>Measured, not inferred</h3>
+    <p>A sandbox with one repo, a round parent worktree, one stage worktree, a queue task naming both, and
+    <code>parents.json</code> absent. The real panel was booted twice over that state dir:</p>
+    <pre>boot 1: round-a-052254             round.display = "Round A: the parent-tree note"   parent = absent
+        round-a-stage-1-probe-6632b6 round.display = "Stage 1: probe"                 parent = absent
+boot 2: identical - both names still there, no grouping on either row</pre>
+    <p class="muted">On the same state dir before the fix, the stage row carried no grouping field at all: the new
+    boot test failed on <code>round.parentPath</code> with <code>actual: undefined, expected: null</code>.</p>
+  </div>
+  <ul>
+    <li>The name is an overlay: <code>withRoundNames()</code> puts <code>row.round</code> on every row of every
+    snapshot, so it is on the board the moment the process can read the queue file.</li>
+    <li>The grouping was a scanned field. <code>parentFor()</code> runs inside the per-row git read, so a row that was
+    just discovered carries no <code>parent</code> until its own scan lands. A project parked on the old tier can wait
+    an hour for that scan, and a board that has only just booted has every row in that state.</li>
+    <li>And when the book had no record for a stage tree - a round cut before the record existed, or a book write that
+    failed - the grouping never came back at all, while the name did. The queue already held the answer; nothing read
+    it for the chart.</li>
+  </ul>
+
+  <h2>What changed, on top of 68c7bf5d</h2>
+  <div class="box good">
+    <h3>The grouping now rides the same record as the name</h3>
+    <ul>
+      <li><code>lib/assistant.js</code> <code>cutPipelineTree</code>: the stage tree record writes
+      <code>parentPath</code> beside its <code>parent</code> branch, so the store holds both halves of the edge for
+      every tree a round cuts. Records written before this change are still read correctly through the fallback
+      below.</li>
+      <li><code>lib/round-tree-names.js</code>: every entry carries <code>parentPath</code>. A round's parent tree
+      answers <code>null</code> (it is a sibling of the checkout's own row); a stage child answers
+      <code>tree.parentPath || round.parentPath</code>, so an old record and a re-homed tree both read right.</li>
+      <li><code>public/render-projects.js</code> <code>childTreeOf()</code>: the round record's <code>parentPath</code>
+      is the edge when a row has one, resolved by path against the project's own rows. The branch edge is the fallback
+      for every other row. The old rules still hold: a parent must be a drawn row of the same project, a main branch is
+      never a parent, and cycles are still broken.</li>
+      <li><code>lib/parents.js</code> <code>record()</code>: <code>parentName: null</code> is now an answer, not a
+      missing value. A round's parent tree cut from <code>origin/main</code> used to fall back to the ref and record
+      <code>parent: "origin/main"</code>, re-introducing the parent 68c7bf5d had just removed; it now records no chart
+      parent, and only a caller that says nothing at all lets the ref answer.</li>
+    </ul>
+  </div>
+  <p>The merge chooser is deliberately untouched: a stage tree still has nothing to roll into. Its parent tree is where
+  the round assembles, not where a stage branch lands, so the grouping is a chart fact and not a landing claim.</p>
+
+  <h2>What ran</h2>
+  <table>
+    <tr><th>Test file</th><th>What it pins</th><th>Result</th></tr>
+    <tr><td><code>test/round-tree-names.test.js</code></td><td>parent entry groups under nothing; stage children group
+        under the round's parent tree; a tree's own <code>parentPath</code> wins; a record with no parent path groups
+        nothing</td><td class="ok">13 pass (3 new fail on the base, pass here)</td></tr>
+    <tr><td><code>test/chart-nesting.test.js</code></td><td>a just-booted board groups a round from its own record with
+        no scanned parent edge; a child whose parent row is absent stays top level</td><td class="ok">7 pass (the new
+        one fails on the base)</td></tr>
+    <tr><td><code>test/round-grouping-restart.test.js</code> <span class="muted">(new)</span></td><td>the real panel
+        booted twice over one sandbox with no <code>parents.json</code>: name and grouping both survive</td>
+        <td class="ok">1 pass (fails on the base)</td></tr>
+    <tr><td><code>test/pipeline-stage-trees.test.js</code></td><td>the cut records, including a round cut from
+        <code>origin/main</code></td><td class="ok">6 pass (2 were red on the base, fixed by the parent-book change)</td></tr>
+    <tr><td><code>test/child-route.test.js</code>, <code>test/steward.test.js</code>,
+        <code>test/brief-follows-the-policy.test.js</code>, <code>test/pipeline-assembly.test.js</code>,
+        <code>test/assistant-queue.test.js</code></td><td>the other readers of the parent book and the queue</td>
+        <td class="ok">89 pass</td></tr>
+  </table>
+  <p class="muted">Two red tests remain on the base and are not from this work: <code>test/assistant-profile.test.js</code>
+  ("the whitelists are gone from the profile ...") and <code>test/worktree-assistant.test.js</code> ("the owner is drawn
+  from the server's answer ..."). Both fail identically with these changes stashed.</p>
+</main>
+</body>
+</html>

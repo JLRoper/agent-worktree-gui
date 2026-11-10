@@ -265,3 +265,5 @@ ledger/gui-improve/settings-panel-board/compare/change-set.patch | 3 | record: t
 ledger/gui-improve/settings-panel-board/compare/comparison.json | 156 | record: the comparison quotes the scan roots and the measured comment on both sides
 ledger/gui-improve/settings-panel-board/compare/README.md | 7 | record: the compare's protocol names the two folders and the browser install it ran with
 ledger/gui-improve/settings-panel-board/compare/run.mjs | 9 | probe: the scan roots and the browser and module folders the compare was run with, kept as its defaults
+docs/reports/round-grouping-persistence-2026-11-09.html | 1 | record: the report names the panel queue file it read, which is the machine's own state folder
+ledger/verify/round-tree-layout/layout.json | 9 | record: the capture names the sandbox trees each measured row was drawn from, so its before/after counts can be re-read

@@ -30,6 +30,7 @@ import { sliceRegion } from "../tools/panel-testkit.mjs";
 
 const CLOCK = "2026-11-09T10:00:00.000Z";
 const EMAIL = ["chart", "example.invalid"].join(String.fromCharCode(64));
+const ROUND = { slug: "carry-the-form", tag: "a1b2c3", title: "carry the form" };
 
 // A real repository whose `origin/main` is a real remote-tracking branch, and a checkout moved AHEAD of it: a round
 // that started from the checkout's tip would carry a commit the remote has never seen, so the two tips must differ
@@ -124,7 +125,12 @@ const page = readFileSync(new URL("../public/render-projects.js", import.meta.ur
 const region = sliceRegion(page, "children under their parent");
 const keyOf = (project, p) => `${project}::${p}`;
 const state = { rows: new Map(), foldedParents: new Set() };
-const { childTreeOf, groupCtxOf, nestRowKeys } = new Function("state", "keyOf", "esc", `${region}; return { childTreeOf, groupCtxOf, nestRowKeys };`)(state, keyOf, (s) => String(s ?? ""));
+const { childTreeOf, groupCtxOf, nestRowKeys } = new Function("state", "keyOf", "esc", "normPath", `${region}; return { childTreeOf, groupCtxOf, nestRowKeys };`)(
+  state,
+  keyOf,
+  (s) => String(s ?? ""),
+  (p) => { const s = String(p || "").split(String.fromCharCode(92)).join("/"); return s.endsWith("/") ? s.slice(0, -1) : s; },
+);
 
 test("a live round's parent draws beside main, and its two stage trees hang under the round", async (t) => {
   const r = repo(t);
@@ -227,6 +233,59 @@ test("a live round's parent draws beside main, and its two stage trees hang unde
   assert.equal(groupCtxOf(tree, roundKey).hidden, false, "the round stays on screen");
   assert.equal(groupCtxOf(tree, mainKey).hidden, false, "and main is untouched by the round's fold");
 });
+
+test("a book that still says `main` for the round's parent tree draws the same sibling picture", () => {
+  // A record written before the cut stopped naming main (or a hand-edited book). The page refuses the edge, so the
+  // board a reader already has draws the round the same way without a migration.
+  const root = "/repo/demo";
+  const rows = [
+    { project: "demo", path: root, branch: "main", parent: null },
+    { project: "demo", path: `${root}/.worktrees/carry-the-form-a1b2c3`, branch: "wtgui/carry-the-form-a1b2c3", parent: "main", parentSource: "cut" },
+    { project: "demo", path: `${root}/.worktrees/carry-the-form-stage-1-write-the-draft-111111`, branch: "wtgui/carry-the-form-stage-1-write-the-draft-111111", parent: "wtgui/carry-the-form-a1b2c3", parentSource: "cut" },
+  ];
+  state.rows = new Map(rows.map((row) => [keyOf(row.project, row.path), row]));
+  state.foldedParents = new Set();
+  const tree = childTreeOf("demo");
+  const mainKey = keyOf("demo", root);
+  const parentKey = keyOf("demo", rows[1].path);
+  const childKey = keyOf("demo", rows[2].path);
+  assert.equal(tree.parentOf.get(parentKey), undefined, "main is never a row's parent, so the parent tree is top-level");
+  assert.equal(tree.parentOf.get(childKey), parentKey, "and the stage tree still hangs under it");
+  assert.equal(tree.childrenOf.get(mainKey), undefined, "the checkout gains no children");
+});
+
+
+test("a board that has just booted groups a round from its own record, with no scanned parent edge", () => {
+  // What a full restart leaves behind: every row carries the round's NAME from the queue task, and none carries a
+  // scanned `parent` yet (the parent book is consulted by the scan, lib/scan.js `parentFor`, not by the snapshot).
+  // The chart must draw the group from the record - the store the names come from - instead of waiting for a scan.
+  const root = "/repo/demo";
+  const parent = `${root}/.worktrees/round-c-5b3b85`;
+  const probe = `${root}/.worktrees/round-c-stage-1-probe-294b21`;
+  const conclude = `${root}/.worktrees/round-c-stage-2-conclude-7ace4b`;
+  const rows = [
+    { project: "demo", path: root, branch: "main", parent: null },
+    { project: "demo", path: parent, branch: "wtgui/round-c-5b3b85", parent: "main", parentSource: "cut", round: { display: "Round C", role: "parent", parentPath: null } },
+    { project: "demo", path: probe, branch: "wtgui/round-c-stage-1-probe-294b21", parentSource: "unknown", round: { display: "Stage 1: Probe", role: "stage", position: 1, parentPath: parent } },
+    { project: "demo", path: conclude, branch: "wtgui/round-c-stage-2-conclude-7ace4b", parentSource: "unknown", round: { display: "Stage 2: Conclude", role: "stage", position: 2, parentPath: parent } },
+  ];
+  state.rows = new Map(rows.map((row) => [keyOf(row.project, row.path), row]));
+  state.foldedParents = new Set();
+  const tree = childTreeOf("demo");
+  const parentKey = keyOf("demo", parent);
+  assert.equal(tree.parentOf.get(parentKey), undefined, "the round's parent tree is still a sibling of the checkout");
+  assert.equal(tree.parentOf.get(keyOf("demo", probe)), parentKey, "the first stage tree groups with no scanned parent edge");
+  assert.equal(tree.parentOf.get(keyOf("demo", conclude)), parentKey, "and so does the second");
+  assert.deepEqual(tree.childrenOf.get(parentKey).sort(), [keyOf("demo", conclude), keyOf("demo", probe)].sort());
+
+  // A stage tree whose recorded parent tree has no row keeps its own place: a child never hangs under a row that is
+  // not drawn, and it does not fall back to a scanned edge the record did not name.
+  state.rows = new Map([
+    [keyOf("demo", probe), { project: "demo", path: probe, branch: "wtgui/round-c-stage-1-probe-294b21", parent: "wtgui/something-else-111111", round: { display: "Stage 1: Probe", role: "stage", parentPath: parent } }],
+  ]);
+  assert.equal(childTreeOf("demo").parentOf.get(keyOf("demo", probe)), undefined, "no parent row, no edge");
+});
+
 
 // ---- the TITLE each of those rows paints ---------------------------------------------------------------------------
 //
