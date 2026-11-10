@@ -10771,22 +10771,84 @@ document.addEventListener("dblclick", (e) => {
 // The tree is read from the job's OWN `worktreePath`, never from `cwd` or `ownerPath`: a card attached by the old
 // fallback carries the checkout that CONTAINS its tree, and believing that would keep a parent's row alive for a run
 // in a child. Paths are compared whole, after slash and case normalisation, so `/a/b-c` never matches `/a/b`.
+//
+// A run in a project's own checkout carries no `worktreePath` at all - nothing was cut for it - and the checkout row
+// is exactly the row it is working in, so dropping it hid the very project a live turn was running in. It is resolved
+// by `focusCheckoutTreesOfJob` instead, and the row kept is that project's CHECKOUT row, never a tree cut from it.
 
 // The tree a job is in, normalised for comparison, or "" when the record carries none. A job with no worktree path
-// is a run in a plain checkout the board has no row for, so it can keep nothing alive.
+// carries no tree of its own: the caller resolves it to a checkout (`focusCheckoutTreesOfJob`) or keeps nothing.
 function focusTreeOfJob(job) {
   const p = job?.worktreePath;
   return typeof p === "string" && p.trim() ? normPath(p).toLowerCase() : "";
+}
+
+// Every project's checkout, normalised ONCE per repaint. The resolution below is asked per pathless job, and a board
+// this size carries 300 of them against 177 projects: normalising a project path inside that loop would be 53,000
+// regex replaces per job event, on a stream that fires per token.
+function focusCheckouts() {
+  const out = [];
+  for (const [project, record] of state.projects) {
+    const root = normPath(record?.path || "");
+    if (!root) continue;
+    out.push({
+      at: root.toLowerCase(),
+      dir: (root.split("/").filter(Boolean).pop() || "").toLowerCase(),
+      name: String(project).trim().toLowerCase(),
+    });
+  }
+  return out;
+}
+
+// The CHECKOUT a pathless job is working in, as a list of normalised tree paths, empty when the record names none.
+//
+// Two shapes of pathless record are answered for, and both resolve to a PROJECT'S CHECKOUT ROW, never to a tree cut
+// from one:
+//
+//   1. the record's own `worktree` - the base name of the directory the run was handed (lib/jobs.js sets it when the
+//      panel cuts a tree), which for a run in a checkout is the project's own folder. It is matched against the
+//      PROJECTS and never against the rows, so a tree cut from a checkout, whose directory has a name of its own, can
+//      never answer for a run in the parent.
+//   2. the path the record does carry - `ownerPath` and `cwd` - but only where one of them IS a project's checkout,
+//      whole and exact. This is the shape the store actually writes for a run it cut nothing for: `worktree` is null
+//      on every one of them (measured on a live board: 301 pathless jobs, none carrying a name), so rule 1 alone
+//      would leave the defect in place for the very runs it is about. Two guards keep it safe. Exact equality, not a
+//      prefix, so no subdirectory of a checkout is ever taken for one; and a run whose own `cwd` or `ownerPath` sits
+//      under `.worktrees` is a tree run whose path went missing, so it keeps nothing rather than the parent.
+//
+// Every project matching is answered for - two checkouts called `menu` cannot be told apart - and a record that names
+// and points at nothing keeps nothing.
+function focusCheckoutTreesOfJob(job, checkouts = null) {
+  const named = String(job?.worktree || "").trim().toLowerCase();
+  const filed = normPath(job?.ownerPath || "").toLowerCase();
+  const ran = normPath(job?.cwd || "").toLowerCase();
+  const trees = [];
+  for (const { at, dir, name } of checkouts || focusCheckouts()) {
+    if (named && (dir === named || name === named)) {
+      trees.push(at);
+      continue;
+    }
+    const inCutTree = `${at}/.worktrees/`;
+    const atCheckout = filed === at || ran === at;
+    if (atCheckout && !filed.startsWith(inCutTree) && !ran.startsWith(inCutTree)) trees.push(at);
+  }
+  return trees;
 }
 
 // The trees the narrowed board keeps: one live turn is a live panel. `turnLive` is the page's own status answer
 // (running, starting, waiting, waiting_for_approval, queued - and a turn still parked on an approval).
 function liveFocusTrees(jobs = null) {
   const trees = new Set();
+  let checkouts = null;
   for (const job of jobs || state.jobs.values()) {
     if (!turnLive(job)) continue;
     const tree = focusTreeOfJob(job);
-    if (tree) trees.add(tree);
+    if (tree) {
+      trees.add(tree);
+      continue;
+    }
+    checkouts = checkouts || focusCheckouts();
+    for (const checkout of focusCheckoutTreesOfJob(job, checkouts)) trees.add(checkout);
   }
   return trees;
 }

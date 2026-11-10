@@ -208,7 +208,7 @@ function focusHarness({ jobs = [], rows = [], projects = [], expanded = [] } = {
     state: {
       jobs: new Map(jobs.map((j, i) => [j.id || `job-${i}`, j])),
       rows: new Map(rows.map((r) => [rowKey(r.project, r.path), r])),
-      projects: new Map(projects.map((name) => [name, { name }])),
+      projects: new Map(projects.map((p) => (typeof p === "string" ? [p, { name: p }] : [p.name, p]))),
       expanded: new Set(expanded),
       expandedProjects: new Set(projects),
       rowEls: rowNodes,
@@ -266,11 +266,134 @@ test("the predicate keeps a tree with one live panel and drops a tree with none"
   assert.equal(vm.runInContext('focusKeepsRow({ path: "/w/gamma" })', h.ctx), false, "no job, no row");
 });
 
-test("a job with no worktree path is dropped", () => {
+test("a job with neither a worktree path nor a worktree name is dropped", () => {
   const h = focusHarness({ jobs: [{ id: "plain", status: "running" }] });
   assert.equal(vm.runInContext('focusTreeOfJob({ status: "running" })', h.ctx), "", "no path, no tree");
   assert.equal(vm.runInContext("liveFocusTrees().size", h.ctx), 0, "a run in a plain checkout keeps nothing alive");
   assert.equal(vm.runInContext('focusKeepsRow({ path: "" })', h.ctx), false, "and an empty row path matches nothing");
+});
+
+// ---- a pathless run in a project's own checkout -------------------------------------------------------------
+//
+// A run that was NOT given a worktree works in the project's checkout, and carries no `worktreePath`. Two shapes of
+// that record exist, and both have to keep the CHECKOUT row - and never a tree cut from it, whose directory has a name
+// of its own:
+//
+//   * `worktree` names the project's folder (lib/jobs.js sets it from the directory the run was handed);
+//   * neither a path nor a name is written, and the checkout is where the record's own `ownerPath` / `cwd` sit. That
+//     is the shape the store actually writes for a run it cut nothing for: a live board was measured at 301 pathless
+//     jobs, not one of them carrying a `worktree` name.
+
+const FACTORY = { name: "factory", path: "C:/ProjectDevelopment/factory" };
+
+test("a pathless job in a project's checkout keeps that project's checkout row", () => {
+  const h = focusHarness({
+    jobs: [{ id: "checkout", status: "running", worktreePath: null, worktree: "factory" }],
+    rows: [
+      { project: "factory", path: "C:/ProjectDevelopment/factory" },
+      { project: "factory", path: "C:/ProjectDevelopment/factory/.worktrees/one" },
+      { project: "other", path: "C:/ProjectDevelopment/other" },
+    ],
+    projects: [FACTORY, { name: "other", path: "C:/ProjectDevelopment/other" }],
+  });
+  const kept = vm.runInContext("liveFocusTrees()", h.ctx);
+  assert.deepEqual([...kept], ["c:/projectdevelopment/factory"], "the checkout is the whole kept set");
+  assert.equal(vm.runInContext('focusKeepsRow({ path: "C:/ProjectDevelopment/factory" })', h.ctx), true);
+  assert.equal(
+    vm.runInContext('focusKeepsRow({ path: "C:/ProjectDevelopment/factory/.worktrees/one" })', h.ctx),
+    false,
+    "a tree cut from the checkout is another row and keeps nothing",
+  );
+  assert.equal(vm.runInContext('focusKeepsRow({ path: "C:/ProjectDevelopment/other" })', h.ctx), false, "no run, no row");
+});
+
+test("a pathless job sitting on a project checkout keeps that row, in the shape the store writes", () => {
+  const h = focusHarness({
+    jobs: [
+      {
+        id: "checkout",
+        status: "running",
+        worktreePath: null,
+        worktree: null,
+        ownerPath: "C:/ProjectDevelopment/factory",
+        cwd: "C:/ProjectDevelopment/factory",
+        baseCheckout: true,
+      },
+    ],
+    rows: [
+      { project: "factory", path: "C:/ProjectDevelopment/factory" },
+      { project: "factory", path: "C:/ProjectDevelopment/factory/.worktrees/one" },
+    ],
+    projects: [FACTORY],
+  });
+  assert.deepEqual([...vm.runInContext("liveFocusTrees()", h.ctx)], ["c:/projectdevelopment/factory"]);
+  assert.equal(vm.runInContext('focusKeepsRow({ path: "C:/ProjectDevelopment/factory" })', h.ctx), true);
+  assert.equal(
+    vm.runInContext('focusKeepsRow({ path: "C:/ProjectDevelopment/factory/.worktrees/one" })', h.ctx),
+    false,
+    "the checkout is kept, and the tree cut from it is not",
+  );
+});
+
+test("a pathless job whose own paths are inside a tree keeps nothing, not even the parent", () => {
+  const h = focusHarness({
+    jobs: [
+      // The attach fallback's shape: the owner is the checkout that CONTAINS the run, the cwd is the tree itself.
+      {
+        id: "lost-tree",
+        status: "running",
+        worktreePath: null,
+        ownerPath: "C:/ProjectDevelopment/factory",
+        cwd: "C:/ProjectDevelopment/factory/.worktrees/one",
+      },
+    ],
+    rows: [
+      { project: "factory", path: "C:/ProjectDevelopment/factory" },
+      { project: "factory", path: "C:/ProjectDevelopment/factory/.worktrees/one" },
+    ],
+    projects: [FACTORY],
+  });
+  assert.equal(vm.runInContext("liveFocusTrees().size", h.ctx), 0, "a run in a tree whose path went missing keeps no row");
+  assert.equal(vm.runInContext('focusKeepsRow({ path: "C:/ProjectDevelopment/factory" })', h.ctx), false);
+});
+
+test("a pathless job whose worktree names no known project keeps nothing", () => {
+  const h = focusHarness({
+    jobs: [
+      { id: "assistant", status: "running", assistant: true, worktreePath: null, worktree: "assistant-cwd" },
+      { id: "bare", status: "running", assistant: true, worktreePath: null },
+    ],
+    rows: [{ project: "factory", path: "C:/ProjectDevelopment/factory" }],
+    projects: [FACTORY],
+  });
+  assert.deepEqual(
+    [...vm.runInContext('focusCheckoutTreesOfJob({ assistant: true, worktree: "assistant-cwd" })', h.ctx)],
+    [],
+    "the assistant's own cwd names no project on the board",
+  );
+  assert.deepEqual(
+    [...vm.runInContext("focusCheckoutTreesOfJob({ assistant: true })", h.ctx)],
+    [],
+    "no name at all keeps nothing",
+  );
+  assert.equal(vm.runInContext("liveFocusTrees().size", h.ctx), 0, "neither assistant run keeps the checkout row alive");
+  assert.equal(vm.runInContext('focusKeepsRow({ path: "C:/ProjectDevelopment/factory" })', h.ctx), false);
+});
+
+test("a pathless job naming a directory a tree was cut into keeps nothing", () => {
+  const h = focusHarness({
+    jobs: [{ id: "child-dir", status: "running", worktreePath: null, worktree: "one" }],
+    rows: [
+      { project: "factory", path: "C:/ProjectDevelopment/factory" },
+      { project: "factory", path: "C:/ProjectDevelopment/factory/.worktrees/one" },
+    ],
+    projects: [FACTORY],
+  });
+  assert.equal(
+    vm.runInContext("liveFocusTrees().size", h.ctx),
+    0,
+    "a child row's directory name is not a project: it never keeps the child row, and it never keeps the checkout",
+  );
 });
 
 test("the match is the whole tree path, not a substring of one", () => {
