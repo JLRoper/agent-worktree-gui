@@ -1,6 +1,6 @@
 # One ping-pong round, from the draft to the verdict
 
-**Status:** design note, ping-pong round 70, stage 1 of 2 (draft, visit 1). Written against `lib/task-pipeline-drive.js` and `lib/task-pipeline.js` at `1c5c53c7`. It states what one round hands forward and where the round stops.
+**Status:** design note, ping-pong round 70, stage 1 of 2 (draft, visit 2). Rewritten against the critic's round 1 note at `ledger/ping-pong/critique.md` (`9888b9bc`), which was read as this visit's brief. Code read at `1c5c53c7`.
 
 **The question.** Two stages hand one piece of work back and forth. What exactly does each stage owe the next one, what does the gate between them decide, and what stops the back-and-forth before it circles for ever?
 
@@ -19,9 +19,11 @@ The critic reads that file and writes `ledger/ping-pong/critique.md`: one note p
 
 **G1, after critique, artifact `critique-notes`.** It refuses when "a note is open and the draft was not rewritten against it". The critic writes the decision record the gate declares, `ledger/ping-pong/verdict-r<round>.json`, with one of two outcomes: `revise` routes to H-02, `accept` routes to nothing and the pipeline ends. The round is the visit the gate is asked in, so round 2's record is `verdict-r2.json` and round 1's record can never answer round 2.
 
-## The cap
+## The cap (rewritten against note 1)
 
-H-02 carries `cap: "3 rounds"`. The cap counts the drafter's visits: a fourth draft visit is refused, and the row parks at the edge with the notes standing as the verdict. That is what keeps a round from circling for ever: three draft visits, then a person decides.
+H-02 carries `cap: "3 rounds"`, and the counter it bounds is `pipelineRun.crossings["H-02"]`, not the drafter's visits. `enterStage` charges the edge every time it is taken (`lib/task-pipeline.js:534-537`, reached from `moveTo` at `lib/task-pipeline-drive.js:1094-1101`), and the cap is compared against that count: `const used = Number(run.crossings?.[leaving.id]) || 0`, then `if (used + 1 > cap.limit)` (`lib/task-pipeline-drive.js:1050-1051`, `:1073-1085`).
+
+So three rounds is three CROSSINGS of H-02, and each `revise` verdict asks for one. With the shipped cap the walk makes draft visits 1, 2, 3 and 4 - the fourth draft visit is made, not refused - and the row parks when a fourth `revise` arrives with three crossings already charged (`used 3 of 3`, `used + 1 > 3`). The park's sentence prints both numbers, which is why the count is kept in crossings and the visits are reported beside it (`:1084`).
 
 ## The assembly
 
@@ -29,4 +31,4 @@ Each stage of a round commits in its own tree, cut at the round's frozen parent.
 
 ## Unsure
 
-Whether the cap should be read as three draft visits or as three crossings of H-02 is the one thing in this note I have not checked against the code; the sentence above reads the cap as visits.
+Nothing is left open from round 1: note 1 is answered in the cap section above. What this note still does not decide is whether a cap park should also carry the verdict that asked for the refused crossing; the driver writes `visits` and `verdict` onto the cap fact (`:2194-2199`), so the fact is already there, and the question is only whether the note should promise it to the reader.
