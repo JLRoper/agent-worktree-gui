@@ -90,7 +90,7 @@ function harness(t, { spawn = "auto" } = {}) {
         branch,
         startSha: ROUND_SHA,
         startRef: opts.round === true ? "origin/main" : opts.from || null,
-        parentName: opts.parent || (opts.round === true ? "origin/main" : "main"),
+        parentName: opts.round === true ? null : opts.parent || "main",
       };
     },
   };
@@ -141,6 +141,7 @@ test("a pipeline task's tree is cut first, then its stage is started, advanced o
   assert.equal(state.cuts[0].round, true, "the first cut IS the round's parent tree");
   assert.equal(state.cuts[0].remote, "main", "cut from origin/main, never from the checkout's tip");
   assert.equal(state.cuts[0].from, null, "the parent tree names no start ref: the remote decides it");
+  assert.equal(state.cuts[0].parent, null, "and names NO local parent, so the chart draws the round beside main");
   assert.equal(state.cuts[1].round, false, "the stage's tree is a child, not a second round");
   assert.equal(state.cuts[1].from, state.cuts[0].branch, "cut from the round's parent branch tip");
   assert.equal(state.cuts[1].parent, state.cuts[0].branch, "and recorded under it, so the chart nests one round together");
