@@ -513,6 +513,12 @@ ends, the panel records a re-check on the tree:
 }
 ```
 
+- **Where the fact comes from: the document the stage is on.** A ladder definition states the review exit on the
+  stage (`stage.exit.check`); a PDL document states it on the GATE after the stage (`verified_by`), because a PDL
+  stage declares an artifact and not an exit. `lib/pipelines.js` `reviewExitOf` reads both, so the wait, the rail edge
+  and the 3-crossing cap are the same for a tree record's rung and a queue row's PDL document. The wait carries the
+  document's id (`pipeline`) because a PDL row's tree is cut `local` and never moves; without it the timer would look
+  for the stage on `local` and register nothing.
 - **One ticker, not one timer per tree**, the way `lib/scheduler.js` drives the scans: a single interval asks which
   records are due, and each due record is one host read — `pr-comments` against `lastSeen` (Bitbucket
   `…/pull-requests/{id}/activities`, GitHub the PR's reviews and comments). That read is panel code and costs no
