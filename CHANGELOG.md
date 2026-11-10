@@ -4,16 +4,42 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.80.4 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.80.6 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-525 releases from v0.1.0 (2026-10-20) to v1.80.4 (2026-11-09), 1721 commits between the tags. Every release is anchored by an
+527 releases from v0.1.0 (2026-10-20) to v1.80.6 (2026-11-09), 1730 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.80.6 — 2026-11-09 · 3 commits
+
+[`fe7b0e9`](https://github.com/JLRoper/agent-worktree-gui/commit/fe7b0e9e2d171a3687ecaff1128f5760e9f160ba) · [compare v1.80.5...v1.80.6](https://github.com/JLRoper/agent-worktree-gui/compare/v1.80.5...v1.80.6)
+
+### Other
+
+- round A: the parent-tree note ([`d9e96db`](https://github.com/JLRoper/agent-worktree-gui/commit/d9e96db7e25ed31b9dcbe7da974362dfab7aa036))
+- Record a round's parent tree beside main, not under it ([`718e633`](https://github.com/JLRoper/agent-worktree-gui/commit/718e63374b4ac4c08de371ec4a89cc22714a6015))
+- chore: 1.80.6 - the version this landing carries ([`fe7b0e9`](https://github.com/JLRoper/agent-worktree-gui/commit/fe7b0e9e2d171a3687ecaff1128f5760e9f160ba))
+
+## v1.80.5 — 2026-11-09 · 6 commits
+
+[`f063ef8`](https://github.com/JLRoper/agent-worktree-gui/commit/f063ef82f74ef9f187545bccdc4dff1b5dcf7590) · [compare v1.80.4...v1.80.5](https://github.com/JLRoper/agent-worktree-gui/compare/v1.80.4...v1.80.5)
+
+### Docs & tests
+
+- docs: render the changelog - 525 releases ([`a868b9d`](https://github.com/JLRoper/agent-worktree-gui/commit/a868b9d4f868a7a61a87f2fd589e8bdb31a0bf2d))
+- test: the GitHub ladder has no loop to cross - every handoff is a sequence ([`a541265`](https://github.com/JLRoper/agent-worktree-gui/commit/a541265732e420b5fc4c01cf311e051b3e7cdb20))
+- docs: record the ladder's push stage ([`3edc1bf`](https://github.com/JLRoper/agent-worktree-gui/commit/3edc1bf51988e8d9c576955f877db223cf397064))
+- docs: record the ladder's pr stage ([`7b0f70f`](https://github.com/JLRoper/agent-worktree-gui/commit/7b0f70fd56a9d77744f8fe46c00641e5d4f6e941))
+
+### Other
+
+- chore: 1.80.1 - the version this landing carries ([`a659e34`](https://github.com/JLRoper/agent-worktree-gui/commit/a659e342a691cf51167e04f565342d5e3baf25a6))
+- chore: 1.80.5 - the version this landing carries ([`f063ef8`](https://github.com/JLRoper/agent-worktree-gui/commit/f063ef82f74ef9f187545bccdc4dff1b5dcf7590))
 
 ## v1.80.4 — 2026-11-09 · 2 commits
 
