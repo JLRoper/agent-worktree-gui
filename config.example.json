@@ -1,5 +1,10 @@
 {
   "port": 7331,
+  "logging": {
+    "level": "info",
+    "stallWarnMs": 1000,
+    "slowRequestMs": 1000
+  },
   "worktreeSeconds": 5,
   "midSeconds": 45,
   "dormantSeconds": 90,
