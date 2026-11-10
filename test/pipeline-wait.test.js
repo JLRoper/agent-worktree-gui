@@ -38,6 +38,8 @@ import {
   readReviewExit,
   renderPrompt,
   reviewWaitFor,
+  reviewExitOf,
+  reviewGateFor,
   settleWait,
   stageRunWaitFor,
   waitDueAt,
@@ -45,6 +47,7 @@ import {
   waitKind,
   PipelineRecords,
 } from "../lib/pipelines.js";
+import { parseBundle, pipelineById } from "../lib/pipeline-bundle.js";
 
 // Jobs reads this box's Hermes session store for counters; a suite about waits must not read the developer's own.
 process.env.HERMES_HOME = mkdtempSync(path.join(os.tmpdir(), "wtgui-wait-home-"));
@@ -114,10 +117,10 @@ function waitRecord(over = {}) {
 }
 
 // A tree in the durable book, on the `wait` stage of the review loop, with the record the panel would have written.
-function board(t, { stage = "wait", wait = waitRecord(), recordOver = {}, onStageSettled = null, catalogue = CATALOGUE } = {}) {
+function board(t, { stage = "wait", wait = waitRecord(), recordOver = {}, onStageSettled = null, catalogue = CATALOGUE, config = {} } = {}) {
   const dir = mkdtempSync(path.join(os.tmpdir(), "wtgui-wait-"));
   const records = new PipelineRecords({ file: path.join(dir, "pipeline-records.json") });
-  const jobs = new Jobs({ config: { jobsFile: path.join(dir, "jobs.json"), defaultCwd: dir }, onLog: () => {}, onStageSettled });
+  const jobs = new Jobs({ config: { jobsFile: path.join(dir, "jobs.json"), defaultCwd: dir, ...config }, onLog: () => {}, onStageSettled });
   jobs.pipelineRecords = records;
   jobs.pipelines = catalogue;
   const record = {
@@ -158,13 +161,27 @@ test("reviewWaitFor: only the reviewer's three exits seed a wait, and reviewers-
 
   // The conversion kept the stages the timer is about: the PDL document carries the same seven ids, in the same order,
   // and the wait stage's instruction is the sentence the ladder shipped. What it does NOT carry is `exit` — a PDL stage
-  // names the artifact it writes, not the check that ends it — so the ladder timer has nothing to read for a PDL
-  // pipeline. That gap is named in the PR body; it is not papered over here by inventing an exit on the document.
+  // names the artifact it writes, not the check that ends it - so the timer reads the GATE after the stage instead
+  // (`reviewGateFor`), and the same closed vocabulary comes back. One fact, two documents; see reviewWaitFor's comment.
   const pdl = JSON.parse(readFileSync(BUNDLE, "utf8")).pipelines.find((p) => p.id === "sefl-review-loop");
   assert.ok(pdl, "the review loop ships in the PDL bundle");
   assert.deepEqual(pdl.stages.map((s) => s.id), ["branch", "push", "pr", "wait", "address", "approve", "merge"]);
   assert.match(pdl.stages.find((s) => s.id === "wait").prompt, /END the turn/);
   assert.equal(pdl.stages.find((s) => s.id === "wait").exit, undefined, "a PDL stage carries no ladder exit");
+
+  const waited = pdl.stages.find((s) => s.id === "wait");
+  const gate = reviewGateFor(pdl, "wait");
+  assert.equal(gate.id, "G4", "the gate after wait is what names the reviewer's check");
+  assert.equal(reviewExitOf(waited, gate).check, "pr-comments", "the gate's verified_by is the SAME fact the ladder put on the exit");
+  assert.equal(reviewExitOf(waited, null), null, "the stage alone names no review: a document read without its gates registers nothing");
+  assert.equal(reviewGateFor(pdl, "address"), null, "G5 verifies `pushed`: the answer stage ends on the worker's own work");
+  const seeded = reviewWaitFor(waited, { at: iso(T0), lastSeen: iso(T0 - HOUR), thread: THREAD, branch: BRANCH, pipeline: pdl.id, gate });
+  assert.equal(seeded.check, "pr-comments");
+  assert.equal(seeded.pipeline, pdl.id, "the wait names the document its stage belongs to, so a tree cut `local` can still be read");
+  assert.equal(seeded.gate, "G4");
+  // A gate the document ROUTES is its own two-outcome decision, not a wait: the same exclusion `reviewEdgeOutOf` makes.
+  const routed = { ...pdl, gates: [{ ...gate, decision: { routes: { passed: "approve", failed: null } } }] };
+  assert.equal(reviewExitOf(waited, reviewGateFor(routed, "wait")), null);
 });
 
 test("readReviewExit: an answer advances it; quiet, unreadable and an older approval do not; a merged PR closes it", () => {
@@ -716,4 +733,106 @@ test("the wait's advance keeps the definition and appends one hop, so wait → a
   const back = advanceStage(addressed, { kind: "turnover", stage: "wait", at, why: "the comment was answered" });
   assert.equal(back.id, LOOP.id);
   assert.deepEqual(back.history.map((h) => h.stage), ["pr", "wait", "address", "wait"]);
+});
+
+// ---- §6.7 the PDL row: the other half of gap 5.1 ----------------------------------------------------------------
+// Every pipeline the panel SHIPS is a PDL document (pipelines.seed.json is empty), and a PDL stage declares an artifact,
+// not an exit. PR #677 made the rail take wait → address on a comment newer than lastSeen, but the timer registered no
+// wait for a PDL row, so a reviewer's comment still could not be answered. These tests are the registration and the
+// sweep on a row the panel actually has: the tree was cut `local`, and only the hold names the document and the stage.
+const PDL_SEED = parseBundle(readFileSync(BUNDLE, "utf8"));
+const PDL_LOOP = pipelineById(PDL_SEED.bundle, "sefl-review-loop");
+
+test("a PDL row's wait stage registers the gate's review fact, naming the document the tree record cannot", (t) => {
+  const { dir, records, jobs } = board(t, {
+    stage: "work",
+    wait: null,
+    recordOver: { id: "local" },
+    catalogue: { get: () => null },
+    config: { pipelineBundleFile: BUNDLE },
+  });
+  // What a live PDL row's book really holds: the cut wrote `local · work` and the hold wrote the run's document and stage.
+  jobs.holdPipelineStageRun({ tree: TREE, pipeline: "sefl-review-loop", stage: "wait", visit: 1, thread: THREAD, job: "job-pdl-1", at: iso(T0 - 30 * 60_000) });
+
+  const wait = jobs.registerPipelineWait({ id: "job-pdl-1", ownerPath: TREE, thread: THREAD, branch: BRANCH }, { now: T0 });
+  assert.ok(wait, "the gate after the PDL wait stage names pr-comments, so the row waits");
+  assert.equal(wait.check, "pr-comments");
+  assert.equal(wait.stage, "wait");
+  assert.equal(wait.pipeline, "sefl-review-loop", "the wait carries the document: the tree record never leaves `local`");
+  assert.equal(wait.gate, "G4");
+  assert.equal(wait.lastSeen, iso(T0 - 30 * 60_000), "the clock is the stage's entry (the hold), not the tree's cut");
+  assert.equal(records.get(TREE, { fresh: true }).id, "local", "registering a wait does not rewrite the tree's rung");
+
+  // Durable on the tree, where a restart and a second panel read it.
+  const onDisk = JSON.parse(readFileSync(path.join(dir, "pipeline-records.json"), "utf8"));
+  assert.equal(onDisk.trees[TREE].pipelineWait.check, "pr-comments");
+  assert.equal(onDisk.trees[TREE].pipelineWait.pipeline, "sefl-review-loop");
+
+  // Idempotent within the stage: a second turn keeps the clock already running.
+  const again = jobs.registerPipelineWait({ id: "job-pdl-2", ownerPath: TREE, thread: THREAD, branch: BRANCH }, { now: T0 + 10 * 60_000 });
+  assert.equal(again.at, iso(T0), "the clock is the stage's, not the turn's");
+
+  // A PDL stage that ends on its own work registers nothing: G5 verifies `pushed`, not a reviewer.
+  jobs.holdPipelineStageRun({ tree: TREE, pipeline: "sefl-review-loop", stage: "address", visit: 1, thread: THREAD, job: "job-pdl-3", at: iso(T0) });
+  assert.equal(jobs.registerPipelineWait({ ownerPath: TREE, thread: THREAD }, { now: T0 }), null, "address ends on the push");
+  assert.equal(records.get(TREE, { fresh: true }).pipelineWait.stage, "address", "and the hold it was reading is left in force");
+});
+
+test("a PDL row's comment newer than lastSeen takes the next sweep to address, and H-05 returns it to wait", async (t) => {
+  assert.equal(PDL_SEED.ok, true, "the shipped document parses");
+  assert.ok(PDL_LOOP, "and holds the review loop");
+  // The book a live PDL row has: `local · work`, and the review wait the registration above just wrote, naming the
+  // document and the stage. The tree record's stage is NOT the wait's, which is the defect this test exists for.
+  const { records, jobs } = board(t, {
+    stage: "work",
+    wait: waitRecord({ pipeline: "sefl-review-loop", gate: "G4", lastSeen: iso(T0 - HOUR), thread: THREAD, branch: BRANCH }),
+    recordOver: { id: "local" },
+    catalogue: { get: () => null },
+    config: { pipelineBundleFile: BUNDLE },
+  });
+  const woke = [];
+  const out = await jobs.sweepPipelineWaits({
+    now: T0 + WAIT_FIRST_MS, // one hour later, a number and never a sleep
+    readReview: () => ({ ok: true, pr: { number: 677, state: "OPEN", headRefOid: "e".repeat(40), reviewers: [], comments: [{ at: iso(T0 - HOUR / 2) }], approvals: [] } }),
+    wake: (turn) => {
+      woke.push(turn);
+      return { ok: true, job: { id: "wake-pdl" } };
+    },
+  });
+
+  assert.equal(out.advanced, 1, "a comment newer than lastSeen entered the answer stage");
+  assert.equal(out.woke, 1, "and the wake is a turn on the same thread");
+  const moved = records.get(TREE, { fresh: true });
+  assert.equal(moved.stage, "address", "wait → address, read off the PDL document's H-04");
+  assert.equal(moved.pipelineWait, undefined, "the wait is gone with the hop");
+  assert.equal(moved.crossings["H-04"], 1, "the loop's crossing is counted on the record, so the cap is real");
+  assert.match(woke[0].text, /sefl-review-loop · address/, "the wake names the document, not the tree's `local` rung");
+
+  // The SAME rail returns it: address draws H-05 back to wait, so wait → address → wait is a path on the document.
+  const back = nextStageOf(PDL_LOOP, moved);
+  assert.equal(back.ok, true);
+  assert.equal(back.stage.id, "wait");
+  assert.equal(back.handoff.id, "H-05");
+});
+
+test("the PDL row's 3-crossing cap is the same one the ladder pays: the fourth comment closes the wait", async (t) => {
+  const { records, jobs } = board(t, {
+    stage: "work",
+    wait: waitRecord({ pipeline: "sefl-review-loop", gate: "G4", lastSeen: iso(T0 - HOUR), thread: THREAD, branch: BRANCH }),
+    recordOver: { id: "local", crossings: { "H-04": 3 } },
+    catalogue: { get: () => null },
+    config: { pipelineBundleFile: BUNDLE },
+  });
+  const out = await jobs.sweepPipelineWaits({
+    now: T0 + WAIT_FIRST_MS,
+    readReview: () => ({ ok: true, pr: { number: 677, state: "OPEN", headRefOid: "e".repeat(40), reviewers: [], comments: [{ at: iso(T0 - HOUR / 2) }], approvals: [] } }),
+    wake: () => {
+      throw new Error("a capped loop must not wake");
+    },
+  });
+  assert.equal(out.advanced, 0, "the fourth crossing is refused, not taken");
+  assert.equal(out.refused, 1);
+  const record = records.get(TREE, { fresh: true });
+  assert.equal(record.stage, "work", "the row stays where it was for a decision");
+  assert.equal(record.pipelineWait, undefined, "the wait is closed rather than looped forever");
 });
