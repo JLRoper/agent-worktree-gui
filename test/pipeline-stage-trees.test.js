@@ -119,16 +119,17 @@ test("a stage tree is cut at the round's frozen parent: a landing after the roun
   const r = repo(t);
   const { jobs, parents } = cutter(t, r.dir);
 
-  // The FIRST cut of the round. Nothing pinned it, so it resolves the parent checkout's branch and writes both halves
-  // of the answer down - the branch, and the commit it resolved to at that moment.
+  // The FIRST cut of the round. Nothing pinned it, and this fixture has no remote, so it resolves the parent
+  // checkout's branch and writes both halves of the answer down - the ref, and the commit it resolved to.
   const draft = await jobs.makeWorktree(r.dir, "write the draft", { project: "demo", round: true });
   const roundSha = r.git("rev-parse", "main");
   assert.equal(draft.startRef, "main", "the first cut is from the checkout's branch");
   assert.equal(draft.startSha, roundSha, "and records the commit it resolved to");
-  assert.equal(draft.parentName, "main", "the branch is the record's parent, even though it is a main branch");
+  assert.equal(draft.parentName, null, "a round names no local parent, so the chart draws it beside main");
   const draftRec = parents.get("demo", draft.branch);
-  assert.equal(draftRec.parent, "main", "the parent book names the branch the chart hangs the tree under");
-  assert.equal(draftRec.parentSource, "cut", "and says the panel watched the cut, not that it guessed");
+  assert.equal(draftRec.parent, null, "no chart parent: the round is never nested under the checkout's main row");
+  assert.equal(draftRec.parentRef, "main", "the ref it was cut from is on the record");
+  assert.equal(draftRec.parentSource, "unknown", "a main branch is not a roll-up target, so the source says nobody may write there");
   assert.equal(draftRec.parentSha, roundSha);
 
   // A LANDING, after the round began. This is the commit the old model let a mid-round cut see.
@@ -138,17 +139,19 @@ test("a stage tree is cut at the round's frozen parent: a landing after the roun
   const landed = r.git("rev-parse", "main");
   assert.notEqual(landed, roundSha, "the fixture must actually move main");
 
-  // The SECOND stage's tree, cut the way the assistant cuts it: at the round's commit, from the round's parent.
-  const critique = await jobs.makeWorktree(r.dir, "critique the draft", { project: "demo", from: roundSha, parent: "main" });
+  // The SECOND stage's tree, cut at the round's frozen commit and recorded under the round's own branch - the shape
+  // every stage cut records, even when the pin is a sha: a record whose parentRef is a sha names no branch to nest
+  // under, so the round's branch is named alongside it (lib/parents.js `record`).
+  const critique = await jobs.makeWorktree(r.dir, "critique the draft", { project: "demo", from: roundSha, parent: draft.branch });
   assert.notEqual(critique.branch, draft.branch, "each stage has its own branch");
   assert.notEqual(critique.path, draft.path, "and its own directory");
   assert.equal(r.git("-C", critique.path, "rev-parse", "HEAD"), roundSha, "the stage tree is at the round's commit, not main's tip");
   assert.equal(existsSync(path.join(critique.path, "landed-after.md")), false, "the landing is NOT in the stage's workspace");
   assert.equal(r.git("-C", critique.path, "ls-tree", "--name-only", "HEAD", "landed-after.md"), "", "and the commit does not name it either");
-  // …and the parent is written the same way, so the chart can hang it under the round's parent even though the cut was
-  // pinned to a sha (a record whose parentRef is a sha names no branch to nest under).
+  // …and the parent is written the same way, so the chart can hang it under the round's own row even though the cut
+  // was pinned to a sha (a record whose parentRef is a sha names no branch to nest under).
   const critiqueRec = parents.get("demo", critique.branch);
-  assert.equal(critiqueRec.parent, "main");
+  assert.equal(critiqueRec.parent, draft.branch);
   assert.equal(critiqueRec.parentSource, "cut");
   assert.equal(critiqueRec.parentSha, roundSha, "the record names the commit the round froze, not main's new tip");
 });
@@ -294,18 +297,19 @@ test("the round's parent tree is cut from origin/main, not from the checkout", a
   assert.notEqual(checkoutSha, originSha, "the fixture must move the checkout ahead of origin/main");
 
   const name = stageTreeName({ slug: "carry-the-form", tag: "a1b2c3", title: "carry the form" }, null, 1);
-  const root = await jobs.makeWorktree(r.dir, "carry the form", { project: "demo", name, remote: "main", parent: "main", round: true });
+  const root = await jobs.makeWorktree(r.dir, "carry the form", { project: "demo", name, remote: "main", round: true });
   assert.equal(path.basename(root.path), "carry-the-form-a1b2c3", "the parent tree's directory is <task-slug>-<tag>");
   assert.equal(root.branch, "wtgui/carry-the-form-a1b2c3");
   assert.equal(root.startRef, "origin/main", "cut from origin/main");
   assert.equal(root.startSha, originSha, "and the sha is the remote's tip, not the checkout's");
   assert.equal(r.git("-C", root.path, "rev-parse", "HEAD"), originSha);
   assert.equal(existsSync(path.join(root.path, "local-only.md")), false, "unpushed local work is not in the round's tree");
-  // The chart hangs it under the branch the commit came FROM, which for a round's parent tree is the repository's
-  // main - the same row a turnover's trees hang under - while `startRef` records that it was cut from origin/main.
+  // The ref is recorded, the LOCAL parent is not: `origin/main` names no local row, so the round draws beside main
+  // rather than under it (the chart half is test/chart-nesting.test.js).
   const rec = parents.get("demo", root.branch);
-  assert.equal(rec.parent, "main");
-  assert.equal(rec.parentSource, "cut");
+  assert.equal(rec.parent, null, "a round records no local parent name");
+  assert.equal(rec.parentRef, "origin/main", "the ref it was cut from is on the record");
+  assert.equal(rec.parentSource, "unknown", "a remote-tracking ref is not a roll-up target");
   assert.equal(rec.parentSha, originSha);
 
   // A stage child is cut from THAT branch, and lands on its own name.

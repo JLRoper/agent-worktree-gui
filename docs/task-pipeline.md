@@ -305,9 +305,14 @@ first stage to its last. Before its first stage it cuts a real worktree on `.wor
   one shared tree and a re-resolved branch, a stage cut mid-round started at whatever main was THEN.
 - The parent tree is the round's landing branch: `pipelineRun.tree` and the row's `worktree` name it from the first cut,
   and the assembly lands on it (below). A stage child is a work branch, never the landing branch.
-- The parent is written into the panel's parent book with `parentSource: "cut"`: the parent tree hangs under `main`
-  (the branch its commit came from, recorded while the cut itself names `origin/main`), and every stage child hangs
-  under the parent tree. That is one group per round in the worktree chart.
+- **A round's parent tree is a row BESIDE main, never under it.** Its cut is written into the panel's parent book as
+  `parentRef: "origin/main"` with **no local parent name**: `parent` is null, so the worktree chart draws the round at
+  the top level, beside the checkout's `main` row, and a roll-up has no local branch to offer (`parentSource:
+  "unknown"` with the ref in `why`). A round is cut from a remote-tracking ref, and a ref that names no local branch
+  is not a chart parent. **Every stage child records the round's branch as its parent**, so the stage trees of one
+  round hang under the round's own row, one indent in: one group per round, with the round's fold covering it, and
+  `main` never drawing as a container of a round's work. `main` stays the branch a round's commit came from, recorded
+  as `base` on the round (`origin/main`) - a fact, not a chart parent.
 - The lookup answers the stage's OWN tree, from `stageRuns[].tree.path` and then `pipelineRun.trees[stage]`. A stage
   with no tree yet is `needed` (the cut is the next step), and a tree that was recorded and is gone is
   `pipeline-tree-gone`, **never** a second cut and never the project checkout.

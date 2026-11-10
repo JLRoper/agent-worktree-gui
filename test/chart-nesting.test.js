@@ -1,43 +1,122 @@
-// The worktree chart nests a round's stage trees under the round's parent.
+// The worktree chart draws a round BESIDE main, with its stage trees under the round.
 //
-// A stage tree is cut with `git worktree add -b <branch> <path> <sha>`: the ref is a COMMIT (the round's frozen
-// parent), so git records no branch the tree came from and the chart would otherwise draw one stage tree per row,
-// unrelated to each other and to the checkout they were cut from.
+// A round's parent tree is cut from `origin/main` - a remote-tracking ref, not a local branch - so its record carries
+// `parentRef: "origin/main"` and NO chart parent. The chart hangs a row under the row whose BRANCH equals `parent`,
+// and no row is called `origin/main`: the round therefore draws at the top level, beside the checkout's `main` row,
+// while its stage trees (recorded with the round's branch as their parent) hang one indent under the round.
 //
 // Two halves are proved here, together, because a picture that groups rows nobody recorded is as wrong as a record
 // nothing draws:
 //
-//   1. THE SERVER half: a cut made the way the assistant makes a stage cut (pinned to a sha, `parent` named) writes
-//      the round's parent into the book the scan reads (`ParentBook.rowsFor`) - the branch, `parentSource: "cut"`, and
-//      the frozen commit as `parentSha`;
+//   1. THE SERVER half: a LIVE round - the real `Assistant.cutPipelineTree`, the real `Jobs.makeWorktree`, and a real
+//      repository whose `origin/main` is a real remote-tracking ref - writes the round's record and its stage
+//      children's records into the book the scan reads (`ParentBook.rowsFor`);
 //   2. THE PAGE half: fed those very rows, the chart's own grouping (`childTreeOf`, `groupCtxOf`, `nestRowKeys` in
-//      public/render-projects.js) hangs both stage trees one indent under the parent's row, in one group, in drawing
-//      order - so a two-stage round reads as one parent with its two stage trees under it, not three unrelated rows.
+//      public/render-projects.js) draws main and the round as two top-level rows, with both stage trees under the
+//      round - so a two-stage round reads as the round's own group, never as main's children.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
+import { Assistant } from "../lib/assistant.js";
+import { readQueueFile, writeQueueFile } from "../lib/assistant/queue.js";
 import { Jobs } from "../lib/jobs.js";
 import { ParentBook } from "../lib/parents.js";
+import { enterStage } from "../lib/task-pipeline.js";
 import { sliceRegion } from "../tools/panel-testkit.mjs";
 
+const CLOCK = "2026-11-09T10:00:00.000Z";
 const EMAIL = ["chart", "example.invalid"].join(String.fromCharCode(64));
 
+// A real repository whose `origin/main` is a real remote-tracking branch, and a checkout moved AHEAD of it: a round
+// that started from the checkout's tip would carry a commit the remote has never seen, so the two tips must differ
+// for the proof to mean anything.
 function repo(t) {
-  const dir = mkdtempSync(path.join(tmpdir(), "wag-chart-nest-"));
-  const git = (...args) =>
-    execFileSync("git", ["-C", dir, "-c", "user.name=Chart Fixture", "-c", `user.email=${EMAIL}`, "-c", "commit.gpgsign=false", "-c", "core.autocrlf=false", ...args], {
+  const sandbox = mkdtempSync(path.join(tmpdir(), "wag-chart-nest-"));
+  const dir = path.join(sandbox, "repo");
+  const originDir = path.join(sandbox, "origin.git");
+  const run = (cwd, ...args) =>
+    execFileSync("git", ["-C", cwd, "-c", "user.name=Chart Fixture", "-c", `user.email=${EMAIL}`, "-c", "commit.gpgsign=false", "-c", "core.autocrlf=false", ...args], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
     }).trim();
+  const git = (...args) => run(dir, ...args);
+  const write = (rel, body) => writeFileSync(path.join(dir, rel), body);
+  mkdirSync(path.join(dir, ".worktrees"), { recursive: true });
   git("init", "-q", "-b", "main");
-  execFileSync("git", ["-C", dir, "commit", "-q", "--allow-empty", "-m", "the round's parent"], { encoding: "utf8" });
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
-  return { dir, git };
+  write("seed.txt", "the round began here\n");
+  git("add", "-A");
+  git("commit", "-qm", "the round's parent");
+  run(sandbox, "init", "-q", "--bare", originDir);
+  git("remote", "add", "origin", originDir.replace(/\\/g, "/"));
+  git("push", "-q", "-u", "origin", "main");
+  const originSha = git("rev-parse", "origin/main");
+  write("local-only.md", "unpushed local work\n");
+  git("add", "-A");
+  git("commit", "-qm", "local work nobody pushed");
+  const checkoutSha = git("rev-parse", "HEAD");
+  t.after(() => rmSync(sandbox, { recursive: true, force: true }));
+  return { dir, originDir, git, write, originSha, checkoutSha };
 }
+
+// The panel's own Assistant, with the panel's own cutter and parent book under it: `cutPipelineTree` is the method
+// that named `main` as the round's chart parent, so the proof has to run through it, not around it.
+function panel(t, dir, bundleFile) {
+  const jobs = new Jobs({
+    config: { apiServer: { url: "http://127.0.0.1:1" }, jobsFile: path.join(dir, "logs", "jobs.json"), jobMaxRuntimeSeconds: 60 },
+    onEvent: () => {},
+    onLog: () => {},
+  });
+  const parents = new ParentBook({ file: path.join(dir, "logs", "parents.json"), onLog: () => {} });
+  jobs.parents = parents;
+  const assistant = new Assistant({
+    config: { jobsFile: path.join(dir, "logs", "jobs.json"), assistantFile: path.join(dir, "logs", "assistant.json"), defaultCwd: dir, pipelineBundleFile: bundleFile },
+    jobs: {
+      list: () => [],
+      firstOfThread: () => null,
+      busyFor: () => ({ held: false, where: null, by: [] }),
+      modelFor: () => null,
+      get: () => null,
+      create: async (opts) => ({ id: "job-1", status: "running", ...opts }),
+      answerQuestion: async () => ({ ok: true }),
+      stop: async () => ({ ok: true }),
+      clarify: { state: () => null },
+      makeWorktree: (repoDir, prompt, opts) => jobs.makeWorktree(repoDir, prompt, opts),
+    },
+    getProjects: () => [{ name: "demo", path: dir }],
+    getRows: () => [],
+    onLog: () => {},
+    now: () => Date.parse(CLOCK),
+  });
+  // The cut is what this file proves. The sweep the cut hands off to would need a bundle and a spawner to start the
+  // stage, and starting it is a different file's subject.
+  assistant.sweepQueues = () => {};
+  t.after(() => {
+    for (const timer of [assistant.persistTimer, assistant.wakeTimer, assistant.timer, assistant.settleTimer]) clearTimeout(timer);
+  });
+  return { assistant, jobs, parents };
+}
+
+// The document the row is assigned against: a draft stage, then a critique. Only the assignment reads it here.
+const BUNDLE = {
+  bundleVersion: 1,
+  name: "review",
+  pipelines: [
+    {
+      id: "review",
+      title: "Review",
+      stages: [
+        { id: "D1", title: "Draft", prompt: "Write the draft.", artifact: { id: "draft", path: "draft.md", schema: "doc/1", writer: "the drafter", kind: "document" } },
+        { id: "C1", title: "Critique", prompt: "Critique the draft.", inputs: { read: [{ artifact: "draft" }] }, artifact: { id: "critique", path: "critique.md", schema: "doc/1", writer: "the critic", kind: "document" } },
+      ],
+      gates: [],
+      handoffs: [{ id: "h1", from: "D1", to: "C1", artifact: "draft", kind: "sequence" }],
+    },
+  ],
+};
 
 // The page's own grouping region, run with a stub `state` and a stub `keyOf`: the same functions the browser calls,
 // with no board under them. The region carries DOM painters too; they are declared here and never called.
@@ -45,44 +124,68 @@ const page = readFileSync(new URL("../public/render-projects.js", import.meta.ur
 const region = sliceRegion(page, "children under their parent");
 const keyOf = (project, p) => `${project}::${p}`;
 const state = { rows: new Map(), foldedParents: new Set() };
-const { childTreeOf, groupCtxOf, nestRowKeys } = new Function("state", "keyOf", "esc", `${region}; return { childTreeOf, groupCtxOf, nestRowKeys };`)(
-  state,
-  keyOf,
-  (s) => String(s ?? ""),
-);
+const { childTreeOf, groupCtxOf, nestRowKeys } = new Function("state", "keyOf", "esc", `${region}; return { childTreeOf, groupCtxOf, nestRowKeys };`)(state, keyOf, (s) => String(s ?? ""));
 
-test("a two-stage round's trees are recorded as children of the round's parent, and the chart nests them", async (t) => {
+test("a live round's parent draws beside main, and its two stage trees hang under the round", async (t) => {
   const r = repo(t);
-  const roundSha = r.git("rev-parse", "main");
-  const jobs = new Jobs({
-    config: { apiServer: { url: "http://127.0.0.1:1" }, jobsFile: path.join(r.dir, "logs", "jobs.json"), jobMaxRuntimeSeconds: 60 },
-    onEvent: () => {},
-    onLog: () => {},
-  });
-  const parents = new ParentBook({ file: path.join(r.dir, "logs", "parents.json"), onLog: () => {} });
-  jobs.parents = parents;
+  assert.notEqual(r.checkoutSha, r.originSha, "the fixture must move the checkout ahead of origin/main");
+  const bundleFile = path.join(r.dir, "logs", "pipeline-bundle.json");
+  mkdirSync(path.dirname(bundleFile), { recursive: true });
+  writeFileSync(bundleFile, JSON.stringify(BUNDLE));
+  const { assistant, parents } = panel(t, r.dir, bundleFile);
 
-  // A round's two stage trees: the first cut RESOLVES the round (`round: true` is what the assistant passes when it
-  // has no round yet — its parent is the checkout's branch), the second is pinned to the round's commit and carries
-  // the same parent.
-  const first = await jobs.makeWorktree(r.dir, "write the draft", { project: "demo", round: true });
-  const second = await jobs.makeWorktree(r.dir, "critique the draft", { project: "demo", from: roundSha, parent: "main" });
-  assert.equal(first.startRef, "main");
-  assert.equal(second.startRef, roundSha, "the second cut is pinned to the commit");
+  const added = assistant.queueMutate("assistant-1", "add", { title: "the review round", project: "demo" });
+  assert.equal(added.ok, true, added.error || "the row must be filed");
+  const id = added.task.id;
+  const assigned = assistant.queueMutate("assistant-1", "pipeline", { id, pipeline: "review", stage: "D1" });
+  assert.equal(assigned.ok, true, assigned.error || "the row must be put on a stage");
 
-  // 1. THE SERVER HALF: what the scan reads for this project. The checkout itself is a row of the board (branch
-  //    `main`), which is what the stage trees hang under.
-  const rows = parents.rowsFor("demo");
-  const rowOf = (branch) => rows.find((row) => row.branch === branch) || null;
-  for (const cut of [first, second]) {
-    const rec = rowOf(cut.branch);
-    assert.ok(rec, `${cut.branch} is in the book the scan reads`);
-    assert.equal(rec.parent, "main", "the round's parent is the branch the chart nests under");
-    assert.equal(rec.parentSource, "cut", "a record, not a guess");
-    assert.equal(rec.parentSha, roundSha, "and it names the commit the round froze");
-  }
+  // THE ROUND'S FIRST CUT, through the method that had the defect: the round's parent tree from origin/main, then
+  // stage D1's own child of it.
+  const first = await assistant.cutPipelineTree("assistant-1", { taskId: id, pipeline: "review", stage: "D1", role: "stage", stageName: "Draft", position: 1, visit: 1 });
+  assert.ok(first && first.pipelineRun, "the cut writes the row");
+  const round = first.pipelineRun.round;
+  assert.equal(round.base, "origin/main", "the round is cut from origin/main");
+  assert.equal(round.sha, r.originSha, "at the remote's tip, not the checkout's");
+  assert.equal(r.git("-C", round.parentPath, "rev-parse", "HEAD"), r.originSha);
+  assert.equal(existsSync(path.join(round.parentPath, "local-only.md")), false, "the checkout's unpushed work is not in the round's tree");
+  const d1 = first.pipelineRun.trees.D1;
+  assert.ok(d1, "the first stage's tree is cut with the round's");
+
+  // 1. THE SERVER HALF: what the scan reads.
+  const roundRec = parents.get("demo", round.parent);
+  assert.equal(roundRec.parent, null, "the round records NO local parent");
+  assert.equal(roundRec.parentRef, "origin/main", "and records the ref it was cut from");
+  assert.equal(roundRec.parentSha, r.originSha, "with the commit that ref resolved to");
+  assert.equal(roundRec.parentSource, "unknown", "a remote-tracking ref is not a roll-up target");
+  assert.match(roundRec.why, /origin\/main/, "and the record says why it is no parent");
+  const d1Rec = parents.get("demo", d1.branch);
+  assert.equal(d1Rec.parent, round.parent, "the stage tree hangs under the round's branch");
+  assert.equal(d1Rec.parentSource, "cut", "a stage's parent is a local branch, watched at the cut");
+
+  // The second stage. The row enters C1 the way a driver's advance does - `enterStage` keeps the round - and the same
+  // cut makes its tree, so both children come from one round rather than two.
+  const qfile = assistant.queuePathOf(assistant.assistantRecord("assistant-1"));
+  const q = readQueueFile(qfile);
+  const moved = enterStage(q.tasks.find((task) => Number(task.id) === Number(id)), { stage: "C1", enteredAt: CLOCK });
+  writeQueueFile(qfile, q.tasks.map((task) => (Number(task.id) === Number(id) ? moved : task)), q.nextId);
+  const second = await assistant.cutPipelineTree("assistant-1", { taskId: id, pipeline: "review", stage: "C1", role: "stage", stageName: "Critique", position: 2, visit: 1 });
+  assert.ok(second && second.pipelineRun, "the second cut writes the row");
+  const c1 = second.pipelineRun.trees.C1;
+  assert.ok(c1, "the second stage's tree is cut");
+  assert.equal(parents.get("demo", c1.branch).parent, round.parent, "and hangs under the round too");
+  assert.equal(second.pipelineRun.round.parentPath, round.parentPath, "ONE round: the second cut did not replace it");
+
+  // The ref the cut recorded survives the slow clock that reconstructs parents: a reconstruction agreeing with
+  // "no parent" must not blank `origin/main` off the record.
+  await parents.refresh({ project: "demo", repoDir: r.dir, mainBranch: "main" });
+  const after = parents.get("demo", round.parent);
+  assert.equal(after.parent, null);
+  assert.equal(after.parentRef, "origin/main", "the ref the cut recorded survives a refresh");
+  assert.equal(after.parentSha, r.originSha);
 
   // 2. THE PAGE HALF: the rows the chart would hold, from those records plus the checkout's own row.
+  const rows = parents.rowsFor("demo");
   const mainPath = r.dir.replace(/\\/g, "/");
   const chartRows = [
     { project: "demo", path: mainPath, branch: "main", parent: null },
@@ -91,33 +194,38 @@ test("a two-stage round's trees are recorded as children of the round's parent, 
   state.rows = new Map(chartRows.map((row) => [keyOf(row.project, row.path), row]));
   state.foldedParents = new Set();
 
+  const rowKey = (branch) => keyOf("demo", rows.find((row) => row.branch === branch).path);
   const tree = childTreeOf("demo");
   const mainKey = keyOf("demo", mainPath);
-  const firstKey = keyOf("demo", first.path);
-  const secondKey = keyOf("demo", second.path);
-  assert.equal(tree.parentOf.get(mainKey), undefined, "the parent itself is a top-level row");
-  assert.equal(tree.parentOf.get(firstKey), mainKey, "the first stage tree hangs under it");
-  assert.equal(tree.parentOf.get(secondKey), mainKey, "and so does the second");
-  assert.deepEqual(tree.childrenOf.get(mainKey), [firstKey, secondKey], "ONE group: the round's stage trees together");
+  const roundKey = rowKey(round.parent);
+  const d1Key = rowKey(d1.branch);
+  const c1Key = rowKey(c1.branch);
+  assert.equal(tree.parentOf.get(roundKey), undefined, "the round is a top-level row, BESIDE main");
+  assert.deepEqual(tree.childrenOf.get(mainKey) || [], [], "main has no children: the round is not nested under it");
+  assert.equal(tree.parentOf.get(d1Key), roundKey, "stage 1 hangs under the round");
+  assert.equal(tree.parentOf.get(c1Key), roundKey, "and stage 2 does too");
+  assert.deepEqual(tree.childrenOf.get(roundKey), [d1Key, c1Key], "ONE group: the round's stage trees together");
 
-  // The drawing order: a child is drawn directly under its parent even when the input order put it first.
-  const order = nestRowKeys(tree.parentOf, [secondKey, firstKey, mainKey]);
-  assert.equal(order[0], mainKey, "the round's parent is painted first");
-  assert.deepEqual(new Set(order.slice(1, 3)), new Set([firstKey, secondKey]), "and both stage trees are painted immediately under it");
-  assert.deepEqual(nestRowKeys(tree.parentOf, [mainKey, firstKey, secondKey]), [mainKey, firstKey, secondKey], "an order that already nests is kept");
+  // The drawing order: main and the round at the top (in the order the rows arrive), both stage trees directly under
+  // the round even when the input order put them first.
+  const order = nestRowKeys(tree.parentOf, [d1Key, mainKey, roundKey, c1Key]);
+  assert.deepEqual(order, [mainKey, roundKey, d1Key, c1Key], "main and the round are top-level; the stage trees follow the round");
 
-  // One indent in, with the parent's own fold covering both.
-  const firstCtx = groupCtxOf(tree, firstKey);
-  assert.equal(firstCtx.parentKey, mainKey);
-  assert.equal(firstCtx.depth, 1);
-  assert.equal(firstCtx.childCount, 0, "a stage tree has no children of its own");
-  assert.equal(groupCtxOf(tree, mainKey).childCount, 2, "the parent offers the fold that hides the whole round");
+  // One indent in, with the round's own fold covering both stages and nothing under main.
+  const roundCtx = groupCtxOf(tree, roundKey);
+  assert.equal(roundCtx.parentKey, null, "the round is not one indent in");
+  assert.equal(roundCtx.depth, 0);
+  assert.equal(roundCtx.childCount, 2, "the round offers the fold that hides its stages");
+  assert.equal(groupCtxOf(tree, d1Key).parentKey, roundKey);
+  assert.equal(groupCtxOf(tree, d1Key).depth, 1);
+  assert.equal(groupCtxOf(tree, d1Key).childCount, 0, "a stage tree has no children of its own");
 
-  // The reader's fold reaches the stage trees, and only them.
-  state.foldedParents.add(mainKey);
-  assert.equal(groupCtxOf(tree, firstKey).hidden, true, "folding the round hides the first stage tree");
-  assert.equal(groupCtxOf(tree, secondKey).hidden, true, "and the second");
-  assert.equal(groupCtxOf(tree, mainKey).hidden, false, "the parent stays on screen");
+  // The reader's fold reaches the round's stages, and only them.
+  state.foldedParents.add(roundKey);
+  assert.equal(groupCtxOf(tree, d1Key).hidden, true, "folding the round hides stage 1");
+  assert.equal(groupCtxOf(tree, c1Key).hidden, true, "and stage 2");
+  assert.equal(groupCtxOf(tree, roundKey).hidden, false, "the round stays on screen");
+  assert.equal(groupCtxOf(tree, mainKey).hidden, false, "and main is untouched by the round's fold");
 });
 
 // ---- the TITLE each of those rows paints ---------------------------------------------------------------------------
