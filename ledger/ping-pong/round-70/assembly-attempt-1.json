@@ -1,0 +1,22 @@
+{
+  "what": "the ping-pong round 70 assembly, first attempt: the four stage commits as the driver cuts them, each cut at the round's frozen parent",
+  "transcribed": "the fields below are the verbatim values the assembly printed on that run; the run's own process exit was 0 with ok:false (a refusal is an answer, not a crash)",
+  "ok": false,
+  "code": "pipeline-assembly-conflict",
+  "commit": null,
+  "base": null,
+  "verified": false,
+  "stages": [
+    { "stage": "draft", "visit": 1, "from": "d27bfc8d746b2bd3a98a0a87e4b1329fdbd42734", "commit": "db58aff0" },
+    { "stage": "critique", "visit": 1, "from": "9888b9bc142df790247df251551ec416a1e07d75", "commit": "2c75504b" }
+  ],
+  "skipped": [],
+  "paths": [],
+  "mismatches": [],
+  "reason": "stage draft changes the path ledger/ping-pong/draft.md, and so did a stage before it (draft, critique) on the same lines - git cannot apply the later stage on top of the earlier one, so the branch was discarded",
+  "supersededCommits": {
+    "draft#2": "722877c15dc6f56e6f6bc9bb5c8c778bfaeb596e",
+    "critique#2": "1fd2dc193ea356e55cd088522b3511f6b297dd69"
+  },
+  "note": "the refusal names the real defect this round found: a loop visit rewrites the path the earlier visit wrote, and a cherry-pick from the same frozen parent cannot apply the second version on top of the first. The two superseded commits above were the loop visits cut the way the driver cuts them; both were re-cut from their own stage's previous visit to give attempt 2 a diff the branch can take."
+}

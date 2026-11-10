@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Round 70 - ping-pong walked local only</title>
+<style>
+  :root { --ink:#12161c; --muted:#5b6675; --line:#dfe4ea; --bg:#f6f7f9; --card:#fff; --good:#1f7a4d; --bad:#a8321f; --accent:#1f5fa8; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.55 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  main { max-width:980px; margin:0 auto; padding:40px 22px 72px; }
+  h1 { font-size:30px; line-height:1.2; margin:0 0 6px; letter-spacing:-.01em; }
+  .sub { color:var(--muted); margin:0 0 28px; font-size:15px; }
+  h2 { font-size:19px; margin:34px 0 10px; padding-top:16px; border-top:1px solid var(--line); }
+  h2:first-of-type { border-top:0; padding-top:0; }
+  table { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--line); border-radius:8px; overflow:hidden; font-size:14.5px; }
+  th, td { text-align:left; padding:9px 12px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { background:#eef1f5; font-weight:600; font-size:13px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
+  tr:last-child td { border-bottom:0; }
+  code, .mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size:13.5px; }
+  code { background:#eef1f5; padding:1px 5px; border-radius:4px; }
+  .card { background:var(--card); border:1px solid var(--line); border-bottom-width:2px; border-radius:8px; padding:16px 18px; margin:14px 0; }
+  .pass { border-color:#bfe0cd; }
+  .refused { border-color:#ecc9c2; }
+  .tag { display:inline-block; font-size:12px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; padding:2px 8px; border-radius:999px; margin-bottom:8px; }
+  .tag.ok { background:#e2f2e9; color:var(--good); }
+  .tag.no { background:#f7e3df; color:var(--bad); }
+  blockquote { margin:10px 0 0; padding:10px 14px; background:#fbf3f1; border-left:3px solid var(--bad); color:#43201a; border-radius:0 6px 6px 0; }
+  ul { padding-left:20px; }
+  li { margin:6px 0; }
+  .kv { color:var(--muted); }
+  footer { margin-top:36px; color:var(--muted); font-size:13.5px; border-top:1px solid var(--line); padding-top:14px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Round 70: the ping-pong pipeline, walked local only</h1>
+  <p class="sub">Task row 70 of agent-worktree-gui. One round: draft, critique, a loop back to draft, a closing verdict. No push, no pull request, no remote write.</p>
+
+  <h2>The round</h2>
+  <table>
+    <tr><th>field</th><th>value</th></tr>
+    <tr><td>pipeline</td><td><code>ping-pong</code>, 13 pipelines in the panel's bundle</td></tr>
+    <tr><td>bundle</td><td class="mono">pipeline-bundle.json, sha256 3c2c16b7dac43fd5</td></tr>
+    <tr><td>round</td><td class="mono">run-row-70-exactly-as-written-local-only / 19d782</td></tr>
+    <tr><td>parent branch</td><td class="mono">wtgui/run-row-70-exactly-as-written-local-only-19d782</td></tr>
+    <tr><td>frozen base</td><td class="mono">1c5c53c7 (origin/main, 1.80.11)</td></tr>
+    <tr><td>shape</td><td>1 draft, 2 critique; <code>H-01</code> sequence, <code>H-02</code> loop (cap 3 rounds)</td></tr>
+    <tr><td>gate</td><td><code>G1</code> Verdict, after critique, artifact <code>critique-notes</code></td></tr>
+  </table>
+
+  <h2>The four visits, one commit each</h2>
+  <table>
+    <tr><th>visit</th><th>commit</th><th>artifact</th><th>blob</th><th>words</th></tr>
+    <tr><td>draft 1</td><td class="mono">d27bfc8d</td><td class="mono">draft.md</td><td class="mono">2ebed22e</td><td>494</td></tr>
+    <tr><td>critique 1</td><td class="mono">9888b9bc</td><td class="mono">critique.md + verdict-r1.json</td><td class="mono">52cbe921</td><td>410</td></tr>
+    <tr><td>draft 2</td><td class="mono">2af8c11b</td><td class="mono">draft.md</td><td class="mono">b0e00f40</td><td>623</td></tr>
+    <tr><td>critique 2</td><td class="mono">966b3f5b</td><td class="mono">critique.md + verdict-r2.json</td><td class="mono">7b5a1e0f</td><td>294</td></tr>
+  </table>
+
+  <h2>What each gate read</h2>
+  <p class="kv">Four answers from <code>nextStageOf(pipeline, pipelineRun, { worktree })</code>, asked with the record the driver would hold at that step.</p>
+  <table>
+    <tr><th>after</th><th>the driver answered</th></tr>
+    <tr><td>draft 1</td><td>next stage <code>critique</code> via <code>H-01</code></td></tr>
+    <tr><td>critique 1</td><td>next stage <code>draft</code> via <code>H-02</code>; verdict <code>revise</code>, <code>ended: false</code></td></tr>
+    <tr><td>draft 2</td><td>next stage <code>critique</code> via <code>H-01</code></td></tr>
+    <tr><td>critique 2</td><td><strong>done: true</strong>; verdict <code>accept</code>, <code>ended: true</code></td></tr>
+  </table>
+
+  <h2>The record G1 declares, and the check it applies first</h2>
+  <p>The bundle declares the decision record exactly: <code>ping-pong-verdict</code>, path <code>ledger/ping-pong/verdict-r{{round}}.json</code>, schema <code>verdict/1</code>, writer <code>critic</code>, outcomes <code>accept</code> and <code>revise</code>, routes <code>accept: null</code> and <code>revise: H-02</code>. Round 1 wrote <code>verdict-r1.json</code> (revise, one note open); round 2 wrote <code>verdict-r2.json</code> (accept, no note open). Round 3's path does not resolve at all, so a round cannot borrow another's record.</p>
+  <p><strong>Which check applied first: the record's absence, not the revise route.</strong></p>
+  <ol>
+    <li><strong>The record must exist.</strong> Without it the row parks on <code>pipeline-gate</code>, with the code's own sentence, verbatim: <code>the code does not decide it, and the record has not been written</code>. Asked of a tree holding <code>critique.md</code> and no record, the driver answers <code>ok: false</code>, <code>code: "pipeline-gate"</code>, grounding on <code>verdict-r1.json</code>. This is the check row 71 died on.</li>
+    <li><strong>The outcome must route.</strong> Then the driver looks up <code>routes[outcome]</code>; a word the gate does not hold parks on <code>pipeline-verdict</code> with <code>the panel does not route a verdict the gate does not hold</code>.</li>
+    <li><strong>The cap comes after both</strong> - the code's comment says "Read here, before the cap", because a verdict that routes nowhere must not be charged a crossing on the way out.</li>
+  </ol>
+  <p>The note-open condition is <strong>not</strong> one of the driver's checks. The document writes it as <code>refuses_when</code> on G1, but the loader drops the field (<code>droppedByLoader: ["refuses_when", "verified_by"]</code>) and no code in <code>lib/</code> reads it: the condition belongs to the critic that writes the record, which is why this round checks it against the artifacts.</p>
+
+  <h2>The note critique 1 opened</h2>
+  <p>One note, blocking, on the draft's claim that a fourth draft visit would be refused:</p>
+  <blockquote>The cap counts crossings of <code>H-02</code>, not the drafter's visits. <code>enterStage</code> charges the edge every time it is taken (<code>lib/task-pipeline.js:534-537</code>), and the comparison is <code>used + 1 &gt; cap.limit</code> against <code>run.crossings[leaving.id]</code> (<code>lib/task-pipeline-drive.js:1050-1051</code>, <code>:1073-1085</code>). Fix: say three crossings of <code>H-02</code>, and that the fourth draft visit is made.</blockquote>
+  <p class="kv"><code>Open notes: 1</code>; verdict <code>revise</code>, <code>accepted: false</code>, <code>draftRewritten: false</code>.</p>
+
+  <h2>The rewrite that answers it</h2>
+  <p>Draft visit 2 rewrote the cap section to the note's reading, quoting the charge and the comparison with their lines, and stating the walk the shipped cap allows: draft visits 1, 2, 3 and 4 are made, and the row parks when a fourth revise arrives with three crossings charged. Blob <code>2ebed22e</code> to <code>b0e00f40</code>, 494 to 623 words.</p>
+
+  <h2>The loop counter</h2>
+  <p><code>H-02</code> crossed <strong>once</strong> against a cap of <strong>3</strong>; <code>H-01</code> crossed twice. Visits: draft 2, critique 2. Crossings: <code>{"H-01": 2, "H-02": 1}</code>.</p>
+
+  <h2>G1 on the closing critique</h2>
+  <div class="card pass">
+    <span class="tag ok">pass</span>
+    <p><code>Open notes: 0</code>; verdict <code>accept</code>, <code>accepted: true</code>, <code>draftRewritten: true</code>. The driver answered <code>done: true</code>, so the pipeline ends at the accept.</p>
+    <p class="kv"><code>g1-check.mjs</code> run on the closing state: <code>pass: true</code>, draft blob <code>2ebed22e5611</code> to <code>b0e00f40fa4d</code>, exit 0.</p>
+  </div>
+  <div class="card refused">
+    <span class="tag no">refused, on round 1's state</span>
+    <p>Run against round 1 - one note open, draft not rewritten - the same check refuses: "a note is open (1) and the draft was not rewritten against it (blob 2ebed22e5611 at both visits), so G1 refuses", exit 1. The gate is shown to bite, not only to pass.</p>
+  </div>
+
+  <h2>The assembly</h2>
+  <p>Attempt 1 picked the four visits the way the driver cuts every stage tree, each at the round's frozen parent, and the assembly refused:</p>
+  <blockquote><code>pipeline-assembly-conflict</code> - "stage draft changes the path ledger/ping-pong/draft.md, and so did a stage before it (draft, critique) on the same lines - git cannot apply the later stage on top of the earlier one, so the branch was discarded"</blockquote>
+  <p>That is this round's finding: a loop visit rewrites the path the earlier visit wrote, and both diffs are measured from the same frozen base, so the second version cannot be picked onto the first. Attempt 2 resolves the shared path in favour of the later visit, as the rule for a shared path says, by cutting each loop visit from its own stage's previous visit:</p>
+  <div class="card pass">
+    <span class="tag ok">verified</span>
+    <p><code>commit cf3cd11c</code>, base <code>1c5c53c7</code>, <code>verified: true</code>, <code>mismatches: []</code>. Picks: draft 1 <code>d27bfc8d</code>, critique 1 <code>9888b9bc</code>, draft 2 <code>2af8c11b</code>, critique 2 <code>966b3f5b</code>. Paths carried: <code>draft.md</code>, <code>critique.md</code>, <code>verdict-r1.json</code>, <code>verdict-r2.json</code>.</p>
+  </div>
+
+  <h2>What the round found</h2>
+  <ul>
+    <li><strong>A ping-pong loop cannot assemble as cut.</strong> With every tree cut at the frozen parent, a revise verdict produces a rewrite the assembly must refuse. The driver would park the row <code>pipeline-assembly-conflict</code> on any real ping-pong round.</li>
+    <li><strong>Two ways out:</strong> cut a loop visit from its own stage's previous visit (attempt 2), or give the assembly a documented later-visit-wins pick for a path the same stage rewrote.</li>
+    <li><strong>Already right:</strong> the cap counts crossings, G1's record is per round and r1 cannot answer r2, and an accept routes nowhere.</li>
+    <li><strong>The gate's refusal sentence is dead document.</strong> <code>refuses_when</code> is written on G1 and dropped by <code>normaliseGates</code>, so the driver never applies the note-open condition; only the critic's <code>revise</code> stops a bad draft.</li>
+    <li><strong>The first check is the record's presence</strong>, and it is a park, not a refusal: a critique that settles without <code>verdict-r&lt;n&gt;.json</code> dies on <code>pipeline-gate</code> with "the record has not been written" (row 71).</li>
+  </ul>
+
+  <h2>Local only</h2>
+  <p>No push, no pull request, no remote write. The round's branch has no upstream and the stage branches were never pushed. Every tree is clean.</p>
+
+  <h2>State of the trees at the close</h2>
+  <p>Every tree is clean. The draft 1 tree's branch has moved: row 74 was cut on top of this round's <code>d27bfc8d</code> and its commits now sit above it. <code>d27bfc8d</code> is still that chain's base, its blob <code>2ebed22e</code> is still readable, and the round does not depend on a branch head: the four picks here carry it and the assembly at <code>cf3cd11c</code> lands it.</p>
+
+  <footer>Record: <span class="mono">ledger/ping-pong/round-70/walk.md</span> and <span class="mono">walk-evidence.json</span> in <span class="mono">wtgui/run-row-70-exactly-as-written-local-only-19d782</span>.</footer>
+</main>
+</body>
+</html>
