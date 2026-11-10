@@ -62,14 +62,26 @@ record keeps the ledger of them:
   write that sets `enteredAt` - so a loop back into S8 is `#2`, the first entry is still `#1`, and a bundle re-export
   that inserts a stage renumbers nothing. Every user of the id (a journal line, a park's sentence, a test) names the
   same thing. The attempt suffix exists because ONE VISIT CAN BE STARTED MORE THAN ONCE - a spawn that failed before
-  the link, a retry after a start that had already linked a thread - and two entries sharing `#<visit>` let a settle
-  stamp whichever one the stage/visit match reached. The first attempt keeps the bare id, so every stored record and
-  every journal line naming `p/s1#1` still names one run, and no two entries in one ledger share an id.
+  the link, a retry after a start that had already linked a thread, **and a start in a different tree** - and two
+  entries sharing `#<visit>` let a settle stamp whichever one the stage/visit match reached. The first attempt keeps
+  the bare id, so every stored record and every journal line naming `p/s1#1` still names one run, and no two entries in
+  one ledger share an id.
+- **A stage run's identity is its visit AND its tree.** `beginStageRun` takes the tree (a path or the record) as well
+  as the thread, and two starts that name different trees are two attempts: a stage re-cut into a second tree - the
+  first was in use, the row moved, the round re-cut it - names no thread yet either, so a start that matched on stage
+  and visit alone reused the first tree's entry, the second settle overwrote its facts, and two runs answered one id.
+  A settle is held to the same rule: it fills an entry that names no tree, and never stamps one that names a
+  different tree.
 - **An entry is created when the START is asked for**, not when it settles: a stage that never started still names the
   attempt, and a start that was refused leaves its refusal on the record. `thread` and `job` are filled at the link.
   A retry of the SAME attempt reuses its entry (the same thread, or a start that names no thread onto an entry that
   names none either) - a retry is an attempt, not a visit. A start whose thread is already on an open entry is the
   NEXT attempt: it gets its own id rather than overwriting the run that already linked.
+- **A settle never invents the start.** `at` is the run's start, and the settle's clock is not it: an entry the
+  settle has to create is written with `at: null` unless the caller hands `startedAt` in, because stamping the settle
+  clock there made every run the ledger had not seen begin claim a zero length - `settledAt - at` read 0 and an
+  `interrupted` run was drawn as one that never worked. `settledAt` is the settle's own clock and is always written; a
+  null `at` is a fact a reader can draw (the start is unknown) rather than a stamp that is false.
 - **A settle names its own run, in order**: the entry on that thread, then the entry on that job, then the newest
   open entry for the visit, and only then a new attempt (created on the spot, because the settle is the moment the
   panel learned those facts). A settle never rewrites an entry whose non-empty thread or job is a different one. The
@@ -524,6 +536,18 @@ queue actions:
 
 Every other park is released by fixing the fact: write the decision record, repair the tree, fix the record or the
 bundle, start the worker by hand.
+
+A park is a CONDITION (the hold) plus EVIDENCE (its `reason` and the row's `detail`), and the two are edited by
+different doors. Correcting the evidence never moves the condition:
+
+- `{ action: "state", id, state: "parked", reason: "…", detail: "…" }` on a row that is ALREADY parked writes the new
+  prose and keeps the hold, including the `since` it was parked on - the row has been held since then, not since now.
+  It used to answer "already parked" and drop both fields, so the sentence a parked row is judged by could not be
+  rewritten without re-parking it (row 79).
+- `{ action: "note", id, reason: "…", detail: "…" }` is the door for prose with no state move at all, and
+  `{ action: "note", id, detail: "…", append: true }` adds a line to the detail instead of replacing it.
+- A `link` fills facts and is not an advance: a row parked on a hold keeps its state, its hold and its prose when the
+  next link reaches it.
 
 ### What the last stage does, and what stays open
 

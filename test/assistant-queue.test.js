@@ -1200,3 +1200,58 @@ test("an agent turn cannot close a live round before its assembly is on the row"
   assert.equal(after.status, 200, JSON.stringify(after.payload));
   assert.equal(JSON.parse(readFileSync(file, "utf8")).tasks[0].state, "done");
 });
+
+// ---- row 79: a park's prose is not its hold, and neither is dropped on the way in ---------------------------
+// The live repro this pins: POST the queue route with action `state`, state `parked`, a NEW reason and a detail, on a
+// row that was already parked - 200, and NEITHER field changed; `note`, `detail`, `append` and `park` all answered 400
+// `unknown queue action`. The state action returned early because the hold was the same, and `detail` was not a field
+// the action carried at all, so the sentence a parked row is judged by could never be corrected. A park is a CONDITION
+// (the hold) plus EVIDENCE (the reason and the detail): correcting the evidence must leave the condition alone, and the
+// route has to have a door for prose that is not a state move.
+test("a parked row's reason and detail are replaced through the route, and the hold survives the edit", async (t) => {
+  const { dir, assistant } = await panelAssistant(t, "wtgui-queue-park-prose-");
+  const route = queueTransport(assistant);
+  await route.call({ method: "POST", body: { assistantId: "assistant-1", action: "add", title: "waiting on the gate", detail: "G1" } });
+  const parked = await route.call({
+    method: "POST",
+    body: { assistantId: "assistant-1", action: "state", id: 1, state: "parked", reason: "the gate record could not be read", hold: { kind: "manual", value: "" } },
+  });
+  assert.equal(parked.status, 200, JSON.stringify(parked.payload));
+  const since = parked.payload.task.hold.since;
+  assert.equal(parked.payload.task.reason, "the gate record could not be read");
+
+  // The same park, with the reason corrected and a detail added: the row says the new words and keeps the old hold.
+  const rewritten = await route.call({
+    method: "POST",
+    body: { assistantId: "assistant-1", action: "state", id: 1, state: "parked", reason: "the gate record exists and refuses", detail: "the record is verdict-r1.json" },
+  });
+  assert.equal(rewritten.status, 200, JSON.stringify(rewritten.payload));
+  assert.equal(rewritten.payload.task.reason, "the gate record exists and refuses", "the reason a park is read by is the caller's to correct");
+  assert.equal(rewritten.payload.task.detail, "the record is verdict-r1.json", "and the detail the state action now carries reaches the row");
+  assert.equal(rewritten.payload.task.state, "parked");
+  assert.deepEqual(rewritten.payload.task.hold, { kind: "manual", value: "", since }, "the hold is the park's condition: a prose edit keeps it, and keeps its clock");
+
+  // The FILE agrees, so the answer above is a write and not a summary of one.
+  const onDisk = JSON.parse(readFileSync(path.join(dir, "assistants", "assistant-1", "queue.json"), "utf8")).tasks[0];
+  assert.equal(onDisk.reason, "the gate record exists and refuses");
+  assert.equal(onDisk.detail, "the record is verdict-r1.json");
+  assert.equal(onDisk.hold.kind, "manual");
+
+  // A held row cannot be advanced by the panel's own LINK: a link fills facts, it is not an advance. The park - and
+  // its prose - is what the link has to find when it arrives.
+  const linked = linkTaskRun(assistant.queueView("assistant-1").tasks, 1, { thread: "T-held", runId: "run-held", worktree: TREE, at: at("2026-11-10T12:00:00Z") });
+  assert.equal(linked.task.state, "parked", "a link cannot walk a parked row forward while its hold is set");
+  assert.equal(linked.task.hold.kind, "manual", "and it cannot clear the hold either");
+  assert.equal(linked.task.reason, "the gate record exists and refuses", "the park's prose is the link's context, so the link leaves it alone");
+
+  // `note` is the door for prose that is not a state move: it replaces, or appends a line, without touching the park.
+  const noted = await route.call({ method: "POST", body: { assistantId: "assistant-1", action: "note", id: 1, detail: "still waiting on G1", reason: "G1 is unreadable" } });
+  assert.equal(noted.status, 200, JSON.stringify(noted.payload));
+  assert.equal(noted.payload.task.detail, "still waiting on G1");
+  assert.equal(noted.payload.task.reason, "G1 is unreadable");
+  assert.equal(noted.payload.task.state, "parked", "a note is not a state move");
+
+  const appended = await route.call({ method: "POST", body: { assistantId: "assistant-1", action: "note", id: 1, detail: "checked again at 14:10", append: true } });
+  assert.equal(appended.status, 200, JSON.stringify(appended.payload));
+  assert.equal(appended.payload.task.detail, "still waiting on G1\nchecked again at 14:10", "append adds a line instead of losing what the row already said");
+});
