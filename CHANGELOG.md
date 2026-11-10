@@ -4,16 +4,26 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.80.7 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.80.8 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-528 releases from v0.1.0 (2026-10-20) to v1.80.7 (2026-11-09), 1732 commits between the tags. Every release is anchored by an
+529 releases from v0.1.0 (2026-10-20) to v1.80.8 (2026-11-09), 1735 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.80.8 — 2026-11-09 · 3 commits
+
+[`7bbe787`](https://github.com/JLRoper/agent-worktree-gui/commit/7bbe78769268d95e97115281c7c5dcc7ed448715) · [compare v1.80.7...v1.80.8](https://github.com/JLRoper/agent-worktree-gui/compare/v1.80.7...v1.80.8)
+
+### Docs & tests
+
+- docs: render the changelog - 528 releases ([`33d9f8d`](https://github.com/JLRoper/agent-worktree-gui/commit/33d9f8d9d9b21c9b3183ba57775907defe012f8a))
+- docs: state what the ladder proved and order its next eight tests ([`5c786f2`](https://github.com/JLRoper/agent-worktree-gui/commit/5c786f2fb7348bba58460c2c199ad67f5dc22f6d))
+- test: the GitHub gate walks as a barrier and a router, not a pause ([`7bbe787`](https://github.com/JLRoper/agent-worktree-gui/commit/7bbe78769268d95e97115281c7c5dcc7ed448715))
 
 ## v1.80.7 — 2026-11-09 · 2 commits
 
