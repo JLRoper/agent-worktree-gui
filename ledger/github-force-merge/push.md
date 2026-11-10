@@ -1,195 +1,210 @@
 # github-force-merge stage 3 of 6: push
 
-Stage: `push` (visit 1), pipeline `github-force-merge`, row #58 in assistant-3's queue.
-Tree: the repo-relative worktree `.worktrees/github-landing-sanity-0bbdd3`.
-Branch: `wtgui/github-landing-sanity-0bbdd3`.
+Stage: `push` (visit 1), pipeline `github-force-merge`, row #1 in assistant-3's queue.
+Tree: the repo-relative worktree `.worktrees/pipeline-row-rung-2-6f9dd4`, in the agent-worktree-gui clone.
+Branch: `wtgui/pipeline-row-rung-2-6f9dd4`.
 Artifact: `pushed-branch`, schema `pushed-branch/1`, kind `pr`, written to `ledger/github-force-merge/push.md`.
-The path already carries the earlier walk's record on `origin/main`; the ladder writes one fixed path per stage, so
-this walk's record replaces it, and that replacement is one of the conflicts named below.
-Base and HEAD at the final push: `origin/main` at 1.80.0 (`10c13658`) and HEAD `0362b82c`.
+The path already carries the earlier walk's record on `origin/main` (row #58, branch
+`wtgui/github-landing-sanity-0bbdd3`, committed as `3edc1bf5`); the ladder writes one fixed path per stage, so this
+walk's record replaces it, and that replacement is a conflict this branch's pull request will show against main's
+copy of this file.
+Base and HEAD at the push: `origin/main` at `23fbe197` (reading 1.80.8) and HEAD `fefe4001`, two commits above it.
 Working tree before this stage: clean, 0 uncommitted files.
 
 This stage is the third rung of the shipped `github-force-merge` ladder, walked once in order:
 `commit -> version -> push -> pr -> merge -> main`. H-02 hands stage 2's `version-bump` in and H-03 hands this
-stage's `pushed-branch` to `pr`. It pushes the branch and nothing else: stage 4 owns the pull request, and no pull
-request was opened here.
+stage's `pushed-branch` to `pr`. It pushes the branch and the version's claim, and nothing else: stage 4 owns the
+pull request, so no pull request was opened here and `gh pr create` was not run.
 
 ## The ladder so far
 
-| # | stage | artifact | path | stamp | sha256 |
-|---|-------|----------|------|-------|--------|
-| 1 | `commit` | `commit-record` | `ledger/github-force-merge/commit.md` | run 22:29:40.098Z, settled 22:33:42.633Z | `a7d6b07a...` |
-| 2 | `version` | `version-bump` | `ledger/github-force-merge/version.md` | run 22:33:42.633Z, settled 22:58:43.152Z | `b1cd02cd...` |
-| 3 | `push` | `pushed-branch` | `ledger/github-force-merge/push.md` | run 22:58:43.152Z, this attempt 00:28:43.565Z | this file |
+| # | stage | artifact | path | entered / settled | artifact sha256 |
+|---|-------|----------|------|-------------------|-----------------|
+| 1 | `commit` | `commit-record` | `ledger/github-force-merge/commit.md` | 03:24:25.112Z / 03:35:45.317Z | `860a928d...` |
+| 2 | `version` | `version-bump` | `ledger/github-force-merge/version.md` | 03:35:45.317Z / 03:43:50.825Z | `bebde57f...` |
+| 3 | `push` | `pushed-branch` | `ledger/github-force-merge/push.md` | 03:43:50.825Z / this visit, job `0aa282c6` started 03:43:52.005Z | this file |
+
+Row #1's `pipelineRun` reads `visits` `commit: 1, version: 1, push: 1` and `crossings` `H-01: 1, H-02: 1`, which is
+the no-loop statement this ladder is being walked to prove: three stages entered once each, two handoffs crossed
+once each, no re-entry.
 
 Stages 4 to 6 (`pr`, `merge`, `main`) have not run. Their stamps belong to the panel when each of those stages
 starts and settles; this stage cannot measure a clock it never held.
 
 ## The input read
 
-`ledger/github-force-merge/version.md`, handed on as `version-bump` read-only at `e197b799ed4c`, pinned at sha256
-`b1cd02cd4e31`. In this tree the file's blob still hashes to that value at HEAD:
+`ledger/github-force-merge/version.md`, handed on as `version-bump` read-only at `fefe40018cee`, pinned at sha256
+`cfbe492932b2` and blob `d57bf7307d1c`. Both pinned values reproduce from that commit:
 
-    git cat-file blob HEAD:ledger/github-force-merge/version.md | sha256sum
-    b1cd02cd4e31fdac518861461d787f2969962b7eed4f792fb3f0949d7095f4d1
+    git cat-file blob fefe40018cee:ledger/github-force-merge/version.md | sha256sum
+    cfbe492932b28d2cc62e5c4cb94e7c3fab5abe52d9e364f699f3e4402e418c0b
 
-Stage 1's `commit.md` was checked the same way and still reads `a7d6b07ab125...`. Both records rode the rebases that
-follow byte for byte, so the content the panel handed on is the content this branch carries.
+    git rev-parse fefe40018cee:ledger/github-force-merge/version.md
+    d57bf7307d1ce3313f6314cd1f839b74da9ed441
 
-## The base moved twice under the stage
+The checked-out copy hashes to a third value, and that is the panel's third field, not drift:
 
-`origin/main` advanced twice while the ladder waited, and neither move was this branch's:
+    sha256sum ledger/github-force-merge/version.md
+    bebde57fc05b335aff695048295ee5b2580b0beb31a603cbe50061b126fc06c8
 
-| read | origin/main | version |
-|------|-------------|---------|
-| stage 2's read, 22:55Z | `621ff6c6` | 1.76.27 |
-| this stage's first fetch, 00:29Z | `47ee919b` | 1.79.0 |
-| the first rebase's target, 00:35Z | `4b06bbec` | 1.79.0 |
-| the fetch that forced the second rebase, 00:44Z | `10c13658` | 1.80.0 |
-
-The version gate refuses a branch that declares a number at or below the base's current tip, so the branch could not
-be pushed at stage 2's 1.76.29. The bump commit was rebased and re-taken twice:
-
-1. Onto `4b06bbec` (1.79.0), with `package.json` conflicted and resolved to 1.79.1. That is the number the first
-   push carried.
-2. Onto `10c13658` (1.80.0), after main landed `548f8a6e` (`chore: 1.80.0`) at 00:40:54Z and its render at 00:41:49Z.
-   `package.json` was conflicted again and resolved to 1.80.1, one patch above the new base. `v1.79.2` was already
-   claimed on origin by another lane and was stepped past, so the number taken is 1.80.1.
-
-The conflicts were only where earlier walks and main's own records meet:
-`ledger/github-force-merge/commit.md` and `ledger/github-force-merge/version.md` are add/add against the records of
-the earlier walk that main already carries, and were resolved by keeping this walk's handed-on records;
-`tools/absolute-paths.allow` merged cleanly with this branch's one line appended; `package.json` was resolved by hand
-to 1.80.1 both times. The bump commit's subject and body were amended to the number it now declares, and the
-annotated tag follows that commit.
-
-The push stage did not rewrite stage 2's number: `version.md` is the artifact the panel handed on pinned, so it keeps
-the number it judged (1.76.29) and this record carries both base moves instead.
+`bebde57f` is the `sha256` the panel pinned on the `version` stage run, because this clone checks out CRLF
+(`core.autocrlf`) while git stores LF; the LF form is the `cfbe4929` blob hash the brief names. All three agreed
+with the panel before this stage wrote anything.
 
 ## The permission
 
-The panel's remote-write answer, read at 00:38:36Z:
+The LANDING paragraph this row carries is the grant: this project allows remote writes, so a push is not asked
+about, and the paragraph is what decides whether the push happens at all. It ordered the push ("commit on
+`wtgui/pipeline-row-rung-2-6f9dd4`, push it and open a pull request"), so the push was taken and no permission box
+was reached. Stage 2's record named this stage as the one that carries the branch and the tag together, which is
+the claim below.
 
-    permission allow, ask false, denied false
-    repo github/JLRoper, branch wtgui/github-landing-sanity-0bbdd3
-    newSource project, existingSource project
-
-The push was not asked about. The permission box is the only thing that grants a write, and it granted it.
+Nothing was pushed to `main`. The push below names `HEAD`, and `HEAD` is the stage branch.
 
 ## The push
 
 All stamps UTC.
 
-    git push -u origin HEAD                       # 00:43:28Z
-    * [new branch]  HEAD -> wtgui/github-landing-sanity-0bbdd3
-    branch 'wtgui/github-landing-sanity-0bbdd3' set up to track 'origin/wtgui/github-landing-sanity-0bbdd3'
-    exit 0
+    git push -u origin HEAD                       # 03:47:11Z, exit 0
+    remote:
+    remote: Create a pull request for 'wtgui/pipeline-row-rung-2-6f9dd4' on GitHub by visiting:
+    remote:      https://github.com/JLRoper/agent-worktree-gui/pull/new/wtgui/pipeline-row-rung-2-6f9dd4
+    remote:
+    To github.com:JLRoper/agent-worktree-gui.git
+     * [new branch]        HEAD -> wtgui/pipeline-row-rung-2-6f9dd4
+    branch 'wtgui/pipeline-row-rung-2-6f9dd4' set up to track 'origin/wtgui/pipeline-row-rung-2-6f9dd4'.
 
-That push carried `62ae1283` (the 1.79.1 bump) and `1c5cd72b` (the test and stage 1's record). Main had already
-moved to 1.80.0 at 00:40:54Z, three minutes before it, so the branch was rebuilt on the new base as described above
-and sent again:
+It carried both commits above `origin/main`:
 
-    git push --force-with-lease origin HEAD       # 00:46:59Z
-     + 62ae1283...0362b82c HEAD -> wtgui/github-landing-sanity-0bbdd3 (forced update)
-    exit 0
+    fefe4001 chore: 1.80.9 - the version this landing carries
+    f3612b12 docs: the GitHub ladder has no loop to cross - all five handoffs are sequence
 
-The force is the branch being rewritten by design, before any pull request exists: same change, new base, and no
-reviewer holding a diff of `62ae1283`.
+## The claim
 
-The claim on the number went with the push. `node tools/version.mjs claim` printed:
+A branch's number is reserved by pushing its tag, and stage 2 left `v1.80.9` local and unclaimed by design. This
+stage is where origin learns the number:
 
-    version claim: v1.80.1 claimed on origin at 0362b82ccc (attempt 1)
+    node tools/version.mjs claim                  # 03:47:14Z, exit 0
+    version claim: v1.80.9 claimed on origin at fefe40018c (attempt 1)
+      the claim is the annotated tag: git ls-remote --tags origin carries v1.80.9, so a lane that asks for it is
+      refused.
 
-and `git ls-remote --tags origin refs/tags/v1.80.1` carries it (tag object `dd086b3b`), so a lane that asks for
-1.80.1 is refused. The tag names the bump commit `0362b82c`; a rebase merge re-creates that commit, and moving the
-anchor onto main's copy is the merge stage's post-merge step, not this stage's.
+The claim took one attempt and rewrote nothing: the number was free on origin when it was taken (`git ls-remote
+--tags origin 'refs/tags/v1.80.9*'` printed nothing at 03:44Z), so the tag was already on the declaring commit and
+the push was the whole claim. `HEAD` still read `fefe4001` after it.
+
+    git ls-remote --tags origin refs/tags/v1.80.9 'refs/tags/v1.80.9^{}'
+    ccd12da1d91d927c805ae72053ed5173924b0a53    refs/tags/v1.80.9
+    fefe40018ceed233a67a7f9969103eced5818fa9    refs/tags/v1.80.9^{}
+
+The annotated tag object is `ccd12da1` and it peels to the bump commit, so the number and the branch agree on
+origin. A rebase merge re-creates that commit; moving the anchor onto main's copy is the merge stage's post-merge
+step, not this stage's.
 
 ## Gate G3
 
-`verified_by: pushed`. The read that answers it, taken after the force push:
+`verified_by: pushed`. The read that answers it, taken at 03:47:33Z, after the push and the claim:
 
-    git ls-remote --heads origin refs/heads/wtgui/github-landing-sanity-0bbdd3
-    0362b82ccc3165aeb96f59012ce6728d53f4a521
+    git ls-remote --heads origin refs/heads/wtgui/pipeline-row-rung-2-6f9dd4
+    fefe40018ceed233a67a7f9969103eced5818fa9    refs/heads/wtgui/pipeline-row-rung-2-6f9dd4
     git rev-parse HEAD
-    0362b82ccc3165aeb96f59012ce6728d53f4a521
+    fefe40018ceed233a67a7f9969103eced5818fa9
 
-The two 40-character shas are the same, so the branch is on origin at this tree's HEAD. That is the whole of G3: the
-pull request stage reads this head, and the record commit that follows adds one more commit above it.
+The two 40-character shas are the same, so at that instant the branch was on origin at this tree's HEAD. This record
+is committed on top of that head by design, and the commit is sent by a second `git push -u origin HEAD` in this same
+stage, so the head the `pr` stage reads is this record's commit and not `fefe4001`. The same two reads were taken
+after the second push and are quoted under "What this commit holds" below.
 
 ## The gates that should have run
 
-No pre-push hook is installed in this clone: `git config --get core.hooksPath` is unset and the hooks directory
-holds only `*.sample` files, so `.githooks/pre-push` (and the panel's chained copy named in
-`.git/wtgui-hooks/chain`) never ran on either push. The two gates were run by hand on the pushed commit and are
-quoted as the check that should have stopped an unbumped or machine-pathed push, not as one that stopped anything:
+No pre-push hook is installed in this clone: `git config --get core.hooksPath` is unset (exit 1) and the common
+hooks directory holds no file that is not a `*.sample`. The panel's chain file names the repository's hook
+(`.githooks/pre-push`), but nothing invokes it, so neither push was guarded by it. The gates were therefore run by
+hand, on the pushed commits, and are quoted as the check that would have stopped an unbumped or machine-pathed push,
+not as one that stopped anything:
 
     node tools/version.mjs check
     version check: ok - the branch's number is above origin/main's
-      branch  1.80.1  (HEAD's package.json)
-      base    origin/main  1.80.0  (10c13658)
+      branch  1.80.9  (HEAD's package.json)
+      base    origin/main  1.80.8  (23fbe197)
       2 commits to land on top of origin/main
     exit 0
 
-    node tools/absolute-paths.mjs --rev HEAD
-    absolute-paths: clean - 1455 files at HEAD, 1311 paths in 250 allowlisted files, none new
+    node tools/absolute-paths.mjs
+    absolute-paths: clean - 1461 tracked files, 1309 paths in 249 allowlisted files, none new
     exit 0
 
-The first push went out with the version check green against `4b06bbec` (1.79.0) and main landing 1.80.0 while the
-focused suite ran. The branch was not left in that state: the second rebase and the 1.80.1 bump are what the force
-push sent.
+The second read is also re-taken at the final HEAD, after this record's commit, and quoted below; this one is the
+read on the pushed change commits.
 
 ## What the focused tests answered
 
-    npm run test:module test/pipeline-bundle-seed.test.js
-    tests 6, pass 6, fail 0, exit 0
+    npm run test:changed -- --list
+    test:changed - 5 changed files against origin/main:
+      docs/pipelines.md
+      ledger/github-force-merge/commit.md
+      ledger/github-force-merge/version.md
+      package.json
+      tools/absolute-paths.allow
+    test:changed - 27 test files name or import the diff (27 by name, 0 by import)
 
     npm run test:changed
-    5 changed files against origin/main, 23 test files name or import the diff
-    179 tests, pass 178, fail 1, 252.6s, exit 1
+    tests 230, pass 229, fail 1, duration 1m 54s, exit 1
 
-The one failure is `test/harness.test.js`, "every declared harness is wired the way its own header says": it says
-`tools/verify-round-tree-names.mjs` is a LIVE GATE and no `package.json` script runs it. It fails on `origin/main` as
-well (`git show origin/main:package.json` has no `verify-round-tree-names` script while the tool's header reads LIVE
-GATE), so it is pre-existing and not this branch's. The seed test itself is green with the pin in place, which is its
-own statement that the ladder has no loop. The full suite is the pull request stage's single final sweep.
+The one failure is `test/harness.test.js`, "every declared harness is wired the way its own header says":
+`tools/verify-round-tree-names.mjs` says `HARNESS: LIVE GATE` and no `package.json` script runs it. It is
+pre-existing and not this branch's, proved rather than asserted: `origin/main` was exported to the run's own scratch
+folder (`git archive origin/main | tar -x -C <scratch>/base`) and the same file run there produced the identical
+failure at `test/harness.test.js:88`. The branch cannot have caused it either: the only change it makes to
+`package.json` is the version line, `origin/main`'s `package.json` has zero occurrences of
+`verify-round-tree-names`, and the tool's header says LIVE GATE on `origin/main` too.
+
+The full suite was not run here. This stage opens no pull request, and the one final sweep the landing owes belongs
+to the `pr` stage, which is the stage that opens it.
 
 ## Timing
 
-All stamps UTC. The panel is the clock for the row and job rows; the rest are this stage's own, with the rebase
-stamps read from the reflog.
+All stamps UTC. The panel is the clock for the row and job rows; the rest are this stage's own.
 
 | event | stamp | source |
 |-------|-------|--------|
-| row #58 entered `push` visit 1 | 2026-11-09T22:58:43.152Z | `~/.wag/state/assistants/assistant-3/queue.json`, `pipelineRun.enteredAt` |
-| attempt 1 job `a03bebb7` started | 2026-11-09T22:58:45.888Z | `~/.wag/state/jobs.json` |
-| attempt 1 ended failed, no final message | 2026-11-09T22:59:15.490Z | same file, `completion.at`, `durationMs` 29602 |
-| panel recorded `pipeline-run-failed` | 2026-11-09T22:59:20.453Z | queue.json, `stageRuns[2].decision` |
-| attempt 2 stage run `push#1.2` stamped | 2026-11-10T00:28:43.565Z | queue.json, `stageRuns[3].at` |
-| attempt 2 job `ecaff67c` started | 2026-11-10T00:28:45.409Z | jobs.json |
-| first rebase start / finish | 00:35:26Z / 00:36:29Z | `git reflog --date=iso` |
-| bump amended to 1.79.1 | 00:36:54Z | reflog |
-| first push | 00:43:28Z | this run |
-| second rebase start / finish | 00:44:38Z / 00:45:52Z | reflog |
-| bump amended to 1.80.1 | 00:45:53Z | reflog |
-| `v1.80.1` claimed on origin | 00:46:30Z | this run, `version.mjs claim` |
-| force push of the rebuilt branch | 00:46:59Z | this run |
-| remote head read equal to HEAD | 00:47:02Z | this run |
+| stage 1 settled, H-01 crossed | 2026-11-10T03:35:45.317Z | the panel's queue file, `stageRuns[0].settledAt` |
+| stage 2 settled, H-02 crossed | 2026-11-10T03:43:50.825Z | same file, `stageRuns[1].settledAt` |
+| row #1 entered `push` visit 1 | 2026-11-10T03:43:50.825Z | same file, `pipelineRun.enteredAt` / `stageRuns[2].at` |
+| job `0aa282c6` started | 2026-11-10T03:43:52.005Z | the panel's `jobs.json` |
+| input hashes read | 03:44:23Z | this run |
+| `node tools/version.mjs check` read | 03:44:23Z | this run |
+| `git push -u origin HEAD` | 03:47:11Z to 03:47:14Z | this run |
+| `node tools/version.mjs claim` | 03:47:14Z to 03:47:28Z | this run |
+| remote head read equal to HEAD | 03:47:33Z | this run |
 
-Attempt 1 failed 30 seconds in with no final message and wrote no artifact: it is the reason this stage shows two
-attempts, and the panel's own decision record says it waits for a decision rather than re-running the stage. Attempt
-2 is this file. From attempt 2's stage stamp (00:28:43.565Z) to the final pushed head (00:46:59Z) is 18 minutes 15
-seconds, of which the two rebases, the focused suite (252.6s) and the wait for main to settle account for the bulk.
-The stage entered at 22:58:43.152Z; the whole visit, across both attempts and the failed one's gap, is 1 hour 48
-minutes 16 seconds.
+From the stage's entry stamp to the pushed head is 3 minutes 42 seconds: two short reads, one 1m 54s focused suite
+run before the push, and the two pushes. The `pr` stage's own stamps are not in this file.
 
-## What this commit holds, and what the next stage reads
+## What this commit holds
 
-This record is committed on the branch above `0362b82c` and sent by a second `git push -u origin HEAD` in this same
-stage, which is a fast-forward from the forced head and rewrites nothing. The commit's own sha is not printed here:
-this file is inside it. The panel stamps it on the stage run as the artifact's commit, and
-`git log --oneline 10c13658..HEAD` answers it in the tree.
+This record is committed on top of `fefe4001` and sent by a second `git push -u origin HEAD` in this same stage. The
+commit's own sha is not printed here: this file is inside it. The panel stamps it on the stage run as the artifact's
+commit, and `git log --oneline origin/main..HEAD` answers it in the tree. One file changes: this record. The commit
+is revertable on its own, and reverting it removes the record and nothing else.
 
-`pr` reads this file as the `pushed-branch` input and opens ONE pull request from this branch into main. The head it
-opens from is the branch's head after this record's commit; the number to state in the body is 1.80.1, claimed on
-origin as `v1.80.1`, and both base moves are in the bump commit's body so main's history accounts for the number it
-ends on.
+The final remote read, taken after that push:
+
+    git ls-remote --heads origin refs/heads/wtgui/pipeline-row-rung-2-6f9dd4   # equals git rev-parse HEAD
+    node tools/version.mjs check                                              # ok, 1.80.9 above 1.80.8
+    node tools/absolute-paths.mjs                                             # clean, none new
+    git status --porcelain                                                    # empty
+
+## What the next stage reads
+
+`pr` reads this file as the `pushed-branch` input (schema `pushed-branch/1`, kind `pr`) and opens ONE pull request
+from `wtgui/pipeline-row-rung-2-6f9dd4` into `main`. It reads the branch's head after this record's commit, not
+`fefe4001`, so the head it opens from is one commit above the pushed change.
+
+The number to state in the body is 1.80.9, claimed on origin as the annotated tag `v1.80.9` (`ccd12da1`, peeling to
+`fefe4001`), which is patch above `origin/main`'s 1.80.8. The body has to carry the level and its reason, because
+`gh pr create --fill` builds a body from commit subjects only.
+
+The one conflict to expect against `main` is this file: `main` carries the earlier walk's `push.md`, and this record
+replaces it whole. `ledger/github-force-merge/commit.md` and `version.md` conflict the same way, for the same reason,
+and are resolved by keeping this walk's copies.
