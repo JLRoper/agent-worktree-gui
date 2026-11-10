@@ -1,196 +1,215 @@
 # github-force-merge stage 4 of 6: pr
 
-Stage: `pr` (visit 1), pipeline `github-force-merge`, row #58 in assistant-3's queue.
-Tree: the repo-relative worktree `.worktrees/github-landing-sanity-0bbdd3`.
-Branch: `wtgui/github-landing-sanity-0bbdd3`.
+Stage: `pr` (visit 1), pipeline `github-force-merge`, row #1 in assistant-3's queue.
+Tree: the repo-relative worktree `.worktrees/pipeline-row-rung-2-6f9dd4`, in the agent-worktree-gui clone.
+Branch: `wtgui/pipeline-row-rung-2-6f9dd4`.
 Artifact: `pull-request`, schema `pull-request/1`, kind `pr`, written to `ledger/github-force-merge/pr.md`.
-The path already carries the earlier walk's record (PR 674) on `origin/main`; the ladder writes one fixed path per
-stage, so this walk's record replaces it.
-Base at open: `origin/main` at 1.80.0 (`10c13658`) when the stage started; the PR's base was read at `a868b9d4`
-(1.80.4) because main moved while this stage ran. Head at open: `269ebdaf`.
+The path already carries the earlier walk's record (PR 674, row #58) on `origin/main`; the ladder writes one fixed path
+per stage, so this walk's record replaces it.
+Base at open: `origin/main` at `23fbe197` (reading 1.80.8). Head at open: `58972a93`, three commits above it.
 Working tree before this stage: clean, 0 uncommitted files.
 
 This stage is the fourth rung of the shipped `github-force-merge` ladder, walked once in order:
 `commit -> version -> push -> pr -> merge -> main`. H-03 hands stage 3's `pushed-branch` in and H-04 hands this
-stage's `pull-request` to `merge`. It opens the pull request and nothing else: no merge, no push to main.
-
-## The ladder so far
-
-Artifacts as the panel pinned them on each stage run in
-`~/.wag/state/assistants/assistant-3/queue.json`, with the job rows from `~/.wag/state/jobs.json`. All stamps UTC.
-
-| # | stage | artifact | path | commit | entered | settled | job | job time |
-|---|-------|----------|------|--------|---------|---------|-----|----------|
-| 1 | `commit` | `commit-record` | `ledger/github-force-merge/commit.md` | `67a5d5b7` | 22:29:40.098Z | 22:33:42.633Z | `3615f3f1` | 241.086s |
-| 2 | `version` | `version-bump` | `ledger/github-force-merge/version.md` | `e197b799` | 22:33:42.633Z | 22:58:43.152Z | `c68536c9` | 1498.585s |
-| 3 | `push` | `pushed-branch` | `ledger/github-force-merge/push.md` | `269ebdaf` | 22:58:43.152Z | 00:49:47.238Z | `a03bebb7`, then `ecaff67c` | 29.602s failed, then 1258.480s |
-| 4 | `pr` | `pull-request` | `ledger/github-force-merge/pr.md` | this record | 00:49:47.238Z | the panel's stamp | `d3ef22d8` | this run |
-| 5 | `merge` | `merge-record` | `ledger/github-force-merge/merge.md` | not run | - | - | - | - |
-| 6 | `main` | `main-moved` | `ledger/github-force-merge/main.md` | not run | - | - | - | - |
-
-The artifacts stage 1 to 3 wrote, as hashed on the run that settled them:
-
-    commit-record   sha256 a7d6b07ab12510e9614b0abcba935994dcc438bdba2612ec7dc8eb61a1bc44b1
-    version-bump    sha256 b1cd02cd4e31fdac518861461d787f2969962b7eed4f792fb3f0949d7095f4d1
-    pushed-branch   blob   31440c76df730769e3ad0d01a21839e4c859c59d
+stage's `pull-request` to `merge`. It opens ONE pull request and nothing else: no merge, no push to `main`, no edit to
+the branch's change commits.
 
 ## The input read
 
-`ledger/github-force-merge/push.md`, handed on as `pushed-branch` read-only at `269ebdaf`. The panel pinned two
-hashes for it, and both are real: the working-tree file has CRLF endings (`core.autocrlf`), so its raw bytes hash to
-`6d5ef316be7e2a1790937a2b1ad0e0d369d969b2fcf5a71980f7e7e4b83c95b8` (the panel's `sha256`), while the committed
-blob, which git stores with LF, hashes to `e08da670f727feba8c04a5c9ade718099b5537ccd35886e7c88911f7c7c42fe9`
-(the panel's `blobSha256`) and is blob `31440c76`:
+`ledger/github-force-merge/push.md`, handed on as `pushed-branch` read-only at `58972a93`. All three pinned values
+reproduce from that commit:
 
-    git cat-file blob HEAD:ledger/github-force-merge/push.md | sha256sum
-    e08da670f727feba8c04a5c9ade718099b5537ccd35886e7c88911f7c7c42fe9
+    git rev-parse 58972a93:ledger/github-force-merge/push.md
+    f4f1b13a9410d6c486c6be241996863360eb8a51
 
-    git hash-object ledger/github-force-merge/push.md
-    31440c76df730769e3ad0d01a21839e4c859c59d
+    git cat-file blob 58972a93:ledger/github-force-merge/push.md | sha256sum
+    9fc1bfaaed74a0f1c3db574a4fd7a569cb63da73af868be506e86c1132015609
 
-Same file, two normalizations. Nothing on the branch changed between the stage 3 settlement and this read: the tree
-was clean and HEAD was `269ebdaf` at both.
+    sha256sum ledger/github-force-merge/push.md
+    9fc1bfaaed74a0f1c3db574a4fd7a569cb63da73af868be506e86c1132015609
+
+The working-tree copy hashes to the same value as the committed blob, so there is no CRLF split between the panel's
+`sha256` and `blobSha256` fields in this file, unlike `version.md` at stage 2. The file was stored with LF endings.
+
+The handoff names the head to open from (`58972a93`, after stage 3's own record commit, not `fefe4001`) and the number
+the body has to carry (1.80.9, patch above `origin/main`'s 1.80.8, claimed on origin as the annotated tag `v1.80.9`).
+It also names the one conflict it expected against `main`: `main` carries the earlier walk's copy of this fixed path
+and stage 3's record replaces it whole. That expectation was not borne out at the open, and the read below says why:
+the branch is 0 commits behind `origin/main`, so the merge base is main's own tip and there is nothing for those
+replacements to conflict with.
 
 ## The branch on origin
 
-Stage 3 pushed and its G3 read confirmed the branch on origin at this tree's HEAD. The read taken before the pull
-request, after `git fetch origin`:
+    git fetch origin                                          # before the open
+    git rev-parse origin/main                                 23fbe1974b89420c3357add805760673b2754959
+    git ls-remote origin refs/heads/wtgui/pipeline-row-rung-2-6f9dd4
+    58972a93a08d0cb09e67db6bf5a3aa972a5ae0ed    refs/heads/wtgui/pipeline-row-rung-2-6f9dd4
+    git rev-parse HEAD                                        58972a93a08d0cb09e67db6bf5a3aa972a5ae0ed
+    git rev-list --left-right --count origin/main...HEAD       0       3
+    git merge-tree --write-tree origin/main HEAD
+    653db153b9344361743dcf432870c5f24791c115                  # exit 0, no CONFLICT line
 
-    git ls-remote --heads origin refs/heads/wtgui/github-landing-sanity-0bbdd3
-    269ebdaf9874d5b807f42cb71ccfa84e63267bbe
-    git rev-parse HEAD
-    269ebdaf9874d5b807f42cb71ccfa84e63267bbe
-
-The one number this stage sends is `1.80.1`, claimed on origin as `v1.80.1` by stage 3. It was above the base when
-stage 3 pushed (1.80.0); main has since moved to 1.80.4, which is why the read below is CONFLICTING. Stage 3 read
-the panel's permission box as `allow, ask false, denied false` for this tree, and no push in this ladder has been
-prompted for, so the record commit below is pushed without a prompt.
+The remote branch and HEAD are the same commit, the branch is 0 behind, and the merge of the branch into main's tip
+computes a tree with no conflict, so the pull request opens on a branch that needs no rebase and whose merge needs no
+resolution. The full diff against `main` at the open is six files, 368 insertions and 344 deletions, all of them this
+branch's own change; this record is a seventh file on top of them.
 
 ## The pull request
 
-    gh pr create --base main --head wtgui/github-landing-sanity-0bbdd3 \
-      --title "test: the GitHub ladder has no loop to cross - every handoff is a sequence" \
-      --body-file <the pr-body.md this run wrote under the panel's scratch folder>
-    https://github.com/JLRoper/agent-worktree-gui/pull/679
+All stamps UTC. One `gh pr create`, and no other pull request was opened for this branch:
 
-Opened at 01:13:58Z. `--fill` was not used: this branch carries a version bump (`1.80.1`), and `--fill` builds the
-body from commit subjects, which drops the level and the reason the bump gave. The body states both: patch, because
-the change is one assertion in a test file (a test-only change, `docs/versioning.md`'s patch case), and 1.80.1
-because the base moved twice while the ladder waited (1.79.0, then 1.80.0) and `v1.79.2` was already claimed on
-origin by another lane.
+    gh pr create --base main --head wtgui/pipeline-row-rung-2-6f9dd4 \
+      --title "docs: the GitHub ladder has no loop to cross" \
+      --body-file <scratch>/pr-body.md                        # exit 0
+    https://github.com/JLRoper/agent-worktree-gui/pull/684
 
-## The read at open
+`gh pr create --fill` was not used, deliberately. The branch carries a version bump (`fefe4001`), and `--fill` builds
+the title and body from commit subjects only, which drops the reason the bump gave. The title is the docs commit's
+own subject; the body carries the level, the two numbers, the tag and the reason it is that level:
 
-`gh pr view 679 --json state,headRefOid,baseRefName,headRefName,mergeable,mergeStateStatus,commits,isDraft`:
+    `version: patch` - `package.json` 1.80.8 to 1.80.9 in `fefe4001`, with the annotated tag `v1.80.9` claimed on
+    origin (tag object `ccd12da1`, peeling to `fefe4001`).
+    The reason, per `docs/versioning.md`: a change confined to `docs/` is a patch. It is not a minor because no
+    capability, gate, store, route or config key is added - the paragraph describes the seed that already ships -
+    and not a major because no file outside this repository reads it.
 
-    state            OPEN
-    baseRefName      main
-    baseRefOid       a868b9d4f868a7a61a87f2fd589e8bdb31a0bf2d
-    headRefName      wtgui/github-landing-sanity-0bbdd3
-    headRefOid       269ebdaf9874d5b807f42cb71ccfa84e63267bbe
-    commits          3
-    mergeable        CONFLICTING
-    mergeStateStatus DIRTY
-    isDraft          false
+The body was read back with `gh pr view 684 --json body` after the create and carries that paragraph whole. It also
+states what lands, the full-sweep result, and that this is stage 4 of 6 of the ladder.
 
-`headRefOid` equals this tree's `git rev-parse HEAD` and the branch's head on origin, both read in the same minute,
-so the PR opens from the commit stage 3 pushed. One PR, base `main`, head equal to the pushed commit: that is G4.
-
-The read also says the PR cannot merge as it stands, and the reason is the base, not this branch's change.
-`origin/main` moved four commits between this stage's first read and its open: `10c13658` (1.80.0) became
-`a868b9d4` (1.80.4), through `dd795193` (`chore: 1.80.4`) and `aa096f04` (`fix: the thinking toggle answers to the
-card's key and the turn's session`). The branch is 4 behind and 3 ahead:
-
-    git rev-list --left-right --count origin/main...HEAD
-    4       3
-    git merge-tree --write-tree origin/main HEAD
-    CONFLICT (content): Merge conflict in package.json
-
-One conflicted path, `package.json`: this branch declares 1.80.1, main declares 1.80.4. The test assertion and the
-ledger records merge cleanly. `node tools/version.mjs check` would now refuse this branch, because 1.80.1 is at or
-below the base's tip, so the merge stage has to rebase onto `a868b9d4` and take a number above 1.80.4 before it
-merges with `--admin`. That rebase is version work inside the merge visit, the same way stage 3 rebased twice inside
-its own visit; the ladder still visits each stage once, and this record is the statement of what the next stage
-inherits rather than a claim that it is mergeable today.
+The base was passed explicitly (`--base main`) rather than left to the remote default, so the pull request's base is
+the branch the ladder names even if the repository's default ever moves.
 
 ## Gate G4
 
-`verified_by: pr-open`. One pull request, `base main`, head equal to the pushed commit `269ebdaf`, and the read
-aborted the stage if it had been anything else. G4 asks for the PR, not for a mergeable one: mergeability is what
-the next stage reads, and today's read is CONFLICTING because the base moved under it. The record commit that
-follows moves the branch one commit above the read, so the merge stage re-reads the head before merging and merges
-the head the records describe.
+`verified_by: pr-open`, artifact `pull-request`. The read that answers it:
+
+    gh pr view 684 --json number,url,state,headRefOid,baseRefName,title,mergeable,mergeStateStatus,isDraft
+    {"baseRefName":"main","headRefOid":"58972a93a08d0cb09e67db6bf5a3aa972a5ae0ed","isDraft":false,
+     "mergeStateStatus":"BLOCKED","mergeable":"MERGEABLE","number":684,"state":"OPEN",
+     "title":"docs: the GitHub ladder has no loop to cross",
+     "url":"https://github.com/JLRoper/agent-worktree-gui/pull/684"}
+
+`state` is `OPEN`, `baseRefName` is `main`, `headRefOid` equals the tree's HEAD at that read, and `isDraft` is false.
+`mergeable` is `MERGEABLE`, so there is no content conflict; `mergeStateStatus` is `BLOCKED`, which is the
+repository ruleset's gate on the default branch (`Owner only`, id `25783530`) and not a second branch to rebase.
+Stage 5's `gh pr merge --rebase --admin` is the bypass the ladder names for it. A second read, taken after this
+record's commit and push, is quoted under "What this commit holds" below.
+
+## The ladder so far
+
+Stamps for stages 1 to 3 are the ones stage 3's record quoted from the panel's queue file. This stage's entry stamp
+was not readable at the time of writing: the panel's saved queue snapshot
+(`~/.wag/state/assistants/assistant-3/queue.json`) holds tasks 1 to 63 and does not carry this row, and
+`~/.wag/state/jobs.json` holds this turn's row with `pipeline` null. The panel's own stamp for this visit is therefore
+left to the panel, as the previous walk's record left its own.
+
+| # | stage | artifact | path | commit | entered | settled | job |
+|---|-------|----------|------|--------|---------|---------|-----|
+| 1 | `commit` | `commit-record` | `ledger/github-force-merge/commit.md` | `f3612b12` | 03:24:25.112Z | 03:35:45.317Z | - |
+| 2 | `version` | `version-bump` | `ledger/github-force-merge/version.md` | `fefe4001` | 03:35:45.317Z | 03:43:50.825Z | - |
+| 3 | `push` | `pushed-branch` | `ledger/github-force-merge/push.md` | `58972a93` | 03:43:50.825Z | `58972a93` committed 03:48:47Z | `0aa282c6` |
+| 4 | `pr` | `pull-request` | `ledger/github-force-merge/pr.md` | this record | 03:43:50.825Z, stage 3's settle | the panel's stamp | this run |
+| 5 | `merge` | `merge-record` | `ledger/github-force-merge/merge.md` | not run | - | - | - |
+| 6 | `main` | `main-moved` | `ledger/github-force-merge/main.md` | not run | - | - | - |
+
+Row #1's `pipelineRun` has read `visits` `commit: 1, version: 1, push: 1` and `crossings` `H-01: 1, H-02: 1` before
+this stage. This stage adds `pr: 1` and `H-03: 1` and crosses nothing twice: there is no loop to cross, because all
+five handoffs in the shipped seed are `sequence`, which is the sentence stage 1 landed in `docs/pipelines.md`.
 
 ## What the focused tests answered
 
-    npm run test:module test/pipeline-bundle-seed.test.js
-    tests 6, pass 6, fail 0
+    npm run test:changed -- --list
+    test:changed - 6 changed files against origin/main:
+      docs/pipelines.md
+      ledger/github-force-merge/commit.md
+      ledger/github-force-merge/push.md
+      ledger/github-force-merge/version.md
+      package.json
+      tools/absolute-paths.allow
+    test:changed - 27 test files name or import the diff (27 by name, 0 by import)
 
-That is the file this branch changes: the assertion that every handoff in the ladder is a `sequence`, and the
-artifact-kind pin beside it. Stage 3 ran the wider focused set on the same code (`df71d768` to `0362b82c`) and
-recorded it: 23 test files, 179 tests, 178 pass, 1 fail, 252.6s. The one failure is `test/harness.test.js`, "every
-declared harness is wired the way its own header says", which fails on `origin/main` too
-(`tools/verify-round-tree-names.mjs` reads LIVE GATE and no `package.json` script runs it).
+Stage 3 ran that set on the same six files at `fefe4001`: 230 tests, 229 pass, 1 fail, the one failure
+`test/harness.test.js` (a LIVE GATE header with no script that runs it), which it proved pre-existing on
+`origin/main`. This stage did not run it again: the only file it adds is this record, and the full sweep below covers
+every test the set would have selected.
 
-Full suite, one sweep, `npm test` on this tree (started 01:06:25Z):
+## What the full sweep answered
 
-    tests 2342, pass 2334, fail 8, exit 1, 372.0s (6m 12s)
+One `npm test`, the sweep this stage owes because it is the stage that opens the pull request:
 
-Six of the eight failures reproduce on a pristine `origin/main` export (`git archive origin/main`) run with the same
-eight files, 6 fail and 81 pass there: `assistant-profile` (a `dock` key the panel does not write),
-`gateway-permissions` (no `config.json` in a worktree), `harness` (`verify-round-tree-names` reads LIVE GATE and no
-`package.json` script runs it), `paths` (`pipelineBundleSeedFile`), `windows-hide` (`lib/child-tree.js`), and
-`worktree-assistant` (the owner bullet). The other two pass in isolation in this worktree (20 tests, 20 pass):
-`assistant-director`'s one-clock test and `job-store-atomic`'s whole-file reader, so they are load flakes under
-four-way concurrency, not this branch's.
+    npm test
+    tests 2360, pass 2353, fail 7, exit 1
 
-One earlier sweep on the same tree was abandoned rather than counted: it stopped after 378 tests when other suites
-were running on this machine at the same time, and `test/assistant-system-briefing.test.js`, the file it was stuck
-in, passes in isolation here in 8.5s. The numbers above are from the single sweep that answered.
+The seven failures are not this branch's, and that is proved rather than asserted. The same seven test files were
+run against a `git archive` of `origin/main` (`23fbe197`) in this run's own scratch folder:
 
-## The gap the walk found, not fixed here
+    node --test test/assistant-profile.test.js test/gateway-permissions.test.js test/harness.test.js \
+      test/paths.test.js test/reasoning-runs.test.js test/windows-hide.test.js test/worktree-assistant.test.js
+    tests 71, pass 64, fail 7, exit 1
 
-No pre-push hook is installed in this clone: `git config --get core.hooksPath` is unset and the hooks directory
-holds only `*.sample` files, so `.githooks/pre-push` and the panel's chained copy named in `.git/wtgui-hooks/chain`
-never ran on any of this ladder's pushes. Stage 3 ran both gates by hand and both passed. Run by hand on this
-stage's push, they do not:
+The seven titles are the same on both sides: the profile, page and route whitelists test, `gateway-permissions`,
+the harness LIVE GATE wiring, the paths config-key rule, the reasoning level's reuse after a jobs-store restart,
+the `windowsHide` child-process rule, and the worktree assistant's owner bullet. None of the seven names a file this
+branch touches, and this branch changes no code at all: it changes one docs paragraph, one version line, one
+allowlist line and four ledger records.
+
+## The other gates run by hand
+
+No pre-push hook is installed in this clone, so the gates the repository ships were run by hand and are quoted as
+reads, not as blockers:
 
     node tools/version.mjs check
-    version check: refused - this branch's version is behind origin/main's
-      branch  1.80.1  (HEAD's package.json)
-      base    origin/main  1.80.4  (a868b9d4)
-    exit 1
+    version check: ok - the branch's number is above origin/main's
+      branch  1.80.9  (HEAD's package.json)
+      base    origin/main  1.80.8  (23fbe197)
+      3 commits to land on top of origin/main
 
-That is the base move this record names, not a new number: the merge stage rebases and bumps past 1.80.4. The
-absolute-paths gate refused the first draft of this record for two drive-letter paths (the tree and the scratch
-body file); both were taken out before the commit was amended and sent, and the gate is clean on the record as
-committed. The gap is tracked as a TODO on this worktree and is not this stage's to close.
+    node tools/absolute-paths.mjs
+    absolute-paths: clean - 1461 tracked files, 1309 paths in 249 allowlisted files, none new
+
+    git ls-remote --tags origin refs/tags/v1.80.9 'refs/tags/v1.80.9^{}'
+    ccd12da1d91d927c805ae72053ed5173924b0a53    refs/tags/v1.80.9
+    fefe40018ceed233a67a7f9969103eced5818fa9    refs/tags/v1.80.9^{}
 
 ## Timing
 
-All stamps UTC. The panel is the clock for the stage's entry and for the job row; the rest are this run's own.
+All stamps UTC. The panel is the clock for stages 1 to 3; the rest are this run's own.
 
 | event | stamp | source |
 |-------|-------|--------|
-| row #58 entered `pr` visit 1 | 2026-11-10T00:49:47.238Z | `~/.wag/state/assistants/assistant-3/queue.json`, `pipelineRun.enteredAt` |
-| job `d3ef22d8` started | 2026-11-10T00:49:49.660Z | `~/.wag/state/jobs.json` |
-| first suite sweep started | 2026-11-10T00:51:55Z | this run, the log's first line |
-| first suite sweep abandoned | 2026-11-10T01:06:05Z | this run, after 378 tests and no output for 10 minutes |
-| second suite sweep | 01:06:25Z to 01:12:39Z | this run, 6m 12s |
-| PR 679 opened | 2026-11-10T01:13:58Z | `gh pr view 679 --json createdAt` |
-| read at open | 2026-11-10T01:14:26Z | this run, equal to `git rev-parse HEAD` and the remote head |
+| stage 3 settled, H-03 available | 03:43:50.825Z | stage 3's record, quoting the panel's queue file |
+| `58972a93` committed (stage 3's own record) | 03:48:47Z | that commit's committer date |
+| pull request created | 03:59:29Z | `gh pr view 684 --json createdAt` |
+| input hashes, version check, absolute-paths read | 03:59:38Z | this run |
+| PR read back for G4 | after the create, before this record | this run |
 
-From the stage's entry stamp to the pull request is 24 minutes 11 seconds, most of it the two suite sweeps.
+From the stage 3 record commit to the open is about eleven minutes: one input read, one full sweep of 2360 tests
+with its base comparison, and one `gh pr create`. The stage's own entry stamp is the panel's to stamp.
 
-## What this commit holds, and what the next stage reads
+## What this commit holds
 
-This record is committed on the branch above `269ebdaf`. Its first commit was sent by `git push -u origin HEAD`,
-then amended to take out the two drive-letter paths the absolute-paths gate refused, and the amended commit was
-sent by `git push --force-with-lease`: the branch is this walk's own, the pull request had just been opened, and no
-reviewer held the earlier diff. The commit's own sha is not printed here: this file is inside it; the panel stamps
-it on the stage run, and `git log --oneline 10c13658..HEAD` answers it in the tree.
+This record is committed on top of `58972a93` and sent by `git push -u origin HEAD` in this same stage, so the pull
+request's head becomes this commit and not `58972a93`. The first send was amended once, so that the sentence above
+could say the open's six files are six before this record, and sent again with `git push --force-with-lease`: the
+branch is this walk's own and no reviewer held the earlier diff. The commit's own sha is not printed here: this file
+is inside it. One file changes: this record, and it is revertable on its own.
 
-`merge` reads this file as the `pull-request` input, re-reads the PR's head, and merges with
-`gh pr merge --rebase --admin`: rebase because the branch must land as one commit per change on main's straight
-history, `--admin` because the repository's ruleset blocks a straight merge and the bypass is the owner's. It then
-records the merge commit, and `main` checks that the merge is an ancestor of `origin/main`.
+The final read, taken after that push:
+
+    git rev-parse HEAD                                   # equals gh pr view 684's headRefOid
+    gh pr view 684 --json state,headRefOid,baseRefName
+    {"baseRefName":"main","headRefOid":"<this commit>","state":"OPEN"}
+    git status --porcelain                               # empty
+
+## What the next stage reads
+
+`merge` reads this file as the `pull-request` input (schema `pull-request/1`, kind `pr`) and merges PR 684 with
+`gh pr merge --rebase --admin`, the ladder's bypass for the ruleset. Two facts it needs:
+
+- The branch is 0 behind `origin/main` at the open and `git merge-tree --write-tree origin/main HEAD` computes a tree
+  with no conflict, so the merge has no content to resolve. The conflict stage 3 predicted for the four ledger
+  records would only appear if `main` moved after this open; the merge stage re-reads the base before it merges.
+- A rebase merge re-creates `fefe4001` on `main` with a new sha, so the annotated tag `v1.80.9` (`ccd12da1`, peeling
+  to `fefe4001`) still names the branch's pre-merge commit after the merge. Moving the anchor onto the merged commit
+  is the merge stage's post-merge step (`node tools/release-tag.mjs --ref origin/main`), and the changelog render
+  belongs at the merged tip, not on this branch.
