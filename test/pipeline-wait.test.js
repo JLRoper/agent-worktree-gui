@@ -561,6 +561,26 @@ test("the host payloads normalise into one observation: GitHub's reviews and Bit
   assert.equal(readReviewExit({ check: "pr-comments" }, bb, { lastSeen: iso(T0) }).advanced, true);
   assert.equal(readReviewExit({ check: "reviewers-exact", who: ["code_review_java"] }, bb).advanced, false, "a second reviewer is not exact");
 
+  // The SAME host, in the shape it ACTUALLY sends: reviewers under `user`, and `createdDate`/`approvedAt` as epoch
+  // milliseconds numbers. The fixture above is ISO and top-level names, which is why a live comment read as "no
+  // comment carries a timestamp yet" and a live reviewer list read as empty. Both shapes must answer the same way.
+  const liveRecord = {
+    id: 7,
+    state: "OPEN",
+    fromRef: { latestCommit: "6".repeat(40) },
+    reviewers: [{ user: { name: "code_review_java", displayName: "Java Code Review", slug: "code_review_java" }, role: "REVIEWER", approved: true, lastReviewedCommit: "6".repeat(40), approvedAt: T0 + HOUR }],
+  };
+  const liveActivities = { values: [{ action: "COMMENTED", createdDate: T0 + 2 * HOUR, comment: { id: 101 }, user: { name: "rev" } }] };
+  const live = observeBitbucketPr(liveRecord, liveActivities);
+  assert.equal(live.ok, true);
+  assert.deepEqual(live.pr.reviewers, ["code_review_java"], "the host nests the reviewer under user");
+  assert.equal(live.pr.comments[0].at, iso(T0 + 2 * HOUR), "an epoch-ms createdDate is a timestamp, not a string to drop");
+  assert.equal(live.pr.comments[0].id, 101);
+  assert.deepEqual(live.pr.approvals, [{ commit: "6".repeat(40), at: iso(T0 + HOUR), by: "code_review_java" }], "an epoch-ms approvedAt is a timestamp");
+  assert.equal(readReviewExit({ check: "pr-comments" }, live, { lastSeen: iso(T0) }).advanced, true, "a live comment after lastSeen advances the wait");
+  assert.equal(readReviewExit({ check: "pr-comments" }, live, { lastSeen: iso(T0 + 3 * HOUR) }).advanced, false, "the same comment is not newer than a later lastSeen");
+  assert.equal(readReviewExit({ check: "reviewers-exact", who: ["code_review_java"] }, live).advanced, true, "the shipped reviewer is exactly the required one");
+
   // A payload this module cannot parse is a refusal, never an empty PR.
   assert.equal(observeGithubPr(null).ok, false);
   assert.equal(observeBitbucketPr({ state: "OPEN" }, null).ok, false);

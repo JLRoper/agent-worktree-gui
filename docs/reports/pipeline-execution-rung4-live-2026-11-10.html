@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Rung 4 live evidence: the comment loop on one PDL row (2026-11-10)</title>
+<style>
+  :root { color-scheme: light; }
+  body { font: 15px/1.55 -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 32px auto; max-width: 980px; color: #1d2430; padding: 0 20px; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  h2 { font-size: 17px; margin: 28px 0 8px; border-bottom: 1px solid #d8dee8; padding-bottom: 4px; }
+  .sub { color: #5b6675; margin: 0 0 18px; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0 4px; font-size: 13.5px; }
+  th, td { border: 1px solid #d8dee8; padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background: #f3f5f9; font-weight: 600; }
+  code { font: 12.5px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; background: #f1f3f7; padding: 1px 4px; border-radius: 3px; }
+  .stop { color: #a12622; font-weight: 600; }
+  .ok { color: #1a6b3c; font-weight: 600; }
+  .note { background: #f7f9fc; border-left: 3px solid #8fa4c0; padding: 8px 12px; margin: 12px 0; }
+  ul { margin: 6px 0 6px 22px; padding: 0; }
+  li { margin: 3px 0; }
+</style>
+</head>
+<body>
+<h1>Rung 4 live evidence: the comment loop on one PDL row</h1>
+<p class="sub">Report under test: <code>docs/reports/pipeline-execution-next-moves-2026-11-10.html</code> section 2.4. Run: 2026-11-10, 05:05Z to 05:32Z. Assistant-3 queue, repository <code>IT/pictureviewer</code> (git.sefl.com), base <code>master</code> at <code>bb12884</code>.</p>
+
+<h2>Outcome in one line</h2>
+<p><span class="stop">The walk stopped before the wait stage.</span> The branch stage ran and the branch was pushed, the pr stage opened exactly one PR with the right reviewer, and the reader then declined that PR and stopped the pr turn. No wait was registered, so no comment was seeded, no address run started, H-04 and H-05 are both 0, and the cap was not reached. Two panel defects were found on the way; the Bitbucket read defect is fixed on this branch with tests built from the real host payload.</p>
+
+<h2>The live rows</h2>
+<table>
+  <tr><th>Row</th><th>Filed</th><th>What it did</th><th>Fate</th></tr>
+  <tr><td>#66</td><td>2026-11-10T05:05:12Z by assistant-3, project pictureviewer, pipeline sefl-review-loop, stage branch, no worktree</td><td>The panel cut round <code>wtgui/rung-4-live-the-comment-loop-on-one-pdl-0823a3</code> at <code>bb12884</code> and ran branch#1 (job <code>45e1d77e</code>) in <code>.worktrees/rung-4-live-the-comment-loop-on-one-pdl-stage-1-name-the-branch-980b40</code>. The worker renamed the branch to <code>20261110_0006_RUNG-4_live_comment_loop</code> and committed <code>196abb9</code> (branch.md). Then push#1 (job <code>ffaabbf3</code>) and pr#1 (job <code>3733218c</code>) each ran in their own stage tree and took no remote write.</td><td>Parked at 05:23Z, then deleted at 05:27Z on the reader's drop instruction. Its branch run is the only branch stage this rung produced.</td></tr>
+  <tr><td>#67</td><td>2026-11-10T05:16:55Z by assistant-3, same project and pipeline, stage push, filed with no worktree</td><td>First started push#1 in a fresh round (job <code>670ca258</code>); that run was stopped with nothing written. The row was then re-pointed at the stage-1 tree (see the repair note), push#1 ran again (job <code>65680093</code>, done 05:28:34) and pushed <code>196abb9</code> then <code>27d32e2</code>. pr#1 (job <code>0d7cf4e8</code>) opened PR 8 and committed/pushed <code>ea8da62</code>; the reader stopped the turn at 05:30:58 and declined the PR. wait#1 was attempted at 05:32:03 and refused because the pr thread still had a live run (<code>1b985552</code>).</td><td>Parked, <code>pipelineRun.stage = wait</code>, visits push 1, pr 1, wait 1; reason names the live run.</td></tr>
+</table>
+
+<h2>Stage order, from the rows' own stageRuns</h2>
+<table>
+  <tr><th>#</th><th>Stage run</th><th>Status</th><th>Commit</th><th>Job</th><th>At</th></tr>
+  <tr><td>1</td><td>sefl-review-loop/branch#1</td><td class="ok">done</td><td><code>196abb93</code></td><td><code>45e1d77e</code></td><td>2026-11-10T05:05:15.736Z</td></tr>
+  <tr><td>2</td><td>sefl-review-loop/push#1</td><td class="ok">done</td><td><code>27d32e2f</code></td><td><code>65680093</code></td><td>2026-11-10T05:25:02.535Z</td></tr>
+  <tr><td>3</td><td>sefl-review-loop/pr#1</td><td class="stop">cancelled</td><td><code>ea8da622</code></td><td><code>0d7cf4e8</code></td><td>2026-11-10T05:28:34.550Z</td></tr>
+  <tr><td>4</td><td>sefl-review-loop/wait#1</td><td class="stop">no run (start refused)</td><td><code>ea8da622</code></td><td>none</td><td>2026-11-10T05:32:03.679Z</td></tr>
+</table>
+<p>Stages after wait (address, approve, merge) never started. H-04 = 0, H-05 = 0; the row's crossings are <code>{"H-02": 1}</code> only. There are no address runs, so there is no single commit and no naming reply to record, and no comment id or timestamp to report: no comment was seeded because no wait existed.</p>
+
+<h2>The one PR</h2>
+<table>
+  <tr><th>Field</th><th>Value</th></tr>
+  <tr><td>PR</td><td>8, <code>Java Code Review for PictureViewer 20261110_0006_RUNG-4_live_comment_loop</code></td></tr>
+  <tr><td>Refs</td><td>from <code>20261110_0006_RUNG-4_live_comment_loop</code> to <code>master</code> (<code>bb12884</code>)</td></tr>
+  <tr><td>Head at open / at decline</td><td><code>27d32e2f57ab4ff7d4366b69399cc82e7794dfb0</code> / <code>ea8da622487787f53b2142cc1f1ac5e9fc1a008f</code> (the last pushed head)</td></tr>
+  <tr><td>Reviewers</td><td><code>["code_review_java"]</code>, exactly</td></tr>
+  <tr><td>Description</td><td>all four sections present (Jira Ticket, Description, and the two the pr artifact carries)</td></tr>
+  <tr><td>State now</td><td class="stop">DECLINED</td>, declined by the reader after stopping the pr turn</td></tr>
+  <tr><td>Other PRs from this branch</td><td>none. PR 7 (<code>20261021_0005_DMR-39015_pictureViewerSso</code>) is the pre-existing SSO PR and is not this row's.</td></tr>
+</table>
+
+<h2>Defect 1: the running panel predates the filed-tree fix (main already carries it)</h2>
+<p>Row 66 was filed with no worktree. Under the panel that ran this walk (build 1.80.7) the driver cut one round, then one tree per stage. Each stage tree was handed <code>remoteWrite: "local"</code> because <code>ownStageBranch</code> is true for a stage tree (<code>lib/task-pipeline-drive.js</code> around line 2407 at that build), and the LANDING paragraph for that tree says commit and do not push. Push#1 (<code>ffaabbf3</code>) followed the paragraph, committed <code>958e9dd</code>, and reported: "this tree is the round's own stage workspace ... the panel's LANDING paragraph for it is the local-only case". Pr#1 (<code>3733218c</code>) then had no ref to point at and recorded a withheld PR in <code>cb26f09</code>.</p>
+<p>Main already carries the fix for this shape: <code>062dbb27</code> "a landing ladder filed with a work branch runs there, not in a cut round" adds <code>filedTreeOf</code>, which answers a queued row's filed tree for a <code>shared</code> pipeline and refuses a trunk checkout. The panel process was started before that commit, so the walk could not use it; this branch is rebased onto it. The row-67 re-point below is what made the same walk possible on the older build.</p>
+<p>The push stage still settled <code>done</code> with nothing on origin. No check in this chain compares the artifact with the remote ref (the driver only evaluates gates that carry <code>verified_by: "pr-comments"</code>), so the row advanced to pr with no branch published.</p>
+
+<h2>Defect 2: the Bitbucket payload the host actually sends (fixed on this branch)</h2>
+<p>Bitbucket Server sends <code>createdDate</code> and <code>approvedAt</code> as epoch-millisecond numbers, and nests a reviewer under <code>user</code>. <code>observeBitbucketPr</code> kept <code>createdDate</code> as a string and read reviewer names from the top level. The wait's clock therefore could not parse any comment, and the reviewer list came back empty. The same real payload through the two modules:</p>
+<table>
+  <tr><th>Module</th><th>reviewers</th><th>comment at</th><th>readReviewExit (pr-comments)</th></tr>
+  <tr><td>panel's main checkout (1.80.7, running)</td><td><code>[]</code></td><td><code>"1794276394498"</code></td><td class="stop">advanced false, "no comment carries a timestamp yet"</td></tr>
+  <tr><td>this branch</td><td><code>["code_review_java"]</code></td><td><code>2026-11-10T02:06:34.498Z</code></td><td class="ok">advanced true, "a comment arrived at ... after 2026-11-09T00:00:00.000Z"</td></tr>
+</table>
+<p>The payload is PR 8's real record plus comment activity 12719 from PR 7 in the same repository (<code>createdDate: 1794276394498</code>, integer). Even with the push and pr defects repaired, the first seeded comment would have stopped at this read: the wait would have stayed put and answered "no comment carries a timestamp yet".</p>
+
+<h2>What was repaired by hand, and why</h2>
+<ul>
+  <li>Row 67 was filed without a worktree, so the driver cut a fresh round. At build 1.80.7 a queued pipeline row's <code>worktree</code> is refused until the row has started (<code>treeLookup</code>, the note at <code>lib/task-pipeline-drive.js:1149</code> at that build); main's <code>062dbb27</code> changes that for a shared pipeline, but the panel process predates it. The row was parked, re-pointed at the stage-1 tree, and given the real branch start time as <code>startingAt</code> so the older lookup would honour the tree. Its round was cleared; this is the one-tree shape section 2.4 asks for.</li>
+  <li>The stage-1 tree's cut record named the round parent <code>wtgui/...0823a3</code> as its landing parent, so every pr-kind stage would have been handed the local-only paragraph. The cut record was set to <code>master</code>, which is the branch's real base (<code>bb12884</code>).</li>
+  <li>Job <code>670ca258</code> (the abandoned push run in the fresh round) was steered to stop before it wrote anything.</li>
+  <li>Row 66 was parked, then deleted on the reader's instruction. Its branch stage is recorded above.</li>
+</ul>
+<p class="note">These are state edits in the panel's own state folder (queue and branch-parents), not panel code changes. They are listed so the walk's provenance is not mistaken for an unmodified driver run.</p>
+
+<h2>What the rung still needs</h2>
+<ul>
+  <li>A panel running the fixed <code>lib/pipelines.js</code> (this branch) so the wait can read a comment.</li>
+  <li>A panel at or after <code>062dbb27</code> (main), so a row filed with the branch's tree starts there instead of in a cut round.</li>
+  <li>The four seeded comments, the two H-04 and H-05 counts, and the cap, none of which this run reached. The falsifier would be a fourth address run or a wake after the cap; neither can be observed yet.</li>
+</ul>
+</body>
+</html>
