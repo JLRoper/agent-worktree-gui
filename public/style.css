@@ -299,6 +299,26 @@ thead th,
 .update-chip button { padding: 2px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--text); font: 11px var(--mono); cursor: pointer; }
 .update-chip button:hover { border-color: #3b4757; }
 .update-chip button:disabled { color: var(--dimmer); cursor: default; }
+/* The expanded chip: hovering it (or focusing its button, for a keyboard reader) opens the build a
+   reload would pick up and one line per release between this tab's build and that one. It opens
+   upward because the chip lives at the bottom edge, and the list scrolls so a tab left open across
+   many releases cannot grow past half the window. The panel's bottom edge touches the chip's top
+   edge: a margin there would be a strip the pointer crosses with nothing hovered, and the panel
+   would close under it. */
+.update-chip .uc-panel {
+  display: none; position: absolute; left: 0; bottom: 100%;
+  width: max-content; max-width: min(560px, calc(100vw - 32px)); max-height: min(320px, 55vh);
+  overflow-y: auto; padding: 9px 11px; text-align: left;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: 0 12px 30px #0009;
+}
+.update-chip:hover .uc-panel, .update-chip:focus-within .uc-panel { display: block; }
+.update-chip .uc-restart { font: 11px var(--mono); color: var(--text); margin-bottom: 7px; }
+.update-chip .uc-releases { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.update-chip .uc-releases li { display: flex; gap: 7px; align-items: baseline; }
+.update-chip .uc-ver { flex: none; font: 10px var(--mono); color: var(--amber); }
+.update-chip .uc-line { color: var(--dim); font-size: 11px; line-height: 1.35; }
+.update-chip .uc-empty:not(:empty) { margin-top: 7px; color: var(--dimmer); font-size: 11px; }
 /* settings panel: a small popover under the top bar */
 /* A fixed panel with a scrolling body: the head stays put (and the close button with it) however far down the
    reader is. The body owns the scrollbar so the rounded border is never clipped by it. One tab's rows can be 18

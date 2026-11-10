@@ -55,6 +55,8 @@ test("the shell is served no-store with every asset URL versioned, and /api/buil
   assert.equal(shell.headers.get("cache-control"), "no-store, must-revalidate", "the shell is the one file a browser must not keep");
   const html = await shell.text();
   assert.match(html, new RegExp(`<meta name="panel-build" content="${info.version}"`), "the page can read the build it loaded");
+  assert.equal(info.semver, JSON.parse(await readFile(path.join(ROOT, "package.json"), "utf8")).version, "and the answer names the release this process serves");
+  assert.match(html, new RegExp(`<meta name="panel-version" content="${info.semver}"`), "the shell carries the release too, so the chip can name the range");
   const urls = assetUrls(html);
   assert.ok(urls.length >= 8, `the shell loads its scripts (saw ${urls.length})`);
   for (const url of urls) {
@@ -88,4 +90,36 @@ test("an asset under the current version is cached hard; any other URL is no-sto
     assert.match(cache, /no-store/, `${url} is revalidated every time`);
     if (!url.startsWith("/index.html")) assert.equal(cache, "no-store", `${url} is not the shell, so it carries no must-revalidate`);
   }
+});
+
+// The update chip's expanded panel reads this answer: what a reload would put into service, and the
+// changelog line for every release between the tab's build and that one. The tab names its own
+// release with ?since=; the server holds the changelog parse against the file's mtime, so a poll
+// pays one stat (the cache itself is test/release-notes.test.js's subject).
+test("GET /api/build names the restart build and the releases between the tab's build and it", async () => {
+  const panel = sharedPanel;
+  const pkg = JSON.parse(await readFile(path.join(ROOT, "package.json"), "utf8"));
+
+  const info = await (await fetch(`${panel.base}/api/build`)).json();
+  assert.deepEqual(info.restart, { semver: pkg.version, version: info.version }, "a reload would serve these bytes, at this number");
+  assert.equal(info.since, null, "no ?since= means the query named no running release");
+  assert.deepEqual(info.releases.map((r) => r.version), [pkg.version], "so only the build on disk is listed");
+
+  const answer = await (await fetch(`${panel.base}/api/build?since=1.76.27`)).json();
+  assert.equal(answer.since, "1.76.27", "the range is echoed, so the page can tell an empty range from an ignored one");
+  const versions = answer.releases.map((r) => r.version);
+  assert.equal(versions[0], pkg.version, "the build on disk comes first, before its own section is rendered");
+  assert.ok(versions.includes("1.77.0") && versions.includes("1.76.28"), `every release above the tab's build is listed (saw ${versions.join(", ")})`);
+  assert.ok(!versions.includes("1.76.27") && !versions.includes("1.76.26"), "the running release and everything below it are not");
+  const newest = answer.releases.find((r) => r.version === "1.77.0");
+  assert.equal(newest.note, "feat: keep another project's docs commit out of the changelog (e4aa989)", "the release's top non-docs bullet, markdown reduced to what a reader says");
+  assert.ok(answer.changelog && answer.changelog.state === "ok" && Date.parse(answer.changelog.mtime) > 0, "the answer says which revision of the changelog it came from");
+
+  const current = await (await fetch(`${panel.base}/api/build?since=${pkg.version}`)).json();
+  assert.deepEqual(current.releases, [], "a tab on the disk release has nothing between it and the disk");
+
+  const docsOnly = await (await fetch(`${panel.base}/api/build?since=1.73.4`)).json();
+  const hit = docsOnly.releases.find((r) => r.version === "1.73.5");
+  assert.ok(hit, "a docs-only release in the range is still listed");
+  assert.equal(hit.note, null, "with no line - the chip is the one that says \"no changelog line found\"");
 });

@@ -164,6 +164,7 @@ import { authorised, handleStream, pageCaller } from "./lib/http/transport.js";
 import { acceptsGzip, gzip, readBody, readRawBody, sendJson } from "./lib/http/respond.js";
 import { serveStatic, PUBLIC_DIR } from "./lib/http/static.js";
 import { createBuild } from "./lib/build-version.js";
+import { createReleaseNotes } from "./lib/release-notes.js";
 
 // A file an agent produced is meant to be OPENED, and the shell association may hand a .md to a
 // browser. Prefer a text editor: Notepad++ when installed, else Windows' notepad (always present),
@@ -339,8 +340,13 @@ setChildTracker(panelChildren, "panel");
 // The versioned static bundle: one hash over everything the shell loads, computed here at boot and
 // re-read when a file under public/ moves. The shell's asset URLs carry it and GET /api/build
 // answers with it — that is how a tab open since yesterday learns the panel changed.
-const build = createBuild({ publicDir: PUBLIC_DIR, log });
+const build = createBuild({ publicDir: PUBLIC_DIR, semver: VERSION, log });
 const buildAtBoot = await build.current();
+
+// The update chip's expanded panel as data: one line per release between the build a tab is running
+// and the build on disk. The parse is held against CHANGELOG.md's mtime and size (lib/release-notes.js),
+// so the page's 30 second poll stats one file and slices a range instead of reading 230 KB of changelog.
+const releaseNotes = createReleaseNotes({ file: path.join(HERE, CHANGELOG_FILE), log });
 
 // The folder a panel with no named scan roots looks at: its own parent, so a bare clone is immediately useful and an
 // emptied list still shows a board instead of nothing. Settings → Board writes `scanRoots`; this is what an empty
@@ -3391,8 +3397,25 @@ const server = createServer(async (req, res) => {
 
     // The build this process is serving: the page carries the version it loaded with, polls this,
     // and offers (or takes) a reload when the two part company. A read, like every other GET here.
+    //
+    // The chip's expanded panel reads the same answer: `restart` is what a reload would put into
+    // service (the checkout's number now, and the bundle hash being served), and `releases` is the
+    // changelog's top non-docs bullet for every release in (since, restart.semver]. `since` is the
+    // release the TAB is running, which only the tab knows - the shell stamps it - and it is absent
+    // from a page served before this panel carried the number, in which case only the disk release
+    // is named. The changelog is parsed once per revision of the file, never once per poll.
     if (route === "/api/build" && req.method === "GET") {
-      return sendJson(res, 200, await build.info());
+      const info = await build.info();
+      const restart = packageVersion();
+      const notes = await releaseNotes.between(url.searchParams.get("since"), restart);
+      return sendJson(res, 200, {
+        ...info,
+        semver: VERSION,
+        restart: { semver: restart, version: info.version },
+        since: notes.since,
+        releases: notes.releases,
+        changelog: { state: notes.state, mtime: notes.at },
+      });
     }
 
     // The checkout's own changelog: what Settings → Updates draws under the build row. One file at the panel

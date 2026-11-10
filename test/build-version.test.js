@@ -116,6 +116,26 @@ test("the served shell carries the version on every bundle URL, and nowhere else
   assert.equal(rewriteShell(html, bundle.version, bundle.files), html, "rewriting an already rewritten shell changes nothing");
 });
 
+test("the shell also carries the release it was served as, and a second rewrite does not stack metas", async (t) => {
+  const dir = await fixture(t);
+  const bundle = await readBundle(dir);
+  const html = rewriteShell(bundle.html, bundle.version, bundle.files, "1.76.25");
+
+  assert.match(html, /<meta name="panel-version" content="1\.76\.25"/, "the chip needs the release, which a hash cannot name");
+  assert.equal(rewriteShell(html, bundle.version, bundle.files, "1.76.25"), html, "a rewrite of a rewritten shell is a no-op");
+
+  const moved = rewriteShell(html, bundle.version, bundle.files, "1.76.26");
+  assert.equal(moved.split('name="panel-version"').length - 1, 1, "a moved number replaces the one meta");
+  assert.match(moved, /content="1\.76\.26"/);
+  assert.ok(!rewriteShell(html, bundle.version, bundle.files).includes("panel-version"), "a caller with no number stamps none");
+
+  const build = createBuild({ publicDir: dir, semver: "1.76.25" });
+  t.after(() => build.close());
+  const info = await build.info();
+  assert.equal(info.version, bundle.version);
+  assert.equal(info.semver, "1.76.25", "the same number is what /api/build answers with");
+});
+
 test("a running panel notices an edit under public/ and moves the build", async (t) => {
   const dir = await fixture(t);
   const lines = [];
