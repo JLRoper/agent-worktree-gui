@@ -114,6 +114,19 @@ test("a stall carries the activity breadcrumb of the pass that was running", asy
   lag.stop();
 });
 
+test("overlapping activities that finish out of order never leave a stale label", async () => {
+  let finishA, finishB;
+  const a = withActivity("a", () => new Promise((resolve) => { finishA = resolve; }));
+  const b = withActivity("b", () => new Promise((resolve) => { finishB = resolve; }));
+  assert.equal(currentActivity(), "b");
+  finishA();
+  await a;
+  assert.equal(currentActivity(), "b");
+  finishB();
+  await b;
+  assert.equal(currentActivity(), "idle");
+});
+
 test("stats window the worst delay: out of the rolling window, out of the reading", () => {
   const { clock, lag } = makeLag();
   lag.start();
