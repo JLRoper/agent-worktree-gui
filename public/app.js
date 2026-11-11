@@ -318,6 +318,10 @@ const state = {
   events: 0,
   eventsAt: 0,
   lastEventAt: null,
+  lastTransportAt: null,
+  lastSnapshotAt: null,
+  snapshotGeneration: 0,
+  awaitingStreamSnapshot: true,
   pool: null,
   jobs: new Map(),
   jobLines: new Map(),
@@ -9426,8 +9430,11 @@ $("btn-pause")?.addEventListener("click", () => {
     state.es?.close();
     setStream("paused", "warn");
   } else {
-    connect();
-    resync();
+    const initial = connect({ waitForSnapshot: true });
+    const stream = state.es;
+    void initial.then((received) => {
+      if (!received && !state.paused && state.es === stream && state.awaitingStreamSnapshot) void resync({ automatic: true });
+    });
   }
 });
 paintPauseButton();
@@ -11577,15 +11584,18 @@ setInterval(() => {
   // die while the tab is open, and a reader watching a bridge start should see it go green without a reload. Only
   // while that tab is the one on screen — a closed Settings window asks nothing.
   if (matrixSettingsShowing()) void loadMatrixStatus();
-  // SSE is the live path; this is only a safety net for a stream that has gone quiet or died. The clock it reads is
-  // stamped by EVERY frame we accept, `jobline` included (core/sse.js) — a line of output is the freshest proof a run
-  // is working — so a board that is still being written to is not resynced, and one that has gone silent (or whose
-  // socket is not open) still is. That second half is the point: the rebuild stays for a card that is genuinely dead.
-  // The rule itself is core/liveness.js, where test/liveness.test.js can drive both halves without a browser.
-  const quiet = globalThis.wtLive
-    ? globalThis.wtLive.quiet({ lastEventAt: state.lastEventAt, streamOpen: state.es?.readyState === 1, paused: state.paused })
-    : !state.lastEventAt || Date.now() - state.lastEventAt > 20000 || state.es?.readyState !== 1;
-  if (quiet) void resync();
+  // A heartbeat proves transport health, not data completeness. Even a busy stream needs periodic anti-entropy;
+  // an unhealthy stream retries on this 30s clock, and overlapping automatic reads share one request.
+  const shouldResync = globalThis.wtLive?.shouldResync ? globalThis.wtLive.shouldResync({
+    lastTransportAt: state.lastTransportAt,
+    lastSnapshotAt: state.lastSnapshotAt,
+    streamOpen: state.es?.readyState === 1,
+    awaitingStreamSnapshot: state.awaitingStreamSnapshot,
+    paused: state.paused,
+  }) : state.awaitingStreamSnapshot || state.es?.readyState !== 1 ||
+    !state.lastTransportAt || Date.now() - state.lastTransportAt > 20000 ||
+    !state.lastSnapshotAt || Date.now() - state.lastSnapshotAt >= 120000;
+  if (shouldResync) void resync({ automatic: true });
 }, 30000);
 
 // A folder whose projects are all closed shows nothing but their titles, so a reorder there is easy to
@@ -11621,7 +11631,7 @@ function startReorderClock() {
 
 document.addEventListener("visibilitychange", () => {
   // Coming back to the tab: one catch-up, then the stream and the 1s tick take over again.
-  if (!document.hidden) void resync();
+  if (!document.hidden && !state.paused) void resync({ automatic: true });
 });
 
 // ---- page zoom -------------------------------------------------------------------------------
@@ -17382,14 +17392,14 @@ startVisibilityReporting();
     // run that list is only the config fallback, and a project seeded that way can never be
     // removed by a later snapshot (heroes-js showed up forever this way on a machine that does
     // not have it). The first snapshot paints the real set.
-    await resync();
+    // The stream's first frame is already a full snapshot; only issue a second read if it fails or stalls.
+    if (!(await connect({ waitForSnapshot: true })) && !state.paused && state.awaitingStreamSnapshot) await resync({ automatic: true });
     // NO promotion on boot. A restored-open section is not a click: this loop used to POST /api/project/open for
     // every project the reader had ever left expanded, and each one promotes an old repo into a full re-probe and a
     // full row read. A boardful of restored sections therefore re-read the whole old fleet on EVERY reload, and
     // because the route answers before the read runs, nothing in the page felt slow while the server drowned. The
     // promotion signal is the reader's own click: toggleProject() reports the section they actually unfold. A
     // restored section keeps the rows it already has until then, which is what it showed before the gate existed.
-    connect();
     startAnchorObserver();
     updateColorsRow();
     paintAnchorSettings();

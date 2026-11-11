@@ -87,20 +87,45 @@ async function apiFetch(url, opts = {}, { timeoutMs = 20000 } = {}) {
   }
 }
 
-async function resync() {
-  try {
-    const r = await apiFetch("/api/state");
-    // The status decides, not the shape of the body. An error answer is `{error}` and carries no
-    // projects, so feeding it to applySnapshot painted an empty board with no message — a server fault
-    // that looked exactly like "you have no repos", which is the blank page this now says out loud.
-    if (!r.ok) {
-      const body = await r.json().catch(() => ({}));
-      throw new Error(body.error || `the panel answered ${r.status}`);
+let resyncInFlight = null;
+let resyncQueued = null;
+
+function resync({ automatic = false } = {}) {
+  if (resyncInFlight) {
+    if (automatic) return resyncQueued || resyncInFlight;
+    // A write may have completed after the current read began; its refresh must run afterwards.
+    if (!resyncQueued) {
+      resyncQueued = resyncInFlight.then(() => {
+        resyncQueued = null;
+        return resync();
+      });
     }
-    applySnapshot(await r.json());
-  } catch (e) {
-    showBanner(`Cannot load the board: ${e.message}`);
-    setStream("offline", "bad");
+    return resyncQueued;
+  }
+  const generation = state.snapshotGeneration;
+  resyncInFlight = readSnapshot().finally(() => { resyncInFlight = null; });
+  return resyncInFlight;
+
+  async function readSnapshot() {
+    try {
+      const r = await apiFetch("/api/state");
+      // The status decides, not the shape of the body. An error answer is `{error}` and carries no
+      // projects, so feeding it to applySnapshot painted an empty board with no message.
+      if (!r.ok) {
+        const body = await r.json().catch(() => ({}));
+        throw new Error(body.error || `the panel answered ${r.status}`);
+      }
+      const snapshot = await r.json();
+      // An SSE snapshot can satisfy a background read, but a user-triggered read must still reflect
+      // the write that caused it: the server may have built the SSE snapshot before that write.
+      if (automatic && (state.snapshotGeneration !== generation || state.paused)) return;
+      applySnapshot(snapshot);
+      state.lastSnapshotAt = Date.now();
+      state.snapshotGeneration += 1;
+    } catch (e) {
+      showBanner(`Cannot load the board: ${e.message}`);
+      setStream("offline", "bad");
+    }
   }
 }
 

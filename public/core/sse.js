@@ -54,15 +54,40 @@ function projectEventIsNew(cur, patch) {
   return false;
 }
 
-function connect() {
+function connect({ waitForSnapshot = false } = {}) {
   if (state.es) state.es.close();
   const es = new EventSource("/api/stream");
   state.es = es;
-  es.addEventListener("open", () => setStream("● live"));
+  state.awaitingStreamSnapshot = true;
+  let finishInitial = () => {};
+  const initialSnapshot = waitForSnapshot ? new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(false), 10000);
+    finishInitial = (received) => {
+      clearTimeout(timer);
+      resolve(received);
+    };
+  }) : null;
+  for (const type of ["snapshot", "row", "project", "drop", "job", "jobline", "remote-write",
+    "remote-write-answered", "remote-write-review", "remote-write-review-done", "settings", "approval",
+    "approval-answered", "jobs", "assistant", "heartbeat"]) {
+    es.addEventListener(type, () => {
+      if (state.es === es) state.lastTransportAt = Date.now();
+    });
+  }
+  es.addEventListener("open", () => {
+    if (state.es !== es || state.paused) return;
+    state.lastTransportAt = Date.now();
+    setStream("● live");
+  });
   es.addEventListener("snapshot", (e) => {
+    if (state.es !== es || state.paused) return;
     const d = JSON.parse(e.data);
     state.lastEventAt = Date.now();
     applySnapshot(d.data ? d.data : d);
+    state.lastSnapshotAt = Date.now();
+    state.snapshotGeneration += 1;
+    state.awaitingStreamSnapshot = false;
+    finishInitial(true);
   });
   es.addEventListener("row", (e) => {
     const evt = JSON.parse(e.data);
@@ -244,7 +269,14 @@ function connect() {
   es.addEventListener("heartbeat", (e) => {
     state.pool = JSON.parse(e.data).pool;
   });
-  es.addEventListener("error", () => setStream("reconnecting…", "warn"));
+  es.addEventListener("error", () => {
+    if (state.es === es && !state.paused) {
+      state.awaitingStreamSnapshot = true;
+      setStream("reconnecting…", "warn");
+      finishInitial(false);
+    }
+  });
+  return initialSnapshot;
 }
 
 window.WMApp = window.WMApp || {};
