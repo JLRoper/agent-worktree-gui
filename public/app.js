@@ -3271,6 +3271,18 @@ function restoreReplyDraft(thread) {
 function captureTyping(root) {
   const el = document.activeElement;
   if (!el || !root.contains(el)) return null;
+  // The clarify card's answer box is the one field a reader types a whole sentence into while the board is live, and
+  // it is a plain textarea the card rebuilds from its draft map - so the draft survived a repaint and the CARET did
+  // not: the box came back full and unfocused, mid-sentence. Captured here, put back in restoreTyping().
+  if (el.classList?.contains("tq-other")) {
+    return {
+      qbox: el.dataset.qother || "",
+      qcopy: el.dataset.qcopy || "",
+      value: el.value,
+      start: el.selectionStart,
+      end: el.selectionEnd,
+    };
+  }
   // The held reply's editor is a textarea inside the card, so a repaint takes it away the same way it takes the reply
   // box — and the reader can be mid-edit exactly when a turn ends. Captured here, put back in restoreTyping().
   if (el.classList?.contains("ghost-edit-box")) {
@@ -3353,6 +3365,26 @@ function restoreTyping(root, typing) {
     if (held && box.dataset.grownFor !== String(held.length)) growBoxToDraft(box, REPLY_MAX_LINES);
   }
   if (!typing) return;
+  // The clarify card's answer box: the card is rebuilt from the draft map (so the words come back), and the focus and
+  // the selection are put back here. A box that already holds the snapshot is the reader's OWN node - the row path
+  // MOVES the card instead of rebuilding it, and a move keeps the value and the selection but drops the focus - so the
+  // value is only written when it differs, and the caret is re-asserted either way.
+  if (typing.qbox !== undefined) {
+    const box = root.querySelector(
+      `.tq-other[data-qother="${CSS.escape(typing.qbox)}"][data-qcopy="${CSS.escape(typing.qcopy)}"]`,
+    );
+    if (!box) return;
+    if (box.value !== typing.value) box.value = typing.value;
+    // preventScroll for the same reason as the reply box: this runs on every repaint, and a plain focus() would pull
+    // the page back to the caret while the reader was reading something lower on the board.
+    box.focus({ preventScroll: true });
+    try {
+      box.setSelectionRange(typing.start, typing.end);
+    } catch {
+      /* a box that is no longer a text field: nothing to restore */
+    }
+    return;
+  }
   // The held reply's editor: the textarea is rebuilt from state (edit.text follows the box), and this puts the caret
   // and the focus back where the reader had them — so a turn ending mid-edit does not move the ground under them.
   if (typing.edit) {
