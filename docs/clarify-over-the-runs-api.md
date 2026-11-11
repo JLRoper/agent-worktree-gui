@@ -282,3 +282,52 @@ running.
 `node --test test/clarify-reask.test.js` is the other half: a real parked run (stub gateway, the
 stream parsed by `lib/jobs.js`), the hour driven by a rewritten timestamp rather than a sleep, and the
 assertions that the count rises on ONE alert and ONE wait while the key never moves.
+
+## What the question can carry: `links`
+
+A question often needs the reader to LOOK at something  -  the report it just wrote, the run page, the
+screenshot. The card draws those as anchors rather than as text the reader copies out of the pane.
+
+The field rides the same `clarify.request` envelope and is normalized once, by `lib/clarify-links.js`:
+
+```
+clarify(question: "The report at docs/reports/x.html is ready - should it ship?",
+        choices: ["Ship it (Recommended)", "Hold"],
+        links: [
+          { label: "the report", path: "docs/reports/x.html" },   // a local file, absolute or tree-relative
+          { label: "the run",    url: "https://example.test/run/7" }
+        ])
+```
+
+What the normalizer guarantees, because the envelope is somebody else's:
+
+- an ABSENT or unusable field is `[]`, and the card then draws no Links section at all  -  the plain-text
+  card is exactly what it was;
+- the target is read from `url`, `href`, `path`, `file` or `target`, so a shape change does not silently
+  empty the section;
+- only `http(s)` URLs are kept. `javascript:`, `data:` and the rest are DROPPED (not thrown), and the
+  entries after them still draw;
+- a `file:///C:/x/y.html` URL becomes the path `C:/x/y.html`  -  a worker that read these docs tends to
+  send a file URL, and the opener wants a path;
+- at most `MAX_LINKS` (8) survive.
+
+The CARD (`public/app.js` `questionLinks`) reserves a block between the question text and the choices,
+one anchor per link: class `tq-link`, the label as the anchor's text and the target under it. A URL
+carries `data-open-url` (the page's `POST /api/open-url`); a file carries `data-open-file`
+(`POST /api/open-file`). The block's head NAMES the browser a file link will open in, from
+`GET /api/open-file`.
+
+A bare URL or file path already sitting in the question TEXT is linked too (`linkifyCardText` in
+`public/core/dom-format.js`), so a worker that knows nothing about the field still yields a clickable
+card.
+
+`POST /api/open-file` walks lib/open-url.js's ladder  -  the HKCU UrlAssociations default browser, then
+`rundll32 url.dll,FileProtocolHandler`, then `explorer.exe`  -  and answers with the step that actually
+started (`via`, `progId`, the `file:///` URL). It opens a file only inside an open project or this
+panel's own checkout, refuses anything else with 403, and a missing file with 404  -  the same boundary a
+deliverable passes through. Relative paths are resolved against each open project root in turn, which
+is what a worker's tree-relative link needs.
+
+Proof, end to end, on a real card: `npm run verify:clarify-card-links` (a stub gateway parks a real
+worker run with a two-link question, the card is read and clicked, and the answer names the launcher);
+unit half: `node --test test/clarify-links.test.js test/clarify-question-links.test.js`.
