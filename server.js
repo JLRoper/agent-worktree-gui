@@ -4100,7 +4100,10 @@ const server = createServer(async (req, res) => {
 
     // Create a worktree (or use a directory that already exists) and start a worker. `{id}` confirms a spawn
     // card the assistant proposed; the spec form is the same act without a card. Both go through the one
-    // spawner, so neither can skip the gateway probe or the unborn-HEAD refusal.
+    // spawner, so neither can skip the gateway probe or the unborn-HEAD refusal. A spec may name the parent the
+    // tree is cut from (`from: "<ref>"`, the `SPAWN FROM <ref> <project>` line's own field): the spawner resolves
+    // it in the project's repo and refuses one that is not a ref there, and `makeWorktree` records it as the cut
+    // parent with the commit it resolved to.
     if (route === "/api/assistant/spawn" && req.method === "POST") {
       if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
