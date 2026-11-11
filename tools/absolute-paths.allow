@@ -100,6 +100,7 @@ test/assistant-queue-directive.test.js | 2 | fixture: a drive path the test comp
 test/assistant-queue-pane.test.js | 2 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
 test/assistant-queue-ui.test.js | 9 | fixture: the tree the test builds or asserts on, named by hand so the comparison is readable
 test/assistant-queue.test.js | 24 | fixture: the tree the test builds or asserts on, named by hand so the comparison is readable
+test/assistant-responsiveness.test.js | 15 | fixture: the stand-in trees this test keeps in step, which landed on main before this gate could see them
 test/base-ref.test.js | 1 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
 test/board-lookups.test.js | 8 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
 test/branch-cell.test.js | 3 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
