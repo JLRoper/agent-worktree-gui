@@ -4,16 +4,30 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.82.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.82.1 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-546 releases from v0.1.0 (2026-10-20) to v1.82.0 (2026-11-11), 1819 commits between the tags. Every release is anchored by an
+547 releases from v0.1.0 (2026-10-20) to v1.82.1 (2026-11-11), 1823 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.82.1 — 2026-11-11 · 4 commits
+
+[`3a0b8bf`](https://github.com/JLRoper/agent-worktree-gui/commit/3a0b8bff2237a33e5723b448c8b9e5ae1f0af5e4) · [compare v1.82.0...v1.82.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.82.0...v1.82.1)
+
+### Docs & tests
+
+- docs: render the changelog - 546 releases ([`71c2d16`](https://github.com/JLRoper/agent-worktree-gui/commit/71c2d169cebe8350c59387ec35ac506dcbfda193))
+
+### Other
+
+- chore: take the machine's paths out of the lines the gate refused ([`2961561`](https://github.com/JLRoper/agent-worktree-gui/commit/2961561030167bc4db46f1654bd8b8dcf99e4c04))
+- Close the Queue reply card after one press so the same text cannot be held twice ([`401c429`](https://github.com/JLRoper/agent-worktree-gui/commit/401c429ba1bd02c795423a043b6dbd8dc259b62c))
+- chore: 1.82.1 - the version this landing carries ([`3a0b8bf`](https://github.com/JLRoper/agent-worktree-gui/commit/3a0b8bff2237a33e5723b448c8b9e5ae1f0af5e4))
 
 ## v1.82.0 — 2026-11-11 · 6 commits
 
