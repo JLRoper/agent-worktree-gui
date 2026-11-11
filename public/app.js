@@ -3840,8 +3840,20 @@ function queueReply(thread, text, attachments = []) {
 // is free, instead of steering the turn that is running now. The draft is cleared BEFORE queueReply, which
 // rebuilds the card - the rebuild would otherwise put the text back into the new box from the saved draft.
 // The staged files are read before either happens: they are the held reply's now, not the composer's.
+//
+// ONE PRESS IS THE WHOLE GESTURE. The press puts the reply in flight and the card closes: the Queue reply button
+// is drawn off and the box is read-only while the entry waits, so there is no second press to make and no second
+// line to type. The guard is asked HERE rather than in the click handler because Enter comes through this same
+// function - a stale node, or a keypress the repaint has not caught up with, is ignored rather than holding the
+// same text twice.
 function queueReplyFromBox(thread) {
   const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
+  if (queueWaitingOn(thread)) {
+    // Already in flight: this press is the same press. Put a node that missed the repaint back in step, and hold
+    // nothing a second time.
+    paintQueueWait(thread);
+    return false;
+  }
   // readBox, not box.value: what is held is what the agent would receive, a chip being the text it holds.
   const text = readBox(box).trim();
   if (!text) {
@@ -3855,8 +3867,45 @@ function queueReplyFromBox(thread) {
     clearBoxDraft(box);
   } else clearBoxDraft(`reply:${thread}`);
   queueReply(thread, text, files);
-  document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`)?.focus();
+  // queueReply rebuilt the card from the queue, so the fresh box is drawn closed by the renderer; this is what
+  // closes it on a node the rebuild did not replace, and what the press below asserts. No focus: the box has
+  // nothing to type into until the held reply is drawn.
+  paintQueueWait(thread);
   return true;
+}
+
+// Is a reply held for this thread, waiting for the turn (or the subagents it started) to finish? The ONE question
+// the press, the box's keys and the card's own face ask, so none of them can disagree about it.
+function queueWaitingOn(thread) {
+  return replyQueued(thread).length > 0;
+}
+
+// The card's "queued, waiting" face, applied to the live DOM: the Queue reply button off, the box closed, and the
+// note that says why. The press applies it the moment an entry is held; the card's render draws the same face from
+// queueWaitingOn, and the queue's length is in conversationSignature - so when the drain takes the entry out and the
+// card repaints, that is the same one question answering "no", and the box opens again.
+function paintQueueWait(thread) {
+  const held = queueWaitingOn(thread);
+  const card = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`);
+  const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
+  const btn = card?.querySelector("[data-queue-reply]");
+  if (btn) {
+    btn.disabled = held;
+    if (held) btn.setAttribute("aria-disabled", "true");
+    else btn.removeAttribute("aria-disabled");
+  }
+  if (box) {
+    box.setAttribute("contenteditable", held ? "false" : "true");
+    if (held) box.setAttribute("aria-readonly", "true");
+    else box.removeAttribute("aria-readonly");
+    box.classList.toggle("queued-waiting", held);
+  }
+  const note = card?.querySelector("[data-queue-wait]");
+  if (note) {
+    note.hidden = !held;
+    note.textContent = held ? "queued, waiting" : "";
+  }
+  return held;
 }
 
 // Is the Queue reply button offered for this card right now? It is drawn for two reasons - a turn is running, or
@@ -4186,6 +4235,9 @@ async function drainReplyQueue(thread) {
   // landing after this point has to say, instead of claiming a cancellation that did not happen.
   markReplySent(thread, entry);
   renderConversation(thread);
+  // The held reply is drawn now, so the card's closed face comes off with it: the same painter the press used,
+  // answering the same question - the queue no longer holds it.
+  paintQueueWait(thread);
   try {
     // The entry's OWN files travel with the send. The composer's staged set belongs to a later message and is
     // neither read nor cleared here.
@@ -11227,6 +11279,10 @@ document.addEventListener("keydown", async (e) => {
   }
   const box = e.target.closest && e.target.closest(".reply-box");
   if (!box) return;
+  // A box with a reply already held is closed, and Enter is the press that would hold it a second time: no key here
+  // is a gesture on it. The guard is the same one queueReplyFromBox asks, so the keyboard cannot reach a state the
+  // button refuses.
+  if (queueWaitingOn(box.dataset.reply)) return;
   // Up/Down walk the thread's previous prompts, shell style: only from the very start (Up) or the very end
   // (Down) of the text, so the arrows still move the caret inside a multi-line reply. The text AND the caret
   // are measured the way readBox measures them, so a chip counts as the text it swallowed and the arrows

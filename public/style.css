@@ -2701,6 +2701,11 @@ button.tq-send:disabled, button.tq-choice:disabled { opacity: .55; cursor: defau
 :root.q-width-set .turn-question-done { margin: 6px auto 2px; max-width: min(var(--q-width, 900px), calc(100% - 18px)); }
 .turn-question-done.is-quiet { color: var(--dimmer); }
 .queue-note { font-size: 11px; color: #ffd479; }
+/* A reply is queued and waiting: ONE press put it in flight, so the box is closed and the button is off until the
+   held reply goes out. The note beside them says why, and it is the same face a repaint draws from the queue. */
+.reply-box.queued-waiting { opacity: .6; cursor: default; }
+.reply-actions button.btn-queue:disabled, .reply-actions button.btn-queue[aria-disabled="true"] { opacity: .45; cursor: default; }
+.reply-actions button.btn-queue:disabled:hover, .reply-actions button.btn-queue[aria-disabled="true"]:hover { background: #2a2f3a; }
 /* A reply waiting to be sent, drawn where it will land but visibly not sent yet: dashed, dimmed, italic. */
 .ghost-turns { margin: 10px 0 4px; display: flex; flex-direction: column; gap: 8px; }
 .ghost-turn { border: 1px dashed #3a4353; border-radius: 8px; padding: 7px 10px; background: rgba(18, 22, 29, .5); opacity: .62; }

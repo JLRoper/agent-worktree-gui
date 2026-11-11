@@ -48,6 +48,8 @@ const ATTACHMENT_NAMES = [
 const APP_NAMES = [
   "queueReply",
   "queueReplyFromBox",
+  "queueWaitingOn",
+  "paintQueueWait",
   "replyQueued",
   "ghostTurnHtml",
   "queuedEditFor",
@@ -83,6 +85,24 @@ class El {
     this.value = value;
     this.id = "";
     this._html = "";
+    this._attrs = new Map();
+    this.classList = {
+      toggle: (name, on) => {
+        const set = new Set(String(this.className || "").split(/\s+/).filter(Boolean));
+        if (on) set.add(name);
+        else set.delete(name);
+        this.className = [...set].join(" ");
+      },
+    };
+  }
+  getAttribute(name) {
+    return this._attrs.has(name) ? this._attrs.get(name) : null;
+  }
+  setAttribute(name, value) {
+    this._attrs.set(name, String(value));
+  }
+  removeAttribute(name) {
+    this._attrs.delete(name);
   }
   get innerHTML() {
     return this._html;
