@@ -83,7 +83,7 @@ lib/assistant/actions.js | 1 | example: a comment or a prompt's sample path — 
 lib/assistant/queue.js | 1 | example: a comment or a prompt's sample path — no code here opens it
 lib/charter.js | 3 | example: a comment or a prompt's sample path — no code here opens it
 lib/hosts.js | 1 | example: a comment or a prompt's sample path — no code here opens it
-lib/jobs.js | 2 | example: a comment or a prompt's sample path — no code here opens it
+lib/jobs.js | 4 | example: a comment or a prompt's sample path — no code here opens it
 lib/project.js | 2 | example: a comment or a prompt's sample path — no code here opens it
 lib/push-guard.js | 2 | example: a comment or a prompt's sample path — no code here opens it
 lib/verify-prompt.js | 1 | example: a comment or a prompt's sample path — no code here opens it

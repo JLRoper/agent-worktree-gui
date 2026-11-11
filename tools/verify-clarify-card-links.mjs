@@ -349,7 +349,7 @@ async function main() {
         section("a refusal the reader could see");
         const outside = await POST("/api/open-file", { path: OUTSIDE });
         ok("a file outside every project is refused", outside.status === 403, `HTTP ${outside.status}: ${outside.body.error || ""}`);
-        const missing = await POST("/api/open-file", { path: "docs/reports/not-here.html" });
+        const missing = await POST("/api/open-file", { path: "docs/reports/not-here.html", base: repoPath });
         ok("a path that does not exist is a 404 with a sentence", missing.status === 404 && /no such file/.test(missing.body.error || ""), String(missing.body.error || ""));
 
         ok("the page threw nothing while drawing the card", pageErrors.length === 0, pageErrors.slice(0, 2).join(" | "));

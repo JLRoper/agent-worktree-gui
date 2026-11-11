@@ -2067,6 +2067,15 @@ let questionBrowser = null;
 
 const browserName = () => questionBrowser || "your browser";
 
+// The tree a question's relative file targets belong to. lib/jobs.js writes the asking turn's own cwd/worktree onto
+// the question record as `base` when the prompt arrives; this is the only place the page reads it, and the click sends
+// it back so the route resolves against that tree rather than guessing a project root. It sits beside `browserName`
+// because both are the two facts a file anchor needs, and both live outside the card's own repaint.
+function questionBase(q) {
+  const base = String(q?.base || "").trim();
+  return base ? base.replace(/\\/g, "/").replace(/\/+$/, "") : "";
+}
+
 // The browser's own name, written into every card already on the page when the answer arrives. In place, like
 // paintQLook: the card is not rebuilt for a label, and a reader typing into one keeps the caret.
 function paintBrowserName() {
@@ -2102,12 +2111,18 @@ function paintQLook(look = qLookState) {
 function questionLinks(q) {
   const links = (Array.isArray(q?.links) ? q.links : []).filter((l) => l && l.target);
   if (!links.length) return "";
+  const base = questionBase(q);
   const rows = links
     .map((l) => {
       if (l.kind === "url") {
         return `<a class="tq-link" href="${esc(l.target)}" target="_blank" rel="noreferrer noopener" data-open-url="${esc(l.target)}" title="open ${esc(l.target)} in your browser">${esc(l.label || l.target)}<span class="tq-link-where mono">${esc(l.target)}</span></a>`;
       }
-      return `<a class="tq-link" href="#" data-open-file="${esc(l.target)}" title="open ${esc(l.target)} in ${esc(browserName())}">${esc(l.label || l.target)}<span class="tq-link-where mono">${esc(l.target)}</span></a>`;
+      // Same rule as the question row (public/core/dom-format.js `fileAnchor`): a relative target with no base is not
+      // an anchor. The row keeps the label and says why, instead of offering a click that answers "no such file".
+      if (!absoluteFileTarget(l.target) && !base) {
+        return `<div class="tq-link is-relative"><span class="tq-link-relative">${esc(l.label || l.target)}</span><span class="tq-link-where mono">${esc(l.target)} · relative path, not a link</span></div>`;
+      }
+      return `<a class="tq-link" href="#" data-open-file="${esc(l.target)}"${fileBaseAttr(l.target, base)} title="open ${esc(l.target)} in ${esc(browserName())}">${esc(l.label || l.target)}<span class="tq-link-where mono">${esc(l.target)}</span></a>`;
     })
     .join("");
   // The browser is named once, in the head: every file anchor in this section goes to the same one, and repeating it
@@ -2183,10 +2198,18 @@ function questionPrompt(turn, copy = "") {
   const again = reasks
     ? `<span class="tq-again" title="the panel asks again once an hour while this stays unanswered — nothing else about the question has changed">↻ asked again ${reasks}× · still unanswered</span>`
     : "";
+  // The question's own text, with its links. `linkifyCardParts` also hands back the relative targets it refused to
+  // anchor, so the sentence below the text can say why they are not clickable - a path a reader cannot open is still
+  // a path they need to know about, and the reason belongs on the card rather than in a 404 banner after the click.
+  const parts = linkifyCardParts(q.question || "(no question text)", { base: questionBase(q) });
+  const relativeNote = parts.relative.length
+    ? `<div class="tq-relnote mono" title="a relative path is resolved against the asking turn's tree, and this question carries none">relative path, not a link: ${esc(parts.relative.join(", "))} - the card has no tree to resolve it against</div>`
+    : "";
   return `<div class="turn-question${sending ? " is-sending" : ""}" data-question-for="${esc(turn.id)}${esc(copy)}"${sending ? ' aria-busy="true"' : ""}>
     <div class="tq-head mono">${sending ? "⏳ sending your answer — the agent is being released" : "❓ waiting on you — the agent is parked until you answer"}</div>
     ${again}
-    <div class="tq-question">${linkifyCardText(q.question || "(no question text)")}</div>
+    <div class="tq-question">${parts.html}</div>
+    ${relativeNote}
     ${questionLinks(q)}
     ${rows ? `<div class="tq-choices${multi ? " is-multi" : ""}">${rows}</div>` : ""}
     <div class="tq-note mono${sending ? " is-sending" : ""}" data-qnote="${esc(note)}">${esc(sending ? "sending your answer, one moment..." : note)}</div>
@@ -2374,12 +2397,14 @@ async function openArtifactUrl(url) {
   }
 }
 
-async function openQuestionFile(target) {
+async function openQuestionFile(target, base = "") {
   try {
     const r = await apiFetch("/api/open-file", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path: target }),
+      // The base rides WITH the path: a relative target is resolved against the asking turn's tree and never against
+      // the panel's own cwd, and the route refuses to guess when the base is missing.
+      body: JSON.stringify(base ? { path: target, base } : { path: target }),
     });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) {
@@ -9809,7 +9834,7 @@ document.addEventListener("click", async (e) => {
   if (openFileBtn) {
     e.preventDefault();
     e.stopPropagation();
-    void openQuestionFile(openFileBtn.dataset.openFile);
+    void openQuestionFile(openFileBtn.dataset.openFile, openFileBtn.dataset.openFileBase || "");
     return;
   }
   const openBtn = e.target.closest("[data-open-path]");
