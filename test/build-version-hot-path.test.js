@@ -14,6 +14,7 @@ import path from "node:path";
 import test from "node:test";
 import { createBuild, readBundle } from "../lib/build-version.js";
 import { serveStatic } from "../lib/http/static.js";
+import { syncTiming } from "../lib/sync-timing.js";
 
 const HANG = () => new Promise(() => {});
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -31,6 +32,23 @@ async function fixture(t) {
   t.after(() => rm(dir, { recursive: true, force: true }));
   return dir;
 }
+
+test("a slow synchronous watcher setup is named in diagnostics", async (t) => {
+  const dir = await fixture(t);
+  const before = syncTiming.stats().count;
+  const build = createBuild({
+    publicDir: dir,
+    watchFn: () => {
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 140);
+      return { unref() {}, on() {}, close() {} };
+    },
+  });
+  t.after(() => build.close());
+  await build.current();
+  const stats = syncTiming.stats();
+  assert.ok(stats.count > before);
+  assert.ok(stats.recent.some((r) => r.phase === "static watcher setup" && r.ms >= 250));
+});
 
 test("a request is not held by a staleness check that will not answer", async (t) => {
   const dir = await fixture(t);

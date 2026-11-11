@@ -1237,7 +1237,7 @@ Watches without a deadline, and finished ones, say so instead.
 | Method | Route | Notes |
 | --- | --- | --- |
 | GET | `/api/health`, `/api/config`, `/api/stats` | settings / scheduler / pool |
-| GET | `/api/diagnostics` | the panel's own health in one read: `logLevel`, `activity` (the scan pass running now), `loopLag` (`currentMs`, the worst of the last minute and the last ten, the last stall with its activity), the recent slow requests, the page-stream counters (`connected`/`disconnected`/`writeErrors`, and the last snapshot's build ms + bytes), and memory. This is the first thing to read after "the page stopped answering" |
+| GET | `/api/diagnostics` | the panel's own health in one read: `logLevel`, `activity`, `loopLag` (worst delays and the most recently active pass), `syncPhases` (bounded recent measured synchronous work), recent slow requests, stream counters, and memory. The activity label names overlapping work, not necessarily the cause of a stall. |
 | GET | `/api/build` | the build this process is serving: `{version, bootedAt, computedAt, uptimeSeconds, files}` — a short hash over `index.html`, every script/stylesheet it loads and everything under `public/core`, plus the per-file sha256. The shell's asset URLs carry `version`; the page polls this to learn the panel restarted (or that `public/` was edited under it) |
 | GET | `/api/state` | full snapshot (projects, worktrees, jobs, spawn info) |
 | GET | `/api/cleanup?project=NAME[&fresh=1]` | on-demand `hermes worktree list --json` audit for one repo: trees, external trees (`locked`/`missing`), per-branch keep/reap verdict + reason. ~6s, cached 10 min |
@@ -1309,8 +1309,9 @@ Watches without a deadline, and finished ones, say so instead.
 ## Troubleshooting
 
 - **The board stops updating (the connection chip goes yellow)** — the page is its SSE stream, so read
-  `GET /api/diagnostics` first. A `loopLag.lastStall` that names a pass means a scan held the event loop
-  long enough to be felt; `slowRequests.recent` names the routes the page actually waited on;
+  `GET /api/diagnostics` first. A pass named by `loopLag.lastStall` was active when the stall was detected,
+  but is not necessarily its cause. `syncPhases.recent` names synchronous phases actually measured above
+  250 ms; `slowRequests.recent` names the routes the page actually waited on;
   `stream` shows whether the tab let go (`lastDisconnectAt` fresh) or was still attached (`clients: 1`)
   while nothing moved — the two point at different halves of the machine. The panel writes a `warn`
   line per stall and per slow request as they happen (`server.out.log`), so the episode's evidence is

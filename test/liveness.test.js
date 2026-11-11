@@ -14,7 +14,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 await import("../public/core/liveness.js");
-const { QUIET_MS, quiet, fresh } = globalThis.wtLive;
+const { QUIET_MS, RESYNC_MS, quiet, fresh, shouldResync } = globalThis.wtLive;
 
 // One clock for every case: the function under test takes `now`, so nothing here depends on the run's own timing.
 const NOW = 1_800_000_000_000;
@@ -56,4 +56,21 @@ test("one run's own clock: fresh inside the window, stale after it", () => {
   // A run that never stamped is not alive; `0` is the "no stamp" a page hands over after a reload.
   assert.equal(fresh(null, NOW), false);
   assert.equal(fresh(0, NOW), false);
+});
+
+test("transport health cannot suppress periodic anti-entropy", () => {
+  assert.equal(RESYNC_MS, 120000);
+  const live = { lastTransportAt: ago(1), lastSnapshotAt: ago(119), streamOpen: true };
+  assert.equal(shouldResync(live, NOW), false);
+  assert.equal(shouldResync({ ...live, lastSnapshotAt: ago(120) }, NOW), true);
+  assert.equal(shouldResync({ ...live, lastSnapshotAt: null }, NOW), true);
+  assert.equal(shouldResync({ ...live, lastSnapshotAt: ago(120), paused: true }, NOW), false);
+});
+
+test("lost transport still resyncs even with a recent snapshot", () => {
+  const recent = { lastTransportAt: ago(1), lastSnapshotAt: ago(1) };
+  assert.equal(shouldResync({ ...recent, streamOpen: false }, NOW), true);
+  assert.equal(shouldResync({ ...recent, lastTransportAt: ago(21), streamOpen: true }, NOW), true);
+  assert.equal(shouldResync({ ...recent, streamOpen: true, awaitingStreamSnapshot: true }, NOW), true);
+  assert.equal(shouldResync({ ...recent, streamOpen: false, paused: true }, NOW), false);
 });

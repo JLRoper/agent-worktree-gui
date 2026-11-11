@@ -17,6 +17,7 @@ import test from "node:test";
 
 import { Assistant } from "../lib/assistant.js";
 import { readQueueFile } from "../lib/assistant/queue.js";
+import { roundTreeKey } from "../lib/round-tree-names.js";
 
 const T0 = Date.parse("2026-11-03T16:00:00.000Z");
 const iso = (ms) => new Date(ms).toISOString();
@@ -109,6 +110,8 @@ function harness(t, { spawn = "auto" } = {}) {
     },
     now: () => T0,
   });
+  // These fabricated trees are not Git repositories; facts are absent without launching Git for each fixture.
+  assistant.treeFactsOf = async () => null;
   assistant.settings.spawn = spawn;
   t.after(() => {
     clearTimeout(assistant.persistTimer);
@@ -116,12 +119,242 @@ function harness(t, { spawn = "auto" } = {}) {
     rmSync(dir, { recursive: true, force: true });
   });
   const rowOf = (id, who = "assistant-1") => readQueueFile(assistant.queuePathOf(assistant.assistantRecord(who))).tasks.find((x) => x.id === id) || null;
-  const settleStarts = () => new Promise((resolve) => setTimeout(resolve, 0));
+  const settleStarts = async () => {
+    const deadline = Date.now() + 60_000;
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      const pending = assistant.queueSweepNext || assistant.queueSweepPending;
+      if (pending) await pending;
+      const linking = assistant.assistants.some((rec) => readQueueFile(assistant.queuePathOf(rec)).tasks.some((task) => task.state === "queued" && task.pipelineRun?.startingAt));
+      if (!assistant.queueSweepPending && !assistant.queueSweepNext && !assistant.cuttingTrees?.size && !linking) return;
+    }
+    throw new Error("pipeline work did not settle");
+  };
   return { assistant, state, dir, bundleFile, rowOf, settleStarts };
 }
 
 const putOnPipeline = (assistant, id, stageId = "S1") =>
   assistant.queueMutate("assistant-1", "pipeline", { id, pipeline: "two", stage: stageId });
+
+test("pending facts do not block timers or overwrite queue edits, and concurrent sweeps serialize", async (t) => {
+  const { assistant, state, rowOf, settleStarts } = harness(t);
+  const added = assistant.queueMutate("assistant-1", "add", { title: "original", project: "agent-worktree-gui" }).task;
+  putOnPipeline(assistant, added.id);
+  await assistant.sweepQueues();
+  await settleStarts();
+  assert.equal(state.started.length, 1);
+  state.board[0].status = "done";
+  let release;
+  let calls = 0;
+  assistant.treeFactsOf = () => {
+    calls += 1;
+    return calls === 1 ? new Promise((resolve) => { release = resolve; }) : Promise.resolve(null);
+  };
+  const first = assistant.sweepQueues();
+  const second = assistant.sweepQueues();
+  assert.equal(assistant.sweepQueues(), second, "overlapping requests coalesce into one follow-up pass");
+  assert.ok(release, "the sweep requested a Git fact");
+  let fired = false;
+  await new Promise((resolve) => setTimeout(() => { fired = true; resolve(); }, 10));
+  assert.equal(fired, true);
+  assert.equal(rowOf(added.id).pipelineRun.stage, "S1", "no partial queue write while facts are pending");
+  assert.equal(assistant.queueMutate("assistant-1", "edit", { id: added.id, title: "edited during read" }).ok, true);
+  release(null);
+  await Promise.all([first, second]);
+  await settleStarts();
+  assert.equal(rowOf(added.id).title, "edited during read");
+  assert.equal(rowOf(added.id).pipelineRun.stage, "S2");
+  assert.equal(state.started.length, 2, "concurrent passes did not start the next stage twice");
+});
+
+test("a pending pin read is discarded after a queue edit, without replay side effects", async (t) => {
+  const { assistant, state, rowOf, settleStarts } = harness(t);
+  const added = assistant.queueMutate("assistant-1", "add", { title: "before pin", project: "agent-worktree-gui" }).task;
+  putOnPipeline(assistant, added.id);
+  await assistant.sweepQueues();
+  await settleStarts();
+  state.board[0].status = "done";
+
+  let release;
+  let notify;
+  const requested = new Promise((resolve) => { notify = resolve; });
+  const calls = [];
+  assistant.readPipelinePin = (operation, args) => {
+    calls.push([operation, args]);
+    if (calls.length === 1) {
+      notify();
+      return new Promise((resolve) => { release = resolve; });
+    }
+    if (operation === "pinOf") return Promise.resolve({ commit: null, blob: null, sha256: null, reason: "no commit" });
+    if (operation === "pinCheck") return Promise.resolve({ ok: true, recorded: false, reason: null });
+    return Promise.resolve(null);
+  };
+  const pending = assistant.sweepQueues();
+  await requested;
+  const firstOperation = JSON.stringify(calls[0]);
+  assert.equal(rowOf(added.id).pipelineRun.stage, "S1");
+  assert.equal(state.started.length, 1);
+  const journalBefore = assistant.journal.length;
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.equal(assistant.journal.length, journalBefore, "a suspended replay has no journal side effects");
+  assert.equal(assistant.queueMutate("assistant-1", "edit", { id: added.id, title: "edited during pin" }).ok, true);
+  release(null);
+  await pending;
+  await settleStarts();
+  assert.ok(calls.filter((call) => JSON.stringify(call) === firstOperation).length >= 2, "the old pin answer was re-read after the queue changed");
+  assert.equal(rowOf(added.id).title, "edited during pin");
+  assert.equal(rowOf(added.id).pipelineRun.stage, "S2");
+  assert.equal(state.started.length, 2, "the stage started only once after replay");
+});
+
+test("a pending pin read cannot settle a job that became live again", async (t) => {
+  const { assistant, state, rowOf, settleStarts } = harness(t);
+  const added = assistant.queueMutate("assistant-1", "add", { title: "job race", project: "agent-worktree-gui" }).task;
+  putOnPipeline(assistant, added.id);
+  await assistant.sweepQueues();
+  await settleStarts();
+  state.board[0].status = "done";
+
+  let release;
+  let notify;
+  const requested = new Promise((resolve) => { notify = resolve; });
+  assistant.readPipelinePin = () => { notify(); return new Promise((resolve) => { release = resolve; }); };
+  const pending = assistant.sweepQueues();
+  await requested;
+  state.board[0].status = "running";
+  release(null);
+  await pending;
+  await settleStarts();
+  assert.equal(rowOf(added.id).pipelineRun.stage, "S1");
+  assert.equal(rowOf(added.id).state, "running");
+  assert.equal(state.started.length, 1, "a stale read did not start the next stage");
+});
+
+test("a pending pin is re-read when the wait book changes without a queue write", async (t) => {
+  const { assistant, state, rowOf, settleStarts } = harness(t);
+  const added = assistant.queueMutate("assistant-1", "add", { title: "wait race", project: "agent-worktree-gui" }).task;
+  putOnPipeline(assistant, added.id);
+  await assistant.sweepQueues();
+  await settleStarts();
+  state.board[0].status = "done";
+  let wait = null;
+  assistant.jobs.pipelineRecordFor = () => ({ pipelineWait: wait });
+  let notify;
+  let release;
+  const requested = new Promise((resolve) => { notify = resolve; });
+  const calls = [];
+  assistant.readPipelinePin = (operation, args) => {
+    calls.push([operation, args]);
+    if (calls.length === 1) { notify(); return new Promise((resolve) => { release = resolve; }); }
+    if (operation === "pinOf") return Promise.resolve({ commit: null, blob: null, sha256: null, reason: "no commit" });
+    if (operation === "pinCheck") return Promise.resolve({ ok: true, recorded: false, reason: null });
+    return Promise.resolve(null);
+  };
+  const pending = assistant.sweepQueues();
+  await requested;
+  const firstOperation = JSON.stringify(calls[0]);
+  // A hold for a different stage does not block this transition, but is still a changed book observation.
+  wait = { kind: "run", stage: "S2", at: iso(T0), settledAt: iso(T0) };
+  release(null);
+  await pending;
+  await settleStarts();
+  assert.ok(calls.filter((call) => JSON.stringify(call) === firstOperation).length >= 2);
+  assert.equal(rowOf(added.id).pipelineRun.stage, "S2");
+  assert.equal(state.started.length, 2);
+});
+
+test("a pending pin is re-read after the pipeline bundle changes", async (t) => {
+  const { assistant, state, rowOf, bundleFile, settleStarts } = harness(t);
+  const added = assistant.queueMutate("assistant-1", "add", { title: "bundle race", project: "agent-worktree-gui" }).task;
+  putOnPipeline(assistant, added.id);
+  await assistant.sweepQueues();
+  await settleStarts();
+  state.board[0].status = "done";
+  let notify;
+  let release;
+  const requested = new Promise((resolve) => { notify = resolve; });
+  const calls = [];
+  assistant.readPipelinePin = (operation, args) => {
+    calls.push([operation, args]);
+    if (calls.length === 1) { notify(); return new Promise((resolve) => { release = resolve; }); }
+    if (operation === "pinOf") return Promise.resolve({ commit: null, blob: null, sha256: null, reason: "no commit" });
+    if (operation === "pinCheck") return Promise.resolve({ ok: true, recorded: false, reason: null });
+    return Promise.resolve(null);
+  };
+  const pending = assistant.sweepQueues();
+  await requested;
+  const firstOperation = JSON.stringify(calls[0]);
+  const edited = structuredClone(bundleDoc);
+  edited.pipelines[0].stages[1].prompt = "Use the updated stage two instructions.";
+  writeFileSync(bundleFile, JSON.stringify(edited));
+  release(null);
+  await pending;
+  await settleStarts();
+  assert.ok(calls.filter((call) => JSON.stringify(call) === firstOperation).length >= 2);
+  assert.equal(rowOf(added.id).pipelineRun.stage, "S2");
+  assert.match(state.started[1].prompt, /updated stage two instructions/);
+});
+
+test("Git changes without a queue or job change are re-read before applying a sweep", async (t) => {
+  const { assistant, state, rowOf, bundleFile, settleStarts } = harness(t);
+  const doc = structuredClone(bundleDoc);
+  delete doc.pipelines[0].stages[1].artifact.kind;
+  writeFileSync(bundleFile, JSON.stringify(doc));
+  const added = assistant.queueMutate("assistant-1", "add", { title: "moving commit", project: "agent-worktree-gui" }).task;
+  putOnPipeline(assistant, added.id);
+  await assistant.sweepQueues();
+  await settleStarts();
+  state.board[0].status = "done";
+  const oldSha = "a".repeat(40);
+  const newSha = "b".repeat(40);
+  let reads = 0;
+  assistant.readPipelinePin = async (operation, args) => {
+    if (operation === "commitOf") return ++reads === 1 ? oldSha : newSha;
+    if (operation === "pinOf") return { commit: args[2]?.commit || newSha, blob: null, sha256: null, reason: "uncommitted" };
+    if (operation === "pinCheck") return { ok: true, recorded: true, reason: null };
+    return null;
+  };
+  await assistant.sweepQueues();
+  await settleStarts();
+  const row = rowOf(added.id);
+  assert.ok(reads >= 3, "changed Git data discarded the original prepared pass");
+  assert.equal(row.pipelineRun.stageRuns.find((entry) => entry.stage === "S1").commit, newSha);
+  assert.equal(row.pipelineRun.stage, "S2");
+  assert.equal(state.started.length, 2);
+});
+
+test("continuously changing Git facts refuse the sweep without side effects", async (t) => {
+  const { assistant, state, rowOf, settleStarts } = harness(t);
+  const added = assistant.queueMutate("assistant-1", "add", { title: "unstable commit", project: "agent-worktree-gui" }).task;
+  putOnPipeline(assistant, added.id);
+  await assistant.sweepQueues();
+  await settleStarts();
+  state.board[0].status = "done";
+  let reads = 0;
+  assistant.readPipelinePin = async (operation, args) => {
+    if (operation === "commitOf") return (++reads % 2 ? "a" : "b").repeat(40);
+    if (operation === "pinOf") return { commit: args[2]?.commit || null, blob: null, sha256: null, reason: "uncommitted" };
+    if (operation === "pinCheck") return { ok: true, recorded: true, reason: null };
+    return null;
+  };
+  const journalBefore = assistant.journal.length;
+  await assert.rejects(assistant.sweepQueues(), /Git facts kept changing/);
+  assert.equal(rowOf(added.id).pipelineRun.stage, "S1");
+  assert.equal(state.started.length, 1);
+  assert.equal(assistant.journal.length, journalBefore);
+});
+
+test("queue writes update the round name index immediately", async (t) => {
+  const { assistant, state, settleStarts } = harness(t);
+  const added = assistant.queueMutate("assistant-1", "add", { title: "before", project: "agent-worktree-gui" }).task;
+  putOnPipeline(assistant, added.id);
+  await assistant.sweepQueues();
+  await settleStarts();
+  const key = roundTreeKey(state.cuts[0].tree);
+  assert.equal(assistant.roundNames().get(key).display, "before");
+  assert.equal(assistant.queueMutate("assistant-1", "edit", { id: added.id, title: "after" }).ok, true);
+  assert.equal(assistant.roundNames().get(key).display, "after");
+});
 
 test("a pipeline task's tree is cut first, then its stage is started, advanced on settle, and finished by the last settle", async (t) => {
   const { assistant, state, rowOf, settleStarts } = harness(t);
@@ -293,7 +526,7 @@ test("a cap park is released by the reader's action, and the row starts again", 
   // (S2 → S1), the rail brings the row back to S2, and the second crossing is past a cap of one.
   const runStage = async () => {
     state.board[state.board.length - 1].status = "done";
-    assistant.sweepQueues();
+    await assistant.sweepQueues();
     await settleStarts();
   };
   await runStage(); // S2 settles → S1, crossing 1

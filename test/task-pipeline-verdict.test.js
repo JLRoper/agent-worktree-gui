@@ -132,6 +132,7 @@ function harness(t, { verdicts = ["fail", "pass"] } = {}) {
     },
     now: () => T0,
   });
+  assistant.treeFactsOf = async () => null;
   assistant.settings.spawn = "auto";
   t.after(() => {
     clearTimeout(assistant.persistTimer);
@@ -139,12 +140,13 @@ function harness(t, { verdicts = ["fail", "pass"] } = {}) {
     rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
   });
   const rowOf = (id) => readQueueFile(assistant.queuePathOf(assistant.assistantRecord("assistant-1"))).tasks.find((x) => x.id === id) || null;
-  const nap = () => new Promise((resolve) => setTimeout(resolve, 5));
+  const nap = () => new Promise((resolve) => setTimeout(resolve, 20));
   // A start is fire-and-forget in the sweep, so a test that marks the live job done has to wait for the row to read
   // "running" in the new stage before it can mark that run's job done. Waiting on the ROW (not a fixed sleep) is what
   // makes each pass act on the stage the previous one started.
   const waitForRow = async (id, { moved = false, before = 0 } = {}) => {
-    for (let i = 0; i < 200; i += 1) {
+    const deadline = Date.now() + 60_000;
+    while (Date.now() < deadline) {
       const row = rowOf(id);
       if (row.state === "parked" || row.state === "done") return row;
       // "Linked" is the ledger's own fact: the stage run the start created has learned its thread.
@@ -153,16 +155,16 @@ function harness(t, { verdicts = ["fail", "pass"] } = {}) {
       if (linked && row.state === "running" && (!moved || state.board.length > before)) return row;
       await nap();
     }
-    return rowOf(id);
+    throw new Error(`timed out waiting for pipeline row #${id} to settle or link its next stage`);
   };
   // The cut, then the first start — the same two passes the round's first sweep and its next one made.
   const begin = async () => {
     assistant.queueMutate("assistant-1", "add", { title: "probe the pipeline studio and fix what the probe finds", project: "agent-worktree-gui" });
     const row = readQueueFile(assistant.queuePathOf(assistant.assistantRecord("assistant-1"))).tasks.at(-1);
     assistant.queueMutate("assistant-1", "pipeline", { id: row.id, pipeline: "probe-fix-loop", stage: "S1" });
-    assistant.sweepQueues();
+    await assistant.sweepQueues();
     await nap();
-    assistant.sweepQueues();
+    await assistant.sweepQueues();
     await waitForRow(row.id, { moved: true });
     return row.id;
   };
@@ -171,7 +173,7 @@ function harness(t, { verdicts = ["fail", "pass"] } = {}) {
     const before = state.board.length;
     const live = state.board[state.board.length - 1];
     if (live) live.status = "done";
-    assistant.sweepQueues();
+    await assistant.sweepQueues();
     await waitForRow(id, { moved: true, before });
     await nap();
   };
@@ -437,24 +439,25 @@ function pingPongHarness(t, { outcomes = ["accept"] } = {}) {
     rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
   });
   const rowOf = (id) => readQueueFile(assistant.queuePathOf(assistant.assistantRecord("assistant-1"))).tasks.find((x) => x.id === id) || null;
-  const nap = () => new Promise((resolve) => setTimeout(resolve, 5));
+  const nap = () => new Promise((resolve) => setTimeout(resolve, 20));
   const waitForRow = async (id, { moved = false, before = 0 } = {}) => {
-    for (let i = 0; i < 200; i += 1) {
+    const deadline = Date.now() + 60_000;
+    while (Date.now() < deadline) {
       const row = rowOf(id);
       if (row.state === "parked" || row.state === "done") return row;
       const entry = row.pipelineRun && Array.isArray(row.pipelineRun.stageRuns) ? row.pipelineRun.stageRuns.at(-1) : null;
       if (entry && entry.thread && row.state === "running" && (!moved || state.board.length > before)) return row;
       await nap();
     }
-    return rowOf(id);
+    throw new Error(`timed out waiting for pipeline row #${id} to settle or link its next stage`);
   };
   const begin = async () => {
     assistant.queueMutate("assistant-1", "add", { title: "write the draft the brief asks for", project: "agent-worktree-gui" });
     const row = readQueueFile(assistant.queuePathOf(assistant.assistantRecord("assistant-1"))).tasks.at(-1);
     assistant.queueMutate("assistant-1", "pipeline", { id: row.id, pipeline: "ping-pong", stage: "draft" });
-    assistant.sweepQueues(); // the cut
+    await assistant.sweepQueues(); // the cut
     await nap();
-    assistant.sweepQueues(); // the drafter's start
+    await assistant.sweepQueues(); // the drafter's start
     await waitForRow(row.id, { moved: true });
     return row.id;
   };
@@ -463,7 +466,7 @@ function pingPongHarness(t, { outcomes = ["accept"] } = {}) {
     const before = state.board.length;
     const live = state.board[state.board.length - 1];
     if (live) live.status = "done";
-    assistant.sweepQueues();
+    await assistant.sweepQueues();
     await waitForRow(id, { moved: true, before });
     await nap();
   };

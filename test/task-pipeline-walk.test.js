@@ -117,6 +117,7 @@ function harness(t, { pipelines = null, seatVerdict = null } = {}) {
     },
     now: () => state.clock,
   });
+  assistant.treeFactsOf = async () => null;
   assistant.settings.spawn = "auto";
   t.after(() => {
     clearTimeout(assistant.persistTimer);
@@ -129,9 +130,16 @@ function harness(t, { pipelines = null, seatVerdict = null } = {}) {
   // One tick of the panel's clock: the sweep, then the starts it asked for are performed.
   const sweep = async () => {
     state.clock += 1000;
-    assistant.sweepQueues();
-    await tick();
-    await tick();
+    await assistant.sweepQueues();
+    const deadline = Date.now() + 60_000;
+    while (Date.now() < deadline) {
+      await tick();
+      const pending = assistant.queueSweepNext || assistant.queueSweepPending;
+      if (pending) await pending;
+      const linking = readQueueFile(queueFile).tasks.some((task) => task.state === "queued" && task.pipelineRun?.startingAt);
+      if (!assistant.queueSweepPending && !assistant.queueSweepNext && !assistant.cuttingTrees?.size && !linking) return;
+    }
+    throw new Error("pipeline work did not settle");
   };
   // The worker finishes between two ticks.
   const finish = () => {
