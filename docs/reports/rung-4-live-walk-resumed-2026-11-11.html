@@ -290,7 +290,7 @@ failed with job <code>69458a89</code>, while address visit 2 is commit <code>6c2
 tree.</p>
 
 <h3>D2. A declined pull request cannot be found by the stage timer</h3>
-<p><code>lib/worktrees.js prFor</code> filters candidates through <code>claimable()</code>, which keeps
+<p><code>lib/project.js prFor</code> filters candidates through <code>claimable()</code>, which keeps
 only <code>OPEN</code> (or <code>MERGED</code> whose head still matches the row). A dismissed or
 declined PR is dropped, so <code>readReviewForPipelineWait</code> answers "no pull request for
 &lt;branch&gt;" and the wait backs off. The refusal the fix added is correct and unreachable on this
