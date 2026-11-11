@@ -59,6 +59,11 @@ export function createDom() {
       this.attributes = {};
       this.title = "";
       this.id = "";
+      // A text field's value and caret. An element that is not a text field never reads them, so carrying them on
+      // every element costs nothing and lets a test state "the reader's caret is at 18" for the one box that has one.
+      this.value = "";
+      this.selectionStart = 0;
+      this.selectionEnd = 0;
     }
     get firstChild() {
       return this.childNodes[0] || null;
@@ -119,12 +124,22 @@ export function createDom() {
       if (at < 0) return node;
       this.childNodes.splice(at, 1);
       node.parentNode = null;
+      // A browser blurs what it detaches: the focused element inside a node that leaves the page loses the caret.
+      // Without this the fixture would make moving a card look harmless, which is the very defect the page fixes.
+      if (node.nodeType === 1 && node.contains(document.activeElement)) document.activeElement = null;
       return node;
     }
     replaceChildren(...nodes) {
       const flat = nodes.flatMap((n) => (n && n.nodeType === 11 ? n.childNodes.slice() : [n]));
       for (const child of this.childNodes.slice()) this.removeChild(child);
       for (const n of flat) if (n) this.appendChild(n);
+    }
+    // A text field's own two properties, so a caret can be stated: `setSelectionRange` is what a page calls to put a
+    // caret back, and `selectionStart`/`selectionEnd` are what it reads first. Nothing else in this fixture is
+    // text-field-shaped; these are exactly the three names the page's typing capture uses.
+    setSelectionRange(start, end = start) {
+      this.selectionStart = start;
+      this.selectionEnd = end;
     }
     remove() {
       detach(this);
@@ -367,18 +382,24 @@ export function createDom() {
   function matches(el, selector) {
     if (!el || el.nodeType !== 1) return false;
     for (const part of String(selector).split(",").map((s) => s.trim()).filter(Boolean)) {
-      const m = /^([a-zA-Z]+)?((?:\.[\w-]+)*)((?:\[[\w-]+\])*)$/.exec(part);
+      const m = /^([a-zA-Z]+)?((?:\.[\w-]+)*)((?:\[[\w-]+(?:="[^"]*")?\])*)$/.exec(part);
       if (!m) continue;
       const [, tag, classes, attrs] = m;
       if (tag && el.tagName !== tag.toUpperCase()) continue;
       const list = String(el.className || "").split(/\s+/).filter(Boolean);
       const wanted = (classes.match(/\.[\w-]+/g) || []).map((c) => c.slice(1));
       if (wanted.some((c) => !list.includes(c))) continue;
-      const attrNames = (attrs.match(/\[[\w-]+\]/g) || []).map((a) => a.slice(1, -1));
-      const missing = attrNames.some((name) => {
+      // `[data-x]` asks whether the attribute is there and carries something; `[data-x="v"]` asks for exactly `v`
+      // (`""` included, which is what a card with no copy suffix carries).
+      const pairs = (attrs.match(/\[[\w-]+(?:="[^"]*")?\]/g) || []).map((a) => a.slice(1, -1));
+      const missing = pairs.some((pair) => {
+        const eq = pair.indexOf("=");
+        const name = eq < 0 ? pair : pair.slice(0, eq);
         const key = name.startsWith("data-") ? camel(name.slice(5)) : name;
         const v = name.startsWith("data-") ? el.dataset[key] : el.getAttribute(name);
-        return v === undefined || v === null || v === "";
+        if (eq < 0) return v === undefined || v === null || v === "";
+        const want = pair.slice(eq + 2, -1);
+        return String(v == null ? "" : v) !== want;
       });
       if (missing) continue;
       return true;
