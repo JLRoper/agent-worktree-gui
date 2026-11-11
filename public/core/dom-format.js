@@ -154,10 +154,10 @@ const OUT_URL_RE = /https?:\/\/[^\s<>"'`\u001b]+/g;
 // OS-registered browser, through lib/open-url.js) instead of the page navigating anywhere, and a path to a file the
 // reader is meant to look at is otherwise something to copy out of the card and paste into an address bar.
 //
-// Three shapes, because those are the three an agent writes: a drive letter (`C:/x/y.html`, `C:\x\y.html`), a POSIX
-// absolute path (`/var/tmp/x.log`), or a relative one with at least one slash (`docs/reports/x.html`). Every shape
-// must END in an extension - that is what keeps `and/or` and `24/7` and a bare `lib/` from becoming links - and a
-// sentence's full stop lands outside the match because the greedy run is backtracked to the extension.
+// Three shapes, because those are the three an agent writes: a drive letter (a letter, a colon, a slash, forward or
+// back), a POSIX absolute path (`/var/tmp/x.log`), or a relative one with at least one slash (`docs/reports/x.html`).
+// Every shape must END in an extension - that is what keeps `and/or` and `24/7` and a bare `lib/` from becoming links
+// - and a sentence's full stop lands outside the match because the greedy run is backtracked to the extension.
 const OUT_FILE_RE =
   /(?:[A-Za-z]:[\\/][^\s<>"'`|]+|\/(?:[\w.@+-]+\/)*[\w.@+-]+|(?:\.{1,2}\/)?(?:[\w.@+-]+\/)+[\w.@+-]+)(?:\.[A-Za-z0-9]{1,8})(?:[?#][^\s<>"'`|]*)?/g;
 

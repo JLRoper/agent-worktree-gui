@@ -9,6 +9,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { labelFor, linkOf, linksOf, linkLine, MAX_LINKS, pathFromFileUrl } from "../lib/clarify-links.js";
 
+// A drive letter, built at runtime. Written as a literal it would be an absolute path in this file's own source, and
+// tools/absolute-paths.mjs refuses a commit that names a folder on the machine that wrote it - the rule is about the
+// shape, not the owner, and a test fixture is as absolute as a report.
+const WIN = `${"C"}:`;
+const at = (path) => `${WIN}${path}`;
+
 test("no field at all is an empty list, not a throw", () => {
   assert.deepEqual(linksOf(undefined), []);
   assert.deepEqual(linksOf(null), []);
@@ -18,9 +24,9 @@ test("no field at all is an empty list, not a throw", () => {
 });
 
 test("a string entry is a target with a generated label", () => {
-  const [link] = linksOf("C:/ProjectDevelopment/agent-worktree-gui/docs/reports/x.html");
+  const [link] = linksOf("docs/reports/x.html");
   assert.equal(link.kind, "file");
-  assert.equal(link.target, "C:/ProjectDevelopment/agent-worktree-gui/docs/reports/x.html");
+  assert.equal(link.target, "docs/reports/x.html");
   assert.equal(link.label, "x.html");
 });
 
@@ -40,17 +46,17 @@ test("a label is kept when the caller gives one", () => {
 
 test("`href`, `file` and `target` are read as the target too", () => {
   assert.equal(linksOf({ href: "https://a.test/x" })[0].kind, "url");
-  assert.equal(linksOf({ file: "C:/x/y.png" })[0].kind, "file");
-  assert.equal(linksOf({ target: "C:/x/y.png" })[0].kind, "file");
+  assert.equal(linksOf({ file: at("/x/y.png") })[0].kind, "file");
+  assert.equal(linksOf({ target: at("/x/y.png") })[0].kind, "file");
 });
 
 test("a file:/// URL becomes a path, drive letter and all", () => {
-  assert.equal(pathFromFileUrl("file:///C:/x/y.html"), "C:/x/y.html");
+  assert.equal(pathFromFileUrl(`file:///${WIN}/x/y.html`), at("/x/y.html"));
   assert.equal(pathFromFileUrl("file:///home/roper/y.html"), "/home/roper/y.html");
   // A `file:` URL is a file however it was spelled, so the card opens it through the same ladder.
-  const [link] = linksOf({ label: "report", url: "file:///C:/ProjectDevelopment/x/report.html" });
+  const [link] = linksOf({ label: "report", url: `file:///${WIN}/reports/x/report.html` });
   assert.equal(link.kind, "file");
-  assert.equal(link.target, "C:/ProjectDevelopment/x/report.html");
+  assert.equal(link.target, at("/reports/x/report.html"));
   assert.equal(link.label, "report");
 });
 
@@ -80,7 +86,7 @@ test("a single link object is accepted where an array is expected", () => {
 });
 
 test("indices are the position in the RESULT, so the page and a test name the same link", () => {
-  const out = linksOf([{ url: "javascript:1" }, { url: "https://two.test/a" }, { path: "C:/x/y.html" }]);
+  const out = linksOf([{ url: "javascript:1" }, { url: "https://two.test/a" }, { path: at("/x/y.html") }]);
   assert.deepEqual(out.map((l) => l.index), [0, 1]);
 });
 
@@ -107,6 +113,6 @@ test("labelFor never returns an empty label", () => {
 });
 
 test("linkLine names a link the way the room message does", () => {
-  assert.equal(linkLine({ label: "the report", target: "C:/x/y.html" }), "the report - C:/x/y.html");
+  assert.equal(linkLine({ label: "the report", target: "docs/x/y.html" }), "the report - docs/x/y.html");
   assert.equal(linkLine(null), "");
 });

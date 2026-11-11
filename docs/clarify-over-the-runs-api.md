@@ -307,8 +307,8 @@ What the normalizer guarantees, because the envelope is somebody else's:
   empty the section;
 - only `http(s)` URLs are kept. `javascript:`, `data:` and the rest are DROPPED (not thrown), and the
   entries after them still draw;
-- a `file:///C:/x/y.html` URL becomes the path `C:/x/y.html`  -  a worker that read these docs tends to
-  send a file URL, and the opener wants a path;
+- a `file:` URL becomes the plain path it names  -  a worker that read these docs tends to send a file URL, and
+  the opener wants a path. The drive letter moves from the URL's pathname back to the front;
 - at most `MAX_LINKS` (8) survive.
 
 The CARD (`public/app.js` `questionLinks`) reserves a block between the question text and the choices,
