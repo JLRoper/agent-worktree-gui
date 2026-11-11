@@ -10,6 +10,15 @@ served straight from `public/`.
     start-background.cmd   # detached, logs to logs\server.out.log / .err.log
     stop-background.cmd    # stop it
 
+The background launcher and panel restart capture stdout and stderr in the panel's configured log directory.
+Both active files and their archives share a 20 MiB cap; the oldest bytes are discarded first. Logs roll at each
+UTC hour boundary, on startup, and when the combined active files reach 2 MiB. Very large writes are split across
+segments; oversized legacy logs retain their newest bytes. `server.pid` still names the panel, not its log supervisor.
+The supervisor stops the panel if it cannot safely write its logs; a forced supervisor termination may also break its pipes.
+The log directory must be trusted; log and pid paths reject symlinks and hard links, but this is not a sandbox
+against an attacker concurrently replacing directory components.
+Foreground `node server.js`, `npm start`, and `start.cmd` continue to use the console rather than these log files.
+
 Then open **http://127.0.0.1:7331**. The page itself — every control, chip and gesture — is documented in
 [docs/using-the-board.md](docs/using-the-board.md).
 
