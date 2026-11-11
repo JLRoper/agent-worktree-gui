@@ -68,10 +68,11 @@
 // A REFUSAL IS SAID ON THE CARD. Missing, a directory, or outside the repo comes back from that route as the
 // sentence the reader sees under the row; the click never opens a blank tab and never hides the reason in a banner.
 // AN ANSWER IS SAID ON THE CARD TOO. The one 200 the page used to swallow is the handler's: the route answers from
-// the spawn (a detached explorer.exe reports nothing), so the row says what was handed over and to which opener —
-// `opened report.html with explorer.exe` — and says in the same line that the panel cannot see whether a window
-// appeared. That is the whole of what the spawn proves; a sentence about the window itself would claim the one fact
-// the route cannot report. A reader who saw nothing for it read the silence as "the control does not respond at all".
+// the spawn (a detached child reports nothing), so the row says what was handed over and to WHICH browser -
+// `opened report.html with msedge.exe - the registered default browser (MSEdgeHTM)` - names the fallback when one
+// fired, and says in the same line that the panel cannot see whether a window appeared. That is the whole of what
+// the spawn proves; a sentence about the window itself would claim the one fact the route cannot report. A reader
+// who saw nothing for it read the silence as "the control does not respond at all".
 // The title is the row's name now, not a second opener; the row's other control points at the AGENT that delivered
 // it, so a mis-click in a 200-row list opens a console (cheap, reversible) rather than a window (not).
 //
@@ -717,7 +718,8 @@ function paintDeliverRows({ keepScroll = false } = {}) {
 // A row: a glyph by kind, the name — which is the row's ONE Open control, and says so with the Open tag at its
 // right — the last few path segments or the URL's host+path so two reports called "report" are distinguishable,
 // then the agent, the project and the age. One control opens the target and its title says which of the two things
-// it will do (a tab, or the program this machine uses for that file); nothing else on the row opens it.
+// it will do (a new tab, or the browser this machine is registered to use, with the fallbacks in
+// lib/open-url.js behind it); nothing else on the row opens it.
 function deliverRowHtml(entry) {
   const kind = entry.kind === "image" ? "image" : entry.kind === "link" ? "link" : "file";
   const glyph = kind === "image" ? "🖼" : kind === "link" ? "🔗" : "📄";
@@ -732,16 +734,17 @@ function deliverRowHtml(entry) {
   const why = deliver.why[entry.seq];
   const whyLine = why ? `<span class="dl-why" role="alert">${esc(why)}</span>` : "";
   const opened = deliver.opened[entry.seq];
-  // The 200 handler's answer, in the row. It names the file and the opener the ROUTE named, and stops where the
-  // route stops: the spawn was made, no window is observable. A detached child reports no exit code, so the line
-  // says "cannot see", never that the program appeared — the audit's silence is what read as a dead control.
+  // The 200 handler's answer, in the row: the file, the launcher the ROUTE says started, and - when one fired -
+  // which fallback it was. The route hands a local file to the browser this machine is registered to use, so the
+  // opener's name is a browser's (`msedge.exe`), not `explorer.exe` for everything. It still stops where the spawn
+  // stops: no detached child reports whether a window appeared, so the line says "cannot see", never that it did.
   const openedLine =
     opened && !why
-      ? `<span class="dl-opened" role="status" title="${esc(`opened ${opened.name} with ${opened.opener} — ${target}`)}">opened ${esc(opened.name)} with ${esc(opened.opener)} — the panel started the opener; it cannot see whether a window appeared</span>`
+      ? `<span class="dl-opened" role="status" title="${esc(`opened ${opened.name} with ${opened.opener}${deliverViaText(opened)} - ${target}`)}">opened ${esc(opened.name)} with ${esc(opened.opener)}${esc(deliverViaText(opened))}; the panel started it and cannot see whether a window appeared</span>`
       : "";
   const how = entry.href
     ? "Open — a new browser tab, in this browser"
-    : "Open — in the program this machine uses for this file";
+    : "Open — in the browser this machine uses for this file";
   return `<div class="dl-row${entry.missingAt ? " is-gone" : ""}" role="option" id="dl-row-${esc(entry.seq)}" data-seq="${esc(entry.seq)}" aria-selected="false" title="${esc(target)}">
       <span class="dl-glyph" aria-hidden="true">${glyph}</span>
       <span class="dl-main">
@@ -888,10 +891,17 @@ async function deliverOpenOnServer(entry, extra) {
       if (r.status === 404) void deliverFetch({ quiet: true });
       return false;
     }
-    // The 200 handler is the answer the page used to swallow. `d.opener` is the basename the route spawned and
-    // `open: "handler"` is what it did; neither is a claim that a window appeared, so the row says exactly those two.
+    // The 200 handler is the answer the page used to swallow. `d.opener` is the basename the route spawned, `d.via`
+    // names the mechanism and `d.fallback` how far down the ladder it was; none of them is a claim that a window
+    // appeared, so the row says exactly those.
     if (d.open === "handler") {
-      return sayDeliverOpened(entry.seq, { name: deliverTargetName(d.target || entry.target), opener: String(d.opener || "") });
+      return sayDeliverOpened(entry.seq, {
+        name: deliverTargetName(d.target || entry.target),
+        opener: String(d.opener || ""),
+        via: String(d.via || ""),
+        progId: d.progId ? String(d.progId) : "",
+        fallback: Number(d.fallback) || 0,
+      });
     }
     clearDeliverWhy(entry.seq);
     return true;
@@ -905,6 +915,20 @@ async function deliverOpenOnServer(entry, extra) {
 function deliverTargetName(target) {
   const parts = String(target || "").split(/[\\/]+/).filter(Boolean);
   return parts.length ? parts[parts.length - 1] : String(target || "");
+}
+
+// WHICH launcher took the file, in the reader's words. The route sends the mechanism (`via`), the registered
+// ProgID when it resolved one, and how many launchers were tried before this one (`fallback`), so a fallback is
+// never silent: the row says `fallback 1 of 2: rundll32 FileProtocolHandler` rather than implying a browser took it.
+function deliverViaText(opened) {
+  const via = String((opened && opened.via) || "");
+  if (!via) return "";
+  if (via === "default browser") {
+    return ` - the registered default browser${opened.progId ? ` (${opened.progId})` : ""}`;
+  }
+  const n = Number(opened && opened.fallback);
+  if (Number.isFinite(n) && n > 0) return ` - fallback ${n} of 2: ${via}`;
+  return ` - ${via}, with no browser resolved`;
 }
 
 // A 200 that spawned a handler. One paint covers both halves — the refusal this row may be carrying goes, the

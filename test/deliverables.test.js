@@ -552,10 +552,14 @@ test("server.js serves the list without a token, and opens with one (authorised(
   assert.doesNotMatch(openBlock, /authorised\(req\)/, "the one-argument form refuses every off-machine write");
   assert.match(openBlock, /deliverables\.get\(body\.seq\)/, "the target comes from the store, never from the page");
   assert.match(openBlock, /chromeFor\(entry\.target\)/, "a link goes to Chrome");
-  assert.match(openBlock, /openerFor\(entry\.target\)/, "a file/image goes through the OS association");
+  assert.match(openBlock, /openFileWith\(entry\.target/, "a file/image goes through the file ladder, not openerFor");
+  assert.match(openBlock, /fallback: opened\.fallback/, "the answer carries how far down the ladder the launcher was");
+  assert.match(openBlock, /via: opened\.via/, "the answer names the mechanism that took the file");
   assert.match(openBlock, /markMissing\(entry\.seq\)/, "a file gone at click time is stamped");
-  // The 200 the page now reports, unchanged: the handler answer still names the opener it spawned.
-  assert.ok(openBlock.includes('open: "handler", opener: path.basename(bin)'), "the handler answer still carries the opener's basename");
+  // The 200 the page now reports: the launcher that started, the mechanism, the ProgID when one resolved, how far
+  // down the ladder it was, and the URL that was handed over - so the row can say which browser took the file.
+  assert.ok(openBlock.includes("opener: path.basename(opened.bin)"), "the handler answer carries the launcher's basename");
+  assert.ok(openBlock.includes("url: opened.url"), "the handler answer carries the file:/// URL it handed over");
   // The three refusal sentences, byte for byte. This change is the PAGE's answer to a 200; a refusal's words are the
   // route's, and re-wording one here would make the audit's measured sentences a lie.
   assert.ok(
