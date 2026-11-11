@@ -127,6 +127,14 @@ when the held reply is drawn.</p>
 <p>The clarify card's caret and links code (1.82.0) is untouched, the panel was not restarted, and no other repository
 was read or written. The only files this change adds or changes are the press, its render, its stylesheet face, the new
 gate, the new test, and one existing test's function list so it carries the two new functions it now calls.</p>
+
+<h2>The full suite</h2>
+<p><code>npm test</code> on this build: <b>2528 tests, 2516 pass, 12 fail</b>. Every failing test is pre-existing: the
+same nine files were run against a <code>git archive 71c2d169</code> export and report the same 11 failing tests
+(<code>gateway-permissions</code>, <code>harness</code>, <code>paths</code>, <code>pipeline-bench</code> x3,
+<code>header-controls</code>, <code>windows-hide</code>, <code>worktree-assistant</code>,
+<code>brief-follows-the-policy</code>). None of them names the queue, the reply box or this change's files. The new
+<code>queue-single-press</code> tests pass, and no test that passed on the base build fails here.</p>
 </main>
 </body>
 </html>
