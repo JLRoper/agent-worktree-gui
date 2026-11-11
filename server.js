@@ -12,11 +12,13 @@ import path from "node:path";
 import { StringDecoder } from "node:string_decoder";
 import { fileURLToPath } from "node:url";
 import { logger, log, parseLevel } from "./lib/log.js";
+import { syncTiming } from "./lib/sync-timing.js";
 import { createLoopLag, withActivity, markActivity, currentActivity } from "./lib/loop-lag.js";
 import { Pool } from "./lib/pool.js";
 // Every helper process this panel starts is registered here: it carries a hard ceiling and dies with its
 // scope (a job that settled, a scan, the panel on the way out). See lib/child-tree.js for the leak it ends.
 import { panelChildren } from "./lib/child-tree.js";
+import { treeFactsWorkers } from "./lib/tree-facts-workers.js";
 import { portHolder, refusalLine } from "./lib/port-guard.js";
 import { worktreeList, prIndex, prFor } from "./lib/project.js";
 import { heldBack, failed as hostFailed, answered as hostAnswered, looksLikeHostTrouble } from "./lib/remote-backoff.js";
@@ -763,7 +765,10 @@ const slowRequests = [];
 const SLOW_REQUESTS_KEPT = 20;
 
 function broadcast(evt) {
-  const frame = `event: ${evt.type}\ndata: ${JSON.stringify(evt)}\n\n`;
+  // No subscriber can use the frame when the board is closed. In particular, a whole-board
+  // snapshot may be megabytes, so do not stringify it on every event with nobody listening.
+  if (!clients.size) return;
+  const frame = syncTiming.measure("SSE event serialization", () => `event: ${evt.type}\ndata: ${JSON.stringify(evt)}\n\n`);
   for (const res of clients) {
     try {
       res.write(frame);
@@ -793,7 +798,11 @@ function guard(what, fn) {
 // before any snapshot has seen it would draw the bare fallback name: the chart cell without its "(Manager 1)", the
 // bullet without its manager label, the title as the directory, until the next snapshot, and a board nobody polls
 // never gets one. Observed as a 2-of-4 flake in tools/verify-chart-columns.mjs.
-store.onEvent((evt) => (evt?.type === "row" ? broadcast({ ...evt, row: rowExtras(evt.project, evt.row) }) : broadcast(evt)));
+store.onEvent((evt) => {
+  if (!clients.size) return;
+  if (evt?.type === "row") broadcast({ ...evt, row: rowExtras(evt.project, evt.row) });
+  else broadcast(evt);
+});
 
 // A `-w` agent's worktree exists a few seconds after spawn; adopt it into the board right then so the
 // card can be opened under a row instead of waiting for a discovery pass.
@@ -1513,6 +1522,9 @@ assistant = new Assistant({
   onEvent: broadcast,
   onLog: log,
 });
+// Start priming the same index used by snapshots and row events; a slow queue file must not hold
+// the listener down for the worker's entire timeout. Once ready, it broadcasts refreshed names.
+const roundNamesReady = assistant.roundNameIndex.refresh().catch((err) => log(`round names: initial refresh failed: ${String(err?.message || err)}`));
 // The assistant's own working directory, created before the first turn so it cannot be refused by the
 // gateway: this thread does no file work, and borrowing a project checkout is what broke a live panel when
 // that checkout had been deleted. Logged once, so the path is never a mystery in the boot log.
@@ -3059,13 +3071,15 @@ function withAssistantOwners(snap) {
 // them. A `row` frame replaces the page's row wholesale, so a name stamped only into the snapshot would be erased by
 // the next scan of that tree; the page paints `row.round.display` (public/app.js `treeTitleOf`).
 function rowExtras(projectName, row) {
-  if (!row) return row;
-  if (!assistant) return row;
-  const out = { ...row, assistant: assistantForRow(projectName, row) };
-  const rec = typeof assistant.roundNames === "function" ? assistant.roundNames().get(roundTreeKey(out.path)) : null;
-  if (rec) out.round = rec;
-  else delete out.round;
-  return out;
+  return syncTiming.measure("row extras", () => {
+    if (!row) return row;
+    if (!assistant) return row;
+    const out = { ...row, assistant: assistantForRow(projectName, row) };
+    const rec = typeof assistant.roundNames === "function" ? assistant.roundNames().get(roundTreeKey(out.path)) : null;
+    if (rec) out.round = rec;
+    else delete out.round;
+    return out;
+  });
 }
 
 // The same round names, overlaid on the rows a snapshot carries.
@@ -3179,6 +3193,10 @@ async function stewardProject(name) {
 }
 
 function snapshot() {
+  return syncTiming.measure("snapshot construction", snapshotBody);
+}
+
+function snapshotBody() {
   const snap = withRefreshJournal(
     withReleases(
       withTodos(
@@ -3389,6 +3407,7 @@ const server = createServer(async (req, res) => {
         logLevel: logger.level,
         activity: currentActivity(),
         loopLag: loopLag.stats(),
+        syncPhases: syncTiming.stats(),
         slowRequests: { thresholdMs: config.logging.slowRequestMs, kept: slowRequests.length, recent: slowRequests.slice(-10) },
         stream: { clients: clients.size, ...streamMetrics },
         memoryMB: Math.round(process.memoryUsage().rss / 1048576),
@@ -6462,6 +6481,14 @@ const onListenError = (e) => {
   throw e;
 };
 server.once("error", onListenError);
+// Give a normal worker a brief head start, but let health and the first snapshot answer even if
+// a queue file or the filesystem is stalled. The onChange snapshot fills names when it completes.
+await Promise.race([roundNamesReady, new Promise((resolve) => setTimeout(resolve, 300))]);
+assistant.roundNameIndex.onError = (err) => log(`round names: refresh failed: ${String(err?.message || err)}`);
+assistant.roundNameIndex.onChange = () => {
+  if (clients.size) broadcast({ type: "snapshot", data: snapshot() });
+};
+assistant.roundNameIndex.start();
 server.listen(config.port, config.host, () => {
   server.off("error", onListenError);
   log(`agent-worktree-gui on http://${config.host}:${config.port}`);
@@ -6557,6 +6584,7 @@ try {
 // (lib/child-tree.js `killTree`), and the restart controller awaits this promise exactly as before.
 async function shutdown(code = 0) {
   log(`shutting down (exit ${code})`);
+  treeFactsWorkers.close();
   // Every helper this panel started dies with it, tree and all: a scan's git, a push's hook, a check agent's
   // helper. Before the pool and the listener go, so nothing is left writing into a tree that is about to be
   // released. `killAllSync` on `exit` is the backstop for an exit that never reaches here.
@@ -6572,6 +6600,7 @@ async function shutdown(code = 0) {
     /* an already-stopped scheduler is not a failure */
   }
   stopPipelineWaitTicker();
+  assistant.roundNameIndex.stop();
   clearInterval(heartbeat);
   loopLag.stop();
   try {
