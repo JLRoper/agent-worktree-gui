@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rung 4 walk leftovers: the delete that refused, six backups, four worktrees gone</title>
+<style>
+  :root {
+    --bg: #14161a; --panel: #1b1e24; --line: #2b303a; --ink: #e6e8ec; --dim: #a2a9b6;
+    --ok: #5fbf7a; --warn: #d9a441; --bad: #d9605f; --acc: #6ea8d8;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.62 "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 1020px; margin: 0 auto; padding: 40px 28px 80px; }
+  h1 { font-size: 26px; line-height: 1.25; margin: 0 0 6px; letter-spacing: -0.01em; }
+  h2 { font-size: 19px; margin: 42px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+  h3 { font-size: 15px; margin: 24px 0 6px; color: var(--acc); text-transform: uppercase; letter-spacing: 0.06em; }
+  p { margin: 10px 0; }
+  .sub { color: var(--dim); font-size: 13.5px; margin-bottom: 26px; }
+  .box { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; margin: 18px 0; }
+  .box.hot { border-left: 3px solid var(--bad); }
+  .box.good { border-left: 3px solid var(--ok); }
+  .box.note { border-left: 3px solid var(--warn); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13.5px; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { color: var(--dim); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+  td.n { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  code, pre { font-family: Consolas, "Cascadia Mono", monospace; font-size: 12.5px; }
+  code { background: #0f1115; padding: 1px 5px; border-radius: 4px; color: #cfd6e2; }
+  pre { background: #0f1115; border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px;
+        overflow-x: auto; color: #cfd6e2; line-height: 1.5; }
+  .ok { color: var(--ok); } .bad { color: var(--bad); } .warn { color: var(--warn); } .dim { color: var(--dim); }
+  ul { margin: 8px 0 8px 20px; padding: 0; } li { margin: 5px 0; }
+  .kv { display: grid; grid-template-columns: 210px 1fr; gap: 4px 16px; font-size: 13.5px; }
+  .kv div:nth-child(odd) { color: var(--dim); }
+  footer { margin-top: 46px; border-top: 1px solid var(--line); padding-top: 14px; color: var(--dim); font-size: 12.5px; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Rung 4 walk leftovers: the delete that refused, six backups, four worktrees gone</h1>
+<div class="sub">
+  Cleanup pass over the rung 4 live walk, written 2026-11-11T03:56Z (2026-11-10 22:56 EST) from the landing
+  worktree <code>agent-worktree-gui/.worktrees/run-the-rung-4-live-walk-on-the-fixed-ba8871</code> ·
+  pictureviewer primary on <code>master</code> at <code>bb12884</code> ·
+  panel <code>127.0.0.1:7453</code> still listening while this pass ran
+</div>
+
+<div class="box hot">
+  <h3 style="margin-top:0;color:var(--bad)">The four answers</h3>
+  <p><strong>1. The merged origin branch was NOT deleted.</strong> The brief's second gate failed.
+  <code>gh pr view 697</code> reads <span class="ok">MERGED</span> and the merge commit
+  <code>ae05489a</code> is on main, but <code>a89a4d1a</code> is <span class="bad">not</span> an
+  ancestor of <code>origin/main</code> <code>8c2ae267</code>, because the landing was a rebase merge:
+  <code>ae05489a</code> has one parent and the branch's four commits were rewritten into main's
+  history. The brief said stop and report if either check fails, so the branch is still on origin at
+  <code>a89a4d1a</code>. The content is identical (both trees are <code>dae87a6d</code>), so this is a
+  gate shape problem, not lost work.</p>
+  <p><strong>2. Six local refs held commits on no pushed ref, and all six were backed up.</strong>
+  pictureviewer's origin carries exactly two heads (<code>master</code>, <code>20261021_0005_DMR-39015_pictureViewerSso</code>);
+  every walk branch was already gone from it, so the walk's commits lived only in local refs.
+  <code>backup/&lt;ref name&gt;</code> now holds each of them, including <code>8289e1d</code>.</p>
+  <p><strong>3. Four walk worktrees removed, four local branches deleted</strong>, each tree's tip already
+  held by its backup ref. Registered worktree entries went <code>8 -&gt; 4</code>, directories
+  <code>7 -&gt; 3</code>, and the primary checkout is clean on <code>master</code>.</p>
+  <p><strong>4. PR 12 was not touched.</strong> It reads <code>DECLINED</code> at <code>version 12</code>
+  with head <code>6c2f7f2</code>, and every call against it in this pass was a GET. The branch that PR
+  came from was one of the local refs deleted here; its head commit survives under a backup ref.</p>
+</div>
+
+<h2>1. Step 1 - the merged origin branch, and the gate that refused the delete</h2>
+
+<p>The target was <code>origin/wtgui/run-rung-4-live-walk-on-fixed-driver-ba8871</code> at
+<code>a89a4d1a</code>, merged by PR 697 in an earlier landing. The two checks the brief ordered, run in
+this order:</p>
+
+<table>
+  <thead><tr><th>Check</th><th>Read</th><th>Verdict</th></tr></thead>
+  <tbody>
+    <tr><td><code>gh pr view 697</code></td>
+        <td><code>state MERGED</code>, head <code>wtgui/run-rung-4-live-walk-on-fixed-driver-ba8871</code>,
+            headOid <code>a89a4d1a</code>, mergeCommit <code>ae05489a</code>, base <code>main</code></td>
+        <td class="ok">passes</td></tr>
+    <tr><td><code>git merge-base --is-ancestor a89a4d1a origin/main</code></td>
+        <td>exit 1; <code>origin/main</code> = <code>8c2ae2673d6d2494e8179f24d673c000277577d1</code></td>
+        <td class="bad">fails</td></tr>
+  </tbody>
+</table>
+
+<p>Why it fails, and why that is not a loss:</p>
+
+<pre>ae05489a3a1247607720dc0c7d3624ce10facfe7 58e1b5a63c8bc394fc6871385d78e14383f97ee6   &lt;- one parent: a rebase, not a merge
+docs: say what the record can prove about the deleted source branch
+
+a89a4d1a^{tree} = dae87a6d230acb8ca5c5c514ca43adc47c39ad2f
+ae05489a^{tree} = dae87a6d230acb8ca5c5c514ca43adc47c39ad2f   &lt;- identical content
+
+rewritten on main:  ae05489a &lt;- a89a4d1a
+                    b139af60 &lt;- 55e851e9   (chore: 1.81.3)
+                    58e1b5a6 &lt;- c23115d8   (docs: name lib/project.js)
+                    1cd1d1b5 &lt;- b956a25f   (docs: record the rung 4 walk resumed)</pre>
+
+<p><span class="bad">Action taken: none.</span> The branch is still on origin:
+<code>git ls-remote origin refs/heads/wtgui/run-rung-4-live-walk-on-fixed-driver-ba8871</code> answers
+<code>a89a4d1a169baf827c53f753ac2a80e810d4d704</code>. Deleting it needs either a decision from the
+reader or a gate that accepts a rebase landing, which is proved by the pair above - the PR went MERGED
+at exactly this head, its merge commit is an ancestor of main, and the head's tree equals the merge
+commit's tree. An ancestry test alone can never pass after <code>land:pr</code>, because that tool
+rebases.</p>
+
+<div class="box note">
+  <p style="margin-top:0"><strong>What this pass did instead.</strong> The push at the end of this run
+  fast-forwards that same origin branch to this branch's new head, so the ref is not stale after today.
+  The old tip stays reachable and no force-push was used.</p>
+</div>
+
+<h2>2. Step 2 - pictureviewer inventory, and the backups</h2>
+
+<p>Measured before anything was removed. The remote first, because "unpushed" is only provable against
+it:</p>
+
+<pre>git ls-remote --heads origin
+1af26850580c02f253a37cfaf9a7dc461db0afc4  refs/heads/20261021_0005_DMR-39015_pictureViewerSso
+bb12884c260fee7ea164f247a3aefd98047147b8  refs/heads/master          &lt;- two heads, no walk branch
+
+git worktree list            -&gt; 8 entries (primary + 7)
+git for-each-ref refs/heads  -&gt; 7 refs matching wtgui/ or RUNG-4</pre>
+
+<p>Reachability was tested per ref against every pushed ref (<code>git for-each-ref --contains
+&lt;sha&gt; refs/remotes/origin refs/tags</code>). Six of the seven hold commits reachable from nothing
+pushed:</p>
+
+<table>
+  <thead><tr><th>Local ref</th><th>Tip</th><th>Ahead of origin/master</th><th>On a pushed ref?</th><th>Backup ref created</th></tr></thead>
+  <tbody>
+    <tr><td><code>20261110_0006_RUNG-4_live_comment_loop</code></td><td class="n">2a31380</td><td class="n">7</td><td class="bad">no</td><td><code>backup/20261110_0006_RUNG-4_live_comment_loop</code></td></tr>
+    <tr><td><code>20261110_1830_RUNG-4_fixed_driver_walk</code></td><td class="n">6f43d07</td><td class="n">5</td><td class="bad">no</td><td><code>backup/20261110_1830_RUNG-4_fixed_driver_walk</code></td></tr>
+    <tr><td><code>20261110_1840_RUNG-4_live_comment_loop_and_decline</code></td><td class="n">b90bf60</td><td class="n">1</td><td class="bad">no</td><td><code>backup/20261110_1840_RUNG-4_live_comment_loop_and_decline</code></td></tr>
+    <tr><td><code>wtgui/inventory-every-piece-of-confluence-942947</code></td><td class="n">bb12884</td><td class="n">0</td><td class="ok">yes, origin/master</td><td class="dim">none needed</td></tr>
+    <tr><td><code>wtgui/pictureviewer-docs-inventory-942947</code></td><td class="n">7bde2f4</td><td class="n">6</td><td class="bad">no</td><td><code>backup/wtgui/pictureviewer-docs-inventory-942947</code></td></tr>
+    <tr><td><code>wtgui/rung-4-live-the-comment-loop-and-the-73f744</code></td><td class="n">6c2f7f2</td><td class="n">11</td><td class="bad">no</td><td><code>backup/wtgui/rung-4-live-the-comment-loop-and-the-73f744</code></td></tr>
+    <tr><td><code>wtgui/rung-4-live-the-comment-loop-and-the-stage-4-wait-for-the-reviewer-70c5ac</code></td><td class="n">8289e1d</td><td class="n">12</td><td class="bad">no</td><td><code>backup/wtgui/rung-4-live-the-comment-loop-and-the-stage-4-wait-for-the-reviewer-70c5ac</code></td></tr>
+  </tbody>
+</table>
+
+<p>Each backup was created with <code>git update-ref refs/heads/&lt;backup name&gt; &lt;tip&gt;</code>
+and re-read afterwards: every one resolves to the tip it copied, and every one still tests as
+unreachable from any pushed ref - the copy is the only ref holding it. Two of them overlap in ancestry
+by design: <code>8289e1d</code>'s parent is <code>6c2f7f2</code>, so the wait tree's backup already
+contains the <code>73f744</code> tip, and <code>6c2f7f2</code> is also PR 12's own head.</p>
+
+<p>The six pre-existing <code>backup/pre-delete-*</code>, <code>backup/wtgui-*</code> and
+<code>backup/pv-pre-squash-*</code> refs were read and left alone.</p>
+
+<h2>3. Step 3 - the four walk worktrees removed, their refs deleted</h2>
+
+<p>Removal precondition checked first, because this repo's trees sometimes carry junctions:
+<code>Get-ChildItem -Recurse -Force | Where-Object { $_.Attributes -match 'ReparsePoint' }</code> over
+<code>.worktrees</code> returned nothing, so <code>git worktree remove --force</code> had no link to
+recurse through into the primary checkout. Each tree's tip was already held by its backup ref before
+its removal, so the delete after it could not lose a commit.</p>
+
+<table>
+  <thead><tr><th>Worktree (under .worktrees/)</th><th>Branch</th><th>HEAD</th><th>Backup at that tip</th><th>Removed</th><th>Branch ref</th></tr></thead>
+  <tbody>
+    <tr><td><code>rung-4-fixed-driver-5d4d8fd2</code></td><td><code>20261110_1830_RUNG-4_fixed_driver_walk</code></td><td class="n">6f43d07</td><td class="ok">6f43d07</td><td class="ok">yes</td><td class="ok">gone</td></tr>
+    <tr><td><code>rung-4-live-the-comment-loop-and-the-73f744</code></td><td><code>wtgui/rung-4-live-the-comment-loop-and-the-73f744</code></td><td class="n">6c2f7f2</td><td class="ok">6c2f7f2</td><td class="ok">yes</td><td class="ok">gone</td></tr>
+    <tr><td><code>rung-4-live-the-comment-loop-and-the-stage-1-name-the-branch-774046</code></td><td><code>20261110_1840_RUNG-4_live_comment_loop_and_decline</code></td><td class="n">b90bf60</td><td class="ok">b90bf60</td><td class="ok">yes</td><td class="ok">gone</td></tr>
+    <tr><td><code>rung-4-live-the-comment-loop-and-the-stage-4-wait-for-the-reviewer-70c5ac</code></td><td><code>wtgui/rung-4-live-the-comment-loop-and-the-stage-4-wait-for-the-reviewer-70c5ac</code></td><td class="n">8289e1d</td><td class="ok">8289e1d</td><td class="ok">yes</td><td class="ok">gone</td></tr>
+  </tbody>
+</table>
+
+<p>Two of those trees were not clean, and <code>--force</code> would have destroyed what they held, so
+the untracked files were copied out first:</p>
+
+<ul>
+  <li><code>rung-4-fixed-driver-5d4d8fd2/mergepost.json</code> (455 bytes) -&gt;
+      <code>Temp/wag/7181e6aa/walk-artifacts/rung-4-fixed-driver-5d4d8fd2__mergepost.json</code></li>
+  <li><code>rung-4-live-the-comment-loop-and-the-73f744/refs-cleanup-report.html</code> (7975 bytes) -&gt;
+      <code>Temp/wag/7181e6aa/walk-artifacts/rung-4-live-the-comment-loop-and-the-73f744__refs-cleanup-report.html</code></li>
+</ul>
+
+<pre>before: entries 8   directories 7
+after : entries 4   directories 3
+
+git worktree list
+pictureviewer                                                            bb12884 [master]
+.worktrees/consolidate-the-oauth2-multi-integration-b694ea               47dcb74 [20261110_1200_DMR-44711_oauth2MultiIntegration]
+.worktrees/inventory-every-piece-of-confluence-942947                    7bde2f4 [wtgui/pictureviewer-docs-inventory-942947]
+.worktrees/pr7-carry-the-spec                                            1af2685 [20261021_0005_DMR-39015_pictureViewerSso]
+
+git -C pictureviewer status --porcelain
+?? .worktrees/          &lt;- the tree directory itself, the standing line; no modified or staged file</pre>
+
+<p>The three survivors are the trees this brief did not name: an oauth2 consolidation, a docs inventory,
+and the PR 7 spec tree. None of them is a rung 4 walk tree, so none was touched.</p>
+
+<h2>4. Step 4 - PR 12, left exactly as it was</h2>
+
+<div class="kv">
+  <div>Repository</div><div>IT/pictureviewer on <code>git.sefl.com</code></div>
+  <div>State</div><div><span class="bad">DECLINED</span>, <code>version 12</code></div>
+  <div>Title</div><div><code>Java Code Review for PictureViewer 20261110_1840_RUNG-4_live_comment_loop_and_decline</code></div>
+  <div>Head</div><div><code>20261110_1840_RUNG-4_live_comment_loop_and_decline</code> at <code>6c2f7f2</code></div>
+  <div>Closed</div><div>2026-11-10 21:49:09 EST (2026-11-11T02:49:09Z), author Roper, Jacob</div>
+  <div>Calls made</div><div>one <code>GET /pull-requests/12</code>. No decline, comment, rescope, merge or reopen.</div>
+</div>
+
+<p>Its source branch is gone from origin (it was deleted during the earlier walk cleanup), and the local
+branch of that name was deleted in step 3 - but the commit the PR's head points at,
+<code>6c2f7f2</code>, is preserved by
+<code>backup/wtgui/rung-4-live-the-comment-loop-and-the-73f744</code>, so the declined PR still has a
+readable head in this clone.</p>
+
+<h2>5. Step 5 - what was removed, what was backed up, what remains</h2>
+
+<h3>Removed</h3>
+<p>Four registered worktrees and their four local branch refs, listed in section 3. Nothing else: no
+file outside those trees, no branch on origin, no other project's tree, no process stopped, no panel
+restarted.</p>
+
+<h3>Backed up</h3>
+<table>
+  <thead><tr><th>Backup ref</th><th>Tip</th><th>Contains</th></tr></thead>
+  <tbody>
+    <tr><td><code>backup/20261110_0006_RUNG-4_live_comment_loop</code></td><td class="n">2a31380</td><td>the first comment-loop walk, 7 commits</td></tr>
+    <tr><td><code>backup/20261110_1830_RUNG-4_fixed_driver_walk</code></td><td class="n">6f43d07</td><td>the fixed-driver walk, 5 commits</td></tr>
+    <tr><td><code>backup/20261110_1840_RUNG-4_live_comment_loop_and_decline</code></td><td class="n">b90bf60</td><td>the branch-naming stage, 1 commit</td></tr>
+    <tr><td><code>backup/wtgui/pictureviewer-docs-inventory-942947</code></td><td class="n">7bde2f4</td><td>the docs inventory branch, 6 commits (tree kept, ref kept)</td></tr>
+    <tr><td><code>backup/wtgui/rung-4-live-the-comment-loop-and-the-73f744</code></td><td class="n">6c2f7f2</td><td>the decline round, 11 commits, PR 12's head</td></tr>
+    <tr><td><code>backup/wtgui/rung-4-live-the-comment-loop-and-the-stage-4-wait-for-the-reviewer-70c5ac</code></td><td class="n">8289e1d</td><td>the wait-stage record, 12 commits, contains the 73f744 tip</td></tr>
+  </tbody>
+</table>
+
+<h3>Remains</h3>
+<ul>
+  <li><strong>This worktree and its branch</strong>:
+      <code>agent-worktree-gui/.worktrees/run-the-rung-4-live-walk-on-the-fixed-ba8871</code> on
+      <code>wtgui/run-rung-4-live-walk-on-fixed-driver-ba8871</code>. It is the landing branch for this
+      record, so it is retired by the panel's own release, not here.</li>
+  <li><strong>The origin branch of the same name</strong>, still at <code>a89a4d1a</code> until this
+      run's push fast-forwards it (section 1).</li>
+  <li><strong>Three pictureviewer worktrees</strong> that are not walk trees, named in section 3.</li>
+  <li><strong>PR 12</strong>, DECLINED at version 12, untouched (section 4).</li>
+  <li><strong>Panel 7453</strong>: still running. PID <code>29316</code>, <code>node server.js</code>,
+      started 18:22:20, listening on <code>127.0.0.1:7453</code>, cwd in this worktree; its own store
+      (<code>Temp/wag/5d4d8fd2/walk/logs/jobs.json</code>) holds 14 jobs, all terminal (12 done, 1
+      failed, 1 cancelled), zero live. It is idle and was not stopped or restarted.</li>
+  <li><strong>The two open defects</strong> the walk left in the panel's own list, D2 (<code>prFor</code>
+      drops a DECLINED PR, so the stage timer answers "no pull request" and backs off) and D1 (the wake
+      hands the next stage the wait stage's tree and thread, so its failure is stamped on the wait
+      entry). Neither was in this brief and neither was touched.</li>
+</ul>
+
+<div class="box good">
+  <p style="margin-top:0"><strong>Done and proved:</strong> six backups at the exact tips that were
+  unpushed, four trees removed and four refs deleted, worktree entries 8 -&gt; 4, directories 7 -&gt; 3,
+  primary clean on master, PR 12 read-only and still DECLINED. <strong>Blocked:</strong> the origin
+  branch delete, by the ancestry gate in section 1. <strong>Pending:</strong> this worktree's own
+  release, by the panel.</p>
+</div>
+
+<footer>
+  Evidence: <code>gh pr view 697 --json state,headRefOid,mergeCommit</code>;
+  <code>git merge-base --is-ancestor</code>, <code>git rev-parse --short</code> and
+  <code>git ls-remote --heads origin</code> in pictureviewer;
+  <code>GET git.sefl.com/rest/api/1.0/projects/IT/repos/pictureviewer/pull-requests/12</code>;
+  <code>git worktree list</code> and <code>git status --porcelain</code> before and after;
+  <code>git for-each-ref --contains</code> per local ref;
+  <code>GET 127.0.0.1:7331/api/remote-write/allow-push</code> (permission: allow);
+  the walk panel's <code>Temp/wag/5d4d8fd2/walk/panel.json</code> and <code>logs/jobs.json</code>;
+  the copied walk artifacts under <code>Temp/wag/7181e6aa/walk-artifacts/</code>.
+</footer>
+
+</main>
+</body>
+</html>
