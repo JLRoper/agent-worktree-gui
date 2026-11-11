@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
+<title>The worktree board, swept - 27 landed trees and 37 empty directories removed, 31 trees kept</title>
+<style>
+  :root{ color-scheme:dark; --ink:#e8e6e1; --paper:#14161a; --rule:#2a2f38; --muted:#9aa3ad; --accent:#c8a6ff; --warn:#e5534b; --sunk:#1a1d22; }
+  html,body{ margin:0; background:var(--paper); color:var(--ink); font:15px/1.55 -apple-system,Segoe UI,Helvetica,Arial,sans-serif; }
+  main{ max-width:1080px; margin:0 auto; padding:36px 28px 80px; }
+  h1{ font-size:26px; margin:0 0 4px; letter-spacing:-.01em; }
+  h2{ font-size:19px; margin:38px 0 10px; padding-bottom:6px; border-bottom:1px solid var(--rule); }
+  h3{ font-size:16px; margin:24px 0 8px; }
+  .sub{ color:var(--muted); margin:0 0 22px; }
+  .prov{ color:var(--ink); margin:0 0 14px; }
+  .prov b{ color:var(--accent); }
+  .cards{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin:18px 0 6px; }
+  .card{ border:1px solid var(--rule); border-radius:10px; padding:12px 14px; }
+  .card b{ display:block; font-size:22px; letter-spacing:-.02em; }
+  .card span{ color:var(--muted); font-size:13px; }
+  table{ border-collapse:collapse; width:100%; font-size:13.5px; }
+  th,td{ text-align:left; padding:6px 8px; border-bottom:1px solid var(--rule); vertical-align:top; }
+  th{ color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+  td.n{ text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  code{ font:12.5px ui-monospace,Consolas,monospace; background:rgba(127,127,127,.12); padding:1px 5px; border-radius:4px; }
+  .note{ border-left:3px solid var(--accent); padding:6px 0 6px 12px; color:var(--muted); margin:14px 0; }
+  .note b{ color:var(--ink); }
+  ol,ul{ padding-left:22px; }
+  ol li, ul li{ margin:6px 0; }
+  .box{ border:1px solid var(--rule); border-radius:10px; padding:14px 16px; margin:20px 0 0; background:var(--sunk); }
+  .box h2{ margin:0 0 8px; border:0; padding:0; font-size:17px; }
+  .box p{ margin:8px 0 0; }
+  .box p.big{ font-size:18px; margin:2px 0 0; }
+  .verdict{ border-left:4px solid var(--accent); }
+  .wide{ overflow-x:auto; }
+  .wide table{ min-width:700px; }
+  .small{ font-size:12.5px; color:var(--muted); }
+  .ok{ color:#7ee2a8; }
+  .mono{ font:12.5px ui-monospace,Consolas,monospace; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>The worktree board, swept - 27 landed trees and 37 empty directories removed, 31 trees kept</h1>
+<p class="sub">Every removal below was decided by a fresh read of that tree at the moment of its deletion, never from a list written earlier in the run.</p>
+
+<p class="prov"><b>Measured</b> 2026-11-11 02:50 EST (07:50Z), in <code>.worktrees/clean-up-agent-worktree-gui-s-worktrees-196a28</code> at
+<code>8dcacee6</code>, against <code>origin/main</code> at <code>8dcacee6</code> (version 1.81.6, this branch claims 1.81.7).</p>
+
+<p class="prov"><b>The board went from 96 directories and 60 registered entries to 32 directories and 33 registered entries.</b>
+27 registered trees were clean and fully landed and were removed through the panel's own delete route; 37 directories git no longer
+registered were empty remnants and were removed after <code>git worktree prune</code>; 27 branches were deleted, each after its
+commits were proved to be in main by content; 31 trees were kept, and every one of them is named below with the number that kept it.
+No backup ref was needed: every deleted branch proved clean. Nothing was merged and no other repository was touched.</p>
+
+<div class="cards">
+  <div class="card"><b>96 -&gt; 32</b><span>directories under .worktrees</span></div>
+  <div class="card"><b>60 -&gt; 33</b><span>registered worktrees (primary included)</span></div>
+  <div class="card"><b>27</b><span>registered trees removed</span></div>
+  <div class="card"><b>37</b><span>stale directories removed</span></div>
+  <div class="card"><b>27</b><span>branches deleted, 0 backups</span></div>
+  <div class="card"><b>31</b><span>trees kept, with reasons</span></div>
+  <div class="card"><b>0</b><span>refusals</span></div>
+  <div class="card"><b>2</b><span>open PRs protected their tree</span></div>
+</div>
+
+<h2>How the qualifying set was recomputed</h2>
+<p>For every directory under <code>.worktrees</code> that <code>git worktree list --porcelain</code> registers, the sweep re-read four
+facts at the moment of deletion, in this order, and stopped at the first that failed:</p>
+<ol>
+  <li><b>Is it live?</b> The tree's path against the live job set (<code>~/.wag/state/jobs.json</code> plus the running panel's
+  <code>/api/jobs</code>, statuses running, starting, waiting, waiting_for_approval, queued) and against an open PR on its branch.</li>
+  <li><b>Is it clean?</b> <code>git status --porcelain</code> in the tree, counted, not inspected. 7 trees failed at this check.</li>
+  <li><b>Is every commit's patch in main?</b> <code>git cherry origin/main HEAD</code>, plus lines counted. This is the authority that
+  survives a rebase landing, where the branch tip is never an ancestor of main.</li>
+  <li><b>Is the work landed?</b> <code>git rev-list --count origin/main..HEAD</code> above zero with no plus lines, or zero with the
+  tip contained in <code>origin/main</code>.</li>
+</ol>
+<div class="note"><b>One reading decision, stated so a reader can disagree with it.</b> The brief qualifies a tree on
+"count above zero, or MERGED per its PR with content on main". A tree whose branch sits at <b>zero commits ahead</b> of
+<code>origin/main</code> satisfies neither leg literally, but it also holds nothing that could be unlanded: its tip is contained in
+<code>origin/main</code>, so every object it names is already on main, and <code>git cherry</code> prints nothing at all. 11 of the 27
+removed trees had a MERGED PR on their branch, 4 of them merging exactly the head the tree still carried; the other 16 had no PR at
+all and were cut trees that produced no commit, still standing at their cut point.
+All 27 were counted as landed by containment, which is the only leg that applies to them, and the evidence column of the removed
+table says so per row. Nothing with a commit main does not carry was removed, and nothing dirty was removed.</div>
+<p>Two trees were held because their PR is <b>OPEN</b> (#468, #462) even though they are clean, and one was held because one of its
+commits has an added line absent from main while its PR is <b>CLOSED</b> rather than MERGED (#607). Both readings come from
+<code>gh pr list --state all</code> for the clone, 400 rows: 389 MERGED, 9 CLOSED, 2 OPEN.</p>
+
+<h2>Removed - 27 registered trees</h2>
+<div class="wide">
+<table>
+<thead><tr><th>Tree</th><th>Branch</th><th>HEAD</th><th class="n">ahead</th><th>Evidence it was landed</th></tr></thead>
+<tbody>
+<tr><td class='mono'>add-dash-formatting-rule-to-assistants-480c5b</td><td class='mono'>wtgui/add-dash-formatting-rule-to-assistants-480c5b</td><td class='mono'>59cda086d3</td><td class='n'>0</td><td>ahead=0, HEAD contained in origin/main</td></tr>
+<tr><td class='mono'>backfill-two-untagged-releases-with-tags-7907e8</td><td class='mono'>wtgui/backfill-two-untagged-releases-with-tags-7907e8</td><td class='mono'>cbfcb0609a</td><td class='n'>0</td><td>ahead=0, HEAD contained in origin/main</td></tr>
+<tr><td class='mono'>convert-built-in-ladder-pipelines-to-pdl-f76189</td><td class='mono'>wtgui/convert-built-in-ladder-pipelines-to-pdl-f76189</td><td class='mono'>91752da4e7</td><td class='n'>0</td><td>ahead=0, HEAD contained in origin/main</td></tr>
+<tr><td class='mono'>give-every-worker-the-project-s-rules-c22489</td><td class='mono'>wtgui/give-every-worker-the-project-s-rules-c22489</td><td class='mono'>4046b75b8f</td><td class='n'>0</td><td>ahead=0, HEAD contained in origin/main</td></tr>
+<tr><td class='mono'>hold-pr-calls-back-when-a-host-does-not-answer</td><td class='mono'>wtgui/hold-pr-calls-back-when-a-host-does-not-answer</td><td class='mono'>f2bbaec6c1</td><td class='n'>0</td><td>ahead=0, HEAD contained in origin/main</td></tr>
+<tr><td class='mono'>host-hold-everywhere-and-a-restart-helper-that-survives</td><td class='mono'>wtgui/host-hold-everywhere-and-a-restart-helper-that-survives</td><td class='mono'>2bb2c65561</td><td class='n'>0</td><td>ahead=0, HEAD contained in origin/main</td></tr>
+<tr><td class='mono'>make-the-role-tab-s-top-line-look-like-0c9087</td><td class='mono'>wtgui/make-the-role-tab-s-top-line-look-like-0c9087</td><td class='mono'>4829d3cf75</td><td class='n'>0</td><td>ahead=0, HEAD contained in origin/main</td></tr>
+<tr><td class='mono'>matrix-bridge-acks-then-errors-239002</td><td class='mono'>wtgui/matrix-bridge-acks-then-errors-239002</td><td class='mono'>91752da4e7</td><td class='n'>0</td><td>ahead=0, HEAD contained in origin/main</td></tr>
+<tr><td class='mono'>move-v1-53-6-tag-onto-merge-commit-7ff0b-08e22a</td><td class='mono'>wtgui/move-v1-53-6-tag-onto-merge-commit-7ff0b-08e22a</td><td class='mono'>91752da4e7</td><td class='n'>0</td><td>ahead=0, HEAD contained in origin/main</td></tr>
+<tr><td class='mono'>poll-assistant-3-queue-for-issue-62-d3cbfa</td><td class='mono'>wtgui/poll-assistant-3-queue-for-issue-62-d3cbfa</td><td class='mono'>23fbe1974b</td><td class='n'>0</td><td>ahead=0, HEAD contained in origin/main</td></tr>
+<tr><td class='mono'>rebuild-the-role-tab-as-a-readable-role-83de6f</td><td class='mono'>wtgui/rebuild-the-role-tab-as-a-readable-role-83de6f</td><td class='mono'>9e6c109f14</td><td class='n'>0</td><td>ahead=0, HEAD contained in origin/main</td></tr>
+<tr><td class='mono'>recover-and-land-the-card-work-do-not-277922</td><td class='mono'>wtgui/recover-and-land-the-card-work-do-not-277922</td><td class='mono'>f6a2ab87fe</td><td class='n'>0</td><td>ahead=0, HEAD contained in origin/main</td></tr>
+<tr><td class='mono'>render-the-changelog-at-main-s-tip-and-01c2b5</td><td class='mono'>wtgui/render-the-changelog-at-main-s-tip-and-01c2b5</td><td class='mono'>bd27dc4919</td><td class='n'>0</td><td>ahead=0, HEAD contained in origin/main</td></tr>
+<tr><td class='mono'>repair-four-version-tag-anchors-53704c</td><td class='mono'>wtgui/repair-four-version-tag-anchors-53704c</td><td class='mono'>33f1090126</td><td class='n'>0</td><td>ahead=0, HEAD contained in origin/main</td></tr>
+<tr><td class='mono'>repair-wrong-commit-version-tags-and-327d24</td><td class='mono'>wtgui/repair-wrong-commit-version-tags-and-327d24</td><td class='mono'>7cadccc996</td><td class='n'>0</td><td>ahead=0, HEAD contained in origin/main</td></tr>
+<tr><td class='mono'>resume-matrix-bridge-ack-then-error-fix-9af3bb</td><td class='mono'>wtgui/resume-matrix-bridge-ack-then-error-fix-9af3bb</td><td class='mono'>e4e4be31fb</td><td class='n'>0</td><td>ahead=0, HEAD contained in origin/main</td></tr>
+<tr><td class='mono'>retire-agent-manager-role-and-re-point-09ea25</td><td class='mono'>wtgui/retire-the-agent-manager-role-09ea25</td><td class='mono'>fbd6951380</td><td class='n'>0</td><td>ahead=0, HEAD contained in origin/main</td></tr>
+<tr><td class='mono'>retire-agent-manager-role-and-re-point-125605</td><td class='mono'>wtgui/retire-agent-manager-role-and-re-point-125605</td><td class='mono'>d1a9165d55</td><td class='n'>0</td><td>ahead=0, HEAD contained in origin/main</td></tr>
+<tr><td class='mono'>rewrite-tl-dr-reply-shape-sentence-in-b5de40</td><td class='mono'>wtgui/rewrite-tl-dr-reply-shape-sentence-in-b5de40</td><td class='mono'>de0ba1e7af</td><td class='n'>0</td><td>ahead=0, HEAD contained in origin/main</td></tr>
+<tr><td class='mono'>round-a-the-parent-tree-note-3a3008</td><td class='mono'>wtgui/round-a-the-parent-tree-note-3a3008</td><td class='mono'>fe2d4fd10f</td><td class='n'>0</td><td>ahead=0, HEAD contained in origin/main</td></tr>
+<tr><td class='mono'>run-two-of-two-the-remainder-of-the-e17eb6</td><td class='mono'>wtgui/run-two-of-two-the-remainder-of-the-e17eb6</td><td class='mono'>985a84b888</td><td class='n'>0</td><td>ahead=0, HEAD contained in origin/main</td></tr>
+<tr><td class='mono'>step-3-of-the-order-of-w-281774</td><td class='mono'>wtgui/step-3-of-the-order-of-w-281774</td><td class='mono'>3032b398b5</td><td class='n'>0</td><td>ahead=0, HEAD contained in origin/main</td></tr>
+<tr><td class='mono'>stop-blocking-the-loop-on-kills-and-writes</td><td class='mono'>wtgui/stop-blocking-the-loop-on-kills-and-writes</td><td class='mono'>d2f8b3d3b0</td><td class='n'>0</td><td>ahead=0, HEAD contained in origin/main</td></tr>
+<tr><td class='mono'>tag-v1-58-0-on-commit-7294f36-9d6509</td><td class='mono'>wtgui/tag-v1-58-0-on-commit-7294f36-9d6509</td><td class='mono'>cbfcb0609a</td><td class='n'>0</td><td>ahead=0, HEAD contained in origin/main</td></tr>
+<tr><td class='mono'>token-cache-report-and-model-price</td><td class='mono'>wtgui/token-cache-report-and-model-price</td><td class='mono'>bbd31fe6c6</td><td class='n'>0</td><td>ahead=0, HEAD contained in origin/main</td></tr>
+<tr><td class='mono'>write-and-land-docs-design-prompt-tiers-6731dd</td><td class='mono'>wtgui/write-and-land-docs-design-prompt-tiers-6731dd</td><td class='mono'>d8833cd65c</td><td class='n'>0</td><td>ahead=0, HEAD contained in origin/main</td></tr>
+<tr><td class='mono'>write-one-self-contained-dark-html-page-198a82</td><td class='mono'>wtgui/panel-overview-persistence-wording-7c1e4a</td><td class='mono'>5be8c3c27b</td><td class='n'>0</td><td>ahead=0, HEAD contained in origin/main</td></tr>
+</tbody>
+</table>
+</div>
+<p class="small">Each removal went through <code>POST /api/worktree/delete</code>, which unlinks every directory link inside the tree first
+(a plain <code>git worktree remove</code> recurses through a <code>node_modules</code> junction and empties the primary checkout's own
+dependencies), sends the folder to the Recycle Bin, then re-reads <code>git worktree list</code> as the arbiter.
+All 27 answered <code>status=200 ok=true</code> with the path absent from the list afterwards, in 5 to 15 seconds each (213 s of worker
+time, about a minute of wall clock across four concurrent workers).</p>
+
+<h2>Kept - 31 trees, with the number that decided it</h2>
+<div class="wide">
+<table>
+<thead><tr><th>Tree</th><th>Branch</th><th>HEAD</th><th>Reason and the number</th></tr></thead>
+<tbody>
+<tr><td class='mono'>add-generic-gui-pipeline-to-bundle-4c4680</td><td class='mono'>wtgui/add-generic-gui-pipeline-to-bundle-4c4680</td><td class='mono'>c3dd589ca9</td><td>1 dirty path(s)</td></tr>
+<tr><td class='mono'>add-per-project-landing-rules-the-carry-4cc45c</td><td class='mono'>wtgui/add-per-project-landing-rules-the-carry-4cc45c</td><td class='mono'>4829d3cf75</td><td>7 dirty path(s)</td></tr>
+<tr><td class='mono'>async-pipeline-driver-refactor</td><td class='mono'>wtgui/async-pipeline-driver-refactor</td><td class='mono'>b7394d4ce8</td><td>22 dirty path(s)</td></tr>
+<tr><td class='mono'>deep-dive-why-some-assis-e8cb2e</td><td class='mono'>wtgui/deep-dive-why-some-assis-e8cb2e</td><td class='mono'>bdf198b67b</td><td>open PR #468</td></tr>
+<tr><td class='mono'>fix-the-refusal-that-parked-52-6974b3</td><td class='mono'>wtgui/fix-the-refusal-that-parked-52-6974b3</td><td class='mono'>b79711377b</td><td>3 dirty path(s)</td></tr>
+<tr><td class='mono'>github-landing-sanity-0bbdd3</td><td class='mono'>wtgui/github-landing-sanity-0bbdd3</td><td class='mono'>de5f30cf65</td><td>2 commit(s) with no patch in origin/main</td></tr>
+<tr><td class='mono'>local-pipeline-walk-author-review-revise-stage-1-author-da66f8</td><td class='mono'>wtgui/local-pipeline-walk-author-review-revise-stage-1-author-da66f8</td><td class='mono'>f5f9f87490</td><td>2 commit(s) with no patch in origin/main</td></tr>
+<tr><td class='mono'>local-pipeline-walk-author-review-revise-stage-2-review-29f215</td><td class='mono'>wtgui/local-pipeline-walk-author-review-revise-stage-2-review-29f215</td><td class='mono'>ae3d444e68</td><td>2 commit(s) with no patch in origin/main</td></tr>
+<tr><td class='mono'>local-pipeline-walk-author-review-revise-stage-3-revise-9e5bdc</td><td class='mono'>wtgui/local-pipeline-walk-author-review-revise-stage-3-revise-9e5bdc</td><td class='mono'>c0644290ed</td><td>1 commit(s) with no patch in origin/main</td></tr>
+<tr><td class='mono'>make-optym-integration-m-b580a2</td><td class='mono'>wtgui/make-optym-integration-m-b580a2</td><td class='mono'>ea15bb1de2</td><td>open PR #462</td></tr>
+<tr><td class='mono'>make-the-turnover-branch-a-first-class-df6ca4</td><td class='mono'>wtgui/make-the-turnover-branch-a-first-class-df6ca4</td><td class='mono'>ae6888caa4</td><td>1 commit(s) with no patch in origin/main</td></tr>
+<tr><td class='mono'>read-docs-reports-gui-improve-experience-28a3ec</td><td class='mono'>wtgui/read-docs-reports-gui-improve-experience-28a3ec</td><td class='mono'>12307d9c92</td><td>1 commit(s) with no patch in origin/main</td></tr>
+<tr><td class='mono'>read-the-settled-transcript-of-thread-31a9f8</td><td class='mono'>wtgui/read-the-settled-transcript-of-thread-31a9f8</td><td class='mono'>e670a95be2</td><td>1 commit(s) with no patch in origin/main</td></tr>
+<tr><td class='mono'>retry-settings-write-on-slow-panel-48eeb8</td><td class='mono'>wtgui/retry-settings-write-on-slow-panel-48eeb8</td><td class='mono'>b7394d4ce8</td><td>2 dirty path(s)</td></tr>
+<tr><td class='mono'>round-b-what-the-state-printer-says-01cc86</td><td class='mono'>wtgui/round-b-what-the-state-printer-says-01cc86</td><td class='mono'>6214af3165</td><td>2 commit(s) with no patch in origin/main</td></tr>
+<tr><td class='mono'>round-b-what-the-state-printer-says-stage-1-probe-112593</td><td class='mono'>wtgui/round-b-what-the-state-printer-says-stage-1-probe-112593</td><td class='mono'>d104dbf219</td><td>1 commit(s) with no patch in origin/main</td></tr>
+<tr><td class='mono'>round-b-what-the-state-printer-says-stage-2-conclude-530d9e</td><td class='mono'>wtgui/round-b-what-the-state-printer-says-stage-2-conclude-530d9e</td><td class='mono'>848cf12023</td><td>1 commit(s) with no patch in origin/main</td></tr>
+<tr><td class='mono'>round-c-how-a-round-names-its-trees-5b3b85</td><td class='mono'>wtgui/round-c-how-a-round-names-its-trees-5b3b85</td><td class='mono'>49442691e1</td><td>4 commit(s) with no patch in origin/main</td></tr>
+<tr><td class='mono'>round-c-how-a-round-names-its-trees-stage-2-conclude-7ace4b</td><td class='mono'>wtgui/rung-2-row-starts-in-its-tree</td><td class='mono'>0ca789b0fb</td><td>1 dirty path(s)</td></tr>
+<tr><td class='mono'>run-github-landing-sanity-test-write-0472b0</td><td class='mono'>wtgui/run-github-landing-sanity-test-write-0472b0</td><td class='mono'>b122608741</td><td>1 dirty path(s)</td></tr>
+<tr><td class='mono'>run-gui-improve-again-this-time-on-the-2ae88d</td><td class='mono'>wtgui/run-gui-improve-again-this-time-on-the-2ae88d</td><td class='mono'>38ef1d286e</td><td>2 commit(s) with no patch in origin/main</td></tr>
+<tr><td class='mono'>run-gui-improve-again-this-time-on-the-5ab4e1</td><td class='mono'>wtgui/run-gui-improve-again-this-time-on-the-5ab4e1</td><td class='mono'>da9f87a603</td><td>1 commit(s) with no patch in origin/main</td></tr>
+<tr><td class='mono'>run-row-70-exactly-as-written-local-only-19d782</td><td class='mono'>wtgui/run-row-70-exactly-as-written-local-only-19d782</td><td class='mono'>27f4de0672</td><td>5 commit(s) with no patch in origin/main</td></tr>
+<tr><td class='mono'>run-row-70-exactly-as-written-local-only-stage-1-draft-1de511</td><td class='mono'>wtgui/run-row-70-exactly-as-written-local-only-stage-1-draft-1de511</td><td class='mono'>5082d019e4</td><td>4 commit(s) with no patch in origin/main</td></tr>
+<tr><td class='mono'>run-row-70-exactly-as-written-local-only-stage-2-critique-59a317</td><td class='mono'>wtgui/run-row-70-exactly-as-written-local-only-stage-2-critique-59a317</td><td class='mono'>966b3f5b1d</td><td>2 commit(s) with no patch in origin/main</td></tr>
+<tr><td class='mono'>run-row-70-exactly-as-written-local-only-stage-2-critique-6635d7</td><td class='mono'>wtgui/run-row-70-exactly-as-written-local-only-stage-2-critique-6635d7</td><td class='mono'>9888b9bc14</td><td>1 commit(s) with no patch in origin/main</td></tr>
+<tr><td class='mono'>run-row-71-exactly-as-written-local-only-0cc905</td><td class='mono'>wtgui/run-row-71-exactly-as-written-local-only-0cc905</td><td class='mono'>608b0e024c</td><td>3 commit(s) with no patch in origin/main</td></tr>
+<tr><td class='mono'>the-implement-stage-of-the-unattached-61851d</td><td class='mono'>wtgui/the-implement-stage-of-the-unattached-61851d</td><td class='mono'>a0a7bc9ce9</td><td>2 commit(s) with no patch in origin/main</td></tr>
+<tr><td class='mono'>the-review-stage-of-the-unattached-fae8c5</td><td class='mono'>wtgui/the-review-stage-of-the-unattached-fae8c5</td><td class='mono'>5966b8557f</td><td>1 commit(s) with no patch in origin/main</td></tr>
+<tr><td class='mono'>write-the-draft-the-brief-asks-for-in-94df79</td><td class='mono'>wtgui/write-the-draft-the-brief-asks-for-in-94df79</td><td class='mono'>93febcc98d</td><td>6 commit(s) with no patch in origin/main</td></tr>
+<tr><td class='mono'>write-the-draft-the-brief-asks-for-in-970633</td><td class='mono'>wtgui/write-the-draft-the-brief-asks-for-in-970633</td><td class='mono'>9993308614</td><td>1 commit(s) with no patch in origin/main</td></tr>
+</tbody>
+</table>
+</div>
+<p class="small">The kept table names 31 of the 32 registered trees that remain; the 32nd is this run's own tree, which the sweep never considers.
+One kept tree is checked out on a branch that does not match its directory name
+(<code>round-c-how-a-round-names-its-trees-stage-2-conclude-7ace4b</code> is on <code>wtgui/rung-2-row-starts-in-its-tree</code>), which is why
+the branch column, not the directory, is the key for every PR read. The one removed tree in the same shape was
+<code>write-one-self-contained-dark-html-page-198a82</code>, which was on <code>wtgui/panel-overview-persistence-wording-7c1e4a</code>.</p>
+
+<h2>Stale directories - 37 found, 37 removed</h2>
+<p><code>git worktree list --porcelain</code> registered 59 trees under <code>.worktrees</code> against 96 directories, so 37 were
+unregistered. Each was read individually: <b>all 37 held zero entries</b> - no files, no <code>.git</code> file, nothing to salvage - so
+each was an empty remnant rather than a half-removed tree (the shape that holds only a <code>.git</code> file pointing at a missing admin
+directory: none here) and none held real work. They were removed with <code>rmdir</code>, which refuses a non-empty directory, then
+<code>git worktree prune</code>.</p>
+<p>Five of them answered <code>Device or resource busy</code> on the first pass. Those five were held by <b>30 processes</b> whose working
+directory was inside them, all started 2026-11-10 and none of them a job any longer: 3 stale <code>node server.js</code> test panels
+(one still listening on 127.0.0.1:7453, and one had burned 9.2 hours of CPU) and 26 processes of yesterday's <code>npm test</code> chains
+(9 bash, 4 cmd, 4 npm-cli, 9 node test workers), plus one <code>tail</code>. They were identified by <code>cwd_of.py</code> over every process
+id on the host, stopped with <code>Stop-Process</code>, and the five directories then came out with a plain <code>rmdir</code>.
+The reader's panel (pid 3716, <code>server.js</code> from the primary checkout, port 7331) was never in that set and answered
+<code>200</code> throughout. <code>git worktree prune -v</code> printed nothing, which is the expected answer: orphans have no admin entry
+to drop, so the <b>directory</b> count is the metric for this half (96 to 69, then to 32) and the registered-entry count only moves in
+the tree half.</p>
+<div class="wide">
+<table>
+<thead><tr><th>Stale directory (all empty)</th><th>What happened</th></tr></thead>
+<tbody>
+<tr><td class='mono'>a-queued-restart-entry-f-654253</td><td>empty remnant, removed</td></tr>
+<tr><td class='mono'>a-task-parked-on-a-quest-161de3</td><td>empty remnant, removed</td></tr>
+<tr><td class='mono'>build-the-attached-child-a01f01</td><td>empty remnant, removed</td></tr>
+<tr><td class='mono'>build-the-bridge-tab-bes-de52c0</td><td>empty remnant, removed</td></tr>
+<tr><td class='mono'>build-the-general-settin-5e8747</td><td>empty remnant, removed</td></tr>
+<tr><td class='mono'>build-the-header-bar-focus-mode-2f921e</td><td>empty remnant, holder processes stopped, removed</td></tr>
+<tr><td class='mono'>capture-the-pipeline-fea-ba1c90</td><td>empty remnant, removed</td></tr>
+<tr><td class='mono'>change-the-git-sefl-com-push-permission-374ae5</td><td>empty remnant, holder processes stopped, removed</td></tr>
+<tr><td class='mono'>close-the-two-defects-th-7aa07e</td><td>empty remnant, removed</td></tr>
+<tr><td class='mono'>every-row-on-this-projec-191460</td><td>empty remnant, removed</td></tr>
+<tr><td class='mono'>fix-focus-mode-so-a-live-turn-running-in-ccc8a1</td><td>empty remnant, holder processes stopped, removed</td></tr>
+<tr><td class='mono'>fix-the-assistant-chat-s-45d706</td><td>empty remnant, removed</td></tr>
+<tr><td class='mono'>give-every-pipeline-stage-its-own-ed8732</td><td>empty remnant, removed</td></tr>
+<tr><td class='mono'>implement-the-endpoint-t-7d8c3a</td><td>empty remnant, removed</td></tr>
+<tr><td class='mono'>land-the-fence-research-358d1a</td><td>empty remnant, removed</td></tr>
+<tr><td class='mono'>let-the-reset-route-sett-e16584</td><td>empty remnant, removed</td></tr>
+<tr><td class='mono'>make-a-pipeline-row-s-liveness-read-the-00bd55</td><td>empty remnant, removed</td></tr>
+<tr><td class='mono'>make-settings-updates-sh-270715</td><td>empty remnant, removed</td></tr>
+<tr><td class='mono'>make-the-panel-refuse-a-9cf58e</td><td>empty remnant, removed</td></tr>
+<tr><td class='mono'>modernise-one-section-th-5e9a08</td><td>empty remnant, removed</td></tr>
+<tr><td class='mono'>on-main-there-is-no-cach-462a35</td><td>empty remnant, removed</td></tr>
+<tr><td class='mono'>put-the-assistant-message-origin-on-the-05fe2a</td><td>empty remnant, removed</td></tr>
+<tr><td class='mono'>read-docs-reviews-ping-pong-round-6-2026-981560</td><td>empty remnant, removed</td></tr>
+<tr><td class='mono'>read-only-backend-perf-a-c32ca9</td><td>empty remnant, removed</td></tr>
+<tr><td class='mono'>repair-the-stale-assertion-in-test-merge-c688fa</td><td>empty remnant, removed</td></tr>
+<tr><td class='mono'>rung-7-one-stage-round-the-assembly-9a5972</td><td>empty remnant, holder processes stopped, removed</td></tr>
+<tr><td class='mono'>run-the-rung-4-live-walk-on-the-fixed-ba8871</td><td>empty remnant, holder processes stopped, removed</td></tr>
+<tr><td class='mono'>step-1-of-the-order-of-w-b32e7b</td><td>empty remnant, removed</td></tr>
+<tr><td class='mono'>step-4-of-the-order-of-w-da938c</td><td>empty remnant, removed</td></tr>
+<tr><td class='mono'>step-5-of-the-order-of-work-in-docs-8fcab3</td><td>empty remnant, removed</td></tr>
+<tr><td class='mono'>step-9b-cut-the-wake-han-b61ec7</td><td>empty remnant, removed</td></tr>
+<tr><td class='mono'>stop-the-queue-idle-sweep-counting-a-9ad207</td><td>empty remnant, removed</td></tr>
+<tr><td class='mono'>stop-tools-land-mjs-writing-em-dashes-b9fbf8</td><td>empty remnant, removed</td></tr>
+<tr><td class='mono'>the-queue-sub-tab-does-n-9c2cdb</td><td>empty remnant, removed</td></tr>
+<tr><td class='mono'>the-watchdog-must-watch-0d5b71</td><td>empty remnant, removed</td></tr>
+<tr><td class='mono'>two-changes-in-the-workt-290300</td><td>empty remnant, removed</td></tr>
+<tr><td class='mono'>write-the-pipeline-skill-and-the-state-b18b14</td><td>empty remnant, removed</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>Branches - 27 deleted, none needed a backup</h2>
+<p>Each branch was proved landed by <b>content, not by ancestry</b> before <code>git branch -D</code>. All 27 removed trees sat at zero
+commits ahead of <code>origin/main</code> with a tip contained in it, so every commit each branch names is already in main and
+<code>git cherry origin/main &lt;tip&gt;</code> printed nothing to compare. The proof was re-read per branch at delete time; each delete was
+followed by <code>git rev-parse --verify --quiet refs/heads/&lt;branch&gt;</code>, which answered empty for all 27. Because no branch carried
+a commit that was not provable, <b>zero <code>backup/</code> refs were created</b>.</p>
+<p>Two trees had continued past the head their PR merged, and both were kept for it: <code>github-landing-sanity-0bbdd3</code> (PR #679
+merged <code>2b72e8e1</code>, then two further doc commits <code>a318d3f2</code> and <code>de5f30cf</code> whose ledger pages are absent from
+main) and <code>round-c-how-a-round-names-its-trees-5b3b85</code> (PR #691 merged <code>a8bc9e5a</code>, then four commits whose added lines
+are 143 of 1174 absent from main). Checking the added lines verbatim against <code>origin/main</code> is what separated those two from a
+landed rebase, and it is the test the two kept rows rest on.</p>
+<p class="small">The clone still carries 186 local <code>wtgui/*</code> branches. The sweep deleted only the 27 whose trees it removed; the
+rest belong to no worktree, most carry commits of their own, and the brief does not name them.</p>
+
+<h2>What was not done</h2>
+<ul>
+  <li>No other repository was touched. The only worktrees read or changed are under this repo's <code>.worktrees</code>.</li>
+  <li>The panel was not restarted: the process serving port 7331 kept answering throughout, and only the stale tree-held processes listed above were stopped.</li>
+  <li>Nothing was merged. No worktree was forced: no <code>--force</code> was passed to any removal, and no dirty tree was touched.</li>
+  <li>The primary checkout was never a candidate. Its <code>git status --porcelain</code> carries only <code>?? .worktrees/</code>, which is the tree directory itself, not uncommitted work.</li>
+</ul>
+
+<div class="box verdict">
+<h2>The answer</h2>
+<p class="big">96 directories and 60 registered entries became 32 directories and 33 registered entries.</p>
+<p>27 landed, clean trees and 37 empty stale directories are gone, with their 27 branches. 31 trees stay, and each one stays for a
+reason that has a number: a dirty working tree (7), an open PR (2), commits whose patches are not in main (22 trees, 46 commits
+between them). The 32nd registered tree is the one this report was written in, and the sweep never considers it.</p>
+</div>
+
+<p class="small">Reproduce any row: the per-tree evidence was written to the sweep's own files and every number above is a count over them.
+The commands are the ones quoted in the method section, run against <code>origin/main</code> at <code>8dcacee6</code>.</p>
+
+</main>
+</body>
+</html>
