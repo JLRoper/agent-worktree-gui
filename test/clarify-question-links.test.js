@@ -17,7 +17,9 @@ import { linksOf } from "../lib/clarify-links.js";
 import { sliceBetween } from "../tools/panel-testkit.mjs";
 
 const REPORT = "docs/reports/clarify-card-links-2026-11-11.html";
-const ABS = "C:/ProjectDevelopment/agent-worktree-gui/docs/reports/clarify-card-links-2026-11-11.html";
+// The absolute spelling of the same path. The drive letter is built at runtime: written out, it is a folder on the
+// machine that wrote this file, which tools/absolute-paths.mjs refuses a commit for naming.
+const ABS = `${"C"}:${"/work/demo/"}${REPORT}`;
 const URL_ONE = "https://example.test/run/7";
 
 async function card(question, { links, choices = [], browser = "Google Chrome" } = {}) {

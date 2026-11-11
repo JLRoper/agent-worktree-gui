@@ -121,11 +121,11 @@ suppressed.</p>
 <h3>The click, end to end</h3>
 <pre><code>POST /api/open-file  {"path": "docs/reports/clarify-card-links-2026-11-11.html"}
 200  {"ok": true,
-     "path": "C:/Users/roper/AppData/Local/Temp/wtgui-links-.../repos/demo/docs/reports/clarify-card-links-2026-11-11.html",
+     "path": "&lt;sandbox&gt;/repos/demo/docs/reports/clarify-card-links-2026-11-11.html",
      "opener": "msedge.exe",
      "via": "default browser",
      "progId": "MSEdgeHTM",
-     "url": "file:///C:/Users/roper/AppData/Local/Temp/wtgui-links-.../repos/demo/docs/reports/clarify-card-links-2026-11-11.html"}</code></pre>
+     "url": "file:///&lt;sandbox&gt;/repos/demo/docs/reports/clarify-card-links-2026-11-11.html"}</code></pre>
 <p class="sub">That answer is from the gate's own click on the card's anchor
 (<code>npm run verify:clarify-card-links</code>, 23/23). The machine's registered browser took the file; nothing in the
 path names Chrome.</p>
@@ -135,7 +135,7 @@ path names Chrome.</p>
   <tr><td>one anchor per link, and no more</td><td>gate: a real card with a file and a URL</td><td class="ok">2 anchors</td></tr>
   <tr><td>the browser is named on the card</td><td>gate: the Links head against <code>GET /api/open-file</code></td><td class="ok">"file links open in Microsoft Edge"</td></tr>
   <tr><td>a bare path in the question text is a link</td><td>gate and <code>test/clarify-question-links.test.js</code></td><td class="ok">data-open-file on the path</td></tr>
-  <tr><td>outside every project is refused</td><td>gate: <code>C:/Windows/win.ini</code></td><td class="ok">403, with the reason</td></tr>
+  <tr><td>outside every project is refused</td><td>gate: a system file that no project holds</td><td class="ok">403, with the reason</td></tr>
   <tr><td>the normalizer's shapes</td><td><code>test/clarify-links.test.js</code></td><td class="ok">16 tests</td></tr>
 </table>
 

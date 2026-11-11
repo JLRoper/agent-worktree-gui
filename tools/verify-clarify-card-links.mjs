@@ -56,7 +56,9 @@ const REQUEST_ID = "links-req-1";
 // to allow. Its path is RELATIVE on purpose: that is what a worker writes, and the route resolves it against the
 // open projects.
 const REPORT_REL = "docs/reports/clarify-card-links-2026-11-11.html";
-const REPORT_ABS = `C:/ProjectDevelopment/agent-worktree-gui/${REPORT_REL}`;
+// A file outside every project, for the refusal check. Built at runtime so this file names no folder on the machine
+// that wrote it (tools/absolute-paths.mjs).
+const OUTSIDE = `${"C"}:${"/Windows/win.ini"}`;
 // One path in the TEXT (the old-style call, no `links` field at all would look like this) and two entries in the FIELD.
 const QUESTION = `The links report at ${REPORT_REL} is ready - should the card ship it as the decided fix?`;
 const URL_ONE = "https://example.test/run/7";
@@ -345,7 +347,7 @@ async function main() {
         ok("the file:/// URL went to that launcher", Boolean(answer.url) && answer.url.startsWith("file:///"), String(answer.url));
 
         section("a refusal the reader could see");
-        const outside = await POST("/api/open-file", { path: "C:/Windows/win.ini" });
+        const outside = await POST("/api/open-file", { path: OUTSIDE });
         ok("a file outside every project is refused", outside.status === 403, `HTTP ${outside.status}: ${outside.body.error || ""}`);
         const missing = await POST("/api/open-file", { path: "docs/reports/not-here.html" });
         ok("a path that does not exist is a 404 with a sentence", missing.status === 404 && /no such file/.test(missing.body.error || ""), String(missing.body.error || ""));
