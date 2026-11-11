@@ -20,9 +20,13 @@ const REPORT = "docs/reports/clarify-card-links-2026-11-11.html";
 // The absolute spelling of the same path. The drive letter is built at runtime: written out, it is a folder on the
 // machine that wrote this file, which tools/absolute-paths.mjs refuses a commit for naming.
 const ABS = `${"C"}:${"/work/demo/"}${REPORT}`;
+// The tree a RELATIVE target is resolved against: the asking turn's own worktree, which lib/jobs.js writes on the
+// question record as `base`. A relative path with no base is plain text now (test/clarify-relative-base.test.js pins
+// that), so the card fixture here carries the base a real record carries.
+const BASE = `${"C"}:${"/work/demo/.worktrees/report-one"}`;
 const URL_ONE = "https://example.test/run/7";
 
-async function card(question, { links, choices = [], browser = "Google Chrome" } = {}) {
+async function card(question, { links, choices = [], browser = "Google Chrome", base = BASE } = {}) {
   const page = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
   const dom = await readFile(new URL("../public/core/dom-format.js", import.meta.url), "utf8");
   const source = [
@@ -43,8 +47,8 @@ async function card(question, { links, choices = [], browser = "Google Chrome" }
     status: "running",
     questionDone: false,
     // `links` goes through the SHIPPED normalizer, exactly as lib/jobs.js puts it on the record, so a test cannot
-    // hand the card a shape the panel never produces.
-    question: { question, choices, requestId: "p-links", links: linksOf(links) },
+    // hand the card a shape the panel never produces. `base` is the question record's own field.
+    question: { question, choices, requestId: "p-links", links: linksOf(links), base },
   };
   return build(() => true, () => null, { typed: true }, () => "10m", new Map(), new Map(), browser).questionPrompt(turn);
 }

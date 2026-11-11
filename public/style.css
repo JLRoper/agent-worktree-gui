@@ -2635,6 +2635,14 @@ a.out-link:hover { color: #a8ccff; text-decoration: underline solid; }
 .tq-link:focus-visible { outline: 1px solid var(--q-accent); outline-offset: 1px; }
 .tq-link-where { font: 10.5px/1.35 var(--mono, var(--ui)); color: var(--q-note); word-break: break-all; }
 .tq-link-where::before { content: "↳ "; opacity: .7; }
+/* A link the card could not resolve: the row keeps its label and its target, and both read as a note rather than as
+   something to press - no pointer, no hover tint, because a press would answer "no such file". */
+.tq-link.is-relative { cursor: default; color: var(--q-note); }
+.tq-link.is-relative:hover { background: none; text-decoration: none; }
+.tq-link-relative { color: var(--q-question); }
+/* The one line under the question text that says why a relative path is not clickable. Dim, mono, and wrapped like the
+   path it names, so it reads as the card's footnote and not as part of the question. */
+.tq-relnote { margin: -4px 0 9px; font: 10.5px/1.4 var(--mono, var(--ui)); color: var(--q-note); word-break: break-word; }
 /* A path or URL inside the question text: a link, but still part of the sentence - so it inherits the sentence's size
    and wraps where the sentence wraps. */
 .tq-question .out-link, .tq-question .out-file { color: var(--q-head); text-decoration: underline; text-underline-offset: 2px; }

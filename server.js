@@ -88,7 +88,7 @@ import { installGuard, uninstallGuard, guardState, refreshGuardFiles, normTree }
 import { projectRulesRow, rulesFrom, validateRules } from "./lib/project-rules.js";
 // The rules prefix: the read the chip and the rules bar draw, and the one save that replaces a project's list.
 import { RULES_PATH, createProjectRulesRoutes } from "./routes/project-rules.js";
-import { safeUrl, openerFor, openerForFolder, chromeFor, openFileWith, resolveDefaultBrowser, browserLabel } from "./lib/open-url.js";
+import { safeUrl, openerFor, openerForFolder, chromeFor, openFileWith, resolveFileTarget, resolveDefaultBrowser, browserLabel } from "./lib/open-url.js";
 import { errorStatus } from "./lib/errors.js";
 // The Matrix bridge's process lifecycle (start / stop / liveness / one --self-test). The protocol itself is the
 // standalone Python program's; this module only ever owns a child process, its pid file and its log.
@@ -5597,30 +5597,19 @@ const server = createServer(async (req, res) => {
       const body = await readBody(req).catch(() => ({}));
       const raw = String(body.path || "").trim();
       if (!raw) return sendJson(res, 400, { error: "no path to open" });
-      // A path from a question is relative to SOMETHING, and the card cannot know which tree: a relative one is
-      // resolved against each project root in turn and the first that exists wins. An absolute one is taken as given.
-      // This is the only place that choice is made, and the answer says which root it landed in.
-      const candidates = [];
-      if (path.isAbsolute(raw)) candidates.push(path.resolve(raw));
-      else {
-        for (const project of scheduler.getProjects()) candidates.push(path.resolve(project.path, raw));
-      }
-      let target = "";
-      let info = null;
-      for (const candidate of candidates) {
-        const found = await stat(candidate).catch(() => null);
-        if (found && found.isFile()) {
-          target = candidate;
-          info = found;
-          break;
-        }
-      }
-      if (!info) {
-        return sendJson(res, 404, {
-          error: candidates.length
-            ? `no such file: ${candidates[0]}${candidates.length > 1 ? ` (or in ${candidates.length - 1} other project root${candidates.length > 2 ? "s" : ""})` : ""}`
-            : `no such file: ${raw} — a relative path is looked for under every open project`,
-        });
+      // A path from a question is relative to SOMETHING, and the panel is not the something: the CARD carries the
+      // asking turn's own tree as `base` (lib/jobs.js writes it on the question record and public/app.js posts it
+      // back). An absolute path is taken as given; a relative one with no base is refused rather than guessed,
+      // because a guess can open a file from the wrong tree - measured on a real card, where `docs/reports/x.html`
+      // was looked for in the project's checkout while the run that asked sat in one of its worktrees.
+      const base = String(body.base || "").trim();
+      const resolved = resolveFileTarget(raw, base);
+      if (resolved.error) return sendJson(res, 400, { error: resolved.error });
+      const target = resolved.path;
+      const info = await stat(target).catch(() => null);
+      if (!info || !info.isFile()) {
+        const where = path.isAbsolute(raw) ? "" : ` - ${raw} is relative, so it was resolved against ${base}`;
+        return sendJson(res, 404, { error: `no such file: ${target}${where}` });
       }
       // The boundary: a file a QUESTION points at is a file an agent put in a tree, so the panel opens one only inside
       // a project (or its own checkout), exactly as a deliverable is only opened inside the tree that delivered it.

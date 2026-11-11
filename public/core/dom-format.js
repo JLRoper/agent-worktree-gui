@@ -184,22 +184,45 @@ function plausiblePath(target) {
   return dir.length > 1 && /[A-Za-z]/.test(dir);
 }
 
+// An ABSOLUTE target names its own root and needs nothing else to open: a drive letter, a leading slash, or a UNC
+// share. Everything else is relative to a tree, which only the question can name.
+function absoluteFileTarget(target) {
+  const t = String(target || "");
+  return /^[A-Za-z]:[\\/]/.test(t) || t.startsWith("/") || t.startsWith("\\\\");
+}
+
+// The attribute that carries the base a RELATIVE target belongs to. Empty for an absolute target (it needs none) and
+// empty when the card has no base - in which case no anchor is drawn at all, so the attribute would have nothing to
+// ride on. Exported because the Links section draws its own anchor markup and must carry the same two fields.
+function fileBaseAttr(target, base) {
+  const root = String(base || "").trim();
+  if (!root || absoluteFileTarget(target)) return "";
+  return ` data-open-file-base="${esc(root)}"`;
+}
+
 // The anchor for a local file: `data-open-file`, which the page's own handler turns into a POST to
 // /api/open-file. No href: there is nothing for this page to navigate to, and a link with a dead href is one a
 // middle-click opens onto an error.
-function fileAnchor(target, { label = "", title = "" } = {}) {
+//
+// A relative target with NO base resolves to "" - the caller keeps the text and says the path is relative. That is
+// the whole rule: a link the card cannot resolve is a link that answers "no such file", and the reader cannot tell
+// that from a file that was deleted.
+function fileAnchor(target, { label = "", title = "", base = "" } = {}) {
+  if (!absoluteFileTarget(target) && !String(base || "").trim()) return "";
   const name = label || target;
-  return `<a class="out-file" href="#" data-open-file="${esc(target)}" title="${esc(title || `open ${target} in your browser`)}">${esc(name)}</a>`;
+  return `<a class="out-file" href="#" data-open-file="${esc(target)}"${fileBaseAttr(target, base)} title="${esc(title || `open ${target} in your browser`)}">${esc(name)}</a>`;
 }
 
-// The question text as the card draws it: URLs and paths both clickable, everything else escaped exactly as before.
-// One pass with both patterns, in that order, because a URL contains slashes and a second pass over already-linked
-// text would link the path inside the anchor it just made.
-function linkifyCardText(text) {
+// The question text as the card draws it, WITH the list of relative targets it could not anchor: URLs and absolute
+// paths are links, a relative path is one only when the question carries the tree it belongs to, and everything else
+// is escaped exactly as before. One pass with both patterns, in that order, because a URL contains slashes and a
+// second pass over already-linked text would link the path inside the anchor it just made.
+function linkifyCardParts(text, { base = "" } = {}) {
   // Every anchor made here is STASHED before the next pass runs. A second pass over the page would otherwise see the
   // slashes inside `href="https://host/a.html"` and link a path inside the anchor it just wrote - the markup, not the
   // reader's text. The stash is one sentinel per anchor, restored at the end.
   const held = [];
+  const relative = [];
   const stash = (html) => `\u0000${held.push(html) - 1}\u0000`;
   let out = esc(text ?? "").replace(OUT_URL_RE, (raw) => {
     const { target, tail } = trimLinkTail(raw);
@@ -211,11 +234,22 @@ function linkifyCardText(text) {
   out = out.replace(OUT_FILE_RE, (raw) => {
     const { target, tail } = trimLinkTail(raw);
     if (!plausiblePath(target)) return raw;
-    return stash(fileAnchor(target)) + tail;
+    const anchor = fileAnchor(target, { base });
+    // No anchor means the card has no tree to resolve it against: the path stays the reader's text, and the caller
+    // draws the one sentence that says why it is not clickable.
+    if (!anchor) {
+      relative.push(target);
+      return raw;
+    }
+    return stash(anchor) + tail;
   });
   // `null` as the sentinel must not survive as a stray digit if a stash index is ever wrong: an unmatched sentinel is
   // dropped, which reads as plain text rather than as markup.
-  return out.replace(/\u0000(\d+)\u0000/g, (_, i) => held[Number(i)] ?? "");
+  return { html: out.replace(/\u0000(\d+)\u0000/g, (_, i) => held[Number(i)] ?? ""), relative };
+}
+
+function linkifyCardText(text, opts = {}) {
+  return linkifyCardParts(text, opts).html;
 }
 
 function linkifyText(text) {
@@ -247,5 +281,6 @@ window.WMApp.core = window.WMApp.core || {};
 // through a new global. Nothing reads it yet: app.js still calls the bare names above.
 window.WMApp.core.domFormat = {
   $, keyOf, esc, tailPath, relTime, fmtDur, fmtAgo, elapsed, rowTier, lifeAt, isMainWorktree,
-  movementKey, orderRows, verdictClass, linkifyText, linkifyCardText, fileAnchor, fmtBytes,
+  movementKey, orderRows, verdictClass, linkifyText, linkifyCardText, linkifyCardParts, fileAnchor,
+  absoluteFileTarget, fileBaseAttr, fmtBytes,
 };
