@@ -268,3 +268,4 @@ ledger/gui-improve/settings-panel-board/compare/README.md | 7 | record: the comp
 ledger/gui-improve/settings-panel-board/compare/run.mjs | 9 | probe: the scan roots and the browser and module folders the compare was run with, kept as its defaults
 docs/reports/round-grouping-persistence-2026-11-09.html | 1 | record: the report names the panel queue file it read, which is the machine's own state folder
 ledger/verify/round-tree-layout/layout.json | 9 | record: the capture names the sandbox trees each measured row was drawn from, so its before/after counts can be re-read
+test/hermes-activity-worker.test.js | 11 | fixture: the detector's own test writes drive-letter paths on purpose, to prove the scan finds each form, and opens none of them
