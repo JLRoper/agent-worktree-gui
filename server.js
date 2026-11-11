@@ -88,7 +88,7 @@ import { installGuard, uninstallGuard, guardState, refreshGuardFiles, normTree }
 import { projectRulesRow, rulesFrom, validateRules } from "./lib/project-rules.js";
 // The rules prefix: the read the chip and the rules bar draw, and the one save that replaces a project's list.
 import { RULES_PATH, createProjectRulesRoutes } from "./routes/project-rules.js";
-import { safeUrl, openerFor, openerForFolder, chromeFor } from "./lib/open-url.js";
+import { safeUrl, openerFor, openerForFolder, chromeFor, openFileWith } from "./lib/open-url.js";
 import { errorStatus } from "./lib/errors.js";
 // The Matrix bridge's process lifecycle (start / stop / liveness / one --self-test). The protocol itself is the
 // standalone Python program's; this module only ever owns a child process, its pid file and its log.
@@ -5658,15 +5658,29 @@ const server = createServer(async (req, res) => {
           error: `outside the repo: ${entry.target} — ${repo ? `it is not inside ${repo}` : "it is inside no git checkout"}; a deliverable is the file an agent put in its own tree`,
         });
       }
-      // No URL: the browser cannot render it, so the OS default handler is what opens it — the existing route, and
-      // the only opener left for a file the panel does not serve.
-      try {
-        const { bin, args } = openerFor(entry.target);
-        launch(bin, args);
-        return sendJson(res, 200, { ok: true, kind: entry.kind, target: entry.target, open: "handler", opener: path.basename(bin), bytes: info.size });
-      } catch (e) {
-        return sendJson(res, 500, { error: String((e && e.message) || e) });
+      // No URL: the browser cannot render it from the panel's own root, so the file goes to the browser THIS machine
+      // is registered to use for a web page, handed a file:/// URL as one argv element. rundll32 and explorer.exe sit
+      // behind it in that order (lib/open-url.js `fileOpenerLadder` says why explorer.exe alone did not work: the
+      // store's forward-slash path made it exit 1 and open nothing). The answer names the launcher that actually
+      // started and how far down the ladder it was, so the card can say which browser took the file.
+      const opened = await openFileWith(entry.target, { spawn, log });
+      if (!opened.ok) {
+        return sendJson(res, 500, {
+          error: `could not open ${path.basename(entry.target)}: ${opened.error || "no launcher started"}`,
+        });
       }
+      return sendJson(res, 200, {
+        ok: true,
+        kind: entry.kind,
+        target: entry.target,
+        open: "handler",
+        opener: path.basename(opened.bin),
+        via: opened.via,
+        progId: opened.progId || null,
+        fallback: opened.fallback,
+        url: opened.url,
+        bytes: info.size,
+      });
     }
 
     // Remove a worktree from the board: the directory goes to the Windows Recycle Bin (recoverable), then git's

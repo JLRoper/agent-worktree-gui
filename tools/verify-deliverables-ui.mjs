@@ -27,9 +27,10 @@
 // anchor so that check can be seen to fail; breaking the page is the only thing the switch does, and it can never
 // make a failing check pass.
 //
-// ONE SIDE EFFECT, DELIBERATELY. `POST /api/deliverables/open` for a file spawns `explorer.exe` on this box: the kit
-// boots `server.js` as a child and the route calls `spawn` inline, so there is no process seam — and inventing one
-// would let the gate pass while the real route was broken (plan §9.2 item 4). This gate therefore opens a real file
+// ONE SIDE EFFECT, DELIBERATELY. `POST /api/deliverables/open` for a file spawns the browser this machine is
+// registered to use (msedge.exe on this box) with a file:/// URL: the kit boots `server.js` as a child and the route
+// calls `spawn` inline, so there is no process seam — and inventing one would let the gate pass while the real route
+// was broken (plan §9.2 item 4). This gate therefore opens a real file
 // three times — the harvested proof through the route, the restored file through the route, and the restored ROW
 // through its own Open control — and prints a line saying so. The missing-file click is unchanged: it 404s before
 // any spawn.
@@ -46,8 +47,9 @@
 //   5. a title click POSTs the recorded seq ONLY — a request the panel answers 404 because the file is gone — and the
 //      row then says `gone` (missingAt, stamped by the real route)
 //   6. an unknown seq answers 404 and opens nothing; a restored file answers 200 and clears `gone`
-//   6b. the restored ROW's own Open says what it opened and with which opener — `opened gone.md with explorer.exe` —
-//      and claims no window, because a detached spawn cannot see one; a refusal is still the route's own sentence
+//   6b. the restored ROW's own Open says which browser took the file — `opened gone.md with msedge.exe - the
+//      registered default browser (MSEdgeHTM)` — and names the fallback when one fired; it claims no window,
+//      because a detached spawn cannot see one; a refusal is still the route's own sentence
 //   7. at the cap the footer says 200 kept
 //   8. a second, empty panel says `Nothing has been delivered yet.` and documents the grammar
 //   9. a screenshot of the header and the open list is written for the report
@@ -68,9 +70,16 @@ import { loadPlaywright, withBrowser, openPage, attachPageCollectors } from "./b
 import { startPanel } from "./panel-testkit.mjs";
 import { Deliverables } from "../lib/deliverables.js";
 import { Jobs } from "../lib/jobs.js";
+import { fileOpenerLadder } from "../lib/open-url.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SHOT_DIR = process.env.PANEL_SHOT_DIR || path.join(HERE, "..", ".shots");
+
+// WHICH BROWSER IS THE RIGHT ANSWER ON THIS MACHINE. The route hands a delivered file to the browser the
+// profile is REGISTERED to use (lib/open-url.js), so the opener this run sees is msedge.exe here and
+// chrome.exe on another box. The gate derives it from the same ladder the route walks: a hard-coded name
+// would pass on one machine and fail on the next, which is the defect this change is about.
+const fileOpenerFor = (target) => path.basename((fileOpenerLadder(target).at(0) || {}).bin || "");
 
 let checks = 0;
 let failures = 0;
@@ -271,9 +280,15 @@ try {
 
   const openExisting = await openJson(HARVESTED_SEQ);
   eq("the harvested seq opens with 200", openExisting.status, 200);
-  eq("…as a file through the OS association", { ok: openExisting.body?.ok, kind: openExisting.body?.kind, opener: openExisting.body?.opener }, { ok: true, kind: "file", opener: "explorer.exe" });
+  const expectedOpener = fileOpenerFor(path.join(tree, "docs", "report.html"));
+  eq("…as a file through the browser this machine is registered to use", { ok: openExisting.body?.ok, kind: openExisting.body?.kind, opener: openExisting.body?.opener }, { ok: true, kind: "file", opener: expectedOpener });
+  ok(
+    "…handed a file:/// URL, and telling the card which mechanism took it",
+    /^file:\/\/\/.*report\.html$/.test(openExisting.body?.url || "") && typeof openExisting.body?.via === "string" && openExisting.body.via.length > 0,
+    JSON.stringify({ url: openExisting.body?.url, via: openExisting.body?.via, progId: openExisting.body?.progId }),
+  );
   eq("…answering the bytes it recorded", openExisting.body?.bytes, statSync(path.join(tree, "docs", "report.html")).size);
-  console.log("      note: that 200 spawned explorer.exe for the real file — the route's real behaviour, plan §9.2 item 4");
+  console.log(`      note: that 200 spawned ${expectedOpener} for the real file — the route's real behaviour, plan §9.2 item 4`);
 
   const result = await withBrowser(async ({ page }) => {
     const { pageErrors, consoleErrors } = attachPageCollectors(page);
@@ -602,10 +617,10 @@ try {
     writeFileSync(path.join(tree, "docs", "gone.md"), "# it is back\n");
     const restored = await openJson(goneEntry.seq);
     eq("a restored file answers 200", restored.status, 200);
-    eq("…and is opened by the OS association", { ok: restored.body?.ok, kind: restored.body?.kind, opener: restored.body?.opener }, { ok: true, kind: "file", opener: "explorer.exe" });
+    eq("…and is opened by the same registered browser", { ok: restored.body?.ok, kind: restored.body?.kind, opener: restored.body?.opener }, { ok: true, kind: "file", opener: expectedOpener });
     const cleared = await getJson();
     eq("…and `gone` is cleared in the store", cleared.body.entries.find((e) => e.seq === goneEntry.seq)?.missingAt, null);
-    console.log("      note: that 200 spawned explorer.exe again — the same real route, now for a file that is there");
+    console.log(`      note: that 200 spawned ${expectedOpener} again — the same real route, now for a file that is there`);
 
     // ---- 6b. the 200 {open:"handler"} is not silent ----------------------------------------------
     // The route answers from the spawn, so the row says what it handed over and to which opener, and stops there.
@@ -623,7 +638,12 @@ try {
       };
     }, goneEntry.seq);
     eq("the answer's click POSTs the seq only", posts, [{ seq: goneEntry.seq }]);
-    ok("a 200 handler says what it opened and with which opener", answered.text.startsWith("opened gone.md with explorer.exe"), answered.text);
+    ok("a 200 handler says which browser took the file", answered.text.startsWith(`opened gone.md with ${expectedOpener}`), answered.text);
+    ok(
+      "…naming the mechanism, so a fallback can never read as the browser",
+      / - (the registered default browser|fallback [12] of 2: |rundll32 FileProtocolHandler|explorer\.exe)/.test(answered.text),
+      answered.text,
+    );
     ok("…and claims no window, because the panel cannot see one", /cannot see whether a window appeared$/.test(answered.text), answered.text);
     ok("…as a polite status, with no refusal left on the row", answered.role === "status" && !answered.why, JSON.stringify({ role: answered.role, why: answered.why }));
 
