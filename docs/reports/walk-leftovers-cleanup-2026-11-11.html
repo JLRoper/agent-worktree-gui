@@ -112,8 +112,9 @@ rebases.</p>
 
 <div class="box note">
   <p style="margin-top:0"><strong>What this pass did instead.</strong> The push at the end of this run
-  fast-forwards that same origin branch to this branch's new head, so the ref is not stale after today.
-  The old tip stays reachable and no force-push was used.</p>
+  fast-forwarded that same origin branch from <code>a89a4d1a</code> to this branch's head
+  <code>1346393c</code> (<code>a89a4d1a..1346393c</code>, no force), so the ref is not stale and nothing
+  was rewritten on the remote: the old tip is still an ancestor of the new one.</p>
 </div>
 
 <h2>2. Step 2 - pictureviewer inventory, and the backups</h2>
@@ -240,8 +241,9 @@ restarted.</p>
       <code>agent-worktree-gui/.worktrees/run-the-rung-4-live-walk-on-the-fixed-ba8871</code> on
       <code>wtgui/run-rung-4-live-walk-on-fixed-driver-ba8871</code>. It is the landing branch for this
       record, so it is retired by the panel's own release, not here.</li>
-  <li><strong>The origin branch of the same name</strong>, still at <code>a89a4d1a</code> until this
-      run's push fast-forwards it (section 1).</li>
+  <li><strong>The origin branch of the same name</strong>, now at <code>1346393c</code>: this run's push
+      fast-forwarded it past <code>a89a4d1a</code> (section 1), so the branch PR 697 merged still exists
+      and now carries this record.</li>
   <li><strong>Three pictureviewer worktrees</strong> that are not walk trees, named in section 3.</li>
   <li><strong>PR 12</strong>, DECLINED at version 12, untouched (section 4).</li>
   <li><strong>Panel 7453</strong>: still running. PID <code>29316</code>, <code>node server.js</code>,
