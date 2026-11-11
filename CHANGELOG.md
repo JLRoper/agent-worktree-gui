@@ -4,16 +4,38 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.81.9 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.82.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-545 releases from v0.1.0 (2026-10-20) to v1.81.9 (2026-11-11), 1813 commits between the tags. Every release is anchored by an
+546 releases from v0.1.0 (2026-10-20) to v1.82.0 (2026-11-11), 1819 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.82.0 — 2026-11-11 · 6 commits
+
+[`a4f6494`](https://github.com/JLRoper/agent-worktree-gui/commit/a4f6494efbe5c6bc1cb9a6cc4aba6331a840bdeb) · [compare v1.81.9...v1.82.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.81.9...v1.82.0)
+
+### Added
+
+- feat(clarify): give a question links, and link the paths in its text ([`f462437`](https://github.com/JLRoper/agent-worktree-gui/commit/f4624377c2020240aba545368b48198078cf8878))
+
+### Fixed
+
+- fix(clarify): keep the caret and the selection across a card repaint ([`6d79eb6`](https://github.com/JLRoper/agent-worktree-gui/commit/6d79eb6c3c6a2a0315be010bbc649f3f334d3c52))
+
+### Docs & tests
+
+- docs: render the changelog - 545 releases ([`3147dcc`](https://github.com/JLRoper/agent-worktree-gui/commit/3147dcc29917f763ab260fcd84e304f5b5498fe5))
+- docs: the two clarify-card changes, with the captures ([`295df2d`](https://github.com/JLRoper/agent-worktree-gui/commit/295df2de5f4f6957dcf307c2188c51f6e2895ee1))
+
+### Other
+
+- Record the fixture paths main already carries so a landing can pass the gate ([`6f60217`](https://github.com/JLRoper/agent-worktree-gui/commit/6f60217115a3425442b241747686df4f77d6f1cb))
+- chore: 1.82.0 - the version this landing carries ([`a4f6494`](https://github.com/JLRoper/agent-worktree-gui/commit/a4f6494efbe5c6bc1cb9a6cc4aba6331a840bdeb))
 
 ## v1.81.9 — 2026-11-11 · 3 commits
 
