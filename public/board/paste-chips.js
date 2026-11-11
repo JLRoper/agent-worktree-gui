@@ -636,6 +636,145 @@ function chipBesideCaret(box, dir) {
   return at >= 0 && at < kids.length ? chip(kids[at]) : null;
 }
 
+// ---- Ctrl+Backspace and Ctrl+Delete -----------------------------------------------------
+// The handler below used to return on any modifier, so a word delete was whatever the engine did on its own:
+// at a chip's edge Chrome happens to take the atom, but nothing here decided it, the chip's text was left in
+// state.pasteChips, and no test could see any of it. These helpers let the box do it itself, so the same press
+// reads the same in every engine and the suite can fire it.
+//
+// The rule is Chrome's own, measured case by case: take the word on that side of the caret, with the
+// whitespace that side owns. Punctuation is a word of its own, a line break is taken alone, and a chip is an
+// atom - the branch above removes it whole, and a word delete never reaches across one.
+//
+// Every helper here is chip-prefixed on purpose: these files are classic scripts sharing one global, and
+// public/dom.js already declares a pointAt() of its own, which silently replaced this one until it was renamed.
+
+const CHIP_WORD_CHAR = /[\p{L}\p{N}_]/u;
+const CHIP_SPACE_CHAR = /\s/u;
+const chipIsHighSurrogate = (ch) => ch >= "\uD800" && ch <= "\uDBFF";
+const chipIsLowSurrogate = (ch) => ch >= "\uDC00" && ch <= "\uDFFF";
+
+// The box's content as the caret sees it: one entry per character, a <br> as one line break, and a chip (or
+// any element this module did not make) as an atom boundary with no characters of its own. Every writer of
+// these boxes is this module, so the content is flat - text nodes, chips and breaks, as siblings under the
+// box - and an engine-made wrapper is a boundary, never a place to edit.
+function chipBoxChars(box) {
+  const out = [];
+  for (const child of box.childNodes) {
+    if (child.nodeType === 3) {
+      for (let i = 0; i < child.data.length; i += 1) {
+        out.push({ node: child, index: i, ch: child.data[i], kind: "text" });
+      }
+    } else if (child.nodeType === 1 && child.tagName === "BR") {
+      out.push({ node: child, index: 0, ch: "\n", kind: "break" });
+    } else {
+      out.push({ node: child, index: 0, ch: "", kind: "atom" });
+    }
+  }
+  return out;
+}
+
+// Where the caret sits among those characters, as an insertion point (0..chars.length), or -1 when this box is
+// not the one being edited (a live selection, a caret elsewhere, a caret inside an engine-made wrapper).
+function chipCaretPoint(box, chars) {
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount) return -1;
+  const range = sel.getRangeAt(0);
+  if (!range.collapsed) return -1;
+  const node = range.startContainer;
+  if (!box.contains(node)) return -1;
+  if (node.nodeType === 3) {
+    const first = chars.findIndex((e) => e.node === node);
+    return first < 0 ? -1 : first + Math.min(range.startOffset, node.data.length);
+  }
+  if (node !== box) return -1;
+  const child = box.childNodes[range.startOffset] || null;
+  if (!child) return chars.length;
+  const at = chars.findIndex((e) => e.node === child);
+  return at < 0 ? chars.length : at;
+}
+
+// What one press takes: [from, to) in characters, or null when there is nothing on that side to take.
+function chipWordSpan(chars, point, dir) {
+  const isWord = (e) => e && e.kind === "text" && CHIP_WORD_CHAR.test(e.ch);
+  const isSpace = (e) => e && e.kind === "text" && CHIP_SPACE_CHAR.test(e.ch);
+  const isText = (e) => e && e.kind === "text";
+  if (dir < 0) {
+    let i = point;
+    const prev = chars[i - 1];
+    if (!prev) return null;
+    if (prev.kind === "break") return { from: i - 1, to: i }; // a line break goes on its own
+    if (prev.kind !== "text") return null; // the chip branch above owns this press
+    if (isSpace(prev)) {
+      // Whitespace, then what it was in front of: a word, or one punctuation character.
+      while (i > 0 && isSpace(chars[i - 1])) i -= 1;
+      if (i > 0 && isWord(chars[i - 1])) while (i > 0 && isWord(chars[i - 1])) i -= 1;
+      else if (i > 0 && isText(chars[i - 1])) i -= 1;
+    } else if (isWord(prev)) {
+      while (i > 0 && isWord(chars[i - 1])) i -= 1;
+    } else {
+      i -= 1; // punctuation: one character, as Chrome takes it
+    }
+    return i < point ? { from: i, to: point } : null;
+  }
+  let j = point;
+  const next = chars[j];
+  if (!next) return null;
+  if (next.kind === "break") return { from: j, to: j + 1 };
+  if (next.kind !== "text") return null;
+  if (isSpace(next)) {
+    // Forward over whitespace the whitespace goes alone: the word after it keeps its own press.
+    while (j < chars.length && isSpace(chars[j])) j += 1;
+  } else if (isWord(next)) {
+    while (j < chars.length && isWord(chars[j])) j += 1;
+    while (j < chars.length && isSpace(chars[j])) j += 1;
+  } else {
+    j += 1; // punctuation, then the whitespace that side owns
+    while (j < chars.length && isSpace(chars[j])) j += 1;
+  }
+  return j > point ? { from: point, to: j } : null;
+}
+
+// A span never splits a character outside the basic plane: an emoji is two code units, and half of one is not
+// a thing a box can hold.
+function chipWidenSpan(chars, span) {
+  let { from, to } = span;
+  if (from > 0 && chars[from] && chipIsLowSurrogate(chars[from].ch) && chars[from - 1] && chipIsHighSurrogate(chars[from - 1].ch)) {
+    from -= 1;
+  }
+  if (to < chars.length && chars[to] && chipIsLowSurrogate(chars[to].ch) && chars[to - 1] && chipIsHighSurrogate(chars[to - 1].ch)) {
+    to += 1;
+  }
+  return { from, to };
+}
+
+// The DOM point at a character index: an offset inside the text node that holds it, the boundary in front of
+// the element at it, or the end of the box.
+function chipPointAt(box, chars, at) {
+  if (at <= 0) return { node: box, offset: 0 };
+  if (at >= chars.length) return { node: box, offset: box.childNodes.length };
+  const e = chars[at];
+  if (e.kind === "text") return { node: e.node, offset: e.index };
+  const parent = e.node.parentNode || box;
+  return { node: parent, offset: [...parent.childNodes].indexOf(e.node) };
+}
+
+// Take the characters, leave the caret where the run began, and let the box's own reader hear about it (an
+// `input`, exactly as a typed deletion makes) so the draft and the chip model are saved.
+function chipDeleteChars(box, chars, span) {
+  const start = chipPointAt(box, chars, span.from);
+  const end = chipPointAt(box, chars, span.to);
+  // The serial offset the caret keeps, counted before the DOM changes: a chip is the text it swallowed.
+  let caret = 0;
+  for (let i = 0; i < span.from; i += 1) caret += chars[i].kind === "atom" ? nodeLength(chars[i].node) : 1;
+  const range = document.createRange();
+  range.setStart(start.node, start.offset);
+  range.setEnd(end.node, end.offset);
+  range.deleteContents();
+  setCaretOffset(box, caret);
+  touchBox(box);
+}
+
 // ---- what a paste does --------------------------------------------------------------------
 // A paste of a FILE belongs to board/attachments.js: it registers first, and its handler has already run (and
 // prevented the default) by the time this one is reached.
@@ -731,13 +870,29 @@ document.addEventListener(
     }
     if (!box) return;
     if (e.key !== "Backspace" && e.key !== "Delete") return;
-    if (e.altKey || e.ctrlKey || e.metaKey) return;
-    const chip = chipBesideCaret(box, e.key === "Backspace" ? -1 : 1);
-    if (!chip) return;
-    // One press, one chip, whole: the caret never enters a chip, and a chip is never split or half-deleted.
+    // Alt is the one modifier this handler still stands aside for: Alt+Backspace is undo-word in the editors a
+    // reader may have in their fingers, and the panel has no business taking it.
+    if (e.altKey || e.metaKey) return;
+    const dir = e.key === "Backspace" ? -1 : 1;
+    const chip = chipBesideCaret(box, dir);
+    if (chip) {
+      // One press, one chip, whole: the caret never enters a chip, and a chip is never split or half-deleted.
+      // With Ctrl held as much as without it, and with the chip's text going out of the panel's state too.
+      e.preventDefault();
+      e.stopPropagation();
+      removeChipEl(chip);
+      return;
+    }
+    // Nothing beside the caret: a plain key is the engine's, characterwise, selection and undo and all.
+    if (!e.ctrlKey || e.shiftKey) return;
+    const chars = chipBoxChars(box);
+    const point = chipCaretPoint(box, chars);
+    if (point < 0) return;
+    const span = chipWordSpan(chars, point, dir);
+    if (!span) return;
     e.preventDefault();
     e.stopPropagation();
-    removeChipEl(chip);
+    chipDeleteChars(box, chars, chipWidenSpan(chars, span));
   },
   true,
 );
