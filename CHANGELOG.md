@@ -4,16 +4,53 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.81.6 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.81.8 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-542 releases from v0.1.0 (2026-10-20) to v1.81.6 (2026-11-11), 1796 commits between the tags. Every release is anchored by an
+544 releases from v0.1.0 (2026-10-20) to v1.81.8 (2026-11-11), 1810 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.81.8 — 2026-11-11 · 11 commits
+
+[`eb98c11`](https://github.com/JLRoper/agent-worktree-gui/commit/eb98c1158bad5ab9659f98b12eea86810f0fd0b7) · [compare v1.81.7...v1.81.8](https://github.com/JLRoper/agent-worktree-gui/compare/v1.81.7...v1.81.8)
+
+### Performance
+
+- perf: record slow synchronous panel phases ([`6884ad9`](https://github.com/JLRoper/agent-worktree-gui/commit/6884ad9b84c3ef16519280022f6f373392a4e233))
+- perf: move tier filesystem scans into bounded workers ([`35eac1b`](https://github.com/JLRoper/agent-worktree-gui/commit/35eac1b91a7d3331e59dc90f20f06298e8a997dc))
+- perf: reduce duplicate SSE resyncs while retaining recovery ([`a75f51a`](https://github.com/JLRoper/agent-worktree-gui/commit/a75f51ad8a4b1ce3e94c8b3e4682813cb01d888d))
+- perf: stream snapshot compression off the event loop ([`5f08a46`](https://github.com/JLRoper/agent-worktree-gui/commit/5f08a46d2970bf24a97d57b870ced8fba51ac07a))
+- perf: identify slow synchronous watcher setup ([`7a9984a`](https://github.com/JLRoper/agent-worktree-gui/commit/7a9984ae99b739e5b527cd6816df0a3b6f649e5a))
+- perf: add bounded worker reads for pipeline pins ([`5fdfafa`](https://github.com/JLRoper/agent-worktree-gui/commit/5fdfafa5030bcf2714a3adf0529da2bbeca86433))
+- perf: measure snapshot encoding time ([`e13c4d8`](https://github.com/JLRoper/agent-worktree-gui/commit/e13c4d8b9c37bd197a66feb0848427f548c0f0c5))
+- perf: offload pipeline Git and cache row queue names ([`38e7a6f`](https://github.com/JLRoper/agent-worktree-gui/commit/38e7a6f8cc420b53f7b7bd189c031e8fb607f740))
+
+### Docs & tests
+
+- docs: 1.81.7 - patch: the worktree board swept, 27 landed trees and 37 stale directories removed ([`91a52c1`](https://github.com/JLRoper/agent-worktree-gui/commit/91a52c1b5eea2973a48757281e27b597df790346))
+- docs: distinguish slow phases from overlapping activity ([`6030613`](https://github.com/JLRoper/agent-worktree-gui/commit/603061371f331190ffe012cef76594d4c91cbb72))
+
+### Other
+
+- chore: 1.81.8 - the version this landing carries ([`eb98c11`](https://github.com/JLRoper/agent-worktree-gui/commit/eb98c1158bad5ab9659f98b12eea86810f0fd0b7))
+
+## v1.81.7 — 2026-11-11 · 3 commits
+
+[`15c864f`](https://github.com/JLRoper/agent-worktree-gui/commit/15c864f3a051c3641bc54457e4eec84d4a278cb8) · [compare v1.81.6...v1.81.7](https://github.com/JLRoper/agent-worktree-gui/compare/v1.81.6...v1.81.7)
+
+### Docs & tests
+
+- docs: render the changelog - 542 releases ([`8dcacee`](https://github.com/JLRoper/agent-worktree-gui/commit/8dcacee61465f1703d122d0e6161c8639741f389))
+
+### Other
+
+- chore: allow the activity worker's drive-letter fixtures ([`53ad7dc`](https://github.com/JLRoper/agent-worktree-gui/commit/53ad7dc2aeb9f8db88386273c3ba0c1e15b4d102))
+- chore: 1.81.7 - the version this landing carries ([`15c864f`](https://github.com/JLRoper/agent-worktree-gui/commit/15c864f3a051c3641bc54457e4eec84d4a278cb8))
 
 ## v1.81.6 — 2026-11-11 · 3 commits
 
