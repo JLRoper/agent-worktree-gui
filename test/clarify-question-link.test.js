@@ -24,11 +24,15 @@ async function card(question, { choices = [], live = true, done = false } = {}) 
   const source = [
     sliceBetween(dom, "const esc = (s) =>", "\n// A path as a card"),
     sliceBetween(dom, "const OUT_URL_RE", "\nfunction fmtBytes"),
+    // The card's Links section and the name of the browser a file link opens in: `questionPrompt` calls both, and a
+    // slice that left them out would be testing a page that does not exist.
+    sliceBetween(page, "const browserName =", "function paintQLook"),
+    sliceBetween(page, "function questionLinks(q) {", "function questionPrompt("),
     sliceBetween(page, "const RECOMMENDED_RE", "// ---- the question box's look (Settings > Display)"),
     sliceBetween(page, 'function questionPrompt(turn, copy = "")', '// "~49m left"'),
   ].join("\n");
   const build = new Function(
-    "turnLive", "questionInFlight", "qLookState", "fmtLeft", "questionPicks", "questionDrafts",
+    "turnLive", "questionInFlight", "qLookState", "fmtLeft", "questionPicks", "questionDrafts", "questionBrowser",
     `${source}\nreturn { questionPrompt };`,
   );
   const turn = {
@@ -45,6 +49,7 @@ async function card(question, { choices = [], live = true, done = false } = {}) 
     () => "10m",
     new Map(),
     new Map(),
+    null,
   ).questionPrompt(turn);
 }
 

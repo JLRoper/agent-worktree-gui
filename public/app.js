@@ -2059,6 +2059,20 @@ function qLook() {
 // Read once, so a card rendered before anyone opens Settings still uses the saved look.
 let qLookState = qLook();
 
+// The browser a FILE link opens in: the machine's registered default, behind lib/open-url.js's ladder, asked once per
+// page load (GET /api/open-file) and named on the card. `null` until the answer lands, and "your browser" is what the
+// card says then - the honest label for a fact the page has not been told yet, and the same label on a machine whose
+// registry names no browser at all (the ladder then falls through rundll32 and explorer.exe).
+let questionBrowser = null;
+
+const browserName = () => questionBrowser || "your browser";
+
+// The browser's own name, written into every card already on the page when the answer arrives. In place, like
+// paintQLook: the card is not rebuilt for a label, and a reader typing into one keeps the caret.
+function paintBrowserName() {
+  for (const el of document.querySelectorAll("[data-browser-name]")) el.textContent = browserName();
+}
+
 function paintQLook(look = qLookState) {
   const size = $("q-size");
   // Never rewrite the box the reader is typing into: a clamp lands on `change`, not on every keystroke.
@@ -2076,6 +2090,32 @@ function paintQLook(look = qLookState) {
     btn.classList.toggle("on", btn.dataset.qTint === look.tint);
     btn.setAttribute("aria-pressed", btn.dataset.qTint === look.tint ? "true" : "false");
   }
+}
+
+// The Links section: a RESERVED block on every question card that came with links, one anchor per link, between the
+// question and its choices. Reserved means the same place on every card and the same head, so a reader learns where to
+// look - and nothing at all when a question carries none, which is why the plain-text card reads exactly as before.
+//
+// A URL is opened by the panel (data-open-url, POST /api/open-url) and a file by the panel's own ladder
+// (data-open-file, POST /api/open-file, lib/open-url.js), never by this page navigating: the panel is what knows the
+// reader's registered browser, and a `file:` navigation inside the page would be blocked by the browser anyway.
+function questionLinks(q) {
+  const links = (Array.isArray(q?.links) ? q.links : []).filter((l) => l && l.target);
+  if (!links.length) return "";
+  const rows = links
+    .map((l) => {
+      if (l.kind === "url") {
+        return `<a class="tq-link" href="${esc(l.target)}" target="_blank" rel="noreferrer noopener" data-open-url="${esc(l.target)}" title="open ${esc(l.target)} in your browser">${esc(l.label || l.target)}<span class="tq-link-where mono">${esc(l.target)}</span></a>`;
+      }
+      return `<a class="tq-link" href="#" data-open-file="${esc(l.target)}" title="open ${esc(l.target)} in ${esc(browserName())}">${esc(l.label || l.target)}<span class="tq-link-where mono">${esc(l.target)}</span></a>`;
+    })
+    .join("");
+  // The browser is named once, in the head: every file anchor in this section goes to the same one, and repeating it
+  // on four rows would be four times the noise for one fact.
+  return `<div class="tq-links">
+    <div class="tq-links-head mono">Links <span class="tq-links-browser">· file links open in <span data-browser-name>${esc(browserName())}</span></span></div>
+    ${rows}
+  </div>`;
 }
 
 function questionPrompt(turn, copy = "") {
@@ -2146,7 +2186,8 @@ function questionPrompt(turn, copy = "") {
   return `<div class="turn-question${sending ? " is-sending" : ""}" data-question-for="${esc(turn.id)}${esc(copy)}"${sending ? ' aria-busy="true"' : ""}>
     <div class="tq-head mono">${sending ? "⏳ sending your answer — the agent is being released" : "❓ waiting on you — the agent is parked until you answer"}</div>
     ${again}
-    <div class="tq-question">${linkifyText(q.question || "(no question text)")}</div>
+    <div class="tq-question">${linkifyCardText(q.question || "(no question text)")}</div>
+    ${questionLinks(q)}
     ${rows ? `<div class="tq-choices${multi ? " is-multi" : ""}">${rows}</div>` : ""}
     <div class="tq-note mono${sending ? " is-sending" : ""}" data-qnote="${esc(note)}">${esc(sending ? "sending your answer, one moment..." : note)}</div>
     ${answerRow}
@@ -2330,6 +2371,25 @@ async function openArtifactUrl(url) {
     if (!r.ok) showBanner(`open ${url}: ${d.error || `HTTP ${r.status}`}`);
   } catch (e) {
     showBanner(`open ${url}: ${e.message}`);
+  }
+}
+
+async function openQuestionFile(target) {
+  try {
+    const r = await apiFetch("/api/open-file", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: target }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      showBanner(`open ${target}: ${d.error || `HTTP ${r.status}`}`);
+      return;
+    }
+    // Nothing on success: the tab that appears IS the answer, and a banner for every opened link would be noise. A
+    // refusal (no such file, outside every project, no launcher started) is what the reader cannot see for themselves.
+  } catch (e) {
+    showBanner(`open ${target}: ${e.message}`);
   }
 }
 
@@ -9689,6 +9749,15 @@ document.addEventListener("click", async (e) => {
     e.preventDefault();
     e.stopPropagation();
     void openArtifactUrl(openUrlBtn.dataset.openUrl);
+    return;
+  }
+  // A clarify card's FILE link: the panel's own opener (POST /api/open-file -> lib/open-url.js's ladder), which is
+  // what knows the reader's registered browser. `#` in the href is prevented here - there is no page to go to.
+  const openFileBtn = e.target.closest("[data-open-file]");
+  if (openFileBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    void openQuestionFile(openFileBtn.dataset.openFile);
     return;
   }
   const openBtn = e.target.closest("[data-open-path]");
@@ -17412,6 +17481,16 @@ startVisibilityReporting();
   try {
     const cfg = await apiFetch("/api/config").then((r) => r.json());
     state.settings = cfg;
+    // The browser the clarify card names on a file link. Its own request, fired here and not awaited: the board must
+    // paint from the stream without waiting on a registry read, and the label is rewritten in place when it lands.
+    void apiFetch("/api/open-file")
+      .then((r) => r.json())
+      .then((d) => {
+        if (!d || !d.browser) return;
+        questionBrowser = String(d.browser);
+        paintBrowserName();
+      })
+      .catch(() => {});
     state.scanRoots = Array.isArray(cfg.scanRoots) ? cfg.scanRoots : [];
     // The folders list's own half of that answer: what config.json says, the fallback's folder, and whether each
     // listed folder is still on disk.

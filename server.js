@@ -88,7 +88,7 @@ import { installGuard, uninstallGuard, guardState, refreshGuardFiles, normTree }
 import { projectRulesRow, rulesFrom, validateRules } from "./lib/project-rules.js";
 // The rules prefix: the read the chip and the rules bar draw, and the one save that replaces a project's list.
 import { RULES_PATH, createProjectRulesRoutes } from "./routes/project-rules.js";
-import { safeUrl, openerFor, openerForFolder, chromeFor, openFileWith } from "./lib/open-url.js";
+import { safeUrl, openerFor, openerForFolder, chromeFor, openFileWith, resolveDefaultBrowser, browserLabel } from "./lib/open-url.js";
 import { errorStatus } from "./lib/errors.js";
 // The Matrix bridge's process lifecycle (start / stop / liveness / one --self-test). The protocol itself is the
 // standalone Python program's; this module only ever owns a child process, its pid file and its log.
@@ -2347,6 +2347,24 @@ function insideRepo(target, root) {
   const b = path.resolve(String(root || "")).replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
   if (!b) return false;
   return a === b || a.startsWith(`${b}/`);
+}
+
+// The browser this machine is registered to use for a web page, asked at most once a minute: the answer comes from a
+// `reg.exe` read (lib/open-url.js `resolveDefaultBrowser`), and the clarify card asks for the NAME on every boot while
+// a reader may click four file links in a row. `browser` is "" when nothing resolves, which the card says as "your
+// browser" - the ladder then still opens the file, through rundll32 or explorer.exe.
+let defaultBrowserCache = { at: 0, value: null };
+async function defaultBrowserName() {
+  if (defaultBrowserCache.value && Date.now() - defaultBrowserCache.at < 60_000) return defaultBrowserCache.value;
+  let found = null;
+  try {
+    found = resolveDefaultBrowser();
+  } catch {
+    /* a registry that cannot be read names no browser, which is the answer */
+  }
+  const value = { browser: browserLabel(found?.bin), progId: found?.progId || null, bin: found?.bin || null };
+  defaultBrowserCache = { at: Date.now(), value };
+  return value;
 }
 // One sentence for a console line: whitespace collapsed, and cut where the panel always cuts (a trailing ellipsis, so
 // a truncated sentence never reads as a finished one).
@@ -5559,6 +5577,74 @@ const server = createServer(async (req, res) => {
         return sendJson(res, 500, { error: String((e && e.message) || e) });
       }
       return sendJson(res, 200, { ok: true, url });
+    }
+
+    // A clarify card's FILE link: open one local file in the browser this machine is REGISTERED to use for a web
+    // page, and name that browser to the page so the card can say whose window it will appear in. Never a hard-coded
+    // Chrome: the ladder is lib/open-url.js's (HKCU UrlAssociations -> rundll32 url.dll,FileProtocolHandler ->
+    // explorer.exe), the same one a delivered file goes through, so a machine with no Chrome, or with Edge as its
+    // default, behaves the same way here as it does for a deliverable.
+    //
+    // GET answers the NAME and nothing else (no launch): the page asks once at boot, and the answer is cached for a
+    // minute because a registry read is a subprocess and the card asks on every paint.
+    if (route === "/api/open-file" && req.method === "GET") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const found = await defaultBrowserName();
+      return sendJson(res, 200, { browser: found.browser, progId: found.progId, bin: found.bin });
+    }
+    if (route === "/api/open-file" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const raw = String(body.path || "").trim();
+      if (!raw) return sendJson(res, 400, { error: "no path to open" });
+      // A path from a question is relative to SOMETHING, and the card cannot know which tree: a relative one is
+      // resolved against each project root in turn and the first that exists wins. An absolute one is taken as given.
+      // This is the only place that choice is made, and the answer says which root it landed in.
+      const candidates = [];
+      if (path.isAbsolute(raw)) candidates.push(path.resolve(raw));
+      else {
+        for (const project of scheduler.getProjects()) candidates.push(path.resolve(project.path, raw));
+      }
+      let target = "";
+      let info = null;
+      for (const candidate of candidates) {
+        const found = await stat(candidate).catch(() => null);
+        if (found && found.isFile()) {
+          target = candidate;
+          info = found;
+          break;
+        }
+      }
+      if (!info) {
+        return sendJson(res, 404, {
+          error: candidates.length
+            ? `no such file: ${candidates[0]}${candidates.length > 1 ? ` (or in ${candidates.length - 1} other project root${candidates.length > 2 ? "s" : ""})` : ""}`
+            : `no such file: ${raw} — a relative path is looked for under every open project`,
+        });
+      }
+      // The boundary: a file a QUESTION points at is a file an agent put in a tree, so the panel opens one only inside
+      // a project (or its own checkout), exactly as a deliverable is only opened inside the tree that delivered it.
+      // Without this, any page that can reach this route could open any file on the machine.
+      const roots = [...scheduler.getProjects().map((p) => p.path), HERE].filter(Boolean);
+      if (!roots.some((root) => insideRepo(target, root))) {
+        return sendJson(res, 403, {
+          error: `outside every project: ${target} — a question's link is a file inside a project tree, and this one is not`,
+        });
+      }
+      const opened = await openFileWith(target, { spawn, log });
+      if (!opened.ok) {
+        return sendJson(res, 500, { error: `could not open ${path.basename(target)}: ${opened.error || "no launcher started"}` });
+      }
+      return sendJson(res, 200, {
+        ok: true,
+        path: target,
+        opener: path.basename(opened.bin),
+        via: opened.via,
+        progId: opened.progId || null,
+        fallback: opened.fallback,
+        url: opened.url,
+        bytes: info.size,
+      });
     }
 
     // "The reader has seen the list up to `seq`" — the ONE watermark, and the only write the badge needs. The

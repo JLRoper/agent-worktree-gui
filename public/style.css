@@ -2622,6 +2622,23 @@ a.out-link:hover { color: #a8ccff; text-decoration: underline solid; }
    carries the box's own accent so it reads as part of the box rather than a warning. */
 .tq-again { display: inline-block; margin: 4px 0 0; font: 11px/1.4 var(--mono, var(--ui)); color: var(--q-accent); opacity: .9; }
 .tq-question { margin: 8px 0 9px; font: var(--q-size, 13px)/1.5 var(--ui); color: var(--q-question); white-space: pre-wrap; word-break: break-word; }
+/* The Links section: a reserved block between the question and its choices, one anchor per link. Same place on every
+   card that has one, and absent entirely when a question carries none - an empty box would be a hole in the card.
+   Colours are the box's OWN tint variables, so Settings > Display retints this block with the rest of the card. */
+.tq-links { display: flex; flex-direction: column; gap: 4px; margin: 0 0 9px; padding: 7px 9px; border: 1px solid var(--q-line); border-left: 2px solid var(--q-accent); border-radius: 5px; background: var(--q-choice-bg); }
+.tq-links-head { font-size: 10px; letter-spacing: .04em; text-transform: uppercase; color: var(--q-note); }
+.tq-links-browser { text-transform: none; letter-spacing: 0; opacity: .85; }
+/* One anchor per link, the label first and the target under it in the panel's mono face: a file path is something a
+   reader sometimes wants to read in full (to paste into a terminal) even when they mean to click it. */
+.tq-link { display: flex; flex-direction: column; gap: 1px; padding: 3px 5px; margin: 0 -5px; border-radius: 4px; color: var(--q-head); text-decoration: none; font: calc(var(--q-size, 13px) - 0.5px)/1.4 var(--ui); }
+.tq-link:hover { background: var(--q-choice-hover); text-decoration: underline; }
+.tq-link:focus-visible { outline: 1px solid var(--q-accent); outline-offset: 1px; }
+.tq-link-where { font: 10.5px/1.35 var(--mono, var(--ui)); color: var(--q-note); word-break: break-all; }
+.tq-link-where::before { content: "↳ "; opacity: .7; }
+/* A path or URL inside the question text: a link, but still part of the sentence - so it inherits the sentence's size
+   and wraps where the sentence wraps. */
+.tq-question .out-link, .tq-question .out-file { color: var(--q-head); text-decoration: underline; text-underline-offset: 2px; }
+.tq-question .out-link:hover, .tq-question .out-file:hover { text-decoration-thickness: 2px; }
 .tq-choices { display: flex; flex-direction: column; gap: 6px; }
 .tq-choice { display: flex; align-items: flex-start; gap: 8px; width: 100%; text-align: left; padding: 7px 10px; border: 1px solid var(--q-choice-line); border-radius: 6px; background: var(--q-choice-bg); color: var(--q-choice-text); font: calc(var(--q-size, 13px) - 0.5px)/1.45 var(--ui); white-space: pre-wrap; word-break: break-word; cursor: pointer; }
 button.tq-choice:hover { background: var(--q-choice-hover); border-color: var(--q-choice-hover-line); }

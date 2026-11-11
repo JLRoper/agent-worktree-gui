@@ -71,11 +71,15 @@ function cardMarkup() {
   const source = [
     sliceBetween(dom, "const esc = (s) =>", "\n// A path as a card"),
     sliceBetween(dom, "const OUT_URL_RE", "\nfunction fmtBytes"),
+    // The card's Links section and the browser name a file link uses: `questionPrompt` draws both, and a slice that
+    // left them out would fail on a ReferenceError instead of measuring the card.
+    sliceBetween(page, "const browserName =", "function paintQLook"),
+    sliceBetween(page, "function questionLinks(q) {", "function questionPrompt("),
     sliceBetween(page, "const RECOMMENDED_RE", "// ---- the question box's look (Settings > Display)"),
     sliceBetween(page, 'function questionPrompt(turn, copy = "")', '// "~49m left"'),
   ].join("\n");
   const build = new Function(
-    "turnLive", "questionInFlight", "qLookState", "fmtLeft", "questionPicks", "questionDrafts",
+    "turnLive", "questionInFlight", "qLookState", "fmtLeft", "questionPicks", "questionDrafts", "questionBrowser",
     `${source}\nreturn { questionPrompt };`,
   );
   const turn = {
@@ -92,6 +96,7 @@ function cardMarkup() {
     () => "10m",
     new Map(),
     new Map(),
+    null,
   ).questionPrompt(turn);
 }
 

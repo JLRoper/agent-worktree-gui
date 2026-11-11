@@ -150,6 +150,74 @@ function verdictClass(v) {
 // navigating, so a webview host cannot swallow the click and the link lands in the OS default browser.
 const OUT_URL_RE = /https?:\/\/[^\s<>"'`\u001b]+/g;
 
+// A LOCAL FILE PATH in agent output or in a question, made a link. Same reason as the URL: the panel opens it (the
+// OS-registered browser, through lib/open-url.js) instead of the page navigating anywhere, and a path to a file the
+// reader is meant to look at is otherwise something to copy out of the card and paste into an address bar.
+//
+// Three shapes, because those are the three an agent writes: a drive letter (`C:/x/y.html`, `C:\x\y.html`), a POSIX
+// absolute path (`/var/tmp/x.log`), or a relative one with at least one slash (`docs/reports/x.html`). Every shape
+// must END in an extension - that is what keeps `and/or` and `24/7` and a bare `lib/` from becoming links - and a
+// sentence's full stop lands outside the match because the greedy run is backtracked to the extension.
+const OUT_FILE_RE =
+  /(?:[A-Za-z]:[\\/][^\s<>"'`|]+|\/(?:[\w.@+-]+\/)*[\w.@+-]+|(?:\.{1,2}\/)?(?:[\w.@+-]+\/)+[\w.@+-]+)(?:\.[A-Za-z0-9]{1,8})(?:[?#][^\s<>"'`|]*)?/g;
+
+// Trailing sentence punctuation belongs to the sentence, not to the link - `see docs/x.html.` is a link to
+// `docs/x.html`. `)` and `]` are only trimmed when they are not balanced inside the target, which for a path means
+// never: a path with a paren in it is rare and a path inside prose parens is not.
+function trimLinkTail(raw) {
+  let target = raw;
+  let tail = "";
+  while (target && /[.,;:!?'"]$/.test(target)) {
+    tail = target.slice(-1) + tail;
+    target = target.slice(0, -1);
+  }
+  return { target, tail };
+}
+
+// Does this look like something worth opening, or is it prose that happens to carry a slash? A URL has one of these
+// already (linkifyText checks the host); a path is a path if its last segment has an extension, which the regex
+// above already demanded. What is left is the false positive it cannot see: a version string (`v1.2.3/beta`) or a
+// fraction with a dot after it. Both are short and carry no directory, so a relative path needs a real directory.
+function plausiblePath(target) {
+  if (/^[A-Za-z]:[\\/]/.test(target) || target.startsWith("/")) return true;
+  const dir = target.split("/")[0] || "";
+  return dir.length > 1 && /[A-Za-z]/.test(dir);
+}
+
+// The anchor for a local file: `data-open-file`, which the page's own handler turns into a POST to
+// /api/open-file. No href: there is nothing for this page to navigate to, and a link with a dead href is one a
+// middle-click opens onto an error.
+function fileAnchor(target, { label = "", title = "" } = {}) {
+  const name = label || target;
+  return `<a class="out-file" href="#" data-open-file="${esc(target)}" title="${esc(title || `open ${target} in your browser`)}">${esc(name)}</a>`;
+}
+
+// The question text as the card draws it: URLs and paths both clickable, everything else escaped exactly as before.
+// One pass with both patterns, in that order, because a URL contains slashes and a second pass over already-linked
+// text would link the path inside the anchor it just made.
+function linkifyCardText(text) {
+  // Every anchor made here is STASHED before the next pass runs. A second pass over the page would otherwise see the
+  // slashes inside `href="https://host/a.html"` and link a path inside the anchor it just wrote - the markup, not the
+  // reader's text. The stash is one sentinel per anchor, restored at the end.
+  const held = [];
+  const stash = (html) => `\u0000${held.push(html) - 1}\u0000`;
+  let out = esc(text ?? "").replace(OUT_URL_RE, (raw) => {
+    const { target, tail } = trimLinkTail(raw);
+    const host = target.replace(/^https?:\/\//, "").split(/[/:?#]/)[0].toLowerCase();
+    const plausible = host === "localhost" || /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes(".");
+    if (!plausible) return raw;
+    return stash(`<a class="out-link" href="${target}" target="_blank" rel="noreferrer noopener" data-open-url="${target}" title="open in your browser">${target}</a>`) + tail;
+  });
+  out = out.replace(OUT_FILE_RE, (raw) => {
+    const { target, tail } = trimLinkTail(raw);
+    if (!plausiblePath(target)) return raw;
+    return stash(fileAnchor(target)) + tail;
+  });
+  // `null` as the sentinel must not survive as a stray digit if a stash index is ever wrong: an unmatched sentinel is
+  // dropped, which reads as plain text rather than as markup.
+  return out.replace(/\u0000(\d+)\u0000/g, (_, i) => held[Number(i)] ?? "");
+}
+
 function linkifyText(text) {
   return esc(text ?? "").replace(OUT_URL_RE, (raw) => {
     let url = raw;
@@ -179,5 +247,5 @@ window.WMApp.core = window.WMApp.core || {};
 // through a new global. Nothing reads it yet: app.js still calls the bare names above.
 window.WMApp.core.domFormat = {
   $, keyOf, esc, tailPath, relTime, fmtDur, fmtAgo, elapsed, rowTier, lifeAt, isMainWorktree,
-  movementKey, orderRows, verdictClass, linkifyText, fmtBytes,
+  movementKey, orderRows, verdictClass, linkifyText, linkifyCardText, fileAnchor, fmtBytes,
 };
