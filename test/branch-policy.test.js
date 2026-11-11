@@ -219,8 +219,98 @@ test("a worker's run body names the parent its tree was really cut from", async 
   assert.match(bodyC, /LOCAL-ONLY/, "the blanket local-only rule stands instead");
 });
 
+// A project that NAMES its turnover branch is cut from it, even when its checkout stands on master. That is the
+// defect this case exists for: a plain SPAWN cut from the project checkout's HEAD, so for a repo parked on master the
+// parent read master and every worker was briefed to push a new remote branch - which is how children of an
+// unpublished turnover branch reached the shared remote.
+test("a project's turnover branch is the parent of a tree cut on a master checkout", async (t) => {
+  const stub = await stubGateway();
+  const repo = makeRepo("master");
+  const dir = mkdtempSync(path.join(tmpdir(), "wtgui-policy-turnover-"));
+  t.after(async () => {
+    await stub.stop();
+    rmSync(repo, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+    rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+  });
+  // The turnover branch carries one commit master does not, so the start point of the cut is provable.
+  git(repo, ["checkout", "-q", "-b", "dmr-7-turnover"]);
+  writeFileSync(path.join(repo, "turnover.txt"), "rolled up work\n");
+  git(repo, ["add", "."]);
+  commit(repo, "turnover work");
+  const turnoverTip = git(repo, ["rev-parse", "HEAD"]);
+  git(repo, ["checkout", "-q", "master"]);
+
+  const jobs = makeJobs(dir, stub.url);
+  t.after(() => jobs.dispose());
+  const job = await jobs.create({
+    prompt: "roll the fix up",
+    cwd: repo,
+    existing: false,
+    project: "Menu",
+    turnoverBranch: "dmr-7-turnover",
+    branchPolicy: "allow",
+    remote: "origin",
+  });
+  assert.notEqual(job.status, "failed", `the run was accepted: ${job.error || ""}`);
+  const body = stub.last();
+  assert.match(body, /cut from `dmr-7-turnover`/, `the turnover branch is the parent:\n${body}`);
+  assert.match(body, /this project's turnover branch \(local only\)/, "the paragraph names the case it is in");
+  assert.match(body, /merging `[^`]+` into `dmr-7-turnover` LOCALLY and do not push/, "the worker rolls up locally");
+  assert.doesNotMatch(body, /push it and open a pull request|gh pr create/, "and is never told to open one");
+  assert.doesNotMatch(body, /cut from `master`/, "the checkout's own branch is not the parent");
+  // The cut really started at the turnover tip, and the reader's checkout did not move.
+  assert.equal(git(job.worktreePath, ["rev-parse", "HEAD"]), turnoverTip, "the tree starts at the turnover branch's tip");
+  assert.equal(git(repo, ["rev-parse", "--abbrev-ref", "HEAD"]), "master", "the checkout is still where the reader left it");
+});
+
+// The paragraph's two halves, driven directly: the turnover case reads the same whether the branch is remote-backed
+// or local only, and a landing parent may say a new remote branch is permitted ONLY when no turnover branch exists.
+test("the turnover parent's paragraph is local-only, remote-backed or not, and main may push only without one", () => {
+  const localOnly = branchLandingLine({
+    parent: "feature/turnover",
+    branch: "wtgui/roll-the-fix-up-a1b2c3",
+    turnoverBranch: "feature/turnover",
+    policy: "allow",
+    remote: "origin",
+  });
+  assert.match(localOnly, /cut from `feature\/turnover` - this project's turnover branch \(local only\)/);
+  assert.match(localOnly, /merging `[^`]+` into `feature\/turnover` LOCALLY and do not push/);
+  assert.match(localOnly, /Do not open a pull request/);
+  assert.doesNotMatch(localOnly, /push it and open a pull request|gh pr create/);
+
+  const backed = branchLandingLine({
+    parent: "feature/turnover",
+    branch: "wtgui/roll-the-fix-up-a1b2c3",
+    turnoverBranch: "feature/turnover",
+    turnoverOnRemote: true,
+    policy: "allow",
+    remote: "origin",
+  });
+  assert.match(backed, /this project's turnover branch \(it is remote-backed/, "the remote-backed branch is named, not hidden");
+  assert.match(backed, /merging `[^`]+` into `feature\/turnover` LOCALLY and do not push/, "and the instruction is the same one");
+  assert.doesNotMatch(backed, /push it and open a pull request|gh pr create/);
+
+  // A landing parent with no turnover branch keeps the push, and says why it is allowed to.
+  const plain = branchLandingLine({ parent: "main", branch: "wtgui/x-a1b2c3", policy: "allow", remote: "origin" });
+  assert.match(plain, /push it and open a pull request/);
+  assert.match(plain, /A new remote branch is permitted here only because this project has no turnover branch configured and there is none on origin/);
+
+  // A landing parent WITH one never says push: the work rolls into the declared branch instead.
+  const declared = branchLandingLine({
+    parent: "main",
+    branch: "wtgui/x-a1b2c3",
+    turnoverBranch: "feature/turnover",
+    policy: "allow",
+    remote: "origin",
+  });
+  assert.match(declared, /This project's turnover branch is `feature\/turnover`, so do not push a new remote branch/);
+  assert.match(declared, /merging `[^`]+` into `feature\/turnover` LOCALLY and do not open a pull request/);
+  assert.doesNotMatch(declared, /push it and open a pull request/);
+  assert.doesNotMatch(declared, /`git push -u/);
+});
+
 // The stage's own case, and the one that was missing: a stage whose declared artifact is a document has nothing to
-// land, so its worker is told to commit and report — on a tree cut from main, where the parent's paragraph used to say
+// land, so its worker is told to commit and report - on a tree cut from main, where the parent's paragraph used to say
 // "push it and open a pull request". The paragraph is asserted where a worker READS it: the run body the spy gateway
 // received. The ping-pong's drafter pushed a branch and opened PR #607 under the old rendering.
 test("a stage whose artifact is not a pull request is local-only: commit and report, no push and no PR", async (t) => {

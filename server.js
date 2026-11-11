@@ -89,6 +89,10 @@ import { installGuard, uninstallGuard, guardState, refreshGuardFiles, normTree }
 import { projectRulesRow, rulesFrom, validateRules } from "./lib/project-rules.js";
 // The rules prefix: the read the chip and the rules bar draw, and the one save that replaces a project's list.
 import { RULES_PATH, createProjectRulesRoutes } from "./routes/project-rules.js";
+// A project's turnover branch: the branch its work rolls up into, named by the reader in the project settings. The
+// row shape and validation live with the module; the config write lives here; the wire shape is its own route.
+import { projectTurnoverRow, turnoverBranchFrom, turnoverLookup, validateTurnoverBranch } from "./lib/project-turnover.js";
+import { TURNOVER_PATH, createProjectTurnoverRoutes } from "./routes/project-turnover.js";
 import { safeUrl, openerFor, openerForFolder, chromeFor, openFileWith, resolveFileTarget, resolveDefaultBrowser, browserLabel } from "./lib/open-url.js";
 import { errorStatus } from "./lib/errors.js";
 // The Matrix bridge's process lifecycle (start / stop / liveness / one --self-test). The protocol itself is the
@@ -1035,6 +1039,10 @@ const jobs = new Jobs({
     void tickPipelineWaits();
   },
 });
+// Which branch a cut for a project starts from, when the reader has named one. Read per cut rather than copied at
+// boot: the settings save updates the registry's record, and the very next SPAWN must cut from the new branch without
+// a restart. `registry` is built above this point; a project absent from it is answered "" (the checkout's own ref).
+jobs.turnoverBranchFor = turnoverLookup({ registry, config });
 // Where the work of a card whose run the gateway has forgotten still is: the tree the turn ran in, and the PR its
 // branch has. Read from the board's own rows — a scan already carries the PR per branch (lib/scheduler.js), so this
 // is a lookup, not a measurement: no git call, no gh call, and nothing the boot reconcile would have to pay per
@@ -1432,6 +1440,44 @@ async function setProjectRules(name, value, { by = "reader" } = {}) {
   return { ok: true, project: name, rules };
 }
 
+// ONE PROJECT'S TURNOVER BRANCH, set or cleared. The same four-place write `setProjectRules` performs, because the
+// same three readers have to agree immediately: the file (what a restart boots), the in-memory config (what the next
+// cut asks `jobs.turnoverBranchFor`), the registry's record (what `/api/project-turnover` and the settings bar draw),
+// and the store's project record (what the snapshot carries, so every other tab repaints the chip).
+//
+// Clearing is a real save: `""` removes the key, and the project goes back to cutting from its checkout's own branch.
+async function setProjectTurnover(name, value, { by = "reader" } = {}) {
+  const project = (registry.projects || []).find((p) => p.name === name) || null;
+  if (!project) return { status: 404, error: `unknown project: ${name || "(none)"} - a turnover branch belongs to a project on this board` };
+  const checked = validateTurnoverBranch(value);
+  if (checked.error) return { status: 400, error: checked.error, turnoverBranch: turnoverBranchFrom(project.turnoverBranch) };
+  const raw = await readPanelConfigFile();
+  if (!Array.isArray(raw.projects)) raw.projects = [];
+  const at = raw.projects.findIndex((p) => p && p.name === name);
+  const existing = at >= 0 ? raw.projects[at] : null;
+  const entry = projectTurnoverRow(existing, name, checked.branch);
+  if (at >= 0) raw.projects[at] = entry;
+  else raw.projects.push(entry);
+  try {
+    await writeConfigAtomic(`${JSON.stringify(raw, null, 2)}\n`);
+  } catch (e) {
+    return { status: 500, error: `could not write the turnover branch: ${String((e && e.message) || e)}`, turnoverBranch: turnoverBranchFrom(project.turnoverBranch) };
+  }
+  if (!Array.isArray(config.projects)) config.projects = [];
+  let live = config.projects.find((p) => p && p.name === name) || null;
+  if (!live) {
+    live = { name };
+    config.projects.push(live);
+  }
+  if (entry.turnoverBranch) live.turnoverBranch = entry.turnoverBranch;
+  else delete live.turnoverBranch;
+  const branch = turnoverBranchFrom(checked.branch);
+  project.turnoverBranch = branch;
+  store.patchProject(name, { turnoverBranch: branch });
+  log(`project turnover branch: ${name} -> ${branch || "(none)"} (by ${by})`);
+  return { ok: true, project: name, turnoverBranch: branch };
+}
+
 // "Always allow" in the permission box is the same fact as the two controls saying allow-all for the project that
 // asked. It writes that project's own answer, not a global one: a grant the reader gave about one tree must not
 // open every other checkout on the board. Under a repo force-override the write is stored and REPORTED as not in
@@ -1639,6 +1685,9 @@ const PREFIX_MOUNTS = [
   // bar, and replaced wholesale by the one save. The writer owns config.json and the live records, so it stays here
   // and travels in; the module owns the paths, the status codes and the wire shape.
   { prefix: RULES_PATH, handles: createProjectRulesRoutes({ getConfig: () => config, registry, setProjectRules, sendJson, readBody, authorised }) },
+  // The turnover prefix (routes/project-turnover.js): the branch a project's work rolls up into, drawn in the project
+  // settings and read by every cut. Same writer, same transport, its own path.
+  { prefix: TURNOVER_PATH, handles: createProjectTurnoverRoutes({ getConfig: () => config, registry, setProjectTurnover, sendJson, readBody, authorised }) },
 ];
 // The reset's route: the gateway client, the store path and the single-flight map live in that module; this file only
 // hands the same transport helpers to it and mounts it below.

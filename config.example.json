@@ -67,7 +67,8 @@
     },
     {
       "name": "optym-integration-multi",
-      "pushNewBranches": "always-ask"
+      "pushNewBranches": "always-ask",
+      "turnoverBranch": "feature/optym-turnover"
     }
   ]
 }

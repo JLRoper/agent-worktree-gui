@@ -13,7 +13,7 @@
 // The run body is read off a stub Runs API that records what was actually POSTed: "what the worker reads" is the claim.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -189,7 +189,7 @@ test("a tree cut from main is told to push for a pull request, on its first turn
   assert.notEqual(first.status, "failed", `the run was accepted: ${first.error || ""}`);
   const body1 = stub.last();
   assert.doesNotMatch(body1, /\[object Object\]/, `the parent is a name, never a stringified record:\n${body1}`);
-  assert.match(body1, /cut from `main` — a landing branch, so do not merge into it/);
+  assert.match(body1, /cut from `main` - a landing branch, so do not merge into it/);
   assert.match(body1, /`git push -u origin HEAD` then `gh pr create --fill`/, "the push is spelled out with the project's own remote");
   assert.match(body1, /Remote writes are allowed for this project, so a push is not asked about/, "and it quotes the guard truthfully");
   assert.match(body1, /the question is one complete sentence naming the report and the decision wanted/, "the clarify card's wording rule rides the brief");
@@ -207,7 +207,7 @@ test("a tree cut from main is told to push for a pull request, on its first turn
   await jobsB.create({ prompt: "Keep going", cwd: tree, reply: true, ownerPath: tree, project: "fixture", branchPolicy: "allow", remote: "origin" });
   const body2 = stub.last();
   assert.doesNotMatch(body2, /\[object Object\]/);
-  assert.match(body2, /cut from `main` — a landing branch/, `a renamed tree still reads where it was cut from:\n${body2}`);
+  assert.match(body2, /cut from `main` - a landing branch/, `a renamed tree still reads where it was cut from:\n${body2}`);
   assert.match(body2, /push it and open a pull request/);
   assert.match(body2, /Remote writes are allowed for this project/);
   assert.doesNotMatch(body2, /LOCAL-ONLY|will park and then fail/, "the reply is not told the blanket local-only rule");
@@ -218,6 +218,75 @@ test("a tree cut from main is told to push for a pull request, on its first turn
   await gitSettled(tree, ["switch", "-q", "-c", "scratch/unrelated"]);
   const asked = await jobsB.parentBranchFor({ tree, branch: null, known: null });
   assert.equal(asked, null, "an untagged branch in the recorded directory does not inherit the record");
+});
+
+// A project's turnover branch is the parent a tree cut for it RECORDS, even when the checkout stands on master. The
+// record is the fact every later reader asks (the chart, the steward's roll-up, the landing paragraph of a follow-up
+// turn), so it is asserted in all three places it is written: the parent book, the tree's own branch-parents entry,
+// and the run body the worker reads.
+test("a tree cut from a project's turnover branch records it as the parent", async (t) => {
+  const stub = await stubGateway();
+  const repo = makeRepo("master");
+  const dir = mkdtempSync(path.join(tmpdir(), "wtgui-brief-turnover-"));
+  const jobs = makeJobs(dir, stub.url);
+  t.after(async () => {
+    jobs.dispose();
+    await stub.stop();
+    sweep(dir, repo);
+  });
+
+  git(repo, ["checkout", "-q", "-b", "dmr-7-turnover"]);
+  writeFileSync(path.join(repo, "turnover.txt"), "rolled up work\n");
+  git(repo, ["add", "."]);
+  commit(repo, "turnover work");
+  const turnoverTip = git(repo, ["rev-parse", "HEAD"]);
+  git(repo, ["checkout", "-q", "master"]);
+
+  const job = await jobs.create({
+    prompt: "roll the fix up",
+    cwd: repo,
+    existing: false,
+    project: "fixture",
+    turnoverBranch: "dmr-7-turnover",
+    branchPolicy: "allow",
+    remote: "origin",
+  });
+  assert.notEqual(job.status, "failed", `the run was accepted: ${job.error || ""}`);
+  const card = jobs.get(job.id);
+  assert.equal(card.parent, "dmr-7-turnover", "the card carries the turnover branch as its parent");
+  assert.equal(card.parentSource, "cut");
+  assert.equal(card.parentSha, turnoverTip, "the parent sha is the turnover tip at the cut");
+
+  // 1. The parent book: the durable record every later reader asks.
+  const rec = jobs.parents.get("fixture", job.branch);
+  assert.ok(rec, "the cut is recorded in the parent book");
+  assert.equal(rec.parent, "dmr-7-turnover");
+  assert.equal(rec.parentSource, "cut");
+  assert.equal(rec.parentSha, turnoverTip);
+  assert.equal(rec.parentRef, "dmr-7-turnover", "the ref the cut was told is the turnover branch, not master");
+
+  // 2. The tree's own branch-parents entry: a later run in the tree reads it without a project in hand.
+  const parentsFile = path.join(dir, "logs", "branch-parents.json");
+  let saved = null;
+  for (let i = 0; i < 60 && !saved; i += 1) {
+    try {
+      saved = JSON.parse(readFileSync(parentsFile, "utf8"));
+    } catch {
+      // the write is queued behind the cut; give it a few more ticks
+      await new Promise((r) => setTimeout(r, 50));
+    }
+  }
+  assert.ok(saved, "the branch-parents book was written");
+  const entry = Object.values(saved).find((e) => e && e.branch === job.branch);
+  assert.ok(entry, `the tree's branch-parents entry names ${job.branch}`);
+  assert.equal(entry.parent, "dmr-7-turnover");
+
+  // 3. The worker's own brief: what the tree records is what its parent line says.
+  const body = stub.last();
+  assert.match(body, /cut from `dmr-7-turnover`/, `the brief names the recorded parent:\n${body}`);
+  assert.doesNotMatch(body, /cut from `master`/);
+  assert.doesNotMatch(body, /push it and open a pull request/);
+  assert.equal(git(repo, ["rev-parse", "--abbrev-ref", "HEAD"]), "master", "the reader's checkout did not move");
 });
 
 // The RELEASE paragraph is handed over only while the board's switch is on (Settings -> Board -> Agents clean up):
@@ -329,7 +398,7 @@ test("the reply route briefs a worker with the policy and remote of its tree's p
   const body1 = String(stub.submitted[0]?.input || "");
   assert.deepEqual(stub.submitted[0]?.model_options, { reasoning: { enabled: true, effort: "medium" } }, "the chosen reasoning level reaches the gateway, not just the card");
   assert.equal(job.reasoningEffort, "medium", "the setting is returned on the actual job");
-  assert.match(body1, /cut from `main` — a landing branch/, `the first turn is told to land by pull request:\n${body1}`);
+  assert.match(body1, /cut from `main` - a landing branch/, `the first turn is told to land by pull request:\n${body1}`);
   assert.doesNotMatch(body1, /\[object Object\]/);
 
   // Wait for the first turn to settle, then rename its branch the way the panel does after a first turn.
@@ -356,7 +425,7 @@ test("the reply route briefs a worker with the policy and remote of its tree's p
   assert.ok(body2.includes("use absolute paths"), "the reply still re-anchors its tools");
   assert.ok(replied.json.job.lines.some((line) => line.kind === "init" && line.text.includes(`continuing session ${job.thread} · turn 2`)));
   assert.ok(!replied.json.job.lines.some((line) => /asked to work in|⇢ workspace /.test(line.text)), "no repeated setup note on the route's returned card");
-  assert.match(body2, /cut from `main` — a landing branch/, `the reply is briefed like the first turn:\n${body2}`);
+  assert.match(body2, /cut from `main` - a landing branch/, `the reply is briefed like the first turn:\n${body2}`);
   assert.match(body2, /`git push -u origin HEAD`/, "with the project's own remote, not a placeholder");
   assert.match(body2, /Remote writes are allowed for this project, so a push is not asked about/, "and the project's policy, not the global one");
   assert.doesNotMatch(body2, /LOCAL-ONLY|will park and then fail/, "the continuation is not told the tree is local-only");

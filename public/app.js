@@ -193,6 +193,8 @@ window.WMApp.scaffold = {
   hermesTitle, sigChips, paintRowChips, livenessLines, agentBadgeHtml, repaintAgentState,
   headTitle, chipsHtml, hostChipHtml, hostPanelHtml, repaintHostPanel, proposeHostMapping, saveHostMapping,
   RULES_FALLBACK_CAPS, rulesCaps, rulesFor, rulesBarOpen, rulesChipSig, rulesChipHtml, refreshRulesChip,
+  TURNOVER_FALLBACK_MAX, turnoverMaxChars, turnoverFor, turnoverBarOpen, turnoverChipSig, turnoverChipHtml,
+  refreshTurnoverChip, turnoverLine, turnoverBarHtml, toggleTurnoverBar, closeTurnoverBar, saveProjectTurnover,
   boardOf, boardBarOpen, boardChipSig, boardChipHtml, refreshBoardChip, boardLine, boardBarHtml,
   toggleBoardBar, closeBoardBar,
   barsOf, setBarOrder, openBar, closeBar, barHtml, barSelector, projectBarsHtml, repaintBars, repaintBar,
@@ -309,9 +311,12 @@ const state = {
   // The grey strip under a project's head is a STACK of bars now, and the host bar is one of them. `bars` holds each
   // project's open bar kinds in the order they were opened (rendered newest first); `rulesBar` is the rules bar's own
   // edit state, and `ruleCaps` the two limits `/api/project-rules` answered with (null until the first read).
+  // `turnoverBar` is the same editor state for the turnover branch, and `turnoverCaps` its one cap.
   bars: new Map(),
   rulesBar: null,
   ruleCaps: null,
+  turnoverBar: null,
+  turnoverCaps: null,
   spawn: {},
   paused: false,
   es: null,
@@ -10028,6 +10033,30 @@ document.addEventListener("click", async (e) => {
     e.stopPropagation();
     e.preventDefault();
     closeRulesBar(rclose.dataset.rulesClose);
+    return;
+  }
+  // The turnover chip and the one field it opens: the fourth chip of the same head line, so it stops propagation for
+  // the same reason. Save and close carry their own attributes - the chip's `data-turnover-project` is what toggles,
+  // and the three must not answer one press between them.
+  const rturnover = e.target.closest("[data-turnover-project]");
+  if (rturnover) {
+    e.stopPropagation();
+    e.preventDefault();
+    void toggleTurnoverBar(rturnover.dataset.turnoverProject);
+    return;
+  }
+  const rtSave = e.target.closest("[data-turnover-save]");
+  if (rtSave) {
+    e.stopPropagation();
+    e.preventDefault();
+    void saveProjectTurnover(rtSave.dataset.turnoverSave);
+    return;
+  }
+  const rtClose = e.target.closest("[data-turnover-close]");
+  if (rtClose) {
+    e.stopPropagation();
+    e.preventDefault();
+    closeTurnoverBar(rtClose.dataset.turnoverClose);
     return;
   }
   // The clear button inside the folder search box: restore the full list and put the caret back.

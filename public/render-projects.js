@@ -361,7 +361,7 @@ function projectSection(name) {
     </div>
     <div class="project-head meta-line">
       <span class="mono dim">${mainLine}</span><span class="spacer"></span>${tip}
-      <span class="dimmer mono">${p.fetchNote ? esc(p.fetchNote) + " · " : ""}fetched ${relTime(p.fetchedAt)} ago</span>${hostChipHtml(name)}${rulesChipHtml(name)}${boardChipHtml(name)}
+      <span class="dimmer mono">${p.fetchNote ? esc(p.fetchNote) + " · " : ""}fetched ${relTime(p.fetchedAt)} ago</span>${hostChipHtml(name)}${rulesChipHtml(name)}${turnoverChipHtml(name)}${boardChipHtml(name)}
     </div>
     ${projectBarsHtml(name)}
     <div class="wt-scroll">
@@ -388,6 +388,8 @@ function refreshChips(name) {
   // The rules chip sits in the project's second head line rather than in this strip, and a snapshot (which repaints
   // only the strip and the rows) is how a count saved in another tab arrives — so it is refreshed from here.
   refreshRulesChip(name);
+  // The turnover chip is in that same line, and a branch saved in another tab arrives the same way.
+  refreshTurnoverChip(name);
   // The chart's arrow (top-N collapse) depends on the same rows, so it is refreshed from the same place.
   refreshTopToggle(name);
 }
