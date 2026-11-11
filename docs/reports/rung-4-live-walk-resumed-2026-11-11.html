@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rung 4 live walk, resumed: the decline on pictureviewer PR 12</title>
+<style>
+  :root {
+    --bg: #14161a; --panel: #1b1e24; --line: #2b303a; --ink: #e6e8ec; --dim: #a2a9b6;
+    --ok: #5fbf7a; --warn: #d9a441; --bad: #d9605f; --acc: #6ea8d8;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.62 "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 1020px; margin: 0 auto; padding: 40px 28px 80px; }
+  h1 { font-size: 27px; line-height: 1.25; margin: 0 0 6px; letter-spacing: -0.01em; }
+  h2 { font-size: 19px; margin: 42px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+  h3 { font-size: 15px; margin: 24px 0 6px; color: var(--acc); text-transform: uppercase; letter-spacing: 0.06em; }
+  p { margin: 10px 0; }
+  .sub { color: var(--dim); font-size: 13.5px; margin-bottom: 26px; }
+  .box { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; margin: 18px 0; }
+  .box.hot { border-left: 3px solid var(--bad); }
+  .box.good { border-left: 3px solid var(--ok); }
+  .box.note { border-left: 3px solid var(--warn); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13.5px; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { color: var(--dim); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+  td.n { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  code, pre { font-family: Consolas, "Cascadia Mono", monospace; font-size: 12.5px; }
+  code { background: #0f1115; padding: 1px 5px; border-radius: 4px; color: #cfd6e2; }
+  pre { background: #0f1115; border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px;
+        overflow-x: auto; color: #cfd6e2; line-height: 1.5; }
+  .ok { color: var(--ok); } .bad { color: var(--bad); } .warn { color: var(--warn); } .dim { color: var(--dim); }
+  ul { margin: 8px 0 8px 20px; padding: 0; } li { margin: 5px 0; }
+  .kv { display: grid; grid-template-columns: 190px 1fr; gap: 4px 16px; font-size: 13.5px; }
+  .kv div:nth-child(odd) { color: var(--dim); }
+  footer { margin-top: 46px; border-top: 1px solid var(--line); padding-top: 14px; color: var(--dim); font-size: 12.5px; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Rung 4 live walk, resumed: the decline on pictureviewer PR 12</h1>
+<div class="sub">
+  Round <code>73f744</code> (rung 4 live: the comment loop and the decline on one round) ·
+  panel <code>127.0.0.1:7453</code>, build 1.81.1 ·
+  written 2026-11-11 after the walk's second sitting ·
+  previous sitting died at 00:33:30Z on HTTP 402
+</div>
+
+<div class="box hot">
+  <h3 style="margin-top:0;color:var(--bad)">The three answers this record exists to give</h3>
+  <p><strong>The round stopped at the decline.</strong> The fixed driver refused the edge:
+  <code>pipeline-declined</code>, the row parked at <code>wait</code> at 03:01:47.294Z with
+  "no later stage is entered and nothing is dispatched". It did not rescope past the decline into
+  <code>approve</code>. That is the behaviour the fix was written for, seen on the live row.</p>
+  <p><strong>But the read that stopped it was placed by hand.</strong> The panel's own stage timer
+  could not see the declined pull request at all: at 02:59:27 it answered
+  <em>"no pull request for 20261110_1840_RUNG-4_live_comment_loop_and_decline in pictureviewer"</em>
+  and backed off to a 4 hour re-check. A declined PR is filtered out of the pull request lookup
+  (<code>prFor</code> keeps only OPEN, or MERGED whose head still matches the row). So the graph rule
+  is proved and the reader path is broken.</p>
+  <p><strong>The step cap was not reached.</strong> Two of three H-04 crossings were taken, not three.
+  The reader declined PR 12 at 02:49:09Z, before a third comment existed, and a declined pull request
+  admits no further comment crossings. The cap never fired: the string "cap of" appears zero times in
+  the panel log for this round.</p>
+</div>
+
+<h2>1. What the round had reached before this sitting (step 0)</h2>
+
+<p>Read from the walk's own record and from the row, not from the transcript. The tree record
+(<code>logs/pipeline-records.json</code>, key
+the wait stage worktree's entry, since the panel keys the book by the tree path it normalises)
+stood here:</p>
+
+<pre>"stage": "address", "since": "2026-11-11T00:26:08.202Z",
+"history": [ ... {"stage":"address","at":"2026-11-11T00:05:00.541Z","by":"stage",
+                  "why":"a comment arrived at 2026-11-11T00:02:28.234Z, after 2026-11-10T23:59:22.735Z"},
+             ... {"stage":"address","at":"2026-11-11T00:26:08.202Z","by":"stage",
+                  "why":"a comment arrived at 2026-11-11T00:25:27.440Z, after 2026-11-11T00:19:51.908Z"} ],
+"crossings": { "H-04": 2 },
+"reviewRead": { "state": "OPEN", "advanced": true, "seen": "2026-11-11T00:25:27.440Z", "at": "2026-11-11T00:26:08.202Z" }</pre>
+
+<p>And the queue row (task 2, from the pre-resume snapshot) stood here:</p>
+
+<pre>"state": "parked",
+"hold": { "kind": "manual", "since": "2026-11-11T00:33:33.572Z" },
+"reason": "sefl-review-loop · wait ended failed with no final message - the pipeline waits for a
+           decision rather than re-running the stage",
+"pipelineRun": { "stage": "wait", "via": "H-05", "enteredAt": "2026-11-11T00:19:48.464Z",
+                 "visits": {"branch":1,"push":1,"pr":1,"wait":2,"address":1},
+                 "crossings": {"H-01":1,"H-02":1,"H-03":1,"H-04":1,"H-05":1} }
+"sefl-review-loop/wait#2": { "status": "failed", "job": "69458a89", "settledAt": "2026-11-11T00:33:33.572Z",
+                 "decision": { "code": "pipeline-run-failed", "trigger": "stage-settled" } }</pre>
+
+<div class="kv" style="margin-top:16px">
+  <div>Crossing reached</div><div>H-04, a second time. The timer took it at <code>00:26:08.202Z</code>
+    for comment <code>12789</code> (00:25:27.440Z) and woke the address turn. The tree record says
+    <code>address</code>; the row still says <code>wait</code> - the two records disagreed, which is the
+    first thing this sitting had to repair.</div>
+  <div>First comment</div><div>H-04 took comment <code>12787</code> to <code>address</code> at
+    <code>00:05:00.541Z</code>; H-05 returned the row to <code>wait</code> (visit 2) at
+    <code>00:19:48.464Z</code>. Both halves of the loop ran once before the 402.</div>
+  <div>Step cap</div><div>Did not fire, and could not have: <code>crossings.H-04</code> was 2 against a cap
+    of 3. The 00:33 death was HTTP 402, not a cap refusal.</div>
+  <div>Last decision</div><div>None of the graph's. The panel settled <code>wait#2</code> as
+    <code>pipeline-run-failed</code> at <code>00:33:33.572Z</code> and parked the row on a manual hold,
+    because the wake's run (job <code>69458a89</code>) died on HTTP 402 at
+    <code>00:33:30.435Z</code> with no final message.</div>
+</div>
+
+<h3>What that failure hid</h3>
+<p>The run that died had already done its work. Address visit 2 is committed in the wait tree as
+<code>6c2f7f2</code> ("record the answer to PR 12 review note 2 - address visit 2"): comment
+<code>12789</code> was fixed in <code>ec5ed9c</code>, pushed as <code>1198574</code>, and replied to as
+<code>12790</code> at <code>00:31:09.112Z</code>. None of that reached the ledger, because the failure
+was stamped on <code>wait#2</code> - a stage whose own run (job <code>8d1dbce3</code>) had finished
+cleanly at <code>00:24:12.747Z</code>. The wake ran the address brief in the <em>wait</em> stage's tree
+and thread, so its failure landed on the wait stage's entry. That is defect D1 below.</p>
+
+<h2>2. Which code answered, and which answers the rest (step 1)</h2>
+
+<p>Two panels are listening on this host and they are different instances, not two builds of one row:</p>
+
+<table>
+  <thead><tr><th>Panel</th><th>semver</th><th>bootedAt</th><th>data dir</th><th>Its part in this round</th></tr></thead>
+  <tbody>
+    <tr>
+      <td class="n">127.0.0.1:7453</td>
+      <td class="ok">1.81.1</td>
+      <td class="n">2026-11-10T23:22:21.103Z</td>
+      <td><code>...\Temp\wag\5d4d8fd2\walk\logs</code> (dataSource PANEL_CONFIG)</td>
+      <td>All of it. The round was cut at 23:40:46.360Z and the first job started at 23:40:47.647Z,
+        both after this process booted, so every crossing in this record was answered by the fixed build.</td>
+    </tr>
+    <tr>
+      <td class="n">127.0.0.1:7331</td>
+      <td class="bad">1.80.12</td>
+      <td class="n">2026-11-10T06:34:37.372Z</td>
+      <td>the reader's own panel directory, the default one (dataSource default)</td>
+      <td>None. Its state carries no assistant and no row of this walk. This is the reader's main
+        panel, and the stale answer the briefing quotes belongs to it.</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>So the fixed driver answered the crossings that had already run, and it answered the ones this
+sitting ran. This walk did not prove the old driver at any point. The old process is still up on 7331
+with 20 hours of uptime, which is why <code>/api/build</code> can be read two ways on this host; the
+walk's row was never on it.</p>
+
+<h2>3. What this sitting did (steps 2 and 3)</h2>
+
+<p>The one crossing the record left outstanding was the wait visit that follows H-05. It ran, live, in
+the panel: job <code>c8667a1d</code>, thread <code>wtgui-read-the-pr-s-activities-onc-fd93b0</code>,
+02:48:27 to 02:54:06, exit 0. Its record is commit <code>8289e1d</code> in the wait tree. The reader's
+decline landed 42 seconds after that visit started.</p>
+
+<table>
+  <thead><tr><th>At (UTC)</th><th>What happened</th><th>Where it is written</th></tr></thead>
+  <tbody>
+    <tr><td class="n">02:48:19.891</td><td>The row re-enters <code>wait</code> as visit 3 (H-05, taken the second time).</td><td>queue row, <code>visits.wait = 3</code></td></tr>
+    <tr><td class="n">02:48:27.085</td><td>The panel starts the wait turn in the wait tree.</td><td>panel log, job <code>c8667a1d</code></td></tr>
+    <tr><td class="n">02:49:09.302</td><td><strong>The reader declines PR 12</strong>, himself, in the browser. Activity 178409, version 12, no comment text.</td><td>Bitbucket activities; <code>8289e1d</code></td></tr>
+    <tr><td class="n">02:54:06.204</td><td>The wait turn ends clean; the panel registers the review wait and says it re-checks in 60 min.</td><td>panel log; tree record <code>pipelineWait</code></td></tr>
+    <tr><td class="n">02:55:14</td><td>First tick: <em>"cannot tell - the wait record names no branch"</em>, back off to 120 min.</td><td>panel log</td></tr>
+    <tr><td class="n">02:59:27</td><td>Second tick, with the branch supplied: <em>"cannot tell - no pull request for 20261110_1840_RUNG-4_live_comment_loop_and_decline in pictureviewer"</em>, back off to 240 min.</td><td>panel log</td></tr>
+    <tr><td class="n">03:01:43.526</td><td>The declined read is stamped on the tree record (DECLINED, closed declined) and the wait is cleared.</td><td>tree record <code>reviewRead</code></td></tr>
+    <tr><td class="n">03:01:47.294</td><td><strong>The driver refuses the edge and parks the row.</strong></td><td>queue row, <code>hold.kind = manual</code></td></tr>
+  </tbody>
+</table>
+
+<div class="box good">
+  <h3 style="margin-top:0;color:var(--ok)">The refusal, in the panel's own words</h3>
+  <pre>sefl-review-loop · wait exits on pr-comments, and the pull request is DECLINED - a reviewer's
+answer cannot arrive on it, so the walk ends here: no later stage is entered and nothing is
+dispatched</pre>
+  <p>Stage run <code>sefl-review-loop/wait#3</code>, decision <code>code: pipeline-declined</code>,
+  <code>trigger: declined</code>, <code>by: panel</code>. H-06 (<code>wait</code> to
+  <code>approve</code>) was never taken, so the row did not rescope past the decline.</p>
+</div>
+
+<h2>4. Verdict per crossing</h2>
+
+<table>
+  <thead><tr><th>Edge</th><th>Taken</th><th>Evidence</th><th>Verdict</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>H-01</strong> work to branch</td><td class="n">1</td>
+      <td>job <code>80e4164b</code>, 23:40:47 to 23:46:46, exit 0; branch renamed to
+        <code>20261110_1840_RUNG-4_live_comment_loop_and_decline</code>; record
+        <code>ledger/sefl-review-loop/branch.md</code></td>
+      <td class="ok">taken, clean</td>
+    </tr>
+    <tr>
+      <td><strong>H-02</strong> branch to push</td><td class="n">1</td>
+      <td>job <code>5c9e926b</code>, 23:46:53 to 23:54:18, exit 0; one ref created,
+        <code>630ca1d</code>, explicit refspec, master untouched</td>
+      <td class="ok">taken, clean</td>
+    </tr>
+    <tr>
+      <td><strong>H-03</strong> push to pr</td><td class="n">1</td>
+      <td>job <code>aed3039c</code>, 23:54:22 to 23:59:20, exit 0; PR 12 opened to
+        <code>master</code>, 10 RESCOPED as the branch moved under it</td>
+      <td class="ok">taken, clean</td>
+    </tr>
+    <tr>
+      <td><strong>H-04</strong> wait to address</td><td class="n">2</td>
+      <td>00:05:00.541 for comment <code>12787</code>, answered <code>bc73524</code>, reply
+        <code>12788</code>; 00:26:08.202 for comment <code>12789</code>, answered
+        <code>ec5ed9c</code>, reply <code>12790</code></td>
+      <td class="ok">taken twice, both answered</td>
+    </tr>
+    <tr>
+      <td><strong>H-05</strong> address to wait</td><td class="n">2</td>
+      <td>visit 2 at 00:19:48.464 (job <code>8d1dbce3</code>, record <code>8a841f4</code>); visit 3 at
+        02:48:19.891 (job <code>c8667a1d</code>, record <code>8289e1d</code>)</td>
+      <td class="ok">taken twice, clean</td>
+    </tr>
+    <tr>
+      <td><strong>H-06</strong> wait to approve</td><td class="n">0</td>
+      <td>no <code>approve</code> stage run exists; the decline refused the edge first</td>
+      <td class="ok">correctly never taken</td>
+    </tr>
+    <tr>
+      <td><strong>H-04 cap</strong></td><td class="n">2 of 3</td>
+      <td><code>crossings.H-04 = 2</code>; the cap sentence names 3 rounds; zero "cap of" lines in the
+        panel log; the reader's decline arrived before a third comment</td>
+      <td class="warn">not reached, so neither held nor broken</td>
+    </tr>
+    <tr>
+      <td><strong>Decline stop</strong></td><td class="n">1</td>
+      <td>parked at 03:01:47.294Z, <code>pipeline-declined</code>, manual hold; no later stage entered</td>
+      <td class="ok">observed, on a hand-placed read</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>5. What was observed, and what was supplied by hand</h2>
+
+<p>Three writes were made to the walk's own state to get the round from the 402 death to the decline,
+because the panel had left the ledger in a shape the driver could not act on. None of them is a read
+of the host, and none of them changes what the driver decided.</p>
+
+<table>
+  <thead><tr><th>Write</th><th>Why it was needed</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>wait#2</code> restored to <code>done</code>, job <code>8d1dbce3</code>, record
+        <code>8a841f4</code>; <code>address#2</code> added as <code>done</code>, job
+        <code>69458a89</code>, record <code>6c2f7f2</code></td>
+      <td>The wake's failure had overwritten the wait stage's entry (D1). The work of address visit 2
+        existed on disk and on the PR but not on the row.</td>
+    </tr>
+    <tr>
+      <td>row <code>crossings.H-04 = 2</code>, then H-05 to <code>wait</code> visit 3, row queued</td>
+      <td>The timer had counted the second crossing on the tree record; the row's counter never saw it
+        because the wake's settle failed. The two records had to agree before the driver could move.</td>
+    </tr>
+    <tr>
+      <td>wait record given its branch (<code>20261110_1840_...</code>) and its clock moved back so a
+        tick would read; then the declined read stamped and the wait cleared</td>
+      <td>Without a branch the tick refuses to read; with one, the lookup still refuses the declined
+        PR (D2). The stamp carries the host's own answer - <code>observeBitbucketPr</code> on PR 12's
+        live record and activities, then <code>readReviewExit</code> and <code>reviewReadOf</code>,
+        the panel's own three functions - and the driver then made its own decision on it.</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="box note">
+  <p style="margin-top:0"><strong>Read this against the cap verdict.</strong> The decline stop is real:
+  the graph rule fired, the park is the panel's, and no later stage was entered. But it fired on a read
+  the panel could not have made by itself. Left alone, this row would still be "running" at
+  <code>wait</code>, re-reading in four hours, and the decline would have been invisible to it forever.
+  The step cap was not exercised at all, so the round record can say the cap's arithmetic is intact
+  (<code>2 &lt; 3</code>) but not that the third crossing is refused.</p>
+</div>
+
+<h2>6. Two defects this round put on the table</h2>
+
+<h3>D1. The wake runs the next stage in the wait stage's tree and thread</h3>
+<p><code>lib/jobs.js checkPipelineWait</code> hands the wake the <em>waiting</em> stage's thread:
+<code>wake({ tree, thread: claim.wait.thread || null, ... })</code>. On this round that meant the
+address brief for comment <code>12789</code> ran as job <code>69458a89</code> with its cwd set to the
+<code>stage-4-wait</code> worktree and the wait thread's id. Its commit still landed (the round tree was
+fast-forwarded to it), but its failure was stamped on <code>wait#2</code> and the ledger lost a whole
+stage. A stage's work should run in the stage's own tree. The evidence is one queue entry: wait#2
+failed with job <code>69458a89</code>, while address visit 2 is commit <code>6c2f7f2</code> in the same
+tree.</p>
+
+<h3>D2. A declined pull request cannot be found by the stage timer</h3>
+<p><code>lib/worktrees.js prFor</code> filters candidates through <code>claimable()</code>, which keeps
+only <code>OPEN</code> (or <code>MERGED</code> whose head still matches the row). A dismissed or
+declined PR is dropped, so <code>readReviewForPipelineWait</code> answers "no pull request for
+&lt;branch&gt;" and the wait backs off. The refusal the fix added is correct and unreachable on this
+path. Two shapes would close it: let the wait carry the PR number it was registered against and read
+that number, or let the lookup admit a <code>DECLINED</code> PR when the row is standing at the head
+the PR records. Until one lands, every decline leg will look like a stall.</p>
+
+<h3>D3 (minor). The wait registers with no branch</h3>
+<p><code>registerPipelineWait</code> takes the branch from the job or from the thread's first turn. A
+stage whose tree is a <code>wtgui/*</code> workspace ref names neither, so the first tick after any
+wait stage answers "the wait record names no branch" - once at 00:03:00 in the first sitting, again at
+02:55:14 here. One wasted tick per wait, and it costs a doubling of the backoff.</p>
+
+<h2>7. What is left behind</h2>
+
+<div class="kv">
+  <div>PR 12</div><div><span class="bad">DECLINED</span>, version 12, by Roper at
+    <code>2026-11-11T02:49:09.302Z</code>. Not merged, not reopened. Its <code>fromRef</code> still
+    records <code>6c2f7f2c</code>.</div>
+  <div>Host branch</div><div>The source branch is <strong>gone from origin</strong>: the decline deleted
+    <code>refs/heads/20261110_1840_RUNG-4_live_comment_loop_and_decline</code> (host branch query for
+    <code>RUNG-4</code> returns 0). Nothing the walk pushed remains on the host.</div>
+  <div>Local refs</div><div><code>wtgui/rung-4-live-the-comment-loop-and-the-73f744</code> at
+    <code>6c2f7f2</code>; <code>wtgui/...-stage-4-wait-for-the-reviewer-70c5ac</code> at
+    <code>8289e1d</code> (one commit never pushed); <code>wtgui/...-stage-1-name-the-branch-774046</code>
+    at <code>b90bf60</code>; <code>20261110_1840_RUNG-4_live_comment_loop_and_decline</code> at
+    <code>b90bf60</code>.</div>
+  <div>Worktrees to delete</div><div>Four under the pictureviewer repo's <code>.worktrees/</code> directory:
+    <code>rung-4-live-the-comment-loop-and-the-73f744</code>,
+    <code>...-stage-1-name-the-branch-774046</code>, <code>...-stage-4-wait-for-the-reviewer-70c5ac</code>,
+    and the earlier sitting's <code>rung-4-fixed-driver-5d4d8fd2</code>. Each needs
+    <code>git worktree remove</code> plus its local branch.</div>
+  <div>Row state</div><div>Task 2 of assistant 2 is <code>parked</code> on a manual hold at
+    <code>03:01:47.294Z</code> and will not move again. Its eight stage runs are all
+    <code>done</code>.</div>
+  <div>Panel</div><div>The walk's panel (7453, 1.81.1) is still up. The old 1.80.12 process on 7331 is
+    the reader's main panel and was not touched.</div>
+</div>
+
+<h2>8. The plain answer</h2>
+<p>Was the fixed behaviour observed? <strong>Yes for the graph, no for the reader.</strong> The driver
+refused the crossing on a declined pull request, entered no later stage, and parked the row with
+<code>pipeline-declined</code> - all of that on the live row, from the 1.81.1 process that had been
+running since before the round was cut. But the read it refused on had to be put on the record by this
+sitting, because the timer's lookup drops a declined PR. And the step cap was never reached: the round
+took two of its three crossings before the reader ended it. A round that wants the cap verdict needs a
+fourth comment on an open PR; a round that wants the decline verdict end to end needs D2 fixed
+first.</p>
+
+<footer>
+  Evidence: <code>Temp/wag/5d4d8fd2/walk/logs/pipeline-records.json</code>,
+  <code>.../assistants/assistant-2/queue.json</code>, <code>.../jobs.json</code>,
+  <code>.../panel.log</code>, the pre-resume snapshot
+  <code>Temp/wag/eb02b9b1/queue-before.json</code>, the pictureviewer ledger at
+  <code>ledger/sefl-review-loop/</code> (commits <code>8289e1d</code>, <code>6c2f7f2</code>,
+  <code>8a841f4</code>), and pictureviewer PR 12's record and activities on
+  <code>git.sefl.com</code>.
+</footer>
+
+</main>
+</body>
+</html>
