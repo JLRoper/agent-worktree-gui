@@ -197,6 +197,13 @@ it has no job, no row and no card on the board, so it is shown where you cannot 
   a record written before the split carries no owner and is resolved from its thread at read time, falling back to
   Assistant #1. **All assistants** hides nothing and is always one press away.
 
+> **Cutting from a named parent.** `SPAWN FROM <ref> <project> | …` cuts the new tree from that ref - a branch,
+> a tag or a commit in the project's repo - instead of from whatever the checkout is standing on. The card shows
+> **cut from <ref>** as one of its evidence lines, and on the press the ref is resolved to its commit and recorded
+> as the tree's parent, so the chart hangs the tree under that branch and the worker's landing paragraph rolls the
+> work back into it. A ref that resolves to nothing refuses the line and cuts nothing; `SPAWN IN` starts in a tree
+> that already stands, so it never names a parent.
+
 Two minutes is a watched deadline, not just a colour: a card still open raises **“spawn card unclicked for 2m”**
 (naming the turn that proposed it and the first 60 characters of its prompt) so the assistant sees it in its own
 digest; and a turn whose `SPAWN` line produced *neither* a worker nor a card is journaled as a lost line and
