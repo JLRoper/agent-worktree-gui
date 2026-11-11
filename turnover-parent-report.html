@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The turnover branch as a first-class parent</title>
+<style>
+  :root {
+    --bg: #10131a; --panel: #161b24; --panel2: #1b212c; --line: #2a3240; --text: #d8dee9; --dim: #8b97a8;
+    --dimmer: #66707f; --green: #8ee0a8; --blue: #9ecbff; --amber: #f0c67c; --red: #ff8f8f; --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.6 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 40px 28px 90px; }
+  h1 { font-size: 27px; line-height: 1.25; margin: 0 0 6px; letter-spacing: -0.2px; }
+  .sub { color: var(--dim); font-size: 14px; margin-bottom: 26px; }
+  h2 { font-size: 18px; margin: 38px 0 10px; padding-top: 14px; border-top: 1px solid var(--line); }
+  h3 { font-size: 14.5px; margin: 22px 0 6px; color: var(--text); }
+  p { margin: 9px 0; }
+  code, pre { font-family: var(--mono); font-size: 12.8px; }
+  code { background: #1d2430; border: 1px solid #29313f; border-radius: 4px; padding: 1px 5px; color: #cfd8e6; }
+  pre { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; overflow-x: auto; color: #c8d2e0; }
+  pre code { background: none; border: 0; padding: 0; }
+  .lede { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--blue); border-radius: 8px; padding: 14px 18px; margin: 18px 0 8px; }
+  .lede p { margin: 4px 0; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0 6px; font-size: 13.5px; }
+  th, td { text-align: left; vertical-align: top; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+  th { color: var(--dim); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+  td code { white-space: nowrap; }
+  .tag { display: inline-block; font: 11px/1.7 var(--mono); padding: 0 7px; border-radius: 9px; border: 1px solid var(--line); color: var(--dim); }
+  .ok { color: var(--green); border-color: #2b4736; }
+  .warn { color: var(--amber); border-color: #4a3d22; }
+  .no { color: var(--red); border-color: #4a2b2b; }
+  ul { margin: 8px 0 8px 20px; padding: 0; }
+  li { margin: 5px 0; }
+  .small { font-size: 12.5px; color: var(--dimmer); }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 760px) { .cols { grid-template-columns: 1fr; } }
+  .box { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+  .box h3 { margin-top: 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>The turnover branch is a first-class parent now</h1>
+  <div class="sub">Worktree branch <code>wtgui/make-the-turnover-branch-a-first-class-df6ca4</code>, cut from <code>main</code>. What was wrong, what changed, and what was actually run.</div>
+
+  <div class="lede">
+    <p><strong>The defect in one sentence.</strong> A tree's parent was whichever branch the project's checkout happened to be standing on, so for a repo parked on <code>master</code> every tree read <code>master</code> as its parent, and <code>branchLandingLine</code> told every worker to push a new remote branch and open a pull request.</p>
+    <p><strong>The fix in one sentence.</strong> A project can now name its turnover branch; a cut for that project starts from it, records it as the parent, and the worker is told to merge back into it locally and not push.</p>
+  </div>
+
+  <h2>1. The defect, with the evidence it was found from</h2>
+
+  <p><code>lib/branch-policy.js</code> said, before this branch:</p>
+  <pre><code>//   parent is main / master            -&gt; do NOT merge into it. Push the branch and open a pull request: the parent
+//                                         is a landing branch and the house rule is one reviewable PR per branch.</code></pre>
+
+  <p>and the cut had no way to say otherwise. <code>assistants/assistant-3/notes.md</code> at <code>2026-11-10T22:02Z</code> recorded the missing half: <em>"the panel has no way for a SPAWN to name its base branch"</em>. With the checkout on <code>master</code>, <code>startRefOf</code> answered <code>master</code>, the parent record said <code>master</code>, and the paragraph told the worker to push. That is how the pictureviewer and RUNG-4 branches reached <code>git.sefl.com</code> as children of a turnover branch that had never landed.</p>
+
+  <p>Two separate facts were conflated: <b>where the checkout stands</b> (a property of one working directory) and <b>where this project's work rolls up</b> (a property of the project, which the reader knows and the panel did not ask). This branch separates them.</p>
+
+  <h2>2. The setting: a project names its turnover branch</h2>
+
+  <p>The branch lives on the project's own <code>config.json</code> row, beside <code>mainBranch</code> and <code>remoteBranchPolicy</code>:</p>
+
+  <pre><code>{
+  "name": "optym-integration-multi",
+  "pushNewBranches": "always-ask",
+  "turnoverBranch": "feature/optym-turnover"
+}</code></pre>
+
+  <p><b>Reading is forgiving, writing is strict.</b> <code>lib/project-turnover.js</code> normalises whatever a hand-edited file holds: <code>refs/heads/feature/x</code> reads as <code>feature/x</code>, padding collapses, a number or an object reads as "no branch". A save is refused with the reason when the name is one git cannot carry, is <code>HEAD</code>, or is a landing branch (<code>main</code>, <code>master</code>, <code>trunk</code>, <code>develop</code>). Clearing (<code>""</code>) is a real save and removes the key. A row the writer invents for a discovered project carries the name and the branch and <b>no path</b>: discovery owns where the repository is.</p>
+
+  <p><b>The reader names it in the project settings.</b> The project head line now draws a fourth chip beside host, rules and board: <code>turnover: none</code> or <code>turnover: feature/x</code>, green when a branch is named. Pressing it opens one field with the branch, a save and a close, and a sentence saying what a tree cut from it will be told. The save goes to <code>POST /api/project-turnover</code>, which writes the file, the in-memory config, the registry record and the store's project record, so the very next SPAWN cuts from the new branch without a restart.</p>
+
+  <table>
+    <tr><th>Where</th><th>What</th></tr>
+    <tr><td><code>lib/project-turnover.js</code></td><td>The field: read side, write side, config row shape, and the per-cut lookup.</td></tr>
+    <tr><td><code>routes/project-turnover.js</code></td><td><code>GET</code> the board's names or one project's; <code>POST</code> one save. 200/400/403/404/405.</td></tr>
+    <tr><td><code>server.js</code></td><td><code>setProjectTurnover</code> (the atomic config write) and <code>jobs.turnoverBranchFor = turnoverLookup({ registry, config })</code>.</td></tr>
+    <tr><td><code>public/board-scaffold.js</code>, <code>public/app.js</code>, <code>public/style.css</code></td><td>The chip, the bar, its three click paths, and the styles.</td></tr>
+  </table>
+
+  <h2>3. The cut: a tree for that project starts from the turnover branch</h2>
+
+  <p><code>Jobs.turnoverStartRefOf</code> resolves the configured name against git before the cut, in this order:</p>
+
+  <table>
+    <tr><th>The branch exists</th><th>What the cut does</th><th>What is recorded</th></tr>
+    <tr><td>locally</td><td><code>git worktree add -b &lt;run branch&gt; &lt;tree&gt; &lt;turnover&gt;</code></td><td>parent = the turnover branch, <code>parentSource: "cut"</code></td></tr>
+    <tr><td>only on a remote</td><td>creates the <b>local</b> branch at that commit (<code>git branch --no-track</code>, a local write, never a push), then cuts from it</td><td>same, and the paragraph says it is remote-backed</td></tr>
+    <tr><td>nowhere</td><td>falls back to the checkout's own ref, and logs one line saying the configured name does not exist here</td><td>the checkout's branch, exactly as before</td></tr>
+  </table>
+
+  <p>A name in a config file is not evidence that a branch exists, so the middle row is the only one that creates anything, and it creates it locally. The fan-out base (<code>from</code>), a round's frozen commit and a stage's <code>from</code> still win over the setting: those cuts are pinned by their caller, and a lane that started anywhere else would not share the commit its siblings were cut from.</p>
+
+  <p><b>The parent record reads it.</b> <code>makeWorktree</code> used to take the chart parent from the resolved ref, which was the checkout's branch. A turnover start now carries its own name, so all three records agree: the job's <code>parent</code>/<code>parentSha</code>, the durable parent book, and the tree's own <code>logs/branch-parents.json</code> entry.</p>
+
+  <h2>4. The policy: one new case, and the permission for a new remote branch is now conditional</h2>
+
+  <table>
+    <tr><th>Parent</th><th>What the worker is told</th></tr>
+    <tr><td>the project's turnover branch, remote-backed or local only</td><td class="ok">merge into it <b>LOCALLY</b>, do not push, do not open a pull request; report the merge commit</td></tr>
+    <tr><td>a landing branch, and the project has a real turnover branch</td><td class="ok">do not merge into main, do not push a new remote branch; roll up into the turnover branch locally</td></tr>
+    <tr><td>a landing branch, no turnover branch configured or none on origin</td><td class="warn">push and open a pull request, and the paragraph says this is permitted <b>only because</b> there is no turnover branch</td></tr>
+    <tr><td>any other branch</td><td class="ok">merge into it locally, do not push (unchanged)</td></tr>
+  </table>
+
+  <p>The two clauses the brief asked for are literal in the paragraph: <code>this project's turnover branch</code> for the parent case, and <code>A new remote branch is permitted only when a project has no turnover branch configured and there is none on origin</code>. The paragraph is handed over only when the tree's parent really is a turnover branch git can point at, so a stale config name cannot send a worker to merge into a branch nobody has.</p>
+
+  <h2>5. What was run</h2>
+
+  <table>
+    <tr><th>Command</th><th>Answer</th></tr>
+    <tr><td><code>node --test test/branch-policy.test.js</code></td><td><span class="tag ok">6 pass, 0 fail</span></td></tr>
+    <tr><td><code>node --test test/brief-follows-the-policy.test.js</code></td><td><span class="tag ok">7 pass, 0 fail</span></td></tr>
+    <tr><td><code>node --test test/project-turnover.test.js</code></td><td><span class="tag ok">7 pass, 0 fail</span></td></tr>
+    <tr><td><code>node --test test/branch-policy.test.js test/brief-follows-the-policy.test.js test/project-turnover.test.js</code></td><td><span class="tag ok">20 pass, 0 fail</span></td></tr>
+    <tr><td><code>node --test test/board-lookups.test.js</code></td><td><span class="tag ok">18 pass, 0 fail</span> (the board-scaffold guard)</td></tr>
+  </table>
+
+  <h3>The assertions that carry the requirement</h3>
+  <ul>
+    <li><b>The cut, on a master checkout.</b> A repo with <code>master</code> checked out and a <code>dmr-7-turnover</code> branch one commit ahead: the run body says <code>cut from `dmr-7-turnover`</code>, says <code>this project's turnover branch (local only)</code>, says <code>merging ... into `dmr-7-turnover` LOCALLY and do not push</code>, and contains no <code>push it and open a pull request</code> and no <code>gh pr create</code>. The tree's <code>HEAD</code> equals the turnover tip, and the checkout is still on <code>master</code>.</li>
+    <li><b>The parent record.</b> The in-memory card, <code>jobs.parents.get(project, branch)</code> and <code>logs/branch-parents.json</code> all hold <code>parent: "dmr-7-turnover"</code>, <code>parentSource: "cut"</code>, and the turnover tip as <code>parentSha</code>.</li>
+    <li><b>Remote-backed or not.</b> The paragraph is the same instruction with <code>turnoverOnRemote: true</code> or without it; the only difference is the parenthetical that names which it is.</li>
+    <li><b>The conditional permission.</b> A main parent with no turnover branch still says push and carries the "only because" clause; a main parent with one says <code>so do not push a new remote branch</code> and contains no push command.</li>
+    <li><b>The setting, end to end.</b> A real panel: a save lands in <code>config.json</code>, the row keeps its path, a discovered project gains a row with <b>no</b> path, a clear removes the key, a landing branch is refused with the file untouched, and the value rides <code>/api/state</code> so the chip draws it.</li>
+    <li><b>The lookup.</b> Registry first, config row second, empty otherwise; mutating the registry record changes what the same lookup answers, which is the no-restart guarantee.</li>
+  </ul>
+
+  <h3>The page, checked in a throwaway panel</h3>
+  <p>A sandbox panel was booted from this worktree on port 7391 (never the live 7331, which was not restarted and not edited), with one repo on <code>master</code>. In the real page: the head line drew <code>turnover: none</code>; pressing it opened the field with the status line <code>demo-repo: no turnover branch - a cut starts where the checkout stands</code>, <code>maxlength="120"</code>, save and close; typing <code>feature/turnover</code> and pressing save answered <code>demo-repo: turnover branch feature/turnover</code>, the chip repainted to <code>turnover: feature/turnover</code> with class <code>btn-turnover has-turnover is-open</code>, and <code>config.json</code> held <code>{"name": "demo-repo", "turnoverBranch": "feature/turnover"}</code> with no path. The sandbox was killed afterwards; port 7391 answers nothing.</p>
+
+  <h2>6. Files touched</h2>
+  <table>
+    <tr><th>File</th><th>Change</th></tr>
+    <tr><td><code>lib/project-turnover.js</code> (new)</td><td>The field: read, validate, config row, lookup.</td></tr>
+    <tr><td><code>routes/project-turnover.js</code> (new)</td><td>The read and the one save.</td></tr>
+    <tr><td><code>lib/branch-policy.js</code></td><td>The turnover-parent case; the conditional remote-branch permission on a landing parent.</td></tr>
+    <tr><td><code>lib/jobs.js</code></td><td><code>turnoverStartRefOf</code>, <code>turnoverState</code>, <code>remoteTrackingRefOf</code>, the cut's start selection, the recorded parent, the paragraph's turnover option.</td></tr>
+    <tr><td><code>lib/projects.js</code></td><td>Normalises <code>turnoverBranch</code> onto the project record the board and the cut read.</td></tr>
+    <tr><td><code>server.js</code></td><td><code>setProjectTurnover</code>, the route mount, <code>jobs.turnoverBranchFor</code>.</td></tr>
+    <tr><td><code>public/board-scaffold.js</code>, <code>public/app.js</code>, <code>public/render-projects.js</code>, <code>public/style.css</code></td><td>The chip, the bar, the click paths, the snapshot refresh, the styles.</td></tr>
+    <tr><td><code>config.example.json</code></td><td>One example row names a turnover branch.</td></tr>
+    <tr><td><code>test/branch-policy.test.js</code></td><td>The cut from turnover on master, and the paragraph's four cases.</td></tr>
+    <tr><td><code>test/brief-follows-the-policy.test.js</code></td><td>The parent record at cut, in all three places it is written.</td></tr>
+    <tr><td><code>test/project-turnover.test.js</code> (new)</td><td>The field, the row, the route's shapes, and the round trip through a real panel.</td></tr>
+  </table>
+
+  <h2>7. What this branch deliberately does not do</h2>
+  <ul>
+    <li><b>No push and no pull request for this work</b>, as the brief asked: the branch stops at the commit.</li>
+    <li><b>No full suite.</b> The three files above are the targeted set the brief named; <code>npm run test:changed</code> here lists most of the suite because <code>jobs.js</code>, <code>app.js</code> and <code>server.js</code> are named by hundreds of tests, which is why it was not used as the gate.</li>
+    <li><b>The live panel on 7331 was not restarted and no file in its tree was edited.</b> The page check used a throwaway panel booted from this worktree on its own port.</li>
+  </ul>
+
+  <p class="small">Report generated from the worktree's own tree, the commands above, and the DOM reads quoted in section 5.</p>
+</main>
+</body>
+</html>

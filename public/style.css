@@ -3170,6 +3170,37 @@ button.btn-rules:hover { color: var(--text); border-color: #3a4250; }
 button.btn-rules.is-open { color: #9ecbff; border-color: #1c3a56; background: var(--blue-bg); }
 button.btn-rules:focus-visible { outline: 1px solid #7fb2e8; outline-offset: 1px; }
 
+/* ---- the turnover chip, and the one field it opens ------------------------------------------------------------ */
+/* The head line's fourth chip, between rules: (what a worker here is told) and board: (who claims the repo now):
+   "turnover: <branch>" is where this project's work rolls up. The same pillow as the other three, so the line reads
+   as one row of facts; green when a branch is named, because a named turnover branch is the fact that stops a worker
+   being briefed to push a new remote branch, and blue while its bar is open. */
+button.btn-turnover {
+  margin-left: 6px;
+  padding: 1px 7px;
+  font: 10.5px/1.6 var(--mono);
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: #20242c;
+  color: var(--dimmer);
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+button.btn-turnover.has-turnover { color: #9fd7b4; border-color: #2b4736; }
+button.btn-turnover:hover { color: var(--text); border-color: #3a4250; }
+button.btn-turnover.is-open { color: #9ecbff; border-color: #1c3a56; background: var(--blue-bg); }
+button.btn-turnover:focus-visible { outline: 1px solid #7fb2e8; outline-offset: 1px; }
+/* The editor is a column like the rules bar: the branch, the save, the close, then the sentence that says what a tree
+   cut from it is told. One row of controls, because there is exactly one value. */
+.turnover-form { flex-direction: column; align-items: stretch; gap: 6px; }
+.turnover-form .host-line { max-width: none; min-width: 0; }
+.turnover-form .turnover-body { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.turnover-form .turnover-input { flex: 1 1 auto; min-width: 160px; max-width: 420px; }
+.turnover-form .turnover-hint { white-space: normal; }
+
 /* ---- the board chip, and the claims it opens in the same grey strip ------------------------------------------- */
 /* The third chip of the second head line, after host: (where the links come from) and rules: (what a worker here is
    told): "board: N" is how many of the repo's .agentboard claims name a live PID. Same pillow as the other two, so
