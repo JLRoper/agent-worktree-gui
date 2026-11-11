@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data: file:">
+<title>A clarify card's relative link now opens the file it names - and is plain text when the card has no tree</title>
+<style>
+  :root{ color-scheme:dark; --ink:#e8e6e1; --paper:#14161a; --rule:#2a2f38; --muted:#9aa3ad; --accent:#c8a6ff; --warn:#e5534b; --sunk:#1a1d22; --ok:#7ee2a8; }
+  html,body{ margin:0; background:var(--paper); color:var(--ink); font:15px/1.55 -apple-system,Segoe UI,Helvetica,Arial,sans-serif; }
+  main{ max-width:1080px; margin:0 auto; padding:36px 28px 80px; }
+  h1{ font-size:26px; margin:0 0 4px; letter-spacing:-.01em; }
+  h2{ font-size:19px; margin:38px 0 10px; padding-bottom:6px; border-bottom:1px solid var(--rule); }
+  h3{ font-size:16px; margin:24px 0 8px; }
+  .sub{ color:var(--muted); margin:0 0 22px; }
+  .prov{ color:var(--ink); margin:0 0 14px; }
+  .prov b{ color:var(--accent); }
+  .cards{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin:18px 0 6px; }
+  .card{ border:1px solid var(--rule); border-radius:10px; padding:12px 14px; }
+  .card b{ display:block; font-size:22px; letter-spacing:-.02em; }
+  .card span{ color:var(--muted); font-size:13px; }
+  table{ border-collapse:collapse; width:100%; font-size:13.5px; }
+  th,td{ text-align:left; padding:6px 8px; border-bottom:1px solid var(--rule); vertical-align:top; }
+  th{ color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+  code{ font:12.5px ui-monospace,Consolas,monospace; background:rgba(127,127,127,.12); padding:1px 5px; border-radius:4px; }
+  pre{ font:12.5px/1.5 ui-monospace,Consolas,monospace; background:var(--sunk); border:1px solid var(--rule); border-radius:8px; padding:12px 14px; overflow-x:auto; }
+  .note{ border-left:3px solid var(--accent); padding:6px 0 6px 12px; color:var(--muted); margin:14px 0; }
+  .note b{ color:var(--ink); }
+  .note.warn{ border-color:var(--warn); }
+  ol,ul{ padding-left:22px; }
+  ol li, ul li{ margin:6px 0; }
+  .box{ border:1px solid var(--rule); border-radius:10px; padding:14px 16px; margin:20px 0 0; background:var(--sunk); }
+  .box h2{ margin:0 0 8px; border:0; padding:0; font-size:17px; }
+  figure{ margin:18px 0 6px; }
+  figure img{ width:100%; border:1px solid var(--rule); border-radius:8px; display:block; }
+  figcaption{ color:var(--muted); font-size:12.5px; margin-top:7px; }
+  .ok{ color:var(--ok); }
+  .bad{ color:var(--warn); }
+  .small{ font-size:12.5px; color:var(--muted); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>A clarify card's relative link now opens the file it names - and is plain text when the card has no tree</h1>
+<p class="sub">A worker card asked about <code>docs/reports/rebuild-phase_status.html</code> as bare relative text. The card drew it as a link, the reader pressed it, and the panel went looking in the project's checkout while the run that asked was one level down in a worktree of it. After the fix the same card, clicked in a real browser, opened the file with no banner.</p>
+
+<p class="prov"><b>Measured</b> 2026-11-11, in <code>.worktrees/fix-a-clarify-card-whose-file-link-is-a-dcebdf</code> on
+<code>wtgui/fix-a-clarify-card-whose-file-link-is-a-dcebdf</code>, cut from <code>main</code> at <code>ce87716a</code>
+("docs: render the changelog - 547 releases", <b>version 1.82.1</b>). This branch claims <b>1.82.2</b>.</p>
+
+<p class="prov"><b>The live panel is serving 1.81.8</b> (<code>GET /api/diagnostics</code>: <code>version 1.81.8</code>, pid 16900,
+uptime 46,787 s at the measurement) - a build older than the base itself. Every check below was answered by the gate's own
+panel, which is <b>this tree's <code>server.js</code> at 1.82.2</b>, started on a port of its own. The change touches
+<code>lib/</code>, so the panel the reader is looking at will not show any of it until that process is restarted: nothing here
+can be seen through <code>http://127.0.0.1:7331</code> yet.</p>
+
+<div class="cards">
+  <div class="card"><b>22/22</b><span>live gate checks, after (12/22 before)</span></div>
+  <div class="card"><b>7 of 9</b><span>assertions red before the fix</span></div>
+  <div class="card"><b>0</b><span>anchors drawn without a tree</span></div>
+  <div class="card"><b>Microsoft Edge</b><span>the browser that opened the file</span></div>
+</div>
+
+<h2>Step 0 - the reproduction, on a real card</h2>
+
+<p>The gate (<code>tools/verify-clarify-card-base.mjs</code>) starts a stub gateway, starts a <b>real worker run through the panel's
+own reply route</b> with its cwd in a linked worktree of a sandbox project, and the worker raises a real
+<code>clarify.request</code> whose question text carries the bare path. The panel then holds that question on a real job record
+and the page draws the card from the store, exactly as a reader's page does.</p>
+
+<p>The card drew an anchor. The click posted the path and nothing else, and the route resolved it against the project roots:</p>
+
+<pre>POST /api/open-file   {"path":"docs/reports/rebuild-phase_status.html"}
+HTTP 404              no such file: &lt;scratch&gt;/wtgui-base-oJL3qH/repos/demo/docs/reports/rebuild-phase_status.html
+
+reader banner         open docs/reports/rebuild-phase_status.html: no such file:
+                      &lt;scratch&gt;/wtgui-base-oJL3qH/repos/demo/docs/reports/rebuild-phase_status.html</pre>
+
+<p>The file was in <code>&lt;scratch&gt;/wtgui-base-oJL3qH/repos/demo/.worktrees/report-one/docs/reports/</code> - the tree the run
+that asked the question was sitting in. The panel looked one level up, in the project's own checkout, because that is what
+<code>path.resolve()</code> against its own cwd and a loop over project roots will always do. The gate answered <b>12/22</b> at that
+point, and the two failures that matter are the two the reader feels: the anchor carried no base, and the click opened nothing.</p>
+
+<figure>
+  <img src="assets/clarify-card-relative-2026-11-11/before.png" alt="The card before the fix: the question text carries docs/reports/rebuild-phase_status.html drawn as an underlined link, with two answer rows.">
+  <figcaption>Before: the relative path is drawn as a link, which is a promise the card cannot keep.</figcaption>
+</figure>
+
+<h2>Step 1 - the request carries the base that belongs to the question</h2>
+
+<p>Four pieces, one rule: <b>a relative target belongs to the asking turn's tree, and only the card knows which tree that is.</b></p>
+
+<table>
+  <tr><th>Where</th><th>What it does now</th></tr>
+  <tr><td><code>lib/jobs.js</code></td><td><code>questionBaseFor(job)</code> reads the run's own <code>cwd</code> (else the tree it was cut into) and writes it on the question record as <code>base</code> when the prompt arrives, slashed as the store keeps every path. <code>null</code> when the run is homeless.</td></tr>
+  <tr><td><code>lib/open-url.js</code></td><td><code>resolveFileTarget(target, base)</code>: absolute is taken as given; relative is resolved against the base; <b>relative with no base is an error</b>, not a default. <code>fileUrlFor</code>, <code>fileOpenerLadder</code> and <code>openFileWith</code> take that base, so no path in this file reaches <code>path.resolve</code> against the panel's own cwd any more.</td></tr>
+  <tr><td><code>server.js</code></td><td><code>POST /api/open-file</code> resolves once through <code>resolveFileTarget</code>, refuses a relative path with no base (400, with the sentence), and the loop over "every open project" is gone. The boundary is unchanged: a file is opened only inside a project or the panel's own checkout (403 otherwise).</td></tr>
+  <tr><td><code>public/app.js</code></td><td><code>questionBase(q)</code> reads the record's base, the anchor carries it as <code>data-open-file-base</code>, and <code>openQuestionFile(target, base)</code> posts it beside the path.</td></tr>
+</table>
+
+<p>What the same click answers after the fix - the body is the one the page actually sent, read off the request:</p>
+
+<pre>POST /api/open-file   {"path":"docs/reports/rebuild-phase_status.html",
+                       "base":"&lt;scratch&gt;/wtgui-base-GGbIy1/repos/demo/.worktrees/report-one"}
+HTTP 200              {"ok":true,
+                       "path":".../repos/demo/.worktrees/report-one/docs/reports/rebuild-phase_status.html",
+                       "opener":"msedge.exe","via":"default browser","progId":"MSEdgeHTM","fallback":0,
+                       "url":"file:///.../report-one/docs/reports/rebuild-phase_status.html","bytes":80}</pre>
+
+<h2>Step 2 - draw no anchor you cannot resolve</h2>
+
+<p>In <code>public/core/dom-format.js</code>, <code>fileAnchor</code> returns empty for a relative target with no base, so
+<code>plausiblePath</code> + <code>fileAnchor</code> never emit <code>data-open-file</code> for something the card cannot resolve.
+<code>linkifyCardParts</code> returns both the HTML and the list of targets it refused, and the card prints one line under the
+question:</p>
+
+<pre>relative path, not a link: docs/reports/rebuild-phase_status.html - the card has no tree to resolve it against</pre>
+
+<p>The Links section applies the same rule to its own rows: a relative entry with no base keeps its label and its target and says
+<code>relative path, not a link</code> instead of offering a press that would fail. An absolute path and a URL are untouched, anchor
+for anchor. Two tests pin that and pass both before and after the change.</p>
+
+<h2>Step 3 - the worker brief asks for an absolute path</h2>
+
+<p>The Links paragraph in <code>lib/jobs.js</code> now says, in the worker's own brief:</p>
+
+<pre>... either a `url` or a `path` (an http(s) URL, or an ABSOLUTE path to a file in your tree -
+`.../docs/reports/thing.html`, not `docs/reports/thing.html`).
+A relative path cannot be opened: the card does not know which tree you mean, so it draws the path as
+plain text and says it is relative rather than opening the wrong file - write the absolute one, and the
+card opens it in the reader's browser.</pre>
+
+<h2>Step 4 - every assertion red before its fix</h2>
+
+<p>The same test file, unchanged, run against the base commit (exported with <code>git archive</code> to a scratch folder, not a
+worktree) and against this branch. <b>7 of 9 fail on the base</b>; the two that pass on both are the "absolute path" and "URL"
+cases, which must not change.</p>
+
+<table>
+  <tr><th>Assertion</th><th>On the base</th><th>On this branch</th></tr>
+  <tr><td>the anchor names the tree it belongs to, so the click cannot resolve anywhere else</td><td class="bad">fails - no <code>data-open-file-base</code></td><td class="ok">passes</td></tr>
+  <tr><td>a path with a space and a non-ASCII character keeps its name and its base</td><td class="bad">fails - no base attribute</td><td class="ok">passes</td></tr>
+  <tr><td>a relative target with no base stays plain text, and the card says why</td><td class="bad">fails - nothing clickable, no note</td><td class="ok">passes</td></tr>
+  <tr><td>a Links entry that is relative and has no base is not drawn as a link either</td><td class="bad">fails - an anchor is drawn</td><td class="ok">passes</td></tr>
+  <tr><td>the worker brief asks for an absolute path and says why a relative one cannot be opened</td><td class="bad">fails - the old brief said "absolute, or relative to the tree root"</td><td class="ok">passes</td></tr>
+  <tr><td>the route refuses a relative path with no base instead of guessing one</td><td class="bad">fails - 404 "looked for under every open project"</td><td class="ok">passes - 400 with the sentence</td></tr>
+  <tr><td>the route resolves a relative path against the base it was given, and says where it looked</td><td class="bad">fails - it looked in a project root</td><td class="ok">passes</td></tr>
+  <tr><td>a base cannot walk a file out of the projects</td><td class="bad">fails - <code>win.ini</code> under a foreign base answered 404, not the boundary</td><td class="ok">passes - 403</td></tr>
+  <tr><td>an absolute path is unchanged, and carries no base</td><td class="ok">passes</td><td class="ok">passes</td></tr>
+  <tr><td>a URL is unchanged</td><td class="ok">passes</td><td class="ok">passes</td></tr>
+</table>
+
+<p class="small">Green: <code>env node --test test/clarify-relative-base.test.js</code> - 10 tests, 10 pass. With the three existing
+card tests beside it (<code>clarify-question-links</code>, <code>clarify-question-link</code>, <code>open-url</code>): <b>45 tests, 45 pass</b>.</p>
+
+<h2>Step 5 - the real proof, in a real browser</h2>
+
+<p><code>tools/verify-clarify-card-base.mjs</code> (also <code>npm run verify:clarify-card-base</code>) drives a real Chromium page,
+finds the card by its row key, reads the anchor the page drew, clicks it, and reads the banner afterwards. <b>22 of 22 checks
+pass.</b> The ones that answer the reader's question:</p>
+
+<table>
+  <tr><th>Check</th><th>Answer</th></tr>
+  <tr><td>the run's cwd is the worktree, not the checkout</td><td class="ok">the run sits in <code>.worktrees/report-one</code></td></tr>
+  <tr><td>the question carries the asking turn's tree as its base</td><td class="ok">the worktree path, written by <code>lib/jobs.js</code></td></tr>
+  <tr><td>the anchor's target is the path the worker wrote</td><td class="ok"><code>docs/reports/rebuild-phase_status.html</code></td></tr>
+  <tr><td>the anchor carries the tree, so the click cannot resolve anywhere else</td><td class="ok">yes</td></tr>
+  <tr><td>the click posts the path AND the base the card carries</td><td class="ok">both, read off the request</td></tr>
+  <tr><td>the file it opened is the one in the asking turn's worktree</td><td class="ok"><code>.../report-one/docs/reports/rebuild-phase_status.html</code></td></tr>
+  <tr><td>the answer names the launcher that started</td><td class="ok">default browser (<code>MSEdgeHTM</code>)</td></tr>
+  <tr><td>the file:/// URL went to that launcher</td><td class="ok"><code>file:///.../report-one/docs/reports/rebuild-phase_status.html</code></td></tr>
+  <tr><td>the answer names the reader's registered browser</td><td class="ok"><code>msedge.exe</code> = <b>Microsoft Edge</b></td></tr>
+  <tr><td>the reader saw no failure banner</td><td class="ok">none</td></tr>
+  <tr><td>a relative path with no base is a 400 that says so</td><td class="ok">"the card has to say which tree it is relative to"</td></tr>
+  <tr><td>a base that is wrong names the path it looked for there</td><td class="ok">404 naming the resolved path and the base</td></tr>
+  <tr><td>a base outside every project cannot smuggle a file out</td><td class="ok">403 on <code>win.ini</code> under a foreign base</td></tr>
+  <tr><td>an absolute path still opens without a base</td><td class="ok">200</td></tr>
+  <tr><td>a URL still goes to the OS opener</td><td class="ok">200</td></tr>
+</table>
+
+<figure>
+  <img src="assets/clarify-card-relative-2026-11-11/card.png" alt="The card after the fix, drawn by the panel: the question text with docs/reports/rebuild-phase_status.html underlined as a link, the two answer rows, and the answer box.">
+  <figcaption>The card the gate clicked, drawn by this branch's page. The anchor it read is the one whose click opened the file in Microsoft Edge.</figcaption>
+</figure>
+
+<h2>Step 6 - what was run, what it answered, and what is red</h2>
+
+<table>
+  <tr><th>Command</th><th>Answer</th></tr>
+  <tr><td><code>node tools/absolute-paths.mjs</code></td><td class="ok">clean - 1527 tracked files, 1378 paths in 254 allowlisted files, none new</td></tr>
+  <tr><td><code>env node --test test/clarify-relative-base.test.js</code></td><td class="ok">10 tests, 10 pass</td></tr>
+  <tr><td>the three existing card/open-url test files</td><td class="ok">45 tests, 45 pass</td></tr>
+  <tr><td><code>npm run verify:clarify-card-base</code></td><td class="ok">22/22 checks</td></tr>
+  <tr><td><code>npm run test:changed</code></td><td class="bad">216 files, 1098.9 s, 1813 subtests pass, 13 distinct failures - 2 were mine (the absolute-paths allowlist, and my own test file caught mid-edit), both fixed after; 11 remain and none names a file this change touches</td></tr>
+  <tr><td><code>npm test</code> (the full suite)</td><td class="bad">not run - the focused set already covered 216 of 308 files, and the eleven reds are outside this change</td></tr>
+</table>
+
+<p>The eleven reds, named so they are not mistaken for this landing's:</p>
+<ul>
+  <li><code>windows-hide</code>: <code>lib/child-tree.js:74</code> calls <code>execFile</code> without <code>windowsHide</code>.</li>
+  <li><code>harness</code>: <code>tools/verify-round-tree-names.mjs</code> says LIVE GATE but no <code>package.json</code> script runs it.</li>
+  <li><code>paths</code>: a <code>*File / *Dir / *Log</code> config key is not derived by <code>lib/paths.js</code>.</li>
+  <li><code>assistant-profile</code>: the whitelists are still in the profile.</li>
+  <li><code>pipeline-bench</code> (3 checks), <code>header-controls</code> (1), <code>worktree-assistant</code> (owner/wake), <code>assistant-attachment-spawn</code> (1).</li>
+</ul>
+<p class="small">The first three were re-run against the base export and fail there identically, which is the evidence that they arrived
+with <code>ce87716a</code> and not with this branch. The other eight name files this change never opens.</p>
+
+<div class="box">
+  <h2>The pull request</h2>
+  <p class="big"><b>#706</b> on <code>JLRoper/agent-worktree-gui</code>: <code>wtgui/fix-a-clarify-card-whose-file-link-is-a-dcebdf</code> -&gt; <code>main</code>, cut from <code>ce87716a</code>, version 1.82.2.</p>
+  <p>What a reader gets: a relative path in a question is a link only when the card can say which tree it belongs to, the click
+  resolves against that tree, and a path the card cannot resolve is plain text with one sentence saying why. The worker is told
+  to write the absolute path, and told why.</p>
+  <p class="small">The panel must be restarted to serve this: it is running 1.81.8 from the main checkout, and a <code>lib/</code>
+  change is not picked up until the process is restarted.</p>
+</div>
+
+</main>
+</body>
+</html>
