@@ -310,9 +310,10 @@ wait stage answers "the wait record names no branch" - once at 00:03:00 in the f
   <div>PR 12</div><div><span class="bad">DECLINED</span>, version 12, by Roper at
     <code>2026-11-11T02:49:09.302Z</code>. Not merged, not reopened. Its <code>fromRef</code> still
     records <code>6c2f7f2c</code>.</div>
-  <div>Host branch</div><div>The source branch is <strong>gone from origin</strong>: the decline deleted
-    <code>refs/heads/20261110_1840_RUNG-4_live_comment_loop_and_decline</code> (host branch query for
-    <code>RUNG-4</code> returns 0). Nothing the walk pushed remains on the host.</div>
+  <div>Host branch</div><div>The source branch is <strong>gone from origin</strong>: the host's branch
+    query for <code>RUNG-4</code> returns none, and the pull request's own record is the last thing that
+    named it. The walk's push created it at <code>630ca1d</code> and the later visits moved it to
+    <code>6c2f7f2</code>; nothing the walk pushed remains on the host.</div>
   <div>Local refs</div><div><code>wtgui/rung-4-live-the-comment-loop-and-the-73f744</code> at
     <code>6c2f7f2</code>; <code>wtgui/...-stage-4-wait-for-the-reviewer-70c5ac</code> at
     <code>8289e1d</code> (one commit never pushed); <code>wtgui/...-stage-1-name-the-branch-774046</code>
