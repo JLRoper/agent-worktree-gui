@@ -75,10 +75,12 @@ test("a save is refused when git cannot carry the name, and clearing is a real a
 
 // ---- 3: the config row -----------------------------------------------------------------------------------------
 test("the config row keeps every field it had, invents no path, and drops the key when cleared", () => {
-  const existing = { name: "alpha", path: "C:/repos/alpha", mainBranch: "main", remoteBranchPolicy: "local-only" };
+  // A folder name, not a folder on the machine that wrote this test: the row must keep a path it was given,
+  // and naming a real one would bake a machine's layout into the repository (tools/absolute-paths.mjs).
+  const existing = { name: "alpha", path: "repos/alpha", mainBranch: "main", remoteBranchPolicy: "local-only" };
   const saved = projectTurnoverRow(existing, "alpha", " feature/turnover ");
   assert.equal(saved.name, "alpha");
-  assert.equal(saved.path, "C:/repos/alpha");
+  assert.equal(saved.path, "repos/alpha");
   assert.equal(saved.mainBranch, "main");
   assert.equal(saved.remoteBranchPolicy, "local-only");
   assert.equal(saved.turnoverBranch, "feature/turnover");
@@ -94,7 +96,7 @@ test("the config row keeps every field it had, invents no path, and drops the ke
   // Clearing removes the key rather than storing "" beside the reader's other project facts.
   const cleared = projectTurnoverRow(saved, "alpha", "");
   assert.equal(Object.hasOwn(cleared, "turnoverBranch"), false);
-  assert.equal(cleared.path, "C:/repos/alpha", "the rest of the row survives a clear");
+  assert.equal(cleared.path, "repos/alpha", "the rest of the row survives a clear");
 });
 
 // ---- 4: the route's own contract, with a recorder instead of a socket ------------------------------------------
@@ -217,7 +219,16 @@ test("the route answers the shapes a caller can send, and its read carries the c
 
 test("turnoverOut is the read's one shape, and a project it cannot find says why", () => {
   const registry = { projects: [{ name: "alpha", turnoverBranch: "feature/turnover" }, { name: "beta" }] };
-  assert.deepEqual(turnoverOut(registry, "beta"), { maxChars: TURNOVER_MAX_CHARS, project: "beta", turnoverBranch: "" });
+  // The read gained the THREE KINDS and their labels (lib/base-ref-kind.js): the bar draws its select from this
+  // answer, so a page never carries a second copy of the list or of the words the reader picks from.
+  assert.deepEqual(turnoverOut(registry, "beta"), {
+    maxChars: TURNOVER_MAX_CHARS,
+    kinds: ["checkout", "turnover", "local-turnover"],
+    kindLabels: { checkout: "the checkout's own branch", turnover: "the named turnover branch", "local-turnover": "local turnover branch - ask if none exist" },
+    project: "beta",
+    turnoverBranch: "",
+    baseRefKind: "checkout",
+  });
   assert.deepEqual(turnoverOut(registry, "alpha").turnoverBranch, "feature/turnover");
   const missing = turnoverOut(registry, "nope");
   assert.equal(missing.turnoverBranch, null);

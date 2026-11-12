@@ -91,7 +91,8 @@ import { projectRulesRow, rulesFrom, validateRules } from "./lib/project-rules.j
 import { RULES_PATH, createProjectRulesRoutes } from "./routes/project-rules.js";
 // A project's turnover branch: the branch its work rolls up into, named by the reader in the project settings. The
 // row shape and validation live with the module; the config write lives here; the wire shape is its own route.
-import { projectTurnoverRow, turnoverBranchFrom, turnoverLookup, validateTurnoverBranch } from "./lib/project-turnover.js";
+import { baseRefKindLookup, baseRefKindOf, projectTurnoverRow, turnoverBranchFrom, turnoverLookup, validateBaseRefKind, validateTurnoverBranch } from "./lib/project-turnover.js";
+import { BASE_REF_KIND_LABELS, LOCAL_TURNOVER_KIND } from "./lib/base-ref-kind.js";
 import { TURNOVER_PATH, createProjectTurnoverRoutes } from "./routes/project-turnover.js";
 import { safeUrl, openerFor, openerForFolder, chromeFor, openFileWith, resolveFileTarget, resolveDefaultBrowser, browserLabel } from "./lib/open-url.js";
 import { errorStatus } from "./lib/errors.js";
@@ -1043,6 +1044,10 @@ const jobs = new Jobs({
 // boot: the settings save updates the registry's record, and the very next SPAWN must cut from the new branch without
 // a restart. `registry` is built above this point; a project absent from it is answered "" (the checkout's own ref).
 jobs.turnoverBranchFor = turnoverLookup({ registry, config });
+// Which BASE-REF KIND a cut for this project is made on: the checkout's branch, the branch the project names, or a
+// local turnover branch the panel finds (lib/turnover-base.js). Read per cut for the same reason as the branch name -
+// the settings save updates the registry's record and the very next SPAWN must obey the new kind.
+jobs.baseRefKindFor = baseRefKindLookup({ registry, config });
 // Where the work of a card whose run the gateway has forgotten still is: the tree the turn ran in, and the PR its
 // branch has. Read from the board's own rows — a scan already carries the PR per branch (lib/scheduler.js), so this
 // is a lookup, not a measurement: no git call, no gh call, and nothing the boot reconcile would have to pay per
@@ -1446,16 +1451,23 @@ async function setProjectRules(name, value, { by = "reader" } = {}) {
 // and the store's project record (what the snapshot carries, so every other tab repaints the chip).
 //
 // Clearing is a real save: `""` removes the key, and the project goes back to cutting from its checkout's own branch.
-async function setProjectTurnover(name, value, { by = "reader" } = {}) {
+async function setProjectTurnover(name, value, { by = "reader", baseRefKind = undefined } = {}) {
   const project = (registry.projects || []).find((p) => p.name === name) || null;
   if (!project) return { status: 404, error: `unknown project: ${name || "(none)"} - a turnover branch belongs to a project on this board` };
   const checked = validateTurnoverBranch(value);
   if (checked.error) return { status: 400, error: checked.error, turnoverBranch: turnoverBranchFrom(project.turnoverBranch) };
+  // The KIND is checked before anything is written, and a typo is refused rather than read as `checkout`: the kind
+  // decides where the next cut starts, so storing a guess would move a tree nobody asked to move.
+  const kindChecked = validateBaseRefKind(baseRefKind);
+  if (kindChecked.error) return { status: 400, error: kindChecked.error, turnoverBranch: turnoverBranchFrom(project.turnoverBranch), baseRefKind: baseRefKindOf(project) };
+  // A save that names a branch but no kind keeps the kind this project already had: editing the name must not
+  // silently reset a "local turnover branch" selection.
+  const askedKind = kindChecked.kind === null ? (baseRefKind === undefined ? baseRefKindOf(project) : undefined) : kindChecked.kind;
   const raw = await readPanelConfigFile();
   if (!Array.isArray(raw.projects)) raw.projects = [];
   const at = raw.projects.findIndex((p) => p && p.name === name);
   const existing = at >= 0 ? raw.projects[at] : null;
-  const entry = projectTurnoverRow(existing, name, checked.branch);
+  const entry = projectTurnoverRow(existing, name, checked.branch, askedKind);
   if (at >= 0) raw.projects[at] = entry;
   else raw.projects.push(entry);
   try {
@@ -1471,11 +1483,20 @@ async function setProjectTurnover(name, value, { by = "reader" } = {}) {
   }
   if (entry.turnoverBranch) live.turnoverBranch = entry.turnoverBranch;
   else delete live.turnoverBranch;
+  if (entry.baseRefKind) live.baseRefKind = entry.baseRefKind;
+  else delete live.baseRefKind;
   const branch = turnoverBranchFrom(checked.branch);
   project.turnoverBranch = branch;
-  store.patchProject(name, { turnoverBranch: branch });
-  log(`project turnover branch: ${name} -> ${branch || "(none)"} (by ${by})`);
-  return { ok: true, project: name, turnoverBranch: branch };
+  const kind = baseRefKindOf({ turnoverBranch: branch, baseRefKind: entry.baseRefKind });
+  project.baseRefKind = kind;
+  store.patchProject(name, { turnoverBranch: branch, baseRefKind: entry.baseRefKind || null });
+  log(`project turnover branch: ${name} -> ${branch || "(none)"} [${kind}] (by ${by})`);
+  const note = kind === LOCAL_TURNOVER_KIND
+    ? `${name}: ${BASE_REF_KIND_LABELS[LOCAL_TURNOVER_KIND]}`
+    : branch
+      ? `${name}: turnover branch ${branch}`
+      : `${name}: no turnover branch`;
+  return { ok: true, project: name, turnoverBranch: branch, baseRefKind: kind, note };
 }
 
 // "Always allow" in the permission box is the same fact as the two controls saying allow-all for the project that
@@ -1629,6 +1650,19 @@ assistant = new Assistant({
   onEvent: broadcast,
   onLog: log,
 });
+// WHERE A CUT'S QUESTION GOES. A selection of the third base-ref kind that finds no qualifying branch refuses the cut
+// and asks the reader (lib/turnover-base.js `turnoverBaseQuestion`); this is the card it is asked on - the assistant's
+// own alerts list, at the `question` rule's level, carrying the reason every local branch was refused. A board with no
+// assistant file yet still raises nothing here, and the refusal itself is what the caller reports.
+jobs.askReader = (question) => {
+  const q = question && typeof question === "object" ? question : null;
+  if (!q) return null;
+  return assistant.fired("question", `cut|${q.title || "turnover base"}`, {
+    title: q.title || "no local turnover branch to cut from",
+    detail: q.detail || "",
+    severity: "warn",
+  });
+};
 // Start priming the same index used by snapshots and row events; a slow queue file must not hold
 // the listener down for the worker's entire timeout. Once ready, it broadcasts refreshed names.
 const roundNamesReady = assistant.roundNameIndex.refresh().catch((err) => log(`round names: initial refresh failed: ${String(err?.message || err)}`));

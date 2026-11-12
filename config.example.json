@@ -69,6 +69,10 @@
       "name": "optym-integration-multi",
       "pushNewBranches": "always-ask",
       "turnoverBranch": "feature/optym-turnover"
+    },
+    {
+      "name": "menu",
+      "baseRefKind": "local-turnover"
     }
   ]
 }

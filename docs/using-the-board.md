@@ -276,6 +276,25 @@ mapped says `no host` and offers the strip the same way. Nothing is written unti
 the panel cannot read is refused with the reason rather than guessed at. The tokens and the file behind it are in
 [docs/hosts.md](hosts.md).
 
+**The turnover chip** (`turnover: feature/optym-turnover`, `turnover: local turnover`, or `turnover: none`) says where
+a tree cut for this project **starts**, and the field behind it has three kinds:
+
+| Kind | The cut starts from | The worker is told |
+| --- | --- | --- |
+| the checkout's own branch | whatever branch the project's checkout is standing on. | push and open a pull request (or merge locally, if the parent is a turnover branch). |
+| the named turnover branch | the branch named in this field. | merge into that branch **locally**; no push, no pull request. |
+| local turnover branch - ask if none exist | the local branch the panel finds at cut time. | the same local-only rule, plus how the branch was found and that the child is rolled back by fast-forward. |
+
+The third kind names nothing because there is nothing to name yet: the panel resolves it at the cut, and a branch is a
+candidate only when **three things are true together** - its name is the turnover shape `YYYYMMDD_HHMM_<KEY>_<slug>`, a
+remote carries a branch of that name, and it is **not** an ancestor of `main` or `master`. Each one alone is a
+different wrong answer: a merged branch is publishable-looking but landed, an unpushed branch has the right name and no
+copy anywhere else, and a feature branch is pushed and unmerged but is not turnover work. When no branch qualifies the
+cut is **refused and the reader is asked**, with every local branch and the reason it was refused; it never falls back
+to cutting from `main`, because that silent cut is the thing this kind exists to prevent. A run that does start from a
+found branch is briefed to keep its own tree **local** - it does not push its branch and does not cut a new remote
+branch - and its work is rolled back into the turnover branch by fast-forward.
+
 **Project colours.** `Ctrl+click` a project's title line to tint that project with a random hue; `Ctrl+click` again
 rolls a new one; `Ctrl+Shift+click` clears it. The hue tints only the project's own surfaces (box, title row, column
 header, row hover), so it answers "which project is this" and never changes what a badge means. A plain click still
