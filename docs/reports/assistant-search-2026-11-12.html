@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The assistant's header search: one box, one store read, and the counts it prints</title>
+<style>
+  :root {
+    --bg: #14161a; --panel: #1b1e24; --line: #2b303a; --ink: #e6e8ec; --dim: #a2a9b6;
+    --ok: #5fbf7a; --warn: #d9a441; --bad: #d9605f; --acc: #6ea8d8;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.62 "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 1020px; margin: 0 auto; padding: 40px 28px 80px; }
+  h1 { font-size: 26px; line-height: 1.25; margin: 0 0 6px; letter-spacing: -0.01em; }
+  h2 { font-size: 19px; margin: 42px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+  h3 { font-size: 15px; margin: 24px 0 6px; color: var(--acc); text-transform: uppercase; letter-spacing: 0.06em; }
+  p { margin: 10px 0; }
+  .sub { color: var(--dim); font-size: 13.5px; margin-bottom: 26px; }
+  .box { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; margin: 18px 0; }
+  .box.hot { border-left: 3px solid var(--bad); }
+  .box.good { border-left: 3px solid var(--ok); }
+  .box.note { border-left: 3px solid var(--warn); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13.5px; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { color: var(--dim); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+  td.n { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  code, pre { font-family: Consolas, "Cascadia Mono", monospace; font-size: 12.5px; }
+  code { background: #0f1115; padding: 1px 5px; border-radius: 4px; color: #cfd6e2; }
+  pre { background: #0f1115; border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px;
+        overflow-x: auto; color: #cfd6e2; line-height: 1.5; }
+  .ok { color: var(--ok); } .bad { color: var(--bad); } .warn { color: var(--warn); } .dim { color: var(--dim); }
+  ul { margin: 8px 0 8px 20px; padding: 0; } li { margin: 5px 0; }
+  .kv { display: grid; grid-template-columns: 210px 1fr; gap: 4px 16px; font-size: 13.5px; }
+  .kv div:nth-child(odd) { color: var(--dim); }
+  figure { margin: 18px 0; }
+  figure img { width: 100%; border: 1px solid var(--line); border-radius: 8px; }
+  figcaption { color: var(--dim); font-size: 12.5px; margin-top: 6px; }
+  footer { margin-top: 46px; border-top: 1px solid var(--line); padding-top: 14px; color: var(--dim); font-size: 12.5px; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>The assistant's header search: one box, one store read, and the counts it prints</h1>
+<div class="sub">
+  Written 2026-11-12 from the landing worktree
+  <code>agent-worktree-gui/.worktrees/add-a-search-bar-to-the-assistant-panel-c46646</code>, branch
+  <code>wtgui/add-a-search-bar-to-the-assistant-panel-c46646</code>, version 1.89.4. Every number below came out of
+  <code>npm run verify:assistant-search</code> against a sandbox panel booted from this checkout, or out of the two
+  new test files.
+</div>
+
+<div class="box good">
+  <h3 style="margin-top:0;color:var(--ok)">The short version</h3>
+  <p>A search box now sits in the title row's empty gap, between the <code>auto-safe</code> chip and the
+  <code>0/30 sweeps</code> pill, with a count and a <code>mine</code> toggle. It does not filter the DOM: it asks a
+  new server read, <code>GET /api/assistant/search</code>, over the persisted turns, so it reaches every turn the
+  store kept rather than the five the card draws. A hit loads the page that turn lives on, through the same
+  <code>wtTurnFold.reveal</code> the card's pager uses, and marks the match inside the turn.</p>
+  <p>The row did not grow: <span class="ok">36.94 px with the box and 36.94 px with the box set to
+  <code>display:none</code></span>, measured in the same page.</p>
+</div>
+
+<h2>Where a turn's text actually lives, and what the search queries</h2>
+<p>A turn in the assistant panel is a job record. The fields the search reads are on that record, in the panel's job
+store (<code>~/.wag/state/jobs.json</code>), and they are read through the same two functions the rest of the
+assistant already reads them with:</p>
+
+<table>
+  <tr><th>Field</th><th>Where it is stored</th><th>Read by</th></tr>
+  <tr>
+    <td>the reader's prompt ("his input")</td>
+    <td><code>prompt</code> on the job record</td>
+    <td rowspan="3"><code>Jobs.list()</code> and <code>Jobs.get()</code> in <code>lib/jobs.js</code>, through
+    <code>Assistant.searchTurns()</code> in <code>lib/assistant.js</code></td>
+  </tr>
+  <tr>
+    <td>the assistant's reply</td>
+    <td><code>finalMessage</code> on the record (the run's last word; the card's
+    <code>completion.final.text</code> is the same text after the summary pass)</td>
+  </tr>
+  <tr>
+    <td>a tool / console line</td>
+    <td><code>lines[]</code>, one <code>{kind, text, lid, at}</code> per line, searched line by line with
+    <code>text</code> and the line's own <code>kind</code> carried on the hit</td>
+  </tr>
+</table>
+
+<p>That is the whole reason the box could not be a page filter: <code>conversations()</code> hands the card five
+turns (<code>wtTurnFold.PER_PAGE</code>) whose consoles hold a tail (60 lines), while the store holds every turn it
+kept (80 jobs in the store this was proved against, 22 of them Assistant #1's). The search module is
+<code>lib/assistant/search.js</code>; the adapter is <code>routes/assistant-search.js</code>, mounted in
+<code>server.js</code> beside the queue and digest prefixes and shaped like <code>routes/assistant-queue.js</code>
+(a factory taking the Assistant plus the transport's <code>sendJson</code>, one exact path, its own 405).</p>
+
+<h2>The query's meaning, once, for both sides</h2>
+<p>The matcher is <code>public/core/turn-search.js</code>: a classic script <code>public/index.html</code> loads
+before <code>assistant.js</code>, and an ES module <code>lib/assistant/search.js</code> imports. One implementation,
+so a hit cannot mean one thing in the count and another in the mark.</p>
+
+<table>
+  <tr><th>Query</th><th>Means</th></tr>
+  <tr><td><code>sweeps pill</code></td><td>a plain substring, case-insensitively: no wildcard, no pattern</td></tr>
+  <tr><td><code>public*js</code></td><td><code>*</code> is any run of characters, including none</td></tr>
+  <tr><td><code>t?rn</code></td><td><code>?</code> is exactly one character</td></tr>
+  <tr><td><code>[</code>, <code>.</code>, <code>(</code>, <code>$</code></td><td>literals, because every regex
+  metacharacter is escaped before the pattern is compiled</td></tr>
+</table>
+
+<div class="box note">
+  <h3 style="margin-top:0;color:var(--warn)">The escaping, proved where it used to throw</h3>
+  <p>Compiling the raw query is what made a bracketed search a 500: a bare <code>[</code> is an
+  <code>Unterminated character class</code>, and a raw <code>.</code> matches anything. The test file
+  <code>test/turn-search.test.js</code> queries <code>[</code> and <code>.</code> against text that holds neither
+  and asserts <span class="ok">zero, with no exception</span>, then asserts the same two characters are found where
+  the text does hold them. <code>test/assistant-search.test.js</code> repeats the zero case through the search
+  engine and through the route. In the live panel, <code>[</code> answered
+  <span class="ok">29 matched</span> and the page raised no error.</p>
+</div>
+
+<h2>Scope, the cap, and the two numbers</h2>
+<p>The route takes <code>q</code>, <code>scope</code>, <code>limit</code> and an optional <code>assistantId</code>.
+<code>scope</code> defaults to <code>all</code> (prompt, reply and every console line); the box's <code>mine</code>
+toggle sends <code>input</code>, which searches only what the reader typed. <code>limit</code> defaults to 20 and is
+capped at 50.</p>
+<p>When the cap bites, the answer keeps the reader's own input first, then the replies, then the console lines,
+newest first inside each class. The answer always carries <code>matched</code> beside <code>displayed</code>, and
+the box prints them as <code>matched/displayed</code> beside the box (amber when they differ), so the list can never
+look complete when it is not.</p>
+
+<h2>The proof, in a real panel</h2>
+<p>The sandbox is booted from this checkout with a copy of the reader's own job store, Assistant #1 selected on its
+Chat pane. The card first draws five turns; the phrase below lives on the oldest turn the store keeps for that
+assistant (22 turns, five pages), so the page provably does not hold it.</p>
+
+<table>
+  <tr><th>Typed into the box</th><th>The panel's count</th><th>What it shows</th></tr>
+  <tr>
+    <td><code>watch: [watch] watch finished: spawned: Resume</code></td>
+    <td class="n ok">1/1</td>
+    <td>a phrase from the oldest turn, several pages back: one hit, the reader's input; the click loaded
+    <code>77f99872</code>'s page and marked the whole phrase inside the turn, brackets and all</td>
+  </tr>
+  <tr>
+    <td><code>watch:*Resume</code></td>
+    <td class="n ok">1/1</td>
+    <td>the same turn through <code>*</code> as a wildcard, typed as plain text</td>
+  </tr>
+  <tr>
+    <td><code>the</code></td>
+    <td class="n warn">94/10</td>
+    <td>the cap biting: 94 matched, 10 displayed, the first rows all "you" (his input kept first), and the count's
+    tooltip says so</td>
+  </tr>
+  <tr>
+    <td><code>[</code></td>
+    <td class="n">29 matched</td>
+    <td>a literal bracket, no exception, no error in the page console</td>
+  </tr>
+</table>
+
+<figure>
+  <img src="assistant-search-header.png" alt="The assistant title row with the search box, a 94/10 count, the mine chip and the results popover">
+  <figcaption>The title row: <code>Assistant #1</code> - <code>auto-safe</code> - the search box with
+  <code>the</code>, <code>94/10</code> and <code>mine</code> - <code>0/30 sweeps</code> - close. Under it, the
+  results: one row per hit, each with where it came from, its turn's ordinal and a one-line window with the match
+  marked.</figcaption>
+</figure>
+
+<div class="box">
+  <h3 style="margin-top:0">The row, measured</h3>
+  <div class="kv">
+    <div>title row, box visible</div><div>36.94 px</div>
+    <div>title row, box <code>display:none</code></div><div>36.94 px</div>
+    <div>the box itself</div><div>20 px tall (the chips beside it are 21.94 px, so the row's tallest child did not change)</div>
+    <div>left to right</div><div>mode chip ends 1463.27 - search starts 1509.64 - search ends 1636.03 - chips start 1644.03</div>
+    <div>the results</div><div><code>position: fixed</code> under the box, so a result can never add a line to the row</div>
+  </div>
+</div>
+
+<h2>What was run</h2>
+<table>
+  <tr><th>Command</th><th>Answer</th></tr>
+  <tr><td><code>node --test test/turn-search.test.js test/assistant-search.test.js</code></td>
+      <td class="ok">24 tests, 24 pass (8 matcher, 16 search + route)</td></tr>
+  <tr><td><code>npm run verify:assistant-search</code></td>
+      <td class="ok">20/20 checks, screenshot written</td></tr>
+  <tr><td><code>npm run test:changed</code></td><td>RUNTEST_CHANGED</td></tr>
+  <tr><td><code>npm test</code></td><td>RUNFULL</td></tr>
+  <tr><td><code>npm run absolute-paths</code></td><td class="ok">clean: no new absolute path in any tracked file</td></tr>
+</table>
+
+<h2>Files</h2>
+<div class="kv">
+  <div>the matcher</div><div><code>public/core/turn-search.js</code> (new; loaded by <code>public/index.html</code>, imported by the server module)</div>
+  <div>the search</div><div><code>lib/assistant/search.js</code> (new: the three fields, the cap's preference, matched vs displayed)</div>
+  <div>the read</div><div><code>lib/assistant.js</code>, method <code>searchTurns()</code> (the thread set for one assistant, the store read)</div>
+  <div>the route</div><div><code>routes/assistant-search.js</code> (new) mounted in <code>server.js</code></div>
+  <div>the box</div><div><code>public/index.html</code>, <code>public/style.css</code>, and the search block in <code>public/assistant.js</code></div>
+  <div>the tests</div><div><code>test/turn-search.test.js</code>, <code>test/assistant-search.test.js</code> (new)</div>
+  <div>the proof</div><div><code>tools/verify-assistant-search.mjs</code> (new), <code>npm run verify:assistant-search</code></div>
+</div>
+
+<footer>
+  One implementation of the query, one read of the store, one count that always says both numbers. The box is
+  <code>#as-search</code>; the endpoint is <code>/api/assistant/search</code>; the store is
+  <code>Jobs.list()</code>/<code>Jobs.get()</code>.
+</footer>
+
+</main>
+</body>
+</html>

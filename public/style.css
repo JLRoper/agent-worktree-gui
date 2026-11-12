@@ -3461,6 +3461,51 @@ button.btn-board:focus-visible { outline: 1px solid #7fb2e8; outline-offset: 1px
 #btn-as-close:hover { color: var(--text); }
 #assistant > .as-bar .chips { display: flex; gap: 5px; flex: 0 1 auto; flex-wrap: wrap; }
 
+/* The header's search: ONE box in the gap the spacer leaves between the mode chip and the chips row, and a popover
+   under it. The box is 20px tall and the chips beside it measure 21.94px at the default zoom, so the title row -
+   its tallest child plus the bar's own 7px padding - measures the same with this control in it as without. Nothing
+   here sets the row's height: the results are position: fixed (the pane clips its own overflow), so a result can
+   never wrap the row or add a line to it. */
+#assistant > .as-bar .as-search { display: flex; align-items: center; gap: 4px; flex: 1 1 96px; min-width: 96px; max-width: 170px; height: 20px; }
+#assistant > .as-bar .as-search-q {
+  flex: 1 1 auto; min-width: 0; width: 100%; height: 20px; box-sizing: border-box;
+  font-family: var(--mono); font-size: 10.5px; line-height: 18px; color: var(--text);
+  background: #0d121a; border: 1px solid var(--line); border-radius: 5px; padding: 0 5px;
+}
+#assistant > .as-bar .as-search-q::placeholder { color: var(--dimmer); }
+#assistant > .as-bar .as-search-q:focus { outline: none; border-color: #3b6ea8; background: #0b1017; }
+#assistant > .as-bar .as-search-n { font-size: 10px; color: var(--dim); white-space: nowrap; }
+#assistant > .as-bar .as-search-n.is-capped { color: #e3b341; }
+#assistant > .as-bar .as-search-n[hidden] { display: none; }
+#assistant > .as-bar .as-search-scope {
+  flex: 0 0 auto; font-family: var(--mono); font-size: 9.5px; line-height: 1; letter-spacing: .04em;
+  color: var(--dim); background: #171f2a; border: 1px solid #2a3444; border-radius: 99px;
+  padding: 4px 6px; cursor: pointer;
+}
+#assistant > .as-bar .as-search-scope:hover { color: var(--text); border-color: var(--dim); background: #1d2734; }
+#assistant > .as-bar .as-search-scope[aria-pressed="true"] { color: #7ee787; border-color: #2ea043; background: var(--green-bg); }
+
+/* The results: a popover under the box. Fixed rather than absolute so the pane's `overflow: hidden` cannot clip it;
+   96 is above the floating rail (90) and its bar, so a row can be read even when the rail is over the board. */
+.as-search-pop {
+  position: fixed; z-index: 96; display: flex; flex-direction: column; gap: 1px;
+  padding: 4px; overflow-y: auto; background: #121821; border: 1px solid #2a3444; border-radius: 7px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .55);
+}
+.as-search-pop[hidden] { display: none; }
+.as-search-row {
+  display: grid; grid-template-columns: auto 1fr; gap: 0 6px; text-align: left; cursor: pointer;
+  background: none; border: 0; border-radius: 5px; padding: 4px 5px; color: var(--text);
+}
+.as-search-row:hover, .as-search-row:focus-visible { background: #1b2532; outline: none; }
+.as-search-where { grid-row: 1; grid-column: 1; font-size: 9.5px; color: #8fb8ff; text-transform: uppercase; letter-spacing: .05em; }
+.as-search-meta { grid-row: 1; grid-column: 2; font-size: 9.5px; color: var(--dimmer); }
+.as-search-snip { grid-column: 1 / -1; grid-row: 2; font-size: 11px; line-height: 1.4; color: var(--dim); overflow-wrap: anywhere; }
+.as-search-more { padding: 4px 5px 2px; font-size: 9.5px; color: var(--dimmer); border-top: 1px solid var(--line); }
+/* The match, in a result row and inside the turn it belongs to: one mark, one colour, both drawn by a read of the
+   same compiled query. */
+mark.as-search-mark { background: #5c4310; color: #ffe9a8; border-radius: 2px; padding: 0 1px; box-shadow: 0 0 0 1px #b8860b; }
+
 .as-tabs { display: flex; gap: 2px; padding: 4px 6px 0; background: var(--panel-2); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .as-tabs button {
   border: 1px solid transparent; border-bottom: 0; background: none; color: var(--dim);

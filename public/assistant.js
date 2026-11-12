@@ -593,6 +593,350 @@
     if (key && typeof toggleTurn === "function") toggleTurn(key);
   }
 
+  // ---- the header's turn search: one box in the title row, one read of the store behind it -----------------
+  //
+  // WHY A READ AND NOT A FILTER. The card on screen holds five turns (`wtTurnFold.PER_PAGE`) and the console's
+  // tail, and the reader who remembers a phrase from forty turns back is asking about text the page does not
+  // hold. So the box asks the server: /api/assistant/search, routes/assistant-search.js over
+  // lib/assistant/search.js, which reads the SAME job store the card was built from - `prompt`, `finalMessage`
+  // and `lines[]` - and answers `matched` beside `displayed` so the count can never imply the list is complete.
+  // The query's meaning (`*`/`?` wildcards, a plain substring, case-insensitive, metacharacters escaped) is
+  // public/core/turn-search.js in both places, so a hit cannot mean one thing here and another in the count.
+  //
+  // WHAT A HIT DOES. `openSearchHit` puts the turn in front of the reader through the card's OWN paging:
+  // wtTurnFold.reveal picks the page the turn lives on, unfolds it and writes the page offset, so the repaint
+  // below is the ordinary one; then the matched text is marked inside the turn. The results are a fixed popover
+  // under the box, so no result can ever add a line to the title row.
+  const SEARCH_DEBOUNCE = 200;
+  const SEARCH_LIMIT = 10;
+  let searchTimer = null;
+  let searchSeq = 0;
+  let searchHits = [];
+  let searchOut = null;
+  let searchAt = -1;
+  let searchShownQuery = "";
+  let searchScope = "all";
+
+  function paintSearchCount(out) {
+    const el = as$("as-search-n");
+    if (!el) return;
+    const matched = Number(out?.matched) || 0;
+    const displayed = Number(out?.displayed) || 0;
+    el.dataset.searchMatched = String(matched);
+    el.dataset.searchDisplayed = String(displayed);
+    // The query this count belongs to. A slow answer for `app` must not be read as the answer for `app.js` - the
+    // sequence guard already drops it, and this makes the box's state legible to anything watching (and to the
+    // verify script, which waits on it rather than on a sleep).
+    el.dataset.searchQuery = out ? String(out.query || "") : "";
+    if (!matched) {
+      el.hidden = true;
+      el.textContent = "";
+      el.removeAttribute("title");
+      el.classList.remove("is-capped");
+      return;
+    }
+    const capped = matched > displayed;
+    el.hidden = false;
+    el.textContent = `${matched}/${displayed}`;
+    el.classList.toggle("is-capped", capped);
+    el.title = capped
+      ? `${matched} matched, ${displayed} displayed - your own input is kept first when the cap bites`
+      : `${matched} matched, all ${displayed} displayed`;
+  }
+
+  // One result row: where the hit is (the reader's input, the reply, or the console line's own kind), the turn's
+  // ordinal on ITS card, and a one-line window with the match marked. The window is built by the server and split
+  // into before/hit/after there, so this never re-finds a match with a second regex that could disagree.
+  function searchHitHtml(hit, index) {
+    const where = hit.field === "input" ? "you" : hit.field === "reply" ? "reply" : String(hit.kind || "tool");
+    const ordinal = searchTurnOrdinal(hit);
+    const when = searchAge(hit.at);
+    const meta = [ordinal ? `turn ${ordinal}` : "", when].filter(Boolean).join(" - ");
+    const lead = hit.lead ? "..." : "";
+    const tail = hit.tail ? "..." : "";
+    const marked = hit.hit ? `<mark class="as-search-mark">${esc(hit.hit)}</mark>` : "";
+    return (
+      `<button type="button" class="as-search-row" data-search-hit="${index}" title="open this turn in the card">` +
+      `<span class="as-search-where mono">${esc(where)}</span>` +
+      `<span class="as-search-meta mono">${esc(meta)}</span>` +
+      `<span class="as-search-snip">${lead}${esc(hit.before)}${marked}${esc(hit.after)}${tail}</span>` +
+      `</button>`
+    );
+  }
+
+  function renderSearchPop(out) {
+    const pop = as$("as-search-pop");
+    if (!pop) return;
+    const hits = Array.isArray(out?.hits) ? out.hits : [];
+    if (!out || !out.matched || !hits.length) {
+      pop.hidden = true;
+      pop.innerHTML = "";
+      return;
+    }
+    const matched = Number(out.matched) || 0;
+    const displayed = Number(out.displayed) || 0;
+    const foot =
+      `<div class="as-search-more mono">${matched} matched, ${displayed} displayed` +
+      `${matched > displayed ? " - your own input is kept first when the cap bites" : ""}</div>`;
+    pop.innerHTML = hits.map((h, i) => searchHitHtml(h, i)).join("") + foot;
+    pop.hidden = false;
+    placeSearchPop();
+  }
+
+  // Under the box, right edges aligned and never off the screen: the rail hugs the window's right edge and the
+  // popover is wider than the box, so it grows leftwards.
+  function placeSearchPop() {
+    const pop = as$("as-search-pop");
+    const box = as$("as-search");
+    if (!pop || !box || pop.hidden) return;
+    const r = box.getBoundingClientRect();
+    const width = Math.min(380, Math.max(250, r.width + 140));
+    const right = Math.min(window.innerWidth - 8, Math.max(8, r.right));
+    const left = Math.max(8, right - width);
+    const top = Math.round(r.bottom + 6);
+    pop.style.width = `${width}px`;
+    pop.style.left = `${left}px`;
+    pop.style.top = `${top}px`;
+    pop.style.maxHeight = `${Math.max(120, Math.min(window.innerHeight * 0.42, window.innerHeight - top - 12))}px`;
+  }
+
+  function clearSearchMarks() {
+    for (const mark of document.querySelectorAll("mark.as-search-mark")) {
+      if (!mark.parentNode) continue;
+      mark.replaceWith(...mark.childNodes);
+    }
+  }
+
+  // Empty the popover and the count, leave the box's text alone: this is what a re-search or a scope change does
+  // before its own answer lands.
+  function clearSearch() {
+    searchHits = [];
+    searchOut = null;
+    searchAt = -1;
+    searchShownQuery = "";
+    if (searchTimer) {
+      clearTimeout(searchTimer);
+      searchTimer = null;
+    }
+    const pop = as$("as-search-pop");
+    if (pop) {
+      pop.hidden = true;
+      pop.innerHTML = "";
+    }
+    paintSearchCount(null);
+    clearSearchMarks();
+  }
+
+  function clearSearchAll() {
+    const input = as$("as-search-q");
+    if (input) input.value = "";
+    clearSearch();
+  }
+
+  function armSearch(delay = SEARCH_DEBOUNCE) {
+    if (searchTimer) clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      searchTimer = null;
+      runSearch();
+    }, delay);
+  }
+
+  // One read. `seq` is the whole guard against a slow answer for `app` landing after a fast one for `app.js`: the
+  // answer that is not the latest keystroke's is dropped, not drawn over the newer one.
+  async function runSearch() {
+    const input = as$("as-search-q");
+    if (!input) return null;
+    const q = String(input.value || "").trim();
+    if (!q) {
+      clearSearch();
+      return null;
+    }
+    const seq = ++searchSeq;
+    const params = new URLSearchParams({ q, scope: searchScope, limit: String(SEARCH_LIMIT), assistantId: activeSessionId() });
+    let out = null;
+    try {
+      const r = await apiFetch(`/api/assistant/search?${params.toString()}`, {}, { timeoutMs: 8000 });
+      if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+      out = await r.json();
+    } catch (err) {
+      if (seq !== searchSeq) return null;
+      searchHits = [];
+      searchOut = null;
+      searchAt = -1;
+      searchShownQuery = q;
+      clearSearchMarks();
+      const pop = as$("as-search-pop");
+      if (pop) {
+        pop.innerHTML = `<div class="as-search-more mono">search failed: ${esc(String(err?.message || err))}</div>`;
+        pop.hidden = false;
+        placeSearchPop();
+      }
+      paintSearchCount(null);
+      return null;
+    }
+    if (seq !== searchSeq) return null;
+    searchHits = Array.isArray(out.hits) ? out.hits : [];
+    searchOut = out;
+    searchAt = -1;
+    searchShownQuery = String(out.query || q);
+    paintSearchCount(out);
+    renderSearchPop(out);
+    return out;
+  }
+
+  const conversationsByThread = (thread) => conversations().find((c) => c.thread === thread) || null;
+
+  function searchTurnOrdinal(hit) {
+    const conv = conversationsByThread(hit?.thread);
+    if (!conv) return 0;
+    const i = conv.turns.findIndex((t) => t.id === hit.id);
+    return i >= 0 ? i + 1 : 0;
+  }
+
+  function searchAge(at) {
+    const ms = Date.now() - Number(at || 0);
+    if (!Number.isFinite(ms) || Number(at) <= 0) return "";
+    if (ms < 60000) return "now";
+    const m = Math.floor(ms / 60000);
+    if (m < 60) return `${m}m`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h`;
+    const d = Math.floor(h / 24);
+    return d < 30 ? `${d}d` : `${Math.floor(d / 30)}mo`;
+  }
+
+  // Mark the first place the query appears inside the turn. TEXT nodes only, walked in order, so the mark can
+  // never rewrite a tag or an attribute: the renderer already escaped the prompt, and this keeps the same promise.
+  function markInsideTurn(turnEl, query) {
+    const compiled = globalThis.wtTurnSearch?.compile(query);
+    if (!turnEl || !compiled) return false;
+    const walker = document.createTreeWalker(turnEl, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        if (!node.nodeValue || !compiled.re.test(node.nodeValue)) return NodeFilter.FILTER_SKIP;
+        if (node.parentElement && node.parentElement.closest("mark.as-search-mark")) return NodeFilter.FILTER_SKIP;
+        return NodeFilter.FILTER_ACCEPT;
+      },
+    });
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const m = compiled.re.exec(node.nodeValue);
+      if (!m || !m[0].length) continue;
+      const range = document.createRange();
+      range.setStart(node, m.index);
+      range.setEnd(node, m.index + m[0].length);
+      const mark = document.createElement("mark");
+      mark.className = "as-search-mark";
+      try {
+        range.surroundContents(mark);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  }
+
+  // A hit, in front of the reader: the assistant whose turn it is, the page that turn lives on (through the same
+  // reveal the board's jump and the toast use), the turn unfolded, and the match marked in it. Returns whether the
+  // match was marked - false when the turn is gone from the store or the text is not on the page (a tool line
+  // older than the console's window), which the row's own marked excerpt still answers.
+  function openSearchHit(index) {
+    const hit = searchHits[Number(index)];
+    if (!hit) return false;
+    searchAt = Number(index);
+    const rec = sessionRecords().find((r) => r.threadId === hit.thread) || null;
+    const targetId = rec ? rec.id : activeSessionId();
+    const conv = conversationsByThread(hit.thread);
+    if (conv) wtTurnFold.reveal(state, conv.thread, conv.turns, hit.id);
+    if (rec && rec.id !== activeSessionId()) setView({ assistant: rec.id, subTab: "chat" });
+    renderAssistantChat(targetId);
+    const host = hostFor(targetId, "chat");
+    const card = host?.querySelector(`.job[data-thread="${CSS.escape(hit.thread)}"]`);
+    const turnEl = card?.querySelector(`[data-turn="${CSS.escape(hit.id)}"]`);
+    if (!turnEl) return false;
+    clearSearchMarks();
+    const marked = markInsideTurn(turnEl, searchShownQuery || hit.hit || "");
+    const pageY = window.scrollY;
+    turnEl.scrollIntoView({ block: "center" });
+    if (window.scrollY !== pageY) window.scrollTo({ top: pageY });
+    // The popover sits under the box and would cover the turn it just opened; step through hits with Enter, or
+    // open the box again with ArrowDown.
+    const pop = as$("as-search-pop");
+    if (pop) pop.hidden = true;
+    return marked;
+  }
+
+  function wireSearch() {
+    const input = as$("as-search-q");
+    if (!input) return;
+    input.addEventListener("input", () => armSearch());
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (searchTimer) {
+          clearTimeout(searchTimer);
+          searchTimer = null;
+        }
+        const done = searchHits.length ? Promise.resolve(null) : runSearch();
+        done.then(() => {
+          // Step through the list: the first Enter opens the first hit, the next opens the one after it, and after
+          // the last it wraps. The popover closed on the last jump (it covers the turn), and this keeps going.
+          if (searchHits.length) openSearchHit((searchAt + 1) % searchHits.length);
+        });
+        return;
+      }
+      if (e.key === "Escape") {
+        // The rail's own Escape closes the whole panel; a reader clearing the box means the box, not the panel.
+        e.preventDefault();
+        e.stopPropagation();
+        clearSearchAll();
+        input.blur();
+        return;
+      }
+      if (e.key === "ArrowDown") {
+        // The popover may be closed from a jump that just landed: reopen it from the answer already in hand (no
+        // second read), then hand the caret to the first row.
+        const pop = as$("as-search-pop");
+        if (pop && pop.hidden && searchOut) renderSearchPop(searchOut);
+        const first = pop?.querySelector("[data-search-hit]");
+        if (first) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    });
+    const scope = as$("as-search-scope");
+    scope?.addEventListener("click", (e) => {
+      searchScope = searchScope === "input" ? "all" : "input";
+      const on = searchScope === "input";
+      e.currentTarget.setAttribute("aria-pressed", on ? "true" : "false");
+      e.currentTarget.title = on
+        ? "searching your own input only - press for every field"
+        : "search your own input only - every turn the store kept, not just the page on screen";
+      if (String(input.value || "").trim()) {
+        if (searchTimer) clearTimeout(searchTimer);
+        searchTimer = null;
+        runSearch();
+      }
+    });
+    as$("as-search-pop")?.addEventListener("click", (e) => {
+      const row = e.target.closest?.("[data-search-hit]");
+      if (row) openSearchHit(row.dataset.searchHit);
+    });
+    as$("as-search-pop")?.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        clearSearchAll();
+        input.focus();
+      }
+    });
+    // The popover is placed in viewport coordinates, so a resize or a scroll of the page moves the box: re-place
+    // rather than leave it pointing at where the row used to be. The rail's own scroll does not move a fixed row.
+    window.addEventListener("resize", placeSearchPop);
+    window.addEventListener("scroll", placeSearchPop, { passive: true, capture: true });
+  }
+
+
   // app.js rebuilds the card on every job event and on every fold the reader makes, which drops the class that hands
   // the room to a console. Watch the pane's children instead of chasing every call site. An attribute-only repaint
   // cannot loop: only `class` is written, and childList is all that is observed.
@@ -5175,6 +5519,9 @@
     applyFrame(true);
     paintAssistantBadge();
     paintAggressive();
+    // The header's search box: one listener set for the life of the page. Wired before the first render so a
+    // restored frame that is already open can be typed into at once.
+    wireSearch();
     if (state.assistantOpen) renderAssistant();
   })();
 

@@ -87,6 +87,7 @@
     "verify:attachment-spawn": "node tools/verify-attachment-spawn.mjs",
     "verify:message-attachments": "node tools/verify-message-attachments.mjs",
     "verify:turn-pager": "node tools/verify-turn-pager.mjs",
+    "verify:assistant-search": "node tools/verify-assistant-search.mjs",
     "verify:turn-fold": "node tools/verify-turn-fold.mjs",
     "verify:human-button": "node tools/verify-human-button.mjs",
     "verify:provider-profiles": "node tools/verify-provider-profiles.mjs",
