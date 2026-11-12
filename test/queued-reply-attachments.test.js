@@ -49,6 +49,9 @@ const APP_NAMES = [
   "queueReply",
   "queueReplyFromBox",
   "queueWaitingOn",
+  "queuePressInFlight",
+  "queueWaitPhrase",
+  "pressSettled",
   "paintQueueWait",
   "replyQueued",
   "ghostTurnHtml",
@@ -163,6 +166,7 @@ function harness({ box = "", staged = [] } = {}) {
     subagentFallback: new Map(),
     state: {
       replyQueue: new Map(),
+      replyPress: new Map(),
       replyAttachments: new Map(),
       replyDrafts: {},
       replyEdit: null,
@@ -198,11 +202,11 @@ function harness({ box = "", staged = [] } = {}) {
 const paths = (list) => Array.from(list || [], (a) => a.path);
 
 // ---- 1. the queue takes the file with it -----------------------------------------------------------------------
-test("queueing from the box stores the staged file on the entry and empties the composer's chip row", () => {
+test("queueing from the box stores the staged file on the entry and empties the composer's chip row", async () => {
   const h = harness({ box: "look at this", staged: [FILE] });
   assert.match(h.chips.innerHTML, /attach-chip/, "the composer is showing the chip before the press");
 
-  assert.equal(h.queueReplyFromBox(THREAD), true);
+  assert.equal(await h.queueReplyFromBox(THREAD), true);
 
   const entry = h.replyQueued(THREAD)[0];
   assert.equal(entry.text, "look at this");
@@ -248,9 +252,9 @@ test("a steer held past the boundary takes the staged files with it and queues t
 });
 
 // ---- 3. cancel gives the file back the way it gives the text back ----------------------------------------------
-test("the × puts the held file back on the composer beside the text returning as the draft", () => {
+test("the × puts the held file back on the composer beside the text returning as the draft", async () => {
   const h = harness({ box: "look at this", staged: [FILE] });
-  h.queueReplyFromBox(THREAD);
+  await h.queueReplyFromBox(THREAD);
   const entry = h.replyQueued(THREAD)[0];
   assert.deepEqual(paths(h.attachmentsFor(THREAD)), [], "held, not staged");
 
@@ -262,9 +266,9 @@ test("the × puts the held file back on the composer beside the text returning a
   assert.equal(h.chips.innerHTML.split("attach-chip").length - 1, 1, "one chip, not two");
 });
 
-test("a cancel into a box that already holds text leaves the composer's chips alone", () => {
+test("a cancel into a box that already holds text leaves the composer's chips alone", async () => {
   const h = harness({ box: "first", staged: [FILE] });
-  h.queueReplyFromBox(THREAD);
+  await h.queueReplyFromBox(THREAD);
   // The reader stages a new file and types something new before pressing the ×.
   h.replyBox.value = "a different message";
   h.setAttachments(THREAD, [LATER]);
@@ -280,9 +284,9 @@ test("a cancel into a box that already holds text leaves the composer's chips al
 });
 
 // ---- 4. an edit replaces the text only -------------------------------------------------------------------------
-test("saving an edit changes the text and keeps the entry's file", () => {
+test("saving an edit changes the text and keeps the entry's file", async () => {
   const h = harness({ box: "look", staged: [FILE] });
-  h.queueReplyFromBox(THREAD);
+  await h.queueReplyFromBox(THREAD);
   const entry = h.replyQueued(THREAD)[0];
   h.__busy = true; // the turn is live: the save must not drain
 

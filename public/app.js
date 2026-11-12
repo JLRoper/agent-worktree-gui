@@ -363,6 +363,10 @@ const state = {
   // Replies typed while the agent is still working, in the order they were written. They go out one
   // at a time as each turn finishes: Hermes refuses a second session on a thread already running.
   replyQueue: new Map(),
+  // The threads a Queue reply press is still IN FLIGHT on: set when the press takes the text and cleared when it
+  // settles, whatever the outcome. Only this closes the card - a reply being held does not, because the reader
+  // may hold several separate messages and the box has to stay open for the next one.
+  replyPress: new Map(),
   // The held reply the reader has open in the in-place editor, if any: `{ thread, at, original, text }`, where `at`
   // is the entry's own identity in replyQueue — the entry a save writes back to, never a new entry. `original` is
   // the text the editor opened on (what Escape, Cancel and a click away put back) and `text` follows the box as it
@@ -3866,19 +3870,21 @@ function queueReply(thread, text, attachments = []) {
 // rebuilds the card - the rebuild would otherwise put the text back into the new box from the saved draft.
 // The staged files are read before either happens: they are the held reply's now, not the composer's.
 //
-// ONE PRESS IS THE WHOLE GESTURE. The press puts the reply in flight and the card closes: the Queue reply button
-// is drawn off and the box is read-only while the entry waits, so there is no second press to make and no second
-// line to type. The guard is asked HERE rather than in the click handler because Enter comes through this same
-// function - a stale node, or a keypress the repaint has not caught up with, is ignored rather than holding the
-// same text twice.
-function queueReplyFromBox(thread) {
-  const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
-  if (queueWaitingOn(thread)) {
+// ONE PRESS IS ONE ENTRY, AND ONLY THE PRESS'S OWN FLIGHT CLOSES THE CARD. The press claims the thread for the
+// length of its own work - the commit of the entry plus the task the browser takes to draw it - and closes the
+// card for exactly that window: the Queue reply button off, the box read-only, "queued, waiting" in place of its
+// sentence. When it settles, success or failure, the face comes off and the box is back, EMPTY, so the next
+// message can be typed and held as its own entry. A press that arrives inside the window is the same press: it is
+// refused rather than racing the first for the same box, which is what keeps a double press from holding twice.
+// The guard is asked HERE rather than in the click handler because Enter comes through this same function.
+async function queueReplyFromBox(thread) {
+  if (queuePressInFlight(thread)) {
     // Already in flight: this press is the same press. Put a node that missed the repaint back in step, and hold
     // nothing a second time.
     paintQueueWait(thread);
     return false;
   }
+  const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
   // readBox, not box.value: what is held is what the agent would receive, a chip being the text it holds.
   const text = readBox(box).trim();
   if (!text) {
@@ -3886,51 +3892,86 @@ function queueReplyFromBox(thread) {
     return false;
   }
   const files = attachmentsFor(thread);
-  state.replyDrafts[thread] = "";
-  if (box) {
-    writeBox(box, "");
-    clearBoxDraft(box);
-  } else clearBoxDraft(`reply:${thread}`);
-  queueReply(thread, text, files);
-  // queueReply rebuilt the card from the queue, so the fresh box is drawn closed by the renderer; this is what
-  // closes it on a node the rebuild did not replace, and what the press below asserts. No focus: the box has
-  // nothing to type into until the held reply is drawn.
+  // The flight is claimed BEFORE the box is touched, so a press that lands while this one is still committing is
+  // refused by the guard above rather than reading a half-cleared box.
+  state.replyPress.set(thread, true);
   paintQueueWait(thread);
-  return true;
+  try {
+    state.replyDrafts[thread] = "";
+    if (box) {
+      writeBox(box, "");
+      clearBoxDraft(box);
+    } else clearBoxDraft(`reply:${thread}`);
+    queueReply(thread, text, files);
+    // queueReply rebuilt the card, and the rebuild draws the closed face from this same predicate. The wait is
+    // what makes the window real: a second press from a double click, a held key or a stale node lands inside it
+    // and is refused instead of holding the same text again.
+    await pressSettled();
+    return true;
+  } finally {
+    state.replyPress.delete(thread);
+    // Whatever happened - held, refused, or a commit that threw - the reader gets the box back, cleared, with the
+    // replies that are still held counted beside it.
+    paintQueueWait(thread);
+  }
 }
 
-// Is a reply held for this thread, waiting for the turn (or the subagents it started) to finish? The ONE question
-// the press, the box's keys and the card's own face ask, so none of them can disagree about it.
+// Is a press of Queue reply still IN FLIGHT on this thread? The one question the press, the box's keys and the
+// card's closed face ask, so none of them can disagree about the window. A HELD reply is not this: the queue may
+// hold several separate messages, and the box stays open for the next one.
+function queuePressInFlight(thread) {
+  return Boolean(thread && state.replyPress.get(thread));
+}
+
+// Does this thread hold a reply that has not gone out yet? The count the card shows and the drain walks. It closes
+// nothing: a press is closed only for its own flight, so this is not a predicate any press asks.
 function queueWaitingOn(thread) {
   return replyQueued(thread).length > 0;
 }
 
-// The card's "queued, waiting" face, applied to the live DOM: the Queue reply button off, the box closed, and the
-// note that says why. The press applies it the moment an entry is held; the card's render draws the same face from
-// queueWaitingOn, and the queue's length is in conversationSignature - so when the drain takes the entry out and the
-// card repaints, that is the same one question answering "no", and the box opens again.
+// The sentence a closed box carries while a press is in flight, in one place: the renderer writes it on the box
+// and the painter puts it back when the flight ends.
+function queueWaitPhrase() {
+  return "queued, waiting - your reply goes out when this turn finishes";
+}
+
+// One task: long enough for the closed face to be drawn before it comes off, short enough that the reader never
+// sees a delay.
+function pressSettled() {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+// The face of a press that is still IN FLIGHT, applied to the live DOM: the Queue reply button off, the box
+// read-only and the note saying "queued, waiting". A press applies it when it claims the thread and takes it off
+// when it settles; the card's render draws the same face from queuePressInFlight, so a repaint cannot reopen a box
+// mid-press. Once the press has settled the box is OPEN - a reply being held is no reason to refuse the next
+// message - and the note counts what is held instead.
 function paintQueueWait(thread) {
-  const held = queueWaitingOn(thread);
+  const inFlight = queuePressInFlight(thread);
+  const held = replyQueued(thread).length;
   const card = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`);
   const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
   const btn = card?.querySelector("[data-queue-reply]");
   if (btn) {
-    btn.disabled = held;
-    if (held) btn.setAttribute("aria-disabled", "true");
+    btn.disabled = inFlight;
+    if (inFlight) btn.setAttribute("aria-disabled", "true");
     else btn.removeAttribute("aria-disabled");
   }
   if (box) {
-    box.setAttribute("contenteditable", held ? "false" : "true");
-    if (held) box.setAttribute("aria-readonly", "true");
+    box.setAttribute("contenteditable", inFlight ? "false" : "true");
+    if (inFlight) box.setAttribute("aria-readonly", "true");
     else box.removeAttribute("aria-readonly");
-    box.classList.toggle("queued-waiting", held);
+    box.classList.toggle("queued-waiting", inFlight);
+    // The placeholder is the renderer's, kept beside the live one on data-ph-idle: the closed face borrows the box
+    // for one task, it does not own the sentence the box goes back to.
+    if (box.dataset && box.dataset.phIdle != null) box.dataset.ph = inFlight ? queueWaitPhrase() : box.dataset.phIdle;
   }
   const note = card?.querySelector("[data-queue-wait]");
   if (note) {
-    note.hidden = !held;
-    note.textContent = held ? "queued, waiting" : "";
+    note.hidden = !inFlight && !held;
+    note.textContent = inFlight ? "queued, waiting" : held ? `${held} queued` : "";
   }
-  return held;
+  return inFlight;
 }
 
 // Is the Queue reply button offered for this card right now? It is drawn for two reasons - a turn is running, or
@@ -4260,8 +4301,8 @@ async function drainReplyQueue(thread) {
   // landing after this point has to say, instead of claiming a cancellation that did not happen.
   markReplySent(thread, entry);
   renderConversation(thread);
-  // The held reply is drawn now, so the card's closed face comes off with it: the same painter the press used,
-  // answering the same question - the queue no longer holds it.
+  // The held reply is drawn now, so the note beside the box counts what is left: the same painter the press used,
+  // answering its own question about a press in flight (there is none) and the queue behind it.
   paintQueueWait(thread);
   try {
     // The entry's OWN files travel with the send. The composer's staged set belongs to a later message and is
@@ -10605,7 +10646,7 @@ document.addEventListener("click", async (e) => {
     e.preventDefault();
     e.stopPropagation();
     // The same press Ctrl/Cmd+Enter makes: one function, so the button and the keystroke cannot drift apart.
-    queueReplyFromBox(queueBtn.dataset.queueReply);
+    void queueReplyFromBox(queueBtn.dataset.queueReply);
     return;
   }
   // Answer an approval a run is parked on. The buttons come from the host's own choice list.
@@ -11304,10 +11345,11 @@ document.addEventListener("keydown", async (e) => {
   }
   const box = e.target.closest && e.target.closest(".reply-box");
   if (!box) return;
-  // A box with a reply already held is closed, and Enter is the press that would hold it a second time: no key here
-  // is a gesture on it. The guard is the same one queueReplyFromBox asks, so the keyboard cannot reach a state the
-  // button refuses.
-  if (queueWaitingOn(box.dataset.reply)) return;
+  // A box with a press IN FLIGHT is closed, and no key here is a gesture on it: the guard is the same one
+  // queueReplyFromBox asks, so the keyboard cannot reach a state the button refuses. A HELD reply no longer closes
+  // the box - the next message is typed there and held as its own entry - so only the press's own flight can put a
+  // keystroke out of reach.
+  if (queuePressInFlight(box.dataset.reply)) return;
   // Up/Down walk the thread's previous prompts, shell style: only from the very start (Up) or the very end
   // (Down) of the text, so the arrows still move the caret inside a multi-line reply. The text AND the caret
   // are measured the way readBox measures them, so a chip counts as the text it swallowed and the arrows
@@ -11354,7 +11396,7 @@ document.addEventListener("keydown", async (e) => {
     // finished turn whose subagents are still out - the text is held for the next turn rather than sent into a
     // busy thread. With nothing to wait for there is nothing to hold, and Enter sends.
     if (queueOfferedFor(box)) {
-      queueReplyFromBox(thread);
+      void queueReplyFromBox(thread);
       return;
     }
     // A card that offers no Queue reply button while a turn is live is not a state the renderer draws; if one ever

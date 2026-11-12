@@ -257,10 +257,28 @@ function conversationHtml(conv) {
   const queue = state.replyQueue.get(thread) || [];
   const queued = queue.length;
   const queuedTitle = queue.map((q, i) => `${i + 1}. ${q.text}`).join("\n");
-  // A reply is held and waiting: the ONE press that put it there also closed the card - the Queue reply button is
-  // drawn off and the box read-only, and the note beside them says "queued, waiting". Asked through the same
-  // predicate queueReplyFromBox guards with, so a repaint and a press can never disagree about it.
+  // A reply is held and waiting: the COUNT the note carries, and the reason the Queue reply button is still offered
+  // on a card whose turn has ended. It does not close the box - several separate replies may be held, and the next
+  // one is written in this same box.
   const queueHeld = queueWaitingOn(thread);
+  // The press that is still IN FLIGHT: the entry it commits and the task the browser takes to draw it. Only this
+  // closes the card, and it ends the moment the press settles, so the box is open again for the next message.
+  const queueInFlight = queuePressInFlight(thread);
+  // The sentence the box carries when no press is in flight. Kept beside the live one on data-ph-idle, because the
+  // press's painter has to put it back the moment the flight ends.
+  const idlePh = running
+    ? !canSteer
+      // A live turn with no Steer press to offer: the box says what Enter does instead of promising a
+      // gesture the card has taken away.
+      ? runningTurn?.steerable?.why === "parked"
+        ? "this turn is parked on an approval — Enter holds yours for the next turn"
+        : "this turn cannot take a steer right now — Enter holds yours for the next turn"
+      : inDelegate
+        ? "a subagent is out — a steer lands when delegate_task returns; Enter holds yours for the next turn"
+        : "a turn is running — Ctrl+Enter steers it; Enter holds yours for the next turn"
+    : childrenStillOut
+      ? "this thread's subagents are still out — Enter holds yours until they finish"
+      : "Reply to this agent — continues the same Hermes thread, Enter or Ctrl+Enter to send";
   // A turn can end while the children it delegated are still working. The card's state is what is happening, not what
   // the parent's turn did, so RUNNING outlives the turn for as long as something it started is still going.
   const liveSubs =
@@ -492,26 +510,10 @@ function conversationHtml(conv) {
                Shift+Enter, the ↑/↓ recall and the draft restore are the same gestures — and every reader of
                its text goes through readBox(box) (board/paste-chips.js), which gives a chip's own text back
                in place. The placeholder moved to data-ph, because :empty draws it on a div. -->
-          <div class="reply-box chipbox${queueHeld ? " queued-waiting" : ""}" contenteditable="${queueHeld ? "false" : "true"}" role="textbox" aria-multiline="true"
-            ${queueHeld ? 'aria-readonly="true"' : ""} data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off"
+          <div class="reply-box chipbox${queueInFlight ? " queued-waiting" : ""}" contenteditable="${queueInFlight ? "false" : "true"}" role="textbox" aria-multiline="true"
+            ${queueInFlight ? 'aria-readonly="true"' : ""} data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off"
             data-reply="${esc(thread)}" data-chipbox="reply:${esc(thread)}" data-rows="2" spellcheck="false"
-            data-ph="${queueHeld
-              // A held reply closes the box: one press is the gesture, so the box says what is happening instead of
-              // inviting a second line the card would refuse.
-              ? "queued, waiting - your reply goes out when this turn finishes"
-              : running
-              ? (!canSteer
-                // A live turn with no Steer press to offer: the box says what Enter does instead of promising a
-                // gesture the card has taken away.
-                ? (runningTurn?.steerable?.why === "parked"
-                  ? "this turn is parked on an approval — Enter holds yours for the next turn"
-                  : "this turn cannot take a steer right now — Enter holds yours for the next turn")
-                : inDelegate
-                  ? "a subagent is out — a steer lands when delegate_task returns; Enter holds yours for the next turn"
-                  : "a turn is running — Ctrl+Enter steers it; Enter holds yours for the next turn")
-              : childrenStillOut
-                ? "this thread's subagents are still out — Enter holds yours until they finish"
-                : "Reply to this agent — continues the same Hermes thread, Enter or Ctrl+Enter to send"}"></div>
+            data-ph="${esc(queueInFlight ? queueWaitPhrase() : idlePh)}" data-ph-idle="${esc(idlePh)}"></div>
           <div class="reply-actions">
             ${canSteer
               ? `<button class="btn-reply btn-steer-primary" data-steer="${esc(steerTurnFor.id)}" type="button" title="${inDelegate ? "send this into the running turn (Ctrl+Enter) — it waits for delegate_task to return, and if the turn ends first it comes back to this box unsent" : "send this into the running turn (Ctrl+Enter) — the agent reads it at its next tool boundary and the turn carries on"}">Steer turn</button>`
@@ -521,10 +523,10 @@ function conversationHtml(conv) {
                 // next turn, and Cancel turn is the other thing this state can be given (docs/steer-refusal.md §2.2).
                 ? ""
                 : `<button class="btn-reply" data-thread="${esc(thread)}" type="button" title="${childrenStillOut ? "send this as the next turn now — the subagents this thread started are still out, and Enter holds it until they finish instead" : "send this as the next turn (Enter or Ctrl+Enter)"}">Send reply</button>`}
-            ${running || childrenStillOut || queueHeld
-              ? `<button class="btn-queue" data-queue-reply="${esc(thread)}" type="button"${queueHeld ? ' disabled aria-disabled="true"' : ""} title="${queueHeld ? "your reply is already queued and waiting - it goes out when this turn finishes, so a second press is the same press" : running ? "hold this reply and send it the moment the current turn finishes (Enter)" : "hold this reply until the subagents this thread started have finished, so the parent is not talking over them (Enter)"}">Queue reply</button>`
+            ${running || childrenStillOut || queueHeld || queueInFlight
+              ? `<button class="btn-queue" data-queue-reply="${esc(thread)}" type="button"${queueInFlight ? ' disabled aria-disabled="true"' : ""} title="${queueInFlight ? "this press is still landing - your reply goes out when this turn finishes, so a second press is the same press" : running ? "hold this reply and send it the moment the current turn finishes (Enter)" : "hold this reply until the subagents this thread started have finished, so the parent is not talking over them (Enter)"}">Queue reply</button>`
               : ""}
-            ${queued ? `<span class="queue-note mono" data-queue-wait="${esc(thread)}" title="${esc(queuedTitle)}">queued, waiting</span>` : ""}
+            ${queued ? `<span class="queue-note mono" data-queue-wait="${esc(thread)}" title="${esc(queuedTitle)}">${queueInFlight ? "queued, waiting" : `${queued} queued`}</span>` : ""}
             ${running ? `<button class="btn-cancel" data-id="${esc(runningTurn.id)}" type="button" title="cancel the run this agent is in the middle of">Cancel turn</button>` : ""}
           </div>
         </div>

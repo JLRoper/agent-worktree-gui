@@ -1,23 +1,24 @@
-// One press of Queue reply puts the reply in flight - the card closes behind it.
+// One press of Queue reply holds ONE entry - and the box comes back for the next message.
 //
-// The defect: queueReplyFromBox read the box, cleared it and called queueReply with no guard. The card came back
-// with an empty, editable box and a live Queue reply button beside one held reply, so the reader could type the
-// same text again and press Queue reply again - two identical held entries, both of which the drain would send.
+// The defect this file pins: 205d7098 answered "is a reply held?" and closed the card on it, so a card that held
+// a reply could not take a second, different message. The block was total - the button was disabled and the box
+// was read-only with "queued, waiting" where its sentence was - and it lasted as long as the entry waited, which
+// is the whole turn. The duplicate press it was fixing was never the same thing: that hole is open only while a
+// press is IN FLIGHT, which is a window of one task, not of one turn.
 //
-// This file drives the page's OWN functions over a small DOM model (the pattern queued-reply-attachments.test.js
-// uses) and pins five pieces:
-//   1. one press holds exactly one reply;
-//   2. while it is held the Queue reply button is disabled and the box is read-only, and the card says
-//      "queued, waiting";
-//   3. a second press on the same text - with the text put back, as a stale node would carry it - holds nothing
-//      a second time; the guard is in the function, so it holds even where the disabled attribute does not;
-//   4. once the held reply is drawn (the drain sends it) the box is editable again and the note is gone;
-//   5. the button and Enter are ONE path: both call queueReplyFromBox, and the card's render draws the closed face
-//      from the same predicate the press guards with.
+// So the predicate is split, and this file pins the split against the page's OWN functions over a small DOM
+// model (the pattern queued-reply-attachments.test.js uses):
+//   (a) after a reply is held the box accepts text again - open, empty, with the button live and the note
+//       counting what is held;
+//   (b) two different messages from one card produce two held entries, in the order they were written;
+//   (c) a second press INSIDE the first press's flight holds nothing - the guard is the flight, not the queue;
+//   (d) Enter asks the same predicate and calls the same function as the button, so it cannot slip past.
+// Plus the face itself: the closed state belongs to the flight and is gone when it settles, success or failure.
 //
-// The real card in a real browser, with real key presses, is tools/verify-queue-single-press.mjs. On the base build
-// (71c2d169) this file fails at the first assertion: paintQueueWait and queueWaitingOn do not exist there, and a
-// retyped reply is held twice.
+// RED PROOF. On the base build this file fails at load: the page carries no queuePressInFlight(), so the grab
+// below refuses. The behavioural red - the box refusing text, and the second message being impossible - is
+// tools/verify-queue-multi-hold.mjs run against a `git archive` of the base: a real card in a real browser,
+// where the same four claims are measured on the shipped renderer.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -42,6 +43,9 @@ const NAMES = [
   "queueReplyFromBox",
   "replyQueued",
   "queueWaitingOn",
+  "queuePressInFlight",
+  "queueWaitPhrase",
+  "pressSettled",
   "paintQueueWait",
   "heldReplyBlocked",
   "markReplySent",
@@ -57,8 +61,10 @@ const esc = (s) =>
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 const CSS = { escape: (s) => String(s) };
-const THREAD = "wtgui-queue-single-press-abc123";
-const TEXT = "the same reply, pressed twice";
+const THREAD = "wtgui-queue-multi-hold-abc123";
+const FIRST = "hold this one while the turn runs";
+const SECOND = "and this one is a different message";
+const IDLE_PH = "a turn is running - Ctrl+Enter steers it; Enter holds yours for the next turn";
 
 // ---- a DOM small enough to see: the box, the card's button and its queued note -------------------------------
 class El {
@@ -78,6 +84,7 @@ class El {
         else set.delete(name);
         this.className = [...set].join(" ");
       },
+      contains: (name) => String(this.className || "").split(/\s+/).includes(name),
     };
   }
   get innerHTML() {
@@ -108,7 +115,7 @@ class El {
 }
 
 function harness({ box = "" } = {}) {
-  const boxEl = new El({ reply: THREAD }, { tag: "DIV", value: box });
+  const boxEl = new El({ reply: THREAD, ph: IDLE_PH, phIdle: IDLE_PH }, { tag: "DIV", value: box });
   boxEl.setAttribute("contenteditable", "true");
   const btn = new El({ queueReply: THREAD }, { tag: "BUTTON" });
   const note = new El({ queueWait: THREAD });
@@ -164,6 +171,7 @@ function harness({ box = "" } = {}) {
     apiFetch: async () => ({ ok: true, json: async () => ({}) }),
     state: {
       replyQueue: new Map(),
+      replyPress: new Map(),
       replyAttachments: new Map(),
       replyDrafts: {},
       replyEdit: null,
@@ -184,62 +192,154 @@ function harness({ box = "" } = {}) {
 
 // Paths in the HOST realm: arrays built inside the vm carry the vm's Array prototype.
 const texts = (h) => Array.from(h.replyQueued(THREAD), (e) => e.text);
-
-test("one press holds one reply and closes the card behind it", () => {
-  const h = harness({ box: TEXT });
-
-  assert.equal(h.queueReplyFromBox(THREAD), true, "the first press holds the reply");
-
-  assert.deepEqual(texts(h), [TEXT], "exactly one held reply");
-  assert.equal(h.btn.disabled, true, "the Queue reply button is disabled while it is held");
-  assert.equal(h.btn.getAttribute("aria-disabled"), "true", "and says so to a screen reader");
-  assert.equal(h.boxEl.getAttribute("contenteditable"), "false", "the box is read-only");
-  assert.equal(h.boxEl.getAttribute("aria-readonly"), "true", "and says so to a screen reader");
-  assert.equal(h.boxEl.value, "", "the box was cleared, as before");
-  assert.equal(h.note.hidden, false, "the queued state is visible");
-  assert.equal(h.note.textContent, "queued, waiting", "in the words the card draws");
+const face = (h) => ({
+  editable: h.boxEl.getAttribute("contenteditable"),
+  readOnly: h.boxEl.getAttribute("aria-readonly"),
+  closed: h.boxEl.classList.contains("queued-waiting"),
+  btn: h.btn.disabled,
+  note: h.note.hidden ? null : h.note.textContent,
+  ph: h.boxEl.dataset.ph,
 });
 
-test("a second press on the same text is the same press, never a second entry", () => {
-  const h = harness({ box: TEXT });
-  assert.equal(h.queueReplyFromBox(THREAD), true);
+// ---- (a) the box comes back -------------------------------------------------------------------------------------
+test("(a) after a reply is held the box accepts text again, empty and with the button live", async () => {
+  const h = harness({ box: FIRST });
 
-  // A stale box node can still carry the text (the press and the repaint are not the same frame): the guard is in
-  // the function, so the text is refused even though nothing disabled it.
-  h.writeBox(h.boxEl, TEXT);
-  assert.equal(h.queueReplyFromBox(THREAD), false, "the second press holds nothing");
+  assert.equal(await h.queueReplyFromBox(THREAD), true, "the first press holds the reply");
+  assert.deepEqual(texts(h), [FIRST], "one held entry");
 
-  assert.deepEqual(texts(h), [TEXT], "still exactly one held reply");
-  assert.equal(h.btn.disabled, true, "and the card is still closed");
-  assert.equal(h.boxEl.getAttribute("contenteditable"), "false", "the box did not reopen");
-});
-
-test("the state clears when the held reply is drawn", async () => {
-  const h = harness({ box: TEXT });
-  h.queueReplyFromBox(THREAD);
-  assert.equal(h.note.hidden, false);
-
-  // The turn ends: the drain takes the entry out and sends it.
-  await h.drainReplyQueue(THREAD);
-
-  assert.deepEqual(texts(h), [], "the held reply left the queue");
-  assert.deepEqual(h.sent.map((s) => s.text), [TEXT], "and was drawn as the next turn");
   assert.equal(h.boxEl.getAttribute("contenteditable"), "true", "the box is editable again");
   assert.equal(h.boxEl.getAttribute("aria-readonly"), null, "and no longer says it is read-only");
-  assert.equal(h.note.hidden, true, "the queued state is gone");
+  assert.equal(h.boxEl.classList.contains("queued-waiting"), false, "the closed class is off");
+  assert.equal(h.btn.disabled, false, "the Queue reply button is live again");
+  assert.equal(h.boxEl.value, "", "the box came back cleared");
+  assert.equal(h.note.hidden, false, "the held reply is still counted beside it");
+  assert.equal(h.note.textContent, "1 queued", "in the count, not in the closed face's words");
+  assert.equal(h.boxEl.dataset.ph, IDLE_PH, "and the box carries its own sentence again");
+
+  // The claim in the reader's words: it takes a second, different message.
+  h.writeBox(h.boxEl, SECOND);
+  assert.equal(h.readBox(h.boxEl), SECOND, "the box accepts text again");
 });
 
-test("the button and Enter are one path, and the render draws the closed face from the same predicate", () => {
-  // The click branch and the Enter branch both call queueReplyFromBox - the one function the guard lives in.
+// ---- (b) two different messages are two held entries ------------------------------------------------------------
+test("(b) two different messages from one card produce two held entries, in the order they were written", async () => {
+  const h = harness({ box: FIRST });
+
+  assert.equal(await h.queueReplyFromBox(THREAD), true);
+  assert.equal(h.queuePressInFlight(THREAD), false, "the first press has settled");
+  h.writeBox(h.boxEl, SECOND);
+  assert.equal(await h.queueReplyFromBox(THREAD), true, "the second press holds the second message");
+
+  assert.deepEqual(texts(h), [FIRST, SECOND], "both are held, in order");
+  assert.equal(h.note.textContent, "2 queued", "the card counts both");
+  const [a, b] = Array.from(h.replyQueued(THREAD));
+  assert.notEqual(a.at, b.at, "each entry has its own identity");
+});
+
+// ---- (c) the flight, and nothing else, refuses a press ----------------------------------------------------------
+test("(c) a second press inside the first press's flight holds nothing", async () => {
+  const h = harness({ box: FIRST });
+
+  // The first press is NOT awaited: while it is in flight the guard must answer for it.
+  const first = h.queueReplyFromBox(THREAD);
+  assert.equal(h.queuePressInFlight(THREAD), true, "the press is in flight");
+
+  const inflight = face(h);
+  assert.equal(inflight.editable, "false", "and the box is closed for exactly that window");
+  assert.equal(inflight.readOnly, "true");
+  assert.equal(inflight.closed, true);
+  assert.equal(inflight.btn, true, "with the button off");
+  assert.equal(inflight.note, "queued, waiting", "and the closed face's words");
+  assert.equal(inflight.ph, h.queueWaitPhrase(), "and its placeholder");
+
+  // A stale node, or a keypress the repaint has not caught up with, still carries text: the refusal has to be
+  // the flight, not an empty box.
+  h.writeBox(h.boxEl, SECOND);
+  assert.equal(await h.queueReplyFromBox(THREAD), false, "the second press holds nothing");
+  assert.deepEqual(texts(h), [FIRST], "so the card still holds exactly one reply");
+
+  assert.equal(await first, true, "the first press still reports that it held its reply");
+  assert.equal(h.queuePressInFlight(THREAD), false, "and the flight is over");
+  assert.deepEqual(
+    face(h),
+    { editable: "true", readOnly: null, closed: false, btn: false, note: "1 queued", ph: IDLE_PH },
+    "the face came off when it settled",
+  );
+});
+
+test("the face comes off even when the commit is refused", async () => {
+  const h = harness({ box: FIRST });
+  // A queueReply that throws stands for any failure inside the press: the reader must get the box back.
+  h.queueReply = () => {
+    throw new Error("the commit failed");
+  };
+  await assert.rejects(() => h.queueReplyFromBox(THREAD), /the commit failed/);
+
+  assert.equal(h.queuePressInFlight(THREAD), false, "the flight is released");
+  assert.equal(h.boxEl.getAttribute("contenteditable"), "true", "the box is back");
+  assert.equal(h.btn.disabled, false, "and the button is live");
+});
+
+// ---- (d) Enter asks the same question and calls the same function -----------------------------------------------
+test("(d) Enter obeys the same predicate as the button and goes through the same function", async () => {
+  // The keyboard's guard is the press's flight, never the queue: a held reply must not put keys out of reach.
+  assert.match(app, /if \(queuePressInFlight\(box\.dataset\.reply\)\) return;/, "the keydown handler asks queuePressInFlight");
+  assert.ok(!/if \(queueWaitingOn\(box\.dataset\.reply\)\) return;/.test(app), "and no longer asks the queue predicate");
+
+  // Both gestures are one function: the click branch and the Enter branch.
   const clickBranch = /const queueBtn = e\.target\.closest\("\[data-queue-reply\]"\);[\s\S]{0,500}?queueReplyFromBox\(queueBtn\.dataset\.queueReply\);/.exec(app);
   assert.ok(clickBranch, "the Queue reply button's press goes through queueReplyFromBox");
-  const enterBranch = /if \(queueOfferedFor\(box\)\) \{\s*queueReplyFromBox\(thread\);/.exec(app);
+  const enterBranch = /if \(queueOfferedFor\(box\)\) \{\s*void queueReplyFromBox\(thread\);/.exec(app);
   assert.ok(enterBranch, "and so does Enter, through the same function");
 
-  // The card's own face is drawn from the same question the press asks, so a repaint cannot reopen the box.
-  assert.match(renderJobs, /const queueHeld = queueWaitingOn\(thread\);/, "the render asks the press's predicate");
-  assert.match(renderJobs, /contenteditable="\$\{queueHeld \? "false" : "true"\}"/, "and closes the box while it is held");
-  assert.match(renderJobs, /disabled aria-disabled="true"/, "and draws the button off");
-  assert.match(renderJobs, /data-queue-wait="\$\{esc\(thread\)\}"/, "and carries the queued state");
-  assert.match(renderJobs, />queued, waiting</, "in the words the reader sees");
+  // And the behaviour behind it: while a press is in flight the predicate the handler asks is true for the box's
+  // thread, so the keystroke returns before it can reach a press of its own.
+  const h = harness({ box: FIRST });
+  const first = h.queueReplyFromBox(THREAD);
+  assert.equal(h.queuePressInFlight(h.boxEl.dataset.reply), true, "the handler's guard answers yes mid-flight");
+  await first;
+  assert.equal(h.queuePressInFlight(h.boxEl.dataset.reply), false, "and no once it has settled");
+});
+
+// ---- the render draws the closed face from the flight, and the count from the queue -----------------------------
+test("the card's render closes the box on the press in flight and counts the held replies separately", () => {
+  assert.match(renderJobs, /const queueInFlight = queuePressInFlight\(thread\);/, "the render asks the flight");
+  assert.match(renderJobs, /const queueHeld = queueWaitingOn\(thread\);/, "and the queue for the count");
+  assert.match(renderJobs, /contenteditable="\$\{queueInFlight \? "false" : "true"\}"/, "the box is closed only mid-press");
+  assert.match(renderJobs, /data-ph="\$\{esc\(queueInFlight \? queueWaitPhrase\(\) : idlePh\)\}"/, "with the flight's sentence");
+  assert.match(renderJobs, /data-ph-idle="\$\{esc\(idlePh\)\}"/, "and its own kept beside it");
+  assert.match(renderJobs, /disabled aria-disabled="true"/, "the button is drawn off mid-press");
+  assert.match(renderJobs, /\$\{queueInFlight \? "queued, waiting" : `\$\{queued\} queued`\}/, "the note counts, unless a press is landing");
+  assert.match(renderJobs, /running \|\| childrenStillOut \|\| queueHeld \|\| queueInFlight/, "the button is offered while a reply is held");
+});
+
+// ---- the count clears when the drain takes the entries out -----------------------------------------------------
+test("the drain sends the held replies in order and takes the count off the card", async () => {
+  const h = harness({ box: FIRST });
+  await h.queueReplyFromBox(THREAD);
+  h.writeBox(h.boxEl, SECOND);
+  await h.queueReplyFromBox(THREAD);
+
+  await h.drainReplyQueue(THREAD);
+  assert.deepEqual(h.sent.map((s) => s.text), [FIRST], "the first one goes first");
+  assert.deepEqual(texts(h), [SECOND], "the second is still held");
+  assert.equal(h.note.textContent, "1 queued", "the count follows the queue");
+
+  await h.drainReplyQueue(THREAD);
+  assert.deepEqual(h.sent.map((s) => s.text), [FIRST, SECOND], "and then the second");
+  assert.deepEqual(texts(h), [], "nothing is left held");
+  assert.equal(h.note.hidden, true, "so the note is gone");
+  assert.equal(h.boxEl.getAttribute("contenteditable"), "true", "the box is the reader's");
+});
+
+// ---- the old duplicate hole, still shut ------------------------------------------------------------------------
+test("a double press that lands before the repaint holds one entry, not two", async () => {
+  const h = harness({ box: FIRST });
+  // Two presses in the same turn of the event loop, as a double click or a held Enter key delivers them.
+  const a = h.queueReplyFromBox(THREAD);
+  const b = h.queueReplyFromBox(THREAD);
+  assert.equal(await a, true, "the first holds");
+  assert.equal(await b, false, "the second is the same press");
+  assert.deepEqual(texts(h), [FIRST], "one entry, never two of the same text");
 });

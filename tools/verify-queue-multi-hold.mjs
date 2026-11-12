@@ -1,30 +1,27 @@
-// One press of Queue reply puts the reply in flight - the card closes behind it.
+// A held reply no longer closes the card: the reader types and queues the next message beside it.
 //
-//   node tools/verify-queue-single-press.mjs                      # this checkout, one sandbox panel
-//   node tools/verify-queue-single-press.mjs --root <dir>         # a `git archive` of another build (RED PROOF)
-//   node tools/verify-queue-single-press.mjs --shots <dir>        # where the card captures are written
-//   PANEL_URL=http://127.0.0.1:7331 node tools/verify-queue-single-press.mjs   # a panel already running
+//   node tools/verify-queue-multi-hold.mjs                        # this checkout, one sandbox panel
+//   node tools/verify-queue-multi-hold.mjs --root <dir>           # a `git archive` of another build (RED PROOF)
+//   node tools/verify-queue-multi-hold.mjs --shots <dir>          # where the card captures are written
+//   PANEL_URL=http://127.0.0.1:7331 node tools/verify-queue-multi-hold.mjs   # a panel already running
 //
-// THE DEFECT. `queueReplyFromBox` read the box, cleared it and called `queueReply` with no guard: the card came
-// back with an open, empty box and a live Queue reply button beside one held reply. The box took the same text
-// again, and the next press held it a second time - two identical ghost turns, both of which the drain would
-// send. A press is a gesture with one answer, so the card has to say "that is in flight" instead of inviting
-// another one.
+// THE DEFECT. 205d7098 answered "is a reply held?" and closed the card on that answer: after ONE press the Queue
+// reply button was drawn off, the box was read-only, and its sentence was replaced by "queued, waiting - your
+// reply goes out when this turn finishes". The block lasted as long as the entry waited - the whole turn - so a
+// reader with a second, different thing to say could not type or queue it at all. What 205d7098 was fixing (a
+// second press holding the same text twice) is a hole in the PRESS, not in the HOLD: it is open only while the
+// press is in flight, which is one task.
 //
-// THE CLAIM, driven against a real card drawn by the shipped renderer:
-//   (1) ONE press holds exactly one reply;
-//   (2) while it is held the Queue reply button is disabled and the box is read-only (contenteditable="false",
-//       aria-readonly), so a second press - the real mouse, or a click event dispatched straight at the disabled
-//       button - holds nothing, and the keyboard cannot put a character in the box;
-//   (3) the card says "queued, waiting" while it holds the reply;
-//   (4) once the held reply is drawn (the drain takes it out and sends it), the box is editable again and the note
-//       is gone;
-//   (5) Enter is the same press: one entry, and the same closed face - one function, so the two cannot drift.
+// THE CLAIM, driven against a real card drawn by the shipped renderer and a real keyboard:
+//   (a) after one press the box is editable, empty, and the button is live, with the held reply counted beside it;
+//   (b) a second, DIFFERENT message typed into that box is held as its own entry - two ghosts, two entries;
+//   (c) a press dispatched INSIDE the first press's flight holds nothing (the 205d7098 hole stays shut);
+//   (d) Enter is the same press and obeys the same predicate: type, Enter, type, Enter - both held;
+//   then the turn ends: the two held replies go out in the order they were written.
 //
-// RED PROOF. Everything is asserted through a panel booted from `--root`, so the same file run against a
-// `git archive 71c2d169` export fails at (2)(3)(5): that build answers with an open box, a live button and no
-// queued state, and the retyped text makes a second held entry. The export has no tools/verify-queue-single-press.mjs
-// of its own; run THIS file with --root pointing at it. The captures it writes are the before/after pair.
+// RED PROOF. Run with `--root` against `git archive <base>`: (a) fails there - the box refuses the typing
+// ("queued, waiting" placeholder, contenteditable=false), so (b) and (d) cannot produce a second entry. The
+// captures it writes are the before/after pair.
 //
 // The card is the shipped one: a running turn is fabricated in the PAGE's state.jobs and rendered by the page's
 // own renderJobs, so the markup, the CSS and the handlers are the real build's. The page's fetch is stubbed (a
@@ -47,10 +44,13 @@ const opt = (name, dflt = null) => {
   return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[i + 1] : dflt;
 };
 const TREE = path.resolve(opt("--root", path.resolve(HERE, "..")));
-const SHOTS = path.resolve(opt("--shots", path.join(tmpdir(), "wtgui-queue-single-press")));
+const SHOTS = path.resolve(opt("--shots", path.join(tmpdir(), "wtgui-queue-multi-hold")));
 const LIVE = String(process.env.PANEL_URL || "").replace(/\/+$/, "");
-const THREAD = "wtgui-probe-queue-single-press-71c2d1";
-const TEXT = "the same reply, pressed twice";
+const THREAD = "wtgui-probe-queue-multi-hold-71c2d1";
+const FIRST = "the first message, held while the turn runs";
+const SECOND = "a second and different message, typed after the first was held";
+const THIRD = "a third one held from the keyboard";
+const FOURTH = "and a fourth, also from the keyboard";
 
 let checks = 0;
 let failures = 0;
@@ -105,7 +105,7 @@ let base = LIVE;
 const panelLog = [];
 
 async function startSandbox() {
-  dir = mkdtempSync(path.join(tmpdir(), "wtgui-queue-single-press-"));
+  dir = mkdtempSync(path.join(tmpdir(), "wtgui-queue-multi-hold-"));
   const scanRoot = path.join(dir, "scan-root");
   const home = path.join(dir, "hermes-home");
   const configDir = path.join(dir, "panel");
@@ -203,7 +203,7 @@ async function browserPhase(pw) {
             job: {
               id: `probe-reply-${probe.posts.length}`,
               thread,
-              turn: 2,
+              turn: probe.posts.length + 1,
               prompt: (probe.posts[probe.posts.length - 1].body || {}).text || "",
               status: "running",
               startedAt: new Date().toISOString(),
@@ -245,6 +245,7 @@ async function browserPhase(pw) {
         document.activeElement?.blur?.();
         state.jobs.clear();
         state.replyQueue.delete(thread);
+        if (state.replyPress) state.replyPress.delete(thread);
         state.replyDrafts[thread] = "";
         state.boxModels.delete(`reply:${thread}`);
         document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`)?.remove();
@@ -267,8 +268,10 @@ async function browserPhase(pw) {
           editable: box ? box.getAttribute("contenteditable") : null,
           readOnly: box ? box.getAttribute("aria-readonly") : null,
           boxClass: box ? box.className : null,
+          ph: box ? box.dataset.ph : null,
           btn: btn ? { disabled: btn.disabled, aria: btn.getAttribute("aria-disabled"), title: btn.title } : null,
           note: note ? { text: note.textContent.trim(), hidden: Boolean(note.hidden) } : null,
+          pressInFlight: state.replyPress ? Boolean(state.replyPress.get(thread)) : false,
         };
       };
       // A click event straight at the node: this bypasses the disabled attribute, so it is the guard itself being
@@ -279,10 +282,19 @@ async function browserPhase(pw) {
         btn.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
         return true;
       };
-      // The turn ends: the held reply becomes sendable, and the drain is the page's own.
+      // Two presses in ONE turn of the event loop, with text in the box both times: the shape a double click or a
+      // held Enter key has, and the window 205d7098 was closing. The second press must hold nothing.
+      probe.doublePress = async () => {
+        const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
+        const one = queueReplyFromBox(thread);
+        if (box) box.textContent = "a second press inside the same flight";
+        const two = queueReplyFromBox(thread);
+        const [first, second] = await Promise.all([one, two]);
+        return { first, second, queue: [...(state.replyQueue.get(thread) || [])].map((q) => q.text) };
+      };
+      // The turn ends: the held replies become sendable, and the drain is the page's own.
       probe.finishTurn = async () => {
         for (const j of state.jobs.values()) if (j.thread === thread) j.status = "done";
-        await drainReplyQueue(thread);
         return true;
       };
       probe.posts = [];
@@ -317,76 +329,109 @@ async function browserPhase(pw) {
   };
   const pressButton = async () => {
     await page.locator(queueBtnSel).click({ force: true, timeout: 5000 }).catch(() => {});
-    await page.waitForTimeout(200);
+    await page.waitForTimeout(250);
+  };
+  const typeInBox = async (text) => {
+    await page.locator(boxSel).click({ force: true }).catch(() => {});
+    await page.keyboard.type(text);
+    await page.waitForTimeout(120);
   };
   const pressEnter = async () => {
     await page.locator(boxSel).focus().catch(() => {});
     await page.keyboard.press("Enter");
-    await page.waitForTimeout(200);
+    await page.waitForTimeout(250);
   };
 
   mkdirSync(SHOTS, { recursive: true });
 
-  // ================= one press ======================================================================
+  // ================= (a) one press, and the box comes back =========================================
   console.log("\n== one press of Queue reply on a running worker card ==");
   ok("the card renders with its Queue reply button", (await card([{ id: "probe-run", status: "running" }])) && (await page.locator(queueBtnSel).count()) === 1);
-  await page.locator(boxSel).fill(TEXT);
+  await page.locator(boxSel).fill(FIRST);
   await page.waitForTimeout(80);
   const shots = {};
-  shots.before = await shot("before-press");
+  shots.pressed = await shot("before-press");
 
   await pressButton();
   const held = await read();
-  check("(1) one press holds exactly one reply", held.queue, [TEXT]);
-  check("(1) and draws exactly one ghost turn", held.ghosts.length, 1);
-  check("(2) the Queue reply button is disabled while it is held", held.btn?.disabled, true);
-  check("(2) the box is read-only (contenteditable=false)", held.editable, "false");
-  check("(2) and says so to a screen reader", held.readOnly, "true");
-  check("(3) the card says queued, waiting", held.note && !held.note.hidden ? held.note.text : null, "queued, waiting");
-  shots.held = await shot("after-press-queued-waiting");
+  check("(a) one press holds exactly one reply", held.queue, [FIRST]);
+  check("(a) the box is editable again", held.editable, "true");
+  check("(a) and says nothing about being read-only", held.readOnly, null);
+  check("(a) the Queue reply button is live again", held.btn?.disabled, false);
+  check("(a) the box came back empty", held.box, "");
+  check("(a) the held reply is counted beside it", held.note && !held.note.hidden ? held.note.text : null, "1 queued");
+  ok(
+    "(a) the box carries its own sentence again, not the closed face's",
+    typeof held.ph === "string" && held.ph.length > 0 && !held.ph.includes("queued, waiting"),
+    JSON.stringify(held.ph),
+  );
 
-  // ================= a second press holds nothing ===================================================
-  console.log("\n== a second press on the same text ==");
+  // ================= (b) a second, different message is held too ===================================
+  console.log("\n== the second, different message: typed, then held ==");
+  await typeInBox(SECOND);
+  const typedSecond = await read();
+  check("(b) the box takes the second message", typedSecond.box, SECOND);
+  if (typedSecond.box !== SECOND) shots.blocked = await shot("BEFORE-the-block-box-refused-typing");
   await pressButton();
-  check("(2) a second click on the disabled button holds nothing", (await read()).queue, [TEXT]);
-  await page.evaluate(() => window.__probe.clickThrough());
-  await page.waitForTimeout(150);
-  check("(2) a click event dispatched at the button holds nothing either", (await read()).queue, [TEXT]);
+  const twoHeld = await read();
+  check("(b) two different messages are two held entries, in order", twoHeld.queue, [FIRST, SECOND]);
+  check("(b) and the card draws two ghosts", twoHeld.ghosts.length, 2);
+  check("(b) with both counted", twoHeld.note && !twoHeld.note.hidden ? twoHeld.note.text : null, "2 queued");
+  check("(b) and the box still open for a third", twoHeld.editable, "true");
+  shots.twoHeld = await shot("after-two-messages-held");
 
-  // The box must take no input while the first reply is held: this is the half the base build got wrong.
-  await page.locator(boxSel).click({ force: true }).catch(() => {});
-  await page.keyboard.type(TEXT);
-  await page.waitForTimeout(150);
-  const typed = await read();
-  check("(2) the box takes no input while the reply is held", typed.box, "");
-  await pressButton();
-  const afterRetype = await read();
-  check("(2) so pressing again cannot hold the same text twice", afterRetype.queue, [TEXT]);
-  await pressEnter();
-  check("(2) and Enter holds nothing more either", (await read()).queue, [TEXT]);
-  shots.second = await shot("after-second-press-and-retype");
+  // ================= (c) a press inside the flight holds nothing ==================================
+  console.log("\n== a press dispatched inside the first press's flight (the 205d7098 hole) ==");
+  await card([{ id: "probe-run-flight", status: "running" }]);
+  await page.locator(boxSel).fill(FIRST);
+  await page.waitForTimeout(80);
+  const double = await page.evaluate(() => window.__probe.doublePress());
+  check("(c) the first press of the pair reports that it held", double.first, true);
+  check("(c) the press inside its flight holds nothing", double.second, false);
+  check("(c) so the card holds one entry, not two", double.queue, [FIRST]);
+  const afterDouble = await read();
+  check("(c) and the box is open again once it has settled", afterDouble.editable, "true");
+  check("(c) with the flight released", afterDouble.pressInFlight, false);
+  shots.flight = await shot("after-double-press-during-flight");
 
-  // ================= the Enter path is the same single entry =======================================
-  console.log("\n== the Enter path ==");
+  // ================= (d) Enter is the same press =================================================
+  console.log("\n== the Enter path: type, Enter, type, Enter ==");
   await card([{ id: "probe-run-enter", status: "running" }]);
-  await page.locator(boxSel).fill(TEXT);
+  await page.locator(boxSel).fill(FIRST);
   await page.waitForTimeout(80);
   await pressEnter();
-  const byEnter = await read();
-  check("(5) Enter holds exactly one reply", byEnter.queue, [TEXT]);
-  check("(5) with the button off, the box read-only and the queued state visible",
-    [byEnter.btn?.disabled, byEnter.editable, byEnter.note && !byEnter.note.hidden ? byEnter.note.text : null],
-    [true, "false", "queued, waiting"]);
+  const enterOne = await read();
+  check("(d) Enter holds the first message", enterOne.queue, [FIRST]);
+  check("(d) and the box comes back open and empty", [enterOne.editable, enterOne.box], ["true", ""]);
+  await typeInBox(SECOND);
+  check("(d) the box takes the second message from the keyboard too", (await read()).box, SECOND);
+  await pressEnter();
+  const enterTwo = await read();
+  check("(d) Enter holds the second message as its own entry", enterTwo.queue, [FIRST, SECOND]);
+  check("(d) two ghosts, and the box still open", [enterTwo.ghosts.length, enterTwo.editable], [2, "true"]);
+  shots.enter = await shot("after-two-messages-held-by-enter");
 
-  // ================= the state clears when the reply is drawn ======================================
-  console.log("\n== the held reply is drawn ==");
+  // ================= the turn ends, both go out in order =========================================
+  console.log("\n== the turn ends: both held replies go out, in order ==");
   await page.evaluate(() => window.__probe.finishTurn());
+  await page.waitForTimeout(300);
+  await page.evaluate((t) => drainReplyQueue(t), THREAD);
+  await page.waitForTimeout(300);
+  const afterOne = await read();
+  check("the first held reply was drawn and sent", afterOne.queue, [SECOND]);
+  // A sent reply starts the next turn, so the second entry waits for it exactly as it waited for the first: end
+  // that turn and the drain takes the second one.
+  await page.evaluate(() => window.__probe.finishTurn());
+  await page.waitForTimeout(300);
+  await page.evaluate((t) => drainReplyQueue(t), THREAD);
   await page.waitForTimeout(400);
-  const drawn = await read();
-  check("(4) the held reply left the queue", drawn.queue, []);
-  check("(4) the box is editable again", drawn.editable, "true");
-  check("(4) and the queued state is gone", drawn.note ? drawn.note.hidden : true, true);
-  shots.cleared = await shot("after-reply-drawn");
+  const drained = await read();
+  check("the second followed it", drained.queue, []);
+  const sentTexts = await page.evaluate(() => window.__probe.posts.filter((p) => p.url.includes("/api/agents/reply")).map((p) => String(p.body.text).split("\n")[0]));
+  check("both were sent, first one first", sentTexts, [FIRST, SECOND]);
+  check("the note is gone with them", drained.note ? drained.note.hidden : true, true);
+  check("and the box is the reader's again", drained.editable, "true");
+  shots.drained = await shot("after-both-sent");
 
   check("no page errors", pageErrors, []);
   for (const [name, file] of Object.entries(shots)) console.log(`      shot ${name}: ${file}`);
