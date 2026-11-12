@@ -171,6 +171,49 @@ test("General Settings carries the one picker, its help, and the save that appli
   assert.match(appSrc, /if \(typeof window\.__assistantFrame === "function"\) window\.__assistantFrame\(\);/);
 });
 
+test("a corner drag's console height is monotonic in the frame's gain and stops at its floor", () => {
+  // The console is what the reader reads, so the drag hands it the height the FRAME gained - measured back after the
+  // clamp - rather than leaving it on the sheet's `flex: 1 1 auto`, which can only grow into FREE space. An
+  // overflowing transcript has none: the console kept its content height, and a wider frame rewrapped that content
+  // into fewer lines, so a drag that made the panel bigger drew a SHORTER console (measured 132.5 -> 98px on the
+  // panel). This is the arithmetic that replaced it: press height + drawn gain, floored at the console's min-height.
+  const fn = code.match(/function consoleDragHeight\(([^)]*)\) \{([\s\S]*?)\n  \}/);
+  assert.ok(fn, "no consoleDragHeight in the page");
+  const floorConst = code.match(/const FLOAT_OUT_MIN = (\d+);/);
+  assert.ok(floorConst, "no FLOAT_OUT_MIN");
+  const heightFor = new Function("FLOAT_OUT_MIN", `return function (${fn[1]}) {${fn[2]}\n  };`)(Number(floorConst[1]));
+
+  // The floor is `.job-out`'s own min-height, read off the sheet: the drag stops where the sheet stops the box.
+  const minRule = css.match(/\.job-out \{[^}]*min-height:\s*(\d+)px/);
+  assert.ok(minRule, "the console has no min-height in the sheet");
+  assert.equal(Number(floorConst[1]), Number(minRule[1]), "the drag's floor is the console's min-height");
+
+  assert.equal(heightFor(132.5, 150, 34), 282.5, "the console takes exactly the height the frame gained");
+  assert.equal(heightFor(132.5, -150, 34), 34, "a drag past the floor stops at the console's min-height");
+  assert.equal(heightFor(20, -150, 34), 34, "never a negative height");
+  // Down-right: non-decreasing at every step, whatever the width reflow does to the text.
+  let prev = heightFor(132.5, 0, 34);
+  for (let gained = 15; gained <= 150; gained += 15) {
+    const now = heightFor(132.5, gained, 34);
+    assert.ok(now >= prev, `down-right: ${gained}px of gain reduced the console (${prev} -> ${now})`);
+    prev = now;
+  }
+  // Up-left: non-increasing, and it lands on the floor instead of going through it.
+  prev = heightFor(132.5, 0, 34);
+  for (let gained = -15; gained >= -300; gained -= 15) {
+    const now = heightFor(132.5, gained, 34);
+    assert.ok(now <= prev, `up-left: ${gained}px of gain grew the console (${prev} -> ${now})`);
+    assert.ok(now >= 34, `up-left: ${gained}px went under the console's floor (${now})`);
+    prev = now;
+  }
+
+  // And the gesture WRITES it, from the drawn frame - not from the pointer's arithmetic, and not left to the flex.
+  assert.match(code, /const drawn = el\.getBoundingClientRect\(\)\.height - d\.box\.height;/, "the gain is the drawn frame's");
+  assert.match(code, /cons\.style\.height = cssPx\(/, "the console's height is written");
+  assert.match(code, /cons\.style\.maxHeight = cssPx\(/, "and its cap with it, or flex-grow hands it more than the drag did");
+  assert.match(code, /rememberOutHeight\(cons\.dataset\.out/, "the size survives a rebuild through the console store");
+});
+
 test("the pane re-frames on load, on a save and on another tab's settings change — through one painter", () => {
   // One entry point decides which geometry runs, and it reads the panel's key every time rather than remembering it.
   assert.match(code, /function applyFrame\(force = false\)/);
