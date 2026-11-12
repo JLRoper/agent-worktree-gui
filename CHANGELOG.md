@@ -4,16 +4,37 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.88.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.89.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-566 releases from v0.1.0 (2026-10-20) to v1.88.0 (2026-11-12), 1883 commits between the tags. Every release is anchored by an
+567 releases from v0.1.0 (2026-10-20) to v1.89.0 (2026-11-12), 1891 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.89.0 — 2026-11-12 · 8 commits
+
+[`a2b46d8`](https://github.com/JLRoper/agent-worktree-gui/commit/a2b46d86a221395c18f15d211de76efa60a5944e) · [compare v1.88.0...v1.89.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.88.0...v1.89.0)
+
+### Added
+
+- feat: record a tree's kind at the cut and refuse a local-only push ([`24bde59`](https://github.com/JLRoper/agent-worktree-gui/commit/24bde59b28fe0c5cba8bd47db921944c53a09ffc))
+
+### Docs & tests
+
+- docs: render the changelog - 566 releases ([`abb9b08`](https://github.com/JLRoper/agent-worktree-gui/commit/abb9b0820b52b4700b819ee3e8878f98532c9d7b))
+- docs: the ping-pong draft states the round's contract and misreads the cap ([`afb320a`](https://github.com/JLRoper/agent-worktree-gui/commit/afb320a6e13d0074eef76ae6cb0c78a9656dccfd))
+- docs: the critique opens one note on the cap and refuses the draft ([`cd9faf1`](https://github.com/JLRoper/agent-worktree-gui/commit/cd9faf16a4e97d2f89945854ace4732ec445320a))
+- docs: the ping-pong draft is rewritten against the critique's cap note ([`c8f9d09`](https://github.com/JLRoper/agent-worktree-gui/commit/c8f9d096e4bd22597bb94d68df5f872d9f2a4b40))
+- docs: the closing critique accepts the draft with no note open ([`ef6c248`](https://github.com/JLRoper/agent-worktree-gui/commit/ef6c2484db632654ed9d79693f56d530f8cf654a))
+- docs: the ping-pong round 70 walk, its gate reads and its assembly ([`dcd6787`](https://github.com/JLRoper/agent-worktree-gui/commit/dcd6787e9885747fa90494411d9ad610b310acee))
+
+### Other
+
+- chore: 1.89.0 - the version this landing carries ([`a2b46d8`](https://github.com/JLRoper/agent-worktree-gui/commit/a2b46d86a221395c18f15d211de76efa60a5944e))
 
 ## v1.88.0 — 2026-11-12 · 3 commits
 
