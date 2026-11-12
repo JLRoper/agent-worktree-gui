@@ -204,7 +204,7 @@ test("a cut on the option asks the reader when nothing qualifies, and cuts nothi
 
 // ---- the brief ---------------------------------------------------------------------------------------------------
 test("the brief for a run cut on the option carries the local-only turnover rule", () => {
-  const brief = turnoverBaseBrief({ branch: VALID, repoDir: "C:/demo" });
+  const brief = turnoverBaseBrief({ branch: VALID, repoDir: "repos/demo" });
   assert.match(brief, /TURNOVER BASE:/);
   assert.match(brief, new RegExp(VALID));
   assert.match(brief, /YYYYMMDD_HHMM_<KEY>_<slug>/);
