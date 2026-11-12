@@ -61,7 +61,7 @@ the parent's own name (a turnover branch makes a turnover child, `main`/`master`
 tree), and `lib/jobs.js rememberParent` writes it **beside the parent** in `~/.wag/state/branch-parents.json`:
 
     "tag:4f1a2b": { "parent": "main", "branch": "wtgui/research-the-seam-4f1a2b",
-                    "tree": "C:/…/.worktrees/research-the-seam-4f1a2b", "kind": "research", "lifted": false }
+                    "tree": "<tree>/.worktrees/research-the-seam-4f1a2b", "kind": "research", "lifted": false }
 
 A body that carries `kind` states the reader's own answer and outranks the name (that is how the card below is
 answered). A parent that names **neither** kind - a feature branch, a sibling's `wtgui/*` branch - is not filed under a
@@ -73,7 +73,7 @@ prevent: a tree filed under a kind nobody chose is a push decision nobody made.
 The kind then decides the push. `lib/push-permissions.js treeKindRefusal` refuses a push from a tree recorded
 **research**, before the four controls and before any grant, naming the tree and the kind:
 
-    refused: C:/…/.worktrees/research-the-seam-4f1a2b is recorded local only (kind research) - the reader must lift it
+    refused: <tree>/.worktrees/research-the-seam-4f1a2b is recorded local only (kind research) - the reader must lift it
     before it can push
 
 `POST /api/worktree/kind-lift {path, branch}` is the one answer that clears it: the record keeps its `kind` and gains

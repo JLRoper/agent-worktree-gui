@@ -6,8 +6,8 @@
   "draftBlobBefore": "2ebed22e56113179cef20441cfa0bf120328f693",
   "draftBlobAfter": "2ebed22e56113179cef20441cfa0bf120328f693",
   "verdict": "revise",
-  "verdictPath": "C:/ProjectDevelopment/agent-worktree-gui/.worktrees/run-row-70-exactly-as-written-local-only-stage-2-critique-6635d7/ledger/ping-pong/verdict-r1.json",
-  "critiquePath": "C:/ProjectDevelopment/agent-worktree-gui/.worktrees/run-row-70-exactly-as-written-local-only-stage-2-critique-6635d7/ledger/ping-pong/critique.md",
+  "verdictPath": ".worktrees/run-row-70-exactly-as-written-local-only-stage-2-critique-6635d7/ledger/ping-pong/verdict-r1.json",
+  "critiquePath": ".worktrees/run-row-70-exactly-as-written-local-only-stage-2-critique-6635d7/ledger/ping-pong/critique.md",
   "pass": false,
   "refused": true,
   "why": "a note is open (1) and the draft was not rewritten against it (blob 2ebed22e5611 at both visits), so G1 refuses"

@@ -9,7 +9,7 @@
 | | |
 |---|---|
 | pipeline | `ping-pong` (13 pipelines in the panel's bundle) |
-| bundle | `C:/Users/roper/.wag/state/pipeline-bundle.json`, sha256 `3c2c16b7dac43fd5` |
+| bundle | `~/.wag/state/pipeline-bundle.json`, sha256 `3c2c16b7dac43fd5` |
 | round slug / tag | `run-row-70-exactly-as-written-local-only` / `19d782` |
 | parent branch | `wtgui/run-row-70-exactly-as-written-local-only-19d782` (this tree) |
 | frozen base | `1c5c53c7` (`origin/main`, "1.80.11 - the version this landing carries") |
