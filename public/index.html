@@ -1026,6 +1026,12 @@
        them by bare name and re-exports them on window.WMApp.dom; it declares only, so that order costs
        nothing and nothing here waits on boot. -->
   <script src="/dom.js"></script>
+  <!-- The clipboard's whole-value copy for a truncated name and branch (public/core/copy-full-value.js). The chart
+       ellipsises td.name/.row-name and td.branch, so a double-click selects only the visible part and Ctrl+C used
+       to take the cut string; this one document-level listener answers a copy inside a truncated cell with the
+       whole value the row carries (data-copy-value) and leaves every other copy exactly as the browser does it. It
+       declares only, holds no nodes, and nothing waits on boot. -->
+  <script src="/core/copy-full-value.js"></script>
   <!-- The worktree chart's own code, cut out of app.js (step 3 of the same order of work): the top-N collapse
        and the arrow that offers the rest, the column list and the header built from it, and the readers and
        painters behind the two chart settings rows. Loaded before app.js, which calls them by bare name and

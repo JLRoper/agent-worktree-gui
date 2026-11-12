@@ -716,9 +716,15 @@ function rowHtml(row, forceOwner = false) {
   // life and next-read cells carry their own <td> (both are painted in place every second), which is why `life` and
   // `nextread` are read, not wrapped.
   const cells = {
-    name: `<td class="name"><div class="name-line"><span class="row-lead"></span><button class="btn-row-agent" data-agent-path="${esc(row.path)}" data-agent-name="${esc(row.name)}" data-agent-project="${esc(row.project)}"
+    // The whole name as well as the drawn one: the name can be ellipsised (`td.name .row-name`, chart.css line 113),
+    // and the copy handler (public/core/copy-full-value.js) answers a copy inside a truncated cell with this value
+    // instead of the fragment the selection covers. It is NOT `data-copy`, which is the console's block-lift
+    // attribute and would grow a ⧉ button inside the cell.
+    name: `<td class="name" data-copy-value="${esc(shownName)}"><div class="name-line"><span class="row-lead"></span><button class="btn-row-agent" data-agent-path="${esc(row.path)}" data-agent-name="${esc(row.name)}" data-agent-project="${esc(row.project)}"
       title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">\u25b6</button><span class="row-name" title="${esc(row.path)}">${esc(shownName)}</span>${renameBtn}${treeLockBtn}${agentBadgeHtml(row)}</div></td>`,
-    branch: `<td class="mono branch">${branchCellHtml(row)}${branchLockBtn}</td>`,
+    // Same rule for the branch, whose whole column is one ellipsis (chart.css line 83). The cell also holds the
+    // remote link, a `local` chip and the branch's padlock, so the value is the branch itself, never the cell's text.
+    branch: `<td class="mono branch" data-copy-value="${esc(row.branch || "")}">${branchCellHtml(row)}${branchLockBtn}</td>`,
     // The owner column: the assistant's NAME from the owner cell region above — never the raw id, never the role
     // label and never a dash. OFF by default: lib/chart-columns.js `DEFAULT_HIDDEN_COLUMNS`, applied when the reader
     // has no stored list.
