@@ -570,21 +570,49 @@ function turnoverFor(name) {
   return String(state.projects.get(name)?.turnoverBranch || "").trim();
 }
 
+// Which BASE-REF KIND this project's cuts are made on. The snapshot carries the normalised answer (lib/projects.js
+// `baseRefKindOf`), so a project that names a branch and states no kind reads `turnover` here exactly as the cut
+// reads it; a project with neither reads `checkout`.
+function turnoverKindFor(name) {
+  const p = state.projects.get(name);
+  const kind = String(p?.baseRefKind || "").trim();
+  if (kind === "local-turnover" || kind === "turnover" || kind === "checkout") return kind;
+  return turnoverFor(name) ? "turnover" : "checkout";
+}
+
+const TURNOVER_KINDS = ["checkout", "turnover", "local-turnover"];
+const TURNOVER_KIND_LABELS = {
+  checkout: "the checkout's own branch",
+  turnover: "the named turnover branch",
+  "local-turnover": "local turnover branch - ask if none exist",
+};
+
+// The chip's short answer for a kind: the third kind has no name to print, because it has no name yet - it is found
+// at the cut, and asking is what happens when nothing is found.
+function turnoverKindShort(name) {
+  const kind = turnoverKindFor(name);
+  if (kind === "local-turnover") return "local turnover";
+  return turnoverFor(name) || "none";
+}
+
 function turnoverBarOpen(name) {
   return barsOf(name).includes("turnover");
 }
 
 function turnoverChipSig(name) {
-  return `${turnoverFor(name)}|${turnoverBarOpen(name) ? "1" : "0"}`;
+  return `${turnoverFor(name)}|${turnoverKindFor(name)}|${turnoverBarOpen(name) ? "1" : "0"}`;
 }
 
 function turnoverChipHtml(name) {
   const branch = turnoverFor(name);
+  const kind = turnoverKindFor(name);
   const open = turnoverBarOpen(name);
-  const title = branch
-    ? `${name}'s turnover branch is ${branch} - a tree cut for this project starts from it, and its worker merges back into it LOCALLY (no push, no pull request). Click to change or clear it.`
-    : `${name} has no turnover branch. A tree cut for it starts from whatever the checkout is standing on, so a checkout on main briefs its worker to push and open a pull request. Click to name the branch this project's work rolls up into.`;
-  return `<button type="button" class="btn-turnover${branch ? " has-turnover" : ""}${open ? " is-open" : ""}" data-turnover-chip="${esc(name)}" data-turnover-project="${esc(name)}" data-turnover-sig="${esc(turnoverChipSig(name))}" aria-expanded="${open ? "true" : "false"}" title="${esc(title)}">turnover: ${esc(branch || "none")}</button>`;
+  const title = kind === "local-turnover"
+    ? `${name} is cut on a local turnover branch: a pushed, unmerged branch named YYYYMMDD_HHMM_<KEY>_<slug>. If no branch qualifies the panel asks instead of cutting from main. Click to change.`
+    : branch
+      ? `${name}'s turnover branch is ${branch} - a tree cut for this project starts from it, and its worker merges back into it LOCALLY (no push, no pull request). Click to change or clear it.`
+      : `${name} has no turnover branch. A tree cut for it starts from whatever the checkout is standing on, so a checkout on main briefs its worker to push and open a pull request. Click to name the branch this project's work rolls up into.`;
+  return `<button type="button" class="btn-turnover${branch || kind === "local-turnover" ? " has-turnover" : ""}${open ? " is-open" : ""}" data-turnover-chip="${esc(name)}" data-turnover-project="${esc(name)}" data-turnover-sig="${esc(turnoverChipSig(name))}" aria-expanded="${open ? "true" : "false"}" title="${esc(title)}">turnover: ${esc(turnoverKindShort(name))}</button>`;
 }
 
 // Repaint the chip in place when the branch or the open state moved - the same rule refreshRulesChip applies, on the
@@ -597,7 +625,9 @@ function refreshTurnoverChip(name) {
 }
 
 function turnoverLine(name) {
+  const kind = turnoverKindFor(name);
   const branch = turnoverFor(name);
+  if (kind === "local-turnover") return `${name}: cut on ${TURNOVER_KIND_LABELS[kind]}`;
   return branch ? `${name}: work rolls up into ${branch}` : `${name}: no turnover branch - a cut starts where the checkout stands`;
 }
 
@@ -605,15 +635,25 @@ function turnoverBarHtml(name) {
   if (!turnoverBarOpen(name)) return "";
   const bar = state.turnoverBar?.project === name ? state.turnoverBar : null;
   const branch = turnoverFor(name);
+  const kind = turnoverKindFor(name);
   const busy = bar?.busy ? " disabled" : "";
+  const kinds = TURNOVER_KINDS.map(
+    (k) => `<option value="${esc(k)}"${kind === k ? " selected" : ""}>${esc(TURNOVER_KIND_LABELS[k])}</option>`,
+  ).join("");
+  const local = kind === "local-turnover";
   return `<div class="host-form turnover-form" data-turnover-bar="${esc(name)}">
       <span class="mono host-line${bar?.error ? " clone-err" : ""}" data-turnover-status>${esc(bar?.line || turnoverLine(name))}</span>
       <span class="turnover-body">
-        <input class="mono turnover-input" type="text" maxlength="${turnoverMaxChars()}" data-turnover-input="${esc(name)}" value="${esc(branch)}" placeholder="a branch name, e.g. feature/turnover"${busy} data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" spellcheck="false" aria-label="the turnover branch for ${esc(name)}">
-        <button type="button" data-turnover-save="${esc(name)}" title="store this branch on the project's config.json row; an empty field clears it"${busy}>save</button>
+        <label class="turnover-kind" title="where a tree cut for this project starts: the checkout's own branch, the branch named here, or a local turnover branch the panel finds">kind <select class="turnover-select" data-turnover-kind="${esc(name)}" aria-label="the base-ref kind for ${esc(name)}"${busy}>${kinds}</select></label>
+        <input class="mono turnover-input" type="text" maxlength="${turnoverMaxChars()}" data-turnover-input="${esc(name)}" value="${esc(branch)}" placeholder="a branch name, e.g. feature/turnover"${busy}${local ? " disabled" : ""} data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" spellcheck="false" aria-label="the turnover branch for ${esc(name)}">
+        <button type="button" data-turnover-save="${esc(name)}" title="store this kind and branch on the project's config.json row; an empty field clears the branch"${busy}>save</button>
         <button type="button" data-turnover-close="${esc(name)}" title="close the turnover bar">close</button>
       </span>
-      <span class="mono dimmer turnover-hint">A tree cut for this project starts from this branch. Its worker merges back into it locally and does not push or open a pull request. Empty means no turnover branch: a cut starts where the checkout stands.</span>
+      <span class="mono dimmer turnover-hint">${esc(
+        local
+          ? "A tree cut for this project starts from the newest local branch that is named YYYYMMDD_HHMM_<KEY>_<slug>, pushed to a remote, and not an ancestor of main or master. When no branch qualifies the panel asks instead of cutting from main."
+          : "A tree cut for this project starts from this branch. Its worker merges back into it locally and does not push or open a pull request. Empty means no turnover branch: a cut starts where the checkout stands.",
+      )}</span>
     </div>`;
 }
 
@@ -639,6 +679,7 @@ async function toggleTurnoverBar(name) {
     if (Number.isFinite(Number(out.maxChars))) state.turnoverCaps = { maxChars: Number(out.maxChars) };
     const p = state.projects.get(name);
     if (p) p.turnoverBranch = String(out.turnoverBranch || "");
+    if (p && out.baseRefKind) p.baseRefKind = String(out.baseRefKind);
     state.turnoverBar = { project: name, line: turnoverLine(name), busy: false, error: false };
     repaintBar(name, "turnover");
     refreshTurnoverChip(name);
@@ -661,14 +702,19 @@ function closeTurnoverBar(name) {
 // bar's own line, so a typed branch is never silently dropped.
 async function saveProjectTurnover(name) {
   const input = document.querySelector(`[data-turnover-input="${CSS.escape(name)}"]`);
-  const value = String(input?.value || "").replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim();
+  const select = document.querySelector(`[data-turnover-kind="${CSS.escape(name)}"]`);
+  const kind = String(select?.value || "").trim() || turnoverKindFor(name);
+  // The third kind has no name to send: it is found at the cut, so a branch left in the field is not this selection's
+  // and must not be stored beside it.
+  const typed = String(input?.value || "").replace(/\s+/g, " ").trim();
+  const value = kind === "local-turnover" ? "" : typed;
   const bar = state.turnoverBar?.project === name ? state.turnoverBar : { project: name };
   state.turnoverBar = { ...bar, busy: true, error: false, line: "saving..." };
   repaintBar(name, "turnover");
   try {
     const res = await apiFetch(
       "/api/project-turnover",
-      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: name, turnoverBranch: value }) },
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: name, turnoverBranch: value, baseRefKind: kind }) },
       { timeoutMs: 20000 },
     );
     const out = await res.json().catch(() => ({}));
@@ -681,6 +727,7 @@ async function saveProjectTurnover(name) {
     // The server's answer, never the request echoed back: a name the writer trimmed reads as the writer stored it.
     const p = state.projects.get(name);
     if (p) p.turnoverBranch = String(out.turnoverBranch || "");
+    if (p && out.baseRefKind) p.baseRefKind = String(out.baseRefKind);
     state.turnoverBar = { project: name, busy: false, error: false, line: out.note || turnoverLine(name) };
     repaintBar(name, "turnover");
     refreshTurnoverChip(name);

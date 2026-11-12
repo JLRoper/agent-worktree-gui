@@ -13,26 +13,28 @@
 //
 // THE VALUE IS ONE BRANCH NAME, and "" is a real answer: a project that has stopped using a turnover branch clears
 // the key, and a later cut starts where the checkout stands exactly as it did before the setting existed.
-import { TURNOVER_MAX_CHARS, turnoverBranchOf } from "../lib/project-turnover.js";
+import { BASE_REF_KINDS, TURNOVER_MAX_CHARS, baseRefKindOf, turnoverBranchOf } from "../lib/project-turnover.js";
+import { BASE_REF_KIND_LABELS } from "../lib/base-ref-kind.js";
 
 /** The one path this prefix answers, and the row the mount table in server.js matches on. */
 export const TURNOVER_PATH = "/api/project-turnover";
 
-/** The shape every answer carries: the cap, and the names. */
+/** The shape every answer carries: the cap, the kinds, and the names. */
 export function turnoverOut(registry, project = null) {
   const projects = registry?.projects || [];
-  const base = { maxChars: TURNOVER_MAX_CHARS };
+  const base = { maxChars: TURNOVER_MAX_CHARS, kinds: [...BASE_REF_KINDS], kindLabels: { ...BASE_REF_KIND_LABELS } };
   if (!project) {
     return {
       ...base,
       projects: Object.fromEntries(projects.map((p) => [p.name, turnoverBranchOf(p)])),
+      baseRefKinds: Object.fromEntries(projects.map((p) => [p.name, baseRefKindOf(p)])),
     };
   }
   const found = projects.find((p) => p.name === project) || null;
   if (!found) {
-    return { ...base, project, turnoverBranch: null, error: `unknown project: ${project} - a turnover branch belongs to a project on this board` };
+    return { ...base, project, turnoverBranch: null, baseRefKind: null, error: `unknown project: ${project} - a turnover branch belongs to a project on this board` };
   }
-  return { ...base, project, turnoverBranch: turnoverBranchOf(found) };
+  return { ...base, project, turnoverBranch: turnoverBranchOf(found), baseRefKind: baseRefKindOf(found) };
 }
 
 export function createProjectTurnoverRoutes({ getConfig, registry, setProjectTurnover, sendJson, readBody, authorised } = {}) {
@@ -79,11 +81,11 @@ export function createProjectTurnoverRoutes({ getConfig, registry, setProjectTur
         sendJson(res, 400, { error: "project is required: a turnover branch belongs to one project on the board", ...turnoverOut(registry) });
         return true;
       }
-      if (payload.turnoverBranch === undefined) {
-        sendJson(res, 400, { error: "turnoverBranch is required: send a branch name (or \"\" to clear it)", ...turnoverOut(registry, project) });
+      if (payload.turnoverBranch === undefined && payload.baseRefKind === undefined) {
+        sendJson(res, 400, { error: "turnoverBranch is required unless a baseRefKind is sent: send a branch name (or \"\" to clear it), a kind, or both", ...turnoverOut(registry, project) });
         return true;
       }
-      const out = await setProjectTurnover(project, payload.turnoverBranch, { by: "the turnover bar" });
+      const out = await setProjectTurnover(project, payload.turnoverBranch, { by: "the turnover bar", baseRefKind: payload.baseRefKind });
       if (out.error) {
         const held = registry.projects.find((p) => p.name === project) || null;
         sendJson(res, out.status || 400, { ...turnoverOut({ projects: held ? [held] : [] }, held ? project : null), error: out.error });
@@ -93,8 +95,9 @@ export function createProjectTurnoverRoutes({ getConfig, registry, setProjectTur
         ok: true,
         project,
         turnoverBranch: out.turnoverBranch,
+        baseRefKind: out.baseRefKind,
         maxChars: TURNOVER_MAX_CHARS,
-        note: out.turnoverBranch ? `${project}: turnover branch ${out.turnoverBranch}` : `${project}: no turnover branch`,
+        note: out.note || (out.turnoverBranch ? `${project}: turnover branch ${out.turnoverBranch}` : `${project}: no turnover branch`),
       });
       return true;
     }

@@ -3199,6 +3199,10 @@ button.btn-turnover:focus-visible { outline: 1px solid #7fb2e8; outline-offset: 
 .turnover-form .host-line { max-width: none; min-width: 0; }
 .turnover-form .turnover-body { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .turnover-form .turnover-input { flex: 1 1 auto; min-width: 160px; max-width: 420px; }
+/* The kind: three words, and the third one is why this field exists - a branch the panel has to find, so the name
+   field beside it is disabled until the reader picks one of the two named kinds again. */
+.turnover-form .turnover-kind { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.turnover-form .turnover-select { max-width: 260px; }
 .turnover-form .turnover-hint { white-space: normal; }
 
 /* ---- the board chip, and the claims it opens in the same grey strip ------------------------------------------- */
