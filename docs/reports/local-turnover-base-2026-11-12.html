@@ -36,14 +36,14 @@
 <p class="sub">agent-worktree-gui 1.84.4. Evidence from a scratch repository built for this proof, a real cut through <code>Jobs</code>, and the tests that pin each rejection.</p>
 
 <dl class="facts">
-  <dt>base ref verified</dt><dd>git log -1 origin/main = f1d4b2e4 2026-11-12 00:40:12 -0500 docs: render the changelog - 554 releases</dd>
+  <dt>base ref verified</dt><dd>git log -1 origin/main = 0befad13 2026-11-12 01:32:49 -0500 docs: render the changelog - 555 releases</dd>
   <dt>branch</dt><dd>wtgui/make-the-turnover-branch-a-first-class-df6ca4</dd>
   <dt>remote base pair</dt><dd>lib/base-ref.js resolveBaseRef, line 67</dd>
   <dt>resolver</dt><dd>lib/turnover-base.js resolveTurnoverBase</dd>
   <dt>kinds</dt><dd>checkout / turnover / local-turnover</dd>
 </dl>
 
-<p class="note">The brief for this landing said <code>origin/main</code> read <code>68d15290</code> at 1.84.1. It has since moved three commits (a scan-queue performance landing, the 1.84.2 version bump and the changelog render), and this branch is rebased onto <code>f1d4b2e4</code>, so the cut lands on today's main rather than the one the brief was written against. That is the only drift from the brief.</p>
+<p class="note">The brief for this landing said <code>origin/main</code> read <code>68d15290</code> at 1.84.1. It has since moved six commits (a scan-queue performance landing, a deferred-scan backoff fix, and their version and changelog commits), and this branch is rebased onto <code>0befad13</code>, so the cut lands on today's main rather than the one the brief was written against. That is the only drift from the brief.</p>
 
 <h2>1. The pair this extends</h2>
 <p>The base the board compares every row against is one function: <code>resolveBaseRef</code> in <code>lib/base-ref.js</code>, which builds the project's remote plus main branch from <code>config.json</code>. The line that builds it, quoted from the file at <code>:67</code>:</p>
