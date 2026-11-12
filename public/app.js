@@ -3799,6 +3799,9 @@ const PANEL_PROMPT = /^The \d+ subagents? you delegated (?:has|have) finished\./
 
 // Everything the reader has sent on this thread, from this browser: replies, steers, and anything the queue
 // delivered. Kept per thread in localStorage, capped, so Up still walks text the panel no longer has a turn for.
+// Each entry is `{ text, at }`: the words, and the moment they were said. The clock is what lets this list be
+// MERGED with the session's turns instead of appended after them. A bare string is what an older build wrote and
+// is read as an entry with no clock.
 const REPLY_HISTORY_KEY = "wtgui.replyHistory";
 const REPLY_HISTORY_MAX = 60;
 
@@ -3811,14 +3814,28 @@ function replyHistoryStore() {
   }
 }
 
-function rememberReply(thread, text) {
+// One stored list as `{ text, at }` entries, in the order the store keeps them. `at` is null for an entry an older
+// build wrote with no clock: nothing says when it was said, so it cannot be placed among the timed entries.
+function replyHistoryEntries(raw) {
+  const out = [];
+  for (const entry of Array.isArray(raw) ? raw : []) {
+    const text = String(entry && typeof entry === "object" ? entry.text : entry ?? "").trim();
+    if (!text) continue;
+    const at = entry && typeof entry === "object" ? Number(entry.at) : NaN;
+    out.push({ text, at: Number.isFinite(at) && at > 0 ? at : null });
+  }
+  return out;
+}
+
+function rememberReply(thread, text, at = Date.now()) {
   const s = String(text || "").trim();
   if (!thread || !s) return;
   try {
     const all = replyHistoryStore();
-    const list = Array.isArray(all[thread]) ? all[thread] : [];
-    // Sending the same thing twice in a row is one entry in the history, not two.
-    if (list[list.length - 1] !== s) list.push(s);
+    // The same words said again MOVE their entry to the newest place instead of adding a second one: Up walks what
+    // the reader said most recently, so a repeat is the newest thing they said, not the first time they said it.
+    const list = replyHistoryEntries(all[thread]).filter((e) => e.text !== s);
+    list.push({ text: s, at: Number(at) || Date.now() });
     all[thread] = list.slice(-REPLY_HISTORY_MAX);
     localStorage.setItem(REPLY_HISTORY_KEY, JSON.stringify(all));
   } catch {
@@ -3826,25 +3843,64 @@ function rememberReply(thread, text) {
   }
 }
 
+// The clock a turn prompt sorts on: when that turn started. `startedAt` is written by the panel's own create(), so
+// it is the same clock the browser stamps its history with, and the two records merge into one timeline.
+function promptClock(j) {
+  for (const raw of [j.startedAt, j.endedAt]) {
+    const at = Date.parse(raw || "");
+    if (Number.isFinite(at) && at > 0) return at;
+  }
+  return null;
+}
+
+// Everything the reader said on ONE session, oldest first. Up steps back from the end of this array.
 function turnPrompts(thread) {
-  const prompts = [...state.jobs.values()]
-    .filter((j) => (j.thread || j.id) === thread)
-    .filter((j) => !j.origin)
-    .sort((a, b) => (a.turn || 0) - (b.turn || 0))
+  if (!thread) return [];
+  const entries = [];
+  for (const j of state.jobs.values()) {
+    // Strictly this composer's session, by its thread and nothing else. `(j.thread || j.id)` recalled a record that
+    // carries no thread through its own id, which is another session's box as soon as the two strings meet.
+    if (j.thread !== thread || j.origin) continue;
     // A prompt that carried attachments holds the panel's file block at the end; recalling it must not
     // re-attach anything, so the block comes off and the words are what moves through the box.
-    .map((j) => String(j.prompt || "").replace(/(?:\n\n?Attachment: [^\n]*before answering\.)+$/g, "").trim())
-    .filter((text) => text && !PANEL_PROMPT.test(text));
-  const mine = replyHistoryStore()[thread];
-  const sent = Array.isArray(mine) ? mine.filter((x) => typeof x === "string" && x.trim() && !PANEL_PROMPT.test(x.trim())) : [];
-  // Older turns first, then what this browser sent (which is the only record of a steer), de-duplicated.
+    const text = String(j.prompt || "").replace(/(?:\n\n?Attachment: [^\n]*before answering\.)+$/g, "").trim();
+    if (!text || PANEL_PROMPT.test(text)) continue;
+    // A missing turn number is NOT a zero. Zero sorted the record in front of the session's whole history, which is
+    // the out-of-order entry this fixes; the stamp places it, and the number only breaks a tie on one millisecond.
+    const turn = Number(j.turn);
+    entries.push({ text, at: promptClock(j), turn: Number.isFinite(turn) && turn > 0 ? turn : null, order: entries.length });
+  }
+  // A turn record the store wrote before it kept a stamp has nothing to sort on. Its number says which prompt it
+  // came AFTER, so it borrows that prompt's clock; a record with neither goes after the timed ones, in arrival order.
+  const newestTimed = entries.reduce((max, e) => (e.at != null && e.at > max ? e.at : max), 0);
+  for (const e of entries) {
+    if (e.at != null) continue;
+    const earlier = entries.filter((o) => o.at != null && o.turn != null && e.turn != null && o.turn < e.turn);
+    const later = entries.filter((o) => o.at != null && o.turn != null && e.turn != null && o.turn > e.turn);
+    if (earlier.length) e.at = Math.max(...earlier.map((o) => o.at)) + 1;
+    else if (later.length) e.at = Math.min(...later.map((o) => o.at)) - 1;
+    else e.at = newestTimed + 1 + e.order;
+  }
+  // Then what this browser sent, on the same clock: the only record of a steer, and of a reply whose turn this
+  // panel has not been told about yet. Appending this list AFTER the turns made every typed entry claim to be newer
+  // than every turn, so a session whose newest entry was typed in the box could read a stale turn prompt instead.
+  const sent = replyHistoryEntries(replyHistoryStore()[thread]).filter((e) => !PANEL_PROMPT.test(e.text));
+  const tailClock = entries.reduce((max, e) => (e.at != null && e.at > max ? e.at : max), 0);
+  sent.forEach((e, i) => {
+    // An entry with no clock of its own keeps its place at the end of the walk, in the order the store kept it: the
+    // reader's own words are the newest thing this build can name for it, which is where the append had them.
+    entries.push({ text: e.text, at: e.at != null ? e.at : tailClock + 1 + i, turn: null, order: entries.length });
+  });
+  entries.sort((a, b) => a.at - b.at || (a.turn ?? Infinity) - (b.turn ?? Infinity) || a.order - b.order);
+  // One entry per text, at its NEWEST place: the turn echo of what the reader typed is the same entry as the typed
+  // one rather than a second step, and a repeated prompt is one step where the reader last said it.
   const seen = new Set();
   const out = [];
-  for (const text of [...prompts, ...sent]) {
-    const key = text.trim();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(key);
+  for (let i = entries.length - 1; i >= 0; i -= 1) {
+    const text = entries[i].text;
+    if (seen.has(text)) continue;
+    seen.add(text);
+    out.unshift(text);
   }
   return out;
 }
@@ -4442,6 +4498,9 @@ function recallSpawnPrompt(step) {
 function recallReply(box, step) {
   const thread = box.dataset.reply;
   if (!thread) return;
+  // ONE session's list, and the walk is inside it: turnPrompts(thread) is keyed by this box's own thread only, so no
+  // step of the walk can land on another session's words. Up starts at the newest entry (back 1) and every further
+  // Up goes one entry older; Down comes back toward the draft and stops there.
   const prompts = turnPrompts(thread);
   if (!prompts.length) return;
   const nav = state.replyNav.get(thread) || { back: 0, stash: readBox(box) };
