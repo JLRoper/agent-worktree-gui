@@ -5836,6 +5836,10 @@ const server = createServer(async (req, res) => {
       if (!opened.ok) {
         return sendJson(res, 500, { error: `could not open ${path.basename(target)}: ${opened.error || "no launcher started"}` });
       }
+      // A second click on the same file inside five minutes is a REUSE: nothing was spawned this time, and the answer
+      // says so (`reused: true`, `opened: false`, `ageMs` since the open that put it on screen) instead of dressing a
+      // remembered launcher up as a fresh launch. The card reads those two words and says "already open, not opened
+      // again" - a silent no-op would be indistinguishable from a click that did nothing.
       return sendJson(res, 200, {
         ok: true,
         path: target,
@@ -5845,6 +5849,11 @@ const server = createServer(async (req, res) => {
         fallback: opened.fallback,
         url: opened.url,
         bytes: info.size,
+        reused: opened.reused === true,
+        opened: opened.reused !== true,
+        ageMs: opened.ageMs ?? 0,
+        focus: opened.focus || "none",
+        focusWhy: opened.focusWhy || "",
       });
     }
 
@@ -5950,6 +5959,10 @@ const server = createServer(async (req, res) => {
       // behind it in that order (lib/open-url.js `fileOpenerLadder` says why explorer.exe alone did not work: the
       // store's forward-slash path made it exit 1 and open nothing). The answer names the launcher that actually
       // started and how far down the ladder it was, so the card can say which browser took the file.
+      //
+      // A repeat inside five minutes is a REUSE (`open: "reused"`): the row says the file is already on screen and
+      // that nothing was launched, rather than printing a second "opened ... with msedge.exe" for a click that
+      // spawned nothing.
       const opened = await openFileWith(entry.target, { spawn, log });
       if (!opened.ok) {
         return sendJson(res, 500, {
@@ -5960,13 +5973,17 @@ const server = createServer(async (req, res) => {
         ok: true,
         kind: entry.kind,
         target: entry.target,
-        open: "handler",
+        open: opened.reused ? "reused" : "handler",
         opener: path.basename(opened.bin),
         via: opened.via,
         progId: opened.progId || null,
         fallback: opened.fallback,
         url: opened.url,
         bytes: info.size,
+        reused: opened.reused === true,
+        ageMs: opened.ageMs ?? 0,
+        focus: opened.focus || "none",
+        focusWhy: opened.focusWhy || "",
       });
     }
 

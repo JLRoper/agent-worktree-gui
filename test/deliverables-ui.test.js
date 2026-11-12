@@ -138,6 +138,17 @@ test("a 200 {open:'handler'} says what it opened and with which opener — and c
   assert.match(src, /delete deliver\.opened\[seq\]/, "a later refusal replaces an earlier answer on that row");
 });
 
+test("a 200 {open:'reused'} says the file is already open, and that this click started nothing", () => {
+  const src = block();
+  // The route's second answer. A repeat inside five minutes spawns nothing, so the row must not print a second
+  // "opened ... with msedge.exe" for a click that started no process - and must not claim a window either.
+  assert.match(src, /d\.open === "handler" \|\| d\.open === "reused"/, "the page reads the route's reuse answer");
+  assert.match(src, /already open in/, "the row says the file is already on screen");
+  assert.match(src, /not opened again, this click started nothing/, "and that nothing was launched this time");
+  assert.match(src, /deliverAgeText\(/, "the row says how long ago the open it is reusing was");
+  assert.match(src, /reused: d\.open === "reused"/, "the reuse flag rides the row's own record, not a second lookup");
+});
+
 test("the popover is the artifacts-pop idiom: fixed, above the board, scrolling", () => {
   const rule = css.match(/\.deliver-pop \{([^}]*)\}/);
   assert.ok(rule, "no .deliver-pop rule");

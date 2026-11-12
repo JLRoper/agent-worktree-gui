@@ -31,6 +31,11 @@ direct binary will do, the pre-execution guard left alone, and the host's curren
 project runbook, so the rule has to be there as well as in the panel's worker brief (`TERMINAL_BRIEF` in
 `lib/jobs.js`).
 
+Every runbook's `## Testing` section also carries the page rule: a page is proved by a test or a headless capture,
+a page the reader has to look at goes through the panel's own open route (`POST /api/open-file`) or one plain tab,
+never `--new-window` and never a scratch `--user-data-dir`, and a scratch-profile browser is closed before the run
+settles. It is in the worker brief as `PAGE_BRIEF` (`lib/jobs.js`) and here for the same reason as the terminal rules.
+
 ## The rollup table
 
 `## Landing and turnover` holds one table, newest rollup first:
