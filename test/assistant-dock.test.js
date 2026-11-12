@@ -71,31 +71,39 @@ test("the width is remembered, not a rect", () => {
     "a width is one number, not a rect to parse");
 });
 
-test("the width is clamped to 340-640px and to 60% of the window", () => {
+test("the width is clamped to a 340px floor, half the window, and a 420px board floor", () => {
   // The band is read out of the source rather than restated here, so a change to it has to change this test.
   const band = Object.fromEntries(
-    [...assistant.matchAll(/const (DOCK_(?:MIN|MAX|SHARE|DEFAULT)) = ([0-9.]+);/g)].map((m) => [m[1], Number(m[2])]),
+    [...assistant.matchAll(/const (DOCK_(?:MIN|SHARE|DEFAULT|HARD_MIN)|BOARD_MIN) = ([0-9.]+);/g)].map((m) => [m[1], Number(m[2])]),
   );
-  assert.deepEqual(band, { DOCK_MIN: 340, DOCK_MAX: 640, DOCK_SHARE: 0.6, DOCK_DEFAULT: 480 });
+  assert.deepEqual(band, { DOCK_MIN: 340, DOCK_SHARE: 0.5, BOARD_MIN: 420, DOCK_HARD_MIN: 240, DOCK_DEFAULT: 480 });
   const clamp = new Function(
-    "DOCK_MIN", "DOCK_MAX", "DOCK_SHARE", "DOCK_DEFAULT",
+    "DOCK_MIN", "DOCK_SHARE", "BOARD_MIN", "DOCK_HARD_MIN", "DOCK_DEFAULT",
     `${sliceRegion(assistant, "dock width", "dock width")}; return clampDockWidth;`,
-  )(band.DOCK_MIN, band.DOCK_MAX, band.DOCK_SHARE, band.DOCK_DEFAULT);
+  )(band.DOCK_MIN, band.DOCK_SHARE, band.BOARD_MIN, band.DOCK_HARD_MIN, band.DOCK_DEFAULT);
   // The ordinary case: the reader's number, inside the band.
   assert.equal(clamp(480, 1247, 1), 480);
   assert.equal(clamp(340, 1247, 1), 340);
-  assert.equal(clamp(640, 1247, 1), 640);
+  // The cap is HALF the window, not a pixel ceiling: 1600 is 800, where the old 640px maximum stopped a reader on a
+  // wide screen at 40% of the row.
+  assert.equal(clamp(900, 1600, 1), 800, "half a 1600px window is the cap");
+  assert.equal(clamp(700, 1600, 1), 700, "and a width under the cap is drawn as asked");
   // Past either end of the band.
   assert.equal(clamp(200, 1247, 1), 340, "a narrower width than the floor is the floor");
-  assert.equal(clamp(900, 1247, 1), 640, "a wider width than the cap is the cap");
-  // 60% of the window, when that is the smaller limit: 800 * 0.6 = 480.
-  assert.equal(clamp(900, 800, 1), 480);
-  // A window too narrow for the floor: the cap wins, because the board keeping the majority of the row is the rule
-  // the floor serves.
-  assert.equal(clamp(900, 500, 1), 300);
+  assert.equal(clamp(900, 1247, 1), 623, "a wider width than the cap is the cap (half of 1247)");
+  // The board's floor is the cap's other stop: 900 - 420 = 480 is more than half of 900, so the half wins here.
+  assert.equal(clamp(900, 900, 1), 450);
+  // The two floors meet at an 840px window: 420 each, no argument.
+  assert.equal(clamp(900, 840, 1), 420);
+  // A window too narrow for both floors: the board keeps its 420 and the rail takes what is left.
+  assert.equal(clamp(900, 800, 1), 380, "the board's floor outranks the rail's on a narrow window");
+  assert.equal(clamp(900, 700, 1), 280);
+  // ...until what is left is not a rail at all, which is the one bound that beats the board's floor.
+  assert.equal(clamp(900, 600, 1), 240);
+  assert.equal(clamp(900, 400, 1), 240);
   // The cap is measured in the layout px the width is stored in, so a zoomed page cannot hand the rail more of the
-  // window than it would at 100%: 1247 client px at 1.3 zoom is 959 layout px, 60% of which is 575.
-  assert.equal(clamp(900, 1247, 1.3), 575);
+  // window than it would at 100%: 1247 client px at 1.3 zoom is 959 layout px, half of which is 479.
+  assert.equal(clamp(900, 1247, 1.3), 479);
   // Nothing remembered, or nonsense remembered: the default, clamped.
   assert.equal(clamp(null, 1247, 1), 480);
   assert.equal(clamp("nonsense", 1247, 1), 480);

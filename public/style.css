@@ -3388,8 +3388,9 @@ button.btn-board:focus-visible { outline: 1px solid #7fb2e8; outline-offset: 1px
 .shell > .foot { flex: 1 0 100%; }
 
 /* The assistant, docked: a column at the right of the board, as tall as the window and pinned there while the
-   board scrolls under it. Its width is the reader's — 340-640px, at most 60% of the window — and `assistant.js`
-   is its one authority: a min/max here would fight that clamp the way a second cap fought the old drag.
+   board scrolls under it. Its width is the reader's - 340px at the floor, half the window at the cap, with the
+   board's 420px floor as the second stop - and `assistant.js` is its one authority: a min/max here would fight
+   that clamp the way a second cap fought the old drag.
    Scoped to `#assistant`: this rule was `.assistant` alone, and the chart's owner cell used to carry
    `class="assistant"` — so every owner <td> was a 480px sticky flex column with the rail's border and background. */
 #assistant {
