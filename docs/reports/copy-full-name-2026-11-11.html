@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The truncated worktree name and branch, copied whole</title>
+<style>
+  :root {
+    --bg: #14161a; --panel: #1b1e24; --line: #2b303a; --ink: #e6e8ec; --dim: #a2a9b6;
+    --ok: #5fbf7a; --warn: #d9a441; --bad: #d9605f; --acc: #6ea8d8;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.62 "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 1020px; margin: 0 auto; padding: 40px 28px 80px; }
+  h1 { font-size: 26px; line-height: 1.25; margin: 0 0 6px; letter-spacing: -0.01em; }
+  h2 { font-size: 19px; margin: 42px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+  h3 { font-size: 15px; margin: 24px 0 6px; color: var(--acc); text-transform: uppercase; letter-spacing: 0.06em; }
+  p { margin: 10px 0; }
+  .sub { color: var(--dim); font-size: 13.5px; margin-bottom: 26px; }
+  .box { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; margin: 18px 0; }
+  .box.hot { border-left: 3px solid var(--bad); }
+  .box.good { border-left: 3px solid var(--ok); }
+  .box.note { border-left: 3px solid var(--warn); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13.5px; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { color: var(--dim); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+  td.n { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  code, pre { font-family: Consolas, "Cascadia Mono", monospace; font-size: 12.5px; }
+  code { background: #0f1115; padding: 1px 5px; border-radius: 4px; color: #cfd6e2; }
+  pre { background: #0f1115; border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px;
+        overflow-x: auto; color: #cfd6e2; line-height: 1.5; }
+  .ok { color: var(--ok); } .bad { color: var(--bad); } .warn { color: var(--warn); } .dim { color: var(--dim); }
+  ul { margin: 8px 0 8px 20px; padding: 0; } li { margin: 5px 0; }
+  .kv { display: grid; grid-template-columns: 210px 1fr; gap: 4px 16px; font-size: 13.5px; }
+  .kv div:nth-child(odd) { color: var(--dim); }
+  figure { margin: 20px 0 26px; }
+  figure img { width: 100%; border: 1px solid var(--line); border-radius: 8px; display: block; }
+  figcaption { color: var(--dim); font-size: 12.5px; margin-top: 8px; }
+  footer { margin-top: 46px; border-top: 1px solid var(--line); padding-top: 14px; color: var(--dim); font-size: 12.5px; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>The truncated worktree name and branch, copied whole</h1>
+<div class="sub">
+  Landing worktree <code>agent-worktree-gui/.worktrees/make-a-truncated-worktree-name-and-e5d056</code> on
+  <code>wtgui/make-a-truncated-worktree-name-and-e5d056</code> · cut from <code>main</code> at
+  <code>c0188ebb</code>, rebased onto <code>origin/main</code> <code>e5b4dbd6</code> (v1.82.4) when main moved ·
+  written 2026-11-11 · panel never restarted: the browser half runs against its own sandbox panel on a free port
+</div>
+
+<div class="box hot">
+  <h3 style="margin-top:0;color:var(--bad)">The bug</h3>
+  <p>Two rules cut the text and only the text:
+  <code>public/chart.css:83</code> ellipsises <code>td.name</code>, <code>td.owner</code>, <code>td.pr</code>,
+  <code>td.verdict</code> and <code>td.branch</code>, and <code>public/chart.css:113</code> ellipsises the name
+  inside the first one, <code>td.name .row-name</code>. An ellipsis is a drawing: the DOM still holds the whole
+  name, but the browser's own copy takes what the SELECTION covers, and a selection covers what is painted.</p>
+  <p>So a double-click on the name selected one word of the cut string, a drag selected only the painted
+  characters, and Ctrl+C delivered <code>make-a-truncated-worktree-name-and-e5...</code> - a name that cannot be
+  pasted anywhere. The same on the branch.</p>
+</div>
+
+<h2>What changed</h2>
+
+<div class="box good">
+  <p><strong>The clipboard, and nothing else.</strong> No CSS, no column widths, no ellipsis: the chart still cuts
+  both cells, which the captures below show. Three pieces:</p>
+  <ul>
+    <li><strong>the whole value rides on the cell.</strong> <code>td.name</code> and <code>td.branch</code> carry
+    <code>data-copy-value</code>, written by the one function that draws them (<code>rowHtml</code> in
+    <code>public/render-projects.js</code>). Not <code>data-copy</code>: that attribute is the console's block-lift
+    mechanism, and any element wearing it grows a copy button on hover, which inside a chart cell would be a new
+    control in the row. Not the cell's <code>title</code> either - the name cell's title is the tree's path and the
+    branch cell's is the sentence about the remote, so neither is the value;</li>
+    <li><strong>one listener, in its own file.</strong> <code>public/core/copy-full-value.js</code> is a classic
+    script registered in <code>public/index.html</code>, not code added to <code>public/app.js</code>: it holds no
+    nodes, so a repainted row cannot orphan it, and the row that needs <code>app.js</code> is not blocked by this
+    one. On a <code>copy</code> event it resolves the cell from the selection anchor (a text node inside
+    <code>.row-name</code>, the branch's own link, or the cell itself) and acts only when all three hold:</li>
+  </ul>
+  <div class="kv">
+    <div>the cell</div><div>it is a <code>td.name</code> or a <code>td.branch</code>. A copy anywhere else - another
+      cell, the console, the page - is left completely alone: nothing is written and <code>preventDefault</code> is
+      never called</div>
+    <div>truncation</div><div>the clipped element's <code>scrollWidth</code> is wider than its
+      <code>clientWidth</code>, so a name that fits copies exactly as the reader selected it</div>
+    <div>one cell</div><div>the anchor and the focus resolve to the same cell: a drag from the name into the branch
+      is a selection of two values and stays the browser's</div>
+  </div>
+  <p>Then, and only then, the whole value goes on the clipboard as <code>text/plain</code> and the event is
+  cancelled, so the browser cannot append or replace it with the fragment.</p>
+</div>
+
+<table>
+  <tr><th>File</th><th>What it is</th></tr>
+  <tr><td><code>public/core/copy-full-value.js</code></td><td>new: the document-level copy handler and its three
+    bounds, published on <code>globalThis.wtCopyFull</code> so the unit test can drive it</td></tr>
+  <tr><td><code>public/render-projects.js</code></td><td>the two cells carry <code>data-copy-value</code>: the whole
+    name, and the branch itself (never the cell's text, which also holds a chip and a padlock)</td></tr>
+  <tr><td><code>public/index.html</code></td><td>one script tag for the module, after <code>/dom.js</code></td></tr>
+  <tr><td><code>test/copy-full-value.test.js</code></td><td>new: six cases, page-shaped stubs, no browser</td></tr>
+  <tr><td><code>tools/verify-copy-full-name.mjs</code></td><td>new: the real thing in Chromium - double-click,
+    Ctrl+C, <code>navigator.clipboard.readText()</code> - and the three captures</td></tr>
+  <tr><td><code>docs/assets/copy-full-name/*.png</code></td><td>the captures: a name and a branch copied whole, and
+    a copy elsewhere left as the browser made it</td></tr>
+</table>
+
+<h2>Red first, then green</h2>
+
+<p>The tests were written against the base build and run there before a line of the fix existed. From a clean
+export of <code>origin/main</code> (<code>git archive</code>, no worktree) with only the new test file copied in:</p>
+
+<pre>base export, node --test test/copy-full-value.test.js
+✖ the row's name and branch cells carry the whole value, not only the text they draw
+✖ a truncated worktree name copies whole
+✖ a truncated branch copies whole
+✖ a caret sitting in a truncated name copies whole too
+✖ a copy outside the name and branch cells is the browser's own, untouched
+✖ a name that fits its column is left to the browser
+tests 6   pass 0   fail 6</pre>
+
+<p>and the browser harness, run against the same base export, fails exactly the four checks that are the bug - the
+two attributes and the two copies - while the layout and the outside-copy checks pass, which is what says the
+harness measures the defect and not itself:</p>
+
+<pre>base export, node tools/verify-copy-full-name.mjs
+FAIL  td.name carries the whole worktree name
+FAIL  td.branch carries the whole branch
+FAIL  Ctrl+C on the truncated worktree name puts the WHOLE name on the clipboard
+FAIL  Ctrl+C on the truncated branch puts the WHOLE branch on the clipboard
+11/15 checks</pre>
+
+<p>On this branch the same two runs are <span class="ok">6/6</span> and <span class="ok">15/15</span>.</p>
+
+<h2>The captures: a name and a branch, copied whole</h2>
+
+<p>Each frame is one screenshot of the sandbox board: the row on the left still carries the ellipsis and the
+selection is still only the word that was double-clicked, and the strip at the bottom carries the text
+<code>navigator.clipboard.readText()</code> returned AFTER the Ctrl+C. The strip is written from that read, not
+from the name this harness knows.</p>
+
+<figure>
+  <img src="../assets/copy-full-name/name-copied-whole.png" alt="The worktree name cell, ellipsised, with the word make selected, and a strip at the bottom holding the whole name">
+  <figcaption>The worktree name. The cell draws <code>make-a-truncated-w...</code> and the double-click selected
+  <code>make</code>; the clipboard holds <code>make-a-truncated-worktree-name-and-e5d056</code>.</figcaption>
+</figure>
+
+<figure>
+  <img src="../assets/copy-full-name/branch-copied-whole.png" alt="The branch cell, ellipsised, with the word wtgui selected, and a strip at the bottom holding the whole branch">
+  <figcaption>The branch. The cell draws <code>wtgui/make-a-truncated-w...</code> and the double-click selected
+  <code>wtgui</code>; the clipboard holds <code>wtgui/make-a-truncated-worktree-name-and-e5d056</code>.</figcaption>
+</figure>
+
+<figure>
+  <img src="../assets/copy-full-name/outside-cells-unchanged.png" alt="The project header line with one token selected, and a strip at the bottom holding that same token">
+  <figcaption>Outside those cells. A word of plain page text is double-clicked and copied and the clipboard holds
+  exactly what the browser selected, which is the proof the handler did not touch it. (Inside a row it cannot be
+  tested: <code>public/chart.css:38</code> makes every cell from the third on unselectable on purpose, so the name
+  and the branch are the only selectable text a row has.)</figcaption>
+</figure>
+
+<h2>The runs</h2>
+
+<table>
+  <tr><th>Command</th><th>Answer</th></tr>
+  <tr>
+    <td><code>npm run test:changed</code></td>
+    <td>51 files, 447 tests: <span class="ok">445 pass</span>, <span class="bad">2 fail</span> - both red on the
+      base build too, checked by running the same two files in the base export:
+      <ul>
+        <li><code>test/header-controls.test.js</code> "the moved control keeps its handler" - it pins
+          <code>connect()</code> and <code>app.js</code> now calls <code>connect({ waitForSnapshot: true })</code>;</li>
+        <li><code>test/worktree-assistant.test.js</code> "the owner is drawn from the server's answer" - it looks for
+          <code>${ownerDetailHtml(row)}</code> in <code>app.js</code> + <code>render-projects.js</code>, and the
+          merge-state list that calls it now lives in <code>public/board-scaffold.js</code>.</li>
+      </ul>
+      Base export, same two files: <code>pass 12, fail 2</code>, the same two.</td>
+  </tr>
+  <tr>
+    <td><code>npm test</code></td>
+    <td>2550 tests, <span class="ok">2539 pass</span>, <span class="bad">11 fail</span>, 807 s. The same eleven
+      fail in the clean export of <code>origin/main</code> (the eight files <code>assistant-profile</code>,
+      <code>gateway-permissions</code>, <code>harness</code>, <code>header-controls</code>, <code>paths</code>,
+      <code>pipeline-bench</code> - four cases - <code>windows-hide</code> and <code>worktree-assistant</code>:
+      <code>pass 65, fail 11</code> there), so none of them is this change. Note the sweep needs a quiet machine:
+      the first attempt sat blocked for twelve minutes on four abandoned <code>node --test</code> parents from
+      earlier runs (started 06:39, 16:35 and 22:04) that still held ports; with those gone the sweep took 807 s.</td>
+  </tr>
+  <tr>
+    <td><code>npm run verify:copy-full-name</code></td>
+    <td><span class="ok">15/15</span> checks, three captures written</td>
+  </tr>
+  <tr>
+    <td><code>node tools/absolute-paths.mjs</code></td>
+    <td>clean: 1544 tracked files, nothing new</td>
+  </tr>
+</table>
+
+<h2>What is deliberately not changed</h2>
+<ul>
+  <li>The ellipsis: <code>public/chart.css</code> and <code>public/style.css</code> are not in this diff at all, and
+  the harness asserts the computed <code>text-overflow: ellipsis</code> and <code>scrollWidth &gt; clientWidth</code>
+  on both cells after the copy.</li>
+  <li>The layout: no column, width, padding or cell class was touched; the value is a data attribute.</li>
+  <li>The browser's copy everywhere else: the handler returns before writing or cancelling anything.</li>
+  <li>The panel: it was not restarted. The browser half boots a throwaway panel on its own free port with a dead
+  apiServer, so the live board and the live gateway were never in the loop.</li>
+</ul>
+
+<footer>
+  Base: <code>main</code> @ <code>e5b4dbd6</code> (v1.82.4), after a rebase from the cut point
+  <code>c0188ebb</code> · branch <code>wtgui/make-a-truncated-worktree-name-and-e5d056</code> ·
+  module <code>public/core/copy-full-value.js</code> · captures under <code>docs/assets/copy-full-name/</code> ·
+  reproduced by <code>node tools/verify-copy-full-name.mjs</code>
+</footer>
+
+</main>
+</body>
+</html>
