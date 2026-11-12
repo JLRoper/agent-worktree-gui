@@ -562,7 +562,46 @@ function queueJobsRefresh() {
 // fanning out, several agents finishing at once) used to trigger it several times per frame. Coalesce
 // to one rebuild per animation frame — the work is identical, only the count changes.
 let renderJobsQueued = false;
+let renderJobsQuietTimer = null;
+let renderJobsQuietSince = 0;
+
+// A rebuild walks every job to compute its list signature (~110ms for a board of 90 jobs) even when
+// it ends up writing nothing. That work must not sit in the same frame as the keystroke the reader is
+// waiting on, so while a text field has focus the rebuild is held for a short quiet window and the
+// burst collapses into one. The window is bounded: a long typing run still sees the board refresh.
+function activeTextInput() {
+  const el = document.activeElement;
+  if (!el || el.offsetParent === null || el.disabled || el.readOnly) return false;
+  const tag = el.tagName;
+  if (tag !== "INPUT" && tag !== "TEXTAREA" && !el.isContentEditable) return false;
+  return !["checkbox", "radio", "button", "submit", "file", "range", "hidden"].includes(String(el.type || "").toLowerCase());
+}
+
 function scheduleRenderJobs() {
+  if (activeTextInput()) {
+    const now = Date.now();
+    if (!renderJobsQuietSince) renderJobsQuietSince = now;
+    const waited = now - renderJobsQuietSince;
+    if (waited >= 500) {
+      renderJobsQuietSince = 0;
+      if (renderJobsQuietTimer) { clearTimeout(renderJobsQuietTimer); renderJobsQuietTimer = null; }
+      // The board has been held long enough: flush once, then start a fresh quiet window.
+      renderJobs();
+      return;
+    }
+    if (renderJobsQuietTimer) clearTimeout(renderJobsQuietTimer);
+    renderJobsQuietTimer = setTimeout(() => {
+      renderJobsQuietTimer = null;
+      renderJobsQuietSince = 0;
+      scheduleRenderJobs();
+    }, 120);
+    return;
+  }
+  if (renderJobsQuietTimer) {
+    clearTimeout(renderJobsQuietTimer);
+    renderJobsQuietTimer = null;
+    renderJobsQuietSince = 0;
+  }
   if (renderJobsQueued) return;
   renderJobsQueued = true;
   requestAnimationFrame(() => {
