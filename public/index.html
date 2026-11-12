@@ -817,9 +817,22 @@
         <strong id="as-name" title="the assistant this float is showing — its own name, from its record">Assistant</strong>
         <span class="as-mode mono" id="as-mode">draft-only</span>
         <span class="spacer"></span>
+        <!-- The header search: one box in the gap the spacer leaves between the mode chip and the chips row. It
+             searches the assistant's OWN turns on the server (routes/assistant-search.js), so it reaches past the
+             five turns a card holds; * and ? are wildcards, a plain query is a substring, and the count beside the
+             box is matched/displayed whenever a query is live. The results are a popover under the bar
+             (position: fixed, because the pane clips its own overflow), so the row never grows. -->
+        <span class="as-search" id="as-search">
+          <input id="as-search-q" class="as-search-q" type="search" placeholder="search turns" aria-label="search this assistant's turns - * and ? are wildcards" autocomplete="off" spellcheck="false" />
+          <span class="as-search-n mono" id="as-search-n" hidden></span>
+          <button type="button" id="as-search-scope" class="as-search-scope" aria-pressed="false" title="search your own input only - every turn the store kept, not just the page on screen">mine</button>
+        </span>
         <span class="chips" id="as-chips"></span>
         <button id="btn-as-close" type="button" title="close (Esc) — it keeps watching while closed">✕</button>
       </div>
+      <!-- The search results: one row per hit, drawn here and placed under the box by assistant.js. It is outside
+           the bar so it can never add a line to the title row; the pane's overflow does not clip it (fixed). -->
+      <div class="as-search-pop" id="as-search-pop" role="group" aria-label="search results" hidden></div>
       <!-- The float's own row: the assistant sessions — each one a real agent thread of its own — and the three
            panes that belong to the PANEL rather than to one session: the ROLE library, the sentry's Watchdog, and
            the Matrix/Element BRIDGE (one agent, no worktree, no queue of its own). Everything that is about ONE
@@ -926,6 +939,12 @@
        app.js's renderer and assistant.js's own card both write through it, and test/turn-fold.test.js imports this
        same file. Loaded before app.js, which reads it at render time. -->
   <script src="/core/turn-fold.js"></script>
+  <!-- The header search's matcher: `*` and `?` as wildcards, a plain query as a substring, and every regex
+       metacharacter escaped before it is compiled, so a search for `[` is a bracket and never a throw. Published
+       on globalThis as `wtTurnSearch`; assistant.js's box, its result rows and the mark inside a turn all read
+       this file, and lib/assistant/search.js imports the same one so the server and the page cannot disagree
+       about what a hit is. Loaded before app.js. -->
+  <script src="/core/turn-search.js"></script>
   <!-- How fast a run's output reaches the reader's eyes: the word pacer (a paragraph typing out) and the line gate
        (whole lines walking into a console), both driven from app.js by the two Settings > Display rows. Published
        on globalThis as `wtType`; test/type-stream.test.js imports this same file. -->

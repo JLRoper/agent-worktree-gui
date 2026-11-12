@@ -124,6 +124,9 @@ import { DELETE_PATH, createDeleteRoutes } from "./routes/assistant-delete.js";
 // The digest tail and its READ tool: two GETs over one assistant's transcript and the turn a row's pointer names.
 // The module is a reader only - every append is the Assistant's - so mounting it cannot change what a turn says.
 import { DIGEST_PATH, READ_PATH, createDigestRoutes } from "./routes/assistant-digest.js";
+// The header search's one read: every persisted turn of one assistant, filtered by a query the module (with
+// public/core/turn-search.js) interprets - wildcards, a plain substring, and an escaped query that cannot throw.
+import { SEARCH_PATH, createSearchRoutes } from "./routes/assistant-search.js";
 // The state read's prefix, cut into routes/ beside the queue and the delete control: one module for /api/state and
 // its /api/audit alias, and one table row each because the alias shares no prefix with the path the board polls.
 import { STATE_PATH, AUDIT_PATH, createStateRoutes } from "./routes/state.js";
@@ -1703,6 +1706,9 @@ const PREFIX_MOUNTS = [
   // a row's pointer with the sending turn's final message and last few tool calls.
   { prefix: DIGEST_PATH, handles: createDigestRoutes({ assistant, config, sendJson, authorised }) },
   { prefix: READ_PATH, handles: createDigestRoutes({ assistant, config, sendJson, authorised }) },
+  // The header search (routes/assistant-search.js): one read over the turns the job store kept, for one assistant
+  // or all of them. The Assistant owns the store read and the thread set, the module owns the query's meaning.
+  { prefix: SEARCH_PATH, handles: createSearchRoutes({ assistant, sendJson }) },
   // The state read (routes/state.js), which is the snapshot and nothing else: the store, the registry, the jobs and
   // the assistants are this file's own, so the assembled snapshot stays here and travels in as a function.
   { prefix: STATE_PATH, handles: stateRoutes },
