@@ -1702,8 +1702,8 @@ function livePulse(j) {
   if (j.live.stream === "off") {
     return {
       cls: "is-poll",
-      text: "polled · every 15s",
-      title: "this gateway does not advertise run_events_sse, so the card is polled every 15s instead of streamed - a quiet minute here is the poll, not a stuck model",
+      text: "polled · every 2s",
+      title: "this gateway does not advertise run_events_sse, so the card is polled every 2s instead of streamed - a quiet moment here is the poll, not a stuck model",
     };
   }
   if (!j.live.events) {
@@ -3283,7 +3283,7 @@ function sweepThinking() {
     for (const turn of conv.turns) {
       const entry = state.thinkCache.get(turn.id);
       const live = turnLive(turn);
-      if (!entry || (live && Date.now() - (entry.at || 0) > 2000)) void loadThinking(turn, "");
+      if (!entry || (live && Date.now() - (entry.at || 0) > 1000)) void loadThinking(turn, "");
       // A block that was open because its turn was running folds once it is not - unless the reader opened it.
       if (!live) {
         const key = turnKey(turn, "");
@@ -3296,7 +3296,7 @@ function sweepThinking() {
     }
   }
 }
-setInterval(sweepThinking, 1200);
+setInterval(sweepThinking, 500);
 
 // The block's own open/closed state belongs to the reader; a repaint puts it back.
 // `thinkAutoOpened` is armed two ways, and both are "the panel did it, not the reader": right before a script-fired
@@ -11907,7 +11907,13 @@ setInterval(() => {
   }) : state.awaitingStreamSnapshot || state.es?.readyState !== 1 ||
     !state.lastTransportAt || Date.now() - state.lastTransportAt > 20000 ||
     !state.lastSnapshotAt || Date.now() - state.lastSnapshotAt >= 120000;
-  if (shouldResync) void resync({ automatic: true });
+  // A live turn is exactly when the reader is waiting for the first reasoning line: a whole
+  // /api/state read here rebuilds every card and replaces the node the thinking pane is
+  // painting into. While a turn is running and the stream is OPEN, the line stream and the
+  // faster thinking poll are already carrying the fresh state, so anti-entropy can wait
+  // until the turn settles.
+  const liveTurn = [...state.jobs.values()].some((j) => turnLive(j));
+  if (shouldResync && !(liveTurn && state.es?.readyState === 1)) void resync({ automatic: true });
 }, 30000);
 
 // A folder whose projects are all closed shows nothing but their titles, so a reorder there is easy to
