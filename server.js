@@ -13,8 +13,9 @@ import { StringDecoder } from "node:string_decoder";
 import { fileURLToPath } from "node:url";
 import { logger, log, parseLevel } from "./lib/log.js";
 import { syncTiming } from "./lib/sync-timing.js";
-import { createLoopLag, withActivity, markActivity, currentActivity } from "./lib/loop-lag.js";
+import { createLoopLag, withActivity, markActivity, currentActivity, realMonotonicMs } from "./lib/loop-lag.js";
 import { Pool } from "./lib/pool.js";
+import { createSnapshotCache } from "./lib/snapshot-cache.js";
 // Every helper process this panel starts is registered here: it carries a hard ceiling and dies with its
 // scope (a job that settled, a scan, the panel on the way out). See lib/child-tree.js for the leak it ends.
 import { panelChildren } from "./lib/child-tree.js";
@@ -473,6 +474,14 @@ async function loadConfig() {
   cfg.dockMode = Object.prototype.hasOwnProperty.call(cfg, "dockMode") ? pickDock(cfg.dockMode) : null;
   cfg.fetchSeconds = Number(cfg.fetchSeconds ?? 600);
   cfg.threads = Number(cfg.threads) || Math.max(1, Math.min(4, cpus().length - 1));
+  // The bounded, per-project-coalesced, visibility-prioritised pending scan queue (lib/scan-queue.js): a cap on
+  // the whole queue, a cap per project, the age at which a hidden scan is promoted for fairness, and how many
+  // visible scans run before a hidden one is forced through. All optional so an existing config.json keeps its
+  // behaviour with these defaults.
+  cfg.scanQueueMax = Math.max(1, Math.floor(Number(cfg.scanQueueMax) || 64));
+  cfg.scanQueuePerProject = Math.max(1, Math.floor(Number(cfg.scanQueuePerProject) || 2));
+  cfg.scanStarvationMs = Math.max(1, Number(cfg.scanStarvationMs) || 30000);
+  cfg.scanFairnessWindow = Math.max(1, Math.floor(Number(cfg.scanFairnessWindow) || 3));
   // How many of a project's worktrees its chart draws before the reader opens the rest. Server-side, like scanMode
   // below: it lives in this file so it survives a restart and applies to every browser. The retired
   // `hideOlderThanDays` is NOT read: a file that still carries it keeps to the default (or its own chartTopCount),
@@ -637,8 +646,16 @@ logger.setLevel(config.logging.level);
 // (lib/loop-lag.js), and GET /api/diagnostics reports the rolling stats.
 const loopLag = createLoopLag({
   warnMs: config.logging.stallWarnMs,
-  onStall: ({ ms, at, activity }) =>
-    logger.warn(`event loop stalled ${Math.round(ms)}ms (at ${new Date(at).toISOString().slice(11, 19)}Z, activity: ${activity})`),
+  onStall: ({ ms, at, activity, kind }) =>
+    logger.warn(`event loop stalled ${Math.round(ms)}ms (${kind}, at ${new Date(at).toISOString().slice(11, 19)}Z, activity: ${activity})`),
+  // A wall-clock jump or a system suspend is not a held loop: say so with both clocks and the
+  // process uptime captured at detection, so the unexplained long gap can be told apart from a
+  // genuine synchronous block instead of being reported as one. `mono` is a monotonic clock;
+  // `uptime()` is captured with every sample. Tests inject a virtual clock and leave mono at the
+  // wall clock for backward-compatible stall counting.
+  mono: realMonotonicMs,
+  onPause: ({ wallMs, monoMs, uptimeSeconds, activity, kind }) =>
+    logger.warn(`event loop pause classified ${kind}: wall ${Math.round(wallMs)}ms, monotonic ${Math.round(monoMs)}ms, uptime ${uptimeSeconds}s, activity ${activity}`),
 });
 loopLag.start();
 // ---- one panel per port, asked before this one touches anything ----------------------------------
@@ -683,7 +700,15 @@ void measureSize(config.scratchDir).catch(() => {});
 // What the data directory's own journal says about where its board came from. Read once, here: the journal only
 // changes at boot, and /api/state is polled far too often to read a file for it.
 const lastMigration = readMigrationJournal(config.stateDir).slice(-1)[0] || null;
-let pool = new Pool(config.threads);
+function poolOptions() {
+  return {
+    maxQueue: config.scanQueueMax,
+    maxPerProject: config.scanQueuePerProject,
+    starvationMs: config.scanStarvationMs,
+    fairnessWindow: config.scanFairnessWindow,
+  };
+}
+let pool = new Pool(config.threads, poolOptions());
 const store = new Store();
 // A tree's name is the panel's fact, never git's. The ledger of which trees have a name, who gave it and when
 // (lib/tree-names.js) is read before anything can rename a tree and written the moment the panel learns one:
@@ -750,7 +775,7 @@ let scheduler = new Scheduler({
 // before its threads go.
 function rebuildPool(threads) {
   const retired = pool;
-  pool = new Pool(threads);
+  pool = new Pool(threads, poolOptions());
   if (scheduler) scheduler.pool = pool;
   retired.retire();
 }
@@ -764,7 +789,36 @@ const streamMetrics = { connected: 0, disconnected: 0, writeErrors: 0, lastConne
 const slowRequests = [];
 const SLOW_REQUESTS_KEPT = 20;
 
+// Snapshot cache (lib/snapshot-cache.js). Building the whole board costs 300-585ms and the
+// board polls /api/state far more often than anything changes. `build` is the existing
+// snapshotBody wrapped in sync-timing so real builds still show up in diagnostics. Any state
+// change bumps the generation through invalidateSnapshot(); a plain heartbeat never does, so the
+// cache survives the quiet polls that justify it. `snapshot()` below returns the cached object.
+// snapshotBody is a hoisted function declaration, so it is safe to reference here.
+const snapshotCache = createSnapshotCache({
+  build: () => syncTiming.measure("snapshot construction", snapshotBody),
+});
+function invalidateSnapshot() {
+  snapshotCache.invalidate();
+}
+
+// A full-snapshot push after a write: invalidate FIRST so the frame carries current state,
+// then broadcast. Invalidation is idempotent (a generation bump), so `broadcast` doing it too
+// is harmless. Every one of the full-snapshot push sites calls this instead of building inline.
+function broadcastSnapshot() {
+  // Invalidate BEFORE building: this frame follows a write, and snapshot() must reflect it.
+  invalidateSnapshot();
+  broadcast({ type: "snapshot", data: snapshot() });
+}
+
 function broadcast(evt) {
+  // Precise invalidation: a non-snapshot broadcast is a state change (rows, drops, jobs,
+  // settings, hosts, approvals, todos, locks, restarts). Heartbeats write their frame directly
+  // (see the heartbeat interval), and a full-snapshot push invalidates in broadcastSnapshot
+  // before it builds, so it must not bump the generation again here. `invalidateSnapshot`
+  // is read through the optional global so source-extraction tests (broadcast-idle.test.js)
+  // can run this body with a minimal scope; in the running panel the function exists.
+  if (evt && evt.type !== "snapshot" && typeof invalidateSnapshot === "function") invalidateSnapshot();
   // No subscriber can use the frame when the board is closed. In particular, a whole-board
   // snapshot may be megabytes, so do not stringify it on every event with nobody listening.
   if (!clients.size) return;
@@ -799,6 +853,12 @@ function guard(what, fn) {
 // bullet without its manager label, the title as the directory, until the next snapshot, and a board nobody polls
 // never gets one. Observed as a 2-of-4 flake in tools/verify-chart-columns.mjs.
 store.onEvent((evt) => {
+  // A scan's row/project/drop changes the board even when no SSE client is attached: /api/state
+  // is polled with no stream open. Invalidate unconditionally, before the clients guard, so the
+  // cached snapshot can never be served stale on a plain HTTP poll. The optional global keeps
+  // the source-extraction test (broadcast-idle.test.js) able to run this handler with a minimal
+  // scope. The broadcast below carries the frame to whoever IS attached.
+  if (typeof invalidateSnapshot === "function") invalidateSnapshot();
   if (!clients.size) return;
   if (evt?.type === "row") broadcast({ ...evt, row: rowExtras(evt.project, evt.row) });
   else broadcast(evt);
@@ -2432,7 +2492,7 @@ async function sweepReleases(reason = "tick") {
   } finally {
     releaseSweepBusy = false;
     if (done.length) {
-      broadcast({ type: "snapshot", data: snapshot() });
+      broadcastSnapshot();
       for (const item of done) {
         // The row of a removed tree is left for the next scan to drop (it drops a row whose folder is gone); a refusal
         // keeps its row, because that row is where the reader reads why.
@@ -2489,7 +2549,7 @@ function withTodos(snap) {
 // A list that changed is a row that changed: the same full snapshot the description harvest sends, so the strip
 // repaints without waiting for the next scan to happen to mention that row.
 function broadcastTodos() {
-  broadcast({ type: "snapshot", data: snapshot() });
+  broadcastSnapshot();
 }
 
 // What the page says after a reader's own press. It names the item and the id, because the id is what the assistant
@@ -3211,7 +3271,7 @@ async function stewardProject(name) {
 }
 
 function snapshot() {
-  return syncTiming.measure("snapshot construction", snapshotBody);
+  return snapshotCache.get();
 }
 
 function snapshotBody() {
@@ -3426,6 +3486,8 @@ const server = createServer(async (req, res) => {
         activity: currentActivity(),
         loopLag: loopLag.stats(),
         syncPhases: syncTiming.stats(),
+        scanQueue: pool.stats(),
+        snapshot: snapshotCache.stats(),
         slowRequests: { thresholdMs: config.logging.slowRequestMs, kept: slowRequests.length, recent: slowRequests.slice(-10) },
         stream: { clients: clients.size, ...streamMetrics },
         memoryMB: Math.round(process.memoryUsage().rss / 1048576),
@@ -4125,7 +4187,7 @@ const server = createServer(async (req, res) => {
       const lock = locks.check({ project: projectName, path: row?.path || String(body.path || ""), branch: row?.branch || branch });
       const what = scope === "branch" ? `branch ${branch}` : `worktree ${row?.name || path.basename(String(row?.path || body.path || ""))}`;
       log(`lock ${out.locked ? "set" : "cleared"} on ${what} in ${projectName}${out.locked ? " — deletes are refused until it is removed" : ""}`);
-      broadcast({ type: "snapshot", data: snapshot() });
+      broadcastSnapshot();
       return sendJson(res, 200, {
         ok: true,
         scope,
@@ -4180,7 +4242,7 @@ const server = createServer(async (req, res) => {
       const what = row.name || path.basename(String(row.path || ""));
       log(`owner ${projectName}: ${what} -> ${fields.name} (${fields.label || "no role label"}, ${rec.id})`);
       // A settings-like write: every open board redraws the row's bullet list and column from this snapshot.
-      broadcast({ type: "snapshot", data: snapshot() });
+      broadcastSnapshot();
       return sendJson(res, 200, {
         ok: true,
         assistant: fields,
@@ -4249,7 +4311,7 @@ const server = createServer(async (req, res) => {
       const fields = ownerFields(rec);
       log(`handover ${projectName}: ${what} ${before.name} (${before.id}) -> ${fields.name} (${rec.id})`);
       // A settings-like write: every open board redraws the row's owner cell and its bullet list from this snapshot.
-      broadcast({ type: "snapshot", data: snapshot() });
+      broadcastSnapshot();
       return sendJson(res, 200, {
         ok: true,
         changed: true,
@@ -4327,7 +4389,7 @@ const server = createServer(async (req, res) => {
           `${out.leftBehind ? ` — ${out.leftBehind} entr${out.leftBehind === 1 ? "y" : "ies"} could not be removed (still open)` : ""}`,
       );
       // Every open Settings tab repaints from this: the size in the row has to move with the press.
-      broadcast({ type: "snapshot", data: snapshot() });
+      broadcastSnapshot();
       return sendJson(res, 200, { ...out, freed, paths: pathsInfo() });
     }
 
@@ -4457,7 +4519,7 @@ const server = createServer(async (req, res) => {
       if (result.dryRun) log(`steward apply (dry run): ${name} — ${result.delete.length} would be deleted, ${result.roll.length} would be rolled`);
       else {
         log(`steward apply: ${name} — deleted ${result.deleted.length}, rolled ${result.rolled.length}, refused ${result.refused.length}`);
-        broadcast({ type: "snapshot", data: snapshot() });
+        broadcastSnapshot();
       }
       return sendJson(res, 200, result);
     }
@@ -4543,7 +4605,7 @@ const server = createServer(async (req, res) => {
       // reader can press straight away. Same door a spawn's tree comes through.
       await scheduler.adoptWorktree(project.name, out.path).catch(() => false);
       log(`child: cut ${out.branch} from ${row.branch} at ${out.path} (${project.name})`);
-      broadcast({ type: "snapshot", data: snapshot() });
+      broadcastSnapshot();
       return sendJson(res, 200, {
         ...out,
         pipeline,
@@ -4590,7 +4652,7 @@ const server = createServer(async (req, res) => {
       });
       if (!out.ok) return sendJson(res, 409, out);
       log(`rollup: ${row.branch} → ${parentBranch} in ${project.name} (${out.method}${out.sha ? ` ${out.sha}` : ""})`);
-      broadcast({ type: "snapshot", data: snapshot() });
+      broadcastSnapshot();
       return sendJson(res, 200, out);
     }
 
@@ -4680,7 +4742,7 @@ const server = createServer(async (req, res) => {
         scheduler.lastFast.set(`${project.name}::${worktree}`, Date.now());
         await scheduler.scanOne(scanProject, worktree, "full").catch(() => null);
       }
-      broadcast({ type: "snapshot", data: snapshot() });
+      broadcastSnapshot();
       // A branch with its own copy on the remote has just rewritten shas that copy still holds: the next push needs
       // `--force-with-lease`, and the page's banner says so rather than letting the Ahead / Behind column look wrong.
       return sendJson(res, 200, { ...out, ...preview, published: Boolean(ownCopyOf(row)), row: store.rowsFor(project.name).find((r) => normPathKey(r.path) === normPathKey(worktree)) || null });
@@ -4811,6 +4873,8 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, {
         scheduler: scheduler.stats,
         pool: { size: pool.size, inFlight: pool.inFlight, queued: pool.queued, completed: pool.completed },
+        scanQueue: pool.stats(),
+        snapshot: snapshotCache.stats(),
         store: store.stats,
         jobs: { total: jobs.jobs.size, running: jobs.list().filter((j) => j.status === "running").length },
         clients: clients.size,
@@ -5780,7 +5844,7 @@ const server = createServer(async (req, res) => {
       // A snapshot only refreshes the rows it carries - it never retracts one - so the removal needs its own event
       // or the row sits on every open board for a worktree that no longer exists.
       broadcast({ type: "drop", project: projectName, path: row.path });
-      broadcast({ type: "snapshot", data: snapshot() });
+      broadcastSnapshot();
       return sendJson(res, 200, out);
     }
 
@@ -5967,7 +6031,7 @@ const server = createServer(async (req, res) => {
       const rowKey = store.rowKey(owner.name, row.path);
       const say = `agent started in ${row.name} — ${started.job.thread || started.job.id}`;
       refreshLog.append({ key: rowKey, project: owner.name, path: row.path, lines: [say] });
-      broadcast({ type: "snapshot", data: snapshot() });
+      broadcastSnapshot();
       return sendJson(res, 202, { ok: true, job: started.job, say });
     }
 
@@ -6262,7 +6326,7 @@ const server = createServer(async (req, res) => {
       log(`cloned ${url} -> ${dest} (${Date.now() - t0}ms)`);
       void registry
         .refresh()
-        .then(() => broadcast({ type: "snapshot", data: snapshot() }))
+        .then(() => broadcastSnapshot())
         .catch(() => {});
       return sendJson(res, 200, { ok: true, url, dest, tookMs: Date.now() - t0 });
     }
@@ -6322,7 +6386,7 @@ const server = createServer(async (req, res) => {
       log(`new project ${dest} on main (${sha}) — local only, nothing pushed`);
       void registry
         .refresh()
-        .then(() => broadcast({ type: "snapshot", data: snapshot() }))
+        .then(() => broadcastSnapshot())
         .catch(() => {});
       return sendJson(res, 201, { ok: true, dest, branch: "main", sha, tookMs: Date.now() - t0 });
     }
@@ -6363,7 +6427,7 @@ const server = createServer(async (req, res) => {
       void reconcileJobTrees({ force: true });
       void sweepCheckedLandings();
       void sweepReleases("reload").catch(() => {});
-      broadcast({ type: "snapshot", data: snapshot() });
+      broadcastSnapshot();
       return sendJson(res, 200, { ok: true, projects: config.projects.map((p) => p.name) });
     }
 
@@ -6533,7 +6597,7 @@ async function sweepCheckedLandings() {
       }
       store.dropRow(project.name, row.path);
       broadcast({ type: "drop", project: project.name, path: row.path });
-      broadcast({ type: "snapshot", data: snapshot() });
+      broadcastSnapshot();
       say(answerLine(answer, { base, deleted: true }));
       log(`check ${job.id}: LANDED: YES for ${row.branch} - removed ${row.path} (recycled: ${out.recycled ? "yes" : "no"})`);
     }
@@ -6575,7 +6639,7 @@ server.once("error", onListenError);
 await Promise.race([roundNamesReady, new Promise((resolve) => setTimeout(resolve, 300))]);
 assistant.roundNameIndex.onError = (err) => log(`round names: refresh failed: ${String(err?.message || err)}`);
 assistant.roundNameIndex.onChange = () => {
-  if (clients.size) broadcast({ type: "snapshot", data: snapshot() });
+  if (clients.size) broadcastSnapshot();
 };
 assistant.roundNameIndex.start();
 server.listen(config.port, config.host, () => {
