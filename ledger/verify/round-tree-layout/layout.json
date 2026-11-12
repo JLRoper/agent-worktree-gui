@@ -1,72 +1,72 @@
 {
-  "at": "2026-11-09T18:06:46.592Z",
-  "panel": "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\round-c-how-a-round-names-its-trees-stage-1-probe-294b21",
-  "base": "http://127.0.0.1:59696",
+  "at": "2026-11-11T23:19:14.376Z",
+  "panel": "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\round-c-how-a-round-names-its-trees-5b3b85",
+  "base": "http://127.0.0.1:59973",
   "project": "sandbox-round",
   "shots": {
-    "chart": "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\round-c-how-a-round-names-its-trees-stage-1-probe-294b21\\ledger\\verify\\round-tree-layout\\chart.png",
-    "marks": "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\round-c-how-a-round-names-its-trees-stage-1-probe-294b21\\ledger\\verify\\round-tree-layout\\marks.png"
+    "chart": "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\round-c-how-a-round-names-its-trees-5b3b85\\ledger\\verify\\round-tree-layout\\chart.png",
+    "marks": "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\round-c-how-a-round-names-its-trees-5b3b85\\ledger\\verify\\round-tree-layout\\marks.png"
   },
   "rows": [
     {
-      "path": "sandbox-round::C:/Users/roper/AppData/Local/Temp/wtgui-round-layout-hYbh63/repos/sandbox-round",
-      "name": "sandbox-round",
-      "depth": null,
-      "parent": "top",
-      "ticks": 0,
-      "rail": "\"├\"",
-      "tickX": null,
-      "nameLeft": 105
-    },
-    {
-      "path": "sandbox-round::C:/Users/roper/AppData/Local/Temp/wtgui-round-layout-hYbh63/repos/sandbox-round/.worktrees/carry-the-form-a1b2c3",
+      "path": "sandbox-round::C:/Users/roper/AppData/Local/Temp/wtgui-round-layout-l5UuuP/repos/sandbox-round/.worktrees/carry-the-form-a1b2c3",
       "name": "the roll-up names its trees",
-      "depth": null,
+      "depth": "0",
       "parent": "top",
       "ticks": 0,
       "rail": "\"├\"",
       "tickX": null,
-      "nameLeft": 123
+      "nameLeft": 130
     },
     {
-      "path": "sandbox-round::C:/Users/roper/AppData/Local/Temp/wtgui-round-layout-hYbh63/repos/sandbox-round/.worktrees/carry-the-form-stage-1-write-the-draft-111111",
+      "path": "sandbox-round::C:/Users/roper/AppData/Local/Temp/wtgui-round-layout-l5UuuP/repos/sandbox-round/.worktrees/carry-the-form-stage-1-write-the-draft-111111",
       "name": "Stage 1: write the draft",
       "depth": "1",
       "parent": "hangs",
       "ticks": 1,
       "rail": null,
       "tickX": 87,
-      "nameLeft": 147
+      "nameLeft": 146
     },
     {
-      "path": "sandbox-round::C:/Users/roper/AppData/Local/Temp/wtgui-round-layout-hYbh63/repos/sandbox-round/.worktrees/carry-the-form-stage-1-follow-up-333333",
+      "path": "sandbox-round::C:/Users/roper/AppData/Local/Temp/wtgui-round-layout-l5UuuP/repos/sandbox-round/.worktrees/carry-the-form-stage-1-follow-up-333333",
       "name": "carry-the-form-stage-1-follow-up-333333",
       "depth": "2",
       "parent": "hangs",
       "ticks": 1,
       "rail": null,
       "tickX": 103,
-      "nameLeft": 143
+      "nameLeft": 162
     },
     {
-      "path": "sandbox-round::C:/Users/roper/AppData/Local/Temp/wtgui-round-layout-hYbh63/repos/sandbox-round/.worktrees/carry-the-form-stage-2-critique-the-draft-222222",
+      "path": "sandbox-round::C:/Users/roper/AppData/Local/Temp/wtgui-round-layout-l5UuuP/repos/sandbox-round/.worktrees/carry-the-form-stage-2-critique-the-draft-222222",
       "name": "Stage 2: critique the draft",
       "depth": "1",
       "parent": "hangs",
       "ticks": 1,
       "rail": null,
       "tickX": 87,
-      "nameLeft": 127
+      "nameLeft": 146
     },
     {
-      "path": "sandbox-round::C:/Users/roper/AppData/Local/Temp/wtgui-round-layout-hYbh63/repos/sandbox-round/.worktrees/plain-0a1b2c",
+      "path": "sandbox-round::C:/Users/roper/AppData/Local/Temp/wtgui-round-layout-l5UuuP/repos/sandbox-round",
+      "name": "sandbox-round",
+      "depth": "0",
+      "parent": "top",
+      "ticks": 0,
+      "rail": "\"├\"",
+      "tickX": null,
+      "nameLeft": 130
+    },
+    {
+      "path": "sandbox-round::C:/Users/roper/AppData/Local/Temp/wtgui-round-layout-l5UuuP/repos/sandbox-round/.worktrees/plain-0a1b2c",
       "name": "plain-0a1b2c",
-      "depth": null,
+      "depth": "0",
       "parent": "top",
       "ticks": 0,
       "rail": "\"└\"",
       "tickX": null,
-      "nameLeft": 105
+      "nameLeft": 130
     }
   ]
 }

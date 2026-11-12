@@ -474,13 +474,19 @@ function childTreeOf(project) {
 // What one row needs to know about its place: the row it hangs under (only while that row is drawn), how deep it is,
 // how many of its own children are drawn, whether the reader has folded IT, and whether an ancestor is folded — the
 // last one is what makes a rebuild come back folded instead of re-opening a group on the reader.
+//
+// The DEPTH counts the rows that are DRAWN above this one, never the records: the chart's top-N can hold a grandparent
+// back while its child and grandchild are both on the chart, and a depth read off the records would step the grandchild
+// in twice under a parent drawn at 0. A row that hangs under nothing is depth 0, a GROUP PARENT included, which is
+// what puts its name in the same column as an ungrouped sibling's. The painter writes that number onto every row and
+// public/chart.css turns it into the one indent rule the whole chart shares.
 function groupCtxOf(tree, key, drawn = null) {
   const onChart = (k) => !drawn || drawn.has(k);
   const pk = tree.parentOf.get(key) || null;
   const parentKey = pk && onChart(pk) ? pk : null;
   let depth = 0;
   let hidden = false;
-  for (let cur = parentKey; cur; cur = tree.parentOf.get(cur)) {
+  for (let cur = parentKey; cur && onChart(cur); cur = tree.parentOf.get(cur)) {
     depth += 1;
     if (state.foldedParents.has(cur)) hidden = true;
   }
@@ -561,15 +567,16 @@ function paintRowGroup(tr, row, key, ctx) {
   // Hidden because an ANCESTOR is folded. The row itself stays in the document: folding is a class, not a removal,
   // which is what lets an open console, a half-typed reply and a scroll position survive it.
   tr.classList.toggle("is-fold-hidden", ctx.hidden);
+  // The depth is written for EVERY row, a group parent included: 0 is a real answer (it is what keeps the parent in an
+  // ungrouped sibling's column) and one rule in public/chart.css reads it off every row, so the indent can no longer
+  // depend on which markers a row happens to carry.
+  const depth = String(ctx.depth);
+  if (tr.dataset.depth !== depth) tr.dataset.depth = depth;
+  if (tr.style.getPropertyValue("--child-depth") !== depth) tr.style.setProperty("--child-depth", depth);
   if (child) {
     if (tr.dataset.parentKey !== ctx.parentKey) tr.dataset.parentKey = ctx.parentKey;
-    const depth = String(ctx.depth);
-    if (tr.dataset.depth !== depth) tr.dataset.depth = depth;
-    if (tr.style.getPropertyValue("--child-depth") !== depth) tr.style.setProperty("--child-depth", depth);
-  } else {
-    if (tr.hasAttribute("data-parent-key")) tr.removeAttribute("data-parent-key");
-    if (tr.dataset.depth) delete tr.dataset.depth;
-    if (tr.style.getPropertyValue("--child-depth")) tr.style.removeProperty("--child-depth");
+  } else if (tr.hasAttribute("data-parent-key")) {
+    tr.removeAttribute("data-parent-key");
   }
   const lead = tr.querySelector("td.name .row-lead");
   if (!lead) return;
