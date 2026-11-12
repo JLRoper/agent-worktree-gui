@@ -1158,18 +1158,198 @@ function paintToBottom(box) {
   wrap.classList.toggle("is-at-end", !overflowing || atEnd);
 }
 
-// A child's own console, drawn in the card's transcript idiom. The panel cannot stream a child (its tools run on its
+// ---- the docked console ---------------------------------------------------------------------------------
+// A child's console, drawn in the card's transcript idiom. The panel cannot stream a child (its tools run on its
 // own session), so this is a read of its messages - a poll while it is open and the child is still out.
+//
+// THE MESSAGE ARRIVES AS ONE LINE. lib/subagents.js hands over the stored assistant message as it was written, with
+// its newlines still inside that string, and markdown is a property of a RUN of lines. Made into real console lines
+// here, a heading, a bullet list and a fence in a child's answer become those shapes; left as one line, they are a
+// paragraph with the source punctuation printed in it, which is what the docked console used to do.
+
+// A message's own newlines, as console lines. A tool line keeps its shape: its leading spaces are the output's
+// indentation, not a block marker.
+function subConsoleLines(lines) {
+  const out = [];
+  for (const line of Array.isArray(lines) ? lines : []) {
+    const kind = (line && line.kind) || "raw";
+    const text = line && line.text != null ? String(line.text) : "";
+    if (!consoleMdIsProse(kind) || !text.includes("\n")) {
+      out.push(line);
+      continue;
+    }
+    // lib/subagents.js has already stripped carriage returns from the stored message, so the newline alone is the
+    // line break here.
+    const parts = text.split("\n");
+    for (let i = 0; i < parts.length; i += 1) {
+      out.push({ ...(line || {}), text: parts[i], lid: line && line.lid != null ? `${line.lid}.${i}` : (line && line.lid) });
+    }
+  }
+  return out;
+}
+
+// The console's parts in draw order: a run of prose is ONE block (a list, a heading, a fence, or a paragraph of
+// several lines), a run of tool lines is one burst, and a panel note is its own plain row. The burst tally is the
+// card console's own (burstGroups), so the two consoles condense a run of tools the same way.
+function subConsoleParts(lines) {
+  const parts = [];
+  let prose = null;
+  const flush = () => {
+    if (prose) parts.push({ prose });
+    prose = null;
+  };
+  for (const item of burstGroups(lines)) {
+    if (item.group) {
+      flush();
+      parts.push({ tools: item.lines });
+      continue;
+    }
+    if (consoleMdIsProse(item.line.kind)) {
+      if (!prose) prose = [];
+      prose.push(item.line);
+      continue;
+    }
+    flush();
+    parts.push({ line: item.line });
+  }
+  flush();
+  return parts;
+}
+
+function subConsoleBodyHtml(lines, id) {
+  return subConsoleParts(subConsoleLines(lines))
+    .map((part, gi) => {
+      if (part.prose) return consoleMdHtml(part.prose);
+      if (part.tools) return toolGroupHtml(part.tools, `${id}#${gi}`, "", false, "", null, toolGroupsOn() ? {} : { flat: true });
+      return lineHtml(part.line);
+    })
+    .join("");
+}
+
+// ---- the console's colour and margin ------------------------------------------------------------------
+// Two view preferences, saved in this browser the way the card's tool groups are (wtgui.*). The colour is the NAME
+// of a design token, never a hex: the palette lives in style.css, and Settings > Panel contrast rewrites those
+// tokens, so a hex here would be the one surface that ignored the reader's contrast setting.
+const SUB_CONSOLE_FG_KEY = "wtgui.subConsoleFg";
+const SUB_CONSOLE_MARGIN_KEY = "wtgui.subConsoleMargin";
+const SUB_CONSOLE_FG = ["text", "dim", "green", "amber", "blue", "violet"];
+// The margin steps are the box's own left indent: 36 px is where the console has always sat under the sub-row, 18
+// tucks it in, 0 lines it up with the row's own text, and 54 gives a long message room to breathe.
+const SUB_CONSOLE_MARGIN = [36, 18, 0, 54];
+
+function subConsoleFg() {
+  try {
+    const v = localStorage.getItem(SUB_CONSOLE_FG_KEY);
+    return SUB_CONSOLE_FG.includes(v) ? v : "text";
+  } catch {
+    return "text"; // private mode: the console keeps the colour it always had
+  }
+}
+function subConsoleMargin() {
+  try {
+    const n = Number(localStorage.getItem(SUB_CONSOLE_MARGIN_KEY));
+    return SUB_CONSOLE_MARGIN.includes(n) ? n : 36;
+  } catch {
+    return 36;
+  }
+}
+function setSubConsoleFg(name) {
+  try {
+    localStorage.setItem(SUB_CONSOLE_FG_KEY, name);
+  } catch {
+    /* the choice just will not persist */
+  }
+}
+function setSubConsoleMargin(px) {
+  try {
+    localStorage.setItem(SUB_CONSOLE_MARGIN_KEY, String(px));
+  } catch {
+    /* same */
+  }
+}
+
+function subConsoleToolsHtml() {
+  const fg = subConsoleFg();
+  const margin = subConsoleMargin();
+  return (
+    `<div class="sub-console-tools" role="group" aria-label="console appearance">` +
+    `<button type="button" class="sub-tool" data-sub-console-color="1" aria-label="console text colour: ${esc(fg)}" title="change the console's text colour (${esc(fg)})">` +
+    `<span class="sub-swatch" aria-hidden="true"></span>colour</button>` +
+    `<button type="button" class="sub-tool" data-sub-console-margin="1" aria-label="console left margin: ${margin} pixels" title="change the console's left margin (${margin}px)">margin ${margin}</button>` +
+    `</div>`
+  );
+}
+
+// One frame for every state of the box. The two controls ride above the scroller, so they stay put while the reader
+// reads; the colour is one custom property drawn from the palette (`--sub-console-fg: var(--violet)`), never a hex;
+// and the wrapper carries the margin, so the control moves the whole box off the sub-row's indent.
+function subConsoleFrame(id, body) {
+  const fg = subConsoleFg();
+  const margin = subConsoleMargin();
+  return (
+    `<div class="sub-console-wrap" style="margin-left:${margin}px; --sub-console-fg: var(--${esc(fg)})">` +
+    subConsoleToolsHtml() +
+    `<div class="sub-console mono" data-sub-console-box="${esc(id)}">${body}</div>` +
+    `</div>`
+  );
+}
+
 function subConsoleHtml(id) {
   const c = state.subConsoles.get(id);
-  if (!c || c.loading) return `<pre class="sub-console mono jl-dim">reading this subagent…</pre>`;
-  if (!c.lines.length) return `<pre class="sub-console mono jl-dim">nothing on its console yet</pre>`;
-  // The child's transcript is condensed exactly like a turn's: a run of tool calls is one row per tool with a tally,
-  // the rest is its text. Same components, so the two consoles behave the same way.
-  const body = burstGroups(c.lines)
-    .map((item, gi) => (item.group ? toolGroupHtml(item.lines, `${id}#${gi}`, "", false, "", null, toolGroupsOn() ? {} : { flat: true }) : lineHtml(item.line)))
-    .join("");
-  return `<pre class="sub-console mono" data-sub-console-box="${esc(id)}">${body}</pre>`;
+  if (!c || c.loading) return subConsoleFrame(id, `<div class="jl jl-dim">reading this subagent…</div>`);
+  if (!c.lines.length) return subConsoleFrame(id, `<div class="jl jl-dim">nothing on its console yet</div>`);
+  return subConsoleFrame(id, subConsoleBodyHtml(c.lines, id));
+}
+
+// A press cycles the closed list, writes it to this browser and repaints the ONE box it was pressed in. The strip's
+// own signature does not carry these two, so paintSubagents would leave the box alone and the control would look
+// dead until the next roster poll.
+function cycleSubConsoleFg() {
+  const i = SUB_CONSOLE_FG.indexOf(subConsoleFg());
+  setSubConsoleFg(SUB_CONSOLE_FG[(i + 1) % SUB_CONSOLE_FG.length]);
+}
+function cycleSubConsoleMargin() {
+  const i = SUB_CONSOLE_MARGIN.indexOf(subConsoleMargin());
+  setSubConsoleMargin(SUB_CONSOLE_MARGIN[(i + 1) % SUB_CONSOLE_MARGIN.length]);
+}
+function applySubConsoleLook(wrap) {
+  if (!wrap || !wrap.style) return;
+  const fg = subConsoleFg();
+  const margin = subConsoleMargin();
+  wrap.style.marginLeft = `${margin}px`;
+  if (wrap.style.setProperty) wrap.style.setProperty("--sub-console-fg", `var(--${fg})`);
+  const color = wrap.querySelector("[data-sub-console-color]");
+  if (color) {
+    color.setAttribute("aria-label", `console text colour: ${fg}`);
+    color.title = `change the console's text colour (${fg})`;
+  }
+  const marginBtn = wrap.querySelector("[data-sub-console-margin]");
+  if (marginBtn) {
+    marginBtn.setAttribute("aria-label", `console left margin: ${margin} pixels`);
+    marginBtn.title = `change the console's left margin (${margin}px)`;
+    marginBtn.textContent = `margin ${margin}`;
+  }
+}
+// ---- end the docked console
+
+// The two controls, registered here because this is the console's own surface (app.js's delegation owns the cards).
+// Capture phase, so the press never reaches the sub-row that opened the console.
+if (typeof document !== "undefined" && document.addEventListener) {
+  document.addEventListener(
+    "click",
+    (e) => {
+      const color = e.target && e.target.closest && e.target.closest("[data-sub-console-color]");
+      const margin = e.target && e.target.closest && e.target.closest("[data-sub-console-margin]");
+      if (!color && !margin) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const wrap = (color || margin).closest(".sub-console-wrap");
+      if (color) cycleSubConsoleFg();
+      else cycleSubConsoleMargin();
+      applySubConsoleLook(wrap);
+    },
+    true,
+  );
 }
 
 function bumpSubRead(id) {

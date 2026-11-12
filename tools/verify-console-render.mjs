@@ -4,6 +4,7 @@
 // and the final message (d).
 //
 //   node tools/verify-console-render.mjs
+//   CONSOLE_VIEWPORT_WIDTH=480 node tools/verify-console-render.mjs           # the same gate at the docked rail
 //   PANEL_ROOT=<an extracted git archive> node tools/verify-console-render.mjs   # the failing-first proof
 //
 // WHAT IS SEEDED, AND WHY IT IS A REAL RENDER
@@ -48,6 +49,12 @@ import { startPanel } from "./panel-testkit.mjs";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 // The checkout whose public/** the sandbox serves. This tree by default; `PANEL_ROOT` is the failing-first proof.
 const ROOT = process.env.PANEL_ROOT ? path.resolve(process.env.PANEL_ROOT) : path.join(HERE, "..");
+// The reader's window. 1360x980 is the panel's own default; the same gate is run at the docked rail's width
+// (`CONSOLE_VIEWPORT_WIDTH=480`, style.css calls that rail 480px) so a shape that only fits wide is caught here.
+const VIEWPORT = {
+  width: Number(process.env.CONSOLE_VIEWPORT_WIDTH) || 1360,
+  height: Number(process.env.CONSOLE_VIEWPORT_HEIGHT) || 980,
+};
 
 let failures = 0;
 let checks = 0;
@@ -348,7 +355,7 @@ async function main() {
       ok("the append did not repaint the blocks above it", beforeFirst === afterFirst);
 
     },
-    { viewport: { width: 1360, height: 980 } },
+    { viewport: VIEWPORT },
   );
   browserResult = verdict;
 }
