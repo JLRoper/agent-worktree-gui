@@ -713,6 +713,10 @@ function rowHtml(row, forceOwner = false) {
     ? ""
     : `<button class="btn-row-lock btn-branch-lock${branchLockedByBranch ? " is-locked" : ""}" type="button" data-lock-scope="branch" data-lock-tree="${lockKeyAttr}"
       title="${esc(branchLockTitle)}" aria-pressed="${branchLockedByBranch ? "true" : "false"}" aria-label="lock this branch">${branchLockedByBranch ? "\u{1F512}" : "\u{1F513}"}</button>`;
+  // Whether this row stands ON the project's turnover branch. Read here, beside the lock, because the two are the two
+  // things a row says about what may be done with the tree: the lock says "nothing deletes this", the turnover mark
+  // says "children are cut from here at will". A tree can carry either, both or neither, so neither reads the other.
+  const onTurnoverBranch = isTurnoverBranchRow(row);
   // One cell per column, keyed by the column's id (CHART_COLUMNS), so the row and the header cannot disagree about
   // which cell is which: a hidden column is simply not in `cells`, and the row is the shown set in table order. The
   // life and next-read cells carry their own <td> (both are painted in place every second), which is why `life` and
@@ -723,7 +727,7 @@ function rowHtml(row, forceOwner = false) {
     // instead of the fragment the selection covers. It is NOT `data-copy`, which is the console's block-lift
     // attribute and would grow a ⧉ button inside the cell.
     name: `<td class="name" data-copy-value="${esc(shownName)}"><div class="name-line"><span class="row-lead"></span><button class="btn-row-agent" data-agent-path="${esc(row.path)}" data-agent-name="${esc(row.name)}" data-agent-project="${esc(row.project)}"
-      title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">\u25b6</button><span class="row-name" title="${esc(row.path)}">${esc(shownName)}</span>${renameBtn}${treeLockBtn}${agentBadgeHtml(row)}</div></td>`,
+      title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">\u25b6</button><span class="row-name${onTurnoverBranch ? " is-turnover" : ""}"${onTurnoverBranch ? ' style="color:var(--blue)"' : ""} title="${esc(row.path)}">${esc(shownName)}</span>${renameBtn}${treeLockBtn}${turnoverRowMarkHtml(row)}${agentBadgeHtml(row)}</div></td>`,
     // Same rule for the branch, whose whole column is one ellipsis (chart.css line 83). The cell also holds the
     // remote link, a `local` chip and the branch's padlock, so the value is the branch itself, never the cell's text.
     branch: `<td class="mono branch" data-copy-value="${esc(row.branch || "")}">${branchCellHtml(row)}${branchLockBtn}</td>`,
@@ -744,6 +748,27 @@ function rowHtml(row, forceOwner = false) {
   return `<tr class="row${isOpen ? " expanded" : ""}${lock ? " is-locked" : ""}" data-key="${esc(keyOf(row.project, row.path))}">
     ${shownColumns(forceOwner).map((i) => cells[CHART_COLUMNS[i].id]).join("\n    ")}
   </tr>`;
+}
+
+// The row's turnover mark, drawn beside the lock. `turnoverFor` (public/board-scaffold.js) is the branch the project's
+// head chip edits and the value a cut for that project starts from, so a row standing ON it is where child worktrees
+// are cut from at will - and where this project's work rolls back into. It is NOT the lock and never borrows its
+// state: the lock is the reader's "nothing may delete this", and a tree may be on the turnover branch, locked, both or
+// neither.
+//
+// The row says it twice on purpose. The name is drawn blue at a glance (inline, so it wins over the locked row's amber
+// name without moving that rule); the marker is the half a reader who cannot see blue still has - a shape of its own,
+// plus the same sentence in its tooltip and its aria-label.
+const TURNOVER_ROW_SAY = "the turnover branch for this project - assistants may cut child worktrees from it at will";
+
+function isTurnoverBranchRow(row) {
+  const branch = String(row?.branch || "").trim();
+  return Boolean(branch) && branch === turnoverFor(row?.project);
+}
+
+function turnoverRowMarkHtml(row) {
+  if (!isTurnoverBranchRow(row)) return "";
+  return `<span class="turnover-mark" role="img" aria-label="${esc(TURNOVER_ROW_SAY)}" title="${esc(TURNOVER_ROW_SAY)}">\u21c4</span>`;
 }
 
 // ---- the age column: last life seen, plus a ring that fills toward the next read --------------
