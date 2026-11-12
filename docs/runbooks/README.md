@@ -25,6 +25,12 @@ Every runbook carries the same four sections, in this order:
 Prose stays short and factual: a command, a path, a fact measured on a named date. A section that would only
 repeat `docs/hosts.md` links to it instead.
 
+Every runbook's `## Testing` section also carries the terminal-call rules: one bounded request per terminal call,
+`curl -m 8` to `10` and `kubectl --request-timeout 8` to `10` rather than 30 to 60, no `bash -lc` wrapper where a
+direct binary will do, the pre-execution guard left alone, and the host's current DNS failures. A worker reads its
+project runbook, so the rule has to be there as well as in the panel's worker brief (`TERMINAL_BRIEF` in
+`lib/jobs.js`).
+
 ## The rollup table
 
 `## Landing and turnover` holds one table, newest rollup first:
