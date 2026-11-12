@@ -4,16 +4,45 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.82.3 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.84.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-549 releases from v0.1.0 (2026-10-20) to v1.82.3 (2026-11-11), 1829 commits between the tags. Every release is anchored by an
+552 releases from v0.1.0 (2026-10-20) to v1.84.0 (2026-11-11), 1834 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.84.0 — 2026-11-11 · 1 commit
+
+[`112537f`](https://github.com/JLRoper/agent-worktree-gui/commit/112537fcf010e90196a0c586a95964f4401e3105) · [compare v1.83.0...v1.84.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.83.0...v1.84.0)
+
+### Added
+
+- feat: Ctrl+Z takes a pasted chip back, and Ctrl+Shift+Z puts it back ([`112537f`](https://github.com/JLRoper/agent-worktree-gui/commit/112537fcf010e90196a0c586a95964f4401e3105))
+
+## v1.83.0 — 2026-11-11 · 1 commit
+
+[`39852c7`](https://github.com/JLRoper/agent-worktree-gui/commit/39852c7ed576aa451a834fe2ea84faa5cb245039) · [compare v1.82.4...v1.83.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.82.4...v1.83.0)
+
+### Added
+
+- feat: teach the terminal-call rules and record each call's duration (#710) ([`39852c7`](https://github.com/JLRoper/agent-worktree-gui/commit/39852c7ed576aa451a834fe2ea84faa5cb245039))
+
+## v1.82.4 — 2026-11-11 · 3 commits
+
+[`e5b4dbd`](https://github.com/JLRoper/agent-worktree-gui/commit/e5b4dbd60de8e29fe20bc779aa7e0cd6b2d7d596) · [compare v1.82.3...v1.82.4](https://github.com/JLRoper/agent-worktree-gui/compare/v1.82.3...v1.82.4)
+
+### Docs & tests
+
+- docs: render the changelog - 549 releases ([`ccb100c`](https://github.com/JLRoper/agent-worktree-gui/commit/ccb100cca4b81593161157d777c02bfd5574ceb0))
+- docs: the 152.2 s terminal call was a sleep-poll on a running Jenkins build ([`c0188eb`](https://github.com/JLRoper/agent-worktree-gui/commit/c0188ebb7b0fbb83d87c68e911edf8f38803c0b4))
+
+### Other
+
+- The closed reply card is the press, not the held reply (#709) ([`e5b4dbd`](https://github.com/JLRoper/agent-worktree-gui/commit/e5b4dbd60de8e29fe20bc779aa7e0cd6b2d7d596))
 
 ## v1.82.3 — 2026-11-11 · 3 commits
 
