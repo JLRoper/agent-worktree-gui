@@ -2694,6 +2694,22 @@ function appendJobLine(evt) {
     if (job) job.live = evt.live;
   }
   const line = evt.line || {};
+  // A reasoning block that arrived on the run's own stream is PUSHED, so it can be shown
+  // before the store poll finds it. The console keeps its dim preview line; the full text
+  // seeds the 🧠 pane additively, keyed by the line's own server timestamp. A later poll
+  // replaces it wholesale with the store's complete block (see loadThinking).
+  if (line.think) {
+    const turn = state.jobs.get(evt.id);
+    if (turn) {
+      const at = Number(line.at) || Date.now();
+      const entry = state.thinkCache.get(turn.id) || { blocks: [], at: 0 };
+      const blocks = entry.blocks.filter((b) => Number(b.at) !== at);
+      blocks.push({ at, text: String(line.think) });
+      blocks.sort((a, b) => Number(a.at) - Number(b.at));
+      state.thinkCache.set(turn.id, { blocks, at: Date.now() });
+      paintThink(turn, "");
+    }
+  }
   // The line-by-line setting holds a burst of whole lines and lets them in one at a time. Bookkeeping never waits:
   // the `result` line is what says the turn ended, and it is also the frame that flushes both buffers. A hidden tab
   // is not reading anything, so it never holds a line either — the answer is there in full when the reader returns.
