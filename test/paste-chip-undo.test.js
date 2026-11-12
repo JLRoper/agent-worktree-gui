@@ -94,6 +94,20 @@ function chipsRow(env, key = THREAD) {
   return row;
 }
 
+// The inline add-agent field, as public/app.js draws it: one line (data-single), so a short paste has its line
+// breaks stripped. It names its own composer, so the stack is keyed to it like any other box.
+function singleBox(env) {
+  const box = env.document.createElement("div");
+  box.className = "add-agent-input chipbox";
+  box.setAttribute("contenteditable", "true");
+  box.setAttribute("role", "textbox");
+  box.setAttribute("data-single", "1");
+  box.setAttribute("data-chipbox", "add:probe");
+  env.document.body.appendChild(box);
+  box.focus();
+  return box;
+}
+
 // A real paste event at the box, carrying plain text - the gesture the reader makes.
 function pasteTextAt(env, box, text) {
   const ev = new env.dom.MiniEvent("paste", { bubbles: true, cancelable: true });
@@ -272,3 +286,133 @@ test("7. the stack is bounded: a long session keeps the last 24 inserts and forg
   assert.equal(chipsOf(box), 30, "thirty pastes, thirty chips");
   assert.equal(env.ctx.composerActionDepth(box), 24, "and the stack holds the last 24 of them, not all thirty");
 });
+
+// Cases 8-13 are the other half of the same gesture: a paste SHORT enough to land as plain text is inserted by
+// insertTextAt, which is as programmatic as a chip is, so it needs an entry of its own. Each of them states a
+// press in keys: a short paste then Ctrl+Z, two short pastes then Ctrl+Z twice, undo then redo on both redo
+// keys, the single-line box, a short paste beside a chip, and the staleness rule that keeps the engine's undo.
+const SHORT = "a short paste";
+
+test("8. a paste below the threshold is recorded too: Ctrl+Z takes exactly that text back", () => {
+  const env = page();
+  const box = typedBox(env);
+
+  const ev = pasteTextAt(env, box, SHORT);
+
+  assert.equal(ev.defaultPrevented, true, "the page took the paste");
+  assert.equal(env.ctx.readBox(box), `Quote this: ${SHORT}`, "the short paste landed as plain text");
+  assert.equal(chipsOf(box), 0, "no chip: below the threshold the paste is text");
+  assert.equal(env.ctx.composerActionDepth(box), 1, "and it is on the composer's stack, so there is something to undo");
+  assert.equal(env.ctx.caretOffset(box), "Quote this: ".length + SHORT.length, "the caret sits after the pasted text");
+
+  const z = keyAt(env, box, "z", { ctrl: true });
+
+  assert.equal(z.defaultPrevented, true, "the composer took Ctrl+Z, so the browser's own undo did not also run");
+  assert.equal(env.ctx.readBox(box), "Quote this: ", "the press took the pasted text and nothing else");
+  assert.equal(env.ctx.caretOffset(box), "Quote this: ".length, "and the caret is back where the paste found it");
+  assert.equal(env.ctx.composerActionDepth(box), 0, "nothing is left on the undo side");
+});
+
+test("9. two short pastes are two entries: Ctrl+Z steps back over them one at a time", () => {
+  const env = page();
+  const box = typedBox(env, "");
+  pasteTextAt(env, box, "alpha ");
+  env.ctx.setCaretOffset(box, env.ctx.readBox(box).length);
+  pasteTextAt(env, box, "beta");
+
+  assert.equal(env.ctx.readBox(box), "alpha beta", "both pastes landed as text");
+  assert.equal(env.ctx.composerActionDepth(box), 2, "each paste is its own entry, not one merged entry");
+
+  assert.equal(keyAt(env, box, "z", { ctrl: true }).defaultPrevented, true, "the first press is the composer's");
+  assert.equal(env.ctx.readBox(box), "alpha ", "and it takes only the second paste");
+  assert.equal(env.ctx.caretOffset(box), "alpha ".length, "with the caret after the first one");
+
+  assert.equal(keyAt(env, box, "z", { ctrl: true }).defaultPrevented, true, "the second press is too");
+  assert.equal(env.ctx.readBox(box), "", "and it takes the first paste");
+  assert.equal(env.ctx.caretOffset(box), 0, "with the caret back at the start");
+
+  const again = keyAt(env, box, "z", { ctrl: true });
+  assert.equal(again.defaultPrevented, false, "with nothing left, Ctrl+Z is the engine's again");
+});
+
+test("10. undo then redo: Ctrl+Shift+Z and Ctrl+Y put the pasted text back, caret after it", () => {
+  const env = page();
+  const box = typedBox(env);
+  pasteTextAt(env, box, SHORT);
+  const after = env.ctx.readBox(box);
+  const afterCaret = env.ctx.caretOffset(box);
+
+  assert.equal(keyAt(env, box, "z", { ctrl: true }).defaultPrevented, true, "Ctrl+Z undid the paste");
+  assert.equal(env.ctx.readBox(box), "Quote this: ", "the text is gone");
+
+  const redo = keyAt(env, box, "Z", { ctrl: true, shift: true });
+
+  assert.equal(redo.defaultPrevented, true, "Ctrl+Shift+Z was taken by the composer");
+  assert.equal(env.ctx.readBox(box), after, "the pasted text is back");
+  assert.equal(env.ctx.caretOffset(box), afterCaret, "and the caret is after it, where the paste left it");
+
+  assert.equal(keyAt(env, box, "z", { ctrl: true }).defaultPrevented, true, "Ctrl+Z undoes it a second time");
+  assert.equal(env.ctx.readBox(box), "Quote this: ");
+  const again = keyAt(env, box, "y", { ctrl: true });
+  assert.equal(again.defaultPrevented, true, "Ctrl+Y is the redo half as well");
+  assert.equal(env.ctx.readBox(box), after);
+  assert.equal(env.ctx.caretOffset(box), afterCaret, "the caret travels with it");
+});
+
+test("11. the single-line box behaves the same: line breaks stripped, and the insert is one undoable entry", () => {
+  const env = page();
+  const box = singleBox(env);
+
+  const ev = pasteTextAt(env, box, "line one\nline two");
+
+  assert.equal(ev.defaultPrevented, true, "the page took the paste");
+  assert.equal(env.ctx.readBox(box), "line oneline two", "the single-line box strips the line breaks, as before");
+  assert.equal(env.ctx.composerActionDepth(box), 1, "the stripped insert is on the stack");
+  assert.equal(env.ctx.caretOffset(box), "line oneline two".length, "the caret sits after it");
+
+  const z = keyAt(env, box, "z", { ctrl: true });
+
+  assert.equal(z.defaultPrevented, true, "the composer took Ctrl+Z");
+  assert.equal(env.ctx.readBox(box), "", "the single line is back to empty");
+  assert.equal(env.ctx.caretOffset(box), 0, "caret at the start, where the paste found it");
+
+  assert.equal(keyAt(env, box, "Z", { ctrl: true, shift: true }).defaultPrevented, true, "and the redo is its own");
+  assert.equal(env.ctx.readBox(box), "line oneline two", "the text comes back");
+  assert.equal(env.ctx.caretOffset(box), "line oneline two".length, "caret after it again");
+});
+
+test("12. a short paste beside a chip: undo takes the text and leaves the chip standing", () => {
+  const env = page();
+  const box = typedBox(env);
+  pasteTextAt(env, box, PASTE);
+  const id = chipIdOf(box);
+  assert.ok(id, "the block went in as a chip");
+  env.ctx.setCaretOffset(box, env.ctx.readBox(box).length);
+  pasteTextAt(env, box, " and a short paste");
+  assert.equal(env.ctx.readBox(box), `Quote this: ${PASTE} and a short paste`);
+  assert.equal(env.ctx.composerActionDepth(box), 2, "the chip and the text are two entries");
+
+  assert.equal(keyAt(env, box, "z", { ctrl: true }).defaultPrevented, true, "Ctrl+Z steps back over the text");
+  assert.equal(env.ctx.readBox(box), `Quote this: ${PASTE}`, "the chip's block is still there, whole");
+  assert.equal(chipsOf(box), 1, "the chip did not go with the text");
+  assert.equal(chipIdOf(box), id, "and it is the same chip");
+  assert.equal(env.ctx.caretOffset(box), "Quote this: ".length + PASTE.length, "the caret is back beside it");
+
+  assert.equal(keyAt(env, box, "z", { ctrl: true }).defaultPrevented, true, "a second Ctrl+Z takes the chip");
+  assert.equal(env.ctx.readBox(box), "Quote this: ");
+  assert.equal(chipsOf(box), 0);
+});
+
+test("13. a typed character makes the text entry stale, so the engine's undo still runs", () => {
+  const env = page();
+  const box = typedBox(env);
+  pasteTextAt(env, box, SHORT);
+  env.ctx.insertTextAt(box, " and this after");
+  env.ctx.setCaretOffset(box, env.ctx.readBox(box).length);
+
+  const ev = keyAt(env, box, "z", { ctrl: true });
+
+  assert.equal(ev.defaultPrevented, false, "Ctrl+Z was left to the browser, which owns the typing");
+  assert.equal(env.ctx.readBox(box), `Quote this: ${SHORT} and this after`, "nothing was rewritten under the reader");
+});
+
