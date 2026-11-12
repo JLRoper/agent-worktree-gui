@@ -158,16 +158,14 @@ reaches a gateway, and drives it with a real mouse and a real keyboard.</p>
   <tr><td><code>node --test test/queue-single-press.test.js</code></td><td class="ok">8/8 on this branch; fails at load on the base export (no <code>queuePressInFlight</code>)</td></tr>
   <tr><td><code>node --test test/queued-reply-attachments.test.js</code></td><td class="ok">7/7 - the entry still owns its files, and the press now settles before the assertions read the box</td></tr>
   <tr><td><code>npm run test:changed</code></td><td>105 files, exit 1 - one red, <code>worktree-assistant.test.js</code> "the owner is drawn from the server's answer", which fails on the base export too (see below)</td></tr>
-  <tr><td><code>npm test</code></td><td class="bad">2532 passed, 12 failed - every one of the 12 also fails on a clean <code>git archive</code> of <code>c0188ebb</code> (see below); none of them asserts anything about the reply box</td></tr>
+  <tr><td><code>npm test</code></td><td class="bad">2532 passed, 12 failed - eleven of the 12 also fail on a clean <code>git archive</code> of <code>c0188ebb</code>; the twelfth was the absolute-paths scan, closed here by one allowlist line (see below). None of them asserts anything about the reply box.</td></tr>
 </table>
 
 <h2>Known reds</h2>
-<p><code>npm test</code> on this branch: 2532 passed, 12 failed. Each of the 12 was run against a clean
-<code>git archive</code> of <code>c0188ebb</code> and fails there too, so none of them is this landing's:</p>
+<p><code>npm test</code> on this branch: 2532 passed, 12 failed. Eleven of them were re-run against a clean
+<code>git archive</code> of <code>c0188ebb</code> and fail there too, so none of those is this landing's:</p>
 <table>
   <tr><th>file</th><th>what it says</th></tr>
-  <tr><td><code>absolute-paths.test.js</code></td><td>a drive-letter path in
-  <code>docs/reports/terminal-call-latency-2026-11-11.html</code>, a report that is already on main and is not touched here</td></tr>
   <tr><td><code>assistant-profile.test.js</code></td><td>the retired payload's <code>dock: 'docked'</code></td></tr>
   <tr><td><code>gateway-permissions.test.js</code></td><td>the file fails as a whole</td></tr>
   <tr><td><code>harness.test.js</code></td><td><code>tools/verify-round-tree-names.mjs</code> has a LIVE GATE header and no npm script</td></tr>
@@ -177,9 +175,15 @@ reaches a gateway, and drives it with a real mouse and a real keyboard.</p>
   <tr><td><code>windows-hide.test.js</code></td><td>a <code>child_process</code> call in <code>server.js</code> or <code>lib/</code> without <code>windowsHide</code></td></tr>
   <tr><td><code>worktree-assistant.test.js</code></td><td>"the owner is drawn from the server's answer" expects <code>${ownerDetailHtml(row)}</code> in a renderer that no longer spells it that way</td></tr>
 </table>
-<p>The two that read <code>public/app.js</code> - <code>header-controls</code> and <code>worktree-assistant</code> - fail on
-the same assertions at base, on code this landing does not touch, so they are separated here rather than folded into a
-pass count.</p>
+<p>The twelfth, <code>absolute-paths.test.js</code>, refused a drive-letter path in
+<code>docs/reports/terminal-call-latency-2026-11-11.html</code> - a report already on main, which this landing does not
+touch. Its path is a measurement's own record, so rather than rewrite another landing's report the line is recorded in
+<code>tools/absolute-paths.allow</code> with its reason, which is the route that tool names for a line that has to keep
+its path. The test reads 17/17 with it. The same refusal was stopping every branch cut from
+<code>c0188ebb</code> at the pre-push gate, which is how it was found.</p>
+<p>The two reds that read <code>public/app.js</code> - <code>header-controls</code> and <code>worktree-assistant</code> -
+fail on the same assertions at base, on code this landing does not touch, so they are separated here rather than folded
+into a pass count.</p>
 
 <h2>What changed</h2>
 <ul>
@@ -197,6 +201,8 @@ pass count.</p>
   <code>tools/verify-queue-single-press.mjs</code> removed - its contract, a held reply closing the card, was the defect,
   and it would pass only on the build this landing replaces.</li>
   <li><code>package.json</code> - the new verify script and the version.</li>
+  <li><code>tools/absolute-paths.allow</code> - one line recording the paths a landed report quotes, so the pre-push
+  gate stops refusing every branch cut from this base.</li>
 </ul>
 
 <h2>What the fix does not change</h2>
