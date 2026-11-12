@@ -15,8 +15,13 @@
   // zoom. The rect this replaced remembered a position and a size for a window that could be dragged anywhere.
   const DOCK_KEY = "wm.assistantWidth";
   const DOCK_MIN = 340;
-  const DOCK_MAX = 640;
-  const DOCK_SHARE = 0.6;
+  // The rail's cap is HALF the window rather than a pixel ceiling: 640 was half of a 1280px window and a third of a
+  // 1920px one, so the reader on the wider screen was the one who could not open the transcript. The board's own
+  // floor (BOARD_MIN) is the cap's other stop, so a narrow window hands the rail what is left over instead of
+  // squeezing the chart, and DOCK_HARD_MIN is where the rail stops being a rail at all.
+  const DOCK_SHARE = 0.5;
+  const BOARD_MIN = 420;
+  const DOCK_HARD_MIN = 240;
   const DOCK_DEFAULT = 480;
   // ---- the frame's other mode: the float ----------------------------------------------------------
   // Which one is on screen is the PANEL's setting (`dockMode` in the panel's own config.json, chosen in
@@ -326,13 +331,18 @@
 
   // ---- the frame: the docked rail and the floating window -------------------------------------
 
-  // The width the rail is drawn at: the remembered one, clamped. The 60% cap is measured in the same layout px the
-  // width is stored in, so a zoomed page cannot hand the rail more of the window than it would at 100% — and on a
-  // window too narrow for the 340px floor the cap wins, because the board keeping the majority of the row is the
-  // rule the floor serves.
+  // The width the rail is drawn at: the remembered one, clamped. The cap is half the window, measured in the same
+  // layout px the width is stored in, so a zoomed page cannot hand the rail more of the window than it would at 100%
+  // - and on a window too narrow for both floors the board's 420px is the one that holds, because the board is what
+  // the row is for.
   // ---- dock width: the one clamp ---------------------------------------------------------------
+  // LAYOUT px in, LAYOUT px out: the unit a style width is written in and the unit the reader's number is stored in.
   function clampDockWidth(want, vw, z) {
-    const cap = Math.min(DOCK_MAX, Math.floor((vw / (z || 1)) * DOCK_SHARE));
+    const layout = Math.max(0, Math.floor((vw || 0) / (z || 1)));
+    // Half the window is the cap, and the board's floor is the second stop: the two meet at an 840px window, and
+    // below it the board keeps its 420px while the rail takes what is left. DOCK_HARD_MIN is the only bound that
+    // wins over the board's floor, because a rail narrower than that is not one.
+    const cap = Math.max(DOCK_HARD_MIN, Math.min(Math.floor(layout * DOCK_SHARE), layout - BOARD_MIN));
     const lo = Math.min(DOCK_MIN, cap);
     return Math.max(lo, Math.min(Number(want) || DOCK_DEFAULT, cap));
   }
@@ -450,7 +460,7 @@
     frameId = id;
     el.classList.toggle("is-floating", mode === "floating");
     const split = as$("as-split");
-    if (split) split.title = mode === "floating" ? "drag to resize the floating assistant (320 px minimum)" : "drag to resize the assistant's column (340–640 px, at most 60% of the window)";
+    if (split) split.title = mode === "floating" ? "drag to resize the floating assistant (320 px minimum)" : "drag to resize the assistant's column (340 px minimum, half the window at most)";
     // The bar is the float's handle and nothing in the rail: a title says so where the cursor turns into a move.
     const bar = el.querySelector(".as-bar");
     if (bar) bar.title = mode === "floating" ? "drag to move the floating assistant" : "";
@@ -5024,7 +5034,7 @@
     true,
   );
 
-  // The rail is sized against the window, so a resize re-measures it: a narrower window caps the width at 60% of
+  // The rail is sized against the window, so a resize re-measures it: a narrower window caps the width at half of
   // it, and a topbar that wrapped to a second row moves the rail's top edge down with it.
   window.addEventListener("resize", () => {
     if (!state.assistantOpen) return;

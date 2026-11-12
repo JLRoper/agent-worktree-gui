@@ -12,8 +12,8 @@
 //   1. it still overlays the board — a `position: fixed` left behind, or a row that does not actually shrink;
 //   2. it does not stay put — a sticky rail whose containing block ends before the page does slides up under the
 //      topbar at the end of a scroll, taking the close toggle with it;
-//   3. the width is not the reader's — not remembered across a reload, or not clamped to 340-640px and to 60% of
-//      the window, which is what keeps the board the majority of the row;
+//   3. the width is not the reader's - not remembered across a reload, or not clamped to a 340px floor, half the
+//      window and a 420px board floor, which is what keeps the board a board while the rail opens wider;
 //   4. the chrome came back — a drag head, a grip, a pin, a maximize, or a press on the board that dismisses the
 //      rail the reader is reading.
 //
@@ -36,9 +36,12 @@ import { startPanel } from "./panel-testkit.mjs";
 
 const VIEW = { width: 1280, height: 800 };
 const NARROW = { width: 900, height: 700 };
+const WIDE = { width: 1600, height: 900 };
 const DEFAULT_W = 480;
 const MIN_W = 340;
-const MAX_W = 640;
+const BOARD_MIN = 420;
+// The cap is half the LAYOUT window, so it is read off the page rather than restated: `capOf(f)`.
+const capOf = (f) => Math.floor(f.vw / 2);
 
 let failures = 0;
 let checks = 0;
@@ -194,13 +197,29 @@ async function main() {
         check(!f.hidden, "the reload restores the rail open, as it was left");
       }
 
-      // ---- 6. the clamp: 340-640px, and at most 60% of the window
+      // ---- 6. the clamp: a 340px floor, half the window, and the board's 420px floor
       {
         const low = await place(page, panel.base, 200);
         check(low.w === MIN_W, "a remembered 200px is drawn at the 340px floor", `${low.w}px`);
         const high = await place(page, panel.base, 900);
-        check(high.w === MAX_W, "a remembered 900px is drawn at the 640px cap", `${high.w}px`);
-        // 60% of the window, when that is the smaller limit.
+        check(high.w === capOf(high), "a remembered 900px is drawn at half the window", `${high.w}px of ${high.vw}`);
+        // A WIDE window is where the old pixel ceiling showed: 640 was half of a 1280 window and only 40% of a 1600
+        // one, so the cap has to be read as a share rather than a number.
+        await withPage(async ({ page: wide }) => {
+          await openPage(wide, panel.base, { selector: "#btn-assistant" });
+          await wide.evaluate(() => {
+            localStorage.setItem("wm.assistantWidth", "900");
+            localStorage.setItem("wm.assistantOpen", "1");
+          });
+          await wide.reload({ waitUntil: "domcontentloaded" });
+          await wide.waitForSelector("#assistant", { state: "visible", timeout: 30_000 });
+          await wide.waitForTimeout(200);
+          const f = await frame(wide);
+          check(f.w === capOf(f) && f.w > 640,
+            `on a ${f.vw}px window the rail opens past the old 640px ceiling, to half of it`, `${f.w}px`);
+          check(f.mainW >= BOARD_MIN, `and the board keeps its ${BOARD_MIN}px floor`, `main ${f.mainW} of ${f.vw}`);
+        }, { viewport: WIDE });
+        // Half the window, when the board's own floor is the smaller limit.
         await withPage(async ({ page: narrow }) => {
           await openPage(narrow, panel.base, { selector: "#btn-assistant" });
           await narrow.evaluate(() => {
@@ -211,9 +230,9 @@ async function main() {
           await narrow.waitForSelector("#assistant", { state: "visible", timeout: 30_000 });
           await narrow.waitForTimeout(200);
           const f = await frame(narrow);
-          const cap = Math.floor(f.vw * 0.6);
-          check(f.w === cap, `on a ${f.vw}px window the rail is capped at 60% (${cap}px)`, `${f.w}px`);
-          check(f.mainRight <= f.left + 1, "and the board still has the majority of the row", `main ${f.mainW} of ${f.vw}`);
+          const cap = capOf(f);
+          check(f.w === cap, `on a ${f.vw}px window the rail is capped at half (${cap}px)`, `${f.w}px`);
+          check(f.mainW >= BOARD_MIN, `and the board keeps its ${BOARD_MIN}px floor`, `main ${f.mainW} of ${f.vw}`);
         }, { viewport: NARROW });
       }
 
@@ -227,8 +246,8 @@ async function main() {
         check(Math.abs(after.mainRight - after.left) <= 1, "the board gives up exactly that width", `main ends ${after.mainRight}, rail starts ${after.left}`);
         // A drag past the cap stores the cap, not the pointer's overshoot.
         const capped = await dragEdge(page, -600);
-        check(capped.w === MAX_W, "a drag past the cap stops at 640px", `${capped.w}px`);
-        eq(capped.stored, String(MAX_W), "and stores 640, not the overshoot");
+        check(capped.w === capOf(capped), "a drag past the cap stops at half the window", `${capped.w}px of ${capped.vw}`);
+        eq(capped.stored, String(capped.w), "and stores what it drew, not the overshoot");
         // A click on the edge is not a gesture: nothing moves, nothing is stored.
         const b = await page.locator("#as-split").boundingBox();
         await page.mouse.move(b.x + b.width / 2, b.y + 100);
@@ -238,7 +257,7 @@ async function main() {
         await page.waitForTimeout(150);
         const clicked = await frame(page);
         check(clicked.w === capped.w, "a click on the edge resizes nothing", `${clicked.w}px`);
-        eq(clicked.stored, String(MAX_W), "and stores nothing new");
+        eq(clicked.stored, String(capped.w), "and stores nothing new");
       }
 
       // ---- 8. it stays put: the rail is pinned for the whole scroll, close toggle included

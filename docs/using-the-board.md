@@ -348,8 +348,8 @@ verdict, the worktree's name) or wrap (the evidence chips) rather than running p
 never be narrower than the sum of its column widths, so a plan that rounds up would be a table that outgrows its card;
 the widths are normalised to the card exactly for that reason. The page's one horizontal scroll container is `main`,
 so an overflow that ever did happen would be reachable there instead of being cut at the card's edge — and opening the
-assistant rail, which takes 340-640px from the board without resizing the window, re-plans every table at once
-(`main`'s own box is what is watched).
+assistant rail, which takes its width (340px at the floor, half the window at the cap) from the board without
+resizing the window, re-plans every table at once (`main`'s own box is what is watched).
 
 The evidence chips are the only definition of "live" the board uses:
 
