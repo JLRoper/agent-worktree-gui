@@ -56,6 +56,14 @@ These apply to every terminal call a worker makes here, not only to the tests ab
 - Leave the pre-execution guard alone: its steady state is sub-millisecond per call, and its 30 s is a fail-closed ceiling, not a cost. Do not edit `terminal_tool.py` to make a call faster.
 - On this host `jenkins.prog.sefl.com` and `cscvk3smgmt.prog.sefl.com` currently fail DNS with `no such host` in 0.4 to 0.6 s. Read the resolver error before blaming your command.
 
+### Showing the reader a page
+
+- A page is proved by a test or a headless capture, never by a browser window thrown at the reader.
+- A page the reader has to look at goes through the panel's own open route (`POST /api/open-file`, or the anchor a
+  clarify card draws) or one plain tab. No `--new-window`, and never a scratch `--user-data-dir` of your own.
+- A scratch-profile browser you start is closed before the run settles, or reused for the next page. Nothing you
+  launched may still be running when the turn ends.
+
 ## Runtime and config
 
 The public prefix is not the Tomcat context: Apache rewrites `/email-service/...` to `/email-web/api/...`, so

@@ -18,10 +18,13 @@ import {
   exeFromCommand,
   fileOpenerLadder,
   fileUrlFor,
+  forgetOpenedFiles,
   openFileWith,
+  openedFileKey,
   openerFor,
   regValue,
   resolveDefaultBrowser,
+  REUSE_WINDOW_MS,
   safeUrl,
 } from "../lib/open-url.js";
 import { post, startPanel } from "../tools/panel-testkit.mjs";
@@ -230,6 +233,7 @@ function fakeChild(started, message) {
 }
 
 test("a launcher that cannot start hands over to the next, and the answer names the fallback", async () => {
+  forgetOpenedFiles();
   const read = registration("ChromeHTML", `"${CHROME}" --single-argument %1`);
   const seen = [];
   const out = await openFileWith(report("report.html"), {
@@ -252,6 +256,7 @@ test("a launcher that cannot start hands over to the next, and the answer names 
 });
 
 test("every launcher failing is reported with each reason, never as a silent success", async () => {
+  forgetOpenedFiles();
   const out = await openFileWith(report("report.html"), {
     platform: "win32",
     env: {},
@@ -263,4 +268,102 @@ test("every launcher failing is reported with each reason, never as a silent suc
   assert.deepEqual(out.tried.map((t) => t.bin), ["rundll32.exe", "explorer.exe"]);
   assert.match(out.error, /rundll32\.exe: spawn rundll32\.exe ENOENT/);
   assert.match(out.error, /explorer\.exe: spawn explorer\.exe ENOENT/);
+});
+
+// ---- one window per file, for five minutes ---------------------------------------------------------------------
+// The reader's complaint was a fresh Edge window for every "proved" page. The route now remembers the file it opened,
+// keyed on the RESOLVED path, and answers a second open inside the window with `reused: true` instead of spawning
+// again. These prove the book mark at the seam the route uses: an injected spawn that records every launch, and an
+// injected clock, so the expiry is a number rather than a five-minute wait and no window is ever opened.
+
+// The ladder a machine with no registered browser walks: rundll32 first, explorer.exe behind it. `answered` decides
+// whether a launch STARTS or fails, so the failure path can be proved without a real browser.
+function recordingSpawn(seen, answered = () => true) {
+  return (bin, args) => {
+    seen.push({ bin, args });
+    return fakeChild(answered(bin), `spawn ${bin} ENOENT`);
+  };
+}
+
+const plainLadder = { platform: "win32", env: {}, read: () => null, exists: () => false };
+
+test("two opens of one file spawn once, and the second says it was a reuse rather than an open", async () => {
+  forgetOpenedFiles();
+  const seen = [];
+  const spawn = recordingSpawn(seen);
+  let clock = 1_000_000;
+  const first = await openFileWith(report("report.html"), { ...plainLadder, spawn, now: () => clock });
+  assert.equal(first.opened, true, "the first open is an open");
+  assert.equal(first.reused, false);
+  assert.equal(first.ageMs, 0);
+  assert.equal(seen.length, 1, "the ladder stopped at the first launcher that started");
+
+  clock += 60_000;
+  // The SAME file spelled as a relative path against its own tree: the key is the resolved path, so this is the one
+  // file the first call opened.
+  const second = await openFileWith("./report.html", { ...plainLadder, base: REPORTS, spawn, now: () => clock });
+  assert.equal(seen.length, 1, "a repeat inside five minutes must not spawn a second window");
+  assert.equal(second.ok, true, "the file is still open, so the answer is not a failure");
+  assert.equal(second.reused, true, "the caller can tell a reuse from an open");
+  assert.equal(second.opened, false, "and it must not claim to have opened anything");
+  assert.equal(second.key, first.key, "one resolved path, one key");
+  assert.equal(second.ageMs, 60_000, "the answer says how long ago the open that put it on screen was");
+  assert.equal(second.bin, first.bin, "the remembered launcher is named, so the row can say whose window it is");
+  assert.equal(second.url, first.url);
+  assert.deepEqual(second.tried, [], "nothing was tried this time");
+  // The focus decision, as a fact a caller can read: no attempt was made, and the reason is in the answer rather than
+  // in a comment the page cannot see.
+  assert.equal(second.focus, "none");
+  assert.match(second.focusWhy, /no focus attempted/, "a reuse says it did not try to raise the window");
+  assert.match(second.focusWhy, /second window is the defect/, "and why: raising it would mean the window this fix removes");
+  assert.equal(first.focusWhy, "", "a fresh open has no focus story to tell");
+});
+
+test("a different file still spawns", async () => {
+  forgetOpenedFiles();
+  const seen = [];
+  const spawn = recordingSpawn(seen);
+  let clock = 1_000_000;
+  const one = await openFileWith(report("one.html"), { ...plainLadder, spawn, now: () => clock });
+  assert.equal(one.opened, true);
+  clock += 1_000;
+  const two = await openFileWith(report("two.html"), { ...plainLadder, spawn, now: () => clock });
+  assert.equal(two.opened, true, "another file is another window");
+  assert.equal(two.reused, false);
+  assert.notEqual(two.key, one.key);
+  assert.equal(seen.length, 2);
+});
+
+test("the five-minute window expires, and the next open spawns again", async () => {
+  forgetOpenedFiles();
+  const seen = [];
+  const spawn = recordingSpawn(seen);
+  const openedAt = 5_000_000;
+  await openFileWith(report("report.html"), { ...plainLadder, spawn, now: () => openedAt });
+  const inside = await openFileWith(report("report.html"), { ...plainLadder, spawn, now: () => openedAt + REUSE_WINDOW_MS - 1 });
+  assert.equal(inside.reused, true, "one millisecond inside the window is still a reuse");
+  assert.equal(seen.length, 1);
+  const after = await openFileWith(report("report.html"), { ...plainLadder, spawn, now: () => openedAt + REUSE_WINDOW_MS });
+  assert.equal(after.reused, false, "the window measured from the OPEN has closed");
+  assert.equal(after.opened, true, "so a reader who is looking at a rewritten page gets the new one");
+  assert.equal(seen.length, 2);
+});
+
+test("a failed ladder is not remembered, so a retry still spawns", async () => {
+  forgetOpenedFiles();
+  const seen = [];
+  const failing = recordingSpawn(seen, () => false);
+  const failed = await openFileWith(report("report.html"), { ...plainLadder, spawn: failing, now: () => 1_000 });
+  assert.equal(failed.ok, false);
+  assert.equal(failed.reused, false);
+  const retried = await openFileWith(report("report.html"), { ...plainLadder, spawn: recordingSpawn(seen), now: () => 2_000 });
+  assert.equal(retried.opened, true, "a window that never appeared must not be remembered as open");
+  assert.equal(retried.reused, false);
+});
+
+test("the key is the resolved path, lower-cased on Windows, never the string that was handed over", () => {
+  const abs = path.resolve(REPORTS, "report.html");
+  assert.equal(openedFileKey(abs, { platform: "win32" }), abs.toLowerCase(), "NTFS is case-insensitive, so two spellings are one file");
+  assert.equal(openedFileKey(`${REPORTS}/./x/../report.html`, { platform: "win32" }), abs.toLowerCase(), "a dot segment is resolved away");
+  assert.equal(openedFileKey(abs, { platform: "linux" }), abs, "a case-sensitive filesystem keeps the case it was given");
 });

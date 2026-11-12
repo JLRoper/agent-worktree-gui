@@ -738,9 +738,13 @@ function deliverRowHtml(entry) {
   // which fallback it was. The route hands a local file to the browser this machine is registered to use, so the
   // opener's name is a browser's (`msedge.exe`), not `explorer.exe` for everything. It still stops where the spawn
   // stops: no detached child reports whether a window appeared, so the line says "cannot see", never that it did.
+  // A reuse is the other answer and says so: the first open is what put the file on screen, this click started
+  // nothing, and the row must not claim a window for it.
   const openedLine =
     opened && !why
-      ? `<span class="dl-opened" role="status" title="${esc(`opened ${opened.name} with ${opened.opener}${deliverViaText(opened)} - ${target}`)}">opened ${esc(opened.name)} with ${esc(opened.opener)}${esc(deliverViaText(opened))}; the panel started it and cannot see whether a window appeared</span>`
+      ? opened.reused
+        ? `<span class="dl-opened" role="status" title="${esc(`already open in ${opened.opener}${deliverViaText(opened)} - ${target}`)}">already open in ${esc(opened.opener)}${esc(deliverViaText(opened))} - not opened again, this click started nothing (${esc(deliverAgeText(opened.ageMs))} ago)</span>`
+        : `<span class="dl-opened" role="status" title="${esc(`opened ${opened.name} with ${opened.opener}${deliverViaText(opened)} - ${target}`)}">opened ${esc(opened.name)} with ${esc(opened.opener)}${esc(deliverViaText(opened))}; the panel started it and cannot see whether a window appeared</span>`
       : "";
   const how = entry.href
     ? "Open — a new browser tab, in this browser"
@@ -893,14 +897,18 @@ async function deliverOpenOnServer(entry, extra) {
     }
     // The 200 handler is the answer the page used to swallow. `d.opener` is the basename the route spawned, `d.via`
     // names the mechanism and `d.fallback` how far down the ladder it was; none of them is a claim that a window
-    // appeared, so the row says exactly those.
-    if (d.open === "handler") {
+    // appeared, so the row says exactly those. A REUSE (`d.open === "reused"`) is the one answer where the route
+    // spawned NOTHING: the file is already on screen from an open inside the last five minutes, and the row says that
+    // instead of a second "opened" for a click that started no process.
+    if (d.open === "handler" || d.open === "reused") {
       return sayDeliverOpened(entry.seq, {
         name: deliverTargetName(d.target || entry.target),
         opener: String(d.opener || ""),
         via: String(d.via || ""),
         progId: d.progId ? String(d.progId) : "",
         fallback: Number(d.fallback) || 0,
+        reused: d.open === "reused",
+        ageMs: Number(d.ageMs) || 0,
       });
     }
     clearDeliverWhy(entry.seq);
@@ -915,6 +923,13 @@ async function deliverOpenOnServer(entry, extra) {
 function deliverTargetName(target) {
   const parts = String(target || "").split(/[\\/]+/).filter(Boolean);
   return parts.length ? parts[parts.length - 1] : String(target || "");
+}
+
+// How long ago the open that put the file on screen happened, in the row's own words. A reuse is inside five minutes
+// by construction, so seconds are the useful unit, and rounding to 0 would read as if the page had just opened.
+function deliverAgeText(ms) {
+  const s = Math.max(1, Math.round((Number(ms) || 0) / 1000));
+  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
 }
 
 // WHICH launcher took the file, in the reader's words. The route sends the mechanism (`via`), the registered

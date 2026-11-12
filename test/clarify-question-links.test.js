@@ -148,3 +148,15 @@ test("the file target is escaped in the attribute it rides in", async () => {
   const inner = section(await card("Pick one.", { links: [{ label: "odd", path: "docs/a&b/<x>.html" }] }));
   assert.ok(inner.includes('data-open-file="docs/a&amp;b/&lt;x&gt;.html"'), `the attribute is escaped once:\n${inner}`);
 });
+
+test("a file already opened inside five minutes says so, and claims no window", async () => {
+  // The panel opens one file once per five minutes (lib/open-url.js's book mark) and answers `reused` to the next
+  // click. The card has to say that: a click that shows no new window is otherwise read as a dead control. It may
+  // not say it opened anything, because nothing was launched.
+  const page = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
+  const fn = sliceBetween(page, "async function openQuestionFile(", "async function deleteArtifact(");
+  assert.match(fn, /if \(d\.reused\)/, "the card reads the panel's reuse answer");
+  assert.match(fn, /already open in \$\{d\.opener/, "and names the browser the route remembered");
+  assert.match(fn, /not opened again, this click started nothing/, "and that this click launched nothing");
+  assert.doesNotMatch(fn, /opened a window|is open in your browser/i, "it never claims a window it cannot see");
+});

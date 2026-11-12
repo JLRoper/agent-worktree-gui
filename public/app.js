@@ -2420,8 +2420,15 @@ async function openQuestionFile(target, base = "") {
       showBanner(`open ${target}: ${d.error || `HTTP ${r.status}`}`);
       return;
     }
-    // Nothing on success: the tab that appears IS the answer, and a banner for every opened link would be noise. A
-    // refusal (no such file, outside every project, no launcher started) is what the reader cannot see for themselves.
+    // A REUSE is the one success worth a word. The panel opened this file inside the last five minutes, so this click
+    // started nothing; without the line the missing second window reads as a control that did nothing. It says
+    // "already open" and never "opened": the panel cannot raise the window it opened before, and it does not pretend
+    // to. Everything else stays silent - the tab that appears IS the answer, and a banner for every link is noise.
+    if (d.reused) {
+      const s = Math.max(1, Math.round((Number(d.ageMs) || 0) / 1000));
+      const age = s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
+      showBanner(`already open in ${d.opener || "your browser"} ${age} ago - not opened again, this click started nothing`);
+    }
   } catch (e) {
     showBanner(`open ${target}: ${e.message}`);
   }
