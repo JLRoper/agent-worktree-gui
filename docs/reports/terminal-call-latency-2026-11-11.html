@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Terminal call latency - 2026-11-11</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 62rem; margin: 2rem auto; padding: 0 1.2rem; line-height: 1.5; color: #1b1f24; }
+  h1 { font-size: 1.6rem; margin-bottom: .2rem; }
+  h2 { font-size: 1.15rem; margin-top: 2rem; border-bottom: 1px solid #d8dee4; padding-bottom: .25rem; }
+  table { border-collapse: collapse; width: 100%; margin: .8rem 0; font-size: .93rem; }
+  th, td { border: 1px solid #d8dee4; padding: .4rem .55rem; text-align: left; vertical-align: top; }
+  th { background: #f6f8fa; }
+  td.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  code { background: #f6f8fa; padding: .05rem .3rem; border-radius: 3px; font-size: .88em; }
+  .verdict { border-left: 4px solid #b42318; background: #fff5f4; padding: .7rem .9rem; margin: 1rem 0; }
+  .note { border-left: 4px solid #9a6700; background: #fff8e6; padding: .7rem .9rem; margin: 1rem 0; }
+  .muted { color: #57606a; font-size: .9rem; }
+</style>
+</head>
+<body>
+<h1>Terminal call latency on this host</h1>
+<p class="muted">Measured 2026-11-11 23:16Z to 23:25Z on C:/ProjectDevelopment/agent-worktree-gui, branch main, HEAD ce87716a. Every number below is a wall-clock reading taken inside the call it describes; nothing here is inferred from priors.</p>
+
+<h2>1. The question</h2>
+<p>A terminal call took 152.2 s and its output ends with <code>Branch #20 SUCCESS in 216.9 s</code>. Was that the shell, the kubectl/Jenkins commands themselves, the pre-execution guard, or waiting?</p>
+
+<div class="verdict">
+<p><strong>Verdict: waiting, and specifically a Jenkins poll loop that sleeps inside the call.</strong> On this host one command of each kind costs under two seconds and six of them chained cost 5.6 s. To reach 152.2 s a call has to spend roughly 146 s not executing anything - which only a <code>sleep</code> between poll requests does. The 216.9 s build time in the same output is the fingerprint of that loop: the build was already running when the call started, and the call sat on it.</p>
+</div>
+
+<h2>2. Phases, one measured number each</h2>
+<table>
+<thead><tr><th>Phase</th><th>What ran</th><th class="n">In-call ms</th><th>Result</th></tr></thead>
+<tbody>
+<tr><td>0</td><td>Guard: <code>pwd</code>, <code>git rev-parse --abbrev-ref HEAD</code>, <code>git rev-parse --short HEAD</code></td><td class="n">n/a</td><td>/c/ProjectDevelopment/agent-worktree-gui, <code>main</code>, <code>ce87716a</code> - correct checkout</td></tr>
+<tr><td>1</td><td>Bare <code>echo</code> with epoch-ms stamps either side</td><td class="n">115</td><td>start 1794442673069, end 1794442673184; a trailing stamp 85 ms later - the whole call window is ~200 ms</td></tr>
+<tr><td>2</td><td><code>bash -lc true</code></td><td class="n">1616</td><td>Exit 0. Login-shell startup alone, no payload</td></tr>
+<tr><td>3</td><td><code>kubectl get pods -A --request-timeout=45s</code></td><td class="n">1774</td><td>No current-context; three failed discovery retries, then NotFound</td></tr>
+<tr><td>4</td><td><code>kubectl --kubeconfig ~/.kube/config-sefl-dev.yaml get pods</code></td><td class="n">629</td><td>Fails: <code>lookup cscvk3smgmt.prog.sefl.com: no such host</code></td></tr>
+<tr><td>5</td><td>Jenkins API curl, <code>/api/json?tree=jobs[name]</code></td><td class="n">399</td><td>curl rc=6, <code>Could not resolve host: jenkins.prog.sefl.com</code>, http=000</td></tr>
+<tr><td>6</td><td>Six commands chained in one call (echo, bash -lc true, kubectl, kubectl-dev, Jenkins curl x2)</td><td class="n">5622</td><td>Per command: 56, 3060, 475, 292, 590, 393</td></tr>
+<tr><td>7</td><td>Process-identity probe primitives</td><td class="n">0.1 / 84.2</td><td><code>psutil.Process(pid).create_time()</code> 0.1 ms; full <code>process_iter</code> over 760 processes 84.2 ms</td></tr>
+<tr><td>8</td><td>Run 5749f462 as recorded by the panel</td><td class="n">1126053</td><td>Whole run, 38 terminal calls, 22:56:15Z to 23:15:01Z</td></tr>
+</tbody>
+</table>
+
+<h2>3. What each number rules out</h2>
+<ul>
+<li><strong>The shell is not it.</strong> A bare echo is 115 ms. Even if the 152.2 s call had opened forty shells it would not reach 152 s.</li>
+<li><strong>The six commands are not it.</strong> Chained they cost 5,622 ms, and 3,060 ms of that is the one <code>bash -lc</code> in the chain. Six chained commands are 27 times cheaper than the call being explained.</li>
+<li><strong>Network waits are not it, today.</strong> Both <code>jenkins.prog.sefl.com</code> and the k3s DEV API fail DNS on this host in 0.4 to 0.6 s, so no request can silently burn minutes on connect. That also means the live cluster and Jenkins round trips could not be measured honestly - see the unverified list.</li>
+<li><strong>The guard is not it.</strong> See section 5: the probe is sub-millisecond on the happy path; it has a 30 s fail-closed ceiling, not a 30 s cost.</li>
+</ul>
+
+<h2>4. What is left: the poll loop</h2>
+<p>Subtracting everything measured leaves about 146 s of the 152.2 s call with no command behind it. The only way a shell produces that is <code>sleep</code>. The output corroborates it directly: <code>Branch #20 SUCCESS in 216.9 s</code> is what a wait-for-build loop prints after it exits, and 216.9 s is longer than the call itself - so the build had started in an earlier call and this call spent its whole life in the sleep-poll cycle, then printed the build's own elapsed time.</p>
+<p>Arithmetic on the run record: 1,126,053 ms for 38 terminal calls is a 29.6 s mean per call if terminal were 100 percent of the run (it is not - the model turn, tool results and prompt assembly are in there too). One 152.2 s call is 5.2 times that mean: an outlier single call, exactly the signature of one call that waited while the rest answered in seconds.</p>
+
+<h2>5. What the process-identity probe costs</h2>
+<p><code>terminal_tool.py:1559</code> is the rejection path for a guard that did not answer in time. The guard itself is <code>_pre_exec_block</code> (line 1416), run on a deadline worker with <code>guard_timeout = max(plan.effective_timeout, _PRE_EXEC_GUARD_MIN_TIMEOUT_S)</code>, and <code>_PRE_EXEC_GUARD_MIN_TIMEOUT_S = 30</code> (line 1413). Inside it, <code>gateway_lifecycle_block</code> calls <code>_is_supervised_gateway_process()</code> (tools/process_registry.py:311), which early-returns False unless <code>_HERMES_GATEWAY=1</code>, and otherwise verifies <code>is_supervised_gateway_launch()</code> plus <code>get_running_pid(cleanup_stale=False) == os.getpid()</code>. That PID verification ends in a kernel process query - the <code>psutil</code> <code>create_time</code> the comment at line 1532-1539 names.</p>
+<p>Measured: one <code>create_time()</code> is 0.1 ms, a full <code>process_iter</code> over 760 processes is 84.2 ms. So the probe's steady-state cost is well under a millisecond per terminal call - it is not a latency contributor. What the code buys with that cheapness is a 30 s fail-closed ceiling per call: if <code>psutil</code> wedges (the macOS case in the comment, #111922), the call is refused after 30 s instead of hanging for an hour. That is the right trade, and it is not the 152.2 s.</p>
+
+<div class="note">
+<p><strong>Side finding worth a fix of its own.</strong> <code>bash -lc true</code> costs 1,616 ms on this host, and 3,060 ms when run inside an already-running MSYS shell. Any command that wraps itself in <code>bash -lc</code> pays that every time. Chained commands should call the binary directly.</p>
+</div>
+
+<h2>6. Cross-check against run 5749f462 and the gateway log</h2>
+<p>Run <code>5749f462</code> (thread wtgui-roll-the-local-only-pr4-chil-cbb66b, started 2026-11-11T22:56:15.691Z, ended 23:15:01.744Z) carries <code>durationMs: 1126053</code> and <code>resultRows.terminal: 38</code> in C:/Users/roper/.wag/state/jobs.json. That is the whole run, not the single call, so it bounds the call rather than timing it: a 152.2 s call is 13.5 percent of an 18 minute 46 s run and is consistent with the panel's record and with the 29.6 s mean above.</p>
+<p>The gateway log cannot corroborate anything at the per-call level. C:/Users/roper/AppData/Local/hermes/logs/gateway.log holds 3,767 lines starting 2026-11-09 09:37:53, contains zero occurrences of <code>5749f462</code> and no per-tool duration field at all. The panel's jobs.json is the only instrumented record of a run's length on this host.</p>
+
+<h2>7. Proposed fix and its expected saving</h2>
+<table>
+<thead><tr><th>Change</th><th>Why</th><th class="n">Expected saving</th></tr></thead>
+<tbody>
+<tr><td>Never poll a build inside a terminal call. One request per call, <code>curl -m 8</code>, and return the build state; re-check on the next turn, or hand the wait to a background process or the panel's own watcher.</td><td>The only phase that can consume minutes is <code>sleep</code>. A single request is bounded by the server or by <code>-m</code>.</td><td class="n">~150 s</td></tr>
+<tr><td>Replace <code>bash -lc</code> with the direct command.</td><td>1,616 ms of login-shell startup for no work.</td><td class="n">~1.6 s per use</td></tr>
+<tr><td>Keep <code>--request-timeout</code> on kubectl and <code>-m</code> on curl, at 8 to 10 s rather than 30 to 60.</td><td>Bounds a dead endpoint to a few seconds; today the DNS failure already costs 0.4 to 1.8 s.</td><td class="n">0.4-1.8 s per call</td></tr>
+<tr><td>Leave the pre-exec guard alone.</td><td>Sub-millisecond steady state; its 30 s is a ceiling, not a cost.</td><td class="n">0</td></tr>
+</tbody>
+</table>
+<p>With the first change the 152.2 s call becomes a ~0.5 to 2 s call and the wait moves off the critical path entirely; the other two are worth about two seconds a call on any command that uses them.</p>
+
+<h2>8. Unverified, and why</h2>
+<ul>
+<li><strong>Live kubectl and Jenkins round trips.</strong> Both hosts fail DNS from this machine right now (<code>no such host</code>), so the honest figure for a real <code>kubectl get pods</code> against DEV and a real Jenkins read is not measured here - only the failure cost. The 152.2 s conclusion does not depend on them: even a 30 s cluster call is well short of 152 s, and the build output in the call proves a successful poll happened when DNS was up.</li>
+<li><strong>The exact original call.</strong> Its text is not in the panel's job lines or in the gateway log; only the reader's quotation of it survives. The six-command chain above is a reconstruction of that shape, not a replay.</li>
+<li><strong>Per-call tool timings.</strong> Nothing on this host records them (section 6), so every number in section 2 is an in-call stamp, which is the narrowest honest measurement available.</li>
+</ul>
+
+<p class="muted">No source file was changed and nothing was committed for this report.</p>
+</body>
+</html>
