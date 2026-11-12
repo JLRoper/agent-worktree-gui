@@ -4,16 +4,33 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.84.3 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.84.4 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-555 releases from v0.1.0 (2026-10-20) to v1.84.3 (2026-11-12), 1844 commits between the tags. Every release is anchored by an
+556 releases from v0.1.0 (2026-10-20) to v1.84.4 (2026-11-12), 1851 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.84.4 — 2026-11-12 · 7 commits
+
+[`971ff1b`](https://github.com/JLRoper/agent-worktree-gui/commit/971ff1b0110a8d23bf0cd6e6c527844726a8b287) · [compare v1.84.3...v1.84.4](https://github.com/JLRoper/agent-worktree-gui/compare/v1.84.3...v1.84.4)
+
+### Docs & tests
+
+- docs: render the changelog - 555 releases ([`0befad1`](https://github.com/JLRoper/agent-worktree-gui/commit/0befad136c4d04d6774d9fe63541c4beb175e199))
+- test: the turnover brief fixture names a folder, not a path on one machine ([`10a7f95`](https://github.com/JLRoper/agent-worktree-gui/commit/10a7f95313598dc346f8f910e12d813797bafa0d))
+- docs: the local turnover base, proved on a scratch repo and quoted in full ([`8fd003c`](https://github.com/JLRoper/agent-worktree-gui/commit/8fd003c713a01b7c8fe8869cc59f30acb3be8bf3))
+
+### Other
+
+- Make the turnover branch a first-class parent ([`1aaa1b5`](https://github.com/JLRoper/agent-worktree-gui/commit/1aaa1b585ee5a6ff8b3e57a28b6dc77e71df5f59))
+- spawn: cut a tree from a named parent with `SPAWN FROM <ref> <project>` ([`7f3f291`](https://github.com/JLRoper/agent-worktree-gui/commit/7f3f29144dcbda845d8a96f359102e79fdbefcac))
+- spawn: cut from a local turnover branch, and ask when none qualifies ([`5a934c2`](https://github.com/JLRoper/agent-worktree-gui/commit/5a934c2f9a381d7a8a7d0260d87e1ad02219853d))
+- chore: 1.84.4 - the version this landing carries ([`971ff1b`](https://github.com/JLRoper/agent-worktree-gui/commit/971ff1b0110a8d23bf0cd6e6c527844726a8b287))
 
 ## v1.84.3 — 2026-11-12 · 3 commits
 
