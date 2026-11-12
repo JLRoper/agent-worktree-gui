@@ -20,8 +20,9 @@
 // what a rebuild and a reload replay, and the same pair is mirrored into sessionStorage so a reload brings a
 // pasted block back with its text instead of losing a 400-line paste to one accidental F5.
 //
-// BELOW THE THRESHOLD NOTHING CHANGES: a short paste is plain inline text, an image or file paste is still
-// the attachment chip board/attachments.js owns (this module steps aside for it — see the paste listener).
+// BELOW THE THRESHOLD a short paste is plain inline text rather than a chip, and an image or file paste is still
+// the attachment chip board/attachments.js owns (this module steps aside for it - see the paste listener). The
+// short paste is still written by this module, so it is recorded for Ctrl+Z exactly as a chip is.
 //
 // Loaded as a classic script BEFORE app.js (see index.html), so its globals exist by the time app.js builds
 // its state and wires its own handlers. It reaches out for `state` by name at call time, exactly as
@@ -784,12 +785,13 @@ function chipDeleteChars(box, chars, span) {
 
 function pasteInto(box, raw) {
   const info = pasteText(raw);
+  // The model and the caret as they were BEFORE this write are what the composer's own Ctrl+Z steps back to:
+  // every insert in this function is programmatic, so the editing engine's undo stack never saw it and cannot
+  // take it. Captured once, here, for both outcomes - a chip above the threshold and plain text below it.
+  const beforeModel = serializeBox(box);
+  const beforeCaret = caretOffset(box);
   if (pasteShouldChip(info.text)) {
     // Nothing of the paste is lost: the chip carries every character and readBox gives them back in place.
-    // The model and the caret as they were BEFORE the chip are what the composer's own Ctrl+Z steps back
-    // to: this write is programmatic, so the editing engine's undo stack never saw it and cannot take it.
-    const beforeModel = serializeBox(box);
-    const beforeCaret = caretOffset(box);
     const chip = makeChip(info.text);
     insertNodeAt(box, chip);
     touchBox(box);
@@ -797,20 +799,24 @@ function pasteInto(box, raw) {
     recordComposerPasteChip(box, chip.dataset.pasteChip, beforeModel, beforeCaret);
     return "chip";
   }
-  // Below the threshold the paste is exactly what it was before this feature: inline text.
+  // Below the threshold the paste is plain inline text, as it was before this feature - and it is still a
+  // programmatic insert (insertTextAt puts in a node the engine never saw), so it gets the same kind of entry,
+  // carrying the string it inserted and the caret after it. Ctrl+Z then takes exactly that text back.
   const text = box.dataset.single ? info.text.replace(/[\r\n]+/g, "") : info.text;
   insertTextAt(box, text);
   touchBox(box);
+  recordComposerPasteText(box, text, beforeModel, beforeCaret);
   return "text";
 }
 
 // ---- the composer's own undo stack --------------------------------------------------------
 // WHY THIS IS HERE. A chip is written by this module, not by the editing engine: insertNodeAt puts a node
 // into the box that the engine never saw, so its undo stack cannot step back over it, and Ctrl+Z after a
-// paste did nothing at all. The same is true of the file chip board/attachments.js draws above the box: a
-// programmatic write the engine's history has no record of. This is the record of the writes made on the
-// reader's behalf - one entry per chip insert, carrying the model the composer held BEFORE it - so the
-// press puts the composer back exactly as it was.
+// paste did nothing at all. A paste BELOW the threshold is just as programmatic - insertTextAt writes its text
+// node the same way - so it gets the same entry. The same is true of the file chip board/attachments.js draws
+// above the box: a programmatic write the engine's history has no record of. This is the record of the writes
+// made on the reader's behalf - one entry per insert, carrying the model and the caret the composer held
+// BEFORE it and the ones it held after - so the press puts the composer back exactly as it was.
 //
 // WHAT IT DOES NOT DO. Ordinary typing is the engine's and stays the engine's: an entry is honoured only
 // while the composer still reads exactly what its insert left (composerEntryLive), so once the reader has
@@ -870,6 +876,26 @@ function recordComposerPasteChip(box, chipId, beforeModel, beforeCaret) {
   });
 }
 
+// Ctrl+Z for a paste that landed as plain text: a short paste is written by insertTextAt, which is as
+// programmatic as a chip - the engine never saw the node go in - so it needs the same record. `text` is the
+// string the paste actually inserted (the single-line box's stripped copy included), and afterCaret is where
+// the caret came to rest after it, which is what a redo puts back.
+function recordComposerPasteText(box, text, beforeModel, beforeCaret) {
+  if (!box) return;
+  const inserted = String(text == null ? "" : text);
+  if (!inserted) return;
+  composerPush({
+    kind: "paste-text",
+    key: boxKeyOf(box),
+    box,
+    text: inserted,
+    beforeModel: cleanModel(beforeModel),
+    beforeCaret: Number(beforeCaret) || 0,
+    afterModel: serializeBox(box),
+    afterCaret: caretOffset(box),
+  });
+}
+
 // Ctrl+Z for a pasted or dropped file: board/attachments.js calls this once the upload has landed and the
 // chip is drawn, with the set before the file joined it and the set after.
 function recordComposerAttachment(ctx, before, after, attachment) {
@@ -890,7 +916,7 @@ function recordComposerAttachment(ctx, before, after, attachment) {
 // left may be stepped back - that guard is what leaves a typed character to the engine's own undo.
 function composerEntryLive(entry) {
   if (!entry) return false;
-  if (entry.kind === "paste-chip") {
+  if (entry.kind === "paste-chip" || entry.kind === "paste-text") {
     if (!entry.box || !entry.box.parentNode) return false; // the card was rebuilt: that box is gone
     return composerSameModel(serializeBox(entry.box), entry.afterModel);
   }
@@ -923,8 +949,11 @@ function composerUndo(box) {
   if (!key) return false;
   const entry = composerTake(composerPast, key, composerEntryLive);
   if (!entry) return false;
-  if (entry.kind === "paste-chip") {
-    state.pasteChips.delete(entry.chipId);
+  if (entry.kind === "paste-chip" || entry.kind === "paste-text") {
+    // A chip's text goes with it; a text entry has nothing in state.pasteChips to take out. Either way the box
+    // is written back to the model it held BEFORE the insert, which removes exactly what the paste put in and
+    // leaves every character around it where it was.
+    if (entry.kind === "paste-chip") state.pasteChips.delete(entry.chipId);
     writeBoxModel(box, entry.beforeModel);
     setCaretOffset(box, entry.beforeCaret);
     touchBox(box);
@@ -940,13 +969,13 @@ function composerRedo(box) {
   const key = boxKeyOf(box);
   if (!key) return false;
   const entry = composerTake(composerFuture, key, (e) =>
-    e.kind === "paste-chip"
+    e.kind === "paste-chip" || e.kind === "paste-text"
       ? Boolean(e.box && e.box.parentNode) && composerSameModel(serializeBox(box), e.beforeModel)
       : JSON.stringify(composerAttachmentPaths(e.ctx)) === JSON.stringify(e.beforePaths),
   );
   if (!entry) return false;
-  if (entry.kind === "paste-chip") {
-    state.pasteChips.set(entry.chipId, { text: entry.text, lines: entry.lines });
+  if (entry.kind === "paste-chip" || entry.kind === "paste-text") {
+    if (entry.kind === "paste-chip") state.pasteChips.set(entry.chipId, { text: entry.text, lines: entry.lines });
     writeBoxModel(box, entry.afterModel);
     setCaretOffset(box, entry.afterCaret);
     touchBox(box);

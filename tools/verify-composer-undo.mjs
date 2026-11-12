@@ -13,7 +13,10 @@
 //   (d) #82's keys are untouched: Ctrl+Backspace beside a chip removes it whole, Ctrl+Backspace in typed text
 //       takes one word, and neither records an action of its own;
 //   (e) ordinary typing keeps the engine's own undo: with nothing pasted, Ctrl+Z is not taken by the composer and
-//       the browser's undo moves the typed text.
+//       the browser's undo moves the typed text;
+//   (f) a paste BELOW the threshold lands as plain text rather than a chip, and the same keys cover it: Ctrl+Z
+//       takes exactly the pasted text back and restores the caret, Ctrl+Shift+Z puts both back, and two short
+//       pastes are two entries.
 //
 //   node tools/verify-composer-undo.mjs                    boot a sandbox panel of this checkout
 //   PROBE_CAPTURES=1 node tools/verify-composer-undo.mjs   also write the before/after PNGs (PROBE_OUT names dir)
@@ -33,6 +36,8 @@ const BOX = "#job-prompt";
 const OUT = String(process.env.PROBE_OUT || "").trim() || path.join(tmpdir(), "wtgui-composer-undo");
 const WRITE_CAPTURES = String(process.env.PROBE_CAPTURES || "") === "1";
 const PASTE = Array.from({ length: 6 }, (_, i) => `pasted line ${i + 1} of the block the reader copied in`).join("\n");
+// Short enough for neither threshold: this one lands as plain text, not a chip.
+const SHORT = "a short paste";
 
 let checks = 0;
 let failures = 0;
@@ -59,6 +64,8 @@ const depth = (page) =>
   }, BOX);
 const attachChips = (page) =>
   page.evaluate(() => [...document.querySelectorAll("#spawn-chips .attach-chip")].map((c) => c.textContent.trim()));
+const caret = (page) =>
+  page.evaluate((sel) => window.WMApp.board.pasteChips.caretOffset(document.querySelector(sel)), BOX);
 
 // A real paste: a real DataTransfer handed to a real ClipboardEvent at the focused box.
 const pasteAt = (page, kind, payload) =>
@@ -158,6 +165,49 @@ try {
     note(`chip label after redo: ${JSON.stringify(await chipLabel(page))}`);
     await page.keyboard.press("Control+z");
     check("and Ctrl+Z takes it again", await chipCount(page), 0);
+
+    // ---- (f) a paste below the threshold -------------------------------------------------
+    console.log("\n== (f) a short paste lands as text, and Ctrl+Z / Ctrl+Shift+Z cover it too ==");
+    await page.click(BOX);
+    await page.keyboard.press("Control+a");
+    await page.keyboard.press("Delete");
+    await page.keyboard.type("Quote this: ");
+    const typedShort = await readBox(page);
+    await shot(page, "8-text-paste-before.png");
+    check("the short paste is taken by the page", (await pasteAt(page, "text", SHORT)).prevented, true);
+    check("no chip: the short paste is plain text", await chipCount(page), 0);
+    check("the box reads the typed text and the paste", await readBox(page), `${typedShort}${SHORT}`);
+    check("the composer's stack holds one action for it", await depth(page), 1);
+    const shortCaret = await caret(page);
+    note(`caret after the short paste: ${shortCaret} (typed text is ${typedShort.length})`);
+    await shot(page, "9-text-paste-after-paste.png");
+
+    await page.keyboard.press("Control+z");
+    check("Ctrl+Z: the pasted text is gone", await readBox(page), typedShort);
+    check("Ctrl+Z: the caret is back where the paste found it", await caret(page), typedShort.length);
+    await shot(page, "10-text-paste-after-undo.png");
+
+    await page.keyboard.press("Control+Shift+z");
+    check("Ctrl+Shift+Z: the text is back", await readBox(page), `${typedShort}${SHORT}`);
+    check("Ctrl+Shift+Z: and the caret is after it", await caret(page), shortCaret);
+    await shot(page, "11-text-paste-after-redo.png");
+
+    // Two short pastes, two entries: neither insert was in the engine's history, so both presses must be the
+    // composer's, and the first must take only the second paste. The depth is read as a delta because the redo
+    // above put its entry back, and a stale entry is only dropped when a press reaches it.
+    const depthBeforeTwo = await depth(page);
+    await page.click(BOX);
+    await page.keyboard.press("Control+a");
+    await page.keyboard.press("Delete");
+    await pasteAt(page, "text", "alpha ");
+    await pasteAt(page, "text", "beta");
+    check("two short pastes read as one line of text", await readBox(page), "alpha beta");
+    check("each paste added an entry of its own", await depth(page), depthBeforeTwo + 2);
+    await page.keyboard.press("Control+z");
+    check("Ctrl+Z takes the second paste only", await readBox(page), "alpha ");
+    await page.keyboard.press("Control+z");
+    check("Ctrl+Z again takes the first", await readBox(page), "");
+    check("and both entries are gone", await depth(page), depthBeforeTwo);
 
     // ---- (c) a pasted file ---------------------------------------------------------------
     console.log("\n== (c) paste a file, Ctrl+Z: the attachment chip and the staged file both go ==");
