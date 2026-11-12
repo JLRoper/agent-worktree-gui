@@ -482,6 +482,7 @@ async function loadConfig() {
   cfg.scanQueuePerProject = Math.max(1, Math.floor(Number(cfg.scanQueuePerProject) || 2));
   cfg.scanStarvationMs = Math.max(1, Number(cfg.scanStarvationMs) || 30000);
   cfg.scanFairnessWindow = Math.max(1, Math.floor(Number(cfg.scanFairnessWindow) || 3));
+  cfg.scanDeferRetryMs = Math.max(1, Number(cfg.scanDeferRetryMs) || 5000);
   // How many of a project's worktrees its chart draws before the reader opens the rest. Server-side, like scanMode
   // below: it lives in this file so it survives a restart and applies to every browser. The retired
   // `hideOlderThanDays` is NOT read: a file that still carries it keeps to the default (or its own chartTopCount),
