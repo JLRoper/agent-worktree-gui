@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Local turnover branch: the third base-ref kind</title>
+<style>
+  :root { --ink:#1c2126; --dim:#5c6771; --line:#d8dee4; --bg:#fbfcfd; --code:#f2f4f6; --ok:#1f7a4d; --no:#a12d2d; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:32px 28px 64px; background:var(--bg); color:var(--ink);
+         font:15px/1.55 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 980px; margin: 0 auto; }
+  h1 { font-size:24px; margin:0 0 4px; letter-spacing:-0.01em; }
+  h2 { font-size:17px; margin:34px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  h3 { font-size:14px; margin:20px 0 6px; color:var(--dim); text-transform:uppercase; letter-spacing:0.06em; }
+  p { margin:8px 0; }
+  .sub { color:var(--dim); margin:0 0 18px; }
+  .facts { display:grid; grid-template-columns: 200px 1fr; gap:4px 14px; margin:14px 0 0; font-size:14px; }
+  .facts dt { color:var(--dim); }
+  .facts dd { margin:0; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; }
+  code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; background:var(--code); padding:1px 5px; border-radius:3px; }
+  pre { background:var(--code); border:1px solid var(--line); border-radius:5px; padding:12px 14px; overflow:auto;
+        font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; line-height:1.5; margin:10px 0; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:14px; }
+  th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:12.5px; text-transform:uppercase; letter-spacing:0.05em; }
+  .ok { color:var(--ok); font-weight:600; }
+  .no { color:var(--no); font-weight:600; }
+  .note { border-left:3px solid var(--line); padding:2px 0 2px 12px; color:var(--dim); margin:12px 0; }
+  ul { margin:8px 0 8px 20px; padding:0; }
+  li { margin:4px 0; }
+</style>
+</head>
+<body>
+<main>
+<h1>A local turnover branch as the third base-ref kind</h1>
+<p class="sub">agent-worktree-gui 1.84.3. Evidence from a scratch repository built for this proof, a real cut through <code>Jobs</code>, and the tests that pin each rejection.</p>
+
+<dl class="facts">
+  <dt>base ref verified</dt><dd>git log -1 origin/main = f1d4b2e4 2026-11-12 00:40:12 -0500 docs: render the changelog - 554 releases</dd>
+  <dt>branch</dt><dd>wtgui/make-the-turnover-branch-a-first-class-df6ca4</dd>
+  <dt>remote base pair</dt><dd>lib/base-ref.js resolveBaseRef, line 67</dd>
+  <dt>resolver</dt><dd>lib/turnover-base.js resolveTurnoverBase</dd>
+  <dt>kinds</dt><dd>checkout / turnover / local-turnover</dd>
+</dl>
+
+<p class="note">The brief for this landing said <code>origin/main</code> read <code>68d15290</code> at 1.84.1. It has since moved three commits (a scan-queue performance landing, the 1.84.2 version bump and the changelog render), and this branch is rebased onto <code>f1d4b2e4</code>, so the cut lands on today's main rather than the one the brief was written against. That is the only drift from the brief.</p>
+
+<h2>1. The pair this extends</h2>
+<p>The base the board compares every row against is one function: <code>resolveBaseRef</code> in <code>lib/base-ref.js</code>, which builds the project's remote plus main branch from <code>config.json</code>. The line that builds it, quoted from the file at <code>:67</code>:</p>
+<pre>const remoteRef = picked.remote &amp;&amp; mainBranch ? `${picked.remote}/${mainBranch}` : mainBranch || null;</pre>
+<p>That pair answers "what is this project's main". A cut asks a different question: "which commit does this tree start from". Before this landing there were two answers, and both were <em>named</em>: the checkout's own branch (<code>startRefOf</code> in <code>lib/jobs.js</code>), or the branch the project names in its settings (<code>turnoverBranch</code>, wired into the cut by <code>ae6888ca</code>). The third kind names nothing. It is found at the cut, and when nothing is found the cut stops and asks, because the one outcome this option exists to prevent is a silent fallback to <code>main</code>.</p>
+
+<h2>2. Three conditions, held together</h2>
+<p>A local branch is a candidate only when all three are true. Each one alone is a different wrong answer, which is why each has its own test.</p>
+<table>
+  <tr><th>#</th><th>Condition</th><th>The mistake it refuses</th></tr>
+  <tr><td>1</td><td>the name is the turnover shape <code>YYYYMMDD_HHMM_&lt;KEY&gt;_&lt;slug&gt;</code></td><td>a feature branch, pushed and unmerged, is not turnover work</td></tr>
+  <tr><td>2</td><td>a remote carries a branch of that name</td><td>an unpushed branch is invisible to everyone else, so a child of it can never be rolled back</td></tr>
+  <tr><td>3</td><td>it is not an ancestor of <code>main</code> or <code>master</code></td><td>a merged branch looks perfectly publishable and has nothing left to roll into</td></tr>
+</table>
+<p>The name pattern is not copied. <code>lib/turnover-base.js</code> compiles the push gate's own string, <code>BRANCH_NAME_GATE_PATTERN</code> from <code>lib/push-permissions.js</code>, so the gate that decides what may be published and the resolver that decides what may be a parent cannot disagree about which branches are work. One deliberate relaxation, commented in place: the gate's slug class is lowercase because it decides what publishes without asking, while a real turnover slug carries the reader's words, so the resolver widens the case class and keeps the date, time and ticket half character for character. Ancestry is asked as data, <code>git rev-list --count &lt;base&gt;..&lt;candidate&gt;</code>, because a zero there is the answer and an exit status is not distinguishable from a failure through this panel's git helper.</p>
+
+<h2>3. The scratch repository</h2>
+<p>Built for this proof under the run's scratch folder: a bare origin, one clone, and exactly three branches beside <code>main</code>.</p>
+<pre>#!/usr/bin/env bash
+# Build the scratch repository the proof runs against: a bare origin, one clone, and exactly three branches beside
+# main - one merged, one unpushed, one valid turnover branch.
+set -eu
+cd &quot;$(dirname &quot;$0&quot;)&quot;
+rm -rf origin.git tree
+git init -q --bare origin.git
+git clone -q origin.git tree
+cd tree
+G() { git -c user.email=proof -c user.name=proof &quot;$@&quot;; }
+
+G commit -q --allow-empty -m &quot;main: the base&quot;
+git branch -M main
+git push -q -u origin main
+
+# 1. THE VALID ONE: turnover-shaped, pushed, unmerged.
+G checkout -q -b 20261020_1624_DMR-39015_menuOAuth2Gateway
+G commit -q --allow-empty -m &quot;valid: oauth2 gateway work&quot;
+git push -q -u origin 20261020_1624_DMR-39015_menuOAuth2Gateway
+git checkout -q main
+
+# 2. THE MERGED ONE: same shape, pushed, then landed on main.
+G checkout -q -b 20261001_0900_DMR-1_mergedWork
+G commit -q --allow-empty -m &quot;merged: already landed&quot;
+git push -q -u origin 20261001_0900_DMR-1_mergedWork
+git checkout -q main
+G merge -q --no-ff -m &quot;merge the landed turnover branch&quot; 20261001_0900_DMR-1_mergedWork
+git push -q origin main
+
+# 3. THE UNPUSHED ONE: same shape, never left this machine.
+G checkout -q -b 20261002_0900_DMR-2_unpushedWork
+G commit -q --allow-empty -m &quot;unpushed: never left this machine&quot;
+git checkout -q main
+git branch --format=&#x27;%(refname:short)&#x27;</pre>
+<h3>What git says the repository holds</h3>
+<pre>$ git branch --format=&quot;%(refname:short)&quot;
+20261001_0900_DMR-1_mergedWork
+20261002_0900_DMR-2_unpushedWork
+20261020_1624_DMR-39015_menuOAuth2Gateway
+main
+
+$ git branch -r --format=&quot;%(refname:short)&quot;
+origin/20261001_0900_DMR-1_mergedWork
+origin/20261020_1624_DMR-39015_menuOAuth2Gateway
+origin/main
+
+$ git merge-base --is-ancestor 20261001_0900_DMR-1_mergedWork main &amp;&amp; echo &quot;exit 0: the merged branch has landed&quot;
+exit 0: the merged branch has landed</pre>
+
+<h3>The resolver's answer</h3>
+<p>Only the valid branch is picked. The other two are refused with their own reason, and <code>main</code> is refused by name rather than treated as a candidate.</p>
+<pre>$ node --input-type=module  # resolveTurnoverBase({ repoDir, mainBranch: &#x27;main&#x27; })
+{
+  &quot;ok&quot;: true,
+  &quot;branch&quot;: &quot;20261020_1624_DMR-39015_menuOAuth2Gateway&quot;,
+  &quot;sha&quot;: &quot;3d18dffaebbfea161aee67aaa3ff5f9cc4c1cff0&quot;,
+  &quot;remote&quot;: &quot;origin/20261020_1624_DMR-39015_menuOAuth2Gateway&quot;,
+  &quot;rejected&quot;: [
+    {
+      &quot;name&quot;: &quot;20261001_0900_DMR-1_mergedWork&quot;,
+      &quot;reason&quot;: &quot;merged&quot;,
+      &quot;why&quot;: &quot;20261001_0900_DMR-1_mergedWork is already an ancestor of main or master - it has landed, so there is nothing to roll back into&quot;
+    },
+    {
+      &quot;name&quot;: &quot;20261002_0900_DMR-2_unpushedWork&quot;,
+      &quot;reason&quot;: &quot;unpushed&quot;,
+      &quot;why&quot;: &quot;20261002_0900_DMR-2_unpushedWork is not on any remote - a child of an unpublished branch is a child nobody else can see&quot;
+    },
+    {
+      &quot;name&quot;: &quot;main&quot;,
+      &quot;reason&quot;: &quot;name&quot;,
+      &quot;why&quot;: &quot;main is not a turnover name (YYYYMMDD_HHMM_&lt;KEY&gt;_&lt;slug&gt;)&quot;
+    }
+  ]
+}
+
+$ node --input-type=module  # turnoverBaseBrief({ branch: out.branch, repoDir })
+TURNOVER BASE: this tree was cut on the local turnover branch `20261020_1624_DMR-39015_menuOAuth2Gateway` (C:/Users/roper/AppData/Local/Temp/wag/a67f1d0d/proof/tree) - a local branch whose name matches YYYYMMDD_HHMM_&lt;KEY&gt;_&lt;slug&gt;, which is also pushed to a remote, and which is not an ancestor of main or master. Find it again with those three tests: `git branch --list &#x27;[0-9]*_[0-9]*_*-*_*&#x27;`, `git branch -r --list` for the same name on a remote, and `git merge-base --is-ancestor 20261020_1624_DMR-39015_menuOAuth2Gateway main` (exit 0 means it has landed and is not a turnover branch to roll into). Do not push this tree&#x27;s branch and do not cut a new remote branch: this child stays local, and when the work is done it is rolled back into `20261020_1624_DMR-39015_menuOAuth2Gateway` by fast-forward - `git checkout 20261020_1624_DMR-39015_menuOAuth2Gateway &amp;&amp; git merge --ff-only &lt;this tree&#x27;s branch&gt;` - never by a merge commit and never through the remote.</pre>
+
+<h3>A run cut on it</h3>
+<p>Through <code>Jobs.makeWorktree</code> with the kind set: the tree's start ref, its start sha, its parent name and its turnover record all come back as the found branch, and the brief carries the rule.</p>
+<pre>$ node --input-type=module  # jobs.makeWorktree(tree, prompt, { baseKind: &#x27;local-turnover&#x27; })
+{
+  &quot;startRef&quot;: &quot;20261020_1624_DMR-39015_menuOAuth2Gateway&quot;,
+  &quot;startSha&quot;: &quot;3d18dffaebbfea161aee67aaa3ff5f9cc4c1cff0&quot;,
+  &quot;parentName&quot;: &quot;20261020_1624_DMR-39015_menuOAuth2Gateway&quot;,
+  &quot;turnover&quot;: {
+    &quot;name&quot;: &quot;20261020_1624_DMR-39015_menuOAuth2Gateway&quot;,
+    &quot;remote&quot;: true
+  },
+  &quot;baseKind&quot;: &quot;local-turnover&quot;,
+  &quot;branch&quot;: &quot;wtgui/prove-the-third-kind-5e0d00&quot;
+}
+
+startRef&#x27;s tip in the repo: 3d18dffaebbfea161aee67aaa3ff5f9cc4c1cff0
+origin/main in the repo:    0be2ac5127ba5175df88dc812447ee05770e0683  &lt;- not the start
+trees under .worktrees:     0 -&gt; 1
+times the reader was asked: 0</pre>
+
+<h3>When nothing qualifies</h3>
+<p>The same repository with the valid branch's remote copy deleted. The resolver answers nothing and raises the question; no tree is cut and nothing falls back to <code>main</code>.</p>
+<pre>$ node --input-type=module  # jobs.makeWorktree(tree, prompt, { baseKind: &#x27;local-turnover&#x27; }), no candidate
+refused: No local turnover branch in C:/Users/roper/AppData/Local/Temp/wag/a67f1d0d/proof/tree passes all three tests
+
+the card raised:
+no local turnover branch to cut from in C:/Users/roper/AppData/Local/Temp/wag/a67f1d0d/proof/tree
+
+No local turnover branch in C:/Users/roper/AppData/Local/Temp/wag/a67f1d0d/proof/tree passes all three tests - the turnover name YYYYMMDD_HHMM_&lt;KEY&gt;_&lt;slug&gt;, a remote branch of the same name, and not an ancestor of main or master - so nothing was cut instead of cutting from main: that fallback is the failure this option exists to prevent. Every local branch was asked and refused: 20261001_0900_DMR-1_mergedWork: 20261001_0900_DMR-1_mergedWork is already an ancestor of main or master - it has landed, so there is nothing to roll back into; 20261002_0900_DMR-2_unpushedWork: 20261002_0900_DMR-2_unpushedWork is not on any remote - a child of an unpublished branch is a child nobody else can see; 20261020_1624_DMR-39015_menuOAuth2Gateway: 20261020_1624_DMR-39015_menuOAuth2Gateway is not on any remote - a child of an unpublished branch is a child nobody else can see; main: main is not a turnover name (YYYYMMDD_HHMM_&lt;KEY&gt;_&lt;slug&gt;); wtgui/prove-the-third-kind-5e0d00: wtgui/prove-the-third-kind-5e0d00 is not a turnover name (YYYYMMDD_HHMM_&lt;KEY&gt;_&lt;slug&gt;). Name the branch to cut from, or push the turnover branch first.
+
+trees under .worktrees before: [&quot;prove-the-third-kind-5e0d00&quot;]
+trees under .worktrees after:  [&quot;prove-the-third-kind-5e0d00&quot;] (nothing was cut)</pre>
+<p>At the server, a cut on this kind throws as well as asking, so the caller's failed line quotes the same sentence, and no worktree is created.</p>
+
+<h2>4. The brief a worker receives</h2>
+<p>Written by <code>turnoverBaseBrief</code> and appended to the brief of any run cut on this kind, and only that kind. Quoted in full:</p>
+<pre>TURNOVER BASE: this tree was cut on the local turnover branch `20261020_1624_DMR-39015_menuOAuth2Gateway` (C:/Users/roper/AppData/Local/Temp/wag/a67f1d0d/proof/tree) - a local branch whose name matches YYYYMMDD_HHMM_&lt;KEY&gt;_&lt;slug&gt;, which is also pushed to a remote, and which is not an ancestor of main or master. Find it again with those three tests: `git branch --list &#x27;[0-9]*_[0-9]*_*-*_*&#x27;`, `git branch -r --list` for the same name on a remote, and `git merge-base --is-ancestor 20261020_1624_DMR-39015_menuOAuth2Gateway main` (exit 0 means it has landed and is not a turnover branch to roll into). Do not push this tree&#x27;s branch and do not cut a new remote branch: this child stays local, and when the work is done it is rolled back into `20261020_1624_DMR-39015_menuOAuth2Gateway` by fast-forward - `git checkout 20261020_1624_DMR-39015_menuOAuth2Gateway &amp;&amp; git merge --ff-only &lt;this tree&#x27;s branch&gt;` - never by a merge commit and never through the remote.</pre>
+
+<h2>5. Tests, red first</h2>
+<p>The tests were written before the resolver and failed against it. What they cover, one rejection reason per test:</p>
+<ul>
+  <li><code>a merged turnover branch is rejected: it is an ancestor of main</code></li>
+  <li><code>an unpushed turnover branch is rejected: no remote carries it</code></li>
+  <li><code>a feature branch is rejected: its name is not a turnover name</code></li>
+  <li><code>with no qualifying branch the rule answers nothing, and says why for every local branch</code></li>
+  <li><code>two qualifying branches resolve the newer one, because the name is its own clock</code></li>
+  <li><code>the name test is the one pattern, not a second copy of it</code></li>
+  <li><code>a real repo with a merged, an unpushed and a valid branch resolves only the valid one</code></li>
+  <li><code>a cut on the option asks the reader when nothing qualifies, and cuts nothing</code></li>
+  <li><code>the brief for a run cut on the option carries the local-only turnover rule</code></li>
+  <li><code>a run cut on the option receives the rule in its brief</code></li>
+  <li><code>the three kinds are one list, and a project that names a branch reads as the named kind</code></li>
+  <li><code>the row stores the third kind with no branch name, and never stores a kind that absence already means</code></li>
+  <li><code>the wire shape carries the kinds and their labels, and each project's kind</code></li>
+</ul>
+<pre>$ npm run test:changed
+test:changed - 25 changed files against origin/main:
+test:changed - 227 test files name or import the diff (224 by name, 3 by import):
+tests 1788   pass 1770   fail 18   duration 810.5s   exit 1
+
+$ node --test test/turnover-base.test.js test/absolute-paths.test.js
+tests 30   pass 30   fail 0
+
+$ node --test test/project-turnover.test.js
+tests 7   pass 7   fail 0
+
+# the 18 failures are all in files this landing does not touch; section 7 lists them with their files,
+# and three of them were re-run against origin/main itself (a git archive extraction) and fail there too.</pre>
+
+<h2>6. What changed</h2>
+<table>
+  <tr><th>File</th><th>Change</th></tr>
+  <tr><td><code>lib/base-ref-kind.js</code></td><td>the three kinds in one place: their names, the reader's labels, a forgiving read and a strict write.</td></tr>
+  <tr><td><code>lib/turnover-base.js</code></td><td>the resolver: three conditions, the question when nothing qualifies, and the worker's brief.</td></tr>
+  <tr><td><code>lib/jobs.js</code></td><td>the cut asks for the kind, resolves before cutting, refuses on no candidate, and writes the rule into the brief.</td></tr>
+  <tr><td><code>lib/project-turnover.js</code></td><td>the project row carries <code>baseRefKind</code>, and the cut's lookup reads it beside the branch name.</td></tr>
+  <tr><td><code>routes/project-turnover.js</code></td><td>the read carries the kinds and each project's kind; the save accepts and validates a kind.</td></tr>
+  <tr><td><code>server.js</code></td><td>writes the kind with the branch, derives the cut's kind per spawn, and points the cut's question at the assistant's alerts.</td></tr>
+  <tr><td><code>public/board-scaffold.js</code></td><td>the turnover chip and bar: a kind select, the third kind's hint, and the chip naming what the cut will do.</td></tr>
+  <tr><td><code>lib/projects.js</code></td><td>the snapshot carries the normalised kind, so the bar and the cut read one answer.</td></tr>
+  <tr><td><code>docs/using-the-board.md</code>, <code>config.example.json</code></td><td>the three kinds documented, with the third's three conditions and its ask.</td></tr>
+</table>
+
+<h2>7. The known reds, separated</h2>
+<p>Eighteen of the 1788 tests the changed set runs fail. None of them is in a file this landing touches, and the three that were re-run against <code>origin/main</code> itself, extracted with <code>git archive</code> into a scratch folder, fail there in exactly the same way: <code>header-controls</code> (the pause handler in <code>public/app.js</code>), <code>windows-hide</code> (<code>lib/child-tree.js:74</code> starts a child without <code>windowsHide</code>), and <code>worktree-assistant</code> (the owner bullet in the merge-state list).</p>
+<table>
+  <tr><th>Test file</th><th>Failures</th><th>Status</th></tr>
+  <tr><td><code>test/board-lookups.test.js</code></td><td>3</td><td>already recorded red on the board</td></tr>
+  <tr><td><code>test/assistant-attachment-spawn.test.js</code></td><td>2</td><td>already recorded red on the board</td></tr>
+  <tr><td><code>test/assistant-profile.test.js</code></td><td>1</td><td>already recorded red on the board</td></tr>
+  <tr><td><code>test/harness.test.js</code></td><td>1</td><td>already recorded red on the board</td></tr>
+  <tr><td><code>test/paths.test.js</code></td><td>1</td><td>already recorded red on the board</td></tr>
+  <tr><td><code>test/pipeline-bench.test.js</code></td><td>4</td><td>already recorded red on the board (recorded as reasoning-runs)</td></tr>
+  <tr><td><code>test/push-permissions.test.js</code></td><td>1</td><td>already recorded red on the board (recorded as gateway-permissions)</td></tr>
+  <tr><td><code>test/port-guard.test.js</code></td><td>1</td><td>same red family as gateway-permissions; untouched by this landing</td></tr>
+  <tr><td><code>test/header-controls.test.js</code></td><td>1</td><td class="no">fails on origin/main too</td></tr>
+  <tr><td><code>test/windows-hide.test.js</code></td><td>1</td><td class="no">fails on origin/main too</td></tr>
+  <tr><td><code>test/worktree-assistant.test.js</code></td><td>1</td><td class="no">fails on origin/main too</td></tr>
+  <tr><td><code>test/run-stream.test.js</code></td><td>1</td><td>passes standalone (2/2); red only inside the 227 file parallel run</td></tr>
+  <tr><td><code>test/absolute-paths.test.js</code></td><td>0</td><td class="ok">was red, now green: this landing took the drive-letter path out of two test fixtures</td></tr>
+</table>
+<p>The one that was in this landing's own hands is the absolute-paths gate, which is now clean over 1572 tracked files.</p>
+
+</main>
+</body>
+</html>
