@@ -738,7 +738,10 @@ async function childCutFixture(t) {
   git(repo, ["commit", "-q", "-m", "main: base"]);
 
   const parentTree = path.join(repo, ".worktrees", "feat-parent");
-  git(repo, ["worktree", "add", "-q", "-b", "feat/parent", parentTree]);
+  // The parent stands on a TURNOVER branch, the shape lib/branch-kind.js files as a turnover child: a cut from it is
+  // the reader's own child of work in flight, so the route records a kind and cuts. (A branch that names neither kind
+  // is answered with a clarify card and cuts nothing - test/branch-kind.test.js holds that half.)
+  git(repo, ["worktree", "add", "-q", "-b", "20261112_0900_DMR-70001_the_parent", parentTree]);
   writeFileSync(path.join(parentTree, "parent.txt"), "the parent's work\n", "utf8");
   git(parentTree, ["add", "."]);
   git(parentTree, ["commit", "-q", "-m", "parent: its own commit"]);
