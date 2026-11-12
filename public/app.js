@@ -7043,43 +7043,119 @@ async function renameWorktreePrompt(btn) {
 // the server's: it is the tree's identity through every later rename.
 const childPresses = new Map(); // row key -> when its + was last taken, so a double click is one tree
 
+// ---- the cut dialog: WHICH KIND of tree this child is ---------------------------------------------
+// A cut records what kind of tree it made (lib/branch-kind.js): a turnover child, cut from a turnover branch the
+// reader asked for, or a research tree, cut from the project's main parent and local only. The dialog offers exactly
+// those two, read from the server, and carries no default of its own: when the reader does not choose, the server
+// decides from the parent's name, and when NEITHER kind matches it answers with a clarify card which this draws in
+// place of the form - nothing is cut until the reader answers. A silent default here is the failure the rule exists
+// to prevent: a tree filed under a kind nobody chose is a push decision nobody made.
+let cutDialog = null; // { el, key, project, path, parent }
+
+function closeCutDialog() {
+  if (!cutDialog) return;
+  try {
+    cutDialog.el.remove();
+  } catch {
+    /* already gone with a repaint */
+  }
+  cutDialog = null;
+}
+
+function cutDialogHtml(choices, { parent, question = "", name = "", note = "" }) {
+  const offered = String(parent).split("/").filter(Boolean).pop().replace(/-[0-9a-f]{6}$/i, "");
+  const options = (choices || [])
+    .map(
+      (c) =>
+        `<label class="cut-kind" title="${esc(c.label)}"><input type="radio" name="cut-kind" value="${esc(c.value)}" /> <strong>${esc(c.value)}</strong><span>${esc(c.label)}</span></label>`,
+    )
+    .join("");
+  const tail = question
+    ? "nothing has been cut. choose one of the two kinds and press Cut."
+    : `its branch: wtgui/&lt;name&gt;-&lt;tag&gt;, cut from ${parent}. nothing is started in it and nothing is pushed. leave the kind unchosen and the panel decides from the parent's own name; if that names neither kind it asks you in this card, and cuts nothing.`;
+  return (
+    `<div class="cut-head">${question ? esc(question) : `cut a child worktree off ${esc(parent)}`}</div>` +
+    `<div class="cut-kinds">${options || `<span class="cut-note">reading the two kinds…</span>`}</div>` +
+    `<label class="cut-row">name <input class="cut-name" type="text" value="${esc(name)}" placeholder="(empty = ${esc(offered)})" /></label>` +
+    `<div class="cut-note">${note ? `${esc(note)} ` : ""}${esc(tail)}</div>` +
+    `<div class="cut-actions"><button type="button" class="mc-choice cut-go">Cut</button><button type="button" class="mc-choice cut-cancel">Cancel</button></div>`
+  );
+}
+
+function openCutDialog({ project, path, parent, key, choices, name = "", question = "", note = "" }) {
+  closeCutDialog();
+  const el = document.createElement("div");
+  el.className = "cut-dialog";
+  el.setAttribute("role", "dialog");
+  el.setAttribute("aria-label", "which kind of tree this cut is");
+  el.innerHTML = cutDialogHtml(choices, { parent, question, name, note });
+  document.body.appendChild(el);
+  el.style.left = `${Math.max(8, Math.round((window.innerWidth - el.offsetWidth) / 2))}px`;
+  el.style.top = `${Math.max(8, Math.round((window.innerHeight - el.offsetHeight) / 2))}px`;
+  cutDialog = { el, project, path, parent, key };
+  el.querySelector(".cut-cancel")?.addEventListener("click", closeCutDialog);
+  el.querySelector(".cut-go")?.addEventListener("click", () => cutSubmit(cutDialog));
+}
+
+async function cutSubmit(dialog) {
+  if (!dialog) return;
+  const el = dialog.el;
+  const name = String(el.querySelector(".cut-name")?.value || "").trim();
+  const chosen = el.querySelector('input[name="cut-kind"]:checked')?.value || "";
+  const go = el.querySelector(".cut-go");
+  if (go) {
+    go.disabled = true;
+    go.classList.add("is-starting");
+  }
+  try {
+    const r = await apiFetch(
+      "/api/worktree/child",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project: dialog.project, path: dialog.path, name, kind: chosen || undefined }),
+      },
+      { timeoutMs: 120000 },
+    );
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      // Neither kind applies, so the server refused to guess: it answered with the card and cut nothing. Draw the
+      // card in place of the form, with the name the reader typed still in it.
+      if (d.clarify) {
+        openCutDialog({ project: dialog.project, path: dialog.path, parent: dialog.parent, key: dialog.key, choices: d.clarify.choices || [], name, question: String(d.clarify.question || ""), note: "" });
+        return;
+      }
+      throw new Error(d.error || `HTTP ${r.status}`);
+    }
+    childPresses.set(dialog.key, Date.now());
+    closeCutDialog();
+    showBanner(`cut ${d.branch} from ${dialog.parent} as a ${d.kind || "tree"}${d.localOnly ? " (local only)" : ""} - ${d.name || d.branch} is a row now`);
+    await resync();
+  } catch (err) {
+    showBanner(`could not cut a child of ${dialog.parent}: ${String((err && err.message) || err)}`);
+    if (go?.isConnected) {
+      go.disabled = false;
+      go.classList.remove("is-starting");
+    }
+  }
+}
+
 async function cutChildTree(btn) {
   const project = btn.dataset.childProject || "";
   const path = btn.dataset.childPath || "";
   const parent = btn.dataset.childBranch || "";
   const key = btn.dataset.childTree || keyOf(project, path);
-  // One press, one tree. A second child of the same branch is a second press — a double click is not.
+  // One press, one tree. A second child of the same branch is a second press - a double click is not.
   if (Date.now() - (childPresses.get(key) || 0) < 3000) return;
-  const offered = String(parent).split("/").filter(Boolean).pop().replace(/-[0-9a-f]{6}$/i, "");
-  const asked = window.prompt(
-    `cut a child worktree off ${parent}\n\n` +
-      `its branch: wtgui/<name>-<tag>, cut from ${parent}\n` +
-      `nothing is started in it and nothing is pushed — it becomes a row of its own\n\n` +
-      `name${offered ? ` (empty = “${offered}”)` : ""}:`,
-    "",
-  );
-  if (asked === null) return; // cancelled: nothing was cut, and no record says otherwise
-  childPresses.set(key, Date.now());
-  btn.disabled = true;
-  btn.classList.add("is-starting");
+  let choices = [];
   try {
-    const r = await apiFetch(
-      "/api/worktree/child",
-      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project, path, name: String(asked).trim() }) },
-      { timeoutMs: 120000 },
-    );
+    const r = await apiFetch("/api/branch-kinds", { method: "GET" }, { timeoutMs: 15000 });
     const d = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
-    showBanner(`cut ${d.branch} from ${parent} — ${d.name || d.branch} is a row now, and its UNMERGED chip rolls it back into ${parent}`);
-    await resync();
-  } catch (err) {
-    showBanner(`could not cut a child of ${parent}: ${String((err && err.message) || err)}`);
-  } finally {
-    if (btn.isConnected) {
-      btn.disabled = false;
-      btn.classList.remove("is-starting");
-    }
+    choices = Array.isArray(d.choices) ? d.choices : [];
+  } catch {
+    choices = [];
   }
+  openCutDialog({ project, path, parent, key, choices });
 }
 // ---- end a child worktree off this row's branch
 

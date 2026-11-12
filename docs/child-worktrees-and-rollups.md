@@ -25,23 +25,26 @@ the order, the two suppressions and the wiring.
 
 ### The press
 
-1. It asks one question — the panel's own prompt, the same shape the ✎ uses:
+1. It opens the panel's **cut dialog** (drawn in the page, `public/app.js openCutDialog`): the **two kinds** the cut
+   may record, a name, and Cut / Cancel. The kinds are read from `GET /api/branch-kinds`, which serves
+   `lib/branch-kind.js` - the page carries no second copy of the vocabulary:
 
-       cut a child worktree off wtgui/parent-demo-4f1a2b
-       its branch: wtgui/<name>-<tag>, cut from wtgui/parent-demo-4f1a2b
-       nothing is started in it and nothing is pushed — it becomes a row of its own
-       name (empty = “parent-demo”):
+   | kind | what it means |
+   |---|---|
+   | **turnover child** | cut from a turnover branch (`YYYYMMDD_HHMM_<TICKET>_<desc>`) the reader asked for; it has a destination on the remote |
+   | **research tree** | cut from the project's main parent; **local only**, and it never lands until the reader lifts it |
 
    The name is **optional**. Empty means "name it after the branch it was cut from" (the branch's last word, minus its
    six-hex tag); anything typed goes through the same slug pass (`Child two` → `child-two`, capped at 24 characters).
-   Cancel cuts nothing at all.
-2. `POST /api/worktree/child {project, path, name?}` runs
+   Cancel cuts nothing at all, and so does closing the dialog: no route is called, no record says otherwise.
+2. `POST /api/worktree/child {project, path, name?, kind?}` runs
    `git worktree add -b wtgui/<slug>-<tag> .worktrees/<slug>-<tag> <the row's branch>` in the project's checkout.
    The start ref is stated, never implied: this is the whole difference between this route and a spawn.
 3. It writes the cut down in the two places a parent is read from — `logs/parents.json` (the ParentBook, with the tip
    the parent resolved to **at the cut**, which git forgets) and the tree's own parent record used by the landing
    paragraph a later worker is handed — and settles the name in `logs/tree-names.json`, so the panel's automatic
    rename can never move it later.
+
 4. The new tree is boarded at once (`Scheduler.adoptWorktree`, the same door a spawn's tree comes through), so it is a
    row with its own controls in the same breath as the banner:
 
@@ -50,6 +53,34 @@ the order, the two suppressions and the wiring.
 
 **What it does not do:** it starts nothing in the new tree (no agent, no run, no bill), it pushes nothing, it writes
 nothing into the parent's tree — not one file, not its index — and it never touches the parent's branch.
+
+### The kind it records, and what the kind refuses
+
+The kind is decided at the cut, because it is the one moment it is knowable: `lib/branch-kind.js branchKindFor` reads
+the parent's own name (a turnover branch makes a turnover child, `main`/`master`/`trunk`/`develop` makes a research
+tree), and `lib/jobs.js rememberParent` writes it **beside the parent** in `~/.wag/state/branch-parents.json`:
+
+    "tag:4f1a2b": { "parent": "main", "branch": "wtgui/research-the-seam-4f1a2b",
+                    "tree": "C:/…/.worktrees/research-the-seam-4f1a2b", "kind": "research", "lifted": false }
+
+A body that carries `kind` states the reader's own answer and outranks the name (that is how the card below is
+answered). A parent that names **neither** kind - a feature branch, a sibling's `wtgui/*` branch - is not filed under a
+default: `planCut` returns `cut: false`, the route answers **409** with the clarify card (`{clarify: {question,
+choices}}`, exactly the two kinds), and **nothing is cut and nothing is recorded**. The dialog draws that card in place
+of the form; the same card goes to the agent through the runs API. A silent default is the failure this rule exists to
+prevent: a tree filed under a kind nobody chose is a push decision nobody made.
+
+The kind then decides the push. `lib/push-permissions.js treeKindRefusal` refuses a push from a tree recorded
+**research**, before the four controls and before any grant, naming the tree and the kind:
+
+    refused: C:/…/.worktrees/research-the-seam-4f1a2b is recorded local only (kind research) - the reader must lift it
+    before it can push
+
+`POST /api/worktree/kind-lift {path, branch}` is the one answer that clears it: the record keeps its `kind` and gains
+`"lifted": true` (`lib/jobs.js liftKind`), the lift is written on disk so a restart keeps it, and the same push then
+meets the ordinary controls. A turnover child is not local only and meets those controls from the start. A tree with no
+record at all (one cut before this rule, or a pipeline's pinned cut, which is not a reader's cut) is decided by the
+controls exactly as before.
 
 ### What it refuses, in its own words
 
