@@ -96,36 +96,123 @@ function cmTrimUrl(raw) {
 
 // ---- inline ------------------------------------------------------------------------------------------
 
-// The inline subset, on ONE line. Code spans and links are lifted out before emphasis is applied, so a `*` in a
-// URL or a `` ` `` inside bold cannot be read as the wrong marker: the placeholder is a character no rule
-// matches, and the finished HTML is put back at the end.
-function consoleMdInline(text) {
+// A code span opens with a RUN of backticks and closes with a run of the SAME length, so
+// `` `render-projects.js:690-705` `` is one span whose content is `render-projects.js:690-705` rather than two
+// one-space spans with the path left bare between them. A run with no closer stays literal, which is what keeps
+// a half-typed line readable while it streams.
+function cmBacktickRunEnd(s, from, n) {
+  let i = from;
+  while (i < s.length) {
+    if (s[i] !== "`") {
+      i += 1;
+      continue;
+    }
+    let j = i;
+    while (s[j] === "`") j += 1;
+    if (j - i === n) return i;
+    i = j;
+  }
+  return -1;
+}
+
+function cmLiftCode(s, hold) {
+  let out = "";
+  let i = 0;
+  while (i < s.length) {
+    if (s[i] !== "`") {
+      out += s[i];
+      i += 1;
+      continue;
+    }
+    let n = 0;
+    while (s[i + n] === "`") n += 1;
+    const end = cmBacktickRunEnd(s, i + n, n);
+    if (end < 0) {
+      out += s.slice(i, i + n);
+      i += n;
+      continue;
+    }
+    let code = s.slice(i + n, end);
+    // CommonMark's one-space padding rule: `` `x` `` is code for "`x`", not for " `x` ".
+    if (code.length > 2 && code.startsWith(" ") && code.endsWith(" ") && code.trim()) code = code.slice(1, -1);
+    out += hold(`<code class="md-code">${code}</code>`);
+    i = end + n;
+  }
+  return out;
+}
+
+// Every tag this file emits is one it wrote itself, so re-opening them across a line break is safe: a <strong>
+// that opened on one line is closed before that row ends and opened again on the next. That is what makes a bold
+// spanning a line break bold on BOTH rows instead of an unpaired marker on each.
+const CM_TAG_RE = /<(\/?)([a-zA-Z][\w-]*)[^>]*>/g;
+function cmRows(html) {
+  const chunks = String(html).split("\n");
+  const open = [];
+  const rows = [];
+  for (let i = 0; i < chunks.length; i += 1) {
+    const chunk = chunks[i];
+    let row = i === 0 ? "" : open.map((tag) => `<${tag}>`).join("");
+    row += chunk;
+    CM_TAG_RE.lastIndex = 0;
+    let m;
+    while ((m = CM_TAG_RE.exec(chunk))) {
+      const tag = m[2].toLowerCase();
+      if (m[1] === "/") {
+        const at = open.lastIndexOf(tag);
+        if (at >= 0) open.splice(at, 1);
+      } else if (!m[0].endsWith("/>")) {
+        open.push(tag);
+      }
+    }
+    for (let k = open.length - 1; k >= 0; k -= 1) row += `</${open[k]}>`;
+    rows.push(row);
+  }
+  return rows;
+}
+
+// The inline subset, over ONE line or a RUN of lines. Code spans, links and bare URLs are lifted out first (they
+// do not span a line break), then emphasis is applied to the whole run, so a marker that opens on one line and
+// closes on the next is one run rather than an unpaired marker on each. The result is split back into one string
+// per source line, with every tag still open at a break closed and re-opened.
+function consoleMdInlineLines(texts) {
   const held = [];
   const hold = (html) => `\u0000${held.push(html) - 1}\u0000`;
-  let s = cmEsc(text);
-  // `code` first: nothing inside a code span is a marker.
-  s = s.replace(/`([^`\n]+)`/g, (_m, code) => hold(`<code class="md-code">${code}</code>`));
-  // [text](url): the label is rendered, and the url is shown beside it when it differs — a reader deciding
-  // whether to click wants to see where the words point.
-  s = s.replace(/\[([^\]\n]+)\]\(([^()\s]+)\)/g, (_m, label, url) => {
-    const shown = consoleMdInlineLabel(label);
-    return hold(cmAnchor(url, shown) + (label.trim() === url ? "" : `<span class="md-link-url">${url}</span>`));
+  const src = (Array.isArray(texts) ? texts : [texts]).map((text) => String(text ?? ""));
+  const lifted = src.map((text) => {
+    let s = cmEsc(text);
+    // `code` first: nothing inside a code span is a marker.
+    s = cmLiftCode(s, hold);
+    // [text](url): the label is rendered, and the url is shown beside it when it differs - a reader deciding
+    // whether to click wants to see where the words point.
+    s = s.replace(/\[([^\]\n]+)\]\(([^()\s]+)\)/g, (_m, label, url) => {
+      const shown = consoleMdInlineLabel(label);
+      return hold(cmAnchor(url, shown) + (label.trim() === url ? "" : `<span class="md-link-url">${url}</span>`));
+    });
+    // A bare URL stays clickable, as it always was.
+    s = s.replace(CM_URL_RE, (raw) => {
+      const hit = cmTrimUrl(raw);
+      return hit ? hold(cmAnchor(hit.url, hit.url) + hit.tail) : raw;
+    });
+    return s;
   });
-  // A bare URL stays clickable, as it always was.
-  s = s.replace(CM_URL_RE, (raw) => {
-    const hit = cmTrimUrl(raw);
-    return hit ? hold(cmAnchor(hit.url, hit.url) + hit.tail) : raw;
-  });
-  // ***both***, **bold**, *italic* — longest marker first, so `***x***` never reads as bold-then-literal.
-  s = s.replace(/\*\*\*([^*\n]+?)\*\*\*/g, "<strong><em>$1</em></strong>");
-  s = s.replace(/\*\*([^*\n]+?)\*\*/g, "<strong>$1</strong>");
-  s = s.replace(/(^|[^\w*])\*([^*\n]+?)\*(?![\w*])/g, "$1<em>$2</em>");
-  s = s.replace(/___([^_\n]+?)___/g, "<strong><em>$1</em></strong>");
-  s = s.replace(/__([^_\n]+?)__/g, "<strong>$1</strong>");
+  let s = lifted.join("\n");
+  // ***both***, **bold**, *italic* - longest marker first, so `***x***` never reads as bold-then-literal. The
+  // content may cross a line break; `cmRows` puts the rows back together.
+  s = s.replace(/\*\*\*([^*]+?)\*\*\*/g, "<strong><em>$1</em></strong>");
+  s = s.replace(/\*\*([^*]+?)\*\*/g, "<strong>$1</strong>");
+  s = s.replace(/(^|[^\w*])\*([^*]+?)\*(?![\w*])/g, "$1<em>$2</em>");
+  s = s.replace(/___([^_]+?)___/g, "<strong><em>$1</em></strong>");
+  s = s.replace(/__([^_]+?)__/g, "<strong>$1</strong>");
   // `snake_case_name` is an identifier, not emphasis: an opening `_` must not follow a word character, and a
   // closing one must not precede one.
-  s = s.replace(/(^|[^\w_])_([^_\n]+?)_(?![\w_])/g, "$1<em>$2</em>");
-  return s.replace(/\u0000(\d+)\u0000/g, (_m, i) => held[Number(i)] || "");
+  s = s.replace(/(^|[^\w_])_([^_]+?)_(?![^\w_])/g, "$1<em>$2</em>");
+  return cmRows(s).map((row) => row.replace(/\u0000(\d+)\u0000/g, (_m, i) => held[Number(i)] || ""));
+}
+
+function consoleMdInline(text) {
+  // One string in, one string out: the rows of a multi-line input are joined back with the newlines they had,
+  // because a caller that hands this one string (a stored message) owns the line breaks.
+  return consoleMdInlineLines([text]).join("\n");
 }
 // A link's label is a label: bold and italic inside it still work, but a link inside a link does not.
 function consoleMdInlineLabel(label) {
@@ -275,20 +362,27 @@ function consoleMdBlockHtml(block, opts = {}) {
     );
   }
   if (block.type === "list") {
-    const rows = block.lines.map((line) => {
+    const rests = block.lines.map((line) => {
+      const text = cmText(line);
+      const m = CM_OL_RE.exec(text) || CM_UL_RE.exec(text);
+      return m ? (block.ordered ? m[2] : m[1]) : text;
+    });
+    // One run, so a bold that opens on one item and closes on the next is bold on both (see consoleMdInlineLines).
+    const inner = consoleMdInlineLines(rests);
+    const rows = block.lines.map((line, i) => {
       const text = cmText(line);
       const m = CM_OL_RE.exec(text) || CM_UL_RE.exec(text);
       const marker = block.ordered && m ? `${m[1]}.` : "\u2022";
-      const rest = m ? (block.ordered ? m[2] : m[1]) : text;
       return consoleMdRow(line, {
         ...rowOpts,
         cls: "md-li",
-        inner: `<span class="md-marker" aria-hidden="true">${cmEsc(marker)}</span><span class="md-li-t">${consoleMdInline(rest)}</span>`,
+        inner: `<span class="md-marker" aria-hidden="true">${cmEsc(marker)}</span><span class="md-li-t">${inner[i]}</span>`,
       });
     });
     return `<div class="md-block md-list" data-md-block="list"${block.ordered ? ' data-md-ordered="1"' : ""}>${rows.join("")}</div>`;
   }
-  const rows = block.lines.map((line) => consoleMdRow(line, rowOpts)).join("");
+  const inner = consoleMdInlineLines(block.lines.map(cmText));
+  const rows = block.lines.map((line, i) => consoleMdRow(line, { ...rowOpts, inner: inner[i] })).join("");
   return `<div class="md-block md-para" data-md-block="para">${rows}</div>`;
 }
 
@@ -321,7 +415,6 @@ function consoleMdTypedBlockHtml(block, textOf) {
     const shown = textOf(line);
     return shown == null ? cmText(line) : String(shown);
   };
-  const row = (line, opts = {}) => consoleMdRow(line, { ...opts, inner: consoleMdInline(shownOf(line)) });
   if (block.type === "fence") {
     const n = block.lines.length;
     const folded = !block.open && n > CONSOLE_MD_FENCE_FOLD;
@@ -341,22 +434,24 @@ function consoleMdTypedBlockHtml(block, textOf) {
     );
   }
   if (block.type === "list") {
-    const items = block.lines.map((line) => {
+    const shownTexts = block.lines.map((line) => shownOf(line).replace(/^\s{0,3}(?:[-*+]|\d{1,9}[.)])\s+/, ""));
+    const inner = consoleMdInlineLines(shownTexts);
+    const items = block.lines.map((line, i) => {
       const text = cmText(line);
       const m = CM_OL_RE.exec(text) || CM_UL_RE.exec(text);
       const ordered = Boolean(CM_OL_RE.exec(text));
       const marker = ordered && m ? `${m[1]}.` : "\u2022";
       // The marker is drawn by this row; the source line still carries it, so the visible text strips the same
       // prefix the parser matched (a typed prefix may not include it yet, which leaves the words alone).
-      const rest = shownOf(line).replace(/^\s{0,3}(?:[-*+]|\d{1,9}[.)])\s+/, "");
       return consoleMdRow(line, {
         cls: "md-li",
-        inner: `<span class="md-marker" aria-hidden="true">${cmEsc(marker)}</span><span class="md-li-t">${consoleMdInline(rest)}</span>`,
+        inner: `<span class="md-marker" aria-hidden="true">${cmEsc(marker)}</span><span class="md-li-t">${inner[i]}</span>`,
       });
     });
     return `<div class="md-block md-list" data-md-block="list"${block.ordered ? ' data-md-ordered="1"' : ""}>${items.join("")}</div>`;
   }
-  return `<div class="md-block md-para" data-md-block="para">${block.lines.map((line) => row(line)).join("")}</div>`;
+  const inner = consoleMdInlineLines(block.lines.map(shownOf));
+  return `<div class="md-block md-para" data-md-block="para">${block.lines.map((line, i) => consoleMdRow(line, { inner: inner[i] })).join("")}</div>`;
 }
 
 // ---- the live append path ------------------------------------------------------------------------------

@@ -1223,7 +1223,7 @@ button.btn-stream.is-on { color: #9ed4ff; border-color: #2f4a63; background: #14
 .subagents.is-compact { margin: 2px 0 4px 18px; font-size: 10.5px; color: #c8a6ff; }
 .subagents.is-compact.is-done { color: var(--dimmer); }
 .subagents.is-collapsed .sub-row,
-.subagents.is-collapsed .sub-console { display: none; }
+.subagents.is-collapsed .sub-console-wrap { display: none; }
 .subagents .sub-row { display: flex; align-items: baseline; gap: 8px; min-width: 0; padding-left: 12px; }
 .subagents .sub-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--dimmer); }
 .subagents .sub-row.is-running .sub-dot { background: #c8a6ff; box-shadow: 0 0 0 3px rgba(200, 166, 255, .16); animation: subpulse 1.6s ease-in-out infinite; }
@@ -1249,8 +1249,19 @@ button.btn-stream.is-on { color: #9ed4ff; border-color: #2f4a63; background: #14
 /* The triangles come from the UI font: the monospace stack on Windows has no ▾/▸, so the caret vanished. */
 .subagents .sub-chev { font-family: var(--ui); font-size: 9px; line-height: 1; }
 .subagents .sub-row.is-open { background: rgba(255, 255, 255, .02); }
-.sub-console { margin: 4px 0 8px 21px; padding: 6px 9px; max-height: 220px; overflow: auto; background: var(--console); border: 1px solid var(--line); border-radius: 6px; font-size: 11px; line-height: 1.45; color: var(--text); white-space: pre-wrap; }
+/* The docked console's own frame: the margin moves the whole box (the control), the scroller keeps the old shape.
+   Its prose is drawn as blocks, so the box no longer preserves the source's whitespace; a non-prose row still does,
+   because a tool result's indentation IS its shape. */
+.sub-console-wrap { margin: 4px 0 8px 36px; }
+.sub-console-tools { display: flex; justify-content: flex-end; gap: 4px; padding: 0 2px 3px; }
+.sub-tool { display: inline-flex; align-items: center; gap: 4px; padding: 0 5px; font: 10px/1.6 var(--mono); color: var(--dim); background: none; border: 1px solid var(--line); border-radius: 4px; cursor: pointer; }
+.sub-tool:hover { color: var(--text); border-color: var(--dim); }
+.sub-tool:focus-visible { outline: 1px solid #4a90d9; outline-offset: 1px; }
+.sub-swatch { width: 8px; height: 8px; border-radius: 50%; background: var(--sub-console-fg, var(--text)); border: 1px solid var(--line); }
+.sub-console { margin: 0; padding: 6px 9px; max-height: 220px; overflow: auto; background: var(--console); border: 1px solid var(--line); border-radius: 6px; font-size: 11px; line-height: 1.45; color: var(--sub-console-fg, var(--text)); white-space: normal; }
 .sub-console .jl { font: inherit; white-space: pre-wrap; word-break: break-word; }
+.sub-console .md-para > .jl, .sub-console .jl.md-li, .sub-console .jl.md-head-l { white-space: normal; }
+.sub-console strong { font-weight: 650; }
 @keyframes subpulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
 .pill {
   font-size: 10.5px;

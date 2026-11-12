@@ -153,9 +153,10 @@ test("with the tally on, the same call is the counted group the panel always dre
 
 // ---- 5. the signature, so a press is not ignored -------------------------------------------------------------------
 test("every console's render path asks the switch, and the card's signature carries it", () => {
-  // The condensed card's burst, the subagent strip, and a live append that starts a group.
+  // The condensed card's burst, the subagent strip (drawn by subConsoleBodyHtml once the child's message is split
+  // into console lines), and a live append that starts a group.
   assert.match(source, /parts\.push\(toolGroupHtml\(item\.lines, `\$\{turn\.id\}#\$\{gi\}`, "", false, "", gofs, toolGroupsOn\(\) \? \{\} : \{ flat: true \}\)\)/);
-  assert.match(source, /item\.group \? toolGroupHtml\(item\.lines, `\$\{id\}#\$\{gi\}`, "", false, "", null, toolGroupsOn\(\) \? \{\} : \{ flat: true \}\)/);
+  assert.match(source, /if \(part\.tools\) return toolGroupHtml\(part\.tools, `\$\{id\}#\$\{gi\}`, "", false, "", null, toolGroupsOn\(\) \? \{\} : \{ flat: true \}\);/);
   assert.match(source, /const flat = openGroup \? openGroup\.dataset\.gflat === "1" : streaming \|\| !toolGroupsOn\(\);/);
   // The signature term beside the 🌊 one: without it, `setToolGroups` repaints every card and every repaint
   // concludes nothing changed, so the console keeps the shape it was drawn under.
