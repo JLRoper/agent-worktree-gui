@@ -29,6 +29,7 @@ const PROJECT = { name: "wtgui", path: "C:/proj/agent-worktree-gui", mainBranch:
 const TREE = "C:/proj/agent-worktree-gui/.worktrees/thing-1a2b3c";
 const BRANCH = "wtgui/thing-1a2b3c";
 const MERGE = "4f0e5f4b2a8c9d7e6f5a4b3c2d1e0f9a8b7c6d5e";
+const BASE_SHA = "9b".repeat(20);
 const LISTING = `worktree C:/proj/agent-worktree-gui\nbranch refs/heads/main\n\nworktree ${TREE}\nbranch refs/heads/${BRANCH}\n`;
 const OK = { ok: true, out: "", err: "" };
 
@@ -50,6 +51,8 @@ function fakeRun(extra = [], state = {}) {
     ["diff --merge-base", { ok: true, out: "" }],
     ["rev-parse HEAD^{tree}", { ok: true, out: "5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e" }],
     [`rev-parse ${MERGE}^{tree}`, { ok: true, out: "5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e" }],
+    ["rev-parse --verify --quiet", { ok: true, out: BASE_SHA }],
+    ["merge-base --is-ancestor", { ok: true, out: "" }],
     ["status --porcelain", { ok: true, out: "" }],
     ["worktree remove", OK],
     ["branch -D", OK],
@@ -261,6 +264,82 @@ test("the fetch is one attempt: the gate re-reads the object afterwards", async 
   assert.equal(asked, 2);
 });
 
+// ---- the base the tree was cut from ---------------------------------------------------------------------------------
+// A merged PR says the merge reached ITS base. The release has to ask whether that base was THIS tree's: a child
+// rolled into its parent turnover branch has its merge commit reachable from the parent and from nothing on
+// origin/main, and the tree-equal gate alone cannot tell that apart from a landing. The recorded parent is the
+// panel's own note from the cut (branch-parents.json, keyed by the tree's six-hex tag).
+const PARENT = "wtgui/turnover-parent-4f1a2b";
+const parentRoots = [];
+test.after(async () => {
+  for (const dir of parentRoots) await rm(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+});
+
+async function parentBook(entries = {}) {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "wtgui-release-parents-"));
+  parentRoots.push(dir);
+  const file = path.join(dir, "branch-parents.json");
+  await writeFile(file, `${JSON.stringify(entries)}\n`, "utf8");
+  return file;
+}
+
+test("a merge into origin/main passes when the tree has no recorded parent", async () => {
+  const parentsPath = await parentBook({});
+  const run = fakeRun();
+  const out = await call({ run, parentsPath });
+  assert.equal(out.ok, true, out.outcome);
+  const step = out.steps.find((s) => s.step === "base");
+  assert.ok(step, "the release names the base it measured");
+  assert.match(step.detail, /reachable from origin\/main/);
+  assert.match(step.detail, /no recorded parent/);
+});
+
+test("a merge into the tree's recorded parent passes, because that is where its work lives", async () => {
+  const parentsPath = await parentBook({
+    "tag:1a2b3c": { parent: PARENT, branch: BRANCH, tree: TREE, at: "2026-11-12T00:00:00.000Z" },
+  });
+  const run = fakeRun();
+  const out = await call({ run, parentsPath });
+  assert.equal(out.ok, true, out.outcome);
+  const step = out.steps.find((s) => s.step === "base");
+  assert.ok(step, "the release names the base it measured");
+  assert.ok(step.detail.includes(`reachable from refs/heads/${PARENT}`), step.detail);
+  assert.ok(step.detail.includes(`recorded parent ${PARENT}`), step.detail);
+  assert.ok(
+    run.calls.some((c) => c.includes(`merge-base --is-ancestor ${MERGE} refs/heads/${PARENT}`)),
+    "the parent, not origin/main, is what the merge was measured against",
+  );
+  assert.ok(
+    !run.calls.some((c) => c.startsWith("merge-base --is-ancestor") && c.includes("origin/main")),
+    "a recorded parent must not also be measured against the project base",
+  );
+});
+
+test("refused: a merge reachable from neither names the base it checked", async () => {
+  const parentsPath = await parentBook({ "tag:1a2b3c": { parent: PARENT, branch: BRANCH, tree: TREE } });
+  const run = fakeRun([["merge-base --is-ancestor", { ok: false, out: "", err: "exit code 1" }]]);
+  const out = await call({ run, parentsPath });
+  assert.equal(out.ok, false, "a merge that never reached the tree's base is not a landing");
+  assert.equal(out.gate, "base");
+  assert.match(out.outcome, /neither its merge commit .* nor the tip of wtgui\/thing-1a2b3c is reachable from wtgui\/turnover-parent-4f1a2b/);
+  assert.ok(!run.calls.some((c) => c.includes("worktree remove")), "nothing is removed on a base refusal");
+});
+
+test("a tree with no recorded parent falls back to the project base, not to a guessed parent", async () => {
+  // The book has a record for ANOTHER tree, and the fake git says that other branch would contain the merge. With no
+  // record for THIS tree the project base is the only authority, so the release must refuse and name origin/main.
+  const parentsPath = await parentBook({ "tag:ffffff": { parent: PARENT, branch: "wtgui/other-ffffff", tree: "elsewhere/other" } });
+  const run = fakeRun([
+    ["merge-base --is-ancestor", (args) => (args.join(" ").includes("turnover") ? { ok: true, out: "" } : { ok: false, out: "", err: "exit code 1" })],
+  ]);
+  const out = await call({ run, parentsPath });
+  assert.equal(out.ok, false);
+  assert.equal(out.gate, "base");
+  assert.match(out.outcome, /reachable from origin\/main/);
+  assert.match(out.outcome, /no recorded parent/);
+  assert.ok(run.calls.some((c) => c.includes("merge-base --is-ancestor") && c.includes("origin/main")));
+});
+
 // ---- the jobs gate ---------------------------------------------------------------------------------------------------
 test("refused: a job still running or queued in that tree", async () => {
   for (const status of ["running", "starting", "waiting", "queued"]) {
@@ -287,7 +366,7 @@ test("the removal runs in the one order: the links out first, then worktree, loc
   assert.deepEqual(order, [`worktree remove ${TREE}`, `branch -D ${BRANCH}`, `push origin --delete ${BRANCH}`]);
   assert.deepEqual(
     out.steps.map((s) => s.step),
-    ["clean", "pr", "tree", "jobs", "junction", "worktree", "branch", "remote", "shell"],
+    ["clean", "pr", "base", "tree", "jobs", "junction", "worktree", "branch", "remote", "shell"],
   );
   // The link step is the one before the git call that would recurse through a junction, and this tree has none (the
   // fake run means TREE does not exist on disk): the step still has to be there, and to say so.
@@ -464,6 +543,61 @@ test("end to end: a true merge commit passes on history, not on identical trees"
   assert.equal(existsSync(fixture.tree), false);
   assert.equal(hasRef(fixture.proj, "refs/heads/feature"), false);
   assert.ok(!bare(slash(fixture.remote), ["for-each-ref", "--format=%(refname:short)", "refs/heads"]).split("\n").includes("feature"));
+});
+
+test("end to end: a child rolled into its parent is released against the parent, and refused against origin/main without the record", async () => {
+  // The release gap itself: a child cut from a parent turnover branch, merged back into that parent, with a MERGED
+  // PR whose merge commit contains the child tip. origin/main never saw the work. Without a record the release must
+  // refuse and name origin/main; with the record the parent is where the work legitimately lives, so it must pass.
+  const base = await getSquashLanding();
+  const { root, remote, proj } = base;
+  const parentBranch = "wtgui/turnover-parent-4f1a2b";
+  const childBranch = "wtgui/turnover-child-1a2b3c";
+  const parentTree = path.join(root, "parent-turnover");
+  const childTree = path.join(root, "child-turnover");
+  git(proj, ["worktree", "add", "-q", "-b", parentBranch, slash(parentTree), "origin/main"]);
+  git(proj, ["worktree", "add", "-q", "-b", childBranch, slash(childTree), parentBranch]);
+  await writeFile(path.join(childTree, "child.txt"), "the child's work\n", "utf8");
+  git(childTree, ["add", "."]);
+  git(childTree, ["commit", "-q", "-m", "the child's work"]);
+  git(childTree, ["push", "-q", "-u", "origin", childBranch]);
+  const childTip = git(childTree, ["rev-parse", "HEAD"]);
+  git(parentTree, ["merge", "-q", "--no-ff", "-m", "roll the child into the parent", childBranch]);
+  const mergeSha = git(parentTree, ["rev-parse", "HEAD"]);
+  assert.equal(ran(proj, ["merge-base", "--is-ancestor", mergeSha, "origin/main"]), false, "the merge never reached origin/main");
+  assert.equal(ran(proj, ["merge-base", "--is-ancestor", childTip, mergeSha]), true, "the merge commit contains the child tip");
+  const mainBefore = git(proj, ["rev-parse", "origin/main"]);
+
+  const store = new ReleaseRequests({ file: path.join(root, "releases-gap.json"), trees: () => [{ project: "wtgui", path: slash(childTree), branch: childBranch }] });
+  store.record({
+    job: { id: "e2e-gap", thread: "wtgui-e2e", worktreePath: slash(childTree), branch: childBranch },
+    finalText: `The roll is done.\n\nRELEASE ${slash(childTree)} | rolled into its parent`,
+  });
+  const request = store.pending()[0];
+  const project = { name: "wtgui", path: slash(proj), mainBranch: "main", remote: "origin", releaseWorktrees: true };
+
+  // 1. No record for this tree: the project base decides, and it never contained the merge.
+  const refused = await releaseWorktree({ project, request, row: { pr: { number: 7 } }, jobs: [], runGh: ghFor(mergeSha) });
+  assert.equal(refused.ok, false, "without the record this must be refused");
+  assert.equal(refused.gate, "base");
+  assert.match(refused.outcome, /neither its merge commit .* nor the tip of wtgui\/turnover-child-1a2b3c is reachable from origin\/main/);
+  assert.equal(existsSync(childTree), true, "the refused tree is still there");
+  assert.equal(hasRef(proj, `refs/heads/${childBranch}`), true, "its local branch is still there");
+
+  // 2. The recorded parent: the same merge is finished work in the place it belongs.
+  const parentsPath = await parentBook({
+    "tag:1a2b3c": { parent: parentBranch, branch: childBranch, tree: slash(childTree), at: new Date().toISOString() },
+  });
+  const passed = await releaseWorktree({ project, request, row: { pr: { number: 7 } }, jobs: [], parentsPath, runGh: ghFor(mergeSha) });
+  assert.equal(passed.ok, true, `expected the parent to carry the roll: ${passed.outcome} ${JSON.stringify(passed.steps)}`);
+  assert.ok(passed.steps.find((s) => s.step === "base").detail.includes(`recorded parent ${parentBranch}`));
+  assert.equal(existsSync(childTree), false, "the child tree is gone");
+  assert.equal(hasRef(proj, `refs/heads/${childBranch}`), false, "the child branch is gone");
+  assert.ok(!bare(slash(remote), ["for-each-ref", "--format=%(refname:short)", "refs/heads"]).split("\n").includes(childBranch), "the child branch is gone from origin");
+  // …and the parent, which is where the work now lives, is untouched.
+  assert.equal(hasRef(proj, `refs/heads/${parentBranch}`), true, "the parent branch was not deleted");
+  assert.equal(existsSync(parentTree), true, "the parent tree is still there");
+  assert.equal(git(proj, ["rev-parse", "origin/main"]), mainBefore, "origin/main never moved");
 });
 
 // ---- the second acceptance: nothing to land ---------------------------------------------------------------------------

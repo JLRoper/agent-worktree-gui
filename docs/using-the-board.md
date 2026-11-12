@@ -510,7 +510,9 @@ Click a row to expand it. The detail is built not to bury the agents:
   clean (1 changed path) …`. A worker can never remove its own worktree — its shell is inside it, and Windows keeps a
   busy directory — so it ends its turn with one `RELEASE <tree> | <why it is finished>` line. The panel records that
   request on the row and decides it AFTER the turn has settled, from its own git and `gh` reads: the tree must be
-  clean, the branch's PR must read **MERGED**, nothing on the branch may be missing from that merge commit, and no run
+  clean, the branch's PR must read **MERGED**, the PR's merge commit or the branch tip must be reachable from the
+  branch this tree was cut from (its recorded parent in `branch-parents.json`, or `origin/<main>` only when the tree
+  has no record), nothing on the branch may be missing from that merge commit, and no run
   may still be holding the tree. A tree that never had a PR — a documentation or review tree that carries nothing main
   does not already have — is accepted the other way: no pull request is recorded for the branch **and**
   `git rev-list --count origin/main..HEAD` is 0 (or, when that count cannot be read, `git diff origin/main HEAD` is
@@ -1129,7 +1131,9 @@ Configured in `config.json` (`liveSeconds`, `worktreeSeconds`, `dormantSeconds`,
 
 `projects[].releaseWorktrees` is the one key that lets a worker's `RELEASE` line be acted on, and it is off unless it
 is literally `true` — a string, a `1` or a missing key all leave it closed. With it on, the panel still refuses
-unless the tree is clean, the branch's PR reads MERGED, nothing on the branch is missing from that PR's merge commit,
+unless the tree is clean, the branch's PR reads MERGED, the PR's merge commit or the branch tip is reachable from
+the branch the tree was cut from (its recorded parent, or `origin/<main>` only when no parent is recorded), nothing
+on the branch is missing from that PR's merge commit,
 and no run is still holding the tree — or, for a tree that never had a PR, unless the branch is 0 commits ahead of
 `origin/main` (measured, with the tree-equal diff as the fallback) and every other gate still passes. The row carries
 the answer either way (`removed`, or `refused: <gate>`).
