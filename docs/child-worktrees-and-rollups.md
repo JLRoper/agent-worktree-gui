@@ -96,6 +96,11 @@ parent's branch, which now contains the child's commits.
 - **The child's row** still reads `UNMERGED (N commits)`. That is correct and not a leftover: the verdict counts the
   child against **origin/main**, and the roll only put the work on its **parent**. The child's content is one branch
   away from main, not on it.
+- **A release measures the parent, not origin/main.** When a worker ends a turn in the child with a `RELEASE` line,
+  the panel requires the PR's merge commit or the child's tip to be reachable from the branch the tree was cut from
+  (its recorded parent in `branch-parents.json`). A rolled child passes, because the parent is where its work
+  legitimately lives, and its worktree and branch can be removed. A tree with no recorded parent is measured against
+  `origin/main` instead, and a merge reachable from neither is refused with that base named.
 - **The steward's plan** (`POST /api/steward`, a dry run that writes a plan and acts on nothing) reads the rolled
   child as `LANDED` — `landedIn: "parent"` — and lists its tree under *would delete*. The roll itself deletes nothing;
   removing the child is the reader's ✕ (or that plan's confirmed apply).
