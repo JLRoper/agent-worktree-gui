@@ -4,16 +4,42 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.82.1 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.82.3 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-547 releases from v0.1.0 (2026-10-20) to v1.82.1 (2026-11-11), 1823 commits between the tags. Every release is anchored by an
+549 releases from v0.1.0 (2026-10-20) to v1.82.3 (2026-11-11), 1829 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.82.3 — 2026-11-11 · 3 commits
+
+[`473cf63`](https://github.com/JLRoper/agent-worktree-gui/commit/473cf63dc24c72e8fa2c3aa058d4030e824d560b) · [compare v1.82.2...v1.82.3](https://github.com/JLRoper/agent-worktree-gui/compare/v1.82.2...v1.82.3)
+
+### Fixed
+
+- fix: a group's parent row sits in an ungrouped sibling's column, one step per level below it ([`b1e4f25`](https://github.com/JLRoper/agent-worktree-gui/commit/b1e4f25e007143e82e607df48c63ff76b5cc6025))
+
+### Other
+
+- Record the relative-link landing: reproduction, the ledger, the live click ([`7fea087`](https://github.com/JLRoper/agent-worktree-gui/commit/7fea087f169ad9e14e1d5330b398a16c13546553))
+- chore: 1.82.3 - the version this landing carries ([`473cf63`](https://github.com/JLRoper/agent-worktree-gui/commit/473cf63dc24c72e8fa2c3aa058d4030e824d560b))
+
+## v1.82.2 — 2026-11-11 · 3 commits
+
+[`8729111`](https://github.com/JLRoper/agent-worktree-gui/commit/87291111c8681382818b066fd2c8cc99693e519e) · [compare v1.82.1...v1.82.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.82.1...v1.82.2)
+
+### Docs & tests
+
+- docs: render the changelog - 547 releases ([`ce87716`](https://github.com/JLRoper/agent-worktree-gui/commit/ce87716a843d1eb12441c6433cdef9c79cb178e8))
+
+### Other
+
+- Record the full-suite result beside the queue reply write-up ([`1e16b48`](https://github.com/JLRoper/agent-worktree-gui/commit/1e16b48cf56a25a054f8b5ba9277d680ae072c82))
+- Resolve a clarify card's relative file link against the asking turn's tree ([`8729111`](https://github.com/JLRoper/agent-worktree-gui/commit/87291111c8681382818b066fd2c8cc99693e519e))
 
 ## v1.82.1 — 2026-11-11 · 4 commits
 
