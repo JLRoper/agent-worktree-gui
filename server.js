@@ -62,6 +62,7 @@ import { TodoLists, todoSummary } from "./lib/todos.js";import { auditRepo } fro
 import { REFRESH_LINES_SHOWN, RefreshJournal, liveRunIn, mergeDelta, normaliseRefreshAgent, parseCommitFiles, todoProposals } from "./lib/refresh-row.js";
 import { ParentBook } from "./lib/parents.js";
 import { cutChildWorktree } from "./lib/child-worktree.js";
+import { BRANCH_KINDS, kindChoices, kindFromAnswer, planCut } from "./lib/branch-kind.js";
 import { Questions, applyPlan, buildPlan, inspectProject, parentWorktreeOf, readPlan, rollGate, rollUp, worktrees as stewardWorktrees, writePlan } from "./lib/steward.js";
 import { REASON_REQUIRED, RestartController, providerKeyCheck } from "./lib/restart.js";
 import { readPipelineDocument } from "./lib/pipeline-doc.js";
@@ -78,6 +79,8 @@ import {
   resolvePushPermissions,
   pushModeFor,
   permissionForPush,
+  pushPermissionFor,
+  treeKindRefusal,
   branchesInPushRefs,
   branchPermission,
   strictestPermission,
@@ -4614,6 +4617,13 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, result);
     }
 
+    // ---- the two kinds a cut may be ------------------------------------------------------------------------------
+    // Read from lib/branch-kind.js so the page carries no second copy of the vocabulary: the dialog offers exactly
+    // what the rule defines, and a kind added or removed there moves here without an edit in public/.
+    if (route === "/api/branch-kinds" && req.method === "GET") {
+      return sendJson(res, 200, { ok: true, kinds: BRANCH_KINDS, choices: kindChoices() });
+    }
+
     // ---- cutting a child worktree off a row's own branch --------------------------------------------------------
     // The roll-up's other half, and the reason it exists: `rollUp` merges a child into the branch it was cut from,
     // inside THAT branch's worktree — so a parent which is a worktree branch has to exist. The only cut the panel
@@ -4639,6 +4649,17 @@ const server = createServer(async (req, res) => {
         return sendJson(res, 409, { error: `refused: ${project.path} is the project's own checkout, not a worktree — start that work from the New-agent card` });
       }
       if (!row.branch) return sendJson(res, 409, { error: `refused: ${row.path} is on a detached HEAD, so there is no branch to cut from` });
+      // THE KIND, decided before anything is cut. The dialog offers exactly two, and a body may carry the reader's
+      // answer to the clarify card; otherwise the parent's own name decides. NEITHER applies -> the card goes back and
+      // NOTHING is cut: a tree filed under a guessed kind is a push decision nobody made.
+      const stated = kindFromAnswer(body.kind);
+      const plan = stated
+        ? { cut: true, kind: stated, localOnly: stated === "research", why: `the reader chose ${stated}` }
+        : planCut({ project: project.name, parent: row.branch, mainBranch: project.mainBranch || null });
+      if (!plan.cut) {
+        log(`child: ${row.branch} names neither kind - asking the reader, and cutting nothing (${project.name})`);
+        return sendJson(res, 409, { error: plan.why, cut: false, clarify: plan.clarify, parent: row.branch, path: row.path });
+      }
       const out = await cutChildWorktree({
         repoDir: project.path,
         parentBranch: row.branch,
@@ -4662,7 +4683,7 @@ const server = createServer(async (req, res) => {
         log(`child: ${out.branch} was cut but its parent record failed (${String((e && e.message) || e)})`);
       }
       try {
-        jobs.rememberParent(out.path, out.branch, row.branch);
+        jobs.rememberParent(out.path, out.branch, row.branch, { kind: plan.kind, lifted: plan.localOnly && body.landing === true });
       } catch {
         /* the landing paragraph falls back to git's upstream for this tree; nothing about the cut depends on it */
       }
@@ -4700,8 +4721,26 @@ const server = createServer(async (req, res) => {
         ...out,
         pipeline,
         project: project.name,
+        kind: plan.kind,
+        localOnly: Boolean(plan.localOnly && body.landing !== true),
         row: store.rowsFor(project.name).find((r) => normPathKey(r.path) === normPathKey(out.path)) || null,
       });
+    }
+
+    // ---- lifting a local-only kind ------------------------------------------------------------------------------
+    // A research tree is local only by the kind its cut recorded. The reader can LIFT it, and that answer is written
+    // on the same record (lib/jobs.js `liftKind`) so a restart keeps it: the one thing that lets its push meet the
+    // ordinary controls. Nothing is pushed here and no branch moves - it only changes what a later push meets.
+    if (route === "/api/worktree/kind-lift" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const path = String(body.path || "").trim();
+      const branch = String(body.branch || "").trim();
+      if (!path) return sendJson(res, 400, { error: "a lift names the tree it is about (path)" });
+      const rec = await jobs.liftKind({ tree: path, branch });
+      if (!rec) return sendJson(res, 404, { error: `no branch-parents record for ${cleanPath(path)} - nothing to lift` });
+      log(`kind: ${cleanPath(path)} is lifted (kind ${rec.kind}) - its push now meets the ordinary controls`);
+      return sendJson(res, 200, { ok: true, record: rec, kinds: BRANCH_KINDS, choices: kindChoices() });
     }
 
     // ---- rolling one child into its parent ---------------------------------------------------------------------
@@ -5084,7 +5123,15 @@ const server = createServer(async (req, res) => {
       const branch = String(url.searchParams.get("branch") || "").trim();
       const isNew = url.searchParams.get("new") === "1" || url.searchParams.get("new") === "true";
       const answer = resolvePushPermissions(project || {}, config);
-      const answered = branch ? permissionForPush(answer, { branch, isNew }) : pushModeFor(answer);
+      // THE TREE'S OWN KIND, when the path names a tree the panel cut: a record that says local only refuses the
+      // push whatever the four controls say, and the reason names the tree and the kind (lib/push-permissions.js
+      // `treeKindRefusal`). A tree with no record is decided by the controls exactly as before.
+      const kindRec = asked ? jobs.treeKindFor({ tree: asked, branch }) : null;
+      const kindArgs = { tree: asked || null, kind: kindRec?.kind || null, lifted: kindRec?.lifted === true };
+      const settled = branch
+        ? pushPermissionFor(answer, { branch, isNew, ...kindArgs })
+        : { permission: pushModeFor(answer, kindArgs), reason: treeKindRefusal(kindArgs) || "" };
+      const answered = settled.permission;
       const remote = String(project?.remote || "");
       const where = project?.name ? `${project.name}${asked ? ` (${cleanPath(asked)})` : ""}` : asked ? cleanPath(asked) : "";
       return sendJson(res, 200, {
@@ -5104,11 +5151,18 @@ const server = createServer(async (req, res) => {
         // What the assistant may DO, not only what the settings say: allow = go ahead, ask = clarify first,
         // refuse = do not push at all and do not offer the box.
         permission: answered,
+        // The tree's kind, when a cut recorded one, and the refusal's own sentence: "refused" alone sends a reader
+        // hunting a setting that is not the cause.
+        kind: kindRec?.kind || null,
+        kindLifted: kindRec?.lifted === true,
+        reason: settled.reason || null,
         ask: answered === "ask",
         denied: answered === "refuse",
         say:
           answered === "refuse"
-            ? `A push from ${where || "that checkout"} is refused outright by its push control (never) — nothing may be pushed there, and no permission box is offered.`
+            ? settled.reason
+              ? `${settled.reason}. Nothing may be pushed from that tree until the reader lifts it.`
+              : `A push from ${where || "that checkout"} is refused outright by its push control (never) - nothing may be pushed there, and no permission box is offered.`
             : answered === "allow"
               ? `A push from ${where || "that checkout"} to ${remote || "its remote"} goes through without a question${branch ? ` for ${branch}` : ""}. It is a permission, not an instruction — push only when the work is meant to land.`
               : `A push from ${where || "that checkout"} parks on the reader's permission box. Ask the reader with a clarify, or report the branch instead.`,
@@ -5159,8 +5213,12 @@ const server = createServer(async (req, res) => {
       const pushed = listed.length
         ? listed
         : [{ branch: String(body.branch || ""), isNew: body.isNew === true }];
-      const mode = strictestPermission(pushed.map((b) => permissionForPush(push, b)));
-      const decision = remoteWrites.decision(worktree, policy, { pushMode: mode });
+      // The tree's own kind decides FIRST: a recorded local-only tree is refused without a box, and the refusal is
+      // the sentence that names the tree and the kind (lib/push-permissions.js `treeKindRefusal`).
+      const kindRec = jobs.treeKindFor({ tree: worktree, branch: String(body.branch || "") });
+      const kindArgs = { tree: worktree, kind: kindRec?.kind || null, lifted: kindRec?.lifted === true };
+      const mode = strictestPermission(pushed.map((b) => permissionForPush(push, { ...b, ...kindArgs })));
+      const decision = remoteWrites.decision(worktree, policy, { pushMode: mode, kindRefusal: treeKindRefusal(kindArgs) });
       if (decision.allowed) {
         // A one-shot grant is spent by the write it was given for.
         if (decision.consume) remoteWrites.spend(worktree);

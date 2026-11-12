@@ -15,6 +15,7 @@ the instruction the tree was cut with and the two controls are what decide wheth
 
 | # | gate | where it lives | what it decides | what waives it |
 |---|---|---|---|---|
+| 0 | the tree's **kind** | the tree's `branch-parents.json` entry (`lib/branch-kind.js`, `lib/jobs.js rememberParent`) read by `lib/push-permissions.js treeKindRefusal` | a tree recorded **research** is local only: its push is refused, whatever gates 1-7 say | `POST /api/worktree/kind-lift {path, branch}` — the reader's own answer, written on the record |
 | 1 | the instruction | `lib/branch-policy.js` `branchLandingLine` (the brief's LANDING line) | push + PR, or merge into the parent locally and do not push | nothing — prose, not enforcement |
 | 2 | the project's push controls | `config.json` `pushPermissions.repos[<repo>]` (per-repository defaults + force-override) and `projects[].pushNewBranches` / `pushExistingBranches` (one project's own pair) | per branch kind: allow all / allow-name-gate / always ask / never | Settings → **Repo**; the two selects on the project card; `POST /api/settings/push-repo` and `POST /api/settings/push-project`; **Always allow** in the box writes that project's pair |
 | 3 | the installed pre-push hook | `<git-common-dir>/wtgui-hooks/pre-push`, enabled per worktree | allows, refuses, or parks the push on the panel | `WTGUI_PUSH_GRANT=1`, `--no-verify`, `-c core.hooksPath=` |
@@ -24,6 +25,28 @@ the instruction the tree was cut with and the two controls are what decide wheth
 | 7 | the panel's merge flow | `POST /api/worktree/merge` | starts (or parks, or refuses) an agent that pushes the base branch | gate 2, or the box |
 | 8 | the host's ruleset | GitHub ruleset **Owner only** (`25783530`), default branch | no delete, no force, no update except through it, linear history | repository-admin bypass (`always`) |
 | — | not a guard for git | `PANEL_TOKEN`, `lib/http/transport.js` `authorised` | writes to the PANEL from another machine | loopback is never challenged |
+
+## 0. The tree's kind
+
+A tree records what kind it is when the panel cuts it, and the kind is the first gate a push meets - before the
+instruction (which is prose), before the two controls, before the hook, before the box. There are exactly two kinds:
+
+- **turnover child** - cut from a turnover branch the reader asked for; it is not local only, and its push meets the
+  gates below exactly as any branch's does.
+- **research tree** - cut from the project's main parent; **local only**. A push from it is refused outright, naming the
+  tree and the kind, and no permission box is offered:
+
+      refused: C:/…/.worktrees/research-the-seam-4f1a2b is recorded local only (kind research) - the reader must lift it
+      before it can push
+
+The record lives beside the parent in `branch-parents.json` (`{parent, branch, tree, kind, lifted}` keyed by the tree's
+six-hex tag), written at the cut by `lib/jobs.js rememberParent`. **Lifting** it is the reader's own answer - `POST
+/api/worktree/kind-lift`, or the panel's own control - and it sets `"lifted": true` on the same record, which is why it
+survives a restart: the push then meets the gates below and nothing else. A tree with no record (cut before this rule,
+or a pipeline's pinned cut, which is no reader's cut) is decided by the gates below exactly as it was.
+
+A parent that names neither kind is not filed under a default: the cut route answers **409** with a clarify card
+offering exactly the two kinds and cuts nothing. See `docs/child-worktrees-and-rollups.md` (the kind it records).
 
 ## 1. The instruction the tree was cut with
 
