@@ -157,9 +157,17 @@ export function createDom() {
       this.replaceChildren(new MiniText(v == null ? "" : v));
     }
     get innerHTML() {
+      // A markup string WRITTEN to the element (the chip row's renderChips does that) is kept as the string
+      // it was: this fixture parses no HTML. Touching the children again makes it a stale copy, so the
+      // child nodes are what is read from then on.
+      if (this._html != null) return this._html;
       return this.childNodes
         .map((c) => (c.nodeType === 3 ? c.data : c.tagName === "BR" ? "<br>" : `<${c.tagName.toLowerCase()}>${c.innerHTML}</${c.tagName.toLowerCase()}>`))
         .join("");
+    }
+    set innerHTML(markup) {
+      for (const child of this.childNodes.slice()) this.removeChild(child);
+      this._html = String(markup == null ? "" : markup);
     }
     matches(selector) {
       return matches(this, selector);
@@ -205,6 +213,15 @@ export function createDom() {
       detach(node);
       node.parentNode = this;
       this.childNodes.push(node);
+      return node;
+    }
+    // A real fragment owns its children the same way an element does, and `replaceChildren(frag)` detaches
+    // each one from the fragment as it lands in the element: without this the detach throws instead.
+    removeChild(node) {
+      const at = this.childNodes.indexOf(node);
+      if (at < 0) return node;
+      this.childNodes.splice(at, 1);
+      node.parentNode = null;
       return node;
     }
     get textContent() {

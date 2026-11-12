@@ -136,8 +136,15 @@ async function attachFiles(files, box) {
       );
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || `HTTP ${res.status}`);
-      setAttachments(ctx, [...attachmentsFor(ctx), d]);
+      // The chip this draws is written here, not by the editing engine, so the browser's undo stack cannot
+      // step over it either: board/paste-chips.js keeps the composer's own stack, and this file hands it the
+      // set as it was BEFORE the file joined, so Ctrl+Z in the box takes the chip back off.
+      const before = [...attachmentsFor(ctx)];
+      setAttachments(ctx, [...before, d]);
       renderChips(ctx);
+      if (typeof recordComposerAttachment === "function") {
+        recordComposerAttachment(ctx, before, [...attachmentsFor(ctx)], d);
+      }
     } catch (e) {
       const warn = ctx === "spawn" ? $("spawn-msg") : document.querySelector(`[data-reply-warn="${CSS.escape(ctx)}"]`);
       if (warn) warn.textContent = `attachment failed: ${e.message}`;
