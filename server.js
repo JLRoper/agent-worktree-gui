@@ -24,7 +24,7 @@ import { portHolder, refusalLine } from "./lib/port-guard.js";
 import { worktreeList, prIndex, prFor } from "./lib/project.js";
 import { heldBack, failed as hostFailed, answered as hostAnswered, looksLikeHostTrouble } from "./lib/remote-backoff.js";
 import { Store } from "./lib/store.js";
-import { Scheduler } from "./lib/scheduler.js";
+import { Scheduler, yieldToLoop } from "./lib/scheduler.js";
 import { ProjectRegistry } from "./lib/projects.js";
 // isLiveJobStatus is main's: the 429 hold asks whether a card's run is live before it re-arms the timer.
 // previewRequest is not: this commit moves both previewRequest call sites into lib/features/spawn.js, so
@@ -2097,6 +2097,9 @@ async function seedTreeNamesAtBoot({ timeoutMs = 30_000, width = 4 } = {}) {
       } catch {
         /* no answer from git here: discovery will seed this project's trees on its next listing */
       }
+      // Each `git worktree list` starts a child process that can hold this loop for seconds;
+      // let a request that arrived during it be answered before the next project's spawn.
+      await yieldToLoop();
     }
   };
   await Promise.all(Array.from({ length: Math.max(1, Math.min(width, projects.length)) }, lane));
