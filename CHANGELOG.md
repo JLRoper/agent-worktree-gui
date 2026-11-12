@@ -4,16 +4,35 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.89.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.89.1 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-567 releases from v0.1.0 (2026-10-20) to v1.89.0 (2026-11-12), 1891 commits between the tags. Every release is anchored by an
+568 releases from v0.1.0 (2026-10-20) to v1.89.1 (2026-11-12), 1897 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.89.1 — 2026-11-12 · 6 commits
+
+[`3ffc205`](https://github.com/JLRoper/agent-worktree-gui/commit/3ffc205b6dc478df153e3018f15e57780983d1e3) · [compare v1.89.0...v1.89.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.89.0...v1.89.1)
+
+### Fixed
+
+- fix: retry a row whose boot scan the queue refused, once its backoff expires ([`978c055`](https://github.com/JLRoper/agent-worktree-gui/commit/978c055738943bac7debf432d0da33d872651817))
+
+### Docs & tests
+
+- test: stand the child-cut fixture on a turnover branch, the shape the kind rule files ([`13ae872`](https://github.com/JLRoper/agent-worktree-gui/commit/13ae87292f3c41f0e9036c34983379356331235a))
+- docs: render the changelog - 567 releases ([`a459f45`](https://github.com/JLRoper/agent-worktree-gui/commit/a459f458b6a05ae963f1627558dcf45cc8ebddd1))
+- test: prove a refused boot scan is retried on its backoff, not parked for a cadence ([`43547fd`](https://github.com/JLRoper/agent-worktree-gui/commit/43547fd1da1bc70eb996b5cdc3d863d4bbf79f2a))
+
+### Other
+
+- chore: name trees relatively in the kind rule's examples and round 70's records ([`5b43279`](https://github.com/JLRoper/agent-worktree-gui/commit/5b43279fed633e6a00f8ced2675b520804156bc5))
+- chore: 1.89.1 - the version this landing carries ([`3ffc205`](https://github.com/JLRoper/agent-worktree-gui/commit/3ffc205b6dc478df153e3018f15e57780983d1e3))
 
 ## v1.89.0 — 2026-11-12 · 8 commits
 
