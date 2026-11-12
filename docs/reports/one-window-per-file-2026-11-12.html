@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>One window per file, for five minutes - 2026-11-12</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 62rem; margin: 2rem auto; padding: 0 1.2rem; line-height: 1.5; color: #1b1f24; }
+  h1 { font-size: 1.6rem; margin-bottom: .2rem; }
+  h2 { font-size: 1.15rem; margin-top: 2rem; border-bottom: 1px solid #d8dee4; padding-bottom: .25rem; }
+  table { border-collapse: collapse; width: 100%; margin: .8rem 0; font-size: .93rem; }
+  th, td { border: 1px solid #d8dee4; padding: .4rem .55rem; text-align: left; vertical-align: top; }
+  th { background: #f6f8fa; }
+  td.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  code { background: #f6f8fa; padding: .05rem .3rem; border-radius: 3px; font-size: .88em; }
+  .note { border-left: 4px solid #1a7f37; background: #f0fff4; padding: .7rem .9rem; margin: 1rem 0; }
+  .warn { border-left: 4px solid #bf8700; background: #fff8c5; padding: .7rem .9rem; margin: 1rem 0; }
+  .muted { color: #57606a; font-size: .9rem; }
+  ul { margin: .4rem 0 .8rem 1.2rem; padding: 0; }
+  li { margin: .25rem 0; }
+</style>
+</head>
+<body>
+<h1>One window per file, for five minutes</h1>
+<p class="muted">Landed 2026-11-12 on branch <code>wtgui/stop-the-panel-and-its-workers-throwing-087364</code>, cut from <code>main</code>. Version 1.89.3. This page records the finding, the change, the tests and the numbers they returned.</p>
+
+<div class="note">
+<p><strong>Result.</strong> The panel now opens a given file once and answers the next open inside five minutes with a REUSE instead of a second spawn. The key is the <strong>resolved path</strong> from <code>resolveFileTarget</code>, lower-cased on Windows, and the window is <strong>five minutes measured from the open</strong> (<code>REUSE_WINDOW_MS = 5 * 60_000</code>). A reuse answers <code>ok: true, opened: false, reused: true, ageMs, focus: "none"</code> and the reason in <code>focusWhy</code>. The worker brief gained a SHOWING A PAGE paragraph: declare the page and let the panel's own open route show it, or open one plain tab, never <code>--new-window</code>, never a scratch <code>--user-data-dir</code>, and a scratch browser never outlives the run.</p>
+</div>
+
+<h2>1. Where the duplicate windows actually came from</h2>
+<p>The finding was verified by grep and holds: <code>--new-window</code> and <code>--user-data-dir</code> appear nowhere in this repository, and <code>fileOpenerLadder</code> builds <code>args: [url]</code> only. The panel's opener was not opening a second window; it was being asked for the same file again by a reader clicking a second time, and by agents that were told to "open the page and prove it" and reached for the browser they knew: <code>msedge.exe --new-window</code> with their own scratch profile. Two paths, two fixes.</p>
+<table>
+<thead><tr><th>Path</th><th>What it did</th><th>What it does now</th></tr></thead>
+<tbody>
+<tr><td>The panel's routes (<code>POST /api/open-file</code>, <code>POST /api/deliverables/open</code>)</td><td>Spawned the registered browser every time, so a repeat click was a second window for a file already on screen.</td><td>Remembers the resolved path for five minutes; the second answer is a reuse that names the launcher and how long ago the open was, and spawns nothing.</td></tr>
+<tr><td>The worker brief</td><td>Silent about how to show a page, so "prove it" was filled in by habit.</td><td><code>PAGE_BRIEF</code> names the panel's open route, forbids <code>--new-window</code> and a scratch <code>--user-data-dir</code>, and requires a scratch browser to be closed or reused before the run settles.</td></tr>
+</tbody>
+</table>
+
+<h2>2. The book mark</h2>
+<p>It sits in front of the spawn in <code>openFileWith</code> (<code>lib/open-url.js</code>), so every caller of the one opener is covered, not only the two routes.</p>
+<table>
+<thead><tr><th>Question</th><th>Answer</th><th>Why</th></tr></thead>
+<tbody>
+<tr><td>What is the key?</td><td>The <code>path.resolve</code> of the <strong>resolved</strong> path from <code>resolveFileTarget</code>, lower-cased on <code>win32</code>.</td><td><code>docs/reports/x.html</code> sent with a base, the same path written out from the drive root, and <code>./x/../reports/x.html</code> are one file. Keying on the raw string would let a caller walk around the book mark by spelling it differently. NTFS is case-insensitive, so <code>Report.HTML</code> and <code>report.html</code> are one file there.</td></tr>
+<tr><td>How long?</td><td>Five minutes, measured from the <strong>open</strong>, not the last reuse.</td><td>A running clock that every reuse refreshed would keep a stale page on screen for as long as the reader kept clicking. Measured from the open, a file asked for repeatedly is a fresh spawn after five minutes, which is how a reader sees a page that has since been rewritten.</td></tr>
+<tr><td>What does a reuse answer?</td><td><code>ok: true, opened: false, reused: true, key, ageMs, bin, via, progId, url, focus: "none", focusWhy, tried: []</code>.</td><td>The caller can tell a reuse from an open and from a failure, and a caller that only reads <code>ok</code> behaves as before. <code>ageMs</code> is how long ago the open that put the file on screen was.</td></tr>
+<tr><td>What is remembered?</td><td>Only a spawn that STARTED. A failed ladder is not remembered.</td><td>A moved browser or a permission refusal must not make the next click answer "already open" for a window that never appeared.</td></tr>
+<tr><td>What is not collapsed?</td><td>A symlink or an 8.3 short name is a different key.</td><td><code>realpath</code> would be a disk call on every open, and the panel has already stat'ed the file by the time it gets here. The limit is stated in the comment rather than hidden.</td></tr>
+<tr><td>How is it tested without waiting?</td><td><code>now</code> and <code>reuseMs</code> are injected; <code>forgetOpenedFiles()</code> empties the book mark.</td><td>The expiry is a number in a test, and a test that deliberately opens one file twice does not inherit a neighbour's window.</td></tr>
+</tbody>
+</table>
+
+<h2>3. The focus decision</h2>
+<p>A reuse attempts <strong>no focus</strong>, deliberately, and says so in <code>focusWhy</code>. On Windows this process cannot raise the tab already showing the file honestly:</p>
+<ul>
+<li>the reader's registered browser exposes no debug port. A debug port is exactly what a scratch <code>--user-data-dir</code> was for, and giving the panel one means launching a second browser to hold it - the defect itself;</li>
+<li>relaunching the browser "to bring it forward" adds a tab or a window for the URL, which is the bug wearing a focus's clothes;</li>
+<li>matching a window by title and calling <code>SetForegroundWindow</code> can raise the reader's own window with the same page, or a console, and it steals focus while the reader is typing - a claim about the screen made from a guess.</li>
+</ul>
+<p>A silent no-op would be worse than silence only if it claimed a window, so a reuse never claims one: <code>opened: false</code>, <code>reused: true</code>, <code>focus: "none"</code>. The field stays in the answer so a platform that can do it later has somewhere to land without a second return type. A fresh open carries an empty <code>focusWhy</code>: nothing had to decide anything.</p>
+
+<h2>4. The instruction path</h2>
+<p><code>PAGE_BRIEF</code> is exported beside <code>TERMINAL_BRIEF</code> and <code>TESTING_BRIEF</code> in <code>lib/jobs.js</code> and appended to every run that has a tree (<code>anchorCwd !== false</code>), through the <code>pageText</code> hook. The assistant's own turn has no tree and does not get it. It says four things:</p>
+<ul>
+<li>a page is proved by a test or a headless capture, never by a browser window thrown at the reader;</li>
+<li>a page the reader has to look at goes through the panel's own open route (<code>POST /api/open-file</code>, or the anchor a clarify card draws; <code>POST /api/open-url</code> for an http(s) page), so it lands as one tab in a window the reader already has;</li>
+<li>if the worker opens one itself it is a plain tab: one argv element, no <code>--new-window</code>, never its own <code>--user-data-dir</code>;</li>
+<li>a scratch-profile browser never outlives the run that started it: close it before you settle, or reuse the one you already have.</li>
+</ul>
+<p>The same rule is in <code>docs/runbooks/email-multi.md</code> under <code>### Showing the reader a page</code>, because a worker reads its project runbook as well as its brief, and <code>docs/runbooks/README.md</code> now tells the next runbook author to carry it.</p>
+
+<h2>5. What the reader sees</h2>
+<table>
+<thead><tr><th>Surface</th><th>A repeat inside five minutes says</th></tr></thead>
+<tbody>
+<tr><td>A deliverables row</td><td><code>already open in msedge.exe - not opened again, this click started nothing (42s ago)</code></td></tr>
+<tr><td>A clarify card's file link</td><td>the same sentence as a brief banner, and only on a reuse; a fresh open stays silent, because the tab that appears is the answer</td></tr>
+<tr><td>The routes' JSON</td><td><code>open: "reused"</code>, <code>reused: true</code>, <code>ageMs</code>, <code>opener</code>, <code>via</code>, <code>focus</code>, <code>focusWhy</code></td></tr>
+</tbody>
+</table>
+
+<h2>6. The tests, and what they answered</h2>
+<table>
+<thead><tr><th>Test</th><th>What it proves</th></tr></thead>
+<tbody>
+<tr><td><code>two opens of one file spawn once, and the second says it was a reuse rather than an open</code></td><td>ONE recorded spawn for two consecutive opens of the same file; the second answers <code>reused: true</code>, <code>opened: false</code>, <code>ageMs: 60000</code>, the same key and launcher, and a <code>focusWhy</code> that names the second window as the defect.</td></tr>
+<tr><td><code>a different file still spawns</code></td><td>A second file is a second spawn, with a different key.</td></tr>
+<tr><td><code>the five-minute window expires, and the next open spawns again</code></td><td>At <code>REUSE_WINDOW_MS - 1</code> the answer is a reuse; at <code>REUSE_WINDOW_MS</code> it spawns again.</td></tr>
+<tr><td><code>a failed ladder is not remembered, so a retry still spawns</code></td><td>A ladder where every launcher errors answers <code>ok: false</code> and does not poison the next click.</td></tr>
+<tr><td><code>the key is the resolved path, lower-cased on Windows, never the string that was handed over</code></td><td>Case folding on win32, a dot segment resolved away, case preserved on a case-sensitive filesystem.</td></tr>
+<tr><td><code>a worker is told how to show a page, and that a second window is the defect</code></td><td>The body POSTed to a stub gateway for a tree run carries every sentence of the paragraph; the stub records what the worker reads, not what the constant says.</td></tr>
+<tr><td><code>the assistant's own turn is not briefed about pages it has no tree to prove</code></td><td><code>anchorCwd: false</code> does not get the paragraph.</td></tr>
+<tr><td><code>the project runbook carries the same page rule</code></td><td>The runbook and the runbook guide carry the rule, at the paths a worker reads.</td></tr>
+</tbody>
+</table>
+<p class="muted">Counts, as returned by the runner:</p>
+<table>
+<thead><tr><th>Run</th><th class="n">Files</th><th class="n">Tests</th><th class="n">Pass</th><th class="n">Fail</th><th>What it answered</th></tr></thead>
+<tbody>
+<tr><td><code>npm run test:changed</code></td><td class="n">212</td><td class="n">1760</td><td class="n">1742</td><td class="n">18</td><td>One failure was mine and real: <code>absolute-paths.test.js</code> refused a drive-letter path in a new <code>lib/open-url.js</code> comment. Rewritten as a relative example, and the file then passed 17 of 17. The other 17 reproduce on <code>origin/main</code>.</td></tr>
+<tr><td><code>npm test</code> (full suite, once)</td><td class="n">328</td><td class="n">2670</td><td class="n">2653</td><td class="n">17</td><td>No new failure. 15 of the 17 also fail in a 12-file run against a <code>git archive origin/main</code> export (108 tests, 92 passed, 16 failed, the extra being a flaky <code>reasoning-runs</code> test that passed under the full run); <code>gateway-permissions</code> and <code>child-route</code> fail identically when run alone against that export, for the same two reasons: a fresh tree has no <code>config.json</code>, and <code>feat/parent</code> is neither a turnover branch nor <code>main</code>.</td></tr>
+</tbody>
+</table>
+
+<div class="warn">
+<p><strong>Inert until a restart.</strong> <code>lib/open-url.js</code>, <code>server.js</code> and <code>lib/jobs.js</code> are read when the panel starts. The panel and the gateway were not restarted for this landing, so the panel that is running now still spawns on every click and still briefs workers without the paragraph. A restart of the panel is what activates it; the worker brief changes only for runs started after that restart.</p>
+</div>
+
+<h2>7. What this does not do</h2>
+<ul>
+<li>It cannot stop an agent from launching a browser - it instructs one not to, and the brief is the only lever the panel has over an agent's own commands. The route-level book mark is the half that holds regardless.</li>
+<li>It does not collapse a symlink or an 8.3 short name to its target, by choice (see the key table).</li>
+<li>It does not focus, by choice (see section 3). A reuse is a statement, not a raised window.</li>
+</ul>
+</body>
+</html>
