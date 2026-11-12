@@ -40,6 +40,10 @@
   // last pixels to the clip: a press on the corner the reader aims at reaches the BOARD under the window, and the
   // resize never starts. This is the band that press has to be claimed in (see the corner zone in the gesture block).
   const FLOAT_GRAB = 6;
+  // The floor a corner drag may shrink the open turn's console to: one line of console, the sheet's own base
+  // `.job-out { min-height }`. The float's open-turn rule zeroes that on the drawn box, and a console the drag has
+  // shrunk is still a console, so this is the floor the gesture keeps rather than a number the box reports.
+  const FLOAT_OUT_MIN = 34;
 
   const SEEN_KEY = "wm.assistantSeenAt";
   // ---- the float's two rows: what it remembers, and how it is painted -----------------------------
@@ -532,14 +536,42 @@
   // nothing is marked and the spacer keeps owning the slack until a turn opens (a resize gesture opens the newest —
   // see `openNewestTurn`).
   let slackQueued = false;
+  // The lowest open turn: the newest one the reader has open, i.e. the turn at the foot of the transcript.
+  function slackTurn() {
+    const body = chatBody();
+    if (!body) return null;
+    const open = [...body.querySelectorAll(":scope > .turn:not(.folded)")];
+    return open.length ? open[open.length - 1] : null;
+  }
   function paintSlackTurn() {
     slackQueued = false;
     const body = chatBody();
     if (!body) return;
-    const turns = [...body.querySelectorAll(":scope > .turn")];
-    const open = turns.filter((t) => !t.classList.contains("folded"));
-    const target = open.length ? open[open.length - 1] : null;
-    for (const t of turns) t.classList.toggle("is-slack", t === target);
+    const target = slackTurn();
+    for (const t of body.querySelectorAll(":scope > .turn")) t.classList.toggle("is-slack", t === target);
+  }
+  // The console that turn draws: the box a resize hands its room to. Null with every turn folded, when no console is
+  // on the page at all, and before the card exists.
+  function slackConsole() {
+    return slackTurn()?.querySelector(":scope > .out-wrap > .job-out") || null;
+  }
+  // The console's own floor, read off the drawn box rather than assumed: `.job-out` carries a base `min-height` in
+  // the sheet, and a box that reports none (the float's open-turn rule zeroes it) falls back to `FLOAT_OUT_MIN` so the
+  // drag still stops with a console on screen.
+  function consoleFloor(out) {
+    const min = out ? parseFloat(getComputedStyle(out).minHeight) : NaN;
+    return Number.isFinite(min) && min > 0 ? min : FLOAT_OUT_MIN;
+  }
+  // The console's height for a corner drag: what it had when the press landed, plus the height the FRAME really
+  // gained (measured back after the clamp), and never under the console's own floor. Monotonic in the gain by
+  // construction, which is what a resize has to be: the box the reader is reading may not shrink while they pull the
+  // corner open. It is written by the gesture rather than handed to `.is-slack`'s `flex: 1 1 auto`, because that flex
+  // only grows into FREE space - an overflowing transcript has none, so the console kept its content height and a
+  // WIDER frame rewrapped that content into fewer lines: measured 132.5 -> 98px while a +200x+150 drag made the panel
+  // bigger. The same arithmetic run backwards is what shrinks it, so both directions are honest.
+  function consoleDragHeight(start, gained, floor) {
+    const lo = Number.isFinite(Number(floor)) && Number(floor) > 0 ? Number(floor) : FLOAT_OUT_MIN;
+    return Math.max(lo, Number(start) + Number(gained));
   }
   function queueSlackPaint() {
     if (slackQueued) return;
@@ -4933,6 +4965,15 @@
         // turn first: a folded turn has no console on the page for the room to land in.
         if (d.kind !== "float-move") openNewestTurn();
       }
+      // Growing the pane hands its room to a turn's console, and a folded transcript has none on the page at all:
+      // `openNewestTurn` above opens the newest turn, and the height it draws at THIS frame is the number every move
+      // below hands the frame's gain to. A repaint that has not reached the DOM yet is retried on the next move rather
+      // than leaving the drag with nothing to hand the room to.
+      if (d.kind === "float-size" && !d.out) {
+        paintSlackTurn();
+        const out = slackConsole();
+        if (out) d.out = { floor: consoleFloor(out), h: out.getBoundingClientRect().height };
+      }
       const { vw, vh } = viewportBox();
       const z = d.z || 1;
       // The rail: the pointer travels in client px and the width is a layout length, so the zoom divides it. Dragging
@@ -4971,6 +5012,20 @@
       const h = clamp(d.box.height + dy, FLOAT_MIN_H, Math.max(d.box.height, vh - FLOAT_EDGE - d.box.top));
       el.style.width = cssPx(w, z);
       el.style.height = cssPx(h, z);
+      // The room the frame just gained goes to the console the reader is reading, WRITTEN on the box. `.is-slack`
+      // alone cannot do it: the flex grows into free space only, and an overflowing transcript has none. The gain is
+      // read back off the DRAWN frame after the clamp - so a drag past the window's edge, or the floor, hands over
+      // nothing - and floored at the console's own min-height, which is what makes the drag monotonic both ways
+      // instead of letting a wider frame's reflow draw a shorter console.
+      const cons = d.out ? slackConsole() : null;
+      if (cons) {
+        const drawn = el.getBoundingClientRect().height - d.box.height;
+        const outH = consoleDragHeight(d.out.h, drawn, d.out.floor);
+        cons.style.height = cssPx(outH, z);
+        // The cap with it: the sheet's open-turn rule says `max-height: none`, so a flex-grow on a later paint would
+        // hand the console more than the drag did; pinning the cap keeps the number the drag wrote.
+        cons.style.maxHeight = cssPx(outH, z);
+      }
       queueSlackPaint();
     };
 
@@ -4991,6 +5046,12 @@
       const r = el.getBoundingClientRect();
       state.assistantFloat = { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) };
       writeFloatRect(state.assistantFloat);
+      // The console keeps the size the drag gave it through the store a console drag writes, so the rebuild that
+      // replaces the node (a new turn, a fold, a reload) puts the number back on the box that follows it.
+      const cons = d.out ? slackConsole() : null;
+      if (cons?.dataset.out && typeof rememberOutHeight === "function") {
+        rememberOutHeight(cons.dataset.out, Math.round(cons.getBoundingClientRect().height / (d.z || 1)));
+      }
     };
 
     split.addEventListener("pointerdown", (e) => onDown(e, floating() ? "float-size" : "dock-width", split));
