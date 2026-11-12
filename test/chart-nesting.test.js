@@ -125,7 +125,7 @@ const page = readFileSync(new URL("../public/render-projects.js", import.meta.ur
 const region = sliceRegion(page, "children under their parent");
 const keyOf = (project, p) => `${project}::${p}`;
 const state = { rows: new Map(), foldedParents: new Set() };
-const { childTreeOf, groupCtxOf, nestRowKeys } = new Function("state", "keyOf", "esc", "normPath", `${region}; return { childTreeOf, groupCtxOf, nestRowKeys };`)(
+const { childTreeOf, groupCtxOf, nestRowKeys, paintRowGroup } = new Function("state", "keyOf", "esc", "normPath", `${region}; return { childTreeOf, groupCtxOf, nestRowKeys, paintRowGroup };`)(
   state,
   keyOf,
   (s) => String(s ?? ""),
@@ -286,6 +286,171 @@ test("a board that has just booted groups a round from its own record, with no s
   assert.equal(childTreeOf("demo").parentOf.get(keyOf("demo", probe)), undefined, "no parent row, no edge");
 });
 
+
+// ---- what a row WRITES as its indent -------------------------------------------------------------------------------
+//
+// `groupCtxOf` says how deep a row is; `paintRowGroup` is where that number becomes the row's `--child-depth`, and one
+// rule in public/chart.css turns the variable into the indent for EVERY row. That seam is what this half pins, because
+// the two ways it can be wrong are both invisible to a depth-only test:
+//
+//   • a row that writes NOTHING (the group parent, before this landed) falls back to the browser's 0 by luck, and a
+//     later rule keyed on the variable cannot reach it at all;
+//   • a row whose markers size themselves shifts its own text, which is the defect the chart actually showed: the fold
+//     pushed the parent 18px into the children's column, and a nested parent's fold put its name further in than the
+//     child's beneath it.
+//
+// The painter is run against a bare stub of a table row (no browser, no page), so the assertion is about the numbers
+// and the markers the painter writes, not about a rendered column.
+function fakeRow() {
+  const vars = new Map();
+  const attrs = new Map();
+  const classes = new Set();
+  const lead = {
+    nodes: [],
+    insertAdjacentHTML(where, html) {
+      const kind = html.includes("child-tick") ? "tick" : html.includes("btn-row-fold") ? "fold" : "other";
+      const node = {
+        kind,
+        textContent: kind === "tick" ? "\u2514" : "\u25be",
+        title: "",
+        attrs: new Map(),
+        classList: { toggle() {} },
+        getAttribute(name) { return this.attrs.get(name) ?? null; },
+        setAttribute(name, value) { this.attrs.set(name, String(value)); },
+        remove() { lead.nodes = lead.nodes.filter((n) => n !== node); },
+      };
+      if (where === "afterbegin") lead.nodes.unshift(node);
+      else lead.nodes.push(node);
+      return node;
+    },
+    querySelector(sel) {
+      const want = sel === ".child-tick" ? "tick" : "fold";
+      return lead.nodes.find((n) => n.kind === want) || null;
+    },
+    count(kind) { return lead.nodes.filter((n) => n.kind === kind).length; },
+  };
+  return {
+    dataset: {},
+    vars,
+    attrs,
+    classes,
+    lead,
+    classList: { toggle: (name, on) => (on ? classes.add(name) : classes.delete(name)), contains: (name) => classes.has(name) },
+    style: {
+      getPropertyValue: (name) => vars.get(name) ?? "",
+      setProperty: (name, value) => vars.set(name, value),
+      removeProperty: (name) => vars.delete(name),
+    },
+    hasAttribute: (name) => attrs.has(name),
+    removeAttribute: (name) => attrs.delete(name),
+    querySelector: (sel) => (sel === "td.name .row-lead" ? lead : null),
+  };
+}
+
+test("every row writes the depth it draws at: a group parent 0, its children 1, the nested parent 1, the grandchild 2", () => {
+  const root = "/repo/demo";
+  const at = (tail) => `${root}/.worktrees/${tail}`;
+  const rows = [
+    { project: "demo", path: root, branch: "main", parent: null },
+    { project: "demo", path: at("plain-aaaaaa"), branch: "wtgui/plain-aaaaaa", parent: null },
+    { project: "demo", path: at("group-bbbbbb"), branch: "wtgui/group-bbbbbb", parent: null },
+    { project: "demo", path: at("group-stage-1-cccccc"), branch: "wtgui/group-stage-1-cccccc", parent: "wtgui/group-bbbbbb", parentSource: "cut" },
+    { project: "demo", path: at("group-stage-2-eeeeee"), branch: "wtgui/group-stage-2-eeeeee", parent: "wtgui/group-bbbbbb", parentSource: "cut" },
+    { project: "demo", path: at("group-stage-1-sub-dddddd"), branch: "wtgui/group-stage-1-sub-dddddd", parent: "wtgui/group-stage-1-cccccc", parentSource: "cut" },
+  ];
+  state.rows = new Map(rows.map((row) => [keyOf(row.project, row.path), row]));
+  state.foldedParents = new Set();
+  const tree = childTreeOf("demo");
+  const drawn = new Set(rows.map((row) => keyOf(row.project, row.path)));
+  const paint = (path) => {
+    const row = rows.find((r) => r.path === path);
+    const key = keyOf(row.project, row.path);
+    const ctx = groupCtxOf(tree, key, drawn);
+    const tr = fakeRow();
+    paintRowGroup(tr, row, key, ctx);
+    return { ctx, tr };
+  };
+
+  // The group. Its parent row hangs under nothing, so it is depth 0 - the same answer the ungrouped sibling gets, and
+  // the same indent the CSS reads back for both.
+  const parent = paint(at("group-bbbbbb"));
+  assert.equal(parent.ctx.parentKey, null, "the group's parent row hangs under nobody");
+  assert.equal(parent.ctx.depth, 0, "so it is depth 0, not its children's depth");
+  assert.equal(parent.tr.style.getPropertyValue("--child-depth"), "0", "and it WRITES that 0 for the indent rule");
+  assert.equal(parent.tr.dataset.depth, "0", "the data attribute the gates read says the same");
+  assert.equal(parent.tr.classes.has("is-parent"), true, "it is a parent: it carries the fold");
+  assert.equal(parent.tr.classes.has("is-child"), false, "and it is not drawn as a child");
+  assert.equal(parent.tr.lead.count("tick"), 0, "a group's parent row draws NO child tick");
+  assert.equal(parent.tr.lead.count("fold"), 1, "its fold sits in the gutter to its left");
+
+  // The ungrouped sibling. Same depth, same written value: that equality IS the alignment.
+  const plain = paint(at("plain-aaaaaa"));
+  assert.equal(plain.ctx.parentKey, null);
+  assert.equal(plain.ctx.depth, 0);
+  assert.equal(plain.tr.style.getPropertyValue("--child-depth"), parent.tr.style.getPropertyValue("--child-depth"));
+  assert.equal(plain.tr.dataset.depth, "0");
+  assert.equal(plain.tr.classes.size, 0, "an ungrouped row is neither a child nor a parent");
+
+  // The parent's children stay at depth 1 - INCLUDING the one that is itself a group, which takes its parent's
+  // children's depth and nothing more.
+  for (const tail of ["group-stage-1-cccccc", "group-stage-2-eeeeee"]) {
+    const child = paint(at(tail));
+    assert.equal(child.ctx.parentKey, keyOf("demo", at("group-bbbbbb")), `${tail} hangs from the group's parent row`);
+    assert.equal(child.ctx.depth, 1, `${tail} is one indent in`);
+    assert.equal(child.tr.style.getPropertyValue("--child-depth"), "1", `${tail} writes its own depth`);
+    assert.equal(child.tr.lead.count("tick"), 1, `${tail} draws exactly one tick`);
+    assert.equal(child.tr.classes.has("is-child"), true);
+  }
+  const nested = paint(at("group-stage-1-cccccc"));
+  assert.equal(nested.ctx.childCount, 1, "the nested group's own child is drawn");
+  assert.equal(nested.tr.classes.has("is-parent"), true, "so it carries a fold as well");
+  assert.equal(nested.tr.lead.count("fold"), 1);
+  assert.equal(nested.ctx.depth, paint(at("group-stage-2-eeeeee")).ctx.depth, "a nested parent sits in its siblings' column");
+
+  // The second tier: one more indent, never two.
+  const grand = paint(at("group-stage-1-sub-dddddd"));
+  assert.equal(grand.ctx.parentKey, keyOf("demo", at("group-stage-1-cccccc")));
+  assert.equal(grand.ctx.depth, 2, "the grandchild is one step past its own parent");
+  assert.equal(grand.tr.style.getPropertyValue("--child-depth"), "2");
+  assert.equal(grand.tr.lead.count("tick"), 1);
+  assert.equal(grand.tr.lead.count("fold"), 0, "a leaf draws no fold");
+
+  // Nesting is EXACTLY one indent per level: each step is +1 on the row above, and the two top-level shapes agree.
+  const ladder = [parent.ctx.depth, nested.ctx.depth, grand.ctx.depth];
+  assert.deepEqual(ladder, [0, 1, 2]);
+  assert.equal(ladder[0], plain.ctx.depth, "a group parent and an ungrouped sibling draw at the same depth");
+});
+
+test("the indent counts rows that are DRAWN, so a held-back row cannot step its grandchild in twice", () => {
+  const root = "/repo/demo";
+  const at = (tail) => `${root}/.worktrees/${tail}`;
+  const rows = [
+    { project: "demo", path: at("group-bbbbbb"), branch: "wtgui/group-bbbbbb", parent: null },
+    { project: "demo", path: at("group-stage-1-cccccc"), branch: "wtgui/group-stage-1-cccccc", parent: "wtgui/group-bbbbbb", parentSource: "cut" },
+    { project: "demo", path: at("group-stage-1-sub-dddddd"), branch: "wtgui/group-stage-1-sub-dddddd", parent: "wtgui/group-stage-1-cccccc", parentSource: "cut" },
+  ];
+  state.rows = new Map(rows.map((row) => [keyOf(row.project, row.path), row]));
+  state.foldedParents = new Set();
+  const tree = childTreeOf("demo");
+  const all = rows.map((row) => keyOf(row.project, row.path));
+  // The chart's top-N holds the GRANDparent back. Its child is drawn at the top level and its grandchild under that
+  // child - so the grandchild is one indent in, counted from the row it is actually drawn beneath.
+  const drawn = new Set(all.filter((k) => k !== keyOf("demo", at("group-bbbbbb"))));
+  const mid = groupCtxOf(tree, keyOf("demo", at("group-stage-1-cccccc")), drawn);
+  assert.equal(mid.parentKey, null, "its own parent is off the chart");
+  assert.equal(mid.depth, 0, "so it is drawn at the top level");
+  const grand = groupCtxOf(tree, keyOf("demo", at("group-stage-1-sub-dddddd")), drawn);
+  assert.equal(grand.parentKey, keyOf("demo", at("group-stage-1-cccccc")), "it still hangs under its drawn parent");
+  assert.equal(grand.depth, mid.depth + 1, "exactly one step in from it - not two, counting the row that is gone");
+  // With every row on the chart the same tree is still one step per level: 0, 1, 2.
+  const every = new Set(all);
+  assert.deepEqual(
+    [keyOf("demo", at("group-bbbbbb")), keyOf("demo", at("group-stage-1-cccccc")), keyOf("demo", at("group-stage-1-sub-dddddd"))].map(
+      (k) => groupCtxOf(tree, k, every).depth,
+    ),
+    [0, 1, 2],
+  );
+});
 
 // ---- the TITLE each of those rows paints ---------------------------------------------------------------------------
 //

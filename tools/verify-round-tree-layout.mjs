@@ -305,12 +305,15 @@ try {
         return { rows: painted, shot: null, crop: null };
       }
 
-      // 2. THE PARENT TREE IS A SIBLING OF THE CHECKOUT, not a child of it: no parent key, no depth, no marker, the
-      //    board's own top-level indent - and nothing hangs under the checkout.
+      // 2. THE PARENT TREE IS A SIBLING OF THE CHECKOUT, not a child of it: no parent key, depth 0 (the depth is
+      //    written for EVERY row now, because one indent rule reads it off every row - a parent that wrote nothing
+      //    was the row the rule could not reach), no marker, the board's own top-level indent - and nothing hangs
+      //    under the checkout.
       const TOP_PAD = plainDrawn.padLeft;
       check("the board's top-level indent is 12px", TOP_PAD, 12);
       check("the parent tree hangs from nobody", parentDrawn.parentKey, null);
-      check("the parent tree was given no depth", parentDrawn.depth, null);
+      check("the parent tree's depth is 0: a top-level row, not its children's", parentDrawn.depth, "0");
+      check("the parent tree is drawn at the plain tree's indent", parentDrawn.nameLeft, plainDrawn.nameLeft);
       check("the parent tree draws NO grouped-branch marker", parentDrawn.ticks, 0);
       ok("the parent tree is not drawn as a child", !parentDrawn.classes.includes("is-child"), parentDrawn.classes.join(" "));
       check("the parent tree sits at the checkout's own indent", parentDrawn.padLeft, checkoutRow.padLeft);
@@ -337,7 +340,16 @@ try {
       check("it is indented one tier past the first stage tree", grandDrawn.padLeft, TOP_PAD + 32);
       check("its L is one indent past the first tier's L", grandDrawn.tick && stage1Drawn.tick ? grandDrawn.tick.x - stage1Drawn.tick.x : null, 16);
 
-      // 5. NOTHING on the chart carries two L's, every hanging row carries exactly one, and a tree no round cut is a
+      // 5. THE NAME'S COLUMN IS THE INDENT, one indent per level and nothing else: the parent row lands in the plain
+      //    tree's column, the two stage rows share one, the second tier is one step past them. This is the half a
+      //    padLeft check cannot see: the markers live in the row's gutter, so a fold that sized itself to its glyph
+      //    moved the row's TEXT and left the cell's padding honest.
+      check("the parent and the plain tree put their names in one column", parentDrawn.nameLeft, plainDrawn.nameLeft);
+      check("stage 1's name is exactly one indent past the parent's", stage1Drawn.nameLeft - parentDrawn.nameLeft, 16);
+      check("the two stage rows share a column whatever markers they carry", stage2Drawn.nameLeft, stage1Drawn.nameLeft);
+      check("the second tier's name is exactly one indent past its parent's", grandDrawn.nameLeft - stage1Drawn.nameLeft, 16);
+
+      // 6. NOTHING on the chart carries two L's, every hanging row carries exactly one, and a tree no round cut is a
       //    top-level row.
       const hanging = (painted || []).filter((row) => Boolean(row.parentKey));
       check("every row that hangs draws exactly ONE marker and no rail L", hanging.map((row) => `${row.ticks}/${row.rail === null ? "no-rail" : row.rail}/${row.ticks + (row.rail ? 1 : 0)}`), hanging.map(() => "1/no-rail/1"));

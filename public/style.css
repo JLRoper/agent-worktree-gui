@@ -2090,8 +2090,9 @@ tr.row:hover .btn-row-rename { opacity: .9; }
   color: var(--dim);
   border-radius: 4px;
   font: 11px/1.4 var(--term);
-  padding: 0 4px;
-  margin-left: 2px;
+  /* A fixed 16px box: the marker gutter (public/style.css `.row-lead`) is the tick's 7px + the 2px gap + this, and a
+     fold that sized itself to its glyph would make one row's name line a pixel wider than the next. */
+  flex: none; width: 16px; padding: 0; margin-left: 0;
   cursor: pointer;
   opacity: .55;
   vertical-align: 1px;
@@ -2099,11 +2100,16 @@ tr.row:hover .btn-row-rename { opacity: .9; }
 .btn-row-fold:hover { background: #232b3a; border-color: var(--line); color: var(--fg); opacity: 1; }
 .btn-row-fold.is-folded { color: var(--fg); opacity: .9; }
 tr.row:hover .btn-row-fold { opacity: .9; }
-/* The lead slot of a row's name line: the fold control, then the tick that says "cut from the row above". Empty on a
-   top-level row with no children, and it takes no room there. */
-td.name > .name-line > .row-lead { display: inline-flex; align-items: center; gap: 2px; flex: none; }
-.row-lead:empty { display: none; }
-.child-tick { color: #465668; font: 11px/1 var(--term); }
+/* The lead slot of a row's name line: the fold control, then the tick that says "cut from the row above". It is a
+   FIXED gutter reserved on every row: 7px for the tick, 2px of gap, 16px for the fold. Because the row's
+   indentation must not depend on which of the two a row carries: while the slot sized itself to its contents, a fold
+   pushed its own row's text 18px right, so a group's parent row sat in its children's column and a nested parent's
+   fold put its name further in than the child's below it. Both markers get a fixed box for the same reason: the
+   gutter's width is the sum, in every font, so one row cannot be a pixel wider than the next. An empty lead keeps
+   its width, which is what makes a group parent match an ungrouped sibling - `:empty { display: none }` was exactly
+   the rule that broke the alignment. */
+td.name > .name-line > .row-lead { display: inline-flex; align-items: center; gap: 2px; flex: none; width: 25px; }
+.child-tick { flex: none; width: 7px; color: #465668; font: 11px/1 var(--term); }
 
 /* The reader's lock, on the row itself: an emoji rather than a glyph, because it has to be legible to a person
    scanning a column and to an agent reading the board's own markup. Quiet while unlocked (a board of rows must not
