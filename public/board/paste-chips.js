@@ -298,6 +298,9 @@ function transferBoxModel(fromKey, toBox, text) {
 function clearBoxDraft(boxOrKey) {
   const key = typeof boxOrKey === "string" ? boxOrKey : boxKeyOf(boxOrKey);
   if (!key) return;
+  // A composer the panel cleared holds no history: the draft the entries belonged to is gone (see the
+  // action stack below).
+  clearComposerActions(key);
   // The chips go with the draft they were part of: a box that has been sent, steered or cleared has no claim on
   // a pasted block any more, and holding its text would keep a megabyte alive for the life of the page.
   const model = state.boxModels.get(key);
@@ -783,9 +786,15 @@ function pasteInto(box, raw) {
   const info = pasteText(raw);
   if (pasteShouldChip(info.text)) {
     // Nothing of the paste is lost: the chip carries every character and readBox gives them back in place.
-    insertNodeAt(box, makeChip(info.text));
+    // The model and the caret as they were BEFORE the chip are what the composer's own Ctrl+Z steps back
+    // to: this write is programmatic, so the editing engine's undo stack never saw it and cannot take it.
+    const beforeModel = serializeBox(box);
+    const beforeCaret = caretOffset(box);
+    const chip = makeChip(info.text);
+    insertNodeAt(box, chip);
     touchBox(box);
     saveChipDrafts();
+    recordComposerPasteChip(box, chip.dataset.pasteChip, beforeModel, beforeCaret);
     return "chip";
   }
   // Below the threshold the paste is exactly what it was before this feature: inline text.
@@ -793,6 +802,178 @@ function pasteInto(box, raw) {
   insertTextAt(box, text);
   touchBox(box);
   return "text";
+}
+
+// ---- the composer's own undo stack --------------------------------------------------------
+// WHY THIS IS HERE. A chip is written by this module, not by the editing engine: insertNodeAt puts a node
+// into the box that the engine never saw, so its undo stack cannot step back over it, and Ctrl+Z after a
+// paste did nothing at all. The same is true of the file chip board/attachments.js draws above the box: a
+// programmatic write the engine's history has no record of. This is the record of the writes made on the
+// reader's behalf - one entry per chip insert, carrying the model the composer held BEFORE it - so the
+// press puts the composer back exactly as it was.
+//
+// WHAT IT DOES NOT DO. Ordinary typing is the engine's and stays the engine's: an entry is honoured only
+// while the composer still reads exactly what its insert left (composerEntryLive), so once the reader has
+// typed in that box the entry is stale, it is dropped, and Ctrl+Z falls through to the browser untouched.
+// Nothing here re-writes a composer the reader has moved on from.
+//
+// BOUNDED, and cleared with the draft. A long session can paste a hundred times; the stack keeps the last
+// COMPOSER_ACTION_MAX inserts and forgets the oldest, because an entry carries a whole draft's model and an
+// unbounded one is a leak. clearBoxDraft empties it: a composer that has been sent has no history.
+const COMPOSER_ACTION_MAX = 24;
+let composerPast = [];
+let composerFuture = [];
+
+// A composer is named the way its box is (data-chipbox): "spawn", "reply:<thread>", "add:<key>". An
+// attachment set is keyed by its context instead - the thread id, or "spawn" - so it is mapped onto the box
+// name of the composer it belongs to: one name for one composer, whichever half wrote to it.
+function composerKeyOf(ctx) {
+  return ctx === "spawn" ? "spawn" : `reply:${ctx}`;
+}
+
+// Two states of a box, compared as the segments the box holds. Never through state.pasteChips: a chip whose
+// text has already gone still compares as the chip it is.
+function composerSameModel(a, b) {
+  return JSON.stringify(cleanModel(a)) === JSON.stringify(cleanModel(b));
+}
+
+function composerPush(entry) {
+  composerPast.push(entry);
+  if (composerPast.length > COMPOSER_ACTION_MAX) composerPast.splice(0, composerPast.length - COMPOSER_ACTION_MAX);
+  composerFuture = []; // a write after an undo starts a new history: the redo branch is gone
+}
+
+// The attachment set as the reader sees it, for an entry's own guard. Empty when the module that owns those
+// chips is not on this page, which makes an attachment entry stale rather than wrongly live.
+function composerAttachmentPaths(ctx) {
+  if (typeof attachmentsFor !== "function") return [];
+  return attachmentsFor(ctx).map((a) => a && a.path);
+}
+
+// Ctrl+Z for a pasted block: pasteInto calls this with the model and the caret the box held before the chip
+// went in. The chip's own text is kept on the entry, because a redo has to put the chip's state back.
+function recordComposerPasteChip(box, chipId, beforeModel, beforeCaret) {
+  if (!box || !chipId) return;
+  const c = state.pasteChips.get(chipId);
+  if (!c) return;
+  composerPush({
+    kind: "paste-chip",
+    key: boxKeyOf(box),
+    box,
+    chipId,
+    text: c.text,
+    lines: c.lines,
+    beforeModel: cleanModel(beforeModel),
+    beforeCaret: Number(beforeCaret) || 0,
+    afterModel: serializeBox(box),
+    afterCaret: caretOffset(box),
+  });
+}
+
+// Ctrl+Z for a pasted or dropped file: board/attachments.js calls this once the upload has landed and the
+// chip is drawn, with the set before the file joined it and the set after.
+function recordComposerAttachment(ctx, before, after, attachment) {
+  if (!ctx || !attachment || !attachment.path) return;
+  composerPush({
+    kind: "attachment",
+    key: composerKeyOf(ctx),
+    ctx,
+    attachment,
+    beforeList: (before || []).slice(),
+    afterList: (after || []).slice(),
+    beforePaths: (before || []).map((a) => a && a.path),
+    afterPaths: (after || []).map((a) => a && a.path),
+  });
+}
+
+// Has the composer moved since this entry's write? Only a composer that still reads exactly what the write
+// left may be stepped back - that guard is what leaves a typed character to the engine's own undo.
+function composerEntryLive(entry) {
+  if (!entry) return false;
+  if (entry.kind === "paste-chip") {
+    if (!entry.box || !entry.box.parentNode) return false; // the card was rebuilt: that box is gone
+    return composerSameModel(serializeBox(entry.box), entry.afterModel);
+  }
+  if (entry.kind === "attachment") {
+    return JSON.stringify(composerAttachmentPaths(entry.ctx)) === JSON.stringify(entry.afterPaths);
+  }
+  return false;
+}
+
+// The newest entry this composer made, taken off the stack. A stale top entry is dropped and answers null,
+// so the press goes to the engine rather than rewriting a draft the reader has typed into.
+function composerTake(stack, key, live) {
+  for (let i = stack.length - 1; i >= 0; i -= 1) {
+    const entry = stack[i];
+    if (entry.key !== key) continue;
+    stack.splice(i, 1);
+    return live(entry) ? entry : null;
+  }
+  return null;
+}
+
+function composerPutAttachments(entry, list) {
+  if (typeof setAttachments !== "function" || typeof renderChips !== "function") return;
+  setAttachments(entry.ctx, list.slice());
+  renderChips(entry.ctx);
+}
+
+function composerUndo(box) {
+  const key = boxKeyOf(box);
+  if (!key) return false;
+  const entry = composerTake(composerPast, key, composerEntryLive);
+  if (!entry) return false;
+  if (entry.kind === "paste-chip") {
+    state.pasteChips.delete(entry.chipId);
+    writeBoxModel(box, entry.beforeModel);
+    setCaretOffset(box, entry.beforeCaret);
+    touchBox(box);
+  } else {
+    composerPutAttachments(entry, entry.beforeList);
+  }
+  composerFuture.push(entry);
+  if (composerFuture.length > COMPOSER_ACTION_MAX) composerFuture.splice(0, composerFuture.length - COMPOSER_ACTION_MAX);
+  return true;
+}
+
+function composerRedo(box) {
+  const key = boxKeyOf(box);
+  if (!key) return false;
+  const entry = composerTake(composerFuture, key, (e) =>
+    e.kind === "paste-chip"
+      ? Boolean(e.box && e.box.parentNode) && composerSameModel(serializeBox(box), e.beforeModel)
+      : JSON.stringify(composerAttachmentPaths(e.ctx)) === JSON.stringify(e.beforePaths),
+  );
+  if (!entry) return false;
+  if (entry.kind === "paste-chip") {
+    state.pasteChips.set(entry.chipId, { text: entry.text, lines: entry.lines });
+    writeBoxModel(box, entry.afterModel);
+    setCaretOffset(box, entry.afterCaret);
+    touchBox(box);
+  } else {
+    composerPutAttachments(entry, entry.afterList);
+  }
+  composerPast.push(entry);
+  if (composerPast.length > COMPOSER_ACTION_MAX) composerPast.splice(0, composerPast.length - COMPOSER_ACTION_MAX);
+  return true;
+}
+
+// A composer the panel cleared has no history: the draft it belonged to is gone, so nothing on the stack
+// could put it back, and the entry would keep a whole pasted block alive for the life of the page.
+function clearComposerActions(keyOrBox) {
+  const key = typeof keyOrBox === "string" ? keyOrBox : boxKeyOf(keyOrBox);
+  if (!key) return 0;
+  const had = composerPast.length + composerFuture.length;
+  composerPast = composerPast.filter((e) => e.key !== key);
+  composerFuture = composerFuture.filter((e) => e.key !== key);
+  return had - (composerPast.length + composerFuture.length);
+}
+
+// What a test and a probe read: how many actions this composer could still undo.
+function composerActionDepth(keyOrBox) {
+  const key = typeof keyOrBox === "string" ? keyOrBox : boxKeyOf(keyOrBox);
+  if (!key) return 0;
+  return composerPast.filter((e) => e.key === key).length;
 }
 
 // ---- the module's own events ---------------------------------------------------------------
@@ -869,6 +1050,19 @@ document.addEventListener(
       return;
     }
     if (!box) return;
+    // Ctrl+Z, Ctrl+Shift+Z and Ctrl+Y: the writes this module and board/attachments.js made on the reader's
+    // behalf, which the engine's own undo stack never saw. A press this composer has nothing to step back
+    // over is NOT taken - it falls through to the browser exactly as before, so ordinary typing keeps the
+    // engine's native undo. Ctrl+Backspace and Ctrl+Delete are untouched: they are the branch after this one.
+    if (e.ctrlKey && !e.altKey && !e.metaKey && (e.key === "z" || e.key === "Z" || e.key === "y" || e.key === "Y")) {
+      const redo = e.key === "y" || e.key === "Y" || e.shiftKey;
+      const took = redo ? composerRedo(box) : composerUndo(box);
+      if (took) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      return;
+    }
     if (e.key !== "Backspace" && e.key !== "Delete") return;
     // Alt is the one modifier this handler still stands aside for: Alt+Backspace is undo-word in the editors a
     // reader may have in their fingers, and the panel has no business taking it.
@@ -947,4 +1141,8 @@ window.WMApp.board.pasteChips = {
   shouldChip: pasteShouldChip,
   pasteText,
   saveChipDrafts,
+  composerUndo,
+  composerRedo,
+  composerActionDepth,
+  clearComposerActions,
 };
