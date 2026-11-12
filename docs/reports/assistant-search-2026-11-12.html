@@ -187,8 +187,12 @@ assistant (22 turns, five pages), so the page provably does not hold it.</p>
       <td class="ok">24 tests, 24 pass (8 matcher, 16 search + route)</td></tr>
   <tr><td><code>npm run verify:assistant-search</code></td>
       <td class="ok">20/20 checks, screenshot written</td></tr>
-  <tr><td><code>npm run test:changed</code></td><td>RUNTEST_CHANGED</td></tr>
-  <tr><td><code>npm test</code></td><td>RUNFULL</td></tr>
+  <tr><td><code>npm run test:changed</code></td><td>168 files, 1504 tests, <span class="ok">1490 pass</span>,
+      <span class="warn">14 fail</span>: the same 14 fail on <code>origin/main</code> exported with
+      <code>git archive</code>, name for name</td></tr>
+  <tr><td><code>npm test</code></td><td>2694 tests, <span class="ok">2676 pass</span>,
+      <span class="warn">18 fail</span>: the same 18 fail on <code>origin/main</code> across the same 13 files, and
+      the two sorted lists of names are identical</td></tr>
   <tr><td><code>npm run absolute-paths</code></td><td class="ok">clean: no new absolute path in any tracked file</td></tr>
 </table>
 
