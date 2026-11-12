@@ -46,6 +46,16 @@ and restart Tomcat. Jenkins has no Docker and runs `integrationTest`; the Docker
 | `./gradlew :email-service:manualTest` | `ManualTest_EmailService_Endpoints` against a live endpoint | the local container up |
 | `./gradlew :email-lib:manualTest --tests "*<ClassName>*"` | one manual test class | whatever that class needs |
 
+### Running commands
+
+These apply to every terminal call a worker makes here, not only to the tests above.
+
+- Never poll a build inside one terminal call. Make ONE bounded request per call (`curl -m 8`), print the build state, and either re-check on the next turn or hand the wait to a background process or the panel's watcher. A sleep-poll loop is what turned a 1 s request into a measured 152.2 s call.
+- Do not wrap a command in `bash -lc` when the binary can be run directly: login-shell startup costs 1,616 ms on this host against 115 ms for the command itself, and 3,060 ms inside an already-running MSYS shell.
+- Bound every remote read: `--request-timeout 8` to `10` s on kubectl and `-m 8` to `10` on curl, not 30 to 60.
+- Leave the pre-execution guard alone: its steady state is sub-millisecond per call, and its 30 s is a fail-closed ceiling, not a cost. Do not edit `terminal_tool.py` to make a call faster.
+- On this host `jenkins.prog.sefl.com` and `cscvk3smgmt.prog.sefl.com` currently fail DNS with `no such host` in 0.4 to 0.6 s. Read the resolver error before blaming your command.
+
 ## Runtime and config
 
 The public prefix is not the Tomcat context: Apache rewrites `/email-service/...` to `/email-web/api/...`, so

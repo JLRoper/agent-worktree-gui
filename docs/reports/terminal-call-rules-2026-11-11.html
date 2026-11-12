@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Terminal call rules and per-call timing - implemented 2026-11-11</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 62rem; margin: 2rem auto; padding: 0 1.2rem; line-height: 1.5; color: #1b1f24; }
+  h1 { font-size: 1.6rem; margin-bottom: .2rem; }
+  h2 { font-size: 1.15rem; margin-top: 2rem; border-bottom: 1px solid #d8dee4; padding-bottom: .25rem; }
+  table { border-collapse: collapse; width: 100%; margin: .8rem 0; font-size: .93rem; }
+  th, td { border: 1px solid #d8dee4; padding: .4rem .55rem; text-align: left; vertical-align: top; }
+  th { background: #f6f8fa; }
+  td.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  code { background: #f6f8fa; padding: .05rem .3rem; border-radius: 3px; font-size: .88em; }
+  .note { border-left: 4px solid #1a7f37; background: #f0fff4; padding: .7rem .9rem; margin: 1rem 0; }
+  .muted { color: #57606a; font-size: .9rem; }
+</style>
+</head>
+<body>
+<h1>Terminal call rules and per-call timing</h1>
+<p class="muted">Implemented 2026-11-11 on branch <code>wtgui/implement-the-row-in-this-tree-only-and-02f181</code>, cut from <code>main</code>. The source report is <code>docs/reports/terminal-call-latency-2026-11-11.html</code>; this page records what changed and the numbers the tests returned.</p>
+
+<div class="note">
+<p><strong>Result:</strong> the worker brief and the project runbook now forbid sleep-polling a build inside one terminal call, forbid <code>bash -lc</code> where a direct binary will do, bound kubectl and curl timeouts at 8 to 10 s, leave the pre-execution guard alone, and name the current DNS failures. The run record now carries each completed tool call's duration and command preview. A test captured a real child process exactly: 447 ms for a measured 446.9 ms, and 656 ms for 656.0 ms in a later run.</p>
+</div>
+
+<h2>1. The row, item by item</h2>
+<table>
+<thead><tr><th>Row item</th><th>Where it landed</th><th>What it says</th></tr></thead>
+<tbody>
+<tr><td>1. Never poll a build inside one terminal call</td><td><code>lib/jobs.js</code> <code>TERMINAL_BRIEF</code>; <code>docs/runbooks/email-multi.md</code> <code>### Running commands</code></td><td>One bounded request per call with <code>curl -m 8</code>, print the build state, then re-check on the next turn or hand the wait to a background process or the panel's watcher.</td></tr>
+<tr><td>2. Forbid <code>bash -lc</code> where a direct binary will do</td><td>Same two places</td><td>Quotes the measured 1,616 ms login-shell startup against 115 ms for the command itself, and 3,060 ms inside an already-running MSYS shell.</td></tr>
+<tr><td>3. Bound remote reads at 8 to 10 s</td><td>Same two places</td><td><code>--request-timeout 8</code> to <code>10</code> s on kubectl and <code>-m 8</code> to <code>10</code> on curl, not 30 to 60.</td></tr>
+<tr><td>4. Leave the pre-execution guard alone</td><td>Same two places</td><td>Steady state is sub-millisecond per call (a <code>create_time()</code> is 0.1 ms); the 30 s is a fail-closed ceiling, not a cost. Do not edit <code>terminal_tool.py</code> to make a call faster.</td></tr>
+<tr><td>5. Add per-call tool duration to the run record</td><td><code>lib/jobs.js</code> <code>noteToolDone()</code>, the persisted job shape, and <code>summary()</code></td><td>Every completed call is recorded as <code>{tool, ms, call, at, error, id}</code>; the list is capped at 200 entries and survives a restart in <code>jobs.json</code>.</td></tr>
+<tr><td>6. Write down the DNS failures where a worker sees them</td><td>Same two places as item 1</td><td><code>jenkins.prog.sefl.com</code> and <code>cscvk3smgmt.prog.sefl.com</code> fail with <code>no such host</code> in 0.4 to 0.6 s on this host; read the resolver error before blaming the command.</td></tr>
+</tbody>
+</table>
+
+<h2>2. Where the brief text comes from</h2>
+<p><code>TERMINAL_BRIEF</code> is exported beside <code>TESTING_BRIEF</code> and <code>DELIVER_BRIEF</code> in <code>lib/jobs.js</code>, and is appended to every run that has a tree (<code>anchorCwd !== false</code>). The assistant's own turn has no tree and is not given it. The paragraph is unconditional for a tree run: every worker runs commands, not only the ones that run tests.</p>
+<p>The runbook copy lives in <code>docs/runbooks/email-multi.md</code> under <code>## Testing</code>, and <code>docs/runbooks/README.md</code> now tells the next runbook author to carry the same rules. The brief and the runbook quote the same numbers so a worker cannot be told two different costs.</p>
+
+<h2>3. The timing record</h2>
+<p><code>tool.started</code> stores the call's one-line preview with the in-flight entry. <code>tool.completed</code> matches it, takes the gateway's <code>duration</code> (seconds) and records whole milliseconds, with the wall-clock delta as the fallback when no duration is sent. The entry is written into the job, persisted to <code>jobs.json</code>, and returned by <code>summary()</code> on <code>/api/jobs</code>.</p>
+<table>
+<thead><tr><th>Field</th><th>Example from the test</th><th>Why</th></tr></thead>
+<tbody>
+<tr><td><code>tool</code></td><td><code>terminal</code></td><td>Which tool owned the time.</td></tr>
+<tr><td><code>ms</code></td><td><code>447</code></td><td>The call's duration, the number a slow-call search sorts on.</td></tr>
+<tr><td><code>call</code></td><td><code>node -e setTimeout 250</code></td><td>The command preview, so the slow call is identifiable without replaying the turn.</td></tr>
+<tr><td><code>at</code></td><td>ISO timestamp</td><td>When the call finished.</td></tr>
+<tr><td><code>error</code></td><td><code>false</code></td><td>Whether the call failed.</td></tr>
+<tr><td><code>id</code></td><td><code>null</code> or the gateway's call id</td><td>Distinguishes parallel calls of the same tool.</td></tr>
+</tbody>
+</table>
+
+<h2>4. Test evidence</h2>
+<table>
+<thead><tr><th>Command</th><th class="n">Tests</th><th class="n">Pass</th><th class="n">Fail</th><th>Answer</th></tr></thead>
+<tbody>
+<tr><td><code>node --test test/terminal-brief.test.js test/tool-timing.test.js</code></td><td class="n">4</td><td class="n">4</td><td class="n">0</td><td>The worker brief carries every rule, the assistant turn does not, the runbook carries the same rules, and the timing record lands in the summary and in <code>jobs.json</code>.</td></tr>
+<tr><td><code>node --test test/run-stream.test.js test/testing-brief.test.js test/deliverables-brief.test.js test/brief-follows-the-policy.test.js</code></td><td class="n">16</td><td class="n">16</td><td class="n">0</td><td>The existing stream, testing-brief, deliverables-brief and policy-brief behaviour is unchanged.</td></tr>
+</tbody>
+</table>
+<p>The timing test runs a real child process (<code>node -e "setTimeout(() =&gt; {}, 250)"</code>), times it with <code>performance.now()</code>, sends that measurement as the gateway's <code>duration</code>, and reads the record back from both the summary and the persisted file. Two runs reported:</p>
+<pre>tool timing: recorded 447 ms for a real 446.9 ms child process
+tool timing: recorded 656 ms for a real 656.0 ms child process</pre>
+<p class="muted">An earlier run recorded 405 ms for a real 405.1 ms child process. The number follows the machine and the load, not a fixture constant.</p>
+
+<h2>5. Not done, and why</h2>
+<ul>
+<li><strong>No live Jenkins or k3s round trip.</strong> Both hosts still fail DNS from this machine, so the report's failure cost (0.4 to 0.6 s) is what can be measured honestly; a successful live read was not invented.</li>
+<li><strong>No push and no pull request.</strong> The row said stop at the commit, and that line was treated as the push decision. Nothing was pushed.</li>
+<li><strong><code>terminal_tool.py</code> was not edited.</strong> The guard is sub-millisecond in steady state and its 30 s is a fail-closed ceiling; the brief and runbook say so explicitly.</li>
+</ul>
+
+<p class="muted">Files changed: <code>lib/jobs.js</code>, <code>docs/runbooks/email-multi.md</code>, <code>docs/runbooks/README.md</code>, <code>test/terminal-brief.test.js</code>, <code>test/tool-timing.test.js</code>.</p>
+</body>
+</html>
