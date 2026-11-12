@@ -149,7 +149,8 @@ test("3. neither kind raises the card, and cuts nothing", async (t) => {
 });
 
 test("4. a push from a local-only tree is refused, naming the tree and the kind", () => {
-  const tree = "C:/ProjectDevelopment/demo/.worktrees/research-the-seam-19d782";
+  // A directory that looks like a tree on this machine, built at run time so the file states no absolute path.
+  const tree = path.resolve(process.cwd(), "demo", ".worktrees", "research-the-seam-19d782");
   const refusal = treeKindRefusal({ tree, kind: "research" });
   assert.ok(refusal, "a local-only kind is refused");
   assert.match(refusal, /research-the-seam-19d782/, "the refusal names the tree");

@@ -2,12 +2,12 @@
   "what": "round 70 of the ping-pong pipeline, walked local only through the panel's own modules",
   "readAt": "2026-11-10T06:30:31.557Z",
   "bundle": {
-    "path": "C:/Users/roper/.wag/state/pipeline-bundle.json",
+    "path": "~/.wag/state/pipeline-bundle.json",
     "sha256": "3c2c16b7dac43fd568ae881627ef67b8d8ee2e3463b29c210cc1411dd3c84857",
     "pipelines": 13
   },
   "round": {
-    "parentPath": "C:/ProjectDevelopment/agent-worktree-gui/.worktrees/run-row-70-exactly-as-written-local-only-19d782",
+    "parentPath": ".worktrees/run-row-70-exactly-as-written-local-only-19d782",
     "parent": "wtgui/run-row-70-exactly-as-written-local-only-19d782",
     "slug": "run-row-70-exactly-as-written-local-only",
     "tag": "19d782",
@@ -24,7 +24,7 @@
       "visit": 1,
       "artifactPath": "ledger/ping-pong/draft.md",
       "verdictPath": null,
-      "tree": "C:/ProjectDevelopment/agent-worktree-gui/.worktrees/run-row-70-exactly-as-written-local-only-stage-1-draft-1de511",
+      "tree": ".worktrees/run-row-70-exactly-as-written-local-only-stage-1-draft-1de511",
       "branch": "wtgui/run-row-70-exactly-as-written-local-only-stage-1-draft-1de511",
       "commit": "d27bfc8d746b2bd3a98a0a87e4b1329fdbd42734",
       "commitAt": "2026-11-10T01:19:18-05:00",
@@ -46,7 +46,7 @@
       "visit": 1,
       "artifactPath": "ledger/ping-pong/critique.md",
       "verdictPath": "ledger/ping-pong/verdict-r1.json",
-      "tree": "C:/ProjectDevelopment/agent-worktree-gui/.worktrees/run-row-70-exactly-as-written-local-only-stage-2-critique-6635d7",
+      "tree": ".worktrees/run-row-70-exactly-as-written-local-only-stage-2-critique-6635d7",
       "branch": "wtgui/run-row-70-exactly-as-written-local-only-stage-2-critique-6635d7",
       "commit": "9888b9bc142df790247df251551ec416a1e07d75",
       "commitAt": "2026-11-10T01:22:30-05:00",
@@ -86,7 +86,7 @@
       "visit": 2,
       "artifactPath": "ledger/ping-pong/draft.md",
       "verdictPath": null,
-      "tree": "C:/ProjectDevelopment/agent-worktree-gui/.worktrees/run-row-70-exactly-as-written-local-only-stage-1-draft-676235",
+      "tree": ".worktrees/run-row-70-exactly-as-written-local-only-stage-1-draft-676235",
       "branch": "wtgui/run-row-70-exactly-as-written-local-only-stage-1-draft-676235",
       "commit": "2af8c11bd6f402cea4cf7d4c7716f361bb42aa0b",
       "commitAt": "2026-11-10T01:24:30-05:00",
@@ -108,7 +108,7 @@
       "visit": 2,
       "artifactPath": "ledger/ping-pong/critique.md",
       "verdictPath": "ledger/ping-pong/verdict-r2.json",
-      "tree": "C:/ProjectDevelopment/agent-worktree-gui/.worktrees/run-row-70-exactly-as-written-local-only-stage-2-critique-59a317",
+      "tree": ".worktrees/run-row-70-exactly-as-written-local-only-stage-2-critique-59a317",
       "branch": "wtgui/run-row-70-exactly-as-written-local-only-stage-2-critique-59a317",
       "commit": "966b3f5b1da2b4b36e4a078f9620e71e6c60af62",
       "commitAt": "2026-11-10T01:24:51-05:00",
@@ -239,7 +239,7 @@
         },
         "verdict": {
           "gate": "G1",
-          "path": "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\run-row-70-exactly-as-written-local-only-stage-2-critique-6635d7\\ledger\\ping-pong\\verdict-r1.json",
+          "path": ".worktrees/run-row-70-exactly-as-written-local-only-stage-2-critique-6635d7/ledger/ping-pong/verdict-r1.json",
           "outcome": "revise",
           "handoff": "H-02",
           "edge": "H-02",
@@ -324,7 +324,7 @@
         "closing": null,
         "verdict": {
           "gate": "G1",
-          "path": "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\run-row-70-exactly-as-written-local-only-stage-2-critique-59a317\\ledger\\ping-pong\\verdict-r2.json",
+          "path": ".worktrees/run-row-70-exactly-as-written-local-only-stage-2-critique-59a317/ledger/ping-pong/verdict-r2.json",
           "outcome": "accept",
           "handoff": null,
           "edge": "H-02",
@@ -364,22 +364,22 @@
     },
     "recordAsDeclared": {
       "found": true,
-      "path": "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\run-row-70-exactly-as-written-local-only-stage-2-critique-6635d7\\ledger\\ping-pong\\verdict-r1.json",
-      "shown": "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\run-row-70-exactly-as-written-local-only-stage-2-critique-6635d7\\ledger\\ping-pong\\verdict-r1.json",
+      "path": ".worktrees/run-row-70-exactly-as-written-local-only-stage-2-critique-6635d7/ledger/ping-pong/verdict-r1.json",
+      "shown": ".worktrees/run-row-70-exactly-as-written-local-only-stage-2-critique-6635d7/ledger/ping-pong/verdict-r1.json",
       "file": "ledger/ping-pong/verdict-r1.json",
       "reason": null
     },
     "recordThisVisit": {
       "found": true,
-      "path": "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\run-row-70-exactly-as-written-local-only-stage-2-critique-59a317\\ledger\\ping-pong\\verdict-r2.json",
-      "shown": "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\run-row-70-exactly-as-written-local-only-stage-2-critique-59a317\\ledger\\ping-pong\\verdict-r2.json",
+      "path": ".worktrees/run-row-70-exactly-as-written-local-only-stage-2-critique-59a317/ledger/ping-pong/verdict-r2.json",
+      "shown": ".worktrees/run-row-70-exactly-as-written-local-only-stage-2-critique-59a317/ledger/ping-pong/verdict-r2.json",
       "file": "ledger/ping-pong/verdict-r2.json",
       "reason": null
     },
     "recordNotYetWritten": {
       "found": false,
       "path": null,
-      "shown": "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\run-row-70-exactly-as-written-local-only-stage-2-critique-59a317\\ledger\\ping-pong\\verdict-r3.json",
+      "shown": ".worktrees/run-row-70-exactly-as-written-local-only-stage-2-critique-59a317/ledger/ping-pong/verdict-r3.json",
       "file": null,
       "reason": null
     },
@@ -452,8 +452,8 @@
             }
           }
         },
-        "path": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\053bfd65\\no-record\\ledger\\ping-pong\\verdict-r1.json",
-        "reason": "gate G1 (Verdict) follows critique and declares a decision record at C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\053bfd65\\no-record\\ledger\\ping-pong\\verdict-r1.json — the code does not decide it, and the record has not been written"
+        "path": "<scratch>/no-record/ledger/ping-pong/verdict-r1.json",
+        "reason": "gate G1 (Verdict) follows critique and declares a decision record at <scratch>/no-record/ledger/ping-pong/verdict-r1.json — the code does not decide it, and the record has not been written"
       }
     }
   },
@@ -472,7 +472,7 @@
     "why": null,
     "base": "1c5c53c7089e186943ad45822cfea36705e7b86b",
     "parent": "wtgui/run-row-70-exactly-as-written-local-only-19d782",
-    "parentPath": "C:/ProjectDevelopment/agent-worktree-gui/.worktrees/run-row-70-exactly-as-written-local-only-19d782",
+    "parentPath": ".worktrees/run-row-70-exactly-as-written-local-only-19d782",
     "stages": [
       {
         "stage": "draft",
@@ -509,7 +509,7 @@
     "done": true,
     "verdict": {
       "gate": "G1",
-      "path": "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\run-row-70-exactly-as-written-local-only-stage-2-critique-59a317\\ledger\\ping-pong\\verdict-r2.json",
+      "path": ".worktrees/run-row-70-exactly-as-written-local-only-stage-2-critique-59a317/ledger/ping-pong/verdict-r2.json",
       "outcome": "accept",
       "handoff": null,
       "edge": "H-02",

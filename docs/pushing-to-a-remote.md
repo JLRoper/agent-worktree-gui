@@ -36,7 +36,7 @@ instruction (which is prose), before the two controls, before the hook, before t
 - **research tree** - cut from the project's main parent; **local only**. A push from it is refused outright, naming the
   tree and the kind, and no permission box is offered:
 
-      refused: C:/…/.worktrees/research-the-seam-4f1a2b is recorded local only (kind research) - the reader must lift it
+      refused: <tree>/.worktrees/research-the-seam-4f1a2b is recorded local only (kind research) - the reader must lift it
       before it can push
 
 The record lives beside the parent in `branch-parents.json` (`{parent, branch, tree, kind, lifted}` keyed by the tree's

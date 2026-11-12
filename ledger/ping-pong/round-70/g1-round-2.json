@@ -6,8 +6,8 @@
   "draftBlobBefore": "2ebed22e56113179cef20441cfa0bf120328f693",
   "draftBlobAfter": "b0e00f40fa4dfc0f8f081bd28400ab276bc837e9",
   "verdict": "accept",
-  "verdictPath": "C:/ProjectDevelopment/agent-worktree-gui/.worktrees/run-row-70-exactly-as-written-local-only-stage-2-critique-59a317/ledger/ping-pong/verdict-r2.json",
-  "critiquePath": "C:/ProjectDevelopment/agent-worktree-gui/.worktrees/run-row-70-exactly-as-written-local-only-stage-2-critique-59a317/ledger/ping-pong/critique.md",
+  "verdictPath": ".worktrees/run-row-70-exactly-as-written-local-only-stage-2-critique-59a317/ledger/ping-pong/verdict-r2.json",
+  "critiquePath": ".worktrees/run-row-70-exactly-as-written-local-only-stage-2-critique-59a317/ledger/ping-pong/critique.md",
   "pass": true,
   "refused": false,
   "why": "no note is open and the verdict accepts, so G1 passes"
