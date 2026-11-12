@@ -38,6 +38,7 @@
     "verify:child-rows": "node tools/verify-child-rows.mjs",
     "verify:round-tree-layout": "node tools/verify-round-tree-layout.mjs",
     "verify:composer-undo": "node tools/verify-composer-undo.mjs",
+    "verify:composer-history": "node tools/verify-composer-history.mjs",
     "version:tag": "node tools/version.mjs tag",
     "version:backfill": "node tools/version.mjs backfill",
     "audit:child-process": "node tools/child-process-audit.mjs",
