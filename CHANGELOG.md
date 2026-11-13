@@ -4,16 +4,31 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.93.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.94.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-584 releases from v0.1.0 (2026-10-20) to v1.93.0 (2026-11-13), 1965 commits between the tags. Every release is anchored by an
+585 releases from v0.1.0 (2026-10-20) to v1.94.0 (2026-11-13), 1970 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.94.0 — 2026-11-13 · 5 commits
+
+[`670463d`](https://github.com/JLRoper/agent-worktree-gui/commit/670463df3c66c8f832d698dd5df352df4766cb81) · [compare v1.93.0...v1.94.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.93.0...v1.94.0)
+
+### Docs & tests
+
+- docs: the marching tail's numbers, from the run on the rebased tree ([`cba2b03`](https://github.com/JLRoper/agent-worktree-gui/commit/cba2b035ec3f71293fe3acb02516186d32dc0045))
+- docs: render the changelog - 584 releases ([`2de5c77`](https://github.com/JLRoper/agent-worktree-gui/commit/2de5c77825d6a16135a1fb4b117dbe46fcd6ddff))
+- docs: the remainder report - 167 branches and 33 worktrees judged by content ([`59635bf`](https://github.com/JLRoper/agent-worktree-gui/commit/59635bfd0570d017b88832f021a00d2ec0bc4f46))
+
+### Other
+
+- Count the console's row churn per second while a stream is flowing ([`d5c7fe2`](https://github.com/JLRoper/agent-worktree-gui/commit/d5c7fe24050921c345ebf93e03231192088a6b15))
+- chore: 1.94.0 - the version this landing carries ([`670463d`](https://github.com/JLRoper/agent-worktree-gui/commit/670463df3c66c8f832d698dd5df352df4766cb81))
 
 ## v1.93.0 — 2026-11-13 · 3 commits
 
