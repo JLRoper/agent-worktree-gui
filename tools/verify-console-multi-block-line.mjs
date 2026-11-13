@@ -81,7 +81,7 @@ const PAGE = `<!doctype html>
   window.__out = { stored: STORED.length };
   window.addEventListener("error", (e) => { (window.__out.errors = window.__out.errors || []).push(String((e.error && e.error.stack) || e.message)); });
   window.state = {
-    typePacer: null, outPinned: {}, outScrolls: {}, outHeights: {},
+    typeStream: null, outPinned: {}, outScrolls: {}, outHeights: {},
     subConsoles: new Map(), subConsoleReads: new Map(), subConsolePinned: new Map(), openSubConsole: new Set(),
     collapsedSubs: new Set(), codeBoxShut: new Set(), foldRows: new Map(), toolStore: new Map(), typed: new Map(),
     thinkPinned: new Map(), thinkLoading: new Set(), thinkOpen: new Set(), openFences: new Set(), toolGroups: new Map(),
@@ -106,8 +106,8 @@ const PAGE = `<!doctype html>
 
   // The pacer on a clock this harness drives, so nothing here waits on a real timer.
   let t = 0;
-  const P = globalThis.wtType.createPacer({ rate: 40, now: () => t, schedule: () => 1, cancel: () => {}, onPaint: (lids) => paintTypedLines(lids) });
-  window.state.typePacer = P;
+  const P = globalThis.wtType.createDrawStream({ rate: 40, now: () => t, schedule: () => 1, cancel: () => {}, onPaint: (lids) => paintTypedLines(lids) });
+  window.state.typeStream = P;
   window.WMApp.core.consoleFormat.setShownFor(typedShown);
 
   const JOB = "job-multiblock";

@@ -16,7 +16,7 @@ import test from "node:test";
 import { readSource, sliceBetween } from "../tools/panel-testkit.mjs";
 
 await import("../public/core/type-stream.js");
-const { createPacer } = globalThis.wtType;
+const { createDrawStream } = globalThis.wtType;
 
 const code = sliceBetween(readSource("public/board/console.js"), "// ---- reasoning first", "// ---- console row text");
 // `thinkingOn`, `streamOn`, `thinkOpenFor` and `turnLive` are app.js's answers, read from inside a function body in
@@ -66,7 +66,7 @@ function bench() {
     cancel: (id) => timers.delete(id),
   };
   const painted = [];
-  const pacer = createPacer({ ...clock, rate: 40, onPaint: (lids) => painted.push(...lids) });
+  const pacer = createDrawStream({ ...clock, rate: 40, onPaint: (lids) => painted.push(...lids) });
   const view = { thinking: false };
   const turn = { id: "turn1", thread: "thread1", status: "running" };
   const blocks = [
@@ -75,7 +75,7 @@ function bench() {
     { at: AT_C, text: BLOCK_C },
   ];
   const state = {
-    typePacer: pacer,
+    typeStream: pacer,
     thinkFed: new Set(),
     thinkCache: new Map([[turn.id, { blocks, at: 0 }]]),
     jobs: new Map([[turn.id, turn]]),
@@ -200,7 +200,13 @@ test("what arrives after the switch is written, and the history does not move fo
   b.step(2000);
   const writing = b.render();
   assert.equal(writing.blocks[2].text.startsWith(newestBefore), true, "it grew from the prefix it had");
-  assert.ok(writing.blocks[3].text.length > 0, "and the newest one is writing too");
+  // One queue, one clock: the newer thought is behind the one still being written, so it takes the clock when that
+  // one is whole rather than writing over it. A later segment never starts before the earlier one has finished.
+  assert.equal(writing.blocks[3].text, "", "the newer thought waits for the one in front of it");
+  b.step(30_000);
+  const done = b.render();
+  assert.equal(done.blocks[2].text, b.blocks[2].text, "the block in front is whole");
+  assert.ok(done.blocks[3].text.length > 0, "and then the newer one is written");
 });
 
 test("a card opened mid-turn paints the turn's older reasoning whole and writes only the newest", () => {

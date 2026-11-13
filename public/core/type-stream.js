@@ -1,39 +1,42 @@
-// core/type-stream.js — how fast a run's output reaches the reader's eyes.
+// core/type-stream.js - how fast a run's output reaches the reader's eyes.
 //
 // A turn's prose reaches the browser as coalesced frames (lib/jobs.js TEXT_FLUSH_MS, 120 ms) and a fast model
 // fills each one with several words, so the console line jumps a phrase at a time. Tool results and reasoning
-// blocks arrive as whole lines instead. Both are honest — they are what the wire sent — but neither reads like an
+// blocks arrive as whole lines instead. Both are honest - they are what the wire sent - but neither reads like an
 // agent writing, and the reader asked to watch it flow. The result of a skill is the one tool result that gets the
 // same treatment as the prose and the reasoning: it is the longest thing a console is handed at once.
 //
-// Two mechanisms, deliberately separate, because they answer two different questions:
+// Three mechanisms, and only ONE of them owns the order and the clock:
 //
-//   * the PACER holds the tail of ONE growing line and hands it back a word at a time. A line is fed its whole
-//     new text and returns the prefix that may be drawn NOW; the rest leaves on the pacer's own clock. What is
-//     drawn is always an exact prefix of the wire's text cut on a word boundary, so a copy of a half-typed line
-//     copies what is on screen and the next frame simply extends it. Rate 0 keeps nothing: every frame is drawn
-//     whole, exactly as before this existed. Three kinds of line are fed to it: a paragraph of the agent's own
-//     words, a reasoning block, and the lines of a skill's result (isPacedTool below).
+//   * the DRAWN STREAM (createDrawStream) is the one queue every revealed segment joins, whatever road it arrived
+//     by: a paragraph of the agent's own words, a reasoning block (a streamed reasoning.delta or a store read), a
+//     tool line, or one line of a skill's result (isPacedTool below). Each segment carries a sequence number and
+//     the server stamp of the thing it draws; the queue's order is (stamp, sequence), one budget releases `rate`
+//     words per second across all of them, and `shown` (the characters emitted for a segment) only ever grows. A
+//     rebuild asks the stream, never the DOM, so a repaint draws exactly what had been emitted and nothing is
+//     revealed twice. Rate 0 keeps nothing: every frame is drawn whole, exactly as before this existed.
 //   * the GATE holds WHOLE LINES that have just joined a console and releases them one at a time. That is the
-//     line-by-line setting: a burst of tool lines and results walks in instead of landing in one paint. A growth
-//     frame for a line the gate is still holding updates the held copy instead of jumping the queue, and a held
-//     line is not in the console's record yet — a repaint mid-burst shows the transcript as far as it has got,
-//     which is the truth.
+//     line-by-line setting: a burst of tool lines and results walks in instead of landing in one paint. It decides
+//     ADMISSION only - how many new lines may join at once - and never how fast words appear, which is the
+//     stream's one clock. A growth frame for a line the gate is still holding updates the held copy instead of
+//     jumping the queue, and a held line is not in the console's record yet, so a repaint mid-burst shows the
+//     transcript as far as it has got, which is the truth.
 //
 //   * the REASONING HOLD keeps a tool's lines out of the console until the reasoning in front of them has finished
-//     being written. The pacer types a thought at the reader's words-a-second, and a tool call (and its output) that
-//     follows it is whole lines on the wire: left alone it lands while the thought above it is still being typed,
-//     and the reader watches the answer arrive before the question. The hold queues those frames, in order, behind
-//     the thought and lets them go the moment the pacer has nothing left to say for it. It knows nothing about the
-//     page: the caller says which frames wait (`wants`), what they wait for (`busy`) and what to do when a hold
-//     begins (`start` — the page uses it to read the store again, because a reply's reasoning lands there a moment
-//     after the tool call it made is already on the wire).
+//     being written. The stream types a thought at the reader's words-a-second, and a tool call (and its output)
+//     that follows it is whole lines on the wire: left alone it lands while the thought above it is still being
+//     typed, and the reader watches the answer arrive before the question. The hold queues those frames, in order,
+//     behind the thought and lets them go the moment the stream has nothing left to say for it. It knows nothing
+//     about the page: the caller says which frames wait (`wants`), what they wait for (`busy`) and what to do when
+//     a hold begins (`start` - the page uses it to read the store again, because a reply's reasoning lands there a
+//     moment after the tool call it made is already on the wire).
 //
 // All three are flushed by the caller when the turn settles, so nothing is ever left sitting in a buffer: the clock
 // here outlives the wire, not the run.
 //
 // This is a classic script in the page and a plain module to node (it publishes itself on globalThis), so
-// test/type-stream.test.js drives the ONE implementation the page runs, with its clock and timer injected.
+// test/type-stream.test.js and test/console-ordered-stream.test.js drive the ONE implementation the page runs, with
+// its clock and timer injected.
 (function (root) {
   "use strict";
 
@@ -45,7 +48,7 @@
   const MIN_TICK_MS = 40; // ~25 fps: finer than the eye needs and cheap on a board of cards
   const MAX_ENTRIES = 4000; // a line per entry, and the console keeps 1000 per job
   const MAX_QUEUE = 600;
-  // No hold outlasts this. A hold ends because the thought has been written, which the pacer always gets to; this is
+  // No hold outlasts this. A hold ends because the thought has been written, which the stream always gets to; this is
   // the fence for the day it does not (a clock that stopped, a read that never answers), and it is far past any
   // reasoning a reader would sit through at a rate they chose.
   const MAX_HOLD_MS = 120_000;
@@ -61,10 +64,10 @@
     return Math.min(MAX_LINES, n);
   };
 
-  // WHICH TOOL RESULTS ARE WRITTEN, NOT DROPPED IN. Prose and reasoning type out through the pacer; so does the
+  // WHICH TOOL RESULTS ARE WRITTEN, NOT DROPPED IN. Prose and reasoning type out through the stream; so does the
   // result of a SKILL. It is the biggest block of text a run hands a console in one go — a SKILL.md is the card's
   // whole 40-line, 400-character head arriving in a single paint — and it is the one result a reader watches arrive,
-  // so the lines of skill_view / skills_list / skill_manage are fed to the pacer as they join the console and type
+  // so the lines of skill_view / skills_list / skill_manage are fed to the stream as they join the console and type
   // out at the same words-a-second as everything else (and walk in at the same lines-a-second: the gate already
   // holds every line). Every other tool's result is still drawn whole, exactly as before; widening this is this one
   // predicate and nothing else.
@@ -110,27 +113,61 @@
   });
 
   /**
-   * The word pacer: one entry per console line that is being revealed.
-   * @param opts.rate       words per second (0 = off, the caller draws every frame whole)
-   * @param opts.onPaint    called with the line ids whose visible prefix just grew
-   * @param opts.now / schedule / cancel   injected in node by the test
+   * The DRAWN STREAM: one ordered queue, one clock, one writer contract for everything a console reveals.
+   *
+   * WHY THIS REPLACES THE PACER. The pacer held one clock per console line. Three segments fed at once each got the
+   * reader's whole words-a-second, so the rate was multiplied by however many were live, and because every segment
+   * released words on its own budget a later line could finish before an earlier one: the reader watched a
+   * transcript assemble out of order. The three kinds of text a console draws also arrived by three different
+   * roads - reasoning.delta for the thoughts (a cumulative preview), `text`/`set` frames for the answer (blocks
+   * grown in place), and whole `tool`/`tool-out` records - sharing neither an order nor a clock, which is why each
+   * of the last four fixes repaired one road and left the other two.
+   *
+   * A SEGMENT is the unit now. A paragraph, a thought, a tool line and each line of a skill's result all join ONE
+   * queue as a segment carrying a sequence number and the server stamp (`at`) of the thing it draws. `seq` is
+   * assigned here, on arrival; the queue's order is (at, seq). The server's stamp is the only clock all three kinds
+   * share, and seq orders two segments written inside one millisecond. A segment keeps its place while its text
+   * grows, so a paragraph the wire is still writing stays one entry in the order rather than a new one per frame.
+   *
+   * THE CLOCK IS ONE BUDGET. tick() adds `rate` words per second, once, and hands them to the earliest segment
+   * that still has words to show. Only when that segment has caught up does the next one get a word, so the setting
+   * means words per second across thinking, answer and tool output together, and nothing can overtake the thing in
+   * front of it. A segment that has caught up with its text is skipped (the wire may still be writing it), and if
+   * it grows again it is still the earliest pending segment, so its new words are released before the later ones.
+   *
+   * THE WRITER IS APPEND-ONLY. `shown` - the number of characters emitted for a segment - only ever grows and is
+   * the only thing a paint or a rebuild asks for. It lives here, not in the DOM, so a board poll, a rail resize or
+   * a focus-mode toggle redraws exactly what had been emitted and typing carries on from that character; nothing
+   * is revealed twice. The one exception is a frame that REWRITES a line (a trim, a replayed snapshot): that is a
+   * replacement, not a retype - the segment jumps to its new text and the row is drawn again whole.
+   *
+   * This is a classic script in the page and a plain module to node, so the ONE implementation the page runs is
+   * what test/type-stream.test.js and test/console-ordered-stream.test.js drive, with the clock injected.
    */
-  function createPacer(opts = {}) {
+  function createDrawStream(opts = {}) {
     const { now, schedule, cancel } = defaults(opts);
     const onPaint = opts.onPaint || (() => {});
     let rate = clampWords(opts.rate ?? DEFAULT_WORDS);
-    const lines = new Map(); // lid -> { job, full, shown, budget, last }
+    const segs = new Map(); // key -> { key, job, kind, at, seq, text, shown, rewrites }
+    let queue = []; // the same segments, ordered by (at, seq)
+    const lastAt = new Map(); // job -> the newest stamp seen, for a segment that carries none
     let timer = null;
+    let last = 0;
+    let words = 0; // the stream's one word budget
+    let seqNo = 0;
+    const stats = { enqueued: 0, emitted: 0, rewrites: 0, replaced: 0, late: 0, ticks: 0, paints: 0 };
 
-    const restOf = (e) => wordsIn(e.full, e.shown);
+    const restOf = (s) => wordsIn(s.text, s.shown);
     const pendingAny = () => {
-      for (const e of lines.values()) if (restOf(e) > 0) return true;
+      for (const s of queue) if (s.shown < s.text.length) return true;
       return false;
     };
     const tickMs = () => Math.max(MIN_TICK_MS, Math.min(250, Math.round(1000 / Math.max(0.5, rate))));
 
     function arm() {
       if (timer != null || !rate || !pendingAny()) return;
+      // Nothing banks while the clock is stopped: the seconds since the last tick are not words anybody is owed.
+      last = now();
       timer = schedule(run, tickMs());
     }
     function disarm() {
@@ -144,135 +181,209 @@
       arm();
     }
 
-    /**
-     * The wire says this line now reads `text`. Returns the prefix to draw right now.
-     *
-     * Cumulative growth extends what is already queued; anything else (a frame that rewrites the line, a
-     * replacement after a trim) snaps to the new text, because typing out a line that has been rewritten is a
-     * promise about the past that nobody made.
-     */
-    function feed(lid, job, text) {
-      const full = String(text ?? "");
-      if (!rate) {
-        lines.delete(lid);
-        return full;
+    // Where a segment sits: the server stamp first, the arrival sequence second. A segment with no stamp of its own
+    // (history written before lines were stamped) takes the newest stamp its job has, so it stays where it arrived.
+    function atOf(job, at) {
+      const id = String(job ?? "");
+      const n = Number(at);
+      if (Number.isFinite(n) && n > 0) {
+        lastAt.set(id, n);
+        return n;
       }
-      let e = lines.get(lid);
-      if (!e) {
-        if (lines.size >= MAX_ENTRIES) lines.delete(lines.keys().next().value);
-        e = { job: String(job ?? ""), full: "", shown: 0, budget: 0, last: now() };
-        lines.set(lid, e);
+      return lastAt.get(id) ?? 0;
+    }
+
+    // Insert by (at, seq). A frame can reach this late with an EARLIER stamp than something already on screen (the
+    // store hands a reply's reasoning over after the tool call it made is already on the wire, see
+    // appendJobLine's `think` branch). It takes its ordered place; `late` counts the cases where text was already
+    // emitted for a segment that now stands after it, which is the only situation the order cannot undo.
+    function place(s) {
+      let i = queue.length;
+      for (let k = 0; k < queue.length; k++) {
+        const q = queue[k];
+        if (q.at > s.at || (q.at === s.at && q.seq > s.seq)) {
+          i = k;
+          break;
+        }
       }
-      if (job != null) e.job = String(job);
-      if (full === e.full) return e.full.slice(0, e.shown);
-      if (!full.startsWith(e.full)) {
-        e.full = full;
-        e.shown = full.length;
-        e.budget = 0;
-        return full;
+      if (i < queue.length) {
+        for (let k = i; k < queue.length; k++) {
+          if (queue[k].shown > 0) {
+            stats.late += 1;
+            break;
+          }
+        }
       }
-      // A line that had gone quiet starts its budget again from now: the clock stopped while there was nothing
-      // to release, so the seconds since the last tick are not words anybody is owed.
-      const wasIdle = restOf(e) === 0;
-      e.full = full;
-      if (wasIdle) {
-        e.budget = 0;
-        e.last = now();
-      }
-      arm();
-      return e.full.slice(0, e.shown);
+      queue.splice(i, 0, s);
+    }
+
+    // The earliest segment with words left to show. Everything in front of it has caught up with the text it has,
+    // which is exactly "the reader has seen everything that comes before this".
+    function headPending() {
+      for (const s of queue) if (s.shown < s.text.length) return s;
+      return null;
     }
 
     /**
-     * What may be drawn for this line now, or null when this line is not being paced (draw it whole).
+     * The wire says this segment now reads `text`. Returns the prefix to draw right now.
      *
-     * `text` is the line as the RECORD holds it — the caller's own row, not the pacer's memory. Given it, the pacer
-     * only answers while it can honestly claim a prefix of that line: a line the record has moved past (the reader
-     * was away, so no frame was ever fed here) or rewritten (a trim moved it) is not being typed any more, and the
-     * entry is dropped so the record draws whole from then on. Without it the entry answers for itself, which is
-     * what a caller with no record in hand wants. Why this matters: a prefix that can no longer grow is text the
-     * console loses — "This" painted over a paragraph that started "This branch was added to main".
+     * Cumulative growth extends the segment in place and keeps its position; anything else (a frame that rewrites
+     * the line, a replacement after a trim) snaps to the new text, because typing out a line that has been
+     * rewritten is a promise about the past that nobody made.
      */
-    function shownFor(lid, text) {
-      const e = lines.get(lid);
-      if (!e) return null;
-      if (text == null) return e.full.slice(0, e.shown);
+    function feed(key, job, text, opts = {}) {
+      const k = String(key);
+      const full = String(text ?? "");
+      const kind = opts.kind ?? "";
+      const at = opts.at;
+      if (!rate) {
+        forget(k);
+        return full;
+      }
+      let s = segs.get(k);
+      if (!s) {
+        if (segs.size >= MAX_ENTRIES) forgetOldest();
+        s = {
+          key: k,
+          job: String(job ?? ""),
+          kind: String(kind ?? ""),
+          at: atOf(job, at),
+          seq: ++seqNo,
+          text: "",
+          shown: 0,
+          rewrites: 0,
+        };
+        segs.set(k, s);
+        place(s);
+        stats.enqueued += 1;
+      } else {
+        if (job != null) s.job = String(job);
+        if (kind != null) s.kind = String(kind);
+      }
+      if (full === s.text) return s.text.slice(0, s.shown);
+      if (!full.startsWith(s.text)) {
+        // A rewrite. Draw the new line whole from here on; what was emitted before is not typed again.
+        stats.replaced += s.shown;
+        stats.rewrites += 1;
+        s.text = full;
+        s.shown = full.length;
+        return full;
+      }
+      s.text = full;
+      arm();
+      return s.text.slice(0, s.shown);
+    }
+
+    /**
+     * What may be drawn for this segment now, or null when it is not being paced (draw the record whole).
+     *
+     * `text` is the segment as the RECORD holds it - the caller's own row, not the stream's memory. Given it, the
+     * stream only answers while it can honestly claim a prefix of that line: a line the record has moved past (the
+     * reader was away, so no frame was ever fed here) or rewritten (a trim moved it) is not being typed any more,
+     * and the entry is dropped so the record draws whole from then on. Without it the entry answers for itself,
+     * which is what a caller with no record in hand wants (a reasoning row holds its words elsewhere).
+     */
+    function shownFor(key, text) {
+      const s = segs.get(String(key));
+      if (!s) return null;
+      if (text == null) return s.text.slice(0, s.shown);
       const full = String(text);
-      if (full === e.full) return e.full.slice(0, e.shown);
-      if (restOf(e) === 0 || !full.startsWith(e.full)) {
-        lines.delete(lid);
+      if (full === s.text) return s.text.slice(0, s.shown);
+      if (restOf(s) === 0 || !full.startsWith(s.text)) {
+        forget(s.key);
         return null;
       }
-      return e.full.slice(0, e.shown);
+      return s.text.slice(0, s.shown);
+    }
+
+    /**
+     * Everything emitted for this segment so far, and nothing the clock has not reached. This is what a REBUILD
+     * draws: it is the stream's own high-water mark, so a repaint cannot be behind what the reader has already
+     * seen and a repaint cannot be ahead of the clock either.
+     */
+    function emitted(key) {
+      const s = segs.get(String(key));
+      return s ? s.text.slice(0, s.shown) : "";
     }
 
     /** Release the next words that are due. Returns whether anything is still waiting. */
     function tick(when) {
       const t = Number.isFinite(when) ? when : now();
+      const dt = Math.max(0, t - last);
+      last = t;
+      stats.ticks += 1;
+      if (!rate) return false;
+      words += (rate * dt) / 1000;
       const painted = [];
-      for (const [lid, e] of lines) {
-        const rest = restOf(e);
-        if (!rest) {
-          // Nothing waiting: bank nothing, so the next frame cannot arrive as a dump.
-          e.budget = 0;
-          e.last = t;
-          continue;
+      // One budget, spent in transcript order: the earliest segment with words left takes them, and the next one
+      // only gets what is left over once it has caught up.
+      for (;;) {
+        const s = headPending();
+        if (!s) break;
+        const n = Math.min(Math.floor(words), restOf(s));
+        if (n <= 0) break;
+        words -= n;
+        const end = advance(s.text, s.shown, n);
+        if (end > s.shown) {
+          stats.emitted += end - s.shown;
+          s.shown = end;
+          painted.push(s.key);
         }
-        e.budget += (rate * Math.max(0, t - e.last)) / 1000;
-        e.last = t;
-        const n = Math.floor(e.budget);
-        if (n <= 0) continue;
-        e.budget -= n;
-        const end = advance(e.full, e.shown, Math.min(n, rest));
-        if (end === e.shown) continue;
-        e.shown = end;
-        painted.push(lid);
+        if (words < 1) break;
       }
-      if (painted.length) onPaint(painted);
+      if (painted.length) {
+        stats.paints += 1;
+        onPaint(painted);
+      }
       return pendingAny();
     }
 
-    /** Show everything this line has right now (the turn settled, or the reader asked for it). */
-    function flush(lid) {
-      const e = lines.get(lid);
-      if (!e) return null;
-      e.shown = e.full.length;
-      e.budget = 0;
-      e.last = now();
+    /** Show everything this segment has right now (the turn settled, or the reader asked for it). */
+    function flush(key) {
+      const s = segs.get(String(key));
+      if (!s) return null;
+      stats.emitted += s.text.length - s.shown;
+      s.shown = s.text.length;
       disarm();
       arm();
-      return e.full;
+      return s.text;
     }
 
     function flushJob(job) {
       const id = String(job ?? "");
       const out = [];
-      for (const [lid, e] of lines) {
-        if (e.job !== id) continue;
-        // Every line of a settled turn goes back to the console, not only the ones with words still queued: the wire
-        // can stop a frame short of the record, and a line the pacer thinks it finished is exactly the one a settle
-        // was leaving drawn at its own top. The console repaints each against its record (see paintTypedLines).
-        e.shown = e.full.length;
-        out.push(lid);
-        e.budget = 0;
-        e.last = now();
+      for (const s of queue) {
+        if (s.job !== id) continue;
+        // Every segment of a settled turn goes back to the console, not only the ones with words still queued: the
+        // wire can stop a frame short of the record, and a line the stream thinks it finished is exactly the one a
+        // settle was leaving drawn at its own top. The console repaints each against its record (see paintTypedLines).
+        stats.emitted += s.text.length - s.shown;
+        s.shown = s.text.length;
+        out.push(s.key);
       }
       // Another card may still be typing: the clock keeps running for it.
       disarm();
       arm();
-      if (out.length) onPaint(out);
+      if (out.length) {
+        stats.paints += 1;
+        onPaint(out);
+      }
       return out;
     }
 
     function releaseAll() {
       const out = [];
-      for (const [lid, e] of lines) {
-        if (restOf(e) <= 0) continue;
-        e.shown = e.full.length;
-        out.push(lid);
+      for (const s of queue) {
+        if (s.shown >= s.text.length) continue;
+        stats.emitted += s.text.length - s.shown;
+        s.shown = s.text.length;
+        out.push(s.key);
       }
       disarm();
-      if (out.length) onPaint(out);
+      if (out.length) {
+        stats.paints += 1;
+        onPaint(out);
+      }
       return out;
     }
 
@@ -282,7 +393,8 @@
       rate = next;
       if (!next) {
         releaseAll();
-        lines.clear();
+        segs.clear();
+        queue = [];
         disarm();
       } else if (next !== was) {
         disarm();
@@ -291,13 +403,29 @@
       return rate;
     }
 
-    // Is any line of this job still being written? `test(lid)` narrows it to the lines the asker cares about (the
-    // reasoning hold asks about thoughts only, and only the ones that belong in front of the call it is holding).
+    function forget(key) {
+      const k = String(key);
+      if (!segs.delete(k)) return false;
+      queue = queue.filter((s) => s.key !== k);
+      return true;
+    }
+
+    // The oldest segment that has nothing left to show; a segment still being written is kept.
+    function forgetOldest() {
+      for (const s of queue) {
+        if (restOf(s) > 0) continue;
+        return forget(s.key);
+      }
+      return forget(queue[0]?.key);
+    }
+
+    // Is any segment of this job still being written? `test(key)` narrows it to the segments the asker cares about
+    // (the reasoning hold asks about thoughts only, and only the ones that belong in front of the call it is holding).
     function pendingFor(job, test) {
       const id = String(job ?? "");
-      for (const [lid, e] of lines) {
-        if (e.job !== id || restOf(e) <= 0) continue;
-        if (!test || test(lid)) return true;
+      for (const s of queue) {
+        if (s.job !== id || s.shown >= s.text.length) continue;
+        if (!test || test(s.key)) return true;
       }
       return false;
     }
@@ -305,10 +433,12 @@
     return {
       feed,
       shownFor,
-      // Which job a paced line belongs to. A paint must resolve a line's rows through the consoles of THIS job:
-      // line ids are the server's sequence, not a page-wide key (a card adopted from another process can carry the
-      // same numbers), and a document-wide lookup by lid is how one agent's tick wrote into another agent's console.
-      jobFor: (lid) => lines.get(lid)?.job ?? null,
+      emitted,
+      // Which job a segment belongs to. A paint must resolve a segment's rows through the consoles of THIS job:
+      // keys are the server's sequence, not a page-wide key (a card adopted from another process can carry the same
+      // numbers), and a document-wide lookup by key is how one agent's tick wrote into another agent's console.
+      jobFor: (key) => segs.get(String(key))?.job ?? null,
+      kindFor: (key) => segs.get(String(key))?.kind ?? null,
       pendingFor,
       tick,
       flush,
@@ -319,11 +449,16 @@
       pending: pendingAny,
       pendingWords: () => {
         let n = 0;
-        for (const e of lines.values()) n += restOf(e);
+        for (const s of queue) n += restOf(s);
         return n;
       },
-      forget: (lid) => lines.delete(lid),
-      size: () => lines.size,
+      forget,
+      size: () => segs.size,
+      // The queue's order, oldest first: the order the reader must see the segments start in.
+      order: () => queue.map((s) => s.key),
+      seqOf: (key) => segs.get(String(key))?.seq ?? null,
+      atOf: (key) => segs.get(String(key))?.at ?? null,
+      stats: () => ({ ...stats }),
     };
   }
 
@@ -534,5 +669,5 @@
     };
   }
 
-  root.wtType = { DEFAULT_WORDS, MAX_WORDS, MAX_LINES, MAX_HOLD_MS, MIN_TICK_MS, wordsIn, advance, createPacer, createLineGate, createReasoningHold, clampWords, clampLines, isPacedTool };
+  root.wtType = { DEFAULT_WORDS, MAX_WORDS, MAX_LINES, MAX_HOLD_MS, MIN_TICK_MS, wordsIn, advance, createDrawStream, createLineGate, createReasoningHold, clampWords, clampLines, isPacedTool };
 })(globalThis);

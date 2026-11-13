@@ -37,7 +37,7 @@
 // fence's body is the lines under it, and a list is several items. So a run of prose lines is parsed into
 // blocks (`consoleMdBlocks`) and each block is emitted as one wrapper with the source lines still inside it as
 // `.jl` rows carrying `data-ltext`/`data-lkind`/`data-lid` — the same attributes every console line has, so
-// nothing in the page that reads a console back out of the DOM (a burst rebuild, the pacer's `[data-lid]`
+// nothing in the page that reads a console back out of the DOM (a burst rebuild, the stream's `[data-lid]`
 // lookup, the copy button) has to learn a second shape. Only the wrapper and the row's inner HTML are new.
 //
 // A FENCE IS A WELL, NOT A WALL. Its head names the language (or "text") and counts the lines in it; past
@@ -427,11 +427,11 @@ function consoleMdBlockHtml(block, opts = {}) {
  * @param lines - [{ kind, text, lid }] in draw order.
  * @param opts.sep - put the stream's blank line (`jl-sep`) on the first block (the console sets every piece of
  *   one stream apart from the piece above it; a repaint must not lose it).
- * @param opts.textOf - the visible text for a line, for a caller with a word pacer: (line) => string|null.
+ * @param opts.textOf - the visible text for a line, for a caller with a drawn stream: (line) => string|null.
  */
 function consoleMdHtml(lines, opts = {}) {
   // The run is expanded into its PHYSICAL lines first (see consoleMdPhysicalLines): a store line that carries
-  // several blocks is drawn as those blocks, and the pacer's prefix of that line is shared out the same way.
+  // several blocks is drawn as those blocks, and the stream's prefix of that line is shared out the same way.
   const list = consoleMdPhysicalLines(Array.isArray(lines) ? lines.filter(Boolean) : []);
   if (!list.length) return "";
   const ask = typeof opts.textOf === "function" ? opts.textOf : null;
@@ -440,7 +440,7 @@ function consoleMdHtml(lines, opts = {}) {
         const parent = line._cmLine || line;
         const shown = ask(parent);
         if (shown == null || parent === line) return shown;
-        // The pacer answers for the STORE line; this row is one physical line of it, so it takes the same index
+        // The stream answers for the STORE line; this row is one physical line of it, so it takes the same index
         // from the prefix. A row the prefix has not reached yet is empty rather than whole.
         const rows = String(shown).split("\n");
         return line._cmRow < rows.length ? rows[line._cmRow] : "";
@@ -449,7 +449,7 @@ function consoleMdHtml(lines, opts = {}) {
   const blocks = consoleMdBlocks(list);
   return blocks
     .map((block, i) => {
-      // A pacer-typed run is drawn up to the words that may be shown now, row by row: the same blocks, the same
+      // A typed run is drawn up to the words that may be shown now, row by row: the same blocks, the same
       // fence head, only each row's inner HTML is the visible prefix instead of the whole line.
       const html = textOf ? consoleMdTypedBlockHtml(block, textOf) : consoleMdBlockHtml(block);
       return i === 0 && opts.sep ? `<div class="md-sep ${opts.sep}"></div>${html}` : html;
@@ -457,7 +457,7 @@ function consoleMdHtml(lines, opts = {}) {
     .join("");
 }
 
-// The typed variant: every row's inner HTML is the pacer's visible prefix, rendered inline. Nothing else
+// The typed variant: every row's inner HTML is the stream's visible prefix, rendered inline. Nothing else
 // changes — the block, the fence and its head are the same shapes.
 function consoleMdTypedBlockHtml(block, textOf) {
   const shownOf = (line) => {
@@ -555,7 +555,7 @@ function consoleMdOpenHtml(plan) {
 // One line's markup, as the append path needs it: inside a paragraph, a list item, a heading, or a fence's code.
 function consoleMdAppendRow(line, type, opts = {}) {
   const text = cmText(line);
-  // A caller with a word pacer answers for a line that is still being typed; `null` means it has nothing to say
+  // A caller with a drawn stream answers for a line that is still being typed; `null` means it has nothing to say
   // about this one (it has not been queued, or the whole line may be shown), and the line is drawn whole.
   const shown = typeof opts.textOf === "function" ? opts.textOf(line) : null;
   const visible = shown == null ? text : String(shown);

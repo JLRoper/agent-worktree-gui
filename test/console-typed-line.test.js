@@ -20,7 +20,7 @@ import test from "node:test";
 import { readSource, sliceBetween } from "../tools/panel-testkit.mjs";
 
 await import("../public/core/type-stream.js");
-const { createPacer } = globalThis.wtType;
+const { createDrawStream } = globalThis.wtType;
 
 const code = sliceBetween(readSource("public/board/console.js") + "\n" + readSource("public/app.js"), "// ---- end result row head", "// ---- console row text");
 // `window` is only used by the "console-format asks the page for the prefix" registration at the end of that region;
@@ -42,9 +42,9 @@ function bench() {
     },
     cancel: (id) => timers.delete(id),
   };
-  const pacer = createPacer({ ...clock, rate: 40, onPaint: (lids) => painted.push(...lids) });
+  const pacer = createDrawStream({ ...clock, rate: 40, onPaint: (lids) => painted.push(...lids) });
   const document = { hidden: false };
-  const page = make({ typePacer: pacer }, document, {});
+  const page = make({ typeStream: pacer }, document, {});
   const step = (ms) => {
     const target = t + ms;
     for (;;) {

@@ -360,7 +360,7 @@ function consoleFileOutput(tool, arg) {
 const cfEsc = (s) => (typeof esc === "function" ? esc(s) : String(s ?? ""));
 const cfLink = (s) => (typeof linkifyText === "function" ? linkifyText(s) : cfEsc(s));
 // A line the stream is still writing: the page registers the one function that knows which lines those are (the
-// word pacer, core/type-stream.js through app.js `typedShown`), and a row it names is drawn up to the words that may
+// drawn stream, core/type-stream.js through app.js `typedShown`), and a row it names is drawn up to the words that may
 // be shown NOW instead of whole. Registered rather than imported so this module stays text in, markup out — with no
 // hook (a harness, a console nobody is typing into) every row is drawn whole, exactly as before.
 let cfShownFor = null;
@@ -662,14 +662,14 @@ function cfBox({ kind, at, rows, what, title = "", delta = "", body, opts, open,
   );
 }
 
-// Is this a SKILL's result? The same tools the word pacer writes out (core/type-stream.js isPacedTool), so the box that
+// Is this a SKILL's result? The same tools the stream writes out (core/type-stream.js isPacedTool), so the box that
 // types out like prose is also the box Settings > Display lets the reader colour and size apart from the console.
-// Asked of the pacer at render time rather than copied here, so the two cannot disagree about which tools those are;
-// a page without the pacer (a harness) falls back to the same name rule.
+// Asked of the stream at render time rather than copied here, so the two cannot disagree about which tools those are;
+// a page without the stream (a harness) falls back to the same name rule.
 function cfIsSkill(tool) {
   const t = String(tool || "").trim();
-  const pacer = globalThis.wtType;
-  return pacer && typeof pacer.isPacedTool === "function" ? pacer.isPacedTool(t) : /^skill/i.test(t);
+  const wt = globalThis.wtType;
+  return wt && typeof wt.isPacedTool === "function" ? wt.isPacedTool(t) : /^skill/i.test(t);
 }
 
 // A result's box. Whatever the result is made of — a shell transcript, a file's body, a search, a skill's lines, a
@@ -748,7 +748,7 @@ window.WMApp.core.consoleFormat = {
   // The fold note's own sentence, shared so the server's push (lib/jobs/console-lines.js) and this matcher cannot
   // drift apart — a harness drives both against the same string.
   foldText: foldNoteText,
-  // The page's word pacer, so a line that is still being written is drawn up to the words that may be shown now
+  // The page's drawn stream, so a line that is still being written is drawn up to the words that may be shown now
   // (the lines of a skill the agent is loading, typed out like its prose). Without it every row is drawn whole.
   setShownFor: consoleSetShownFor,
 };

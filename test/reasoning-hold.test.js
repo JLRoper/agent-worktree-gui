@@ -17,7 +17,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 await import("../public/core/type-stream.js");
-const { createPacer, createReasoningHold, MAX_HOLD_MS } = globalThis.wtType;
+const { createDrawStream, createReasoningHold, MAX_HOLD_MS } = globalThis.wtType;
 
 function bench({ words = 10, hold: holdOpts = {} } = {}) {
   let t = 1_000_000;
@@ -46,7 +46,7 @@ function bench({ words = 10, hold: holdOpts = {} } = {}) {
   };
   const drawn = [];
   const calls = [];
-  const pacer = createPacer({ ...clock, rate: words });
+  const pacer = createDrawStream({ ...clock, rate: words });
   const { floor = 0, ...rest } = typeof holdOpts === "function" ? holdOpts({ pacer, calls }) : holdOpts;
   const hold = createReasoningHold({
     ...clock,
@@ -118,17 +118,19 @@ test("a growth frame for a held line updates the held copy instead of queueing a
   assert.deepEqual(b.drawn, ["call A", "half a sentence, finished"], "the paragraph left as the wire last wrote it");
 });
 
-test("only thoughts newer than the floor hold a call: an old backlog typing in parallel does not", () => {
+test("only thoughts newer than the floor hold a call: an old backlog is history, not a queue in front of it", () => {
   const b = bench({ words: 10, hold: { floor: 5000 } });
-  // A card opened mid-turn: every earlier thought is fed at once and types in parallel. None of it precedes this call.
-  for (const at of [1000, 2000, 3000]) b.pacer.feed(`think:${at}`, "job", THOUGHT);
+  // A card opened mid-turn: the thoughts older than the last result are history, drawn whole by the pane. One that
+  // was handed to the stream anyway is still in front of nothing this call follows, so it cannot hold it.
+  b.pacer.feed("think:2000", "job", THOUGHT);
   b.arrive("job", "tool", "call A");
   assert.deepEqual(b.drawn, ["call A"], "the backlog is not a reason to wait");
-  // The thought written since the last result is.
+  // The thought written since the last result is, and it is the only thing the stream has.
   b.pacer.feed("think:6000", "job", THOUGHT);
   b.arrive("job", "tool", "call B");
   assert.deepEqual(b.drawn, ["call A"], "the thought in front of call B holds it");
-  b.step(2500);
+  // One queue, one clock: the backlog finishes first, then the thought the call waits for, then the call.
+  b.step(6000);
   assert.deepEqual(b.drawn, ["call A", "call B"]);
 });
 
@@ -244,7 +246,7 @@ test("the page holds frames before the line gate, and lets the queue go before t
 
 test("the page holds only what a reader is watching: words/s on, turn live, reasoning on screen", () => {
   const wants = con.slice(con.indexOf("function reasoningWants(evt)"), con.indexOf("// The moment of the last tool result"));
-  assert.match(wants, /typePacer\.rate\(\)/, "words/s 0 keeps the console exactly as the run sent it");
+  assert.match(wants, /typeStream\.rate\(\)/, "words/s 0 keeps the console exactly as the run sent it");
   assert.match(wants, /turnLive\(turn\)/);
   assert.match(wants, /reasoningShown\(turn\)/);
   const shown = con.slice(con.indexOf("function reasoningShown(turn)"), con.indexOf("function reasoningWants(evt)"));

@@ -155,7 +155,7 @@ async function main() {
         state.thinkOpen.clear();
         state.thinkClosed.clear();
         state.pinnedTurns?.clear?.();
-        state.typePacer?.releaseAll?.();
+        state.typeStream?.releaseAll?.();
         const now = Date.now();
         for (const c of cards) {
           const shape = (n, age) => ({
