@@ -45,6 +45,10 @@ function harness({ turnoverBranch = TURNOVER } = {}) {
     },
     esc,
     keyOf,
+    // The page's own answer for "is this row drawn open" (public/app.js). With focus mode off it is the stored set,
+    // which is the state this harness builds; the renderer reads it instead of the set directly so one fold answer
+    // covers the board and the narrowed board both.
+    rowDrawsOpen: (k) => ctx.state.expanded.has(k),
     prCellHtml: () => "",
     verdictHtml: () => "",
     isProjectRootRow: () => false,
@@ -60,7 +64,7 @@ function harness({ turnoverBranch = TURNOVER } = {}) {
   };
   const { rowHtml } = new Function(
     "ctx",
-    `const { state, esc, keyOf, prCellHtml, verdictHtml, isProjectRootRow, treeTitleOf, agentBadgeHtml,
+    `const { state, esc, keyOf, rowDrawsOpen, prCellHtml, verdictHtml, isProjectRootRow, treeTitleOf, agentBadgeHtml,
              deletableWithoutAsking, shownColumns, branchCellHtml, ownerCellHtml, aheadBehindCellHtml,
              lifeCellHtml, nextReadCellHtml } = ctx;
      ${turnoverForCode}

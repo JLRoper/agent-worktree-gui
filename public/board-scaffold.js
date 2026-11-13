@@ -266,8 +266,13 @@ function repaintAgentState() {
 
 // The project header: its title tooltip, its counts strip, and the host chip with its Discover strip.
 function headTitle(name) {
-  const open = state.expandedProjects.has(name);
-  return `${open ? "minimize" : "expand"} ${name} — Ctrl+click to colour this project, Ctrl+Shift+click to clear it`;
+  const open = projectDrawsOpen(name);
+  // Focus mode draws every project that holds a live row expanded, so the header must not offer a fold the mode will
+  // not make: name the gesture that does work instead.
+  const what = focusModeOn() && projectHasFocusRow(name)
+    ? "focus mode draws every project with a live panel expanded - double-click the header bar to fold projects again"
+    : `${open ? "minimize" : "expand"} ${name}`;
+  return `${what} - Ctrl+click to colour this project, Ctrl+Shift+click to clear it`;
 }
 
 function chipsHtml(name) {

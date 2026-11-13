@@ -110,7 +110,7 @@ function pinOpenProjects(body, prevNames) {
   const byName = new Map(els.map((el) => [el.dataset.project, el]));
   const pinned = new Map();
   prevNames.forEach((n, i) => {
-    if (!state.expandedProjects.has(n) || i >= els.length) return;
+    if (!projectDrawsOpen(n) || i >= els.length) return;
     const el = byName.get(n);
     if (el) pinned.set(i, el);
   });
@@ -182,12 +182,15 @@ function reorderProjects() {
   const order = (els) => {
     const open = new Map();
     els.forEach((el, i) => {
-      if (state.expandedProjects.has(el.dataset.project)) open.set(i, el);
+      // A project drawn open holds its slot, and focus mode draws every project holding a live row open (app.js
+      // projectDrawsOpen) whether or not the reader ever opened it - a section sliding under a live row is the same
+      // defect as a section sliding under a console.
+      if (projectDrawsOpen(el.dataset.project)) open.set(i, el);
     });
     const byName = new Map(els.map((el) => [el.dataset.project, el]));
     const ranked = orderedByRank("projects", els.map((el) => el.dataset.project), ctx);
     const free = ranked
-      .filter((n) => !state.expandedProjects.has(n))
+      .filter((n) => !projectDrawsOpen(n))
       .map((n) => byName.get(n))
       .filter(Boolean);
     const out = [];
@@ -224,7 +227,7 @@ function reorderProjects() {
     .filter(Boolean);
   // A folder you are reading a project in holds its slot for the same reason the project does: the
   // folder sliding up takes the open section with it, which looks exactly like the section itself jumping.
-  const holdsOpen = (g) => childrenMatching(groupBody(g), "section.project").some((s) => state.expandedProjects.has(s.dataset.project));
+  const holdsOpen = (g) => childrenMatching(groupBody(g), "section.project").some((s) => projectDrawsOpen(s.dataset.project));
   const pinnedGroups = new Map();
   groups.forEach((g, i) => { if (holdsOpen(g)) pinnedGroups.set(i, g); });
   const freeGroups = ranked.filter((g) => !pinnedGroups.has(groups.indexOf(g)));
@@ -311,7 +314,9 @@ function rootSection(root, allProjects) {
   // The folder's frequent-scan count is over ALL its projects, not the ones the recent-only filter is showing: it
   // answers "how many of these am I reading often", which does not change when the reader toggles the filter.
   const scanning = allProjects.filter((p) => rootOf(p) === root && p.tier !== "old").length;
-  const anyOpen = projects.some((p) => state.expandedProjects.has(p.name));
+  // The label follows the fold the board DRAWS: focus mode force-expands a project holding a live row (app.js
+  // projectDrawsOpen), and a button reading "Expand all" over expanded sections is the wrong word for what is on screen.
+  const anyOpen = projects.some((p) => projectDrawsOpen(p.name));
   return `<section class="root-group${open ? "" : " collapsed"}" data-root="${esc(root)}">
     <div class="root-head" data-toggle-root="${esc(root)}" title="${open ? "collapse" : "expand"} ${esc(labelRoot(root))}">
       <span class="chev">${open ? "\u25be" : "\u25b8"}</span>
@@ -343,7 +348,9 @@ ${projects.map((p) => projectSection(p.name)).join("\n")}
 
 function projectSection(name) {
   const p = state.projects.get(name) || { name };
-  const open = state.expandedProjects.has(name);
+  // Focus mode force-expands a project that holds a live row (public/app.js projectDrawsOpen), so the class, the
+  // chevron and the head's tooltip all follow the answer the rows are built from rather than the stored fold.
+  const open = projectDrawsOpen(name);
   const mainLine = p.localMain && p.remoteTip
     ? `local ${esc(p.mainBranch)} <code>${esc(p.localMain)}</code> · ${p.mainBehind ?? "?"} behind / ${p.mainAhead ?? "?"} ahead of remote`
     : p.error ? esc(p.error) : "local main unknown";
@@ -648,7 +655,7 @@ function toggleChildFold(key) {
 // ---- end children under their parent
 
 function rowHtml(row, forceOwner = false) {
-  const isOpen = state.expanded.has(keyOf(row.project, row.path));
+  const isOpen = rowDrawsOpen(keyOf(row.project, row.path));
   // A row whose path is no longer a tree of its own (lib/scan.js's RELEASED row) has no counts to show: "clean" would
   // be a claim about a worktree that is not there, so the cell says — with the reason in its tooltip.
   const releasedWhy = row.released ? String(row.released.why || "this path is not a worktree any more") : "";
@@ -1271,8 +1278,9 @@ function placeRow(project, row, { flash = false } = {}) {
   }
   const old = state.rowEls.get(key);
   // A collapsed section is not on screen: keep the row in state (the chips and counters need it)
-  // but spend nothing on its markup. Expanding the project renders it from state.
-  if (!state.expandedProjects.has(project)) {
+  // but spend nothing on its markup. Expanding the project renders it from state. Focus mode force-expands a project
+  // that holds a live row, so the fold asked here is the one the section is drawn with.
+  if (!projectDrawsOpen(project)) {
     // Collapsed: there is no row on screen to flash, so a GREEN row flash becomes a green flash on the project's own
     // bar - "something inside this box moved and you could not see it". The quiet grey pulse is not repeated here:
     // "re-read, nothing moved" is not worth a project-level signal.
@@ -1312,7 +1320,7 @@ function placeRow(project, row, { flash = false } = {}) {
   // console's place off the node it is about to move, and a node that has already left the page reports 0 - the top,
   // which is the wrong answer for a reader who parked it. The rebuilt detail is attached below, the cards move into it
   // while the old one is still on screen, and only then does the old one go.
-  const cardOut = Boolean(oldDetail && oldDetail.isConnected && state.expanded.has(key) && !keepDetail);
+  const cardOut = Boolean(oldDetail && oldDetail.isConnected && rowDrawsOpen(key) && !keepDetail);
   beginDomMove();
   if (oldDetail && !keepDetail && !cardOut) oldDetail.remove();
   // Any other copy for this key is a stray from an earlier render: one row, one detail.
@@ -1323,7 +1331,7 @@ function placeRow(project, row, { flash = false } = {}) {
   if (old) old.replaceWith(newTr);
   else tbody.appendChild(newTr);
   state.rowEls.set(key, newTr);
-  if (state.expanded.has(key) && keepDetail) {
+  if (rowDrawsOpen(key) && keepDetail) {
     // Nothing the detail draws changed: keep the element — and every console inside it — exactly where it is.
     state.detailEls.set(key, oldDetail);
     // `old.replaceWith(newTr)` already leaves the detail as the new row's next sibling. Only move it if some other
@@ -1333,7 +1341,7 @@ function placeRow(project, row, { flash = false } = {}) {
       newTr.after(oldDetail);
       releaseScrolls(held);
     }
-  } else if (state.expanded.has(key)) {
+  } else if (rowDrawsOpen(key)) {
     const h2 = document.createElement("tbody");
     h2.innerHTML = detailHtml(row);
     const dEl = h2.firstElementChild;
@@ -1450,8 +1458,9 @@ function renderProjectRows(name, { typing = null } = {}) {
     prevTyping.set(k, captureTyping(dEl));
   }
   // A collapsed project shows nothing, so building its rows would be pure waste — with 94
-  // projects that was ~110 invisible rows and most of the render cost of a snapshot.
-  const expanded = state.expandedProjects.has(name);
+  // projects that was ~110 invisible rows and most of the render cost of a snapshot. Focus mode force-expands a
+  // project that holds a live row, so the fold this reads is the one the section is drawn with.
+  const expanded = projectDrawsOpen(name);
   const frag = document.createDocumentFragment();
   const built = [];
   // Stabilized: while a row of this project is open, the rows keep the order they are already in on screen (a row
@@ -1486,7 +1495,7 @@ function renderProjectRows(name, { typing = null } = {}) {
       const confirmEl = state.confirmEls.get(k);
       if (confirmEl) frag.appendChild(confirmEl);
       let dEl = null;
-      if (state.expanded.has(k)) {
+      if (rowDrawsOpen(k)) {
         const h2 = document.createElement("tbody");
         h2.innerHTML = detailHtml(row);
         dEl = h2.firstElementChild;
@@ -1544,7 +1553,7 @@ function renderProjectRows(name, { typing = null } = {}) {
   // A row that no longer exists must not leave a dead detail element remembered.
   for (const k of [...state.detailEls.keys()]) {
     if (state.rows.get(k)?.project !== name) state.detailEls.delete(k);
-    else if (!state.expanded.has(k)) state.detailEls.delete(k);
+    else if (!rowDrawsOpen(k)) state.detailEls.delete(k);
   }
   // The rows this table holds have just changed, so what each column has to be wide enough for changed with them.
   // Measured here, before the position below is restored: a new split can re-wrap a chip strip and make a row

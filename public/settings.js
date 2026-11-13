@@ -101,11 +101,15 @@ function applyRootFilter(root) {
 function applyProjectCollapse(name) {
   const sec = document.querySelector(`section.project[data-project="${CSS.escape(name)}"]`);
   if (!sec) return;
-  const open = state.expandedProjects.has(name);
+  // The same fold the rows are built from, not the stored one: focus mode force-expands every project that holds a
+  // live row (app.js projectDrawsOpen), and the class below is what shows or hides that project's chart.
+  const open = projectDrawsOpen(name);
   sec.classList.toggle("collapsed", !open);
   const head = sec.querySelector(".project-head[data-toggle-project]");
   if (head) {
-    head.title = `${open ? "minimize" : "expand"} ${name}`;
+    // One sentence, from the one place that writes it: `headTitle` answers for a forced-open project too, so the
+    // tooltip never promises a fold the mode will not make.
+    head.title = headTitle(name);
     const chev = head.querySelector(".chev");
     if (chev) chev.textContent = open ? "\u25be" : "\u25b8";
   }
