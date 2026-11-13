@@ -189,15 +189,19 @@
 <h2>The version, and why this landing carries no new number</h2>
 <div class="box note">
   <p>
-    This branch declares <b>1.89.4</b>, which is what <code>origin/main</code> declares. The base it merges into,
-    <code>wtgui/reasoning-delta-2026-11-12</code>, already declares <b>1.89.5</b> and already carries the annotated
-    tag <code>v1.89.5</code> at commit <code>107dc766</code> ("chore: 1.89.5 - the version this landing carries").
+    Three numbers are in play, all read from this tree at hand-off. This branch declares <b>1.89.4</b>, the number it
+    was cut with. <code>origin/main</code> moved to <b>1.89.5</b> while the work was in flight (commit
+    <code>d33a6ef5</code>, "docs: render the changelog - 572 releases"). The base this branch merges into,
+    <code>wtgui/reasoning-delta-2026-11-12</code>, also declares <b>1.89.5</b>, at commit <code>107dc766</code>
+    ("chore: 1.89.5 - the version this landing carries"), and carries the annotated tag <code>v1.89.5</code> there.
   </p>
   <p>
-    A second bump here would put two numbers on one unlanded stack - the base's 1.89.5 and this branch's 1.89.6 - and
-    the changelog render would then describe a release history cannot cover until the base lands. So this branch
-    adds no number, no tag and no changelog edit: it joins the stack that 1.89.5 already names, and the number moves
-    when the base itself lands.
+    That is drift, not a slot for a fourth number: a bump here would put a second number on an unlanded base whose
+    changelog cannot be rendered until the base lands, and it would make <code>v1.89.5</code> describe one branch's
+    commit while another branch declared the same value. So this branch adds no number, no tag and no changelog edit.
+    It joins the stack the base already names; the base's own landing owes a fresh number, and
+    <code>node tools/version.mjs check</code> says so in one line ("apply minor", with the reason to go in the PR
+    body). Withheld landings have neither tag nor changelog, which is why this one has neither.
   </p>
 </div>
 
