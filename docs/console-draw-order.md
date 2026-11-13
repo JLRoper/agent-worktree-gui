@@ -65,3 +65,63 @@ appear any more.
 
 The page is served from `public/`, but the panel process caches its module list and the browser holds the old
 scripts: a running panel keeps drawing with the pacer until the panel process is restarted and the page reloaded.
+
+## 5. The marching tail: outside the queue by construction
+
+A live turn's console carries one more thing - a trailing decoration under its last line drawing `. . . . `, one dot
+every 500 ms, four dots to the cycle, cleared back to a single dot whenever output arrives, and gone the instant the
+turn reads done. It is worth saying exactly where it stands, because the honest way to add it is to put it somewhere
+the ordered stream cannot reach.
+
+- **It is not a segment, and no rule can make it one.** The row is a sibling of the `pre`, emitted by
+  `public/render-jobs.js` `turnBody` between the console and its own tools (`public/board/console.js`
+  `marchRowHtml`). `createDrawStream` is never called for it, it carries no `lid`, no `data-ltext` and no `.jl`, and
+  nothing orders it against anything. A test can therefore hold the queue's own books: the stream's `enqueued` does
+  not move while the row marches.
+- **The record is never touched.** `pre.textContent` is the turn's text with no dot in it at any moment of the march,
+  not only after the turn ends - the row is not inside the node a repaint replaces, so a board poll, a rail resize or
+  a focus-mode toggle redraws the card and leaves the row where it was.
+- **The feed's height and scroll are the console's own.** The row is one fixed line *under* the box and its dot slot
+  is exactly `. . . . ` wide (`.march-dots { width: 8ch }`), so a step can neither wrap the row nor reflow the feed.
+- **One clock, one text node.** A single 500 ms timer writes `nodeValue` on the row's own `.march-dots` text node -
+  `nodeValue` and not `textContent`, because a replaced text node is a childList mutation the page's copy observer
+  wakes for. There is no per-frame loop and nothing in the march reads a box. The dot count is a function of the
+  clock (`marchDotsAt`: 1 at the burst, 2 at 500 ms, 3 at 1000, 4 at 1500, 1 again at 2000), so a timer that fires
+  late cannot make the march skip or double a dot, and a repaint draws the count the march had reached rather than
+  starting again.
+- **The panel's one motion idiom, and its one reduced-motion rule.** The row is `.live-pulse` with a `.pulse-dot`, so
+  it gets the `@keyframes livepulse` breath (1.4 s), the `.is-offscreen` pause and - under
+  `prefers-reduced-motion: reduce` - the *existing* stylesheet rule that sets `animation: none`. No second media query
+  is added: with motion held still the row does not march at all, and shows a static single dot with the word the dots
+  stood for.
+
+### Proving it
+
+`test/march-row.test.js` holds the rule without a browser: the 500 ms step and the 2 s cycle, the eight-character
+slot, the region's refusal to name the stream at all (`createDrawStream`, `feed(`, `shownFor`, `drawRowText` and
+`requestAnimationFrame` never appear in it), `createDrawStream`'s own `enqueued`/`pendingWords` staying at zero while
+the row marches, the clear-to-one on a burst, the wrap, the removal on done, the same text node written every step,
+and the stylesheet reusing the one media query rather than adding a second.
+
+`node tools/verify-march-row.mjs` is the browser half, and it is the one the numbers come from: a panel of its own on
+a spare port, a stub Runs API playing three bursts of five lines with a five-second quiet gap between them, the card
+spawned through `POST /api/agents`, then a 50 ms sampler for the whole turn. On this host it measured a median of
+**499 ms** between rendered steps (21 intervals, 489 to 509 ms), **5 wraps**, and a quiet window of 4740 ms holding
+**2 full cycles** in which `scrollHeight` 148 -> 148, `clientHeight` 148 -> 148, `scrollTop` 0 -> 0, the console box
+150 -> 150 px and the row 17 px in every one of the 96 samples. After the settle it read 21 rendered rows against the
+turn's 15 stored lines of its own text, in the store's order, with none missing and nothing on screen the store does
+not hold, and the record ending on the turn's last line character for character. The same harness runs a second turn
+in a context that asks for reduced motion and finds the row `is-still`, the dot slot not shown, the label shown, and
+`animation-name: none` - the existing rule, not a new one.
+
+The captures it leaves behind are `march-mid-cycle.png` (the row at ". . . " under the console), `march-after-done.png`
+(the row gone, the console ending on the turn's own last line) and `march-reduced-motion.png` (one dot, the word
+`working`), plus a JSON of every sample. `--root <checkout>` serves another checkout, so the same harness can be run
+against a `git archive` of the commit before this one.
+
+### Restarting to see it
+
+The page is served from `public/`, and a running panel keeps drawing with the scripts the browser already holds: the
+row appears after the panel process is restarted and the page reloaded (`docs/console-draw-order.md`, section 4). The
+shipped step is 500 ms with a 2 s cycle - the number the report quotes is the number in `public/board/console.js`'s
+`MARCH_STEP_MS`, not a second copy of it anywhere else.

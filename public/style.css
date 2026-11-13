@@ -1329,6 +1329,33 @@ button.pill-continue.is-starting .pill-again { animation: pill-again-spin .9s li
 @keyframes livepulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .3; transform: scale(.72); } }
 /* A looping dot is exactly what this asks to turn off. The state word and the age stay: only the motion goes. */
 @media (prefers-reduced-motion: reduce) { .live-pulse .pulse-dot { animation: none; } }
+/* The console's marching tail (public/board/console.js marchRowHtml). It is a SIBLING of the console, drawn under
+   the box: the record's text, height and scroll are the console's own, so the row can neither enter the record nor
+   move the feed. The pulse idiom supplies the dot (the @keyframes livepulse breath above) and the mono 11px text;
+   this variant drops the pill's chrome because it is a tail, not a chip, and gives the dots a FIXED slot of exactly
+   ". . . . " - eight characters - so a step never changes the row's width, the fourth dot clears at that edge, and
+   the row is always one line tall. */
+.out-wrap > .live-pulse.march {
+  display: flex;
+  align-self: flex-start;
+  margin: 5px 0 0 2px;
+  padding: 0;
+  border: 0;
+  background: none;
+  min-height: 1.5em;
+  line-height: 1.5;
+  white-space: pre;
+}
+.out-wrap > .live-pulse.march .march-dots {
+  display: inline-block;
+  width: 8ch;
+  white-space: pre;
+}
+/* Still (reduced motion): the dot stops by the ONE existing rule above, the march is never started, and the row says
+   in words what the dots were saying. */
+.out-wrap > .live-pulse.march .march-label { display: none; }
+.out-wrap > .live-pulse.march.is-still .march-dots { display: none; }
+.out-wrap > .live-pulse.march.is-still .march-label { display: inline; }
 /* The re-attach pill is the not-running pill: same word, same amber, same refresh glyph, same place on the card.
    The reader is not asked to learn a second control for a card that is not running, and the state is the same one
    the word already names. Only the CLICK differs, which is what this hook class carries: it asks the gateway about
