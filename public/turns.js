@@ -279,6 +279,30 @@ function turnAttachmentsHtml(turn) {
     .join("")}</div>`;
 }
 
+// ---- the assistant's command lines, as the tool card -----------------------------------------
+// A reply ends with lines in the panel's own vocabulary, and public/core/assistant-command.js is the one reader of
+// them: it answers with the same `.code-box` frame a tool's result is drawn in (public/core/console-format.js
+// publishes it), with the body folded to two lines. DISPLAY ONLY - it reads the line a second time and never
+// changes what the panel does with it, so a line whose title is malformed or absent draws exactly what it drew
+// before this existed.
+//
+// The module is asked at call time, and a page without it draws the plain line: nothing here may be the reason a
+// card comes back blank.
+function commandCardHtml(line, key, open = state.codeBoxOpen) {
+  const mod = globalThis.wtAssistantCommand;
+  if (!mod || typeof mod.cardHtml !== "function") return "";
+  return mod.cardHtml(line, { key, open });
+}
+
+// A block of text (a compacted answer) with every titled command line drawn as a card; "" when it holds none, so
+// the caller keeps its own rendering untouched.
+function commandCardsHtml(text, scope, open = state.codeBoxOpen) {
+  const mod = globalThis.wtAssistantCommand;
+  if (!mod || typeof mod.cardsHtml !== "function") return "";
+  return mod.cardsHtml(text, { scope, open, renderText: (line) => `<div class="tc-line">${linkifyText(line)}</div>` });
+}
+// ---- end the assistant's command lines -------------------------------------------------------
+
 // The answer a turn ended on: the first sentence of what the agent said AFTER its last tool call. Not the
 // console, not the tool output, not the thinking — the line a reader would have kept.
 function firstSentence(text) {
@@ -332,6 +356,9 @@ function turnPeekLine(turn) {
 
 // A compacted turn: what it concluded, and the last tool it used. Thinking blocks and the run of tool calls -
 // usually several hundred pixels of scrollback the reader has already read - are dropped, not merely folded.
+// A reply's command lines are drawn as cards here (see `commandCardHtml`): the tail of a folded turn is where a
+// reader meets "QUEUE assistant-3 | Playwright test" long after the turn has ended, and one line of prose is the
+// worst place to find it.
 function compactHtml(turn, copy = "") {
   const lines = jobLines(turn.id).filter((l) => !isBookkeeping(l));
   let lastTool = -1;
@@ -352,9 +379,12 @@ function compactHtml(turn, copy = "") {
   const answer = (said.length ? said : texts(0)).join("\n\n");
   const tool = lastTool >= 0 ? lines[lastTool] : null;
   const hidden = lines.filter((l) => l.kind === "tool" || l.kind === "tool-out" || l.kind === "dim").length;
+  // The command cards the answer holds, line by line; "" when it holds none, which leaves the drawn answer exactly
+  // as it was.
+  const cards = commandCardsHtml(answer, `compact|${turn.id}${copy}`);
   return `<div class="turn-compact" data-compact-turn="${esc(turn.id)}${esc(copy)}">${
     tool ? `<div class="tc-tool mono" title="${esc(String(tool.text || ""))}">${linkifyText(String(tool.text || ""))}</div>` : ""
-  }${answer ? `<div class="tc-answer">${linkifyText(answer)}</div>` : ""}<div class="tc-more dimmer mono">${
+  }${answer ? `<div class="tc-answer">${cards || linkifyText(answer)}</div>` : ""}<div class="tc-more dimmer mono">${
     hidden ? `${hidden} tool line${hidden === 1 ? "" : "s"} folded` : "thinking folded"
   } · open for the whole turn</div></div>`;
 }
@@ -362,6 +392,10 @@ function compactHtml(turn, copy = "") {
 function peekHtml(turn) {
   const peek = turnPeekLine(turn);
   if (!peek) return `<div class="turn-peek" data-peek-turn="${esc(turn.id)}" hidden></div>`;
+  // A command line the turn ended on is drawn as its card: its title is what the reader is looking for, and the
+  // one-line peek would cut it at the window's width.
+  const card = commandCardHtml(peek.text, `peek|${turn.id}`);
+  if (card) return `<div class="turn-peek is-command" data-peek-turn="${esc(turn.id)}" title="${esc(peek.text)}">${card}</div>`;
   return `<div class="turn-peek${peek.kind === "tool" ? " is-tool" : ""}" data-peek-turn="${esc(turn.id)}" title="${esc(peek.text)}">${esc(peek.text)}</div>`;
 }
 
@@ -373,7 +407,22 @@ function refreshTurnPeek(turn) {
     el.hidden = !peek;
     el.classList.toggle("is-tool", Boolean(peek && peek.kind === "tool"));
     const text = peek ? peek.text : "";
-    if (el.textContent !== text) el.textContent = text;
+    const card = peek ? commandCardHtml(text, `peek|${turn.id}`) : "";
+    el.classList.toggle("is-command", Boolean(card));
+    // The card is redrawn only when the line behind it changed: a repaint of an unchanged card would take the
+    // reader's focus off the head they just pressed (the fold itself is kept in the page's own book).
+    if (card) {
+      if (el.dataset.cmdText !== text) {
+        el.innerHTML = card;
+        el.dataset.cmdText = text;
+      }
+    } else {
+      if (el.dataset.cmdText) {
+        el.innerHTML = "";
+        delete el.dataset.cmdText;
+      }
+      if (el.textContent !== text) el.textContent = text;
+    }
     el.title = text;
   }
 }

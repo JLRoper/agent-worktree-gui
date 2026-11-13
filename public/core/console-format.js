@@ -639,9 +639,11 @@ const cfCount = (n) => `${n} line${n === 1 ? "" : "s"}`;
 // row in the rows the caller handed over — with the caller's `codeKey` that is the box's key, the handle the
 // reader's open state is kept under across a repaint. The key is also why a box grows in place while its result is
 // still arriving: the run starts at the same row every time, only its length changes.
-function cfBox({ kind, at, rows, what, title = "", delta = "", body, opts, open, skill = false }) {
+function cfBox({ kind, at, rows, what, title = "", delta = "", body, opts, open, skill = false, clamp = 0 }) {
   const fold = opts.fold && opts.fold.tool && opts.fold.turn != null && opts.fold.row != null ? opts.fold : null;
-  const key = fold ? `result|${fold.turn}|${fold.tool}|${fold.row}` : `${String(opts.codeKey || "")}|${at}`;
+  // `opts.key` is for the one caller whose card is not a RESULT: a command line's card is keyed by its own scope
+  // (the turn or the message it was written in), so its fold survives a repaint like every other box's.
+  const key = String(opts.key || "") || (fold ? `result|${fold.turn}|${fold.tool}|${fold.row}` : `${String(opts.codeKey || "")}|${at}`);
   const isOpen = Boolean(open && open.has(key));
   const inverted = Boolean(open && open.openByDefault);
   const pending = Boolean(fold && !opts.whole);
@@ -652,12 +654,15 @@ function cfBox({ kind, at, rows, what, title = "", delta = "", body, opts, open,
     : "";
   // Preserve only the capped wire rows for a DOM read-back. A fetched body must never be reabsorbed into the buffer.
   const source = fold && opts.source ? ` data-code-source="${cfEsc(JSON.stringify(opts.source))}"` : "";
+  // A clamped card shows its body FOLDED TO N LINES rather than shut: the body is never hidden, and the stylesheet
+  // reads the number off `data-code-clamp` (the press handler keeps it in step with `is-open`).
+  const lines = Number(clamp) > 0 ? Number(clamp) : 0;
   return (
-    `<div class="code-box is-${kind}${skill ? " is-skill" : ""}${isOpen ? " is-open" : ""}"${source}>` +
+    `<div class="code-box is-${kind}${skill ? " is-skill" : ""}${isOpen ? " is-open" : ""}${lines && !isOpen ? " is-clamped" : ""}"${source}${lines ? ` data-code-clamp="${lines}"` : ""}>` +
     `<button type="button" class="code-head" data-code-fold="1"${identity} data-code-key="${cfEsc(key)}"${inverted ? ' data-code-inverted="1"' : ""} aria-expanded="${isOpen ? "true" : "false"}"${title ? ` title="${cfEsc(title)}"` : ""}>` +
     `<span class="code-caret">${isOpen ? "▾" : "▸"}</span><span class="code-what">${cfEsc(what)}</span>${delta}` +
     `<span class="code-n">${cfEsc(count)}</span><span class="code-hint">${isOpen ? "click to fold" : "click to read"}</span></button>` +
-    `<div class="code-body"${isOpen ? "" : " hidden"}>${body}</div>` +
+    `<div class="code-body"${isOpen || lines ? "" : " hidden"}>${body}</div>` +
     `</div>`
   );
 }
@@ -739,6 +744,9 @@ window.WMApp.core.consoleFormat = {
   lineClasses: consoleLineClasses,
   bodyHtml: consoleBodyHtml,
   fileOutput: consoleFileOutput,
+  // The one frame a folded result is drawn in, published so a card that is NOT a result (the assistant's command
+  // line, public/core/assistant-command.js) is the same frame rather than a second one beside it.
+  box: cfBox,
   // Was this preview cut by the gateway? The console asks before it decides whether the lines it was handed are
   // all there is of a result, so the wording of the note lives here and nowhere else.
   cutNote: consoleCutNote,

@@ -916,6 +916,12 @@
        needs dom-format's esc and nothing else, so it sits before app.js; both call it through window.ModelMenu. -->
   <script src="/core/model-menu.js"></script>
   <script src="/core/console-format.js"></script>
+  <!-- The assistant's command lines, drawn as the tool card: the emoji per kind, the 80-character title rule, and
+       the card itself - the frame console-format.js publishes, with the body folded to two lines. DISPLAY ONLY:
+       lib/assistant/actions.js still parses the line the panel executes, byte for byte. Read by turns.js (the
+       board's tail) and assistant.js (the transcript) at render time; test/assistant-command-card.test.js imports
+       this same file. Needs console-format.js above it, because that is where the frame lives. -->
+  <script src="/core/assistant-command.js"></script>
   <!-- The console's PROSE, drawn as the markdown the agent wrote: bold, italic, inline code, fences, headings,
        lists and links, escaped first and never injecting the agent's own HTML. Loaded before app.js, which calls
        it at render time for the agent's own lines only (a tool line stays a tool line); the fence fold and the raw

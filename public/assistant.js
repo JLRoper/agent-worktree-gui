@@ -2088,6 +2088,15 @@
     return "the panel holds no text for this entry";
   }
 
+  // The assistant's own command lines, drawn as the tool card (public/core/assistant-command.js): the same frame
+  // the board's tail uses, with the body folded to two lines. "" when the text holds no TITLED command line, which
+  // is what leaves every other message's body exactly as it was drawn before.
+  function msgCommandCards(text, scope) {
+    const mod = globalThis.wtAssistantCommand;
+    if (!mod || typeof mod.cardsHtml !== "function") return "";
+    return mod.cardsHtml(text, { scope, open: state.codeBoxOpen, renderText: (line) => `<div class="as-msg-line">${esc(line)}</div>` });
+  }
+
   function msgEntryHtml(e) {
     const kind = (msgBoard?.kinds || {})[e.kind] || {};
     const dir = msgDirLabel(e);
@@ -2097,9 +2106,16 @@
     const open = msgOpen.has(e.id);
     const meta = msgMetaHtml(e);
     const report = msgReportHtml(e);
+    // A reply's command lines are drawn as cards here too: the transcript is where the reader meets them after the
+    // fact, and the emoji, the recipient and the title are the three things a row of prose cannot give at a glance.
+    // The module is asked only for the text actually being shown, so a clipped message clips its cards as well.
+    const cmd = msgCommandCards(long && !open ? text.slice(0, MSG_TEXT_CHARS) : text, `msg|${e.id}`);
+    const cut = e.clipped ? `<span class="as-msg-cut"> (the panel clipped this message at its own cap)</span>` : "";
     const body = !text.trim()
-      ? `<div class="as-msg-text is-missing">${esc(msgMissingText(e))}</div>`
-      : `<div class="as-msg-text">${esc(long && !open ? `${text.slice(0, MSG_TEXT_CHARS)}…` : text)}${e.clipped ? `<span class="as-msg-cut"> (the panel clipped this message at its own cap)</span>` : ""}</div>`;
+        ? `<div class="as-msg-text is-missing">${esc(msgMissingText(e))}</div>`
+        : cmd
+          ? `<div class="as-msg-text is-cards">${cmd}${cut}</div>`
+          : `<div class="as-msg-text">${esc(long && !open ? `${text.slice(0, MSG_TEXT_CHARS)}…` : text)}${cut}</div>`;
     const aria = `${dir}, ${label}, ${relTime(e.at)} ago: ${msgClip(text.replace(/\s+/g, " "), 160) || msgMissingText(e)}`;
     return `<div class="as-msg is-${e.dir}" role="listitem" data-msg="${esc(e.id)}" data-dir="${e.dir}" aria-label="${esc(aria)}">
       <div class="as-msg-head">
