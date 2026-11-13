@@ -4,16 +4,32 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.98.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.98.1 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-592 releases from v0.1.0 (2026-10-20) to v1.98.0 (2026-11-13), 2000 commits between the tags. Every release is anchored by an
+593 releases from v0.1.0 (2026-10-20) to v1.98.1 (2026-11-13), 2003 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.98.1 — 2026-11-13 · 3 commits
+
+[`fb8ec3c`](https://github.com/JLRoper/agent-worktree-gui/commit/fb8ec3c61b2600506c444bbe11a75c6f0547eaae) · [compare v1.98.0...v1.98.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.98.0...v1.98.1)
+
+### Fixed
+
+- fix: keep the agent card's session scroller on the newest line ([`cd0e970`](https://github.com/JLRoper/agent-worktree-gui/commit/cd0e970cb71d1cf86ef8ab93624a06a4f54a9b4c))
+
+### Docs & tests
+
+- docs: render the changelog - 592 releases ([`bd5c109`](https://github.com/JLRoper/agent-worktree-gui/commit/bd5c109efd63ac4eb68d1f861d9adf193b9c7223))
+
+### Other
+
+- chore: 1.98.1 - the version this landing carries ([`fb8ec3c`](https://github.com/JLRoper/agent-worktree-gui/commit/fb8ec3c61b2600506c444bbe11a75c6f0547eaae))
 
 ## v1.98.0 — 2026-11-13 · 4 commits
 
