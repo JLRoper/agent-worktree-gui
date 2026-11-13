@@ -639,7 +639,7 @@ const cfCount = (n) => `${n} line${n === 1 ? "" : "s"}`;
 // row in the rows the caller handed over — with the caller's `codeKey` that is the box's key, the handle the
 // reader's open state is kept under across a repaint. The key is also why a box grows in place while its result is
 // still arriving: the run starts at the same row every time, only its length changes.
-function cfBox({ kind, at, rows, what, title = "", delta = "", body, opts, open, skill = false, clamp = 0 }) {
+function cfBox({ kind, at, rows, what, title = "", delta = "", body, opts, open, skill = false, clamp = 0, attrs = "" }) {
   const fold = opts.fold && opts.fold.tool && opts.fold.turn != null && opts.fold.row != null ? opts.fold : null;
   // `opts.key` is for the one caller whose card is not a RESULT: a command line's card is keyed by its own scope
   // (the turn or the message it was written in), so its fold survives a repaint like every other box's.
@@ -658,7 +658,7 @@ function cfBox({ kind, at, rows, what, title = "", delta = "", body, opts, open,
   // reads the number off `data-code-clamp` (the press handler keeps it in step with `is-open`).
   const lines = Number(clamp) > 0 ? Number(clamp) : 0;
   return (
-    `<div class="code-box is-${kind}${skill ? " is-skill" : ""}${isOpen ? " is-open" : ""}${lines && !isOpen ? " is-clamped" : ""}"${source}${lines ? ` data-code-clamp="${lines}"` : ""}>` +
+    `<div class="code-box is-${kind}${skill ? " is-skill" : ""}${isOpen ? " is-open" : ""}${lines && !isOpen ? " is-clamped" : ""}"${attrs}${source}${lines ? ` data-code-clamp="${lines}"` : ""}>` +
     `<button type="button" class="code-head" data-code-fold="1"${identity} data-code-key="${cfEsc(key)}"${inverted ? ' data-code-inverted="1"' : ""} aria-expanded="${isOpen ? "true" : "false"}"${title ? ` title="${cfEsc(title)}"` : ""}>` +
     `<span class="code-caret">${isOpen ? "▾" : "▸"}</span><span class="code-what">${cfEsc(what)}</span>${delta}` +
     `<span class="code-n">${cfEsc(count)}</span><span class="code-hint">${isOpen ? "click to fold" : "click to read"}</span></button>` +
@@ -736,6 +736,28 @@ function cfResultBox(list, classes, pair, from, to, file, opts, open) {
   return cfBox({ kind: diff ? "diff" : name ? "file" : "out", at: from, rows: to - from, what, title: name, delta, body: parts.join(""), opts, open, skill: cfIsSkill(tool) });
 }
 
+// ---- the assistant's command lines, read through the one card -------------------------------
+// A reply ends with lines in the panel's own vocabulary (`QUEUE assistant-3 | ...`, `TODO ADD ...`), and
+// public/core/assistant-command.js is the one reader of them: it answers with the frame above, so a command line's
+// card is a result's card rather than a second component beside it.
+//
+// These two are the seam the OTHER renderers use, and they are here for one reason: the agent card's transcript draws
+// its prose through public/core/console-markdown.js, whose rows are the same rows the console uses. Asking this file
+// for the card - instead of asking the assistant module from a renderer, or writing a second card builder into
+// public/render-jobs.js - is what keeps ONE card on the page. Both answer "" / false when the page has no such module
+// (a harness, a console with no assistant), so a caller keeps the line it has always drawn.
+function cfCommandLine(text) {
+  const mod = globalThis.wtAssistantCommand;
+  return Boolean(mod && typeof mod.parseCommandLine === "function" && mod.parseCommandLine(String(text == null ? "" : text)));
+}
+
+function cfCommandCard(text, opts = {}) {
+  const mod = globalThis.wtAssistantCommand;
+  if (!mod || typeof mod.cardHtml !== "function") return "";
+  const out = mod.cardHtml(String(text == null ? "" : text), opts);
+  return typeof out === "string" ? out : "";
+}
+
 window.WMApp = window.WMApp || {};
 window.WMApp.core = window.WMApp.core || {};
 // Published for the harnesses and for the later steps of the public/ split; app.js calls the bare names.
@@ -747,6 +769,10 @@ window.WMApp.core.consoleFormat = {
   // The one frame a folded result is drawn in, published so a card that is NOT a result (the assistant's command
   // line, public/core/assistant-command.js) is the same frame rather than a second one beside it.
   box: cfBox,
+  // Is this text one of the assistant's command lines, and what does its card look like? The one seam every other
+  // renderer asks (core/console-markdown.js draws a turn's prose with the card this answers).
+  commandLine: cfCommandLine,
+  commandCard: cfCommandCard,
   // Was this preview cut by the gateway? The console asks before it decides whether the lines it was handed are
   // all there is of a result, so the wording of the note lives here and nowhere else.
   cutNote: consoleCutNote,

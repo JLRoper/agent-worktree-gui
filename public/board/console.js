@@ -2727,6 +2727,11 @@ function copyShownText(el) {
   if (el.checkVisibility && !el.checkVisibility({ checkVisibilityCSS: true })) return "";
   // A folded block contributes its title line and nothing else, whatever its contents compute to.
   if (el.tagName === "DETAILS" && !el.open) return copyShownText(el.querySelector(":scope > summary"));
+  // A command line's card is one line of the record (core/console-format.js's frame, drawn by
+  // core/assistant-command.js), not a block of chrome: it copies the line it was drawn from, which it carries the way
+  // every console row carries its own. Without this the head - a button, so skipped below - would take the command
+  // itself out of a copied console and leave only the payload.
+  if (el.matches && el.matches(".code-box[data-ltext]")) return String(el.getAttribute("data-ltext") || "");
   // A wrapper a renderer added for a fold is read THROUGH, not treated as a block of its own: a block's copy is
   // trimmed at its edges, and applied to a tool call's output that would eat the leading spaces of whichever line
   // happens to be first under the wrapper (a result line reads "  ↳ patch · 3.27s" on screen). The lines inside
