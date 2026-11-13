@@ -2968,9 +2968,25 @@ function recordJobLine(evt) {
   }
   // mode "set" = the agent is still writing the same paragraph; that line grows in place
   // instead of a new one being pushed for every streamed fragment.
-  const at = line.lid ? buf.findIndex((l) => l.lid === line.lid) : -1;
-  if (line.mode === "set" && at >= 0) buf[at] = { ...buf[at], ...line };
-  else buf.push(line);
+  //
+  // A prose line's own newlines are PHYSICAL lines (core/console-markdown.js, consoleMdPhysicalLines): the record
+  // keeps them apart so a live append and a rebuild draw the same blocks, and so the pacer is asked about the row
+  // that is actually on screen. A line that grows into more of them updates the rows where they stand and slots the
+  // new ones in beside them, rather than at the end of the buffer: lib/jobs.js can move on to a tool line and then
+  // keep writing the same paragraph.
+  const base = line.lid == null || line.lid === "" ? null : String(line.lid);
+  const owned = (l) => base != null && (String(l.lid ?? "") === base || String(l.lid ?? "").startsWith(`${base}.`));
+  const at = base == null ? -1 : buf.findIndex(owned);
+  const segs = consoleMdIsProse(line.kind) ? consoleMdPhysicalLines([line]) : null;
+  if (segs && (segs.length > 1 || (line.mode === "set" && at >= 0))) {
+    if (at >= 0) {
+      let n = 0;
+      while (at + n < buf.length && owned(buf[at + n])) n += 1;
+      buf.splice(at, n, ...segs);
+    } else buf.push(...segs);
+  } else if (line.mode === "set" && at >= 0) {
+    buf[at] = { ...buf[at], ...line };
+  } else buf.push(line);
   if (buf.length > JOB_LINES_PER_TURN) buf.splice(0, buf.length - JOB_LINES_PER_TURN);
   state.jobLines.set(evt.id, buf);
   // A new buffer is also the moment the tab can cross its ceiling on how many turns it holds one for.
@@ -2984,6 +3000,17 @@ function drawJobLine(evt) {
   const line = evt.line || {};
   // Kept in the buffer, never drawn: see BOOKKEEPING_LINES above.
   if (isBookkeeping(line)) return;
+  // A prose line can carry several physical lines of its own (core/console-markdown.js, consoleMdPhysicalLines):
+  // each one joins the block it belongs to, so a paragraph, a list and a heading that arrived inside ONE line are
+  // drawn as those shapes and not as one run-on paragraph. The first segment keeps the line's own id, so a line that
+  // grows a newline later updates the row already on screen instead of drawing it a second time.
+  if (consoleMdIsProse(line.kind)) {
+    const segs = consoleMdPhysicalLines([line]);
+    if (segs.length > 1) {
+      for (const seg of segs) drawJobLine({ ...evt, line: seg });
+      return;
+    }
+  }
   // A pinned turn renders twice — in its page and in the pinned block above — so every pane carrying
   // this id (or its "@pin" copy) gets the line.
   const outs = placedNodes("pre.job-out")

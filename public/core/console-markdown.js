@@ -241,13 +241,49 @@ function consoleMdIsProse(kind) {
 
 const cmText = (line) => String((line && line.text) != null ? line.text : "").replace(/\r+$/, "");
 
+// ---- physical lines ----------------------------------------------------------------------------------
+// A console line can carry several PHYSICAL lines inside its own text. lib/jobs.js keeps ONE open line per
+// paragraph and grows it in place, and a gateway may hand a whole answer over in a single delta - so the line a
+// turn's record holds is one string with blank lines, bullets, headings and fences in it (job 6073fb2a holds a
+// 4,446-character answer that way). Markdown is a property of a RUN of physical lines, so the run is expanded
+// HERE, before the parser sees it.
+//
+// Without this the parser read the string as one paragraph, and every block renderer then indexed the per-line
+// output of consoleMdInlineLines() with the index of the STORE line it came from: `inner[0]` was drawn and every
+// row after it was dropped, which is a console that stops after the opening sentence while data-ltext still holds
+// the whole answer.
+//
+// The expansion is IDEMPOTENT (a segment carries no newline) and it keeps the turn's own words: each segment's
+// `data-ltext` is its own physical line, so the rows read back joined by a newline are the stored string exactly.
+// Ids stay addressable: the first segment keeps the store line's own `lid`, so a line that grows a newline later
+// updates the row already on screen, and the ones after it are `lid.1`, `lid.2`...
+function consoleMdPhysicalLines(lines) {
+  const out = [];
+  for (const line of Array.isArray(lines) ? lines : []) {
+    if (!line) continue;
+    const text = cmText(line);
+    if (!consoleMdIsProse(line.kind) || !text.includes("\n")) {
+      out.push(line);
+      continue;
+    }
+    const base = line.lid == null || line.lid === "" ? null : String(line.lid);
+    text.split("\n").forEach((part, i) => {
+      const seg = { ...line, text: part, ...(base == null || i === 0 ? {} : { lid: `${base}.${i}` }) };
+      Object.defineProperty(seg, "_cmLine", { value: line, enumerable: false });
+      Object.defineProperty(seg, "_cmRow", { value: i, enumerable: false });
+      out.push(seg);
+    });
+  }
+  return out;
+}
+
 // A run of prose lines, as blocks. Pure: same lines in, same blocks out, no reader state.
 //   { type: "para" | "list" | "head" | "fence", lines: [...] }
 //   list:  ordered (boolean)
 //   head:  level (1..6)
 //   fence: lang (string), open (the closing fence has not arrived yet), code (boolean — this block is code)
 function consoleMdBlocks(lines) {
-  const list = (Array.isArray(lines) ? lines : []).filter(Boolean);
+  const list = consoleMdPhysicalLines(lines).filter(Boolean);
   const out = [];
   let cur = null;
   const flush = () => {
@@ -394,9 +430,22 @@ function consoleMdBlockHtml(block, opts = {}) {
  * @param opts.textOf - the visible text for a line, for a caller with a word pacer: (line) => string|null.
  */
 function consoleMdHtml(lines, opts = {}) {
-  const list = Array.isArray(lines) ? lines.filter(Boolean) : [];
+  // The run is expanded into its PHYSICAL lines first (see consoleMdPhysicalLines): a store line that carries
+  // several blocks is drawn as those blocks, and the pacer's prefix of that line is shared out the same way.
+  const list = consoleMdPhysicalLines(Array.isArray(lines) ? lines.filter(Boolean) : []);
   if (!list.length) return "";
-  const textOf = typeof opts.textOf === "function" ? opts.textOf : null;
+  const ask = typeof opts.textOf === "function" ? opts.textOf : null;
+  const textOf = ask
+    ? (line) => {
+        const parent = line._cmLine || line;
+        const shown = ask(parent);
+        if (shown == null || parent === line) return shown;
+        // The pacer answers for the STORE line; this row is one physical line of it, so it takes the same index
+        // from the prefix. A row the prefix has not reached yet is empty rather than whole.
+        const rows = String(shown).split("\n");
+        return line._cmRow < rows.length ? rows[line._cmRow] : "";
+      }
+    : null;
   const blocks = consoleMdBlocks(list);
   return blocks
     .map((block, i) => {
@@ -540,6 +589,8 @@ window.WMApp.core = window.WMApp.core || {};
 window.WMApp.core.consoleMarkdown = {
   inline: consoleMdInline,
   blocks: consoleMdBlocks,
+  physicalLines: consoleMdPhysicalLines,
+  isProse: consoleMdIsProse,
   blockHtml: consoleMdBlockHtml,
   html: consoleMdHtml,
   plan: consoleMdPlan,
