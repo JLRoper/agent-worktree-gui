@@ -85,7 +85,6 @@ test("the turn text names the question, the answer, and the one thing a new turn
 });
 
 // ── the delivery, against a real job store and a stub Runs API ─────────────────────────────────────────
-const reply = (status, body) => ({ status, ok: status >= 200 && status < 300, json: async () => body });
 
 async function stubGateway(t) {
   const bodies = [];
