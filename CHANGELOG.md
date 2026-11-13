@@ -4,16 +4,38 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.94.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.94.1 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-585 releases from v0.1.0 (2026-10-20) to v1.94.0 (2026-11-13), 1970 commits between the tags. Every release is anchored by an
+586 releases from v0.1.0 (2026-10-20) to v1.94.1 (2026-11-13), 1979 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.94.1 — 2026-11-13 · 9 commits
+
+[`9dbd6de`](https://github.com/JLRoper/agent-worktree-gui/commit/9dbd6de21aa3029fbad10ce1c6d3cc7451827ed8) · [compare v1.94.0...v1.94.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.94.0...v1.94.1)
+
+### Fixed
+
+- fix: the jitter tool names no absolute path ([`7dd49af`](https://github.com/JLRoper/agent-worktree-gui/commit/7dd49afdef23153db83244ae6100097140575090))
+- fix: the session console's corner is a grip this page drives, not the browser's resizer ([`8c4977b`](https://github.com/JLRoper/agent-worktree-gui/commit/8c4977bfd9528082514bd2caa86e36fc12f0e64a))
+
+### Docs & tests
+
+- docs: the remainder report records the suite comparison ([`7a1c73e`](https://github.com/JLRoper/agent-worktree-gui/commit/7a1c73e40f6d2f98dfa5447dbee6c20e4a258247))
+- docs: the remainder report carries the final commit list ([`6fb1cc7`](https://github.com/JLRoper/agent-worktree-gui/commit/6fb1cc7f08ee03d720def6df437bb3049f3719ad))
+- docs: the remainder report corrects the patch-apply count ([`49eec3a`](https://github.com/JLRoper/agent-worktree-gui/commit/49eec3ac98e084c00baa5350be1505a15dc7b14d))
+- docs: every row of the remainder report carries a superseding line ([`51ed0a0`](https://github.com/JLRoper/agent-worktree-gui/commit/51ed0a03bca6a945abe835f9d030a0bda37e9a91))
+- docs: the worktree table names a superseding line on every row ([`e1f8edb`](https://github.com/JLRoper/agent-worktree-gui/commit/e1f8edb8b8b176d171ff0516c15e582161e1424a))
+- docs: render the changelog - 585 releases ([`1f1c104`](https://github.com/JLRoper/agent-worktree-gui/commit/1f1c1047b1abf37049241fefca01c25772c1b5d4))
+
+### Other
+
+- chore: 1.94.1 - the version this landing carries ([`9dbd6de`](https://github.com/JLRoper/agent-worktree-gui/commit/9dbd6de21aa3029fbad10ce1c6d3cc7451827ed8))
 
 ## v1.94.0 — 2026-11-13 · 5 commits
 
