@@ -32,7 +32,9 @@ const QUESTION = "Which comment do you want posted on the ticket?";
 const PROMPT_ID = "p-verify-1";
 const ASKING_THREAD = "wtgui-verify-the-asking-thread";
 const TOKEN = "verify-token";
-const SCRATCH_ROOT = process.env.WAG_SCRATCH || "C:/Users/roper/AppData/Local/Temp/wag/45ffd8a5";
+// The scratch root comes from the environment or from the OS, never from a path typed into this file: a
+// drive-letter path exists on one machine only (test/absolute-paths.test.js is the gate).
+const SCRATCH_ROOT = process.env.WAG_SCRATCH || path.join(os.tmpdir(), "wag-clarify-answer-reuse");
 
 const say = (line = "") => console.log(line);
 const fail = [];
