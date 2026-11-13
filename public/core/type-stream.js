@@ -249,10 +249,11 @@
       const out = [];
       for (const [lid, e] of lines) {
         if (e.job !== id) continue;
-        if (restOf(e) > 0) {
-          e.shown = e.full.length;
-          out.push(lid);
-        }
+        // Every line of a settled turn goes back to the console, not only the ones with words still queued: the wire
+        // can stop a frame short of the record, and a line the pacer thinks it finished is exactly the one a settle
+        // was leaving drawn at its own top. The console repaints each against its record (see paintTypedLines).
+        e.shown = e.full.length;
+        out.push(lid);
         e.budget = 0;
         e.last = now();
       }

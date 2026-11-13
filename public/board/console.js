@@ -1962,8 +1962,14 @@ function paintTypedLines(lids) {
         // (a reasoning row) asks with nothing.
         const rec = el.dataset.ltext;
         const shown = rec == null ? P.shownFor(lid) : P.shownFor(lid, rec);
-        if (shown == null) continue;
-        if (!drawRowText(el, shown)) continue;
+        // `null` is the pacer saying it has stopped answering for this line: its record has moved past what the wire
+        // last carried, so the prefix on screen is not the line any more. Skipping the row there left a settled turn
+        // drawn at its own top - the rest of the answer never reached the DOM, the console had nothing to scroll, and
+        // the card's `done` sat under a reply that was cut. A row with a record draws that record whole instead.
+        if (shown == null) {
+          if (rec == null) continue;
+          if (!drawRowText(el, rec)) continue;
+        } else if (!drawRowText(el, shown)) continue;
         const body = el.closest(".think-body");
         if (body) stickThinkBody(body);
         else stickSoon(out);
