@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Email-multi #272: the settled transcript, the gates, and the second writer - agent-worktree-gui, 2026-11-09</title>
+<style>
+  :root{ --ink:#191714; --paper:#fbf9f4; --rule:#ded7cb; --muted:#6b645b; --accent:#7a4bd0; --bar:#b79ce8; --warn:#b4453a; --ok:#2f7a4f; }
+  @media (prefers-color-scheme: dark){
+    :root{ --ink:#e8e6e1; --paper:#14161a; --rule:#2a2f38; --muted:#9aa3ad; --accent:#c8a6ff; --bar:#6f4fa8; --warn:#e5534b; --ok:#6fcf97; }
+  }
+  html,body{ margin:0; background:var(--paper); color:var(--ink); font:15px/1.55 -apple-system,Segoe UI,Helvetica,Arial,sans-serif; }
+  main{ max-width:1180px; margin:0 auto; padding:36px 28px 80px; }
+  h1{ font-size:26px; margin:0 0 4px; letter-spacing:-.01em; }
+  h2{ font-size:19px; margin:38px 0 10px; padding-bottom:6px; border-bottom:1px solid var(--rule); }
+  h3{ font-size:16px; margin:24px 0 8px; }
+  .sub{ color:var(--muted); margin:0 0 22px; }
+  .cards{ display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin:18px 0 6px; }
+  .card{ border:1px solid var(--rule); border-radius:10px; padding:12px 14px; }
+  .card b{ display:block; font-size:22px; letter-spacing:-.02em; }
+  .card span{ color:var(--muted); font-size:13px; }
+  table{ border-collapse:collapse; width:100%; font-size:14px; }
+  th,td{ text-align:left; padding:6px 8px; border-bottom:1px solid var(--rule); vertical-align:top; }
+  th{ color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+  td.n{ text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  code{ font:13px ui-monospace,Consolas,monospace; background:rgba(127,127,127,.12); padding:1px 5px; border-radius:4px; overflow-wrap:anywhere; }
+  .muted{ color:var(--muted); }
+  .note{ border-left:3px solid var(--accent); padding:6px 0 6px 12px; color:var(--muted); margin:14px 0; }
+  .verdict{ border:1px solid var(--accent); border-radius:10px; padding:14px 16px; margin:18px 0 6px; }
+  .verdict p{ margin:6px 0; }
+  pre.cmd, pre.print{ background:rgba(127,127,127,.10); border:1px solid var(--rule); border-radius:8px; padding:10px 12px; overflow-x:auto; font:12.5px/1.5 ui-monospace,Consolas,monospace; white-space:pre-wrap; overflow-wrap:anywhere; }
+  pre.print{ max-height:520px; overflow-y:auto; }
+  details{ margin:10px 0 4px; }
+  summary{ cursor:pointer; color:var(--muted); font-size:13px; }
+  .tag{ font-size:11px; padding:1px 6px; border:1px solid var(--rule); border-radius:10px; color:var(--muted); white-space:nowrap; }
+  .tag.ok{ border-color:var(--ok); color:var(--ok); }
+  .tag.warn{ border-color:var(--warn); color:var(--warn); }
+  ul li{ margin:6px 0; }
+  .quote{ color:#3a3226; }
+  @media (prefers-color-scheme: dark){ .quote{ color:#cfd6de; } }
+  .fact{ border:1px solid var(--rule); border-left:4px solid var(--accent); border-radius:8px; padding:12px 14px; margin:14px 0; }
+  .fact p{ margin:5px 0; }
+</style>
+</head>
+<body>
+<main>
+<h1>The #272 email-multi resume: the gates, the guards, and the second writer</h1>
+<p class="sub">Thread <code>wtgui-resume-this-row-after-the-15-97babb</code>, jobs <code>88aa9a5b</code> and <code>802c0261</code>, with the runs before and after them. Read from the panel's job store at <code>http://127.0.0.1:7331/api/jobs</code> and the gateway's own session store, 2026-11-09. All times UTC; the panel's cards print local time (UTC-5). Report written 2026-11-09, before any code was changed.</p>
+
+<div class="cards">
+  <div class="card"><b>5</b><span>runs in the row's day: two before the resume, the resume, a lost third turn, and the landing turn</span></div>
+  <div class="card"><b>2</b><span>writers in one tree, for 21 minutes at the same time</span></div>
+  <div class="card"><b>13</b><span>gates, guards or refusals quoted below</span></div>
+  <div class="card"><b>20m49s</b><span>of turn 1 that ran after its card was recorded as interrupted</span></div>
+  <div class="card"><b>98m52s</b><span>from the first prompt to the last push, for one style-only commit and one docs commit</span></div>
+</div>
+
+<div class="verdict">
+<h2 id="answer" style="margin-top:0;border:0;padding:0">The answer</h2>
+<p>The row's work did land: <code>e17b45e</code> is on the turnover branch, PR #9 reads OPEN at version 16 with <code>e17b45e</code> as its fromRef, and the three Angus jars resolve. What the transcript shows is that the landing was not the resume's doing. The card <code>88aa9a5b</code> was marked <b>interrupted</b> at 16:23:44 while its gateway run kept executing until 16:44:34, 20m49s longer. The resume <code>802c0261</code> was started into that same thread at 16:32:42, was fenced by the gateway 28 seconds later, and ran in a new session while the old run was still working in the same directory.</p>
+<p>Both workers were right by their own lights, and they overwrote each other. The resume saw 122 modified files, classified them as "the sweep applied backwards", and restored them with <code>git checkout -- .</code> at 16:35:57. The interrupted run had re-applied those same 122 files as the correct narrowing; it found the tree reset at 16:42:36, re-applied them, and committed <code>e17b45e</code> after the resume had already pushed <code>3744aef</code>. A third turn then started in the fenced session at 16:44:35, re-derived the whole position, and asked a clarify question at 16:45:34 that no card could answer. Nobody answered it; the session ends there.</p>
+<p>The prompt caused most of the waste. It asserted a premise that was false ("your turn was cut"), named the wrong publishing vehicle (the <code>wtgui</code> branch and a new PR, where the repo's live review vehicle was PR #9), handed over a diagnosis that was wrong ("the shape of a whole-tree line-ending rewrite") with a destructive remedy keyed to it (<code>git checkout -- .</code>), and omitted the two facts that decided the turn: the PR #9 link and the fact that the tree was already shared with parked row #213. The one genuine decision had to be asked as a clarify at 16:37:39; the answer, fast-forward PR #9 and leave <code>wtgui/*</code> local, is exactly what the prompt should have carried.</p>
+</div>
+
+<h2 id="runs">1. The runs and their clocks</h2>
+<p>The job store records five runs that belong to this row. Two of them are the resume; one is the run the resume was written for; one is a turn the panel had already written off; one is the turn that finally pushed the branch.</p>
+<table>
+<thead><tr><th>job</th><th>what it was</th><th>card start / end</th><th class="n">card clock</th><th>what actually happened</th><th>card verdict</th></tr></thead>
+<tbody>
+<tr>
+  <td><code>a7e84431</code></td>
+  <td>#272, "work the last two items" (the run the resume was written for)</td>
+  <td>15:25:51.828Z<br>15:50:48.304Z</td>
+  <td class="n">24m 56s</td>
+  <td>The card was re-attached to gateway run <code>run_763564997a8c4d8da5f0406ef90194b3</code> at 15:50:48.304Z, then the gateway restarted and the card recorded "no stream" 2 seconds later at 15:50:50.575Z.</td>
+  <td><span class="tag warn">interrupted</span><br><span class="muted">"the gateway ended it: the gateway answered unknown for this run and never described it again"</span></td>
+</tr>
+<tr>
+  <td><code>88aa9a5b</code></td>
+  <td>#272, "resume this row after the 15:50 gateway restart"</td>
+  <td>15:55:43.896Z<br>16:23:44.401Z</td>
+  <td class="n">28m 00s</td>
+  <td>Same gateway session. The run's own clock is <b>2929.7s (48m 50s)</b> and 84 API calls; its 2306-character final message arrived at 16:44:34.655Z and was never harvested. The panel wrote "no stream" at 16:30:58.584Z.</td>
+  <td><span class="tag warn">interrupted</span><br><span class="muted">"the panel ended it (panel)"</span></td>
+</tr>
+<tr>
+  <td><code>802c0261</code></td>
+  <td>#272 turn 2, "your turn was cut by the panel restart"</td>
+  <td>16:32:42.286Z<br>16:41:58.471Z</td>
+  <td class="n">9m 16s</td>
+  <td>Fenced at 16:33:10Z and continued on a new session. Restored the 122 files at 16:35:57Z, asked the ref question at 16:37:39Z, was answered at 16:39:25Z, pushed <code>84e0aff..3744aef</code> at 16:40:13Z, verified PR #9 by read-back, and delivered the PR URL at 16:41:31Z.</td>
+  <td><span class="tag ok">normal</span><br><span class="muted">exit 0, 9m 16s</span></td>
+</tr>
+<tr>
+  <td><code>run_161b416440b14137a88eeb31bd8e4a41</code></td>
+  <td>the resume the panel had already replaced, queued in the old session</td>
+  <td>16:44:35Z<br>16:45:34Z</td>
+  <td class="n">1m</td>
+  <td>Started in the fenced session one second after turn 1's final arrived. Found the tree clean at <code>e17b45e</code>, loaded the PR skills, and asked a clarify question at 16:45:34Z. There was no card, so nothing answered it; the session ends on the question.</td>
+  <td><span class="tag warn">no card</span><br><span class="muted">left where it was</span></td>
+</tr>
+<tr>
+  <td><code>4349b1e8</code></td>
+  <td>#272, "finish the remaining items and open PR"</td>
+  <td>16:46:08.390Z<br>17:04:44.003Z</td>
+  <td class="n">18m 35s</td>
+  <td>Found <code>e17b45e</code> already committed and unpushed, verified the 122-file narrowing (497 pairs, 0 mismatches), ran the deps and docker checks, and pushed <code>e17b45e</code> to the turnover branch. PR #9 head moved <code>3744aef..e17b45e</code>.</td>
+  <td><span class="tag ok">normal</span><br><span class="muted">exit 0, 18m 35s</span></td>
+</tr>
+</tbody>
+</table>
+<p class="muted">Card clock is <code>endedAt</code> minus <code>startedAt</code> in the job store. It is not the run's clock: for <code>88aa9a5b</code> the gateway's own line at 11:44:34.655 local reads <code>time=2929.7s api_calls=84 response=2306 chars</code>, and the prompt for <code>802c0261</code> arrived at the gateway at 16:44:35.193Z, after turn 1 had already answered at the gateway but before the panel had harvested it.</p>
+
+<h2 id="overlap">2. The overlap, in order</h2>
+<pre class="print">15:25:51  a7e84431 starts #272 ("work the last two items")
+15:50:48  a7e84431's card: re-attached to run_7635... and can steer it again
+15:50:50  a7e84431's card: the gateway restarted, no stream for it any more
+15:55:43  88aa9a5b starts the resume in the same session
+16:00:49  terminal pre-execution guard wedges (180s), command not run
+16:03:00  the same guard, 120s, same answer
+16:03:14  execute_code refused: unattended platform, no approver
+16:16:15  the narrowing apply times out at 300s, half-applied
+16:23:44  panel restart: 88aa9a5b is marked interrupted (card clock 28m00s)
+16:29:16  the worker proves its narrowing is IDENTICAL-TO-CANCELLED-STATE
+16:30:58  the panel writes "no stream" on the 88aa9a5b card
+16:32:42  802c0261 starts, as a resume of the same thread
+16:33:10  the gateway answers unknown_execution; a NEW session is opened
+16:35:57  802c0261 classifies 122 files as dash-only and runs git checkout -- .
+16:37:39  802c0261 asks which ref to publish (PR #9 vs the wtgui branch)
+16:39:25  the reader answers: fast-forward PR #9, leave wtgui/* local
+16:40:13  push 84e0aff..3744aef to the turnover branch (PR #9 head moves)
+16:41:31  802c0261 final; PR #9 read back OPEN at 3744aef
+16:44:34  88aa9a5b's original run finally answers (2306 chars, never seen)
+16:44:35  the queued run_161b starts in the fenced session
+16:45:34  run_161b asks the same ref question; no card, no answer
+16:46:08  4349b1e8 starts the next turn on the row
+17:04:44  4349b1e8 pushes e17b45e; PR #9 head e17b45e, version 16</pre>
+<p>The two writers overlapped from 16:32:42 to 16:44:34. The panel never showed a second card for the old run, and the old run never saw the new one. The only trace on the cards is the sentence in <code>88aa9a5b</code>'s final message: "mid-run this worktree was reset to HEAD by something outside this run and the remote-tracking ref moved to 3744aef". The "something outside this run" was the resume.</p>
+
+<h2 id="gates">3. Every gate, guard and refused action</h2>
+<p class="muted">Quotes are verbatim except for two editorial rules: em and en dashes are rendered as plain hyphens (the repository's dash rule), and long absolute paths stay as the panel printed them. Each row names the surface: a card line, a tool result, or the gateway's own answer.</p>
+<table>
+<thead><tr><th>time (UTC)</th><th>surface</th><th>gate / guard / refusal, exact quote</th><th>what it cost, or what it shows</th></tr></thead>
+<tbody>
+
+<tr>
+  <td class="n">15:50:48.304Z</td>
+  <td>card <code>a7e84431</code>, dim</td>
+  <td class="quote">"the panel restarted while this was running - the gateway still has run run_763564997a8c4d8da5f0406ef90194b3, so this card is re-attached to it and can steer it again"</td>
+  <td>The re-attach path. It works: the card stays live and can be steered. This is the behaviour <code>88aa9a5b</code> needed 33 minutes later and did not get.</td>
+</tr>
+
+<tr>
+  <td class="n">15:50:50.575Z</td>
+  <td>card <code>a7e84431</code>, result</td>
+  <td class="quote">"the gateway restarted while this was running (run run_763564997a8c4d8da5f0406ef90194b3) - this panel has no stream for it any more"</td>
+  <td>Two verdicts, 2 seconds apart, on one card: re-attached, then no stream. The second is a write-off; the run is never asked to stop.</td>
+</tr>
+
+<tr>
+  <td class="n">16:00:49Z</td>
+  <td>terminal guard</td>
+  <td class="quote">"Terminal pre-execution guard did not finish within 180s (process-identity probe wedged); the command was not run. Retry the call." (exit -1)</td>
+  <td>3 minutes of a 48m50s turn, on a command the guard could not analyse. The advice is "retry", and the retry wedges too.</td>
+</tr>
+
+<tr>
+  <td class="n">16:03:00Z</td>
+  <td>terminal guard</td>
+  <td class="quote">"Terminal pre-execution guard did not finish within 120s (process-identity probe wedged); the command was not run. Retry the call." (exit -1)</td>
+  <td>The same construct, a shorter deadline, the same answer: 2 more minutes. The guard names its own wedge but not the command shape that caused it.</td>
+</tr>
+
+<tr>
+  <td class="n">16:03:14Z</td>
+  <td><code>execute_code</code></td>
+  <td class="quote">"BLOCKED: execute_code runs arbitrary local Python (including subprocess calls that bypass shell-string approval checks). This session runs on an unattended platform (api_server) with no user present to approve it. Use normal tools instead, or set approvals.unattended_mode: approve only if sessions on this surface are intentionally trusted."</td>
+  <td>One call. The panel's pipeline stages are told this in <code>STAGE_TOOLS_LINE</code>; a plain queue row is not, so every such worker learns it by trying.</td>
+</tr>
+
+<tr>
+  <td class="n">16:16:15Z</td>
+  <td>terminal limit</td>
+  <td class="quote">"[Command timed out after 300s]" (exit 124)</td>
+  <td>The 135-file apply was killed after 109 files. The prompt had said "never commit a half-sweep"; the tool produced one anyway.</td>
+</tr>
+
+<tr>
+  <td class="n">16:23:44.401Z</td>
+  <td>card <code>88aa9a5b</code>, status</td>
+  <td class="quote">interrupted, reason "the panel ended it (panel)"</td>
+  <td>The card closed. The run did not: it kept writing tool calls into the same tree for another 20m49s and produced a 2306-character final at 16:44:34.</td>
+</tr>
+
+<tr>
+  <td class="n">16:30:58.584Z</td>
+  <td>card <code>88aa9a5b</code>, result</td>
+  <td class="quote">"the panel restarted while this was running (run run_f4fa41af8e7443ccb5de5711cf040933) - this panel has no stream for it any more"</td>
+  <td>Written 7 minutes after the card ended and 14 minutes before the run's real end. The panel knows the run's id and still does not ask it anything.</td>
+</tr>
+
+<tr>
+  <td class="n">16:33:10Z</td>
+  <td>card <code>802c0261</code>, dim</td>
+  <td class="quote">"session replaced - the gateway answered unknown_execution for session wtgui-resume-this-row-after-the-15-97babb (run run_161b416440b14137a88eeb31bd8e4a41 was queued with no execution generation (two consecutive answers 15s apart)), and a fenced session never claims another run; this turn continues on a NEW session wtgui-your-turn-was-cut-by-the-pan-6698c3 instead of being written off; run run_161b416440b14137a88eeb31bd8e4a41 is left where it is"</td>
+  <td>28 seconds after the resume POST. The fence is correct; "left where it is" is not: the queued run later started in the old session at 16:44:35 and hung on a question nobody could see.</td>
+</tr>
+
+<tr>
+  <td class="n">16:35:33Z</td>
+  <td><code>write_file</code></td>
+  <td class="quote">"Refusing to overwrite C:/Users/roper/AppData/Local/Temp/wag/88aa9a5b/body_before.sql: ... exists but this task has not seen its full current content (never read, patched without a prior full read, or only a redacted/partial view)."</td>
+  <td>A second run of a script that had already written its body sample; the guard is right, the script was rerun without a read. One call.</td>
+</tr>
+
+<tr>
+  <td class="n">16:36:36Z</td>
+  <td>terminal probe, then the worker's claim at 16:36:44Z</td>
+  <td class="quote">the probe <code>ls -la .git/hooks/pre-push</code> printed nothing and returned exit 2; the worker said: "No pre-push hook, no wtgui hook chain."</td>
+  <td>False. The worktree's <code>.git</code> is a file (<code>gitdir: C:/ProjectDevelopment/email-multi/.git/worktrees/...</code>), so <code>.git/hooks/pre-push</code> can never exist. The real hook is at <code>C:/ProjectDevelopment/email-multi/.git/wtgui-hooks/pre-push</code>, wired by <code>core.hooksPath</code>; its own <code>policy</code> file reads <code>allow</code>, so it passed the push silently. The worker skipped the guard reasoning the other run did at 16:45:07.</td>
+</tr>
+
+<tr>
+  <td class="n">16:37:39Z</td>
+  <td>card <code>802c0261</code>, clarify</td>
+  <td class="quote">"The card says push wtgui/work-on-the-first-branch-55f84d and open a PR to master, which would duplicate #9. Which ref do I publish?"</td>
+  <td>Answered at 16:39:25Z: <span class="quote">"Fast-forward 3744aef onto 20261023_1120_DMR-41419_sefreightBizParity so PR #9 head moves; leave wtgui/* local"</span>. 1m46s, and the one decision in the turn. The prompt should have carried its answer.</td>
+</tr>
+
+<tr>
+  <td class="n">16:42:04Z</td>
+  <td>card <code>802c0261</code>, raw</td>
+  <td class="quote">"DELIVER was NOT recorded - "https://git.sefl.com/projects/IT/repos/..." is not one of link / file / image"</td>
+  <td>The line was <code>DELIVER https://git.sefl.com/... | PR #9, now at 3744aef</code>; the kind word was omitted. The URL was still recorded as an artifact at 16:42:03, so the link survived and the title did not. One parser fix (accept a bare URL) removes this class.</td>
+</tr>
+
+<tr>
+  <td class="n">16:42:04Z</td>
+  <td>card <code>802c0261</code>, dim</td>
+  <td class="quote">"TODO #60 done -> done: PR #9 head is 84e0aff; Pittman last reviewed 8ae1ab5, so the branch needs a re-review after this push"</td>
+  <td>The head was <code>3744aef</code> by then (the push at 16:40:13). The note asserts the pre-push head, so the one line that should tell the reader where the PR stood is stale at the moment it is written.</td>
+</tr>
+
+<tr>
+  <td class="n">16:45:34Z</td>
+  <td>session A, third turn (no card)</td>
+  <td class="quote">"This tree is a wtgui/* panel branch, and the SEFL rule forbids publishing those to git.sefl.com. HEAD is e17b45e, exactly one commit ahead of the turnover branch 20261023_1120_DMR-41419_sefreightBizParity, which already has open PR #9 to master at 3744aef. The tree is clean, so there is nothing to restore or commit. How should this land?"</td>
+  <td>The same fork, asked again, 6 minutes after the reader answered it. No card, so the question is unanswerable; the session ends on it. This is the panel's "left where it is" run, and it is the clearest proof that a fenced session must not be left holding a queued turn.</td>
+</tr>
+
+<tr>
+  <td class="n">16:42:36Z</td>
+  <td>session A, the live run</td>
+  <td class="quote">"The worktree was reset by something outside this run and the remote ref moved to 3744aef."</td>
+  <td>Not a panel gate, but the effect of the missing one: a second writer's <code>git checkout -- .</code> at 16:35:57 discarded the narrowing this run had just proved at 16:29:16.</td>
+</tr>
+
+</tbody>
+</table>
+
+<h2 id="inefficiencies">4. The other inefficiencies</h2>
+<p>These are not gates. They are the minutes and tokens the row spent on work it did not need, in the order they appear.</p>
+<table>
+<thead><tr><th>#</th><th>what happened</th><th>cost</th><th>fix</th></tr></thead>
+<tbody>
+
+<tr><td class="n">I1</td><td><b>Reset before reading.</b> The prompt offered "finish the narrowing correctly or reset those edits and redo". The worker reset at 16:06 without first testing whether the 122 files were already the correct narrowing. It then wrote <code>narrow.py</code>, <code>narrow2.py</code> and <code>narrow3.py</code> to re-derive it and proved at 16:29:16 that the result was <code>IDENTICAL-TO-CANCELLED-STATE</code>.</td><td>About 23 minutes for a delta of zero.</td><td>Check first: a per-file <code>git diff -U0</code> against the sweep commit answers "is this already the narrowing" in one script. Reset only when the check fails.</td></tr>
+
+<tr><td class="n">I2</td><td><b>Commit deferred behind checks.</b> The narrowing was correct at 16:29:16 but not committed; the worker went on to the gradle, docker and Oracle checks. The resume's <code>git checkout -- .</code> at 16:35:57 wiped it; the worker re-applied and committed at 16:42:36.</td><td>About 7 minutes, one destroyed tree state, and a second 122-file commit cycle.</td><td>In a shared tree, commit before leaving for any check. The prompt should say so in the first line, not the last.</td></tr>
+
+<tr><td class="n">I3</td><td><b>Nine scripts for one transform.</b> <code>sets.sh</code>, <code>narrow.py</code>, <code>narrow2.py</code>, <code>narrow3.py</code>, <code>grep_dash2.py</code>, <code>where_dash.py</code>, <code>classify_hits.py</code>, <code>head_counts.py</code>, <code>status_ip.py</code>; plus two redirects that died because the SCRATCH directory named in the prompt did not exist.</td><td>Two failed commands at 15:57:05 and 15:57:09, and a dozen extra tool calls.</td><td>One script with <code>--check</code>, <code>--apply</code> and <code>--verify</code> modes, and <code>mkdir -p "$SCRATCH"</code> as the first command.</td></tr>
+
+<tr><td class="n">I4</td><td><b>Guard wedges and a timeout.</b> The terminal guard wedged twice on the same command shape, and the apply hit the 300s cap for the default timeout.</td><td>About 5 minutes, plus a half-applied tree that had to be re-derived.</td><td>Run the transform with <code>timeout=600</code> or in the background, and let the guard name the construct it is analysing.</td></tr>
+
+<tr><td class="n">I5</td><td><b>One call lost to <code>execute_code</code>.</b> The refusal is correct and predictable, but only pipeline stages are told.</td><td>One call, and a small context growth.</td><td>Append <code>STAGE_TOOLS_LINE</code> to every unattended tree run.</td></tr>
+
+<tr><td class="n">I6</td><td><b>A 152KB tool result for a one-line stat.</b> <code>git diff --stat</code> printed an <code>LF will be replaced by CRLF</code> warning for every changed file; the captured result is 151,723 characters, truncated to head and tail.</td><td>About 100,000 characters of omitted output in one call, and the useful line at the end.</td><td><code>git -c core.safecrlf=false diff --stat 2&gt;/dev/null</code>, or <code>git diff --stat -- . 2&gt;/dev/null | tail -3</code>.</td></tr>
+
+<tr><td class="n">I7</td><td><b>Two 60KB skill loads mid-run.</b> <code>oracle-dev-query</code> (62,522 characters) at 16:30 to answer one SELECT, and <code>sefl-pull-request-format</code> (29,606 characters) at 16:45 for a PR that was not being opened.</td><td>Context growth on an already long turn; the oracle answer was two queries.</td><td>Load the one skill the step needs, and drop it when the step ends. The PR format skill belonged to 4349b1e8, not to the turn that only fast-forwarded an existing PR.</td></tr>
+
+<tr><td class="n">I8</td><td><b>A stale item premise.</b> TODO 61 named the row <code>Turnover sanity queued 2026-11-09T09:10:34</code> and asked for a DELETE; the row was already gone (0 by exact subject, 0 failed today, 0 failed in 7 days). Two SELECT rounds discovered it.</td><td>Two query rounds and a paragraph of evidence for "nothing to do".</td><td>Pre-check the item with one COUNT before writing it into the prompt; if it is already gone, drop it and say so.</td></tr>
+
+<tr><td class="n">I9</td><td><b>The false hook probe.</b> <code>ls .git/hooks/pre-push</code> returned exit 2 with no output; the worker concluded "No pre-push hook, no wtgui hook chain" at 16:36:44. The hook is at <code>&lt;repo&gt;/.git/wtgui-hooks/pre-push</code>.</td><td>No damage this time, because the hook's <code>policy</code> is <code>allow</code>; but the worker skipped the SEFL rule reasoning the other run had already done.</td><td>Use <code>git rev-parse --git-path hooks/pre-push</code>, and never read exit 2 from <code>ls</code> as "no hook".</td></tr>
+
+<tr><td class="n">I10</td><td><b>The same decision asked twice.</b> The resume asked which ref to publish at 16:37:39; the orphaned turn asked it again at 16:45:34. The row's own prompt had already chosen the wrong ref.</td><td>1m46s on the first question, and an unanswerable question that ended the third turn.</td><td>Put PR #9 and the turnover branch in the prompt, and put the reader's answer in the row's context so a later turn inherits it.</td></tr>
+
+<tr><td class="n">I11</td><td><b>TODO churn.</b> The list had 67 items (45 done) when the resume started. Items 63 to 67 duplicate 61 and 62 and add 67, "keep the commit local and unpushed; no PR", which contradicts the LANDING header on the same card ("push it and open a pull request"). Turn 1 claimed 61 to 67 done while saying "no DELETE ran"; turn 2 claimed 60 done (it was already done); 4349b1e8 claimed 61 to 66 and 68 and dropped 67.</td><td>Three different states of one list for one row, and two contradictory instructions in one prompt.</td><td>One item per acceptance criterion, no policy items in the list, and a done claim must quote the closing evidence. Keep the push decision in one place: the row's context, not the list.</td></tr>
+
+<tr><td class="n">I12</td><td><b>The turn-1 report was never delivered.</b> <code>88aa9a5b</code> wrote <code>docs/reviews/272-remaining-items-20261109.secret.html</code> and its final message carried a <code>DELIVER file</code> line, but the card had already been interrupted, so the DELIVER was never harvested.</td><td>The reader waited until 17:04:44, when 4349b1e8's message named the same report.</td><td>Harvest a late final from an interrupted run's gateway result when it arrives; the final is there (2306 chars at 16:44:34).</td></tr>
+
+<tr><td class="n">I13</td><td><b>The aggregate price.</b> The three panel cards cost 370,822 input tokens, 88,957 output tokens and 6,506,880 cache reads; their card clocks total 55m52s, and the worker time including the invisible 20m49s is about 77m43s. The first prompt was at 15:25:51 and the last push at 17:04:44.</td><td>98m52s end to end, for one style-only commit (<code>e17b45e</code>) and one docs commit (<code>3744aef</code>) that the cancelled run had already made.</td><td>Not a token problem: a sequencing problem. Fix the overlap and the prompt's facts, and most of this time does not exist.</td></tr>
+
+</tbody>
+</table>
+
+<h2 id="facts">5. The two facts the row should have carried</h2>
+<p>The brief asked two facts be restored to the row's context. They are the two that decide the turn, and both were available to the panel when it wrote the prompt.</p>
+
+<div class="fact">
+<h3 style="margin-top:0">Fact 1: the PR #9 link and its state</h3>
+<p><a href="https://git.sefl.com/projects/IT/repos/email-multi/pull-requests/9">https://git.sefl.com/projects/IT/repos/email-multi/pull-requests/9</a></p>
+<p>At the cut (16:32:42Z) the read-back was: <b>OPEN, version 16, fromRef <code>20261023_1120_DMR-41419_sefreightBizParity</code> at <code>84e0aff</code>, toRef <code>master</code> at <code>2b1a6ad</code>, 22 commits, reviewers <code>PITTMAN</code> and <code>code_review_java</code> both <code>UNAPPROVED</code></b>. A prior <code>wtgui</code> PR, #11, had already been DECLINED. The branch is the review vehicle; a new PR against master would have duplicated the 22 commits. The answer the reader gave at 16:39:25Z, fast-forward onto the turnover branch, is a restatement of this fact.</p>
+<p>At the time of writing, the same read is <b>OPEN, version 16, fromRef <code>e17b45e</code></b>, and <code>git ls-remote</code> shows the turnover branch at <code>e17b45e18c865a0a8093462e49b96c23f1bfe353</code>. The link is live and the row's work is on it.</p>
+</div>
+
+<div class="fact">
+<h3 style="margin-top:0">Fact 2: the tree is shared, and row #213 holds it</h3>
+<p>Row <b>#213</b> is <b>parked</b> on the same directory: <code>C:/ProjectDevelopment/email-multi/.worktrees/work-on-the-first-branch-55f84d</code>. Its title is <span class="quote">"email-multi: consolidate both fixes on the first branch, deploy to local Docker and prove queue + immediate send to both addresses"</span>; its thread is <code>wtgui-work-on-the-first-branch-202-53b8f5</code>. Its park reason, corrected 2026-11-08, is: <span class="quote">"the two blockers Pittman raised are fixed in 1d1c98b and the branch head is now 84e0aff, but his 2026-11-05 18:40 review left three comments still OPEN after that fix and he is UNAPPROVED ... Answering those three comments and asking for re-review is work nobody has authorised; nothing starts until the reader says so."</span></p>
+<p>At the same time, row <b>#276</b> was parked behind #272 on that tree (the board's own line at 17:05:27Z says <span class="quote">"Held on #272, which is live in the same email-multi tree and branch: its worker already owns the Angus mail changes"</span>), and #277 was parked behind #276. At 17:08:17Z, after #272 settled, #276 started in the same tree as job <code>b8eaa8ba</code>; at the time of writing that run is live and the tree holds four modified <code>build.gradle</code> files from it.</p>
+<p>The panel already has the rule. <code>docs/design/pipeline-stage-execution.md</code> section 3.5, "Two rows, one tree", says a tree path is claimed by every open row and a second start parks with <code>pipeline-tree-claimed</code>, naming the other row. <code>treeClaims()</code> in <code>lib/task-pipeline-drive.js</code> implements it over <code>queued</code>, <code>running</code> and <code>parked</code> rows. The rule is consulted by the pipeline driver only. A plain queue row, which is what the #272 resume was, starts without it. That is the gap: the fact existed, the code existed, and the start did not ask.</p>
+</div>
+
+<h2 id="prompt">6. Fixes to the row's prompt and context</h2>
+<p>The prompt is the reader's brief plus the panel's context paragraphs. Both need changes. The replacements below are written to be pasted, and each one names the evidence it removes.</p>
+
+<h3>6.1 The prompt, as it was</h3>
+<pre class="cmd">Your turn was cut by the panel restart at 16:30, not by you, and your work is on the branch
+already: 9a482e5 replaced the em and en dashes and it is not on origin/master yet. Before you
+commit anything else, judge the 122-file uncommitted diff in the tree: git warns LF will become
+CRLF on every file, which is the shape of a whole-tree line-ending rewrite rather than a second
+content pass. Run `git -c core.autocrlf=false diff --stat` and `git diff --ignore-cr-at-eol
+--stat` in the tree; if the diff is only line endings, restore those files (`git checkout -- .`)
+because the committed sweep already carries the change, and if it holds real edits, commit those
+files only. Then push wtgui/work-on-the-first-branch-55f84d and open the PR against master on the
+Bitbucket remote. Do not restart or edit anything else.</pre>
+
+<p>Four defects, each with its consequence:</p>
+<ul>
+  <li><b>A false premise.</b> "Your turn was cut" was the panel's view of a card that had been closed while the gateway run was still executing. That run worked for another 20m49s. The prompt should say the card was interrupted, not that the run ended, and should require a live-run check before the first write.</li>
+  <li><b>The wrong vehicle.</b> "push wtgui/work-on-the-first-branch-55f84d and open the PR against master" contradicts the repo's one-live-turnover-branch rule and would have duplicated PR #9's 22 commits. The worker had to discover #9 and ask. The prompt should name the turnover branch, the explicit refspec, and the PR URL.</li>
+  <li><b>A diagnosis and a remedy the prompt had no basis for.</b> The 122 files were not line endings; they were <code>9a482e5</code> applied backwards. The worker proved that in one call (<code>changed files: 122 / dash-only: 122 / real edits: 0 / files on disk containing CRLF: 0</code>) and still followed the prompt's remedy, <code>git checkout -- .</code>, which is the one command a shared tree cannot afford.</li>
+  <li><b>Two facts missing.</b> The PR #9 link and the #213 tree-sharing fact. Either alone would have changed the turn; together they remove the clarify, the fence's consequence, and the reset.</li>
+</ul>
+
+<h3>6.2 The prompt to use instead</h3>
+<pre class="cmd">Resume #272 in email-multi. The card was interrupted at 16:23:44, not the run: the gateway may
+still be executing it. Before you touch the tree, read http://127.0.0.1:7331/api/jobs and look
+for a live job on this thread (wtgui-resume-this-row-after-the-15-97babb). If one is live, do not
+write; report it and stop.
+
+TREE: C:/ProjectDevelopment/email-multi/.worktrees/work-on-the-first-branch-55f84d
+  branch wtgui/work-on-the-first-branch-55f84d at 3744aef (local only; a wtgui ref is never
+  pushed to git.sefl.com)
+  origin/20261023_1120_DMR-41419_sefreightBizParity at 84e0aff, which is PR #9:
+  https://git.sefl.com/projects/IT/repos/email-multi/pull-requests/9 (OPEN, version 16,
+  fromRef 20261023_1120_DMR-41419_sefreightBizParity, toRef master 2b1a6ad, 22 commits,
+  Pittman and Code Review - Java both UNAPPROVED). A prior wtgui PR, #11, was DECLINED.
+  This tree is SHARED. Row #213 (email-multi: consolidate both fixes on the first branch,
+  deploy to local Docker and prove) is parked on it; #276 and #277 are held behind #272.
+  Never run `git checkout -- .`, `git reset` or `git restore` here: another run may hold
+  uncommitted work. Commit before you leave for any check.
+
+THE DIFF: 122 files differ from HEAD. Classify them before changing anything:
+  git diff -U0 --numstat; then, per changed hunk, compare the old line with the new line after
+  replacing U+2014/U+2013 with a hyphen. If every pair matches, the files are 9a482e5 applied
+  backwards, not a line-ending rewrite (the LF/CRLF warnings are autocrlf noise; no file on
+  disk holds CRLF). Restore nothing in place: if the narrowing is the right state, commit it as
+  a 122-file narrowing commit; if a hunk is not a dash pair, report that file and leave it.
+  Do not commit a half-sweep.
+
+THEN: prove :email-lib's runtimeClasspath carries jakarta.mail-api 2.1.3, angus-mail 2.0.3 and
+angus-activation 2.0.2 with GRADLE_USER_HOME=C:/Users/roper/.gradle; run the local docker
+email-service sanity on both paths (immediate sendOracle, queued bypassQueJson) quoting the HTTP
+responses and the matching log lines; clear TODO 61 only if a COUNT still finds the 09:10:34 F row.
+
+LANDING: when the commit is ready, push it by explicit refspec onto
+20261023_1120_DMR-41419_sefreightBizParity so PR #9's head moves:
+  git push origin HEAD:refs/heads/20261023_1120_DMR-41419_sefreightBizParity
+Do not open a new PR. Do not push wtgui/*. The panel's push guard is at
+C:/ProjectDevelopment/email-multi/.git/wtgui-hooks/pre-push (core.hooksPath); probe it with
+`git rev-parse --git-path hooks/pre-push`, never with `ls .git/hooks`.
+
+DELIVER link https://git.sefl.com/projects/IT/repos/email-multi/pull-requests/9 | PR #9 at &lt;head&gt;
+TOOLS: this session is unattended; execute_code is refused. Use terminal, read_file, write_file
+and patch. SCRATCH is C:/Users/roper/AppData/Local/Temp/wag/802c0261; run `mkdir -p` on it first.</pre>
+
+<h3>6.3 The context block the panel should prepend</h3>
+<p>Everything in this block is already in the panel's own stores at the moment a job starts: the job list, the queue rows, the worktree record, the remote heads, and the PR read-back. It is not generated, and its absence is what forced the worker to rediscover the repository at 16:34 to 16:37.</p>
+<pre class="cmd">TREE - generated by the panel at spawn, not written by the reader
+  path      C:/ProjectDevelopment/email-multi/.worktrees/work-on-the-first-branch-55f84d
+  branch    wtgui/work-on-the-first-branch-55f84d at 3744aef (local; 22 ahead of origin/master
+            and 1 ahead of the turnover branch at cut)
+  remote    20261023_1120_DMR-41419_sefreightBizParity at 84e0aff; master at 2b1a6ad
+  PR        #9 OPEN, version 16, reviewers UNAPPROVED - https://git.sefl.com/.../pull-requests/9
+  claims    row #213 (parked) names this path; #272 owns it now; #276/#277 held behind #272
+  last run  job 88aa9a5b, card interrupted 16:23:44; gateway run f4fa41af... may still be live;
+            its final (16:44:34) is NOT harvested
+  policy    wtgui/* is local only; the turnover branch is the only push; guard policy=allow</pre>
+<p>The same block fixes the LANDING header's other mismatch: the header on the card is the generic GitHub one ("<code>gh pr create --fill</code>") on a Bitbucket repository. The worker had to load <code>sefl-pull-request-format</code> to discover that <code>gh</code> does not apply. A project with a Bitbucket remote should get the Bitbucket header, with the PR URL and the refspec in it.</p>
+
+<h3>6.4 The list itself</h3>
+<p>The TODO list handed to the resume had 67 items, 45 done. Items 63 to 67 were a second copy of 61 and 62 plus a policy item ("keep the commit local and unpushed; no PR") that contradicted the LANDING header on the same card. The list is the tree's, not the row's, so it accumulates items from every thread that has worked there. Two changes:</p>
+<ul>
+  <li><b>Do not seed policy into the list.</b> "Keep the commit local" is a decision about this turn, not an acceptance criterion; it lives in the prompt or the row's context, and it must not be an item a worker can mark done.</li>
+  <li><b>Hand the row only its own open items.</b> The block can still carry the tree's full list for reference, but the acceptance section should be the row's items (61 to 66 here), each with the evidence that closes it, and item 60's text ("PR #9 head is 84e0aff; Pittman last reviewed 8ae1ab5") should be a note, not a checkable item: it is a statement about the PR, and marking it done closes nothing.</li>
+</ul>
+
+<h2 id="panel">7. Fixes to the panel</h2>
+<p>Each fix names the file and the observed failure it prevents. None of them is a redesign; they are the smallest changes that would have stopped this transcript.</p>
+<table>
+<thead><tr><th>#</th><th>failure observed</th><th>fix</th><th>where</th></tr></thead>
+<tbody>
+
+<tr><td class="n">P1</td><td>A resume started a second run on a thread whose first run was still alive (802c0261 at 16:32:42, run f4fa41af alive until 16:44:34).</td><td>Before a resume POST, look for a live job on the thread (the job store's <code>running</code> set, or the run's own state). If one is live, re-attach or steer it; do not start a second turn. This is the rule the board already prints: "one run per thread, one worker per tree".</td><td><code>lib/jobs.js</code>, the start path; <code>routes/jobs.js</code> for the POST</td></tr>
+
+<tr><td class="n">P2</td><td>A panel restart marked a run interrupted without stopping it, and the card then said "no stream" while the run kept going.</td><td>On the panel-restart path, ask the gateway to stop the interrupted run as the gateway-restart path does (<code>stopInterruptedRuns</code>), and record whether the gateway acknowledged. If it did not, the card must say "still live", not "no stream".</td><td><code>lib/restart.js</code> (the <code>stopInterruptedRuns</code> call at the gateway path has no panel-path counterpart)</td></tr>
+
+<tr><td class="n">P3</td><td>A fenced session's queued run was "left where it is"; it started 11 minutes later and hung on a question no card could answer.</td><td>When a session is fenced, cancel the queued run by id. A clarify with no card must return <code>unavailable</code> at once, not wait.</td><td><code>lib/jobs.js</code>, the <code>unknown_execution</code> / <code>replaceLostSession</code> path</td></tr>
+
+<tr><td class="n">P4</td><td>Two rows (the live run and the resume) wrote one tree; row #213 is parked on the same path and nothing refused the start.</td><td>Consult <code>treeClaims()</code> at every job start, not only pipeline stages. A start whose tree is claimed by another open row parks with <code>pipeline-tree-claimed</code>, naming the row. The claim already covers <code>queued</code>, <code>running</code> and <code>parked</code> rows.</td><td><code>lib/task-pipeline-drive.js:1326</code> (<code>treeClaims</code>), called from the job start in <code>lib/jobs.js</code></td></tr>
+
+<tr><td class="n">P5</td><td>The prompt omitted the PR #9 link, the branch state, the other rows and the last run's final, all of which the panel held.</td><td>Generate the TREE block in 6.3 at spawn and prepend it to the brief. It is a read of the panel's own stores plus one PR read-back, not a new source of truth.</td><td><code>lib/jobs.js</code> near <code>todoBlockText</code> / the brief template (line 3220), and <code>lib/assistant/actions.js</code> for the SPAWN text</td></tr>
+
+<tr><td class="n">P6</td><td><code>DELIVER https://...</code> was refused because the kind word was missing, though the URL was already in artifacts.</td><td>Accept a bare URL as <code>link</code>. The parser already knows the target is a URL; the kind word adds nothing.</td><td><code>lib/deliverables.js:94</code></td></tr>
+
+<tr><td class="n">P7</td><td>The TODO #60 note said "PR #9 head is 84e0aff" at the moment the head was 3744aef.</td><td>Do not write a PR head into a done note from the item's text; either re-read the PR at the note's timestamp or leave the item's text alone.</td><td><code>lib/todos.js</code> (the done note), <code>lib/jobs.js</code> (the dim line)</td></tr>
+
+<tr><td class="n">P8</td><td>Turn 1's final and DELIVER were never harvested because the card had been interrupted.</td><td>When an interrupted run's gateway result arrives, record its final and parse its DELIVER lines. The panel already reads a late result for a completed card (the "run completed in the gateway" line on 802c0261); the interrupted card needs the same read.</td><td><code>lib/jobs.js</code> (result harvesting), <code>lib/restart.js</code> (interrupted list)</td></tr>
+
+<tr><td class="n">P9</td><td>The terminal guard wedged twice and its advice was "retry".</td><td>Fail open after a shorter deadline with a named construct, or refuse the shape once and say which shape. A 180s silence on a command that never ran is the most expensive message in this transcript.</td><td>the terminal pre-execution guard</td></tr>
+
+<tr><td class="n">P10</td><td>An unattended queue row tried <code>execute_code</code> and lost a call.</td><td>Append <code>STAGE_TOOLS_LINE</code> to every unattended tree run, not only to pipeline stages. The line already exists and names the refused tool.</td><td><code>lib/task-pipeline-drive.js:1364</code>, used at line 1416</td></tr>
+
+<tr><td class="n">P11</td><td>The SCRATCH directory named in every brief did not exist; two redirects died on it.</td><td>Create the scratch directory at spawn, or make the brief's first line <code>mkdir -p "$SCRATCH"</code>.</td><td><code>lib/jobs.js</code> (the brief template)</td></tr>
+
+</tbody>
+</table>
+
+<h2 id="what">8. What this does not prove</h2>
+<ul>
+  <li>I did not run the workers; the transcript, the job store and the gateway's session store are the evidence. No result is inferred from a commit message alone.</li>
+  <li>The gateway's own record for <code>run_161b416440b14137a88eeb31bd8e4a41</code> could not be read: the panel's API key is rejected by <code>/v1/runs</code> (401, <code>Invalid gateway API key</code>). Its start time is the gateway log's inbound line at 11:44:35 local (16:44:35Z), and its end is the clarify call at 16:45:34Z; nothing after that is claimed.</li>
+  <li>The 122-file classification is quoted from the two workers, not re-derived here. I did not re-run the dash-pair check over the tree.</li>
+  <li>The email-multi tree is not clean at the time of writing: four <code>build.gradle</code> files are modified by row #276's live run <code>b8eaa8ba</code> (started 17:08:17Z). I did not touch them, and this report makes no claim about #276's work.</li>
+  <li>No code was changed in either repository for this review. The fixes in section 7 are directions with file references, not applied patches.</li>
+  <li>The panel's tree-claim rule is quoted from the design document and the function; I did not exercise a <code>pipeline-tree-claimed</code> park to prove the start path refuses a plain row, because that would require a code change.</li>
+</ul>
+
+<h2 id="sources">9. Sources</h2>
+<table>
+<thead><tr><th>what</th><th>where</th><th>why</th></tr></thead>
+<tbody>
+<tr><td>the jobs and their clocks</td><td><code>http://127.0.0.1:7331/api/jobs</code>, jobs <code>a7e84431</code>, <code>88aa9a5b</code>, <code>802c0261</code>, <code>4349b1e8</code>, <code>b8eaa8ba</code></td><td>start, end, duration, status, prompt, completion, artifacts, lines</td></tr>
+<tr><td>the settled transcript</td><td>Hermes state store <code>C:/Users/roper/AppData/Local/hermes/state.db</code>, sessions <code>wtgui-resume-this-row-after-the-15-97babb</code> and <code>wtgui-your-turn-was-cut-by-the-pan-6698c3</code></td><td>every tool call and result quoted in section 3 and section 4</td></tr>
+<tr><td>the run's own clock</td><td><code>C:/Users/roper/AppData/Local/hermes/logs/gateway.log</code>, line at 11:44:34.655 local</td><td><code>time=2929.7s api_calls=84 response=2306 chars</code>; the queued turn's inbound at 11:44:35.193</td></tr>
+<tr><td>the row and the tree facts</td><td><code>C:/Users/roper/.wag/state/assistants/assistant-1/queue.json</code>, rows 213, 272, 276, 277</td><td>titles, park reasons, worktree, thread</td></tr>
+<tr><td>the tree-claim rule</td><td><code>docs/design/pipeline-stage-execution.md</code> section 3.5; <code>lib/task-pipeline-drive.js</code> <code>treeClaims</code> (line 1326)</td><td>the rule exists and covers open rows</td></tr>
+<tr><td>the guards and briefs</td><td><code>lib/jobs.js</code> (DELIVER_BRIEF, <code>todoBlockText</code>), <code>lib/todos.js</code> (<code>todoBlock</code>), <code>lib/deliverables.js:94</code>, <code>lib/restart.js</code>, <code>lib/task-pipeline-drive.js</code> (<code>STAGE_TOOLS_LINE</code>)</td><td>where each fix lands</td></tr>
+<tr><td>the push guard</td><td><code>C:/ProjectDevelopment/email-multi/.git/wtgui-hooks/pre-push</code> and its <code>policy</code> file</td><td><code>core.hooksPath</code> wiring, <code>policy=allow</code>, "a speed bump, not a lock"</td></tr>
+<tr><td>PR #9</td><td><a href="https://git.sefl.com/projects/IT/repos/email-multi/pull-requests/9">https://git.sefl.com/projects/IT/repos/email-multi/pull-requests/9</a> and <code>git ls-remote --heads origin</code> in the email-multi tree</td><td>OPEN, version 16, fromRef <code>e17b45e</code>, toRef <code>2b1a6ad</code>; turnover branch at <code>e17b45e</code></td></tr>
+</tbody>
+</table>
+
+<p class="muted">Quotes are from the panel's job store and the gateway's session store; em and en dashes are rendered as hyphens and long paths are left as printed. The report is read-only work: no file in <code>email-multi</code> was changed, no branch was pushed, and no PR was opened.</p>
+</main>
+</body>
+</html>
