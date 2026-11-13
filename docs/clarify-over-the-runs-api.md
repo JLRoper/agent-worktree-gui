@@ -212,6 +212,44 @@ the box, the choices as buttons, and the turn waiting for the answer. On a build
 prose question at the end of a turn, which the board's `question` rule escalates with the choices it
 can read, and the run has stopped by then: that is the difference the instruction exists to make.
 
+## Where an answered question lands
+
+An answer is a CONTINUATION, not a new job for someone else. The turn that asked has already read the ticket,
+drafted the text the question is about and measured the tree, so its thread is where the answer belongs. Measured
+on this board: a thread did the work in two turns for 597k tokens and produced a drafted comment, and the
+follow-up ran as a FRESH session in the same tree for 393k input - re-deriving the one-line comment the asking
+thread still had in its transcript. That is the defect this ordering exists to stop.
+
+`lib/clarify-answer.js` decides, as a function of the card and of what the gateway said, and `lib/assistant.js`
+delivers. Four modes, and only one of them mints a session:
+
+- `resume` (the default) - the run parked on the prompt takes the answer through `POST /v1/runs/<id>/clarify`.
+  No new turn, no new session, and the turn carries on with the context it asked from. `answerParked` and the
+  standing-rule answer both come here.
+- `reply` (the default once the asking run is gone) - the run ended under the card (its cap fired, the gateway
+  dropped it, or the reader got to the card late). The answer becomes a REPLY turn on the asking thread, posted
+  with that thread as the `session_id`, so the session continues. The queue row naming that thread moves to the
+  new run at the same moment (`linkResumedRun`), which is what keeps the row settleable.
+- `fresh` (explicit, never the default) - the caller says the answer changes gear: `POST /api/jobs/answer` with
+  `fresh: true` starts a NEW session in the same tree. This is the path for a different task, a different tree or
+  a different repo, and for a thread whose context is already large enough that re-sending its transcript costs
+  more than a fresh read.
+- `refuse` - the answer is not delivered and no turn is started: a run the READER stopped is not resumed by an
+  answer, and a refusal the gateway itself wrote (a malformed body, an answer already in flight) is repeated with
+  its reason rather than worked around.
+
+The managers' shared action prompt (`lib/assistant/actions.js`) carries the same rule for the follow-up work an
+answer starts: `TO <its thread>` continues the asking thread, and `SPAWN IN` its tree is the gear change.
+
+To see it on a tree, without a gateway and without touching the board:
+
+    node tools/verify-clarify-answer-reuse.mjs
+
+It mounts `routes/jobs.js` on a loopback socket with a stub Runs API, parks a run on a question, ends that run,
+presses Answer through `POST /api/jobs/answer` and prints the asking thread, the answering thread and the run ids,
+then settles the queue row. On a tree that does not carry the change the same request answers `undelivered` /
+`run_ended` with no answering turn, and the tool exits 1.
+
 ## What the reader has to do (a patch, then a restart)
 
 The gateway change is code, and it does not have to be 1692 commits of upstream work: the contract the

@@ -32,6 +32,7 @@
     "verify:deliverables-stable": "node tools/verify-deliverables-stable.mjs",
     "verify:deliverables-stale": "node tools/verify-deliverables-stale.mjs",
     "verify:clarify-card-link": "node tools/verify-clarify-card-link.mjs",
+    "verify:clarify-answer-reuse": "node tools/verify-clarify-answer-reuse.mjs",
     "verify:clarify-card-links": "node tools/verify-clarify-card-links.mjs",
     "verify:clarify-card-base": "node tools/verify-clarify-card-base.mjs",
     "verify:clarify-card-caret": "node tools/verify-clarify-card-caret.mjs",

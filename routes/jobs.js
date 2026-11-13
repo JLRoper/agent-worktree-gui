@@ -12,7 +12,7 @@
 //   POST /api/jobs/reattach         {id} - ask the gateway about ONE interrupted card and settle it.
 //   POST /api/jobs/ask-complete     {id} - queue one ask for the board assistant.
 //   POST /api/jobs/approve          {id, choice, requestId} - answer a parked run's approval.
-//   POST /api/jobs/answer           {id, answer, requestId} - answer a clarify prompt the run is blocked on.
+//   POST /api/jobs/answer           {id, answer, requestId, fresh?} - answer a clarify prompt the run is blocked on.
 //   POST /api/jobs/attach           {thread, path|detach} - give a conversation a tree, or take one back.
 //   POST /api/jobs/label            {thread, label} - a panel-side display name; the thread id stays the identity.
 //   POST /api/jobs/clear            {thread?} - forget one conversation, or every finished one.
@@ -153,16 +153,35 @@ export function createJobsRoutes({ jobs, config = {}, assistant, broadcast, gone
     // Answer a question the agent's `clarify` tool is blocked on. Same fence as an approval: the
     // gateway re-validates the prompt id against the run's pending controls and its execution
     // generation, so a stale card cannot answer a question that has already been settled.
+    //
+    // WHERE the answer lands is the panel's decision, not the page's (lib/clarify-answer.js): the default is the
+    // thread that ASKED - the parked run takes it when it is still there, and a reply on that same thread when it
+    // has ended, which continues the session with the context it already holds. `fresh: true` is the manager's
+    // explicit gear change and mints a new session in the same tree; it is never the default. The composition
+    // root's assistant owns that choice, so a route built without one keeps the plain parked-run answer.
     if (route === "/api/jobs/answer" && req.method === "POST") {
       if (!authorised(req, config.token)) {
         sendJson(res, 403, { error: "bad or missing x-panel-token" });
         return true;
       }
       const body = await readBody(req);
-      const r = await jobs.answerQuestion(String(body.id || ""), body.answer, body.requestId ?? body.request_id);
+      const id = String(body.id || "");
+      const requestId = body.requestId ?? body.request_id;
+      let r;
+      if (typeof assistant.deliverClarifyAnswer === "function") {
+        try {
+          r = await assistant.deliverClarifyAnswer(id, body.answer, { requestId, fresh: body.fresh === true, by: body.by || "reader" });
+        } catch (e) {
+          // A fresh session the tree refuses (a released tree, a tree a live run holds) is a refusal with a
+          // reason the reader can act on, never a 500.
+          r = { ok: false, error: String((e && e.message) || e), code: (e && e.code) || null };
+        }
+      } else {
+        r = await jobs.answerQuestion(id, body.answer, requestId);
+      }
       // `answer_in_flight` is the single-flight fence refusing a second press for a question the first one is
       // already answering: a conflict, not a malformed body.
-      sendJson(res, r.ok ? 200 : r.code === "approval_not_pending" || r.code === "answer_in_flight" ? 409 : 400, r);
+      sendJson(res, r.ok ? 200 : r.code === "approval_not_pending" || r.code === "answer_in_flight" || r.code === "thread_busy" ? 409 : 400, r);
       return true;
     }
 
