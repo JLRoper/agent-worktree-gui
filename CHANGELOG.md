@@ -4,16 +4,33 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.89.4 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.89.5 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-571 releases from v0.1.0 (2026-10-20) to v1.89.4 (2026-11-12), 1908 commits between the tags. Every release is anchored by an
+572 releases from v0.1.0 (2026-10-20) to v1.89.5 (2026-11-12), 1912 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.89.5 — 2026-11-12 · 4 commits
+
+[`6d8296b`](https://github.com/JLRoper/agent-worktree-gui/commit/6d8296b75d0c9eb3f2952c3c1c30ddb036720dc9) · [compare v1.89.4...v1.89.5](https://github.com/JLRoper/agent-worktree-gui/compare/v1.89.4...v1.89.5)
+
+### Fixed
+
+- fix: stream reasoning.delta into the thinking pane and show a live thinking placeholder ([`33ad603`](https://github.com/JLRoper/agent-worktree-gui/commit/33ad603ff2d67b8911c13d20e4f8671830f7f61c))
+
+### Docs & tests
+
+- docs: render the changelog - 571 releases ([`96c78eb`](https://github.com/JLRoper/agent-worktree-gui/commit/96c78eb27eef0f8c3f05e8d0bfe061dbeac0c52f))
+- docs: the search report names the numbers its two runs printed ([`7f89524`](https://github.com/JLRoper/agent-worktree-gui/commit/7f895244891f6a422c374caed74331592e28b7c2))
+
+### Other
+
+- chore: 1.89.5 - the version this landing carries ([`6d8296b`](https://github.com/JLRoper/agent-worktree-gui/commit/6d8296b75d0c9eb3f2952c3c1c30ddb036720dc9))
 
 ## v1.89.4 — 2026-11-12 · 5 commits
 
