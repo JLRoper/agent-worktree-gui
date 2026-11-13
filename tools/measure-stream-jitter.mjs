@@ -2,7 +2,7 @@
 //
 //   node tools/measure-stream-jitter.mjs --mode stream        # 🌊 one-stream console (reasoning is rows of it)
 //   node tools/measure-stream-jitter.mjs --mode think         # the 🧠 block above a condensed console
-//   --report <dir>   where the captures go (default C:/CodeReviews/agent-worktree-gui)
+//   --report <dir>   where the captures go (default the directory the tool runs in)
 //   --label <name>   name of the capture (default the mode)
 //   --flow1/--pause/--flow2/--settle <ms>   the four windows (defaults 30000/15000/20000/8000)
 //   --md <path>      also write the per-window table as markdown
@@ -48,7 +48,7 @@ if (!["stream", "think"].includes(MODE)) {
   console.log(`--mode must be stream or think, not ${MODE}`);
   process.exit(2);
 }
-const REPORT = opt("--report", "C:/CodeReviews/agent-worktree-gui");
+const REPORT = opt("--report", process.cwd());
 const LABEL = opt("--label", MODE);
 const FLOW1 = Number(opt("--flow1", 30000));
 const PAUSE = Number(opt("--pause", 15000));
@@ -56,7 +56,7 @@ const FLOW2 = Number(opt("--flow2", 20000));
 const SETTLE = Number(opt("--settle", 8000));
 const MD = opt("--md");
 const THREAD = "probe-jitter";
-const SCRATCH = "C:/Users/roper/AppData/Local/Temp/wag/5c12fc93";
+const SCRATCH = path.join(os.tmpdir(), "measure-stream-jitter");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const r1 = (n) => Math.round(n * 10) / 10;
 
@@ -783,7 +783,7 @@ function pageInit({ thread, mode }) {
 
 // ---- running one capture ------------------------------------------------------------------------------------------
 function loadPlaywright() {
-  for (const root of [process.env.PANEL_PLAYWRIGHT_ROOT, process.env.PLAYWRIGHT_ROOT, ROOT, process.cwd(), "C:/Users/roper/AppData/Roaming/npm/node_modules"].filter(Boolean)) {
+  for (const root of [process.env.PANEL_PLAYWRIGHT_ROOT, process.env.PLAYWRIGHT_ROOT, ROOT, process.cwd(), process.env.APPDATA ? path.join(process.env.APPDATA, "npm", "node_modules") : ""].filter(Boolean)) {
     for (const p of [path.join(root, "node_modules", "playwright"), path.join(root, "playwright"), root]) {
       try {
         return require(p);
