@@ -2890,6 +2890,13 @@ function appendJobLine(evt) {
       paintThink(turn, "");
     }
   }
+  // A streamed reasoning chunk (`line.thinkOnly`) is a PUSHED PREVIEW of one growing block, not a
+  // console line: lib/jobs.js emits it coalesced, keyed by a stable `at`, with the cumulative text so
+  // far. The `line.think` branch above just painted the 🧠 pane from it; returning here keeps it out
+  // of the line-by-line hold, recordJobLine() and drawJobLine(). One frame per token would otherwise
+  // flood the transcript and repaint the console. The store poll replaces the preview wholesale when
+  // the turn completes (see loadThinking).
+  if (line.thinkOnly) return;
   // The line-by-line setting holds a burst of whole lines and lets them in one at a time. Bookkeeping never waits:
   // the `result` line is what says the turn ended, and it is also the frame that flushes both buffers. A hidden tab
   // is not reading anything, so it never holds a line either — the answer is there in full when the reader returns.
