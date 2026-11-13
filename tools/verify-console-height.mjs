@@ -254,7 +254,9 @@ async function grab(page, thread, out) {
     const onBox = await page.evaluate(
       ({ px, py }) => {
         const el = document.elementFromPoint(px, py);
-        return Boolean(el && el.closest && el.closest("pre.job-out"));
+        // The corner is the grip's now (`[data-out-grip]`, a sibling of the console inside its `.out-box`), so a press
+        // that reaches the resize gesture may report either element.
+        return Boolean(el && el.closest && el.closest("pre.job-out, [data-out-grip]"));
       },
       { px: x, py: y },
     );
