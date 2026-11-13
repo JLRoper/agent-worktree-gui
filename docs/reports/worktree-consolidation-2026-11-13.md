@@ -1,7 +1,7 @@
 # Worktree consolidation audit - 2026-11-13
 
 
-**Provenance:** measured 2026-11-13T02:00Z in `C:/ProjectDevelopment/agent-worktree-gui` against `origin/main` read fresh, at `5b773c49cff1a5ec5cb1593bc48d284fa37dff1b` (`docs: render the changelog - 573 releases`). The task record names `d33a6ef5`; that sha is stale and every number below is quoted against `5b773c49`.
+**Provenance:** measured 2026-11-13T02:00Z in the repository root against `origin/main` read fresh, at `5b773c49cff1a5ec5cb1593bc48d284fa37dff1b` (`docs: render the changelog - 573 releases`). The task record names `d33a6ef5`; that sha is stale and every number below is quoted against `5b773c49`.
 
 
 **Counts at the start:** 49 `git worktree list` entries = the primary checkout plus **48 worktrees**; 52 directories under `.worktrees/` = 48 registered trees plus **4 empty orphan directories** (no `.git`, no files). Seven runs are live on this host, three of them in this repo: this run, `make-highlighting-part-of-a-worktree-db6c92` (run_b4d414728ab641b884063f45075296fc) and `make-focus-mode-show-every-worktree-with-a9627a` (run_d0c7b0f4a0084e6fb07a8d522bae2f4a).
@@ -222,7 +222,7 @@ Every one of these was `empty` (branch tip an ancestor of `origin/main`, 0 own c
 - **8 dirty trees**, because uncommitted work is the only copy in git: add-generic-gui-pipeline-to-bundle-4c4680 (1 file), add-per-project-landing-rules-the-carry-4cc45c (7), async-pipeline-driver-refactor (22), fix-the-refusal-that-parked-52-6974b3 (3), retry-settings-write-on-slow-panel-48eeb8 (2), round-c-how-a-round-names-its-trees-stage-2-conclude-7ace4b (1, on `wtgui/rung-2-row-starts-in-its-tree`), run-github-landing-sanity-test-write-0472b0 (1), two-changes-to-the-clarify-card-one-pr-33f806 (2).
 - **9 trees whose commits are on no remote and not on main**, the rule that cost two commits earlier: github-landing-sanity-0bbdd3 `de5f30cf`, round-b-what-the-state-printer-says-01cc86 `6214af31`, round-b-what-the-state-printer-says-stage-1-probe-112593 `d104dbf2`, round-b-what-the-state-printer-says-stage-2-conclude-530d9e `848cf120`, run-gui-improve-again-this-time-on-the-2ae88d `38ef1d28`, run-row-70-exactly-as-written-local-only-stage-1-draft-1de511 `5082d019`, run-row-71-exactly-as-written-local-only-0cc905 `608b0e02`, the-implement-stage-of-the-unattached-61851d `a0a7bc9c`, write-the-draft-the-brief-asks-for-in-94df79 `93febcc9`. Their code or ledger is on main, but their ledger records are not, and the branch is the only copy.
 - **8 keepers**, merged below.
-- **This run's tree** and **the primary checkout** (`C:/ProjectDevelopment/agent-worktree-gui`, on `main`), never touched.
+- **This run's tree** and **the primary checkout** (the repository root, on `main`), never touched.
 
 ### Keepers merged (8, 13 commits)
 
