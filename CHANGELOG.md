@@ -4,16 +4,33 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.91.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.91.1 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-576 releases from v0.1.0 (2026-10-20) to v1.91.0 (2026-11-12), 1942 commits between the tags. Every release is anchored by an
+577 releases from v0.1.0 (2026-10-20) to v1.91.1 (2026-11-12), 1946 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.91.1 — 2026-11-12 · 4 commits
+
+[`24d2771`](https://github.com/JLRoper/agent-worktree-gui/commit/24d277118ae2bcfeff7db733563314fe7b0da496) · [compare v1.91.0...v1.91.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.91.0...v1.91.1)
+
+### Fixed
+
+- fix: stop the store poll from re-typing live reasoning from word 0 ([`478fb6d`](https://github.com/JLRoper/agent-worktree-gui/commit/478fb6d954609ac0fbc257eb902b1dc50f3f863b))
+
+### Docs & tests
+
+- docs: name the repo relatively in the audit, allowlist the merged session record ([`5a9057b`](https://github.com/JLRoper/agent-worktree-gui/commit/5a9057b6a4a60de485a0756ca04d7649d22fdb9c))
+- docs: render the changelog - 576 releases ([`fa165bf`](https://github.com/JLRoper/agent-worktree-gui/commit/fa165bf8a969bbac9108e6f500d0659d1d330a47))
+
+### Other
+
+- chore: 1.91.1 - the version this landing carries ([`24d2771`](https://github.com/JLRoper/agent-worktree-gui/commit/24d277118ae2bcfeff7db733563314fe7b0da496))
 
 ## v1.91.0 — 2026-11-12 · 13 commits
 
