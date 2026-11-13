@@ -962,7 +962,11 @@
     if (!body) return;
     if (!force && !chatPinned) return;
     const toFoot = () => {
-      body.scrollTop = body.scrollHeight;
+      // Through `setScroll` (public/board/console.js), so the box remembers where the panel put it: the card's own
+      // pin (`stickCardBodySoon`) reads that record to tell the reader's scroll from the panel's, and a write it
+      // cannot attribute is a write that can unpin a pane the reader never touched.
+      setScroll(body, body.scrollHeight);
+      body._atBottom = true;
     };
     toFoot();
     requestAnimationFrame(toFoot);
@@ -1435,6 +1439,32 @@
     </div>`;
   }
 
+  // How tall the pane's own foot is. The composer is `position: sticky; bottom: 0` inside the card body, so it occupies
+  // the bottom of the scrollport the reader is looking at, and anything that has to sit just above it has to know that
+  // height. It is written as a custom property on the body (one number, read by the ↓ chip's `bottom: calc()` in
+  // public/style.css) and re-written only when the composer changes size - a ResizeObserver, not a read per line, so
+  // the per-append path pays nothing for it.
+  let footObserver = null;
+  function watchPaneFoot(host) {
+    if (typeof ResizeObserver !== "function") return;
+    const reply = host?.querySelector(':scope > .job > .job-body > .reply');
+    const body = reply?.parentElement;
+    if (!reply || !body) return;
+    const write = () => body.style.setProperty("--reply-h", `${reply.offsetHeight || 0}px`);
+    write();
+    if (!footObserver) {
+      footObserver = new ResizeObserver((entries) => {
+        for (const e of entries) {
+          const box = e.target?.parentElement;
+          if (box) box.style.setProperty("--reply-h", `${e.target.offsetHeight || 0}px`);
+        }
+      });
+    }
+    // Whichever composer is on screen is the only one this pane has: observing the fresh one is the whole update.
+    footObserver.disconnect();
+    footObserver.observe(reply);
+  }
+
   function renderAssistantChat(id = activeSessionId()) {
     const host = hostFor(id, "chat");
     if (!host) return;
@@ -1476,10 +1506,17 @@
     restoreTyping(host, typing);
     restoreCardSelection(held);
     settleScrolls(host);
+    watchPaneFoot(host);
     if (wasPinned) pinChatToBottom(true);
     else {
       const body = chatBody();
-      if (body) body.scrollTop = prevTop;
+      if (body) {
+        // The same two records `pinChatToBottom` keeps, written the other way round: where the panel put the box, and
+        // that this body is NOT following. Without the second, a fresh node answers "following" and the next streamed
+        // line drags a reader who is reading the middle of the transcript back down to the foot.
+        setScroll(body, prevTop);
+        noteCardBodyScroll(body);
+      }
     }
     // The panel is fixed, so a rebuild can never move the page — but a focus() inside it can, and this keeps
     // that promise local instead of relying on every callee remembering preventScroll.

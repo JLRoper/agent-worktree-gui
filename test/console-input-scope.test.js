@@ -158,8 +158,10 @@ test("the window is 1,200 ms and each card keeps its own clock", () => {
   assert.equal(p.INPUT_WINDOW_MS, 1200);
 });
 
-test("all three scroll sites ask the per-card question and none keeps the document-wide one", () => {
-  assert.equal((src.match(/readerInputHere\(pre\)/g) || []).length, 3, "think-body, sub-console and job-out scroll sites");
+test("all four scroll sites ask the per-card question and none keeps the document-wide one", () => {
+  // The fourth is the agent card's own session scroller (.job-body), which is the only box that scrolls in the docked
+  // Chat pane: it asks the same per-card question so a wheel in another card cannot decide this one's pin.
+  assert.equal((src.match(/readerInputHere\(pre\)/g) || []).length, 4, "think-body, sub-console, job-out and job-body scroll sites");
   assert.doesNotMatch(src, /Date\.now\(\) - lastInputAt < 1200/, "no call site compares against a page-wide clock");
   assert.equal((src.match(/lastInputAt\.set\(/g) || []).length, 1, "one writer, keyed by card thread");
   assert.match(src, /e\.target\.closest\("\.job\[data-thread\]"\)/, "the writer resolves the card from the event target");

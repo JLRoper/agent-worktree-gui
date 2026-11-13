@@ -1480,6 +1480,27 @@ body.is-out-gripping * { cursor: nwse-resize; }
 /* Scrolled to the newest line, or nothing to scroll: the chip fades out and stops taking clicks. */
 .out-wrap.is-at-end > .to-bottom { opacity: 0; pointer-events: none; }
 
+/* THE CHIP IN A PANE THAT SCROLLS ITS CARD, NOT ITS CONSOLE. In the two places the sheet makes a card's BODY the
+   scrollport - the docked Chat pane and a maximized card - a turn is taller than the viewport, so a chip anchored to
+   the turn's own bottom hangs below the fold: the reader who has scrolled away from the newest line is exactly the
+   reader who cannot reach it. There it rides the scroller's own foot instead (sticky, in flow, centred over the text),
+   so it is where the eye already is while the turn is in view, and it settles back into its old place the moment the
+   turn's bottom reaches the reader. The halo is the base rule's.
+   In the PANE the foot is not the scroller's edge: the composer is `position: sticky; bottom: 0` inside the very same
+   body (line 4199), so a chip at 9 px would sit behind it and take no press. `--reply-h` is the composer's own height,
+   written by the pane (public/assistant.js, watchPaneFoot) the one time it changes, and the chip rides above it. */
+.job.maximized .out-wrap > .to-bottom,
+.as-subpane[data-subpane="chat"] .out-wrap > .to-bottom {
+  position: sticky;
+  left: auto;
+  margin: -21px auto 6px;
+  transform: none;
+}
+.job.maximized .out-wrap > .to-bottom { bottom: 9px; }
+.as-subpane[data-subpane="chat"] .out-wrap > .to-bottom { bottom: calc(var(--reply-h, 0px) + 9px); }
+.job.maximized .out-wrap > .to-bottom:active,
+.as-subpane[data-subpane="chat"] .out-wrap > .to-bottom:active { transform: translateY(1px); }
+
 /* ---- the hover copy button -------------------------------------------------------------------------
    One attribute, one mechanism: anything carrying `data-copy` is a block the reader can lift, and app.js
    mounts a button into its corner itself - so a block another worker draws opts in by carrying the same

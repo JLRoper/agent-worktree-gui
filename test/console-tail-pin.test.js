@@ -182,9 +182,11 @@ test("a reader's scroll handler re-pins only on the newest line itself; the rest
     src.includes("atBottom: o._selfTop == null || o.scrollHeight - o.scrollTop - o.clientHeight < 32"),
     "a capture still reads 'was at the bottom' with its own tolerance",
   );
-  // The ↓ chip appears exactly where following stops, or a reader parked a few px up is offered no way back.
+  // The ↓ chip appears exactly where following stops, or a reader parked a few px up is offered no way back. `scroller`
+  // is the box the reader is reading: the console itself, or the card's session scroller for a console drawn at its
+  // content height in the docked Chat pane (public/board/console.js, paintToBottom).
   assert.ok(
-    src.includes("const atEnd = box.scrollHeight - box.scrollTop - box.clientHeight <= 2;"),
+    src.includes("const atEnd = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <= 2;"),
     "the ↓ chip appears when the console stops following, not 24 px later",
   );
 });

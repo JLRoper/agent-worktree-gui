@@ -1021,6 +1021,12 @@ function renderConversation(thread, { scroll = false, card = null } = {}) {
   const body = fresh.querySelector(".job-body");
   if (body) {
     setScroll(body, bodyAtBottom ? body.scrollHeight : Math.min(bodyTop, Math.max(0, body.scrollHeight - body.clientHeight)));
+    // …and the answer travels with the new node: `_atBottom` is what `stickCardBodySoon` reads before it lets an
+    // arriving line carry the body down, and a fresh node would otherwise say "following" for a reader parked up
+    // the transcript, who would be dragged to the bottom by the next streamed line. Read back off the box the panel
+    // just placed rather than copied from the old node's measurement: a body that shrank under the reader ends up on
+    // its foot, and that is following.
+    noteCardBodyScroll(body);
   }
   settleScrolls(fresh);
   // A repaint replaces the card node, and the node that held the caret is gone with it — so a spawn
