@@ -76,7 +76,7 @@ function streamBodyHtml(turn, lines, windowFull = false, thread = turn.thread ||
   let mdRun = null;
   const flushMd = () => {
     if (!mdRun) return;
-    parts.push(mdRunHtml(mdRun.lines, mdRun.sep));
+    parts.push(mdRunHtml(mdRun.lines, mdRun.sep, { scope: turn.id, open: state.codeBoxOpen }));
     mdRun = null;
   };
   const flushRun = () => {
@@ -123,8 +123,13 @@ function streamBodyHtml(turn, lines, windowFull = false, thread = turn.thread ||
 // arrive one per `<div>`, so a paragraph, a list and a fenced block have to be recognised ACROSS lines — the one
 // place that knows how they group is that module, and this hands it a run and takes the markup back. `textOf`
 // keeps the drawn stream honest: a line still being typed is drawn up to the words that may be shown now.
-function mdRunHtml(lines, sep = "") {
-  return consoleMdHtml(lines, { sep, textOf: (l) => typedShown(l) });
+//
+// `cards` is the turn's own scope and the page's open book, and it is what makes a command line in this turn's final
+// message the same card the panes around the card draw (core/assistant-command.js, through the frame
+// core/console-format.js publishes). The card is built there, never here: this file hands the run over and takes the
+// markup back, and it holds no second builder of its own.
+function mdRunHtml(lines, sep = "", cards = null) {
+  return consoleMdHtml(lines, { sep, ...(cards ? { cards } : {}), textOf: (l) => typedShown(l) });
 }
 
 // The condensed card's console: one row per tool call (the burst, exactly as before), and the prose between the
@@ -153,7 +158,7 @@ function condensedBodyHtml(turn, lines, busy, storeSeen) {
   let run = null;
   const flush = () => {
     if (!run) return;
-    parts.push(mdRunHtml(run));
+    parts.push(mdRunHtml(run, "", { scope: turn.id, open: state.codeBoxOpen }));
     run = null;
   };
   burstGroups(lines).forEach((item, gi) => {

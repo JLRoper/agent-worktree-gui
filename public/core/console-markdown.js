@@ -239,6 +239,44 @@ function consoleMdIsProse(kind) {
   return k === "text" || k === "final";
 }
 
+// ---- the assistant's command lines --------------------------------------------------------------------
+// A reply's command lines (`QUEUE assistant-3 | ...`, `SPAWN IN <tree> | ...`) are not prose to be wrapped in a
+// paragraph: each is ONE card, drawn by the module public/core/console-format.js publishes (`commandCard`), which is
+// the same frame a tool's result is drawn in. A caller that wants them asks with `cards` - the agent card's
+// transcript does (public/render-jobs.js hands the turn's scope and the reader's open book) - and every other
+// caller, the console's own live append included, keeps the paragraph it has always drawn.
+//
+// A card is drawn only once the whole line is on screen: a head that appeared while the line was still being typed
+// would claim a command the reader cannot read yet. So the block is decided from the line's own text, and the typed
+// renderer draws a plain row until the visible prefix is the whole line.
+function cmConsoleFormat() {
+  const core = globalThis.WMApp && globalThis.WMApp.core;
+  return core && core.consoleFormat ? core.consoleFormat : null;
+}
+
+function cmIsCommandLine(text, opts) {
+  if (!opts || !opts.cards) return false;
+  const cf = cmConsoleFormat();
+  return Boolean(cf && typeof cf.commandLine === "function" && cf.commandLine(text));
+}
+
+function cmCommandCard(line, opts, i) {
+  if (!opts || !opts.cards) return "";
+  const cf = cmConsoleFormat();
+  if (!cf || typeof cf.commandCard !== "function") return "";
+  const lid = line && line.lid != null && line.lid !== "" ? String(line.lid) : null;
+  // The key the reader's open state is kept under: the line's own id when it has one (it survives a repaint and a
+  // window that drops the lines above it), its index in the run when it does not.
+  return String(
+    cf.commandCard(cmText(line), {
+      ...opts.cards,
+      ref: lid == null ? i : lid,
+      lid,
+      lineKind: String((line && line.kind) || "text"),
+    }) || "",
+  );
+}
+
 const cmText = (line) => String((line && line.text) != null ? line.text : "").replace(/\r+$/, "");
 
 // ---- physical lines ----------------------------------------------------------------------------------
@@ -282,7 +320,8 @@ function consoleMdPhysicalLines(lines) {
 //   list:  ordered (boolean)
 //   head:  level (1..6)
 //   fence: lang (string), open (the closing fence has not arrived yet), code (boolean — this block is code)
-function consoleMdBlocks(lines) {
+//   cmd:   one command line, drawn as its own card (only when the caller asked with `opts.cards`)
+function consoleMdBlocks(lines, opts = {}) {
   const list = consoleMdPhysicalLines(lines).filter(Boolean);
   const out = [];
   let cur = null;
@@ -304,6 +343,13 @@ function consoleMdBlocks(lines) {
     }
     if (CM_BLANK_RE.test(text)) {
       flush();
+      continue;
+    }
+    // A command line is a block of its own, and the one block drawn as a card. Checked before every other shape:
+    // nothing about it is a paragraph, a heading or a fence, and it ends whatever run was open above it.
+    if (cmIsCommandLine(text, opts)) {
+      flush();
+      out.push({ type: "cmd", lines: [line] });
       continue;
     }
     const fence = CM_FENCE_RE.exec(text);
@@ -387,6 +433,9 @@ function cmFenceHtml(block, rowOpts) {
 // carries its own marker (the source line keeps its "- " in data-ltext, so a rebuild is exact).
 function consoleMdBlockHtml(block, opts = {}) {
   const rowOpts = opts.rowOpts || {};
+  // A command line's card IS the block: no `.md-block` wrapper, because the card is a frame of its own (the same one
+  // a result is drawn in) and a wrapper would only add margins around margins.
+  if (block.type === "cmd") return cmCommandCard(block.lines[0], opts, Number(opts.index) || 0);
   if (block.type === "fence") return cmFenceHtml(block, rowOpts);
   if (block.type === "head") {
     // The `##` is the marker, not the sentence: data-ltext keeps the source line whole, the row shows the words.
@@ -446,12 +495,12 @@ function consoleMdHtml(lines, opts = {}) {
         return line._cmRow < rows.length ? rows[line._cmRow] : "";
       }
     : null;
-  const blocks = consoleMdBlocks(list);
+  const blocks = consoleMdBlocks(list, opts);
   return blocks
     .map((block, i) => {
       // A typed run is drawn up to the words that may be shown now, row by row: the same blocks, the same
       // fence head, only each row's inner HTML is the visible prefix instead of the whole line.
-      const html = textOf ? consoleMdTypedBlockHtml(block, textOf) : consoleMdBlockHtml(block);
+      const html = textOf ? consoleMdTypedBlockHtml(block, textOf, opts, i) : consoleMdBlockHtml(block, { cards: opts.cards, index: i });
       return i === 0 && opts.sep ? `<div class="md-sep ${opts.sep}"></div>${html}` : html;
     })
     .join("");
@@ -459,11 +508,18 @@ function consoleMdHtml(lines, opts = {}) {
 
 // The typed variant: every row's inner HTML is the stream's visible prefix, rendered inline. Nothing else
 // changes — the block, the fence and its head are the same shapes.
-function consoleMdTypedBlockHtml(block, textOf) {
+function consoleMdTypedBlockHtml(block, textOf, opts = {}, index = 0) {
   const shownOf = (line) => {
     const shown = textOf(line);
     return shown == null ? cmText(line) : String(shown);
   };
+  if (block.type === "cmd") {
+    // The card waits for the whole line (see cmCommandCard): until the stream has released the last character, the
+    // line is the plain row it was while it was being written.
+    const line = block.lines[0];
+    if (shownOf(line) !== cmText(line)) return consoleMdRow(line, { inner: consoleMdInline(shownOf(line)) });
+    return cmCommandCard(line, opts, index);
+  }
   if (block.type === "fence") {
     const n = block.lines.length;
     const folded = !block.open && n > CONSOLE_MD_FENCE_FOLD;

@@ -1,21 +1,23 @@
-// The assistant's command lines, drawn as the tool card - and the rule that says when they are NOT drawn.
+// The assistant's command lines, drawn as the tool card - every readable one, titled or not.
 //
 // A reply ends with lines in the panel's own vocabulary (`QUEUE assistant-3 | ...`, `TODO ADD ...`), and the reader
-// met them as prose. This proves the reading that turns one of them into a card, and - the half that matters more -
-// that a line the reading cannot finish with a title is left EXACTLY as it was, so a malformed bracket can never
-// change what the panel shows the line to mean, let alone what it does.
+// met them as prose. This proves the reading that turns one of them into a card, on all three surfaces a reader
+// meets it: the board's tail, the Messages pane, and the agent card's own transcript. The title is a display nicety
+// on top of that card: a malformed bracket is not a title, and it never changes what the line is or what the panel
+// does with it.
 //
 //   1. the emoji map: one emoji per kind, nine kinds, no kind without one;
-//   2. the 80-character rule, named and exported: a title of 80 characters counts, 81 does not, and a bracket that
-//      never closes or never leads is not a title at all;
-//   3. the header: the kind's emoji, then the recipient, then the title - `assistant-3 | Playwright test`;
-//   4. the card is the SAME component a tool's result uses (core/console-format.js's frame), with a real button for
+//   2. the 80-character rule, named and exported: a title of 80 characters counts, 81 does not - and the line is a
+//      card either way, because the rule decides the TITLE and never whether a readable line is drawn;
+//   3. the header: the kind's emoji, then the recipient, then the title when one parses;
+//   4. a card for ANY readable line: untitled QUEUE, MESSAGE and SPAWN, and a titled one alongside them;
+//   5. the card is the SAME component a tool's result uses (core/console-format.js's frame), with a real button for
 //      its head and a body folded to two lines;
-//   5. the four lines the panel asks to see still run: an unclosed bracket, an 81-character bracket, a bracket on a
+//   6. the agent card's transcript reaches that card through the one prose renderer, and holds no builder of its own;
+//   7. the four lines the panel asks to see still run: an unclosed bracket, an 81-character bracket, a bracket on a
 //      TODO line and a line with no bracket at all, each parsed by the EXECUTING grammar into the same row as before;
-//   6. the queue row is byte-for-byte what it was: the title is not stripped from what executes;
-//   7. the two surfaces call the one module, the page loads it after the frame it needs, and neither surface builds
-//      a second card of its own.
+//   8. the queue row is byte-for-byte what it was: the title is not stripped from what executes;
+//   9. the panes call the one module, the page loads it after the frame it needs, and no surface builds a second card.
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import { readFileSync } from "node:fs";
@@ -34,11 +36,23 @@ const frame = globalThis.WMApp.core.consoleFormat;
 const read = (rel) => readFileSync(new URL(rel, import.meta.url), "utf8");
 const turns = read("../public/turns.js");
 const assistant = read("../public/assistant.js");
+const jobs = read("../public/render-jobs.js");
+const markdown = read("../public/core/console-markdown.js");
+const board = read("../public/board/console.js");
 const html = read("../public/index.html");
 const css = read("../public/style.css");
 const app = read("../public/app.js");
 
 const QUEUE = "QUEUE assistant-3 | [Playwright test] corner resize";
+const PLAIN_QUEUE = "QUEUE assistant-3 | corner resize";
+const PLAIN_MESSAGE = "MESSAGE assistant-3 | the deploy moved";
+const PLAIN_SPAWN = "SPAWN IN #12 agent-worktree-gui | card it";
+const UNCLOSED = "QUEUE assistant-3 | [Playwright test corner resize";
+const TOO_LONG = `QUEUE assistant-3 | [${"x".repeat(81)}] body`;
+const INNER = "QUEUE assistant-3 | see [Playwright] below";
+
+const EM = M.COMMAND_EMOJI;
+const head = (what) => `<span class="code-what">${what}</span>`;
 
 test("one emoji per kind, and a kind with no emoji is a bug", () => {
   assert.equal(M.KINDS.length, 9);
@@ -49,48 +63,84 @@ test("one emoji per kind, and a kind with no emoji is a bug", () => {
   // The nine the panel names, in the head's order, and TO is deliberately not one of them: it addresses a worker.
   assert.deepEqual(M.KINDS, ["QUEUE", "MESSAGE", "SPAWN", "TODO", "RULE", "NOTE", "WATCH", "CHARTER", "RESTART"]);
   assert.equal(M.parseCommandLine("TO panel-assistant: hello"), null);
+  // …and a line that is not of the vocabulary is not a card at all.
+  assert.equal(M.cardHtml("TO panel-assistant: hello", { key: "k" }), "");
+  assert.equal(M.cardHtml("just a sentence about QUEUEing work", { key: "k" }), "");
 });
 
-test("the header is the emoji, then the recipient, then the title", () => {
+test("the header is the emoji, then the recipient, then the title when one parses", () => {
   const parsed = M.parseCommandLine(QUEUE);
   assert.equal(parsed.kind, "QUEUE");
   assert.equal(parsed.recipient, "assistant-3");
   assert.equal(parsed.title, "Playwright test");
   assert.equal(parsed.body, "corner resize");
-  assert.equal(M.headerOf(parsed), `${M.COMMAND_EMOJI.QUEUE} assistant-3 | Playwright test`);
+  assert.equal(M.headerOf(parsed), `${EM.QUEUE} assistant-3 | Playwright test`);
   // A kind that addresses nobody draws the emoji and the title alone.
   const rule = M.parseCommandLine("RULE: [Never PROD] deploy to QA only");
   assert.equal(rule.recipient, "");
-  assert.equal(M.headerOf(rule), `${M.COMMAND_EMOJI.RULE} Never PROD`);
+  assert.equal(M.headerOf(rule), `${EM.RULE} Never PROD`);
+  // Without a title the head is the emoji and the recipient - which is all the line itself names.
+  assert.equal(M.headerOf(M.parseCommandLine(PLAIN_MESSAGE)), `${EM.MESSAGE} assistant-3`);
+  assert.equal(M.headerOf(M.parseCommandLine(PLAIN_SPAWN)), `${EM.SPAWN} IN #12 agent-worktree-gui`);
+  // A kind that addresses nobody and carries no title says its own kind, so a head is never a bare glyph.
+  assert.equal(M.headerOf(M.parseCommandLine("RULE: deploy to QA only")), `${EM.RULE} RULE`);
 });
 
-test("the 80-character rule: 80 counts, 81 does not, and the rule is an exported number", () => {
+test("the 80-character rule: 80 is a title, 81 is not, and the line is a card either way", () => {
   assert.equal(M.COMMAND_TITLE_MAX, 80);
   const at = (n) => M.parseCommandLine(`QUEUE a | [${"x".repeat(n)}] body`);
   assert.equal(at(80).title.length, 80);
   assert.equal(at(81).title, null);
-  // …and the card follows the same answer: no title, no card, the line stays the plain line it was.
-  assert.equal(M.cardHtml(`QUEUE a | [${"x".repeat(81)}] body`, { key: "k" }), "");
-  assert.notEqual(M.cardHtml(`QUEUE a | [${"x".repeat(80)}] body`, { key: "k" }), "");
+  // The rule decides the TITLE, never whether a readable line is drawn: both are cards, one just has no title.
+  const eighty = M.cardHtml(`QUEUE a | [${"x".repeat(80)}] body`, { key: "k" });
+  const eightyOne = M.cardHtml(`QUEUE a | [${"x".repeat(81)}] body`, { key: "k" });
+  assert.notEqual(eighty, "");
+  assert.notEqual(eightyOne, "");
+  assert.ok(eighty.includes(head(`${EM.QUEUE} a | ${"x".repeat(80)}`)), "80 characters is a title");
+  assert.ok(eightyOne.includes(head(`${EM.QUEUE} a`)), "81 characters is not a title, and the head says so");
+  // …and the bracket that is not a title stays in the body, as the payload it is.
+  assert.ok(eightyOne.includes(`[${"x".repeat(81)}] body`), "the payload keeps its bracket");
 });
 
-test("an unclosed bracket, a bracket that does not lead, and no bracket at all are not titles", () => {
-  for (const line of [
-    "QUEUE assistant-3 | [Playwright test corner resize",
-    "QUEUE assistant-3 | see [Playwright] below",
-    "QUEUE assistant-3 | corner resize",
-  ]) {
+test("a bracket that never closes, one that does not lead, and no bracket at all are cards without a title", () => {
+  for (const line of [UNCLOSED, INNER, PLAIN_QUEUE]) {
     const parsed = M.parseCommandLine(line);
     assert.ok(parsed, `the line is still a QUEUE line: ${line}`);
     assert.equal(parsed.title, null);
-    assert.equal(M.cardHtml(line, { key: "k" }), "", `no card for: ${line}`);
+    const card = M.cardHtml(line, { key: "k" });
+    assert.notEqual(card, "", `a readable line is a card: ${line}`);
+    assert.ok(card.includes(head(`${EM.QUEUE} assistant-3`)), `the head is the kind and the recipient: ${line}`);
+    assert.ok(card.includes(parsed.body), "the body is the payload, as written");
   }
-  // A TODO line with a bracket is a card; an id op carries no text, so it is not.
+  // A TODO line with a bracket is a card with its title; an id op carries no text, so there is no body to show.
   const todo = M.parseCommandLine("TODO ADD [Playwright test] corner resize");
   assert.equal(todo.kind, "TODO");
   assert.equal(todo.title, "Playwright test");
   assert.match(M.cardHtml("TODO ADD [Playwright test] corner resize", { key: "k" }), /✓?|☑/u);
   assert.equal(M.parseCommandLine("TODO DONE 3").title, null);
+  assert.equal(M.cardHtml("TODO DONE 3", { key: "k" }), "", "nothing but the command: the prose line is the whole command");
+});
+
+test("untitled MESSAGE, QUEUE and SPAWN lines are cards, and a titled one keeps its title", () => {
+  const cases = [
+    { line: PLAIN_QUEUE, what: `${EM.QUEUE} assistant-3`, body: "corner resize" },
+    { line: PLAIN_MESSAGE, what: `${EM.MESSAGE} assistant-3`, body: "the deploy moved" },
+    { line: PLAIN_SPAWN, what: `${EM.SPAWN} IN #12 agent-worktree-gui`, body: "card it" },
+    { line: QUEUE, what: `${EM.QUEUE} assistant-3 | Playwright test`, body: "corner resize" },
+  ];
+  for (const c of cases) {
+    const card = M.cardHtml(c.line, { key: `k|${c.what}` });
+    assert.notEqual(card, "", `no card for: ${c.line}`);
+    assert.ok(card.includes(head(c.what)), `the head of ${c.line} is wrong`);
+    assert.ok(card.includes(`<div class="jl jl-text">${c.body}</div>`), `the body of ${c.line} is wrong`);
+    assert.match(card, /data-code-clamp="2"/, "folded to two lines");
+  }
+  // A block of the four: every one of them a card, and the prose around them still prose.
+  const block = M.cardsHtml(["here is what is queued.", ...cases.map((c) => c.line)].join("\n"), { scope: "msg|1", open: new Set() });
+  assert.equal((block.match(/class="code-box is-cmd/g) || []).length, 4, "four cards, one per line");
+  assert.ok(block.includes(`<div class="jl jl-text">here is what is queued.</div>`), "the prose line is not a card");
+  // The four keys are the lines' own places in the message, so a repaint keeps each card's fold apart.
+  for (let i = 1; i <= 4; i += 1) assert.match(block, new RegExp(`data-code-key="cmd\\|msg\\|1\\|${i}"`));
 });
 
 test("the card is the tool card's own frame, with a button head and a two-line body", () => {
@@ -109,10 +159,10 @@ test("the card is the tool card's own frame, with a button head and a two-line b
     frame.box = original;
   }
   const card = M.cardHtml(QUEUE, { key: "cmd|t1|0" });
-  assert.match(card, /^<div class="code-box is-cmd is-clamped" data-code-clamp="2">/);
+  assert.match(card, /^<div class="code-box is-cmd is-clamped" data-ltext="QUEUE assistant-3 \| \[Playwright test\] corner resize"/);
   assert.match(card, /<button type="button" class="code-head" data-code-fold="1" data-code-key="cmd\|t1\|0" aria-expanded="false"/);
   assert.match(card, /<span class="code-caret">/);
-  assert.match(card, /<span class="code-what">🧾 assistant-3 \| Playwright test<\/span>/);
+  assert.ok(card.includes(head(`${EM.QUEUE} assistant-3 | Playwright test`)));
   assert.match(card, /click to read/);
   // Folded, the body is on the page (folded to two lines by the stylesheet), never `hidden`.
   assert.match(card, /<div class="code-body">/);
@@ -121,11 +171,51 @@ test("the card is the tool card's own frame, with a button head and a two-line b
   assert.match(css, /\.code-box\.is-cmd\.is-clamped > \.code-body \{ max-height: 3em; overflow: hidden; \}/);
   // A head that is a real button is the keyboard's own control: Tab reaches it, Enter and Space press it, and it
   // carries the state. Nothing here draws a div pretending to be a press.
-  const head = /<button type="button" class="code-head"[^>]*aria-expanded="false"[^>]*>/.exec(card);
-  assert.ok(head, "the head is not a button with its expanded state");
+  const press = /<button type="button" class="code-head"[^>]*aria-expanded="false"[^>]*>/.exec(card);
+  assert.ok(press, "the head is not a button with its expanded state");
   // The press handler is the console's own, and it knows the clamped body is not a hidden one.
   assert.match(app, /const clamp = Number\(box\.dataset\.codeClamp\) \|\| 0;/);
   assert.match(app, /box\.classList\.toggle\("is-clamped", !open\)/);
+});
+
+test("the agent card's transcript draws the same card, through the one prose renderer and no builder of its own", () => {
+  // public/render-jobs.js draws a turn's prose with core/console-markdown.js, which is the one renderer both the
+  // console and the transcript use. Loaded the way the page loads it: classic scripts, window === globalThis.
+  const ctx = vm.createContext({ console });
+  vm.runInContext("globalThis.window = globalThis;", ctx);
+  for (const file of [
+    "../public/core/dom-format.js",
+    "../public/core/console-format.js",
+    "../public/core/assistant-command.js",
+    "../public/core/console-markdown.js",
+  ]) {
+    vm.runInContext(read(file), ctx, { filename: file });
+  }
+  const md = ctx.window.WMApp.core.consoleMarkdown;
+  const lines = [PLAIN_MESSAGE, PLAIN_QUEUE, PLAIN_SPAWN, QUEUE].map((text, i) => ({ kind: "text", text, lid: 200 + i }));
+  // A caller that did not ask keeps the rows it always drew: the console's own live path is untouched.
+  assert.doesNotMatch(md.html(lines), /code-box/);
+  const drawn = md.html(lines, { cards: { scope: "turn-7", open: new Set() } });
+  assert.equal((drawn.match(/class="code-box is-cmd is-clamped"/g) || []).length, 4, "all four are cards in a transcript");
+  assert.ok(drawn.includes(head(`${EM.MESSAGE} assistant-3`)));
+  assert.ok(drawn.includes(head(`${EM.SPAWN} IN #12 agent-worktree-gui`)));
+  assert.ok(drawn.includes(head(`${EM.QUEUE} assistant-3 | Playwright test`)));
+  // Each card carries the line itself, keyed by the line's own id, so a repaint keeps the reader's fold and the
+  // console's copy lifts the line rather than the card's chrome.
+  assert.match(drawn, /class="code-box is-cmd is-clamped" data-ltext="MESSAGE assistant-3 \| the deploy moved" data-lkind="text" data-lid="200"/);
+  assert.match(drawn, /data-code-key="cmd\|turn-7\|200"/);
+  // The renderer this page hands a turn's prose to, and the scope it hands over: one line per call site, no builder.
+  assert.match(jobs, /mdRunHtml\(mdRun\.lines, mdRun\.sep, \{ scope: turn\.id, open: state\.codeBoxOpen \}\)/);
+  assert.match(jobs, /mdRunHtml\(run, "", \{ scope: turn\.id, open: state\.codeBoxOpen \}\)/);
+  for (const source of [jobs, markdown]) {
+    assert.doesNotMatch(source, /class="code-box/, "a second card builder in the transcript's own files");
+    assert.doesNotMatch(source, /class="code-head/);
+    assert.doesNotMatch(source, /data-code-clamp/);
+  }
+  // One seam: the prose renderer asks console-format, which asks the one module. The copy walker lifts the line.
+  assert.match(markdown, /cf\.commandLine\(/);
+  assert.match(markdown, /cf\.commandCard\(/);
+  assert.match(board, /\.code-box\[data-ltext\]/);
 });
 
 test("the executed text is untouched: the queue row is byte-for-byte what it was", () => {
@@ -137,28 +227,26 @@ test("the executed text is untouched: the queue row is byte-for-byte what it was
   // The card's own reading must never be what runs: the line it was handed is unchanged, and so is the parse.
   const before = JSON.stringify(parseActions(QUEUE));
   M.cardHtml(QUEUE, { key: "k" });
-  M.cardsHtml(`one\n${QUEUE}\ntwo`, { scope: "m" });
+  M.cardHtml(PLAIN_QUEUE, { key: "k" });
+  M.cardsHtml(`one\n${QUEUE}\ntwo\n${PLAIN_MESSAGE}`, { scope: "m" });
   assert.equal(JSON.stringify(parseActions(QUEUE)), before);
   assert.equal(parseActions(QUEUE).queue[0].text, "[Playwright test] corner resize");
 });
 
 test("the four lines still execute and still parse into the rows they did before", () => {
   // 1. an unclosed bracket: the QUEUE row is the whole payload, exactly as it was written.
-  const unclosed = "QUEUE assistant-3 | [Playwright test corner resize";
-  assert.deepEqual(parseActions(unclosed).queue, [{ assistant: "assistant-3", text: "[Playwright test corner resize" }]);
+  assert.deepEqual(parseActions(UNCLOSED).queue, [{ assistant: "assistant-3", text: "[Playwright test corner resize" }]);
   // 2. an 81-character bracket: the title is not a title, and the row is still the whole payload.
-  const long = `QUEUE assistant-3 | [${"x".repeat(81)}] body`;
-  assert.equal(parseActions(long).queue[0].text, `[${"x".repeat(81)}] body`);
-  assert.equal(M.parseCommandLine(long).title, null);
+  assert.equal(parseActions(TOO_LONG).queue[0].text, `[${"x".repeat(81)}] body`);
+  assert.equal(M.parseCommandLine(TOO_LONG).title, null);
   // 3. a bracket on a TODO line: the item's text keeps the bracket, so the list reads what was written.
   const todo = parseActions("TODO ADD [Playwright test] corner resize");
   assert.equal(todo.todo.length, 1);
   assert.equal(todo.todo[0].op, "add");
   assert.equal(todo.todo[0].text, "[Playwright test] corner resize");
-  // 4. a command with no bracket at all: nothing about it changes, and it is not a card.
-  const plain = "QUEUE assistant-3 | corner resize";
-  assert.deepEqual(parseActions(plain).queue, [{ assistant: "assistant-3", text: "corner resize" }]);
-  assert.equal(M.cardHtml(plain, { key: "k" }), "");
+  // 4. a command with no bracket at all: nothing about it changes, and it is a card like any other readable line.
+  assert.deepEqual(parseActions(PLAIN_QUEUE).queue, [{ assistant: "assistant-3", text: "corner resize" }]);
+  assert.notEqual(M.cardHtml(PLAIN_QUEUE, { key: "k" }), "");
 });
 
 test("the compact snippet of a folded turn draws the same cards, in its own text", () => {
@@ -188,22 +276,25 @@ test("the compact snippet of a folded turn draws the same cards, in its own text
   const snippet = sandbox.compactHtml(turn);
   assert.match(snippet, /data-compact-turn="t-compact"/);
   assert.match(snippet, /<div class="tc-answer"><div class="code-box is-cmd is-clamped"/);
-  assert.match(snippet, /🧾 assistant-3 \| Playwright test/);
-  // The three that are not cards keep the snippet's own text, exactly as it was drawn before.
-  for (const text of [
-    "QUEUE assistant-3 | [Playwright test corner resize",
-    `QUEUE assistant-3 | [${"x".repeat(81)}] body`,
-    "QUEUE assistant-3 | corner resize",
-  ]) {
+  assert.ok(snippet.includes(head(`${EM.QUEUE} assistant-3 | Playwright test`)));
+  // The three that carry no title are still cards - the line the reader meets is a command either way - and each
+  // one is drawn with its emoji, its recipient and its own payload.
+  for (const text of [UNCLOSED, TOO_LONG, PLAIN_QUEUE]) {
     sandbox.state.jobLines.set(turn.id, [{ kind: "text", text }]);
-    const plain = sandbox.compactHtml(turn);
-    assert.doesNotMatch(plain, /code-box/, `a compact card was drawn for: ${text.slice(0, 40)}`);
-    assert.match(plain, /<div class="tc-answer">/);
-    assert.ok(plain.includes(text.replace(/&/g, "&amp;")), "the snippet does not carry the line itself");
+    const card = sandbox.compactHtml(turn);
+    assert.match(card, /code-box is-cmd/, `a compact card was not drawn for: ${text.slice(0, 40)}`);
+    assert.ok(card.includes(head(`${EM.QUEUE} assistant-3`)), "the compact card's head is the kind and the recipient");
+    assert.ok(card.includes(text.replace(/&/g, "&amp;")), "the card carries the line itself");
   }
+  // The one line that is nothing but its own command keeps the snippet's plain text.
+  sandbox.state.jobLines.set(turn.id, [{ kind: "text", text: "TODO DONE 3" }]);
+  const plain = sandbox.compactHtml(turn);
+  assert.doesNotMatch(plain, /code-box/);
+  assert.match(plain, /<div class="tc-answer">/);
+  assert.ok(plain.includes("TODO DONE 3"));
 });
 
-test("both surfaces call the one module, and the page loads it after the frame it draws with", () => {
+test("every pane calls the one module, and the page loads it after the frame it draws with", () => {
   assert.match(turns, /wtAssistantCommand/);
   assert.match(assistant, /wtAssistantCommand/);
   // The board's tail: the peek a folded turn draws, and the compact card it freezes to.
@@ -218,10 +309,12 @@ test("both surfaces call the one module, and the page loads it after the frame i
     assert.doesNotMatch(source, /class="code-head/);
     assert.doesNotMatch(source, /data-code-clamp/);
   }
-  // Loaded after the frame, and before the two surfaces that read it.
+  // Loaded after the frame, and before the two surfaces that read it. console-markdown comes after the module it
+  // asks for a card, because the transcript's route runs through it.
   const at = (src) => html.indexOf(`<script src="${src}"></script>`);
   assert.ok(at("/core/console-format.js") > 0);
   assert.ok(at("/core/assistant-command.js") > at("/core/console-format.js"));
+  assert.ok(at("/core/console-markdown.js") > at("/core/assistant-command.js"));
   assert.ok(at("/turns.js") > at("/core/assistant-command.js"));
   assert.ok(at("/assistant.js") > at("/core/assistant-command.js"));
 });

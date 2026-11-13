@@ -11,18 +11,26 @@
 // is a second reading of the same string, so a line this module cannot read renders exactly as it does today and
 // the panel does exactly what it did before it existed.
 //
-// THE TITLE. A line's payload may lead with `[Title]`. The title counts only when its closing bracket arrives
-// within the rule below (`COMMAND_TITLE_MAX`): a longer one, or one that never closes, is not a title, and the line
-// is drawn as the plain text it has always been. That is deliberate - a title is a display nicety, and a model
-// writing `[a long sentence that never ends` must not be able to change what a reader is shown the line MEANS.
+// EVERY READABLE LINE IS A CARD, titled or not. The head is the kind's emoji and the recipient - `🧾 assistant-3` -
+// and the title is appended only when the payload leads with one: `🧾 assistant-3 | Playwright test`. The body is the
+// payload, folded to two lines. A line whose title is malformed or absent is not a lesser line: the reader still gets
+// the same frame, the same emoji and the same recipient, which is what a row of monospace prose could not give.
 //
-// THE HEADER. One emoji for the kind, then the recipient, then the title: `assistant-3 | Playwright test`. The
-// recipient is the field the kind addresses - the assistant for QUEUE/MESSAGE, the tree or project for SPAWN, the
-// thread for WATCH, `gateway`/`panel` for RESTART - and a kind that addresses nobody (RULE, NOTE, CHARTER) draws
-// the emoji and the title alone.
+// THE TITLE. A line's payload may lead with `[Title]`. The title counts only when its closing bracket arrives
+// within the rule below (`COMMAND_TITLE_MAX`): a longer one, or one that never closes, is not a title, and it stays
+// in the body as the payload it is. That is deliberate - a title is a display nicety, and a model writing
+// `[a long sentence that never ends` must not be able to change what a reader is shown the line MEANS.
+//
+// THE HEADER. One emoji for the kind, then the recipient, then the title when there is one: `assistant-3 |
+// Playwright test`. The recipient is the field the kind addresses - the assistant for QUEUE/MESSAGE, the tree or
+// project for SPAWN, the thread for WATCH, `gateway`/`panel` for RESTART - and a kind that addresses nobody (RULE,
+// NOTE, CHARTER) draws the emoji and the title alone, or the kind's own name when it has no title either, so a head
+// is never a bare glyph.
 //
 // WHERE IT IS DRAWN. public/turns.js paints the board's tail with it (a folded turn's peek, and the compact card a
-// turn freezes to), and public/assistant.js paints the transcript's entries with it. The frame itself is
+// turn freezes to), public/assistant.js paints the transcript's entries with it, and the agent card's own transcript
+// reaches it through the one prose renderer (public/core/console-markdown.js asks `consoleFormat.commandCard`), so
+// the turn body a reader opens draws the same cards as the panes around it. The frame itself is
 // public/core/console-format.js's `box` - published for exactly this - so there is one card component and not two.
 //
 // Published on globalThis as `wtAssistantCommand`, loaded after core/console-format.js in public/index.html and
@@ -128,7 +136,8 @@
   }
 
   // A payload's leading `[Title]`, or null. The rule lives here and nowhere else, so the card, the tests and any
-  // later surface cannot disagree about when a bracket is a title.
+  // later surface cannot disagree about when a bracket is a title. A line without one is still a card: the title is
+  // the head's last field, never the reason a line is drawn.
   function readTitle(payload) {
     const s = String(payload == null ? "" : payload);
     const m = /^\s*\[([^\]\n]*)\]/.exec(s);
@@ -139,7 +148,8 @@
   }
 
   // One line, read the way the card needs it. Returns null for anything that is not a command line of the
-  // vocabulary, and for a command line that does not lead with a title (which is drawn exactly as it is today).
+  // vocabulary. `title` is null when the payload carries no title the rule accepts, and the line is still drawn:
+  // `body` is then the payload itself, which is what the card shows.
   function parseCommandLine(text) {
     const line = String(text == null ? "" : text);
     if (!line || /[\r\n]/.test(line)) return null;
@@ -159,28 +169,42 @@
     };
   }
 
-  // The head's one line: the kind's emoji, the recipient when the kind addresses one, then the title.
+  // The head's one line: the kind's emoji, the recipient when the kind addresses one, then the title when the line
+  // carries one. A kind that addresses nobody and carries no title says its own kind after the glyph, so a head is
+  // never a bare emoji.
   function headerOf(parsed) {
-    if (!parsed || !parsed.title) return "";
-    const lead = parsed.recipient ? `${parsed.emoji} ${parsed.recipient} | ` : `${parsed.emoji} `;
-    return `${lead}${parsed.title}`;
+    if (!parsed) return "";
+    const lead = parsed.recipient ? `${parsed.emoji} ${parsed.recipient}` : parsed.emoji;
+    if (parsed.title) return parsed.recipient ? `${lead} | ${parsed.title}` : `${lead} ${parsed.title}`;
+    return parsed.recipient ? lead : `${lead} ${parsed.kind}`;
   }
 
   // A stable key for the reader's open state, so a repaint does not fold a card the reader opened. The caller words
-  // its own scope (a turn, a message) and this only has to be unique inside it.
-  function keyOf(scope, index) {
-    return `cmd|${String(scope || "")}|${Number(index) || 0}`;
+  // its own scope (a turn, a message) and `ref` is what is stable inside it - a line's own id when it has one, its
+  // index in the run when it does not.
+  function keyOf(scope, ref) {
+    const at = ref == null || ref === "" ? 0 : ref;
+    return `cmd|${String(scope || "")}|${String(at)}`;
   }
 
-  // One command line as a card, or "" when the line is not a titled command. `open` is the page's code-box book (a
-  // Set of keys); `clamp` is how many lines the body shows while it is folded.
-  function cardHtml(text, { key = "", open = null, clamp = 2 } = {}) {
+  // One command line as a card, or "" when the text is not a command line this module can read, when the line is
+  // nothing but the command itself, or when the page has lost the frame. `open` is the page's code-box book (a Set
+  // of keys); `clamp` is how many lines the body shows while it is folded.
+  function cardHtml(text, { key = "", scope = "", ref = null, open = null, clamp = 2, lid = null, lineKind = "" } = {}) {
     const parsed = parseCommandLine(text);
-    if (!parsed || !parsed.title) return "";
+    if (!parsed) return "";
+    // An id op (`TODO DONE 3`) carries no payload and no title: there is nothing a body could show, so the prose
+    // line it has always been is the whole command.
+    if (!parsed.title && !parsed.body) return "";
     const box = frame();
     if (!box) return "";
     const lines = String(parsed.body || "").split("\n");
     const body = lines.map((l) => `<div class="jl jl-text">${escOf(l)}</div>`).join("");
+    // The line itself travels on the card, the way it travels on a console row: the console's copy lifts the line,
+    // not the card's chrome, and a reader of the DOM finds the source text where every other row keeps it.
+    const id = lid != null && lid !== "" ? String(lid) : "";
+    const attrs =
+      ` data-ltext="${escOf(parsed.text)}" data-lkind="${escOf(lineKind || "text")}"` + (id ? ` data-lid="${escOf(id)}"` : "");
     return box({
       kind: "cmd",
       at: 0,
@@ -188,15 +212,16 @@
       what: headerOf(parsed),
       title: parsed.text.trim(),
       body,
-      opts: { key: key || keyOf("line", 0) },
+      opts: { key: key || keyOf(scope, ref) },
       open,
       clamp,
+      attrs,
     });
   }
 
-  // A block of text (a reply, a transcript entry) as it reads: every titled command line is a card, every other
-  // line is handed back to the caller's own renderer. "" when the text holds no titled command line at all, which
-  // is what lets a caller keep its existing rendering untouched for every message that has none.
+  // A block of text (a reply, a transcript entry) as it reads: every readable command line is a card, every other
+  // line is handed back to the caller's own renderer. "" when the text holds no command line at all, which is what
+  // lets a caller keep its existing rendering untouched for every message that has none.
   function cardsHtml(text, { scope = "", keyPrefix = "", open = null, clamp = 2, renderText = null } = {}) {
     const source = String(text == null ? "" : text);
     if (!source) return "";
