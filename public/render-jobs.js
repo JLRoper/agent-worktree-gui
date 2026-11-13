@@ -130,6 +130,24 @@ function mdRunHtml(lines, sep = "") {
 // The condensed card's console: one row per tool call (the burst, exactly as before), and the prose between the
 // bursts as markdown blocks. Nothing about the tool-group markup moves; the run of prose around it is simply no
 // longer one escaped line per marker.
+// ---- thinking placeholder ----
+// The console's empty state, from submit until the first real line lands. A genuinely RUNNING turn
+// shows an active "🧠 thinking…" with a ticking clock instead of the passive "waiting for output…"
+// that reads as a stall during the 10-30 s a reasoning model spends before its first token. The clock
+// is a `data-live-from` span that tickLiveClocks() advances in place (no repaint per second);
+// `data-wait="1"` is the marker drawJobLine() removes the moment the first console line is appended,
+// so the placeholder never sits above output. Only running/starting claims to be thinking: a held
+// (429/queued) or approval-parked turn has its own head wording and must not imply the model is
+// working when it is not.
+function emptyConsoleHtml(turn) {
+  const status = String(turn?.status || "");
+  const working = turnLive(turn) && (status === "running" || status === "starting");
+  if (!working) return '<div class="jl jl-dim" data-wait="1">waiting for output…</div>';
+  const from = Number(turn?.live?.startedAt) || Date.parse(turn?.startedAt || "") || Date.now();
+  return `<div class="jl jl-dim" data-wait="1">🧠 thinking… <span class="jl-live" data-live-from="${from}">${liveSuffix(from)}</span></div>`;
+}
+// ---- end thinking placeholder ----
+
 function condensedBodyHtml(turn, lines, busy, storeSeen) {
   const parts = [];
   let run = null;
@@ -165,7 +183,7 @@ function condensedBodyHtml(turn, lines, busy, storeSeen) {
     parts.push(lineHtml(l, live));
   });
   flush();
-  return parts.join("") || '<div class="jl jl-dim" data-wait="1">waiting for output…</div>';
+  return parts.join("") || emptyConsoleHtml(turn);
 }
 
 // `thread` is the CARD's own thread, and it is the one identity the two switches on that card share: the 🧠 beside
