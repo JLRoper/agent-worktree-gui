@@ -4,16 +4,37 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.95.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.96.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-587 releases from v0.1.0 (2026-10-20) to v1.95.0 (2026-11-13), 1982 commits between the tags. Every release is anchored by an
+588 releases from v0.1.0 (2026-10-20) to v1.96.0 (2026-11-13), 1987 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.96.0 — 2026-11-13 · 5 commits
+
+[`fd0395d`](https://github.com/JLRoper/agent-worktree-gui/commit/fd0395d165d1405ef30b1aa85168b4f717169e06) · [compare v1.95.0...v1.96.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.95.0...v1.96.0)
+
+### Added
+
+- feat(clarify): an answered card continues the asking thread ([`ff499e1`](https://github.com/JLRoper/agent-worktree-gui/commit/ff499e11f229bd8e524fbc2f44ac8ad6b1aa0c1e))
+
+### Fixed
+
+- fix(verify): the reuse round trip takes its scratch root from the environment ([`4249f09`](https://github.com/JLRoper/agent-worktree-gui/commit/4249f09f2dee57f86410e7cfc5b35211890b8b4f))
+
+### Docs & tests
+
+- docs: render the changelog - 587 releases ([`f025fa2`](https://github.com/JLRoper/agent-worktree-gui/commit/f025fa2cba369d1339af0ea36c40fbe7f1dc807e))
+- test(clarify): drop an unused stub helper from the reuse test ([`229cedf`](https://github.com/JLRoper/agent-worktree-gui/commit/229cedff2b600f716db506e5e95cba2f585c35d0))
+
+### Other
+
+- chore: 1.96.0 - the version this landing carries ([`fd0395d`](https://github.com/JLRoper/agent-worktree-gui/commit/fd0395d165d1405ef30b1aa85168b4f717169e06))
 
 ## v1.95.0 — 2026-11-13 · 3 commits
 
