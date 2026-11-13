@@ -6,6 +6,9 @@
 //  2. A full pass asks the POOL for a project's meta and worktree list, so the loop that answers /api/state does not
 //     sit inside a CreateProcess while the fleet is mapped - and the tree list rides back with the meta, so the
 //     reconcile costs no second `git worktree list`.
+//  3. The two LOCAL branch reads (`refs/heads` upstreams, the last fetch's `refs/remotes`) ride the pool too: they
+//     were the last `for-each-ref` spawns a full scan or a boot row-read started on the main thread, and every
+//     `full scan:` loop-pause of 2026-11-13 carried one to two seconds of that shape.
 import test, { after } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
@@ -137,4 +140,19 @@ test("without a pool the pass still reads its own meta (a probe, a test, a bare 
   await scheduler.fullPassProject({ ...project }, { rows: false });
   assert.equal(patched.remoteTip, run("rev-parse", "--short", "origin/main"));
   assert.equal(patched.remoteTipSubject, "first");
+});
+
+// The same worker branch as the meta job's, for the other spawn-heavy pair: the upstreams and the refs/remotes.
+test("the pool runs a locals job in a worker thread and hands back both maps", async () => {
+  run("branch", "--set-upstream-to=origin/main", "main");
+  const pool = new Pool(1);
+  try {
+    const got = await pool.locals(project, 0);
+    assert.ok(got.upstreams instanceof Map, "the upstream map survives the worker frame as a Map");
+    assert.equal(got.upstreams.get("main")?.upstream, "origin/main");
+    assert.ok(got.remoteRefs instanceof Set, "the refs/remotes set survives the worker frame as a Set");
+    assert.ok(got.remoteRefs.has("main"), `refs/remotes/origin/main is listed: ${[...got.remoteRefs].join(", ")}`);
+  } finally {
+    pool.close();
+  }
 });
