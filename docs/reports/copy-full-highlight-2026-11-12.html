@@ -45,10 +45,10 @@
 
 <h1>Highlighting a name or a branch on the worktree chart is now the copy</h1>
 <div class="sub">
-  Written 2026-11-12T20:39 EST for branch <code>wtgui/make-highlighting-part-of-a-worktree-db6c92</code>, landing by a
-  local merge into <code>wtgui/reasoning-delta-2026-11-12</code>. Every number and every quoted string below comes
-  from a run in this tree; the two pictures are frames from Chromium with the clipboard read back through
-  <code>navigator.clipboard.readText()</code>.
+  Written 2026-11-12T20:39 EST for branch <code>wtgui/make-highlighting-part-of-a-worktree-db6c92</code>, rebased onto
+  <code>origin/main</code> and landing by one pull request into <code>main</code> with <code>npm run land:pr</code>.
+  Every number and every quoted string below comes from a run in this tree; the two pictures are frames from Chromium
+  with the clipboard read back through <code>navigator.clipboard.readText()</code>.
 </div>
 
 <h2>What was asked, and where the ask landed</h2>
@@ -186,31 +186,29 @@
       a file this landing changed.</td></tr>
 </table>
 
-<h2>The version, and why this landing carries no new number</h2>
+<h2>The version this landing carries</h2>
 <div class="box note">
   <p>
-    Three numbers are in play, all read from this tree at hand-off. This branch declares <b>1.89.4</b>, the number it
-    was cut with. <code>origin/main</code> moved to <b>1.89.5</b> while the work was in flight (commit
-    <code>d33a6ef5</code>, "docs: render the changelog - 572 releases"). The base this branch merges into,
-    <code>wtgui/reasoning-delta-2026-11-12</code>, also declares <b>1.89.5</b>, at commit <code>107dc766</code>
-    ("chore: 1.89.5 - the version this landing carries"), and carries the annotated tag <code>v1.89.5</code> there.
+    The branch was cut at <b>1.89.4</b> and rebased onto <code>origin/main</code> at <b>1.89.5</b> (commit
+    <code>d33a6ef5</code>). <code>node tools/version.mjs check</code> refused the branch as it stood and named the
+    level its commits add: <code>minor</code>, because the first of the two is a <code>feat:</code>. So this landing
+    declares <b>1.90.0</b>, <code>node tools/version.mjs apply minor</code> writes and tags that number on its own
+    commit, and <code>npm run land:pr</code> moves the tag onto the commit the merge produced and renders
+    <code>CHANGELOG.md</code> there.
   </p>
   <p>
-    That is drift, not a slot for a fourth number: a bump here would put a second number on an unlanded base whose
-    changelog cannot be rendered until the base lands, and it would make <code>v1.89.5</code> describe one branch's
-    commit while another branch declared the same value. So this branch adds no number, no tag and no changelog edit.
-    It joins the stack the base already names; the base's own landing owes a fresh number, and
-    <code>node tools/version.mjs check</code> says so in one line ("apply minor", with the reason to go in the PR
-    body). Withheld landings have neither tag nor changelog, which is why this one has neither.
+    The number is not decoration: the chart prints it on the board's config line, and the changelog a reader opens to
+    answer "what changed since the build I am running" is rendered between consecutive tags. A landing that skipped
+    the bump would leave that question unanswerable for this release.
   </p>
 </div>
 
 <h2>The landing shape</h2>
 <p>
-  The base has not landed, so the brief's own rule withheld the push: this work merges into
-  <code>wtgui/reasoning-delta-2026-11-12</code> <b>locally</b>, with <code>--no-ff</code> from that branch's own
-  worktree, and creates no remote ref and no pull request. The merge commit cannot be named by a document it carries,
-  so it is named in the hand-off note instead.
+  One pull request into <code>main</code>, landed with <code>npm run land:pr</code>: the merge, the primary
+  checkout fast-forwarded to the merged tip, the release tag moved onto the merge commit, and the changelog rendered
+  and checked there. The PR number and the merge sha cannot be named by a document the merge itself carries, so both
+  are in the hand-off note instead.
 </p>
 
 <h2>Where the work is</h2>
