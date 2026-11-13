@@ -180,6 +180,76 @@ Each removal re-reads `/api/jobs` first and skips a tree a live run holds. The r
 
 ## Phase 2 result
 
+**Resumed 2026-11-13T02:20Z** in `.worktrees/consolidate-this-repo-s-worktrees-in-two-cee22f` on `wtgui/roll-up-2026-11-13`, from the verdicts above and not from a fresh audit. Nothing was re-cut and nothing was re-measured: the shas and proofs below are the ones in the tables above.
 
-_Not started when this report was written. The deletions, the refusals and the roll-up are recorded here after the sweep._
+**Counts:** 48 worktrees audited, **26 kept** (25 other trees plus this run's own tree) and **22 dropped**. `git worktree list` now reads 27 entries (the primary checkout plus 26 trees) and `.worktrees/` holds 26 directories; the 4 empty orphan directories the audit counted are gone too. `/api/jobs` was read before every removal and at the resume: 3 live runs at resume, none of them holding a tree in the drop set.
+
+### Dropped (22)
+
+Every one of these was `empty` (branch tip an ancestor of `origin/main`, 0 own commits) or `already-in-main` (PR merged at this head, `git cherry` printing `-` for every own commit, or `git merge-tree origin/main <head>` returning origin/main's own tree). Nothing in this set holds content main lacks.
+
+| tree | branch | tip | one line |
+| --- | --- | --- | --- |
+| fix-the-docked-console-so-it-renders-7c9ac4 | wtgui/fix-the-docked-console-so-it-renders-7c9ac4 | `3e796ff3f4cdf2f4613abcc1959ad44b62ccda0a` | docked console render fix, PR #724 merged at this head |
+| fix-the-scan-defect-that-leaves-rows-e624cd | wtgui/fix-the-scan-defect-that-leaves-rows-e624cd | `e83ec642b6219cd47761a716db8b4e7fe1e50913` | scan defect that left rows behind, PR #727 |
+| implement-the-row-in-this-tree-only-and-02f181 | wtgui/implement-the-row-in-this-tree-only-and-02f181 | `60a3961616cbd7c3decd8730d6c457224fb49310` | row implemented in its tree, PR #710 |
+| input-lag-flame-2026-11-12 | wtgui/input-lag-flame-2026-11-12 | `c6a37f5c705fff3125b44c8afc473ac0e27b7ea1` | input lag flame profile, PR #717 |
+| main-thread-stalls-2026-11-12 | wtgui/main-thread-stalls-2026-11-12 | `649cc2b73d3acd5254e7a64b3ee087d975f1b1ff` | main thread stall fixes, PR #721 |
+| make-the-turnover-branch-a-first-class-df6ca4 | wtgui/make-the-turnover-branch-a-first-class-df6ca4 | `2061db2613fde7c931f6dab2b5a0abcecedeadd5` | turnover branch as a first-class row, PR #715 |
+| run-gui-improve-again-this-time-on-the-5ab4e1 | wtgui/run-gui-improve-again-this-time-on-the-5ab4e1 | `da9f87a6036b0c7a9303d18ab7ce5f2f1d902b43` | gui improve round; merge-tree equals origin/main's tree |
+| run-row-70-exactly-as-written-local-only-19d782 | wtgui/run-row-70-exactly-as-written-local-only-19d782 | `50d503ca7b9dfa2283283a9acf8a1a959d60fcb5` | row 70 walked local-only, PR #725 |
+| run-row-70-exactly-as-written-local-only-stage-2-critique-59a317 | wtgui/run-row-70-exactly-as-written-local-only-stage-2-critique-59a317 | `966b3f5b1da2b4b36e4a078f9620e71e6c60af62` | row 70 stage 2 critique absorbed by main's later round |
+| run-row-70-exactly-as-written-local-only-stage-2-critique-6635d7 | wtgui/run-row-70-exactly-as-written-local-only-stage-2-critique-6635d7 | `9888b9bc142df790247df251551ec416a1e07d75` | row 70 stage 2 critique; merge-tree equals main's tree |
+| scan-queue-backoff-2026-11-12 | wtgui/scan-queue-backoff-2026-11-12 | `16dd82244eaff6089aa6129ddf2288c4ab69a78a` | scan queue backoff, PR #714 |
+| scan-queue-latency-2026-11-11 | wtgui/scan-queue-latency-2026-11-11 | `738334e88acb230f09d50ab893a3eaa0f83f9d27` | scan queue latency, PR #713 |
+| the-review-stage-of-the-unattached-fae8c5 | wtgui/the-review-stage-of-the-unattached-fae8c5 | `5966b8557f2145881e9af14fd917024e8677b4b9` | unattached review stage; merge-tree equals main's tree |
+| thinking-latency-2026-11-12 | wtgui/thinking-latency-2026-11-12 | `09b3a1687e0c8909191a19490d325823947a1d6c` | thinking latency, PR #723 |
+| write-the-draft-the-brief-asks-for-in-970633 | wtgui/write-the-draft-the-brief-asks-for-in-970633 | `9993308614c87ac8e02108824f73d5838eafdc42` | draft doc; PR #607 closed but its code is on main |
+| make-baidu-ernie-light-dt-1-0-intl-884b06 | wtgui/make-baidu-ernie-light-dt-1-0-intl-884b06 | `c0188ebb7b0fbb83d87c68e911edf8f38803c0b4` | empty: tip is an ancestor of origin/main |
+| mark-the-turnover-branch-at-a-glance-in-ccdfb1 | wtgui/mark-the-turnover-branch-at-a-glance-in-ccdfb1 | `a5e4a1a93b9068c646849b4e79af1f5efccf3a08` | empty: tip is an ancestor; PR #720 merged |
+| open-jira-report-in-edge-desktop-session-a29cc7 | wtgui/open-jira-report-in-edge-desktop-session-a29cc7 | `a459f458b6a05ae963f1627558dcf45cc8ebddd1` | empty: tip is an ancestor of origin/main |
+| panel-responsiveness-fixes | wtgui/panel-responsiveness-fixes | `a8c88bfb7b441e8ee9bd64ccaf8552025d0eab46` | empty: tip is an ancestor; PR #712 merged at this head |
+| revert-baidu-ernie-light-model-catalog-d1f5ac | wtgui/revert-baidu-ernie-light-model-catalog-d1f5ac | `c0188ebb7b0fbb83d87c68e911edf8f38803c0b4` | empty: tip is an ancestor of origin/main |
+| round-c-how-a-round-names-its-trees-5b3b85 | wtgui/round-c-how-a-round-names-its-trees-5b3b85 | `ccb100cca4b81593161157d777c02bfd5574ceb0` | empty: tip is an ancestor; PR #707 and #691 merged |
+| make-highlighting-part-of-a-worktree-db6c92 | wtgui/make-highlighting-part-of-a-worktree-db6c92 | `006e093c1d5523f0696e8880eb523f61d196211b` | worktree highlighting, PR #732; skipped at audit while its run was live, removed after that run left /api/jobs |
+
+**One honest caveat.** Five of these tips - `da9f87a6` (run-gui-improve-again-5ab4e1), `966b3f5b` and `9888b9bc` (the two row-70 stage-2 critiques), `5966b855` (review stage of the unattached) and `99933086` (write-the-draft-970633) - are not reachable from any branch on `origin` and are not ancestors of `main`. Their *content* is on main and that is the proof the audit recorded (merge-tree equality for four of them, 186/186 and a later `nextStageOf` form for `99933086`), and the commit objects are still in the local object store (`git cat-file -t` returns `commit` for all five), but the shas themselves are local-only. "Already in main" here means the change, not the sha.
+
+**Remote heads were left alone.** 15 of the 22 branches still exist on `origin`; this sweep removed local branches and worktrees only.
+
+### Kept (26, nothing removed)
+
+- **8 dirty trees**, because uncommitted work is the only copy in git: add-generic-gui-pipeline-to-bundle-4c4680 (1 file), add-per-project-landing-rules-the-carry-4cc45c (7), async-pipeline-driver-refactor (22), fix-the-refusal-that-parked-52-6974b3 (3), retry-settings-write-on-slow-panel-48eeb8 (2), round-c-how-a-round-names-its-trees-stage-2-conclude-7ace4b (1, on `wtgui/rung-2-row-starts-in-its-tree`), run-github-landing-sanity-test-write-0472b0 (1), two-changes-to-the-clarify-card-one-pr-33f806 (2).
+- **9 trees whose commits are on no remote and not on main**, the rule that cost two commits earlier: github-landing-sanity-0bbdd3 `de5f30cf`, round-b-what-the-state-printer-says-01cc86 `6214af31`, round-b-what-the-state-printer-says-stage-1-probe-112593 `d104dbf2`, round-b-what-the-state-printer-says-stage-2-conclude-530d9e `848cf120`, run-gui-improve-again-this-time-on-the-2ae88d `38ef1d28`, run-row-70-exactly-as-written-local-only-stage-1-draft-1de511 `5082d019`, run-row-71-exactly-as-written-local-only-0cc905 `608b0e02`, the-implement-stage-of-the-unattached-61851d `a0a7bc9c`, write-the-draft-the-brief-asks-for-in-94df79 `93febcc9`. Their code or ledger is on main, but their ledger records are not, and the branch is the only copy.
+- **8 keepers**, merged below.
+- **This run's tree** and **the primary checkout** (`C:/ProjectDevelopment/agent-worktree-gui`, on `main`), never touched.
+
+### Keepers merged (8, 13 commits)
+
+| keeper | tip | commits | merge |
+| --- | --- | --- | --- |
+| wtgui/local-pipeline-walk-author-review-revise-stage-1-author-da66f8 | `f5f9f874` | 2 | `7e64a884` |
+| wtgui/local-pipeline-walk-author-review-revise-stage-2-review-29f215 | `ae3d444e` | 2 | `9caadef8` |
+| wtgui/local-pipeline-walk-author-review-revise-stage-3-revise-9e5bdc | `c0644290` | 1 | `76d97b07` |
+| wtgui/read-docs-reports-gui-improve-experience-28a3ec | `12307d9c` | 1 | `6b10cd7f` |
+| wtgui/read-the-settled-transcript-of-thread-31a9f8 | `e670a95b` | 1 | `d6e22309` |
+| wtgui/make-optym-integration-m-b580a2 | `ea15bb1d` | 2 | `5a7a5dc1` |
+| wtgui/deep-dive-why-some-assis-e8cb2e | `bdf198b6` | 3 | `df4af5a8` |
+| wtgui/make-focus-mode-show-every-worktree-with-a9627a | `9be7cb59` | 1 | `d5eb6f1d` |
+
+**No keeper was dropped for regressing main.** Every merge was made with `--no-ff`; `git merge-tree --write-tree HEAD <keeper>` printed a tree and no conflict for the last one, and the seven before it merged with no conflict. The roll-up's diff against `origin/main` is 16 files, +1803/-15; the deletions are the README, SETUP and `server.js` lines that claim `config.json` is tracked by git - the exact wording the optym keeper exists to fix - and the reworded `lib/jobs.js` comments of the unknown-fence work. No main behaviour is removed.
+
+The focus-mode keeper was held back at audit time because `run_d0c7b0f4a0084e6fb07a8d522bae2f4a` held its tree. `/api/jobs` at resume no longer lists that run, so the keeper was merged as the eighth.
+
+### Tests
+
+- `npm run test:changed` on the roll-up: 23 changed files against `origin/main`, 225 test files selected (222 by name, 3 by import), 325.1s, exit 1 with 17 failing test names. 16 of the 17 also fail in a clean `git archive origin/main` at `5b773c49`; the 17th, "every spawn prompt states the scratch path, and the card still shows only what the reader wrote", is load-dependent and passes on both trees when `test/paths.test.js` is run alone.
+- `npm test` on the roll-up: exit 1 with 20 distinct failing test names. `npm test` on the clean archive failed 20 distinct names too; 19 are the same names. The roll-up-only name, "scan roots: a folder added from the settings is written, re-scanned, and drawn under its own card", fails identically in `test/scan-roots.test.js` run alone on both trees (same assertion, same 1.6s), so it is pre-existing. The archive-only name, "a job's settle kills what its turn started, grandchild included", is the flaky side of the same comparison.
+- The union of the failing files was then run on both trees in one command: 19 names shared, and the two differences reproduce on the archive or pass in isolation.
+
+No failure is attributable to this roll-up. The suite is red on `origin/main` itself.
+
+### Landing
+
+_Recorded after the pull request was opened._
 
