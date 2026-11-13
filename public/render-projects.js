@@ -1430,6 +1430,12 @@ function removeRow(project, p) {
 function renderProjectRows(name, { typing = null } = {}) {
   const tbody = state.tbodyEls.get(name);
   if (!tbody) return;
+  // A live corner gesture holds a console somewhere on the board, and this rebuild replaces the rows it lives in. It
+  // waits for the release, which asks for one full repaint (public/app.js's endOutGrip).
+  if (typeof outGripLive === "function" && outGripLive()) {
+    if (typeof outGripDefer === "function") outGripDefer();
+    return;
+  }
   // The rebuild below replaces every row of this project, and it must not walk the reader up the page. Emptying the
   // tbody and appending row by row laid the page out with part of the project missing - the reply box measures
   // itself (scrollHeight) while a draft is restored, which forces that layout - and at the bottom of the page ANY

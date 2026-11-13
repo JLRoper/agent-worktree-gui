@@ -553,7 +553,7 @@
   // The console that turn draws: the box a resize hands its room to. Null with every turn folded, when no console is
   // on the page at all, and before the card exists.
   function slackConsole() {
-    return slackTurn()?.querySelector(":scope > .out-wrap > .job-out") || null;
+    return slackTurn()?.querySelector(":scope > .out-wrap > .out-box > .job-out") || null;
   }
   // The console's own floor, read off the drawn box rather than assumed: `.job-out` carries a base `min-height` in
   // the sheet, and a box that reports none (the float's open-turn rule zeroes it) falls back to `FLOAT_OUT_MIN` so the

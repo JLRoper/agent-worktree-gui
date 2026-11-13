@@ -6,12 +6,13 @@
 // browser rule they depend on - the computed `max-height` a box is drawn under, and `clientHeight` following the height
 // the inline style gives it.
 //
-// Why it exists. `.job-out` is a browser-resized box (`resize: vertical` under a max-height, public/style.css), so the
-// size the reader gave it lives only in that node's inline style. Measured on 0.48.2 (C:/CodeReviews/agent-worktree-gui/
+// Why it exists. The size the reader gave a console lives only in that node's inline style, and every path that
+// builds or replaces the node throws that node away. Measured on 0.48.2 (C:/CodeReviews/agent-worktree-gui/
 // resize/rebuild.md): eight of twelve rebuild triggers threw it away — a status change, a new turn, a fold, a project
 // collapse and a reload all came back on the 320 px cap (or, on a short transcript, at 121.5 px / 69.8 px). The height
 // now lives in `state.outHeights`, keyed by the turn id the console carries, and goes back on every path that builds or
-// replaces the node.
+// replaces the node. The gesture that WRITES it is the console's corner grip (`public/app.js`), not the browser's
+// `resize` handle; `tools/verify-console-resize.mjs` drives that one.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -220,6 +221,6 @@ test("the pruned set is the one renderJobs already keeps: a live turn keeps its 
 // calls from being deleted without a red test.
 test("the shipped rebuild and the drag's release still call the store", () => {
   assert.ok(grab("renderConversation").includes("applyStoredHeight(o);"), "renderConversation puts the height back");
-  assert.ok(src.includes("rememberOutHeight(out.dataset.out, now);"), "the drag's pointerup records the height it reached");
+  assert.ok(src.includes("rememberOutHeight(d.out.dataset.out, h);"), "the grip's release records the height it reached");
   assert.ok(src.includes("pruneOutHeights(live);"), "renderJobs prunes the store on the turns that are left");
 });

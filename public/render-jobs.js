@@ -211,11 +211,17 @@ function turnBody(turn, copy = "", thread = turn.thread || turn.id) {
     // `out-tab` carries the 18px left tab the console itself has, so the wrapper is the console's box: the chip
     // centred in the wrapper is centred in the console, not 9px off it.
     //
-    // The marching tail (console.js marchRowHtml) is a SIBLING of the console, drawn between it and its own tools.
-    // That is the whole of its place: it is not a line of the record, so it cannot be ordered with one, cannot be
-    // typed by the stream, and cannot change the console's height or scroll - and a repaint of the record cannot
-    // take it away either, because it is not in the node the repaint replaces.
-    `<div class="out-wrap out-tab" data-copy><pre class="job-out" data-out="${esc(turn.id)}${esc(copy)}">${body}</pre>${marchRowHtml(turn)}${consoleToolsHtml()}${toBottomBtnHtml()}</div>` +
+    // `out-box` holds exactly the console and its corner grip, and nothing else. That is what puts the grip ON the
+    // console's corner: the grip is positioned against this box, so it rides the <pre>'s own bottom-right pixel, while
+    // everything below it (the marching row, the two chips) belongs to the wrapper and cannot move it. The box is also
+    // what the float's slack rule grows, so the grip is at the corner of the box the reader is pulling.
+    //
+    // The marching tail (console.js marchRowHtml) is a SIBLING of that box, drawn between it and the console's own
+    // tools. That is the whole of its place: it is not a line of the record, so it cannot be ordered with one, cannot
+    // be typed by the stream, and cannot change the console's height or scroll - and a repaint of the record cannot
+    // take it away either, because it is not in the node the repaint replaces. It stays in the TEXT FLOW, a row under
+    // the console, and is never pinned over the pane.
+    `<div class="out-wrap out-tab" data-copy><div class="out-box"><pre class="job-out" data-out="${esc(turn.id)}${esc(copy)}">${body}</pre>${outGripHtml()}</div>${marchRowHtml(turn)}${consoleToolsHtml()}${toBottomBtnHtml()}</div>` +
     // The subagents this turn spawned, right under the console they ran beside: the delegation is the turn's own
     // work, not the card's, and a card with several turns would otherwise show the newest one's children under all
     // of them.
@@ -634,6 +640,14 @@ function scheduleRenderJobs() {
 }
 
 function renderJobs() {
+  // The reader's corner gesture is holding a console in the unattached list: this rebuild replaces every card in it,
+  // and the box under their pointer with them. The release asks for the repaint back (public/app.js's endOutGrip).
+  // public/app.js declares outGripLive / outGripDefer on the page's one global scope; `?.` keeps a bench that evaluates
+  // this file alone from throwing on a gesture it does not have.
+  if (globalThis.outGripLive?.()) {
+    globalThis.outGripDefer?.();
+    return;
+  }
   // Only unattached agents live here now: anything created in a worktree is listed under that
   // worktree's row, so this panel is the "homeless" workspace (project-root runs, pending spawns,
   // agents whose worktree was removed).
@@ -951,6 +965,12 @@ function renderConversation(thread, { scroll = false, card = null } = {}) {
   const sig = conversationSignature(conv);
   if (el.dataset.sig === sig) {
     paintCardMeta(el, conv);
+    return;
+  }
+  // This rebuild replaces the card node, and the console inside it with it: while the reader's corner gesture holds a
+  // console in this card, the card stays exactly as it is and the release draws it (see renderJobs above).
+  if (globalThis.outGripHoldsCard?.(el)) {
+    globalThis.outGripDefer?.();
     return;
   }
   // Rebuild, then put the reader back exactly where they were: every output pane, the maximized

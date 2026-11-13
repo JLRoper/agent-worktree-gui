@@ -1136,6 +1136,15 @@ function toBottomBtnHtml() {
   return `<button type="button" class="tail-chip to-bottom" data-to-bottom="1" title="jump to the newest line and follow it again">\u2193</button>`;
 }
 
+// The console's own corner. It is the only thing that resizes a console (`public/app.js` owns the gesture and the
+// number): the box is drawn in a `.out-box` with the <pre>, so this element's corner IS the console's corner, and the
+// marching tail and the chips below it are siblings of that box and cannot move it. Drawn as three diagonal ticks by
+// the sheet, in the shape the float's corner grip already has; a span rather than a button because there is no press
+// to announce and no label to read, and a focusable stop between a transcript and the reply box is a stop for nothing.
+function outGripHtml() {
+  return `<span class="out-grip" data-out-grip="1" title="drag this corner to resize the console"></span>`;
+}
+
 // The console's own two views, in a strip at its top-right: RAW restores the turn's text exactly as it arrived,
 // FOCUS drops the tool rows and leaves what the agent said. The state is per TURN (page state), because a card
 // repaint rewrites this markup on every run event and on every scan — a class on the old node would be gone.
@@ -1842,6 +1851,14 @@ function toggleConsoleFence(btn) {
 //     scrollTop write, batched to at most one per console per animation frame. Reading scrollHeight per row per tick
 //     lays the whole board out again for every line of every agent, which is what made one agent's output stutter
 //     the others.
+// Is a live corner gesture holding this console? `public/app.js` owns the gesture and declares `outDragging`; asked by
+// bare name and defensively, because this script is loaded before app.js and the unit benches evaluate it without the
+// page's gesture at all. While a gesture runs the box belongs to the reader's pointer: nothing may re-pin its line,
+// rebuild its text, or replace it, or the corner they are holding walks away from them.
+function consoleHeld(out) {
+  return typeof outDragging === "function" && outDragging(out);
+}
+
 function wireConsole(el) {
   if (!el || el._wired) return el;
   el._wired = true;
@@ -2335,6 +2352,9 @@ const streamRowKey = (n) => {
 };
 
 function syncStreamConsole(out, body, stick) {
+  // A live corner gesture holds this box: a patch is a rebuild of the text under the pointer, and the reader is sizing
+  // the box, not reading it. What it would have drawn arrives on the release (the gesture asks for one repaint).
+  if (globalThis.consoleHeld?.(out)) return false;
   const holder = document.createElement("div");
   holder.innerHTML = body;
   const next = [...holder.children];
@@ -2412,6 +2432,7 @@ function syncStreamConsole(out, body, stick) {
 function paintStreamConsole(turn, copy = "", thread = turn.thread || turn.id) {
   const out = placedNodes("pre.job-out").find((el) => el.dataset.out === `${turn.id}${copy}`);
   if (!out) return false;
+  if (globalThis.consoleHeld?.(out)) return false;
   const all = jobLines(turn.id).filter((l) => !isBookkeeping(l));
   const stick = consolePinned(`${turn.id}${copy}`) || wireConsole(out)._atBottom !== false;
   syncStreamConsole(out, streamBodyHtml(turn, all.slice(-300), all.length > 300, thread), stick);
@@ -2912,6 +2933,9 @@ function restoreScrolls(root, map) {
 // Returns whether a height was applied, so a caller can tell "the reader chose this" from "a fresh box".
 function applyStoredHeight(o) {
   if (!o || !o.dataset) return false;
+  // A box a live corner gesture owns has a height the reader is setting with the pointer: a stored number written over
+  // it mid-drag is the box jumping under the corner.
+  if (globalThis.consoleHeld?.(o)) return false;
   const h = Number(state.outHeights[o.dataset.out || ""]);
   if (!Number.isFinite(h) || h <= 0) return false;
   o.style.height = `${h}px`;
@@ -3319,7 +3343,7 @@ function drawJobLine(evt) {
         out.appendChild(div);
       }
     }
-    if (stick) stickSoon(out);
+    if (stick && !globalThis.consoleHeld?.(out)) stickSoon(out);
   }
   refreshJobPreview(evt.id);
 }

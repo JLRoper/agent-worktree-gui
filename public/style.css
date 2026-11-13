@@ -1402,10 +1402,48 @@ button.pill-complete.is-asked { color: var(--dim); border-color: var(--line); ba
    the corner of the CONSOLE, not in the flow of its text. The chip is only visible while the reader is scrolled
    away from the end; at the end there is nothing to jump to. */
 .out-wrap { position: relative; }
+/* The console's own box: the <pre> and the grip that resizes it, and nothing else. It exists so the grip's corner is
+   the CONSOLE's corner: the marching tail and the chips below are siblings of this box, not part of it, so a row that
+   appears under a live transcript cannot move the corner the reader is holding. */
+.out-box { position: relative; }
+/* The grip. It is the ONLY thing that resizes a console: the browser's own `resize: vertical` handle is driven by the
+   browser's layout of the node it started on, and this panel rebuilds and re-pins consoles as a matter of course, so
+   that handle walked out from under the pointer whenever the box under it was replaced. An 18px hit band (bigger than
+   the 16px corner it replaces, and the whole band is the target) with `touch-action: none`, so a touch drag is this
+   gesture and never a scroll. The ticks are the shape the float's corner grip already draws (`.deliver-pop
+   .dl-resize`), so the panel teaches one resize affordance and not two. */
+.out-box > .out-grip {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  width: 18px;
+  height: 18px;
+  /* NO border-radius here, deliberately. A radius clips the element's own hit area, and the pixel a reader aims at
+     when they reach for a corner is the corner itself: with a 6px rounding the two corner-most pixels were dead, the
+     press fell through to the box, and nothing resized. The float's corner lost its grab to exactly this, under a
+     radius it needed for its frame; these ticks do not need one. */
+  cursor: nwse-resize;
+  touch-action: none;
+  user-select: none;
+  opacity: .45;
+  background-image:
+    linear-gradient(135deg, transparent 0 78%, #6b7c96 78% 90%, transparent 90% 100%),
+    linear-gradient(135deg, transparent 0 52%, #6b7c96 52% 64%, transparent 64% 100%),
+    linear-gradient(135deg, transparent 0 26%, #6b7c96 26% 38%, transparent 38% 100%);
+}
+.out-box > .out-grip:hover,
+.out-wrap:hover > .out-box > .out-grip,
+.out-box.is-resizing > .out-grip { opacity: 1; }
+/* A live corner drag is not a text selection, and the pointer keeps the resize cursor even when it strays off the
+   18px band the gesture was started on. (The board's own anchor compensation stands down for the same length of
+   time - see the guard in compensateAnchor, public/app.js - or the page scrolls under the gesture.) */
+body.is-out-gripping { user-select: none; cursor: nwse-resize; }
+body.is-out-gripping * { cursor: nwse-resize; }
 /* The console has an 18px left tab (.job-cmd, .job-out, .job-foot). The wrapper takes the tab instead, so the two
    boxes line up exactly and the chip centred in the wrapper is centred in the console. */
 .out-wrap.out-tab { margin-left: 18px; }
-.out-wrap.out-tab > .job-out { margin-left: 0; }
+.out-wrap.out-tab .job-out { margin-left: 0; }
 /* The chip both tail controls are, written once. The console's "jump to the newest line" and the worktree chart's
    "show the trees this chart is holding back" (`.wt-age-toggle`, further down) are the same 21px circle, and every
    declaration here is one the two rules carried verbatim. What they do NOT share stays with its owner: where the
@@ -1476,6 +1514,7 @@ button.pill-complete.is-asked { color: var(--dim); border-color: var(--line); ba
 /* The room the button needs, reserved whether or not it is showing so its appearance moves nothing:
    the console's own text, a burst's call lines, a thinking block's title line. */
 [data-copy] > .job-out,
+[data-copy] > .out-box > .job-out,
 [data-copy] > .tgrp-head,
 [data-copy] > summary { padding-right: 24px; }
 /* The reveal - the whole of it. A <details>'s button lives in its summary (the only part a folded one
@@ -1499,11 +1538,11 @@ button.pill-complete.is-asked { color: var(--dim); border-color: var(--line); ba
 
 .job-out {
   margin: 0;
-  /* Resizable like the reply box. The max-height is the cap the console always had — the drag lifts it
-     (agent-worktree-gui: liftConsoleCap), because a cap would otherwise stop the handle dead. */
+  /* The max-height is the cap the console sits on before anyone resizes it. The corner grip (`.out-grip`) writes an
+     explicit height instead, and lifts this cap while that height needs it - there is no `resize` here on purpose: a
+     native handle belongs to the node it started on, and this panel replaces that node. See public/app.js's grip. */
   max-height: 230px;
   min-height: 34px;
-  resize: vertical;
   overflow: auto;
   /* The panel owns this pane's reading position. Native anchoring otherwise follows a row AFTER an expanded
      result and jumps the reader past the text they just opened, even when this console is not pinned. */
@@ -4128,7 +4167,12 @@ body.pipew-open { overflow: hidden; }
    after it at the foot of the scrollport at every width and in both frames. */
 .as-subpane[data-subpane="chat"] > .job > .job-body > .turn.is-slack { flex: 1 0 auto; }
 .as-subpane[data-subpane="chat"] > .job > .job-body > .turn.is-slack > .out-wrap { flex: 1 1 auto; }
-.as-subpane[data-subpane="chat"] > .job > .job-body > .turn.is-slack > .out-wrap > .job-out { flex: 1 1 auto; max-height: none; }
+/* The console's box takes the slack (the grip rides its corner, so it must), and the console inside it fills that box:
+   the same two declarations the console itself carried before the grip needed a box of its own. */
+.as-subpane[data-subpane="chat"] > .job > .job-body > .turn.is-slack > .out-wrap > .out-box {
+  display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0;
+}
+.as-subpane[data-subpane="chat"] > .job > .job-body > .turn.is-slack > .out-wrap > .out-box > .job-out { flex: 1 1 auto; max-height: none; }
 .as-subpane[data-subpane="chat"] > .job .reply-box { min-height: 79px; }
 
 /* Which rules the assistant wrote for itself. The reader's rules are their own answers; these are proposals,
