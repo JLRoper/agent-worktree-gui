@@ -1,18 +1,29 @@
 // A double-click on a name or a branch selects only what the cell SHOWS, and the cell shows an ellipsis: the copy
-// came back as the cut string ("make-a-truncated-worktree-name-and-e…"). The chart still ellipsises - the row has
+// came back as the cut string ("make-a-truncated-worktree-name-and-e..."). The chart still ellipsises - the row has
 // eleven columns and the name has to lose letters - so the fix is what the clipboard GETS, not what the cell draws.
 //
 //   (1) a truncated worktree name copies whole, from a selection anchored inside td.name's .row-name;
 //   (2) a truncated branch copies whole, from a selection anchored inside the branch cell's own link;
 //   (3) a copy anywhere else - another cell of the same row - is the browser's own business: the handler writes
 //       nothing and cancels nothing;
-//   (4) the trigger is TRUNCATION, not the cell: a name that fits its column is left alone as well, because
-//       hijacking that copy would replace the reader's own selection (half a name, a word they dragged across)
-//       with something they did not select.
+//   (4) the trigger for the COPY EVENT is TRUNCATION, not the cell: a name that fits its column is left alone as
+//       well, because hijacking that copy would replace the reader's own selection with something they did not
+//       select.
+//
+// PR 712 answered the copy event only. A HIGHLIGHT is a copy by itself now, and its cases are the second half:
+//
+//   (5) a highlight inside a name or branch cell answers its whole value - truncated or not, because a highlight is
+//       a request for the value and half a name hands over the whole name;
+//   (6) a caret is not a highlight, another cell is not ours, and a drag across two cells is two values;
+//   (7) the write goes through navigator.clipboard.writeText, falls back to the hidden textarea when the API
+//       refuses, puts the reader's highlight back afterwards, and says "copied" either way;
+//   (8) the same highlight answered twice writes the clipboard once;
+//   (9) the listeners are registered on the document and nothing is cancelled: no stopPropagation anywhere in the
+//       module, so the row's expand, its double-click and its drag are the page's own.
 //
 // No browser here: the module is a classic script on the page, so it is loaded for its side effect and driven with
 // page-shaped stubs whose scrollWidth/clientWidth are the numbers the browser would report. The real page is proved
-// in tools/verify-copy-full-name.mjs, which double-clicks and presses Ctrl+C in Chromium.
+// in tools/verify-copy-full-name.mjs, which drags a highlight and reads navigator.clipboard.readText() in Chromium.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
@@ -185,4 +196,192 @@ test("a name that fits its column is left to the browser", () => {
   withSelection(selection(cells.nameText), () => onCopy(e));
   assert.deepEqual(e.said, {});
   assert.equal(e.defaultPrevented, false);
+});
+
+// ---- (5) a HIGHLIGHT is a copy of the whole value, truncated or not ---------------------------------
+// The copy event above keeps 712's truncation gate. The highlight does not: it IS the gesture that asks for the
+// value, so a name that fits its column and a name that does not both answer the same whole value.
+const highlight = (anchor, focus = anchor) => ({ anchorNode: anchor, focusNode: focus, rangeCount: 1, isCollapsed: false });
+const caret = (node) => ({ anchorNode: node, focusNode: node, rangeCount: 1, isCollapsed: true });
+
+test("a highlight inside a name cell answers the whole name, even when the column fits it", () => {
+  const { highlightValueFor } = engine();
+  const cells = row({ nameWidth: 260 });
+  assert.equal(highlightValueFor(highlight(cells.nameText)), NAME);
+});
+
+test("a highlight inside the branch cell answers the whole branch", () => {
+  const { highlightValueFor } = engine();
+  const cells = row();
+  assert.equal(highlightValueFor(highlight(cells.branchText)), BRANCH);
+});
+
+// The value comes from the model the row was drawn from, never from the ellipsised text: the drawn text is the cut
+// string, and copying that is exactly the bug.
+test("a truncated row still answers its whole value, not the text it paints", () => {
+  const { highlightValueFor } = engine();
+  const cells = row();
+  cells.rowName.textContent = "make-a-truncated-worktree-name-and-e\u2026";
+  assert.equal(highlightValueFor(highlight(cells.nameText)), NAME);
+  assert.notEqual(highlightValueFor(highlight(cells.nameText)), cells.rowName.textContent);
+});
+
+test("a caret is not a highlight, and a highlight outside the two cells is not ours", () => {
+  const { highlightValueFor } = engine();
+  const cells = row();
+  assert.equal(highlightValueFor(caret(cells.nameText)), null, "a caret is not a highlight");
+  assert.equal(highlightValueFor(highlight(cells.tipText)), null, "another cell is the browser's");
+  assert.equal(highlightValueFor(highlight(cells.nameText, cells.branchText)), null, "a drag across two cells is two values");
+  assert.equal(highlightValueFor(null), null);
+});
+
+// ---- (6) the write, and the flash that says it happened ---------------------------------------------
+// The module reads the selection and the clipboard through globals, so the write cases put page-shaped values there
+// and take them away again. This file defines no `document` at load, which is why the module's listener block stays
+// off and every case drives the exported function directly.
+function flashDocument() {
+  const body = {
+    children: [],
+    appendChild(node) {
+      node.parentNode = this;
+      this.children.push(node);
+    },
+  };
+  const doc = {
+    body,
+    created: [],
+    commanded: [],
+    addEventListener() {},
+    createElement(tag) {
+      const el = {
+        tag,
+        style: {},
+        attrs: {},
+        value: "",
+        parentNode: null,
+        setAttribute(name, value) {
+          this.attrs[name] = value;
+        },
+        focus() {
+          this.focused = true;
+        },
+        select() {
+          this.selected = true;
+        },
+        remove() {
+          if (this.parentNode) this.parentNode.children = this.parentNode.children.filter((n) => n !== this);
+          this.parentNode = null;
+        },
+      };
+      doc.created.push(el);
+      return el;
+    },
+    querySelectorAll() {
+      return [];
+    },
+    execCommand(cmd) {
+      this.commanded.push(cmd);
+      return true;
+    },
+  };
+  return doc;
+}
+// A selection rich enough for the fallback: it can be saved (cloneRange), cleared and put back. A highlight inside
+// one text node has the same anchor and focus NODE and two offsets, so the collapsed flag is explicit, not inferred
+// from the two nodes being equal.
+const richSelection = (anchor, focus = anchor) => ({
+  anchorNode: anchor,
+  focusNode: focus,
+  rangeCount: 1,
+  isCollapsed: false,
+  getRangeAt() {
+    return { cloneRange: () => ({ marker: "range" }) };
+  },
+  removeAllRanges() {
+    this.cleared = (this.cleared || 0) + 1;
+  },
+  addRange(range) {
+    this.restored = (this.restored || []).concat([range]);
+  },
+  toString() {
+    return "chunk";
+  },
+});
+async function withGlobals({ navigator: nav, document: doc, selection: sel }, fn) {
+  const keys = ["navigator", "document", "getSelection"];
+  const saved = {};
+  for (const key of keys) saved[key] = Object.getOwnPropertyDescriptor(globalThis, key);
+  const put = (key, value) => Object.defineProperty(globalThis, key, { value, configurable: true, writable: true });
+  if (nav) put("navigator", nav);
+  if (doc) put("document", doc);
+  if (sel) put("getSelection", () => sel);
+  try {
+    return await fn();
+  } finally {
+    for (const key of keys) {
+      if (saved[key]) Object.defineProperty(globalThis, key, saved[key]);
+      else delete globalThis[key];
+    }
+  }
+}
+
+test("a highlight writes the whole value through navigator.clipboard and flashes copied", async () => {
+  const { onSelectEnd } = engine();
+  const cells = row();
+  const doc = flashDocument();
+  const said = [];
+  const nav = { clipboard: { writeText: (v) => (said.push(v), Promise.resolve()) } };
+  const sel = richSelection(cells.nameText);
+  await withGlobals({ navigator: nav, document: doc, selection: sel }, async () => {
+    assert.equal(await onSelectEnd(), true, "the write is reported as having landed");
+  });
+  assert.deepEqual(said, [NAME], "the clipboard API took the whole name");
+  const chip = doc.created.find((el) => el.className === "copy-flash");
+  assert.ok(chip, "a copied chip was drawn");
+  assert.equal(chip.textContent, "copied");
+  assert.equal(chip.attrs.role, "status");
+  assert.equal(chip.parentNode, doc.body, "the chip sits on the body, not inside a row that a repaint replaces");
+});
+
+test("a refused clipboard write falls back to the hidden textarea and puts the highlight back", async () => {
+  const { onSelectEnd } = engine();
+  const cells = row();
+  const doc = flashDocument();
+  const nav = { clipboard: { writeText: () => Promise.reject(new Error("NotAllowedError")) } };
+  const sel = richSelection(cells.branchText);
+  await withGlobals({ navigator: nav, document: doc, selection: sel }, async () => {
+    assert.equal(await onSelectEnd(), true, "the fallback copy is reported as having landed");
+  });
+  const ta = doc.created.find((el) => el.tag === "textarea");
+  assert.ok(ta, "the fallback used a textarea");
+  assert.equal(ta.value, BRANCH, "the textarea carried the whole branch");
+  assert.deepEqual(doc.commanded, ["copy"], "the browser's own copy command wrote it");
+  assert.equal(sel.cleared, 1, "the textarea's selection was cleared after the copy");
+  assert.equal(sel.restored.length, 1, "the reader's highlight was put back exactly once");
+  const chip = doc.created.find((el) => el.className === "copy-flash");
+  assert.ok(chip, "the fallback still says copied");
+});
+
+test("the same highlight answered twice writes the clipboard once", async () => {
+  const { onSelectEnd } = engine();
+  const cells = row();
+  const doc = flashDocument();
+  const said = [];
+  const nav = { clipboard: { writeText: (v) => (said.push(v), Promise.resolve()) } };
+  const sel = richSelection(cells.nameText);
+  await withGlobals({ navigator: nav, document: doc, selection: sel }, async () => {
+    assert.equal(await onSelectEnd(), true);
+    assert.equal(await onSelectEnd(), false, "the settle check did not answer it twice");
+  });
+  assert.equal(said.length, 1);
+});
+
+// ---- (7) the listeners, and the gestures they leave alone -------------------------------------------
+test("the highlight listeners are on the document and nothing is cancelled", () => {
+  engine();
+  const source = readFileSync(new URL("../public/core/copy-full-value.js", import.meta.url), "utf8");
+  assert.match(source, /document\.addEventListener\("mousedown", onPointerDown, true\)/);
+  assert.match(source, /document\.addEventListener\("mouseup", onPointerUp, true\)/);
+  assert.match(source, /document\.addEventListener\("selectionchange", scheduleSettleCheck\)/);
+  assert.doesNotMatch(source, /\.stopPropagation\(/, "no gesture is swallowed: the row's expand and drag are the page's");
 });

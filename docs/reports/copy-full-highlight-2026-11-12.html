@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Highlighting a name or a branch on the worktree chart is now the copy</title>
+<style>
+  :root {
+    --bg: #14161a; --panel: #1b1e24; --line: #2b303a; --ink: #e6e8ec; --dim: #a2a9b6;
+    --ok: #5fbf7a; --warn: #d9a441; --bad: #d9605f; --acc: #6ea8d8;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.62 "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; padding: 40px 28px 80px; }
+  h1 { font-size: 26px; line-height: 1.25; margin: 0 0 6px; letter-spacing: -0.01em; }
+  h2 { font-size: 19px; margin: 42px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+  h3 { font-size: 15px; margin: 24px 0 6px; color: var(--acc); text-transform: uppercase; letter-spacing: 0.06em; }
+  p { margin: 10px 0; }
+  .sub { color: var(--dim); font-size: 13.5px; margin-bottom: 26px; }
+  .box { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; margin: 18px 0; }
+  .box.hot { border-left: 3px solid var(--bad); }
+  .box.good { border-left: 3px solid var(--ok); }
+  .box.note { border-left: 3px solid var(--warn); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13.5px; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { color: var(--dim); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+  td.n { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  code, pre { font-family: Consolas, "Cascadia Mono", monospace; font-size: 12.5px; }
+  code { background: #0f1115; padding: 1px 5px; border-radius: 4px; color: #cfd6e2; }
+  pre { background: #0f1115; border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px;
+        overflow-x: auto; color: #cfd6e2; line-height: 1.5; }
+  .ok { color: var(--ok); } .bad { color: var(--bad); } .warn { color: var(--warn); } .dim { color: var(--dim); }
+  ul { margin: 8px 0 8px 20px; padding: 0; } li { margin: 5px 0; }
+  .kv { display: grid; grid-template-columns: 220px 1fr; gap: 4px 16px; font-size: 13.5px; }
+  .kv div:nth-child(odd) { color: var(--dim); }
+  figure { margin: 22px 0; }
+  figure img { width: 100%; border: 1px solid var(--line); border-radius: 8px; display: block; }
+  figcaption { color: var(--dim); font-size: 12.5px; margin-top: 8px; }
+  footer { margin-top: 46px; border-top: 1px solid var(--line); padding-top: 14px; color: var(--dim); font-size: 12.5px; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Highlighting a name or a branch on the worktree chart is now the copy</h1>
+<div class="sub">
+  Written 2026-11-12T20:39 EST for branch <code>wtgui/make-highlighting-part-of-a-worktree-db6c92</code>, landing by a
+  local merge into <code>wtgui/reasoning-delta-2026-11-12</code>. Every number and every quoted string below comes
+  from a run in this tree; the two pictures are frames from Chromium with the clipboard read back through
+  <code>navigator.clipboard.readText()</code>.
+</div>
+
+<h2>What was asked, and where the ask landed</h2>
+<p>
+  The chart cuts a worktree name and a branch with an ellipsis (<code>td.name .row-name</code> and
+  <code>td.branch</code>, <code>public/chart.css</code> lines 83 and 113). Selecting part of one of those cells is
+  how a reader takes a name out of the board, so the request was exact: a highlight on either cell must put the
+  <b>whole</b> name or branch on the clipboard, read from the row's model rather than from the cut text; the existing
+  copier must be extended, not duplicated; the confirmation must be visible; and the row's expand, double-click and
+  drag must survive it.
+</p>
+
+<h2>What PR 712 already did</h2>
+<p>
+  <code>public/core/copy-full-value.js</code> in this tree was already the answer to a <b>copy</b>, not to a
+  highlight. One document-level <code>copy</code> listener, registered from a classic script that
+  <code>public/index.html</code> loads before <code>app.js</code>:
+</p>
+<ul>
+  <li>it resolved the cell under the selection with <code>closest("td.name, td.branch")</code>, and answered only
+      when the anchor and the focus were in the <b>same</b> cell;</li>
+  <li>it required the cell to be <b>truncated</b> (<code>scrollWidth &gt; clientWidth</code> on the clipping element),
+      so a name that fits its column kept the browser's own copy;</li>
+  <li>it took the value from the cell's <code>data-copy-value</code> attribute, which
+      <code>public/render-projects.js</code> line 729 (name) and line 733 (branch) write from the row model;</li>
+  <li>it wrote that value with <code>event.clipboardData.setData</code> and cancelled the event, and did nothing at
+      all anywhere else on the page.</li>
+</ul>
+<p>
+  So Ctrl+C after a double-click already produced the whole value. What it did not answer was the highlight itself:
+  a reader who dragged across a name had to reach for Ctrl+C as a second gesture, and a reader who did not know the
+  rule got the cut string from the browser. That gap is what this landing closes.
+</p>
+
+<h2>What this adds</h2>
+<div class="kv">
+  <div>the highlight answers</div><div><code>onSelectEnd</code> answers a settled, non-collapsed selection that lives in one
+    name or branch cell. The answer is the cell's whole value whether or not the column had to cut it, because a
+    highlight is a request for the value: half a name hands over the whole name. The copy-event path keeps 712's
+    truncation gate unchanged.</div>
+  <div>the write</div><div><code>navigator.clipboard.writeText</code>, with the hidden-textarea path
+    (<code>fallbackWrite</code>) for a browser or a gesture the API refuses; the fallback saves and restores the
+    reader's ranges, so the highlight stays where it was made.</div>
+  <div>the confirmation</div><div>a <code>.copy-flash</code> chip reading <b>copied</b>, appended to
+    <code>document.body</code> (never inside a row a repaint replaces), placed under the cell, removed after 1.1 s,
+    <code>pointer-events: none</code> and <code>user-select: none</code> so it can never take the next gesture.</div>
+  <div>the bounds</div><div>only <code>td.name</code> and <code>td.branch</code>; only one cell at a time; no
+    <code>preventDefault</code> or <code>stopPropagation</code> on any mouse or key event, so expand, double-click and
+    drag run exactly as they did.</div>
+  <div>the row's fold</div><div>one guard in <code>public/app.js</code> (line 11864), the same rule the call blocks
+    already follow at lines 10874 and 10926: a press that ends a drag-select is a selection, not a fold. It fires only
+    for <code>detail === 1</code>, so a double-click's second click still folds and its net effect is what it always
+    was, and a plain click (whose mousedown collapsed the selection) still expands.</div>
+</div>
+
+<h2>The browser proof</h2>
+<p>
+  <code>node tools/verify-copy-full-name.mjs</code> boots a sandbox panel from this tree, draws one row whose name and
+  branch are both longer than their columns, and then does what a reader does. The two rows that matter, quoted from
+  the run:
+</p>
+<table>
+  <tr><th>gesture</th><th>fragment the page selected</th><th>clipboard, read back with readText()</th></tr>
+  <tr>
+    <td>drag across the truncated worktree name, no Ctrl+C</td>
+    <td class="n">"make-a-tru" - 10 of 41 chars</td>
+    <td><code>make-a-truncated-worktree-name-and-e5d056</code></td>
+  </tr>
+  <tr>
+    <td>drag across the truncated branch, no Ctrl+C</td>
+    <td class="n">"wtgui/mak" - 9 of 47 chars</td>
+    <td><code>wtgui/make-a-truncated-worktree-name-and-e5d056</code></td>
+  </tr>
+  <tr>
+    <td>double-click a word of the name, no Ctrl+C</td>
+    <td class="n">"make"</td>
+    <td><code>make-a-truncated-worktree-name-and-e5d056</code></td>
+  </tr>
+  <tr>
+    <td>double-click a word of the branch, no Ctrl+C</td>
+    <td class="n">"wtgui"</td>
+    <td><code>wtgui/make-a-truncated-worktree-name-and-e5d056</code></td>
+  </tr>
+</table>
+
+<figure>
+  <img src="../assets/copy-full-highlight/name-highlight-copied-whole.png" alt="the worktree row with a highlighted fragment of the name, a copied chip under the cell, and the clipboard text read back at the bottom">
+  <figcaption>
+    The name cell, dragged and released with no key pressed: the highlight is still on the screen, the <b>copied</b>
+    chip sits under the cell, and the strip at the bottom is the clipboard read back through
+    <code>readText()</code> - the whole 41-character name, while the row still draws <code>make-a-truncated-w...</code>.
+  </figcaption>
+</figure>
+
+<figure>
+  <img src="../assets/copy-full-highlight/branch-highlight-copied-whole.png" alt="the branch cell with a highlighted fragment, a copied chip, and the whole branch on the clipboard at the bottom">
+  <figcaption>
+    The branch cell is a different rendering - its own ellipsis, its text inside a link - and it answers the same way:
+    the selected fragment is <code>wtgui/mak</code>, the clipboard holds
+    <code>wtgui/make-a-truncated-worktree-name-and-e5d056</code>.
+  </figcaption>
+</figure>
+
+<h3>The checks around it</h3>
+<ul>
+  <li><span class="ok">34 of 34</span> checks pass in the real browser. Among them: the chip is up, its computed
+      <code>pointer-events</code> and <code>user-select</code> are both <code>none</code>, and it is gone within 4 s;
+      the highlight is still the dragged fragment after the write; the row's expand state is
+      <code>false -&gt; false</code> across both drags; a plain click on the name expands the row and copies nothing;
+      a second click folds it; a copy of text outside those cells is still the browser's own copy of exactly what was
+      selected (<code>"27f487b "</code> came back as <code>"27f487b "</code>); the page threw nothing.</li>
+  <li>The same harness run against a clean archive of the commit this branch started from (7f895244) reads
+      <span class="bad">25 of 34</span>: the nine reds are exactly the new behaviour - no <code>.copy-flash</code>
+      (three checks), no whole value from a highlight (two), the drag toggling the row's fold
+      (<code>false -&gt; true</code>, <code>true -&gt; false</code>), and no value from a double-click alone (two).
+      The twenty-five that pass on the old commit include 712's own Ctrl+C cases, which is the proof this did not
+      disturb them.</li>
+</ul>
+
+<h2>Tests and the tree they ran in</h2>
+<table>
+  <tr><th>command</th><th>what it answered</th></tr>
+  <tr><td><code>node --test test/copy-full-value.test.js</code></td><td>14 of 14 pass. They cover the two old cases,
+      712's truncation gate (still on), the highlight's whole value including a column that fits, the value coming
+      from the model and not the painted text, a caret / another cell / two cells answering nothing, the clipboard
+      write and its flash, the refused-API fallback restoring the highlight, one write per highlight, and the
+      listeners being registered with no <code>stopPropagation</code> in the module.</td></tr>
+  <tr><td><code>npm run test:changed -- --base wtgui/reasoning-delta-2026-11-12</code></td><td>93 files, 829 tests,
+      823 pass, 6 fail. The six are pre-existing on the stack: the same six tests fail on a clean archive of the
+      commit this branch started from.</td></tr>
+  <tr><td><code>npm test</code></td><td>2702 tests, 2684 pass, 18 fail, 494 s. All 18 reproduce without this change: 12 of the
+      13 files fail the same way on a clean <code>git archive</code> of the commit this branch started from, and the
+      thirteenth (<code>reasoning-runs.test.js</code>) fails 3 of 3 runs in this tree with this diff stashed - a
+      persist-debounce flake in <code>lib/jobs.js</code>, a file this diff does not touch. None of the failures names
+      a file this landing changed.</td></tr>
+</table>
+
+<h2>The version, and why this landing carries no new number</h2>
+<div class="box note">
+  <p>
+    This branch declares <b>1.89.4</b>, which is what <code>origin/main</code> declares. The base it merges into,
+    <code>wtgui/reasoning-delta-2026-11-12</code>, already declares <b>1.89.5</b> and already carries the annotated
+    tag <code>v1.89.5</code> at commit <code>107dc766</code> ("chore: 1.89.5 - the version this landing carries").
+  </p>
+  <p>
+    A second bump here would put two numbers on one unlanded stack - the base's 1.89.5 and this branch's 1.89.6 - and
+    the changelog render would then describe a release history cannot cover until the base lands. So this branch
+    adds no number, no tag and no changelog edit: it joins the stack that 1.89.5 already names, and the number moves
+    when the base itself lands.
+  </p>
+</div>
+
+<h2>The landing shape</h2>
+<p>
+  The base has not landed, so the brief's own rule withheld the push: this work merges into
+  <code>wtgui/reasoning-delta-2026-11-12</code> <b>locally</b>, with <code>--no-ff</code> from that branch's own
+  worktree, and creates no remote ref and no pull request. The merge commit cannot be named by a document it carries,
+  so it is named in the hand-off note instead.
+</p>
+
+<h2>Where the work is</h2>
+<div class="kv">
+  <div>the copier</div><div><code>public/core/copy-full-value.js</code> - the copy path 712 wrote, and the highlight
+    path added above it.</div>
+  <div>the row's fold</div><div><code>public/app.js</code> line 11864 - the drag-select guard, in the shape the call
+    blocks already use.</div>
+  <div>the chip</div><div><code>public/chart.css</code> line 568 - <code>.copy-flash</code> and its one animation.</div>
+  <div>the value on the cells</div><div><code>public/render-projects.js</code> lines 729 and 733, with the comment
+    corrected to name the highlight as a trigger.</div>
+  <div>the loader</div><div><code>public/index.html</code>, whose comment now says what the module answers.</div>
+  <div>the tests</div><div><code>test/copy-full-value.test.js</code>, and the browser gate
+    <code>tools/verify-copy-full-name.mjs</code> with its captures under
+    <code>docs/assets/copy-full-highlight/</code>.</div>
+</div>
+
+<footer>
+  Written from this tree at 2026-11-12T20:39 EST. Quotes are the harness's own output, not a transcription: the
+  selected fragments, the clipboard values, the check counts and the old-commit comparison all come from
+  <code>tools/verify-copy-full-name.mjs</code> runs in this worktree.
+</footer>
+
+</main>
+</body>
+</html>

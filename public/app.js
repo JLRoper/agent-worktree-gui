@@ -11861,6 +11861,16 @@ $("projects").addEventListener("click", (e) => {
   // which is exactly how clicking the green play button moved the caret into the prompt while leaving
   // the card off-screen.
   if (e.target.closest("button, a, input, select, textarea, label")) return;
+  // A press that was the end of a drag-select is a selection, not a fold - the same rule a call block's caret keeps
+  // (`[data-call-fold]` above). The name and branch cells are the only selectable cells in a row (chart.css line 38),
+  // and public/core/copy-full-value.js answers a highlight there with the whole value, so folding on the release
+  // would open a detail block every time a reader takes a name. Only the FIRST click of a sequence is skipped: a
+  // double-click's second click still folds, so its net effect is what it always was, and a plain click (whose
+  // mousedown collapsed the selection) still expands.
+  if (e.detail === 1 && document.getSelection) {
+    const picked = document.getSelection();
+    if (picked && !picked.isCollapsed && picked.containsNode && picked.containsNode(tr, true)) return;
+  }
   const key = tr.dataset.key;
   const row = state.rows.get(key);
   if (!row) return;
