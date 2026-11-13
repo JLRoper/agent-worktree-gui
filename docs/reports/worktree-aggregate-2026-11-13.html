@@ -72,8 +72,10 @@ discounted. The "lines absent" column is that count.</li>
 on the worst path names the commit that last moved that path; where the work was replaced by a different mechanism, the
 landing commit of that mechanism is named instead and the reason says so.</li>
 </ul>
-<p>Applying the branch's own patch to a fresh export of <code>origin/main</code> was tried and is not used as a verdict:
-main has moved so far that 43 of the 44 non-landed branches apply in neither direction. That is drift, not a class.</p>
+<p>Applying the branch's own patch to a fresh export of <code>origin/main</code> was tried on 44 branches and is not
+used as a verdict: 42 of them conflict in both directions, one was skipped for its 18 MB patch, and one applies
+forward cleanly (a junk branch that deletes a finished report). Main has moved too far for the patch to be a fair
+question.</p>
 <h2>Counts per class</h2>
 <table><thead><tr><th>class</th><th class="num">branches</th><th class="num">worktrees</th><th>what it means</th></tr></thead><tbody>
 <tr><td><code>already-in-main</code></td><td class="num">133</td><td class="num">24</td><td>main carries the change: every own commit's patch-id is on main, or merge-tree returns main's own tree, or a merged PR sits at this exact head</td></tr>
@@ -311,12 +313,13 @@ nothing else in the set, so it is the whole order. No keeper was dropped for reg
 <p>121 of the 166 proposed branch deletions still exist on <code>origin</code>. This report proposes the local refs only; whether a remote branch is retired is the reader's call, and none was touched.</p>
 <h2>This branch's own commits</h2>
 <p><code>git log --format="%h %ad %s" 2de5c778..HEAD</code> as this revision was generated:</p>
-<pre><code>58fe69d8 2026-11-13 fix: the jitter tool names no absolute path
+<pre><code>3f0e2a50 2026-11-13 docs: the remainder report carries the final commit list
+58fe69d8 2026-11-13 fix: the jitter tool names no absolute path
 a48623fd 2026-11-13 docs: the remainder report records the suite comparison
 be20c0f0 2026-11-13 chore: 1.94.0 - the version this landing carries
 1f16137b 2026-11-13 docs: the remainder report - 167 branches and 33 worktrees judged by content
 e3e67edb 2026-10-30 Count the console's row churn per second while a stream is flowing</code></pre>
-<p>That is the branch's whole list from the cut sha up to the commit before the one that carries this revision of the file: the keeper, this file's first commit, the version bump, this file's second commit and the path fix. The carrying commit sits on top of that list, and its sha is quoted in the pull request because a commit cannot name its own sha.</p>
+<p>That is the branch's whole list from the cut sha up to the commit before the one that carries this revision of the file. The carrying commit sits on top of that list, and its sha is quoted in the pull request because a commit cannot name its own sha.</p>
 <h2>What was run</h2>
 <ul>
 <li>Inventory: <code>git worktree list --porcelain</code> (34 entries: 1 primary + 33 worktrees), <code>git ls-remote --heads origin</code> (381 heads), <code>gh pr list --state all --limit 500</code> (500 PRs: 491 MERGED, 9 CLOSED, 0 OPEN), <code>GET /api/jobs</code>.</li>
