@@ -11966,7 +11966,9 @@ setInterval(() => {
     // is to say how long the silence is, and nothing arrives while it is silent. Rewritten in place - a rebuilt
     // node would take the card's layout with it every second.
     const pulse = card ? livePulse(j) : null;
-    for (const el of card?.querySelectorAll(".live-pulse") || []) {
+    // The console's marching tail wears the same pill (console.js marchRowHtml) and keeps its OWN clock: this loop is
+    // the card's heartbeat, and rewriting the tail from it took the march's classes and dots away every second.
+    for (const el of card?.querySelectorAll(".live-pulse:not([data-march])") || []) {
       if (!pulse) {
         el.remove();
         continue;

@@ -210,7 +210,12 @@ function turnBody(turn, copy = "", thread = turn.thread || turn.id) {
   return (stream ? "" : thinkHtml(turn, copy, thread)) +
     // `out-tab` carries the 18px left tab the console itself has, so the wrapper is the console's box: the chip
     // centred in the wrapper is centred in the console, not 9px off it.
-    `<div class="out-wrap out-tab" data-copy><pre class="job-out" data-out="${esc(turn.id)}${esc(copy)}">${body}</pre>${consoleToolsHtml()}${toBottomBtnHtml()}</div>` +
+    //
+    // The marching tail (console.js marchRowHtml) is a SIBLING of the console, drawn between it and its own tools.
+    // That is the whole of its place: it is not a line of the record, so it cannot be ordered with one, cannot be
+    // typed by the stream, and cannot change the console's height or scroll - and a repaint of the record cannot
+    // take it away either, because it is not in the node the repaint replaces.
+    `<div class="out-wrap out-tab" data-copy><pre class="job-out" data-out="${esc(turn.id)}${esc(copy)}">${body}</pre>${marchRowHtml(turn)}${consoleToolsHtml()}${toBottomBtnHtml()}</div>` +
     // The subagents this turn spawned, right under the console they ran beside: the delegation is the turn's own
     // work, not the card's, and a card with several turns would otherwise show the newest one's children under all
     // of them.
@@ -767,7 +772,12 @@ function updateJob(j, { scroll = false } = {}) {
   // record `/api/state` just delivered and once in the array nothing ever shrank.
   // A turn that has stopped has no more frames coming, so whatever either display buffer still holds is released:
   // a resumed, interrupted or failed run settles without a `result` line, and its card must not sit mid-paragraph.
-  if (statusChanged && !turnLive(j)) flushTypeStream(j.id);
+  // The marching tail goes the instant the turn reads done - here, before the repaint, so no dot survives into the
+  // settled card even for the one frame a rebuild takes (console.js marchEnd).
+  if (statusChanged && !turnLive(j)) {
+    flushTypeStream(j.id);
+    marchEnd(j.id);
+  }
   renderConversation(j.thread || j.id, { scroll });
   // Starting or finishing a turn changes what the worktree rows should say about themselves.
   if (statusChanged || approvalChanged) {

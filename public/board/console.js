@@ -1946,6 +1946,184 @@ function stickSoon(el) {
 }
 // ---- end console writers
 
+// ---- the console's marching tail ---------------------------------------------------------------------------------
+// The trailing decoration a LIVE turn's console carries: ". . . . " under its last line, one dot every 500 ms, four
+// dots to the cycle (two seconds), and the fourth clears at the right edge of its slot so the row never grows. Any
+// new output clears it back to a single dot: the row is the sign of a feed that has gone quiet, so a burst restarts
+// its clock.
+//
+// It is NOT a console line, and that is the whole design. It is a sibling of the pre (render-jobs.js turnBody puts
+// it between the console and the console's own tools), so:
+//   * it never joins createDrawStream - it is no segment, it is never ordered against one, it is never typed, and
+//     nothing here can reorder, restart or scroll the record;
+//   * the record's own DOM is never touched, so pre.textContent is the turn's record with no dot in it, at any
+//     moment of the march and not only after the turn ends;
+//   * the feed's height and scroll are the console's own: the row is one fixed line UNDER the box, and the dot slot
+//     is exactly ". . . . " wide (style.css .march-dots), so a step can never reflow the box or move a reader.
+// The march is ONE timer (started when a row exists, stopped when none does) that rewrites the row's own text node -
+// nodeValue, never textContent, because replacing the text node is a childList mutation and the copy observer wakes
+// for those. No frame loop runs and nothing in here reads a box.
+//
+// Reduced motion: the row holds a static single dot and the word it stands for. The dot is still because the
+// panel's ONE existing rule says so (style.css "@media (prefers-reduced-motion: reduce) { .live-pulse .pulse-dot {
+// animation: none } }"); this file only decides whether a march starts at all, and adds no media query of its own.
+const MARCH_STEP_MS = 500; // one dot every half second
+const MARCH_DOTS = 4; // ". . . . " - the slot's own width, so the next step is the clear at that edge
+const MARCH_LABEL = "working"; // what a still row says instead of marching
+
+// The reader's own setting, read once and then kept live by the MediaQueryList itself. Not a per-frame or per-paint
+// read: it is asked when a row is drawn and when the clock decides what to write.
+const marchMotion = (() => {
+  let mq;
+  return () => {
+    if (mq === undefined) {
+      try {
+        mq = globalThis.matchMedia ? globalThis.matchMedia("(prefers-reduced-motion: reduce)") : null;
+      } catch {
+        mq = null; // no media support at all: nothing asked for stillness, so the march runs
+      }
+    }
+    return Boolean(mq && mq.matches);
+  };
+})();
+
+// The dots a row shows `ms` after its last burst: 1 at the arrival, 2 at 500 ms, 3 at 1000, 4 at 1500, and 1 again
+// at 2000. The cycle IS four steps of 500 ms, so two seconds is the whole march - and a step is a function of the
+// clock, never of how often a timer happened to fire.
+function marchDotsAt(from, now) {
+  const steps = Math.floor(Math.max(0, Number(now) - Number(from)) / MARCH_STEP_MS);
+  return (steps % MARCH_DOTS) + 1;
+}
+
+// ". . . . " with ONE space between dots and the slot's trailing space, so every step is the same 8 characters wide
+// and the fourth dot's step clears back to the first.
+function marchText(dots) {
+  const n = Math.min(MARCH_DOTS, Math.max(1, Math.round(Number(dots) || 1)));
+  return `${Array(n).fill(".").join(" ")} `;
+}
+
+// One entry per turn with a row drawn: when its last burst arrived, and the dot count currently written.
+function marchEntry(id, now) {
+  if (!state.march) state.march = new Map();
+  let m = state.march.get(id);
+  if (!m) {
+    m = { at: Number(now) || Date.now(), dots: 1 };
+    state.march.set(id, m);
+  }
+  return m;
+}
+
+// Every row on the page, read from the consoles that carry one: the row IS the console's next sibling, which is
+// where turnBody puts it. A pinned turn draws its own copy, and both march on the same clock and the same count.
+function marchRows() {
+  const rows = [];
+  for (const out of placedNodes("pre.job-out")) {
+    const row = out.nextElementSibling;
+    if (row && row.dataset && row.dataset.march) rows.push(row);
+  }
+  return rows;
+}
+
+// ONLY the decoration's own text node. nodeValue on the node the row was parsed with: assigning textContent would
+// replace that node, and a replaced child is a childList mutation the page's copy observer wakes for.
+function marchWrite(row, dots) {
+  const el = row.querySelector(".march-dots");
+  if (!el) return;
+  const text = marchText(dots);
+  let node = el._marchText;
+  if (!node || node.parentNode !== el) {
+    node = el.firstChild && el.firstChild.nodeType === 3 ? el.firstChild : el.appendChild(document.createTextNode(""));
+    el._marchText = node;
+  }
+  if (node.nodeValue !== text) node.nodeValue = text;
+}
+
+let marchTimer = 0;
+
+function marchStart() {
+  if (marchTimer || marchMotion()) return; // a still row has nothing to march
+  marchTimer = setInterval(() => {
+    if (!document.hidden) marchAdvance(Date.now()); // a hidden tab has no reader to show a dot to
+  }, MARCH_STEP_MS);
+}
+
+function marchStop() {
+  if (!marchTimer) return;
+  clearInterval(marchTimer);
+  marchTimer = 0;
+}
+
+// The row a live turn's console carries, or "" - the ONE place it is drawn. The count is the turn's own state, so a
+// repaint of the card (a poll, a rail resize, a focus toggle) draws the march where it had got to, never from one dot.
+function marchRowHtml(turn) {
+  if (!turnLive(turn)) return ""; // done reads done: the row is not drawn at all
+  const id = String(turn.id ?? "");
+  if (!id) return "";
+  const now = Date.now();
+  const m = marchEntry(id, now);
+  const still = marchMotion();
+  m.dots = still ? 1 : marchDotsAt(m.at, now);
+  marchStart();
+  const title = still
+    ? "this turn is still running - motion is held still here (this system asks for reduced motion), so the row does not march"
+    : "this turn is still running - the dots mark a feed that has gone quiet: one every 0.5 s, cleared to one dot whenever output arrives";
+  return `<span class="live-pulse is-stream march${still ? " is-still" : ""}" data-march="${esc(id)}" title="${esc(title)}"><span class="pulse-dot" aria-hidden="true"></span><span class="march-dots">${marchText(m.dots)}</span><span class="march-label">${MARCH_LABEL}</span></span>`;
+}
+
+// New output: back to a single dot, now, and the march's clock restarts from this line.
+function marchReset(id) {
+  const key = String(id ?? "");
+  const m = state.march && state.march.get(key);
+  if (!m) return; // no row was ever drawn for this turn: nothing to clear
+  m.at = Date.now();
+  m.dots = 1;
+  for (const row of marchRows()) if (row.dataset.march === key) marchWrite(row, 1);
+  marchStart();
+}
+
+// One tick: advance every row that has come due. A row whose turn has stopped marching is ended here too, so a card
+// that settles without a job event still loses its dots within the half second rather than at the next repaint.
+function marchAdvance(now) {
+  const rows = marchRows();
+  if (!rows.length || !state.march) {
+    marchStop();
+    return;
+  }
+  const still = marchMotion();
+  for (const row of rows) {
+    const key = row.dataset.march;
+    const turn = state.jobs && state.jobs.get(key);
+    if (turn && !turnLive(turn)) {
+      marchEnd(key);
+      continue;
+    }
+    const m = state.march && state.march.get(key);
+    if (!m) continue;
+    const dots = still ? 1 : marchDotsAt(m.at, now);
+    if (m.dots === dots) continue;
+    m.dots = dots;
+    marchWrite(row, dots);
+  }
+  // A count whose row and turn are both gone (a cleared card, a turn the board dropped) is pruned here: the map is
+  // keyed by turn, and a card that never reports its end is the one way an entry could outlive it.
+  const seen = new Set(rows.map((r) => r.dataset.march));
+  for (const key of [...state.march.keys()]) {
+    if (seen.has(key)) continue;
+    const turn = state.jobs && state.jobs.get(key);
+    if (!turn || !turnLive(turn)) state.march.delete(key);
+  }
+}
+
+// The turn reads done: the row goes at once - both copies of it - and its count with it, so no dot is left on the
+// card or anywhere near the record.
+function marchEnd(id) {
+  const key = String(id ?? "");
+  if (state.march) state.march.delete(key);
+  for (const row of document.querySelectorAll(`[data-march="${CSS.escape(key)}"]`)) row.remove();
+  if (!marchRows().length) marchStop();
+}
+// ---- end the console's marching tail
+
 // The ONE writer. The stream says which segments grew; every pane carrying one gets the new prefix (a pinned turn
 // draws its own copy, so the same line can be in two consoles at once).
 //
