@@ -310,15 +310,18 @@ nothing else in the set, so it is the whole order. No keeper was dropped for reg
 <h3>Remote heads</h3>
 <p>121 of the 166 proposed branch deletions still exist on <code>origin</code>. This report proposes the local refs only; whether a remote branch is retired is the reader's call, and none was touched.</p>
 <h2>This branch's own commits</h2>
-<p><code>git log --oneline 2de5c778..HEAD</code> before the report commit:</p>
-<pre><code>e3e67edb 2026-10-30 Count the console's row churn per second while a stream is flowing</code></pre>
-<p>That list is what existed when this file was generated. This file's own commit (<code>docs: the remainder report</code>) and this landing's version bump (<code>chore: 1.94.0</code>, a minor for the new tool) follow it, and both are in <code>git log --oneline 2de5c778..HEAD</code>. Their shas are quoted in the pull request rather than pre-written here, because a commit cannot name its own sha.</p>
+<p><code>git log --format="%h %ad %s" 2de5c778..HEAD</code> as this revision was generated:</p>
+<pre><code>be20c0f0 2026-11-13 chore: 1.94.0 - the version this landing carries
+1f16137b 2026-11-13 docs: the remainder report - 167 branches and 33 worktrees judged by content
+e3e67edb 2026-10-30 Count the console's row churn per second while a stream is flowing</code></pre>
+<p>That is the branch's whole list from the cut sha: the keeper, this file's first commit and the landing's version bump. The commit that carries this revision of the file follows the bump, and its sha is quoted in the pull request rather than pre-written here, because a commit cannot name its own sha.</p>
 <h2>What was run</h2>
 <ul>
 <li>Inventory: <code>git worktree list --porcelain</code> (34 entries: 1 primary + 33 worktrees), <code>git ls-remote --heads origin</code> (381 heads), <code>gh pr list --state all --limit 500</code> (500 PRs: 491 MERGED, 9 CLOSED, 0 OPEN), <code>GET /api/jobs</code>.</li>
 <li>Per branch: <code>git rev-list --left-right --count origin/main...&lt;ref&gt;</code>, <code>git merge-base</code>, <code>git cherry</code>, <code>git merge-tree --write-tree</code>, <code>git diff &lt;base&gt; &lt;tip&gt;</code>, the line-containment read, and the patch-id index.</li>
 <li>Branches ahead of main: <b>167 measured, 0 errors, 0 not reached</b>.</li>
 <li>The keeper: <code>git cherry-pick 602d2103</code>, one README conflict resolved by hand, the tool applied cleanly.</li>
+<li>Tests: <code>npm test</code> on this branch exits 1 with 20 distinct failing test names. The same run on a clean <code>git archive origin/main</code> at <code>2de5c778</code> fails 21 distinct names: the 20 are shared and the 21st ("a taken directory is a 409 that moves nothing and settles nothing") is a flake on the baseline. <code>npm run test:changed</code> selects the whole suite here because README.md is named in most test files, so the full run is the focused run. No failure is attributable to this branch: the suite is red on origin/main.</li>
 </ul>
 </main>
 </body>
