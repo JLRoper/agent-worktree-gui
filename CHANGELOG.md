@@ -4,16 +4,33 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.97.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.98.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-591 releases from v0.1.0 (2026-10-20) to v1.97.0 (2026-11-13), 1996 commits between the tags. Every release is anchored by an
+592 releases from v0.1.0 (2026-10-20) to v1.98.0 (2026-11-13), 2000 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.98.0 — 2026-11-13 · 4 commits
+
+[`b39f6dc`](https://github.com/JLRoper/agent-worktree-gui/commit/b39f6dc57d8944e9e7ba744a48574b93ae533372) · [compare v1.97.0...v1.98.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.97.0...v1.98.0)
+
+### Added
+
+- feat: brief every worker to clone and fetch over ssh ([`cad36ae`](https://github.com/JLRoper/agent-worktree-gui/commit/cad36aee9cd2b649b91b345262668a377b78feee))
+
+### Docs & tests
+
+- docs: render the changelog - 591 releases ([`fe3a367`](https://github.com/JLRoper/agent-worktree-gui/commit/fe3a367822a60bfe7af120d2b37d209b78cc6f6b))
+- docs: record that project rules are a store with no injection into a brief ([`91f4273`](https://github.com/JLRoper/agent-worktree-gui/commit/91f4273ad37f1c97c62859bd939f33b98d73e0a5))
+
+### Other
+
+- chore: 1.98.0 - the version this landing carries ([`b39f6dc`](https://github.com/JLRoper/agent-worktree-gui/commit/b39f6dc57d8944e9e7ba744a48574b93ae533372))
 
 ## v1.97.0 — 2026-11-13 · 3 commits
 
