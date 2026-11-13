@@ -95,6 +95,10 @@ function harness() {
     saveExpandedProjects: () => saves.push(["projects", [...state.expandedProjects].sort()]),
     saveCollapsedRoots: () => saves.push(["roots", [...state.collapsedRoots].sort()]),
     saveCollapsedFixed: () => saves.push(["fixed", [...state.collapsedFixed].sort()]),
+    // The project toggle asks the page whether the narrowed board is up before it writes a fold (public/app.js
+    // `toggleProject`). This harness is the full board, so the answer is no.
+    focusModeOn: () => false,
+    showBanner: () => {},
     setEverythingOpen: (open) => expandedAll.push(open),
     renderConversation: (thread) => painted.push(thread),
     renderJobs: () => painted.push("#jobs"),
