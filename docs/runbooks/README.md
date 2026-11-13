@@ -36,6 +36,11 @@ a page the reader has to look at goes through the panel's own open route (`POST 
 never `--new-window` and never a scratch `--user-data-dir`, and a scratch-profile browser is closed before the run
 settles. It is in the worker brief as `PAGE_BRIEF` (`lib/jobs.js`) and here for the same reason as the terminal rules.
 
+Every runbook also names its clone and fetch URLs as ssh, never https: `git@host:path` or `ssh://`, and an existing
+checkout whose `origin` is https is switched with `git remote set-url` before the fetch. It is in the worker brief as
+`GIT_BRIEF` (`lib/jobs.js`, documented in `docs/worker-brief-git-remotes.md`) for every tree run, because
+`projects[].rules` is a store today with no injection into any brief.
+
 ## The rollup table
 
 `## Landing and turnover` holds one table, newest rollup first:
