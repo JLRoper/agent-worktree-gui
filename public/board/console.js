@@ -1160,10 +1160,17 @@ function consoleToolsHtml() {
 function paintToBottom(box) {
   const wrap = box?.closest?.(".out-wrap");
   if (!wrap) return;
-  const overflowing = box.scrollHeight > box.clientHeight + 4;
+  // Which box the reader is actually reading. A console drawn inside a card's session scroller has no tail of its
+  // own: the sheet gives it `max-height: none`, so it cannot scroll and `.job-body` scrolls for it. A chip tied to
+  // that console could never be shown and could never move anything, so the NEWEST console in the body speaks for
+  // the body and carries the one chip such a pane has; every other console keeps the answer its own box gives, which
+  // is the behaviour the board has always had.
+  const body = cardBodyOf(box);
+  const scroller = box.scrollHeight > box.clientHeight + 4 || !body || cardTailConsole(body) !== box ? box : body;
+  const overflowing = scroller.scrollHeight > scroller.clientHeight + 4;
   // The chip is the reader's way back, so it appears exactly when the console is NOT following: the same 2 px the
   // pin uses. A 24 px band hid it for a reader parked a few px up, who was then neither following nor offered the ↓.
-  const atEnd = box.scrollHeight - box.scrollTop - box.clientHeight <= 2;
+  const atEnd = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <= 2;
   wrap.classList.toggle("is-at-end", !overflowing || atEnd);
 }
 
@@ -1947,6 +1954,13 @@ let stickFrame = 0;
 // Ask for this console to follow its newest line, at most once per frame, and only while the reader is following it.
 function stickSoon(el) {
   if (!el || !el.dataset) return;
+  // The card's own session scroller follows the same line, and is asked FIRST: in the docked Chat pane the console
+  // this call is about cannot scroll at all (it is drawn at its content height), so the body is the only box that has
+  // anywhere to move, and it must not depend on the console's own pin to be asked.
+  // Called guardedly for the same reason `wireConsole` guards `paintConsoleModes`: this function is READ OUT of the
+  // page on its own by test/console-tail-pin.test.js (a vm over the source), and that region must not depend on a
+  // third name to answer its own question.
+  if (typeof stickCardBodySoon === "function") stickCardBodySoon(el);
   if (!consolePinned(el.dataset.out) && el._atBottom !== true) return;
   stickPending.add(el);
   if (stickFrame) return;
@@ -2317,6 +2331,8 @@ const thinkAutoOpened = new WeakSet();
 
 function stickSubConsole(box) {
   if (!box || !box.isConnected) return;
+  // A child console growing inside a card's session scroller grows the body too (see stickCardBodySoon).
+  stickCardBodySoon(box);
   const id = box.dataset.subConsoleBox || "";
   if (state.subConsolePinned.get(id) === false) return;
   const max = box.scrollHeight - box.clientHeight;
@@ -2326,6 +2342,9 @@ function stickSubConsole(box) {
 
 function stickThinkBody(body) {
   if (!body || !body.isConnected) return;
+  // A reasoning block growing inside a card's session scroller grows the body too (see stickCardBodySoon): in the
+  // docked Chat pane the block has no box of its own, so this is the growth a long thinking stream produces.
+  stickCardBodySoon(body);
   const key = body.closest("details.think")?.dataset.thinkTurn || "";
   if (state.thinkPinned.get(key) === false) return;
   const max = body.scrollHeight - body.clientHeight;
@@ -2874,6 +2893,10 @@ function settleScrolls(root) {
     for (const o of root.querySelectorAll("pre.job-out")) stickConsole(o);
     for (const b of root.querySelectorAll(".think-body")) restoreThinkBody(b);
     for (const s of root.querySelectorAll(".sub-console")) stickSubConsole(s);
+    // The card's session scroller gets the same second pass: a rebuild writes its bottom before the new nodes are
+    // laid out, and the height the reader is following is the one the card ends up with, not the one it had at the
+    // write. Only a body still following is touched, so a reader parked mid-history keeps their line.
+    for (const b of root.querySelectorAll(".job-body")) stickCardBody(b);
     // A repaint can move the card under an open picker; put the panel back under its control.
     positionModelPop();
   };
@@ -2899,6 +2922,97 @@ function stickConsole(pre) {
   const max = pre.scrollHeight - pre.clientHeight;
   if (max <= 0 || Math.abs(pre.scrollTop - max) <= 1) return;
   setScroll(pre, max);
+}
+
+// ---- the card's session scroller -------------------------------------------------------------------------------
+// The card is drawn as a scrollport in two places: the docked Chat pane
+// (`.as-subpane[data-subpane="chat"] > .job > .job-body`) and a maximized card (`.job.maximized .job-body`). In both,
+// `.job-body` holds the WHOLE conversation - every turn, the composer under them - and the turn consoles inside it are
+// drawn at their content height (`.job.maximized .job-out` and `.as-subpane[data-subpane="chat"] ... .job-out`, both
+// `max-height: none`, public/style.css:3150 and :4209). So the console's own stick has nothing to move: `stickConsole`
+// measures a <pre> that cannot scroll, finds no overflow, and returns. Nothing followed the body,
+// and a long stream was appended below the fold while the reader dragged the session bar down by hand.
+//
+// The rule is the console's rule one level up, and it has to be, because the two boxes are the same conversation seen
+// at two magnifications:
+//
+//   * FOLLOW ONLY A READER AT THE FOOT. Eight px, the same band `chatPinned` (public/assistant.js) has always used for
+//     this box, and for the same reason the console uses 2 px: a band wider than a line reads as generous and then
+//     re-anchors someone parked on the last line of a turn.
+//   * NEVER TOUCH A BODY THE READER TOOK OVER. The answer is remembered on the node (`_atBottom`, set by its own scroll
+//     events) and is never measured here: this is asked once per appended line, and a layout read per line is exactly
+//     what the console's design exists to avoid. A body the panel has never placed is following - a card the reader
+//     just opened lands on the newest output (`renderConversation` and assistant.js's `pinChatToBottom` both then record
+//     where they put it).
+const CARD_TAIL_PX = 8;
+
+// Is this node one of the bodies the sheet draws as a card's scrollport? The docked (and floating) Chat pane and a
+// maximized card are the two rules that make `.job-body` `overflow: auto`; everywhere else on the board it is
+// `overflow: visible`, and a scrollTop write on it moves nothing while still costing the layout read every line would
+// pay for it. Asked of the markup rather than of `getComputedStyle`, because this is asked once per line per console
+// and a style read there is the cost this whole section exists to avoid (public/style.css:3147, :4176).
+function isCardScrollport(body) {
+  if (!body || !body.isConnected || typeof body.closest !== "function") return false;
+  return Boolean(body.closest(".job.maximized") || body.closest('[data-subpane="chat"]'));
+}
+
+// The session scroller this node is drawn inside, or null.
+function cardBodyOf(el) {
+  const body = el && typeof el.closest === "function" ? el.closest(".job-body") : null;
+  return isCardScrollport(body) ? body : null;
+}
+
+function cardBodyFollowing(body) {
+  return body._atBottom !== false;
+}
+
+// The one place a card body's pin is decided from its own scroll. Measured on the event, like a console's, and the
+// panel's own writes are excluded by the caller (`setScroll` records where it put the box).
+function noteCardBodyScroll(body) {
+  if (!body) return;
+  body._atBottom = body.scrollHeight - body.scrollTop - body.clientHeight <= CARD_TAIL_PX;
+}
+
+const cardStickPending = new Set();
+let cardStickFrame = 0;
+
+// Ask the card's session scroller to follow its foot, at most once per body per animation frame. Called by every
+// append path that grows a turn - a streamed line, a typed line, a reasoning block, a docked child console - because
+// each of those grows the BODY when the console inside it does not scroll.
+function stickCardBodySoon(el) {
+  const body = cardBodyOf(el);
+  if (!body || !cardBodyFollowing(body)) return;
+  cardStickPending.add(body);
+  if (cardStickFrame) return;
+  cardStickFrame = requestAnimationFrame(() => {
+    cardStickFrame = 0;
+    const batch = [...cardStickPending];
+    cardStickPending.clear();
+    for (const b of batch) {
+      if (!cardBodyFollowing(b)) continue;
+      // One read of the scrollport per body per frame, not one per row: the same cost the console pays.
+      const max = b.scrollHeight - b.clientHeight;
+      if (max > 0 && b.scrollTop < max) setScroll(b, max);
+    }
+  });
+}
+
+// The one-shot form, for a pass that runs after layout has settled (settleScrolls, two frames after a rebuild, when a
+// "go to the bottom" written before the paint can be clamped short of the height the card ends up with).
+function stickCardBody(body) {
+  if (!isCardScrollport(body) || !cardBodyFollowing(body)) return;
+  const max = body.scrollHeight - body.clientHeight;
+  if (max <= 0 || Math.abs(body.scrollTop - max) <= 1) return;
+  setScroll(body, max);
+}
+
+// The console that speaks for a card body's tail: the LAST one in document order, which is the newest turn drawn
+// open. A pinned turn's own copy (`@pin`) is drawn ABOVE the turns, so it is never this one; a pane with every turn
+// folded has no console and answers null.
+function cardTailConsole(body) {
+  if (!body || typeof body.querySelectorAll !== "function") return null;
+  const outs = body.querySelectorAll("pre.job-out");
+  return outs.length ? outs[outs.length - 1] : null;
 }
 
 function captureScrolls(root) {

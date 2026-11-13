@@ -11251,6 +11251,14 @@ document.addEventListener("click", async (e) => {
       if (box.matches("pre.job-out")) pinConsole(box.dataset.out);
       else state.thinkPinned.set(box.closest("details.think")?.dataset.thinkTurn || "", true);
       setScroll(box, box.scrollHeight);
+      // In the docked Chat pane (and a maximized card) the console cannot scroll: the card's session scroller does,
+      // and the chip is drawn on the newest console for exactly this press. The reader's own jump re-pins it, so the
+      // next streamed line follows again.
+      const body = cardBodyOf(box);
+      if (body) {
+        body._atBottom = true;
+        setScroll(body, body.scrollHeight);
+      }
       paintToBottom(box);
     }
     return;
@@ -11968,6 +11976,21 @@ document.addEventListener(
         // reader took it over on.
         state.subConsoleTop.set(id, pre.scrollTop);
       }
+      return;
+    }
+    // The card's session scroller: the docked Chat pane and a maximized card, where `.job-body` is the only box that
+    // scrolls. It is not a console - nothing is appended to it directly, but everything inside it grows - so all it
+    // has to answer is whether the reader is still at its foot, which is the answer `stickCardBodySoon` reads before
+    // it moves anything. A write the panel made itself is not the reader leaving the bottom (the same two exclusions
+    // every box above uses), and the pane's chip is repainted here so it appears the moment the reader takes over.
+    if (pre && pre.classList && pre.classList.contains("job-body")) {
+      if (selfScrolled.has(pre) || justPlaced(pre)) {
+        selfScrolled.delete(pre);
+        return;
+      }
+      if (readerInputHere(pre)) noteCardBodyScroll(pre);
+      const chip = cardTailConsole(pre);
+      if (chip) paintToBottom(chip);
       return;
     }
     if (!pre || pre.tagName !== "PRE" || !pre.classList || !pre.classList.contains("job-out") || !pre.dataset.out) return;
