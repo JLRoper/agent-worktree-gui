@@ -105,10 +105,10 @@ and the stylesheet reusing the one media query rather than adding a second.
 
 `node tools/verify-march-row.mjs` is the browser half, and it is the one the numbers come from: a panel of its own on
 a spare port, a stub Runs API playing three bursts of five lines with a five-second quiet gap between them, the card
-spawned through `POST /api/agents`, then a 50 ms sampler for the whole turn. On this host it measured a median of
-**499 ms** between rendered steps (21 intervals, 489 to 509 ms), **5 wraps**, and a quiet window of 4740 ms holding
-**2 full cycles** in which `scrollHeight` 148 -> 148, `clientHeight` 148 -> 148, `scrollTop` 0 -> 0, the console box
-150 -> 150 px and the row 17 px in every one of the 96 samples. After the settle it read 21 rendered rows against the
+spawned through `POST /api/agents`, then a 50 ms sampler for the whole turn. On this host, on the tree this section
+landed with, it measured a median of **500 ms** between rendered steps (21 intervals, 487 to 513 ms), **5 wraps**, and
+a quiet window of 4762 ms holding **2 full cycles** in which `scrollHeight` 148 -> 148, `clientHeight` 148 -> 148,
+`scrollTop` 0 -> 0, the console box 150 -> 150 px and the row 17 px in every one of the 97 samples. After the settle it read 21 rendered rows against the
 turn's 15 stored lines of its own text, in the store's order, with none missing and nothing on screen the store does
 not hold, and the record ending on the turn's last line character for character. The same harness runs a second turn
 in a context that asks for reduced motion and finds the row `is-still`, the dot slot not shown, the label shown, and
