@@ -11153,11 +11153,20 @@ document.addEventListener("click", async (e) => {
     const box = codeFold.closest(".code-box");
     const body = box && box.querySelector(".code-body");
     if (body) {
-      const open = body.hidden;
+      // A clamped card (`data-code-clamp`) shows its body folded to N lines rather than shut, so its own state is
+      // the class and never `hidden`: folding it back re-clamps it and the body stays on the page. Every other box
+      // is the shut one it has always been, and asks `hidden` as it always did.
+      const clamp = Number(box.dataset.codeClamp) || 0;
+      const open = clamp ? !box.classList.contains("is-open") : body.hidden;
       // Opening this result hands the console over: the view stays on the line the reader was reading, instead of
       // sliding to the bottom of the output that just unfolded (Settings > Agent cards, off by default).
       if (open) holdConsoleFor(codeFold);
-      body.hidden = !open;
+      if (clamp) {
+        body.hidden = false;
+        box.classList.toggle("is-clamped", !open);
+      } else {
+        body.hidden = !open;
+      }
       box.classList.toggle("is-open", open);
       codeFold.setAttribute("aria-expanded", open ? "true" : "false");
       const caret = codeFold.querySelector(".code-caret");

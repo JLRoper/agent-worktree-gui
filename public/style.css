@@ -1919,6 +1919,36 @@ textarea.drop-target, .chipbox.drop-target { outline: 2px dashed var(--violet); 
 .code-delta .is-add { color: #7ee787; }
 .code-delta .is-del { color: #ff9c94; }
 
+/* ---- the assistant's command card ----------------------------------------------------------------
+   A command line the assistant wrote (public/core/assistant-command.js), drawn in the SAME frame as a tool's
+   result and folded to two lines instead of shut: the head keeps the frame's caret, header, count and
+   "click to read", and the body stays on the page so a reader who never clicks still sees the start of what the
+   line asked for. `.is-clamped` is the folded state; the press handler (public/app.js) keeps it in step with
+   `.is-open`, and 3em at this line height is exactly the two lines the panel asks for. */
+.code-box.is-cmd > .code-body { font: 12px/1.5 var(--mono); color: #cfd8e3; }
+.code-box.is-cmd.is-clamped > .code-body { max-height: 3em; overflow: hidden; }
+/* The header's emoji is the kind, and a kind is not a tool: it keeps the frame's own colour so the card reads as
+   one family, with the recipient and the title after it in the transcript's ink. The TITLE is the whole point of
+   the card, so the header WRAPS rather than ellipsizing the one word the reader came for: a tool's header names a
+   path it is fine to cut, this one names a task. */
+.code-box.is-cmd > .code-head { align-items: flex-start; }
+.code-box.is-cmd > .code-head .code-what { color: #c8a6ff; white-space: normal; overflow: visible; text-overflow: clip; flex: 1 1 auto; }
+/* No count: a command's body is one line of text that wraps, so "1 line" would count separators and not what the
+   reader sees, and the room it takes is room the title needs. */
+.code-box.is-cmd > .code-head .code-n { display: none; }
+.code-box.is-cmd > .code-head .code-caret { padding-top: 1px; }
+/* Folded, the card sits in a folded turn's tail where every other line is quiet: a 4px margin there would read as
+   a gap in the head, so the tail keeps the card tight against it. */
+.turn-peek.is-command { font-style: normal; }
+.turn-peek.is-command .code-box { margin: 2px 0 0; }
+/* The compacted answer draws its cards line by line; a line that is not a command keeps the answer's own font. */
+.turn-compact .tc-line { font: inherit; }
+/* The transcript's entry, with cards in it: the container stops pre-wrapping (each line is its own block) and the
+   lines that are not commands keep the transcript's ink and wrapping. */
+.as-msg-text.is-cards { white-space: normal; }
+.as-msg-text .as-msg-line { white-space: pre-wrap; overflow-wrap: anywhere; }
+.as-msg-text.is-cards .code-box { margin: 3px 0; }
+
 /* The panel's own fold, at the foot of a result the card kept only the head of: "… 214 lines hidden — click to
    read". It is a button because the rest of the result is one click away (the session store has it verbatim), and
    it reads as the note it has always been until the pointer is over it — a card full of long results should read
