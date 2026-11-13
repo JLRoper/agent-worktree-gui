@@ -1398,11 +1398,11 @@ async function toggleSubConsole(id) {
 }
 
 // ---- reasoning first: a tool's lines wait for the thought in front of them -----------------------------------
-// A reply's reasoning is typed at the reader's words-a-second, and the tool call that reply made (and its output) are
+// A reply's reasoning is written at the reader's words-a-second, and the tool call that reply made (and its output) are
 // whole lines on the wire, so left alone they land while the thought above them is still being written — the answer
 // before the question. This holds those frames (core/type-stream.js createReasoningHold: in order, a whole job's
 // queue at once) until two things are true: the store has been read again since the call arrived — the reasoning is
-// written to the store a moment AFTER its tool call is on the stream, and only a read finds it — and the pacer has
+// written to the store a moment AFTER its tool call is on the stream, and only a read finds it — and the stream has
 // written every word of the thoughts that belong in front of the call. "In front of" is every thought newer than
 // the last tool result already in the console: a reader who opens a card mid-turn gets the whole backlog typing in
 // parallel, and none of that is a reason to hold a call it does not precede.
@@ -1423,7 +1423,7 @@ function reasoningShown(turn) {
 function reasoningWants(evt) {
   const kind = evt?.line?.kind;
   if (kind !== "tool" && kind !== "tool-out") return false;
-  if (!state.typePacer || !state.typePacer.rate()) return false;
+  if (!state.typeStream || !state.typeStream.rate()) return false;
   const turn = state.jobs.get(String(evt.id));
   return Boolean(turn) && turnLive(turn) && reasoningShown(turn);
 }
@@ -1460,18 +1460,18 @@ function reasoningBusy(job) {
   if (rec && !rec.done && Date.now() - rec.at < REASONING_READ_WAIT_MS) return true;
   const floor = reasoningFloor(job);
   return Boolean(
-    state.typePacer?.pendingFor(job, (lid) => lid.startsWith("think:") && (Number(lid.slice(6)) || 0) > floor),
+    state.typeStream?.pendingFor(job, (lid) => lid.startsWith("think:") && (Number(lid.slice(6)) || 0) > floor),
   );
 }
 
-// Reasoning types out on the same pacer, at the same words/s the prose uses — it is the same reading. A block is
+// Reasoning types out on the same stream, at the same words/s the prose uses — it is the same reading. A block is
 // fed the first time the panel sees it while its turn is live AND it is the newest thought that turn has, and every
 // re-read of the store feeds it again so a block that grew keeps flowing. Returns the prefix to draw, or null when
 // this block is drawn whole (history, a hidden tab, rate 0, or the turn has settled and the flush already released it).
 //
 // WHY ONLY THE NEWEST. Every path that draws a card hands this function the turn's WHOLE block list in one pass, and
 // the toggle is one of them: pressing 🧠 on a running turn paints the blocks for the first time, so with no gate the
-// pacer's first frame for each was the block's entire text, queued to be typed - the turn's reasoning replayed from
+// stream's first frame for each was the block's entire text, queued to be typed - the turn's reasoning replayed from
 // its first word over output the reader was already looking at (a live window holds tens of blocks and >100 kB of
 // reasoning on this box). The newest thought is the live edge, the one still being written, so it keeps its clock;
 // everything above it is history and paints whole.
@@ -1495,20 +1495,22 @@ function thinkIsNewest(turn, block) {
 }
 
 function paceThinkBlock(turn, block) {
-  const P = state.typePacer;
+  const P = state.typeStream;
   if (!P || !block) return null;
   const lid = `think:${block.at}`;
   const flowing = !document.hidden && turnLive(turn);
-  // A block the pacer has never held: history draws it whole, and on a live turn only the newest thought is written
-  // (see above). A block the pacer DOES hold is not history any more, whatever the status or the store says now.
+  // A block the stream has never held: history draws it whole, and on a live turn only the newest thought is written
+  // (see above). A block the stream DOES hold is not history any more, whatever the status or the store says now.
   if (!state.thinkFed.has(lid) && (!flowing || !thinkIsNewest(turn, block))) return null;
   state.thinkFed.add(lid);
-  const shown = P.feed(lid, String(turn.id), String(block.text ?? ""));
+  // The thought joins the SAME queue as the answer's words and the tool records, stamped with the moment its first
+  // delta arrived: that stamp is what keeps it in front of the call it introduced instead of behind it.
+  const shown = P.feed(lid, String(turn.id), String(block.text ?? ""), { kind: "think", at: Number(block.at) || 0 });
   if (!flowing) return P.flush(lid) ?? shown;
   return shown;
 }
 
-// A SKILL'S RESULT is written like prose and reasoning are. Its lines are fed to the pacer as they join a console,
+// A SKILL'S RESULT is written like prose and reasoning are. Its lines join the stream as they join a console,
 // and every row a console draws asks `typedShown` (core/console-format.js's hook) how much of itself it may show, so
 // the lines of a skill type out at the reader's words-a-second inside the result's box — and walk in at their
 // lines-a-second, because the gate in front of this already holds every line. Which results those are is
@@ -1530,7 +1532,7 @@ function resultToolOf(lines, line) {
 }
 
 function paceResultLine(lines, line, jobId) {
-  if (!state.typePacer || !globalThis.wtType || line.kind !== "tool-out" || line.lid == null) return;
+  if (!state.typeStream || !globalThis.wtType || line.kind !== "tool-out" || line.lid == null) return;
   const text = String(line.text ?? "");
   if (TOOL_DONE_RE.test(text) || consoleFoldNote(text) || /^\s*(?:…|\.\.\.)\s/.test(text)) return;
   if (!globalThis.wtType.isPacedTool(resultToolOf(lines, line))) return;
@@ -1541,7 +1543,7 @@ function paceResultLine(lines, line, jobId) {
 
 // ---- result row head
 // How many rows of one result are typed, and no more. A skill's result arrives as one row per line, and handing all
-// forty to the pacer made every tick write every row that had grown: one second carried 296 row writes, and the two
+// forty to the stream made every tick write every row that had grown: one second carried 296 row writes, and the two
 // seconds of that burst were 61% of a streamed window's writes (docs/console-redraw-spam.html). The head is what a
 // reader watches arrive; past a handful of rows the typing is a delay rather than a reveal, so the rest of a long
 // result is drawn at once. Six is a whole short result and the head of a SKILL.md.
@@ -1568,15 +1570,15 @@ function shouldPaceResultRow(lines, line, cap = RESULT_PACED_ROWS) {
 // The words of a line that may be drawn now: the live append asks for them, and every render path asks too, so a
 // repaint mid-paragraph draws the same prefix the console is showing instead of jumping to the wire's whole text.
 function typedText(line, jobId) {
-  const P = state.typePacer;
+  const P = state.typeStream;
   const full = String(line?.text ?? "");
   if (!P || line?.lid == null) return full;
-  // The wire's text reaches the pacer whether or not anybody is looking. A hidden tab has no flow to show — the frame
-  // is drawn whole and held whole — but the pacer still has to be TOLD the rest of the line. It used to be skipped
+  // The wire's text reaches the stream whether or not anybody is looking. A hidden tab has no flow to show — the frame
+  // is drawn whole and held whole — but the stream still has to be TOLD the rest of the line. It used to be skipped
   // while hidden, so a paragraph that was mid-type when the reader left stayed at the text it had then; every repaint
   // after they came back drew that prefix over the whole line, and the console showed "This" for a paragraph that
   // starts "This branch was added to main as version 0.47.0." until the card was reloaded from the store.
-  const shown = P.feed(String(line.lid), String(jobId ?? ""), full);
+  const shown = P.feed(String(line.lid), String(jobId ?? ""), full, { kind: line.kind, at: line.at });
   if (document.hidden) {
     P.flush(String(line.lid));
     return full;
@@ -1585,11 +1587,11 @@ function typedText(line, jobId) {
 }
 
 function typedShown(line) {
-  const P = state.typePacer;
+  const P = state.typeStream;
   if (!P || !line || line.lid == null) return null;
   // The record's own text goes with the question, so a repaint may only draw a prefix of THAT line (see
   // core/type-stream.js shownFor). A line with no text of its own — a reasoning row holds its words elsewhere — asks
-  // with nothing, and the pacer answers for itself, exactly as it did before.
+  // with nothing, and the stream answers for itself, exactly as it did before.
   const rec = line.text;
   return P.shownFor(String(line.lid), rec == null ? undefined : String(rec));
 }
@@ -1870,7 +1872,7 @@ function wireConsole(el) {
 
 // ---- the board's consoles, without walking the board ----------------------------------------------------------
 // Six paths want every console of one kind on the page, and each asked the whole document for them every time:
-// - the typing pacer on every tick (paintTypedLines -> consoleOuts);
+// - the typing stream on every tick (paintTypedLines -> consoleOuts);
 // - every streamed line (drawJobLine);
 // - every stream repaint (paintStreamConsole);
 // - the 400 ms sweep, three times over (consoles, thinking bodies, subagent consoles).
@@ -1944,25 +1946,31 @@ function stickSoon(el) {
 }
 // ---- end console writers
 
-// The pacer says which lines grew; every pane carrying one gets the new prefix (a pinned turn draws its own copy,
-// so the same line can be in two consoles at once).
-function paintTypedLines(lids) {
-  const P = state.typePacer;
+// The ONE writer. The stream says which segments grew; every pane carrying one gets the new prefix (a pinned turn
+// draws its own copy, so the same line can be in two consoles at once).
+//
+// What it draws is the stream's own watermark for the segment (`shownFor` hands back `text.slice(0, shown)`), never
+// a number derived from the DOM. A row a repaint has just rebuilt therefore asks for exactly the characters that had
+// been emitted before the row disappeared, and typing carries on at that character; `drawRowText` appends the tail
+// to the row's own text node when the new text extends what is drawn, so no tick re-writes a character already on
+// screen and no ancestor repaint can take one back.
+function paintTypedLines(keys) {
+  const P = state.typeStream;
   if (!P) return;
   const byJob = consoleOuts();
-  for (const lid of lids) {
+  for (const lid of keys) {
     const outs = byJob.get(String(P.jobFor(lid) ?? ""));
     if (!outs || !outs.length) continue;
     for (const out of outs) {
       // A reasoning row types inside its thinking block, which follows its own stickiness, not the console's.
       for (const el of out.querySelectorAll(`[data-lid="${CSS.escape(String(lid))}"]`)) {
         if (!el.isConnected) continue;
-        // The row's own record goes with the question, so a paint can never shorten a line to a prefix the pacer has
+        // The row's own record goes with the question, so a paint can never shorten a line to a prefix the stream has
         // stopped growing (see typedShown): the worst a stale tick can do is nothing. A row with no record of its own
         // (a reasoning row) asks with nothing.
         const rec = el.dataset.ltext;
         const shown = rec == null ? P.shownFor(lid) : P.shownFor(lid, rec);
-        // `null` is the pacer saying it has stopped answering for this line: its record has moved past what the wire
+        // `null` is the stream saying it has stopped answering for this line: its record has moved past what the wire
         // last carried, so the prefix on screen is not the line any more. Skipping the row there left a settled turn
         // drawn at its own top - the rest of the answer never reached the DOM, the console had nothing to scroll, and
         // the card's `done` sat under a reply that was cut. A row with a record draws that record whole instead.
@@ -1983,7 +1991,7 @@ function paintTypedLines(lids) {
 function flushTypeStream(job) {
   state.typeHold?.drain(String(job ?? ""));
   state.typeGate?.drain(String(job ?? ""));
-  state.typePacer?.flushJob(String(job ?? ""));
+  state.typeStream?.flushJob(String(job ?? ""));
 }
 
 function paintStreamSpeed() {
@@ -2010,7 +2018,7 @@ function paintStreamSpeed() {
 
 function saveTypeWords(value) {
   const n = globalThis.wtType ? globalThis.wtType.clampWords(value) : 0;
-  state.typePacer?.setRate(n);
+  state.typeStream?.setRate(n);
   try {
     localStorage.setItem(TYPE_WORDS_KEY, String(n));
   } catch {
@@ -2032,8 +2040,8 @@ function saveTypeLines(value) {
 
 // A read that BEGINS after this call. loadThinking drops a request while one is in flight (the poll must not stack up),
 // but an answer already on its way may have been asked for before the store held the reply the caller is waiting on,
-// so this waits that one out and then asks again. Resolves once the answer is painted — which is also when the pacer
-// has been handed any new thought, so a caller that looks at the pacer afterwards sees it.
+// so this waits that one out and then asks again. Resolves once the answer is painted — which is also when the stream
+// has been handed any new thought, so a caller that looks at the stream afterwards sees it.
 async function loadThinkingAfter(turn) {
   const until = Date.now() + REASONING_READ_WAIT_MS;
   while (state.thinkLoading.has(turn.id) && Date.now() < until) await new Promise((r) => setTimeout(r, 20));
@@ -2059,7 +2067,7 @@ function thinkingSessionFor(turn) {
 // while the turn is live would (a) hand paceThinkBlock a brand-new `think:<at>` lid, so it types the
 // whole text again from word 0 — the "doubling back" — and (b) show the same reasoning twice. Keep
 // the live block's own lid and settle the store's complete text INTO it instead: the same `at` means
-// the pacer keeps growing one line, never restarting. With no live preview this is the old behaviour.
+// the stream keeps growing one line, never restarting. With no live preview this is the old behaviour.
 function reconcileThinking(prev, fresh) {
   const live = (prev || []).filter((b) => b && b.live);
   if (!live.length) return fresh;        // no live-streamed preview: store poll replaces wholesale, as before
@@ -2237,7 +2245,7 @@ function paintStreamConsole(turn, copy = "", thread = turn.thread || turn.id) {
 // A poll of the store used to be drawn by replacing the whole `<details>`: one fresh node per read, every block
 // inside it new. That is what made the block churn 5.6 rows a second on a card whose model had stopped, and it took
 // the reader's selection, the block's open state and the copy button with every read. What a poll's answer actually
-// changes is the WORDS: the last thought grows as the pacer types it, one more thought appears at the end, and the
+// changes is the WORDS: the last thought grows as the stream types it, one more thought appears at the end, and the
 // count in the summary moves. So the node stays — its `open` belongs to the reader (sweepThinking folds it when the
 // turn ends, and the card repaint on a status change re-renders it) — the summary's copy button is never touched, and
 // only the text that moved is written, in place, so a selection standing in an untouched block survives the read.
@@ -2970,7 +2978,7 @@ function recordJobLine(evt) {
   // instead of a new one being pushed for every streamed fragment.
   //
   // A prose line's own newlines are PHYSICAL lines (core/console-markdown.js, consoleMdPhysicalLines): the record
-  // keeps them apart so a live append and a rebuild draw the same blocks, and so the pacer is asked about the row
+  // keeps them apart so a live append and a rebuild draw the same blocks, and so the stream is asked about the row
   // that is actually on screen. A line that grows into more of them updates the rows where they stand and slots the
   // new ones in beside them, rather than at the end of the buffer: lib/jobs.js can move on to a tool line and then
   // keep writing the same paragraph.
@@ -3017,7 +3025,7 @@ function drawJobLine(evt) {
     .filter((el) => el.dataset.out === evt.id || el.dataset.out === `${evt.id}@pin`)
     .map(wireConsole);
   if (!outs.length) return;
-  // The words of a growing paragraph that may be drawn now: the pacer holds the tail and releases it on its own
+  // The words of a growing paragraph that may be drawn now: the stream holds the tail and releases it on its own
   // clock, so the console fills in a word or two at a time instead of a coalesced phrase at a time.
   const shownText = line.kind === "text" ? typedText(line, evt.id) : line.text;
   // Whether this turn is drawn as ONE stream. Only that console sets a piece apart from the piece above it: the
@@ -3066,7 +3074,7 @@ function drawJobLine(evt) {
       // A group that came from a full render has no `_burst`; read its lines back from the DOM so the new call joins
       // the burst the reader is looking at instead of starting a group that shows this line alone.
       const lines = [...(openGroup && tailLines ? tailLines : []), line];
-      // The lines of a skill's result are written, not dropped in: this is where each one is handed to the pacer, BEFORE
+      // The lines of a skill's result are written, not dropped in: this is where each one is handed to the stream, BEFORE
       // the burst is drawn, so its first paint already shows only the words that may be shown.
       paceResultLine(lines, line, evt.id);
       // A tool chosen by the reader keeps its filter and open body while the burst grows under it.

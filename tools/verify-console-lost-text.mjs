@@ -139,7 +139,7 @@ async function startSandbox() {
 function driveInPage({ paragraphs }) {
   const lids = paragraphs.map((_, i) => `probe-${i + 1}`);
   const id = "probe-lost-text";
-  const pacer = state.typePacer;
+  const pacer = state.typeStream;
   const seen = (v) => Object.defineProperty(document, "hidden", { configurable: true, get: () => v });
   seen(false); // the reader is looking at the board
   lids.forEach((l) => pacer?.forget(l));
@@ -216,7 +216,7 @@ async function main() {
     const pageErrors = [];
     page.on("pageerror", (e) => pageErrors.push(String((e && e.message) || e)));
     await page.goto(sb.base, { waitUntil: "domcontentloaded" });
-    await page.waitForFunction(() => typeof state !== "undefined" && state.typePacer && state.jobs, null, { timeout: 30000 });
+    await page.waitForFunction(() => typeof state !== "undefined" && state.typeStream && state.jobs, null, { timeout: 30000 });
     const measured = await page.evaluate(driveInPage, { paragraphs: PARAGRAPHS });
     console.log(`  read: ${measured.beforeShort}/${PARAGRAPHS.length} paragraphs were mid-type when the tab went away; ` +
       `after the repaint ${measured.short}/${measured.rows.length} rows are short (${measured.missingChars} characters)`);

@@ -58,7 +58,7 @@ function streamBodyHtml(turn, lines, windowFull = false, thread = turn.thread ||
   // Reasoning joins the stream only while the 🧠 is on: with it off, the console's own one-line preview is the only
   // trace of what the agent thought, exactly as in the condensed view.
   const blocks = thinkingOn(thread) ? state.thinkCache.get(turn.id)?.blocks || [] : [];
-  // Reasoning joins the console as lines keyed `think:<at>`; feeding them to the pacer HERE, where the turn's own
+  // Reasoning joins the console as lines keyed `think:<at>`; feeding them to the stream HERE, where the turn's own
   // clock is at hand, is what makes lineHtml type them out exactly like prose.
   if (blocks.length) for (const b of blocks) paceThinkBlock(turn, b);
   const merged = W.merge(lines, blocks, { windowFull, hidePreviews: blocks.length > 0 });
@@ -122,7 +122,7 @@ function streamBodyHtml(turn, lines, windowFull = false, thread = turn.thread ||
 // A run of the agent's own lines, drawn as the markdown it is (core/console-markdown.js). The console's lines
 // arrive one per `<div>`, so a paragraph, a list and a fenced block have to be recognised ACROSS lines — the one
 // place that knows how they group is that module, and this hands it a run and takes the markup back. `textOf`
-// keeps the word pacer honest: a line still being typed is drawn up to the words that may be shown now.
+// keeps the drawn stream honest: a line still being typed is drawn up to the words that may be shown now.
 function mdRunHtml(lines, sep = "") {
   return consoleMdHtml(lines, { sep, textOf: (l) => typedShown(l) });
 }

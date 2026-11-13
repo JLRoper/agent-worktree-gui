@@ -5969,9 +5969,10 @@ function setFoldFollow(on) {
 // several words in a fast model) and tool calls and results arrive as whole lines, so a live card used to jump a
 // phrase at a time. Two settings answer that, and they answer different questions:
 //
-//   * Stream display speed — WORDS a second inside a growing paragraph. The line's tail waits in
-//     core/type-stream.js's pacer and leaves a word at a time; what is drawn is always an exact prefix of the text
-//     the run sent, so a copy of a half-typed line is what is on screen.
+//   * Stream display speed — WORDS a second across EVERYTHING the console reveals. One queue in
+//     core/type-stream.js carries the answer's paragraphs, its reasoning blocks and the tool records in the order
+//     the server stamped them, and one budget releases the words in that order; what is drawn is always an exact
+//     prefix of the text the run sent, so a copy of a half-typed line is what is on screen.
 //   * Stream line rate — LINES a second joining a console. A burst of whole lines (a tool call and the results that
 //     answered it, a run of stored output) walks in one at a time instead of landing in one paint. A line held back
 //     is not in the console's record yet, so a repaint mid-burst shows the transcript as far as it has got.
@@ -6003,9 +6004,9 @@ function typeLineRate() {
   return typeSpeedStored(TYPE_LINES_KEY, TYPE_LINES_DEFAULT, (n) => (globalThis.wtType ? globalThis.wtType.clampLines(n) : 0));
 }
 
-// One pacer and one gate for the whole board: this is a reading preference, not a per-card one.
-state.typePacer = globalThis.wtType
-  ? globalThis.wtType.createPacer({ rate: typeWordSpeed(), onPaint: (lids) => paintTypedLines(lids) })
+// One drawn stream and one gate for the whole board: this is a reading preference, not a per-card one.
+state.typeStream = globalThis.wtType?.createDrawStream
+  ? globalThis.wtType.createDrawStream({ rate: typeWordSpeed(), onPaint: (keys) => paintTypedLines(keys) })
   : null;
 state.typeGate = globalThis.wtType
   ? globalThis.wtType.createLineGate({
@@ -6016,7 +6017,7 @@ state.typeGate = globalThis.wtType
       },
     })
   : null;
-// The reasoning blocks the pacer has already been given: a block seen for the first time while its turn is LIVE is
+// The reasoning blocks the stream has already been given: a block seen for the first time while its turn is LIVE is
 // the only one that types out, so opening an old card (or reloading the page) draws history whole.
 state.thinkFed = new Set();
 state.reasoningReads = new Map(); // job -> { at, done }: the latest read begun for a call
@@ -6044,7 +6045,7 @@ document.addEventListener("visibilitychange", () => {
   if (!document.hidden) return;
   state.typeHold?.drain();
   state.typeGate?.drain();
-  state.typePacer?.releaseAll();
+  state.typeStream?.releaseAll();
 });
 
 // The block scrolls like a console: new thinking keeps the newest line in view unless the reader has gone back up.
@@ -6057,7 +6058,7 @@ watchMotion(document.documentElement);
 // The watch placedNodes() reads (see there): its own observer, so a lookup can take the records waiting for it
 // without taking the copy observer's.
 placedNodes.watch = (() => {
-  // The consoles (pre.job-out, .think-body, .sub-console: the 400 ms sweep, the pacer, every line, every stream
+  // The consoles (pre.job-out, .think-body, .sub-console: the 400 ms sweep, the stream, every line, every stream
   // repaint), plus the other nodes a clock walked the page for: tr.detail (sweepStaleBoard, ~44 a minute), .tgrp (the
   // 3 s tool-store refresh), .queue-ago (the 1 s queue clock, 49 ms a minute of native search on its own) and
   // [data-q-clock] (the question clocks).

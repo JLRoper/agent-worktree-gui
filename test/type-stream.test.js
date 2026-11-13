@@ -1,13 +1,13 @@
-// How fast a run's output reaches the reader's eyes: the word pacer and the line gate.
+// How a run's output reaches the reader's eyes, and in what order: the drawn stream and the line gate.
 //
 // public/core/type-stream.js is a classic script in the page and a plain module to node (it publishes itself on
 // globalThis), so this drives the ONE implementation the page runs rather than a copy of it. Both mechanisms run
-// on their own clock, so the clock and the timers are injected here: time is the thing under test.
+// with an injected clock, so the clock and the timers are the thing under test.
 import assert from "node:assert/strict";
 import test from "node:test";
 
 await import("../public/core/type-stream.js");
-const { createPacer, createLineGate, wordsIn, advance, MAX_WORDS, MAX_LINES } = globalThis.wtType;
+const { createDrawStream, createLineGate, wordsIn, advance, MAX_WORDS, MAX_LINES } = globalThis.wtType;
 
 // A clock, a timer queue and a paint log, all driven by hand. `step(ms)` runs every timer that comes due inside
 // that window in order, exactly as the browser's event loop would.
@@ -25,7 +25,7 @@ function bench({ words = 0, lines = 0 } = {}) {
     },
     cancel: (id) => timers.delete(id),
   };
-  const pacer = createPacer({ ...clock, rate: words, onPaint: () => paints++ });
+  const pacer = createDrawStream({ ...clock, rate: words, onPaint: () => paints++ });
   const released = [];
   const gate = createLineGate({ ...clock, rate: lines, release: (evt) => released.push(evt.line.text) });
   const step = (ms) => {
@@ -146,16 +146,18 @@ test("an idle line banks no credit: a late frame cannot arrive as a dump", () =>
   assert.equal(b.pacer.shownFor("1"), "alpha beta");
 });
 
-test("two lines pace independently, each at the setting's rate", () => {
+test("segments share ONE clock: the earlier one is written before the later one starts", () => {
   const b = bench({ words: 10 });
   b.pacer.feed("1", "job", "one two three");
   b.pacer.feed("2", "job", "four five six");
   b.step(100);
-  assert.equal(b.pacer.shownFor("1"), "one");
-  assert.equal(b.pacer.shownFor("2"), "four");
-  b.step(200);
-  assert.equal(b.pacer.shownFor("1"), "one two three");
-  assert.equal(b.pacer.shownFor("2"), "four five six");
+  assert.equal(b.pacer.shownFor("1"), "one", "the first segment got the tick's word");
+  assert.equal(b.pacer.shownFor("2"), "", "the second waited: one budget, spent in transcript order");
+  b.step(300);
+  assert.equal(b.pacer.shownFor("1"), "one two three", "three words at ten a second is 300 ms");
+  assert.equal(b.pacer.shownFor("2"), "four", "the second begins only where the first stopped");
+  b.step(300);
+  assert.equal(b.pacer.shownFor("2"), "four five six", "six words in all, not six per segment");
 });
 
 test("the setting is clamped to what the row offers", () => {
@@ -178,6 +180,106 @@ test("turning the word rate off releases what was held instead of freezing it", 
   b.pacer.setRate(0);
   assert.equal(b.pacer.shownFor("1"), null);
   assert.equal(b.pacer.size(), 0);
+});
+
+// ---- the ordered queue: one stream across the three kinds -------------------------------------
+
+// The three roads a console is fed by, as the wire stamps them: a thought (reasoning.delta, cumulative), the
+// answer's paragraph (a `text`/`set` block), and a tool record (a whole line). Their stamps are the server's and
+// are the only thing all three share, so that is what the queue orders on.
+const thought = (text, at) => ({ key: "think:1", job: "job", text, opts: { kind: "think", at } });
+const answer = (text, at) => ({ key: "42", job: "job", text, opts: { kind: "text", at } });
+const record = (text, at) => ({ key: "43", job: "job", text, opts: { kind: "tool-out", at } });
+
+test("the queue is the server's order across thinking, answer and tool output", () => {
+  const b = bench({ words: 1000 });
+  // Fed in the order the page happens to receive them: the tool record first (it is a whole line on the stream),
+  // then the answer's block, then the thought, which the store read hands over last.
+  b.pacer.feed("43", "job", "a tool record", { kind: "tool-out", at: 3000 });
+  b.pacer.feed("42", "job", "the answer's words", { kind: "text", at: 2000 });
+  b.pacer.feed("think:1", "job", "the thought before both", { kind: "think", at: 1000 });
+  assert.deepEqual(b.pacer.order(), ["think:1", "42", "43"], "the queue is by stamp, not by arrival");
+  assert.equal(b.pacer.atOf("42"), 2000);
+  assert.ok(b.pacer.seqOf("43") < b.pacer.seqOf("think:1"), "seq records the arrival, and only breaks a tie");
+});
+
+test("one clock: the reader's whole words-a-second, spent in order, whatever arrives together", () => {
+  const b = bench({ words: 10 });
+  b.pacer.feed("think:1", "job", "one two", { kind: "think", at: 1000 });
+  b.pacer.feed("42", "job", "three four", { kind: "text", at: 2000 });
+  b.pacer.feed("43", "job", "five six", { kind: "tool-out", at: 3000 });
+  const lengths = () => ["think:1", "42", "43"].map((k) => b.pacer.emitted(k).length);
+  b.step(100);
+  assert.deepEqual(lengths(), [3, 0, 0], "one word out, and it is the earliest segment's");
+  b.step(200);
+  assert.deepEqual(lengths(), [7, 5, 0], "the thought finishes, and the next word is the answer's first");
+  b.step(200);
+  assert.deepEqual(lengths(), [7, 10, 4], "the answer finishes, and the record's first word follows it");
+  b.step(200);
+  assert.deepEqual(lengths(), [7, 10, 8], "then the rest of the record: six words in all, spent one at a time");
+});
+
+test("a watermark only ever grows: what a repaint asks for is what was already emitted", () => {
+  const b = bench({ words: 20 });
+  b.pacer.feed("42", "job", "a paragraph that is long enough to be written out over several ticks", { kind: "text", at: 1 });
+  const seen = [];
+  for (let i = 0; i < 30; i++) {
+    b.step(40);
+    seen.push(b.pacer.emitted("42"));
+  }
+  for (let i = 1; i < seen.length; i++) {
+    assert.ok(seen[i].startsWith(seen[i - 1]), `tick ${i} took text back: ${JSON.stringify(seen[i - 1])} -> ${JSON.stringify(seen[i])}`);
+  }
+  // What a rebuild would draw is the same watermark, never the record and never less than the last paint.
+  assert.equal(b.pacer.shownFor("42", "a paragraph that is long enough to be written out over several ticks"), seen.at(-1));
+  // Characters emitted: the last watermark is the whole of what was written, and no character was written twice.
+  const written = b.pacer.stats().emitted;
+  assert.equal(written, seen.at(-1).length, "the stream emitted exactly the characters on screen");
+  assert.equal(b.pacer.stats().rewrites, 0, "and nothing was replaced");
+});
+
+test("a rewritten segment is replaced, not retyped", () => {
+  const b = bench({ words: 10 });
+  b.pacer.feed("42", "job", "the first version of this line", { kind: "text", at: 1 });
+  b.step(300);
+  const before = b.pacer.emitted("42");
+  assert.ok(before.length > 0 && before.length < 25, "part-way out");
+  // A trim moved the line, or a replayed frame rewrote it: the segment jumps to the new text in one paint.
+  b.pacer.feed("42", "job", "a completely different line", { kind: "text", at: 1 });
+  assert.equal(b.pacer.emitted("42"), "a completely different line");
+  assert.equal(b.pacer.stats().rewrites, 1);
+  assert.equal(b.pacer.stats().replaced, before.length, "the characters it replaced are counted, not re-typed");
+});
+
+test("a late frame stamped EARLIER takes its ordered place and is counted", () => {
+  const b = bench({ words: 1000 });
+  b.pacer.feed("43", "job", "a tool record", { kind: "tool-out", at: 3000 });
+  b.step(40);
+  assert.ok(b.pacer.emitted("43").length > 0, "the record had already started");
+  b.pacer.feed("think:1", "job", "the thought that came first", { kind: "think", at: 1000 });
+  assert.deepEqual(b.pacer.order(), ["think:1", "43"]);
+  assert.equal(b.pacer.stats().late, 1, "the one case an order cannot undo is counted, never hidden");
+});
+
+test("a segment with no stamp of its own keeps the place it arrived in", () => {
+  const b = bench({ words: 1000 });
+  b.pacer.feed("a", "job", "first line");
+  b.pacer.feed("b", "job", "second line");
+  b.pacer.feed("c", "job", "third line");
+  assert.deepEqual(b.pacer.order(), ["a", "b", "c"]);
+});
+
+test("a turn settling releases its own segments only, and leaves the queue in order", () => {
+  const b = bench({ words: 1 });
+  b.pacer.feed("1", "job-a", "one two three", { kind: "text", at: 1000 });
+  b.pacer.feed("2", "job-b", "four five six", { kind: "text", at: 1001 });
+  b.step(200);
+  assert.ok(b.pacer.emitted("1").length < b.pacer.emitted("1").length + 1);
+  const released = b.pacer.flushJob("job-a");
+  assert.deepEqual(released, ["1"]);
+  assert.equal(b.pacer.emitted("1"), "one two three");
+  assert.ok(b.pacer.emitted("2").length < "four five six".length, "the other card keeps its clock");
+  assert.deepEqual(b.pacer.order(), ["1", "2"], "and the queue is still one order");
 });
 
 // ---- the words themselves ---------------------------------------------------------------------
@@ -278,20 +380,18 @@ test("the results written like prose are the skill tools', and no other tool's",
   }
 });
 
-test("a skill's lines type out together, each on its own words-a-second, and the turn's end releases the rest", () => {
-  // Forty lines of a SKILL.md join the console at once. Every line is its own pacer entry: they all start typing
-  // together and the longest decides how long the dump takes, rather than the forty queueing behind each other.
+test("a burst of skill lines walks in one at a time, on the stream's one rate", () => {
+  // Forty lines of a SKILL.md join the console at once. They are forty segments in ONE queue: the first is written
+  // before the second starts, so the dump takes as long as its words and never types forty lines at once.
   const b = bench({ words: 20 });
   const line = (i) => Array.from({ length: 30 }, (_, k) => `w${i}x${k}`).join(" ");
   for (let i = 0; i < 40; i++) assert.equal(b.pacer.feed(`s${i}`, "job", line(i)), "", "nothing is drawn before the first word is due");
   b.step(500);
-  for (let i = 0; i < 40; i++) {
-    const shown = b.pacer.shownFor(`s${i}`);
-    assert.ok(shown.length > 0 && shown.length < line(i).length, `line ${i} is part-way at 0.5 s: ${shown.length} of ${line(i).length}`);
-    assert.ok(line(i).startsWith(shown), "what is drawn is an exact prefix of the line");
-  }
-  b.step(1500);
-  for (let i = 0; i < 40; i++) assert.equal(b.pacer.shownFor(`s${i}`), line(i), `line ${i} is whole after 30 words at 20/s`);
+  const first = b.pacer.shownFor("s0");
+  assert.ok(first.length > 0 && first.length < line(0).length, `the first line is part-way at 0.5 s: ${first.length} of ${line(0).length}`);
+  assert.ok(line(0).startsWith(first), "what is drawn is an exact prefix of the line");
+  assert.equal(b.pacer.shownFor("s1"), "", "and the second has not started: one queue, one clock");
+  assert.equal(b.pacer.shownFor("s39"), "", "nor the fortieth");
 
   // The turn ends in the middle of another dump: nothing may be left in the buffer.
   const c = bench({ words: 2 });

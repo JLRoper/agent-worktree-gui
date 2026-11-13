@@ -160,7 +160,7 @@ async function main() {
         state.thinkOpen.clear();
         state.thinkClosed.clear();
         state.pinnedTurns?.clear?.();
-        state.typePacer?.releaseAll();
+        state.typeStream?.releaseAll();
         state.jobLines.set(id, lines);
         state.jobs.set(id, {
           id,
@@ -201,7 +201,7 @@ async function main() {
         return {
           rows: rows.map((el) => ({ cls: el.className, lid: el.dataset.lid || "", text: el.innerText || "" })),
           reasoning,
-          pacer: { size: state.typePacer.size(), pending: state.typePacer.pendingWords(), rate: state.typePacer.rate() },
+          pacer: { size: state.typeStream.size(), pending: state.typeStream.pendingWords(), rate: state.typeStream.rate() },
           fed: [...state.thinkFed],
         };
       };
