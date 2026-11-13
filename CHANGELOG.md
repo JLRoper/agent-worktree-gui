@@ -4,16 +4,42 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.92.3 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.93.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-582 releases from v0.1.0 (2026-10-20) to v1.92.3 (2026-11-13), 1959 commits between the tags. Every release is anchored by an
+584 releases from v0.1.0 (2026-10-20) to v1.93.0 (2026-11-13), 1965 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.93.0 — 2026-11-13 · 3 commits
+
+[`e2de800`](https://github.com/JLRoper/agent-worktree-gui/commit/e2de80001aeb513a54bb81007575a821aac22760) · [compare v1.92.4...v1.93.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.92.4...v1.93.0)
+
+### Added
+
+- feat: a marching tail under a live console, outside the ordered stream ([`3fd9947`](https://github.com/JLRoper/agent-worktree-gui/commit/3fd99474e1aaea358ddaf4a5ea9f62a375dcb071))
+
+### Other
+
+- Record the ledger report on the base the three tests finally ran on ([`c35528a`](https://github.com/JLRoper/agent-worktree-gui/commit/c35528ac70bd084669e1c88acc25c32370f8a78a))
+- chore: 1.93.0 - the version this landing carries ([`e2de800`](https://github.com/JLRoper/agent-worktree-gui/commit/e2de80001aeb513a54bb81007575a821aac22760))
+
+## v1.92.4 — 2026-11-13 · 3 commits
+
+[`8fdbf46`](https://github.com/JLRoper/agent-worktree-gui/commit/8fdbf4631294b543bcf2fecfded5b364fd461e8b) · [compare v1.92.3...v1.92.4](https://github.com/JLRoper/agent-worktree-gui/compare/v1.92.3...v1.92.4)
+
+### Docs & tests
+
+- docs: render the changelog - 582 releases ([`4190663`](https://github.com/JLRoper/agent-worktree-gui/commit/4190663dad9999b8f02e51f7027435d8008a7781))
+
+### Other
+
+- Pin the three pipeline-ledger defects that main already closes ([`cecd114`](https://github.com/JLRoper/agent-worktree-gui/commit/cecd1142c4feac495fd6c126d8e8f2a51b407a4d))
+- chore: 1.92.4 - the version this landing carries ([`8fdbf46`](https://github.com/JLRoper/agent-worktree-gui/commit/8fdbf4631294b543bcf2fecfded5b364fd461e8b))
 
 ## v1.92.3 — 2026-11-13 · 3 commits
 
