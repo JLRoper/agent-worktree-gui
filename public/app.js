@@ -814,6 +814,14 @@ function noteProjectOpen(name) {
 
 function toggleProject(name) {
   if (!name) return;
+  // Focus mode draws every project that holds a live row expanded, so a fold here would be undone by the next paint
+  // while still moving `expandedProjects` - the reader's layout, which is what the mode promises to give back when it
+  // goes off. Refuse it and name the way out. Every open and close of a project funnels through here (the header
+  // click, and the reveals that unfold a project to reach a card), so one guard covers them all.
+  if (focusModeOn()) {
+    showBanner("focus mode draws every project with a live panel expanded - double-click the header bar to fold projects again");
+    return;
+  }
   if (state.expandedProjects.has(name)) state.expandedProjects.delete(name);
   else {
     state.expandedProjects.add(name);
@@ -11250,7 +11258,8 @@ function liveFocusTrees(jobs = null) {
   return trees;
 }
 
-// Is this row one of them? Exact path equality, both sides through the same normaliser.
+// Is this row one of them? Exact path equality, both sides through the same normaliser. `trees` is the kept set when
+// the caller already holds one: a project asks for it once and answers every row from it.
 function focusKeepsRow(row, trees = null) {
   const tree = normPath(row?.path || "").toLowerCase();
   return Boolean(tree) && (trees || liveFocusTrees()).has(tree);
@@ -11268,9 +11277,23 @@ function focusHidesRow(row) {
 
 // A project belongs to the narrowed board while at least one of its rows does. Counted from state.rows rather than
 // from the document, so a collapsed project (which has no row nodes) answers exactly like an open one.
-function projectHasFocusRow(name) {
-  for (const row of state.rows.values()) if (row.project === name && focusKeepsRow(row)) return true;
+function projectHasFocusRow(name, trees = null) {
+  const set = trees || liveFocusTrees();
+  for (const row of state.rows.values()) if (row.project === name && focusKeepsRow(row, set)) return true;
   return false;
+}
+
+// A project the board DRAWS open. Focus mode force-expands every section that holds a live row: the mode is a list of
+// the trees a live panel is working in, and a project left folded would hide the very rows the list exists to show.
+// This reads the two records and writes neither, so `expandedProjects` keeps the reader's own folds for the way out.
+function projectDrawsOpen(name) {
+  return state.expandedProjects.has(name) || (focusModeOn() && projectHasFocusRow(name));
+}
+
+// Is this row DRAWN open? While the mode is on no row is: the narrowed board is one line per live tree, and the
+// reader's own open rows come back when the mode goes off, because the mode never touches `state.expanded`.
+function rowDrawsOpen(key) {
+  return !focusModeOn() && state.expanded.has(key);
 }
 
 function paintFocusSection(name) {
@@ -11298,22 +11321,24 @@ function repaintFocus() {
   for (const name of state.projects.keys()) {
     renderProjectRows(name);
     paintFocusSection(name);
+    // A project that has just gained or lost its last live row changes the fold the board draws it with, and the
+    // section's own class is what shows or hides the rows: repaint it from the same answer the rows were built on.
+    applyProjectCollapse(name);
     refreshChips(name);
   }
   reorderProjects();
 }
 
 // Every open worktree row folds on the way in: the mode is a list of live trees, and an open row would otherwise keep
-// a console (and the rebuild that goes with it) inside the narrowed board. The state is the record; the nodes are
-// taken down here rather than left to the repaint, so a row the mode hides cannot keep its detail until then.
-function collapseOpenRows() {
+// a console (and the rebuild that goes with it) inside the narrowed board. Only the NODES come down here - the record
+// (`state.expanded`) is the reader's own layout and the way back out redraws it, so the mode never clears it.
+function foldOpenRowNodes() {
   clearEveryCollapseCascade();
   for (const key of [...state.expanded]) {
     state.detailEls.get(key)?.remove();
     state.detailEls.delete(key);
     state.rowEls.get(key)?.classList.remove("expanded");
   }
-  state.expanded.clear();
 }
 
 function setFocusMode(on, { announce = true } = {}) {
@@ -11321,23 +11346,26 @@ function setFocusMode(on, { announce = true } = {}) {
   if (want === focusModeOn()) return;
   state.focusMode = want;
   state.focusSig = "";
-  if (want) collapseOpenRows();
+  if (want) foldOpenRowNodes();
   document.body?.classList.toggle("focus-mode", want);
   const bar = document.querySelector(".topbar");
   if (bar) {
     bar.title = want
-      ? "focus mode: only the worktrees with a live panel are drawn - double-click this bar to show every worktree"
+      ? "focus mode: only the worktrees with a live panel are drawn - every project holding one is expanded, with its rows listed minimized - double-click this bar to show every worktree again"
       : "double-click this bar to show only the worktrees with a live panel (focus mode)";
   }
   for (const name of state.projects.keys()) {
     renderProjectRows(name);
     paintFocusSection(name);
+    // The section template is not rebuilt here, so its `collapsed` class is applied from the same answer the rows
+    // were built on: a project the mode force-expands has to lose the class that hides its chart.
+    applyProjectCollapse(name);
   }
   reorderProjects();
   if (announce) {
     showBanner(
       want
-        ? "focus mode: only worktrees with a live panel are drawn - double-click the header bar to show every worktree"
+        ? "focus mode: only worktrees with a live panel are drawn - every project holding one is expanded, with its rows listed minimized - double-click the header bar to show every worktree"
         : "focus mode off: every worktree is drawn again",
     );
   }
@@ -11877,6 +11905,13 @@ $("projects").addEventListener("click", (e) => {
   keepInPlace(
     () => document.querySelector(`tr.row[data-key="${CSS.escape(key)}"]`),
     () => {
+      // Focus mode lists one line per live tree and keeps every row minimized. A toggle here would open a detail the
+      // mode does not draw, and closing one would delete a row from the reader's own layout - which is the layout the
+      // mode promises to give back. Say which gesture does what instead of writing a state the picture cannot show.
+      if (focusModeOn()) {
+        showBanner("focus mode keeps every worktree row minimized - double-click the header bar to show the board and open this row");
+        return;
+      }
       if (state.expanded.has(key)) {
         state.expanded.delete(key);
         state.detailEls.get(key)?.remove();

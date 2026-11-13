@@ -193,8 +193,10 @@ function rowKey(project, path) {
 }
 
 // A page-shaped sandbox: the state the mode reads, and spies for every repaint it asks for. No DOM.
-function focusHarness({ jobs = [], rows = [], projects = [], expanded = [] } = {}) {
-  const seen = { banners: [], renders: [], chips: [], reorders: 0, cascades: 0 };
+// `storedProjects` is `expandedProjects` when the reader's own folds matter to the test; by default every project is
+// stored open, which is what the older tests assume.
+function focusHarness({ jobs = [], rows = [], projects = [], expanded = [], storedProjects = null } = {}) {
+  const seen = { banners: [], renders: [], chips: [], reorders: 0, cascades: 0, folds: [] };
   const sections = new Map();
   for (const name of projects) sections.set(name, { classList: new ClassList() });
   const bar = { title: "", dataset: {} };
@@ -210,7 +212,7 @@ function focusHarness({ jobs = [], rows = [], projects = [], expanded = [] } = {
       rows: new Map(rows.map((r) => [rowKey(r.project, r.path), r])),
       projects: new Map(projects.map((p) => (typeof p === "string" ? [p, { name: p }] : [p.name, p]))),
       expanded: new Set(expanded),
-      expandedProjects: new Set(projects),
+      expandedProjects: new Set(storedProjects ?? projects),
       rowEls: rowNodes,
       detailEls: detailNodes,
       focusMode: false,
@@ -232,6 +234,7 @@ function focusHarness({ jobs = [], rows = [], projects = [], expanded = [] } = {
       seen.cascades += 1;
     },
     showBanner: (text) => seen.banners.push(text),
+    applyProjectCollapse: (name) => seen.folds.push(name),
   };
   ctx.window = ctx;
   vm.createContext(ctx);
@@ -452,7 +455,7 @@ test("a double-click on the header bar toggles focus mode, and off again", () =>
   assert.match(h.seen.banners.at(-1), /^focus mode off/);
 });
 
-test("entry to the mode folds every expanded worktree row", () => {
+test("entry to the mode folds the open rows' nodes and leaves the reader's record alone", () => {
   const keys = ["alpha::/w/alpha", "beta::/w/beta"];
   const h = focusHarness({
     jobs: [{ id: "live", status: "running", worktreePath: "/w/alpha" }],
@@ -471,11 +474,44 @@ test("entry to the mode folds every expanded worktree row", () => {
 
   vm.runInContext("setFocusMode(true)", h.ctx);
 
-  assert.equal(h.ctx.state.expanded.size, 0, "every row is folded on entry");
+  assert.deepEqual([...h.ctx.state.expanded], keys, "the reader's record of what was open is untouched");
   assert.equal(details[0].removed, true, "the open row's detail left the page");
   assert.equal(details[1].removed, true);
   assert.equal(rows[0].classList.contains("expanded"), false, "and no row is drawn open");
+  assert.equal(vm.runInContext('rowDrawsOpen("alpha::/w/alpha")', h.ctx), false, "the mode draws every row minimized");
   assert.equal(h.seen.cascades, 1, "a fold that was already in flight does not undo it");
+
+  vm.runInContext("setFocusMode(false)", h.ctx);
+  assert.equal(vm.runInContext('rowDrawsOpen("alpha::/w/alpha")', h.ctx), true, "the row the reader had open comes back");
+  assert.deepEqual([...h.ctx.state.expanded], keys, "and the record never moved");
+});
+
+test("a project holding a live row is drawn expanded while the mode is on, and the fold written is none", () => {
+  const h = focusHarness({
+    jobs: [{ id: "live", status: "running", worktreePath: "/w/beta" }],
+    rows: [
+      { project: "alpha", path: "/w/alpha" },
+      { project: "beta", path: "/w/beta" },
+      { project: "gamma", path: "/w/gamma" },
+    ],
+    projects: ["alpha", "beta", "gamma"],
+    // The reader had alpha open and beta and gamma folded: the case the mode used to hide.
+    storedProjects: ["alpha"],
+  });
+  assert.equal(vm.runInContext('projectDrawsOpen("beta")', h.ctx), false, "nothing is forced while the mode is off");
+
+  vm.runInContext("setFocusMode(true)", h.ctx);
+
+  assert.equal(vm.runInContext('projectDrawsOpen("beta")', h.ctx), true, "the project holding the live row draws expanded");
+  assert.equal(vm.runInContext('projectDrawsOpen("alpha")', h.ctx), true, "the reader's own open project stays open");
+  assert.equal(vm.runInContext('projectDrawsOpen("gamma")', h.ctx), false, "a folded project with no live row stays folded");
+  assert.deepEqual([...h.ctx.state.expandedProjects], ["alpha"], "not one project fold was written");
+  assert.ok(h.seen.folds.includes("beta"), "the section was re-applied with the fold its rows were built on");
+
+  vm.runInContext("setFocusMode(false)", h.ctx);
+
+  assert.equal(vm.runInContext('projectDrawsOpen("beta")', h.ctx), false, "the stored fold is what the board draws again");
+  assert.deepEqual([...h.ctx.state.expandedProjects], ["alpha"], "still the reader's own layout");
 });
 
 test("a project with no surviving row is hidden, and comes back when the mode goes off", () => {
