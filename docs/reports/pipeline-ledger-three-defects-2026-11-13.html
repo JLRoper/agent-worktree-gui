@@ -47,17 +47,18 @@ three tests and this record.</p>
   <div class="card"><b>3 / 3</b><span>verdicts: already fixed, no fix needed</span></div>
   <div class="card"><b>3 fail</b><span>the same tests on <code>c067c25c^</code></span></div>
   <div class="card"><b>3 pass</b><span>the same tests on <code>origin/main</code></span></div>
-  <div class="card"><b>1.92.2</b><span>the patch this landing carries</span></div>
+  <div class="card"><b>1.92.4</b><span>the patch this landing carries</span></div>
 </div>
 
 <h2>Base</h2>
 <p>The branch <code>wtgui/take-the-three-pipeline-ledger-defects-ac5f76</code> is cut from <code>main</code>, read with
 <code>git fetch origin</code> then <code>git rev-parse origin/main</code> on this tree's first commands:
 <code>a4bd60e12928735c1a04b77f8e0b049b9823a408</code> (<code>docs: render the changelog - 580 releases</code>,
-version 1.92.0). <code>origin/main</code> moved while this row was being verified, to
-<code>484fe48c698c09615b570a810644c3bdd7cbc75a</code> (<code>docs: render the changelog - 581 releases</code>, version 1.92.1),
-and the branch was rebased onto that tip before its tests ran, so every green reading below is on the newer base. Nothing
-the three defects live in moved with it: <code>git diff --stat a4bd60e1..484fe48c -- lib/task-pipeline.js
+version 1.92.0). <code>origin/main</code> moved three times while this row was being verified, to
+<code>484fe48c</code> (1.92.1), <code>c31bcf68</code> (1.92.3) and finally
+<code>4190663dad9999b8f02e51f7027435d8008a7781</code> (<code>docs: render the changelog - 582 releases</code>), and the
+branch was rebased onto that last tip before its final test run, so every green reading below is on the current base.
+Nothing the three defects live in moved with it: <code>git diff --stat a4bd60e1..origin/main -- lib/task-pipeline.js
 lib/assistant/queue.js lib/assistant.js public/</code> is empty. The pre-fix tree is <code>c067c25c^</code>, extracted with
 <code>git archive c067c25c^ | tar -x</code> into a scratch directory. No worktree was created for the comparison.</p>
 
@@ -139,7 +140,7 @@ files:</p>
 <table>
   <tr><th>Command</th><th>Where</th><th>Result</th></tr>
   <tr><td><code>node --test test/pipeline-ledger-defects.test.js</code></td><td><code>c067c25c^</code> (git archive)</td><td><span class="bad">3 tests, 0 pass, 3 fail</span> - all three defects reproduce</td></tr>
-  <tr><td><code>node --test test/pipeline-ledger-defects.test.js</code></td><td>this branch, rebased onto <code>484fe48c</code></td><td><span class="ok">3 tests, 3 pass, 0 fail</span></td></tr>
+  <tr><td><code>node --test test/pipeline-ledger-defects.test.js</code></td><td>this branch, rebased onto <code>4190663d</code></td><td><span class="ok">3 tests, 3 pass, 0 fail</span></td></tr>
   <tr><td><code>node --test test/task-pipeline.test.js test/assistant-queue.test.js</code></td><td>this branch</td><td><span class="ok">75 tests, 75 pass, 0 fail</span> - the fix's own regression tests and their neighbours</td></tr>
   <tr><td><code>node --test test/board-lookups.test.js</code></td><td>this branch</td><td><span class="bad">18 tests, 15 pass, 3 fail</span> - <code>ReferenceError: refreshTurnoverChip is not defined</code>, the known pre-existing red, left alone and not counted</td></tr>
   <tr><td><code>npm run test:changed -- --list</code></td><td>this branch</td><td>one changed file, and no other test names or imports it</td></tr>
@@ -149,7 +150,7 @@ never the whole suite, and the only source file this landing changes is its own 
 ceiling; the longest was the 75-test pair at 628 ms of test time.</p>
 
 <h2>What this landing changes</h2>
-<p>One test file (<code>test/pipeline-ledger-defects.test.js</code>), this page, and the patch bump 1.92.1 to 1.92.2 that a
+<p>One test file (<code>test/pipeline-ledger-defects.test.js</code>), this page, and the patch bump 1.92.3 to 1.92.4 that a
 test-only landing carries. Nothing under <code>lib/</code> or <code>public/</code>. The three defects were verified against
 current main before a line was touched, none of them reproduced, so there was nothing to fix, no per-defect commit and no
 survivor to name.</p>
