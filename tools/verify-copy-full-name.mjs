@@ -2,21 +2,26 @@
 //
 //   node tools/verify-copy-full-name.mjs
 //
-// WHAT THIS GUARDS. public/chart.css ellipsises `td.name`/.row-name and `td.branch`, so a double-click on either
-// selects the visible part and Ctrl+C took the cut string. The fix (public/core/copy-full-value.js) answers the
-// `copy` event with the cell's whole value, and every other copy is the browser's. So this harness does the thing
-// the reader does, not a call into the module:
+// WHAT THIS GUARDS. public/chart.css ellipsises `td.name`/.row-name and `td.branch`, so a highlight or a
+// double-click on either covers the visible part only, and Ctrl+C used to take the cut string. The fix
+// (public/core/copy-full-value.js) answers both the `copy` event and the HIGHLIGHT with the cell's whole value, and
+// every other selection is the browser's. So this harness does the thing the reader does, not a call into the module:
 //
-//   (1) double-click a word of the truncated worktree name, press Ctrl+C, and read the clipboard back with
-//       navigator.clipboard.readText() - it must be the whole name, and the cell must still be ellipsised;
-//   (2) the same for the branch;
-//   (3) double-click a word of ANOTHER cell in the same row (the dirty count), press Ctrl+C, and read it back - it
-//       must be the word that was selected and nothing else, which is the proof the handler leaves a copy outside
-//       those cells exactly as it was.
+//   (1) DRAG across the middle of the truncated worktree name, release, and press nothing: the clipboard, read back
+//       with navigator.clipboard.readText(), must already hold the whole name; the drag must still be on the screen;
+//       a "copied" chip must be up and must not be able to take the next click; and the row must be as expanded as
+//       it was before the drag;
+//   (2) the same drag on the branch cell, which is a different rendering of the same value;
+//   (3) a double-click on a word of the name still selects only that word, and the highlight path puts the whole name
+//       on the clipboard before Ctrl+C is pressed - then Ctrl+C still does;
+//   (4) the same for the branch;
+//   (5) a double-click and Ctrl+C on plain page text outside the row stay the browser's own copy of exactly what was
+//       selected - the proof the handler leaves every other selection alone;
+//   (6) a plain click on the name cell still expands the row, and copies nothing.
 //
-// The two screenshots are the record: the row on the left with the selection still highlighted, and a strip at the
-// bottom of the same frame carrying the clipboard's actual text, read back after the copy. Nothing is typed into
-// the strip by this harness except what readText() returned.
+// The captures are the record: the row with the selection still highlighted and the "copied" chip beside it, plus a
+// strip at the bottom of the same frame carrying the clipboard's actual text, read back after the write. Nothing is
+// typed into the strip by this harness except what readText() returned.
 //
 // Sandbox only: a throwaway repo with one hand-cut worktree whose name is long enough to be cut, its own
 // PANEL_CONFIG, logs and port, and a dead apiServer. The live panel and the live gateway are never touched, and
@@ -32,7 +37,7 @@ import { loadPlaywright } from "./browser.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, "..");
-const OUT = process.env.COPY_FULL_OUT || path.join(ROOT, "docs", "assets", "copy-full-name");
+const OUT = process.env.COPY_FULL_OUT || path.join(ROOT, "docs", "assets", "copy-full-highlight");
 
 let failures = 0;
 let checks = 0;
@@ -183,23 +188,99 @@ const readClipboard = (page) => page.evaluate(async () => await navigator.clipbo
 
 // A double-click ON THE TEXT, not on the middle of the box: a chart cell is mostly padding, and a double-click in
 // the empty part of it selects nothing at all. The point is measured from the node's own text range, so the click
-// lands on a word however the column was sized.
-async function dblclickText(page, selector) {
-  const at = await page.evaluate((sel) => {
-    const el = document.querySelector(sel);
-    if (!el) return null;
-    const range = document.createRange();
-    range.selectNodeContents(el);
-    const r = range.getBoundingClientRect();
-    if (!r.width || !r.height) return null;
-    return { x: r.left + Math.min(12, Math.max(2, r.width / 2)), y: r.top + r.height / 2, text: String(el.textContent || "") };
-  }, selector);
-  if (!at) throw new Error(`nothing to double-click for ${selector}`);
+// lands on a word however the column was sized. `key` resolves the row in the SAME evaluate: the board replaces a
+// <tr> on a repaint, so a selector holding an id captured a moment ago can find nothing.
+async function dblclickText(page, selector, key = null) {
+  const at = await page.evaluate(
+    ({ sel, k }) => {
+      const root = k ? [...document.querySelectorAll("tr.row")].find((el) => el.dataset.key === k) : document;
+      const el = root && root.querySelector(sel);
+      if (!el) return null;
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const r = range.getBoundingClientRect();
+      if (!r.width || !r.height) return null;
+      return { x: r.left + Math.min(12, Math.max(2, r.width / 2)), y: r.top + r.height / 2, text: String(el.textContent || "") };
+    },
+    { sel: selector, k: key },
+  );
+  if (!at) throw new Error(`nothing to double-click for ${selector}${key ? ` in ${key}` : ""}`);
   await page.mouse.dblclick(at.x, at.y);
   return at;
 }
 // Each case starts with no selection, so a copy cannot be answered from the previous case's highlight.
 const clearSelection = (page) => page.evaluate(() => window.getSelection()?.removeAllRanges());
+// The text the page thinks is highlighted, read back the way a reader would see it.
+const selectionText = (page) => page.evaluate(() => String(window.getSelection() || ""));
+
+// A DRAG across the middle of a cell, which is the gesture this landing is about: no Ctrl+C follows it, so
+// anything on the clipboard afterwards was written by the page. The start is inside the inner element that holds
+// the text (the name's span, the branch's link), and the end is clamped to the cell, so the drag can never run off
+// into a neighbouring column and select a second value. The row is resolved by its data-key in this same evaluate,
+// for the reason `dblclickText` gives.
+async function dragHighlight(page, key, cellSel, innerSel = null) {
+  const box = await page.evaluate(
+    ({ k, cs, is }) => {
+      const tr = [...document.querySelectorAll("tr.row")].find((el) => el.dataset.key === k);
+      if (!tr) return { noRow: true };
+      const cell = tr.querySelector(cs);
+      const inner = (is && tr.querySelector(is)) || cell;
+      if (!cell || !inner) return { noCell: true, cs };
+      const c = cell.getBoundingClientRect();
+      const i = inner.getBoundingClientRect();
+      const left = Math.max(c.left + 3, i.left + 2);
+      const right = Math.min(c.right - 4, i.right);
+      if (!(right > left + 12)) {
+        return { tooSmall: true, cell: [Math.round(c.left), Math.round(c.right), Math.round(c.width)], inner: [Math.round(i.left), Math.round(i.right), Math.round(i.width)], top: Math.round(i.top) };
+      }
+      return { x1: left + 4, x2: Math.min(left + 70, right - 2), y: i.top + i.height / 2, width: right - left, text: String(inner.textContent || "") };
+    },
+    { k: key, cs: cellSel, is: innerSel },
+  );
+  if (!box) throw new Error(`nothing to drag across for ${cellSel}`);
+  if (box.noRow) throw new Error(`the row ${key} was not on the page`);
+  if (box.noCell) throw new Error(`nothing to drag across for ${cellSel} in ${key}`);
+  if (box.tooSmall) throw new Error(`nothing to drag across for ${cellSel}: cell ${JSON.stringify(box.cell)}, inner ${JSON.stringify(box.inner)}, top ${box.top}`);
+  await page.mouse.move(box.x1, box.y);
+  await page.mouse.down();
+  await page.mouse.move((box.x1 + box.x2) / 2, box.y, { steps: 5 });
+  await page.mouse.move(box.x2, box.y, { steps: 5 });
+  await page.mouse.up();
+  return box;
+}
+
+// The "copied" chip, as the page draws it: its text, whether it has a box, and whether it can take a gesture.
+const flashState = (page) =>
+  page.evaluate(() => {
+    const el = document.querySelector(".copy-flash");
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    const style = getComputedStyle(el);
+    return { text: el.textContent, role: el.getAttribute("role"), width: r.width, height: r.height, pointer: style.pointerEvents, userSelect: style.userSelect };
+  });
+
+// Whether the row is expanded, which is what a plain click toggles. Resolved by data-key in the same evaluate, so a
+// repaint between two calls cannot answer about a row that has been replaced.
+const rowState = (page, key) => page.evaluate((k) => {
+  const tr = [...document.querySelectorAll("tr.row")].find((el) => el.dataset.key === k);
+  return { expanded: Boolean(tr && tr.classList.contains("expanded")), detail: Boolean(tr && tr.nextElementSibling && tr.nextElementSibling.classList.contains("detail")) };
+}, key);
+
+// The board repaints rows constantly (a scan, a row frame, a fold), and a repaint replaces the <tr> - id and all. Every
+// section re-finds the row by its data-key and puts the harness's id back before it touches anything, so a repaint
+// between two sections cannot turn into "nothing to drag across".
+async function settleRow(page, key) {
+  return waitFor(
+    () =>
+      page.evaluate((k) => {
+        const tr = [...document.querySelectorAll("tr.row")].find((el) => el.dataset.key === k) || document.getElementById("copy-row");
+        if (!tr || !tr.querySelector("td.name .row-name")) return false;
+        tr.id = "copy-row";
+        return true;
+      }, key),
+    { timeoutMs: 15000, what: "the sandbox row to be back on the page" },
+  );
+}
 
 // A strip at the bottom of the frame carrying what the clipboard really holds, then a screenshot of the frame.
 async function capture(page, file, label) {
@@ -267,14 +348,14 @@ const run = async () => {
   );
   ok("the sandbox row is drawn", named, key);
   if (!named) throw new Error(`the row never appeared on ${base}`);
-  const rowSel = "#copy-row";
-  await page.waitForSelector(`${rowSel} td.name .row-name`, { timeout: 30_000 });
+  await settleRow(page, key);
 
   // ---- (0) the cells the fix is about, and that the chart still cuts them ---------------------------------
-  const cells = await page.evaluate((sel) => {
-    const nameCell = document.querySelector(`${sel} td.name`);
+  const cells = await page.evaluate((k) => {
+    const tr = [...document.querySelectorAll("tr.row")].find((el) => el.dataset.key === k);
+    const nameCell = tr?.querySelector("td.name");
     const nameInner = nameCell?.querySelector(".row-name");
-    const branchCell = document.querySelector(`${sel} td.branch`);
+    const branchCell = tr?.querySelector("td.branch");
     const style = (el) => (el ? getComputedStyle(el) : null);
     return {
       nameAttr: nameCell?.getAttribute("data-copy-value") ?? null,
@@ -287,33 +368,101 @@ const run = async () => {
       branchEllipsis: style(branchCell)?.textOverflow ?? null,
       branchWraps: style(branchCell)?.whiteSpace ?? null,
     };
-  }, rowSel);
+  }, key);
   check("td.name carries the whole worktree name", cells.nameAttr, NAME);
   check("td.branch carries the whole branch", cells.branchAttr, BRANCH);
   ok("the name cell is still ellipsised, not re-laid-out", cells.nameEllipsis === "ellipsis" && cells.nameClip[0] > cells.nameClip[1], `text-overflow ${cells.nameEllipsis}, scrollWidth ${cells.nameClip?.[0]} > clientWidth ${cells.nameClip?.[1]}`);
   ok("the branch cell is still ellipsised, not re-laid-out", cells.branchEllipsis === "ellipsis" && cells.branchWraps === "nowrap" && cells.branchClip[0] > cells.branchClip[1], `text-overflow ${cells.branchEllipsis}, scrollWidth ${cells.branchClip?.[0]} > clientWidth ${cells.branchClip?.[1]}`);
 
-  // ---- (1) the worktree name, double-clicked and copied ------------------------------------------------
+  // ---- (1) the name: the HIGHLIGHT itself is the copy -------------------------------------------------
+  // A drag across a middle chunk of the truncated name, released, with NO Ctrl+C afterwards: the clipboard must
+  // already hold the whole name, because the highlight is the gesture the reader asked for. The selection must still
+  // be the piece they dragged (the write never replaces the highlight), the flash must say it happened, and the row
+  // must be exactly as expanded as it was before the drag.
+  await settleRow(page, key);
   await clearSelection(page);
-  await dblclickText(page, `${rowSel} td.name .row-name`);
+  await sleep(250); // let a previous case's settle check run out before the "before" reading
+  const beforeDrag = await rowState(page, key);
+  const nameBox = await dragHighlight(page, key, "td.name", "td.name .row-name");
+  await sleep(150); // the write is a promise; the readText below is the proof it landed
+  const nameHighlight = await selectionText(page);
+  ok(
+    "the drag highlighted part of the name, not the whole cell",
+    nameHighlight.length > 0 && nameHighlight.length < NAME.length,
+    `${nameHighlight.length} of ${NAME.length} chars: ${JSON.stringify(nameHighlight)}`,
+  );
+  ok("the highlighted fragment is a piece of the name that was drawn", nameBox.text.includes(nameHighlight), `${JSON.stringify(nameHighlight)} inside ${JSON.stringify(nameBox.text)}`);
+  const nameFlash = await flashState(page);
+  ok(
+    "a copied chip is on the page after the drag",
+    Boolean(nameFlash) && nameFlash.text === "copied" && nameFlash.width > 0 && nameFlash.height > 0,
+    nameFlash ? `text ${JSON.stringify(nameFlash.text)}, role ${nameFlash.role}, ${Math.round(nameFlash.width)}x${Math.round(nameFlash.height)}` : "no .copy-flash",
+  );
+  ok(
+    "the chip cannot take the reader's next click or drag",
+    Boolean(nameFlash) && nameFlash.pointer === "none" && nameFlash.userSelect === "none",
+    nameFlash ? `pointer-events ${nameFlash.pointer}, user-select ${nameFlash.userSelect}` : "no .copy-flash",
+  );
+  const nameDragCopied = await capture(page, path.join(OUT, "name-highlight-copied-whole.png"), "worktree name, dragged highlight, no Ctrl+C");
+  check("a HIGHLIGHT on the truncated worktree name puts the WHOLE name on the clipboard", nameDragCopied, NAME);
+  const afterDrag = await rowState(page, key);
+  ok("the drag left the row's expand state alone", afterDrag.expanded === beforeDrag.expanded, `expanded ${beforeDrag.expanded} -> ${afterDrag.expanded}`);
+  const keptHighlight = await selectionText(page);
+  ok("the highlight is still on the screen after the write", keptHighlight === nameHighlight, `selection ${JSON.stringify(keptHighlight)}`);
+  ok("the copied chip clears itself", await waitFor(async () => (await flashState(page)) === null, { timeoutMs: 4000, what: "the copied chip to disappear" }), "gone within 4s");
+
+  // ---- (2) the branch: a different rendering of the same rule -----------------------------------------
+  // The branch cell is its own ellipsis (chart.css line 83) and its text can sit inside a link, so this is not the
+  // name cell with another string: the drag starts in the cell and its whole value is what must land.
+  await settleRow(page, key);
+  await clearSelection(page);
+  await sleep(250);
+  const beforeBranch = await rowState(page, key);
+  const branchBox = await dragHighlight(page, key, "td.branch");
+  await sleep(150);
+  const branchHighlight = await selectionText(page);
+  ok(
+    "the drag highlighted part of the branch, not the whole cell",
+    branchHighlight.length > 0 && branchHighlight.length < BRANCH.length,
+    `${branchHighlight.length} of ${BRANCH.length} chars: ${JSON.stringify(branchHighlight)}`,
+  );
+  ok("the highlighted fragment is a piece of the branch", branchBox.text.includes(branchHighlight), `${JSON.stringify(branchHighlight)} inside ${JSON.stringify(branchBox.text)}`);
+  const branchFlash = await flashState(page);
+  ok("the branch's copy says copied as well", Boolean(branchFlash) && branchFlash.text === "copied" && branchFlash.width > 0, branchFlash ? `text ${JSON.stringify(branchFlash.text)}` : "no .copy-flash");
+  const branchDragCopied = await capture(page, path.join(OUT, "branch-highlight-copied-whole.png"), "branch, dragged highlight, no Ctrl+C");
+  check("a HIGHLIGHT on the truncated branch puts the WHOLE branch on the clipboard", branchDragCopied, BRANCH);
+  const afterBranch = await rowState(page, key);
+  ok("the branch drag left the row's expand state alone", afterBranch.expanded === beforeBranch.expanded, `expanded ${beforeBranch.expanded} -> ${afterBranch.expanded}`);
+  ok("the branch highlight is still on the screen after the write", (await selectionText(page)) === branchHighlight);
+
+  // ---- (3) the worktree name, double-clicked and copied ------------------------------------------------
+  await settleRow(page, key);
+  await clearSelection(page);
+  await dblclickText(page, "td.name .row-name", key);
   const nameSelection = await page.evaluate(() => String(window.getSelection() || ""));
   ok("the double-click selected only part of the name, as it always did", nameSelection.length > 0 && nameSelection.length < NAME.length, `selected ${JSON.stringify(nameSelection)}`);
+  // The double-click is itself a highlight, so the whole name is already there before any key is pressed.
+  await sleep(200);
+  check("the double-click alone puts the WHOLE name on the clipboard", await readClipboard(page), NAME);
   await page.keyboard.press("Control+c");
   await sleep(250);
   const nameCopied = await capture(page, path.join(OUT, "name-copied-whole.png"), "worktree name, double-clicked");
   check("Ctrl+C on the truncated worktree name puts the WHOLE name on the clipboard", nameCopied, NAME);
 
-  // ---- (2) the branch, double-clicked and copied -------------------------------------------------------
+  // ---- (4) the branch, double-clicked and copied -------------------------------------------------------
+  await settleRow(page, key);
   await clearSelection(page);
-  await dblclickText(page, `${rowSel} td.branch .branch-plain, ${rowSel} td.branch a.branch-link`);
+  await dblclickText(page, "td.branch .branch-plain, td.branch a.branch-link", key);
   const branchSelection = await page.evaluate(() => String(window.getSelection() || ""));
   ok("the double-click selected only part of the branch", branchSelection.length > 0 && branchSelection.length < BRANCH.length, `selected ${JSON.stringify(branchSelection)}`);
+  await sleep(200);
+  check("the double-click alone puts the WHOLE branch on the clipboard", await readClipboard(page), BRANCH);
   await page.keyboard.press("Control+c");
   await sleep(250);
   const branchCopied = await capture(page, path.join(OUT, "branch-copied-whole.png"), "branch, double-clicked");
   check("Ctrl+C on the truncated branch puts the WHOLE branch on the clipboard", branchCopied, BRANCH);
 
-  // ---- (3) a copy outside those cells is the browser's own --------------------------------------------
+  // ---- (5) a copy outside those cells is the browser's own --------------------------------------------
   // Not another cell of the row: chart.css line 38 makes every cell from the third on unselectable on purpose, so
   // the name and the branch are the only selectable text in a row. So the case is any other text on the page: the
   // first leaf element, outside the row, that the browser will actually let a reader drag across.
@@ -336,6 +485,7 @@ const run = async () => {
     return { tag: pick.tagName, cls: pick.className, text: String(pick.textContent || "").trim() };
   });
   ok("there is other text on the page to copy from", Boolean(other), other ? `${other.tag} ${other.cls} holds ${JSON.stringify(other.text)}` : "no selectable text outside the row");
+  await settleRow(page, key);
   await clearSelection(page);
   const clicked = await dblclickText(page, "[data-copy-other]");
   console.log(`      (the text picked: ${JSON.stringify(clicked.text)})`);
@@ -346,6 +496,37 @@ const run = async () => {
   const otherCopied = await capture(page, path.join(OUT, "outside-cells-unchanged.png"), "plain page text, not a name or a branch");
   check("a copy outside the name and branch cells is the browser's own copy of what was selected", otherCopied, otherSelection);
   ok("that copy is not a name or a branch", otherCopied !== NAME && otherCopied !== BRANCH && otherCopied.length > 0, `clipboard ${JSON.stringify(otherCopied)}`);
+
+  // ---- (6) a plain click still expands the row ---------------------------------------------------------
+  // The highlight path must not have taken the row's own gesture with it: one click on the name cell (no drag, so
+  // no highlight) opens the detail row and copies nothing, and a second click closes it again.
+  await settleRow(page, key);
+  const namePoint = await page.evaluate((k) => {
+    const tr = [...document.querySelectorAll("tr.row")].find((el) => el.dataset.key === k);
+    const el = tr?.querySelector("td.name .row-name");
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return { x: Math.min(r.left + 12, r.right - 2), y: r.top + r.height / 2 };
+  }, key);
+  if (!namePoint) throw new Error(`no name cell to click in ${key}`);
+  // Whatever the double-click cases left behind, start from the folded row.
+  if ((await rowState(page, key)).expanded) {
+    await page.mouse.click(namePoint.x, namePoint.y);
+    await waitFor(async () => !(await rowState(page, key)).expanded, { timeoutMs: 3000, what: "the row to fold before the click case" });
+  }
+  const clipBeforeClick = await readClipboard(page);
+  await page.mouse.click(namePoint.x, namePoint.y);
+  ok(
+    "a plain click on the name still expands the row",
+    await waitFor(async () => (await rowState(page, key)).expanded, { timeoutMs: 3000, what: "the row to expand on a plain click" }),
+    `expanded ${(await rowState(page, key)).expanded}`,
+  );
+  ok("that click copied nothing", (await readClipboard(page)) === clipBeforeClick, `clipboard ${JSON.stringify(await readClipboard(page))}`);
+  await page.mouse.click(namePoint.x, namePoint.y);
+  ok(
+    "a second plain click folds it again",
+    await waitFor(async () => !(await rowState(page, key)).expanded, { timeoutMs: 3000, what: "the row to fold on a second click" }),
+  );
 
   ok("the page threw nothing while the copies ran", pageErrors.length === 0, pageErrors.join(" | "));
   await context.close();

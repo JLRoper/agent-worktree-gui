@@ -723,8 +723,8 @@ function rowHtml(row, forceOwner = false) {
   // `nextread` are read, not wrapped.
   const cells = {
     // The whole name as well as the drawn one: the name can be ellipsised (`td.name .row-name`, chart.css line 113),
-    // and the copy handler (public/core/copy-full-value.js) answers a copy inside a truncated cell with this value
-    // instead of the fragment the selection covers. It is NOT `data-copy`, which is the console's block-lift
+    // and the copy handler (public/core/copy-full-value.js) answers a copy OR a highlight inside the cell with this
+    // value instead of the fragment the selection covers. It is NOT `data-copy`, which is the console's block-lift
     // attribute and would grow a ⧉ button inside the cell.
     name: `<td class="name" data-copy-value="${esc(shownName)}"><div class="name-line"><span class="row-lead"></span><button class="btn-row-agent" data-agent-path="${esc(row.path)}" data-agent-name="${esc(row.name)}" data-agent-project="${esc(row.project)}"
       title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">\u25b6</button><span class="row-name${onTurnoverBranch ? " is-turnover" : ""}"${onTurnoverBranch ? ' style="color:var(--blue)"' : ""} title="${esc(row.path)}">${esc(shownName)}</span>${renameBtn}${treeLockBtn}${turnoverRowMarkHtml(row)}${agentBadgeHtml(row)}</div></td>`,
