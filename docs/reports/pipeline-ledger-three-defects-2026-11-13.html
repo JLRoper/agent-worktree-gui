@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
+<title>The three pipeline-ledger defects: all three already fixed on main - 2026-11-13</title>
+<style>
+  :root{ color-scheme:dark; --ink:#e9e7e2; --paper:#121417; --panel:#171a1f; --rule:#2b3038; --muted:#9aa3ad; --accent:#c8a6ff; --ok:#7ee2a8; --bad:#e5534b; --sunk:#1b1e24; --code:#f0c987; }
+  html,body{ margin:0; background:var(--paper); color:var(--ink); font:15px/1.58 -apple-system,Segoe UI,Helvetica,Arial,sans-serif; }
+  main{ max-width:1120px; margin:0 auto; padding:38px 28px 84px; }
+  h1{ font-size:28px; line-height:1.2; margin:0 0 8px; letter-spacing:-.015em; }
+  h2{ font-size:20px; margin:42px 0 10px; padding-bottom:7px; border-bottom:1px solid var(--rule); }
+  h3{ font-size:15.5px; margin:24px 0 8px; }
+  p{ margin:9px 0; }
+  .kicker{ color:var(--accent); font:12px ui-monospace,Consolas,monospace; letter-spacing:.08em; text-transform:uppercase; margin:0 0 8px; }
+  .sub{ color:var(--muted); margin:0 0 20px; max-width:100ch; }
+  .cards{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin:18px 0 4px; }
+  .card{ border:1px solid var(--rule); border-radius:10px; padding:11px 13px; background:var(--panel); }
+  .card b{ display:block; font-size:21px; letter-spacing:-.02em; font-variant-numeric:tabular-nums; }
+  .card span{ color:var(--muted); font-size:12.5px; }
+  table{ border-collapse:collapse; width:100%; font-size:13.5px; }
+  th,td{ text-align:left; padding:6px 8px; border-bottom:1px solid var(--rule); vertical-align:top; }
+  th{ color:var(--muted); font-weight:600; font-size:11.5px; text-transform:uppercase; letter-spacing:.05em; }
+  tr:last-child td{ border-bottom:0; }
+  code{ font:12.5px ui-monospace,Consolas,monospace; background:rgba(127,127,127,.13); padding:1px 5px; border-radius:4px; color:var(--code); overflow-wrap:anywhere; }
+  pre{ background:var(--sunk); border:1px solid var(--rule); border-radius:8px; padding:11px 13px; overflow-x:auto; font:12.3px/1.55 ui-monospace,Consolas,monospace; white-space:pre-wrap; overflow-wrap:anywhere; }
+  pre code{ background:none; padding:0; color:inherit; }
+  .ok{ color:var(--ok); font-weight:600; }
+  .bad{ color:var(--bad); font-weight:600; }
+  ul{ margin:8px 0 8px 20px; } li{ margin:5px 0; }
+  .small{ color:var(--muted); font-size:12.5px; }
+</style>
+</head>
+<body>
+<main>
+<p class="kicker">agent-worktree-gui - the pipeline ledger - three defects, verified</p>
+<h1>All three ledger defects are already fixed on main, and these tests say so out loud</h1>
+<p class="sub">The row carried three pipeline-ledger defects from the 2026-11-09 rounds: a stage-run id collision, a park
+erased when a row is linked, and <code>startedAt</code> surviving into a done row. Each was given the smallest test that
+fails when the defect is present. All three tests fail on the tree before the fix and pass on current
+<code>origin/main</code>, so the verdict for every one of them is already fixed. No code was changed: the landing adds the
+three tests and this record.</p>
+
+<div class="cards">
+  <div class="card"><b>0 / 3</b><span>defects that still reproduce</span></div>
+  <div class="card"><b>3 / 3</b><span>verdicts: already fixed, no fix needed</span></div>
+  <div class="card"><b>3 fail</b><span>the same tests on <code>c067c25c^</code></span></div>
+  <div class="card"><b>3 pass</b><span>the same tests on <code>origin/main</code></span></div>
+  <div class="card"><b>1.92.2</b><span>the patch this landing carries</span></div>
+</div>
+
+<h2>Base</h2>
+<p>The branch <code>wtgui/take-the-three-pipeline-ledger-defects-ac5f76</code> is cut from <code>main</code>, read with
+<code>git fetch origin</code> then <code>git rev-parse origin/main</code> on this tree's first commands:
+<code>a4bd60e12928735c1a04b77f8e0b049b9823a408</code> (<code>docs: render the changelog - 580 releases</code>,
+version 1.92.0). <code>origin/main</code> moved while this row was being verified, to
+<code>484fe48c698c09615b570a810644c3bdd7cbc75a</code> (<code>docs: render the changelog - 581 releases</code>, version 1.92.1),
+and the branch was rebased onto that tip before its tests ran, so every green reading below is on the newer base. Nothing
+the three defects live in moved with it: <code>git diff --stat a4bd60e1..484fe48c -- lib/task-pipeline.js
+lib/assistant/queue.js lib/assistant.js public/</code> is empty. The pre-fix tree is <code>c067c25c^</code>, extracted with
+<code>git archive c067c25c^ | tar -x</code> into a scratch directory. No worktree was created for the comparison.</p>
+
+<h2>The three verdicts</h2>
+<table>
+  <tr><th>Defect</th><th>Verdict on <code>origin/main</code></th><th>What closed it</th><th>Test that proves it</th></tr>
+  <tr>
+    <td>1. a stage-run id collision: two starts of one visit shared <code>&lt;pipeline&gt;/&lt;stage&gt;#&lt;visit&gt;</code>, and a settle stamped the newest entry whatever thread it ran on</td>
+    <td><span class="ok">already fixed</span>, does not reproduce</td>
+    <td><code>c067c25c</code>: <code>stageRunId()</code> suffixes a later attempt (<code>p/s1#1.2</code>), and <code>settleStageRun()</code> names its run by thread, then job, then the newest open entry</td>
+    <td><code>defect 1: two starts of one visit are two stage runs, two ids, and a settle stamps only its own</code></td>
+  </tr>
+  <tr>
+    <td>2. a park erased when a row is linked: <code>linkTaskRun()</code> wrote <code>running</code> and cleared <code>hold</code> and <code>reason</code></td>
+    <td><span class="ok">already fixed</span>, does not reproduce</td>
+    <td><code>c067c25c</code>: a link fills facts and is not a state transition; a parked row, or any row carrying a hold, keeps its state, hold and reason</td>
+    <td><code>defect 2: a link fills facts and leaves a park exactly as it was</code></td>
+  </tr>
+  <tr>
+    <td>3. <code>startedAt</code> surviving into a done row: the done branch backfilled the start with the done clock, so a hand-cut row read as a zero-length run</td>
+    <td><span class="ok">already fixed</span>, does not reproduce</td>
+    <td><code>c067c25c</code>: done keeps <code>t.startedAt</code> and never backfills it; a row that never started finishes with <code>startedAt: null</code></td>
+    <td><code>defect 3: done keeps a real start and never invents one</code></td>
+  </tr>
+</table>
+
+<h2>The test file</h2>
+<p>One file, three tests, <code>test/pipeline-ledger-defects.test.js</code>, each written from the shortest public path
+into the module: <code>beginStageRun</code> and <code>settleStageRun</code> for the ledger, <code>addTask</code>,
+<code>setTaskState</code> and <code>linkTaskRun</code> for the queue. Each test names the defect it would catch in its
+own title, and the file's header names the commit that fixed it, so a reader three months from now can tell a
+regression from a deliberate change.</p>
+
+<h2>Reproduce: the same file on the tree before the fix</h2>
+<p><code>node --test test/pipeline-ledger-defects.test.js</code> run inside the <code>git archive</code> of
+<code>c067c25c^</code>: 3 tests, 0 pass, 3 fail. Each failure is the defect itself, in its own words.</p>
+<pre><code>not ok 1 - defect 1: two starts of one visit are two stage runs, two ids, and a settle stamps only its own
+  AssertionError: the first attempt keeps the bare id and the next one is suffixed
+    actual:   [ 'p/s1#1', 'p/s1#1' ]        &lt;- two entries, one id
+    expected: [ 'p/s1#1', 'p/s1#1.2' ]
+
+not ok 2 - defect 2: a link fills facts and leaves a park exactly as it was
+  AssertionError: a link is not a state transition
+    actual:   'running'                     &lt;- the park was erased
+    expected: 'parked'
+
+not ok 3 - defect 3: done keeps a real start and never invents one
+  AssertionError: a row that never started finishes with no start, not a zero-length run
+    actual:   '2026-11-09T09:20:00.000Z'    &lt;- startedAt = doneAt, a 0 ms run
+    expected: null
+</code></pre>
+
+<h2>Reproduce: the same file on current main</h2>
+<pre><code>$ node --test test/pipeline-ledger-defects.test.js
+ok 1 - defect 1: two starts of one visit are two stage runs, two ids, and a settle stamps only its own (2.4469ms)
+ok 2 - defect 2: a link fills facts and leaves a park exactly as it was (4.5138ms)
+ok 3 - defect 3: done keeps a real start and never invents one (0.3625ms)
+tests 3
+pass 3
+fail 0
+</code></pre>
+
+<h2>What fixed it, and why this row saw it as open</h2>
+<p>All three were closed together on 2026-11-09 10:43:38 -0500 in <code>c067c25c</code>
+(<code>fix: one stage-run id names one run, a link cannot erase a park, done keeps its start</code>), which is an ancestor of
+<code>origin/main</code>: <code>git merge-base --is-ancestor c067c25c origin/main</code> answers 0. The commit touched the two
+modules the defects live in (<code>lib/task-pipeline.js</code>, <code>lib/assistant/queue.js</code>), the one caller that
+linked a row (<code>lib/assistant.js</code>), the driver, the doc and its own regression tests. The row was cut from a
+queue record written before that landing, so its three lines describe a state main had already left.</p>
+<p>The fix brought three tests of its own, which agree with this file and were rerun here as the modules' own targeted
+files:</p>
+<ul>
+  <li><code>test/task-pipeline.test.js</code>: <code>two starts in one visit on different threads are two runs, two ids, and a settle stamps only its own</code></li>
+  <li><code>test/assistant-queue.test.js</code>: <code>a link fills facts and leaves a park exactly as it was</code></li>
+  <li><code>test/assistant-queue.test.js</code>: <code>done keeps the start it has and never backfills one</code></li>
+</ul>
+
+<h2>Runs, and what each answered</h2>
+<table>
+  <tr><th>Command</th><th>Where</th><th>Result</th></tr>
+  <tr><td><code>node --test test/pipeline-ledger-defects.test.js</code></td><td><code>c067c25c^</code> (git archive)</td><td><span class="bad">3 tests, 0 pass, 3 fail</span> - all three defects reproduce</td></tr>
+  <tr><td><code>node --test test/pipeline-ledger-defects.test.js</code></td><td>this branch, rebased onto <code>484fe48c</code></td><td><span class="ok">3 tests, 3 pass, 0 fail</span></td></tr>
+  <tr><td><code>node --test test/task-pipeline.test.js test/assistant-queue.test.js</code></td><td>this branch</td><td><span class="ok">75 tests, 75 pass, 0 fail</span> - the fix's own regression tests and their neighbours</td></tr>
+  <tr><td><code>node --test test/board-lookups.test.js</code></td><td>this branch</td><td><span class="bad">18 tests, 15 pass, 3 fail</span> - <code>ReferenceError: refreshTurnoverChip is not defined</code>, the known pre-existing red, left alone and not counted</td></tr>
+  <tr><td><code>npm run test:changed -- --list</code></td><td>this branch</td><td>one changed file, and no other test names or imports it</td></tr>
+</table>
+<p class="small">The full suite was not run: this row's brief says targeted <code>node --test</code> on the file touched,
+never the whole suite, and the only source file this landing changes is its own test. No run came near the 20 minute
+ceiling; the longest was the 75-test pair at 628 ms of test time.</p>
+
+<h2>What this landing changes</h2>
+<p>One test file (<code>test/pipeline-ledger-defects.test.js</code>), this page, and the patch bump 1.92.1 to 1.92.2 that a
+test-only landing carries. Nothing under <code>lib/</code> or <code>public/</code>. The three defects were verified against
+current main before a line was touched, none of them reproduced, so there was nothing to fix, no per-defect commit and no
+survivor to name.</p>
+</main>
+</body>
+</html>
