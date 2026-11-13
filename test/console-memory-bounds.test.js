@@ -21,6 +21,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import vm from "node:vm";
 
 import { readSource, sliceBetween } from "../tools/panel-testkit.mjs";
 
@@ -39,9 +40,22 @@ const snapshotCode = sliceBetween(settings, "function applyJobSnapshot(", "funct
 // The console's only buffer writer, and the per-turn cap it trims to.
 const recordCode = sliceBetween(consoleJs, "const JOB_LINES_PER_TURN", "// One line into every pane showing this turn.");
 
+// recordJobLine() keeps a prose line's own newlines as separate rows, and both of those rules are the renderer's
+// (public/core/console-markdown.js, which the page loads before console.js): the real functions are handed in rather
+// than stubbed, so this file measures the buffer the page actually builds.
+const md = (() => {
+  const ctx = vm.createContext({ window: {}, console });
+  for (const file of ["public/core/dom-format.js", "public/core/console-markdown.js"]) {
+    vm.runInContext(readSource(file), ctx, { filename: file });
+  }
+  return ctx.window.WMApp.core.consoleMarkdown;
+})();
+
 const patched = new Function(
   "state",
   "refreshTurnPeek",
+  "consoleMdPhysicalLines",
+  "consoleMdIsProse",
   `${liveCode}\n${buffersCode}\n${snapshotCode}\n${recordCode}
    return { jobLines, trimJobLines, applyJobSnapshot, recordJobLine, MAX_TURN_BUFFERS, JOB_LINES_PER_TURN };`,
 );
@@ -49,7 +63,7 @@ const patched = new Function(
 function bench() {
   const state = { jobs: new Map(), jobLines: new Map() };
   const peeked = [];
-  const page = patched(state, (job) => peeked.push(job && job.id));
+  const page = patched(state, (job) => peeked.push(job && job.id), md.physicalLines, md.isProse);
   return { state, page, peeked };
 }
 
