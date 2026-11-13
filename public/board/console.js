@@ -2047,6 +2047,25 @@ function thinkingSessionFor(turn) {
   return String(turn?.sessionId || turn?.thread || turn?.id || "");
 }
 
+// ---- reconcile thinking ----
+// A live-streamed reasoning.delta preview grows ONE block under a stable `at`. The store poll's
+// finished reasoning block carries a DIFFERENT `at` (the message timestamp). Adopting it wholesale
+// while the turn is live would (a) hand paceThinkBlock a brand-new `think:<at>` lid, so it types the
+// whole text again from word 0 — the "doubling back" — and (b) show the same reasoning twice. Keep
+// the live block's own lid and settle the store's complete text INTO it instead: the same `at` means
+// the pacer keeps growing one line, never restarting. With no live preview this is the old behaviour.
+function reconcileThinking(prev, fresh) {
+  const live = (prev || []).filter((b) => b && b.live);
+  if (!live.length) return fresh;        // no live-streamed preview: store poll replaces wholesale, as before
+  if (!fresh.length) return prev;        // nothing authoritative yet: keep the growing preview
+  const complete = fresh.map((b) => String(b.text ?? "")).join("\n\n");
+  const kept = prev.filter((b) => !b || !b.live);
+  kept.push({ ...live[live.length - 1], text: complete, live: true });
+  kept.sort((a, b) => Number(a.at) - Number(b.at));
+  return kept;
+}
+// ---- end reconcile thinking ----
+
 async function loadThinking(turn, copy = "") {
   const key = turnKey(turn, copy);
   if (state.thinkLoading.has(turn.id)) return;
@@ -2070,7 +2089,7 @@ async function loadThinking(turn, copy = "") {
       // And a live turn's block list only ever GROWS (the store appends one row per assistant message and takes none
       // away), so an empty answer while the turn is still running is a bad read too. A shorter non-empty answer is left
       // alone: past MAX_BLOCKS the oldest block legitimately drops out of the window.
-      if (!d.error && (fresh.length || !prev.length || !turnLive(turn))) blocks = fresh;
+      if (!d.error && (fresh.length || !prev.length || !turnLive(turn))) blocks = reconcileThinking(prev, fresh);
     }
   } catch {
     /* an unreadable store is not worth a banner: the block just keeps what it already shows */
@@ -2876,26 +2895,37 @@ function appendJobLine(evt) {
   const line = evt.line || {};
   // A reasoning block that arrived on the run's own stream is PUSHED, so it can be shown
   // before the store poll finds it. The console keeps its dim preview line; the full text
-  // seeds the 🧠 pane additively, keyed by the line's own server timestamp. A later poll
-  // replaces it wholesale with the store's complete block (see loadThinking).
+  // seeds the 🧠 pane additively, keyed by the line's own server timestamp. A live-streamed
+  // chunk (reasoning.delta) carries a STABLE at and is marked `live`: one growing block that
+  // owns the pane while the turn runs, so a later store poll cannot re-key it and retype the
+  // whole text from word 0 (see reconcileThinking / loadThinking). A finished
+  // reasoning.available is the same reasoning under a different at — ignore it once a live
+  // block exists, or the reader sees two copies of one thought.
   if (line.think) {
     const turn = state.jobs.get(evt.id);
     if (turn) {
       const at = Number(line.at) || Date.now();
       const entry = state.thinkCache.get(turn.id) || { blocks: [], at: 0 };
-      const blocks = entry.blocks.filter((b) => Number(b.at) !== at);
-      blocks.push({ at, text: String(line.think) });
-      blocks.sort((a, b) => Number(a.at) - Number(b.at));
-      state.thinkCache.set(turn.id, { blocks, at: Date.now() });
-      paintThink(turn, "");
+      const hasLive = entry.blocks.some((b) => b && b.live);
+      if (line.thinkOnly || !hasLive) {
+        // A live-streamed chunk drops stale store/available blocks: the pane shows exactly ONE
+        // growing block, never the finished copy alongside the streaming one.
+        const blocks = line.thinkOnly
+          ? entry.blocks.filter((b) => b && b.live && Number(b.at) !== at)
+          : entry.blocks.filter((b) => Number(b.at) !== at);
+        blocks.push({ at, text: String(line.think), ...(line.thinkOnly ? { live: true } : {}) });
+        blocks.sort((a, b) => Number(a.at) - Number(b.at));
+        state.thinkCache.set(turn.id, { blocks, at: Date.now() });
+        paintThink(turn, "");
+      }
     }
   }
   // A streamed reasoning chunk (`line.thinkOnly`) is a PUSHED PREVIEW of one growing block, not a
   // console line: lib/jobs.js emits it coalesced, keyed by a stable `at`, with the cumulative text so
   // far. The `line.think` branch above just painted the 🧠 pane from it; returning here keeps it out
   // of the line-by-line hold, recordJobLine() and drawJobLine(). One frame per token would otherwise
-  // flood the transcript and repaint the console. The store poll replaces the preview wholesale when
-  // the turn completes (see loadThinking).
+  // flood the transcript and repaint the console. The marked `live` block stays authoritative while
+  // the turn runs; the store poll adopts the finished text only once the turn settles (see loadThinking).
   if (line.thinkOnly) return;
   // The line-by-line setting holds a burst of whole lines and lets them in one at a time. Bookkeeping never waits:
   // the `result` line is what says the turn ended, and it is also the frame that flushes both buffers. A hidden tab
