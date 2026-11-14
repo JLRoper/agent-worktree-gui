@@ -4,16 +4,36 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.99.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.99.1 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-594 releases from v0.1.0 (2026-10-20) to v1.99.0 (2026-11-13), 2006 commits between the tags. Every release is anchored by an
+595 releases from v0.1.0 (2026-10-20) to v1.99.1 (2026-11-13), 2013 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.99.1 — 2026-11-13 · 7 commits
+
+[`2da362b`](https://github.com/JLRoper/agent-worktree-gui/commit/2da362b5d3bad46924ffffae30ba84d8c731abb0) · [compare v1.99.0...v1.99.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.99.0...v1.99.1)
+
+### Fixed
+
+- fix: a SPAWN card's bullet category is drawn bold, the item after it quiet ([`a67ee34`](https://github.com/JLRoper/agent-worktree-gui/commit/a67ee34a25f342acf7faa6066c518fa0e1430bcf))
+- fix: await the sweep a verification harness just fired ([`2f165ac`](https://github.com/JLRoper/agent-worktree-gui/commit/2f165acfd775a2efcea5cebb627ee9f3ff0f87c1))
+
+### Docs & tests
+
+- docs: name the browser proof of a SPAWN's bullets in the card docs ([`2e37310`](https://github.com/JLRoper/agent-worktree-gui/commit/2e373106d282029b58fc6c2aa991eae4f7e9bd83))
+- docs: the browser proof, re-measured on the version this landing carries ([`2cb1c49`](https://github.com/JLRoper/agent-worktree-gui/commit/2cb1c49a7f5aa9ffb4adae62dee119d86f6e0cde))
+- docs: render the changelog - 594 releases ([`d45158c`](https://github.com/JLRoper/agent-worktree-gui/commit/d45158c69a6666e8957ce00fe03b9511e96e0171))
+- docs: record what the abandoned async-pipeline delta still holds ([`00b399d`](https://github.com/JLRoper/agent-worktree-gui/commit/00b399de79a57a27141de43809bcefd518b379f4))
+
+### Other
+
+- chore: 1.99.1 - the version this landing carries ([`2da362b`](https://github.com/JLRoper/agent-worktree-gui/commit/2da362b5d3bad46924ffffae30ba84d8c731abb0))
 
 ## v1.99.0 — 2026-11-13 · 3 commits
 
