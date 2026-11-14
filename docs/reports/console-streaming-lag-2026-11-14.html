@@ -217,6 +217,8 @@ ol li, ul li { margin: 4px 0; }
 mkdir -p /tmp/base-1991 &amp;&amp; git archive v1.99.1 | tar -x -C /tmp/base-1991
 node tools/measure-console-stream-lag.mjs --root /tmp/base-1991 --label base --seconds 24 --json base.json</code></pre>
 <p class="note">Each run prints its own browser pid and panel pid and closes both; the temp profile and the fixture are removed at the end.</p>
+<h3>The suite, once, on this tree</h3>
+<p><code>npm test</code> (<code>node --test --test-concurrency=4</code>): <b>2811 tests, 2797 pass, 14 fail</b>, about eleven minutes. None of the 14 is in a file this branch touches - it adds one tool, one report and a version number. The one that could have been about a new file, "every declared harness is wired the way its own header says", fails naming <code>tools/verify-round-tree-names.mjs</code>, which predates this branch. Three of the failing files (<code>word-budget</code>, <code>worktree-board</code>, <code>worktree-naming</code>) pass when run alone and in pairs, so the parallel run is part of the condition. The suite was not run on <code>origin/main</code> in this run: "predates the branch" there is an inference from the diff, not a second measurement.</p>
 
 <details><summary>Full record: this tree, 24 s window (JSON)</summary><pre><code>{
  "label": "new",
