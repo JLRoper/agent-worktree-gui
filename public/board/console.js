@@ -2714,6 +2714,165 @@ function watchMotion(root) {
   }
 }
 
+// ---- the folded command card's last preview row ---------------------------------------------------------------
+// A command card folded to its preview rows (core/command card, style.css `--cmd-rows`) used to END at the clamp's
+// edge, so a prompt cut in the middle of a sentence read as if it stopped there. It now ends with three ASCII dots,
+// and a card that is open draws no marker at all: the dots say "there is more", and there is no more when it is open.
+//
+// WHY IT IS MEASURED, AND NOT WRITTEN INTO THE MARKUP. The clamp is a HEIGHT - N lines of the card's own line height,
+// set by the reader in Settings > Display - and a prompt wraps, so WHICH character is the last visible one is a fact
+// only the browser has (it depends on the width the card happens to be drawn at). So the last visible character is
+// found with a Range over the body's text nodes, everything after it is taken out, and the three dots are written
+// where the text stops. The body's own markup is kept in `cmdFull`, so opening the card, or re-measuring it at a new
+// width, starts from the whole prompt again: nothing is lost, only folded. What the console COPIES is untouched by
+// any of this - a card carries its line in `data-ltext` and copy reads that, never the drawn rows.
+const CMD_FOLD_DOTS = "...";
+const cmdFull = new WeakMap(); // .code-body -> the markup its folded state was cut from
+const cmdFoldPending = new Set();
+let cmdFoldFrame = 0;
+// One canvas for the dots' own width in the body's font: three dots that do not fit on the row would be clipped with
+// the rest of the text, which is the one way this marker can come out invisible.
+const cmdDotsCtx = typeof document !== "undefined" && document.createElement ? document.createElement("canvas").getContext("2d") : null;
+
+function cmdDotsWidth(body) {
+  if (!cmdDotsCtx) return 0;
+  const cs = getComputedStyle(body);
+  cmdDotsCtx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+  return cmdDotsCtx.measureText(CMD_FOLD_DOTS).width;
+}
+
+// The last character of this text node that renders inside the clamp, then backed off until the dots fit after it on
+// the same row. The per-character rect's bottom only grows with the offset (text flows down), so a binary search is
+// exact; the back-off walks at most one row's worth of characters.
+function cmdCutOffset(node, limitY, maxX, dots) {
+  const len = node.data ? node.data.length : 0;
+  if (!len) return 0;
+  const r = document.createRange();
+  const rect = (i) => {
+    r.setStart(node, Math.max(0, i - 1));
+    r.setEnd(node, i);
+    return r.getBoundingClientRect();
+  };
+  let lo = 0;
+  let hi = len;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (rect(mid).bottom <= limitY + 0.5) lo = mid;
+    else hi = mid - 1;
+  }
+  while (lo > 0 && rect(lo).right + dots > maxX) lo -= 1;
+  return lo;
+}
+
+// Everything after `last`, gone: the rows below the clamp's edge, and the rest of the row the cut is in.
+function cmdCutAfter(body, last) {
+  let node = last;
+  while (node && node !== body) {
+    let sib = node.nextSibling;
+    while (sib) {
+      const after = sib.nextSibling;
+      sib.remove();
+      sib = after;
+    }
+    node = node.parentNode;
+  }
+}
+
+// Back to the whole prompt: the markup the fold was cut from, put back. Idempotent, so every path may call it.
+function clearCommandFoldMark(box) {
+  const body = box && box.querySelector ? box.querySelector(":scope > .code-body") : null;
+  if (!body) return;
+  const html = cmdFull.get(body);
+  if (html === undefined) return;
+  body.innerHTML = html;
+  cmdFull.delete(body);
+}
+
+// One card, marked or unmarked to match its own state. Called for every card a render path places, for the press that
+// folds one, and when a body's width changes (the wrap moved, so the last visible character moved with the dots).
+function paintCommandFoldMark(box) {
+  if (!box || box.nodeType !== 1 || !box.classList || !box.classList.contains("is-cmd")) return;
+  const body = box.querySelector(":scope > .code-body");
+  if (!body) return;
+  const clamped = box.classList.contains("is-clamped");
+  // Always start from the whole prompt: a card that was marked and is being measured again must be measured on its
+  // own text, not on last frame's cut.
+  clearCommandFoldMark(box);
+  if (!clamped || !body.isConnected || body.hidden) return;
+  cmdFoldResize?.observe(body);
+  // A body with no layout (a folded turn, a hidden pane) cannot be measured, and marking it would mark it wrongly.
+  const w = body.clientWidth;
+  const h = body.clientHeight;
+  if (!w || !h) return;
+  // The whole prompt fits its preview rows: nothing is hidden, so nothing says otherwise.
+  if (body.scrollHeight <= h + 1) return;
+  if (body.dataset.cmdFolding === "1") return;
+  body.dataset.cmdFolding = "1";
+  try {
+    const markup = body.innerHTML;
+    const cs = getComputedStyle(body);
+    const rect = body.getBoundingClientRect();
+    // The clamp is a border-box height, so the text's own area ends `padding-bottom` above the box's bottom edge.
+    const limitY = rect.top + h - (parseFloat(cs.paddingBottom) || 0);
+    const maxX = rect.left + w - (parseFloat(cs.paddingRight) || 0) - (parseFloat(cs.borderRightWidth) || 0);
+    const dots = cmdDotsWidth(body);
+    const nodes = [];
+    const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT, null);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) nodes.push(node);
+    // The LAST node with a visible character is the row to end; the first node that is wholly below the edge ends it.
+    let chosen = null;
+    for (const node of nodes) {
+      const cut = cmdCutOffset(node, limitY, maxX, dots);
+      if (cut <= 0) break;
+      chosen = { node, cut };
+      if (cut < (node.data || "").length) break;
+    }
+    if (!chosen) return;
+    const { node, cut } = chosen;
+    node.data = node.data.slice(0, cut);
+    // The label is bold chrome and the dots are not: placed after it, never inside it.
+    const holder = node.parentNode && node.parentNode.classList && node.parentNode.classList.contains("code-prompt-label") ? node.parentNode : node;
+    const span = document.createElement("span");
+    span.className = "code-fold-dots";
+    span.textContent = CMD_FOLD_DOTS;
+    holder.parentNode.insertBefore(span, holder.nextSibling);
+    cmdCutAfter(body, span);
+    cmdFull.set(body, markup);
+  } finally {
+    delete body.dataset.cmdFolding;
+  }
+}
+
+// A card whose body changed width is re-measured: the console narrowed, the card was maximized, the panel resized.
+const cmdFoldResize =
+  typeof ResizeObserver === "function"
+    ? new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          const box = entry.target.parentElement;
+          if (box && box.classList && box.classList.contains("is-cmd")) paintCommandFoldMark(box);
+        }
+      })
+    : null;
+
+// Every card a render path placed, batched into one frame: a console rebuild puts twenty cards on the page at once,
+// and twenty separate measurements would be twenty layout flushes.
+function scheduleCommandFoldMark(root) {
+  if (!root || root.nodeType !== 1) return;
+  const boxes = [];
+  if (root.matches?.(".code-box.is-cmd")) boxes.push(root);
+  for (const el of root.querySelectorAll?.(".code-box.is-cmd") || []) boxes.push(el);
+  if (!boxes.length) return;
+  for (const box of boxes) cmdFoldPending.add(box);
+  if (cmdFoldFrame) return;
+  const flush = () => {
+    cmdFoldFrame = 0;
+    const batch = [...cmdFoldPending];
+    cmdFoldPending.clear();
+    for (const box of batch) if (box.isConnected) paintCommandFoldMark(box);
+  };
+  cmdFoldFrame = typeof requestAnimationFrame === "function" ? requestAnimationFrame(flush) : (setTimeout(flush, 0), 1);
+}
+
 const copyObserver = new MutationObserver((records) => {
   for (const r of records) {
     for (const node of r.addedNodes) {
@@ -2721,6 +2880,7 @@ const copyObserver = new MutationObserver((records) => {
       mountCopyButtons(node);
       armPlacedThink(node);
       watchMotion(node);
+      scheduleCommandFoldMark(node);
     }
   }
 });

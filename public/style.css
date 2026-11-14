@@ -1533,11 +1533,13 @@ body.is-out-gripping * { cursor: nwse-resize; }
 }
 [data-copy] { position: relative; }
 /* The room the button needs, reserved whether or not it is showing so its appearance moves nothing:
-   the console's own text, a burst's call lines, a thinking block's title line. */
+   the console's own text, a burst's call lines, a thinking block's title line. 24px is that room and stays the
+   floor; Settings > Display's "console text side margin" raises the right inset with the left one when the reader
+   sets it past 24, so the two sides of the console's text stay level. */
 [data-copy] > .job-out,
 [data-copy] > .out-box > .job-out,
 [data-copy] > .tgrp-head,
-[data-copy] > summary { padding-right: 24px; }
+[data-copy] > summary { padding-right: max(24px, var(--con-side, 10px)); }
 /* The reveal - the whole of it. A <details>'s button lives in its summary (the only part a folded one
    renders), so both placements answer to the block being hovered. */
 [data-copy]:hover > .copy-block,
@@ -1571,7 +1573,10 @@ body.is-out-gripping * { cursor: nwse-resize; }
   background: var(--console);
   border: 1px solid var(--line);
   border-radius: 6px;
-  padding: 8px 10px;
+  /* The text's own side inset: 10px, which is what this console has always kept, and the one number Settings >
+     Display's "console text side margin" moves - the command card's side margin is measured from it. The right side
+     is reserved for the copy button on a block that has one (see `[data-copy]`), which is unchanged by the setting. */
+  padding: 8px var(--con-side, 10px);
   /* ONE console size: the root's --term-size from Settings, overridden on a card the reader has Ctrl+wheel-zoomed.
      Normal output, tool output and the reasoning below all resolve to this same variable, so they cannot drift. */
   font-weight: var(--term-weight);
@@ -1942,17 +1947,41 @@ textarea.drop-target, .chipbox.drop-target { outline: 2px dashed var(--violet); 
 
 /* ---- the assistant's command card ----------------------------------------------------------------
    A command line the assistant wrote (public/core/assistant-command.js), drawn in the SAME frame as a tool's
-   result and folded to two lines instead of shut: the head keeps the frame's caret, header, count and
+   result and folded to its preview rows instead of shut: the head keeps the frame's caret, header, count and
    "click to read", and the body stays on the page so a reader who never clicks still sees the start of what the
    line asked for. `.is-clamped` is the folded state; the press handler (public/app.js) keeps it in step with
-   `.is-open`, and 3em at this line height is exactly the two lines the panel asks for. */
-.code-box.is-cmd > .code-body { font: 12px/1.5 var(--mono); color: #cfd8e3; }
-.code-box.is-cmd.is-clamped > .code-body { max-height: 3em; overflow: hidden; }
+   `.is-open`.
+   THE FIVE NUMBERS ARE THE READER'S (Settings > Display). They are variables with today's look as the fallback,
+   so an unset setting draws exactly what this card drew before they existed: the fold is 2 rows of this card's
+   line height (36px, the 3em this rule used to say), the body's side padding is 8px, the card's side margin is 0,
+   nothing is added above or below its 4px base margin, and the console's own text keeps the 10px inset it has
+   always had inside its box. */
+/* No vertical padding, on purpose: the fold is a WHOLE number of this card's 18px rows (`--cmd-rows`, a border-box
+   max-height), and 4px of air above and below would eat 8px of it - two rows would not fit in the height two rows
+   ask for. The default stays byte for byte the height the card has always folded to (2 x 18px = 36px, the 3em this
+   rule used to say); what the 4px used to hide was the bottom of the second row. */
+.code-box.is-cmd > .code-body {
+  font: 12px/1.5 var(--mono);
+  color: #cfd8e3;
+  padding: 0 var(--cmd-pad, 8px);
+}
+.code-box.is-cmd.is-clamped > .code-body { max-height: calc(var(--cmd-rows, 2) * 1.5em); overflow: hidden; }
+/* The card's own box, as the reader wants it beside the console's text: its side margin, and the blank lines above
+   and below it on top of the 4px frame margin it has always carried (one line here is the body's own 18px). */
+.code-box.is-cmd { margin: calc(4px + var(--cmd-blank, 0) * 18px) var(--cmd-side, 0px); }
+/* The three dots that end a folded card's last preview row, written by public/board/console.js at the character the
+   clamp cuts. Quiet - they are the card saying "there is more", not a word of the prompt - and never bold, so the
+   Prompt: label beside them keeps its weight on its own. */
+.code-fold-dots { color: var(--dim); font-weight: 400; }
+/* The Prompt: label that starts the body: it names what the text under it is, so it carries the weight the rest of
+   the prompt does not. Inline on the first row, which is why a folded card still shows its two rows of prompt. */
+.code-prompt-label { font-weight: 700; color: #e2e9f3; }
 /* The header's emoji is the kind, and a kind is not a tool: it keeps the frame's own colour so the card reads as
    one family, with the recipient and the title after it in the transcript's ink. The TITLE is the whole point of
    the card, so the header WRAPS rather than ellipsizing the one word the reader came for: a tool's header names a
-   path it is fine to cut, this one names a task. */
-.code-box.is-cmd > .code-head { align-items: flex-start; }
+   path it is fine to cut, this one names a task. Its side padding is the body's, so the two texts line up at any
+   value of the setting. */
+.code-box.is-cmd > .code-head { align-items: flex-start; padding-left: var(--cmd-pad, 8px); padding-right: var(--cmd-pad, 8px); }
 .code-box.is-cmd > .code-head .code-what { color: #c8a6ff; white-space: normal; overflow: visible; text-overflow: clip; flex: 1 1 auto; }
 /* No count: a command's body is one line of text that wraps, so "1 line" would count separators and not what the
    reader sees, and the room it takes is room the title needs. A card that carries a SPAWN's TODOs is the exception:
@@ -1963,7 +1992,9 @@ textarea.drop-target, .chipbox.drop-target { outline: 2px dashed var(--violet); 
 /* A SPAWN's TODOs, as bullet rows BETWEEN the head and the body: the two-line clamp cuts the BODY, so a folded card
    still shows every item the tree has to do. Each row is one line of text (glyph, category, the item), escaped by the
    module that draws it. */
-.code-box.is-cmd > .code-bullets { display: flex; flex-direction: column; gap: 2px; padding: 3px 8px 5px 22px; font: 12px/1.5 var(--mono); color: #cfd8e3; }
+/* The bullets keep the body's own side padding, the item text one glyph-width in from it (8px + 14px = the 22px this
+   row has always used), so a card's list and its prompt stay in one column at any value of the setting. */
+.code-box.is-cmd > .code-bullets { display: flex; flex-direction: column; gap: 2px; padding: 3px var(--cmd-pad, 8px) 5px calc(var(--cmd-pad, 8px) + 14px); font: 12px/1.5 var(--mono); color: #cfd8e3; }
 .code-box.is-cmd > .code-bullets + .code-body { border-top: 1px solid var(--line); }
 .code-bullet { display: flex; gap: 6px; white-space: normal; overflow-wrap: anywhere; }
 .code-bullet-glyph { flex: none; }
@@ -1972,16 +2003,17 @@ textarea.drop-target, .chipbox.drop-target { outline: 2px dashed var(--violet); 
    and the item reads after it. */
 .code-bullet-cat { font-weight: 700; color: #e2e9f3; }
 /* Folded, the card sits in a folded turn's tail where every other line is quiet: a 4px margin there would read as
-   a gap in the head, so the tail keeps the card tight against it. */
+   a gap in the head, so the tail keeps the card tight against it - the reader's side margin still applies, because
+   that is the card's place beside the console's text, not this tail's own gap. */
 .turn-peek.is-command { font-style: normal; }
-.turn-peek.is-command .code-box { margin: 2px 0 0; }
+.turn-peek.is-command .code-box { margin: 2px var(--cmd-side, 0px) 0; }
 /* The compacted answer draws its cards line by line; a line that is not a command keeps the answer's own font. */
 .turn-compact .tc-line { font: inherit; }
 /* The transcript's entry, with cards in it: the container stops pre-wrapping (each line is its own block) and the
    lines that are not commands keep the transcript's ink and wrapping. */
 .as-msg-text.is-cards { white-space: normal; }
 .as-msg-text .as-msg-line { white-space: pre-wrap; overflow-wrap: anywhere; }
-.as-msg-text.is-cards .code-box { margin: 3px 0; }
+.as-msg-text.is-cards .code-box { margin: 3px var(--cmd-side, 0px); }
 
 /* The panel's own fold, at the foot of a result the card kept only the head of: "… 214 lines hidden — click to
    read". It is a button because the rest of the result is one click away (the session store has it verbatim), and
@@ -2754,14 +2786,15 @@ a.out-link:hover { color: #a8ccff; text-decoration: underline solid; }
   --q-choice-on: #3a4452; --q-choice-on-line: #8a97ab;
   --q-accent: #8a97ab; --q-box: #647085; --q-tick: #e2e8f0; --q-note: #a3adbb;
 }
-/* The box is the console's box: the same 18px inset the console wrapper carries (`out-tab`, inside the turn's
-   11px rail padding) and the same right edge, so the question lines up with the output it follows. The inset is
-   on the wrapper, so a change there has to be mirrored here. Settings > Display > Question width can narrow it
-   to a fixed number of pixels, which then centres it under the console instead of following the console's edges. */
+/* The box is the console's box: the same 18px tab the console wrapper carries (`out-tab`, inside the turn's 11px
+   rail padding) and the same right edge, so the question lines up with the output it follows (the console's own text
+   sits one 10px inset further in, and the question box does not try to match that). Settings > Display > Question
+   width can narrow it to a fixed number of pixels, which then centres it under the console instead of following the
+   console's edges. */
 .turn-question { max-width: none; margin: 8px 0 6px 18px; border: 1px solid var(--q-line); border-radius: 8px; background: linear-gradient(180deg, var(--q-bg-a), var(--q-bg-b)); box-shadow: 0 6px 18px rgba(0,0,0,.35); padding: 10px 12px; }
-/* A set width centres the box under the console, and the 18px keeps it inside the console's own span when the
-   number is larger than the card — otherwise the cap stops binding and the box would start 18px left of the
-   console it is supposed to sit under. */
+/* A set width centres the box under the console, and the 18px keeps it inside the console's own span when the number
+   is larger than the card - otherwise the cap stops binding and the box would start 18px left of the console it is
+   supposed to sit under. */
 :root.q-width-set .turn-question { margin: 8px auto 6px; max-width: min(var(--q-width, 900px), calc(100% - 18px)); }
 .tq-head { font-size: 11.5px; color: var(--q-head); letter-spacing: .01em; }
 /* The re-ask count: the question is the same one, and this is how many times the panel has put it back in
@@ -3162,6 +3195,11 @@ body.modal-open { overflow: hidden; }
 .job.maximized .turn.folded { display: block; flex: 0 0 auto; }
 .job.maximized .job-out { max-height: none; flex: 1; min-height: 0; }
 .job.maximized .reply-box { min-height: 79px; }
+/* The console's text keeps a side inset inside its own box, so a line of output is set in from the box's edge and
+   reads as a transcript rather than as the box's own chrome: that inset is the body's 10px padding, the one number
+   Settings > Display's "console text side margin" moves (0 runs the text to the edge), and the command card's own
+   side margin is measured from it. This 18px is a different number and not the reader's: it is the tab that centres
+   the console's boxes under the turn, kept here so the card and the question box below still sit in that column. */
 .job-cmd, .job-out, .job-foot { margin-left: 18px; }
 /* The usage readout sits directly under the reply box, not above it and not at the foot of the card: it
    starts where the box starts and ends its line. No left margin of its own; the send/steer buttons are

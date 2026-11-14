@@ -132,7 +132,10 @@ test("untitled MESSAGE, QUEUE and SPAWN lines are cards, and a titled one keeps 
     const card = M.cardHtml(c.line, { key: `k|${c.what}` });
     assert.notEqual(card, "", `no card for: ${c.line}`);
     assert.ok(card.includes(head(c.what)), `the head of ${c.line} is wrong`);
-    assert.ok(card.includes(`<div class="jl jl-text">${c.body}</div>`), `the body of ${c.line} is wrong`);
+    assert.ok(
+      card.includes(`<div class="jl jl-text"><b class="code-prompt-label">Prompt:</b> ${c.body}</div>`),
+      `the body of ${c.line} is wrong: it starts with the bold label, then the payload`,
+    );
     assert.match(card, /data-code-clamp="2"/, "folded to two lines");
   }
   // A block of the four: every one of them a card, and the prose around them still prose.
@@ -167,8 +170,10 @@ test("the card is the tool card's own frame, with a button head and a two-line b
   // Folded, the body is on the page (folded to two lines by the stylesheet), never `hidden`.
   assert.match(card, /<div class="code-body">/);
   assert.doesNotMatch(card, /code-body" hidden/);
-  // The same stylesheet rule, and the number it reads: two lines at this line height.
-  assert.match(css, /\.code-box\.is-cmd\.is-clamped > \.code-body \{ max-height: 3em; overflow: hidden; \}/);
+  // The same stylesheet rule, and the number it reads: the reader's preview rows, with today's two as the fallback
+  // (2 rows at this card's 18px line = the 36px the rule used to spell as 3em).
+  assert.match(css, /\.code-box\.is-cmd\.is-clamped > \.code-body \{ max-height: calc\(var\(--cmd-rows, 2\) \* 1\.5em\); overflow: hidden; \}/);
+  assert.doesNotMatch(css, /max-height: 3em;/, "the fold reads the setting, not a fixed three em");
   // A head that is a real button is the keyboard's own control: Tab reaches it, Enter and Space press it, and it
   // carries the state. Nothing here draws a div pretending to be a press.
   const press = /<button type="button" class="code-head"[^>]*aria-expanded="false"[^>]*>/.exec(card);

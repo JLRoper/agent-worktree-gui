@@ -1,0 +1,2206 @@
+{
+  "tree": ".",
+  "shots": "docs/reports/command-card-look",
+  "steps": [
+    {
+      "step": "default",
+      "found": true,
+      "ltext": "QUEUE assistant-3 | [Fold marker] corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "clamp": "2",
+      "clamped": true,
+      "open": false,
+      "aria": "false",
+      "hint": "click to read",
+      "rows": "2",
+      "bodyH": 36,
+      "bodyScroll": 36,
+      "bodyTop": 364,
+      "bodyBottom": 400,
+      "lineH": 18,
+      "padLeft": 8,
+      "padRight": 8,
+      "bodyLeft": 1027,
+      "bodyRight": 1392,
+      "dots": "...",
+      "dotsCount": 1,
+      "dotsLast": true,
+      "dotsBox": {
+        "top": 384,
+        "bottom": 398,
+        "right": 1378
+      },
+      "dotsVisible": true,
+      "dotsInside": true,
+      "text": "Prompt: corner resize the board's tail and the transcript together, corner resize the board's ta...",
+      "cut": "corner resize the board's tail and the transcript together, corner resize the board's ta",
+      "whole": "corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "cutIsPrefix": true,
+      "cutShorter": true,
+      "label": "Prompt:",
+      "labelWeight": "700",
+      "labelFirst": true,
+      "labelInline": true,
+      "vars": {
+        "rows": "2",
+        "side": "0px",
+        "pad": "8px",
+        "blank": "0",
+        "con": "10px"
+      },
+      "store": null,
+      "card": {
+        "left": 1026,
+        "top": 336,
+        "bottom": 401,
+        "width": 367
+      },
+      "cardMarginTop": 4,
+      "cardMarginLeft": 0,
+      "cardMarginRight": 0,
+      "prePadLeft": 10,
+      "prePadRight": 24,
+      "preBorder": 1,
+      "pre": {
+        "left": 1015,
+        "width": 403
+      },
+      "turn": {
+        "left": 986,
+        "width": 432
+      },
+      "headPadLeft": 8,
+      "bulletsPadLeft": null,
+      "prose": [
+        {
+          "text": "the console's own words, before the card.",
+          "left": 1026,
+          "top": 315,
+          "bottom": 332
+        },
+        {
+          "text": "the console's own words after the cards.",
+          "left": 1026,
+          "top": 455,
+          "bottom": 472
+        }
+      ],
+      "fits": {
+        "found": true,
+        "dots": 0,
+        "bodyH": 18,
+        "clamp": "2"
+      }
+    },
+    {
+      "step": "open",
+      "found": true,
+      "ltext": "QUEUE assistant-3 | [Fold marker] corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "clamp": "2",
+      "clamped": false,
+      "open": true,
+      "aria": "true",
+      "hint": "click to fold",
+      "rows": "2",
+      "bodyH": 666,
+      "bodyScroll": 666,
+      "bodyTop": 365,
+      "bodyBottom": 1031,
+      "lineH": 18,
+      "padLeft": 8,
+      "padRight": 8,
+      "bodyLeft": 1027,
+      "bodyRight": 1392,
+      "dots": null,
+      "dotsCount": 0,
+      "dotsLast": null,
+      "dotsBox": null,
+      "dotsVisible": null,
+      "dotsInside": null,
+      "text": "Prompt: corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "cut": "corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "whole": "corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "cutIsPrefix": true,
+      "cutShorter": false,
+      "label": "Prompt:",
+      "labelWeight": "700",
+      "labelFirst": true,
+      "labelInline": true,
+      "vars": {
+        "rows": "2",
+        "side": "0px",
+        "pad": "8px",
+        "blank": "0",
+        "con": "10px"
+      },
+      "store": null,
+      "card": {
+        "left": 1026,
+        "top": 336,
+        "bottom": 1032,
+        "width": 367
+      },
+      "cardMarginTop": 4,
+      "cardMarginLeft": 0,
+      "cardMarginRight": 0,
+      "prePadLeft": 10,
+      "prePadRight": 24,
+      "preBorder": 1,
+      "pre": {
+        "left": 1015,
+        "width": 403
+      },
+      "turn": {
+        "left": 986,
+        "width": 432
+      },
+      "headPadLeft": 8,
+      "bulletsPadLeft": null,
+      "prose": [
+        {
+          "text": "the console's own words, before the card.",
+          "left": 1026,
+          "top": 315,
+          "bottom": 332
+        },
+        {
+          "text": "the console's own words after the cards.",
+          "left": 1026,
+          "top": 1086,
+          "bottom": 1103
+        }
+      ],
+      "fits": {
+        "found": true,
+        "dots": 0,
+        "bodyH": 18,
+        "clamp": "2"
+      }
+    },
+    {
+      "step": "settings-rows",
+      "present": [
+        {
+          "id": "cmd-rows",
+          "found": true,
+          "type": "number",
+          "min": "1",
+          "max": "8",
+          "value": "2",
+          "visible": true
+        },
+        {
+          "id": "cmd-side",
+          "found": true,
+          "type": "number",
+          "min": "0",
+          "max": "60",
+          "value": "0",
+          "visible": true
+        },
+        {
+          "id": "cmd-pad",
+          "found": true,
+          "type": "number",
+          "min": "0",
+          "max": "32",
+          "value": "8",
+          "visible": true
+        },
+        {
+          "id": "cmd-blank",
+          "found": true,
+          "type": "number",
+          "min": "0",
+          "max": "4",
+          "value": "0",
+          "visible": true
+        },
+        {
+          "id": "cmd-con",
+          "found": true,
+          "type": "number",
+          "min": "0",
+          "max": "60",
+          "value": "10",
+          "visible": true
+        }
+      ],
+      "reset": true,
+      "tab": "true"
+    },
+    {
+      "step": "10-rows-min-1",
+      "found": true,
+      "ltext": "QUEUE assistant-3 | [Fold marker] corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "clamp": "1",
+      "clamped": true,
+      "open": false,
+      "aria": "false",
+      "hint": "click to read",
+      "rows": "1",
+      "bodyH": 18,
+      "bodyScroll": 18,
+      "bodyTop": 364,
+      "bodyBottom": 382,
+      "lineH": 18,
+      "padLeft": 8,
+      "padRight": 8,
+      "bodyLeft": 1027,
+      "bodyRight": 1392,
+      "dots": "...",
+      "dotsCount": 1,
+      "dotsLast": true,
+      "dotsBox": {
+        "top": 366,
+        "bottom": 380,
+        "right": 1365
+      },
+      "dotsVisible": true,
+      "dotsInside": true,
+      "text": "Prompt: corner resize the board's tail and the ...",
+      "cut": "corner resize the board's tail and the",
+      "whole": "corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "cutIsPrefix": true,
+      "cutShorter": true,
+      "label": "Prompt:",
+      "labelWeight": "700",
+      "labelFirst": true,
+      "labelInline": true,
+      "vars": {
+        "rows": "1",
+        "side": "0px",
+        "pad": "8px",
+        "blank": "0",
+        "con": "10px"
+      },
+      "store": {
+        "rows": 1,
+        "side": 0,
+        "pad": 8,
+        "blank": 0,
+        "con": 10
+      },
+      "card": {
+        "left": 1026,
+        "top": 336,
+        "bottom": 383,
+        "width": 367
+      },
+      "cardMarginTop": 4,
+      "cardMarginLeft": 0,
+      "cardMarginRight": 0,
+      "prePadLeft": 10,
+      "prePadRight": 24,
+      "preBorder": 1,
+      "pre": {
+        "left": 1015,
+        "width": 403
+      },
+      "turn": {
+        "left": 986,
+        "width": 432
+      },
+      "headPadLeft": 8,
+      "bulletsPadLeft": null,
+      "prose": [
+        {
+          "text": "the console's own words, before the card.",
+          "left": 1026,
+          "top": 315,
+          "bottom": 332
+        },
+        {
+          "text": "the console's own words after the cards.",
+          "left": 1026,
+          "top": 437,
+          "bottom": 454
+        }
+      ],
+      "fits": {
+        "found": true,
+        "dots": 0,
+        "bodyH": 18,
+        "clamp": "1"
+      }
+    },
+    {
+      "step": "11-rows-max-8",
+      "found": true,
+      "ltext": "QUEUE assistant-3 | [Fold marker] corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "clamp": "8",
+      "clamped": true,
+      "open": false,
+      "aria": "false",
+      "hint": "click to read",
+      "rows": "8",
+      "bodyH": 144,
+      "bodyScroll": 144,
+      "bodyTop": 364,
+      "bodyBottom": 508,
+      "lineH": 18,
+      "padLeft": 8,
+      "padRight": 8,
+      "bodyLeft": 1027,
+      "bodyRight": 1392,
+      "dots": "...",
+      "dotsCount": 1,
+      "dotsLast": true,
+      "dotsBox": {
+        "top": 492,
+        "bottom": 506,
+        "right": 1378
+      },
+      "dotsVisible": true,
+      "dotsInside": true,
+      "text": "Prompt: corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's ta...",
+      "cut": "corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's ta",
+      "whole": "corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "cutIsPrefix": true,
+      "cutShorter": true,
+      "label": "Prompt:",
+      "labelWeight": "700",
+      "labelFirst": true,
+      "labelInline": true,
+      "vars": {
+        "rows": "8",
+        "side": "0px",
+        "pad": "8px",
+        "blank": "0",
+        "con": "10px"
+      },
+      "store": {
+        "rows": 8,
+        "side": 0,
+        "pad": 8,
+        "blank": 0,
+        "con": 10
+      },
+      "card": {
+        "left": 1026,
+        "top": 336,
+        "bottom": 509,
+        "width": 367
+      },
+      "cardMarginTop": 4,
+      "cardMarginLeft": 0,
+      "cardMarginRight": 0,
+      "prePadLeft": 10,
+      "prePadRight": 24,
+      "preBorder": 1,
+      "pre": {
+        "left": 1015,
+        "width": 403
+      },
+      "turn": {
+        "left": 986,
+        "width": 432
+      },
+      "headPadLeft": 8,
+      "bulletsPadLeft": null,
+      "prose": [
+        {
+          "text": "the console's own words, before the card.",
+          "left": 1026,
+          "top": 315,
+          "bottom": 332
+        },
+        {
+          "text": "the console's own words after the cards.",
+          "left": 1026,
+          "top": 563,
+          "bottom": 580
+        }
+      ],
+      "fits": {
+        "found": true,
+        "dots": 0,
+        "bodyH": 18,
+        "clamp": "8"
+      }
+    },
+    {
+      "step": "20-side-min-0",
+      "found": true,
+      "ltext": "QUEUE assistant-3 | [Fold marker] corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "clamp": "2",
+      "clamped": true,
+      "open": false,
+      "aria": "false",
+      "hint": "click to read",
+      "rows": "2",
+      "bodyH": 36,
+      "bodyScroll": 36,
+      "bodyTop": 364,
+      "bodyBottom": 400,
+      "lineH": 18,
+      "padLeft": 8,
+      "padRight": 8,
+      "bodyLeft": 1027,
+      "bodyRight": 1392,
+      "dots": "...",
+      "dotsCount": 1,
+      "dotsLast": true,
+      "dotsBox": {
+        "top": 384,
+        "bottom": 398,
+        "right": 1378
+      },
+      "dotsVisible": true,
+      "dotsInside": true,
+      "text": "Prompt: corner resize the board's tail and the transcript together, corner resize the board's ta...",
+      "cut": "corner resize the board's tail and the transcript together, corner resize the board's ta",
+      "whole": "corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "cutIsPrefix": true,
+      "cutShorter": true,
+      "label": "Prompt:",
+      "labelWeight": "700",
+      "labelFirst": true,
+      "labelInline": true,
+      "vars": {
+        "rows": "2",
+        "side": "0px",
+        "pad": "8px",
+        "blank": "0",
+        "con": "10px"
+      },
+      "store": {
+        "rows": 2,
+        "side": 0,
+        "pad": 8,
+        "blank": 0,
+        "con": 10
+      },
+      "card": {
+        "left": 1026,
+        "top": 336,
+        "bottom": 401,
+        "width": 367
+      },
+      "cardMarginTop": 4,
+      "cardMarginLeft": 0,
+      "cardMarginRight": 0,
+      "prePadLeft": 10,
+      "prePadRight": 24,
+      "preBorder": 1,
+      "pre": {
+        "left": 1015,
+        "width": 403
+      },
+      "turn": {
+        "left": 986,
+        "width": 432
+      },
+      "headPadLeft": 8,
+      "bulletsPadLeft": null,
+      "prose": [
+        {
+          "text": "the console's own words, before the card.",
+          "left": 1026,
+          "top": 315,
+          "bottom": 332
+        },
+        {
+          "text": "the console's own words after the cards.",
+          "left": 1026,
+          "top": 455,
+          "bottom": 472
+        }
+      ],
+      "fits": {
+        "found": true,
+        "dots": 0,
+        "bodyH": 18,
+        "clamp": "2"
+      }
+    },
+    {
+      "step": "21-side-max-60",
+      "found": true,
+      "ltext": "QUEUE assistant-3 | [Fold marker] corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "clamp": "2",
+      "clamped": true,
+      "open": false,
+      "aria": "false",
+      "hint": "click to read",
+      "rows": "2",
+      "bodyH": 36,
+      "bodyScroll": 36,
+      "bodyTop": 380,
+      "bodyBottom": 416,
+      "lineH": 18,
+      "padLeft": 8,
+      "padRight": 8,
+      "bodyLeft": 1087,
+      "bodyRight": 1332,
+      "dots": "...",
+      "dotsCount": 1,
+      "dotsLast": true,
+      "dotsBox": {
+        "top": 400,
+        "bottom": 414,
+        "right": 1319
+      },
+      "dotsVisible": true,
+      "dotsInside": true,
+      "text": "Prompt: corner resize the board's tail and the transcript togethe...",
+      "cut": "corner resize the board's tail and the transcript togethe",
+      "whole": "corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "cutIsPrefix": true,
+      "cutShorter": true,
+      "label": "Prompt:",
+      "labelWeight": "700",
+      "labelFirst": true,
+      "labelInline": true,
+      "vars": {
+        "rows": "2",
+        "side": "60px",
+        "pad": "8px",
+        "blank": "0",
+        "con": "10px"
+      },
+      "store": {
+        "rows": 2,
+        "side": 60,
+        "pad": 8,
+        "blank": 0,
+        "con": 10
+      },
+      "card": {
+        "left": 1086,
+        "top": 336,
+        "bottom": 417,
+        "width": 247
+      },
+      "cardMarginTop": 4,
+      "cardMarginLeft": 60,
+      "cardMarginRight": 60,
+      "prePadLeft": 10,
+      "prePadRight": 24,
+      "preBorder": 1,
+      "pre": {
+        "left": 1015,
+        "width": 403
+      },
+      "turn": {
+        "left": 986,
+        "width": 432
+      },
+      "headPadLeft": 8,
+      "bulletsPadLeft": null,
+      "prose": [
+        {
+          "text": "the console's own words, before the card.",
+          "left": 1026,
+          "top": 315,
+          "bottom": 332
+        },
+        {
+          "text": "the console's own words after the cards.",
+          "left": 1026,
+          "top": 471,
+          "bottom": 488
+        }
+      ],
+      "fits": {
+        "found": true,
+        "dots": 0,
+        "bodyH": 18,
+        "clamp": "2"
+      }
+    },
+    {
+      "step": "30-pad-min-0",
+      "found": true,
+      "ltext": "QUEUE assistant-3 | [Fold marker] corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "clamp": "2",
+      "clamped": true,
+      "open": false,
+      "aria": "false",
+      "hint": "click to read",
+      "rows": "2",
+      "bodyH": 36,
+      "bodyScroll": 36,
+      "bodyTop": 364,
+      "bodyBottom": 400,
+      "lineH": 18,
+      "padLeft": 0,
+      "padRight": 0,
+      "bodyLeft": 1027,
+      "bodyRight": 1392,
+      "dots": "...",
+      "dotsCount": 1,
+      "dotsLast": true,
+      "dotsBox": {
+        "top": 384,
+        "bottom": 398,
+        "right": 1390
+      },
+      "dotsVisible": true,
+      "dotsInside": true,
+      "text": "Prompt: corner resize the board's tail and the transcript together, corner resize the board's tail ...",
+      "cut": "corner resize the board's tail and the transcript together, corner resize the board's tail",
+      "whole": "corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "cutIsPrefix": true,
+      "cutShorter": true,
+      "label": "Prompt:",
+      "labelWeight": "700",
+      "labelFirst": true,
+      "labelInline": true,
+      "vars": {
+        "rows": "2",
+        "side": "0px",
+        "pad": "0px",
+        "blank": "0",
+        "con": "10px"
+      },
+      "store": {
+        "rows": 2,
+        "side": 0,
+        "pad": 0,
+        "blank": 0,
+        "con": 10
+      },
+      "card": {
+        "left": 1026,
+        "top": 336,
+        "bottom": 401,
+        "width": 367
+      },
+      "cardMarginTop": 4,
+      "cardMarginLeft": 0,
+      "cardMarginRight": 0,
+      "prePadLeft": 10,
+      "prePadRight": 24,
+      "preBorder": 1,
+      "pre": {
+        "left": 1015,
+        "width": 403
+      },
+      "turn": {
+        "left": 986,
+        "width": 432
+      },
+      "headPadLeft": 0,
+      "bulletsPadLeft": null,
+      "prose": [
+        {
+          "text": "the console's own words, before the card.",
+          "left": 1026,
+          "top": 315,
+          "bottom": 332
+        },
+        {
+          "text": "the console's own words after the cards.",
+          "left": 1026,
+          "top": 455,
+          "bottom": 472
+        }
+      ],
+      "fits": {
+        "found": true,
+        "dots": 0,
+        "bodyH": 18,
+        "clamp": "2"
+      }
+    },
+    {
+      "step": "31-pad-max-32",
+      "found": true,
+      "ltext": "QUEUE assistant-3 | [Fold marker] corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "clamp": "2",
+      "clamped": true,
+      "open": false,
+      "aria": "false",
+      "hint": "click to read",
+      "rows": "2",
+      "bodyH": 36,
+      "bodyScroll": 36,
+      "bodyTop": 364,
+      "bodyBottom": 400,
+      "lineH": 18,
+      "padLeft": 32,
+      "padRight": 32,
+      "bodyLeft": 1027,
+      "bodyRight": 1392,
+      "dots": "...",
+      "dotsCount": 1,
+      "dotsLast": true,
+      "dotsBox": {
+        "top": 384,
+        "bottom": 398,
+        "right": 1356
+      },
+      "dotsVisible": true,
+      "dotsInside": true,
+      "text": "Prompt: corner resize the board's tail and the transcript together, corner resize the...",
+      "cut": "corner resize the board's tail and the transcript together, corner resize the",
+      "whole": "corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "cutIsPrefix": true,
+      "cutShorter": true,
+      "label": "Prompt:",
+      "labelWeight": "700",
+      "labelFirst": true,
+      "labelInline": true,
+      "vars": {
+        "rows": "2",
+        "side": "0px",
+        "pad": "32px",
+        "blank": "0",
+        "con": "10px"
+      },
+      "store": {
+        "rows": 2,
+        "side": 0,
+        "pad": 32,
+        "blank": 0,
+        "con": 10
+      },
+      "card": {
+        "left": 1026,
+        "top": 336,
+        "bottom": 401,
+        "width": 367
+      },
+      "cardMarginTop": 4,
+      "cardMarginLeft": 0,
+      "cardMarginRight": 0,
+      "prePadLeft": 10,
+      "prePadRight": 24,
+      "preBorder": 1,
+      "pre": {
+        "left": 1015,
+        "width": 403
+      },
+      "turn": {
+        "left": 986,
+        "width": 432
+      },
+      "headPadLeft": 32,
+      "bulletsPadLeft": null,
+      "prose": [
+        {
+          "text": "the console's own words, before the card.",
+          "left": 1026,
+          "top": 315,
+          "bottom": 332
+        },
+        {
+          "text": "the console's own words after the cards.",
+          "left": 1026,
+          "top": 455,
+          "bottom": 472
+        }
+      ],
+      "fits": {
+        "found": true,
+        "dots": 0,
+        "bodyH": 18,
+        "clamp": "2"
+      }
+    },
+    {
+      "step": "40-blank-min-0",
+      "found": true,
+      "ltext": "QUEUE assistant-3 | [Fold marker] corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "clamp": "2",
+      "clamped": true,
+      "open": false,
+      "aria": "false",
+      "hint": "click to read",
+      "rows": "2",
+      "bodyH": 36,
+      "bodyScroll": 36,
+      "bodyTop": 364,
+      "bodyBottom": 400,
+      "lineH": 18,
+      "padLeft": 8,
+      "padRight": 8,
+      "bodyLeft": 1027,
+      "bodyRight": 1392,
+      "dots": "...",
+      "dotsCount": 1,
+      "dotsLast": true,
+      "dotsBox": {
+        "top": 384,
+        "bottom": 398,
+        "right": 1378
+      },
+      "dotsVisible": true,
+      "dotsInside": true,
+      "text": "Prompt: corner resize the board's tail and the transcript together, corner resize the board's ta...",
+      "cut": "corner resize the board's tail and the transcript together, corner resize the board's ta",
+      "whole": "corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "cutIsPrefix": true,
+      "cutShorter": true,
+      "label": "Prompt:",
+      "labelWeight": "700",
+      "labelFirst": true,
+      "labelInline": true,
+      "vars": {
+        "rows": "2",
+        "side": "0px",
+        "pad": "8px",
+        "blank": "0",
+        "con": "10px"
+      },
+      "store": {
+        "rows": 2,
+        "side": 0,
+        "pad": 8,
+        "blank": 0,
+        "con": 10
+      },
+      "card": {
+        "left": 1026,
+        "top": 336,
+        "bottom": 401,
+        "width": 367
+      },
+      "cardMarginTop": 4,
+      "cardMarginLeft": 0,
+      "cardMarginRight": 0,
+      "prePadLeft": 10,
+      "prePadRight": 24,
+      "preBorder": 1,
+      "pre": {
+        "left": 1015,
+        "width": 403
+      },
+      "turn": {
+        "left": 986,
+        "width": 432
+      },
+      "headPadLeft": 8,
+      "bulletsPadLeft": null,
+      "prose": [
+        {
+          "text": "the console's own words, before the card.",
+          "left": 1026,
+          "top": 315,
+          "bottom": 332
+        },
+        {
+          "text": "the console's own words after the cards.",
+          "left": 1026,
+          "top": 455,
+          "bottom": 472
+        }
+      ],
+      "fits": {
+        "found": true,
+        "dots": 0,
+        "bodyH": 18,
+        "clamp": "2"
+      }
+    },
+    {
+      "step": "41-blank-max-4",
+      "found": true,
+      "ltext": "QUEUE assistant-3 | [Fold marker] corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "clamp": "2",
+      "clamped": true,
+      "open": false,
+      "aria": "false",
+      "hint": "click to read",
+      "rows": "2",
+      "bodyH": 36,
+      "bodyScroll": 36,
+      "bodyTop": 436,
+      "bodyBottom": 472,
+      "lineH": 18,
+      "padLeft": 8,
+      "padRight": 8,
+      "bodyLeft": 1027,
+      "bodyRight": 1392,
+      "dots": "...",
+      "dotsCount": 1,
+      "dotsLast": true,
+      "dotsBox": {
+        "top": 456,
+        "bottom": 470,
+        "right": 1378
+      },
+      "dotsVisible": true,
+      "dotsInside": true,
+      "text": "Prompt: corner resize the board's tail and the transcript together, corner resize the board's ta...",
+      "cut": "corner resize the board's tail and the transcript together, corner resize the board's ta",
+      "whole": "corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "cutIsPrefix": true,
+      "cutShorter": true,
+      "label": "Prompt:",
+      "labelWeight": "700",
+      "labelFirst": true,
+      "labelInline": true,
+      "vars": {
+        "rows": "2",
+        "side": "0px",
+        "pad": "8px",
+        "blank": "4",
+        "con": "10px"
+      },
+      "store": {
+        "rows": 2,
+        "side": 0,
+        "pad": 8,
+        "blank": 4,
+        "con": 10
+      },
+      "card": {
+        "left": 1026,
+        "top": 408,
+        "bottom": 473,
+        "width": 367
+      },
+      "cardMarginTop": 76,
+      "cardMarginLeft": 0,
+      "cardMarginRight": 0,
+      "prePadLeft": 10,
+      "prePadRight": 24,
+      "preBorder": 1,
+      "pre": {
+        "left": 1015,
+        "width": 403
+      },
+      "turn": {
+        "left": 986,
+        "width": 432
+      },
+      "headPadLeft": 8,
+      "bulletsPadLeft": null,
+      "prose": [
+        {
+          "text": "the console's own words, before the card.",
+          "left": 1026,
+          "top": 315,
+          "bottom": 332
+        },
+        {
+          "text": "the console's own words after the cards.",
+          "left": 1026,
+          "top": 671,
+          "bottom": 688
+        }
+      ],
+      "fits": {
+        "found": true,
+        "dots": 0,
+        "bodyH": 18,
+        "clamp": "2"
+      }
+    },
+    {
+      "step": "50-con-min-0",
+      "found": true,
+      "ltext": "QUEUE assistant-3 | [Fold marker] corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "clamp": "2",
+      "clamped": true,
+      "open": false,
+      "aria": "false",
+      "hint": "click to read",
+      "rows": "2",
+      "bodyH": 36,
+      "bodyScroll": 36,
+      "bodyTop": 364,
+      "bodyBottom": 400,
+      "lineH": 18,
+      "padLeft": 8,
+      "padRight": 8,
+      "bodyLeft": 1017,
+      "bodyRight": 1392,
+      "dots": "...",
+      "dotsCount": 1,
+      "dotsLast": true,
+      "dotsBox": {
+        "top": 384,
+        "bottom": 398,
+        "right": 1381
+      },
+      "dotsVisible": true,
+      "dotsInside": true,
+      "text": "Prompt: corner resize the board's tail and the transcript together, corner resize the board's tail...",
+      "cut": "corner resize the board's tail and the transcript together, corner resize the board's tail",
+      "whole": "corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "cutIsPrefix": true,
+      "cutShorter": true,
+      "label": "Prompt:",
+      "labelWeight": "700",
+      "labelFirst": true,
+      "labelInline": true,
+      "vars": {
+        "rows": "2",
+        "side": "0px",
+        "pad": "8px",
+        "blank": "0",
+        "con": "0px"
+      },
+      "store": {
+        "rows": 2,
+        "side": 0,
+        "pad": 8,
+        "blank": 0,
+        "con": 0
+      },
+      "card": {
+        "left": 1016,
+        "top": 336,
+        "bottom": 401,
+        "width": 377
+      },
+      "cardMarginTop": 4,
+      "cardMarginLeft": 0,
+      "cardMarginRight": 0,
+      "prePadLeft": 0,
+      "prePadRight": 24,
+      "preBorder": 1,
+      "pre": {
+        "left": 1015,
+        "width": 403
+      },
+      "turn": {
+        "left": 986,
+        "width": 432
+      },
+      "headPadLeft": 8,
+      "bulletsPadLeft": null,
+      "prose": [
+        {
+          "text": "the console's own words, before the card.",
+          "left": 1016,
+          "top": 315,
+          "bottom": 332
+        },
+        {
+          "text": "the console's own words after the cards.",
+          "left": 1016,
+          "top": 455,
+          "bottom": 472
+        }
+      ],
+      "fits": {
+        "found": true,
+        "dots": 0,
+        "bodyH": 18,
+        "clamp": "2"
+      }
+    },
+    {
+      "step": "51-con-max-60",
+      "found": true,
+      "ltext": "QUEUE assistant-3 | [Fold marker] corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "clamp": "2",
+      "clamped": true,
+      "open": false,
+      "aria": "false",
+      "hint": "click to read",
+      "rows": "2",
+      "bodyH": 36,
+      "bodyScroll": 36,
+      "bodyTop": 380,
+      "bodyBottom": 416,
+      "lineH": 18,
+      "padLeft": 8,
+      "padRight": 8,
+      "bodyLeft": 1077,
+      "bodyRight": 1356,
+      "dots": "...",
+      "dotsCount": 1,
+      "dotsLast": true,
+      "dotsBox": {
+        "top": 400,
+        "bottom": 414,
+        "right": 1342
+      },
+      "dotsVisible": true,
+      "dotsInside": true,
+      "text": "Prompt: corner resize the board's tail and the transcript together, corner ...",
+      "cut": "corner resize the board's tail and the transcript together, corner",
+      "whole": "corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "cutIsPrefix": true,
+      "cutShorter": true,
+      "label": "Prompt:",
+      "labelWeight": "700",
+      "labelFirst": true,
+      "labelInline": true,
+      "vars": {
+        "rows": "2",
+        "side": "0px",
+        "pad": "8px",
+        "blank": "0",
+        "con": "60px"
+      },
+      "store": {
+        "rows": 2,
+        "side": 0,
+        "pad": 8,
+        "blank": 0,
+        "con": 60
+      },
+      "card": {
+        "left": 1076,
+        "top": 336,
+        "bottom": 417,
+        "width": 281
+      },
+      "cardMarginTop": 4,
+      "cardMarginLeft": 0,
+      "cardMarginRight": 0,
+      "prePadLeft": 60,
+      "prePadRight": 60,
+      "preBorder": 1,
+      "pre": {
+        "left": 1015,
+        "width": 403
+      },
+      "turn": {
+        "left": 986,
+        "width": 432
+      },
+      "headPadLeft": 8,
+      "bulletsPadLeft": null,
+      "prose": [
+        {
+          "text": "the console's own words, before the card.",
+          "left": 1076,
+          "top": 315,
+          "bottom": 332
+        },
+        {
+          "text": "the console's own words after the cards.",
+          "left": 1076,
+          "top": 471,
+          "bottom": 488
+        }
+      ],
+      "fits": {
+        "found": true,
+        "dots": 0,
+        "bodyH": 18,
+        "clamp": "2"
+      }
+    }
+  ],
+  "notMeasured": [],
+  "errors": [],
+  "browser": {
+    "pids": [
+      22684,
+      43244,
+      12492,
+      22580
+    ],
+    "profile": "<tmp>/playwright_chromiumdev_profile-yZjuSZ"
+  },
+  "states": {
+    "10-rows-min-1": {
+      "found": true,
+      "ltext": "QUEUE assistant-3 | [Fold marker] corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "clamp": "1",
+      "clamped": true,
+      "open": false,
+      "aria": "false",
+      "hint": "click to read",
+      "rows": "1",
+      "bodyH": 18,
+      "bodyScroll": 18,
+      "bodyTop": 364,
+      "bodyBottom": 382,
+      "lineH": 18,
+      "padLeft": 8,
+      "padRight": 8,
+      "bodyLeft": 1027,
+      "bodyRight": 1392,
+      "dots": "...",
+      "dotsCount": 1,
+      "dotsLast": true,
+      "dotsBox": {
+        "top": 366,
+        "bottom": 380,
+        "right": 1365
+      },
+      "dotsVisible": true,
+      "dotsInside": true,
+      "text": "Prompt: corner resize the board's tail and the ...",
+      "cut": "corner resize the board's tail and the",
+      "whole": "corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "cutIsPrefix": true,
+      "cutShorter": true,
+      "label": "Prompt:",
+      "labelWeight": "700",
+      "labelFirst": true,
+      "labelInline": true,
+      "vars": {
+        "rows": "1",
+        "side": "0px",
+        "pad": "8px",
+        "blank": "0",
+        "con": "10px"
+      },
+      "store": {
+        "rows": 1,
+        "side": 0,
+        "pad": 8,
+        "blank": 0,
+        "con": 10
+      },
+      "card": {
+        "left": 1026,
+        "top": 336,
+        "bottom": 383,
+        "width": 367
+      },
+      "cardMarginTop": 4,
+      "cardMarginLeft": 0,
+      "cardMarginRight": 0,
+      "prePadLeft": 10,
+      "prePadRight": 24,
+      "preBorder": 1,
+      "pre": {
+        "left": 1015,
+        "width": 403
+      },
+      "turn": {
+        "left": 986,
+        "width": 432
+      },
+      "headPadLeft": 8,
+      "bulletsPadLeft": null,
+      "prose": [
+        {
+          "text": "the console's own words, before the card.",
+          "left": 1026,
+          "top": 315,
+          "bottom": 332
+        },
+        {
+          "text": "the console's own words after the cards.",
+          "left": 1026,
+          "top": 437,
+          "bottom": 454
+        }
+      ],
+      "fits": {
+        "found": true,
+        "dots": 0,
+        "bodyH": 18,
+        "clamp": "1"
+      }
+    },
+    "11-rows-max-8": {
+      "found": true,
+      "ltext": "QUEUE assistant-3 | [Fold marker] corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "clamp": "8",
+      "clamped": true,
+      "open": false,
+      "aria": "false",
+      "hint": "click to read",
+      "rows": "8",
+      "bodyH": 144,
+      "bodyScroll": 144,
+      "bodyTop": 364,
+      "bodyBottom": 508,
+      "lineH": 18,
+      "padLeft": 8,
+      "padRight": 8,
+      "bodyLeft": 1027,
+      "bodyRight": 1392,
+      "dots": "...",
+      "dotsCount": 1,
+      "dotsLast": true,
+      "dotsBox": {
+        "top": 492,
+        "bottom": 506,
+        "right": 1378
+      },
+      "dotsVisible": true,
+      "dotsInside": true,
+      "text": "Prompt: corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's ta...",
+      "cut": "corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's ta",
+      "whole": "corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "cutIsPrefix": true,
+      "cutShorter": true,
+      "label": "Prompt:",
+      "labelWeight": "700",
+      "labelFirst": true,
+      "labelInline": true,
+      "vars": {
+        "rows": "8",
+        "side": "0px",
+        "pad": "8px",
+        "blank": "0",
+        "con": "10px"
+      },
+      "store": {
+        "rows": 8,
+        "side": 0,
+        "pad": 8,
+        "blank": 0,
+        "con": 10
+      },
+      "card": {
+        "left": 1026,
+        "top": 336,
+        "bottom": 509,
+        "width": 367
+      },
+      "cardMarginTop": 4,
+      "cardMarginLeft": 0,
+      "cardMarginRight": 0,
+      "prePadLeft": 10,
+      "prePadRight": 24,
+      "preBorder": 1,
+      "pre": {
+        "left": 1015,
+        "width": 403
+      },
+      "turn": {
+        "left": 986,
+        "width": 432
+      },
+      "headPadLeft": 8,
+      "bulletsPadLeft": null,
+      "prose": [
+        {
+          "text": "the console's own words, before the card.",
+          "left": 1026,
+          "top": 315,
+          "bottom": 332
+        },
+        {
+          "text": "the console's own words after the cards.",
+          "left": 1026,
+          "top": 563,
+          "bottom": 580
+        }
+      ],
+      "fits": {
+        "found": true,
+        "dots": 0,
+        "bodyH": 18,
+        "clamp": "8"
+      }
+    },
+    "20-side-min-0": {
+      "found": true,
+      "ltext": "QUEUE assistant-3 | [Fold marker] corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "clamp": "2",
+      "clamped": true,
+      "open": false,
+      "aria": "false",
+      "hint": "click to read",
+      "rows": "2",
+      "bodyH": 36,
+      "bodyScroll": 36,
+      "bodyTop": 364,
+      "bodyBottom": 400,
+      "lineH": 18,
+      "padLeft": 8,
+      "padRight": 8,
+      "bodyLeft": 1027,
+      "bodyRight": 1392,
+      "dots": "...",
+      "dotsCount": 1,
+      "dotsLast": true,
+      "dotsBox": {
+        "top": 384,
+        "bottom": 398,
+        "right": 1378
+      },
+      "dotsVisible": true,
+      "dotsInside": true,
+      "text": "Prompt: corner resize the board's tail and the transcript together, corner resize the board's ta...",
+      "cut": "corner resize the board's tail and the transcript together, corner resize the board's ta",
+      "whole": "corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "cutIsPrefix": true,
+      "cutShorter": true,
+      "label": "Prompt:",
+      "labelWeight": "700",
+      "labelFirst": true,
+      "labelInline": true,
+      "vars": {
+        "rows": "2",
+        "side": "0px",
+        "pad": "8px",
+        "blank": "0",
+        "con": "10px"
+      },
+      "store": {
+        "rows": 2,
+        "side": 0,
+        "pad": 8,
+        "blank": 0,
+        "con": 10
+      },
+      "card": {
+        "left": 1026,
+        "top": 336,
+        "bottom": 401,
+        "width": 367
+      },
+      "cardMarginTop": 4,
+      "cardMarginLeft": 0,
+      "cardMarginRight": 0,
+      "prePadLeft": 10,
+      "prePadRight": 24,
+      "preBorder": 1,
+      "pre": {
+        "left": 1015,
+        "width": 403
+      },
+      "turn": {
+        "left": 986,
+        "width": 432
+      },
+      "headPadLeft": 8,
+      "bulletsPadLeft": null,
+      "prose": [
+        {
+          "text": "the console's own words, before the card.",
+          "left": 1026,
+          "top": 315,
+          "bottom": 332
+        },
+        {
+          "text": "the console's own words after the cards.",
+          "left": 1026,
+          "top": 455,
+          "bottom": 472
+        }
+      ],
+      "fits": {
+        "found": true,
+        "dots": 0,
+        "bodyH": 18,
+        "clamp": "2"
+      }
+    },
+    "21-side-max-60": {
+      "found": true,
+      "ltext": "QUEUE assistant-3 | [Fold marker] corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "clamp": "2",
+      "clamped": true,
+      "open": false,
+      "aria": "false",
+      "hint": "click to read",
+      "rows": "2",
+      "bodyH": 36,
+      "bodyScroll": 36,
+      "bodyTop": 380,
+      "bodyBottom": 416,
+      "lineH": 18,
+      "padLeft": 8,
+      "padRight": 8,
+      "bodyLeft": 1087,
+      "bodyRight": 1332,
+      "dots": "...",
+      "dotsCount": 1,
+      "dotsLast": true,
+      "dotsBox": {
+        "top": 400,
+        "bottom": 414,
+        "right": 1319
+      },
+      "dotsVisible": true,
+      "dotsInside": true,
+      "text": "Prompt: corner resize the board's tail and the transcript togethe...",
+      "cut": "corner resize the board's tail and the transcript togethe",
+      "whole": "corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "cutIsPrefix": true,
+      "cutShorter": true,
+      "label": "Prompt:",
+      "labelWeight": "700",
+      "labelFirst": true,
+      "labelInline": true,
+      "vars": {
+        "rows": "2",
+        "side": "60px",
+        "pad": "8px",
+        "blank": "0",
+        "con": "10px"
+      },
+      "store": {
+        "rows": 2,
+        "side": 60,
+        "pad": 8,
+        "blank": 0,
+        "con": 10
+      },
+      "card": {
+        "left": 1086,
+        "top": 336,
+        "bottom": 417,
+        "width": 247
+      },
+      "cardMarginTop": 4,
+      "cardMarginLeft": 60,
+      "cardMarginRight": 60,
+      "prePadLeft": 10,
+      "prePadRight": 24,
+      "preBorder": 1,
+      "pre": {
+        "left": 1015,
+        "width": 403
+      },
+      "turn": {
+        "left": 986,
+        "width": 432
+      },
+      "headPadLeft": 8,
+      "bulletsPadLeft": null,
+      "prose": [
+        {
+          "text": "the console's own words, before the card.",
+          "left": 1026,
+          "top": 315,
+          "bottom": 332
+        },
+        {
+          "text": "the console's own words after the cards.",
+          "left": 1026,
+          "top": 471,
+          "bottom": 488
+        }
+      ],
+      "fits": {
+        "found": true,
+        "dots": 0,
+        "bodyH": 18,
+        "clamp": "2"
+      }
+    },
+    "30-pad-min-0": {
+      "found": true,
+      "ltext": "QUEUE assistant-3 | [Fold marker] corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "clamp": "2",
+      "clamped": true,
+      "open": false,
+      "aria": "false",
+      "hint": "click to read",
+      "rows": "2",
+      "bodyH": 36,
+      "bodyScroll": 36,
+      "bodyTop": 364,
+      "bodyBottom": 400,
+      "lineH": 18,
+      "padLeft": 0,
+      "padRight": 0,
+      "bodyLeft": 1027,
+      "bodyRight": 1392,
+      "dots": "...",
+      "dotsCount": 1,
+      "dotsLast": true,
+      "dotsBox": {
+        "top": 384,
+        "bottom": 398,
+        "right": 1390
+      },
+      "dotsVisible": true,
+      "dotsInside": true,
+      "text": "Prompt: corner resize the board's tail and the transcript together, corner resize the board's tail ...",
+      "cut": "corner resize the board's tail and the transcript together, corner resize the board's tail",
+      "whole": "corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "cutIsPrefix": true,
+      "cutShorter": true,
+      "label": "Prompt:",
+      "labelWeight": "700",
+      "labelFirst": true,
+      "labelInline": true,
+      "vars": {
+        "rows": "2",
+        "side": "0px",
+        "pad": "0px",
+        "blank": "0",
+        "con": "10px"
+      },
+      "store": {
+        "rows": 2,
+        "side": 0,
+        "pad": 0,
+        "blank": 0,
+        "con": 10
+      },
+      "card": {
+        "left": 1026,
+        "top": 336,
+        "bottom": 401,
+        "width": 367
+      },
+      "cardMarginTop": 4,
+      "cardMarginLeft": 0,
+      "cardMarginRight": 0,
+      "prePadLeft": 10,
+      "prePadRight": 24,
+      "preBorder": 1,
+      "pre": {
+        "left": 1015,
+        "width": 403
+      },
+      "turn": {
+        "left": 986,
+        "width": 432
+      },
+      "headPadLeft": 0,
+      "bulletsPadLeft": null,
+      "prose": [
+        {
+          "text": "the console's own words, before the card.",
+          "left": 1026,
+          "top": 315,
+          "bottom": 332
+        },
+        {
+          "text": "the console's own words after the cards.",
+          "left": 1026,
+          "top": 455,
+          "bottom": 472
+        }
+      ],
+      "fits": {
+        "found": true,
+        "dots": 0,
+        "bodyH": 18,
+        "clamp": "2"
+      }
+    },
+    "31-pad-max-32": {
+      "found": true,
+      "ltext": "QUEUE assistant-3 | [Fold marker] corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "clamp": "2",
+      "clamped": true,
+      "open": false,
+      "aria": "false",
+      "hint": "click to read",
+      "rows": "2",
+      "bodyH": 36,
+      "bodyScroll": 36,
+      "bodyTop": 364,
+      "bodyBottom": 400,
+      "lineH": 18,
+      "padLeft": 32,
+      "padRight": 32,
+      "bodyLeft": 1027,
+      "bodyRight": 1392,
+      "dots": "...",
+      "dotsCount": 1,
+      "dotsLast": true,
+      "dotsBox": {
+        "top": 384,
+        "bottom": 398,
+        "right": 1356
+      },
+      "dotsVisible": true,
+      "dotsInside": true,
+      "text": "Prompt: corner resize the board's tail and the transcript together, corner resize the...",
+      "cut": "corner resize the board's tail and the transcript together, corner resize the",
+      "whole": "corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "cutIsPrefix": true,
+      "cutShorter": true,
+      "label": "Prompt:",
+      "labelWeight": "700",
+      "labelFirst": true,
+      "labelInline": true,
+      "vars": {
+        "rows": "2",
+        "side": "0px",
+        "pad": "32px",
+        "blank": "0",
+        "con": "10px"
+      },
+      "store": {
+        "rows": 2,
+        "side": 0,
+        "pad": 32,
+        "blank": 0,
+        "con": 10
+      },
+      "card": {
+        "left": 1026,
+        "top": 336,
+        "bottom": 401,
+        "width": 367
+      },
+      "cardMarginTop": 4,
+      "cardMarginLeft": 0,
+      "cardMarginRight": 0,
+      "prePadLeft": 10,
+      "prePadRight": 24,
+      "preBorder": 1,
+      "pre": {
+        "left": 1015,
+        "width": 403
+      },
+      "turn": {
+        "left": 986,
+        "width": 432
+      },
+      "headPadLeft": 32,
+      "bulletsPadLeft": null,
+      "prose": [
+        {
+          "text": "the console's own words, before the card.",
+          "left": 1026,
+          "top": 315,
+          "bottom": 332
+        },
+        {
+          "text": "the console's own words after the cards.",
+          "left": 1026,
+          "top": 455,
+          "bottom": 472
+        }
+      ],
+      "fits": {
+        "found": true,
+        "dots": 0,
+        "bodyH": 18,
+        "clamp": "2"
+      }
+    },
+    "40-blank-min-0": {
+      "found": true,
+      "ltext": "QUEUE assistant-3 | [Fold marker] corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "clamp": "2",
+      "clamped": true,
+      "open": false,
+      "aria": "false",
+      "hint": "click to read",
+      "rows": "2",
+      "bodyH": 36,
+      "bodyScroll": 36,
+      "bodyTop": 364,
+      "bodyBottom": 400,
+      "lineH": 18,
+      "padLeft": 8,
+      "padRight": 8,
+      "bodyLeft": 1027,
+      "bodyRight": 1392,
+      "dots": "...",
+      "dotsCount": 1,
+      "dotsLast": true,
+      "dotsBox": {
+        "top": 384,
+        "bottom": 398,
+        "right": 1378
+      },
+      "dotsVisible": true,
+      "dotsInside": true,
+      "text": "Prompt: corner resize the board's tail and the transcript together, corner resize the board's ta...",
+      "cut": "corner resize the board's tail and the transcript together, corner resize the board's ta",
+      "whole": "corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "cutIsPrefix": true,
+      "cutShorter": true,
+      "label": "Prompt:",
+      "labelWeight": "700",
+      "labelFirst": true,
+      "labelInline": true,
+      "vars": {
+        "rows": "2",
+        "side": "0px",
+        "pad": "8px",
+        "blank": "0",
+        "con": "10px"
+      },
+      "store": {
+        "rows": 2,
+        "side": 0,
+        "pad": 8,
+        "blank": 0,
+        "con": 10
+      },
+      "card": {
+        "left": 1026,
+        "top": 336,
+        "bottom": 401,
+        "width": 367
+      },
+      "cardMarginTop": 4,
+      "cardMarginLeft": 0,
+      "cardMarginRight": 0,
+      "prePadLeft": 10,
+      "prePadRight": 24,
+      "preBorder": 1,
+      "pre": {
+        "left": 1015,
+        "width": 403
+      },
+      "turn": {
+        "left": 986,
+        "width": 432
+      },
+      "headPadLeft": 8,
+      "bulletsPadLeft": null,
+      "prose": [
+        {
+          "text": "the console's own words, before the card.",
+          "left": 1026,
+          "top": 315,
+          "bottom": 332
+        },
+        {
+          "text": "the console's own words after the cards.",
+          "left": 1026,
+          "top": 455,
+          "bottom": 472
+        }
+      ],
+      "fits": {
+        "found": true,
+        "dots": 0,
+        "bodyH": 18,
+        "clamp": "2"
+      }
+    },
+    "41-blank-max-4": {
+      "found": true,
+      "ltext": "QUEUE assistant-3 | [Fold marker] corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "clamp": "2",
+      "clamped": true,
+      "open": false,
+      "aria": "false",
+      "hint": "click to read",
+      "rows": "2",
+      "bodyH": 36,
+      "bodyScroll": 36,
+      "bodyTop": 436,
+      "bodyBottom": 472,
+      "lineH": 18,
+      "padLeft": 8,
+      "padRight": 8,
+      "bodyLeft": 1027,
+      "bodyRight": 1392,
+      "dots": "...",
+      "dotsCount": 1,
+      "dotsLast": true,
+      "dotsBox": {
+        "top": 456,
+        "bottom": 470,
+        "right": 1378
+      },
+      "dotsVisible": true,
+      "dotsInside": true,
+      "text": "Prompt: corner resize the board's tail and the transcript together, corner resize the board's ta...",
+      "cut": "corner resize the board's tail and the transcript together, corner resize the board's ta",
+      "whole": "corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "cutIsPrefix": true,
+      "cutShorter": true,
+      "label": "Prompt:",
+      "labelWeight": "700",
+      "labelFirst": true,
+      "labelInline": true,
+      "vars": {
+        "rows": "2",
+        "side": "0px",
+        "pad": "8px",
+        "blank": "4",
+        "con": "10px"
+      },
+      "store": {
+        "rows": 2,
+        "side": 0,
+        "pad": 8,
+        "blank": 4,
+        "con": 10
+      },
+      "card": {
+        "left": 1026,
+        "top": 408,
+        "bottom": 473,
+        "width": 367
+      },
+      "cardMarginTop": 76,
+      "cardMarginLeft": 0,
+      "cardMarginRight": 0,
+      "prePadLeft": 10,
+      "prePadRight": 24,
+      "preBorder": 1,
+      "pre": {
+        "left": 1015,
+        "width": 403
+      },
+      "turn": {
+        "left": 986,
+        "width": 432
+      },
+      "headPadLeft": 8,
+      "bulletsPadLeft": null,
+      "prose": [
+        {
+          "text": "the console's own words, before the card.",
+          "left": 1026,
+          "top": 315,
+          "bottom": 332
+        },
+        {
+          "text": "the console's own words after the cards.",
+          "left": 1026,
+          "top": 671,
+          "bottom": 688
+        }
+      ],
+      "fits": {
+        "found": true,
+        "dots": 0,
+        "bodyH": 18,
+        "clamp": "2"
+      }
+    },
+    "50-con-min-0": {
+      "found": true,
+      "ltext": "QUEUE assistant-3 | [Fold marker] corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "clamp": "2",
+      "clamped": true,
+      "open": false,
+      "aria": "false",
+      "hint": "click to read",
+      "rows": "2",
+      "bodyH": 36,
+      "bodyScroll": 36,
+      "bodyTop": 364,
+      "bodyBottom": 400,
+      "lineH": 18,
+      "padLeft": 8,
+      "padRight": 8,
+      "bodyLeft": 1017,
+      "bodyRight": 1392,
+      "dots": "...",
+      "dotsCount": 1,
+      "dotsLast": true,
+      "dotsBox": {
+        "top": 384,
+        "bottom": 398,
+        "right": 1381
+      },
+      "dotsVisible": true,
+      "dotsInside": true,
+      "text": "Prompt: corner resize the board's tail and the transcript together, corner resize the board's tail...",
+      "cut": "corner resize the board's tail and the transcript together, corner resize the board's tail",
+      "whole": "corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "cutIsPrefix": true,
+      "cutShorter": true,
+      "label": "Prompt:",
+      "labelWeight": "700",
+      "labelFirst": true,
+      "labelInline": true,
+      "vars": {
+        "rows": "2",
+        "side": "0px",
+        "pad": "8px",
+        "blank": "0",
+        "con": "0px"
+      },
+      "store": {
+        "rows": 2,
+        "side": 0,
+        "pad": 8,
+        "blank": 0,
+        "con": 0
+      },
+      "card": {
+        "left": 1016,
+        "top": 336,
+        "bottom": 401,
+        "width": 377
+      },
+      "cardMarginTop": 4,
+      "cardMarginLeft": 0,
+      "cardMarginRight": 0,
+      "prePadLeft": 0,
+      "prePadRight": 24,
+      "preBorder": 1,
+      "pre": {
+        "left": 1015,
+        "width": 403
+      },
+      "turn": {
+        "left": 986,
+        "width": 432
+      },
+      "headPadLeft": 8,
+      "bulletsPadLeft": null,
+      "prose": [
+        {
+          "text": "the console's own words, before the card.",
+          "left": 1016,
+          "top": 315,
+          "bottom": 332
+        },
+        {
+          "text": "the console's own words after the cards.",
+          "left": 1016,
+          "top": 455,
+          "bottom": 472
+        }
+      ],
+      "fits": {
+        "found": true,
+        "dots": 0,
+        "bodyH": 18,
+        "clamp": "2"
+      }
+    },
+    "51-con-max-60": {
+      "found": true,
+      "ltext": "QUEUE assistant-3 | [Fold marker] corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "clamp": "2",
+      "clamped": true,
+      "open": false,
+      "aria": "false",
+      "hint": "click to read",
+      "rows": "2",
+      "bodyH": 36,
+      "bodyScroll": 36,
+      "bodyTop": 380,
+      "bodyBottom": 416,
+      "lineH": 18,
+      "padLeft": 8,
+      "padRight": 8,
+      "bodyLeft": 1077,
+      "bodyRight": 1356,
+      "dots": "...",
+      "dotsCount": 1,
+      "dotsLast": true,
+      "dotsBox": {
+        "top": 400,
+        "bottom": 414,
+        "right": 1342
+      },
+      "dotsVisible": true,
+      "dotsInside": true,
+      "text": "Prompt: corner resize the board's tail and the transcript together, corner ...",
+      "cut": "corner resize the board's tail and the transcript together, corner",
+      "whole": "corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together, corner resize the board's tail and the transcript together,",
+      "cutIsPrefix": true,
+      "cutShorter": true,
+      "label": "Prompt:",
+      "labelWeight": "700",
+      "labelFirst": true,
+      "labelInline": true,
+      "vars": {
+        "rows": "2",
+        "side": "0px",
+        "pad": "8px",
+        "blank": "0",
+        "con": "60px"
+      },
+      "store": {
+        "rows": 2,
+        "side": 0,
+        "pad": 8,
+        "blank": 0,
+        "con": 60
+      },
+      "card": {
+        "left": 1076,
+        "top": 336,
+        "bottom": 417,
+        "width": 281
+      },
+      "cardMarginTop": 4,
+      "cardMarginLeft": 0,
+      "cardMarginRight": 0,
+      "prePadLeft": 60,
+      "prePadRight": 60,
+      "preBorder": 1,
+      "pre": {
+        "left": 1015,
+        "width": 403
+      },
+      "turn": {
+        "left": 986,
+        "width": 432
+      },
+      "headPadLeft": 8,
+      "bulletsPadLeft": null,
+      "prose": [
+        {
+          "text": "the console's own words, before the card.",
+          "left": 1076,
+          "top": 315,
+          "bottom": 332
+        },
+        {
+          "text": "the console's own words after the cards.",
+          "left": 1076,
+          "top": 471,
+          "bottom": 488
+        }
+      ],
+      "fits": {
+        "found": true,
+        "dots": 0,
+        "bodyH": 18,
+        "clamp": "2"
+      }
+    }
+  },
+  "screens": [
+    {
+      "name": "00-default-two-rows",
+      "file": "docs/reports/command-card-look/00-default-two-rows.png"
+    },
+    {
+      "name": "01-default-open",
+      "file": "docs/reports/command-card-look/01-default-open.png"
+    },
+    {
+      "name": "05-settings-rows",
+      "file": "docs/reports/command-card-look/05-settings-rows.png"
+    },
+    {
+      "name": "06-settings-reset",
+      "file": "docs/reports/command-card-look/06-settings-reset.png"
+    },
+    {
+      "name": "10-rows-min-1",
+      "file": "docs/reports/command-card-look/10-rows-min-1.png"
+    },
+    {
+      "name": "11-rows-max-8",
+      "file": "docs/reports/command-card-look/11-rows-max-8.png"
+    },
+    {
+      "name": "20-side-min-0",
+      "file": "docs/reports/command-card-look/20-side-min-0.png"
+    },
+    {
+      "name": "21-side-max-60",
+      "file": "docs/reports/command-card-look/21-side-max-60.png"
+    },
+    {
+      "name": "30-pad-min-0",
+      "file": "docs/reports/command-card-look/30-pad-min-0.png"
+    },
+    {
+      "name": "31-pad-max-32",
+      "file": "docs/reports/command-card-look/31-pad-max-32.png"
+    },
+    {
+      "name": "40-blank-min-0",
+      "file": "docs/reports/command-card-look/40-blank-min-0.png"
+    },
+    {
+      "name": "41-blank-max-4",
+      "file": "docs/reports/command-card-look/41-blank-max-4.png"
+    },
+    {
+      "name": "50-con-min-0",
+      "file": "docs/reports/command-card-look/50-con-min-0.png"
+    },
+    {
+      "name": "51-con-max-60",
+      "file": "docs/reports/command-card-look/51-con-max-60.png"
+    }
+  ],
+  "reaped": {
+    "browserPids": [
+      22684,
+      43244,
+      12492,
+      22580
+    ],
+    "alive": [],
+    "sandbox": "<tmp>/wtgui-command-card-look-voZj1B",
+    "sandboxRemoved": true,
+    "profile": "<tmp>/playwright_chromiumdev_profile-yZjuSZ",
+    "shots": "docs/reports/command-card-look"
+  }
+}

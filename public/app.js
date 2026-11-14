@@ -11168,6 +11168,13 @@ document.addEventListener("click", async (e) => {
         body.hidden = !open;
       }
       box.classList.toggle("is-open", open);
+      // The folded card's last preview row ends with three ASCII dots and no earlier row does: opening the card puts
+      // the whole prompt back, folding it measures and marks it again (public/board/console.js holds the painter, and
+      // the same one runs for every card a render path places).
+      if (clamp && typeof clearCommandFoldMark === "function") {
+        if (open) clearCommandFoldMark(box);
+        else paintCommandFoldMark(box);
+      }
       codeFold.setAttribute("aria-expanded", open ? "true" : "false");
       const caret = codeFold.querySelector(".code-caret");
       if (caret) caret.textContent = open ? "▾" : "▸";
@@ -13089,6 +13096,112 @@ function greyFlashOn() {
   } catch {
     return true;
   }
+}
+
+// ---- the assistant console command card's look (Settings > Display) -----------------------------------------
+// Five numbers, all display only and all saved in this browser like every other Display row: the preview rows a
+// folded command card shows, the card's side margin, the padding of the text inside it, the blank lines above and
+// below it, and the side margin the rest of the console's text keeps. Each is written as a CSS variable the
+// stylesheet reads WITH today's look as its fallback (style.css, `--cmd-*` and `--con-side`), so an unset setting
+// draws exactly what this panel drew before the rows existed - and the defaults are those fallbacks, not a second
+// set of numbers that could drift away from them.
+const CMD_LOOK_KEY = "wtgui.cmdLook";
+// `rows` and `blank` are counted in the card's own line (18px: a 12px body at 1.5), `side`, `pad` and `con` in px.
+// The unit travels WITH the value into the CSS variable - a bare `8` in `padding: 0 var(--cmd-pad)` is an invalid
+// declaration, and the whole property would fall back to the initial `0` instead of today's number.
+const CMD_LOOK_DEFAULTS = Object.freeze({ rows: 2, side: 0, pad: 8, blank: 0, con: 10 });
+const CMD_LOOK_UNITS = Object.freeze({ rows: "", side: "px", pad: "px", blank: "", con: "px" });
+const CMD_LOOK_LIMITS = Object.freeze({
+  rows: [1, 8],
+  side: [0, 60],
+  pad: [0, 32],
+  blank: [0, 4],
+  con: [0, 60],
+});
+const CMD_LOOK_VARS = Object.freeze({
+  rows: "--cmd-rows",
+  side: "--cmd-side",
+  pad: "--cmd-pad",
+  blank: "--cmd-blank",
+  con: "--con-side",
+});
+
+function cmdLook() {
+  const out = { ...CMD_LOOK_DEFAULTS };
+  let raw = null;
+  try {
+    raw = JSON.parse(localStorage.getItem(CMD_LOOK_KEY) || "null");
+  } catch {
+    raw = null;
+  }
+  if (raw && typeof raw === "object") {
+    for (const name of Object.keys(out)) {
+      const n = Number(raw[name]);
+      if (Number.isFinite(n)) out[name] = n; // clamped in applyCommandCardLook, the one place that decides
+    }
+  }
+  return out;
+}
+
+// Read once, so a card drawn before anyone opens Settings already follows the saved look.
+let cmdLookState = cmdLook();
+
+// Write the five variables on :root, hand the row count to the card module (which writes `data-code-clamp`), and
+// re-measure the cards already on the page: a fold that got taller or narrower moved the marker's own row with it.
+function applyCommandCardLook(patch = null, { save = false } = {}) {
+  if (patch && typeof patch === "object") cmdLookState = { ...cmdLookState, ...patch };
+  const root = document.documentElement;
+  for (const name of Object.keys(CMD_LOOK_VARS)) {
+    const [lo, hi] = CMD_LOOK_LIMITS[name];
+    const n = Number(cmdLookState[name]);
+    const v = Number.isFinite(n) ? Math.min(hi, Math.max(lo, Math.round(n))) : CMD_LOOK_DEFAULTS[name];
+    cmdLookState[name] = v;
+    root.style.setProperty(CMD_LOOK_VARS[name], `${v}${CMD_LOOK_UNITS[name]}`);
+  }
+  // The card module reads this for `data-code-clamp`: one number, so the attribute and the stylesheet's fold agree.
+  globalThis.wtCommandPreviewRows = cmdLookState.rows;
+  if (save) {
+    try {
+      localStorage.setItem(CMD_LOOK_KEY, JSON.stringify(cmdLookState));
+    } catch {
+      /* private mode: the look applies to this tab only */
+    }
+  }
+  paintCommandCardLook();
+  if (typeof requestAnimationFrame === "function") requestAnimationFrame(repaintCommandFolds);
+  return cmdLookState;
+}
+
+// The rows' own values. Never rewrite the box the reader is typing into: a clamp lands on `change`, not on a
+// keystroke.
+function paintCommandCardLook(look = cmdLookState) {
+  for (const name of Object.keys(CMD_LOOK_VARS)) {
+    const el = $(`cmd-${name}`);
+    if (!el || document.activeElement === el) continue;
+    if (String(el.value) !== String(look[name])) el.value = String(look[name]);
+  }
+}
+
+// Every folded card on the page: the attribute the card says it is folded to, then its marker. The attribute is
+// written here as well as at render time, because a reader who changes the row count is looking at cards that were
+// drawn at the old one - the stylesheet's fold moves with the variable, and the card's own number has to agree with
+// it or the DOM would read one fold and the page draw another.
+function repaintCommandFolds() {
+  if (typeof paintCommandFoldMark !== "function") return;
+  for (const box of document.querySelectorAll(".code-box.is-cmd")) {
+    box.setAttribute("data-code-clamp", String(cmdLookState.rows));
+    paintCommandFoldMark(box);
+  }
+}
+
+// "use defaults" is the five fallbacks: the same numbers an unset key draws, written back so the inputs can show them.
+function resetCommandCardLook() {
+  applyCommandCardLook({ ...CMD_LOOK_DEFAULTS }, { save: true });
+}
+
+// Paint the command card's look before the first card is drawn.
+function initCommandCardLook() {
+  applyCommandCardLook(null, { save: false });
 }
 
 // ---- settings tabs ---------------------------------------------------------------------------------------
@@ -16683,6 +16796,25 @@ for (const [kind, set] of Object.entries(TEXT_STYLES)) {
 }
 for (const b of document.querySelectorAll("[data-text-reset]")) b.addEventListener("click", () => resetTextStyle(b.dataset.textReset));
 
+// ---- the command card's five rows: each applies at once, saved in this browser like the rest of Display ------
+// The input is `#cmd-<name>`, one per variable, so a row can only ever write the variable that names it.
+const CMD_LOOK_ROWS = ["rows", "side", "pad", "blank", "con"];
+for (const name of CMD_LOOK_ROWS) {
+  const el = $(`cmd-${name}`);
+  if (!el) continue;
+  el.addEventListener("change", () => {
+    const n = Number(el.value);
+    const look = applyCommandCardLook({ [name]: Number.isFinite(n) ? n : CMD_LOOK_DEFAULTS[name] }, { save: true });
+    // The box shows the number that was APPLIED, not the one that was typed: a value over the ceiling lands on the
+    // ceiling, and the reader has to see that rather than a box that disagrees with the card.
+    el.value = String(look[name]);
+  });
+}
+$("cmd-look-reset")?.addEventListener("click", () => {
+  resetCommandCardLook();
+  showBanner("command card: back to the defaults - 2 preview rows, no side margin, 8px padding, no blank lines, a 10px console text inset");
+});
+
 // ---- the question box's look: tint, size, density, and whether the typed answer is offered --------
 for (const btn of document.querySelectorAll("[data-q-tint]")) {
   btn.addEventListener("click", (e) => {
@@ -17907,6 +18039,8 @@ document.addEventListener("click", (e) => {
 
 initFonts();
 initQLook();
+// The command card's five numbers, on :root, before the first console is drawn.
+initCommandCardLook();
 // The question countdowns move on their own; nothing else in the panel needs a 1s clock.
 setInterval(tickQuestionClocks, 1000);
 applyGreyFlash(greyFlashOn());
