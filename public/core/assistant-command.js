@@ -63,6 +63,22 @@
   // the panel asks for. Longer than this and there is no title.
   const COMMAND_TITLE_MAX = 80;
 
+  // HOW MANY PREVIEW ROWS A FOLDED CARD SHOWS. The page publishes the reader's own number as
+  // `wtCommandPreviewRows` (Settings > Display, applied by public/app.js to the stylesheet's `--cmd-rows` as well,
+  // so the clamp and this attribute can never disagree). A page that publishes none - a test, a harness, a caller
+  // that did not ask - draws the two rows this card has always had.
+  const COMMAND_PREVIEW_ROWS = 2;
+
+  function previewRows() {
+    const n = Math.round(Number(root.wtCommandPreviewRows));
+    return Number.isFinite(n) && n >= 1 ? n : COMMAND_PREVIEW_ROWS;
+  }
+
+  // THE PROMPT'S LABEL. A card's body is the text the line sends - the prompt - and a folded card shows the first
+  // rows of it with nothing saying what they are. The label is bold and INLINE on the body's first row, so it costs
+  // no preview row of its own: two rows of prompt still read as two rows.
+  const COMMAND_PROMPT_LABEL = "Prompt:";
+
   // The frame, published by core/console-format.js. Looked up at call time and never imported: this file is a
   // classic script, and a page that has lost the frame should draw the plain line rather than a second card.
   function frame() {
@@ -269,7 +285,7 @@
   // One command line as a card, or "" when the text is not a command line this module can read, when the line is
   // nothing but the command itself, or when the page has lost the frame. `open` is the page's code-box book (a Set
   // of keys); `clamp` is how many lines the body shows while it is folded.
-  function cardHtml(text, { key = "", scope = "", ref = null, open = null, clamp = 2, lid = null, lineKind = "", bullets = null } = {}) {
+  function cardHtml(text, { key = "", scope = "", ref = null, open = null, clamp = 0, lid = null, lineKind = "", bullets = null } = {}) {
     const parsed = parseCommandLine(text);
     if (!parsed) return "";
     // A SPAWN whose TODOs are folded into it is a card even when its own payload is empty: the bullets are the body's
@@ -280,8 +296,22 @@
     if (!parsed.title && !parsed.body && !list.length) return "";
     const box = frame();
     if (!box) return "";
+    // The reader's preview rows (Settings > Display) unless the caller named its own number. The attribute and the
+    // stylesheet's `--cmd-rows` are both written from the one setting, so the fold and the marker agree.
+    const rows = Number(clamp) > 0 ? Number(clamp) : previewRows();
     const lines = String(parsed.body || "").split("\n");
-    const body = lines.map((l) => `<div class="jl jl-text">${escOf(l)}</div>`).join("");
+    // The first row carries the bold label that names what the text is; every later row is the prompt's own text.
+    // A card with no body at all (a SPAWN that only carries its TODOs) draws no label: a name over nothing is not a
+    // prompt, and the reader would take the empty row for an unreadable one.
+    const body = String(parsed.body || "").trim()
+      ? lines
+          .map((l, i) =>
+            i === 0
+              ? `<div class="jl jl-text"><b class="code-prompt-label">${COMMAND_PROMPT_LABEL}</b> ${escOf(l)}</div>`
+              : `<div class="jl jl-text">${escOf(l)}</div>`,
+          )
+          .join("")
+      : "";
     // The line itself travels on the card, the way it travels on a console row: the console's copy lifts the line,
     // not the card's chrome, and a reader of the DOM finds the source text where every other row keeps it.
     const id = lid != null && lid !== "" ? String(lid) : "";
@@ -302,7 +332,7 @@
       body,
       opts: { key: key || keyOf(scope, ref) },
       open,
-      clamp,
+      clamp: rows,
       attrs,
     });
   }
@@ -310,7 +340,7 @@
   // A block of text (a reply, a transcript entry) as it reads: every readable command line is a card, every other
   // line is handed back to the caller's own renderer. "" when the text holds no command line at all, which is what
   // lets a caller keep its existing rendering untouched for every message that has none.
-  function cardsHtml(text, { scope = "", keyPrefix = "", open = null, clamp = 2, renderText = null } = {}) {
+  function cardsHtml(text, { scope = "", keyPrefix = "", open = null, clamp = 0, renderText = null } = {}) {
     const source = String(text == null ? "" : text);
     if (!source) return "";
     // One pass decides which lines are cards and which are a SPAWN card's bullets: a TODO under a SPAWN is drawn
@@ -335,6 +365,9 @@
   root.wtAssistantCommand = {
     COMMAND_EMOJI,
     COMMAND_TITLE_MAX,
+    COMMAND_PREVIEW_ROWS,
+    COMMAND_PROMPT_LABEL,
+    previewRows,
     KINDS,
     parseCommandLine,
     readTitle,
