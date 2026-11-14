@@ -63,12 +63,14 @@
       "defaultTurnover": "github-force-merge",
       "defaultInvestigation": "github-investigate",
       "releaseWorktrees": true,
-      "worktrees": null
+      "worktrees": null,
+      "landingRules": "One wtgui/* branch per worktree, cut from main. Push the branch, open one pull request, and land it with gh pr merge <n> --rebase --admin - never a merge commit and never a push to main. Report the merge commit, then render the changelog at the merged tip and re-anchor the release tag with node tools/version.mjs tag --ref origin/main --force."
     },
     {
       "name": "optym-integration-multi",
       "pushNewBranches": "always-ask",
-      "turnoverBranch": "feature/optym-turnover"
+      "turnoverBranch": "feature/optym-turnover",
+      "landingRules": "One turnover branch per feature, named YYYYMMDD_HHMM_<TICKET>_<description>, cut from master. Worker branches are cut from that turnover branch and each is rolled back into it LOCALLY with git -C <checkout holding it> merge --no-ff <worker branch> - never pushed and never given a PR of its own. Only the turnover branch is pushed, by explicit refspec, and its pull request goes to master through Bitbucket's REST API (gh pr create does not work on git.sefl.com). Prove a local roll-back with git log --oneline -2, an empty git diff --stat <turnover> <worker> and git ls-remote --heads origin <turnover> still naming the old sha."
     },
     {
       "name": "menu",

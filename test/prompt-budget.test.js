@@ -100,7 +100,7 @@ test("every budget the picture shows is the panel's own constant", () => {
   assert.equal(PROMPT_BUDGET.projects, PROJECTS_BRIEFING_MAX * PROJECT_LINE_CHARS, "the projects are forty lines");
   assert.equal(PROMPT_BUDGET.charter, CHARTER_MAX_CHARS, "the charter is its cap");
   assert.equal(PROMPT_BUDGET.queue, queueBudgetChars(5), "the queue digest is its five rows and their header");
-  assert.equal(PROMPT_SECTION_DEFS.length, 14, "fourteen boxes: the eleven standing sections and the three moving ones");
+  assert.equal(PROMPT_SECTION_DEFS.length, 15, "fifteen boxes: the twelve standing sections and the three moving ones");
 });
 
 test("the model draws the first turn of a session, an ordinary turn and the fourth wake", async (t) => {
