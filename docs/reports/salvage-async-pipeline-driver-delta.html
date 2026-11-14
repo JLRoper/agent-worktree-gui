@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Salvage report: the async-pipeline driver delta</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 32px 28px 64px; background: #14171c; color: #d8dee9; font: 14px/1.55 "Segoe UI", system-ui, sans-serif; }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 4px; color: #eef2f7; }
+  h2 { font-size: 16px; margin: 34px 0 10px; padding-bottom: 6px; border-bottom: 1px solid #2a3038; color: #eef2f7; }
+  .sub { color: #8b95a3; margin: 0 0 22px; }
+  .facts { display: grid; grid-template-columns: 210px 1fr; gap: 2px 14px; background: #1a1f26; border: 1px solid #2a3038; border-radius: 6px; padding: 14px 16px; }
+  .facts dt { color: #8b95a3; }
+  .facts dd { margin: 0; color: #d8dee9; }
+  code, .mono { font-family: Consolas, "Cascadia Mono", monospace; font-size: 12.5px; }
+  code { color: #c8d3e0; }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0 6px; font-size: 12.5px; }
+  th, td { text-align: left; vertical-align: top; padding: 6px 8px; border-bottom: 1px solid #252b33; }
+  th { color: #8b95a3; font-weight: 600; background: #1a1f26; position: sticky; top: 0; }
+  td.path { font-family: Consolas, "Cascadia Mono", monospace; white-space: nowrap; }
+  .v { font-weight: 600; white-space: nowrap; }
+  .v.sup { color: #7fb069; }
+  .v.miss { color: #e0b055; }
+  .v.amb { color: #d98cb3; }
+  tr.keep td { background: #1b2129; }
+  .quote { color: #9aa7b8; font-family: Consolas, "Cascadia Mono", monospace; font-size: 12px; }
+  ul { margin: 8px 0 0 18px; padding: 0; }
+  li { margin: 4px 0; }
+  .warn { border-left: 3px solid #e0b055; background: #1e2229; padding: 10px 14px; margin: 14px 0; }
+  .ok { border-left: 3px solid #7fb069; background: #1e2229; padding: 10px 14px; margin: 14px 0; }
+  .foot { color: #6f7a88; font-size: 12px; margin-top: 30px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Salvage report: the async-pipeline driver delta</h1>
+<p class="sub">What the abandoned worktree branch still holds that main does not, path by path - measured before any change.</p>
+
+<dl class="facts">
+  <dt>Source branch</dt><dd><code>wtgui/async-pipeline-driver-refactor</code> at <code>b7394d4c</code> in <code>.worktrees/async-pipeline-driver-refactor</code></dd>
+  <dt>Source position</dt><dd>an ancestor of <code>origin/main</code>, 349 commits behind, no PR ever, no live run at that path</dd>
+  <dt>Compared against</dt><dd><code>origin/main</code> at <code>d45158c6</code> (this worktree is level with it)</dd>
+  <dt>The delta</dt><dd>20 modified files, +431 / -276, plus 1 untracked test of 88 lines: 21 paths</dd>
+  <dt>The main-side landing</dt><dd><code>38e7a6f8 perf: offload pipeline Git and cache row queue names</code> - 12 files, +942 / -122</dd>
+  <dt>Read-only</dt><dd>the source tree was read with <code>git diff</code>, <code>git rev-parse</code> and <code>git show</code> only: no stash, no checkout, no edit</dd>
+</dl>
+
+<h2>1. The delta saved as one patch, outside the source tree</h2>
+<p>The whole 21-path delta is one unified diff written to a scratch directory outside the repository
+(<code>async-pipeline-driver-delta.patch</code>, 2314 lines, sha256
+<code class="mono">6e9384fea3463e4ffe1e7a98ad29c990af61e3fc92ab1bf9b2b15e8e9e54b7c3</code>). The 20 tracked files came from
+<code>git diff</code> in the source tree; the untracked test was added as a <code>new file mode 100644</code> hunk with its own blob hash.</p>
+
+<div class="warn">
+<strong>The patch no longer applies to main as one set:</strong> <code>git apply --check</code> against this worktree
+(which is level with <code>origin/main</code>) checks all 21 paths and fails 6 of them -
+<code>lib/assistant.js</code>, <code>lib/task-pipeline-drive.js</code>, <code>test/task-pipeline-drive.test.js</code>,
+<code>test/task-pipeline-sweep.test.js</code>, <code>test/task-pipeline-verdict.test.js</code>,
+<code>test/task-pipeline-walk.test.js</code>. Those are exactly the paths main rewrote in <code>38e7a6f8</code> (and the
+harnesses it touched with it). A clean apply is therefore not evidence of a live change: 15 paths apply because main
+never touched them, not because the change is still wanted.
+</div>
+
+<h2>2. Verdict for each of the 21 paths</h2>
+<p><span class="v sup">superseded</span> = main already has an equal or better change;
+<span class="v miss">still missing</span> = main does not have it and the change is worth taking;
+<span class="v amb">ambiguous</span> = partly both.</p>
+
+<table>
+<thead>
+<tr><th>#</th><th>Path</th><th>Delta</th><th>Main moved since b7394d4c</th><th>Applies to main</th><th>Verdict</th><th>Deciding line</th></tr>
+</thead>
+<tbody>
+<tr><td>1</td><td class="path">lib/assistant.js</td><td>+115 / -38</td><td>yes (+437 / -84)</td><td>no</td><td class="v sup">superseded</td>
+<td class="quote">main <code>lib/assistant.js:21</code> <code>import { treeFactsWorkers } from "./tree-facts-workers.js";</code> and <code>:1719</code> <code>const facts = await treeFactsWorkers.run(treePath);</code> - the same freeze removed, through supervised worker threads instead of a concurrent <code>gitIn</code> wave. The reentrancy guard is main's <code>queueSweepPending</code> / <code>queueSweepNext</code> chain (<code>:1381</code>) against the delta's <code>sweepPass</code> / <code>sweepAgain</code>, which no longer exists anywhere on main.</td></tr>
+
+<tr><td>2</td><td class="path">lib/assistant/queue.js</td><td>+7 / -2</td><td>yes</td><td>yes</td><td class="v sup">superseded</td>
+<td class="quote">main <code>lib/assistant/queue.js:1545</code> keeps <code>export function settleTasks(...)</code> synchronous on purpose: main's pass suspends and replays on a pending read (<code>throw { treeFactsPending }</code>) instead of awaiting inside the pass, so an <code>async</code> settle is not needed and would make every caller in the sync pass wrong.</td></tr>
+
+<tr><td>3</td><td class="path">lib/task-pipeline-drive.js</td><td>+16 / -3</td><td>yes</td><td>no</td><td class="v sup">superseded</td>
+<td class="quote">main <code>lib/task-pipeline-drive.js:2019</code> <code>export function driveTaskPipelines(tasks, options = {}) {</code> with <code>:2020</code> <code>return withStagePinReader(options.pinReader, () =&gt; driveTaskPipelinesPass(tasks, options));</code> - the pass stays synchronous and the caller's <code>treeOf</code> throws the pending marker. Awaiting <code>factsFor</code> inside a sync pass is the shape main deliberately did not take.</td></tr>
+
+<tr><td>4</td><td class="path">test/assistant-queue.test.js</td><td>+17 / -17</td><td>yes</td><td>yes</td><td class="v sup">superseded</td>
+<td class="quote">main <code>test/assistant-queue.test.js:413</code> <code>const { tasks: settled, changed } = settleTasks(linked.tasks, ...)</code> - the awaits in the delta exist only to satisfy an async <code>settleTasks</code> that main does not have; <code>await</code> of a sync return is a no-op, so the delta edits nothing observable.</td></tr>
+
+<tr><td>5</td><td class="path">test/pipeline-artifacts.test.js</td><td>+7 / -7</td><td>no</td><td>yes</td><td class="v sup">superseded</td>
+<td class="quote">main <code>test/pipeline-artifacts.test.js:312</code> <code>const settle = (task) =&gt;</code> with a sync <code>driveTaskPipelines</code>; the delta's <code>async</code> / <code>await</code> pair is an inert wrapper around a synchronous return.</td></tr>
+
+<tr><td>6</td><td class="path">test/pipeline-stage-trees.test.js</td><td>+3 / -3</td><td>yes</td><td>yes</td><td class="v sup">superseded</td>
+<td class="quote">same class: <code>await driveTaskPipelines([task], {...})</code> over main's synchronous driver. Nothing in the delta's three lines changes what the test asserts.</td></tr>
+
+<tr><td>7</td><td class="path">test/queue-holds.test.js</td><td>+21 / -17</td><td>no</td><td>yes</td><td class="v sup">superseded</td>
+<td class="quote">the awaits are inert, and the delta's one new wait names a property main does not own: <code>await assistant.sweepPass;</code> - main's in-flight pass lives on <code>assistant.queueSweepPending</code> (<code>lib/assistant.js:1381</code>).</td></tr>
+
+<tr><td>8</td><td class="path">test/task-pipeline-drive.test.js</td><td>+104 / -103</td><td>yes (+492 / -7)</td><td>no</td><td class="v sup">superseded</td>
+<td class="quote">main <code>test/task-pipeline-drive.test.js:98</code> <code>const drive = (tasks, over = {}) =&gt;</code> - one sync helper, and the file main landed since is 492 lines ahead of the base the delta was written on. The 104/103 is the async rewrite, not new assertions.</td></tr>
+
+<tr><td>9</td><td class="path">test/task-pipeline-fanout.test.js</td><td>+20 / -20</td><td>no</td><td>yes</td><td class="v sup">superseded</td>
+<td class="quote"><code>const drive = async (tasks, bundle, over = {}) =&gt; await driveTaskPipelines(...)</code> in the delta against main <code>:106</code> <code>const drive = (tasks, bundle, over = {}) =&gt;</code>. Same assertions, inert await.</td></tr>
+
+<tr><td>10</td><td class="path">test/task-pipeline-inputs.test.js</td><td>+6 / -6</td><td>no</td><td>yes</td><td class="v sup">superseded</td>
+<td class="quote">main <code>:106</code> sync <code>drive</code> helper; the delta only adds <code>async</code> and <code>await</code>.</td></tr>
+
+<tr><td>11</td><td class="path">test/task-pipeline-pins.test.js</td><td>+13 / -13</td><td>no</td><td>yes</td><td class="v sup">superseded</td>
+<td class="quote">main <code>:91</code> sync <code>drive</code> helper; the delta only adds <code>async</code> and <code>await</code>.</td></tr>
+
+<tr><td>12</td><td class="path">test/task-pipeline-sweep.test.js</td><td>+40 / -18</td><td>yes (+237 / -16)</td><td>no</td><td class="v sup">superseded</td>
+<td class="quote">main already carries a better harness: <code>:114</code> <code>assistant.treeFactsOf = async () =&gt; null;</code> (a seam that needs no fake child tracker) and <code>:126</code> <code>const pending = assistant.queueSweepNext || assistant.queueSweepPending;</code>. The delta's <code>setChildTracker({ exec: async () =&gt; { throw noRepo; } })</code> substitutes a fake git for a temp dir; main removes the git call instead.</td></tr>
+
+<tr><td>13</td><td class="path">test/task-pipeline-verdict.test.js</td><td>+14 / -8</td><td>yes</td><td>no</td><td class="v sup">superseded</td>
+<td class="quote">main <code>:135</code> <code>assistant.treeFactsOf = async () =&gt; null;</code> and <code>:165</code> <code>await assistant.sweepQueues();</code> already in the harness. The delta's 200 -&gt; 2000 poll extension is a symptom of its own slower async path.</td></tr>
+
+<tr><td>14</td><td class="path">test/task-pipeline-walk.test.js</td><td>+22 / -4</td><td>yes</td><td>no</td><td class="v sup">superseded</td>
+<td class="quote">main <code>:120</code> <code>assistant.treeFactsOf = async () =&gt; null;</code> and <code>:133</code> <code>await assistant.sweepQueues();</code> with a <code>queueSweepPending</code> quiescence loop at <code>:137</code> - the same three edits the delta makes, against main's guard names.</td></tr>
+
+<tr class="keep"><td>15</td><td class="path">tools/bench-pipeline.mjs</td><td>+13 / -4</td><td>no</td><td>yes</td><td class="v amb">ambiguous</td>
+<td class="quote">main <code>:262</code> <code>assistant.sweepQueues();</code> then three bare ticks. The delta's intent is right (await the pass, then wait for quiescence) but its body tests <code>assistant.sweepPass</code>, which main does not have - ported to <code>queueSweepPending</code> / <code>queueSweepNext</code> / <code>cuttingTrees</code> it is worth taking, unported it would silently loop 6000 ticks.</td></tr>
+
+<tr class="keep"><td>16</td><td class="path">tools/pipeline-exec-poc-rounds.mjs</td><td>+1 / -1</td><td>no</td><td>yes</td><td class="v miss">still missing</td>
+<td class="quote">main <code>:264</code> <code>assistant.sweepQueues();</code> followed by <code>await sleep(70)</code>. Main's <code>sweepQueues</code> returns a promise whenever the pass suspends on a git read, so the tool races the pass it just fired.</td></tr>
+
+<tr class="keep"><td>17</td><td class="path">tools/pipeline-exec-round.mjs</td><td>+1 / -1</td><td>no</td><td>yes</td><td class="v miss">still missing</td>
+<td class="quote">main <code>:245</code> <code>assistant.sweepQueues();</code> then <code>await settle()</code> - same race, one line.</td></tr>
+
+<tr class="keep"><td>18</td><td class="path">tools/verify-pipeline-assembly.mjs</td><td>+1 / -1</td><td>no</td><td>yes</td><td class="v miss">still missing</td>
+<td class="quote">main <code>:170</code> <code>assistant.sweepQueues();</code> inside a 900-step loop with <code>await sleep(120)</code> - same race, one line.</td></tr>
+
+<tr><td>19</td><td class="path">tools/verify-pipeline-fanout.mjs</td><td>+8 / -8</td><td>no</td><td>yes</td><td class="v sup">superseded</td>
+<td class="quote">main <code>:99</code> <code>const drive = (tasks, jobs = []) =&gt; driveTaskPipelines(tasks, {...})</code> - synchronous by design; the delta's eight <code>await</code> insertions change no answer.</td></tr>
+
+<tr class="keep"><td>20</td><td class="path">tools/verify-pipeline-walk.mjs</td><td>+2 / -2</td><td>no</td><td>yes</td><td class="v miss">still missing</td>
+<td class="quote">main <code>:252</code> and <code>:262</code> both call <code>assistant.sweepQueues();</code> bare, then two ticks. The delta awaits both - correct for main, two lines.</td></tr>
+
+<tr><td>21</td><td class="path">test/tree-facts-cache.test.js</td><td>+88 / -0 (new)</td><td>absent on main</td><td>yes</td><td class="v sup">superseded</td>
+<td class="quote">it is written against the abandoned implementation and FAILS on main: run against an export of <code>origin/main</code>, 2 of 2 cases fail with <code>0 !== 4</code> at <code>assert.equal(tr.calls.length, 4, "the four reads go out as ONE wave")</code>. Main's <code>treeFactsOf</code> does not go through <code>lib/scan.js</code> <code>gitIn</code> at all. What it was protecting is covered by <code>test/assistant-responsiveness.test.js:20</code> <code>"real tree facts use supervised workers and leave timers runnable"</code>.</td></tr>
+</tbody>
+</table>
+
+<p class="foot">Verdicts: 16 superseded, 4 still missing, 1 ambiguous. The 431/276 headline is almost entirely the
+mechanical <code>async</code> / <code>await</code> conversion of one design that main replaced with a different one -
+not lost behaviour.</p>
+
+<h2>3. The only payload worth taking: 5 files, 7 lines</h2>
+<p>All five are verification harnesses that fire the panel's clock and then sleep, while main's
+<code>sweepQueues()</code> returns a promise whenever the pass suspends on a git read
+(<code>lib/assistant.js:1400</code> <code>const result = run();</code> ... <code>:1401</code>
+<code>if (!result || typeof result.then !== "function") return result;</code>). The change is the delta's own intent,
+ported to main's guard names:</p>
+
+<table>
+<thead><tr><th>#</th><th>Path</th><th>Exact change</th></tr></thead>
+<tbody>
+<tr><td>15</td><td class="path">tools/bench-pipeline.mjs</td><td><code>:262</code> becomes <code>await assistant.sweepQueues();</code> and the three <code>await tick()</code> lines become a bounded quiescence wait - the shape main's own harness already uses at <code>test/task-pipeline-sweep.test.js:122-131</code>: poll until <code>!queueSweepPending &amp;&amp; !queueSweepNext &amp;&amp; !cuttingTrees?.size</code>, with the board shape stable across two polls and a deadline.</td></tr>
+<tr><td>16</td><td class="path">tools/pipeline-exec-poc-rounds.mjs</td><td><code>:264</code> <code>assistant.sweepQueues();</code> -> <code>await assistant.sweepQueues();</code></td></tr>
+<tr><td>17</td><td class="path">tools/pipeline-exec-round.mjs</td><td><code>:245</code> <code>assistant.sweepQueues();</code> -> <code>await assistant.sweepQueues();</code></td></tr>
+<tr><td>18</td><td class="path">tools/verify-pipeline-assembly.mjs</td><td><code>:170</code> <code>assistant.sweepQueues();</code> -> <code>await assistant.sweepQueues();</code></td></tr>
+<tr><td>20</td><td class="path">tools/verify-pipeline-walk.mjs</td><td><code>:252</code> and <code>:262</code> <code>assistant.sweepQueues();</code> -> <code>await assistant.sweepQueues();</code></td></tr>
+</tbody>
+</table>
+
+<div class="ok">
+Nothing under <code>lib/</code>, nothing under <code>test/</code>, no new file: the four one-line edits and one
+quiescence helper, in tools only. Each is a no-op when the pass never suspends and a correct wait when it does, so the
+worst case is that a harness waits for the pass it asked for.
+</div>
+
+<h2>3a. What the await buys, measured</h2>
+<p><strong>Why an unawaited sweep is one pass behind.</strong> <code>sweepQueues()</code> is promise-returning by design:
+a pass that needs a git fact suspends instead of blocking - <code>lib/assistant.js:1400</code>
+<code>const result = run();</code> with <code>:1397</code> <code>return err.treeFactsPending.then(run);</code>. Main's
+own suite pins what that means for a caller that ignores the promise:
+<code>test/task-pipeline-sweep.test.js:153</code> <code>const first = assistant.sweepQueues();</code> ... <code>:160</code>
+<code>assert.equal(rowOf(added.id).pipelineRun.stage, "S1", "no partial queue write while facts are pending");</code> -
+the row is still at the stage it started from while the pass is in flight, and only after
+<code>:163</code> <code>await Promise.all([first, second]);</code> does <code>:166</code> read <code>"S2"</code>.</p>
+
+<p><strong>How long the gap is, on this host.</strong> One real tree reading through main's own method, timed in an
+export of <code>origin/main</code>:</p>
+<pre class="mono">Assistant.prototype.treeFactsOf(".../agent-worktree-gui")              384 ms
+Assistant.prototype.treeFactsOf(".../.worktrees/salvage-...-0d4a42")     373 ms</pre>
+
+<p><strong>Against what the harnesses sleep.</strong> Every one of them fires the sweep and then waits far less than one
+reading:</p>
+<ul>
+  <li><code>tools/pipeline-exec-round.mjs:239-240</code> <code>const settle = async () =&gt; { for (let i = 0; i &lt; 12; i += 1) await sleep(5); }</code>
+  - 60 ms, then it compares the row's thread before and after the step;</li>
+  <li><code>tools/pipeline-exec-poc-rounds.mjs:265</code> <code>await sleep(70);</code> - then reads the prompt count it expects the pass to have produced;</li>
+  <li><code>tools/verify-pipeline-assembly.mjs:171</code> <code>await sleep(120);</code> - then reads the row it expects the pass to have written;</li>
+  <li><code>tools/verify-pipeline-walk.mjs:252,262</code> and <code>tools/bench-pipeline.mjs:262</code> - two or three bare
+  <code>await tick()</code>, which is a macrotask, not a wait.</li>
+</ul>
+<p>So the step boundary these tools assert on is ~300 ms earlier than the pass they just fired. The consequence is
+narrow but real: a step counts as "nothing moved" when the pass simply has not finished, one iteration of a bounded
+loop (60 or 900) is spent on every pass, and a loop that runs out of budget reports an unfinished row - which reads as a
+pipeline defect rather than a timeout. Awaiting the returned promise makes "one sweep" mean "one completed pass".</p>
+
+<div class="warn">
+<strong>What it does not fix: no shipped path.</strong> Every call site inside the panel already awaits the promise or
+handles it: <code>lib/assistant.js:1685</code> <code>await this.sweepQueues();</code>, and <code>:1904</code> /
+<code>:4157</code> <code>const result = this.sweepQueues();</code> with a <code>.catch(...)</code> on the returned
+promise. The seven unawaited lines are exactly these five verification harnesses, so this is determinism in the tools,
+not a bug a reader of the board can see. That is why "retire with no salvage" is a real option rather than a cop-out.
+</div>
+
+<h2>4. What was run, and what it answered</h2>
+<ul>
+  <li><code>node --check</code> on all five tools: five of five OK.</li>
+  <li><code>npm run test:changed</code>: one test file names the diff, <code>test/pipeline-bench.test.js</code>.
+  Run alone: <strong>6 tests, 6 pass, 0 fail</strong> (26.5 s).</li>
+  <li><code>tools/verify-pipeline-assembly.mjs</code>: <strong>79 checks, 0 failed</strong>, exit 0 - four stage trees,
+  four commits, one assembly, the conflict round parked.</li>
+  <li><code>tools/verify-pipeline-walk.mjs</code>: red on this host, and red on <code>origin/main</code> too.
+  Base export of <code>origin/main</code>: <code>-1 / 15 checks passed, 16 FAILED</code>, all four scenarios stalled at
+  their first stage. With the awaits: <code>6 / 15</code>, the <code>probe-fix</code> and <code>author/review</code>
+  scenarios fully green, then the same crash the base hits -
+  <code>TypeError: Cannot read properties of undefined (reading 'at')</code> at
+  <code>leaveLeftover</code> (<code>:202</code>, <code>task.pipelineRun.stageRuns.at(-1)</code> on a row with no stage
+  run yet). Two pre-existing defects of the harness itself, unrelated to the sweep: the leftover fixture assumes a
+  stage run exists by step 3, and the seat writes a stage artifact at <code>stage.artifact.path</code> without
+  <code>fillHoles</code>, so <code>ledger/ping-pong/draft-r{{round}}.md</code> is written with a literal
+  <code>{{round}}</code> and the driver never finds it. Fixing them is a separate change; the awaits are not the
+  cause, which the base run proves.</li>
+  <li><code>npm test</code> once, at the end, before the pull request. A fresh worktree has no <code>config.json</code>
+  (gitignored), which fails <code>gateway-permissions.test.js</code> at import with an <code>ENOENT</code>; the primary
+  checkout's copy is copied in first, as the landing notes require.</li>
+</ul>
+
+<h2>5. What retirement removes</h2>
+<p>Once the salvage lands and reads MERGED, from the main checkout only:</p>
+<ul>
+  <li>the worktree directory <code>.worktrees/async-pipeline-driver-refactor</code> - with it, the 20 uncommitted files
+  (+431 / -276), the untracked <code>test/tree-facts-cache.test.js</code> (88 lines, preserved in the patch above and in
+  section 6), and an untracked <code>.kilo/</code> directory that is local tooling, not part of the delta and not in the 21 paths;</li>
+  <li>the local branch <code>wtgui/async-pipeline-driver-refactor</code> (<code>git branch -D</code>). It has no PR, no
+  remote ref to keep, and its tip <code>b7394d4c</code> is already an ancestor of main, so nothing unique to the branch is lost;</li>
+  <li>its registration in <code>git worktree list</code>, which is what the panel's board reads.</li>
+</ul>
+<p>Nothing on <code>origin</code> is deleted and no other worktree is touched. The source tree stays in place until the
+pull request reads MERGED and <code>/api/jobs</code> shows no live run at that path.</p>
+
+<h2>6. The untracked test, run against main</h2>
+<p>Exported <code>origin/main</code> with <code>git archive</code> into a scratch directory, copied
+<code>test/tree-facts-cache.test.js</code> in, and ran it there:</p>
+<pre class="mono">node --test test/tree-facts-cache.test.js
+# fail 2 / pass 0
+# one concurrent wave per tree per pass, and a second call in the same pass reuses it - no second spawn
+#   AssertionError: the four reads go out as ONE wave, not one after the other
+#   0 !== 4    (line 58)</pre>
+<p>So the file is not "a test main forgot to add": it asserts an implementation main does not have, and adding it
+unchanged would put a red file on main. Its subject is covered by <code>test/assistant-responsiveness.test.js</code>.</p>
+
+<p class="foot">Measured on <code>origin/main</code> <code>d45158c6</code> against source <code>b7394d4c</code>.
+Paths are repository-relative; the patch and this export live outside the repository.</p>
+
+</div>
+</body>
+</html>
