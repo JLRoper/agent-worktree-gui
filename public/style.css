@@ -1955,9 +1955,19 @@ textarea.drop-target, .chipbox.drop-target { outline: 2px dashed var(--violet); 
 .code-box.is-cmd > .code-head { align-items: flex-start; }
 .code-box.is-cmd > .code-head .code-what { color: #c8a6ff; white-space: normal; overflow: visible; text-overflow: clip; flex: 1 1 auto; }
 /* No count: a command's body is one line of text that wraps, so "1 line" would count separators and not what the
-   reader sees, and the room it takes is room the title needs. */
+   reader sees, and the room it takes is room the title needs. A card that carries a SPAWN's TODOs is the exception:
+   "5 todos" is a number the body does not give, and it is what a folded card should still say. */
 .code-box.is-cmd > .code-head .code-n { display: none; }
+.code-box.is-cmd[data-cmd-bullets] > .code-head .code-n { display: inline; }
 .code-box.is-cmd > .code-head .code-caret { padding-top: 1px; }
+/* A SPAWN's TODOs, as bullet rows BETWEEN the head and the body: the two-line clamp cuts the BODY, so a folded card
+   still shows every item the tree has to do. Each row is one line of text (glyph, category, the item), escaped by the
+   module that draws it. */
+.code-box.is-cmd > .code-bullets { display: flex; flex-direction: column; gap: 2px; padding: 3px 8px 5px 22px; font: 12px/1.5 var(--mono); color: #cfd8e3; }
+.code-box.is-cmd > .code-bullets + .code-body { border-top: 1px solid var(--line); }
+.code-bullet { display: flex; gap: 6px; white-space: normal; overflow-wrap: anywhere; }
+.code-bullet-glyph { flex: none; }
+.code-bullet-text { flex: 1 1 auto; min-width: 0; }
 /* Folded, the card sits in a folded turn's tail where every other line is quiet: a 4px margin there would read as
    a gap in the head, so the tail keeps the card tight against it. */
 .turn-peek.is-command { font-style: normal; }

@@ -11,6 +11,9 @@ TODO ADD [Playwright test] corner resize
 RULE: [Never PROD] deploy to QA only
 ```
 
+The TODO there belongs to the tree the SPAWN above it names, so it is not a card of its own: it is a bullet row of
+that SPAWN's card (see [A SPAWN's TODOs are its card's bullets](#a-spawns-todos-are-its-cards-bullets)).
+
 **Every readable one of those lines is now a card**, titled or not, in every place a reader meets it: the board's
 turn tail (`public/turns.js`), the Messages pane (`public/assistant.js`), and the agent card's own transcript, whose
 turn body is drawn by `public/render-jobs.js`. It is drawn in the *same* frame a tool's result is drawn in -
@@ -38,6 +41,7 @@ card; a line it cannot read, or one with nothing to show, is exactly the line it
 | `MESSAGE assistant-3 \| the deploy moved` | `✉️ assistant-3`              | `the deploy moved`       |
 | `SPAWN IN #12 agent-worktree-gui \| card it` | `🌱 IN #12 agent-worktree-gui` | `card it`            |
 | `TODO ADD [Playwright test] corner resize` | `☑️ Playwright test`         | `corner resize`          |
+| `SPAWN …` then `TODO ADD [Playwright test] corner resize` | `🌱 …` (the SPAWN's card) | the TODO is one of its bullets, not a card |
 | `RULE: deploy to QA only`               | `📏 RULE`                       | `deploy to QA only`      |
 | `TODO DONE 3`                           | (not a card)                    | the prose line it has always been |
 | `see above`                             | (not a card)                    | the prose line it has always been |
@@ -52,6 +56,44 @@ Three of those deserve a word:
 - the shapes are the grammar's own (`lib/assistant/actions.js`, and `lib/todos.js` for TODO): `NOTE: text`,
   `WATCH <thread>: <sentence>`, `RULE [Never PROD] text`, `RESTART gateway | text`. A line the executing grammar
   would not read as a command is not a card, because a card must never invent a reading the panel does not have.
+
+## A SPAWN's TODOs are its card's bullets
+
+A TODO written under a SPAWN belongs to the tree that SPAWN names - the grammar's own sentence - so it is not a card
+of its own: it is one bullet row of the SPAWN's card. The row reads `<category> - <todo>`, where the category is the
+TODO's leading `[Title]` (the same bracket the card's head reads) and the glyph is the TODO card's checkbox:
+
+```
+[▸] 🌱 IN #398 sales-citdev-POC-build-1 | Tight sweep     3 todos   click to read
+    ☑️ Inventory first - Write docs/reports/worktree-cleanup.md naming every tree
+    ☑️ Salvage - Cut one branch from 88d1538 and take the four trees' commits
+    ☑️ Squash and prove - Squash to one commit and prove the tree hash
+    do the sweep, local only
+```
+
+The rule:
+
+- the owner is the nearest SPAWN above the line; a TODO with no SPAWN above it keeps the card it always had;
+- a TODO with no bracket is still the SPAWN's bullet: the glyph and the item, with no invented category;
+- an id op (`TODO DONE 3`) carries no text and is not folded: it keeps the prose line it always was;
+- the bullets are drawn BETWEEN the head and the body, so the two-line clamp on the body never hides them, and the
+  head counts them (`3 todos`, `1 todo`). The card says `data-cmd-bullets="3"`, and its count is the one number a
+  command card shows - the others hide theirs;
+- the SPAWN's own payload is still the body, folded to two lines as before, and the card is keyed by the SPAWN line,
+  so a repaint keeps the reader's fold.
+
+It is the same reading in all three places: the Messages pane and the board's turn tail go through `cardsHtml`, and
+the agent card's transcript goes through `core/console-markdown.js`, which asks the frame for the fold
+(`consoleFormat.commandFold`) so there is one rule and not two. The console's own live append, which never asked for
+cards, keeps every row it always drew.
+
+The shared action grammar (`lib/assistant/actions.js`, `actionGrammar`) asks every manager to put each TODO directly
+after the SPAWN it belongs to with its short category in brackets - `TODO [<category>] <what has to happen>` - which
+is what gives the bullets their categories. It is a prompt line, not a change to the parser.
+
+Display only, as ever: `TODO [Inventory first] Write the report` still adds the item with its bracket in the text,
+and the bullets change no line the panel executes. `lib/assistant/actions.js`'s parser and `lib/todos.js` are
+untouched.
 
 ## Where it is drawn, and the one card that draws it
 

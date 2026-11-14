@@ -318,3 +318,136 @@ test("every pane calls the one module, and the page loads it after the frame it 
   assert.ok(at("/turns.js") > at("/core/assistant-command.js"));
   assert.ok(at("/assistant.js") > at("/core/assistant-command.js"));
 });
+
+// ---- a SPAWN's TODOs, as its own card's bullets ------------------------------------------------------
+// A TODO written under a SPAWN belongs to the tree that SPAWN names (the grammar's own words), so it is one bullet of
+// the SPAWN's card instead of a card of its own. The bullet reads `<category> - <todo>`, the category being the TODO's
+// leading `[Title]`, and the rows sit BETWEEN the head and the body - outside the clamp - so a folded card still
+// shows every item. A TODO with no SPAWN above it keeps its card.
+
+const SWEEP = [
+  "SPAWN IN #398 sales-citdev-POC-build-1 | [Tight sweep] inventory, salvage, squash, land, delete - local only",
+  "TODO [Inventory first] Write docs/reports/worktree-cleanup.md naming every tree",
+  "TODO [Salvage] Cut one branch from 88d1538 and take the four trees' commits",
+  "TODO ADD [Squash and prove] Squash to one commit and prove the tree hash",
+];
+
+test("a SPAWN's TODOs are its card's bullets, and stop being cards of their own", () => {
+  const plan = M.foldSpawnTodos(SWEEP.map((text, i) => ({ text, i })));
+  assert.equal(plan[0].todos.length, 3, "the SPAWN owns the three TODOs below it");
+  for (const at of [1, 2, 3]) assert.equal(plan[at].folded, true, `the TODO on line ${at} is folded into the card`);
+  // The bullet's own reading, in the one place that names it.
+  assert.deepEqual(
+    plan[0].todos.map(M.bulletLabel),
+    [
+      "Inventory first - Write docs/reports/worktree-cleanup.md naming every tree",
+      "Salvage - Cut one branch from 88d1538 and take the four trees' commits",
+      "Squash and prove - Squash to one commit and prove the tree hash",
+    ],
+  );
+  const block = M.cardsHtml(SWEEP.join("\n"), { scope: "msg|398", open: new Set() });
+  assert.equal((block.match(/class="code-box/g) || []).length, 1, "one card, not four: the TODOs drew none of their own");
+  assert.equal((block.match(/class="code-bullet"/g) || []).length, 3, "three bullet rows inside it");
+  assert.ok(!block.includes(`<span class="code-what">${EM.TODO}`), "no TODO card is drawn");
+  // Each bullet reads: the checkbox glyph, the category, then the item - and carries the TODO it came from.
+  for (const [i, todo] of plan[0].todos.entries()) {
+    assert.ok(block.includes(`<span class="code-bullet-glyph" aria-hidden="true">${EM.TODO}</span>`), "a bullet carries the TODO glyph");
+    assert.ok(block.includes(`<span class="code-bullet-text">${todo.category} - ${todo.text}</span>`), `bullet ${i + 1} reads category - item`);
+    assert.ok(block.includes(`title="${SWEEP[i + 1]}"`), `bullet ${i + 1} carries its TODO line`);
+  }
+  // The head shows the count, and the card is still the same frame with the same line on it.
+  assert.ok(block.includes(`<span class="code-n">3 todos</span>`), "the head counts the bullets");
+  assert.ok(block.includes('data-cmd-bullets="3"'), "the card says how many it carries");
+  assert.ok(block.includes(`data-ltext="${SWEEP[0]}"`), "the box still carries the SPAWN line itself");
+  // BULLETS STAY VISIBLE WHEN THE BODY IS FOLDED. They are rows BETWEEN the head and the body, and the clamp is on
+  // the body, so the folded card is two lines of payload with the whole list above it.
+  const head = block.indexOf("</button>");
+  const bulletsAt = block.indexOf('<div class="code-bullets"');
+  const bodyAt = block.indexOf('<div class="code-body"');
+  assert.ok(head > 0 && bulletsAt > head && bodyAt > bulletsAt, "the bullets sit between the head and the body");
+  assert.match(block, /class="code-box is-cmd is-clamped"/, "the body is folded to two lines");
+  const bodyOnly = block.slice(bodyAt, block.indexOf("</div>", block.lastIndexOf("</div>")));
+  assert.ok(!bodyOnly.includes("code-bullet"), "and no bullet is inside the clamped body");
+  // The stylesheet keeps the count on a bullets-bearing card, and the fold is the same two lines.
+  assert.match(css, /\.code-box\.is-cmd\[data-cmd-bullets\] > \.code-head \.code-n \{ display: inline; \}/);
+  assert.match(css, /\.code-box\.is-cmd > \.code-bullets \{/);
+});
+
+test("a TODO with no SPAWN above it keeps its card, and the nearest SPAWN owns the rest", () => {
+  const solo = M.cardsHtml("TODO ADD [Solo] no spawn above this", { scope: "msg|2", open: new Set() });
+  assert.equal((solo.match(/class="code-box/g) || []).length, 1, "a TODO with no SPAWN above it is still a card");
+  assert.ok(solo.includes(`<span class="code-what">${EM.TODO} Solo</span>`), "with its own head");
+  assert.ok(!solo.includes("code-bullets"), "and no bullets, because it owns no tree");
+  // Two SPAWNs: each TODO goes to the nearest one above it, and neither card steals the other's work.
+  const two = ["SPAWN IN a | first", "TODO [A] one", "SPAWN IN b | second", "TODO [B] two"];
+  const pair = M.cardsHtml(two.join("\n"), { scope: "msg|3", open: new Set() });
+  assert.equal((pair.match(/class="code-box/g) || []).length, 2, "two SPAWN cards");
+  assert.equal((pair.match(/class="code-bullet"/g) || []).length, 2, "one bullet each");
+  assert.ok(pair.includes("<span class=\"code-bullet-text\">A - one</span>") && pair.includes("<span class=\"code-bullet-text\">B - two</span>"));
+  assert.equal((pair.match(/<span class="code-n">1 todo<\/span>/g) || []).length, 2, "each head says one todo");
+  // An id op carries no text: it is not a bullet, and it keeps the prose line it always was.
+  const idOp = M.cardsHtml("SPAWN IN a | first\nTODO DONE 3", { scope: "msg|4", open: new Set() });
+  assert.ok(!idOp.includes("code-bullet"), "an id op is not folded into the card");
+  assert.ok(idOp.includes("TODO DONE 3"), "and it is still drawn, as the line it always was");
+  // A TODO with no bracket is still the SPAWN's bullet: the glyph and the item, with no invented category.
+  const bare = M.cardsHtml("SPAWN IN a | first\nTODO ADD no bracket here", { scope: "msg|5", open: new Set() });
+  assert.ok(bare.includes("<span class=\"code-bullet-text\">no bracket here</span>"), "no bracket, no category, the item as written");
+  // A SPAWN with no TODOs is untouched: no bullet row, no count, the card it always was.
+  const plain = M.cardHtml(PLAIN_SPAWN, { key: "k" });
+  assert.ok(!plain.includes("code-bullets") && !plain.includes("data-cmd-bullets"), "a SPAWN with no TODOs draws no bullets");
+});
+
+test("the fold is display-only: the executing grammar still reads every TODO row, bracket and all", () => {
+  const rows = parseActions(SWEEP.join("\n"));
+  assert.equal(rows.todo.length, 3, "three TODO rows, exactly as before the card drew them");
+  assert.deepEqual(
+    rows.todo.map((t) => t.text),
+    [
+      "[Inventory first] Write docs/reports/worktree-cleanup.md naming every tree",
+      "[Salvage] Cut one branch from 88d1538 and take the four trees' commits",
+      "[Squash and prove] Squash to one commit and prove the tree hash",
+    ],
+    "the category is NOT stripped from what runs",
+  );
+  assert.deepEqual(rows.todo.map((t) => t.op), ["add", "add", "add"]);
+  // Drawing the card changes neither the parse nor the line: the bullets are a second reading of the same strings.
+  const before = JSON.stringify(parseActions(SWEEP.join("\n")));
+  M.cardsHtml(SWEEP.join("\n"), { scope: "msg|398", open: new Set() });
+  assert.equal(JSON.stringify(parseActions(SWEEP.join("\n"))), before);
+  // And the executing modules this card must never reach for are named here, so a later change cannot quietly move
+  // the reading into them: the parser is the grammar's, the list is lib/todos.js's, and neither is imported here.
+  const source = read("../public/core/assistant-command.js");
+  assert.doesNotMatch(source, /(?:import|require)\s*\(?\s*["'][^"']*(?:assistant\/actions|todos)\.js/, "the card imports neither executor");
+});
+
+test("the agent card's transcript folds the same TODOs into the same card, through the same module", () => {
+  const ctx = vm.createContext({ console });
+  vm.runInContext("globalThis.window = globalThis;", ctx);
+  for (const file of [
+    "../public/core/dom-format.js",
+    "../public/core/console-format.js",
+    "../public/core/assistant-command.js",
+    "../public/core/console-markdown.js",
+  ]) {
+    vm.runInContext(read(file), ctx, { filename: file });
+  }
+  const md = ctx.window.WMApp.core.consoleMarkdown;
+  const lines = ["nothing else to report.", ...SWEEP].map((text, i) => ({ kind: "text", text, lid: 300 + i }));
+  // A caller that did not ask for cards keeps every row it always drew - the console's own live path.
+  const plain = md.html(lines);
+  assert.doesNotMatch(plain, /code-box/);
+  assert.equal((plain.match(/class="jl /g) || []).length, 5, "five rows, the TODOs included");
+  // Asked for cards, the transcript draws ONE SPAWN card with three bullets, and no TODO card at all.
+  const drawn = md.html(lines, { cards: { scope: "turn-9", open: new Set() } });
+  assert.equal((drawn.match(/class="code-box is-cmd is-clamped"/g) || []).length, 1, "one card in the transcript");
+  assert.equal((drawn.match(/class="code-bullet"/g) || []).length, 3, "carrying the three bullets");
+  assert.ok(!drawn.includes("code-what\">" + EM.TODO), "and no TODO card");
+  for (const line of SWEEP.slice(1)) {
+    assert.ok(!drawn.includes(`data-ltext="${line}"`), "a folded TODO line is not drawn as a row of its own");
+  }
+  assert.ok(drawn.includes(`<span class="code-n">3 todos</span>`), "the head counts them here too");
+  assert.match(drawn, /data-code-key="cmd\|turn-9\|301"/, "keyed by the SPAWN line's own id");
+  // The seam, in one place: the transcript asks the frame for the fold, and the frame asks the one module.
+  assert.match(markdown, /cf\.commandFold\(/);
+  assert.match(read("../public/core/console-format.js"), /commandFold: cfCommandFold/);
+});

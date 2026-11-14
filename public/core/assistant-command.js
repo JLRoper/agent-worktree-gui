@@ -16,6 +16,12 @@
 // payload, folded to two lines. A line whose title is malformed or absent is not a lesser line: the reader still gets
 // the same frame, the same emoji and the same recipient, which is what a row of monospace prose could not give.
 //
+// A SPAWN'S TODOS ARE ITS BULLETS. A TODO written under a SPAWN belongs to the tree that SPAWN names, so it is not a
+// card of its own: it is a bullet row of the SPAWN's card - `<category> - <todo>`, the category being the TODO's own
+// leading `[Title]` and the glyph its card's checkbox - drawn BETWEEN the head and the body. The bullets sit outside
+// the body, so the two-line clamp never hides them, and the head counts them (`5 todos`). A TODO with no SPAWN above
+// it keeps its card, exactly as it was.
+//
 // THE TITLE. A line's payload may lead with `[Title]`. The title counts only when its closing bracket arrives
 // within the rule below (`COMMAND_TITLE_MAX`): a longer one, or one that never closes, is not a title, and it stays
 // in the body as the payload it is. That is deliberate - a title is a display nicety, and a model writing
@@ -169,6 +175,70 @@
     };
   }
 
+  // WHAT A SPAWN CARD OWNS. A TODO written under a SPAWN is that tree's work, so it is not a card of its own: it is
+  // one bullet row of the SPAWN's card, drawn between the head and the body. The rule is positional - the nearest
+  // SPAWN above the line owns it - because the grammar's own sentence says a TODO belongs to "the worktree the SPAWN
+  // above names". A TODO with no SPAWN above it keeps its card exactly as before. This is a second reading of the
+  // same strings, like every other line here: the TODO still executes with its bracket, and lib/todos.js is untouched.
+  //
+  // The bullet reads `<category> - <todo>`, where the category is the TODO's leading `[Title]` - the same bracket the
+  // card's head already reads - and the glyph is the TODO card's own checkbox. A TODO with no bracket is still the
+  // SPAWN's bullet: it draws the glyph and its text, with no invented category.
+  function todoBullet(parsed) {
+    if (!parsed || parsed.kind !== "TODO") return null;
+    // An id op (`TODO DONE 3`) carries no text, so there is nothing to fold: the prose line is the whole command.
+    if (!parsed.title && !parsed.body) return null;
+    return { category: parsed.title || "", text: parsed.body || "", source: parsed.text };
+  }
+
+  // One bullet's label, in the one place, so the card, the tests and the docs cannot disagree.
+  function bulletLabel(bullet) {
+    if (!bullet) return "";
+    if (!bullet.category) return bullet.text;
+    return bullet.text ? `${bullet.category} - ${bullet.text}` : bullet.category;
+  }
+
+  // Lines in, the same lines out, with each SPAWN's following TODOs attached to it and marked `folded` (the caller
+  // draws nothing for those). Entries are `{ text, ... }` and are returned shallow-copied, so a caller's own fields
+  // (an index, a line id) survive. Ownership is the nearest SPAWN above and is not reset by prose: a reply's tail is
+  // one block of command lines, and a TODO an inch below its SPAWN belongs to it however the sentences are broken up.
+  function foldSpawnTodos(entries) {
+    const list = Array.isArray(entries) ? entries : [];
+    let owner = null;
+    return list.map((entry) => {
+      const text = String(entry && entry.text != null ? entry.text : "");
+      const parsed = parseCommandLine(text);
+      if (parsed && parsed.kind === "SPAWN") {
+        owner = { todos: [] };
+        return { ...entry, parsed, todos: owner.todos };
+      }
+      const bullet = todoBullet(parsed);
+      if (bullet && owner) {
+        owner.todos.push(bullet);
+        return { ...entry, parsed, folded: true, todos: [] };
+      }
+      return { ...entry, parsed, todos: [] };
+    });
+  }
+
+  // A SPAWN card's bullets, as rows BETWEEN the head and the body: they stay on the page when the body is folded to
+  // two lines, because they are not part of it. Each row is its own line of text, escaped like every other row, and
+  // carries the TODO it was read from in `title` - no `data-ltext`, because the box's own `data-ltext` is the SPAWN
+  // line and the console's copy walker lifts the box, not its parts.
+  function bulletsHtml(bullets) {
+    const list = (Array.isArray(bullets) ? bullets : []).filter(Boolean);
+    if (!list.length) return "";
+    const rows = list.map(
+      (b) =>
+        `<div class="code-bullet" role="listitem" title="${escOf(b.source || "")}">` +
+        `<span class="code-bullet-glyph" aria-hidden="true">${COMMAND_EMOJI.TODO}</span>` +
+        `<span class="code-bullet-text">${escOf(bulletLabel(b))}</span></div>`,
+    );
+    return `<div class="code-bullets" role="list" aria-label="${list.length} todo${list.length === 1 ? "" : "s"} in this tree">${rows.join("")}</div>`;
+  }
+
+  const todoCount = (n) => `${n} todo${n === 1 ? "" : "s"}`;
+
   // The head's one line: the kind's emoji, the recipient when the kind addresses one, then the title when the line
   // carries one. A kind that addresses nobody and carries no title says its own kind after the glyph, so a head is
   // never a bare emoji.
@@ -190,12 +260,15 @@
   // One command line as a card, or "" when the text is not a command line this module can read, when the line is
   // nothing but the command itself, or when the page has lost the frame. `open` is the page's code-box book (a Set
   // of keys); `clamp` is how many lines the body shows while it is folded.
-  function cardHtml(text, { key = "", scope = "", ref = null, open = null, clamp = 2, lid = null, lineKind = "" } = {}) {
+  function cardHtml(text, { key = "", scope = "", ref = null, open = null, clamp = 2, lid = null, lineKind = "", bullets = null } = {}) {
     const parsed = parseCommandLine(text);
     if (!parsed) return "";
+    // A SPAWN whose TODOs are folded into it is a card even when its own payload is empty: the bullets are the body's
+    // equal, and dropping the card would drop them with it.
+    const list = (Array.isArray(bullets) ? bullets : []).filter(Boolean);
     // An id op (`TODO DONE 3`) carries no payload and no title: there is nothing a body could show, so the prose
     // line it has always been is the whole command.
-    if (!parsed.title && !parsed.body) return "";
+    if (!parsed.title && !parsed.body && !list.length) return "";
     const box = frame();
     if (!box) return "";
     const lines = String(parsed.body || "").split("\n");
@@ -204,13 +277,19 @@
     // not the card's chrome, and a reader of the DOM finds the source text where every other row keeps it.
     const id = lid != null && lid !== "" ? String(lid) : "";
     const attrs =
-      ` data-ltext="${escOf(parsed.text)}" data-lkind="${escOf(lineKind || "text")}"` + (id ? ` data-lid="${escOf(id)}"` : "");
+      ` data-ltext="${escOf(parsed.text)}" data-lkind="${escOf(lineKind || "text")}"` +
+      (id ? ` data-lid="${escOf(id)}"` : "") +
+      (list.length ? ` data-cmd-bullets="${list.length}"` : "");
     return box({
       kind: "cmd",
       at: 0,
       rows: Math.max(1, lines.length),
       what: headerOf(parsed),
       title: parsed.text.trim(),
+      // The head says how many bullets the card carries, and the bullets ride BETWEEN the head and the body so a
+      // folded card still shows them: they are not part of the body the clamp cuts.
+      count: list.length ? todoCount(list.length) : "",
+      bullets: bulletsHtml(list),
       body,
       opts: { key: key || keyOf(scope, ref) },
       open,
@@ -225,11 +304,22 @@
   function cardsHtml(text, { scope = "", keyPrefix = "", open = null, clamp = 2, renderText = null } = {}) {
     const source = String(text == null ? "" : text);
     if (!source) return "";
-    const lines = source.split("\n");
-    const cards = lines.map((line, i) => cardHtml(line, { key: keyOf(scope || keyPrefix, i), open, clamp }));
+    // One pass decides which lines are cards and which are a SPAWN card's bullets: a TODO under a SPAWN is drawn
+    // inside that card and draws nothing of its own, so it contributes no row to the block at all.
+    const units = foldSpawnTodos(source.split("\n").map((line, i) => ({ text: line, i })));
+    const cards = units.map((u) =>
+      u.folded ? "" : cardHtml(u.text, { key: keyOf(scope || keyPrefix, u.i), open, clamp, bullets: u.todos }),
+    );
     if (!cards.some(Boolean)) return "";
-    return lines
-      .map((line, i) => cards[i] || (typeof renderText === "function" ? renderText(line) : `<div class="jl jl-text">${escOf(line)}</div>`))
+    return units
+      .map((u, i) =>
+        cards[i] ||
+        (u.folded
+          ? ""
+          : typeof renderText === "function"
+            ? renderText(u.text)
+            : `<div class="jl jl-text">${escOf(u.text)}</div>`),
+      )
       .join("");
   }
 
@@ -239,6 +329,10 @@
     KINDS,
     parseCommandLine,
     readTitle,
+    todoBullet,
+    bulletLabel,
+    foldSpawnTodos,
+    bulletsHtml,
     headerOf,
     keyOf,
     cardHtml,
