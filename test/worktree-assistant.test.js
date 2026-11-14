@@ -362,7 +362,7 @@ test("the owner is drawn from the server's answer, and the wake path consults th
   const app = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
   // The worktree row template moved to public/render-projects.js in step 7 of
   // docs/reports/module-map-2026-11-07.html, so the owner slot is read where the template now lives.
-  const src = `${app}\n${await readFile(new URL("../public/render-projects.js", import.meta.url), "utf8")}`;
+  const src = `${app}\n${await readFile(new URL("../public/render-projects.js", import.meta.url), "utf8")}\n${await readFile(new URL("../public/board-scaffold.js", import.meta.url), "utf8")}`;
   // Both surfaces come from the owner-cell region, which reads the SERVER's name, label and role; neither maps an id
   // to a sentence of its own, and neither falls back to the role label.
   assert.match(src, /assistant: ownerCellHtml\(row\)/, "the owner column draws the owner cell");

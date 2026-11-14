@@ -122,6 +122,143 @@ window.WMApp.queueCards = function queueCards(deps) {
     ];
   };
 
+  // ---- a task id is a reference into this pane -------------------------------------------------------
+  //
+  // The assistant's own prose can say `#405`, and `#405` names one row of ONE assistant's queue. Two questions are
+  // answered here, and they are deliberately separate:
+  //
+  //   WHOSE ROW IS IT (`taskOwnerOf`) is read at RENDER time, when the console turns the words into an anchor
+  //   (public/core/console-markdown.js). It answers from every queue this tab holds, and only when exactly ONE
+  //   assistant owns the id: each assistant's queue numbers its own tasks, so two queues can both hold a `#405`, and
+  //   a guess would send the reader to the wrong list. No owner, or two, is null - the words stay plain.
+  //
+  //   WHERE IS THE ROW (`queueOpenTask`) is answered at PRESS time, when the reader follows the anchor. A row can be
+  //   in the queue and outside the window the pane draws, or the queue can be one this tab never read; both are
+  //   fixed here, with ONE read and no loop.
+  //
+  // The attribution is warmed by ONE list read of every queue (`GET /api/assistant/queue` with no id). It is what
+  // fills each assistant's cache too, so a press on a fresh page usually has its row already; the read is throttled
+  // and single-flight, so a paint that arrives while it is out joins it instead of starting another.
+  const TASK_INDEX_TTL = 20000;
+  const taskIndex = { at: 0, inflight: null };
+  // The attribution, and the signature it was built from. The signature is cheap (one number per cached queue) and
+  // changes whenever a cache is replaced, which is every read and every write: no call site has to remember to tell
+  // this map that the queues moved.
+  let taskOwnersMemo = { sig: "", byId: new Map() };
+  const taskIndexSig = () =>
+    [...queueCache.keys()]
+      .sort()
+      .map((k) => `${k}:${queueCache.get(k)?.at || 0}`)
+      .join("|");
+  function taskOwnersById() {
+    const sig = taskIndexSig();
+    if (sig === taskOwnersMemo.sig) return taskOwnersMemo.byId;
+    const byId = new Map();
+    for (const [own, cached] of queueCache) {
+      for (const t of Array.isArray(cached?.view?.tasks) ? cached.view.tasks : []) {
+        const id = String(t?.id ?? "");
+        if (!id) continue;
+        const owners = byId.get(id) || new Set();
+        owners.add(own);
+        byId.set(id, owners);
+      }
+    }
+    taskOwnersMemo = { sig, byId };
+    return byId;
+  }
+  // The assistant that owns a task id, or null when none or more than one does. Never a guess.
+  function taskOwnerOf(taskId) {
+    const id = String(taskId ?? "").trim();
+    if (!id) return null;
+    const owners = taskOwnersById().get(id);
+    if (!owners || owners.size !== 1) return null;
+    const [own] = owners;
+    return isAssistant(own) ? own : null;
+  }
+  // The transcript's own repaint key: a card drawn before this answer landed carries the plain words it could
+  // honestly draw then, and the string moving is what tells it to draw them again.
+  const taskIndexRev = () => taskIndexSig();
+  function ensureTaskIndex() {
+    if (taskIndex.inflight) return taskIndex.inflight;
+    if (taskIndex.at && Date.now() - taskIndex.at < TASK_INDEX_TTL) return Promise.resolve(false);
+    taskIndex.at = Date.now();
+    const read = apiFetch("/api/assistant/queue")
+      .then(async (r) => {
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+        let changed = false;
+        for (const q of Array.isArray(d.queues) ? d.queues : []) {
+          const own = String(q?.assistantId || "");
+          // A queue this tab already holds is NOT replaced: the pane's own read is the copy the reader is looking
+          // at, and an index answer that left the server a moment earlier must not paint over it.
+          if (!own || queueCache.get(own)?.view) continue;
+          queueCache.set(own, { view: q, error: null, loading: false, at: Date.now() });
+          changed = true;
+        }
+        if (changed) {
+          // The anchors are built while the console renders, so the cards already on screen are asked to draw
+          // again. public/assistant.js owns that paint; this is the one thing it is told.
+          document.dispatchEvent(new CustomEvent("wtgui:task-index", { detail: { rev: taskIndexRev() } }));
+        }
+        return changed;
+      })
+      .catch(() => false)
+      .finally(() => {
+        taskIndex.inflight = null;
+      });
+    taskIndex.inflight = read;
+    return read;
+  }
+  // Follow a `#405` into its row: widen the window if the row is known but not drawn, ONE read if the queue is not
+  // in this tab (or does not have the id), then centre the row in the pane's scroller and pulse it. True when the
+  // row was found and flashed.
+  async function queueOpenTask(own, taskId) {
+    const id = String(taskId ?? "").trim();
+    if (!id || !isAssistant(own)) return false;
+    const find = () => hostFor(own, "queue")?.querySelector(`.as-task[data-as-qrow="${CSS.escape(id)}"]`) || null;
+    // A row the window leaves out is still in the cache. The window counts newest first, so the target's own
+    // position in that order (plus one) is the smallest window that draws it - no wider than it has to be.
+    const reveal = () => {
+      const rows = Array.isArray(queueCache.get(own)?.view?.tasks) ? queueCache.get(own).view.tasks : [];
+      const newest = rows.slice().sort((a, b) => Number(b.id) - Number(a.id)).map((t) => String(t.id));
+      const at = newest.indexOf(id);
+      if (at < 0 || at + 1 <= queueWindowOf(own)) return false;
+      queueShown.set(own, at + 1);
+      renderAssistantQueue(own);
+      return true;
+    };
+    let row = find();
+    if (!row && reveal()) row = find();
+    if (!row) {
+      await loadQueue(own);
+      reveal();
+      row = find();
+    }
+    if (!row) {
+      // Still nothing: the read has just been made and the id is not in it. Say so rather than pulse nothing.
+      queueDropNotes.set(own, `task #${id} is not in this queue: it has just been read again, and #${id} is not in it.`);
+      renderAssistantQueue(own);
+      return false;
+    }
+    queueDropNotes.delete(own);
+    // The scroll is the PANE's, not the page's: the float is a column with its own scroller, and scrollIntoView would
+    // move the board under it as well. Centre the row in that scroller.
+    const scroller = queueScrollerOf(row);
+    if (scroller) {
+      const top = row.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
+      const want = top - (scroller.clientHeight - row.offsetHeight) / 2;
+      scroller.scrollTop = Math.max(0, Math.min(scroller.scrollHeight - scroller.clientHeight, want));
+    } else {
+      row.scrollIntoView({ block: "center", inline: "nearest" });
+    }
+    // The chart's own green pulse, on this row: the same @keyframes flashrow the table flashes a row with, and the
+    // class carries the card's own resting colour so the fade ends where the card started (see public/style.css).
+    restartClassAnimation(row, "flash", "flashrow");
+    clearTimeout(row._asFlash);
+    row._asFlash = setTimeout(() => row.classList.remove("flash"), flashRowMs() + 60);
+    return true;
+  }
+
   const queueMark = (state) => (state === "done" ? "✓" : state === "parked" ? "⏸" : state === "running" ? "●" : "○");
   const queueStateName = (state) => (state === "running" ? "running" : state === "parked" ? "parked" : state === "done" ? "done" : "queued");
   // The word in the head is a STATUS, and hover is where it explains itself: a reader who does not know what "parked"
@@ -1064,13 +1201,14 @@ window.WMApp.queueCards = function queueCards(deps) {
   // ---- end the queue sub-tab --------------------------------------------------------------------
 
   // The names the panel keeps reading after the move: the paint and its two reads, the one write path, the re-attach
-  // press, the order's own constants, the picker's record, the drag's functions, and the one line of drag state a
-  // fresh press clears.
+  // press, the order's own constants, the picker's record, the drag's functions, the one line of drag state a fresh
+  // press clears, and the task id's own two answers (whose row it is, and the press that finds it).
   return {
     renderAssistantQueue, loadQueue, queueAct, queueReattach,
     QUEUE_LIVE, qmoveOpen, closeQueueMove, toggleQueueMove,
     queueDropNotes, queueShown, queueWindowOf, QUEUE_MORE,
     queueCardDown, queueCardMove, queueCardUp, queueCardClickGuard,
+    taskOwnerOf, taskIndexRev, ensureTaskIndex, queueOpenTask,
     queueDragReset: () => {
       queueDragEnded = 0;
     },

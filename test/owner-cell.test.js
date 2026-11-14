@@ -30,6 +30,7 @@ const { ownerNameOf, ownerTagOf, ownerCellHtml, ownerDetailHtml } = new Function
 
 const text = (html) => html.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
 const title = (html) => (/title="([^"]*)"/.exec(html) || [])[1] || "";
+const attr = (html, name) => (new RegExp(`${name}="([^"]*)"`).exec(html) || [])[1] || "";
 // What the server's `ownerFields` sends for a tree nobody moved, and for one reassigned to the second assistant.
 const owner = (over = {}) => ({ id: "assistant-1", name: "Assistant #1", label: "Manager 1", role: "Manager", ...over });
 const goneFallback =
@@ -100,4 +101,29 @@ test("the detail bullet keeps the fallback sentence in its own span", () => {
 test("a payload with no role name still names the owner, with no dangling dash", () => {
   assert.equal(text(ownerDetailHtml({ assistant: owner({ role: "" }) })), "Controlled by: Assistant #1");
   assert.equal(ownerNameOf({}), "Assistant #1");
+});
+
+// ---- the chip is a press -------------------------------------------------------------------------------------
+//
+// The tag is the way INTO that assistant's chat (public/assistant.js opens it): it is a BUTTON, so a keyboard reaches
+// it and Enter presses it, and it carries the four fields the sentence is built from - the assistant that owns the
+// tree, and the row's own project, worktree and branch - so the press never has to look anything up and never names
+// a tree other than the one it is drawn on.
+test("the owner tag is a button carrying the assistant and the row it was drawn on", () => {
+  const html = ownerCellHtml({ project: "agent-worktree-gui", name: "task-ids", branch: "wtgui/task-ids", assistant: owner({ id: "assistant-2", name: "Assistant #2", label: "Manager 2" }) });
+  assert.match(html, /<button type="button" class="owner-tag"/, "a button, so Enter presses it");
+  assert.equal(attr(html, "data-owner-assistant"), "assistant-2", "the assistant that owns the tree");
+  assert.equal(attr(html, "data-owner-project"), "agent-worktree-gui");
+  assert.equal(attr(html, "data-owner-worktree"), "task-ids");
+  assert.equal(attr(html, "data-owner-branch"), "wtgui/task-ids");
+  assert.equal(text(html), "M2", "the chip still reads as the compact tag");
+  assert.equal(attr(html, "aria-label"), "Assistant #2", "the accessible name is the assistant, as it was");
+  assert.match(title(html), /Press to open Assistant #2's chat/, "and the tooltip says what pressing it does");
+});
+
+test("a chip with no assistant on the row stays the plain span it was - no press that opens nothing", () => {
+  const html = ownerCellHtml({});
+  assert.doesNotMatch(html, /<button/, "a row the server could not name has no chat to open");
+  assert.match(html, /<span class="owner-tag"/);
+  assert.equal(text(html), "A1");
 });

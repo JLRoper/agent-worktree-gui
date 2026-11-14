@@ -2652,6 +2652,18 @@ tr.row-confirm .btn-del-yes:hover { background: #3a1d22; }
 /* a URL in an agent's console: click (or ctrl-click) opens it in the OS default browser */
 a.out-link { color: #7fb3ff; text-decoration: underline dotted; cursor: pointer; }
 a.out-link:hover { color: #a8ccff; text-decoration: underline solid; }
+/* A TASK ID in the assistant's transcript (public/core/console-markdown.js builds the anchor while it renders). It is
+   not an external link, so it does not wear the out-link's dotted blue: it stays in the panel, and the underline plus
+   the tabular figures say "a number you can press". Hover lifts it out of the sentence. */
+a.as-task-ref {
+  color: #a9c0dd;
+  text-decoration: none;
+  border-bottom: 1px solid #4a6076;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+a.as-task-ref:hover { color: #d7e6f7; border-bottom-color: #7fb3ff; background: #1a212b; }
+a.as-task-ref:focus-visible { outline: 2px solid #7fb3ff; outline-offset: 1px; }
 .thread-name { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The name is the only thing allowed to give up width: without min-width:0 its nowrap text refuses to
    shrink and pushes the buttons that follow it onto a second row. */
@@ -3973,6 +3985,10 @@ mark.as-search-mark { background: #5c4310; color: #ffe9a8; border-radius: 2px; p
    a radius and a gap between cards is what separates one task from the next now that the bullet rules are gone. */
 .as-task { display: flex; flex-direction: column; background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; margin: 0 0 8px; font-size: 11.5px; box-shadow: 0 1px 2px #0006; }
 .as-task:last-child { margin-bottom: 0; }
+/* The chart's own green pulse, on a queue row: @keyframes flashrow lives in public/chart.css and fades to
+   --row-rest-bg, so this rule only has to say what the card rests on. A task id in the transcript is followed to its
+   row with this (public/queue-cards.js queueOpenTask), so the two surfaces flash the same green for the same reason. */
+.as-task.flash { --row-rest-bg: var(--panel-2); animation: flashrow var(--flash-row, 900ms) ease-out; }
 .as-task.is-done { opacity: .55; }
 /* A QUEUED card is the one thing the reader can move: running, parked and done keep their own sections, so only these
    take the grab cursor. The drag lifts the card over its neighbours with a shadow while the pane reflows around it —

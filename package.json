@@ -59,6 +59,7 @@
     "verify:settings-window": "node tools/verify-settings-window.mjs",
     "verify:chart-top-count": "node tools/verify-chart-top-count.mjs",
     "verify:chart-edges": "node tools/verify-chart-edges.mjs",
+    "verify:task-refs": "node tools/verify-task-refs.mjs",
     "verify:round-tree-names": "node tools/verify-round-tree-names.mjs",
     "verify:settings-tabs": "node tools/verify-settings-tabs.mjs",
     "verify:prompt-tab": "node tools/verify-prompt-tab.mjs",

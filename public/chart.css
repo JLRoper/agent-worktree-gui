@@ -105,6 +105,17 @@ td.owner { overflow: hidden; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* The chip is a PRESS (public/app.js ownerCellHtml): it opens that assistant's chat with the row's project, worktree
+   and branch already named in the box. It keeps the tag's own look above - that rule is the chip, and it wins on
+   font, border and background because both are one class - and only gains what a button needs: a cursor, a hover, a
+   focus ring, and `appearance: none` so no platform draws its own button chrome over the chip. */
+button.owner-tag {
+  appearance: none;
+  cursor: pointer;
+  text-align: center;
+}
+button.owner-tag:hover { border-color: #4a6076; color: #d7e6f7; background: #202a36; }
+button.owner-tag:focus-visible { outline: 2px solid #7fb3ff; outline-offset: 1px; }
 /* The owner bullet's fallback sentence: the reader's stored owner is gone, so Assistant #1 has the tree. Dimmer
    than the line it follows, because the label is the answer and this is only why it is not the answer they set. */
 .git-owner .owner-fallback { color: var(--dimmer); }

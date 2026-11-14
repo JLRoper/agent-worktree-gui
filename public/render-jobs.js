@@ -52,7 +52,7 @@
 // belongs to, so a reader's selection in an earlier paragraph survives the turn growing under it. A run of call pieces
 // is the exception the group IS: those pieces are collected into one group node, which is what "a rule above and a
 // rule below the group" means.
-function streamBodyHtml(turn, lines, windowFull = false, thread = turn.thread || turn.id) {
+function streamBodyHtml(turn, lines, windowFull = false, thread = turn.thread || turn.id, taskLink = null) {
   const W = globalThis.wtStream;
   if (!W || typeof W.merge !== "function" || typeof W.pieces !== "function") return "";
   // Reasoning joins the stream only while the 🧠 is on: with it off, the console's own one-line preview is the only
@@ -76,7 +76,7 @@ function streamBodyHtml(turn, lines, windowFull = false, thread = turn.thread ||
   let mdRun = null;
   const flushMd = () => {
     if (!mdRun) return;
-    parts.push(mdRunHtml(mdRun.lines, mdRun.sep, { scope: turn.id, open: state.codeBoxOpen }));
+    parts.push(mdRunHtml(mdRun.lines, mdRun.sep, { scope: turn.id, open: state.codeBoxOpen }, taskLink));
     mdRun = null;
   };
   const flushRun = () => {
@@ -128,8 +128,8 @@ function streamBodyHtml(turn, lines, windowFull = false, thread = turn.thread ||
 // message the same card the panes around the card draw (core/assistant-command.js, through the frame
 // core/console-format.js publishes). The card is built there, never here: this file hands the run over and takes the
 // markup back, and it holds no second builder of its own.
-function mdRunHtml(lines, sep = "", cards = null) {
-  return consoleMdHtml(lines, { sep, ...(cards ? { cards } : {}), textOf: (l) => typedShown(l) });
+function mdRunHtml(lines, sep = "", cards = null, taskLink = null) {
+  return consoleMdHtml(lines, { sep, ...(cards ? { cards } : {}), ...(taskLink ? { taskLink } : {}), textOf: (l) => typedShown(l) });
 }
 
 // The condensed card's console: one row per tool call (the burst, exactly as before), and the prose between the
@@ -153,12 +153,12 @@ function emptyConsoleHtml(turn) {
 }
 // ---- end thinking placeholder ----
 
-function condensedBodyHtml(turn, lines, busy, storeSeen) {
+function condensedBodyHtml(turn, lines, busy, storeSeen, taskLink = null) {
   const parts = [];
   let run = null;
   const flush = () => {
     if (!run) return;
-    parts.push(mdRunHtml(run, "", { scope: turn.id, open: state.codeBoxOpen }));
+    parts.push(mdRunHtml(run, "", { scope: turn.id, open: state.codeBoxOpen }, taskLink));
     run = null;
   };
   burstGroups(lines).forEach((item, gi) => {
@@ -195,7 +195,9 @@ function condensedBodyHtml(turn, lines, busy, storeSeen) {
 // this body writes its answer under the card's thread, so the body must read the answer back from the same value.
 // A turn's own `thread` can differ (an assistant's turns run under a session of their own) or be absent, which is
 // why this is handed down from `conversationHtml` rather than guessed here.
-function turnBody(turn, copy = "", thread = turn.thread || turn.id) {
+// `taskLink` is the transcript's own resolver (see conversationTaskLink): the assistant's console can place a `#405`
+// as an anchor into its queue row, and a card with no assistant's queue behind it leaves the text alone.
+function turnBody(turn, copy = "", thread = turn.thread || turn.id, taskLink = null) {
   const all = jobLines(turn.id).filter((l) => !isBookkeeping(l));
   // A window, cut on a burst boundary rather than a line count: windowLines keeps the call line of the burst the
   // window would otherwise open inside, so that burst is still a group with a head row and a remembered state.
@@ -210,8 +212,8 @@ function turnBody(turn, copy = "", thread = turn.thread || turn.id) {
   // paragraph, then another patch burst, and the second one must start after the first one's rows.
   const storeSeen = new Map();
   const body = stream
-    ? streamBodyHtml(turn, lines, lines.length < all.length, thread)
-    : condensedBodyHtml(turn, lines, busy, storeSeen);
+    ? streamBodyHtml(turn, lines, lines.length < all.length, thread, taskLink)
+    : condensedBodyHtml(turn, lines, busy, storeSeen, taskLink);
   return (stream ? "" : thinkHtml(turn, copy, thread)) +
     // `out-tab` carries the 18px left tab the console itself has, so the wrapper is the console's box: the chip
     // centred in the wrapper is centred in the console, not 9px off it.
@@ -235,7 +237,18 @@ function turnBody(turn, copy = "", thread = turn.thread || turn.id) {
     questionPrompt(turn, copy) + questionAnswered(turn);
 }
 
-function turnBlock(conv, turn, index, copy = "") {
+// A task id in the assistant's transcript is a reference into that assistant's queue (public/queue-cards.js), and the
+// anchor is built by the console WHILE it renders (core/console-markdown.js) - never by a pass over the DOM after the
+// fact, because this card is rebuilt on every repaint and a sweeper would have to run on every path that draws prose.
+// Only the assistant's own card gets a resolver: the board's agent cards have no chat and no queue pane behind them,
+// and a link that opens nothing is worse than the words it was written as. The resolver itself answers null for an id
+// that no ONE loaded queue owns (or that two queues both own), which is what keeps a `#405` plain rather than guessed.
+function conversationTaskLink(conv) {
+  if (typeof assistantSessionFor !== "function" || !assistantSessionFor(conv?.thread)) return null;
+  return typeof window.__assistantTaskLink === "function" ? window.__assistantTaskLink : null;
+}
+
+function turnBlock(conv, turn, index, copy = "", taskLink = null) {
   const open = turnIsOpen(conv, turn, copy);
   const tkey = turnKey(turn, copy);
   // The rail down the turns' left edge is violet while a turn is executing, slate otherwise, so `is-running`
@@ -256,11 +269,13 @@ function turnBlock(conv, turn, index, copy = "") {
   return `<div class="${cls}" data-turn="${esc(turn.id)}">${turnHead(turn, index, true, copy, true)}` +
     // The request stays on the head line whether the turn is open or folded: it is the turn's title either
     // way, and the open form used to drop it onto its own row, which pushed the transcript down for nothing.
-    `${turnAttachmentsHtml(turn)}${turnBody(turn, copy, conv.thread)}</div>`;
+    `${turnAttachmentsHtml(turn)}${turnBody(turn, copy, conv.thread, taskLink)}</div>`;
 }
 
 function conversationHtml(conv) {
   const { thread, turns, latest } = conv;
+  // One resolver per card, computed once: every turn block below draws the same anchors for the same ids.
+  const taskLink = conversationTaskLink(conv);
   const collapsed = state.collapsedJobs.has(thread);
   const maximized = state.maximized === thread;
   const homeless = isHomelessConv(conv);
@@ -446,7 +461,7 @@ function conversationHtml(conv) {
   // disabled ends and this strip are three readings of ONE range; they used to be three copies of the same sums.
   const blocks = (() => {
     const r = wtTurnFold.range(turns.length, wtTurnFold.offset(state, thread, turns.length));
-    return { ...r, html: turns.slice(r.start, r.end).map((t, i) => turnBlock(conv, t, r.start + i)).join("") };
+    return { ...r, html: turns.slice(r.start, r.end).map((t, i) => turnBlock(conv, t, r.start + i, "", taskLink)).join("") };
   })();
   const pages = blocks.pages;
   // Starred turns are repeated above the page — still accordions, and still present in their own
@@ -455,7 +470,7 @@ function conversationHtml(conv) {
   const pinnedHtml = pinned.length
     ? `<div class="pinned-turns">
         <div class="pinned-head mono"><span>\u2605 pinned</span><span class="dimmer">${pinned.length} of ${turns.length}</span></div>
-        ${pinned.map((t) => turnBlock(conv, t, turns.indexOf(t), wtTurnFold.PIN)).join("")}
+        ${pinned.map((t) => turnBlock(conv, t, turns.indexOf(t), wtTurnFold.PIN, taskLink)).join("")}
       </div>`
     : "";
   const pager = pages > 1

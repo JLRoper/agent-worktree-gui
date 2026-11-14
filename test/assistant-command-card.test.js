@@ -215,8 +215,8 @@ test("the agent card's transcript draws the same card, through the one prose ren
   assert.match(drawn, /class="code-box is-cmd is-clamped" data-ltext="MESSAGE assistant-3 \| the deploy moved" data-lkind="text" data-lid="200"/);
   assert.match(drawn, /data-code-key="cmd\|turn-7\|200"/);
   // The renderer this page hands a turn's prose to, and the scope it hands over: one line per call site, no builder.
-  assert.match(jobs, /mdRunHtml\(mdRun\.lines, mdRun\.sep, \{ scope: turn\.id, open: state\.codeBoxOpen \}\)/);
-  assert.match(jobs, /mdRunHtml\(run, "", \{ scope: turn\.id, open: state\.codeBoxOpen \}\)/);
+  assert.match(jobs, /mdRunHtml\(mdRun\.lines, mdRun\.sep, \{ scope: turn\.id, open: state\.codeBoxOpen \}(, taskLink)?\)/);
+  assert.match(jobs, /mdRunHtml\(run, "", \{ scope: turn\.id, open: state\.codeBoxOpen \}(, taskLink)?\)/);
   for (const source of [jobs, markdown]) {
     assert.doesNotMatch(source, /class="code-box/, "a second card builder in the transcript's own files");
     assert.doesNotMatch(source, /class="code-head/);

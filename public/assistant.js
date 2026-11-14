@@ -987,6 +987,10 @@
       // Enter away from clearing a conversation, so it starts at rest.
       hardRestartArmed.clear();
       renderAssistant();
+      // The transcript's task ids are anchors only once the page can name their owner, and the owner comes from the
+      // queues. Opening the float asks once (throttled and single-flight, see public/queue-cards.js): the chat is
+      // already on screen, and the answer repaints it a moment later if it placed anything.
+      void ensureTaskIndex();
       paintAssistantBadge();
       pinChatToBottom(true);
     }
@@ -1482,9 +1486,16 @@
     }
     // A live edit in the intro box survives until the first turn exists; after that the card owns the box.
     host.dataset.mode = "card";
+    // A transcript on screen is a transcript that may carry task ids: ask for the attribution if the page has not got
+    // it (one read per 20 s, shared with every other caller).
+    void ensureTaskIndex();
     const sig = conversationSignature(conv);
+    // The task index is the second half of the card's key: an id that was plain when this card was drawn becomes an
+    // anchor the moment the page can name its owner (see public/queue-cards.js), and the card has to draw again for
+    // that - the anchor is built while the console renders, never by a pass over the drawn DOM.
+    const rev = taskIndexRev();
     const card = host.querySelector(`.job[data-thread="${CSS.escape(conv.thread)}"]`);
-    if (card && card.dataset.sig === sig) {
+    if (card && card.dataset.sig === sig && card.dataset.taskrev === rev) {
       paintCardMeta(card, conv);
       return;
     }
@@ -1498,7 +1509,10 @@
     const pageY = window.scrollY;
     host.innerHTML = conversationHtml(conv);
     const fresh = host.firstElementChild;
-    if (fresh) fresh.dataset.sig = sig;
+    if (fresh) {
+      fresh.dataset.sig = sig;
+      fresh.dataset.taskrev = rev;
+    }
     restoreScrolls(host, prevScrolls);
     applyStoredScrolls(host);
     restoreThinkBodies(host);
@@ -1605,6 +1619,45 @@
     if (!state.assistantOpen) toggleAssistant(true);
     setView({ assistant: rec.id, subTab: SUBTABS[0] });
     return Boolean(hostFor(rec.id, "chat"));
+  }
+
+  // A task id in the transcript and the chart's owner chip are one intent from two places - put the reader in THAT
+  // assistant's pane - so the two share this opener. It is the same path `showAssistantThread` takes: open the float
+  // if it is closed, then write the view; the paint follows the view.
+  function showAssistantPane(assistantId, subTab) {
+    const own = String(assistantId || "").trim();
+    if (!own || !isAssistant(own)) return false;
+    if (!state.assistantOpen) toggleAssistant(true);
+    setView({ assistant: own, subTab: SUBTABS.includes(subTab) ? subTab : SUBTABS[0] });
+    return true;
+  }
+
+  // A task id written as `#405` in the assistant's own prose. The anchor is built while the console renders
+  // (public/core/console-markdown.js); this is the one press it makes: that assistant's Queue on screen, and the row
+  // carrying the id centred in the pane with the chart's green pulse on it. The row may be outside the window the
+  // pane draws, or in a queue this tab has never read - queueOpenTask widens the window or makes ONE read and
+  // retries, and says so on the pane when the id is really not there. Nothing is sent.
+  async function openTaskRef(assistantId, taskId) {
+    if (!showAssistantPane(assistantId, "queue")) return false;
+    return queueOpenTask(assistantId, taskId);
+  }
+
+  // The chart's owner column chip (M1, M2, A1): that assistant's Chat, with the reader's sentence already started
+  // from the row they pressed - "Regarding <project> <worktree> <branch>: " - the caret after the colon and the box
+  // focused, so the first keystroke continues it. NOTHING is sent: Enter is still the reader's to press, and a chip
+  // that posted on its own would be a message they never wrote. The three fields are the row's own spellings, taken
+  // from the chip's data at press time; a row with no branch (or an unnamed tree) simply leaves that part out
+  // rather than writing a hole into the sentence.
+  function openRegarding(at) {
+    const own = String(at?.assistantId || "").trim();
+    if (!showAssistantPane(own, "chat")) return false;
+    const box = as$(firstBoxId(own));
+    if (!box) return false;
+    const about = [at.project, at.worktree, at.branch].map((s) => String(s ?? "").trim()).filter(Boolean).join(" ");
+    writeBox(box, `Regarding ${about}: `);
+    box.focus({ preventScroll: true });
+    setCaretOffset(box, readBox(box).length);
+    return document.activeElement === box;
   }
 
   // A queue row is a CONSOLE row. `openAgentThread` opens the project, the row and the card; the reader asked for the
@@ -3292,6 +3345,7 @@
     QUEUE_LIVE, qmoveOpen, closeQueueMove, toggleQueueMove,
     queueDropNotes, queueShown, queueWindowOf, QUEUE_MORE,
     queueCardDown, queueCardMove, queueCardUp, queueCardClickGuard, queueDragReset,
+    taskOwnerOf, taskIndexRev, ensureTaskIndex, queueOpenTask,
   } = window.WMApp.queueCards({
     asPost,
     setErr,
@@ -4167,6 +4221,21 @@
   // ---- wiring ---------------------------------------------------------------------------------
 
   as$("btn-assistant")?.addEventListener("click", () => toggleAssistant());
+  // ONE delegated listener for every task id in every assistant's transcript. The anchors are built while the console
+  // renders (public/core/console-markdown.js), so nothing here has to find or rewrite them: this only recognises the
+  // one that was pressed. It sits on the float rather than on each chat host because those hosts are rebuilt, and a
+  // listener per card would be one more to place on every repaint.
+  as$("assistant")?.addEventListener("click", (e) => {
+    const link = e.target?.closest?.("a[data-as-task]");
+    if (!link) return;
+    e.preventDefault();
+    void openTaskRef(link.dataset.asTaskOwn, link.dataset.asTask);
+  });
+  // The task index landed (public/queue-cards.js dispatches this when an answer placed something new). The anchors are
+  // built at render time, so the cards already on screen are asked to draw again; nothing is rewritten in place.
+  document.addEventListener("wtgui:task-index", () => {
+    for (const rec of sessionRecords()) if (hostFor(rec.id, "chat")) renderAssistantChat(rec.id);
+  });
   // The strip is the board's own copy of the spawn cards, so it lives outside the float and gets its own
   // listener. Its Start is the card's own POST; "Open card" only moves the float, and starts nothing.
   as$("spawn-strip")?.addEventListener("click", (e) => {
@@ -5587,6 +5656,13 @@
     renderAssistantChat(rec ? rec.id : activeSessionId());
   };
   window.__assistantToggle = toggleAssistant;
+  // The chart's owner column chip: app.js hands the four fields it drew on the chip (the assistant, the project, the
+  // worktree, the branch) and this opens that assistant's Chat with "Regarding <project> <worktree> <branch>: " in the
+  // box, the caret at the end and the box focused. Nothing is sent.
+  window.__assistantRegarding = openRegarding;
+  // The task id in the transcript: app.js's renderer asks this for the assistant that owns an id while the console is
+  // being built (public/render-jobs.js -> core/console-markdown.js). null means no one owner, and the words stay plain.
+  window.__assistantTaskLink = taskOwnerOf;
   // Settings → General's frame picker: the setting is the panel's, the painter is here, so app.js calls this after
   // the save (and public/settings.js `applySettings` after any settings change from any tab). `applyFrame()` is
   // idempotent — an unchanged mode returns before it measures anything — so calling it on every settings event is

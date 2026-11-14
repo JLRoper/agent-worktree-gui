@@ -7715,7 +7715,20 @@ function ownerCellHtml(row) {
   const title = row?.assistant?.fallback
     ? `${seat} — ${row.assistant.fallback}`
     : `${seat}. Display only: it does not change who wakes or runs.`;
-  return `<td class="owner nowrap" title="${esc(title)}"><span class="owner-tag" aria-label="${esc(name)}">${esc(tag)}</span></td>`;
+  // The chip is the way INTO that assistant's chat: pressing it opens the chat with "Regarding <project> <worktree>
+  // <branch>: " already started, the caret at the end, and sends nothing. It is a BUTTON, not a span, so a keyboard
+  // reaches it and Enter presses it - and the chart's row-folding listener already steps over buttons, so a press
+  // here never folds the row it sits in. The four fields are drawn onto the chip rather than looked up at press
+  // time, so the sentence carries exactly the words the row shows.
+  const own = String(row?.assistant?.id || "").trim();
+  if (!own) return `<td class="owner nowrap" title="${esc(title)}"><span class="owner-tag" aria-label="${esc(name)}">${esc(tag)}</span></td>`;
+  const what = `Press to open ${name}'s chat, started with this worktree and branch named.`;
+  return (
+    `<td class="owner nowrap" title="${esc(`${title} ${what}`)}">` +
+    `<button type="button" class="owner-tag" aria-label="${esc(name)}"` +
+    ` data-owner-assistant="${esc(own)}" data-owner-project="${esc(row.project || "")}"` +
+    ` data-owner-worktree="${esc(row.name || "")}" data-owner-branch="${esc(row.branch || "")}">${esc(tag)}</button></td>`
+  );
 }
 function ownerDetailHtml(row) {
   const role = ownerRoleOf(row);
@@ -12109,6 +12122,25 @@ document.addEventListener(
   },
   { capture: true, passive: true },
 );
+
+// The owner column's chip is the way INTO that assistant's chat. It is delegated from the document because the same
+// cell is drawn by two tables - the board's chart and the assistant's own Worktrees tab, which reuses this row
+// builder - and neither table owns the chat: public/assistant.js does, and publishes the opener. The press starts the
+// reader's sentence from the row's own project, worktree and branch, puts the caret at the end, focuses the box, and
+// sends nothing (window.__assistantRegarding says the same in its own comment).
+document.addEventListener("click", (e) => {
+  const chip = e.target.closest?.("[data-owner-assistant]");
+  if (!chip) return;
+  e.preventDefault();
+  e.stopPropagation();
+  if (typeof window.__assistantRegarding !== "function") return;
+  window.__assistantRegarding({
+    assistantId: chip.dataset.ownerAssistant,
+    project: chip.dataset.ownerProject,
+    worktree: chip.dataset.ownerWorktree,
+    branch: chip.dataset.ownerBranch,
+  });
+});
 
 $("projects").addEventListener("click", (e) => {
   // The agent badge inside a row opens the row (and its agents block) instead of toggling blindly.
