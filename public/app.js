@@ -12852,11 +12852,12 @@ window.addEventListener("resize", deliverPosition);
 // normal preference, and so is the other way round.
 //
 // EVERY ENTRY HERE IS A FACE THIS BOX CAN PAINT, and each one names it. The list used to be written from memory of
-// what a developer machine might have: nine of the sixteen console entries drew Consolas under a different name
-// ("JetBrains Mono", "Fira Code", "IBM Plex Mono" and six more), and two of the panel entries drew a face another
-// entry already offered - sixteen choices, five pictures. tools/verify-console-fonts.mjs now drives every entry in a
-// real browser and asks CSS.getPlatformFontsForNode which family painted the glyphs, and these lists are what that
-// readback says: eight distinct console faces and fourteen distinct panel faces, the duplicates gone.
+// what a developer machine might have: of sixteen console entries ten drew Consolas - eight of them under another name
+// ("JetBrains Mono", "Fira Code", "IBM Plex Mono" and five more, none of them installed here) and one an entry that
+// was already called Consolas - so sixteen console choices came to nine pictures. Two panel entries drew a face
+// another entry already offered. tools/verify-console-fonts.mjs now drives every entry in a real browser and asks
+// CSS.getPlatformFontsForNode which family painted the glyphs, and these lists are what that readback says: ten console
+// entries drawing ten different pictures, fourteen panel entries drawing fourteen, the duplicates gone.
 //
 // Stacks, not families: the first face the machine actually has wins, so the stack still reads correctly on a Mac
 // (where ui-monospace is SF Mono) even though `resolves` names THIS box's face. `resolves` is that readback, and the
