@@ -97,6 +97,19 @@ The two deletions and this document, and nothing else. No file from `wtgui/githu
 re-applied: every one of the seven commits meets a main commit that says the same thing or a later visit of the same
 record.
 
+## The tests
+
+`npm test` (the repo's own `node --test --test-concurrency=4 test/*.test.js`) on this branch: **2811 tests, 2796
+pass, 15 fail**, exit 1. None of the 15 belongs to this branch, whose whole diff is this document and one version
+line. The proof is a second run on a pristine export of the base: `git archive origin/main | tar -x` into a scratch
+folder of `5cf42a25`, `git init` and one commit, then the same failing files by name - **104 tests, 91 pass, 13
+fail**, the same titles and messages.
+
+Two titles needed a second read. "an ask-mode card carries the same files when the reader presses it" passes when
+its file runs alone in this tree, so it is a concurrency artefact of the parallel run. "the latest reasoning level
+survives a jobs-store restart and is reused on a reply" fails identically on the base export when run alone
+(`command node --test test/reasoning-runs.test.js` there: 4 tests, 3 pass, 1 fail), so it predates this branch.
+
 ## The deletions, and the branch list after them
 
 Both refs are deleted with `git branch -D`, after `git worktree list --porcelain` showed no tree holding either:
