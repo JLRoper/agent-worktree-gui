@@ -1,0 +1,8281 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Console streaming lag: every cause, measured</title>
+<style>
+:root { color-scheme: dark; }
+body { margin: 0; background: #0d1117; color: #d6dee8; font: 15px/1.55 "Segoe UI", system-ui, sans-serif; }
+main { max-width: 1120px; margin: 0 auto; padding: 34px 26px 80px; }
+h1 { font-size: 27px; line-height: 1.25; margin: 0 0 6px; color: #f2f6fa; letter-spacing: -0.2px; }
+h2 { font-size: 19px; margin: 40px 0 10px; color: #f2f6fa; border-bottom: 1px solid #222c38; padding-bottom: 7px; }
+h3 { font-size: 16px; margin: 24px 0 6px; color: #e8eef6; }
+p, li { color: #c6d0dc; }
+.sub { color: #8b98a8; font-size: 13px; margin: 0 0 22px; }
+code { font-family: "Cascadia Mono", Consolas, monospace; font-size: 12.5px; color: #9fd3ff; }
+pre { background: #0a0f16; border: 1px solid #1d2733; border-radius: 8px; padding: 12px 14px; overflow-x: auto; }
+pre code { color: #c9d6e4; }
+table { width: 100%; border-collapse: collapse; margin: 10px 0 6px; font-size: 13px; }
+th { text-align: left; color: #93a1b1; font-weight: 600; border-bottom: 1px solid #2a3644; padding: 6px 8px; }
+td { border-bottom: 1px solid #18212b; padding: 5px 8px; vertical-align: top; }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+tr.hl td { background: #17222e; }
+.up { color: #ff9d8a; }
+.down { color: #8ce0a4; }
+.verdict { border-left: 3px solid #5aa9e6; background: #101a24; padding: 14px 18px; border-radius: 0 8px 8px 0; margin: 18px 0 6px; }
+.verdict p { margin: 6px 0; }
+.cause { border: 1px solid #1e2936; border-radius: 10px; padding: 14px 18px; margin: 14px 0; background: #0f151d; }
+.cause h3 { margin-top: 0; }
+.tag { display: inline-block; font-size: 11px; letter-spacing: 0.4px; text-transform: uppercase; color: #0d1117; background: #6fb3e0; border-radius: 4px; padding: 1px 6px; margin-right: 8px; vertical-align: 2px; }
+.tag.b { background: #e0a86f; }
+.tag.c { background: #9dd08a; }
+.kv { display: grid; grid-template-columns: 130px 1fr; gap: 3px 12px; font-size: 13px; margin: 8px 0; }
+.kv div:nth-child(odd) { color: #8b98a8; }
+details { margin: 10px 0; border: 1px solid #1d2733; border-radius: 8px; padding: 8px 12px; background: #0b1118; }
+summary { cursor: pointer; color: #9fd3ff; font-size: 13px; }
+.note { color: #8b98a8; font-size: 13px; }
+ol li, ul li { margin: 4px 0; }
+</style></head>
+<body><main>
+<h1>Console streaming lag: every cause, measured</h1>
+<p class="sub">agent-worktree-gui, branch <code>wtgui/console-streaming-lag-measure-and-name-ad41c8</code> at <code>101cf6aa</code>, against tag <code>v1.99.1</code>. Headless Chromium, 1440x900, one long streaming turn. No shipped file changed in this run.</p>
+
+<div class="verdict">
+<p><b>Verdict.</b> On this fixture the console does not miss a frame: zero long tasks, zero frame gaps over 50 ms, and a delta reaches paint in 7.4 ms at p50 and 13.3 ms at p90, on both builds. The main thread is busy 21.6% of a 24 s window and idle the rest.</p>
+<p>The lag is not throughput, it is <b>layout</b> and <b>repetition</b>: 9.7% of that busy time is layout and style, the scroll anchor forces a layout of the whole 325-line console on every frame (661.06 ms of self time charged to a two-line callback), and a 1 Hz sweep redraws all 325 lines (12318 <code>drawJobLine</code> calls in 24 s) so every tool row, and the clock's own span, is destroyed and rebuilt on a page that is otherwise sitting still.</p>
+<p>Against v1.99.1, at an identical 193-line window: script 17.6%, layout 19.2%, busy 21.8%. The badge behaves identically on both: it is old behaviour, not a regression.</p>
+</div>
+
+<h2>1. What was measured, and how</h2>
+<p>A panel of its own from each tree (spare port, its own <code>PANEL_CONFIG</code>, <code>HERMES_HOME</code> and jobs file, no <code>API_SERVER_KEY</code>), a stub Runs API that plays a real SSE turn, and one card spawned through the panel's own <code>POST /api/agents</code> with <code>existing: true</code>. The one-stream console key (<code>wtgui.stream.&lt;thread&gt;</code>) is written before the spawn, so the card is <em>built</em> as a stream, not repainted into one.</p>
+<div class="kv">
+<div>Fixture</div><div>20 prose/call/result rounds (10-line results), 4 command lines, one 120-line markdown reply, then the measured windows: a 20-row tool history in a full 300-line console window, 1687 px of content in a 318 px box.</div>
+<div>Stream</div><div>one text delta every 25 ms (the panel's own 120 ms coalescing turns that into about 26 frames a second), a tool call every 2 s with its result 1.4 s later, and one five-call parallel burst - all pushed by <code>--control</code> calls, so a window boundary is a fact rather than a guess about a timer's phase.</div>
+<div>Windows</div><div>silence (3 s, wire quiet) -> metrics (24 s) -> badge (721 frames of one in-flight call, crossing 9 s to 10 s and the swap to its duration).</div>
+<div>Instruments</div><div>CDP <code>Performance.getMetrics</code> and a <code>Profiler</code> CPU profile sized to the window; <code>PerformanceObserver</code> long tasks plus a <code>requestAnimationFrame</code> heartbeat; the page's own functions wrapped for calls and inclusive time; a <code>MutationObserver</code> on the console; and the app's own <code>EventSource</code> listeners timed from frame arrival to the next animation frame.</div>
+</div>
+<p class="note">The page probe never reads geometry in the metrics window, so the browser's own LayoutCount is the page's, not the harness's. The badge window is separate because its per-frame <code>getBoundingClientRect</code> IS a forced layout.</p>
+
+<h2>2. The numbers</h2>
+<h3>2.1 Long window: full 300-line console, 24 s</h3>
+<table><thead><tr><th>Measurement, 24 s window</th><th class="n">this tree</th><th class="n">v1.99.1</th><th class="n">delta</th></tr></thead><tbody><tr><td>Console lines in the window (store lines drawn)</td><td class="n">325</td><td class="n">265</td><td class="n"></td></tr>
+<tr><td>Console pieces (top-level child nodes)</td><td class="n">71</td><td class="n">58</td><td class="n"></td></tr>
+<tr><td>Script (ms, CDP ScriptDuration)</td><td class="n">1147.7</td><td class="n">985</td><td class="n"><b class="up">+16.5%</b></td></tr>
+<tr><td>Task (ms, main thread busy, CDP TaskDuration)</td><td class="n">5191.3</td><td class="n">4330.2</td><td class="n"><b class="up">+19.9%</b></td></tr>
+<tr><td>Layout count</td><td class="n">733</td><td class="n">720</td><td class="n"><b class="up">+1.8%</b></td></tr>
+<tr><td>Layout duration (ms)</td><td class="n">504.8</td><td class="n">414.1</td><td class="n"><b class="up">+21.9%</b></td></tr>
+<tr><td>Style recalc count</td><td class="n">1515</td><td class="n">1505</td><td class="n"><b class="up">+0.7%</b></td></tr>
+<tr><td>Style recalc duration (ms)</td><td class="n">360.2</td><td class="n">295.4</td><td class="n"><b class="up">+21.9%</b></td></tr>
+<tr><td>Stream frames (jobline SSE events)</td><td class="n">624</td><td class="n">628</td><td class="n"></td></tr>
+<tr><td>SSE handler total (ms, in the page)</td><td class="n">769</td><td class="n">655.6</td><td class="n"><b class="up">+17.3%</b></td></tr>
+<tr><td>SSE handler per frame (ms)</td><td class="n">1.23</td><td class="n">1.04</td><td class="n"><b class="up">+18.3%</b></td></tr>
+<tr><td>Delta to first frame after it, p50 (ms)</td><td class="n">7.4</td><td class="n">7.2</td><td class="n"></td></tr>
+<tr><td>Delta to first frame, p90 (ms)</td><td class="n">13.3</td><td class="n">13.3</td><td class="n"></td></tr>
+<tr><td>Delta to first frame, max (ms)</td><td class="n">17.4</td><td class="n">19.3</td><td class="n"></td></tr>
+<tr><td>Long tasks (count / total ms)</td><td class="n">0 / 0</td><td class="n">0 / 0</td><td class="n"></td></tr>
+<tr><td>Frame gaps over 50 ms</td><td class="n">1</td><td class="n">1</td><td class="n"></td></tr>
+<tr><td>DOM nodes added inside the console</td><td class="n">3660</td><td class="n">3671</td><td class="n"></td></tr>
+<tr><td>DOM nodes removed inside the console</td><td class="n">2179</td><td class="n">2178</td><td class="n"></td></tr></tbody></table>
+<p class="note">The two windows are not the same size here: this tree drew 325 store lines and v1.99.1 drew 265 from the same events, because a command line becomes a card on this tree and the window trims differently. Per line, layout is 1.55 ms here and 1.56 ms there - the same cost per line, so this table's percentage gap is mostly the window, not the code. Section 2.2 is the controlled pair.</p>
+
+<h3>2.2 Controlled pair: identical 193-line window, 15 s</h3>
+<table><thead><tr><th>Measurement, 15 s window</th><th class="n">this tree</th><th class="n">v1.99.1</th><th class="n">delta</th></tr></thead><tbody><tr><td>Console lines in the window (store lines drawn)</td><td class="n">193</td><td class="n">193</td><td class="n"></td></tr>
+<tr><td>Console pieces (top-level child nodes)</td><td class="n">31</td><td class="n">39</td><td class="n"></td></tr>
+<tr><td>Script (ms, CDP ScriptDuration)</td><td class="n">621.2</td><td class="n">528</td><td class="n"><b class="up">+17.7%</b></td></tr>
+<tr><td>Task (ms, main thread busy, CDP TaskDuration)</td><td class="n">2982.7</td><td class="n">2448.4</td><td class="n"><b class="up">+21.8%</b></td></tr>
+<tr><td>Layout count</td><td class="n">450</td><td class="n">449</td><td class="n"><b class="up">+0.2%</b></td></tr>
+<tr><td>Layout duration (ms)</td><td class="n">269.4</td><td class="n">226.1</td><td class="n"><b class="up">+19.2%</b></td></tr>
+<tr><td>Style recalc count</td><td class="n">939</td><td class="n">938</td><td class="n"><b class="up">+0.1%</b></td></tr>
+<tr><td>Style recalc duration (ms)</td><td class="n">205.4</td><td class="n">172.8</td><td class="n"><b class="up">+18.9%</b></td></tr>
+<tr><td>Stream frames (jobline SSE events)</td><td class="n">400</td><td class="n">400</td><td class="n"></td></tr>
+<tr><td>SSE handler total (ms, in the page)</td><td class="n">382.5</td><td class="n">325.6</td><td class="n"><b class="up">+17.5%</b></td></tr>
+<tr><td>SSE handler per frame (ms)</td><td class="n">0.96</td><td class="n">0.81</td><td class="n"><b class="up">+18.5%</b></td></tr>
+<tr><td>Delta to first frame after it, p50 (ms)</td><td class="n">6.1</td><td class="n">8.1</td><td class="n"></td></tr>
+<tr><td>Delta to first frame, p90 (ms)</td><td class="n">13.5</td><td class="n">14.3</td><td class="n"></td></tr>
+<tr><td>Delta to first frame, max (ms)</td><td class="n">17</td><td class="n">17</td><td class="n"></td></tr>
+<tr><td>Long tasks (count / total ms)</td><td class="n">0 / 0</td><td class="n">0 / 0</td><td class="n"></td></tr>
+<tr><td>Frame gaps over 50 ms</td><td class="n">1</td><td class="n">1</td><td class="n"></td></tr>
+<tr><td>DOM nodes added inside the console</td><td class="n">2607</td><td class="n">2602</td><td class="n"></td></tr>
+<tr><td>DOM nodes removed inside the console</td><td class="n">1662</td><td class="n">1657</td><td class="n"></td></tr></tbody></table>
+<p class="note">Same 193 lines, same 400 stream frames, same 31 pieces. This is the regression number: script per streamed frame 1.23 ms vs 1.04 ms, layout count identical (450 vs 449) but each layout more expensive, and the only new code on the path is the command-fold machinery of <code>101cf6aa</code>.</p>
+
+<h3>2.3 A silent wire: what runs when nothing arrives (3 s)</h3>
+<table><thead><tr><th>run</th><th class="n">layouts</th><th class="n">layout ms</th><th class="n">style recalc</th><th class="n">script ms</th><th class="n">busy ms</th><th class="n">paintTypedLines</th><th class="n">streamBodyHtml</th><th class="n">nodes added</th></tr></thead><tbody>
+<tr><td>new</td><td class="n">67</td><td class="n">51.3</td><td class="n">184</td><td class="n">55.6</td><td class="n">389</td><td class="n">67</td><td class="n">2</td><td class="n">5</td></tr><tr><td>base</td><td class="n">69</td><td class="n">25.2</td><td class="n">181</td><td class="n">34.7</td><td class="n">223.2</td><td class="n">66</td><td class="n">3</td><td class="n">5</td></tr>
+</tbody></table>
+<p>The page keeps drawing with no delta to react to: the type-stream pacing is still flushing characters it already has (67 paints of the growing line in 3 s), and the sweep still rebuilds (2 full window builds). The console never goes quiet between deltas.</p>
+
+<h2>3. Ranked causes</h2>
+
+<div class="cause"><h3><span class="tag">1</span>The scroll anchor forces a layout of the whole console, every frame</h3>
+<div class="kv">
+<div>Where</div><div><code>public/board/console.js:1967</code> (the rAF), <code>:1974</code> (<code>setScroll(out, out.scrollHeight)</code>), <code>public/board/console.js:3024</code> (<code>setScroll</code>), callers <code>stickSoon</code> at <code>:1955</code></div>
+<div>Measured</div><div><b>661.06 ms of self time</b> for the callback at <code>console.js:1967</code> - the largest page frame in the profile, 15.8% of every sampled busy millisecond. <code>stickSoon</code> was called 12757 times in 24 s; the callback runs at most once per frame.</div>
+<div>Why</div><div><code>out.scrollHeight</code> is read <em>after</em> the content changed, so the browser must lay out the 325-line box before it can answer; the write to <code>scrollTop</code> then invalidates paint. Two statements, one full layout, on the frame after every growth.</div>
+<div>Fix</div><div>Keep the read, drop the cost: anchor on <code>overflow-anchor</code> plus a single <code>ResizeObserver</code> on the console's content, and stick with <code>el.scrollTop = el.scrollHeight</code> only when the content height actually changed (cache the last value per console). A console that grew by one 18 px line does not need the geometry of 1687 px recomputed 60 times a second. If the anchor must stay a rAF, read the height inside it once per frame per console (it already batches) and skip the read when the last write put the box at the bottom and nothing was added.</div>
+</div>
+
+<div class="cause"><h3><span class="tag">2</span>The 1 Hz sweep rebuilds the whole window and redraws every line</h3>
+<div class="kv">
+<div>Where</div><div><code>public/app.js:1783</code> region (<code>sweepThinking</code>) -> <code>public/board/console.js:2325</code> (<code>paintStreamConsole</code>) -> <code>loadThinking</code> -> <code>streamBodyHtml</code> at <code>:2015</code> -> <code>drawJobLine</code> at <code>:3488</code></div>
+<div>Measured</div><div>16 full window builds (one per sweep) and <b>12318 <code>drawJobLine</code> calls in 24 s</b> - 769.9 per build - for an inclusive 1306.3 ms. 3660 nodes added and 2179 removed inside the console in the same window (243.3/s).</div>
+<div>Why</div><div>Every sweep re-renders every piece into a detached holder and then replaces the pieces that are not <code>isEqualNode</code> to what is on screen. The growing line and the busy row are never equal, so the tail is replaced; the sweep also re-enters <code>drawJobLine</code> for lines that did not change at all.</div>
+<div>Fix</div><div>Make the store's own append path the only painter while a turn streams: <code>recordJobLine</code> already draws the line it changed (<code>:3446</code>). The sweep exists for text the panel did not see arrive; gate it on a version counter the store bumps, and skip the whole rebuild when the counter did not move. When it does, diff by <code>data-lid</code> and patch the changed row instead of rebuilding the piece list.</div>
+</div>
+
+<div class="cause"><h3><span class="tag">3</span><code>paintToBottom</code> reads the geometry of two boxes on every paint</h3>
+<div class="kv">
+<div>Where</div><div><code>public/board/console.js:1160</code>, reads at <code>:1169</code> and <code>:1170</code>, write at <code>:1174</code></div>
+<div>Measured</div><div>286 calls, 109.4 ms inclusive, and <b>98.16 ms of self time</b> in the profile - <code>scrollHeight</code> and <code>clientHeight</code> on the console AND on the card body, twice each, then a <code>classList</code> write that invalidates style for the next frame.</div>
+<div>Fix</div><div>Compute the answer from the scroll event the reader actually caused (<code>scroll</code> already tells you the offset, and the box's own height is cached until a resize), and only call it from a scroll or resize, not from the paint path that fires per line.</div>
+</div>
+
+<div class="cause"><h3><span class="tag">4</span>Selector matching inside the per-line draw</h3>
+<div class="kv">
+<div>Where</div><div><code>public/board/console.js:3488</code> (<code>drawJobLine</code>), its <code>querySelector(":scope > [data-wait]")</code> at <code>:3524</code>, and the helpers it calls</div>
+<div>Measured</div><div><b>437.41 ms</b> of self time in <code>querySelector</code> and 12318 calls - a selector evaluation per line per sweep. This is the browser's matcher, charged to the page, and it is the second largest single frame in the profile.</div>
+<div>Fix</div><div>Hold the row's own children by reference at build time (the row is created here) instead of querying back into it, or query the parent once per build and index the rows by <code>data-lid</code>.</div>
+</div>
+
+<div class="cause"><h3><span class="tag">5</span>The tool row's clock is a new node on every paint, in a slot that changes width</h3>
+<div class="kv">
+<div>Where</div><div><code>public/board/console.js:822</code> (grouped rows) and <code>:1045</code> (flat rows) build <code>&lt;span class="jl-live tgrp-state" data-live-from&gt;</code>; the finished branch swaps to <code>&lt;span class="tgrp-state"&gt;{secs}s</code> at <code>:824</code> and <code>:1043</code>; <code>tickLiveClocks</code> patches it between paints at <code>public/app.js:1784</code>; the job loop is <code>public/app.js:12155-12186</code></div>
+<div>Measured</div><div>24 clock ticks and <b>171 badge spans added and 171 removed</b> in 24 s (<code>span.jl-live</code> in the mutation record) - one destroyed and rebuilt per tool-row paint, 171 mutations inside tool groups. Over a 12 s call the badge node was replaced 1 time(s) while its text was patched 12 times.</div>
+<div>Why</div><div>Every sweep's row HTML carries the clock, so the row's identity, not its text, is what changes. Then the text is patched in place between sweeps. That is two mechanisms for one number, and the node is destroyed by one of them.</div>
+<div>Fix</div><div>See section 4: one stable node per row, created with the row, never re-created, with the clock and the duration written into a fixed-width slot.</div>
+</div>
+
+<div class="cause"><h3><span class="tag b">6</span>The command-fold marker measures text with a Range binary search, from a page-wide observer</h3>
+<div class="kv">
+<div>Where</div><div><code>public/board/console.js:2793</code> (<code>paintCommandFoldMark</code>), <code>:2804-2805</code> (<code>clientWidth</code>, <code>clientHeight</code>), <code>:2814</code> (<code>getBoundingClientRect</code>), <code>:2747-2765</code> (<code>cmdCutOffset</code>, a binary search of <code>Range.getBoundingClientRect</code>), <code>:2786</code> (<code>body.innerHTML = html</code>), <code>:2847</code> (<code>ResizeObserver</code>), <code>:2876-2885</code> (the observer that calls <code>scheduleCommandFoldMark</code> for every added element)</div>
+<div>Measured</div><div><b>1.7 ms per mark</b> (max 2.6 ms over 8 runs), 32 layout-forcing Range reads for 4 text nodes, and 358 schedules in 24 s of streaming. Absent from v1.99.1 entirely.</div>
+<div>Why</div><div>Each mark is: restore the whole body's <code>innerHTML</code>, read three heights, walk every text node, and binary-search each one for the row where the text stops, then cut the tree and insert the dots. The restore is itself a DOM write, so the next mark's first read is a forced layout - and the observer that ordered the mark wakes on the nodes the restore added.</div>
+<div>Fix</div><div>Mark once per card and never clear-and-remeasure in the same paint: cache the cut offset keyed by (card, width, text length), skip the binary search when none of the three moved, and drop the <code>innerHTML</code> round-trip in favour of storing the removed nodes. The <code>ResizeObserver</code> can then be one observer on the console, not one target per card.</div>
+</div>
+
+<div class="cause"><h3><span class="tag c">7</span>The type-stream keeps painting after the wire stops</h3>
+<div class="kv">
+<div>Where</div><div><code>public/core/type-stream.js:234</code> (<code>feed</code>), <code>public/board/console.js:2166</code> (<code>paintTypedLines</code>), timer registered at <code>public/app.js:12039</code> (400 ms)</div>
+<div>Measured</div><div>With the wire silent for 3 s: 67 <code>paintTypedLines</code> calls, 69 <code>drawRowText</code> calls, 67 layouts, 389 ms busy. The 400 ms timer alone cost 44.7 ms over 60 calls in the measured window.</div>
+<div>Why</div><div>Paced reveal is deliberate, and it means the console carries a repaint queue of its own on top of the wire. Under a burst the two multiply: the wire keeps appending while the pacer is still revealing what arrived a second ago.</div>
+<div>Fix</div><div>Cap the backlog: when the pacer is more than one frame behind the wire, jump to the newest text instead of pacing through it (the reader cannot read a second-old reveal anyway), and stop the 400 ms timer when the pacer's queue is empty.</div>
+</div>
+
+<div class="cause"><h3><span class="tag c">8</span>DOM churn: whole pieces replaced instead of patched</h3>
+<div class="kv">
+<div>Where</div><div><code>public/board/console.js:2373</code> (<code>syncStreamConsole</code>, the replace loop)</div>
+<div>Measured</div><div>3660 nodes added / 2179 removed per 24 s (243.3/s), by target: <code>pre.job-out</code> 3336 added, <code>span.jl-live</code> 171 added / 171 removed.</div>
+<div>Fix</div><div>Falls out of cause 2: a diff by <code>data-lid</code> that patches text and class keeps node identity, which is also what makes the badge fix in section 4 possible.</div>
+</div>
+
+<h2>4. The badge: what the row does while a turn writes</h2>
+<p>One call, in flight for 12 s of frames, with the sampler re-resolving the badge every frame. Times are ms from the start of the call; widths are whole pixels.</p>
+<table><thead><tr><th>t (ms)</th><th>badge text</th><th class="n">badge width</th><th class="n">badge left (from row)</th><th class="n">target width</th><th class="n">row width</th></tr></thead><tbody><tr><td class="n">7</td><td><code> · running 0s</code></td><td class="n">82.2</td><td class="n">1114.8</td><td class="n">1029.2</td><td class="n">1199</td></tr>
+<tr><td class="n">1273</td><td><code> · running 1s</code></td><td class="n">82.2</td><td class="n">1114.8</td><td class="n">1029.2</td><td class="n">1199</td></tr>
+<tr><td class="n">2210</td><td><code> · running 2s</code></td><td class="n">82.2</td><td class="n">1114.8</td><td class="n">1029.2</td><td class="n">1199</td></tr>
+<tr><td class="n">3208</td><td><code> · running 3s</code></td><td class="n">82.2</td><td class="n">1114.8</td><td class="n">1029.2</td><td class="n">1199</td></tr>
+<tr><td class="n">4274</td><td><code> · running 4s</code></td><td class="n">82.2</td><td class="n">1114.8</td><td class="n">1029.2</td><td class="n">1199</td></tr>
+<tr><td class="n">5208</td><td><code> · running 5s</code></td><td class="n">82.2</td><td class="n">1114.8</td><td class="n">1029.2</td><td class="n">1199</td></tr>
+<tr><td class="n">6273</td><td><code> · running 6s</code></td><td class="n">82.2</td><td class="n">1114.8</td><td class="n">1029.2</td><td class="n">1199</td></tr>
+<tr><td class="n">7274</td><td><code> · running 7s</code></td><td class="n">82.2</td><td class="n">1114.8</td><td class="n">1029.2</td><td class="n">1199</td></tr>
+<tr><td class="n">8206</td><td><code> · running 8s</code></td><td class="n">82.2</td><td class="n">1114.8</td><td class="n">1029.2</td><td class="n">1199</td></tr>
+<tr><td class="n">9273</td><td><code> · running 9s</code></td><td class="n">82.2</td><td class="n">1114.8</td><td class="n">1029.2</td><td class="n">1199</td></tr>
+<tr><td class="n">10273</td><td><code> · running 10s</code></td><td class="n">88.53</td><td class="n">1108.47</td><td class="n">1022.88</td><td class="n">1199</td></tr><tr class="hl"><td class="n">after</td><td><code>42.70s</code></td><td class="n">37.94</td><td class="n">1159.06</td><td class="n">1073.47</td><td class="n">1199</td></tr></tbody></table>
+<div class="kv">
+<div>Text changes</div><div>12 (one a second, patched in place by <code>tickLiveClocks</code>)</div>
+<div>Width changes</div><div>1 while running - all of it at the 9 s to 10 s crossing: <code>82.2 px</code> to <code>88.53 px</code>, the badge's left edge moving 6.33 px and the target's width moving -6.32 px in one frame.</div>
+<div>The swap</div><div>to the finished <code>42.70s</code>: width 37.94 px, left edge 1159.06 px, and the target grows to 1073.47 px - <b>50.59 px wider in a single frame</b>, so the file name on that row is truncated at a different character than it was the frame before.</div>
+<div>Node identity</div><div>2 badge nodes seen in one call, 0 frames with no badge at all after the swap, and 171 <code>span.jl-live</code> replacements in the 24 s window.</div>
+</div>
+<p>So the brief's reading is right in substance and needs one correction in detail: the badge does not move on every streamed repaint - it is <em>replaced</em> on every repaint, its text is patched between them, and its <em>width</em> changes only where the digit count does (9 s to 10 s) and at the swap to the duration, where the row's target jumps by 50.59 px. Three separate mechanisms, one number.</p>
+<h3>The proposal: one stable node per row, patched in place, in a fixed-width slot</h3>
+<ol>
+<li><b>Build the slot once.</b> Every tool row carries <code>&lt;span class="tgrp-state" data-tgrp-clock&gt;&lt;/span&gt;</code> from its first paint, empty for a row that never ran and re-used for every state after that. No branch may emit a second span, and no rebuild may replace the row while it is live (cause 8's diff is what makes that possible).</li>
+<li><b>Write text, never HTML.</b> One function owns the slot: <code>clockEl.textContent = live ? liveSuffix(from) : secs.toFixed(2) + "s"</code>. The per-second tick and the completion swap call the same function on the same node, so the swap is a text write, not a node replacement.</li>
+<li><b>Fix the slot's geometry.</b> <code>.tgrp-state { min-width: 5.6ch; text-align: right; font-variant-numeric: tabular-nums; }</code> - <code>tabular-nums</code> makes every digit the same width, and the min-width covers the widest text either state can produce (<code>102.70s</code>), so <code>1s</code>, <code>10s</code> and <code>42.70s</code> all occupy the same box. Measured, the font is already tabular in the numbers it draws (82.2 px for every one-digit second), which is why the slot only needs the min-width and the alignment to be still.</li>
+<li><b>Keep the reader's row.</b> The clock's <code>data-live-from</code> must survive a sweep: put it on the row, not the span, so <code>tickLiveClocks</code> finds the row and patches its slot after any repaint instead of the repaint re-creating the span.</li>
+</ol>
+<p class="note">With that, the row's geometry is constant for the life of the row: no width change at 9 s, none at the swap, and the target's truncation window does not move while the turn writes. The measured 50.59 px jump and the 1 node replacement per call are the numbers this removes.</p>
+
+<h2>5. What changed since v1.99.1</h2>
+<p><code>git log v1.99.1..HEAD</code> over the five console files is one commit: <code>101cf6aa</code> "console: mark a folded command card's last row, and make its spacing the reader's", 421 insertions and 24 deletions across <code>public/app.js</code>, <code>public/board/console.js</code>, <code>public/core/assistant-command.js</code>, <code>public/index.html</code> and <code>public/style.css</code>. Everything else on the delta path is older than the tag.</p>
+<ul>
+<li>New: <code>paintCommandFoldMark</code>, <code>clearCommandFoldMark</code>, <code>cmdCutOffset</code>, <code>scheduleCommandFoldMark</code>, <code>cmdFoldResize</code> (<code>console.js:2747-2885</code>) - cause 6, and the only code that reads text geometry per card.</li>
+<li>New: <code>scheduleCommandFoldMark</code> on every element the copy observer sees (<code>console.js:2883</code>) - 358 calls in 24 s of streaming, all doing a subtree <code>querySelectorAll</code>.</li>
+<li>Changed: spacing ownership in <code>style.css</code> and the last-row marker, which is why the two builds draw a different number of lines from the same events.</li>
+<li>Unchanged: the scroll anchor, the sweep, <code>paintToBottom</code>, and the badge. The controlled pair shows them cost the same as they did at the tag - the badge identically so.</li>
+</ul>
+<p>So the regression since the tag is real but small (script 17.6% per identical window) and it is the fold marker, not the streaming path. The streaming path's cost is old, and it is causes 1 to 5.</p>
+
+<h2>6. Limits of this measurement</h2>
+<ul>
+<li>No command card reached the turn: the card path needs a frame this stub does not install, so cause 6 was measured on a card built to <code>.code-box.is-cmd</code>'s own shape inside the console, not on one the app produced. It is a per-mark cost, not a per-turn frequency.</li>
+<li>One card on the board. The board-side cost of a redraw (every card, every scan) is outside these windows and would only add to causes 2 and 3.</li>
+<li>Headless Chromium at deviceScaleFactor 1 on a fast host: these are lower bounds for a laptop on a 4K display, and the ratios are what travel, not the absolute milliseconds.</li>
+<li>No delta was ever delayed by more than 17.4 ms, in either build. Whatever a reader experiences as "lag" at this scale is not the primary thread failing to keep up with the wire; the profile says it is the console doing work between deltas that a still page would not do.</li>
+</ul>
+
+<h2>7. Reproduce</h2>
+<pre><code>node tools/measure-console-stream-lag.mjs --label new --seconds 24 --json new.json
+mkdir -p /tmp/base-1991 &amp;&amp; git archive v1.99.1 | tar -x -C /tmp/base-1991
+node tools/measure-console-stream-lag.mjs --root /tmp/base-1991 --label base --seconds 24 --json base.json</code></pre>
+<p class="note">Each run prints its own browser pid and panel pid and closes both; the temp profile and the fixture are removed at the end.</p>
+
+<details><summary>Full record: this tree, 24 s window (JSON)</summary><pre><code>{
+ "label": "new",
+ "tree": "<path on the measuring host>",
+ "viewport": "1440x900",
+ "startedAt": "2026-11-14T06:03:44.368Z",
+ "gwPort": 59568,
+ "panelPort": 59569,
+ "panelPid": 23904,
+ "pagePid": null,
+ "seconds": 24,
+ "browserPid": 47012,
+ "jobId": "a62e4fa8",
+ "thread": "lag-new-mwg02mot",
+ "missingProbes": [],
+ "preludeShape": {
+  "pieces": 71,
+  "rows": 20,
+  "groups": 20,
+  "lines": 325,
+  "scrollH": 1687,
+  "clientH": 318,
+  "bars": true,
+  "visible": "visible"
+ },
+ "silence": {
+  "seconds": 3,
+  "perf": {
+   "LayoutCount": 67,
+   "LayoutDuration": 51.32,
+   "RecalcStyleCount": 184,
+   "RecalcStyleDuration": 23.01,
+   "ScriptDuration": 55.55,
+   "TaskDuration": 389.02,
+   "Nodes": 19806
+  },
+  "browser": {
+   "fn": {
+    "appendJobLine": {
+     "n": 0,
+     "ms": 0,
+     "max": 0,
+     "bytes": 0
+    },
+    "recordJobLine": {
+     "n": 0,
+     "ms": 0,
+     "max": 0,
+     "bytes": 0
+    },
+    "drawJobLine": {
+     "n": 0,
+     "ms": 0,
+     "max": 0,
+     "bytes": 0
+    },
+    "drawRowText": {
+     "n": 69,
+     "ms": 8.999999970197678,
+     "max": 1.4000000059604645,
+     "bytes": 0
+    },
+    "paintTypedLines": {
+     "n": 67,
+     "ms": 22.099999755620956,
+     "max": 4.799999982118607,
+     "bytes": 0
+    },
+    "flushTypeStream": {
+     "n": 0,
+     "ms": 0,
+     "max": 0,
+     "bytes": 0
+    },
+    "appendProseLine": {
+     "n": 0,
+     "ms": 0,
+     "max": 0,
+     "bytes": 0
+    },
+    "streamBodyHtml": {
+     "n": 2,
+     "ms": 6.5,
+     "max": 3.699999988079071,
+     "bytes": 0
+    },
+    "syncStreamConsole": {
+     "n": 2,
+     "ms": 1.800000011920929,
+     "max": 1.0999999940395355,
+     "bytes": 0
+    },
+    "paintStreamConsole": {
+     "n": 2,
+     "ms": 10.400000005960464,
+     "max": 5.9000000059604645,
+     "bytes": 0
+    },
+    "toolGroupHtml": {
+     "n": 32,
+     "ms": 4.699999988079071,
+     "max": 0.699999988079071,
+     "bytes": 0
+    },
+    "rebuildToolGroup": {
+     "n": 0,
+     "ms": 0,
+     "max": 0,
+     "bytes": 0
+    },
+    "consoleMdHtml": {
+     "n": 30,
+     "ms": 1.300000011920929,
+     "max": 0.30000001192092896,
+     "bytes": 0
+    },
+    "consoleBodyHtml": {
+     "n": 32,
+     "ms": 2.599999964237213,
+     "max": 0.5999999940395355,
+     "bytes": 0
+    },
+    "tickLiveClocks": {
+     "n": 0,
+     "ms": 0,
+     "max": 0,
+     "bytes": 0
+    },
+    "paintCommandFoldMark": {
+     "n": 0,
+     "ms": 0,
+     "max": 0,
+     "bytes": 0
+    },
+    "clearCommandFoldMark": {
+     "n": 0,
+     "ms": 0,
+     "max": 0,
+     "bytes": 0
+    },
+    "scheduleCommandFoldMark": {
+     "n": 0,
+     "ms": 0,
+     "max": 0,
+     "bytes": 0
+    },
+    "cmdCutOffset": {
+     "n": 0,
+     "ms": 0,
+     "max": 0,
+     "bytes": 0
+    },
+    "updateJob": {
+     "n": 0,
+     "ms": 0,
+     "max": 0,
+     "bytes": 0
+    },
+    "renderConversation": {
+     "n": 0,
+     "ms": 0,
+     "max": 0,
+     "bytes": 0
+    },
+    "paintToBottom": {
+     "n": 15,
+     "ms": 3.0999999940395355,
+     "max": 1.800000011920929,
+     "bytes": 0
+    },
+    "setScroll": {
+     "n": 69,
+     "ms": 2.0999999344348907,
+     "max": 0.29999998211860657,
+     "bytes": 0
+    },
+    "stickSoon": {
+     "n": 71,
+     "ms": 0.7999999821186066,
+     "max": 0.19999998807907104,
+     "bytes": 0
+    },
+    "loadThinking": {
+     "n": 2,
+     "ms": 0.9000000059604645,
+     "max": 0.5999999940395355,
+     "bytes": 0
+    },
+    "paintThink": {
+     "n": 2,
+     "ms": 10.800000011920929,
+     "max": 6.0999999940395355,
+     "bytes": 0
+    }
+   },
+   "muts": {
+    "added": 5,
+    "removed": 0,
+    "records": 69,
+    "tgrp": 0,
+    "badge": 0
+   },
+   "timers": {
+    "(anonymous 400ms)": {
+     "ms": 400,
+     "n": 8,
+     "tot": 5.699999988079071,
+     "max": 4.9000000059604645
+    },
+    "sweepThinking": {
+     "ms": 500,
+     "n": 6,
+     "tot": 1.5000000298023224,
+     "max": 0.699999988079071
+    },
+    "applyPendingFocus": {
+     "ms": 250,
+     "n": 12,
+     "tot": 0,
+     "max": 0
+    },
+    "humanTick": {
+     "ms": 250,
+     "n": 12,
+     "tot": 0,
+     "max": 0
+    },
+    "tickLiveClocks": {
+     "ms": 1000,
+     "n": 3,
+     "tot": 0.5000000298023224,
+     "max": 0.20000001788139343
+    },
+    "(anonymous 3000ms)": {
+     "ms": 3000,
+     "n": 2,
+     "tot": 1.7999999821186066,
+     "max": 1.7999999821186066
+    },
+    "tickApprovals": {
+     "ms": 1000,
+     "n": 3,
+     "tot": 0.30000001192092896,
+     "max": 0.10000002384185791
+    },
+    "(anonymous 1000ms)": {
+     "ms": 1000,
+     "n": 3,
+     "tot": 1.7999999821186066,
+     "max": 0.5999999940395355
+    },
+    "tickQuestionClocks": {
+     "ms": 1000,
+     "n": 3,
+     "tot": 0,
+     "max": 0
+    },
+    "paintWatchClocks": {
+     "ms": 1000,
+     "n": 3,
+     "tot": 0,
+     "max": 0
+    },
+    "refreshSubagentRoster": {
+     "ms": 5000,
+     "n": 1,
+     "tot": 0.29999998211860657,
+     "max": 0.29999998211860657
+    },
+    "(anonymous 5000ms)": {
+     "ms": 5000,
+     "n": 3,
+     "tot": 1.7000000178813934,
+     "max": 1.0999999940395355
+    }
+   },
+   "frames": {
+    "heartbeat": {
+     "n": 2,
+     "bytes": 1726,
+     "ms": 0.09999999403953552,
+     "max": 0.09999999403953552,
+     "kinds": {}
+    }
+   },
+   "rafGaps": 0,
+   "cmdBoxes": 1,
+   "dots": 0
+  }
+ },
+ "metrics": {
+  "windowSeconds": 24,
+  "perf": {
+   "LayoutCount": 733,
+   "LayoutDuration": 504.81,
+   "RecalcStyleCount": 1515,
+   "RecalcStyleDuration": 360.17,
+   "ScriptDuration": 1147.72,
+   "TaskDuration": 5191.34,
+   "Nodes": 9978,
+   "JSEventListeners": 425
+  },
+  "browser": {
+   "fn": {
+    "appendJobLine": {
+     "n": 312,
+     "ms": 716.3999999463558,
+     "max": 6,
+     "bytes": 0
+    },
+    "recordJobLine": {
+     "n": 312,
+     "ms": 33.70000013709068,
+     "max": 0.5,
+     "bytes": 0
+    },
+    "drawJobLine": {
+     "n": 12318,
+     "ms": 1306.300000101328,
+     "max": 5.800000011920929,
+     "bytes": 0
+    },
+    "drawRowText": {
+     "n": 11384,
+     "ms": 64.29999950528145,
+     "max": 0.5,
+     "bytes": 0
+    },
+    "paintTypedLines": {
+     "n": 585,
+     "ms": 135.6999995112419,
+     "max": 0.7000000178813934,
+     "bytes": 0
+    },
+    "flushTypeStream": {
+     "n": 0,
+     "ms": 0,
+     "max": 0,
+     "bytes": 0
+    },
+    "appendProseLine": {
+     "n": 1219,
+     "ms": 26.4000001847744,
+     "max": 0.30000001192092896,
+     "bytes": 0
+    },
+    "streamBodyHtml": {
+     "n": 16,
+     "ms": 33.39999994635582,
+     "max": 2.9000000059604645,
+     "bytes": 0
+    },
+    "syncStreamConsole": {
+     "n": 16,
+     "ms": 19.799999982118607,
+     "max": 3.100000023841858,
+     "bytes": 0
+    },
+    "paintStreamConsole": {
+     "n": 16,
+     "ms": 59.699999898672104,
+     "max": 6.199999988079071,
+     "bytes": 0
+    },
+    "toolGroupHtml": {
+     "n": 315,
+     "ms": 26.69999995827675,
+     "max": 1.0999999940395355,
+     "bytes": 0
+    },
+    "rebuildToolGroup": {
+     "n": 0,
+     "ms": 0,
+     "max": 0,
+     "bytes": 0
+    },
+    "consoleMdHtml": {
+     "n": 165,
+     "ms": 10.09999993443489,
+     "max": 1.0999999940395355,
+     "bytes": 0
+    },
+    "consoleBodyHtml": {
+     "n": 430,
+     "ms": 13.399999856948853,
+     "max": 0.20000001788139343,
+     "bytes": 0
+    },
+    "tickLiveClocks": {
+     "n": 0,
+     "ms": 0,
+     "max": 0,
+     "bytes": 0
+    },
+    "paintCommandFoldMark": {
+     "n": 0,
+     "ms": 0,
+     "max": 0,
+     "bytes": 0
+    },
+    "clearCommandFoldMark": {
+     "n": 0,
+     "ms": 0,
+     "max": 0,
+     "bytes": 0
+    },
+    "scheduleCommandFoldMark": {
+     "n": 358,
+     "ms": 0.6000000536441803,
+     "max": 0.10000002384185791,
+     "bytes": 0
+    },
+    "cmdCutOffset": {
+     "n": 0,
+     "ms": 0,
+     "max": 0,
+     "bytes": 0
+    },
+    "updateJob": {
+     "n": 0,
+     "ms": 0,
+     "max": 0,
+     "bytes": 0
+    },
+    "renderConversation": {
+     "n": 0,
+     "ms": 0,
+     "max": 0,
+     "bytes": 0
+    },
+    "paintToBottom": {
+     "n": 286,
+     "ms": 109.40000039339066,
+     "max": 2.0999999940395355,
+     "bytes": 0
+    },
+    "setScroll": {
+     "n": 722,
+     "ms": 15.699999958276749,
+     "max": 0.20000001788139343,
+     "bytes": 0
+    },
+    "stickSoon": {
+     "n": 12757,
+     "ms": 31.099999964237213,
+     "max": 0.20000001788139343,
+     "bytes": 0
+    },
+    "loadThinking": {
+     "n": 16,
+     "ms": 6.800000011920929,
+     "max": 0.5999999940395355,
+     "bytes": 0
+    },
+    "paintThink": {
+     "n": 16,
+     "ms": 61.49999997019768,
+     "max": 6.4000000059604645,
+     "bytes": 0
+    }
+   },
+   "muts": {
+    "added": 3660,
+    "removed": 2179,
+    "records": 1287,
+    "tgrp": 171,
+    "badge": 171
+   },
+   "byTarget": {
+    "pre.job-out": {
+     "added": 3336,
+     "removed": 1883,
+     "n": 313
+    },
+    "span.jl-live": {
+     "added": 171,
+     "removed": 171,
+     "n": 171
+    },
+    "div.jl": {
+     "added": 152,
+     "removed": 125,
+     "n": 628
+    },
+    "div.md-block": {
+     "added": 1,
+     "removed": 0,
+     "n": 175
+    }
+   },
+   "timers": {
+    "sweepThinking": {
+     "ms": 500,
+     "n": 48,
+     "tot": 12.899999916553497,
+     "max": 0.7999999821186066
+    },
+    "applyPendingFocus": {
+     "ms": 250,
+     "n": 96,
+     "tot": 0.20000001788139343,
+     "max": 0.10000002384185791
+    },
+    "humanTick": {
+     "ms": 250,
+     "n": 96,
+     "tot": 0.5000000298023224,
+     "max": 0.10000002384185791
+    },
+    "(anonymous 400ms)": {
+     "ms": 400,
+     "n": 60,
+     "tot": 44.69999983906746,
+     "max": 2.399999976158142
+    },
+    "tickLiveClocks": {
+     "ms": 1000,
+     "n": 24,
+     "tot": 6.500000059604645,
+     "max": 0.5999999940395355
+    },
+    "(anonymous 3000ms)": {
+     "ms": 3000,
+     "n": 16,
+     "tot": 12.700000017881393,
+     "max": 3.0999999940395355
+    },
+    "tickApprovals": {
+     "ms": 1000,
+     "n": 24,
+     "tot": 2.099999964237213,
+     "max": 0.20000001788139343
+    },
+    "(anonymous 1000ms)": {
+     "ms": 1000,
+     "n": 24,
+     "tot": 13.099999964237213,
+     "max": 0.800000011920929
+    },
+    "tickQuestionClocks": {
+     "ms": 1000,
+     "n": 24,
+     "tot": 0.4999999701976776,
+     "max": 0.09999999403953552
+    },
+    "paintWatchClocks": {
+     "ms": 1000,
+     "n": 24,
+     "tot": 0.20000001788139343,
+     "max": 0.10000002384185791
+    },
+    "refreshSubagentRoster": {
+     "ms": 5000,
+     "n": 5,
+     "tot": 1.7999999821186066,
+     "max": 0.5
+    },
+    "(anonymous 5000ms)": {
+     "ms": 5000,
+     "n": 15,
+     "tot": 3.8999999463558197,
+     "max": 0.5
+    },
+    "(anonymous 15000ms)": {
+     "ms": 15000,
+     "n": 4,
+     "tot": 0.20000001788139343,
+     "max": 0.10000002384185791
+    },
+    "(anonymous 30000ms)": {
+     "ms": 30000,
+     "n": 2,
+     "tot": 0.6000000238418579,
+     "max": 0.30000001192092896
+    }
+   },
+   "frames": {
+    "jobline": {
+     "n": 624,
+     "bytes": 3801084,
+     "ms": 769,
+     "max": 7,
+     "kinds": {
+      "text": 348,
+      "tool": 34,
+      "tool-out": 242
+     }
+    },
+    "heartbeat": {
+     "n": 10,
+     "bytes": 8640,
+     "ms": 0.19999998807907104,
+     "max": 0.09999999403953552,
+     "kinds": {}
+    }
+   },
+   "rafGaps": {
+    "n": 1,
+    "p50": 83,
+    "p95": 83,
+    "max": 83,
+    "over50": 1,
+    "over100": 0
+   },
+   "longs": {
+    "n": 0,
+    "total": 0,
+    "max": 0,
+    "top": []
+   },
+   "deltaToFrame": {
+    "n": 622,
+    "p50": 7.4,
+    "p90": 13.3,
+    "p99": 16.4,
+    "max": 17.4,
+    "mean": 7.98
+   },
+   "handler": {
+    "n": 624,
+    "mean": 1.23,
+    "max": 7
+   },
+   "kinds": {
+    "text": 348,
+    "tool": 34,
+    "tool-out": 242
+   },
+   "shape": {
+    "pieces": 272,
+    "rows": 37,
+    "groups": 46,
+    "scrollH": 11605,
+    "clientH": 318
+   },
+   "visibility": "visible"
+  },
+  "network": {
+   "thinkingPolls": 22,
+   "statePolls": 0,
+   "total": 106
+  },
+  "profileTop": [
+   {
+    "fn": "(idle)",
+    "where": "",
+    "ms": 19263.23,
+    "samples": 33363
+   },
+   {
+    "fn": "(program)",
+    "where": "",
+    "ms": 3047.12,
+    "samples": 5111
+   },
+   {
+    "fn": "(anonymous)",
+    "where": "htt<path on the measuring host>",
+    "ms": 661.06,
+    "samples": 1143
+   },
+   {
+    "fn": "querySelector",
+    "where": "",
+    "ms": 437.41,
+    "samples": 748
+   },
+   {
+    "fn": "paintToBottom",
+    "where": "htt<path on the measuring host>",
+    "ms": 98.16,
+    "samples": 172
+   },
+   {
+    "fn": "drawJobLine",
+    "where": "htt<path on the measuring host>",
+    "ms": 58.66,
+    "samples": 103
+   },
+   {
+    "fn": "(garbage collector)",
+    "where": "",
+    "ms": 39.17,
+    "samples": 56
+   },
+   {
+    "fn": "querySelectorAll",
+    "where": "",
+    "ms": 38.5,
+    "samples": 65
+   },
+   {
+    "fn": "stickConsole",
+    "where": "htt<path on the measuring host>",
+    "ms": 35.02,
+    "samples": 60
+   },
+   {
+    "fn": "wrapped",
+    "where": "",
+    "ms": 27.35,
+    "samples": 47
+   },
+   {
+    "fn": "closest",
+    "where": "",
+    "ms": 21.61,
+    "samples": 38
+   },
+   {
+    "fn": "now",
+    "where": "",
+    "ms": 20.68,
+    "samples": 34
+   },
+   {
+    "fn": "feed",
+    "where": "htt<path on the measuring host>",
+    "ms": 19.41,
+    "samples": 34
+   },
+   {
+    "fn": "getAnimations",
+    "where": "",
+    "ms": 18.92,
+    "samples": 33
+   },
+   {
+    "fn": "syncStreamConsole",
+    "where": "htt<path on the measuring host>",
+    "ms": 15.34,
+    "samples": 26
+   },
+   {
+    "fn": "escape",
+    "where": "",
+    "ms": 14.07,
+    "samples": 24
+   },
+   {
+    "fn": "now",
+    "where": "",
+    "ms": 12.1,
+    "samples": 20
+   },
+   {
+    "fn": "requestAnimationFrame",
+    "where": "",
+    "ms": 11.98,
+    "samples": 20
+   },
+   {
+    "fn": "startMdBlock",
+    "where": "htt<path on the measuring host>",
+    "ms": 11.62,
+    "samples": 21
+   },
+   {
+    "fn": "fetch",
+    "where": "",
+    "ms": 10.59,
+    "samples": 18
+   },
+   {
+    "fn": "streamOn",
+    "where": "htt<path on the measuring host>",
+    "ms": 10.49,
+    "samples": 17
+   },
+   {
+    "fn": "consoleMdPhysicalLines",
+    "where": "htt<path on the measuring host>",
+    "ms": 10.06,
+    "samples": 17
+   },
+   {
+    "fn": "takeRecords",
+    "where": "",
+    "ms": 9.63,
+    "samples": 11
+   },
+   {
+    "fn": "(anonymous)",
+    "where": "",
+    "ms": 9.44,
+    "samples": 17
+   },
+   {
+    "fn": "getItem",
+    "where": "",
+    "ms": 8.87,
+    "samples": 9
+   },
+   {
+    "fn": "appendChild",
+    "where": "",
+    "ms": 8.32,
+    "samples": 14
+   }
+  ],
+  "events": 25
+ },
+ "badge": {
+  "found": true,
+  "frames": 721,
+  "nodes": 2,
+  "detaches": 0,
+  "texts": [
+   {
+    "t": 1223,
+    "from": " · running 0s",
+    "to": " · running 1s"
+   },
+   {
+    "t": 2210,
+    "from": " · running 1s",
+    "to": " · running 2s"
+   },
+   {
+    "t": 3208,
+    "from": " · running 2s",
+    "to": " · running 3s"
+   },
+   {
+    "t": 4224,
+    "from": " · running 3s",
+    "to": " · running 4s"
+   },
+   {
+    "t": 5208,
+    "from": " · running 4s",
+    "to": " · running 5s"
+   },
+   {
+    "t": 6224,
+    "from": " · running 5s",
+    "to": " · running 6s"
+   },
+   {
+    "t": 7224,
+    "from": " · running 6s",
+    "to": " · running 7s"
+   },
+   {
+    "t": 8206,
+    "from": " · running 7s",
+    "to": " · running 8s"
+   },
+   {
+    "t": 9225,
+    "from": " · running 8s",
+    "to": " · running 9s"
+   },
+   {
+    "t": 10224,
+    "from": " · running 9s",
+    "to": " · running 10s"
+   },
+   {
+    "t": 10824,
+    "from": " · running 10s",
+    "to": " · running 12s"
+   },
+   {
+    "t": 11224,
+    "from": " · running 12s",
+    "to": " · running 13s"
+   }
+  ],
+  "widthChanges": 1,
+  "truncChanges": 0,
+  "widthMin": 82.2,
+  "widthMax": 88.53,
+  "role": "tgrp-state + jl-live",
+  "froms": [
+   "1794636261773",
+   "1794636259918"
+  ],
+  "trace": [
+   {
+    "t": 7,
+    "text": " · running 0s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 74,
+    "text": " · running 0s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 141,
+    "text": " · running 0s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 207,
+    "text": " · running 0s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 274,
+    "text": " · running 0s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 340,
+    "text": " · running 0s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 408,
+    "text": " · running 0s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 473,
+    "text": " · running 0s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 540,
+    "text": " · running 0s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 608,
+    "text": " · running 0s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 674,
+    "text": " · running 0s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 741,
+    "text": " · running 0s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 808,
+    "text": " · running 0s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 873,
+    "text": " · running 0s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 940,
+    "text": " · running 0s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 1007,
+    "text": " · running 0s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 1074,
+    "text": " · running 0s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 1140,
+    "text": " · running 0s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 1207,
+    "text": " · running 0s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 1273,
+    "text": " · running 1s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 1341,
+    "text": " · running 1s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 1407,
+    "text": " · running 1s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 1474,
+    "text": " · running 1s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 1540,
+    "text": " · running 1s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 1608,
+    "text": " · running 1s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 1673,
+    "text": " · running 1s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 1740,
+    "text": " · running 1s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 1807,
+    "text": " · running 1s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 1873,
+    "text": " · running 1s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 1940,
+    "text": " · running 1s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 2007,
+    "text": " · running 1s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 2074,
+    "text": " · running 1s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 2141,
+    "text": " · running 1s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 2210,
+    "text": " · running 2s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 2273,
+    "text": " · running 2s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 2340,
+    "text": " · running 2s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 2408,
+    "text": " · running 2s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 2474,
+    "text": " · running 2s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 2541,
+    "text": " · running 2s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 2606,
+    "text": " · running 2s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 2674,
+    "text": " · running 2s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 2740,
+    "text": " · running 2s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 2807,
+    "text": " · running 2s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 2874,
+    "text": " · running 2s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 2941,
+    "text": " · running 2s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 3007,
+    "text": " · running 2s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 3074,
+    "text": " · running 2s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 3141,
+    "text": " · running 2s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 3208,
+    "text": " · running 3s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 3273,
+    "text": " · running 3s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 3340,
+    "text": " · running 3s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 3407,
+    "text": " · running 3s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 3473,
+    "text": " · running 3s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 3540,
+    "text": " · running 3s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 3606,
+    "text": " · running 3s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 3673,
+    "text": " · running 3s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 3740,
+    "text": " · running 3s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 3806,
+    "text": " · running 3s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 3874,
+    "text": " · running 3s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 3941,
+    "text": " · running 3s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 4007,
+    "text": " · running 3s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 4073,
+    "text": " · running 3s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 4140,
+    "text": " · running 3s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 4207,
+    "text": " · running 3s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 4274,
+    "text": " · running 4s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 4339,
+    "text": " · running 4s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 4407,
+    "text": " · running 4s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 4474,
+    "text": " · running 4s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 4540,
+    "text": " · running 4s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 4608,
+    "text": " · running 4s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 4674,
+    "text": " · running 4s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 4740,
+    "text": " · running 4s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 4806,
+    "text": " · running 4s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 4873,
+    "text": " · running 4s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 4941,
+    "text": " · running 4s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 5007,
+    "text": " · running 4s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 5074,
+    "text": " · running 4s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 5140,
+    "text": " · running 4s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 5208,
+    "text": " · running 5s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 5274,
+    "text": " · running 5s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 5340,
+    "text": " · running 5s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 5407,
+    "text": " · running 5s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 5474,
+    "text": " · running 5s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 5540,
+    "text": " · running 5s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 5606,
+    "text": " · running 5s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 5673,
+    "text": " · running 5s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 5741,
+    "text": " · running 5s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 5808,
+    "text": " · running 5s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 5873,
+    "text": " · running 5s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 5941,
+    "text": " · running 5s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 6007,
+    "text": " · running 5s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 6073,
+    "text": " · running 5s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 6140,
+    "text": " · running 5s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 6207,
+    "text": " · running 5s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 6273,
+    "text": " · running 6s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 6340,
+    "text": " · running 6s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 6408,
+    "text": " · running 6s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 6473,
+    "text": " · running 6s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 6540,
+    "text": " · running 6s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 6607,
+    "text": " · running 6s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 6673,
+    "text": " · running 6s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 6740,
+    "text": " · running 6s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 6807,
+    "text": " · running 6s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 6873,
+    "text": " · running 6s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 6940,
+    "text": " · running 6s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 7007,
+    "text": " · running 6s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 7074,
+    "text": " · running 6s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 7140,
+    "text": " · running 6s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 7207,
+    "text": " · running 6s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 7274,
+    "text": " · running 7s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 7341,
+    "text": " · running 7s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 7406,
+    "text": " · running 7s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 7473,
+    "text": " · running 7s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 7540,
+    "text": " · running 7s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 7607,
+    "text": " · running 7s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 7673,
+    "text": " · running 7s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 7739,
+    "text": " · running 7s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 7807,
+    "text": " · running 7s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 7874,
+    "text": " · running 7s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 7940,
+    "text": " · running 7s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 8008,
+    "text": " · running 7s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 8073,
+    "text": " · running 7s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 8140,
+    "text": " · running 7s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 8206,
+    "text": " · running 8s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 8273,
+    "text": " · running 8s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 8340,
+    "text": " · running 8s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 8407,
+    "text": " · running 8s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 8474,
+    "text": " · running 8s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 8540,
+    "text": " · running 8s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 8606,
+    "text": " · running 8s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 8673,
+    "text": " · running 8s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 8740,
+    "text": " · running 8s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 8807,
+    "text": " · running 8s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 8874,
+    "text": " · running 8s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 8940,
+    "text": " · running 8s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 9006,
+    "text": " · running 8s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 9073,
+    "text": " · running 8s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 9140,
+    "text": " · running 8s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 9206,
+    "text": " · running 8s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 9273,
+    "text": " · running 9s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 9340,
+    "text": " · running 9s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 9406,
+    "text": " · running 9s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 9474,
+    "text": " · running 9s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 9540,
+    "text": " · running 9s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 9607,
+    "text": " · running 9s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 9673,
+    "text": " · running 9s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 9740,
+    "text": " · running 9s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 9807,
+    "text": " · running 9s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 9874,
+    "text": " · running 9s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 9940,
+    "text": " · running 9s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 10007,
+    "text": " · running 9s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 10074,
+    "text": " · running 9s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 10140,
+    "text": " · running 9s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 10206,
+    "text": " · running 9s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 10273,
+    "text": " · running 10s",
+    "cw": 88.53,
+    "cx": 1108.47,
+    "rw": 1199,
+    "tw": 1022.88,
+    "cut": false
+   },
+   {
+    "t": 10340,
+    "text": " · running 10s",
+    "cw": 88.53,
+    "cx": 1108.47,
+    "rw": 1199,
+    "tw": 1022.88,
+    "cut": false
+   },
+   {
+    "t": 10407,
+    "text": " · running 10s",
+    "cw": 88.53,
+    "cx": 1108.47,
+    "rw": 1199,
+    "tw": 1022.88,
+    "cut": false
+   },
+   {
+    "t": 10474,
+    "text": " · running 10s",
+    "cw": 88.53,
+    "cx": 1108.47,
+    "rw": 1199,
+    "tw": 1022.88,
+    "cut": false
+   },
+   {
+    "t": 10540,
+    "text": " · running 10s",
+    "cw": 88.53,
+    "cx": 1108.47,
+    "rw": 1199,
+    "tw": 1022.88,
+    "cut": false
+   },
+   {
+    "t": 10607,
+    "text": " · running 10s",
+    "cw": 88.53,
+    "cx": 1108.47,
+    "rw": 1199,
+    "tw": 1022.88,
+    "cut": false
+   }
+  ]
+ },
+ "badgeFinal": {
+  "text": "42.70s",
+  "stateW": 37.94,
+  "stateX": 1159.06,
+  "rowW": 1199,
+  "targetW": 1073.47,
+  "targetCut": false,
+  "live": 0
+ },
+ "foldProbe": {
+  "runs": [
+   1.3,
+   1.5,
+   1.5,
+   1.5,
+   1.7,
+   1.7,
+   1.9,
+   2.6
+  ],
+  "p50": 1.7,
+  "max": 2.6,
+  "rangeReads": 32,
+  "perCall": 4,
+  "textNodes": 4,
+  "marked": 1
+ },
+ "badgeWindow": {
+  "tickLiveClocks": {
+   "n": 0,
+   "ms": 0,
+   "max": 0,
+   "bytes": 0
+  },
+  "muts": {
+   "added": 554,
+   "removed": 484,
+   "records": 657,
+   "tgrp": 167,
+   "badge": 167
+  },
+  "clocks": 13
+ }
+}</code></pre></details>
+<details><summary>Full record: v1.99.1, 24 s window (JSON)</summary><pre><code>{
+ "label": "base",
+ "tree": "<path on the measuring host>",
+ "viewport": "1440x900",
+ "startedAt": "2026-11-14T06:04:53.669Z",
+ "gwPort": 52080,
+ "panelPort": 52081,
+ "panelPid": 61040,
+ "pagePid": null,
+ "seconds": 24,
+ "browserPid": 49640,
+ "jobId": "5acf75da",
+ "thread": "lag-base-mwg044e1",
+ "missingProbes": [
+  "paintCommandFoldMark",
+  "clearCommandFoldMark",
+  "scheduleCommandFoldMark",
+  "cmdCutOffset"
+ ],
+ "preludeShape": {
+  "pieces": 58,
+  "rows": 20,
+  "groups": 20,
+  "lines": 265,
+  "scrollH": 1081,
+  "clientH": 318,
+  "bars": true,
+  "visible": "visible"
+ },
+ "silence": {
+  "seconds": 3,
+  "perf": {
+   "LayoutCount": 69,
+   "LayoutDuration": 25.15,
+   "RecalcStyleCount": 181,
+   "RecalcStyleDuration": 15.77,
+   "ScriptDuration": 34.72,
+   "TaskDuration": 223.22,
+   "Nodes": 19812
+  },
+  "browser": {
+   "fn": {
+    "appendJobLine": {
+     "n": 0,
+     "ms": 0,
+     "max": 0,
+     "bytes": 0
+    },
+    "recordJobLine": {
+     "n": 0,
+     "ms": 0,
+     "max": 0,
+     "bytes": 0
+    },
+    "drawJobLine": {
+     "n": 0,
+     "ms": 0,
+     "max": 0,
+     "bytes": 0
+    },
+    "drawRowText": {
+     "n": 68,
+     "ms": 6.099999964237213,
+     "max": 0.20000001788139343,
+     "bytes": 0
+    },
+    "paintTypedLines": {
+     "n": 66,
+     "ms": 13.399999886751175,
+     "max": 0.4000000059604645,
+     "bytes": 0
+    },
+    "flushTypeStream": {
+     "n": 0,
+     "ms": 0,
+     "max": 0,
+     "bytes": 0
+    },
+    "appendProseLine": {
+     "n": 0,
+     "ms": 0,
+     "max": 0,
+     "bytes": 0
+    },
+    "streamBodyHtml": {
+     "n": 3,
+     "ms": 4.800000011920929,
+     "max": 1.800000011920929,
+     "bytes": 0
+    },
+    "syncStreamConsole": {
+     "n": 3,
+     "ms": 2.4000000059604645,
+     "max": 0.9000000059604645,
+     "bytes": 0
+    },
+    "paintStreamConsole": {
+     "n": 3,
+     "ms": 8.299999982118607,
+     "max": 3.2999999821186066,
+     "bytes": 0
+    },
+    "toolGroupHtml": {
+     "n": 48,
+     "ms": 2.899999976158142,
+     "max": 0.19999998807907104,
+     "bytes": 0
+    },
+    "rebuildToolGroup": {
+     "n": 0,
+     "ms": 0,
+     "max": 0,
+     "bytes": 0
+    },
+    "consoleMdHtml": {
+     "n": 45,
+     "ms": 1.600000023841858,
+     "max": 0.29999998211860657,
+     "bytes": 0
+    },
+    "consoleBodyHtml": {
+     "n": 48,
+     "ms": 1.2999999523162842,
+     "max": 0.10000002384185791,
+     "bytes": 0
+    },
+    "tickLiveClocks": {
+     "n": 0,
+     "ms": 0,
+     "max": 0,
+     "bytes": 0
+    },
+    "updateJob": {
+     "n": 0,
+     "ms": 0,
+     "max": 0,
+     "bytes": 0
+    },
+    "renderConversation": {
+     "n": 0,
+     "ms": 0,
+     "max": 0,
+     "bytes": 0
+    },
+    "paintToBottom": {
+     "n": 16,
+     "ms": 1.5,
+     "max": 0.699999988079071,
+     "bytes": 0
+    },
+    "setScroll": {
+     "n": 69,
+     "ms": 0.9000000059604645,
+     "max": 0.10000002384185791,
+     "bytes": 0
+    },
+    "stickSoon": {
+     "n": 71,
+     "ms": 1.4999999403953552,
+     "max": 0.19999998807907104,
+     "bytes": 0
+    },
+    "loadThinking": {
+     "n": 3,
+     "ms": 1,
+     "max": 0.5,
+     "bytes": 0
+    },
+    "paintThink": {
+     "n": 3,
+     "ms": 8.699999988079071,
+     "max": 3.399999976158142,
+     "bytes": 0
+    }
+   },
+   "muts": {
+    "added": 5,
+    "removed": 0,
+    "records": 68,
+    "tgrp": 0,
+    "badge": 0
+   },
+   "timers": {
+    "applyPendingFocus": {
+     "ms": 250,
+     "n": 12,
+     "tot": 0,
+     "max": 0
+    },
+    "humanTick": {
+     "ms": 250,
+     "n": 12,
+     "tot": 0,
+     "max": 0
+    },
+    "(anonymous 400ms)": {
+     "ms": 400,
+     "n": 8,
+     "tot": 1.0999999344348907,
+     "max": 0.3999999761581421
+    },
+    "sweepThinking": {
+     "ms": 500,
+     "n": 6,
+     "tot": 1.5999999940395355,
+     "max": 0.5999999940395355
+    },
+    "tickLiveClocks": {
+     "ms": 1000,
+     "n": 3,
+     "tot": 0.3999999761581421,
+     "max": 0.19999998807907104
+    },
+    "tickApprovals": {
+     "ms": 1000,
+     "n": 3,
+     "tot": 0.30000001192092896,
+     "max": 0.20000001788139343
+    },
+    "(anonymous 1000ms)": {
+     "ms": 1000,
+     "n": 3,
+     "tot": 1.7000000178813934,
+     "max": 0.800000011920929
+    },
+    "tickQuestionClocks": {
+     "ms": 1000,
+     "n": 3,
+     "tot": 0.09999999403953552,
+     "max": 0.09999999403953552
+    },
+    "paintWatchClocks": {
+     "ms": 1000,
+     "n": 3,
+     "tot": 0,
+     "max": 0
+    },
+    "(anonymous 3000ms)": {
+     "ms": 3000,
+     "n": 2,
+     "tot": 1.5999999940395355,
+     "max": 1.5999999940395355
+    }
+   },
+   "frames": {
+    "heartbeat": {
+     "n": 2,
+     "bytes": 1722,
+     "ms": 0.09999999403953552,
+     "max": 0.09999999403953552,
+     "kinds": {}
+    }
+   },
+   "rafGaps": 0,
+   "cmdBoxes": 0,
+   "dots": 0
+  }
+ },
+ "metrics": {
+  "windowSeconds": 24,
+  "perf": {
+   "LayoutCount": 720,
+   "LayoutDuration": 414.1,
+   "RecalcStyleCount": 1505,
+   "RecalcStyleDuration": 295.36,
+   "ScriptDuration": 984.99,
+   "TaskDuration": 4330.22,
+   "Nodes": 8457,
+   "JSEventListeners": 419
+  },
+  "browser": {
+   "fn": {
+    "appendJobLine": {
+     "n": 314,
+     "ms": 622.899999588728,
+     "max": 5.799999982118607,
+     "bytes": 0
+    },
+    "recordJobLine": {
+     "n": 314,
+     "ms": 27.899999886751175,
+     "max": 0.30000001192092896,
+     "bytes": 0
+    },
+    "drawJobLine": {
+     "n": 12458,
+     "ms": 1145.4999996125698,
+     "max": 5.699999988079071,
+     "bytes": 0
+    },
+    "drawRowText": {
+     "n": 11506,
+     "ms": 56.90000006556511,
+     "max": 0.4000000059604645,
+     "bytes": 0
+    },
+    "paintTypedLines": {
+     "n": 585,
+     "ms": 119.59999999403954,
+     "max": 0.7000000178813934,
+     "bytes": 0
+    },
+    "flushTypeStream": {
+     "n": 0,
+     "ms": 0,
+     "max": 0,
+     "bytes": 0
+    },
+    "appendProseLine": {
+     "n": 1233,
+     "ms": 22.30000004172325,
+     "max": 0.20000001788139343,
+     "bytes": 0
+    },
+    "streamBodyHtml": {
+     "n": 16,
+     "ms": 26.400000035762787,
+     "max": 2.5,
+     "bytes": 0
+    },
+    "syncStreamConsole": {
+     "n": 16,
+     "ms": 14.800000041723251,
+     "max": 1.399999976158142,
+     "bytes": 0
+    },
+    "paintStreamConsole": {
+     "n": 16,
+     "ms": 54.900000005960464,
+     "max": 4.9000000059604645,
+     "bytes": 0
+    },
+    "toolGroupHtml": {
+     "n": 314,
+     "ms": 24.4999997317791,
+     "max": 0.9000000059604645,
+     "bytes": 0
+    },
+    "rebuildToolGroup": {
+     "n": 0,
+     "ms": 0,
+     "max": 0,
+     "bytes": 0
+    },
+    "consoleMdHtml": {
+     "n": 165,
+     "ms": 5.600000023841858,
+     "max": 0.7000000178813934,
+     "bytes": 0
+    },
+    "consoleBodyHtml": {
+     "n": 433,
+     "ms": 13.099999964237213,
+     "max": 0.20000001788139343,
+     "bytes": 0
+    },
+    "tickLiveClocks": {
+     "n": 0,
+     "ms": 0,
+     "max": 0,
+     "bytes": 0
+    },
+    "updateJob": {
+     "n": 0,
+     "ms": 0,
+     "max": 0,
+     "bytes": 0
+    },
+    "renderConversation": {
+     "n": 0,
+     "ms": 0,
+     "max": 0,
+     "bytes": 0
+    },
+    "paintToBottom": {
+     "n": 287,
+     "ms": 107.29999953508377,
+     "max": 1.9000000059604645,
+     "bytes": 0
+    },
+    "setScroll": {
+     "n": 706,
+     "ms": 11.39999994635582,
+     "max": 0.10000002384185791,
+     "bytes": 0
+    },
+    "stickSoon": {
+     "n": 12893,
+     "ms": 30.59999993443489,
+     "max": 0.20000001788139343,
+     "bytes": 0
+    },
+    "loadThinking": {
+     "n": 16,
+     "ms": 4.699999958276749,
+     "max": 0.4000000059604645,
+     "bytes": 0
+    },
+    "paintThink": {
+     "n": 16,
+     "ms": 57.09999996423721,
+     "max": 5.0999999940395355,
+     "bytes": 0
+    }
+   },
+   "muts": {
+    "added": 3671,
+    "removed": 2178,
+    "records": 1289,
+    "tgrp": 171,
+    "badge": 171
+   },
+   "byTarget": {
+    "pre.job-out": {
+     "added": 3348,
+     "removed": 1883,
+     "n": 315
+    },
+    "span.jl-live": {
+     "added": 171,
+     "removed": 171,
+     "n": 171
+    },
+    "div.jl": {
+     "added": 151,
+     "removed": 124,
+     "n": 626
+    },
+    "div.md-block": {
+     "added": 1,
+     "removed": 0,
+     "n": 177
+    }
+   },
+   "timers": {
+    "applyPendingFocus": {
+     "ms": 250,
+     "n": 97,
+     "tot": 0.4999999701976776,
+     "max": 0.09999999403953552
+    },
+    "humanTick": {
+     "ms": 250,
+     "n": 97,
+     "tot": 0.5,
+     "max": 0.10000002384185791
+    },
+    "sweepThinking": {
+     "ms": 500,
+     "n": 48,
+     "tot": 12.79999989271164,
+     "max": 3.0999999940395355
+    },
+    "(anonymous 400ms)": {
+     "ms": 400,
+     "n": 60,
+     "tot": 32.00000002980232,
+     "max": 1.9000000059604645
+    },
+    "tickLiveClocks": {
+     "ms": 1000,
+     "n": 24,
+     "tot": 5.400000035762787,
+     "max": 0.4000000059604645
+    },
+    "refreshSubagentRoster": {
+     "ms": 5000,
+     "n": 5,
+     "tot": 1.5,
+     "max": 0.4000000059604645
+    },
+    "tickApprovals": {
+     "ms": 1000,
+     "n": 24,
+     "tot": 1.5000000894069672,
+     "max": 0.20000001788139343
+    },
+    "(anonymous 1000ms)": {
+     "ms": 1000,
+     "n": 24,
+     "tot": 10.000000029802322,
+     "max": 0.699999988079071
+    },
+    "tickQuestionClocks": {
+     "ms": 1000,
+     "n": 24,
+     "tot": 0.4000000059604645,
+     "max": 0.10000002384185791
+    },
+    "(anonymous 5000ms)": {
+     "ms": 5000,
+     "n": 15,
+     "tot": 4.699999988079071,
+     "max": 1.0999999940395355
+    },
+    "paintWatchClocks": {
+     "ms": 1000,
+     "n": 24,
+     "tot": 0.10000002384185791,
+     "max": 0.10000002384185791
+    },
+    "(anonymous 3000ms)": {
+     "ms": 3000,
+     "n": 16,
+     "tot": 8.200000047683716,
+     "max": 1.5999999940395355
+    },
+    "(anonymous 15000ms)": {
+     "ms": 15000,
+     "n": 4,
+     "tot": 0.20000001788139343,
+     "max": 0.20000001788139343
+    },
+    "(anonymous 30000ms)": {
+     "ms": 30000,
+     "n": 2,
+     "tot": 0.4000000059604645,
+     "max": 0.30000001192092896
+    }
+   },
+   "frames": {
+    "jobline": {
+     "n": 628,
+     "bytes": 3806144,
+     "ms": 655.5999995172024,
+     "max": 6,
+     "kinds": {
+      "text": 352,
+      "tool": 34,
+      "tool-out": 242
+     }
+    },
+    "heartbeat": {
+     "n": 8,
+     "bytes": 6896,
+     "ms": 0.30000001192092896,
+     "max": 0.10000002384185791,
+     "kinds": {}
+    }
+   },
+   "rafGaps": {
+    "n": 1,
+    "p50": 83,
+    "p95": 83,
+    "max": 83,
+    "over50": 1,
+    "over100": 0
+   },
+   "longs": {
+    "n": 0,
+    "total": 0,
+    "max": 0,
+    "top": []
+   },
+   "deltaToFrame": {
+    "n": 626,
+    "p50": 7.2,
+    "p90": 13.3,
+    "p99": 16.6,
+    "max": 19.3,
+    "mean": 7.77
+   },
+   "handler": {
+    "n": 628,
+    "mean": 1.04,
+    "max": 6
+   },
+   "kinds": {
+    "text": 352,
+    "tool": 34,
+    "tool-out": 242
+   },
+   "shape": {
+    "pieces": 267,
+    "rows": 37,
+    "groups": 46,
+    "scrollH": 11698,
+    "clientH": 318
+   },
+   "visibility": "visible"
+  },
+  "network": {
+   "thinkingPolls": 22,
+   "statePolls": 0,
+   "total": 107
+  },
+  "profileTop": [
+   {
+    "fn": "(idle)",
+    "where": "",
+    "ms": 20115.22,
+    "samples": 34089
+   },
+   {
+    "fn": "(program)",
+    "where": "",
+    "ms": 2524.74,
+    "samples": 4063
+   },
+   {
+    "fn": "(anonymous)",
+    "where": "htt<path on the measuring host>",
+    "ms": 513.04,
+    "samples": 864
+   },
+   {
+    "fn": "querySelector",
+    "where": "",
+    "ms": 410.98,
+    "samples": 692
+   },
+   {
+    "fn": "paintToBottom",
+    "where": "htt<path on the measuring host>",
+    "ms": 86.88,
+    "samples": 146
+   },
+   {
+    "fn": "drawJobLine",
+    "where": "htt<path on the measuring host>",
+    "ms": 40.09,
+    "samples": 69
+   },
+   {
+    "fn": "(garbage collector)",
+    "where": "",
+    "ms": 32.2,
+    "samples": 42
+   },
+   {
+    "fn": "querySelectorAll",
+    "where": "",
+    "ms": 28.3,
+    "samples": 41
+   },
+   {
+    "fn": "stickConsole",
+    "where": "htt<path on the measuring host>",
+    "ms": 26.01,
+    "samples": 43
+   },
+   {
+    "fn": "wrapped",
+    "where": "",
+    "ms": 20.03,
+    "samples": 33
+   },
+   {
+    "fn": "closest",
+    "where": "",
+    "ms": 13.95,
+    "samples": 25
+   },
+   {
+    "fn": "feed",
+    "where": "htt<path on the measuring host>",
+    "ms": 13.82,
+    "samples": 24
+   },
+   {
+    "fn": "now",
+    "where": "",
+    "ms": 13.78,
+    "samples": 23
+   },
+   {
+    "fn": "escape",
+    "where": "",
+    "ms": 13.16,
+    "samples": 22
+   },
+   {
+    "fn": "syncStreamConsole",
+    "where": "htt<path on the measuring host>",
+    "ms": 13.03,
+    "samples": 20
+   },
+   {
+    "fn": "appendData",
+    "where": "",
+    "ms": 12.8,
+    "samples": 21
+   },
+   {
+    "fn": "requestAnimationFrame",
+    "where": "",
+    "ms": 12.42,
+    "samples": 21
+   },
+   {
+    "fn": "el.addEventListener.passive",
+    "where": "htt<path on the measuring host>",
+    "ms": 10.43,
+    "samples": 17
+   },
+   {
+    "fn": "placedNodes",
+    "where": "htt<path on the measuring host>",
+    "ms": 10.29,
+    "samples": 17
+   },
+   {
+    "fn": "wrapped",
+    "where": "",
+    "ms": 10.11,
+    "samples": 16
+   },
+   {
+    "fn": "startMdBlock",
+    "where": "htt<path on the measuring host>",
+    "ms": 9.03,
+    "samples": 13
+   },
+   {
+    "fn": "matches",
+    "where": "",
+    "ms": 8.34,
+    "samples": 14
+   },
+   {
+    "fn": "fetch",
+    "where": "",
+    "ms": 7.79,
+    "samples": 14
+   },
+   {
+    "fn": "appendChild",
+    "where": "",
+    "ms": 6.84,
+    "samples": 12
+   },
+   {
+    "fn": "streamOn",
+    "where": "htt<path on the measuring host>",
+    "ms": 6.13,
+    "samples": 11
+   },
+   {
+    "fn": "now",
+    "where": "",
+    "ms": 6.05,
+    "samples": 10
+   }
+  ],
+  "events": 25
+ },
+ "badge": {
+  "found": true,
+  "frames": 721,
+  "nodes": 2,
+  "detaches": 0,
+  "texts": [
+   {
+    "t": 1292,
+    "from": " · running 0s",
+    "to": " · running 1s"
+   },
+   {
+    "t": 2293,
+    "from": " · running 1s",
+    "to": " · running 2s"
+   },
+   {
+    "t": 3308,
+    "from": " · running 2s",
+    "to": " · running 3s"
+   },
+   {
+    "t": 4291,
+    "from": " · running 3s",
+    "to": " · running 4s"
+   },
+   {
+    "t": 5291,
+    "from": " · running 4s",
+    "to": " · running 5s"
+   },
+   {
+    "t": 6291,
+    "from": " · running 5s",
+    "to": " · running 6s"
+   },
+   {
+    "t": 7307,
+    "from": " · running 6s",
+    "to": " · running 7s"
+   },
+   {
+    "t": 8307,
+    "from": " · running 7s",
+    "to": " · running 8s"
+   },
+   {
+    "t": 9289,
+    "from": " · running 8s",
+    "to": " · running 9s"
+   },
+   {
+    "t": 10292,
+    "from": " · running 9s",
+    "to": " · running 10s"
+   },
+   {
+    "t": 10824,
+    "from": " · running 10s",
+    "to": " · running 12s"
+   },
+   {
+    "t": 11307,
+    "from": " · running 12s",
+    "to": " · running 13s"
+   }
+  ],
+  "widthChanges": 1,
+  "truncChanges": 0,
+  "widthMin": 82.2,
+  "widthMax": 88.53,
+  "role": "tgrp-state + jl-live",
+  "froms": [
+   "1794636329317",
+   "1794636327466"
+  ],
+  "trace": [
+   {
+    "t": 9,
+    "text": " · running 0s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 74,
+    "text": " · running 0s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 140,
+    "text": " · running 0s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 208,
+    "text": " · running 0s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 274,
+    "text": " · running 0s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 340,
+    "text": " · running 0s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 407,
+    "text": " · running 0s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 474,
+    "text": " · running 0s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 540,
+    "text": " · running 0s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 607,
+    "text": " · running 0s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 673,
+    "text": " · running 0s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 741,
+    "text": " · running 0s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 807,
+    "text": " · running 0s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 875,
+    "text": " · running 0s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 940,
+    "text": " · running 0s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 1008,
+    "text": " · running 0s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 1075,
+    "text": " · running 0s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 1142,
+    "text": " · running 0s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 1208,
+    "text": " · running 0s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 1274,
+    "text": " · running 0s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 1340,
+    "text": " · running 1s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 1408,
+    "text": " · running 1s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 1474,
+    "text": " · running 1s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 1540,
+    "text": " · running 1s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 1607,
+    "text": " · running 1s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 1673,
+    "text": " · running 1s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 1741,
+    "text": " · running 1s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 1807,
+    "text": " · running 1s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 1874,
+    "text": " · running 1s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 1940,
+    "text": " · running 1s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 2007,
+    "text": " · running 1s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 2074,
+    "text": " · running 1s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 2141,
+    "text": " · running 1s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 2207,
+    "text": " · running 1s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 2273,
+    "text": " · running 1s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 2341,
+    "text": " · running 2s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 2407,
+    "text": " · running 2s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 2475,
+    "text": " · running 2s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 2540,
+    "text": " · running 2s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 2607,
+    "text": " · running 2s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 2674,
+    "text": " · running 2s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 2740,
+    "text": " · running 2s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 2807,
+    "text": " · running 2s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 2874,
+    "text": " · running 2s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 2940,
+    "text": " · running 2s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 3008,
+    "text": " · running 2s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 3075,
+    "text": " · running 2s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 3141,
+    "text": " · running 2s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 3207,
+    "text": " · running 2s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 3274,
+    "text": " · running 2s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 3341,
+    "text": " · running 3s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 3407,
+    "text": " · running 3s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 3474,
+    "text": " · running 3s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 3541,
+    "text": " · running 3s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 3608,
+    "text": " · running 3s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 3674,
+    "text": " · running 3s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 3740,
+    "text": " · running 3s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 3807,
+    "text": " · running 3s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 3874,
+    "text": " · running 3s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 3941,
+    "text": " · running 3s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 4007,
+    "text": " · running 3s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 4074,
+    "text": " · running 3s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 4140,
+    "text": " · running 3s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 4207,
+    "text": " · running 3s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 4274,
+    "text": " · running 3s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 4340,
+    "text": " · running 4s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 4407,
+    "text": " · running 4s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 4473,
+    "text": " · running 4s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 4541,
+    "text": " · running 4s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 4607,
+    "text": " · running 4s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 4673,
+    "text": " · running 4s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 4740,
+    "text": " · running 4s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 4807,
+    "text": " · running 4s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 4874,
+    "text": " · running 4s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 4941,
+    "text": " · running 4s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 5007,
+    "text": " · running 4s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 5075,
+    "text": " · running 4s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 5140,
+    "text": " · running 4s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 5207,
+    "text": " · running 4s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 5273,
+    "text": " · running 4s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 5341,
+    "text": " · running 5s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 5408,
+    "text": " · running 5s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 5474,
+    "text": " · running 5s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 5540,
+    "text": " · running 5s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 5607,
+    "text": " · running 5s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 5673,
+    "text": " · running 5s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 5741,
+    "text": " · running 5s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 5807,
+    "text": " · running 5s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 5873,
+    "text": " · running 5s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 5940,
+    "text": " · running 5s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 6008,
+    "text": " · running 5s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 6074,
+    "text": " · running 5s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 6141,
+    "text": " · running 5s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 6207,
+    "text": " · running 5s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 6275,
+    "text": " · running 5s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 6340,
+    "text": " · running 6s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 6407,
+    "text": " · running 6s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 6474,
+    "text": " · running 6s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 6540,
+    "text": " · running 6s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 6607,
+    "text": " · running 6s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 6674,
+    "text": " · running 6s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 6740,
+    "text": " · running 6s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 6807,
+    "text": " · running 6s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 6873,
+    "text": " · running 6s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 6941,
+    "text": " · running 6s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 7007,
+    "text": " · running 6s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 7074,
+    "text": " · running 6s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 7140,
+    "text": " · running 6s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 7207,
+    "text": " · running 6s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 7274,
+    "text": " · running 6s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 7341,
+    "text": " · running 7s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 7406,
+    "text": " · running 7s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 7473,
+    "text": " · running 7s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 7540,
+    "text": " · running 7s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 7607,
+    "text": " · running 7s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 7674,
+    "text": " · running 7s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 7740,
+    "text": " · running 7s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 7806,
+    "text": " · running 7s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 7873,
+    "text": " · running 7s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 7941,
+    "text": " · running 7s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 8007,
+    "text": " · running 7s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 8075,
+    "text": " · running 7s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 8140,
+    "text": " · running 7s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 8206,
+    "text": " · running 7s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 8274,
+    "text": " · running 7s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 8340,
+    "text": " · running 8s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 8407,
+    "text": " · running 8s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 8475,
+    "text": " · running 8s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 8540,
+    "text": " · running 8s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 8606,
+    "text": " · running 8s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 8674,
+    "text": " · running 8s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 8740,
+    "text": " · running 8s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 8807,
+    "text": " · running 8s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 8873,
+    "text": " · running 8s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 8940,
+    "text": " · running 8s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 9007,
+    "text": " · running 8s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 9075,
+    "text": " · running 8s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 9140,
+    "text": " · running 8s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 9206,
+    "text": " · running 8s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 9274,
+    "text": " · running 8s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 9340,
+    "text": " · running 9s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 9407,
+    "text": " · running 9s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 9473,
+    "text": " · running 9s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 9541,
+    "text": " · running 9s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 9607,
+    "text": " · running 9s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 9673,
+    "text": " · running 9s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 9740,
+    "text": " · running 9s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 9807,
+    "text": " · running 9s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 9873,
+    "text": " · running 9s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 9940,
+    "text": " · running 9s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 10007,
+    "text": " · running 9s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 10073,
+    "text": " · running 9s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 10140,
+    "text": " · running 9s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 10207,
+    "text": " · running 9s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 10274,
+    "text": " · running 9s",
+    "cw": 82.2,
+    "cx": 1114.8,
+    "rw": 1199,
+    "tw": 1029.2,
+    "cut": false
+   },
+   {
+    "t": 10340,
+    "text": " · running 10s",
+    "cw": 88.53,
+    "cx": 1108.47,
+    "rw": 1199,
+    "tw": 1022.88,
+    "cut": false
+   },
+   {
+    "t": 10407,
+    "text": " · running 10s",
+    "cw": 88.53,
+    "cx": 1108.47,
+    "rw": 1199,
+    "tw": 1022.88,
+    "cut": false
+   },
+   {
+    "t": 10473,
+    "text": " · running 10s",
+    "cw": 88.53,
+    "cx": 1108.47,
+    "rw": 1199,
+    "tw": 1022.88,
+    "cut": false
+   },
+   {
+    "t": 10540,
+    "text": " · running 10s",
+    "cw": 88.53,
+    "cx": 1108.47,
+    "rw": 1199,
+    "tw": 1022.88,
+    "cut": false
+   },
+   {
+    "t": 10607,
+    "text": " · running 10s",
+    "cw": 88.53,
+    "cx": 1108.47,
+    "rw": 1199,
+    "tw": 1022.88,
+    "cut": false
+   }
+  ]
+ },
+ "badgeFinal": {
+  "text": "42.70s",
+  "stateW": 37.94,
+  "stateX": 1159.06,
+  "rowW": 1199,
+  "targetW": 1073.47,
+  "targetCut": false,
+  "live": 0
+ },
+ "foldProbe": {
+  "missing": true
+ },
+ "badgeWindow": {
+  "tickLiveClocks": {
+   "n": 0,
+   "ms": 0,
+   "max": 0,
+   "bytes": 0
+  },
+  "muts": {
+   "added": 368,
+   "removed": 285,
+   "records": 462,
+   "tgrp": 167,
+   "badge": 167
+  },
+  "clocks": 13
+ }
+}</code></pre></details>
+<details><summary>Full record: controlled pair (JSON)</summary><pre><code>{
+ "new": {
+  "label": "new-sm",
+  "tree": "<path on the measuring host>",
+  "viewport": "1440x900",
+  "startedAt": "2026-11-14T06:05:53.432Z",
+  "gwPort": 53874,
+  "panelPort": 53875,
+  "panelPid": 21052,
+  "pagePid": null,
+  "seconds": 15,
+  "browserPid": 56956,
+  "jobId": "3892176d",
+  "thread": "lag-new-sm-mwg05dl9",
+  "missingProbes": [],
+  "preludeShape": {
+   "pieces": 31,
+   "rows": 10,
+   "groups": 10,
+   "lines": 193,
+   "scrollH": 1191,
+   "clientH": 318,
+   "bars": true,
+   "visible": "visible"
+  },
+  "silence": {
+   "seconds": 3,
+   "perf": {
+    "LayoutCount": 78,
+    "LayoutDuration": 35.47,
+    "RecalcStyleCount": 194,
+    "RecalcStyleDuration": 24.6,
+    "ScriptDuration": 42.4,
+    "TaskDuration": 268.97,
+    "Nodes": 13920
+   },
+   "browser": {
+    "fn": {
+     "appendJobLine": {
+      "n": 0,
+      "ms": 0,
+      "max": 0,
+      "bytes": 0
+     },
+     "recordJobLine": {
+      "n": 0,
+      "ms": 0,
+      "max": 0,
+      "bytes": 0
+     },
+     "drawJobLine": {
+      "n": 0,
+      "ms": 0,
+      "max": 0,
+      "bytes": 0
+     },
+     "drawRowText": {
+      "n": 66,
+      "ms": 5.900000184774399,
+      "max": 0.29999998211860657,
+      "bytes": 0
+     },
+     "paintTypedLines": {
+      "n": 66,
+      "ms": 13.60000017285347,
+      "max": 0.5,
+      "bytes": 0
+     },
+     "flushTypeStream": {
+      "n": 0,
+      "ms": 0,
+      "max": 0,
+      "bytes": 0
+     },
+     "appendProseLine": {
+      "n": 0,
+      "ms": 0,
+      "max": 0,
+      "bytes": 0
+     },
+     "streamBodyHtml": {
+      "n": 3,
+      "ms": 5.300000011920929,
+      "max": 2.0999999940395355,
+      "bytes": 0
+     },
+     "syncStreamConsole": {
+      "n": 3,
+      "ms": 3.599999964237213,
+      "max": 1.2999999821186066,
+      "bytes": 0
+     },
+     "paintStreamConsole": {
+      "n": 3,
+      "ms": 18.30000004172325,
+      "max": 7.100000023841858,
+      "bytes": 0
+     },
+     "toolGroupHtml": {
+      "n": 30,
+      "ms": 2.899999976158142,
+      "max": 0.29999998211860657,
+      "bytes": 0
+     },
+     "rebuildToolGroup": {
+      "n": 0,
+      "ms": 0,
+      "max": 0,
+      "bytes": 0
+     },
+     "consoleMdHtml": {
+      "n": 30,
+      "ms": 1.9000000059604645,
+      "max": 0.5,
+      "bytes": 0
+     },
+     "consoleBodyHtml": {
+      "n": 30,
+      "ms": 1.7999999523162842,
+      "max": 0.10000002384185791,
+      "bytes": 0
+     },
+     "tickLiveClocks": {
+      "n": 0,
+      "ms": 0,
+      "max": 0,
+      "bytes": 0
+     },
+     "paintCommandFoldMark": {
+      "n": 7,
+      "ms": 4.699999988079071,
+      "max": 1.2000000178813934,
+      "bytes": 0
+     },
+     "clearCommandFoldMark": {
+      "n": 7,
+      "ms": 0.4000000059604645,
+      "max": 0.19999998807907104,
+      "bytes": 0
+     },
+     "scheduleCommandFoldMark": {
+      "n": 126,
+      "ms": 0.30000004172325134,
+      "max": 0.10000002384185791,
+      "bytes": 0
+     },
+     "cmdCutOffset": {
+      "n": 12,
+      "ms": 0.699999988079071,
+      "max": 0.29999998211860657,
+      "bytes": 0
+     },
+     "updateJob": {
+      "n": 0,
+      "ms": 0,
+      "max": 0,
+      "bytes": 0
+     },
+     "renderConversation": {
+      "n": 0,
+      "ms": 0,
+      "max": 0,
+      "bytes": 0
+     },
+     "paintToBottom": {
+      "n": 17,
+      "ms": 11.300000011920929,
+      "max": 3.9000000059604645,
+      "bytes": 0
+     },
+     "setScroll": {
+      "n": 68,
+      "ms": 0.800000011920929,
+      "max": 0.10000002384185791,
+      "bytes": 0
+     },
+     "stickSoon": {
+      "n": 69,
+      "ms": 1.4999999701976776,
+      "max": 0.10000002384185791,
+      "bytes": 0
+     },
+     "loadThinking": {
+      "n": 3,
+      "ms": 1.199999988079071,
+      "max": 0.4000000059604645,
+      "bytes": 0
+     },
+     "paintThink": {
+      "n": 3,
+      "ms": 18.600000023841858,
+      "max": 7.200000017881393,
+      "bytes": 0
+     }
+    },
+    "muts": {
+     "added": 1284,
+     "removed": 1268,
+     "records": 312,
+     "tgrp": 0,
+     "badge": 0
+    },
+    "timers": {
+     "sweepThinking": {
+      "ms": 500,
+      "n": 6,
+      "tot": 1.699999988079071,
+      "max": 0.5
+     },
+     "applyPendingFocus": {
+      "ms": 250,
+      "n": 12,
+      "tot": 0,
+      "max": 0
+     },
+     "humanTick": {
+      "ms": 250,
+      "n": 12,
+      "tot": 0,
+      "max": 0
+     },
+     "(anonymous 400ms)": {
+      "ms": 400,
+      "n": 7,
+      "tot": 0.800000011920929,
+      "max": 0.5
+     },
+     "tickLiveClocks": {
+      "ms": 1000,
+      "n": 3,
+      "tot": 0.30000001192092896,
+      "max": 0.20000001788139343
+     },
+     "refreshSubagentRoster": {
+      "ms": 5000,
+      "n": 1,
+      "tot": 0.3999999761581421,
+      "max": 0.3999999761581421
+     },
+     "tickApprovals": {
+      "ms": 1000,
+      "n": 3,
+      "tot": 0.29999998211860657,
+      "max": 0.09999999403953552
+     },
+     "(anonymous 1000ms)": {
+      "ms": 1000,
+      "n": 3,
+      "tot": 1.9000000059604645,
+      "max": 0.800000011920929
+     },
+     "tickQuestionClocks": {
+      "ms": 1000,
+      "n": 3,
+      "tot": 0,
+      "max": 0
+     },
+     "(anonymous 5000ms)": {
+      "ms": 5000,
+      "n": 3,
+      "tot": 1.800000011920929,
+      "max": 1.4000000059604645
+     },
+     "paintWatchClocks": {
+      "ms": 1000,
+      "n": 3,
+      "tot": 0,
+      "max": 0
+     },
+     "(anonymous 3000ms)": {
+      "ms": 3000,
+      "n": 2,
+      "tot": 0.5999999940395355,
+      "max": 0.5999999940395355
+     }
+    },
+    "frames": {},
+    "rafGaps": 0,
+    "cmdBoxes": 1,
+    "dots": 1
+   }
+  },
+  "metrics": {
+   "windowSeconds": 15,
+   "perf": {
+    "LayoutCount": 450,
+    "LayoutDuration": 269.41,
+    "RecalcStyleCount": 939,
+    "RecalcStyleDuration": 205.44,
+    "ScriptDuration": 621.18,
+    "TaskDuration": 2982.74,
+    "Nodes": 7439,
+    "JSEventListeners": 425
+   },
+   "browser": {
+    "fn": {
+     "appendJobLine": {
+      "n": 200,
+      "ms": 352.00000032782555,
+      "max": 4.5,
+      "bytes": 0
+     },
+     "recordJobLine": {
+      "n": 200,
+      "ms": 18.5000002682209,
+      "max": 0.30000001192092896,
+      "bytes": 0
+     },
+     "drawJobLine": {
+      "n": 7583,
+      "ms": 633.0999998450279,
+      "max": 4.299999982118607,
+      "bytes": 0
+     },
+     "drawRowText": {
+      "n": 7008,
+      "ms": 42.10000005364418,
+      "max": 0.5,
+      "bytes": 0
+     },
+     "paintTypedLines": {
+      "n": 365,
+      "ms": 77.80000039935112,
+      "max": 0.6000000238418579,
+      "bytes": 0
+     },
+     "flushTypeStream": {
+      "n": 0,
+      "ms": 0,
+      "max": 0,
+      "bytes": 0
+     },
+     "appendProseLine": {
+      "n": 750,
+      "ms": 16.400000125169754,
+      "max": 0.5,
+      "bytes": 0
+     },
+     "streamBodyHtml": {
+      "n": 10,
+      "ms": 25.400000005960464,
+      "max": 5.5,
+      "bytes": 0
+     },
+     "syncStreamConsole": {
+      "n": 10,
+      "ms": 10.999999940395355,
+      "max": 2.199999988079071,
+      "bytes": 0
+     },
+     "paintStreamConsole": {
+      "n": 10,
+      "ms": 46.00000002980232,
+      "max": 7.5999999940395355,
+      "bytes": 0
+     },
+     "toolGroupHtml": {
+      "n": 193,
+      "ms": 22.599999964237213,
+      "max": 4.0999999940395355,
+      "bytes": 0
+     },
+     "rebuildToolGroup": {
+      "n": 0,
+      "ms": 0,
+      "max": 0,
+      "bytes": 0
+     },
+     "consoleMdHtml": {
+      "n": 99,
+      "ms": 5.5,
+      "max": 1.0999999940395355,
+      "bytes": 0
+     },
+     "consoleBodyHtml": {
+      "n": 221,
+      "ms": 14.20000010728836,
+      "max": 3.5999999940395355,
+      "bytes": 0
+     },
+     "tickLiveClocks": {
+      "n": 0,
+      "ms": 0,
+      "max": 0,
+      "bytes": 0
+     },
+     "paintCommandFoldMark": {
+      "n": 0,
+      "ms": 0,
+      "max": 0,
+      "bytes": 0
+     },
+     "clearCommandFoldMark": {
+      "n": 0,
+      "ms": 0,
+      "max": 0,
+      "bytes": 0
+     },
+     "scheduleCommandFoldMark": {
+      "n": 250,
+      "ms": 0.7000000774860382,
+      "max": 0.10000002384185791,
+      "bytes": 0
+     },
+     "cmdCutOffset": {
+      "n": 0,
+      "ms": 0,
+      "max": 0,
+      "bytes": 0
+     },
+     "updateJob": {
+      "n": 0,
+      "ms": 0,
+      "max": 0,
+      "bytes": 0
+     },
+     "renderConversation": {
+      "n": 0,
+      "ms": 0,
+      "max": 0,
+      "bytes": 0
+     },
+     "paintToBottom": {
+      "n": 179,
+      "ms": 75.80000016093254,
+      "max": 4.5,
+      "bytes": 0
+     },
+     "setScroll": {
+      "n": 435,
+      "ms": 10.800000131130219,
+      "max": 0.19999998807907104,
+      "bytes": 0
+     },
+     "stickSoon": {
+      "n": 7861,
+      "ms": 20.49999961256981,
+      "max": 0.19999998807907104,
+      "bytes": 0
+     },
+     "loadThinking": {
+      "n": 10,
+      "ms": 3.4999999403953552,
+      "max": 0.4000000059604645,
+      "bytes": 0
+     },
+     "paintThink": {
+      "n": 10,
+      "ms": 47.40000003576279,
+      "max": 7.800000011920929,
+      "bytes": 0
+     }
+    },
+    "muts": {
+     "added": 2607,
+     "removed": 1662,
+     "records": 784,
+     "tgrp": 69,
+     "badge": 69
+    },
+    "byTarget": {
+     "pre.job-out": {
+      "added": 2384,
+      "removed": 1463,
+      "n": 201
+     },
+     "div.jl": {
+      "added": 153,
+      "removed": 130,
+      "n": 406
+     },
+     "span.jl-live": {
+      "added": 69,
+      "removed": 69,
+      "n": 69
+     },
+     "div.md-block": {
+      "added": 1,
+      "removed": 0,
+      "n": 108
+     }
+    },
+    "timers": {
+     "sweepThinking": {
+      "ms": 500,
+      "n": 31,
+      "tot": 7.0999999940395355,
+      "max": 0.7000000178813934
+     },
+     "applyPendingFocus": {
+      "ms": 250,
+      "n": 61,
+      "tot": 0.09999999403953552,
+      "max": 0.09999999403953552
+     },
+     "humanTick": {
+      "ms": 250,
+      "n": 61,
+      "tot": 0.10000002384185791,
+      "max": 0.10000002384185791
+     },
+     "(anonymous 400ms)": {
+      "ms": 400,
+      "n": 38,
+      "tot": 14.699999988079071,
+      "max": 1.800000011920929
+     },
+     "tickLiveClocks": {
+      "ms": 1000,
+      "n": 15,
+      "tot": 3.7999999821186066,
+      "max": 0.4000000059604645
+     },
+     "tickApprovals": {
+      "ms": 1000,
+      "n": 15,
+      "tot": 1.5999999642372131,
+      "max": 0.20000001788139343
+     },
+     "(anonymous 1000ms)": {
+      "ms": 1000,
+      "n": 15,
+      "tot": 7.699999988079071,
+      "max": 0.800000011920929
+     },
+     "tickQuestionClocks": {
+      "ms": 1000,
+      "n": 15,
+      "tot": 0.30000001192092896,
+      "max": 0.10000002384185791
+     },
+     "paintWatchClocks": {
+      "ms": 1000,
+      "n": 15,
+      "tot": 0,
+      "max": 0
+     },
+     "(anonymous 3000ms)": {
+      "ms": 3000,
+      "n": 10,
+      "tot": 5.199999988079071,
+      "max": 1.5
+     },
+     "refreshSubagentRoster": {
+      "ms": 5000,
+      "n": 3,
+      "tot": 2.4000000059604645,
+      "max": 1.5
+     },
+     "(anonymous 5000ms)": {
+      "ms": 5000,
+      "n": 9,
+      "tot": 3.100000023841858,
+      "max": 0.5999999940395355
+     },
+     "(anonymous 15000ms)": {
+      "ms": 15000,
+      "n": 2,
+      "tot": 0.19999998807907104,
+      "max": 0.09999999403953552
+     }
+    },
+    "frames": {
+     "jobline": {
+      "n": 400,
+      "bytes": 1897444,
+      "ms": 382.5000001192093,
+      "max": 5.800000011920929,
+      "kinds": {
+       "text": 214,
+       "tool": 24,
+       "tool-out": 162
+      }
+     },
+     "heartbeat": {
+      "n": 6,
+      "bytes": 5152,
+      "ms": 0,
+      "max": 0,
+      "kinds": {}
+     }
+    },
+    "rafGaps": {
+     "n": 1,
+     "p50": 67,
+     "p95": 67,
+     "max": 67,
+     "over50": 1,
+     "over100": 0
+    },
+    "longs": {
+     "n": 0,
+     "total": 0,
+     "max": 0,
+     "top": []
+    },
+    "deltaToFrame": {
+     "n": 400,
+     "p50": 6.1,
+     "p90": 13.5,
+     "p99": 16.4,
+     "max": 17,
+     "mean": 7.09
+    },
+    "handler": {
+     "n": 400,
+     "mean": 0.96,
+     "max": 5.8
+    },
+    "kinds": {
+     "text": 214,
+     "tool": 24,
+     "tool-out": 162
+    },
+    "shape": {
+     "pieces": 163,
+     "rows": 22,
+     "groups": 26,
+     "scrollH": 7213,
+     "clientH": 318
+    },
+    "visibility": "visible"
+   },
+   "network": {
+    "thinkingPolls": 15,
+    "statePolls": 0,
+    "total": 89
+   },
+   "profileTop": [
+    {
+     "fn": "(idle)",
+     "where": "",
+     "ms": 12345.84,
+     "samples": 21355
+    },
+    {
+     "fn": "(program)",
+     "where": "",
+     "ms": 1802.31,
+     "samples": 2962
+    },
+    {
+     "fn": "(anonymous)",
+     "where": "htt<path on the measuring host>",
+     "ms": 351.13,
+     "samples": 614
+    },
+    {
+     "fn": "querySelector",
+     "where": "",
+     "ms": 209.75,
+     "samples": 360
+    },
+    {
+     "fn": "paintToBottom",
+     "where": "htt<path on the measuring host>",
+     "ms": 70.97,
+     "samples": 120
+    },
+    {
+     "fn": "drawJobLine",
+     "where": "htt<path on the measuring host>",
+     "ms": 27.67,
+     "samples": 47
+    },
+    {
+     "fn": "now",
+     "where": "",
+     "ms": 20.15,
+     "samples": 35
+    },
+    {
+     "fn": "(garbage collector)",
+     "where": "",
+     "ms": 19.79,
+     "samples": 35
+    },
+    {
+     "fn": "querySelectorAll",
+     "where": "",
+     "ms": 15.34,
+     "samples": 26
+    },
+    {
+     "fn": "wrapped",
+     "where": "",
+     "ms": 11.34,
+     "samples": 20
+    },
+    {
+     "fn": "syncStreamConsole",
+     "where": "htt<path on the measuring host>",
+     "ms": 11.01,
+     "samples": 19
+    },
+    {
+     "fn": "closest",
+     "where": "",
+     "ms": 10.19,
+     "samples": 18
+    },
+    {
+     "fn": "stickConsole",
+     "where": "htt<path on the measuring host>",
+     "ms": 9.88,
+     "samples": 16
+    },
+    {
+     "fn": "feed",
+     "where": "htt<path on the measuring host>",
+     "ms": 9.34,
+     "samples": 15
+    },
+    {
+     "fn": "setScroll",
+     "where": "htt<path on the measuring host>",
+     "ms": 9.19,
+     "samples": 16
+    },
+    {
+     "fn": "requestAnimationFrame",
+     "where": "",
+     "ms": 8.21,
+     "samples": 14
+    },
+    {
+     "fn": "escape",
+     "where": "",
+     "ms": 7.34,
+     "samples": 13
+    },
+    {
+     "fn": "now",
+     "where": "",
+     "ms": 7.21,
+     "samples": 13
+    },
+    {
+     "fn": "placedNodes",
+     "where": "htt<path on the measuring host>",
+     "ms": 6.18,
+     "samples": 11
+    },
+    {
+     "fn": "getAnimations",
+     "where": "",
+     "ms": 6.13,
+     "samples": 11
+    },
+    {
+     "fn": "startMdBlock",
+     "where": "htt<path on the measuring host>",
+     "ms": 5.06,
+     "samples": 9
+    },
+    {
+     "fn": "wrapped",
+     "where": "",
+     "ms": 5,
+     "samples": 8
+    },
+    {
+     "fn": "(anonymous)",
+     "where": "htt<path on the measuring host>",
+     "ms": 4.95,
+     "samples": 7
+    },
+    {
+     "fn": "(anonymous)",
+     "where": "",
+     "ms": 4.92,
+     "samples": 8
+    },
+    {
+     "fn": "appendData",
+     "where": "",
+     "ms": 4.55,
+     "samples": 8
+    },
+    {
+     "fn": "streamOn",
+     "where": "htt<path on the measuring host>",
+     "ms": 4.44,
+     "samples": 8
+    }
+   ],
+   "events": 15
+  },
+  "badge": {
+   "found": true,
+   "frames": 361,
+   "nodes": 2,
+   "detaches": 0,
+   "texts": [
+    {
+     "t": 1112,
+     "from": " · running 0s",
+     "to": " · running 1s"
+    },
+    {
+     "t": 2114,
+     "from": " · running 1s",
+     "to": " · running 2s"
+    },
+    {
+     "t": 3113,
+     "from": " · running 2s",
+     "to": " · running 3s"
+    },
+    {
+     "t": 4113,
+     "from": " · running 3s",
+     "to": " · running 4s"
+    },
+    {
+     "t": 4813,
+     "from": " · running 4s",
+     "to": " · running 7s"
+    },
+    {
+     "t": 5112,
+     "from": " · running 7s",
+     "to": " · running 8s"
+    }
+   ],
+   "widthChanges": 0,
+   "truncChanges": 0,
+   "widthMin": 82.2,
+   "widthMax": 82.2,
+   "role": "tgrp-state + jl-live",
+   "froms": [
+    "1794636377098",
+    "1794636374259"
+   ],
+   "trace": [
+    {
+     "t": 13,
+     "text": " · running 0s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 79,
+     "text": " · running 0s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 147,
+     "text": " · running 0s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 212,
+     "text": " · running 0s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 279,
+     "text": " · running 0s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 346,
+     "text": " · running 0s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 412,
+     "text": " · running 0s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 479,
+     "text": " · running 0s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 545,
+     "text": " · running 0s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 613,
+     "text": " · running 0s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 678,
+     "text": " · running 0s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 746,
+     "text": " · running 0s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 813,
+     "text": " · running 0s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 880,
+     "text": " · running 0s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 947,
+     "text": " · running 0s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 1012,
+     "text": " · running 0s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 1079,
+     "text": " · running 0s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 1145,
+     "text": " · running 1s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 1212,
+     "text": " · running 1s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 1279,
+     "text": " · running 1s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 1346,
+     "text": " · running 1s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 1413,
+     "text": " · running 1s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 1479,
+     "text": " · running 1s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 1546,
+     "text": " · running 1s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 1613,
+     "text": " · running 1s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 1679,
+     "text": " · running 1s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 1745,
+     "text": " · running 1s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 1812,
+     "text": " · running 1s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 1879,
+     "text": " · running 1s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 1946,
+     "text": " · running 1s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 2012,
+     "text": " · running 1s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 2079,
+     "text": " · running 1s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 2145,
+     "text": " · running 2s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 2213,
+     "text": " · running 2s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 2279,
+     "text": " · running 2s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 2345,
+     "text": " · running 2s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 2412,
+     "text": " · running 2s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 2479,
+     "text": " · running 2s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 2546,
+     "text": " · running 2s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 2612,
+     "text": " · running 2s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 2680,
+     "text": " · running 2s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 2745,
+     "text": " · running 2s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 2813,
+     "text": " · running 2s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 2879,
+     "text": " · running 2s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 2945,
+     "text": " · running 2s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 3012,
+     "text": " · running 2s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 3080,
+     "text": " · running 2s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 3146,
+     "text": " · running 3s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 3212,
+     "text": " · running 3s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 3280,
+     "text": " · running 3s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 3346,
+     "text": " · running 3s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 3412,
+     "text": " · running 3s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 3479,
+     "text": " · running 3s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 3546,
+     "text": " · running 3s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 3613,
+     "text": " · running 3s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 3679,
+     "text": " · running 3s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 3745,
+     "text": " · running 3s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 3812,
+     "text": " · running 3s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 3880,
+     "text": " · running 3s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 3946,
+     "text": " · running 3s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 4012,
+     "text": " · running 3s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 4079,
+     "text": " · running 3s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 4146,
+     "text": " · running 4s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 4212,
+     "text": " · running 4s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 4279,
+     "text": " · running 4s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 4346,
+     "text": " · running 4s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 4413,
+     "text": " · running 4s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 4479,
+     "text": " · running 4s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 4546,
+     "text": " · running 4s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 4612,
+     "text": " · running 4s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 4679,
+     "text": " · running 4s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 4745,
+     "text": " · running 4s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 4813,
+     "text": " · running 7s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 4879,
+     "text": " · running 7s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 4946,
+     "text": " · running 7s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 5013,
+     "text": " · running 7s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 5079,
+     "text": " · running 7s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 5145,
+     "text": " · running 8s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 5212,
+     "text": " · running 8s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 5280,
+     "text": " · running 8s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 5346,
+     "text": " · running 8s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 5412,
+     "text": " · running 8s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 5480,
+     "text": " · running 8s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 5546,
+     "text": " · running 8s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 5614,
+     "text": " · running 8s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 5679,
+     "text": " · running 8s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 5746,
+     "text": " · running 8s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 5812,
+     "text": " · running 8s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 5879,
+     "text": " · running 8s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 5946,
+     "text": " · running 8s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 6012,
+     "text": " · running 8s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    }
+   ]
+  },
+  "badgeFinal": {
+   "text": "42.70s",
+   "stateW": 37.94,
+   "stateX": 1159.06,
+   "rowW": 1199,
+   "targetW": 1073.47,
+   "targetCut": false,
+   "live": 0
+  },
+  "foldProbe": {
+   "runs": [
+    1.6,
+    1.6,
+    1.7,
+    1.9,
+    2.1,
+    2.2,
+    2.2,
+    3.4
+   ],
+   "p50": 2.1,
+   "max": 3.4,
+   "rangeReads": 32,
+   "perCall": 4,
+   "textNodes": 4,
+   "marked": 1
+  },
+  "badgeWindow": {
+   "tickLiveClocks": {
+    "n": 0,
+    "ms": 0,
+    "max": 0,
+    "bytes": 0
+   },
+   "muts": {
+    "added": 408,
+    "removed": 366,
+    "records": 402,
+    "tgrp": 53,
+    "badge": 53
+   },
+   "clocks": 8
+  }
+ },
+ "base": {
+  "label": "base-sm",
+  "tree": "<path on the measuring host>",
+  "viewport": "1440x900",
+  "startedAt": "2026-11-14T06:06:25.548Z",
+  "gwPort": 64403,
+  "panelPort": 64404,
+  "panelPid": 56768,
+  "pagePid": null,
+  "seconds": 15,
+  "browserPid": 65604,
+  "jobId": "2355e8d9",
+  "thread": "lag-base-sm-mwg062ht",
+  "missingProbes": [
+   "paintCommandFoldMark",
+   "clearCommandFoldMark",
+   "scheduleCommandFoldMark",
+   "cmdCutOffset"
+  ],
+  "preludeShape": {
+   "pieces": 39,
+   "rows": 10,
+   "groups": 10,
+   "lines": 193,
+   "scrollH": 1191,
+   "clientH": 318,
+   "bars": true,
+   "visible": "visible"
+  },
+  "silence": {
+   "seconds": 3,
+   "perf": {
+    "LayoutCount": 68,
+    "LayoutDuration": 25.16,
+    "RecalcStyleCount": 185,
+    "RecalcStyleDuration": 18.09,
+    "ScriptDuration": 32.51,
+    "TaskDuration": 211.4,
+    "Nodes": 13534
+   },
+   "browser": {
+    "fn": {
+     "appendJobLine": {
+      "n": 0,
+      "ms": 0,
+      "max": 0,
+      "bytes": 0
+     },
+     "recordJobLine": {
+      "n": 0,
+      "ms": 0,
+      "max": 0,
+      "bytes": 0
+     },
+     "drawJobLine": {
+      "n": 0,
+      "ms": 0,
+      "max": 0,
+      "bytes": 0
+     },
+     "drawRowText": {
+      "n": 68,
+      "ms": 5.5,
+      "max": 0.20000001788139343,
+      "bytes": 0
+     },
+     "paintTypedLines": {
+      "n": 66,
+      "ms": 11.399999976158142,
+      "max": 0.30000001192092896,
+      "bytes": 0
+     },
+     "flushTypeStream": {
+      "n": 0,
+      "ms": 0,
+      "max": 0,
+      "bytes": 0
+     },
+     "appendProseLine": {
+      "n": 0,
+      "ms": 0,
+      "max": 0,
+      "bytes": 0
+     },
+     "streamBodyHtml": {
+      "n": 2,
+      "ms": 2.300000011920929,
+      "max": 1.4000000059604645,
+      "bytes": 0
+     },
+     "syncStreamConsole": {
+      "n": 2,
+      "ms": 1.9000000059604645,
+      "max": 1,
+      "bytes": 0
+     },
+     "paintStreamConsole": {
+      "n": 2,
+      "ms": 8.099999994039536,
+      "max": 4.5999999940395355,
+      "bytes": 0
+     },
+     "toolGroupHtml": {
+      "n": 20,
+      "ms": 1.600000023841858,
+      "max": 0.19999998807907104,
+      "bytes": 0
+     },
+     "rebuildToolGroup": {
+      "n": 0,
+      "ms": 0,
+      "max": 0,
+      "bytes": 0
+     },
+     "consoleMdHtml": {
+      "n": 20,
+      "ms": 0.4000000059604645,
+      "max": 0.10000002384185791,
+      "bytes": 0
+     },
+     "consoleBodyHtml": {
+      "n": 20,
+      "ms": 0.9000000357627869,
+      "max": 0.10000002384185791,
+      "bytes": 0
+     },
+     "tickLiveClocks": {
+      "n": 0,
+      "ms": 0,
+      "max": 0,
+      "bytes": 0
+     },
+     "updateJob": {
+      "n": 0,
+      "ms": 0,
+      "max": 0,
+      "bytes": 0
+     },
+     "renderConversation": {
+      "n": 0,
+      "ms": 0,
+      "max": 0,
+      "bytes": 0
+     },
+     "paintToBottom": {
+      "n": 15,
+      "ms": 4.700000017881393,
+      "max": 2.199999988079071,
+      "bytes": 0
+     },
+     "setScroll": {
+      "n": 68,
+      "ms": 1.0999999344348907,
+      "max": 0.09999999403953552,
+      "bytes": 0
+     },
+     "stickSoon": {
+      "n": 70,
+      "ms": 0.7000000178813934,
+      "max": 0.10000002384185791,
+      "bytes": 0
+     },
+     "loadThinking": {
+      "n": 2,
+      "ms": 0.7999999821186066,
+      "max": 0.5,
+      "bytes": 0
+     },
+     "paintThink": {
+      "n": 2,
+      "ms": 8.299999982118607,
+      "max": 4.699999988079071,
+      "bytes": 0
+     }
+    },
+    "muts": {
+     "added": 838,
+     "removed": 828,
+     "records": 221,
+     "tgrp": 0,
+     "badge": 0
+    },
+    "timers": {
+     "applyPendingFocus": {
+      "ms": 250,
+      "n": 12,
+      "tot": 0,
+      "max": 0
+     },
+     "humanTick": {
+      "ms": 250,
+      "n": 12,
+      "tot": 0,
+      "max": 0
+     },
+     "(anonymous 400ms)": {
+      "ms": 400,
+      "n": 8,
+      "tot": 1.4000000059604645,
+      "max": 0.5
+     },
+     "sweepThinking": {
+      "ms": 500,
+      "n": 6,
+      "tot": 1.2000000178813934,
+      "max": 0.5999999940395355
+     },
+     "tickLiveClocks": {
+      "ms": 1000,
+      "n": 3,
+      "tot": 0.09999999403953552,
+      "max": 0.09999999403953552
+     },
+     "refreshSubagentRoster": {
+      "ms": 5000,
+      "n": 1,
+      "tot": 0.29999998211860657,
+      "max": 0.29999998211860657
+     },
+     "tickApprovals": {
+      "ms": 1000,
+      "n": 3,
+      "tot": 0.09999999403953552,
+      "max": 0.09999999403953552
+     },
+     "(anonymous 1000ms)": {
+      "ms": 1000,
+      "n": 3,
+      "tot": 1.300000011920929,
+      "max": 0.5999999940395355
+     },
+     "tickQuestionClocks": {
+      "ms": 1000,
+      "n": 3,
+      "tot": 0,
+      "max": 0
+     },
+     "(anonymous 5000ms)": {
+      "ms": 5000,
+      "n": 3,
+      "tot": 1.600000023841858,
+      "max": 1.2000000178813934
+     },
+     "paintWatchClocks": {
+      "ms": 1000,
+      "n": 3,
+      "tot": 0,
+      "max": 0
+     },
+     "(anonymous 3000ms)": {
+      "ms": 3000,
+      "n": 2,
+      "tot": 0.4000000059604645,
+      "max": 0.4000000059604645
+     }
+    },
+    "frames": {
+     "heartbeat": {
+      "n": 2,
+      "bytes": 1722,
+      "ms": 0.09999999403953552,
+      "max": 0.09999999403953552,
+      "kinds": {}
+     }
+    },
+    "rafGaps": 0,
+    "cmdBoxes": 1,
+    "dots": 0
+   }
+  },
+  "metrics": {
+   "windowSeconds": 15,
+   "perf": {
+    "LayoutCount": 449,
+    "LayoutDuration": 226.05,
+    "RecalcStyleCount": 938,
+    "RecalcStyleDuration": 172.79,
+    "ScriptDuration": 528,
+    "TaskDuration": 2448.38,
+    "Nodes": 7157,
+    "JSEventListeners": 419
+   },
+   "browser": {
+    "fn": {
+     "appendJobLine": {
+      "n": 200,
+      "ms": 302.1999998688698,
+      "max": 4.5999999940395355,
+      "bytes": 0
+     },
+     "recordJobLine": {
+      "n": 200,
+      "ms": 14.599999964237213,
+      "max": 0.30000001192092896,
+      "bytes": 0
+     },
+     "drawJobLine": {
+      "n": 7583,
+      "ms": 547.0000000298023,
+      "max": 4.4000000059604645,
+      "bytes": 0
+     },
+     "drawRowText": {
+      "n": 7008,
+      "ms": 34.50000023841858,
+      "max": 0.4000000059604645,
+      "bytes": 0
+     },
+     "paintTypedLines": {
+      "n": 367,
+      "ms": 66.40000024437904,
+      "max": 0.5999999940395355,
+      "bytes": 0
+     },
+     "flushTypeStream": {
+      "n": 0,
+      "ms": 0,
+      "max": 0,
+      "bytes": 0
+     },
+     "appendProseLine": {
+      "n": 750,
+      "ms": 12.300000011920929,
+      "max": 0.20000001788139343,
+      "bytes": 0
+     },
+     "streamBodyHtml": {
+      "n": 10,
+      "ms": 16.299999982118607,
+      "max": 2.9000000059604645,
+      "bytes": 0
+     },
+     "syncStreamConsole": {
+      "n": 10,
+      "ms": 9.700000017881393,
+      "max": 1.800000011920929,
+      "bytes": 0
+     },
+     "paintStreamConsole": {
+      "n": 10,
+      "ms": 33.59999993443489,
+      "max": 6,
+      "bytes": 0
+     },
+     "toolGroupHtml": {
+      "n": 193,
+      "ms": 15,
+      "max": 1.7999999821186066,
+      "bytes": 0
+     },
+     "rebuildToolGroup": {
+      "n": 0,
+      "ms": 0,
+      "max": 0,
+      "bytes": 0
+     },
+     "consoleMdHtml": {
+      "n": 98,
+      "ms": 3.699999988079071,
+      "max": 0.699999988079071,
+      "bytes": 0
+     },
+     "consoleBodyHtml": {
+      "n": 228,
+      "ms": 7.799999922513962,
+      "max": 0.20000001788139343,
+      "bytes": 0
+     },
+     "tickLiveClocks": {
+      "n": 0,
+      "ms": 0,
+      "max": 0,
+      "bytes": 0
+     },
+     "updateJob": {
+      "n": 0,
+      "ms": 0,
+      "max": 0,
+      "bytes": 0
+     },
+     "renderConversation": {
+      "n": 0,
+      "ms": 0,
+      "max": 0,
+      "bytes": 0
+     },
+     "paintToBottom": {
+      "n": 176,
+      "ms": 54.70000013709068,
+      "max": 1.9000000059604645,
+      "bytes": 0
+     },
+     "setScroll": {
+      "n": 444,
+      "ms": 8.599999874830246,
+      "max": 0.19999998807907104,
+      "bytes": 0
+     },
+     "stickSoon": {
+      "n": 7861,
+      "ms": 16.299999862909317,
+      "max": 0.20000001788139343,
+      "bytes": 0
+     },
+     "loadThinking": {
+      "n": 10,
+      "ms": 3.099999964237213,
+      "max": 0.5,
+      "bytes": 0
+     },
+     "paintThink": {
+      "n": 10,
+      "ms": 34.29999998211861,
+      "max": 6.0999999940395355,
+      "bytes": 0
+     }
+    },
+    "muts": {
+     "added": 2602,
+     "removed": 1657,
+     "records": 784,
+     "tgrp": 69,
+     "badge": 69
+    },
+    "byTarget": {
+     "pre.job-out": {
+      "added": 2384,
+      "removed": 1463,
+      "n": 201
+     },
+     "div.jl": {
+      "added": 148,
+      "removed": 125,
+      "n": 406
+     },
+     "span.jl-live": {
+      "added": 69,
+      "removed": 69,
+      "n": 69
+     },
+     "div.md-block": {
+      "added": 1,
+      "removed": 0,
+      "n": 108
+     }
+    },
+    "timers": {
+     "applyPendingFocus": {
+      "ms": 250,
+      "n": 61,
+      "tot": 0.4000000059604645,
+      "max": 0.20000001788139343
+     },
+     "humanTick": {
+      "ms": 250,
+      "n": 61,
+      "tot": 0.30000001192092896,
+      "max": 0.10000002384185791
+     },
+     "sweepThinking": {
+      "ms": 500,
+      "n": 30,
+      "tot": 6.39999994635582,
+      "max": 0.5999999940395355
+     },
+     "(anonymous 400ms)": {
+      "ms": 400,
+      "n": 37,
+      "tot": 19.099999874830246,
+      "max": 1.5
+     },
+     "tickLiveClocks": {
+      "ms": 1000,
+      "n": 15,
+      "tot": 3.199999988079071,
+      "max": 0.4000000059604645
+     },
+     "tickApprovals": {
+      "ms": 1000,
+      "n": 15,
+      "tot": 0.9000000655651093,
+      "max": 0.20000001788139343
+     },
+     "(anonymous 1000ms)": {
+      "ms": 1000,
+      "n": 15,
+      "tot": 6.299999952316284,
+      "max": 0.5999999940395355
+     },
+     "tickQuestionClocks": {
+      "ms": 1000,
+      "n": 15,
+      "tot": 0.20000001788139343,
+      "max": 0.10000002384185791
+     },
+     "paintWatchClocks": {
+      "ms": 1000,
+      "n": 15,
+      "tot": 0.09999999403953552,
+      "max": 0.09999999403953552
+     },
+     "(anonymous 3000ms)": {
+      "ms": 3000,
+      "n": 10,
+      "tot": 4.599999934434891,
+      "max": 1.199999988079071
+     },
+     "refreshSubagentRoster": {
+      "ms": 5000,
+      "n": 3,
+      "tot": 1,
+      "max": 0.4000000059604645
+     },
+     "(anonymous 5000ms)": {
+      "ms": 5000,
+      "n": 9,
+      "tot": 3.4000000059604645,
+      "max": 1
+     },
+     "(anonymous 15000ms)": {
+      "ms": 15000,
+      "n": 2,
+      "tot": 0.09999999403953552,
+      "max": 0.09999999403953552
+     }
+    },
+    "frames": {
+     "jobline": {
+      "n": 400,
+      "bytes": 1901368,
+      "ms": 325.59999987483025,
+      "max": 4.800000011920929,
+      "kinds": {
+       "text": 214,
+       "tool": 24,
+       "tool-out": 162
+      }
+     },
+     "heartbeat": {
+      "n": 6,
+      "bytes": 5170,
+      "ms": 0.30000001192092896,
+      "max": 0.10000002384185791,
+      "kinds": {}
+     }
+    },
+    "rafGaps": {
+     "n": 1,
+     "p50": 67,
+     "p95": 67,
+     "max": 67,
+     "over50": 1,
+     "over100": 0
+    },
+    "longs": {
+     "n": 0,
+     "total": 0,
+     "max": 0,
+     "top": []
+    },
+    "deltaToFrame": {
+     "n": 400,
+     "p50": 8.1,
+     "p90": 14.3,
+     "p99": 16.7,
+     "max": 17,
+     "mean": 8.54
+    },
+    "handler": {
+     "n": 400,
+     "mean": 0.81,
+     "max": 4.8
+    },
+    "kinds": {
+     "text": 214,
+     "tool": 24,
+     "tool-out": 162
+    },
+    "shape": {
+     "pieces": 163,
+     "rows": 22,
+     "groups": 26,
+     "scrollH": 7213,
+     "clientH": 318
+    },
+    "visibility": "visible"
+   },
+   "network": {
+    "thinkingPolls": 15,
+    "statePolls": 0,
+    "total": 89
+   },
+   "profileTop": [
+    {
+     "fn": "(idle)",
+     "where": "",
+     "ms": 12835.89,
+     "samples": 22116
+    },
+    {
+     "fn": "(program)",
+     "where": "",
+     "ms": 1461.78,
+     "samples": 2398
+    },
+    {
+     "fn": "(anonymous)",
+     "where": "htt<path on the measuring host>",
+     "ms": 290.82,
+     "samples": 502
+    },
+    {
+     "fn": "querySelector",
+     "where": "",
+     "ms": 177.9,
+     "samples": 298
+    },
+    {
+     "fn": "paintToBottom",
+     "where": "htt<path on the measuring host>",
+     "ms": 42.8,
+     "samples": 76
+    },
+    {
+     "fn": "drawJobLine",
+     "where": "htt<path on the measuring host>",
+     "ms": 27.45,
+     "samples": 47
+    },
+    {
+     "fn": "querySelectorAll",
+     "where": "",
+     "ms": 14.19,
+     "samples": 24
+    },
+    {
+     "fn": "stickConsole",
+     "where": "htt<path on the measuring host>",
+     "ms": 14.05,
+     "samples": 25
+    },
+    {
+     "fn": "(garbage collector)",
+     "where": "",
+     "ms": 14,
+     "samples": 22
+    },
+    {
+     "fn": "requestAnimationFrame",
+     "where": "",
+     "ms": 11.63,
+     "samples": 20
+    },
+    {
+     "fn": "wrapped",
+     "where": "",
+     "ms": 9.83,
+     "samples": 17
+    },
+    {
+     "fn": "now",
+     "where": "",
+     "ms": 8.99,
+     "samples": 15
+    },
+    {
+     "fn": "syncStreamConsole",
+     "where": "htt<path on the measuring host>",
+     "ms": 8.26,
+     "samples": 14
+    },
+    {
+     "fn": "closest",
+     "where": "",
+     "ms": 7.4,
+     "samples": 13
+    },
+    {
+     "fn": "wrapped",
+     "where": "",
+     "ms": 7.36,
+     "samples": 13
+    },
+    {
+     "fn": "now",
+     "where": "",
+     "ms": 6.49,
+     "samples": 11
+    },
+    {
+     "fn": "setScroll",
+     "where": "htt<path on the measuring host>",
+     "ms": 6.47,
+     "samples": 11
+    },
+    {
+     "fn": "consoleMdPhysicalLines",
+     "where": "htt<path on the measuring host>",
+     "ms": 6.03,
+     "samples": 11
+    },
+    {
+     "fn": "placedNodes",
+     "where": "htt<path on the measuring host>",
+     "ms": 5.64,
+     "samples": 10
+    },
+    {
+     "fn": "(anonymous)",
+     "where": "",
+     "ms": 5.23,
+     "samples": 9
+    },
+    {
+     "fn": "appendData",
+     "where": "",
+     "ms": 5.09,
+     "samples": 9
+    },
+    {
+     "fn": "fetch",
+     "where": "",
+     "ms": 4.9,
+     "samples": 9
+    },
+    {
+     "fn": "escape",
+     "where": "",
+     "ms": 4.73,
+     "samples": 8
+    },
+    {
+     "fn": "getAnimations",
+     "where": "",
+     "ms": 4.39,
+     "samples": 7
+    },
+    {
+     "fn": "feed",
+     "where": "htt<path on the measuring host>",
+     "ms": 4.16,
+     "samples": 7
+    },
+    {
+     "fn": "groupLines",
+     "where": "htt<path on the measuring host>",
+     "ms": 3.95,
+     "samples": 7
+    }
+   ],
+   "events": 15
+  },
+  "badge": {
+   "found": true,
+   "frames": 361,
+   "nodes": 2,
+   "detaches": 0,
+   "texts": [
+    {
+     "t": 1378,
+     "from": " · running 0s",
+     "to": " · running 1s"
+    },
+    {
+     "t": 2362,
+     "from": " · running 1s",
+     "to": " · running 2s"
+    },
+    {
+     "t": 3377,
+     "from": " · running 2s",
+     "to": " · running 3s"
+    },
+    {
+     "t": 4378,
+     "from": " · running 3s",
+     "to": " · running 4s"
+    },
+    {
+     "t": 4812,
+     "from": " · running 4s",
+     "to": " · running 7s"
+    },
+    {
+     "t": 5361,
+     "from": " · running 7s",
+     "to": " · running 8s"
+    }
+   ],
+   "widthChanges": 0,
+   "truncChanges": 0,
+   "widthMin": 82.2,
+   "widthMax": 82.2,
+   "role": "tgrp-state + jl-live",
+   "froms": [
+    "1794636409101",
+    "1794636406273"
+   ],
+   "trace": [
+    {
+     "t": 11,
+     "text": " · running 0s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 78,
+     "text": " · running 0s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 145,
+     "text": " · running 0s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 212,
+     "text": " · running 0s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 279,
+     "text": " · running 0s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 344,
+     "text": " · running 0s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 411,
+     "text": " · running 0s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 478,
+     "text": " · running 0s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 545,
+     "text": " · running 0s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 612,
+     "text": " · running 0s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 678,
+     "text": " · running 0s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 744,
+     "text": " · running 0s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 812,
+     "text": " · running 0s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 878,
+     "text": " · running 0s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 945,
+     "text": " · running 0s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 1013,
+     "text": " · running 0s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 1079,
+     "text": " · running 0s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 1145,
+     "text": " · running 0s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 1212,
+     "text": " · running 0s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 1278,
+     "text": " · running 0s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 1345,
+     "text": " · running 0s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 1412,
+     "text": " · running 1s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 1478,
+     "text": " · running 1s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 1545,
+     "text": " · running 1s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 1612,
+     "text": " · running 1s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 1678,
+     "text": " · running 1s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 1744,
+     "text": " · running 1s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 1811,
+     "text": " · running 1s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 1878,
+     "text": " · running 1s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 1945,
+     "text": " · running 1s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 2012,
+     "text": " · running 1s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 2078,
+     "text": " · running 1s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 2144,
+     "text": " · running 1s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 2212,
+     "text": " · running 1s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 2278,
+     "text": " · running 1s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 2344,
+     "text": " · running 1s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 2411,
+     "text": " · running 2s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 2478,
+     "text": " · running 2s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 2545,
+     "text": " · running 2s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 2611,
+     "text": " · running 2s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 2678,
+     "text": " · running 2s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 2744,
+     "text": " · running 2s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 2812,
+     "text": " · running 2s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 2879,
+     "text": " · running 2s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 2945,
+     "text": " · running 2s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 3012,
+     "text": " · running 2s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 3078,
+     "text": " · running 2s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 3145,
+     "text": " · running 2s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 3212,
+     "text": " · running 2s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 3277,
+     "text": " · running 2s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 3345,
+     "text": " · running 2s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 3411,
+     "text": " · running 3s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 3478,
+     "text": " · running 3s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 3545,
+     "text": " · running 3s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 3611,
+     "text": " · running 3s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 3679,
+     "text": " · running 3s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 3745,
+     "text": " · running 3s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 3812,
+     "text": " · running 3s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 3878,
+     "text": " · running 3s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 3944,
+     "text": " · running 3s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 4012,
+     "text": " · running 3s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 4078,
+     "text": " · running 3s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 4144,
+     "text": " · running 3s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 4211,
+     "text": " · running 3s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 4278,
+     "text": " · running 3s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 4344,
+     "text": " · running 3s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 4411,
+     "text": " · running 4s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 4478,
+     "text": " · running 4s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 4544,
+     "text": " · running 4s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 4611,
+     "text": " · running 4s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 4678,
+     "text": " · running 4s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 4744,
+     "text": " · running 4s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 4812,
+     "text": " · running 7s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 4878,
+     "text": " · running 7s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 4945,
+     "text": " · running 7s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 5011,
+     "text": " · running 7s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 5078,
+     "text": " · running 7s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 5145,
+     "text": " · running 7s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 5211,
+     "text": " · running 7s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 5278,
+     "text": " · running 7s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 5344,
+     "text": " · running 7s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 5411,
+     "text": " · running 8s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 5478,
+     "text": " · running 8s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 5544,
+     "text": " · running 8s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 5611,
+     "text": " · running 8s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 5679,
+     "text": " · running 8s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 5744,
+     "text": " · running 8s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 5811,
+     "text": " · running 8s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 5878,
+     "text": " · running 8s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 5945,
+     "text": " · running 8s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    },
+    {
+     "t": 6011,
+     "text": " · running 8s",
+     "cw": 82.2,
+     "cx": 1114.8,
+     "rw": 1199,
+     "tw": 1029.2,
+     "cut": false
+    }
+   ]
+  },
+  "badgeFinal": {
+   "text": "42.70s",
+   "stateW": 37.94,
+   "stateX": 1159.06,
+   "rowW": 1199,
+   "targetW": 1073.47,
+   "targetCut": false,
+   "live": 0
+  },
+  "foldProbe": {
+   "missing": true
+  },
+  "badgeWindow": {
+   "tickLiveClocks": {
+    "n": 0,
+    "ms": 0,
+    "max": 0,
+    "bytes": 0
+   },
+   "muts": {
+    "added": 219,
+    "removed": 165,
+    "records": 210,
+    "tgrp": 53,
+    "badge": 53
+   },
+   "clocks": 8
+  }
+ }
+}</code></pre></details>
+<details><summary>Top CPU frames, this tree</summary><table><thead><tr><th>Self time (top CPU frames)</th><th class="n">ms</th><th>where</th></tr></thead><tbody><tr><td><code>(idle)</code></td><td class="n">19263.23</td><td><code>-</code></td></tr>
+<tr><td><code>(program)</code></td><td class="n">3047.12</td><td><code>-</code></td></tr>
+<tr><td><code>(anonymous)</code></td><td class="n">661.06</td><td><code>http://127.0.0.1:59569/board/console.js?v=64aee65be7c6:1967</code></td></tr>
+<tr><td><code>querySelector</code></td><td class="n">437.41</td><td><code>-</code></td></tr>
+<tr><td><code>paintToBottom</code></td><td class="n">98.16</td><td><code>http://127.0.0.1:59569/board/console.js?v=64aee65be7c6:1160</code></td></tr>
+<tr><td><code>drawJobLine</code></td><td class="n">58.66</td><td><code>http://127.0.0.1:59569/board/console.js?v=64aee65be7c6:3488</code></td></tr>
+<tr><td><code>(garbage collector)</code></td><td class="n">39.17</td><td><code>-</code></td></tr>
+<tr><td><code>querySelectorAll</code></td><td class="n">38.5</td><td><code>-</code></td></tr>
+<tr><td><code>stickConsole</code></td><td class="n">35.02</td><td><code>http://127.0.0.1:59569/board/console.js?v=64aee65be7c6:3080</code></td></tr>
+<tr><td><code>wrapped</code></td><td class="n">27.35</td><td><code>-</code></td></tr>
+<tr><td><code>closest</code></td><td class="n">21.61</td><td><code>-</code></td></tr>
+<tr><td><code>now</code></td><td class="n">20.68</td><td><code>-</code></td></tr>
+<tr><td><code>feed</code></td><td class="n">19.41</td><td><code>http://127.0.0.1:59569/core/type-stream.js?v=64aee65be7c6:234</code></td></tr>
+<tr><td><code>getAnimations</code></td><td class="n">18.92</td><td><code>-</code></td></tr>
+<tr><td><code>syncStreamConsole</code></td><td class="n">15.34</td><td><code>http://127.0.0.1:59569/board/console.js?v=64aee65be7c6:2373</code></td></tr>
+<tr><td><code>escape</code></td><td class="n">14.07</td><td><code>-</code></td></tr></tbody></table></details>
+<details><summary>Per-function call counts, this tree</summary><table><thead><tr><th>Function (page, wrapped)</th><th class="n">calls</th><th class="n">total ms (inclusive)</th><th class="n">ms/call</th><th class="n">max ms</th></tr></thead><tbody><tr><td><code>appendJobLine</code></td><td class="n">312</td><td class="n">716.4</td><td class="n">2.3</td><td class="n">6</td></tr>
+<tr><td><code>recordJobLine</code></td><td class="n">312</td><td class="n">33.7</td><td class="n">0.11</td><td class="n">0.5</td></tr>
+<tr><td><code>drawJobLine</code></td><td class="n">12318</td><td class="n">1306.3</td><td class="n">0.11</td><td class="n">5.8</td></tr>
+<tr><td><code>drawRowText</code></td><td class="n">11384</td><td class="n">64.3</td><td class="n">0.01</td><td class="n">0.5</td></tr>
+<tr><td><code>paintTypedLines</code></td><td class="n">585</td><td class="n">135.7</td><td class="n">0.23</td><td class="n">0.7</td></tr>
+<tr><td><code>streamBodyHtml</code></td><td class="n">16</td><td class="n">33.4</td><td class="n">2.09</td><td class="n">2.9</td></tr>
+<tr><td><code>syncStreamConsole</code></td><td class="n">16</td><td class="n">19.8</td><td class="n">1.24</td><td class="n">3.1</td></tr>
+<tr><td><code>paintStreamConsole</code></td><td class="n">16</td><td class="n">59.7</td><td class="n">3.73</td><td class="n">6.2</td></tr>
+<tr><td><code>toolGroupHtml</code></td><td class="n">315</td><td class="n">26.7</td><td class="n">0.08</td><td class="n">1.1</td></tr>
+<tr><td><code>consoleMdHtml</code></td><td class="n">165</td><td class="n">10.1</td><td class="n">0.06</td><td class="n">1.1</td></tr>
+<tr><td><code>consoleBodyHtml</code></td><td class="n">430</td><td class="n">13.4</td><td class="n">0.03</td><td class="n">0.2</td></tr>
+<tr><td><code>paintToBottom</code></td><td class="n">286</td><td class="n">109.4</td><td class="n">0.38</td><td class="n">2.1</td></tr>
+<tr><td><code>setScroll</code></td><td class="n">722</td><td class="n">15.7</td><td class="n">0.02</td><td class="n">0.2</td></tr>
+<tr><td><code>stickSoon</code></td><td class="n">12757</td><td class="n">31.1</td><td class="n">0</td><td class="n">0.2</td></tr>
+<tr><td><code>paintThink</code></td><td class="n">16</td><td class="n">61.5</td><td class="n">3.84</td><td class="n">6.4</td></tr>
+<tr><td><code>loadThinking</code></td><td class="n">16</td><td class="n">6.8</td><td class="n">0.43</td><td class="n">0.6</td></tr>
+<tr><td><code>scheduleCommandFoldMark</code></td><td class="n">358</td><td class="n">0.6</td><td class="n">0</td><td class="n">0.1</td></tr>
+<tr><td><code>paintCommandFoldMark</code></td><td class="n">0</td><td class="n">0</td><td class="n">-</td><td class="n">-</td></tr>
+<tr><td><code>tickLiveClocks</code></td><td class="n">24</td><td class="n">6.5</td><td class="n">0.27</td><td class="n">0.6</td></tr></tbody></table></details>
+<details><summary>Per-function call counts, v1.99.1</summary><table><thead><tr><th>Function (page, wrapped)</th><th class="n">calls</th><th class="n">total ms (inclusive)</th><th class="n">ms/call</th><th class="n">max ms</th></tr></thead><tbody><tr><td><code>appendJobLine</code></td><td class="n">314</td><td class="n">622.9</td><td class="n">1.98</td><td class="n">5.8</td></tr>
+<tr><td><code>recordJobLine</code></td><td class="n">314</td><td class="n">27.9</td><td class="n">0.09</td><td class="n">0.3</td></tr>
+<tr><td><code>drawJobLine</code></td><td class="n">12458</td><td class="n">1145.5</td><td class="n">0.09</td><td class="n">5.7</td></tr>
+<tr><td><code>drawRowText</code></td><td class="n">11506</td><td class="n">56.9</td><td class="n">0</td><td class="n">0.4</td></tr>
+<tr><td><code>paintTypedLines</code></td><td class="n">585</td><td class="n">119.6</td><td class="n">0.2</td><td class="n">0.7</td></tr>
+<tr><td><code>streamBodyHtml</code></td><td class="n">16</td><td class="n">26.4</td><td class="n">1.65</td><td class="n">2.5</td></tr>
+<tr><td><code>syncStreamConsole</code></td><td class="n">16</td><td class="n">14.8</td><td class="n">0.93</td><td class="n">1.4</td></tr>
+<tr><td><code>paintStreamConsole</code></td><td class="n">16</td><td class="n">54.9</td><td class="n">3.43</td><td class="n">4.9</td></tr>
+<tr><td><code>toolGroupHtml</code></td><td class="n">314</td><td class="n">24.5</td><td class="n">0.08</td><td class="n">0.9</td></tr>
+<tr><td><code>consoleMdHtml</code></td><td class="n">165</td><td class="n">5.6</td><td class="n">0.03</td><td class="n">0.7</td></tr>
+<tr><td><code>consoleBodyHtml</code></td><td class="n">433</td><td class="n">13.1</td><td class="n">0.03</td><td class="n">0.2</td></tr>
+<tr><td><code>paintToBottom</code></td><td class="n">287</td><td class="n">107.3</td><td class="n">0.37</td><td class="n">1.9</td></tr>
+<tr><td><code>setScroll</code></td><td class="n">706</td><td class="n">11.4</td><td class="n">0.02</td><td class="n">0.1</td></tr>
+<tr><td><code>stickSoon</code></td><td class="n">12893</td><td class="n">30.6</td><td class="n">0</td><td class="n">0.2</td></tr>
+<tr><td><code>paintThink</code></td><td class="n">16</td><td class="n">57.1</td><td class="n">3.57</td><td class="n">5.1</td></tr>
+<tr><td><code>loadThinking</code></td><td class="n">16</td><td class="n">4.7</td><td class="n">0.29</td><td class="n">0.4</td></tr>
+<tr><td><code>tickLiveClocks</code></td><td class="n">24</td><td class="n">5.4</td><td class="n">0.23</td><td class="n">0.4</td></tr></tbody></table></details>
+</main></body></html>
