@@ -13253,22 +13253,29 @@ function greyFlashOn() {
 }
 
 // ---- the assistant console command card's look (Settings > Display) -----------------------------------------
-// Five numbers, all display only and all saved in this browser like every other Display row: the preview rows a
-// folded command card shows, the card's side margin, the padding of the text inside it, the blank lines above and
-// below it, and the side margin the rest of the console's text keeps. Each is written as a CSS variable the
-// stylesheet reads WITH today's look as its fallback (style.css, `--cmd-*` and `--con-side`), so an unset setting
-// draws exactly what this panel drew before the rows existed - and the defaults are those fallbacks, not a second
-// set of numbers that could drift away from them.
+// Seven numbers, all display only and all saved in this browser like every other Display row: the preview rows a
+// folded command card shows, the card's side margin, the padding of the text inside it - its sides, and its top and
+// bottom - the blank lines above and below it, and the side margin the rest of the console's text keeps. Each is
+// written as a CSS variable the stylesheet reads WITH today's look as its fallback (style.css, `--cmd-*` and
+// `--con-side`), so an unset setting draws exactly what this panel drew before the rows existed - and the defaults
+// are those fallbacks, not a second set of numbers that could drift away from them.
+//
+// The inside padding is three numbers, not one, because a box has four sides: `pad` is the sides, `padTop` the air
+// between the card's top edge and the prompt's first row, `padBottom` the same at the foot. The blank lines are the
+// OUTSIDE spacing - the card's own margin in the console, on top of the 4px frame margin every box carries - and
+// they are a different row on purpose, so "more air around the card" and "more air inside it" cannot be confused.
 const CMD_LOOK_KEY = "wtgui.cmdLook";
-// `rows` and `blank` are counted in the card's own line (18px: a 12px body at 1.5), `side`, `pad` and `con` in px.
-// The unit travels WITH the value into the CSS variable - a bare `8` in `padding: 0 var(--cmd-pad)` is an invalid
-// declaration, and the whole property would fall back to the initial `0` instead of today's number.
-const CMD_LOOK_DEFAULTS = Object.freeze({ rows: 2, side: 0, pad: 8, blank: 0, con: 10 });
-const CMD_LOOK_UNITS = Object.freeze({ rows: "", side: "px", pad: "px", blank: "", con: "px" });
+// `rows` and `blank` are counted in the card's own line (18px: a 12px body at 1.5), the rest in px.
+// The unit travels WITH the value into the CSS variable - a bare `8` in `padding: var(--cmd-pad-top) var(--cmd-pad)`
+// is an invalid declaration, and the whole property would fall back to the initial `0` instead of today's number.
+const CMD_LOOK_DEFAULTS = Object.freeze({ rows: 2, side: 0, pad: 8, padTop: 0, padBottom: 0, blank: 0, con: 10 });
+const CMD_LOOK_UNITS = Object.freeze({ rows: "", side: "px", pad: "px", padTop: "px", padBottom: "px", blank: "", con: "px" });
 const CMD_LOOK_LIMITS = Object.freeze({
   rows: [1, 8],
   side: [0, 60],
   pad: [0, 32],
+  padTop: [0, 32],
+  padBottom: [0, 32],
   blank: [0, 4],
   con: [0, 60],
 });
@@ -13276,8 +13283,21 @@ const CMD_LOOK_VARS = Object.freeze({
   rows: "--cmd-rows",
   side: "--cmd-side",
   pad: "--cmd-pad",
+  padTop: "--cmd-pad-top",
+  padBottom: "--cmd-pad-bottom",
   blank: "--cmd-blank",
   con: "--con-side",
+});
+// The input each row is: the name and the element's id are not always the same word (`padTop` is `cmd-pad-top`),
+// and one table keeps the variable, the row and the readout from having to guess.
+const CMD_LOOK_IDS = Object.freeze({
+  rows: "cmd-rows",
+  side: "cmd-side",
+  pad: "cmd-pad",
+  padTop: "cmd-pad-top",
+  padBottom: "cmd-pad-bottom",
+  blank: "cmd-blank",
+  con: "cmd-con",
 });
 
 function cmdLook() {
@@ -13300,7 +13320,7 @@ function cmdLook() {
 // Read once, so a card drawn before anyone opens Settings already follows the saved look.
 let cmdLookState = cmdLook();
 
-// Write the five variables on :root, hand the row count to the card module (which writes `data-code-clamp`), and
+// Write the seven variables on :root, hand the row count to the card module (which writes `data-code-clamp`), and
 // re-measure the cards already on the page: a fold that got taller or narrower moved the marker's own row with it.
 function applyCommandCardLook(patch = null, { save = false } = {}) {
   if (patch && typeof patch === "object") cmdLookState = { ...cmdLookState, ...patch };
@@ -13330,7 +13350,7 @@ function applyCommandCardLook(patch = null, { save = false } = {}) {
 // keystroke.
 function paintCommandCardLook(look = cmdLookState) {
   for (const name of Object.keys(CMD_LOOK_VARS)) {
-    const el = $(`cmd-${name}`);
+    const el = $(CMD_LOOK_IDS[name]);
     if (!el || document.activeElement === el) continue;
     if (String(el.value) !== String(look[name])) el.value = String(look[name]);
   }
@@ -13348,7 +13368,7 @@ function repaintCommandFolds() {
   }
 }
 
-// "use defaults" is the five fallbacks: the same numbers an unset key draws, written back so the inputs can show them.
+// "use defaults" is the seven fallbacks: the same numbers an unset key draws, written back so the inputs can show them.
 function resetCommandCardLook() {
   applyCommandCardLook({ ...CMD_LOOK_DEFAULTS }, { save: true });
 }
@@ -16955,11 +16975,11 @@ $("con-row-space")?.addEventListener("input", (e) => applyConRowSpace(e.target.v
 $("con-row-space")?.addEventListener("change", (e) => applyConRowSpace(e.target.value, { save: true }));
 $("con-row-reset")?.addEventListener("click", () => resetConRowSpace());
 
-// ---- the command card's five rows: each applies at once, saved in this browser like the rest of Display ------
-// The input is `#cmd-<name>`, one per variable, so a row can only ever write the variable that names it.
-const CMD_LOOK_ROWS = ["rows", "side", "pad", "blank", "con"];
+// ---- the command card's seven rows: each applies at once, saved in this browser like the rest of Display ----
+// The input is `CMD_LOOK_IDS[name]`, one per variable, so a row can only ever write the variable that names it.
+const CMD_LOOK_ROWS = ["rows", "side", "pad", "padTop", "padBottom", "blank", "con"];
 for (const name of CMD_LOOK_ROWS) {
-  const el = $(`cmd-${name}`);
+  const el = $(CMD_LOOK_IDS[name]);
   if (!el) continue;
   el.addEventListener("change", () => {
     const n = Number(el.value);
@@ -16971,7 +16991,7 @@ for (const name of CMD_LOOK_ROWS) {
 }
 $("cmd-look-reset")?.addEventListener("click", () => {
   resetCommandCardLook();
-  showBanner("command card: back to the defaults - 2 preview rows, no side margin, 8px padding, no blank lines, a 10px console text inset");
+  showBanner("command card: back to the defaults - 2 preview rows, no side margin, 8px side padding, no inside padding at the top or bottom, no blank lines, a 10px console text inset");
 });
 
 // ---- the question box's look: tint, size, density, and whether the typed answer is offered --------
@@ -18200,7 +18220,7 @@ initFonts();
 initQLook();
 // The console's row spacing, on :root, before the first console is drawn.
 initConRowSpace();
-// The command card's five numbers, on :root, before the first console is drawn.
+// The command card's seven numbers, on :root, before the first console is drawn.
 initCommandCardLook();
 // The question countdowns move on their own; nothing else in the panel needs a 1s clock.
 setInterval(tickQuestionClocks, 1000);

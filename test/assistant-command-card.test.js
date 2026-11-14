@@ -175,8 +175,9 @@ test("the card is the tool card's own frame, with a button head and a two-line b
   assert.match(card, /<div class="code-body">/);
   assert.doesNotMatch(card, /code-body" hidden/);
   // The same stylesheet rule, and the number it reads: the reader's preview rows, with today's two as the fallback
-  // (2 rows at this card's 18px line = the 36px the rule used to spell as 3em).
-  assert.match(css, /\.code-box\.is-cmd\.is-clamped > \.code-body \{ max-height: calc\(var\(--cmd-rows, 2\) \* 1\.5em\); overflow: hidden; \}/);
+  // (2 rows at this card's 18px line = the 36px the rule used to spell as 3em), plus the two inside paddings that
+  // are added back on so a reader's top or bottom padding never eats a preview row.
+  assert.match(css, /\.code-box\.is-cmd\.is-clamped > \.code-body \{ max-height: calc\(var\(--cmd-rows, 2\) \* 1\.5em \+ var\(--cmd-pad-top, 0px\) \+ var\(--cmd-pad-bottom, 0px\)\); overflow: hidden; \}/);
   assert.doesNotMatch(css, /max-height: 3em;/, "the fold reads the setting, not a fixed three em");
   // A head that is a real button is the keyboard's own control: Tab reaches it, Enter and Space press it, and it
   // carries the state. Nothing here draws a div pretending to be a press.

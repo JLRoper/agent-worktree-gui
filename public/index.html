@@ -176,7 +176,7 @@
         <div class="settings-presets"><button type="button" id="con-row-reset" title="back to the console's own 1.5 line-height, which is how every console row was before this row existed">use defaults</button></div>
 
         <div class="settings-sep"></div>
-        <div class="settings-row" title="The assistant's command card - the box a command line in a reply is drawn in - as it reads inside a console. Five numbers, all saved in this browser and applied at once, no reload. Preview rows is how much of the prompt a folded card shows before its click to read; the last visible row ends with three dots, so a cut prompt does not read as a finished one. The rest are the card's own spacing beside the console's text: its side margin, the padding of the text inside it, and the blank lines above and below it. Console text side margin is the inset the console's own text keeps inside its box. The card's side margin is measured from that inset, so the card stays in the console's own column at any value. The defaults are 2 rows, 0px, 8px, 0 lines and 10px, which is exactly how the card looked before these rows existed.">
+        <div class="settings-row" title="The assistant's command card - the box a command line in a reply is drawn in - as it reads inside a console. Seven numbers, all saved in this browser and applied at once, no reload. Preview rows is how much of the prompt a folded card shows before its click to read; the last visible row ends with three dots, so a cut prompt does not read as a finished one. The rest are the card's spacing: its side margin, the padding of the text INSIDE it (the two sides, the top and the bottom), and the blank lines above and below it, which are the OUTSIDE spacing around the card rather than the padding inside it. Console text side margin is the inset the console's own text keeps inside its box. The card's side margin is measured from that inset, so the card stays in the console's own column at any value. The defaults are 2 rows, 0px, 8px, 0px, 0px, 0 lines and 10px, which is exactly how the card looked before these rows existed.">
           <span>Command card <span class="settings-info">ⓘ</span></span>
           <span class="settings-unit mono">assistant console</span>
         </div>
@@ -190,12 +190,22 @@
           <input id="cmd-side" type="number" inputmode="numeric" step="1" min="0" max="60">
           <span class="settings-unit mono">px</span>
         </label>
-        <label class="settings-row" for="cmd-pad" title="The padding of the text inside the command card - the head's label and the prompt's own rows. 8px is the default and the indent the card has always had; 0 puts the text against the card's edge. The prompt's bullet rows follow it, so a card's list and its text stay in one column. Saved in this browser, applied at once.">
+        <label class="settings-row" for="cmd-pad" title="The padding INSIDE the command card on the left and the right - the head's label and the prompt's own rows. 8px is the default and the indent the card has always had; 0 puts the text against the card's edge. The prompt's bullet rows follow it, so a card's list and its text stay in one column. Box top padding and Box bottom padding are the other two sides of the same inside padding. Saved in this browser, applied at once.">
           <span>Box padding <span class="settings-info">ⓘ</span></span>
           <input id="cmd-pad" type="number" inputmode="numeric" step="1" min="0" max="32">
           <span class="settings-unit mono">px</span>
         </label>
-        <label class="settings-row" for="cmd-blank" title="Blank lines above and below the command card, on top of the small frame margin it has always had. One line here is one line of the card's own text (18px), so 1 sets the card apart from the transcript around it and 0 leaves it as tight as it reads today. Saved in this browser, applied at once.">
+        <label class="settings-row" for="cmd-pad-top" title="The padding INSIDE the command card above the prompt's first row: the air between the card's head and the text, the top of the same inside padding Box padding sets on the sides. 0 is the default and exactly how the card has always read, so nothing moves until you ask; the fold grows by this much, so the same number of preview rows stays on the page. This is the INSIDE spacing - the blank lines above and below the card are the OUTSIDE spacing, a different row. Saved in this browser, applied at once.">
+          <span>Box top padding <span class="settings-info">ⓘ</span></span>
+          <input id="cmd-pad-top" type="number" inputmode="numeric" step="1" min="0" max="32">
+          <span class="settings-unit mono">px</span>
+        </label>
+        <label class="settings-row" for="cmd-pad-bottom" title="The padding INSIDE the command card below the prompt's last row: the air between the text and the card's bottom edge, the bottom of the same inside padding Box padding sets on the sides. 0 is the default and exactly how the card has always read, so nothing moves until you ask; the fold grows by this much, so the last preview row and its dots are not cut off. This is the INSIDE spacing - the blank lines above and below the card are the OUTSIDE spacing, a different row. Saved in this browser, applied at once.">
+          <span>Box bottom padding <span class="settings-info">ⓘ</span></span>
+          <input id="cmd-pad-bottom" type="number" inputmode="numeric" step="1" min="0" max="32">
+          <span class="settings-unit mono">px</span>
+        </label>
+        <label class="settings-row" for="cmd-blank" title="The OUTSIDE spacing: blank lines above and below the command card, on top of the small frame margin it has always had. One line here is one line of the card's own text (18px), so 1 sets the card apart from the transcript around it and 0 leaves it as tight as it reads today. These blank lines are outside the card - the air around it in the console - while Box padding, Box top padding and Box bottom padding are the padding of the text inside it. Saved in this browser, applied at once.">
           <span>Blank lines <span class="settings-info">ⓘ</span></span>
           <input id="cmd-blank" type="number" inputmode="numeric" step="1" min="0" max="4">
           <span class="settings-unit mono">lines</span>
@@ -205,7 +215,7 @@
           <input id="cmd-con" type="number" inputmode="numeric" step="1" min="0" max="60">
           <span class="settings-unit mono">px</span>
         </label>
-        <div class="settings-presets"><button type="button" id="cmd-look-reset" title="back to the card's own defaults: 2 preview rows, no side margin, 8px padding, no blank lines, and the console's 18px tab">use defaults</button></div>
+        <div class="settings-presets"><button type="button" id="cmd-look-reset" title="back to the card's own defaults: 2 preview rows, no side margin, 8px side padding, no inside padding at the top or the bottom, no blank lines, and the console's 18px tab">use defaults</button></div>
 
         <label class="settings-row settings-gap" for="stream-words" title="How fast the agent's own words — its reasoning blocks, and the skills it loads — are written on the screen. A run's prose reaches the panel in bursts — a phrase or two every frame, more on a fast model — and this holds the tail of each paragraph back so it types out a word or two at a time at this many words a second. A reasoning block only types the first time the panel sees it on a live turn, so history is never re-typed; the result of a skill (skill_view, skills_list, skill_manage — the longest thing a run hands the console at once) types out the same way inside its output box, and every other tool's result is drawn whole. Nothing is lost or left waiting: the words keep coming on the clock's own schedule, and whatever is still held is released the moment the turn ends (or the tab goes to the background). While it is on, a tool call (and the output that answers it) is not written into the console until the reasoning in front of it has finished typing — the panel reads the store again the moment the call arrives, holds it and everything behind it, in order, and lets them go together; it holds nothing when reasoning is off or its block is folded. 0 turns it off, so the console fills exactly as the run sent it and nothing waits. Saved in this browser.">
           <span>Stream display speed <span class="settings-info">ⓘ</span></span>
