@@ -4,16 +4,29 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.99.1 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.100.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-595 releases from v0.1.0 (2026-10-20) to v1.99.1 (2026-11-13), 2013 commits between the tags. Every release is anchored by an
+596 releases from v0.1.0 (2026-10-20) to v1.100.0 (2026-11-14), 2016 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.100.0 — 2026-11-14 · 3 commits
+
+[`47b22f4`](https://github.com/JLRoper/agent-worktree-gui/commit/47b22f43f9c6e59863bd653d001d54caf15d51c7) · [compare v1.99.1...v1.100.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.99.1...v1.100.0)
+
+### Docs & tests
+
+- docs: render the changelog - 595 releases ([`445ece7`](https://github.com/JLRoper/agent-worktree-gui/commit/445ece75b2543ee240f08f0b824899c83ab50d42))
+
+### Other
+
+- console: mark a folded command card's last row, and make its spacing the reader's ([`101cf6a`](https://github.com/JLRoper/agent-worktree-gui/commit/101cf6aac7a15d1bb5fdcfd76015a0f2a6cd76f0))
+- chore: 1.100.0 - the version this landing carries ([`47b22f4`](https://github.com/JLRoper/agent-worktree-gui/commit/47b22f43f9c6e59863bd653d001d54caf15d51c7))
 
 ## v1.99.1 — 2026-11-13 · 7 commits
 
