@@ -212,3 +212,11 @@ plain row it was being written as, and the card appears when the line is complet
   Captures: `01-agent-card-transcript.png`, `02-agent-card-transcript-open.png`, `01-malformed-and-absent.png`,
   `02-queue-card-folded.png`, `03-queue-card-expanded.png`, `04-queue-card-folded-again.png`,
   `05-transcript-card.png`.
+- `tools/verify-spawn-todo-bullets.mjs` - the fold, in a real browser, on two services: `main` (a `git archive`, not a
+  second worktree) on one port and this branch on another, both seeded with assistant-1's #398 message and driven in
+  headless Chromium at 1440x900 with the assistant attached as the side panel. BEFORE draws six cards and no bullet
+  row; AFTER draws one card, `5 todos` on its head, five bullets reading `category - item` with the checkbox glyph, no
+  TODO card and no bullet inside the clamped body, and the fold still opens on a press (the whole payload on the page)
+  and closes to exactly two lines. The store the page read is hashed before and after and is unchanged. It writes
+  `docs/reports/spawn-todo-bullets-<date>.html` with the shots inline as data URIs, and leaves its AFTER service
+  standing (it is a test service on its own port and store, not the reader's panel).
