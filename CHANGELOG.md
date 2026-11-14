@@ -4,16 +4,31 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.100.2 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.100.3 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-598 releases from v0.1.0 (2026-10-20) to v1.100.2 (2026-11-14), 2023 commits between the tags. Every release is anchored by an
+599 releases from v0.1.0 (2026-10-20) to v1.100.3 (2026-11-14), 2028 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.100.3 — 2026-11-14 · 5 commits
+
+[`ca22ff3`](https://github.com/JLRoper/agent-worktree-gui/commit/ca22ff31dee04c91d6634e72884a5bed97c58340) · [compare v1.100.2...v1.100.3](https://github.com/JLRoper/agent-worktree-gui/compare/v1.100.2...v1.100.3)
+
+### Docs & tests
+
+- docs: the second leftover ref is deleted, and the report carries the list after it ([`78fed6b`](https://github.com/JLRoper/agent-worktree-gui/commit/78fed6bc69f23e1a2097535e66842d6d00d37fbd))
+- docs: the report carries the suite totals and which failures predate the branch ([`5a6ffb4`](https://github.com/JLRoper/agent-worktree-gui/commit/5a6ffb4b90b90e1675b8b378b7e7e44fec214791))
+- docs: render the changelog - 598 releases ([`18e3940`](https://github.com/JLRoper/agent-worktree-gui/commit/18e394096b06f35ea44bd26acd3467f53dbb5321))
+
+### Other
+
+- console: measure the stream path and name every cause of its lag ([`52aec41`](https://github.com/JLRoper/agent-worktree-gui/commit/52aec4125c3d0bea489211de9ee5f17f9f0ee306))
+- chore: 1.100.3 - the version this landing carries ([`ca22ff3`](https://github.com/JLRoper/agent-worktree-gui/commit/ca22ff31dee04c91d6634e72884a5bed97c58340))
 
 ## v1.100.2 — 2026-11-14 · 4 commits
 
