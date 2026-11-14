@@ -257,12 +257,25 @@ async function walkScenario({ bundle, scenario, keep = false }) {
   const queueFile = assistant.queuePathOf(assistant.assistantRecord("assistant-1"));
   const rowOf = (id) => readQueueFile(queueFile).tasks.find((task) => Number(task.id) === Number(id)) || null;
   const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+  // One tick of the panel's clock is ONE COMPLETED PASS. `sweepQueues` answers a promise whenever the pass suspends on
+  // a git fact (`lib/assistant.js`: `throw { treeFactsPending }` -> `err.treeFactsPending.then(run)`), and a tree reading
+  // costs ~380 ms on this host, so three bare macrotask ticks read the queue long before the pass has written it. The
+  // wait is the same quiescence the repo's own harness uses (test/task-pipeline-sweep.test.js, `settleStarts`): the
+  // guard idle, no cut in flight, and the board's shape stable across two polls.
   const sweep = async () => {
     state.clock += STEP_MS;
-    assistant.sweepQueues();
-    await tick();
-    await tick();
-    await tick();
+    await assistant.sweepQueues();
+    let last = "";
+    const deadline = Date.now() + 60_000;
+    while (Date.now() < deadline) {
+      await tick();
+      const pending = assistant.queueSweepNext || assistant.queueSweepPending;
+      if (pending) await pending;
+      const shape = [state.started.length, state.board.length, state.cuts.length].join("|");
+      if (!assistant.queueSweepPending && !assistant.queueSweepNext && !assistant.cuttingTrees?.size && shape === last) return;
+      last = shape;
+    }
+    throw new Error("the pipeline did not settle");
   };
   const finish = () => {
     const job = state.board.filter((entry) => entry.status === "running").at(-1);

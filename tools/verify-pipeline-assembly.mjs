@@ -167,7 +167,9 @@ async function runRound(dir, pipelineId, { stages, conflict = false } = {}) {
   if (!assigned.ok) throw new Error(`the pipeline assignment was refused: ${assigned.error}`);
   const rowOf = () => readQueueFile(rowQueue).tasks.find((task) => task.id === id) || null;
   for (let step = 0; step < 900; step += 1) {
-    assistant.sweepQueues();
+    // AWAITED: `sweepQueues` answers a promise when the pass suspends on a tree reading (~380 ms here), and the 120 ms
+    // sleep below is shorter than that - the row read after it can still be the pre-pass row.
+    await assistant.sweepQueues();
     await sleep(120);
     const row = rowOf();
     if (!row) break;

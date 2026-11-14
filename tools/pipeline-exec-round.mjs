@@ -242,7 +242,9 @@ async function runRound(round) {
   for (let step = 1; step <= 60; step += 1) {
     const before = rowOf();
     const beforeThread = before ? currentThread(before) : null;
-    assistant.sweepQueues();
+    // AWAITED: the pass is a promise when it suspends on a tree reading, and `settle()` below is 60 ms against a
+    // reading that costs ~380 ms here - an unawaited call compares the row against a pass that has not written it.
+    await assistant.sweepQueues();
     await settle();
     const row = rowOf();
     const thread = row ? currentThread(row) : null;

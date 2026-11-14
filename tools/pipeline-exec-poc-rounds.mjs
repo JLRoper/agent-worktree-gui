@@ -261,7 +261,9 @@ async function runRoute(route) {
     const before = rowOf();
     const beforeThread = before ? currentThread(before) : null;
     const beforeRuns = state.prompts.length;
-    assistant.sweepQueues();
+    // AWAITED: `sweepQueues` answers a promise whenever the pass suspends on a git fact (~380 ms a tree reading here),
+    // so the 70 ms sleep below is a guess at the pass, not a wait for it - this reads the prompts the pass wrote.
+    await assistant.sweepQueues();
     await sleep(70);
     if (state.prompts.length > beforeRuns) {
       const startedThread = state.starts[state.starts.length - 1].thread;

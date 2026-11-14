@@ -249,7 +249,9 @@ async function walk(pipelineId, { leftover = false, timer = false, restartAt = 0
       if (state.started.length === 0) {
         // Nothing has been cut yet, so there is no run to hold: this is the panel's ordinary queue tick — the tree is cut
         // on one pass and its first stage started on the next — and it is the only one this walk takes.
-        assistant.sweepQueues();
+        // AWAITED: the pass is a promise when it suspends on a tree reading, and the three ticks below are macrotasks,
+        // not a wait for it (~380 ms a reading on this host).
+        await assistant.sweepQueues();
       } else {
         out = await book.sweepPipelineWaits({
           now: state.clock,
@@ -259,7 +261,7 @@ async function walk(pipelineId, { leftover = false, timer = false, restartAt = 0
         });
       }
     } else {
-      assistant.sweepQueues();
+      await assistant.sweepQueues();
     }
     await tick();
     await tick();
