@@ -1179,16 +1179,329 @@
       }
     }
   ],
+  "checks": [
+    {
+      "ok": true,
+      "label": "the console draws the command card from the seeded turn",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "folded at the default, and the card says so",
+      "detail": "clamp=2"
+    },
+    {
+      "ok": true,
+      "label": "two preview rows are 36px - the 3em the rule used to spell out",
+      "detail": "36px"
+    },
+    {
+      "ok": true,
+      "label": "the body's side padding is the 8px it always was",
+      "detail": "8/8"
+    },
+    {
+      "ok": true,
+      "label": "the card's side margin is 0, as before",
+      "detail": "0"
+    },
+    {
+      "ok": true,
+      "label": "the card keeps its 4px frame margin above, with no blank line added",
+      "detail": "4px"
+    },
+    {
+      "ok": true,
+      "label": "the head's text starts at the body's padding, so the two line up",
+      "detail": "8px"
+    },
+    {
+      "ok": true,
+      "label": "the console's own text keeps its 10px inset, and the copy button its 24px",
+      "detail": "10/24"
+    },
+    {
+      "ok": true,
+      "label": "a line of console prose starts at that inset",
+      "detail": "1026 = 1015+1+10"
+    },
+    {
+      "ok": true,
+      "label": "and the card starts on the same pixel: the default adds no margin of its own",
+      "detail": "card 1026 vs prose 1026"
+    },
+    {
+      "ok": true,
+      "label": "the five variables carry today's numbers, units and all",
+      "detail": "{\"rows\":\"2\",\"side\":\"0px\",\"pad\":\"8px\",\"blank\":\"0\",\"con\":\"10px\"}"
+    },
+    {
+      "ok": true,
+      "label": "the folded card's last preview row ends with three ASCII dots",
+      "detail": "\"...\""
+    },
+    {
+      "ok": true,
+      "label": "one marker per card, not one per row",
+      "detail": "1"
+    },
+    {
+      "ok": true,
+      "label": "and it is the last thing in the body: nothing of the prompt follows it",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "the marker's own box is inside the clamp, so it is drawn and not cut with the text",
+      "detail": "{\"top\":384,\"bottom\":398,\"right\":1378}"
+    },
+    {
+      "ok": true,
+      "label": "and it fits inside the body's padding on the right",
+      "detail": "{\"top\":384,\"bottom\":398,\"right\":1378}"
+    },
+    {
+      "ok": true,
+      "label": "the text before the dots is an exact prefix of the prompt: cut, never rewritten",
+      "detail": "88/1799 chars"
+    },
+    {
+      "ok": true,
+      "label": "and it is shorter: the card really is showing less than the whole prompt",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "the bold Prompt: label is the body's first child",
+      "detail": "\"Prompt:\""
+    },
+    {
+      "ok": true,
+      "label": "and it is bold",
+      "detail": "700"
+    },
+    {
+      "ok": true,
+      "label": "inline on the first row, not on a row of its own",
+      "detail": "true"
+    },
+    {
+      "ok": true,
+      "label": "a card whose prompt fits its rows draws no dots",
+      "detail": "{\"found\":true,\"dots\":0,\"bodyH\":18,\"clamp\":\"2\"}"
+    },
+    {
+      "ok": true,
+      "label": "an open card draws no marker at all",
+      "detail": "0"
+    },
+    {
+      "ok": true,
+      "label": "the press opened it",
+      "detail": "[true,\"true\",false]"
+    },
+    {
+      "ok": true,
+      "label": "and the whole prompt is on the page, byte for byte",
+      "detail": "1807 chars"
+    },
+    {
+      "ok": true,
+      "label": "the open card is taller than its fold: there really was more to read",
+      "detail": "666px > 36px"
+    },
+    {
+      "ok": true,
+      "label": "the hint says what the next press does",
+      "detail": "\"click to fold\""
+    },
+    {
+      "ok": true,
+      "label": "folding it back marks it again",
+      "detail": "[true,\"...\"]"
+    },
+    {
+      "ok": true,
+      "label": "the Display tab is the one on screen",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "all five rows are on the Display tab, as number boxes",
+      "detail": "[\"cmd-rows\",\"cmd-side\",\"cmd-pad\",\"cmd-blank\",\"cmd-con\"]"
+    },
+    {
+      "ok": true,
+      "label": "preview rows: a floor of 1, defaulting to 2",
+      "detail": "[\"1\",\"2\"]"
+    },
+    {
+      "ok": true,
+      "label": "and one press puts all five back",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "every row carries its own floor and ceiling, the same numbers app.js clamps to",
+      "detail": "{\"cmd-rows\":\"1..8\",\"cmd-side\":\"0..60\",\"cmd-pad\":\"0..32\",\"cmd-blank\":\"0..4\",\"cmd-con\":\"0..60\"}"
+    },
+    {
+      "ok": true,
+      "label": "typing 3 into the box folds the card to three rows at once",
+      "detail": "54px clamp=3"
+    },
+    {
+      "ok": true,
+      "label": "and the number is saved in this browser",
+      "detail": "{\"rows\":3,\"side\":0,\"pad\":8,\"blank\":0,\"con\":10}"
+    },
+    {
+      "ok": true,
+      "label": "and use defaults puts the five back",
+      "detail": "{\"rows\":2,\"side\":0,\"pad\":8,\"blank\":0,\"con\":10}"
+    },
+    {
+      "ok": true,
+      "label": "preview rows at 1: one 18px row on the page",
+      "detail": "18px"
+    },
+    {
+      "ok": true,
+      "label": "and the one row still ends with the marker, inside it",
+      "detail": "{\"top\":366,\"bottom\":380,\"right\":1365}"
+    },
+    {
+      "ok": true,
+      "label": "still a cut of the whole prompt, never a rewrite",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "preview rows at 8: eight 18px rows on the page",
+      "detail": "144px"
+    },
+    {
+      "ok": true,
+      "label": "and the marker ends the eighth row",
+      "detail": "{\"top\":492,\"bottom\":506,\"right\":1378}"
+    },
+    {
+      "ok": true,
+      "label": "the fixture's prompt is longer than eight rows, so the maximum is measured on a folded card",
+      "detail": "38 -> 388 chars"
+    },
+    {
+      "ok": true,
+      "label": "side margin at 0: the card starts at the console's text column",
+      "detail": "1026 vs 1026"
+    },
+    {
+      "ok": true,
+      "label": "side margin at 60: the card moves 60px in from that column",
+      "detail": "60px"
+    },
+    {
+      "ok": true,
+      "label": "and is 120px narrower: it gives up both sides, not one",
+      "detail": "120px"
+    },
+    {
+      "ok": true,
+      "label": "the card stays inside the console it belongs to",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "padding at 0: the body's text touches the card's own edge",
+      "detail": "0"
+    },
+    {
+      "ok": true,
+      "label": "and the head follows it",
+      "detail": "0"
+    },
+    {
+      "ok": true,
+      "label": "padding at 32: 32px of air on both sides of the text",
+      "detail": "32"
+    },
+    {
+      "ok": true,
+      "label": "the head follows that too, so the label and the prompt stay in one column",
+      "detail": "32"
+    },
+    {
+      "ok": true,
+      "label": "the narrower text column still ends its fold with a visible marker",
+      "detail": "{\"top\":384,\"bottom\":398,\"right\":1356}"
+    },
+    {
+      "ok": true,
+      "label": "blank lines at 0: the card's own 4px frame margin, as before",
+      "detail": "4px"
+    },
+    {
+      "ok": true,
+      "label": "blank lines at 4: 72px added above the frame margin",
+      "detail": "76px"
+    },
+    {
+      "ok": true,
+      "label": "and the page shows it: the gap above the card grew by exactly 72px",
+      "detail": "4px -> 76px"
+    },
+    {
+      "ok": true,
+      "label": "console text margin at 0: the left runs to the box's own edge, the copy button keeps its room",
+      "detail": "0/24"
+    },
+    {
+      "ok": true,
+      "label": "the card follows it, keeping its own margin of 0",
+      "detail": "card 1016 vs prose 1016"
+    },
+    {
+      "ok": true,
+      "label": "console text margin at 60: the text's inset is 60px on both sides, past the copy button's room",
+      "detail": "60/60"
+    },
+    {
+      "ok": true,
+      "label": "and the whole text column moved 60px in, the card with it",
+      "detail": "1016 -> 1076"
+    },
+    {
+      "ok": true,
+      "label": "the narrower column still ends its fold with the marker",
+      "detail": "{\"top\":400,\"bottom\":414,\"right\":1342}"
+    },
+    {
+      "ok": true,
+      "label": "use defaults puts the drawn card back where it started",
+      "detail": "[36,\"2\",\"10px\"]"
+    },
+    {
+      "ok": true,
+      "label": "no press raised a page error",
+      "detail": "0"
+    }
+  ],
+  "verdict": {
+    "checks": 61,
+    "failures": 0,
+    "held": 61,
+    "at": "2026-11-14T05:05:24.265Z"
+  },
   "notMeasured": [],
   "errors": [],
   "browser": {
     "pids": [
-      22684,
-      43244,
-      12492,
-      22580
+      36928,
+      49764,
+      65172,
+      18704
     ],
-    "profile": "<tmp>/playwright_chromiumdev_profile-yZjuSZ"
+    "profile": "<tmp>/playwright_chromiumdev_profile-kLapOW"
   },
   "states": {
     "10-rows-min-1": {
@@ -2192,15 +2505,15 @@
   ],
   "reaped": {
     "browserPids": [
-      22684,
-      43244,
-      12492,
-      22580
+      36928,
+      49764,
+      65172,
+      18704
     ],
     "alive": [],
-    "sandbox": "<tmp>/wtgui-command-card-look-voZj1B",
+    "sandbox": "<tmp>/wtgui-command-card-look-bMRmvg",
     "sandboxRemoved": true,
-    "profile": "<tmp>/playwright_chromiumdev_profile-yZjuSZ",
+    "profile": "<tmp>/playwright_chromiumdev_profile-kLapOW",
     "shots": "docs/reports/command-card-look"
   }
 }
