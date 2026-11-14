@@ -212,7 +212,10 @@ ol li, ul li { margin: 4px 0; }
 <li>No delta was ever delayed by more than 17.4 ms, in either build. Whatever a reader experiences as "lag" at this scale is not the primary thread failing to keep up with the wire; the profile says it is the console doing work between deltas that a still page would not do.</li>
 </ul>
 
-<h2>7. Reproduce</h2>
+<h2>8. The decision this report asked for</h2>
+<p><b>Fix all of it.</b> Recorded at the end of this run, as the next direction: causes 1 to 8, including the command-fold marker and the type-stream backlog. This run changed no shipped file, as it was scoped to measure only; the fixes belong to the run that follows, and the order to take them in is the rank above, because cause 8 (a diff that keeps node identity) is what makes the badge fix in section 4 hold.</p>
+
+<h2>9. Reproduce</h2>
 <pre><code>node tools/measure-console-stream-lag.mjs --label new --seconds 24 --json new.json
 mkdir -p /tmp/base-1991 &amp;&amp; git archive v1.99.1 | tar -x -C /tmp/base-1991
 node tools/measure-console-stream-lag.mjs --root /tmp/base-1991 --label base --seconds 24 --json base.json</code></pre>
