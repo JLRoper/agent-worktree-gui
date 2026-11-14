@@ -4,16 +4,32 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.105.1 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.105.2 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-607 releases from v0.1.0 (2026-10-20) to v1.105.1 (2026-11-14), 2062 commits between the tags. Every release is anchored by an
+608 releases from v0.1.0 (2026-10-20) to v1.105.2 (2026-11-14), 2065 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.105.2 — 2026-11-14 · 3 commits
+
+[`4a125a6`](https://github.com/JLRoper/agent-worktree-gui/commit/4a125a698164a3f0acca756aa3c3bce32c7c9b3d) · [compare v1.105.1...v1.105.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.105.1...v1.105.2)
+
+### Fixed
+
+- fix(console): the eight streaming lag causes, each one measured ([`a4232a6`](https://github.com/JLRoper/agent-worktree-gui/commit/a4232a664b60e0c9359599bc075c425d8021a111))
+
+### Docs & tests
+
+- docs: render the changelog - 607 releases ([`c65d4af`](https://github.com/JLRoper/agent-worktree-gui/commit/c65d4afd559f099ca07cb8ee2af904f75535ac8e))
+
+### Other
+
+- chore: 1.105.2 - the version this landing carries ([`4a125a6`](https://github.com/JLRoper/agent-worktree-gui/commit/4a125a698164a3f0acca756aa3c3bce32c7c9b3d))
 
 ## v1.105.1 — 2026-11-14 · 3 commits
 
