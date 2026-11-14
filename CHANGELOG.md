@@ -17,7 +17,7 @@ has no tag.
 
 ## v1.102.0 — 2026-11-14 · 4 commits
 
-[`5358b46`](https://github.com/JLRoper/agent-worktree-gui/commit/5358b4620466dd89e4ad32d9b12d3a86d04da4a6) · [compare v1.101.0...v1.102.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.101.0...v1.102.0)
+[`28e400a`](https://github.com/JLRoper/agent-worktree-gui/commit/28e400a357b91a5de424b28a803dbd3c74172f4d) · [compare v1.101.0...v1.102.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.101.0...v1.102.0)
 
 ### Docs & tests
 
@@ -26,8 +26,8 @@ has no tag.
 ### Other
 
 - console: say the audited counts the lists actually have ([`40425d4`](https://github.com/JLRoper/agent-worktree-gui/commit/40425d43a6b531846bf2f49c055932e86a832378))
-- console: the whole command card is the fold handle ([`99fe3bc`](https://github.com/JLRoper/agent-worktree-gui/commit/99fe3bc2b1cfc05c44100cf02868315fbe17cbd4))
-- chore: 1.102.0 - the version this landing carries ([`5358b46`](https://github.com/JLRoper/agent-worktree-gui/commit/5358b4620466dd89e4ad32d9b12d3a86d04da4a6))
+- console: the whole command card is the fold handle ([`e7ce8b2`](https://github.com/JLRoper/agent-worktree-gui/commit/e7ce8b2b53a1190e5acb9512bcae11e62e1d7cb2))
+- chore: 1.102.0 - the version this landing carries ([`28e400a`](https://github.com/JLRoper/agent-worktree-gui/commit/28e400a357b91a5de424b28a803dbd3c74172f4d))
 
 ## v1.101.0 — 2026-11-14 · 6 commits
 
