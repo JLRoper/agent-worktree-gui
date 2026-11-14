@@ -42,7 +42,12 @@
 //       at every value, and the setting is saved in this browser (`wtgui.cmdLook`);
 //   (8) the five rows are on the Display tab of Settings, each a number box with its own floor and ceiling, and one
 //       press of `use defaults` puts all five back to today's look;
-//   (9) nothing pressed here raised a page error.
+//   (9) nothing pressed here raised a page error;
+//  (10) THE WHOLE CARD IS THE HIT TARGET at 1440x900: the frame wears the pointer, the head carries no "click to
+//       read", a press in the middle of the body opens the card and a second one folds it back (caret, aria-expanded
+//       and the fold marker moving with it), Enter and Space work on the focused head, and three presses are NOT
+//       folds - a link, a copy button, and a drag that selects the card's own text. The console's copy control still
+//       copies the block the card is drawn in.
 //
 // Exit codes: 0 held; 1 a check failed; 2 the run did not measure what it claims (no Playwright, no card, no store).
 import { execFileSync } from "node:child_process";
@@ -224,6 +229,13 @@ function readConsole(thread) {
     labelFirst: body ? body.firstElementChild === firstRow && firstRow.firstElementChild === label : false,
     // the label is on the first row, not a row above it: its box sits inside the first row's own box
     labelInline: labelBox && firstRowBox ? labelBox.top >= firstRowBox.top - 1 && labelBox.bottom <= firstRowBox.bottom + 1 && labelBox.left >= firstRowBox.left - 1 : null,
+    // the handle: the frame wears the pointer, and the head carries no gesture label
+    cursor: cardCs.cursor,
+    bodyCursor: getComputedStyle(body).cursor,
+    headCursor: headCs.cursor,
+    copyBtn: Boolean(box.querySelector("[data-copy-btn]")),
+    // a point in the middle of the body, nowhere near the head: where a reader actually presses
+    bodyMid: bodyBox.width > 8 && bodyBox.height > 8 ? { x: Math.round(bodyBox.x + bodyBox.width / 2), y: Math.round(bodyBox.y + bodyBox.height / 2) } : null,
     // the five numbers, as the page drew them
     vars: {
       rows: root.getPropertyValue("--cmd-rows").trim(),
@@ -395,7 +407,7 @@ try {
       check(open.open === true && open.aria === "true" && open.clamped === false, "the press opened it", JSON.stringify([open.open, open.aria, open.clamped]));
       check(open.text.replace(/^Prompt:\s?/, "").trim() === open.whole, "and the whole prompt is on the page, byte for byte", `${open.text.length} chars`);
       check(open.bodyH > NOW.rows * NOW.rowPx, "the open card is taller than its fold: there really was more to read", `${open.bodyH}px > ${NOW.rows * NOW.rowPx}px`);
-      check(open.hint === "click to fold", "the hint says what the next press does", JSON.stringify(open.hint));
+      check(open.hint === "", "the head no longer names the gesture: the frame is the handle", JSON.stringify(open.hint));
       await shot("01-default-open");
       await head.click();
       await page.waitForTimeout(260);
@@ -568,6 +580,183 @@ try {
       // ---- (6) BACK AT THE DEFAULT, AND NOTHING ERRORS --------------------------------------------------------
       const after = await read();
       check(after.bodyH === NOW.rows * NOW.rowPx && after.clamp === "2" && after.vars.con === "10px", "use defaults puts the drawn card back where it started", JSON.stringify([after.bodyH, after.clamp, after.vars.con]));
+      // ---- (7) THE WHOLE CARD IS THE HIT TARGET, AT 1440x900 ----------------------------------------------------
+      // ONE PRESS, ONE CARD. The frame is the handle: a press anywhere in it folds or unfolds it, because the head no
+      // longer tells the reader to click it. Three presses are NOT folds, and each is driven here as the reader makes
+      // it - a link, a copy button, and a drag that selects the card's own text (the browser collapses the selection
+      // on mousedown, so that one is a real drag and not a click after a selection).
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.waitForTimeout(500);
+      const HIT = '.code-box.is-cmd[data-ltext*="[Fold marker]"]';
+      const hitOf = () =>
+        page.evaluate((sel) => {
+          const box = document.querySelector(sel);
+          if (!box) return null;
+          const head = box.querySelector(":scope > .code-head");
+          const body = box.querySelector(":scope > .code-body");
+          const cs = getComputedStyle(box);
+          const bb = body ? body.getBoundingClientRect() : null;
+          return {
+            open: box.classList.contains("is-open"),
+            clamped: box.classList.contains("is-clamped"),
+            aria: head ? head.getAttribute("aria-expanded") : null,
+            caret: head && head.querySelector(".code-caret") ? String(head.querySelector(".code-caret").textContent || "") : "",
+            hint: head && head.querySelector(".code-hint") ? String(head.querySelector(".code-hint").textContent || "").trim() : "",
+            bodyVisible: body ? !body.hidden && body.getBoundingClientRect().height > 0 : false,
+            bodyH: bb ? Math.round(bb.height) : 0,
+            dots: body ? body.querySelectorAll(".code-fold-dots").length : 0,
+            cursor: cs.cursor,
+            mid: bb && bb.width > 8 && bb.height > 8 ? { x: Math.round(bb.x + bb.width / 2), y: Math.round(bb.y + bb.height / 2) } : null,
+          };
+        }, HIT);
+      const hitShot = async (name) => {
+        const st = await hitOf();
+        const cardBox = await page.locator(HIT).boundingBox();
+        if (!cardBox) return null;
+        const clip = {
+          x: Math.max(0, Math.round(cardBox.x) - 30),
+          y: Math.max(0, Math.round(cardBox.y) - 40),
+          width: Math.min(1440, Math.round(cardBox.width) + 60),
+          height: Math.min(900, Math.round(cardBox.height) + 80),
+        };
+        const file = path.join(SHOTS, `${name}.png`);
+        await page.screenshot({ path: file, clip });
+        note(`screenshot ${file} at 1440x900`);
+        screens.push({ name, file, state: st });
+        return file;
+      };
+
+      let hit = await hitOf();
+      out.steps.push({ step: "hit-closed", ...hit });
+      check(Boolean(hit), "the card is on the page at 1440x900");
+      if (hit) {
+        check(hit.open === false && hit.clamped === true && hit.dots === 1, "closed: folded to its preview rows, marker and all", JSON.stringify([hit.open, hit.clamped, hit.dots]));
+        check(hit.cursor === "pointer", "the whole frame wears the pointer, not only its head", hit.cursor);
+        check(hit.hint === "", "and no part of it says click to read", JSON.stringify(hit.hint));
+        await hitShot("60-hit-closed-1440x900");
+
+        // A press in the MIDDLE OF THE BODY: nowhere near the head, which is where a reader actually puts the pointer.
+        await page.mouse.click(hit.mid.x, hit.mid.y);
+        await page.waitForTimeout(300);
+        const openByBody = await hitOf();
+        out.steps.push({ step: "hit-body-open", ...openByBody });
+        check(openByBody.open === true && openByBody.aria === "true" && openByBody.bodyVisible === true, "a press in the middle of the body opens the card", JSON.stringify([openByBody.open, openByBody.aria, openByBody.bodyVisible]));
+        check(openByBody.caret === "▾" && openByBody.dots === 0, "the caret turns and the marker goes with the fold", JSON.stringify([openByBody.caret, openByBody.dots]));
+        check(openByBody.bodyH > hit.bodyH, "and the body is taller than the fold it was cut to", `${hit.bodyH} -> ${openByBody.bodyH}px`);
+        await hitShot("61-hit-open-1440x900");
+
+        // A second press in the body folds it again.
+        await page.mouse.click(openByBody.mid.x, openByBody.mid.y);
+        await page.waitForTimeout(300);
+        const shutByBody = await hitOf();
+        check(shutByBody.open === false && shutByBody.aria === "false" && shutByBody.dots === 1, "a second press in the body folds it back, marker and all", JSON.stringify([shutByBody.open, shutByBody.aria, shutByBody.dots]));
+        check(shutByBody.bodyH === hit.bodyH, "to the same two preview rows it started at", `${shutByBody.bodyH}px`);
+
+        // Enter and Space, on the head the keyboard can reach.
+        await page.locator(`${HIT} .code-head`).first().focus();
+        await page.keyboard.press("Enter");
+        await page.waitForTimeout(280);
+        const byEnter = await hitOf();
+        check(byEnter.open === true && byEnter.aria === "true", "Enter on the focused head opens it", JSON.stringify([byEnter.open, byEnter.aria, byEnter.caret]));
+        await page.keyboard.press(" ");
+        await page.waitForTimeout(280);
+        const bySpace = await hitOf();
+        check(bySpace.open === false && bySpace.aria === "false", "Space folds it again", JSON.stringify([bySpace.open, bySpace.aria, bySpace.caret]));
+
+        // (a) A LINK in the body. The card's own body is prose, so the link is placed the way a reply's markdown puts
+        // one there - the guard is about what the press lands on, and it is the same node either way.
+        await page.evaluate((sel) => {
+          const body = document.querySelector(sel).querySelector(".code-body");
+          body.insertAdjacentHTML("afterbegin", '<a class="hit-probe" href="#hit-probe">a link in the card</a>');
+        }, HIT);
+        await page.locator(`${HIT} .hit-probe`).click();
+        await page.waitForTimeout(250);
+        const afterLink = await hitOf();
+        check(afterLink.open === bySpace.open && afterLink.clamped === bySpace.clamped, "a press on a link inside the card does not fold it", JSON.stringify([afterLink.open, afterLink.clamped]));
+        await page.evaluate((sel) => {
+          const probe = document.querySelector(sel).querySelector(".hit-probe");
+          if (probe) probe.remove();
+          if (location.hash) history.replaceState(null, "", location.pathname + location.search);
+        }, HIT);
+
+        // (b) A COPY BUTTON inside the card: the one the console's copy walker mounts is this exact node.
+        await page.evaluate((sel) => {
+          const box = document.querySelector(sel);
+          box.insertAdjacentHTML("beforeend", '<button type="button" class="copy-block" data-copy-btn="1" title="copy this block">\u29c9</button>');
+        }, HIT);
+        await page.evaluate((sel) => {
+          const btn = document.querySelector(sel).querySelector("[data-copy-btn]");
+          if (btn) btn.click();
+        }, HIT);
+        await page.waitForTimeout(250);
+        const afterCopy = await hitOf();
+        check(afterCopy.open === bySpace.open && afterCopy.clamped === bySpace.clamped, "a press on a copy button inside the card does not fold it", JSON.stringify([afterCopy.open, afterCopy.clamped]));
+        await page.evaluate((sel) => {
+          const btn = document.querySelector(sel).querySelector("[data-copy-btn]");
+          if (btn) btn.remove();
+        }, HIT);
+
+        // (c) A DRAG ACROSS THE CARD'S OWN TEXT. This is the press the reader makes when they mean to select, and the
+        // selection exists at mousedown and is collapsed by it: the fold is decided by the press, not by what the
+        // selection reads when the click arrives.
+        const dragFrom = await page.evaluate((sel) => {
+          const row = document.querySelector(sel).querySelector(".code-body .jl");
+          const r = row ? row.getBoundingClientRect() : null;
+          return r ? { x: Math.round(r.x + 6), y: Math.round(r.y + Math.min(7, r.height / 2)), width: Math.round(r.width) } : null;
+        }, HIT);
+        await page.mouse.move(dragFrom.x, dragFrom.y);
+        await page.mouse.down();
+        await page.mouse.move(dragFrom.x + Math.min(220, Math.max(40, dragFrom.width - 20)), dragFrom.y, { steps: 8 });
+        await page.mouse.up();
+        await page.waitForTimeout(280);
+        const selectedChars = await page.evaluate(() => String(window.getSelection() ? window.getSelection().toString() : "").trim().length);
+        const afterDrag = await hitOf();
+        check(selectedChars > 0, "a drag across the body selects its text", `${selectedChars} chars`);
+        check(afterDrag.open === bySpace.open && afterDrag.clamped === bySpace.clamped, "and that press does not fold the card", JSON.stringify([afterDrag.open, afterDrag.clamped]));
+        await page.evaluate(() => window.getSelection() && window.getSelection().removeAllRanges());
+        await page.waitForTimeout(150);
+
+        // The console's own copy control still works: the button on the block the card sits in copies, and copying is
+        // not a fold either.
+        const copyState = await page.evaluate((sel) => {
+          window.__copied = [];
+          let stubbed = false;
+          try {
+            Object.defineProperty(navigator, "clipboard", {
+              configurable: true,
+              value: { writeText: (t) => { window.__copied.push(String(t)); return Promise.resolve(); } },
+            });
+            stubbed = true;
+          } catch {
+            /* a browser that will not hand over clipboard still exercises the guard */
+          }
+          // The button the console mounts on the block the card is drawn in: the walker gives every `[data-copy]`
+          // block one, so the block that CONTAINS this card is the reader's own copy control for it.
+          const card = document.querySelector(sel);
+          const all = [...document.querySelectorAll("[data-copy-btn]")];
+          const btn = all.find((b) => {
+            const block = b.closest("[data-copy]");
+            return Boolean(block && card && block.contains(card));
+          });
+          if (btn) btn.click();
+          return {
+            btn: Boolean(btn),
+            stubbed,
+            buttons: all.length,
+            block: btn && btn.closest("[data-copy]") ? String(btn.closest("[data-copy]").className || btn.closest("[data-copy]").id || "?") : "",
+          };
+        }, HIT);
+        await page.waitForTimeout(350);
+        const copied = await page.evaluate(() => (window.__copied || []).join(""));
+        const afterCopyReal = await hitOf();
+        check(copied.length > 0 && copied.includes("Fold marker"), "the console's copy control still copies the block the card is in", `${copied.length} chars, button ${copyState.btn ? `found on .${copyState.block}` : `MISSING (${copyState.buttons} on the page)`}, clipboard ${copyState.stubbed ? "stubbed" : "native"}`);
+        check(afterCopyReal.open === afterDrag.open, "and pressing it does not fold the card", JSON.stringify([afterCopyReal.open, afterCopyReal.clamped]));
+
+        // Back to folded for the ledger's own closing state, and the fold marker still marks it.
+        const final = await hitOf();
+        check(final.clamped === true && final.dots === 1 && final.aria === "false", "the card is folded, marked and honest about it at the end of the presses", JSON.stringify([final.clamped, final.dots, final.aria]));
+      }
+
       const errors = [...pageErrors];
       out.errors = errors.map((e) => String(e && e.message ? e.message : e));
       check(errors.length === 0, "no press raised a page error", `${errors.length}`);

@@ -40,7 +40,7 @@ test("a shell transcript is one box, folded, that says what it is and how long i
   assert.equal(opened(h), 0);
   assert.match(h, /<span class="code-what">terminal output<\/span>/);
   assert.match(h, /<span class="code-n">3 lines<\/span>/);
-  assert.match(h, /<span class="code-hint">click to read<\/span>/);
+  assert.match(h, /<span class="code-hint"><\/span>/); // the hint is a status slot, not the gesture label
   assert.match(h, /aria-expanded="false"/);
   assert.match(h, /<span class="code-caret">▸<\/span>/);
   for (const line of TERMINAL) assert.ok(h.includes(`data-ltext="${line}"`), `${line} is in the box, whole, as a console line`);
@@ -213,7 +213,7 @@ test("the reader's open boxes come from the caller's set, keyed by the run's fir
   assert.match(h, /code-box is-out is-open/);
   assert.match(h, /aria-expanded="true"/);
   assert.match(h, /<span class="code-caret">▾<\/span>/);
-  assert.match(h, /<span class="code-hint">click to fold<\/span>/);
+  assert.match(h, /<span class="code-hint"><\/span>/); // open or shut, the slot carries no label
   assert.equal(folded(html(["a", "b"], { ...opts, codeOpen: new Set(["some|other|key"]) })), 1, "any other key stays folded");
 });
 

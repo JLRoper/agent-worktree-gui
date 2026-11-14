@@ -1911,7 +1911,10 @@ textarea.drop-target, .chipbox.drop-target { outline: 2px dashed var(--violet); 
 
 /* A file printed into the console that is NOT a diff: the same window shape, its header naming the file, and
    folded by default — the reader can see that a file was printed, and which one, without reading it. */
-.code-box { margin: 4px 0; border: 1px solid var(--line); border-radius: 6px; background: #10151c; overflow: hidden; white-space: normal; }
+/* THE WHOLE FRAME IS THE HANDLE (public/app.js). A press anywhere in it folds or unfolds it, so the box wears the
+   pointer the head used to wear alone; the head is still a real button, and its own cursor rule stays for the
+   keyboard focus ring's sake. Selection still works: a press that finishes a text selection is not a fold. */
+.code-box { margin: 4px 0; border: 1px solid var(--line); border-radius: 6px; background: #10151c; overflow: hidden; white-space: normal; cursor: pointer; }
 .code-head {
   display: flex;
   align-items: baseline;
@@ -1931,6 +1934,8 @@ textarea.drop-target, .chipbox.drop-target { outline: 2px dashed var(--violet); 
 .code-caret { flex: none; color: var(--dimmer); }
 .code-what { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #c8a6ff; }
 .code-n { flex: none; margin-left: auto; color: var(--dimmer); }
+/* A SLOT, NOT A LABEL: the frame no longer spells out the gesture (the box is the handle), so this holds only the
+   transient status a fold note writes while it fetches its stored result; the hover rule hides it as it always did. */
 .code-hint { flex: none; color: var(--dimmer); font-size: .9em; }
 .code-head:hover .code-hint { visibility: hidden; }
 .code-body { padding: 4px 8px; white-space: normal; }

@@ -81,7 +81,12 @@ test("the marker is written for every card a render path places, and taken back 
   assert.match(app, /if \(open\) clearCommandFoldMark\(box\);\n\s*else paintCommandFoldMark\(box\);/);
   // ...and the press still writes its own state exactly as before it.
   assert.match(app, /box\.classList\.toggle\("is-clamped", !open\);/);
-  assert.match(app, /if \(hint\) hint\.textContent = open \? "click to fold" : "click to read";/);
+  // ...and the press is the whole card's, not the head's alone: one branch answers a press on the frame (codeBoxHit),
+  // and the frame's hint no longer names the gesture (the box is the affordance).
+  assert.match(app, /const codeFold = e\.target\.closest\("\[data-code-fold\]"\) \|\| codeBoxHit\(e\);/);
+  assert.match(app, /function codeBoxHit\(e\) \{/);
+  assert.match(app, /target\.closest\("a, button, input, textarea, select, summary, label, \[data-copy-btn\]"\)/);
+  assert.doesNotMatch(app, /hint\.textContent = open \? "click to fold"/);
 });
 
 test("the folded height is the reader's number of preview rows, and its fallback is today's two", () => {

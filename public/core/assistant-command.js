@@ -3,8 +3,8 @@
 // WHAT THIS IS. A reply an assistant writes ends with lines in the panel's own vocabulary - `QUEUE assistant-3 |
 // ...`, `SPAWN IN <tree> | ...`, `TODO ADD ...` - and the reader meets them as plain prose in the transcript. This
 // module reads the one thing a reader needs at a glance (which kind, who it is for, what it is called) and hands
-// back the SAME `.code-box` frame a tool's result is drawn in: a head button with a caret and "click to read", and a
-// body folded to two lines.
+// back the SAME `.code-box` frame a tool's result is drawn in: a head with a caret and a line count, a body folded
+// to two lines, and a whole card that toggles on a press anywhere inside it.
 //
 // DISPLAY ONLY, AND THIS IS THE WHOLE OF THE RULE. Nothing here is read by the executing grammar: lib/assistant/
 // actions.js parses the line as it always did, byte for byte, and the title is NOT stripped from what runs. A card

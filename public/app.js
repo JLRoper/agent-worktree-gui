@@ -9992,6 +9992,61 @@ function foldProjectFromClick(e) {
   return true;
 }
 
+// WHICH `code-head` A PRESS BELONGS TO, when the press did not land on a head. The whole `.code-box` frame is the
+// handle (the branch below): a press on its body, its bullets or its chrome folds or unfolds the card. Three
+// presses are NOT a fold, because the card contains things a reader means to use and text a reader means to keep:
+//   * one on a LINK or any other control inside the box - the copy button the console's copy walker adds to every
+//     `[data-copy]` block is a `<button>`, so it and every other button, input and summary answer for themselves;
+//   * one that finishes a TEXT SELECTION - dragging across the output and letting go fires a click on the box, and
+//     folding what was just selected would be the panel undoing the reader's own gesture;
+//   * one on the head itself, which the branch that calls this has already matched (a button is a control: the head
+//     would otherwise toggle once here and once through its own press, which cancels out).
+// Returns null for all three, so the caller's `if (codeFold)` skips them and their own handlers run.
+//
+// A SELECTION IS MEASURED AT MOUSEDOWN, not at the click. The browser collapses the selection when the button goes
+// down, so a click handler that asks `getSelection()` after a drag always sees nothing selected: the guard would pass
+// every press it was written to stop. So the press is recorded as it starts - where the pointer went down, and
+// whether a selection was already open inside the box - and a click that moved more than a few pixels (a drag) or
+// landed while text was selected is not a fold, whatever the selection reads by then.
+let codePress = null;
+document.addEventListener(
+  "mousedown",
+  (e) => {
+    const target = e.target;
+    const box = target && target.closest ? target.closest(".code-box") : null;
+    if (!box) {
+      codePress = null;
+      return;
+    }
+    const picked = document.getSelection ? document.getSelection() : null;
+    const inside = (n) => Boolean(n) && (n === box || box.contains(n));
+    codePress = {
+      x: e.clientX,
+      y: e.clientY,
+      selected: Boolean(picked && !picked.isCollapsed && (inside(picked.anchorNode) || inside(picked.focusNode))),
+    };
+  },
+  true,
+);
+
+function codeBoxHit(e) {
+  const target = e.target;
+  if (!target || typeof target.closest !== "function") return null;
+  const box = target.closest(".code-box");
+  if (!box) return null;
+  if (target.closest("a, button, input, textarea, select, summary, label, [data-copy-btn]")) return null;
+  if (codePress) {
+    const moved = Math.abs(Number(e.clientX) - codePress.x) > 4 || Math.abs(Number(e.clientY) - codePress.y) > 4;
+    if (codePress.selected || moved) return null;
+  }
+  const picked = document.getSelection ? document.getSelection() : null;
+  if (picked && !picked.isCollapsed && picked.rangeCount > 0) {
+    const inside = (n) => Boolean(n) && (n === box || box.contains(n));
+    if (inside(picked.anchorNode) || inside(picked.focusNode)) return null;
+  }
+  return box.querySelector(":scope > .code-head[data-code-fold]");
+}
+
 document.addEventListener("click", async (e) => {
   // A click is the reader taking over: stop chasing the box a spawn wanted focused. Clicking inside
   // that agent's own card keeps the target, so reading its output does not undo it.
@@ -11053,10 +11108,10 @@ document.addEventListener("click", async (e) => {
       // One entry per row the reader ever opened; a long-lived tab should not keep every one of them forever.
       while (state.callOpen.size > 500) state.callOpen.delete(state.callOpen.values().next().value);
       if (open) {
-        // The row IS its box's opener. What sits behind a row is a console box like any other — folded, with its own
-        // "click to read" — because the box is the same one the condensed view draws, and a reader who opened the row
-        // asked to see what the call returned, not for a second thing to click. So the box's own book is written here
-        // as if its header had been pressed: one action, one box, and the box's header still folds it on its own.
+        // The row IS its box's opener. What sits behind a row is a console box like any other - open, with its head
+        // still able to fold it - because the box is the same one the condensed view draws, and a reader who opened
+        // the row asked to see what the call returned, not for a second thing to click. So the box's own book is
+        // written here as if its head had been pressed: one action, one box, and the box still folds on any press.
         for (const head of boxEl.querySelectorAll("[data-code-fold][data-code-key]")) {
           const book = head.dataset.codeInverted === "1" ? state.codeBoxShut : state.codeBoxOpen;
           if (head.dataset.codeInverted === "1") book.delete(head.dataset.codeKey);
@@ -11067,8 +11122,6 @@ document.addEventListener("click", async (e) => {
           head.setAttribute("aria-expanded", "true");
           const caret = head.querySelector(".code-caret");
           if (caret) caret.textContent = "\u25be";
-          const hint = head.querySelector(".code-hint");
-          if (hint) hint.textContent = "click to fold";
         }
         const grp = block.closest(".tgrp");
         const turnId = String(grp?.dataset.tgrp || "").split("#")[0];
@@ -11141,12 +11194,16 @@ document.addEventListener("click", async (e) => {
     toggleConsoleFocus(focusBtn);
     return;
   }
-  // A result box inside a burst: a tool's output, folded until the reader asks for it. The fold is remembered by
-  // key (the burst plus the segment), because every rebuild replaces this markup and a box that snapped shut under
-  // the cursor would read as the panel losing the click. Which book it is written in depends on the box: every box
-  // starts folded and the book holds the ones that were opened; the one drawn open because the reader asked for
-  // it (data-code-inverted — the whole stored text a fold note reads) is the other way round.
-  const codeFold = e.target.closest("[data-code-fold]");
+  // A result box inside a burst: a tool's output, and every command card in a reply. THE WHOLE BOX IS THE HANDLE -
+  // a press anywhere inside it folds or unfolds it, because the frame no longer tells the reader to click its head
+  // (core/console-format.js) and a two-row body with a 20px strip of buttons above it is a card that reads as inert.
+  // The head is still a real button: Tab reaches it, Enter and Space press it, and it carries aria-expanded, which
+  // the one branch below keeps honest for either kind of press. The fold is remembered by key (the burst plus the
+  // segment), because every rebuild replaces this markup and a box that snapped shut under the cursor would read as
+  // the panel losing the click. Which book it is written in depends on the box: every box starts folded and the book
+  // holds the ones that were opened; the one drawn open because the reader asked for it (data-code-inverted - the
+  // whole stored text a fold note reads) is the other way round.
+  const codeFold = e.target.closest("[data-code-fold]") || codeBoxHit(e);
   if (codeFold) {
     e.preventDefault();
     e.stopPropagation();
@@ -11178,8 +11235,6 @@ document.addEventListener("click", async (e) => {
       codeFold.setAttribute("aria-expanded", open ? "true" : "false");
       const caret = codeFold.querySelector(".code-caret");
       if (caret) caret.textContent = open ? "▾" : "▸";
-      const hint = codeFold.querySelector(".code-hint");
-      if (hint) hint.textContent = open ? "click to fold" : "click to read";
       const key = codeFold.dataset.codeKey || "";
       const book = codeFold.dataset.codeInverted === "1" ? state.codeBoxShut : state.codeBoxOpen;
       // Boxes that start folded remember the ones opened; boxes that start open remember the ones shut.
