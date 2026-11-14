@@ -352,9 +352,16 @@ test("a SPAWN's TODOs are its card's bullets, and stop being cards of their own"
   // Each bullet reads: the checkbox glyph, the category, then the item - and carries the TODO it came from.
   for (const [i, todo] of plan[0].todos.entries()) {
     assert.ok(block.includes(`<span class="code-bullet-glyph" aria-hidden="true">${EM.TODO}</span>`), "a bullet carries the TODO glyph");
-    assert.ok(block.includes(`<span class="code-bullet-text">${todo.category} - ${todo.text}</span>`), `bullet ${i + 1} reads category - item`);
+    assert.ok(
+      block.includes(`<span class="code-bullet-text"><b class="code-bullet-cat">${todo.category}</b> - ${todo.text}</span>`),
+      `bullet ${i + 1} reads a bold category, a hyphen, then the item`,
+    );
     assert.ok(block.includes(`title="${SWEEP[i + 1]}"`), `bullet ${i + 1} carries its TODO line`);
   }
+  // The category is the label, so it is drawn bold: the markup says it, and the stylesheet gives it the weight.
+  assert.equal(M.bulletText({ category: "A", text: "one" }), '<b class="code-bullet-cat">A</b> - one', "one reading of a bullet's markup");
+  assert.equal(M.bulletText({ category: "", text: "no bracket" }), "no bracket", "no category, no weight, no invented label");
+  assert.match(css, /\.code-bullet-cat \{ font-weight: 700;/, "the stylesheet makes the category the bold part");
   // The head shows the count, and the card is still the same frame with the same line on it.
   assert.ok(block.includes(`<span class="code-n">3 todos</span>`), "the head counts the bullets");
   assert.ok(block.includes('data-cmd-bullets="3"'), "the card says how many it carries");
@@ -383,7 +390,7 @@ test("a TODO with no SPAWN above it keeps its card, and the nearest SPAWN owns t
   const pair = M.cardsHtml(two.join("\n"), { scope: "msg|3", open: new Set() });
   assert.equal((pair.match(/class="code-box/g) || []).length, 2, "two SPAWN cards");
   assert.equal((pair.match(/class="code-bullet"/g) || []).length, 2, "one bullet each");
-  assert.ok(pair.includes("<span class=\"code-bullet-text\">A - one</span>") && pair.includes("<span class=\"code-bullet-text\">B - two</span>"));
+  assert.ok(pair.includes('<b class="code-bullet-cat">A</b> - one') && pair.includes('<b class="code-bullet-cat">B</b> - two'));
   assert.equal((pair.match(/<span class="code-n">1 todo<\/span>/g) || []).length, 2, "each head says one todo");
   // An id op carries no text: it is not a bullet, and it keeps the prose line it always was.
   const idOp = M.cardsHtml("SPAWN IN a | first\nTODO DONE 3", { scope: "msg|4", open: new Set() });

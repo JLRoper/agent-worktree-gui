@@ -61,7 +61,8 @@ Three of those deserve a word:
 
 A TODO written under a SPAWN belongs to the tree that SPAWN names - the grammar's own sentence - so it is not a card
 of its own: it is one bullet row of the SPAWN's card. The row reads `<category> - <todo>`, where the category is the
-TODO's leading `[Title]` (the same bracket the card's head reads) and the glyph is the TODO card's checkbox:
+TODO's leading `[Title]` (the same bracket the card's head reads), drawn in bold because it is the label a reader
+scans for, and the glyph is the TODO card's checkbox:
 
 ```
 [▸] 🌱 IN #398 sales-citdev-POC-build-1 | Tight sweep     3 todos   click to read
@@ -74,7 +75,8 @@ TODO's leading `[Title]` (the same bracket the card's head reads) and the glyph 
 The rule:
 
 - the owner is the nearest SPAWN above the line; a TODO with no SPAWN above it keeps the card it always had;
-- a TODO with no bracket is still the SPAWN's bullet: the glyph and the item, with no invented category;
+- a TODO with no bracket is still the SPAWN's bullet: the glyph and the item, with no invented category - and so no
+  bold label, because there is no label to weigh;
 - an id op (`TODO DONE 3`) carries no text and is not folded: it keeps the prose line it always was;
 - the bullets are drawn BETWEEN the head and the body, so the two-line clamp on the body never hides them, and the
   head counts them (`3 todos`, `1 todo`). The card says `data-cmd-bullets="3"`, and its count is the one number a
