@@ -667,9 +667,14 @@ function cfBox({ kind, at, rows, what, title = "", delta = "", body, opts, open,
     `<div class="code-box is-${kind}${skill ? " is-skill" : ""}${isOpen ? " is-open" : ""}${lines && !isOpen ? " is-clamped" : ""}"${attrs}${source}${lines ? ` data-code-clamp="${lines}"` : ""}>` +
     `<button type="button" class="code-head" data-code-fold="1"${identity} data-code-key="${cfEsc(key)}"${inverted ? ' data-code-inverted="1"' : ""} aria-expanded="${isOpen ? "true" : "false"}"${title ? ` title="${cfEsc(title)}"` : ""}>` +
     `<span class="code-caret">${isOpen ? "▾" : "▸"}</span><span class="code-what">${cfEsc(what)}</span>${delta}` +
-    `<span class="code-n">${cfEsc(countText)}</span><span class="code-hint">${isOpen ? "click to fold" : "click to read"}</span></button>` +
+    `<span class="code-n">${cfEsc(countText)}</span><span class="code-hint"></span></button>` +
     // `bullets` is the one slot BETWEEN the head and the body: a command card's SPAWN owns its TODOs as rows there,
     // so they stay on the page when the body is folded to two lines. Nothing else passes it.
+    //
+    // THE HINT IS A SLOT, NOT A LABEL. It used to spell the gesture out - "click to read" shut, "click to fold" open -
+    // and the box is the affordance now: the whole frame toggles (public/app.js), so a sentence telling the reader to
+    // click was a caption under something already clickable. The span stays, empty, because it is where the one string
+    // that is not a label goes: a fold note fetching its stored result says so in the head (public/board/console.js).
     `${bullets}<div class="code-body"${isOpen || lines ? "" : " hidden"}>${body}</div>` +
     `</div>`
   );

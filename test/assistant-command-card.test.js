@@ -166,7 +166,11 @@ test("the card is the tool card's own frame, with a button head and a two-line b
   assert.match(card, /<button type="button" class="code-head" data-code-fold="1" data-code-key="cmd\|t1\|0" aria-expanded="false"/);
   assert.match(card, /<span class="code-caret">/);
   assert.ok(card.includes(head(`${EM.QUEUE} assistant-3 | Playwright test`)));
-  assert.match(card, /click to read/);
+  // The frame does not spell out the gesture any more: the whole card is the handle (public/app.js's codeBoxHit), so
+  // "click to read" was a caption under something already clickable. The hint span stays, empty, as the slot a fold
+  // note writes its fetching status into.
+  assert.doesNotMatch(card, /click to read|click to fold/);
+  assert.match(card, /<span class="code-hint"><\/span>/);
   // Folded, the body is on the page (folded to two lines by the stylesheet), never `hidden`.
   assert.match(card, /<div class="code-body">/);
   assert.doesNotMatch(card, /code-body" hidden/);

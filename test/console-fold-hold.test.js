@@ -133,8 +133,8 @@ test("a press outside a console is not a fold", () => {
 const handler = (marker, end) => part(marker, end);
 
 test("opening a result box's head holds the console; folding it shut does not", () => {
-  const at = source.indexOf('const codeFold = e.target.closest("[data-code-fold]");');
-  assert.ok(at > 0, "the result box's head still has its handler");
+  const at = source.indexOf('const codeFold = e.target.closest("[data-code-fold]") || codeBoxHit(e);');
+  assert.ok(at > 0, "the result box's head still has its handler - and the whole frame answers with it, which is why the branch is the same one");
   const click = source.slice(at, source.indexOf('const batchBtn = e.target.closest("[data-batch-tool]")', at));
   assert.match(click, /if \(open\) holdConsoleFor\(codeFold\);/, "the hold is on the opening press only");
   assert.ok(click.indexOf("holdConsoleFor") < click.indexOf("body.hidden = !open;"), "it is taken over BEFORE the body is shown");

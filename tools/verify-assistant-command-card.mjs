@@ -27,7 +27,7 @@
 //   (1) turn 1's tail is a card whose header reads "🧾 assistant-3 | Playwright test";
 //   (2) folded, its body is exactly two lines high and there is more to read under the clamp;
 //   (3) a real click on the head opens it: aria-expanded flips, the caret turns, the whole body is on the page, and
-//       the hint says "click to fold";
+//       the head carries no gesture label at all - the frame is the handle and the hint slot stays empty;
 //   (4) a second click folds it back to the same two lines - the folded state is a fold, not a disappearance;
 //   (5) the TODO line is a card too, with its own emoji; the three lines whose title is malformed or absent are cards
 //       as well, with a head of the kind's emoji and the recipient and no title;
@@ -391,7 +391,7 @@ try {
       out.steps.push({ step: "expanded", ...tail });
       check(tail.aria === "true" && tail.open === true && tail.clamped === false, "the press opens the card: aria-expanded true, unclamped", `aria ${tail.aria} · open ${tail.open}`);
       check(tail.caret === "▾", "the caret turns to point down", tail.caret);
-      check(tail.hint === "click to fold", "and the head offers the way back", tail.hint);
+      check(tail.hint === "", "and the head no longer names the gesture: the whole card is the handle", JSON.stringify(tail.hint));
       check(tail.bodyH >= tail.bodyScroll - 2, "the whole body is on the page now", `${tail.bodyH}px vs ${tail.bodyScroll}px of body`);
       check(tail.bodyH > tail.lineH * 2 + 2, "which is more than the two lines it was folded to", `${tail.bodyH}px`);
       await shot("03-queue-card-expanded", await boxOf(LINES[0].id));
