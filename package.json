@@ -28,6 +28,7 @@
     "verify:version-tags": "node tools/verify-version-tags.mjs",
     "verify:store-atomic": "node tools/verify-store-atomic.mjs",
     "verify:assistant-command-card": "node tools/verify-assistant-command-card.mjs",
+    "verify:spawn-todo-bullets": "node tools/verify-spawn-todo-bullets.mjs",
     "verify:deliverables-ui": "node tools/verify-deliverables-ui.mjs",
     "verify:deliverables-stable": "node tools/verify-deliverables-stable.mjs",
     "verify:deliverables-stale": "node tools/verify-deliverables-stale.mjs",

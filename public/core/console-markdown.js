@@ -260,21 +260,49 @@ function cmIsCommandLine(text, opts) {
   return Boolean(cf && typeof cf.commandLine === "function" && cf.commandLine(text));
 }
 
-function cmCommandCard(line, opts, i) {
+function cmCommandCard(line, opts, i, bullets = null) {
   if (!opts || !opts.cards) return "";
   const cf = cmConsoleFormat();
   if (!cf || typeof cf.commandCard !== "function") return "";
   const lid = line && line.lid != null && line.lid !== "" ? String(line.lid) : null;
   // The key the reader's open state is kept under: the line's own id when it has one (it survives a repaint and a
-  // window that drops the lines above it), its index in the run when it does not.
+  // window that drops the lines above it), its index in the run when it does not. `bullets` is a SPAWN's own TODOs,
+  // folded into its card (see cmFoldCommandBlocks): the card draws them between its head and its body.
   return String(
     cf.commandCard(cmText(line), {
       ...opts.cards,
       ref: lid == null ? i : lid,
       lid,
       lineKind: String((line && line.kind) || "text"),
+      ...(Array.isArray(bullets) && bullets.length ? { bullets } : {}),
     }) || "",
   );
+}
+
+// A SPAWN's own TODO lines are that card's bullets, not four more cards. The rule lives in
+// public/core/assistant-command.js (`foldSpawnTodos`, reached through the frame's `commandFold` seam), so the
+// transcript and the Messages pane cannot disagree about which TODO belongs to which SPAWN. A command block that is
+// one of those bullets is DROPPED from the run: the block above it carries it, and drawing both would be the defect
+// this fold exists to stop. Only a caller that asked for cards (the agent card's transcript) takes this path; the
+// console's own live append keeps every row it always drew.
+function cmFoldCommandBlocks(blocks, opts) {
+  if (!opts || !opts.cards) return blocks;
+  const cf = cmConsoleFormat();
+  if (!cf || typeof cf.commandFold !== "function") return blocks;
+  // Prose and fence blocks answer with an empty text on purpose: they neither own nor are a TODO, and a SPAWN's
+  // ownership is not broken by a sentence between it and its items.
+  const plan = cf.commandFold(blocks.map((b) => ({ text: b.type === "cmd" && b.lines[0] ? cmText(b.lines[0]) : "" })));
+  const out = [];
+  blocks.forEach((b, i) => {
+    if (b.type !== "cmd") {
+      out.push(b);
+      return;
+    }
+    const p = plan[i] || {};
+    if (p.folded) return;
+    out.push(Array.isArray(p.todos) && p.todos.length ? { ...b, todos: p.todos } : b);
+  });
+  return out;
 }
 
 const cmText = (line) => String((line && line.text) != null ? line.text : "").replace(/\r+$/, "");
@@ -382,7 +410,7 @@ function consoleMdBlocks(lines, opts = {}) {
     cur.lines.push(line);
   }
   flush();
-  return out;
+  return cmFoldCommandBlocks(out, opts);
 }
 
 // ---- markup ------------------------------------------------------------------------------------------
@@ -435,7 +463,7 @@ function consoleMdBlockHtml(block, opts = {}) {
   const rowOpts = opts.rowOpts || {};
   // A command line's card IS the block: no `.md-block` wrapper, because the card is a frame of its own (the same one
   // a result is drawn in) and a wrapper would only add margins around margins.
-  if (block.type === "cmd") return cmCommandCard(block.lines[0], opts, Number(opts.index) || 0);
+  if (block.type === "cmd") return cmCommandCard(block.lines[0], opts, Number(opts.index) || 0, block.todos);
   if (block.type === "fence") return cmFenceHtml(block, rowOpts);
   if (block.type === "head") {
     // The `##` is the marker, not the sentence: data-ltext keeps the source line whole, the row shows the words.
@@ -518,7 +546,7 @@ function consoleMdTypedBlockHtml(block, textOf, opts = {}, index = 0) {
     // line is the plain row it was while it was being written.
     const line = block.lines[0];
     if (shownOf(line) !== cmText(line)) return consoleMdRow(line, { inner: consoleMdInline(shownOf(line)) });
-    return cmCommandCard(line, opts, index);
+    return cmCommandCard(line, opts, index, block.todos);
   }
   if (block.type === "fence") {
     const n = block.lines.length;

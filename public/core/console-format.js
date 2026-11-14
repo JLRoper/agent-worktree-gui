@@ -639,7 +639,7 @@ const cfCount = (n) => `${n} line${n === 1 ? "" : "s"}`;
 // row in the rows the caller handed over — with the caller's `codeKey` that is the box's key, the handle the
 // reader's open state is kept under across a repaint. The key is also why a box grows in place while its result is
 // still arriving: the run starts at the same row every time, only its length changes.
-function cfBox({ kind, at, rows, what, title = "", delta = "", body, opts, open, skill = false, clamp = 0, attrs = "" }) {
+function cfBox({ kind, at, rows, what, title = "", delta = "", body, opts, open, skill = false, clamp = 0, attrs = "", count = "", bullets = "" }) {
   const fold = opts.fold && opts.fold.tool && opts.fold.turn != null && opts.fold.row != null ? opts.fold : null;
   // `opts.key` is for the one caller whose card is not a RESULT: a command line's card is keyed by its own scope
   // (the turn or the message it was written in), so its fold survives a repaint like every other box's.
@@ -648,7 +648,13 @@ function cfBox({ kind, at, rows, what, title = "", delta = "", body, opts, open,
   const inverted = Boolean(open && open.openByDefault);
   const pending = Boolean(fold && !opts.whole);
   const hidden = /([0-9]+) (?:lines? hidden|more line)/.exec(String(opts.foldNote || ""));
-  const count = pending ? hidden ? `${rows} of ${Math.max(rows, Number(fold.head) || 40) + Number(hidden[1])} lines` : `${cfCount(rows)} · preview` : cfCount(rows);
+  const countText = count
+    ? String(count)
+    : pending
+      ? hidden
+        ? `${rows} of ${Math.max(rows, Number(fold.head) || 40) + Number(hidden[1])} lines`
+        : `${cfCount(rows)} · preview`
+      : cfCount(rows);
   const identity = fold
     ? `${pending ? ' data-tool-fold="1"' : ""} data-fold-turn="${cfEsc(String(fold.turn))}" data-fold-tool="${cfEsc(String(fold.tool))}" data-fold-row="${cfEsc(String(fold.row))}"`
     : "";
@@ -661,8 +667,10 @@ function cfBox({ kind, at, rows, what, title = "", delta = "", body, opts, open,
     `<div class="code-box is-${kind}${skill ? " is-skill" : ""}${isOpen ? " is-open" : ""}${lines && !isOpen ? " is-clamped" : ""}"${attrs}${source}${lines ? ` data-code-clamp="${lines}"` : ""}>` +
     `<button type="button" class="code-head" data-code-fold="1"${identity} data-code-key="${cfEsc(key)}"${inverted ? ' data-code-inverted="1"' : ""} aria-expanded="${isOpen ? "true" : "false"}"${title ? ` title="${cfEsc(title)}"` : ""}>` +
     `<span class="code-caret">${isOpen ? "▾" : "▸"}</span><span class="code-what">${cfEsc(what)}</span>${delta}` +
-    `<span class="code-n">${cfEsc(count)}</span><span class="code-hint">${isOpen ? "click to fold" : "click to read"}</span></button>` +
-    `<div class="code-body"${isOpen || lines ? "" : " hidden"}>${body}</div>` +
+    `<span class="code-n">${cfEsc(countText)}</span><span class="code-hint">${isOpen ? "click to fold" : "click to read"}</span></button>` +
+    // `bullets` is the one slot BETWEEN the head and the body: a command card's SPAWN owns its TODOs as rows there,
+    // so they stay on the page when the body is folded to two lines. Nothing else passes it.
+    `${bullets}<div class="code-body"${isOpen || lines ? "" : " hidden"}>${body}</div>` +
     `</div>`
   );
 }
@@ -758,6 +766,18 @@ function cfCommandCard(text, opts = {}) {
   return typeof out === "string" ? out : "";
 }
 
+// The SPAWN-owns-its-TODOs fold, for a renderer that hands over a BLOCK of lines rather than one string: the agent
+// card's transcript draws a run of blocks, so it asks here and the rule stays in the one module
+// (public/core/assistant-command.js `foldSpawnTodos`). Blocks are `{ text }`; each comes back with `todos` (the
+// bullets that card owns) and `folded` (draw nothing: that line is one of them). A page without the module answers
+// every block unfolded, so the transcript keeps the cards it always drew.
+function cfCommandFold(entries) {
+  const mod = globalThis.wtAssistantCommand;
+  const list = Array.isArray(entries) ? entries : [];
+  if (!mod || typeof mod.foldSpawnTodos !== "function") return list.map(() => ({}));
+  return mod.foldSpawnTodos(list);
+}
+
 window.WMApp = window.WMApp || {};
 window.WMApp.core = window.WMApp.core || {};
 // Published for the harnesses and for the later steps of the public/ split; app.js calls the bare names.
@@ -773,6 +793,7 @@ window.WMApp.core.consoleFormat = {
   // renderer asks (core/console-markdown.js draws a turn's prose with the card this answers).
   commandLine: cfCommandLine,
   commandCard: cfCommandCard,
+  commandFold: cfCommandFold,
   // Was this preview cut by the gateway? The console asks before it decides whether the lines it was handed are
   // all there is of a result, so the wording of the note lives here and nowhere else.
   cutNote: consoleCutNote,
