@@ -104,7 +104,7 @@ Both refs are deleted with `git branch -D`, after `git worktree list --porcelain
     git branch -D wtgui/cut-branch-wtgui-aggregate-remainder-5650d5
     Deleted branch wtgui/cut-branch-wtgui-aggregate-remainder-5650d5 (was 2de5c778).
     git branch -D wtgui/github-landing-sanity-0bbdd3
-    DELETION-B-RESULT
+    Deleted branch wtgui/github-landing-sanity-0bbdd3 (was de5f30cf).
 
 Neither ref resolves afterwards:
 
@@ -112,4 +112,6 @@ Neither ref resolves afterwards:
     git rev-parse --verify --quiet refs/heads/wtgui/github-landing-sanity-0bbdd3                (no output)
     git branch --list '*aggregate*'                                                             (no output)
 
-The branch list after both deletions: LOCAL-BRANCH-COUNT local branches, no ref named after either tree.
+The branch list after both deletions: `git branch --format='%(refname:short)' | wc -l` prints 78 local branches,
+`git branch --list '*aggregate*'` prints nothing, and neither deleted ref resolves. No branch in the list is named
+after either tree.
