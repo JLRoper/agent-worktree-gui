@@ -1773,7 +1773,13 @@ body.is-out-gripping * { cursor: nwse-resize; }
 }
 .tgrp-batch:hover { color: #cfe6ff; }
 .tgrp-batch:disabled { color: var(--dim); text-decoration: none; cursor: progress; }
-.tgrp-state { flex: none; color: var(--dimmer); }
+/* The clock's slot. One fixed box for every text a row's state can produce: the running label grows a character at
+   9 s to 10 s (82.2 px to 88.53 px in the measured row) and the completion swap shrinks it to a duration (37.94 px,
+   which grew the target by 50.59 px in one frame). tabular-nums makes every digit the same width and 16ch covers the
+   widest label either state can print ("· running 99m59s"), so the row's geometry is constant for its life and the
+   file name on it is truncated at the same character before and after the swap. An empty slot reserves nothing. */
+.tgrp-state { flex: none; color: var(--dimmer); text-align: right; font-variant-numeric: tabular-nums; }
+.tgrp-state:not(:empty) { min-width: 16ch; }
 .tgrp-more { align-self: flex-start; margin: 3px 0 0; background: none; border: 1px solid var(--line); border-radius: 4px; color: var(--dimmer); font: 10px/1.5 var(--mono); padding: 0 6px; cursor: pointer; }
 .tgrp-more:hover { color: var(--text); border-color: #3b4757; }
 .tgrp-more.is-open { color: var(--text); }

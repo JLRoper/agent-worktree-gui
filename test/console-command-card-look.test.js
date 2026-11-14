@@ -53,19 +53,27 @@ test("three ASCII dots end a folded card's last preview row, and the painter is 
   assert.match(consoleJs, /function paintCommandFoldMark\(box\) \{/);
   assert.match(consoleJs, /function clearCommandFoldMark\(box\) \{/);
   assert.match(consoleJs, /function cmdCutOffset\(node, limitY, maxX, dots\) \{/);
-  assert.match(consoleJs, /function cmdCutAfter\(body, last\) \{/);
-  // Back to the whole prompt is the markup the cut came from - never a re-render, never a second copy of the text.
-  assert.match(consoleJs, /const cmdFull = new WeakMap\(\);/);
-  assert.match(consoleJs, /body\.innerHTML = html;/);
-  assert.match(consoleJs, /cmdFull\.set\(body, markup\);/);
+  assert.match(consoleJs, /function cmdCutAfter\(body, last, removed\) \{/);
+  // Back to the whole prompt is the NODES the cut took, put back where they stood - never a re-render and never the
+  // innerHTML round-trip (that write was itself a forced layout on the next mark, see the report's cause 6).
+  assert.match(consoleJs, /const cmdMarks = new WeakMap\(\);/);
+  assert.match(consoleJs, /const mark = \{ sig, text: \{ node, tail: \(node\.data \|\| ""\)\.slice\(cut\) \}, nodes: \[\], dots: null \};/);
+  assert.match(consoleJs, /if \(after && after\.parentNode === parent\) parent\.insertBefore\(node, after\);/);
+  assert.match(consoleJs, /if \(mark\.text && mark\.text\.node\) mark\.text\.node\.data \+= mark\.text\.tail;/);
+  assert.doesNotMatch(consoleJs, /body\.innerHTML = html;/);
+  assert.doesNotMatch(consoleJs, /cmdFull/);
+  // A mark is not re-measured when none of the three numbers that decide it moved: the width, the height and the
+  // text's length. This is the 1.7 ms and 32 Range reads per call the report measured, 8 of 8 re-marks re-running it.
+  assert.match(consoleJs, /const sig = `\$\{w\}\|\$\{h\}\|\$\{body\.textContent\.length\}`;/);
+  assert.match(consoleJs, /if \(drawn && drawn\.sig === sig && drawn\.dots && drawn\.dots\.isConnected && body\.contains\(drawn\.dots\)\) return;/);
   // The cut is at the character a Range says is inside the clamp, and the dots have room on that same row.
   assert.match(consoleJs, /const limitY = rect\.top \+ h - \(parseFloat\(cs\.paddingBottom\) \|\| 0\);/);
   assert.match(consoleJs, /if \(rect\(mid\)\.bottom <= limitY \+ 0\.5\) lo = mid;/);
   assert.match(consoleJs, /while \(lo > 0 && rect\(lo\)\.right \+ dots > maxX\) lo -= 1;/);
   // A body that fits its preview rows is not marked: there is nothing more to read, so nothing may say there is.
-  assert.match(consoleJs, /if \(body\.scrollHeight <= h \+ 1\) return;/);
+  assert.match(consoleJs, /if \(body\.scrollHeight <= h \+ 1\) \{/);
   // ...and a body with no layout yet (a folded turn, a hidden pane) is left for the frame that draws it.
-  assert.match(consoleJs, /if \(!w \|\| !h\) return;/);
+  assert.match(consoleJs, /if \(!w \|\| !h\) \{/);
   // The dots are the card's own chrome in the stylesheet, quiet and never bold.
   assert.match(css, /\.code-fold-dots \{ color: var\(--dim\); font-weight: 400; \}/);
 });
@@ -76,9 +84,12 @@ test("the marker is written for every card a render path places, and taken back 
   assert.match(consoleJs, /scheduleCommandFoldMark\(node\);/);
   assert.match(consoleJs, /for \(const el of root\.querySelectorAll\?\.\("\.code-box\.is-cmd"\) \|\| \[\]\) boxes\.push\(el\);/);
   assert.match(consoleJs, /cmdFoldFrame = typeof requestAnimationFrame === "function" \? requestAnimationFrame\(flush\)/);
-  // A body that changes width is measured again: the wrap moved, so the last visible character moved with it.
+  // A body that changes width is measured again: the wrap moved, so the last visible character moved with it. ONE
+  // observer, on the console the cards are drawn in - the target per card was one more observation per rebuild.
   assert.match(consoleJs, /const cmdFoldResize =/);
   assert.match(consoleJs, /new ResizeObserver\(\(entries\) => \{/);
+  assert.match(consoleJs, /cmdFoldResize\.observe\(el\);/);
+  assert.match(consoleJs, /for \(const box of root\.querySelectorAll\("\.code-box\.is-cmd"\)\) scheduleCommandFoldMark\(box\);/);
   // The press: opening restores the prompt, folding marks it. One gesture, one card, no repaint of the console.
   assert.match(app, /const clamp = Number\(box\.dataset\.codeClamp\) \|\| 0;/);
   assert.match(app, /if \(open\) clearCommandFoldMark\(box\);\n\s*else paintCommandFoldMark\(box\);/);

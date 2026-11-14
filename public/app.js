@@ -600,6 +600,9 @@ function trimJobLines() {
     // Map order is the order the buffers were first written, which for a board is the order the turns started.
     if (turnLive(state.jobs.get(id))) continue;
     state.jobLines.delete(id);
+    // A turn that just went back to its record's 60-line tail draws a different window: a stream repaint that was
+    // skipped for a live turn must not now be skipped for this one.
+    if (state.jobLineVersion) state.jobLineVersion.set(id, (state.jobLineVersion.get(id) || 0) + 1);
     dropped += 1;
   }
   return dropped;
@@ -1780,14 +1783,21 @@ function liveSuffix(from) {
   return liveLabel((Date.now() - (Number(from) || Date.now())) / 1000);
 }
 
-// Redraws the clocks in place — never a repaint, so a scrolled console stays put while it ticks.
+// Redraws the clocks in place — never a repaint, so a scrolled console stays put while it ticks. One clock slot per
+// tool row (public/board/console.js toolGroupHtml/flatRowHtml), written as TEXT on the node that is already there:
+// the swap from "running" to a duration is the same slot with a different string, so the row's geometry never moves
+// when the digit count changes.
 function tickLiveClocks() {
   for (const el of document.querySelectorAll("[data-live-from]")) {
     const from = Number(el.dataset.liveFrom) || Date.now();
     const secs = (Date.now() - from) / 1000;
-    el.textContent = liveLabel(secs);
+    // A row's slot is the span the row was built with; the placeholder and the card head carry the attribute on
+    // themselves, and are written the way they always were.
+    const slot = el.matches("[data-tgrp-clock]") ? el : el.querySelector("[data-tgrp-clock]");
+    const target = slot || el;
+    target.textContent = liveLabel(secs);
     // Past a minute it is the only moving part on the card, so it stops being quiet.
-    el.classList.toggle("is-long", secs >= 60);
+    target.classList.toggle("is-long", secs >= 60);
   }
 }
 
@@ -12020,10 +12030,14 @@ document.addEventListener(
   (e) => {
     const pre = e.target;
     // The "to the newest line" chip follows the scroll as it happens, not on the 400ms sweep: the reader should
-    // see it the moment they take the console over. This also runs for the panel's own scrolls, which is right -
-    // a chip that is shown or hidden has no effect on where anything sits.
+    // see it the moment they take the console over. A scroll the panel itself caused (a stick to the tail, a
+    // restore) is skipped below - the chip is already off for it, and measuring there would put a box read back on
+    // the per-line path that this report's cause 3 is about.
     if (pre && pre.classList && (pre.classList.contains("job-out") || pre.classList.contains("think-body"))) {
-      paintToBottom(pre);
+      // The panel's own stick scroll is not the reader taking the box over: the chip is already off (paintAtEnd said
+      // so), and measuring the box here is what made every streamed line read geometry. A reader's scroll is still
+      // answered the moment it happens, which is why this is not left to the 400 ms pass.
+      if (!selfScrolled.has(pre) && !justPlaced(pre)) paintToBottom(pre);
     }
     if (pre && pre.classList && pre.classList.contains("think-body")) {
       const key = pre.closest("details.think")?.dataset.thinkTurn || "";
@@ -12092,16 +12106,34 @@ document.addEventListener(
 
 // Whatever moved a pinned console off its newest line - a rebuild, the browser clamping a replaced node, a resize -
 // is corrected here within a frame or two. Only pinned consoles are touched, so reading history is never interrupted.
+// And only boxes that GREW since this pass last looked: one that did not cannot have left its reader behind, so a
+// still page pays a comparison per box and no layout at all. The measured 60 calls and 44.7 ms a streaming window
+// spent here were this pass measuring boxes that had not moved.
 setInterval(() => {
   for (const pre of placedNodes("pre.job-out")) {
-    // A console under the reader's own corner gesture is not re-pinned: the box belongs to the pointer for the length
-    // of the drag, and a scroll that lands mid-gesture is one of the things that made the corner feel unsteady.
-    if (!outDragging(pre)) stickConsole(pre);
-    paintToBottom(pre);
+    const grewSince = pre._sweepGrow !== pre._grow;
+    pre._sweepGrow = pre._grow;
+    if (grewSince) {
+      // A console under the reader's own corner gesture is not re-pinned: the box belongs to the pointer for the
+      // length of the drag, and a scroll that lands mid-gesture is one of the things that made the corner feel
+      // unsteady.
+      if (outDragging(pre)) continue;
+      stickConsole(pre);
+      // Stuck to the tail by the page itself, so the chip is off: said, not measured (see paintAtEnd).
+      paintAtEnd(pre);
+      continue;
+    }
+    // The one case the paint path cannot answer: a console the reader took over. Its chip is told the truth here -
+    // at most twice a second, and only while somebody is actually reading back through a streaming turn.
+    if (pre._chipDirty) paintToBottom(pre);
   }
   for (const body of placedNodes(".think-body")) {
-    stickThinkBody(body);
-    paintToBottom(body);
+    const grewSince = body._sweepGrow !== body._grow;
+    body._sweepGrow = body._grow;
+    if (grewSince) {
+      stickThinkBody(body);
+      paintAtEnd(body);
+    } else if (body._chipDirty) paintToBottom(body);
   }
   for (const box of placedNodes(".sub-console")) stickSubConsole(box);
 }, 400);

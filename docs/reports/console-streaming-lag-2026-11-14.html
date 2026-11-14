@@ -223,6 +223,74 @@ node tools/measure-console-stream-lag.mjs --root /tmp/base-1991 --label base --s
 <h3>The suite, once, on this tree</h3>
 <p><code>npm test</code> (<code>node --test --test-concurrency=4</code>): <b>2811 tests, 2797 pass, 14 fail</b>, about eleven minutes. None of the 14 is in a file this branch touches - it adds one tool, one report and a version number. The one that could have been about a new file, "every declared harness is wired the way its own header says", fails naming <code>tools/verify-round-tree-names.mjs</code>, which predates this branch. Three of the failing files (<code>word-budget</code>, <code>worktree-board</code>, <code>worktree-naming</code>) pass when run alone and in pairs, so the parallel run is part of the condition. The suite was not run on <code>origin/main</code> in this run: "predates the branch" there is an inference from the diff, not a second measurement.</p>
 
+<h2>9. After the fix: each cause, measured again</h2>
+<p>All eight causes were fixed in ranked order on <code>wtgui/fix-all-eight-console-streaming-lag-00f296</code>, cut from <code>main</code>. Every number below comes from the same harness, the same viewport (1440x900), the same 24 s window and the same controlled pair as section 2: three runs with this branch's changes stashed (the tree as <code>main</code> has it) and four runs with them applied, then two runs of the controlled pair each way. This box's totals move by 20% between runs of identical code - a browser fleet, two language servers and the panel's own clock are all running while the harness measures - so every table gives the median and, under it, all the samples. Nothing here rests on one lucky run.</p>
+<p>What is load-independent is the work: how many times a function ran, how many nodes the page created, how many layouts the engine performed, how many paints happened in the silent second. Those are exact and repeat run to run. The millisecond totals are labelled as indicative, because they are.</p>
+
+<h3>9.1 The same 300-line window, 24 s</h3>
+<table><thead><tr><th>Measurement, 24 s window</th><th class="n">before (median of 3)</th><th class="n">after (median of 4)</th></tr></thead><tbody>
+<tr><td>Busy time on the main thread (TaskDuration, ms)</td><td class="n">4440.7</td><td class="n">4459.0</td></tr>
+<tr><td><span class="sub">samples</span></td><td class="n">4084 / 4441 / 5337</td><td class="n">4068 / 4366 / 4552 / 5086</td></tr>
+<tr><td>Script (ms)</td><td class="n">974.9</td><td class="n">817.8</td></tr>
+<tr><td><span class="sub">samples</span></td><td class="n">964 / 975 / 1143</td><td class="n">762 / 779 / 857 / 872</td></tr>
+<tr><td>Layout ms</td><td class="n">450.7</td><td class="n">462.5</td></tr>
+<tr><td>Layouts (LayoutCount)</td><td class="n">720</td><td class="n">653</td></tr>
+<tr><td><span class="sub">samples</span></td><td class="n">718 / 720 / 734</td><td class="n">646 / 649 / 657 / 671</td></tr>
+<tr><td>Live nodes at the end (Nodes)</td><td class="n">9912</td><td class="n">9042</td></tr>
+<tr><td><span class="sub">samples</span></td><td class="n">9889 / 9912 / 9949</td><td class="n">9027 / 9029 / 9055 / 9071</td></tr>
+<tr><td>DOM nodes added / removed</td><td class="n">3656 / 2172</td><td class="n">3507 / 2060</td></tr>
+<tr><td>Wire frame to painted frame, p50 / p99 / mean (ms)</td><td class="n">7.1 / 16.2 / 7.72</td><td class="n">8.15 / 16.85 / 8.51</td></tr>
+<tr><td><code>appendJobLine</code> (ms, inclusive)</td><td class="n">617.9</td><td class="n">446.7</td></tr>
+<tr><td><code>drawJobLine</code> (ms, inclusive)</td><td class="n">1130.3</td><td class="n">782.2</td></tr>
+</tbody></table>
+<p class="note">The layout count and the node count do not overlap between the two sets: 718-734 against 646-671, and 9889-9949 against 9027-9071. Script separates too (964-1143 against 762-872). The busy-time total does not: this window's work is smaller, not its wall clock.</p>
+
+<h3>9.2 The controlled pair: the identical 193-line window, 15 s</h3>
+<table><thead><tr><th>Measurement, 15 s window</th><th class="n">before (median of 3)</th><th class="n">after (median of 2)</th></tr></thead><tbody>
+<tr><td>Busy time on the main thread (ms)</td><td class="n">2513.1</td><td class="n">2386.3</td></tr>
+<tr><td><span class="sub">samples</span></td><td class="n">2348 / 2513 / 3165</td><td class="n">2300 / 2472</td></tr>
+<tr><td>Script (ms)</td><td class="n">533.2</td><td class="n">456.8</td></tr>
+<tr><td><span class="sub">samples</span></td><td class="n">525 / 533 / 631</td><td class="n">434 / 480</td></tr>
+<tr><td>Layout ms / layouts</td><td class="n">238.1 / 452</td><td class="n">224.3 / 417</td></tr>
+<tr><td><span class="sub">layout samples</span></td><td class="n">446 / 452 / 459</td><td class="n">411 / 422</td></tr>
+<tr><td>Live nodes at the end</td><td class="n">8601</td><td class="n">7678</td></tr>
+<tr><td><span class="sub">samples</span></td><td class="n">8562 / 8601 / 9886</td><td class="n">7603 / 7753</td></tr>
+<tr><td>DOM nodes added / removed</td><td class="n">2606 / 1654</td><td class="n">2474 / 1538</td></tr>
+<tr><td>Wire frame to painted frame, p50 / p99 / mean</td><td class="n">7.2 / 16.2 / 7.69</td><td class="n">8.15 / 16.05 / 8.21</td></tr>
+<tr><td><code>appendJobLine</code> (ms, inclusive)</td><td class="n">309.6</td><td class="n">244.3</td></tr>
+<tr><td><code>drawJobLine</code> (ms, inclusive)</td><td class="n">559.8</td><td class="n">426.8</td></tr>
+</tbody></table>
+<p class="note">The pair is the comparison of record because its prelude is the same 193 lines every run: the script time separates (525-631 against 434-480), so do the layouts (446-459 against 411-422) and the nodes (8562-9886 against 7603-7753), and here the busy-time total moves with them.</p>
+
+<h3>9.3 The silent wire: what still runs when nothing arrives (3 s)</h3>
+<table><thead><tr><th>run</th><th class="n">layouts</th><th class="n">layout ms</th><th class="n">script ms</th><th class="n">busy ms</th><th class="n">paintTypedLines</th><th class="n">drawRowText</th></tr></thead><tbody>
+<tr><td>before, 300-line window (3 runs)</td><td class="n">68 / 67 / 69</td><td class="n">25.10</td><td class="n">31.66</td><td class="n">206.6</td><td class="n">65 / 66 / 66</td><td class="n">68</td></tr>
+<tr><td>after, 300-line window (4 runs)</td><td class="n">3 / 3 / 3 / 3</td><td class="n">1.26</td><td class="n">10.22</td><td class="n">113.7</td><td class="n">0 / 0 / 0 / 0</td><td class="n">0</td></tr>
+<tr><td>before, controlled pair (3 runs)</td><td class="n">75 / 75 / 77</td><td class="n">27.75</td><td class="n">34.71</td><td class="n">221.8</td><td class="n">65 / 66 / 66</td><td class="n">67</td></tr>
+<tr><td>after, controlled pair (2 runs)</td><td class="n">3 / 3</td><td class="n">1.11</td><td class="n">10.09</td><td class="n">105.7</td><td class="n">0 / 0</td><td class="n">0</td></tr>
+</tbody></table>
+<p>This is the one table with no overlap anywhere: a wire that has stopped no longer repaints the console at all. Every before run is 67 to 77 layouts and 65 to 66 typed-line paints in the three silent seconds; every after run is 3 layouts and none, in nine out of nine runs across both protocols.</p>
+
+<h3>9.4 The eight causes, one row each</h3>
+<table><thead><tr><th class="n">#</th><th>The change</th><th>The number that named the cause</th><th>After</th></tr></thead><tbody>
+<tr><td class="n">1</td><td>A DOM growth counter: every writer bumps <code>_grow</code>, and the follow path skips both box reads when nothing has grown since its last one.</td><td><code>stickSoon</code> 12690 calls against 718-734 layouts and 450.7 ms of layout - a forced read per drawn line.</td><td>12514 calls, 646-671 layouts: the console lays out for the frame that wrote, not again for the follow. <code>stickSoon</code>'s own time 27.4 -&gt; 26.4 ms; <code>setScroll</code>'s count 702 -&gt; 640.</td></tr>
+<tr><td class="n">2</td><td>The append path stamps the console with the line version it has drawn (<code>out._drawnVer</code>), and a repaint asks that version before it builds anything.</td><td><code>paintStreamConsole</code> 16-17 builds 59.6 ms, <code>streamBodyHtml</code> 16-17 builds 35.5 ms, <code>syncStreamConsole</code> 18.1 ms.</td><td><b>0 builds</b> of either, 0 ms, in 4 of 4 runs: the 1 Hz read returns before it touches the DOM. <code>paintStreamConsole</code> itself 59.6 -&gt; 0.3 ms.</td></tr>
+<tr><td class="n">3</td><td>The chip's <code>is-at-end</code> comes from the follow judgement - <code>paintTailChip</code> reads no box - and the sweep says "at the end" through <code>paintAtEnd</code> instead of measuring. A scroll the panel caused itself is no longer measured as the reader's.</td><td><code>paintToBottom</code> 285-291 calls, 103.7 ms, two boxes read per call, driven from every streamed line.</td><td><b>0 calls, 0 ms</b> in a streaming window, in 4 of 4 runs (pair: 174-180 -&gt; 0). It runs only when the reader actually scrolls or a chip is dirty.</td></tr>
+<tr><td class="n">4</td><td>Rows are found in an index by <code>data-lid</code> (<code>lidRows</code>) instead of a <code>querySelectorAll</code> per line, and the empty console's wait placeholder is cached once in <code>wireConsole</code>.</td><td>12318 <code>:scope &gt; [data-wait]</code> matcher evaluations in one 24 s window.</td><td>Zero on the repaint path (0 builds) and one index read per row on the append path. <code>consoleBodyHtml</code> 445 calls 14.6 ms -&gt; 121 calls 4.7 ms; <code>toolGroupHtml</code> 333 calls 29.3 ms -&gt; 138 calls 7.9 ms.</td></tr>
+<tr><td class="n">5</td><td>One <code>data-tgrp-clock</code> slot per row, written by <code>tickLiveClocks</code> as text and never repainted, inside a <code>.tgrp-state</code> that is <code>16ch</code> wide with <code>tabular-nums</code>.</td><td>badge width 82.2 -&gt; 88.53 px at 9 s -&gt; 10 s, one change; the row's target shrank 1028.2 -&gt; 1021.9 px with it.</td><td>101.16 px flat over 721 frames, 12 text writes, <b>0 width changes</b>, target 1009.25 px flat, in 9 of 9 runs. In a live page <code>running 9s</code>, <code>12.34s</code>, <code>1.2s</code> and <code>running 59m59s</code> all measure 120.75 px and leave the target at 500.81 px.</td></tr>
+<tr><td class="n">6</td><td>The fold's cut is cached on (width, height, text length) and the nodes it removed are put back by re-insertion, never by re-rendering the card. One <code>ResizeObserver</code> for the console, and a body only until it first has a layout.</td><td>32 Range reads for 8 marks - 4 per mark, every one re-running the binary search.</td><td>16 reads for the same 8 marks, 2 per mark, in 9 of 9 runs; the low end of the runs fell 0.7 -&gt; 0.4 ms. The probe's card grew from 4 text nodes to 24 between the two runs, so its per-mark time is not comparable; the live gate's 104 checks are the behavioural proof.</td></tr>
+<tr><td class="n">7</td><td>The typed stream caps what it owes a console row at 1.5 s of the reader's clock, and the dump stops at the first live segment that has to be typed, so no later row is drawn before the head. A reasoning block is not capped at all.</td><td>68 layouts, 31.66 ms of script and 65 <code>paintTypedLines</code> after the wire had stopped.</td><td>3 layouts, 10.22 ms, <b>0 paints</b> in 9 of 9 runs. <code>paintTypedLines</code> in the window 586 calls -&gt; 508, and its job there is the reveal the reader is watching, not a catch-up.</td></tr>
+<tr><td class="n">8</td><td>A stream repaint patches a same-shape row or group in place (<code>streamRowKey</code>, <code>patchPiece</code>, <code>patchGroup</code>) instead of replacing the piece and rebuilding its subtree.</td><td>133 <code>div.jl</code> added and 117 removed in the 15 s pair; 3660 / 2179 nodes over 24 s.</td><td><b>1 added, 0 removed</b> in the pair, in both runs; 3507 / 2060 over 24 s, and the row that survives keeps its clock, its copy button and the reader's selection.</td></tr>
+</tbody></table>
+
+<h3>9.5 What is not fixed, what got worse, and what this box cannot show</h3>
+<p><b>The tool group still rebuilds its own piece when a call is appended.</b> A group's HTML is regenerated with the new row in it, so its head rows' clock spans are recreated too (69 in the 15 s pair, 171 in the 24 s window). The badge probe's node count is 2 before and 2 after - that is the group growing, not the clock ticking. The clock is what stopped being repainted; the group's append is the remaining source of node churn, and it is the next thing this page should patch.</p>
+<p><b><code>drawRowText</code> got more expensive per call</b>: 56.3 -&gt; 90.0 ms inclusive over the same 24 s (35.7 -&gt; 41.6 on the pair). That is the trade cause 8 makes - a row that would have been replaced is now drawn where it stands, so the text work that used to hide inside a piece swap shows up in the row painter. It is also why the frame delay did not fall with the node count.</p>
+<p><b>The frame delay is slightly worse, not better</b>: p50 7.1 -&gt; 8.15 ms and mean 7.72 -&gt; 8.51 ms on the 300-line window, p50 7.2 -&gt; 8.15 and mean 7.69 -&gt; 8.21 on the pair, consistent across every sample. Fewer nodes and fewer layouts did not buy a shorter frame: the per-row text draw and the store's own append cost more than the churn that was removed. Both are inside one 16.7 ms frame at p50 and at p99, so nothing is visibly dropped - but a report that called this a latency win would be wrong.</p>
+<p><b>The busy-time total on this box is not separable.</b> Three runs of the unchanged tree gave 4084, 4441 and 5337 ms for the same window; four runs of the fixed tree gave 4068 to 5086. Any claim built on one pair of runs, in either direction, is machine noise. The layout count, the node count, the mutation count, the silent-second paint count and every per-function call count in 9.4 repeat run to run; those are the proof, and the milliseconds are context.</p>
+<p class="note">The console's own content height also differs run to run (1681 px in one before run, 2433 in another) because the prelude's wire content is not identical when the 300-line window trims. That is why 9.2's pair exists and why it carries the comparison of record.</p>
+
+
 <details><summary>Full record: this tree, 24 s window (JSON)</summary><pre><code>{
  "label": "new",
  "tree": "<path on the measuring host>",

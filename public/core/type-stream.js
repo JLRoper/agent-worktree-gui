@@ -155,9 +155,39 @@
     let last = 0;
     let words = 0; // the stream's one word budget
     let seqNo = 0;
-    const stats = { enqueued: 0, emitted: 0, rewrites: 0, replaced: 0, late: 0, ticks: 0, paints: 0 };
+    const stats = { enqueued: 0, emitted: 0, rewrites: 0, replaced: 0, late: 0, ticks: 0, paints: 0, capped: 0 };
 
     const restOf = (s) => wordsIn(s.text, s.shown);
+    // How far behind the wire the QUEUE may be, in words. Paced reveal is for prose arriving at readable speed; a
+    // burst - ten whole lines of a paragraph each, a result's whole head, one frame carrying a document - is one
+    // queue, and every line in it can be under any per-line cap while the reader waits seconds for the console to
+    // finish typing something that ended long ago. 1.5 s of the reader's own clock is the most the pacer may still
+    // owe; past it everything pending is drawn at once and the clock restarts empty. (A paced TOOL RESULT is the one
+    // kind that is *meant* to be typed out - paceResultLine, six rows of a skill's answer - and six short rows are
+    // well under this, so the feature survives; forty rows were never handed to the pacer in the first place.)
+    const queueCap = () => Math.max(60, Math.ceil(rate * 1.5));
+    // The debt is what the CONSOLE owes, and only the part of it that can be drawn without jumping the queue. A
+    // console line is a row the wire has already handed over in full, so a reveal longer than a second and a half is
+    // the page catching up, not the model writing. A reasoning block is fed the same way but is watched differently:
+    // its newest block is written from its first word (docs/reports/console-streaming-lag-2026-11-14.html cause 7,
+    // and think-toggle-no-replay's rule that the press does not re-type history). So the walk stops at the first live
+    // segment with no `cap` - drawing past it would put a later row on screen before the head, which is the ordering
+    // defect console-ordered-stream exists to pin. Completed segments are behind the head and never in the way.
+    const capRun = () => {
+      // Characters, not words: restOf() counts spaces in a scan of the text, and running that for the whole queue on
+      // every tick (25 a second) is itself a cost the report would charge to this page. A character count is a
+      // subtraction per segment; CAP_CHARS is only the threshold's own unit, so an average word is close enough.
+      let n = 0;
+      for (const s of queue) {
+        if (s.shown >= s.text.length) continue;
+        if (!s.cap) break;
+        n += s.text.length - s.shown;
+      }
+      return n;
+    };
+    // One reader-facing word is ~6 characters of console text; the cap is a feel, not a contract, so the threshold is
+    // converted once instead of counting words on every tick.
+    const CAP_CHARS = 6;
     const pendingAny = () => {
       for (const s of queue) if (s.shown < s.text.length) return true;
       return false;
@@ -252,6 +282,8 @@
           text: "",
           shown: 0,
           rewrites: 0,
+          // Console lines are capped, reasoning blocks are not - see backlog().
+          cap: opts.cap === true,
         };
         segs.set(k, s);
         place(s);
@@ -259,6 +291,7 @@
       } else {
         if (job != null) s.job = String(job);
         if (kind != null) s.kind = String(kind);
+        if (opts.cap === true) s.cap = true;
       }
       if (full === s.text) return s.text.slice(0, s.shown);
       if (!full.startsWith(s.text)) {
@@ -313,6 +346,27 @@
       last = t;
       stats.ticks += 1;
       if (!rate) return false;
+      // The queue is a burst this clock cannot read: draw what it owes NOW, in one paint, and start the clock empty.
+      // (See queueCap: the wire stopped, and a reveal that takes longer than a second and a half is the page catching
+      // up, not the model writing.)
+      if (capRun() > queueCap() * CAP_CHARS) {
+        const painted = [];
+        for (const s of queue) {
+          if (s.shown >= s.text.length) continue;
+          // The head's own typewriter, or any reasoning block, is where the queue stops being dumpable.
+          if (!s.cap) break;
+          stats.emitted += s.text.length - s.shown;
+          s.shown = s.text.length;
+          painted.push(s.key);
+        }
+        stats.capped += 1;
+        words = 0;
+        if (painted.length) {
+          stats.paints += 1;
+          onPaint(painted);
+        }
+        return false;
+      }
       words += (rate * dt) / 1000;
       const painted = [];
       // One budget, spent in transcript order: the earliest segment with words left takes them, and the next one

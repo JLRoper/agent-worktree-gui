@@ -380,26 +380,43 @@ test("the results written like prose are the skill tools', and no other tool's",
   }
 });
 
-test("a burst of skill lines walks in one at a time, on the stream's one rate", () => {
-  // Forty lines of a SKILL.md join the console at once. They are forty segments in ONE queue: the first is written
-  // before the second starts, so the dump takes as long as its words and never types forty lines at once.
+test("a burst bigger than the clock is drawn whole; the paced head of a result still walks in", () => {
+  // Forty lines of a SKILL.md joining the console at once are 1200 words: at 20 words a second that is a minute of
+  // typing AFTER the wire stopped, which is cause 7 of docs/reports/console-streaming-lag-2026-11-14.html. The queue
+  // cap draws the lot in one paint, and the clock owes nothing once it has (the console's own RESULT_PACED_ROWS keeps
+  // a real result to six rows, and those six are under the cap and still type: see the second half).
   const b = bench({ words: 20 });
   const line = (i) => Array.from({ length: 30 }, (_, k) => `w${i}x${k}`).join(" ");
-  for (let i = 0; i < 40; i++) assert.equal(b.pacer.feed(`s${i}`, "job", line(i)), "", "nothing is drawn before the first word is due");
+  for (let i = 0; i < 40; i++) assert.equal(b.pacer.feed(`s${i}`, "job", line(i), { kind: "tool-out", cap: true }), "", "nothing is drawn before the first word is due");
   b.step(500);
-  const first = b.pacer.shownFor("s0");
-  assert.ok(first.length > 0 && first.length < line(0).length, `the first line is part-way at 0.5 s: ${first.length} of ${line(0).length}`);
-  assert.ok(line(0).startsWith(first), "what is drawn is an exact prefix of the line");
-  assert.equal(b.pacer.shownFor("s1"), "", "and the second has not started: one queue, one clock");
-  assert.equal(b.pacer.shownFor("s39"), "", "nor the fortieth");
+  for (let i = 0; i < 40; i++) assert.equal(b.pacer.shownFor(`s${i}`), line(i), `line ${i} is drawn whole`);
+  assert.equal(b.pacer.pendingWords(), 0, "and the clock owes nothing after the dump");
 
-  // The turn ends in the middle of another dump: nothing may be left in the buffer.
-  const c = bench({ words: 2 });
-  for (let i = 0; i < 5; i++) c.pacer.feed(`k${i}`, "job", line(i));
-  c.step(1000);
-  assert.ok(c.pacer.pendingWords() > 100, "most of it is still waiting at 2 words a second");
-  c.pacer.flushJob("job");
-  for (let i = 0; i < 5; i++) assert.equal(c.pacer.shownFor(`k${i}`), line(i));
-  assert.equal(c.pacer.pendingWords(), 0);
+  // The head a real result hands over: six short rows, one queue, one clock. The first is written before the second
+  // starts, so a result is still read as it arrives rather than appearing all at once.
+  const c = bench({ words: 20 });
+  const rows = ["one", "two", "three", "four", "five", "six"];
+  for (let i = 0; i < rows.length; i++) assert.equal(c.pacer.feed(`h${i}`, "job", rows[i], { kind: "tool-out", cap: true }), "", "nothing drawn yet");
+  c.step(100);
+  assert.equal(c.pacer.shownFor("h0"), "one", "the first row is drawn at its words");
+  assert.equal(c.pacer.shownFor("h1"), "two", "then the second, in order: one queue, one clock");
+  assert.equal(c.pacer.shownFor("h2"), "", "and the third waits its turn");
+
+  // A reasoning block is NOT capped. It is fed the same queue, but its newest block is written from its first word
+  // (think-toggle-no-replay's rule), so the same forty lines without the flag stay owed.
+  const e = bench({ words: 20 });
+  for (let i = 0; i < 40; i++) e.pacer.feed(`t${i}`, "job", line(i), { kind: "think" });
+  e.step(500);
+  assert.ok(e.pacer.shownFor("t0").length > 0, "the newest thought is written from its first word");
+  assert.ok(e.pacer.pendingWords() > 0, "and the rest of the reasoning is still owed");
+
+  // The turn ends in the middle of a line still typing: nothing may be left in the buffer.
+  const d = bench({ words: 2 });
+  d.pacer.feed("k0", "job", line(0));
+  d.step(1000);
+  assert.ok(d.pacer.pendingWords() > 0, "most of it is still waiting at 2 words a second");
+  d.pacer.flushJob("job");
+  assert.equal(d.pacer.shownFor("k0"), line(0));
+  assert.equal(d.pacer.pendingWords(), 0);
 });
 
