@@ -4,16 +4,30 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.100.1 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.100.2 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-597 releases from v0.1.0 (2026-10-20) to v1.100.1 (2026-11-14), 2019 commits between the tags. Every release is anchored by an
+598 releases from v0.1.0 (2026-10-20) to v1.100.2 (2026-11-14), 2023 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.100.2 — 2026-11-14 · 4 commits
+
+[`74b8d86`](https://github.com/JLRoper/agent-worktree-gui/commit/74b8d8604a52950cbacdf8367a227095012eef8a) · [compare v1.100.1...v1.100.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.100.1...v1.100.2)
+
+### Added
+
+- feat: a project's landing rules ride its workers' briefs and the assistant's text ([`177bb76`](https://github.com/JLRoper/agent-worktree-gui/commit/177bb766f2554d3fbb9b03dbe603b90c8bc5ab97))
+
+### Docs & tests
+
+- docs: the worktree sweep names every tree, and the leftovers report main never took ([`79a7be2`](https://github.com/JLRoper/agent-worktree-gui/commit/79a7be228753b25ff7818474172ebd00c853d239))
+- docs: render the changelog - 597 releases ([`5cf42a2`](https://github.com/JLRoper/agent-worktree-gui/commit/5cf42a255ea946fdc88905c63f0fd9df83fcced4))
+- docs: 1.100.2 - patch: seven leftover commits judged against main, both refs retired ([`74b8d86`](https://github.com/JLRoper/agent-worktree-gui/commit/74b8d8604a52950cbacdf8367a227095012eef8a))
 
 ## v1.100.1 — 2026-11-14 · 3 commits
 
