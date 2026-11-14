@@ -622,6 +622,10 @@ try {
         const file = path.join(SHOTS, `${name}.png`);
         await page.screenshot({ path: file, clip });
         note(`screenshot ${file} at 1440x900`);
+        // The press state goes in the ledger's states as well as the figure, so the report can describe the capture
+        // by what the card was doing (open or shut, caret, aria-expanded, the marker) instead of by the five settings
+        // numbers it does not have.
+        if (st) states[name] = st;
         screens.push({ name, file, state: st });
         return file;
       };
@@ -761,7 +765,10 @@ try {
       out.errors = errors.map((e) => String(e && e.message ? e.message : e));
       check(errors.length === 0, "no press raised a page error", `${errors.length}`);
       out.states = states;
-      out.screens = screens.map((sc) => ({ name: sc.name, file: sc.file }));
+      // The figure keeps its own state: the report describes each capture by the numbers it was taken at, and a
+      // capture whose name never reached `states` (the opening pair, taken before the first settings press) would
+      // otherwise be pictured with an empty caption.
+      out.screens = screens.map((sc) => ({ name: sc.name, file: sc.file, state: sc.state || null }));
     },
     { viewport: { width: 1440, height: 1100 }, deviceScaleFactor: 2 },
   );
@@ -836,7 +843,11 @@ function reportHtml(ledger) {
   const screens = ledger.screens || [];
   const rows = screens
     .map((sc, i) => {
-      const st = stateOf(sc.name) || {};
+      const st = stateOf(sc.name) || sc.state || {};
+      // The table is the five numbers at each state, so it holds the states that HAVE numbers. The press captures
+      // (the card closed and open) are figures with their own captions: a row of empty cells under a heading that
+      // names numbers reads as a broken report, and the numbers do not exist for them.
+      if (st.vars === undefined) return "";
       const cells = [
         `${String(i).padStart(2, "0")} ${sc.name}`,
         st.vars ? st.vars.rows : "",
@@ -853,10 +864,16 @@ function reportHtml(ledger) {
     .join("\n");
   const figures = screens
     .map((sc) => {
-      const st = stateOf(sc.name) || {};
+      const st = stateOf(sc.name) || sc.state || {};
+      // Two kinds of capture: a settings state, which is described by the five numbers, and a press on the card, which
+      // has no settings numbers at all - its state is whether the card is open, and what the head and the marker say.
+      const press = st.aria !== undefined && st.vars === undefined;
+      const caption = press
+        ? `the card ${st.open ? "open" : "closed"} after a press: caret ${esc(st.caret)}, aria-expanded ${esc(st.aria)}, body ${esc(st.bodyH)}px, fold marker ${st.dots ? "inside the fold" : "gone"}`
+        : `rows ${esc(st.vars ? st.vars.rows : "")}, body ${esc(st.bodyH)}px, dots ${esc(st.dots == null ? "none" : st.dots)}, padding ${esc(st.padLeft)}px, side ${esc(st.cardMarginLeft)}px, blank above ${esc(st.cardMarginTop)}px, console tab ${esc(st.pre && st.turn ? st.pre.left - st.turn.left : "")}px`;
       return `<figure id="${esc(sc.name)}">
   <a href="${esc(rel(sc.file))}"><img src="${esc(rel(sc.file))}" alt="${esc(sc.name)}"></a>
-  <figcaption><b>${esc(sc.name)}</b> - rows ${esc(st.vars ? st.vars.rows : "")}, body ${esc(st.bodyH)}px, dots ${esc(st.dots == null ? "none" : st.dots)}, padding ${esc(st.padLeft)}px, side ${esc(st.cardMarginLeft)}px, blank above ${esc(st.cardMarginTop)}px, console tab ${esc(st.pre && st.turn ? st.pre.left - st.turn.left : "")}px</figcaption>
+  <figcaption><b>${esc(sc.name)}</b> - ${caption}</figcaption>
 </figure>`;
     })
     .join("\n");
