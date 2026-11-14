@@ -4,16 +4,30 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.101.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.102.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-600 releases from v0.1.0 (2026-10-20) to v1.101.0 (2026-11-14), 2034 commits between the tags. Every release is anchored by an
+601 releases from v0.1.0 (2026-10-20) to v1.102.0 (2026-11-14), 2038 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.102.0 — 2026-11-14 · 4 commits
+
+[`5358b46`](https://github.com/JLRoper/agent-worktree-gui/commit/5358b4620466dd89e4ad32d9b12d3a86d04da4a6) · [compare v1.101.0...v1.102.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.101.0...v1.102.0)
+
+### Docs & tests
+
+- docs: render the changelog - 600 releases ([`d738506`](https://github.com/JLRoper/agent-worktree-gui/commit/d7385067bf27776b0763773415940d752fd35ba5))
+
+### Other
+
+- console: say the audited counts the lists actually have ([`40425d4`](https://github.com/JLRoper/agent-worktree-gui/commit/40425d43a6b531846bf2f49c055932e86a832378))
+- console: the whole command card is the fold handle ([`99fe3bc`](https://github.com/JLRoper/agent-worktree-gui/commit/99fe3bc2b1cfc05c44100cf02868315fbe17cbd4))
+- chore: 1.102.0 - the version this landing carries ([`5358b46`](https://github.com/JLRoper/agent-worktree-gui/commit/5358b4620466dd89e4ad32d9b12d3a86d04da4a6))
 
 ## v1.101.0 — 2026-11-14 · 6 commits
 
