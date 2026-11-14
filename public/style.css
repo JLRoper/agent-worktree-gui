@@ -453,6 +453,10 @@ thead th,
 .settings-preview.sample-think { font: italic var(--term-size)/1.5 var(--term); font-weight: var(--term-weight); color: var(--think-color, #b3a8cc); }
 .settings-preview.sample-skill { font: var(--skill-font-size, var(--term-size))/1.5 var(--term); font-weight: var(--term-weight); color: var(--skill-color, var(--con-color, var(--dim))); }
 .settings-preview.sample-console { font: var(--term-size)/1.5 var(--term); font-weight: var(--term-weight); color: var(--con-color, #e6e9ef); }
+/* The console's row spacing, drawn on the row that sets it: three lines of console text at the reader's own size,
+   weight and colour, whose leading is the SAME variable a card's console reads. A preview that does not move with
+   the number beside it is decoration; this one is the console's own line box. */
+.settings-preview.sample-rows { font: var(--term-size)/var(--con-row-space, 1.5) var(--term); font-weight: var(--term-weight); color: var(--con-color, #e6e9ef); }
 .settings-row input[type="number"] { width: 74px; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; font: 12px var(--mono); }
 .settings-row input[type="url"], .settings-row input[type="password"], .settings-row input[type="text"] { flex: 1; min-width: 0; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; font: 12px var(--mono); }
 .settings-row input[type="url"]::placeholder, .settings-row input[type="password"]::placeholder, .settings-row input[type="text"]::placeholder { color: var(--dimmer); }
@@ -1183,7 +1187,7 @@ button.chip:active { transform: translateY(1px); }
 .think-title { font-size: 10.5px; letter-spacing: .03em; color: #9db4d0; }
 .think-meta { font-size: 10.5px; color: var(--dimmer); }
 .think-body { margin: 6px 0 2px; max-height: 260px; overflow: auto; }
-.think-block { white-space: pre-wrap; word-break: break-word; font-size: var(--term-size); line-height: 1.5; font-style: italic; color: var(--think-color, var(--dim)); margin: 0 0 8px; }
+.think-block { white-space: pre-wrap; word-break: break-word; font-size: var(--term-size); line-height: var(--con-row-space, 1.5); font-style: italic; color: var(--think-color, var(--dim)); margin: 0 0 8px; }
 /* The blocks also carry .mono, which sets a 12px size and would otherwise win on the var: this rule is two classes
    deep so the reasoning is the console's own size, the same one Ctrl+wheel writes on the card for all three kinds
    of text. Reasoning has no size knob of its own — one size drives the console, its tool output and this. */
@@ -1581,7 +1585,13 @@ body.is-out-gripping * { cursor: nwse-resize; }
      Normal output, tool output and the reasoning below all resolve to this same variable, so they cannot drift. */
   font-weight: var(--term-weight);
   font-family: var(--term);
-  line-height: 1.5;
+  /* ONE console row spacing: Settings > Display's Console row spacing, a MULTIPLIER on the console's line-height
+     (1.5 is what this console has always used, and it is the fallback an unset key draws). Every row a card's console
+     draws inherits this number - its own words, a tool's call and output, the reasoning lines of the stream - so one
+     setting moves them all, and a px value would fight Console size and a card's Ctrl+wheel zoom instead of scaling
+     with them. The spacing BETWEEN rows is this leading; the console's padding and the prompt box's own padding are
+     not touched by it. */
+  line-height: var(--con-row-space, 1.5);
   font-size: var(--term-size);
   white-space: pre-wrap;
   word-break: break-word;

@@ -167,6 +167,14 @@
         <div class="settings-preview sample-console" id="console-preview">Patched lib/jobs.js and ran the tests — 24 passed.</div>
         <div class="settings-presets"><button type="button" data-text-reset="console" title="back to the default console colour and size (11.5px)">use defaults</button></div>
 
+        <label class="settings-row settings-gap" for="con-row-space" title="The vertical gap between two lines of console text - the leading of every console row: the agent's own words, a tool's call and the output under it, the reasoning, and a skill's box. 1.5 is the line-height the console has always had, so the default draws exactly what this panel drew before this row existed; higher sets the rows further apart, lower tightens them. It is a multiplier on the console's line-height, so it follows Console size and a card's Ctrl+wheel zoom instead of fighting them, it moves the reasoning block above a console too, and it does not touch the prompt box's own padding. Saved in this browser, applied at once.">
+          <span>Console row spacing <span class="settings-info">ⓘ</span></span>
+          <input id="con-row-space" type="range" min="1.2" max="2.4" step="0.05" value="1.5" aria-label="Console row spacing">
+          <span class="settings-unit mono" id="con-row-space-px"></span>
+        </label>
+        <div class="settings-preview sample-console sample-rows" id="con-row-preview">read_file lib/jobs.js, 412 lines<br>patched the guard, 24 tests passed<br>QUEUE assistant-3 | exit 0</div>
+        <div class="settings-presets"><button type="button" id="con-row-reset" title="back to the console's own 1.5 line-height, which is how every console row was before this row existed">use defaults</button></div>
+
         <div class="settings-sep"></div>
         <div class="settings-row" title="The assistant's command card - the box a command line in a reply is drawn in - as it reads inside a console. Five numbers, all saved in this browser and applied at once, no reload. Preview rows is how much of the prompt a folded card shows before its click to read; the last visible row ends with three dots, so a cut prompt does not read as a finished one. The rest are the card's own spacing beside the console's text: its side margin, the padding of the text inside it, and the blank lines above and below it. Console text side margin is the inset the console's own text keeps inside its box. The card's side margin is measured from that inset, so the card stays in the console's own column at any value. The defaults are 2 rows, 0px, 8px, 0 lines and 10px, which is exactly how the card looked before these rows existed.">
           <span>Command card <span class="settings-info">ⓘ</span></span>
