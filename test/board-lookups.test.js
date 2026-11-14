@@ -187,11 +187,13 @@ function project() {
   doc.reset();
   chips.html = "<span class=chip>3 worktrees</span>";
   chips.chipsHtml = () => chips.html;
-  // `refreshChips` also refreshes the rules and board chips in the same head line (board-scaffold.js). Both are
-  // stubbed here because THIS test measures the counts strip's own lookups; each chip's caching is measured on its
-  // own, below.
+  // `refreshChips` also refreshes the rules, board and turnover chips in the same head line (board-scaffold.js). All
+  // three are stubbed here because THIS test measures the counts strip's own lookups; each chip's caching is measured
+  // on its own, below. The turnover chip was missing from this list, so all three of these tests died on
+  // `refreshTurnoverChip is not defined` - a red suite on main, not a defect in the counts strip.
   chips.refreshRulesChip = () => {};
   chips.refreshBoardChip = () => {};
+  chips.refreshTurnoverChip = () => {};
   chips.topSlotHtml = () => ""; // nothing held back: no arrow
   const strip = doc.add(new Node({ "data-chips": "alpha" }));
   const slot = doc.add(new Node({ "data-age-slot": "alpha" }));
