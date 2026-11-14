@@ -187,6 +187,31 @@ test("a diff is one box with its framed windows inside it, and the header says w
   assert.match(h, /<span class="is-add">\+3<\/span><span class="is-del">−2<\/span>/, "two modifications and one addition: +3 −2");
 });
 
+test("a context run fills both columns, and a lone deletion keeps the empty right cell", () => {
+  // The card used to be two columns only where the file changed: a context line was one cell spanning the window,
+  // and a lone removal was one cell with no right-hand side at all. Both now fill the row like every other row.
+  const rows = ["--- a/lib/one.js", "+++ b/lib/one.js", "@@ -10,4 +10,4 @@", " one", " two", "-three", " four"];
+  const h = html(rows, { tool: "patch", arg: "lib/one.js" });
+  assert.equal(count(h, /class="df-row"/g), 4, "one row per body line, never one per column");
+  const ctx = [...h.matchAll(/<div class="df-row"><div class="jl [^"]*df-c is-ctx"([^>]*)>([^<]*)<\/div><div class="df-c is-ctx df-mirror"([^>]*)>([^<]*)<\/div><\/div>/g)];
+  assert.deepEqual(
+    ctx.map((m) => [m[2], m[4]]),
+    [
+      [" one", " one"],
+      [" two", " two"],
+      [" four", " four"],
+    ],
+    "each unchanged line is in both columns, with the same text",
+  );
+  assert.match(ctx[0][1], /data-ltext=" one"/, "the left cell is the console line, so a rebuild reads it back");
+  assert.doesNotMatch(ctx[0][3], /data-ltext|class="jl/, "the right cell is a mirror, not a second line");
+  assert.match(ctx[0][3], /data-copy-skip="1"/, "and the block's copy does not say the line twice");
+  assert.ok(
+    h.includes('<div class="jl jl-tool-out df-c is-del" data-ltext="-three" data-lkind="tool-out" data-lid="105">-three</div><div class="df-c is-gap" aria-hidden="true"></div>'),
+    "a lone deletion gets the same empty right cell a lone addition gets",
+  );
+});
+
 test("a diff that creates a file is named by the new side, never by /dev/null", () => {
   const h = html(["--- /dev/null", "+++ b/lib/new.js", "@@ -0,0 +1,2 @@", "+one", "+two"], { tool: "write_file", arg: "lib/new.js" });
   assert.match(h, /<span class="code-what">write_file · lib\/new\.js<\/span>/);

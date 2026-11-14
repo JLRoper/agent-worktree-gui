@@ -3248,6 +3248,9 @@ function copyBlockBox(el) {
 function copyShownText(el) {
   if (!el || el.nodeType !== 1) return "";
   if (COPY_SKIP_TAGS.has(el.tagName)) return ""; // a control's label is chrome, never output
+  // A cell a renderer duplicates to fill a column - a diff window's second context cell - marks itself so the
+  // block's copy is the record once, not once per column.
+  if (el.hasAttribute && el.hasAttribute("data-copy-skip")) return "";
   if (el.tagName === "BR") return "\n";
   const cs = getComputedStyle(el);
   if (cs.display === "none" || cs.visibility === "hidden" || el.hidden) return "";

@@ -178,7 +178,10 @@ ok(
   "window: a modification puts the new side on the left and the old one on the right",
   /<div class="df-row" data-lpair="1"><div class="jl jl-tool-out df-c is-add"[^>]*>\+after<\/div><div class="jl jl-tool-out df-c is-mod"[^>]*>-before<\/div><\/div>/.test(winHtml),
 );
-ok("window: a pure removal is its own row", /<div class="df-row"><div class="jl jl-tool-out df-c is-del"[^>]*>-dropped<\/div><\/div>/.test(winHtml));
+ok(
+  "window: a pure removal keeps an empty right cell, so its column lines up with the rows around it",
+  /<div class="df-row"><div class="jl jl-tool-out df-c is-del"[^>]*>-dropped<\/div><div class="df-c is-gap" aria-hidden="true"><\/div><\/div>/.test(winHtml),
+);
 ok(
   "window: a lone addition sits on the left with the empty cell after it",
   /<div class="df-row"><div class="jl jl-tool-out df-c is-add"[^>]*>\+extra<\/div><div class="df-c is-gap" aria-hidden="true"><\/div><\/div>/.test(winHtml),
@@ -215,8 +218,21 @@ check("window: the second hunk pairs, leaves the extras alone and reds the lefto
   "del",
   "ctx",
 ]);
-ok("window: context is dim and spans the row", winHtml.includes('class="jl jl-tool-out df-c is-ctx"'));
-ok("window: a lone addition keeps an empty left cell", winHtml.includes('class="df-c is-gap" aria-hidden="true"'));
+// Every unchanged line is drawn in BOTH columns: one console cell carrying the line, and a mirror cell beside it
+// holding the same text, so a context run reads as two columns instead of one wide cell. The mirror is not a
+// console line (no jl, no data-ltext) - the diff drew one line and the read-back below must hand back one - and it
+// carries data-copy-skip, so the block's copy holds the line once.
+const ctxRows = [...winHtml.matchAll(/<div class="df-row"><div class="jl jl-tool-out df-c is-ctx"[^>]*>([^<]*)<\/div><div class="df-c is-ctx df-mirror"[^>]*>([^<]*)<\/div><\/div>/g)].map((m) => [m[1], m[2]]);
+check("window: every unchanged line fills both columns with the same text", ctxRows, [
+  [" keep", " keep"],
+  [" keep two", " keep two"],
+  [" tail", " tail"],
+]);
+ok(
+  "window: the second context cell is a mirror, not a second console line",
+  /class="df-c is-ctx df-mirror" data-copy-skip="1" aria-hidden="true"/.test(winHtml) && !/class="jl[^"]*df-mirror/.test(winHtml),
+);
+ok("window: a lone addition keeps an empty cell after it", /<div class="jl jl-tool-out df-c is-add"[^>]*>\+extra<\/div><div class="df-c is-gap" aria-hidden="true"><\/div><\/div>/.test(winHtml));
 // Nothing in the window may carry a fixed width or nowrap: the CSS wraps both sides.
 ok("window: no inline width or nowrap in the markup", !/style=|nowrap/.test(winHtml));
 

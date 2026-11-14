@@ -70,10 +70,14 @@
 // and "what it was" on the right. A change block (a run of "-" lines immediately followed by a run of "+"
 // lines) pairs index by index, so the i-th removal sits on the same row as the i-th addition and both read as
 // one modification: the left half green, the right half yellow. A "-" left over after pairing is a pure removal
-// (red, drawn full width because there is no after half to sit beside); a "+" is always green and sits on the
-// LEFT with an empty right cell, so the columns still line up with the rows above and below. Pairing a single
-// "-" only with the "+" immediately after it would leave a two-for-two change reading as "one modification, one
-// deletion, one addition", which is not what the diff says.
+// (red), and a "+" is always green; both sit on the LEFT with the same empty right cell after them. Pairing a
+// single "-" only with the "+" immediately after it would leave a two-for-two change reading as "one modification,
+// one deletion, one addition", which is not what the diff says.
+//
+// EVERY ROW IS TWO COLUMNS. An unchanged line is unchanged on both sides, so it is drawn as a row of two cells
+// carrying the same text, one per column, rather than one cell spanning the window. Only the second of the two is
+// a mirror: it is not a console line (no `jl`, no data-ltext), because the diff drew ONE line and the read-back
+// below must hand back one line, and it carries data-copy-skip so lifting the block does not say it twice.
 //
 // A paired row is therefore written after-then-before, which is the opposite of the diff's own order. The
 // read-back a burst rebuild runs (groupLines, in public/app.js) reads a row carrying data-lpair in the reverse
@@ -437,9 +441,17 @@ function cfFoldRow(row, fold) {
   );
 }
 
+// The right-hand cell of an unchanged line: the same text in the other column, and nothing else. It is a mirror,
+// not a second line - no `jl` and no data-ltext (the diff drew ONE line, and the read-back a burst rebuild runs
+// must hand back one), and data-copy-skip so lifting the block does not say that line twice (copyShownText,
+// public/board/console.js).
+function cfCtxMirror(row) {
+  return `<div class="df-c is-ctx df-mirror" data-copy-skip="1" aria-hidden="true">${cfLink(cfText(row))}</div>`;
+}
 // One framed diff window: the identifiers as a chrome strip on top, then the two sides. Every row is its own
-// two-column grid, so a modification's halves sit on one line, a lone addition leaves the right cell empty and a
-// cut row spans the window's width.
+// two-column grid, and every row fills both of them: a modification's halves sit on one line, an unchanged line
+// carries the same text in each column, a lone addition or removal keeps the empty cell beside it, and a cut
+// row spans the window's width.
 function cfDiffWindow(labels, body, classes, pair, file) {
   const hasFileHead = labels.some((l) => classes[l.i] === "fileplus" || classes[l.i] === "fileminus");
   // Panel chrome, not a console line: no `jl` class and no data-ltext, so a burst rebuild does not read this
@@ -453,7 +465,7 @@ function cfDiffWindow(labels, body, classes, pair, file) {
   for (const b of body) {
     const c = classes[b.i];
     if (c === "ctx") {
-      rows.push(`<div class="df-row">${cfLine(b.row, "df-c is-ctx")}</div>`);
+      rows.push(`<div class="df-row">${cfLine(b.row, "df-c is-ctx")}${cfCtxMirror(b.row)}</div>`);
       continue;
     }
     if (c === "cut") {
@@ -475,7 +487,9 @@ function cfDiffWindow(labels, body, classes, pair, file) {
       rows.push(`<div class="df-row">${cfLine(b.row, "df-c is-add")}<div class="df-c is-gap" aria-hidden="true"></div></div>`);
       continue;
     }
-    if (c === "del") rows.push(`<div class="df-row">${cfLine(b.row, "df-c is-del")}</div>`);
+    // A lone removal has no after half, but its row still fills both columns: the same empty right cell a lone
+    // addition gets, so its column lines up with the rows above and below.
+    if (c === "del") rows.push(`<div class="df-row">${cfLine(b.row, "df-c is-del")}<div class="df-c is-gap" aria-hidden="true"></div></div>`);
   }
   const bodyHtml = rows.length ? `<div class="df-body">${rows.join("")}</div>` : "";
   return `<div class="df-win">${head}${bodyHtml}</div>`;
