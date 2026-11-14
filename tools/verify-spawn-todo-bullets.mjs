@@ -57,7 +57,13 @@ const BEFORE_PORT = Number(opt("--before-port", 7340));
 const MAIN = String(opt("--main", "main"));
 const SCRATCH = path.resolve(opt("--scratch", path.join(os.tmpdir(), "wtgui-spawn-todo-bullets")));
 const SHOTS = path.resolve(opt("--shots", path.join(SCRATCH, "shots")));
-const stamp = new Date().toISOString().slice(0, 10);
+// The report is named by the READER's day, not UTC's: an evening run here is already tomorrow in UTC, and a file
+// called tomorrow that was written today is a small lie in every link to it.
+const stamp = (() => {
+  const d = new Date();
+  const two = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}`;
+})();
 const REPORT = path.resolve(opt("--report", path.join(TREE, "docs", "reports", `spawn-todo-bullets-${stamp}.html`)));
 const JSON_OUT = opt("--json");
 const STOP_AFTER = flag("--stop-after");
