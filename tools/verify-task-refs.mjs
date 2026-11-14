@@ -335,6 +335,14 @@ try {
     check(after.rows > before.rows, "the pane widened its window to reach a row it had not drawn", `${before.rows} -> ${after.rows}`);
     check(after.inView === true, "the row is inside the pane's own scroller", `centred off by ${after.centred}px, scrollTop ${after.scrolled} on ${after.scroller}`);
     check(Math.abs(after.centred ?? 9999) <= 90, "and it is centred there, not merely visible", `${after.centred}px from the middle`);
+    // The capture the brief asks for is the flash ITSELF, and a pulse is one animation long: the float goes back to the
+    // Chat (the anchor has to be on screen to be pressed), the press is repeated, and the shot is taken while the class
+    // is on the row, because a picture after the fade would show an ordinary row.
+    await page.click('#as-subtabs [data-as-subtab="chat"]');
+    await page.click(link);
+    await page
+      .waitForFunction((sel) => Boolean(document.querySelector(sel)?.classList.contains("flash")), flashRow, { timeout: 6000 })
+      .catch(() => note("the pulse was not on the row at capture time"));
     note(`shot ${await shot(page, "2-flash-on-the-row.png")}`);
     const faded = await waitFor(
       () => page.evaluate((sel) => !document.querySelector(sel)?.classList.contains("flash"), flashRow),
