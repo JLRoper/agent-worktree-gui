@@ -818,11 +818,17 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
   const head = flat ? "" : rows
     .map((r) => {
       const running = r.count > r.done && live;
-      const state = running
-        ? `<span class="jl-live tgrp-state" data-live-from="${r.at || Date.now()}">${liveSuffix(r.at || Date.now())}</span>`
-        : r.duration != null
-          ? `<span class="tgrp-state">${r.duration.toFixed(2)}s</span>`
-          : "";
+      // ONE clock slot per row, empty until the row has something to say and never re-created: the text is written
+      // into this node by whoever owns the number (the build here, tickLiveClocks between builds, the completion
+      // swap), so a repaint is a text write and not a new span. `data-live-from` rides the slot so the sampler and
+      // the tick find the same node; the row outlives every repaint because a group of the same run is patched, not
+      // replaced (see patchGroup in the console).
+      const state =
+        running
+          ? `<span class="jl-live tgrp-state" data-tgrp-clock data-live-from="${r.at || Date.now()}">${liveSuffix(r.at || Date.now())}</span>`
+          : r.duration != null
+            ? `<span class="tgrp-state" data-tgrp-clock>${r.duration.toFixed(2)}s</span>`
+            : `<span class="tgrp-state" data-tgrp-clock></span>`;
       const last = r.last ? `<span class="tgrp-last mono" title="${esc(r.last)}">${linkBatchTail(r.last, r.name, gkey)}</span>` : "";
       const active = filter === r.name ? " is-active" : "";
       return `<div class="tgrp-row${active}" role="button" tabindex="0" data-tgrp-tool="${esc(r.name)}" title="show the ${r.count} call${r.count === 1 ? "" : "s"} this run made to ${esc(r.name)}${r.count === 1 ? "" : ", with their output"}"><span class="tgrp-g">${esc(r.glyph)}</span><span class="tgrp-name">${esc(r.name)}</span><span class="tgrp-n">×${r.count}</span>${last}${state}</div>`;
@@ -1038,12 +1044,12 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
     const failed = done ? /·\s*error\b/.test(resText) : false;
     const running = !row.result && live && line && line === busyLine;
     const stateHtml = failed
-      ? `<span class="tgrp-state">error</span>`
+      ? `<span class="tgrp-state" data-tgrp-clock>error</span>`
       : secs != null
-        ? `<span class="tgrp-state">${secs.toFixed(2)}s</span>`
+        ? `<span class="tgrp-state" data-tgrp-clock>${secs.toFixed(2)}s</span>`
         : running
-          ? `<span class="jl-live tgrp-state" data-live-from="${from || Date.now()}">${liveSuffix(from || Date.now())}</span>`
-          : "";
+          ? `<span class="jl-live tgrp-state" data-tgrp-clock data-live-from="${from || Date.now()}">${liveSuffix(from || Date.now())}</span>`
+          : `<span class="tgrp-state" data-tgrp-clock></span>`;
     const key = `${gkey}|c${si}`;
     const open = state.callOpen.has(key);
     const target = arg ? `<span class="tgrp-last mono" title="${esc(arg)}">${linkBatchTail(arg, tool, gkey)}</span>` : `<span class="tgrp-last"></span>`;
@@ -1157,6 +1163,16 @@ function consoleToolsHtml() {
   );
 }
 
+// The answer the 400 ms pass already knows: the box grew and was just stuck to its tail, or it does not overflow at
+// all. No box is read for it - paintToBottom's two reads per box are the choke point the report timed, and a box the
+// page itself scrolled to the end cannot be showing the reader a chip. Only a dirty chip (a reader parked above the
+// tail) goes through the measuring path, and it does so at most twice a second.
+function paintAtEnd(box) {
+  const wrap = box?.closest?.(".out-wrap");
+  if (wrap && !wrap.classList.contains("is-at-end")) wrap.classList.add("is-at-end");
+  if (box) box._chipDirty = false;
+}
+
 function paintToBottom(box) {
   const wrap = box?.closest?.(".out-wrap");
   if (!wrap) return;
@@ -1172,6 +1188,7 @@ function paintToBottom(box) {
   // pin uses. A 24 px band hid it for a reader parked a few px up, who was then neither following nor offered the ↓.
   const atEnd = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <= 2;
   wrap.classList.toggle("is-at-end", !overflowing || atEnd);
+  box._chipDirty = false;
 }
 
 // ---- the docked console ---------------------------------------------------------------------------------
@@ -1594,7 +1611,13 @@ function typedText(line, jobId) {
   // while hidden, so a paragraph that was mid-type when the reader left stayed at the text it had then; every repaint
   // after they came back drew that prefix over the whole line, and the console showed "This" for a paragraph that
   // starts "This branch was added to main as version 0.47.0." until the card was reloaded from the store.
-  const shown = P.feed(String(line.lid), String(jobId ?? ""), full, { kind: line.kind, at: line.at });
+  const shown = P.feed(String(line.lid), String(jobId ?? ""), full, {
+    kind: line.kind,
+    at: line.at,
+    // The console's own rows are capped: a result the wire handed over in full must not be revealed for a minute
+    // (cause 7). A reasoning block keeps its deliberate reveal.
+    cap: line.kind !== "think",
+  });
   if (document.hidden) {
     P.flush(String(line.lid));
     return full;
@@ -1638,6 +1661,22 @@ function rowTakesTail(el, next) {
 function drawRowText(el, text) {
   const next = String(text ?? "");
   if (el._drawn === next) return false;
+  // A command card's prompt is drawn row by row like any other text, and the three dots that end its fold are cut into
+  // one of those rows: the row has to be whole again BEFORE it is drawn, or the new words land after the dots and the
+  // dots end up in the middle of a sentence. So the card is put back first (its own nodes, not a re-render), and the
+  // frame after the draw marks it again from the text it now holds. The answer is remembered per row once the row is
+  // in the page: 11000 draws a window is 11000 ancestor walks otherwise, and a row does not change cards.
+  let card = el._cmdCard;
+  if (card === undefined) {
+    const found = el.closest ? el.closest(".code-box.is-cmd") : null;
+    // Remembered once the row is in the page. A row drawn before it is inserted would cache "not in a card" forever.
+    if (el.isConnected) el._cmdCard = found;
+    card = found;
+  }
+  if (card) {
+    clearCommandFoldMark(card);
+    scheduleCommandFoldMark(card);
+  }
   // A prose row draws MARKDOWN (core/console-markdown.js). The cheap tail-append below is still correct for a
   // growing paragraph that has no marker in the part that just arrived; once a marker lands — `**`, a backtick, an
   // underscore, a link's `[` — the row is rendered again, because the tail may be a marker that closes one already
@@ -1705,28 +1744,29 @@ function appendProseLine(out, line, streaming, shown = null) {
   const plan = consoleMdPlan(prev, line);
   if (plan.action === "break") {
     out._md = null;
-    return;
+    return null;
   }
   if (plan.action === "close") {
     finishFence(prev);
     out._md = null;
-    return;
+    return null;
   }
   if (plan.action === "code" && prev) {
     appendFenceRow(prev, line);
-    return;
+    return prev.el;
   }
   if (prev && (plan.action === "line" || plan.action === "item")) {
     prev.el.insertAdjacentHTML("beforeend", consoleMdAppendRow(line, prev.type, { textOf: () => shown }));
-    return;
+    return prev.el;
   }
   const block = startMdBlock(plan, streaming && Boolean(out.lastElementChild));
   out.appendChild(block);
   out._md = { type: plan.type, ordered: Boolean(plan.ordered), lang: plan.lang || "", open: Boolean(plan.open), el: block };
   // An OPENING fence is a delimiter, not a line of the well: the block is the fence, and the next lines are its
   // code. (Drawn as a row it would sit inside the body it just opened, which is the shape a repaint never makes.)
-  if (plan.type === "fence") return;
+  if (plan.type === "fence") return block;
   block.insertAdjacentHTML("beforeend", consoleMdAppendRow(line, plan.type, { textOf: () => shown }));
+  return block;
 }
 
 // ---- the raw view, and the focus control ---------------------------------------------------------------
@@ -1743,16 +1783,26 @@ function paintRawConsole(out) {
   if (out.dataset.rawView !== "1") out._mdHtml = out.innerHTML;
   out.dataset.rawView = "1";
   out._md = null;
+  out._wait = null;
+  // The RAW text is not what the store would draw, so the next store read must repaint rather than trust a signature
+  // taken from the view that was on screen before this toggle.
+  out._paintSig = null;
+  out._drawnVer = null;
   out.textContent = consoleMdRawText(consoleRawLines(out));
+  grew(out);
   const wrap = out.closest(".out-wrap");
   if (wrap) wrap.classList.add("is-raw");
 }
 function restoreRenderedConsole(out) {
   delete out.dataset.rawView;
   out._md = null;
+  out._paintSig = null;
+  out._drawnVer = null;
   if (typeof out._mdHtml === "string") {
     out.innerHTML = out._mdHtml;
     delete out._mdHtml;
+    out._wait = out.querySelector(":scope > [data-wait]");
+    grew(out);
     // The rows are fresh nodes: forget what the previous ones had been drawn with, so the next append renders
     // rather than appending half a line to a node this page no longer holds.
     for (const row of out.querySelectorAll("[data-lid]")) delete row._drawn;
@@ -1869,6 +1919,15 @@ function consoleHeld(out) {
 function wireConsole(el) {
   if (!el || el._wired) return el;
   el._wired = true;
+  // The growth counter the follow path reads (see grew): a console placed with content already in it has grown at
+  // least once, and every writer after this bumps it.
+  if (el._grow == null) el._grow = 0;
+  // The empty console's placeholder, held by reference: the append path removes it once, and asking the selector
+  // engine for a row that stops existing on the first line was 12318 matcher evaluations in one 24 s window.
+  if (typeof el.querySelector === "function") el._wait = el.querySelector(":scope > [data-wait]");
+  // The one resize target a command card needs (see cmdFoldResize): the console it is drawn in. Asked by typeof
+  // because this function is evaluated on its own, with no ResizeObserver in scope, by test/console-tail-pin.test.js.
+  if (typeof cmdFoldResize === "object" && cmdFoldResize && typeof el.tagName === "string") cmdFoldResize.observe(el);
   // "Following" is the last line itself, not a band around it. Forty px of tolerance read as generous, but one row of
   // a long turn is taller than that: a reader who nudged up to read the newest line was still "at the bottom" to the
   // page and every paint path re-anchored them on the next line (measured on 0.46.0: 42 moves / +850 px in 30 s on a
@@ -1951,6 +2010,77 @@ function consoleOuts() {
 const stickPending = new Set();
 let stickFrame = 0;
 
+// This console's content changed, by one line or by one character. It is the ONLY thing the follow path needs to
+// know: a console whose counter has not moved cannot have grown, so the height it would read is the height it has
+// already put the reader on, and the read (which lays the whole box out before it can answer) is skipped. Bumped by
+// every writer - the append path, the typed stream, a stream repaint, a raw repaint - and by nothing else.
+//
+// The card's session scroller is marked with it too: it grows whenever the console inside it does, and its own frame
+// read has the same reason to be skipped.
+function grew(out) {
+  if (!out) return;
+  out._grow = (Number(out._grow) || 0) + 1;
+  const body = out.closest && out.closest(".job-body");
+  if (body) body._grow = (Number(body._grow) || 0) + 1;
+}
+
+// ---- the rows a console holds, by line id ---------------------------------------------------------------
+// The typed stream and the append path both need the row a line id names, and both used to ask the document with a
+// selector: 12318 selector evaluations and 437 ms of the browser's own matcher in one 24 s window. The rows are made
+// here, so a console keeps its own index instead - one Map from `data-lid` to the rows carrying it, built once per
+// console and kept as rows arrive and leave. A lookup validates what it hands back, so a row a rebuild detached is
+// never drawn into.
+const lidOf = (el) => (el && el.dataset && el.dataset.lid != null ? String(el.dataset.lid) : "");
+
+function indexLid(map, el) {
+  const lid = lidOf(el);
+  if (!lid) return;
+  const list = map.get(lid);
+  if (!list) map.set(lid, [el]);
+  else if (!list.includes(el)) list.push(el);
+}
+
+function lidIndex(out) {
+  let map = out._lidIndex;
+  if (!map) {
+    map = out._lidIndex = new Map();
+    for (const el of out.querySelectorAll("[data-lid]")) indexLid(map, el);
+  }
+  return map;
+}
+
+function lidRows(out, lid) {
+  const list = lidIndex(out).get(String(lid));
+  if (!list || !list.length) return [];
+  for (let i = list.length - 1; i >= 0; i -= 1) {
+    const el = list[i];
+    if (!el.isConnected || !out.contains(el)) list.splice(i, 1);
+  }
+  return list;
+}
+
+// A subtree that just joined this console (a row, a markdown block, a tool group) adds its ids to the index.
+function indexSubtree(out, el) {
+  if (!out || !el || !el.querySelectorAll) return;
+  const map = lidIndex(out);
+  indexLid(map, el);
+  for (const row of el.querySelectorAll("[data-lid]")) indexLid(map, row);
+}
+
+// A subtree that is leaving takes its ids with it: an index that still names a detached row finds nothing (validated
+// above) but would grow forever.
+function unindexSubtree(out, el) {
+  const map = out && out._lidIndex;
+  if (!map || !el || !el.querySelectorAll) return;
+  for (const row of el.querySelectorAll("[data-lid]")) {
+    const list = map.get(lidOf(row));
+    if (!list) continue;
+    const i = list.indexOf(row);
+    if (i >= 0) list.splice(i, 1);
+    if (!list.length) map.delete(lidOf(row));
+  }
+}
+
 // Ask for this console to follow its newest line, at most once per frame, and only while the reader is following it.
 function stickSoon(el) {
   if (!el || !el.dataset) return;
@@ -1971,7 +2101,13 @@ function stickSoon(el) {
     for (const out of batch) {
       if (!out.isConnected) continue;
       if (!consolePinned(out.dataset.out) && out._atBottom !== true) continue;
+      // Nothing has been added since the last time this console was put on its newest line, so the height it would
+      // read is the one it wrote: the frame after every growth is the one that has work, and a call that only asks
+      // again (a repaint, a settle pass, the 400 ms repair) costs a comparison instead of a full layout. This is the
+      // whole of the measured 661 ms a two-line callback carried: 12757 asks, most of them with nothing new to follow.
+      if (out._stuckAt != null && out._stuckAt === out._grow) continue;
       setScroll(out, out.scrollHeight); // one read per console per frame, not one per row
+      out._stuckAt = out._grow;
     }
   });
 }
@@ -2172,8 +2308,7 @@ function paintTypedLines(keys) {
     if (!outs || !outs.length) continue;
     for (const out of outs) {
       // A reasoning row types inside its thinking block, which follows its own stickiness, not the console's.
-      for (const el of out.querySelectorAll(`[data-lid="${CSS.escape(String(lid))}"]`)) {
-        if (!el.isConnected) continue;
+      for (const el of lidRows(out, lid)) {
         // The row's own record goes with the question, so a paint can never shorten a line to a prefix the stream has
         // stopped growing (see typedShown): the worst a stale tick can do is nothing. A row with no record of its own
         // (a reasoning row) asks with nothing.
@@ -2187,6 +2322,7 @@ function paintTypedLines(keys) {
           if (rec == null) continue;
           if (!drawRowText(el, rec)) continue;
         } else if (!drawRowText(el, shown)) continue;
+        grew(out);
         const body = el.closest(".think-body");
         if (body) stickThinkBody(body);
         else stickSoon(out);
@@ -2370,6 +2506,124 @@ const streamRowKey = (n) => {
   return grp ? `g:${grp}` : "";
 };
 
+// ---- patch a piece, never replace it -----------------------------------------------------------------------
+// A repaint asks the same question of every piece: is this the same piece with different words, or a different
+// piece? Replacing it throws away every node under it - the clocks that tick, the copy button, the reader's
+// selection - and that churn (3660 nodes added, 2179 removed in one 24 s window, 3330 of them inside the console)
+// is cause 8. A piece of the same shape in the same place is PATCHED: words and classes move, the node stays. The
+// badge fix in section 4 holds only because of this: a clock is one node per row for the life of the row.
+//
+// Identity is the shape (a tool group, or a row/block and the line ids it draws), never the words. A tool group's
+// shape is the run it collects - the tools of its head rows and the keys of its calls - so a group that gained a
+// call, or lost one, is a different group and is replaced; the same run with a new clock, a new result or a new
+// tally is patched.
+function copyData(to, from) {
+  if (!to || !from || !to.dataset || !from.dataset) return;
+  for (const k of Object.keys(to.dataset)) if (!(k in from.dataset)) delete to.dataset[k];
+  for (const [k, v] of Object.entries(from.dataset)) if (to.dataset[k] !== v) to.dataset[k] = v;
+}
+
+const pieceIds = (el) => {
+  const ids = [];
+  if (el?.dataset?.lid != null) ids.push(String(el.dataset.lid));
+  for (const row of el?.querySelectorAll ? el.querySelectorAll("[data-lid]") : []) ids.push(String(row.dataset.lid));
+  return ids.join("|");
+};
+
+const groupShape = (el) => {
+  const heads = [...el.querySelectorAll(":scope > .tgrp-head > .tgrp-row")].map((n) => n.dataset.tgrpTool || "");
+  const calls = [...el.querySelectorAll("[data-call-key]")].map((n) => n.dataset.callKey || "");
+  return `${heads.join(",")}/${calls.join(",")}`;
+};
+
+// One clock slot: text and the states it carries, never a node.
+function patchClock(row, freshRow) {
+  const have = row.querySelector("[data-tgrp-clock]");
+  const want = freshRow.querySelector("[data-tgrp-clock]");
+  if (!have || !want) return;
+  if (have.textContent !== want.textContent) have.textContent = want.textContent;
+  if (have.className !== want.className) have.className = want.className;
+  copyData(have, want);
+}
+
+function patchGroup(have, fresh) {
+  copyData(have, fresh);
+  if (have.className !== fresh.className) have.className = fresh.className;
+  const hRows = [...have.querySelectorAll(":scope > .tgrp-head > .tgrp-row")];
+  const fRows = [...fresh.querySelectorAll(":scope > .tgrp-head > .tgrp-row")];
+  for (let i = 0; i < hRows.length && i < fRows.length; i += 1) {
+    copyData(hRows[i], fRows[i]);
+    hRows[i].classList.toggle("is-active", fRows[i].classList.contains("is-active"));
+    patchClock(hRows[i], fRows[i]);
+  }
+  const hCalls = [...have.querySelectorAll(".tgrp-call")];
+  const fCalls = [...fresh.querySelectorAll(".tgrp-call")];
+  for (let i = 0; i < hCalls.length && i < fCalls.length; i += 1) {
+    const h = hCalls[i];
+    const f = fCalls[i];
+    const hRow = h.querySelector(":scope > .tgrp-row");
+    const fRow = f.querySelector(":scope > .tgrp-row");
+    if (!hRow || !fRow) return false;
+    // A call row's own line does not move once it is on the wire; a drawable that rewrote it is a different row,
+    // and the group is replaced rather than half-patched.
+    if ((hRow.dataset.ltext || "") !== (fRow.dataset.ltext || "")) return false;
+    copyData(hRow, fRow);
+    if (hRow.className !== fRow.className) hRow.className = fRow.className;
+    if (hRow.getAttribute("aria-expanded") !== fRow.getAttribute("aria-expanded")) {
+      hRow.setAttribute("aria-expanded", fRow.getAttribute("aria-expanded") || "false");
+    }
+    if (hRow.title !== fRow.title) hRow.title = fRow.title;
+    patchClock(hRow, fRow);
+    // An open box's stored output is written only when what it holds changed; a folded one is not read.
+    const hBox = h.querySelector(":scope > .tgrp-out");
+    const fBox = f.querySelector(":scope > .tgrp-out");
+    if (hBox && fBox) {
+      if (hBox.hidden !== fBox.hidden) hBox.hidden = fBox.hidden;
+      if (!fBox.hidden && hBox.innerHTML !== fBox.innerHTML) hBox.innerHTML = fBox.innerHTML;
+    }
+    if (h.classList.contains("is-open") !== f.classList.contains("is-open")) h.classList.toggle("is-open");
+  }
+  // The tally button and the body's fold are the reader's state, carried by the fresh markup.
+  const hMore = have.querySelector(":scope > .tgrp-head > .tgrp-more");
+  const fMore = fresh.querySelector(":scope > .tgrp-head > .tgrp-more");
+  if (hMore && fMore) {
+    if (hMore.className !== fMore.className) hMore.className = fMore.className;
+    if (hMore.textContent !== fMore.textContent) hMore.textContent = fMore.textContent;
+    if (hMore.title !== fMore.title) hMore.title = fMore.title;
+  }
+  const hBody = have.querySelector(":scope > .tgrp-body");
+  const fBody = fresh.querySelector(":scope > .tgrp-body");
+  if (hBody && fBody && hBody.hidden !== fBody.hidden) hBody.hidden = fBody.hidden;
+  return true;
+}
+
+function patchPiece(have, fresh) {
+  if (!have || !fresh || have.nodeName !== fresh.nodeName) return false;
+  const grp = Boolean(have.classList && have.classList.contains("tgrp"));
+  if (grp !== Boolean(fresh.classList && fresh.classList.contains("tgrp"))) return false;
+  if (grp) {
+    if (groupShape(have) !== groupShape(fresh)) return false;
+    return patchGroup(have, fresh);
+  }
+  if (pieceIds(have) !== pieceIds(fresh)) return false;
+  copyData(have, fresh);
+  if (have.className !== fresh.className) have.className = fresh.className;
+  const hText = have.dataset ? have.dataset.ltext : null;
+  const fText = fresh.dataset ? fresh.dataset.ltext : null;
+  if (hText != null && fText != null && hText !== fText) drawRowText(have, fText);
+  else if (fresh.firstElementChild && have.innerHTML !== fresh.innerHTML) {
+    have.innerHTML = fresh.innerHTML;
+    // A command card's body was just re-written: the three dots went with the children they ended, and the cache that
+    // said the card was marked no longer describes what is on screen. Mark it again on this frame's own schedule.
+    const cards = have.classList.contains("is-cmd") ? [have] : have.querySelectorAll(".code-box.is-cmd");
+    for (const box of cards) {
+      clearCommandFoldMark(box);
+      scheduleCommandFoldMark(box);
+    }
+  }
+  return true;
+}
+
 function syncStreamConsole(out, body, stick) {
   // A live corner gesture holds this box: a patch is a rebuild of the text under the pointer, and the reader is sizing
   // the box, not reading it. What it would have drawn arrives on the release (the gesture asks for one repaint).
@@ -2415,9 +2669,10 @@ function syncStreamConsole(out, body, stick) {
       if (k) byKey.delete(k);
       let place = have;
       if (have) {
-        // The same row in the same place: only its words can have moved, so it is replaced only when they did.
+        // The same row in the same place: only its words can have moved, so it is patched in place - and replaced
+        // only when it is not the same row at all (see patchPiece).
         if (have !== cursor) out.insertBefore(have, cursor);
-        if (!have.isEqualNode(fresh)) {
+        if (!have.isEqualNode(fresh) && !patchPiece(have, fresh)) {
           have.replaceWith(fresh);
           place = fresh;
         }
@@ -2432,6 +2687,7 @@ function syncStreamConsole(out, body, stick) {
     while (cursor) {
       const gone = cursor;
       cursor = cursor.nextElementSibling;
+      unindexSubtree(out, gone);
       gone.remove();
     }
   }
@@ -2445,18 +2701,45 @@ function syncStreamConsole(out, body, stick) {
   // The rows this paint replaced include the open markdown block (if there was one): the next appended line must
   // start from the DOM that is actually there, never from a block node this page has just detached.
   out._md = null;
+  out._lidIndex = null;
+  grew(out);
   return true;
+}
+
+// The ↓ chip's answer for the frame that just drew a line, without a single box read. A console the panel has just
+// put on its newest line is at its end; one it did not put there is not - `following` IS that judgement, and the
+// geometry cannot say anything else about it. The full answer (whether there is anything to scroll at all, and
+// whether the reader is inside the 2 px band) belongs to the three moments it can change: the reader's own scroll,
+// a resize, and the 400 ms pass - and each of those measures. This path used to read scrollHeight and clientHeight on
+// the console AND on the card body, twice each, for 286 calls and 98.16 ms of self time per streaming window.
+function paintTailChip(box, following) {
+  const wrap = box && box.closest ? box.closest(".out-wrap") : null;
+  if (!wrap) return;
+  wrap.classList.toggle("is-at-end", Boolean(following));
+  // Not following: the truthful answer is one the paint path cannot give, so the 400 ms pass is asked for it. A
+  // following console clears nothing, which is every console in a stream that nobody has taken over.
+  if (box) box._chipDirty = !following;
 }
 
 function paintStreamConsole(turn, copy = "", thread = turn.thread || turn.id) {
   const out = placedNodes("pre.job-out").find((el) => el.dataset.out === `${turn.id}${copy}`);
   if (!out) return false;
   if (globalThis.consoleHeld?.(out)) return false;
+  // What this repaint would draw, as one string. The gate the report asked for is the version below, and it is the
+  // one that matters: recordJobLine already draws the line it changes, so a console whose append path has drawn the
+  // store's current version needs nothing rebuilt. 16 full window builds and 12248 drawJobLine calls per 24 s ran on
+  // a page whose append path had drawn every one of those lines already; the sweep exists for text the panel did
+  // not see arrive, and that is exactly what a version that did not move says.
+  const ver = (state.jobLineVersion && state.jobLineVersion.get(turn.id)) || 0;
+  if (out._drawnVer === ver) return true;
+  const sig = `${ver}|${thread}`;
+  if (out._paintSig === sig) return true;
+  out._paintSig = sig;
   const all = jobLines(turn.id).filter((l) => !isBookkeeping(l));
   const stick = consolePinned(`${turn.id}${copy}`) || wireConsole(out)._atBottom !== false;
   syncStreamConsole(out, streamBodyHtml(turn, all.slice(-300), all.length > 300, thread), stick);
   if (stick) stickSoon(out);
-  paintToBottom(out);
+  paintTailChip(out, stick);
   return true;
 }
 
@@ -2542,6 +2825,9 @@ function syncThinkBody(body, freshBody) {
     cursor = cursor.nextElementSibling;
     gone.remove();
   }
+  // The body grew (or was rebuilt): the repair pass and the stick both key off this, so a patched body is a box the
+  // page knows has moved without measuring it to find out.
+  body._grow = (Number(body._grow) || 0) + 1;
 }
 
 function syncThinkBlock(el, fresh) {
@@ -2723,11 +3009,11 @@ function watchMotion(root) {
 // set by the reader in Settings > Display - and a prompt wraps, so WHICH character is the last visible one is a fact
 // only the browser has (it depends on the width the card happens to be drawn at). So the last visible character is
 // found with a Range over the body's text nodes, everything after it is taken out, and the three dots are written
-// where the text stops. The body's own markup is kept in `cmdFull`, so opening the card, or re-measuring it at a new
-// width, starts from the whole prompt again: nothing is lost, only folded. What the console COPIES is untouched by
-// any of this - a card carries its line in `data-ltext` and copy reads that, never the drawn rows.
+// where the text stops. What was taken is remembered on the body (`cmdMarks`, below), so opening the card, or
+// re-measuring it at a new width, starts from the whole prompt again: nothing is lost, only folded. What the console
+// COPIES is untouched by any of this - a card carries its line in `data-ltext` and copy reads that, never the drawn
+// rows.
 const CMD_FOLD_DOTS = "...";
-const cmdFull = new WeakMap(); // .code-body -> the markup its folded state was cut from
 const cmdFoldPending = new Set();
 let cmdFoldFrame = 0;
 // One canvas for the dots' own width in the body's font: three dots that do not fit on the row would be clipped with
@@ -2764,13 +3050,17 @@ function cmdCutOffset(node, limitY, maxX, dots) {
   return lo;
 }
 
-// Everything after `last`, gone: the rows below the clamp's edge, and the rest of the row the cut is in.
-function cmdCutAfter(body, last) {
+// Everything after `last`, gone: the rows below the clamp's edge, and the rest of the row the cut is in. Every node
+// is remembered with its parent and the sibling it stood in front of, so the whole prompt goes back by INSERTING
+// what was taken - never by re-parsing the body's innerHTML, which was itself a DOM write and made the next mark's
+// first read a forced layout.
+function cmdCutAfter(body, last, removed) {
   let node = last;
   while (node && node !== body) {
     let sib = node.nextSibling;
     while (sib) {
       const after = sib.nextSibling;
+      removed.push({ node: sib, parent: node.parentNode, after });
       sib.remove();
       sib = after;
     }
@@ -2778,38 +3068,80 @@ function cmdCutAfter(body, last) {
   }
 }
 
-// Back to the whole prompt: the markup the fold was cut from, put back. Idempotent, so every path may call it.
+// One card's mark as it was drawn: the measurement it was made from, the text node the cut landed in and the tail it
+// lost, every node the cut removed and where it stood, and the dots. Restoring is putting those same nodes back.
+const cmdMarks = new WeakMap();
+
+// Back to the whole prompt: everything the fold took, put back where it stood. Idempotent, so every path may call it.
 function clearCommandFoldMark(box) {
   const body = box && box.querySelector ? box.querySelector(":scope > .code-body") : null;
   if (!body) return;
-  const html = cmdFull.get(body);
-  if (html === undefined) return;
-  body.innerHTML = html;
-  cmdFull.delete(body);
+  const mark = cmdMarks.get(body);
+  if (!mark) return;
+  // Reverse order: a removed node's `after` is either still in the tree or was restored by a later entry.
+  for (let i = mark.nodes.length - 1; i >= 0; i -= 1) {
+    const { node, parent, after } = mark.nodes[i];
+    if (!parent) continue;
+    if (after && after.parentNode === parent) parent.insertBefore(node, after);
+    else parent.appendChild(node);
+  }
+  if (mark.dots && mark.dots.parentNode) mark.dots.parentNode.removeChild(mark.dots);
+  if (mark.text && mark.text.node) mark.text.node.data += mark.text.tail;
+  cmdMarks.delete(body);
 }
 
 // One card, marked or unmarked to match its own state. Called for every card a render path places, for the press that
 // folds one, and when a body's width changes (the wrap moved, so the last visible character moved with the dots).
+//
+// A mark is measured, not re-measured: the three numbers that decide where the cut lands are the body's width, its
+// height and the length of its text, and when none of them moved the mark already on the card is the answer. That
+// was 1.7 ms per call and 32 Range reads for four text nodes, 8 of 8 re-marks doing the same binary search again.
 function paintCommandFoldMark(box) {
   if (!box || box.nodeType !== 1 || !box.classList || !box.classList.contains("is-cmd")) return;
   const body = box.querySelector(":scope > .code-body");
   if (!body) return;
   const clamped = box.classList.contains("is-clamped");
+  // A card that could not be measured on this frame is measured again on the next one, a few frames at most: the
+  // fold's class can land a frame AFTER the repaint that asked for the mark (a settings reset re-renders the card and
+  // folds it afterwards), and a card whose fold arrived late used to keep no dots at all - the one-shot repaint had
+  // already run. Bounded, so a card that is genuinely open costs four cheap returns and then nothing.
+  const retry = () => {
+    if ((box._foldTries = (box._foldTries || 0) + 1) > 4) return;
+    scheduleCommandFoldMark(box);
+  };
   // Always start from the whole prompt: a card that was marked and is being measured again must be measured on its
   // own text, not on last frame's cut.
-  clearCommandFoldMark(box);
-  if (!clamped || !body.isConnected || body.hidden) return;
-  cmdFoldResize?.observe(body);
+  if (!clamped || !body.isConnected || body.hidden) {
+    clearCommandFoldMark(box);
+    if (body.isConnected && !body.hidden) retry();
+    return;
+  }
   // A body with no layout (a folded turn, a hidden pane) cannot be measured, and marking it would mark it wrongly.
+  // It is watched until it has one: the first layout is what makes the answer possible, and nothing schedules a
+  // second look at a card that is merely off screen.
   const w = body.clientWidth;
   const h = body.clientHeight;
-  if (!w || !h) return;
+  if (!w || !h) {
+    clearCommandFoldMark(box);
+    if (cmdFoldResize) cmdFoldResize.observe(body);
+    retry();
+    return;
+  }
   // The whole prompt fits its preview rows: nothing is hidden, so nothing says otherwise.
-  if (body.scrollHeight <= h + 1) return;
+  if (body.scrollHeight <= h + 1) {
+    clearCommandFoldMark(box);
+    retry();
+    return;
+  }
   if (body.dataset.cmdFolding === "1") return;
+  const sig = `${w}|${h}|${body.textContent.length}`;
+  const drawn = cmdMarks.get(body);
+  // The mark already on the card, if it is still on the card: a repaint that rewrote this body's children took the
+  // dots with the old nodes, and a cache entry that says "drawn" must not keep them from being drawn again.
+  if (drawn && drawn.sig === sig && drawn.dots && drawn.dots.isConnected && body.contains(drawn.dots)) return;
+  clearCommandFoldMark(box);
   body.dataset.cmdFolding = "1";
   try {
-    const markup = body.innerHTML;
     const cs = getComputedStyle(body);
     const rect = body.getBoundingClientRect();
     // The clamp is a border-box height, so the text's own area ends `padding-bottom` above the box's bottom edge.
@@ -2829,6 +3161,7 @@ function paintCommandFoldMark(box) {
     }
     if (!chosen) return;
     const { node, cut } = chosen;
+    const mark = { sig, text: { node, tail: (node.data || "").slice(cut) }, nodes: [], dots: null };
     node.data = node.data.slice(0, cut);
     // The label is bold chrome and the dots are not: placed after it, never inside it.
     const holder = node.parentNode && node.parentNode.classList && node.parentNode.classList.contains("code-prompt-label") ? node.parentNode : node;
@@ -2836,20 +3169,35 @@ function paintCommandFoldMark(box) {
     span.className = "code-fold-dots";
     span.textContent = CMD_FOLD_DOTS;
     holder.parentNode.insertBefore(span, holder.nextSibling);
-    cmdCutAfter(body, span);
-    cmdFull.set(body, markup);
+    mark.dots = span;
+    cmdCutAfter(body, span, mark.nodes);
+    cmdMarks.set(body, mark);
+    // This card has its answer: the next frame's retry budget starts over, so a later transient (a settings change, a
+    // turn unfolding) still gets its four frames.
+    box._foldTries = 0;
   } finally {
     delete body.dataset.cmdFolding;
   }
 }
 
-// A card whose body changed width is re-measured: the console narrowed, the card was maximized, the panel resized.
+// A card whose body changed width is re-measured, and a card whose body had no layout yet is measured as soon as it
+// has one. ONE observer for the console AND the bodies: the console is what a card's width follows (a panel resize,
+// a maximized card), and a body is watched only until it first has a layout (a turn unfolding, a pane shown) - a
+// target per card per paint was 20 observations for one console and one more for every rebuild.
 const cmdFoldResize =
   typeof ResizeObserver === "function"
     ? new ResizeObserver((entries) => {
         for (const entry of entries) {
-          const box = entry.target.parentElement;
-          if (box && box.classList && box.classList.contains("is-cmd")) paintCommandFoldMark(box);
+          const root = entry.target;
+          if (!root) continue;
+          // A body names its own card; the console names every card inside it.
+          const own = root.classList && root.classList.contains("code-body") ? root.parentElement : null;
+          if (own && own.classList && own.classList.contains("is-cmd")) {
+            scheduleCommandFoldMark(own);
+            continue;
+          }
+          if (!root.querySelectorAll) continue;
+          for (const box of root.querySelectorAll(".code-box.is-cmd")) scheduleCommandFoldMark(box);
         }
       })
     : null;
@@ -3150,9 +3498,12 @@ function stickCardBodySoon(el) {
     cardStickPending.clear();
     for (const b of batch) {
       if (!cardBodyFollowing(b)) continue;
-      // One read of the scrollport per body per frame, not one per row: the same cost the console pays.
+      // One read of the scrollport per body per frame, not one per row: the same cost the console pays. And, like the
+      // console, only a frame with something new in it: a body that did not grow cannot have left the reader's foot.
+      if (b._stuckAt != null && b._stuckAt === b._grow) continue;
       const max = b.scrollHeight - b.clientHeight;
       if (max > 0 && b.scrollTop < max) setScroll(b, max);
+      b._stuckAt = b._grow;
     }
   });
 }
@@ -3478,6 +3829,11 @@ function recordJobLine(evt) {
   } else buf.push(line);
   if (buf.length > JOB_LINES_PER_TURN) buf.splice(0, buf.length - JOB_LINES_PER_TURN);
   state.jobLines.set(evt.id, buf);
+  // One bump per recorded line. This is the counter a stream repaint asks before it rebuilds: the line this event
+  // carries has already been DRAWN by drawJobLine below, which stamps the console with this version, so a store read
+  // that would draw the same window has nothing to add (see paintStreamConsole).
+  if (!state.jobLineVersion) state.jobLineVersion = new Map();
+  state.jobLineVersion.set(evt.id, (state.jobLineVersion.get(evt.id) || 0) + 1);
   // A new buffer is also the moment the tab can cross its ceiling on how many turns it holds one for.
   trimJobLines();
   // A folded turn shows only the peek, and it is not part of the console the lines are appended to.
@@ -3521,7 +3877,13 @@ function drawJobLine(evt) {
     // was dim, but a dim line is transcript too ("⇢ asked to work in …", "cut from …", "push guard: …") and every
     // repaint — the thinking sweep, a new deliverable, an approval — puts one back on top, so the next live line wiped
     // everything the reader had on screen and drew only itself until the following repaint put it all back.
-    out.querySelector(":scope > [data-wait]")?.remove();
+    // The placeholder an empty console shows gives way to the first line. This used to ask the selector engine for it
+    // once per line; the node is held by reference from wireConsole, so a row that stops existing costs a comparison.
+    const wait = out._wait;
+    if (wait) {
+      if (wait.isConnected) wait.remove();
+      out._wait = null;
+    }
     // A tool call joins the burst at the tail of the console and updates its tally in place; anything said in
     // between ends that burst, so the next call starts a fresh tally where the transcript has got to.
     const isTool = line.kind === "tool" || line.kind === "tool-out";
@@ -3588,8 +3950,11 @@ function drawJobLine(evt) {
       const fresh = holder.firstElementChild;
       if (fresh) {
         fresh._burst = lines;
-        if (openGroup) openGroup.replaceWith(fresh);
-        else out.appendChild(fresh);
+        if (openGroup) {
+          unindexSubtree(out, openGroup);
+          openGroup.replaceWith(fresh);
+        } else out.appendChild(fresh);
+        indexSubtree(out, fresh);
         rememberToolGroup(fresh);
       }
     } else if (out.dataset.rawView === "1") {
@@ -3597,7 +3962,7 @@ function drawJobLine(evt) {
       // text, never append a rendered row beside it.
       paintRawConsole(out);
     } else {
-      const existing = line.lid ? out.querySelector(`[data-lid="${CSS.escape(String(line.lid))}"]`) : null;
+      const existing = line.lid ? lidRows(out, line.lid)[0] || null : null;
       if (line.mode === "set" && existing) {
         // One rule for both writers: append what the row is missing when it can, reparse it only when it must.
         drawRowText(existing, shownText);
@@ -3605,7 +3970,7 @@ function drawJobLine(evt) {
       } else if (consoleMdIsProse(line.kind)) {
         // The agent's own words join the block already open (a paragraph, a list, a fence) or start the next one.
         // Appending one row is the whole cost of a streamed line: nothing above it is repainted.
-        appendProseLine(out, line, streaming, shownText);
+        indexSubtree(out, appendProseLine(out, line, streaming, shownText));
       } else {
         out._md = null;
         const div = document.createElement("div");
@@ -3620,9 +3985,16 @@ function drawJobLine(evt) {
         div.dataset.lkind = String(line.kind || "raw");
         drawRowText(div, shownText);
         out.appendChild(div);
+        indexSubtree(out, div);
       }
     }
+    grew(out);
     if (stick && !globalThis.consoleHeld?.(out)) stickSoon(out);
+    // What this console has now drawn. recordJobLine draws every line it records, so a console whose marker equals
+    // the store's version is CURRENT - and the 1 Hz sweep has nothing to rebuild. This is the version gate the
+    // report asked for: without it 16 full 300-line window builds and 12248 drawJobLine calls ran in one 24 s window
+    // on a page whose append path had already drawn every one of those lines.
+    out._drawnVer = (state.jobLineVersion && state.jobLineVersion.get(evt.id)) || 0;
   }
   refreshJobPreview(evt.id);
 }

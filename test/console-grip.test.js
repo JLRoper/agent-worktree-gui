@@ -122,7 +122,10 @@ test("the writers that would move a console ask the gesture first", () => {
   assert.ok(grab(consoleSrc, "syncStreamConsole").includes("globalThis.consoleHeld?.(out)"), "and the text is not rebuilt under it");
   assert.ok(grab(consoleSrc, "paintStreamConsole").includes("globalThis.consoleHeld?.(out)"), "not even its markup built");
   assert.ok(grab(consoleSrc, "drawJobLine").includes("!globalThis.consoleHeld?.(out)"), "nor is it re-pinned by a line arriving");
-  assert.ok(appSrc.includes("if (!outDragging(pre)) stickConsole(pre);"), "the 400ms sweep leaves the box to the pointer");
+  assert.ok(
+    /if \(outDragging\(pre\)\) continue;|if \(!outDragging\(pre\)\) stickConsole\(pre\);/.test(appSrc),
+    "the 400ms sweep leaves the box to the pointer",
+  );
 });
 
 test("the rebuild paths that would replace the node defer to the release", () => {
