@@ -194,6 +194,8 @@ const OPS_PREVIEW = [
   "- Local PostgreSQL uses the shared `game_db` container on host port 5432.",
   "+- A **pod** is a per-run copy of that stack — its own postgres, api and web, its own ports.",
   " - The API applies `server/schema.sql` and the ordered migration set during startup.",
+  // Added to the copied rows: a lone removal (no matching addition), the row whose empty right cell is under test.
+  "- Local PostgreSQL also served the old `game_db` volume on the same host port.",
 ];
 const FIRST_TEXT = "docker pods per run, acceptance first";
 const LAST_TEXT = "pods are up and the ports are recorded";
@@ -505,20 +507,48 @@ async function browserPhase(pw) {
     ],
   );
   check(
-    "(b) the context row still spans the window and the row order is unchanged",
-    b0.rows.map((r) => r.cells[0].replace(/\s+/g, " ")),
+    "(b) the row order is unchanged, and every row fills both columns",
+    b0.rows.map((r) => r.cells.map((c) => c.replace(/\s+/g, " ").trim())),
     [
-      "df-c is-ctx - Use Node.js 22+ and `npm install`; `npm run dev` starts the Vite client and API.",
-      "df-c is-add +- A **pod** is a per-run copy of that stack — its own postgres, api and web, its own ports.",
-      "df-c is-ctx - The API applies `server/schema.sql` and the ordered migration set during startup.",
+      [
+        "df-c is-ctx - Use Node.js 22+ and `npm install`; `npm run dev` starts the Vite client and API.",
+        "df-c is-ctx df-mirror - Use Node.js 22+ and `npm install`; `npm run dev` starts the Vite client and API.",
+      ],
+      [
+        "df-c is-add +- A **pod** is a per-run copy of that stack — its own postgres, api and web, its own ports.",
+        "df-c is-mod - Local PostgreSQL uses the shared `game_db` container on host port 5432.",
+      ],
+      [
+        "df-c is-ctx - The API applies `server/schema.sql` and the ordered migration set during startup.",
+        "df-c is-ctx df-mirror - The API applies `server/schema.sql` and the ordered migration set during startup.",
+      ],
+      [
+        "df-c is-del - Local PostgreSQL also served the old `game_db` volume on the same host port.",
+        "df-c is-gap",
+      ],
     ],
   );
+  // The point of the change, measured rather than read: a row that used to be one cell spanning the window (or one
+  // cell with no right-hand side at all) is two real columns now, each half the row, with the divider between them.
+  const columns = await page.evaluate(() => {
+    const win = document.querySelectorAll("pre.job-out .call")[1].querySelector(".df-win");
+    const rows = [...win.querySelectorAll(".df-body > .df-row")];
+    const w = (el) => Math.round(el.getBoundingClientRect().width);
+    return {
+      cells: rows.map((r) => r.children.length),
+      sameText: rows.map((r) => r.children.length === 2 && r.children[0].innerText === r.children[1].innerText),
+      widths: rows.map((r) => [...r.children].map(w)),
+      rowWidth: w(rows[0]),
+      divider: rows.map((r) => (r.children.length === 2 ? getComputedStyle(r.children[1]).borderLeftWidth : "")),
+    };
+  });
+  check("(b) every row of the window is two cells", columns.cells, [2, 2, 2, 2]);
+  check("(b) an unchanged line carries the same text in both columns, a change does not", columns.sameText, [true, false, true, false]);
   ok(
-    "(b) a context row is a full-width row: one cell, spanning both columns",
-    (await page.evaluate(() => {
-      const row = document.querySelectorAll("pre.job-out .call")[1].querySelector(".df-body .df-row");
-      return row.children.length === 1 && getComputedStyle(row.children[0]).gridColumn === "1 / -1";
-    })),
+    "(b) the two cells are real columns: half the row each, with the divider between them",
+    columns.widths.every(([a, b]) => Math.abs(a - b) <= 1 && Math.abs(a + b - columns.rowWidth) <= 2) &&
+      columns.divider.every((d) => d !== "" && d !== "0px"),
+    JSON.stringify(columns),
   );
 
   // ---- (c) the cut edge, when the store has nothing ------------------------------------------------
@@ -604,7 +634,12 @@ async function browserPhase(pw) {
     !copyFolded.includes("+## Per-run docker pods") && copyFolded.includes(FIRST_TEXT) && copyFolded.includes(LAST_TEXT) && copyFolded.includes("- Local PostgreSQL uses the shared"),
     JSON.stringify(copyFolded.slice(0, 80)),
   );
-  ok("(d) the other call's output is still there", (await page.evaluate(() => window.__probe.diffRows(1))).rows.length === 3);
+  ok("(d) the other call's output is still there", (await page.evaluate(() => window.__probe.diffRows(1))).rows.length === 4);
+  // The block's copy is the record once: the second context cell is a mirror for the eye, and a copy that said
+  // every unchanged line twice would be a worse record than the one wide cell it replaced.
+  const copyText = await page.evaluate(() => window.__probe.consoleCopy());
+  const ctxLine = "- The API applies `server/schema.sql` and the ordered migration set during startup.";
+  check("(d) the copy holds each unchanged line once, not once per column", copyText.split(ctxLine).length - 1, 1);
 
   // a repaint
   await page.evaluate(() => window.__probe.repaint());
@@ -633,7 +668,7 @@ async function browserPhase(pw) {
   check(
     "(b) the read-back undoes the swapped pair: the rebuild draws the same change, not two rows",
     (await page.evaluate(() => window.__probe.diffRows(1))).rows.map((r) => r.lpair || "-"),
-    ["-", "1", "-"],
+    ["-", "1", "-", "-"],
   );
   const fromDom = await page.evaluate(() => window.__probe.rebuildFromDom(0));
   // The store-backed lines are the panel's own addition (jl-store) and are deliberately NOT read back - they are
@@ -724,17 +759,21 @@ async function browserPhase(pw) {
 // ---- what can only be read off the source --------------------------------------------------------
 function sourceChecks() {
   const app = readFileSync(path.join(ROOT, "public", "app.js"), "utf8");
+  // The console's renderers moved out of app.js into board/console.js (the board split), so a source check that
+  // reads app.js alone answers 0 for code that IS there and reads as a regression nobody made. Read both.
+  const board = readFileSync(path.join(ROOT, "public", "board", "console.js"), "utf8");
+  const src = `${app}\n${board}`;
   const css = readFileSync(path.join(ROOT, "public", "style.css"), "utf8");
   const mod = readFileSync(path.join(ROOT, "public", "core", "console-format.js"), "utf8");
   ok(
     "the fold is one delegated handler on the console, not one per call",
-    (app.match(/closest\("\[data-call-fold\], \.call-head"\)/g) || []).length === 1 &&
-      (app.match(/callBlockHtml = \(/g) || []).length === 1 &&
-      (app.match(/callBlockHtml\(seg\.lines\[0\]/g) || []).length === 1,
-    `${(app.match(/closest\("\[data-call-fold\], \.call-head"\)/g) || []).length} handler(s), ${(app.match(/callBlockHtml\(seg\.lines\[0\]/g) || []).length} call site(s)`,
+    (src.match(/closest\("\[data-call-fold\], \.call-head"\)/g) || []).length === 1 &&
+      (src.match(/callBlockHtml = \(/g) || []).length === 1 &&
+      (src.match(/callBlockHtml\(seg\.lines\[0\]/g) || []).length === 1,
+    `${(src.match(/closest\("\[data-call-fold\], \.call-head"\)/g) || []).length} handler(s), ${(src.match(/callBlockHtml\(seg\.lines\[0\]/g) || []).length} call site(s)`,
   );
-  ok("the folded state is remembered in one place, beside the code box's own set", /callFolded: new Set\(\)/.test(app) && /state\.callFolded\.has\(key\)/.test(app));
-  ok("the module draws the swapped pair and marks it for the read-back", /data-lpair="1"/.test(mod) && /row\.dataset\.lpair === "1"/.test(app));
+  ok("the folded state is remembered in one place, beside the code box's own set", /callFolded: new Set\(\)/.test(src) && /state\.callFolded\.has\(key\)/.test(src));
+  ok("the module draws the swapped pair and marks it for the read-back", /data-lpair="1"/.test(mod) && /row\.dataset\.lpair === "1"/.test(src));
   ok("the module's own doc comment states the new side is the left one", /the LEFT holds the after \(new\) lines/.test(mod) && !/the left holds the before lines/.test(mod));
   ok("the cut row's words live in the module, with the frame's own CSS", /CF_CUT_HINT/.test(mod) && /\.df-cut-hint/.test(css));
   ok("the two file-header chips are the frame's chrome (a tail, not a second full path)", /text\.slice\(0, 3\)/.test(mod) && /\.df-head \{[\s\S]*?flex-wrap: wrap/.test(css));

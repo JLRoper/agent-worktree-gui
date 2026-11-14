@@ -1893,11 +1893,11 @@ textarea.drop-target, .chipbox.drop-target { outline: 2px dashed var(--violet); 
   overflow-wrap: anywhere;
   word-break: break-word;
 }
-/* Context is the unchanged surroundings: quiet, and spanning both sides so it reads as a separator between
-   changes rather than as a line of either side. */
-.df-c.is-ctx { grid-column: 1 / -1; padding-left: 8px; color: var(--dimmer); }
-/* A modification: the after half green on the left, the before half yellow on the right. A pure removal is red,
-   drawn full width, and a pure addition green on the left with its right cell left empty. */
+/* Context is the unchanged surroundings: quiet, and drawn in BOTH columns - a run of unchanged lines is a row of
+   two cells carrying the same text, so the card reads as two columns on every line, not only where it changed. */
+.df-c.is-ctx { padding-left: 8px; color: var(--dimmer); }
+/* A modification: the after half green on the left, the before half yellow on the right. A pure removal is red on
+   the left with an empty right cell after it, and a pure addition green on the left with the same empty cell. */
 .df-c.is-mod { color: #f0c674; background: rgba(210, 153, 34, .10); padding-left: 8px; }
 .df-c.is-del { color: #ff9c94; background: rgba(229, 83, 75, .10); padding-left: 8px; }
 .df-c.is-add { color: #7ee787; background: rgba(46, 160, 67, .10); padding-left: 8px; }
