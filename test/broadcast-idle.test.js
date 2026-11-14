@@ -44,3 +44,28 @@ test("row event overlays run only when a browser is listening", () => {
   assert.equal(calls, 1);
   assert.equal(events[0].row.augmented, true);
 });
+
+test("no frames go out while the boot pass is unfinished, and the wire resumes when it ends", () => {
+  const start = source.indexOf("store.onEvent((evt) => {");
+  const end = source.indexOf("\n});", start);
+  assert.ok(start >= 0 && end > start);
+  const body = source.slice(start, end + 4);
+  const run = (bootPassFinishedAt) => {
+    let handler;
+    const events = [];
+    const clients = new Set();
+    const store = { onEvent: (fn) => { handler = fn; } };
+    const streamMetrics = { bootSuppressed: 0 };
+    new Function("store", "clients", "broadcast", "rowExtras", "bootPassFinishedAt", "streamMetrics", body)(
+      store, clients, (evt) => events.push(evt), (_project, row) => row, bootPassFinishedAt, streamMetrics,
+    );
+    clients.add({});
+    handler({ type: "row", project: "p", row: { id: 1 } });
+    return { events, streamMetrics };
+  };
+  const booting = run(0);
+  assert.equal(booting.events.length, 0, "a panel still walking the fleet withholds the row frame");
+  assert.equal(booting.streamMetrics.bootSuppressed, 1, "and counts what it withheld, for /api/diagnostics");
+  const booted = run(Date.now());
+  assert.equal(booted.events.length, 1, "the gate reads the finished stamp at event time, so the wire resumes");
+});
