@@ -10,9 +10,11 @@
 // cut mid sentence ended cleanly at the clamp's edge: a reader could not tell a finished prompt from a truncated one,
 // and nothing in the card named the text under its head. So (1) the last visible preview row of a FOLDED card now
 // ends with three ASCII dots and an open one draws none, (2) a bold `Prompt:` label starts the body's first row,
-// inline, and (3) five numbers that were fixed in the stylesheet are Settings > Display rows: the preview rows, the
-// card's side margin, the padding of the text inside it, the blank lines above and below it, and the side margin the
-// rest of the console's text keeps. Every default is today's look, exactly.
+// inline, and (3) seven numbers that were fixed in the stylesheet are Settings > Display rows: the preview rows, the
+// card's side margin, the padding of the text INSIDE it - its two sides, and then its top and its bottom - the blank
+// lines above and below it (the OUTSIDE spacing), and the side margin the rest of the console's text keeps. Every
+// default is today's look, exactly: the two new paddings are 0, which is the `padding: 0 8px` the body has always
+// carried.
 //
 // WHAT IS DRIVEN (nothing synthetic reaches the page): a throwaway panel of its own (tools/panel-testkit.mjs - spare
 // port, own PANEL_CONFIG / HERMES_HOME / jobs.json, API_SERVER_KEY empty), no gateway, the assistant's own rules off,
@@ -25,8 +27,9 @@
 //
 // WHAT IT ASSERTS, off the painted console:
 //   (1) DEFAULT IS TODAY'S LOOK: the card is folded to two rows of 18px (36px, the 3em the rule used to say), its
-//       body's side padding is 8px, its side margin is 0, its margin above is the 4px frame margin, and the console's
-//       own text keeps its 18px tab - the card and the prose beside it line up, as they did before the settings;
+//       body's side padding is 8px and its inside padding above and below the prompt is 0, its side margin is 0, its
+//       margin above is the 4px frame margin, and the console's own text keeps its 18px tab - the card and the prose
+//       beside it line up, as they did before the settings;
 //   (2) THREE DOTS END THE LAST VISIBLE ROW: the folded card's body ends with exactly `...`, in a `.code-fold-dots`
 //       span whose box is inside the body's clamp (bottom at or above the fold's edge, right inside the padding), so
 //       the marker is VISIBLE and not clipped with the text it replaced;
@@ -34,16 +37,22 @@
 //       the whole prompt back byte for byte with no dots at all - then folding it marks it again;
 //   (4) A CARD WHOSE PROMPT FITS IS NOT MARKED: the one-row card draws no dots and no label-only body;
 //   (5) THE LABEL: `Prompt:` is the body's first child, bold (700), inline on the first row (not a row of its own);
-//   (6) EACH OF THE FIVE ROWS MOVES WHAT IT NAMES, at its minimum and its maximum, measured on the painted page AND
-//       read off the store: 1 and 8 preview rows (18px and 144px, dots at both), 0 and 60px side margin, 0 and 32px
-//       padding (the head and the bullets follow it), 0 and 4 blank lines (the gap above the card grows by 72px), and
-//       0 and 60px for the console's text (the prose and the card move together, the card staying in the column);
+//   (6) EACH OF THE FIVE ORIGINAL ROWS MOVES WHAT IT NAMES, at its minimum and its maximum, measured on the painted
+//       page AND read off the store: 1 and 8 preview rows (18px and 144px, dots at both), 0 and 60px side margin, 0
+//       and 32px side padding (the head and the bullets follow it), 0 and 4 blank lines (the gap above the card grows
+//       by 72px), and 0 and 60px for the console's text (the prose and the card move together, the card staying in
+//       the column);
 //   (7) the preview-row setting and the fold are ONE number: the card's `data-code-clamp` and the drawn height agree
 //       at every value, and the setting is saved in this browser (`wtgui.cmdLook`);
-//   (8) the five rows are on the Display tab of Settings, each a number box with its own floor and ceiling, and one
-//       press of `use defaults` puts all five back to today's look;
+//   (8) the seven rows are on the Display tab of Settings, each a number box with its own floor and ceiling, and one
+//       press of `use defaults` puts all seven back to today's look;
 //   (9) nothing pressed here raised a page error;
-//  (10) THE WHOLE CARD IS THE HIT TARGET at 1440x900: the frame wears the pointer, the head carries no "click to
+//  (10) THE TWO INSIDE PADDINGS, AT 1440x900, EACH AT ITS MINIMUM, ITS DEFAULT AND ITS MAXIMUM: the prompt's first row
+//       moves down by exactly the top padding (and the last visible row sits that far above the fold for the bottom
+//       one), the body grows by the padding rather than clipping it, the SAME number of preview rows stays on the page
+//       (the clamp adds the padding back on), the dots stay inside the fold, the store keeps the number, and the
+//       second card on the page - a different command box - follows the same two variables;
+//  (11) THE WHOLE CARD IS THE HIT TARGET at 1440x900: the frame wears the pointer, the head carries no "click to
 //       read", a press in the middle of the body opens the card and a second one folds it back (caret, aria-expanded
 //       and the fold marker moving with it), Enter and Space work on the focused head, and three presses are NOT
 //       folds - a link, a copy button, and a drag that selects the card's own text. The console's copy control still
@@ -78,10 +87,10 @@ const TRANSCRIPT = [
   `QUEUE assistant-3 | ${SHORT}`,
   "the console's own words after the cards.",
 ];
-// Today's look, as numbers, in one place: the defaults the checks compare against. `NOW_STORE` is the same five as
+// Today's look, as numbers, in one place: the defaults the checks compare against. `NOW_STORE` is the same seven as
 // the store holds them, in the order the app writes them (the object it saves is CMD_LOOK_DEFAULTS' own key order).
-const NOW = { rows: 2, side: 0, pad: 8, blank: 0, con: 10, rowPx: 18 };
-const NOW_STORE = { rows: 2, side: 0, pad: 8, blank: 0, con: 10 };
+const NOW = { rows: 2, side: 0, pad: 8, padTop: 0, padBottom: 0, blank: 0, con: 10, rowPx: 18 };
+const NOW_STORE = { rows: 2, side: 0, pad: 8, padTop: 0, padBottom: 0, blank: 0, con: 10 };
 
 let checks = 0;
 let failures = 0;
@@ -190,6 +199,9 @@ function readConsole(thread) {
     store = null;
   }
   const fitsBox = fits ? fits.getBoundingClientRect() : null;
+  // The second card's own body, for "a second command box follows the same two variables".
+  const fitsBody = fits ? fits.querySelector(".code-body") : null;
+  const fitsPad = (side) => (fitsBody ? Math.round(parseFloat(getComputedStyle(fitsBody)[side]) || 0) : null);
   return {
     found: true,
     // the card's own state
@@ -208,6 +220,13 @@ function readConsole(thread) {
     lineH: Math.round(parseFloat(cs.lineHeight) || 0),
     padLeft: Math.round(parseFloat(cs.paddingLeft) || 0),
     padRight: Math.round(parseFloat(cs.paddingRight) || 0),
+    padTop: Math.round(parseFloat(cs.paddingTop) || 0),
+    padBottom: Math.round(parseFloat(cs.paddingBottom) || 0),
+    // The text's own box inside the body: where the first row starts against the body's top edge, and how far the
+    // last row's box ends above the fold's edge. These are what the two new paddings move, in pixels.
+    firstRowTop: firstRowBox ? Math.round(firstRowBox.top) : null,
+    firstRowInset: firstRowBox ? Math.round(firstRowBox.top - bodyBox.top) : null,
+    dotsFromFoot: dotsBox ? Math.round(bodyBox.bottom - dotsBox.bottom) : null,
     bodyLeft: Math.round(bodyBox.left),
     bodyRight: Math.round(bodyBox.right),
     // the marker
@@ -236,11 +255,13 @@ function readConsole(thread) {
     copyBtn: Boolean(box.querySelector("[data-copy-btn]")),
     // a point in the middle of the body, nowhere near the head: where a reader actually presses
     bodyMid: bodyBox.width > 8 && bodyBox.height > 8 ? { x: Math.round(bodyBox.x + bodyBox.width / 2), y: Math.round(bodyBox.y + bodyBox.height / 2) } : null,
-    // the five numbers, as the page drew them
+    // the seven numbers, as the page drew them
     vars: {
       rows: root.getPropertyValue("--cmd-rows").trim(),
       side: root.getPropertyValue("--cmd-side").trim(),
       pad: root.getPropertyValue("--cmd-pad").trim(),
+      padTop: root.getPropertyValue("--cmd-pad-top").trim(),
+      padBottom: root.getPropertyValue("--cmd-pad-bottom").trim(),
       blank: root.getPropertyValue("--cmd-blank").trim(),
       con: root.getPropertyValue("--con-side").trim(),
     },
@@ -260,13 +281,16 @@ function readConsole(thread) {
     headPadLeft: Math.round(parseFloat(headCs.paddingLeft) || 0),
     bulletsPadLeft: bullets ? Math.round(parseFloat(getComputedStyle(bullets).paddingLeft) || 0) : null,
     prose,
-    // the one-row card, for "a prompt that fits is not marked"
+    // the one-row card, for "a prompt that fits is not marked", and for "every command box follows the padding":
+    // its body carries the same two variables as the folded card's, so a second box is a second witness.
     fits: fitsBox
       ? {
           found: true,
           dots: fits.querySelectorAll(".code-fold-dots").length,
           bodyH: Math.round((fits.querySelector(".code-body") || fits).getBoundingClientRect().height),
           clamp: fits.getAttribute("data-code-clamp"),
+          padTop: fitsPad("paddingTop"),
+          padBottom: fitsPad("paddingBottom"),
         }
       : { found: false },
   };
@@ -372,6 +396,8 @@ try {
       check(s.clamped === true && s.clamp === "2", "folded at the default, and the card says so", `clamp=${s.clamp}`);
       check(s.bodyH === NOW.rows * NOW.rowPx, "two preview rows are 36px - the 3em the rule used to spell out", `${s.bodyH}px`);
       check(s.padLeft === NOW.pad && s.padRight === NOW.pad, "the body's side padding is the 8px it always was", `${s.padLeft}/${s.padRight}`);
+      check(s.padTop === NOW.padTop && s.padBottom === NOW.padBottom, "its inside padding above and below the prompt is 0, as before", `${s.padTop}/${s.padBottom}`);
+      check(s.firstRowInset === 0, "so the prompt's first row starts at the body's own top edge", `${s.firstRowInset}px`);
       check(s.cardMarginLeft === NOW.side && s.cardMarginRight === NOW.side, "the card's side margin is 0, as before", `${s.cardMarginLeft}`);
       check(s.cardMarginTop === 4, "the card keeps its 4px frame margin above, with no blank line added", `${s.cardMarginTop}px`);
       check(s.headPadLeft === NOW.pad, "the head's text starts at the body's padding, so the two line up", `${s.headPadLeft}px`);
@@ -381,7 +407,7 @@ try {
       const proseLeft = s.prose.length ? s.prose[0].left : null;
       check(proseLeft !== null && proseLeft - (s.pre.left + s.preBorder + s.prePadLeft) === 0, "a line of console prose starts at that inset", `${proseLeft} = ${s.pre.left}+${s.preBorder}+${s.prePadLeft}`);
       check(s.card.left === proseLeft, "and the card starts on the same pixel: the default adds no margin of its own", `card ${s.card.left} vs prose ${proseLeft}`);
-      check(s.vars.rows === "2" && s.vars.side === "0px" && s.vars.pad === "8px" && s.vars.blank === "0" && s.vars.con === "10px", "the five variables carry today's numbers, units and all", JSON.stringify(s.vars));
+      check(s.vars.rows === "2" && s.vars.side === "0px" && s.vars.pad === "8px" && s.vars.padTop === "0px" && s.vars.padBottom === "0px" && s.vars.blank === "0" && s.vars.con === "10px", "the seven variables carry today's numbers, units and all", JSON.stringify(s.vars));
 
       // ---- (2) THREE DOTS END THE LAST VISIBLE ROW -----------------------------------------------------------
       check(s.dots === "...", "the folded card's last preview row ends with three ASCII dots", JSON.stringify(s.dots));
@@ -414,10 +440,10 @@ try {
       s = await read();
       check(s.clamped === true && s.dotsCount === 1 && s.dots === "...", "folding it back marks it again", JSON.stringify([s.clamped, s.dots]));
 
-      // ---- (4) THE FIVE ROWS ON THE DISPLAY TAB --------------------------------------------------------------
+      // ---- (4) THE SEVEN ROWS ON THE DISPLAY TAB --------------------------------------------------------------
       await openSettingsGroup(page, "display");
       const rows = await page.evaluate(() => {
-        const ids = ["cmd-rows", "cmd-side", "cmd-pad", "cmd-blank", "cmd-con"];
+        const ids = ["cmd-rows", "cmd-side", "cmd-pad", "cmd-pad-top", "cmd-pad-bottom", "cmd-blank", "cmd-con"];
         return {
           present: ids.map((id) => {
             const el = document.getElementById(id);
@@ -434,13 +460,18 @@ try {
       });
       out.steps.push({ step: "settings-rows", ...rows });
       check(rows.tab === "true", "the Display tab is the one on screen");
-      check(rows.present.every((r) => r.found && r.type === "number" && r.visible), "all five rows are on the Display tab, as number boxes", JSON.stringify(rows.present.map((r) => r.id)));
+      check(rows.present.every((r) => r.found && r.type === "number" && r.visible), "all seven rows are on the Display tab, as number boxes", JSON.stringify(rows.present.map((r) => r.id)));
       check(rows.present[0].min === "1" && rows.present[0].value === "2", "preview rows: a floor of 1, defaulting to 2", JSON.stringify([rows.present[0].min, rows.present[0].value]));
-      check(rows.reset === true, "and one press puts all five back");
-      // The five floors and ceilings the settings store clamps to, read from the markup the reader types into.
+      check(
+        rows.present[3].value === "0" && rows.present[4].value === "0",
+        "the two inside paddings open at 0 - today's look, not a shipped number",
+        JSON.stringify([rows.present[3].id, rows.present[3].value, rows.present[4].id, rows.present[4].value]),
+      );
+      check(rows.reset === true, "and one press puts all seven back");
+      // The seven floors and ceilings the settings store clamps to, read from the markup the reader types into.
       const limits = Object.fromEntries(rows.present.map((r) => [r.id, `${r.min}..${r.max}`]));
       check(
-        JSON.stringify(limits) === JSON.stringify({ "cmd-rows": "1..8", "cmd-side": "0..60", "cmd-pad": "0..32", "cmd-blank": "0..4", "cmd-con": "0..60" }),
+        JSON.stringify(limits) === JSON.stringify({ "cmd-rows": "1..8", "cmd-side": "0..60", "cmd-pad": "0..32", "cmd-pad-top": "0..32", "cmd-pad-bottom": "0..32", "cmd-blank": "0..4", "cmd-con": "0..60" }),
         "every row carries its own floor and ceiling, the same numbers app.js clamps to",
         JSON.stringify(limits),
       );
@@ -577,9 +608,93 @@ try {
       check(con60.dots === "..." && con60.dotsVisible === true, "the narrower column still ends its fold with the marker", JSON.stringify(con60.dotsBox));
       await reset();
 
+      // ---- (5b) THE TWO INSIDE PADDINGS AT 1440x900: MIN, DEFAULT AND MAX OF EACH ------------------------------
+      // The reader's two new rows, driven at their floor, their default and their ceiling, each state captured at
+      // 1440x900 with a band of the console around the card: the prose above and below it is in every picture, so the
+      // air INSIDE the card can be seen moving while the OUTSIDE spacing (the blank lines row) stays where it was.
+      // The numbers come from the same frame as the picture, so a caption can never describe a state the shot is not.
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.waitForTimeout(500);
+      const insideShot = async (name) => {
+        const state = await read();
+        if (!state) return null;
+        const y = Math.max(0, state.card.top - 150);
+        const height = Math.max(120, Math.min(900 - y, state.card.bottom + 130 - y));
+        const x = Math.max(0, state.turn.left - 26);
+        const width = Math.min(1440 - x, state.turn.width + 52);
+        const file = path.join(SHOTS, `${name}.png`);
+        await page.screenshot({ path: file, clip: { x, y, width, height } });
+        note(`screenshot ${file} at 1440x900`);
+        screens.push({ name, file, state });
+        return file;
+      };
+      const insideApply = async (id, value, name) => {
+        await setRow(page, id, value);
+        await page.waitForTimeout(280);
+        const state = await measure(name);
+        await insideShot(name);
+        return state;
+      };
+      // A band of the settings window over the two new rows, so the shape and the range are in the report too.
+      await openSettingsGroup(page, "display");
+      const padRowsBox = await page.evaluate(() => {
+        const pad = document.getElementById("cmd-pad").closest(".settings-row");
+        const con = document.getElementById("cmd-pad-bottom").closest(".settings-row");
+        pad.scrollIntoView({ block: "center" });
+        const a = pad.getBoundingClientRect();
+        const b = con.getBoundingClientRect();
+        const from = Math.max(0, a.top - 8);
+        return { from, x: Math.max(0, a.left - 24), width: Math.max(320, Math.min(window.innerWidth - a.left + 24, a.width + 48)), height: Math.max(80, Math.min(900 - from, b.bottom + 8 - from)) };
+      });
+      await page.waitForTimeout(200);
+      const padRowsShot = path.join(SHOTS, "07-settings-inside-padding.png");
+      await page.screenshot({ path: padRowsShot, clip: { x: padRowsBox.x, y: padRowsBox.from, width: padRowsBox.width, height: padRowsBox.height } });
+      note(`screenshot ${padRowsShot} at 1440x900`);
+      screens.push({ name: "07-settings-inside-padding", file: padRowsShot, state: await read() });
+      await page.click("#btn-settings");
+      await page.waitForTimeout(220);
+
+      // The top padding: its floor, its default (the same 0), and its ceiling.
+      const top0 = await insideApply("cmd-pad-top", 0, "70-padtop-min-0");
+      check(top0.padTop === 0 && top0.firstRowInset === 0, "top padding at 0: the prompt's first row starts at the body's top edge", `${top0.firstRowInset}px`);
+      check(top0.bodyH === NOW.rows * NOW.rowPx && top0.vars.padTop === "0px", "and the folded card is the 36px two rows it has always been", `${top0.bodyH}px ${top0.vars.padTop}`);
+      check(top0.cardMarginTop === 4 && top0.fits && top0.fits.padTop === 0, "the outside spacing is untouched and the second command box reads the same 0", `${top0.cardMarginTop}px, second box ${top0.fits && top0.fits.padTop}`);
+      await reset();
+      const topDefault = await insideApply("cmd-pad-top", 0, "71-padtop-default-0");
+      check(topDefault.padTop === 0 && topDefault.firstRowInset === 0 && topDefault.store && topDefault.store.padTop === 0, "the default is today's 0 - the row opens on it and nothing moves", JSON.stringify(topDefault.store && topDefault.store.padTop));
+      await reset();
+      const top32 = await insideApply("cmd-pad-top", 32, "72-padtop-max-32");
+      check(top32.padTop === 32 && top32.vars.padTop === "32px", "top padding at 32: the body's top padding is 32px, written on :root", `${top32.padTop}px ${top32.vars.padTop}`);
+      check(top32.firstRowInset === 32, "and the prompt's first row moved down by exactly that: the air is INSIDE the card", `${top32.firstRowInset}px`);
+      check(top32.bodyH === NOW.rows * NOW.rowPx + 32, "the body grew by the padding rather than clipping it", `${top32.bodyH}px = 36 + 32`);
+      check(top32.clamp === "2" && top32.dots === "..." && top32.dotsVisible === true, "the same two preview rows stay on the page, marker inside the fold", JSON.stringify([top32.clamp, top32.dotsBox]));
+      check(top32.cardMarginTop === 4, "and the blank lines ABOVE the card did not move: that is the outside spacing", `${top32.cardMarginTop}px`);
+      check(top32.fits && top32.fits.padTop === 32, "the second command box on the page follows the same variable", `${top32.fits && top32.fits.padTop}px`);
+      check(top32.store && top32.store.padTop === 32 && top32.store.padBottom === 0, "the number is saved in this browser under wtgui.cmdLook", JSON.stringify(top32.store));
+      await reset();
+
+      // The bottom padding: the same three states, measured at the fold's foot.
+      const bottom0 = await insideApply("cmd-pad-bottom", 0, "80-padbottom-min-0");
+      check(bottom0.padBottom === 0 && bottom0.dotsFromFoot >= 0 && bottom0.dotsFromFoot <= bottom0.lineH, "bottom padding at 0: the last preview row and its dots end at the fold", `${bottom0.dotsFromFoot}px`);
+      check(bottom0.bodyH === NOW.rows * NOW.rowPx && bottom0.vars.padBottom === "0px", "and the folded card is the 36px two rows it has always been", `${bottom0.bodyH}px ${bottom0.vars.padBottom}`);
+      await reset();
+      const bottomDefault = await insideApply("cmd-pad-bottom", 0, "81-padbottom-default-0");
+      check(bottomDefault.padBottom === 0 && bottomDefault.store && bottomDefault.store.padBottom === 0, "the default is today's 0 - the row opens on it and nothing moves", JSON.stringify(bottomDefault.store && bottomDefault.store.padBottom));
+      await reset();
+      const bottom32 = await insideApply("cmd-pad-bottom", 32, "82-padbottom-max-32");
+      check(bottom32.padBottom === 32 && bottom32.vars.padBottom === "32px", "bottom padding at 32: the body's bottom padding is 32px, written on :root", `${bottom32.padBottom}px ${bottom32.vars.padBottom}`);
+      check(bottom32.dotsFromFoot >= 32 && bottom32.dotsFromFoot <= 32 + bottom32.lineH, "the last visible row sits 32px above the fold's edge, so it is not cut off", `${bottom32.dotsFromFoot}px`);
+      check(bottom32.bodyH === NOW.rows * NOW.rowPx + 32, "the body grew by the padding rather than clipping the row", `${bottom32.bodyH}px = 36 + 32`);
+      check(bottom32.clamp === "2" && bottom32.dots === "..." && bottom32.dotsVisible === true, "the same two preview rows stay on the page, marker inside the fold", JSON.stringify([bottom32.clamp, bottom32.dotsBox]));
+      check(bottom32.cardMarginTop === 4, "and the blank lines outside the card did not move", `${bottom32.cardMarginTop}px`);
+      check(bottom32.fits && bottom32.fits.padBottom === 32, "the second command box follows the same variable", `${bottom32.fits && bottom32.fits.padBottom}px`);
+      check(bottom32.store && bottom32.store.padBottom === 32 && bottom32.store.padTop === 0, "the number is saved in this browser under wtgui.cmdLook", JSON.stringify(bottom32.store));
+      await reset();
+
       // ---- (6) BACK AT THE DEFAULT, AND NOTHING ERRORS --------------------------------------------------------
       const after = await read();
       check(after.bodyH === NOW.rows * NOW.rowPx && after.clamp === "2" && after.vars.con === "10px", "use defaults puts the drawn card back where it started", JSON.stringify([after.bodyH, after.clamp, after.vars.con]));
+      check(after.padTop === 0 && after.padBottom === 0 && after.vars.padTop === "0px" && after.vars.padBottom === "0px", "the two inside paddings are back to today's 0", JSON.stringify([after.vars.padTop, after.vars.padBottom]));
       // ---- (7) THE WHOLE CARD IS THE HIT TARGET, AT 1440x900 ----------------------------------------------------
       // ONE PRESS, ONE CARD. The frame is the handle: a press anywhere in it folds or unfolds it, because the head no
       // longer tells the reader to click it. Three presses are NOT folds, and each is driven here as the reader makes
@@ -844,7 +959,7 @@ function reportHtml(ledger) {
   const rows = screens
     .map((sc, i) => {
       const st = stateOf(sc.name) || sc.state || {};
-      // The table is the five numbers at each state, so it holds the states that HAVE numbers. The press captures
+      // The table is the seven numbers at each state, so it holds the states that HAVE numbers. The press captures
       // (the card closed and open) are figures with their own captions: a row of empty cells under a heading that
       // names numbers reads as a broken report, and the numbers do not exist for them.
       if (st.vars === undefined) return "";
@@ -855,6 +970,8 @@ function reportHtml(ledger) {
         st.dots == null ? "none" : JSON.stringify(st.dots),
         st.dotsVisible === true ? "inside the fold" : st.dots == null ? "" : "OUTSIDE THE FOLD",
         st.padLeft == null ? "" : `${st.padLeft}px`,
+        st.padTop == null ? "" : `${st.padTop}px`,
+        st.padBottom == null ? "" : `${st.padBottom}px`,
         st.cardMarginLeft == null ? "" : `${st.cardMarginLeft}px`,
         st.cardMarginTop == null ? "" : `${st.cardMarginTop}px`,
         st.pre && st.turn ? `${st.pre.left - st.turn.left}px` : "",
@@ -865,12 +982,12 @@ function reportHtml(ledger) {
   const figures = screens
     .map((sc) => {
       const st = stateOf(sc.name) || sc.state || {};
-      // Two kinds of capture: a settings state, which is described by the five numbers, and a press on the card, which
+      // Two kinds of capture: a settings state, which is described by the seven numbers, and a press on the card, which
       // has no settings numbers at all - its state is whether the card is open, and what the head and the marker say.
       const press = st.aria !== undefined && st.vars === undefined;
       const caption = press
         ? `the card ${st.open ? "open" : "closed"} after a press: caret ${esc(st.caret)}, aria-expanded ${esc(st.aria)}, body ${esc(st.bodyH)}px, fold marker ${st.dots ? "inside the fold" : "gone"}`
-        : `rows ${esc(st.vars ? st.vars.rows : "")}, body ${esc(st.bodyH)}px, dots ${esc(st.dots == null ? "none" : st.dots)}, padding ${esc(st.padLeft)}px, side ${esc(st.cardMarginLeft)}px, blank above ${esc(st.cardMarginTop)}px, console tab ${esc(st.pre && st.turn ? st.pre.left - st.turn.left : "")}px`;
+        : `rows ${esc(st.vars ? st.vars.rows : "")}, body ${esc(st.bodyH)}px, dots ${esc(st.dots == null ? "none" : st.dots)}, side padding ${esc(st.padLeft)}px, inside padding top ${esc(st.padTop)}px and bottom ${esc(st.padBottom)}px, side ${esc(st.cardMarginLeft)}px, blank above ${esc(st.cardMarginTop)}px, console tab ${esc(st.pre && st.turn ? st.pre.left - st.turn.left : "")}px`;
       return `<figure id="${esc(sc.name)}">
   <a href="${esc(rel(sc.file))}"><img src="${esc(rel(sc.file))}" alt="${esc(sc.name)}"></a>
   <figcaption><b>${esc(sc.name)}</b> - ${caption}</figcaption>
@@ -898,14 +1015,18 @@ function reportHtml(ledger) {
 </head>
 <body>
 <h1>The console command card: fold marker and spacing</h1>
-<p class="lede"><b>${esc(ledger.verdict ? `${ledger.verdict.held} of ${ledger.verdict.checks} checks held${ledger.verdict.failures ? `, ${ledger.verdict.failures} FAILED` : ""}` : "no verdict recorded")}</b>, measured in headless Chromium on a throwaway panel at 1440x1100, device scale 2, except the last pass
-which sets 1440x900 to prove the whole card is the hit target. The card is the
+<p class="lede"><b>${esc(ledger.verdict ? `${ledger.verdict.held} of ${ledger.verdict.checks} checks held${ledger.verdict.failures ? `, ${ledger.verdict.failures} FAILED` : ""}` : "no verdict recorded")}</b>, measured in headless Chromium on a throwaway panel at 1440x1100, device scale 2, except two passes
+which set 1440x900: the one that drives the two inside paddings at their minimum, their default and their maximum
+(and the one that proves the whole card is the hit target). The card is the
 assistant's command card in the open turn's console: one prompt long enough to wrap past eight preview rows, and one
 short prompt that fits its rows. Every default is the look the panel had before these settings: <span class="num">2
-preview rows of 18px</span>, <span class="num">8px</span> of padding, <span class="num">0</span> side margin,
-<span class="num">0</span> blank lines, and the console's <span class="num">10px</span> text inset inside its box.</p>
+preview rows of 18px</span>, <span class="num">8px</span> of side padding, <span class="num">0</span> of inside
+padding above the prompt and <span class="num">0</span> below it, <span class="num">0</span> side margin,
+<span class="num">0</span> blank lines, and the console's <span class="num">10px</span> text inset inside its box. The
+blank lines are the OUTSIDE spacing - the room the card takes in the console - while the three paddings are the air
+inside its frame.</p>
 <table>
-<thead><tr><th>state</th><th>--cmd-rows</th><th>body</th><th>marker</th><th>marker box</th><th>padding</th><th>side</th><th>blank above</th><th>console tab</th></tr></thead>
+<thead><tr><th>state</th><th>--cmd-rows</th><th>body</th><th>marker</th><th>marker box</th><th>side padding</th><th>inside top</th><th>inside bottom</th><th>side</th><th>blank above</th><th>console tab</th></tr></thead>
 <tbody>
 ${rows}
 </tbody>

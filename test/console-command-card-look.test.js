@@ -1,10 +1,11 @@
-// The assistant console command card's look: its fold marker, its five settings, and the label that names the prompt.
+// The assistant console command card's look: its fold marker, its seven settings, and the label that names the prompt.
 //
 // A command card folds its BODY to a few preview rows instead of shutting. Read as it was, a prompt cut in the middle
 // of a sentence ended cleanly at the clamp's edge, so the reader could not tell a finished prompt from a truncated
-// one - and nothing in the card said what the text under the head was. The five numbers that place the card (how many
-// preview rows, the box's side margin, the padding inside it, the blank lines above and below it, and the side margin
-// the rest of the console's text keeps) were fixed in the stylesheet. This file is the contract for all of it:
+// one - and nothing in the card said what the text under the head was. The seven numbers that place the card (how many
+// preview rows, the box's side margin, the padding INSIDE it - its two sides, its top and its bottom - the blank
+// lines above and below it, which are the OUTSIDE spacing, and the side margin the rest of the console's text keeps)
+// were fixed in the stylesheet. This file is the contract for all of it:
 //
 //   1. THREE ASCII DOTS end the last visible preview row of a folded card, and only that row: the painter lives in
 //      public/board/console.js, writes a `.code-fold-dots` span at the character the clamp cuts, and takes the cut
@@ -13,11 +14,13 @@
 //      inside the fold, and the body's own markup is kept so opening or re-measuring starts from the whole prompt;
 //   3. every card a render path places is marked (the console's one node observer), and the press that folds or opens
 //      one marks it or clears it in the same gesture;
-//   4. five settings in Settings > Display, saved in this browser under one key, defaulting to EXACTLY today's look -
-//      2 preview rows, 0px side margin, 8px padding, 0 blank lines, and the console text's 10px inset inside its box -
-//      and each written as the CSS variable the stylesheet reads, with today's number as the variable's fallback;
+//   4. seven settings in Settings > Display, saved in this browser under one key, defaulting to EXACTLY today's look -
+//      2 preview rows, 0px side margin, 8px side padding, 0px inside padding at the top, 0px at the bottom, 0 blank
+//      lines, and the console text's 10px inset inside its box - and each written as the CSS variable the stylesheet
+//      reads, with today's number as the variable's fallback;
 //   5. the preview rows are one number, not two: the card's `data-code-clamp` and the stylesheet's fold are written
-//      from the same setting, so a DOM read-back can never disagree with the drawn height;
+//      from the same setting, so a DOM read-back can never disagree with the drawn height - and the clamp adds the
+//      two inside paddings back on, so a reader who raises them keeps the same number of preview rows;
 //   6. a bold `Prompt:` label starts the body's first row, inline, so it costs no preview row of its own;
 //   7. display only: the line the panel executes and the text it copies are untouched (the card carries the line in
 //      `data-ltext`, and copy reads that).
@@ -91,7 +94,11 @@ test("the marker is written for every card a render path places, and taken back 
 
 test("the folded height is the reader's number of preview rows, and its fallback is today's two", () => {
   // ONE fold: the stylesheet reads `--cmd-rows` with 2 as its fallback, so an unset setting is the 3em it replaced.
-  assert.match(css, /\.code-box\.is-cmd\.is-clamped > \.code-body \{ max-height: calc\(var\(--cmd-rows, 2\) \* 1\.5em\); overflow: hidden; \}/);
+  // The two inside paddings are added back on, so padding never eats a preview row.
+  assert.match(
+    css,
+    /\.code-box\.is-cmd\.is-clamped > \.code-body \{ max-height: calc\(var\(--cmd-rows, 2\) \* 1\.5em \+ var\(--cmd-pad-top, 0px\) \+ var\(--cmd-pad-bottom, 0px\)\); overflow: hidden; \}/,
+  );
   assert.doesNotMatch(css, /max-height: 3em;/);
   // The arithmetic, not a claim: a 12px body at 1.5 is an 18px row, and two of them are the 36px = 3em this rule
   // used to spell out. So the default draws the card exactly as it drew before the setting existed.
@@ -102,36 +109,44 @@ test("the folded height is the reader's number of preview rows, and its fallback
   assert.match(read("../public/core/assistant-command.js"), /const rows = Number\(clamp\) > 0 \? Number\(clamp\) : previewRows\(\);/);
   assert.match(read("../public/core/assistant-command.js"), /clamp: rows,/);
   assert.match(app, /globalThis\.wtCommandPreviewRows = cmdLookState\.rows;/);
-  // The unit travels with the value: a bare number in `padding: 4px var(--cmd-pad)` is an invalid declaration and
-  // the property would fall back to 0 instead of the reader's pixels.
-  assert.match(app, /const CMD_LOOK_UNITS = Object\.freeze\(\{ rows: "", side: "px", pad: "px", blank: "", con: "px" \}\);/);
+  // The unit travels with the value: a bare number in `padding: var(--cmd-pad-top) var(--cmd-pad)` is an invalid
+  // declaration and the property would fall back to 0 instead of the reader's pixels.
+  assert.match(app, /const CMD_LOOK_UNITS = Object\.freeze\(\{ rows: "", side: "px", pad: "px", padTop: "px", padBottom: "px", blank: "", con: "px" \}\);/);
   assert.match(app, /root\.style\.setProperty\(CMD_LOOK_VARS\[name\], `\$\{v\}\$\{CMD_LOOK_UNITS\[name\]\}`\);/);
   assert.match(app, /const CMD_LOOK_VARS = Object\.freeze\(\{\n\s*rows: "--cmd-rows",/);
-  assert.match(app, /rows: "--cmd-rows",\n\s*side: "--cmd-side",\n\s*pad: "--cmd-pad",\n\s*blank: "--cmd-blank",\n\s*con: "--con-side",/);
+  assert.match(
+    app,
+    /rows: "--cmd-rows",\n\s*side: "--cmd-side",\n\s*pad: "--cmd-pad",\n\s*padTop: "--cmd-pad-top",\n\s*padBottom: "--cmd-pad-bottom",\n\s*blank: "--cmd-blank",\n\s*con: "--con-side",/,
+  );
   // A card already on the page when the reader changes the count is renumbered as well as re-measured: the DOM's
   // number and the drawn fold are the same number.
   assert.match(app, /box\.setAttribute\("data-code-clamp", String\(cmdLookState\.rows\)\);/);
 });
 
-test("the card's five settings default to exactly the look the panel had, and one is a floor of 1", () => {
+test("the card's seven settings default to exactly the look the panel had, and one is a floor of 1", () => {
   // The defaults ARE today's numbers, and they are the same numbers the stylesheet falls back to.
-  assert.match(app, /const CMD_LOOK_DEFAULTS = Object\.freeze\(\{ rows: 2, side: 0, pad: 8, blank: 0, con: 10 \}\);/);
-  assert.match(css, /padding: 0 var\(--cmd-pad, 8px\);/);
+  assert.match(app, /const CMD_LOOK_DEFAULTS = Object\.freeze\(\{ rows: 2, side: 0, pad: 8, padTop: 0, padBottom: 0, blank: 0, con: 10 \}\);/);
+  // The body's four sides, from three variables: the sides are the 8px the card has always had, and the top and the
+  // bottom are 0 - which is exactly the `padding: 0 var(--cmd-pad, 8px)` this rule used to write.
+  assert.match(css, /padding: var\(--cmd-pad-top, 0px\) var\(--cmd-pad, 8px\) var\(--cmd-pad-bottom, 0px\);/);
   assert.match(css, /\.code-box\.is-cmd \{ margin: calc\(4px \+ var\(--cmd-blank, 0\) \* 18px\) var\(--cmd-side, 0px\); \}/);
   // The console's own text: the inset inside its box, which was 10px before these rows existed.
   assert.match(css, /\n  padding: 8px var\(--con-side, 10px\);/);
   assert.doesNotMatch(css, /\.job-cmd, \.job-out, \.job-foot \{ margin-left: var\(--con-side/);
-  // The head and the bullet rows follow the same padding, so the card's texts stay in one column at any value.
+  // The head and the bullet rows follow the same SIDE padding, so the card's texts stay in one column at any value.
   assert.match(css, /\.code-box\.is-cmd > \.code-head \{ align-items: flex-start; padding-left: var\(--cmd-pad, 8px\); padding-right: var\(--cmd-pad, 8px\); \}/);
   assert.match(css, /padding: 3px var\(--cmd-pad, 8px\) 5px calc\(var\(--cmd-pad, 8px\) \+ 14px\);/);
   // The floor: 1 preview row is the minimum, and the ceiling is the one the markup offers (8).
   assert.match(app, /rows: \[1, 8\],/);
   assert.match(app, /const v = Number\.isFinite\(n\) \? Math\.min\(hi, Math\.max\(lo, Math\.round\(n\)\)\) : CMD_LOOK_DEFAULTS\[name\];/);
-  // Five rows in the markup, each a number box over its own id, each carrying the same floor and ceiling.
+  // Seven rows in the markup, each a number box over its own id, each carrying the same floor and ceiling. The two
+  // inside paddings are the SIDE padding's own range (0..32), so a reader who sets one can set the other to match.
   for (const [id, min, max] of [
     ["cmd-rows", 1, 8],
     ["cmd-side", 0, 60],
     ["cmd-pad", 0, 32],
+    ["cmd-pad-top", 0, 32],
+    ["cmd-pad-bottom", 0, 32],
     ["cmd-blank", 0, 4],
     ["cmd-con", 0, 60],
   ]) {
@@ -140,15 +155,41 @@ test("the card's five settings default to exactly the look the panel had, and on
     // The value is the STORE's, never the markup's: a shipped value attribute would be a second default.
     assert.doesNotMatch(html, new RegExp(`<input id="${id}"[^>]* value=`), `${id} draws the stored value, not a shipped one`);
   }
-  // They live on the Display tab, beside the console's own text settings, and one press puts all five back.
+  // They live on the Display tab, beside the console's own text settings, and one press puts all seven back.
   const display = html.slice(html.indexOf('id="settings-panel-display"'), html.indexOf('id="settings-panel-cards"'));
-  for (const id of ["cmd-rows", "cmd-side", "cmd-pad", "cmd-blank", "cmd-con"]) assert.ok(display.includes(`id="${id}"`), `${id} is on the Display tab`);
+  for (const id of ["cmd-rows", "cmd-side", "cmd-pad", "cmd-pad-top", "cmd-pad-bottom", "cmd-blank", "cmd-con"]) assert.ok(display.includes(`id="${id}"`), `${id} is on the Display tab`);
   assert.match(display, /<button type="button" id="cmd-look-reset"/);
   assert.match(app, /\$\("cmd-look-reset"\)\?\.addEventListener\("click", \(\) => \{/);
   // Saved in this browser under one key, and applied at boot before the first card is drawn.
   assert.match(app, /const CMD_LOOK_KEY = "wtgui\.cmdLook";/);
   assert.match(app, /localStorage\.setItem\(CMD_LOOK_KEY, JSON\.stringify\(cmdLookState\)\);/);
   assert.match(app, /initCommandCardLook\(\);/);
+});
+
+test("the two new rows are the inside padding, and the copy says so beside the blank lines' outside spacing", () => {
+  // The labels a reader reads, and the shape they read in: the same `settings-row` a side padding row uses.
+  const rowOf = (id) => {
+    const at = html.indexOf(`id="${id}"`);
+    assert.ok(at > 0, `${id} is in the markup`);
+    const open = html.lastIndexOf("<label", at);
+    return html.slice(open, html.indexOf("</label>", at) + "</label>".length);
+  };
+  // One sentence per side, in the reader's own terms: INSIDE the box, and named as the padding of the text.
+  assert.match(rowOf("cmd-pad-top"), /<span>Box top padding /);
+  assert.match(rowOf("cmd-pad-top"), /padding INSIDE the command card above the prompt's first row/);
+  assert.match(rowOf("cmd-pad-top"), /INSIDE spacing - the blank lines above and below the card are the OUTSIDE spacing/);
+  assert.match(rowOf("cmd-pad-bottom"), /<span>Box bottom padding /);
+  assert.match(rowOf("cmd-pad-bottom"), /padding INSIDE the command card below the prompt's last row/);
+  assert.match(rowOf("cmd-pad-bottom"), /INSIDE spacing - the blank lines above and below the card are the OUTSIDE spacing/);
+  // ...and the blank lines row says which one IT is, so the two cannot be read as the same number: one is the air
+  // inside the frame, the other the room the card takes in the console.
+  assert.match(rowOf("cmd-blank"), /The OUTSIDE spacing/);
+  assert.match(rowOf("cmd-blank"), /These blank lines are outside the card/);
+  // Every command box reads the same variables: the padding is on `.code-box.is-cmd > .code-body` and nowhere is a
+  // second, fixed vertical padding written over it (the base `.code-body` rule is the one the card overrides).
+  assert.match(css, /\.code-body \{ padding: 4px 8px; white-space: normal; \}/);
+  assert.equal((css.match(/var\(--cmd-pad-top, 0px\)/g) || []).length, 2, "one declaration and one clamp, no third copy");
+  assert.doesNotMatch(css, /is-cmd[^{]*\{[^}]*padding: 0 var\(--cmd-pad/);
 });
 
 test("the preview rows are one number: the attribute moves with the fold, and junk never draws a broken card", () => {

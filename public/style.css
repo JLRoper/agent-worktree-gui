@@ -1966,21 +1966,23 @@ textarea.drop-target, .chipbox.drop-target { outline: 2px dashed var(--violet); 
    "click to read", and the body stays on the page so a reader who never clicks still sees the start of what the
    line asked for. `.is-clamped` is the folded state; the press handler (public/app.js) keeps it in step with
    `.is-open`.
-   THE FIVE NUMBERS ARE THE READER'S (Settings > Display). They are variables with today's look as the fallback,
+   THE SEVEN NUMBERS ARE THE READER'S (Settings > Display). They are variables with today's look as the fallback,
    so an unset setting draws exactly what this card drew before they existed: the fold is 2 rows of this card's
-   line height (36px, the 3em this rule used to say), the body's side padding is 8px, the card's side margin is 0,
-   nothing is added above or below its 4px base margin, and the console's own text keeps the 10px inset it has
-   always had inside its box. */
-/* No vertical padding, on purpose: the fold is a WHOLE number of this card's 18px rows (`--cmd-rows`, a border-box
-   max-height), and 4px of air above and below would eat 8px of it - two rows would not fit in the height two rows
-   ask for. The default stays byte for byte the height the card has always folded to (2 x 18px = 36px, the 3em this
-   rule used to say); what the 4px used to hide was the bottom of the second row. */
+   line height (36px, the 3em this rule used to say), the body's side padding is 8px, its inside padding above and
+   below the prompt is 0, the card's side margin is 0, nothing is added above or below its 4px base margin, and the
+   console's own text keeps the 10px inset it has always had inside its box. The blank lines are the OUTSIDE
+   spacing (the card's margin in the console); the three paddings are the INSIDE one (the text against the frame). */
+/* The body's padding is its four sides, from three variables: `--cmd-pad` the sides (8px today), and
+   `--cmd-pad-top` / `--cmd-pad-bottom` the air above the prompt's first row and below its last (0 today, which is
+   the look the card has always had). The fold is a WHOLE number of this card's 18px rows (`--cmd-rows`, a
+   border-box max-height), so the clamp adds the two new paddings back on: the same number of preview rows stays on
+   the page at any value of the setting, instead of the padding eating a row. */
 .code-box.is-cmd > .code-body {
   font: 12px/1.5 var(--mono);
   color: #cfd8e3;
-  padding: 0 var(--cmd-pad, 8px);
+  padding: var(--cmd-pad-top, 0px) var(--cmd-pad, 8px) var(--cmd-pad-bottom, 0px);
 }
-.code-box.is-cmd.is-clamped > .code-body { max-height: calc(var(--cmd-rows, 2) * 1.5em); overflow: hidden; }
+.code-box.is-cmd.is-clamped > .code-body { max-height: calc(var(--cmd-rows, 2) * 1.5em + var(--cmd-pad-top, 0px) + var(--cmd-pad-bottom, 0px)); overflow: hidden; }
 /* The card's own box, as the reader wants it beside the console's text: its side margin, and the blank lines above
    and below it on top of the 4px frame margin it has always carried (one line here is the body's own 18px). */
 .code-box.is-cmd { margin: calc(4px + var(--cmd-blank, 0) * 18px) var(--cmd-side, 0px); }
