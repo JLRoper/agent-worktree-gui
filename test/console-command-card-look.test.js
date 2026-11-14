@@ -14,8 +14,8 @@
 //   3. every card a render path places is marked (the console's one node observer), and the press that folds or opens
 //      one marks it or clears it in the same gesture;
 //   4. five settings in Settings > Display, saved in this browser under one key, defaulting to EXACTLY today's look -
-//      2 preview rows, 0px side margin, 8px padding, 0 blank lines, 18px console tab - and each written as the CSS
-//      variable the stylesheet reads, with today's number as the variable's fallback;
+//      2 preview rows, 0px side margin, 8px padding, 0 blank lines, and the console text's 10px inset inside its box -
+//      and each written as the CSS variable the stylesheet reads, with today's number as the variable's fallback;
 //   5. the preview rows are one number, not two: the card's `data-code-clamp` and the stylesheet's fold are written
 //      from the same setting, so a DOM read-back can never disagree with the drawn height;
 //   6. a bold `Prompt:` label starts the body's first row, inline, so it costs no preview row of its own;
@@ -194,4 +194,27 @@ test("display only: the copy and the executed line are what they were", () => {
   // Nothing in the marker's own file parses a command line or writes a job: it is chrome over a drawn body.
   const marker = consoleJs.slice(consoleJs.indexOf("const CMD_FOLD_DOTS"), consoleJs.indexOf("const copyObserver"));
   assert.doesNotMatch(marker, /parseActions|parseCommandLine|saveJob|recordJobLine|fetch\(/);
+});
+
+// The harness that proves all of the above on a real page. It is named here because a verify script no test names is a
+// script nobody runs: `npm run test:module tools/verify-command-card-look.mjs` treats that as a finding, not a pass.
+test("the browser proof is wired the way the repo reads a harness, and its committed artifacts carry no machine path", () => {
+  const harness = read("../tools/verify-command-card-look.mjs");
+  // The runner registers a harness by its own header line, and test/harness.test.js refuses a declared one with no
+  // script in package.json to run it.
+  assert.match(harness.split("\n").slice(0, 40).join("\n"), /^\/\/\s*HARNESS:\s*LIVE GATE\b/m);
+  const pkg = JSON.parse(read("../package.json"));
+  assert.equal(pkg.scripts["verify:command-card-look"], "node tools/verify-command-card-look.mjs");
+  // It makes its own panel and its own browser profile under the OS temp folder, and it reaps both: nothing it
+  // started may outlive the run.
+  assert.match(harness, /mkdtempSync\(path\.join\(tmpdir\(\), "wtgui-command-card-look-"\)\)/);
+  assert.match(harness, /rmSync\(dir, \{ recursive: true, force: true/);
+  assert.match(harness, /alivePid/);
+  // The ledger and the report are COMMITTED, so no line in them names a folder on this machine: the repo's own
+  // absolute-paths gate refuses a drive letter, and a scratch folder is gone by the next run anyway.
+  assert.match(harness, /function scrubString\(v\)/);
+  assert.match(harness, /writeFileSync\(JSON_OUT, JSON\.stringify\(scrubDeep\(out\), null, 2\)\);/);
+  assert.match(harness, /writeFileSync\(HTML_OUT, scrubString\(reportHtml\(out\)\)\);/);
+  // The ledger carries the verdict, not only the pictures.
+  assert.match(harness, /out\.verdict = \{ checks, failures, held: checks - failures/);
 });

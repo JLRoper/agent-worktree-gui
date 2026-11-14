@@ -80,10 +80,13 @@ const NOW_STORE = { rows: 2, side: 0, pad: 8, blank: 0, con: 10 };
 
 let checks = 0;
 let failures = 0;
-const out = { tree: TREE, shots: SHOTS, steps: [], notMeasured: [], errors: [] };
+const out = { tree: TREE, shots: SHOTS, steps: [], checks: [], verdict: null, notMeasured: [], errors: [] };
 function check(ok, label, detail = "") {
   checks += 1;
   if (!ok) failures += 1;
+  // Every check is kept, so the ledger a reader opens carries the verdict and not only the pictures: a report that
+  // names its states but not what held is a slideshow.
+  out.checks.push({ ok, label, detail });
   console.log(`${ok ? "PASS" : "FAIL"}  ${label}${detail ? ` - ${detail}` : ""}`);
 }
 const note = (text) => console.log(`      ${text}`);
@@ -590,6 +593,10 @@ out.reaped = { browserPids, alive, sandbox: dir, sandboxRemoved: !existsSync(dir
 console.log(`      browser pid ${browserPids.join(", ") || "(none found)"}; still alive after close: ${alive.length ? alive.join(", ") : "none"}`);
 console.log(`      reaped: ${dir} (panel sandbox${existsSync(dir) ? " STILL PRESENT" : ", removed"}); profile ${profileDir || "(not reported)"}${profileDir && !existsSync(profileDir) ? " (removed by the close)" : ""}`);
 
+// The verdict goes in the ledger and the page, and only then is either written: a report that names its states but not
+// which checks held is a slideshow.
+out.verdict = { checks, failures, held: checks - failures, at: new Date().toISOString() };
+
 // The ledger and the page are COMMITTED, so no line in them may name a folder on this machine (the repo's own
 // absolute-paths gate refuses it, and a drive letter is a path exactly one machine can open). Every path a step
 // recorded is written relatively: inside this tree from its root, and everything under the OS temp dir as `<tmp>/`.
@@ -685,7 +692,7 @@ function reportHtml(ledger) {
 </head>
 <body>
 <h1>The console command card: fold marker and spacing</h1>
-<p class="lede">Measured in headless Chromium on a throwaway panel at 1440x1100, device scale 2. The card is the
+<p class="lede"><b>${esc(ledger.verdict ? `${ledger.verdict.held} of ${ledger.verdict.checks} checks held${ledger.verdict.failures ? `, ${ledger.verdict.failures} FAILED` : ""}` : "no verdict recorded")}</b>, measured in headless Chromium on a throwaway panel at 1440x1100, device scale 2. The card is the
 assistant's command card in the open turn's console: one prompt long enough to wrap past eight preview rows, and one
 short prompt that fits its rows. Every default is the look the panel had before these settings: <span class="num">2
 preview rows of 18px</span>, <span class="num">8px</span> of padding, <span class="num">0</span> side margin,
