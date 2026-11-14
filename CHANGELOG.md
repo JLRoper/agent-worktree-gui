@@ -4,16 +4,32 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.98.1 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.99.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-593 releases from v0.1.0 (2026-10-20) to v1.98.1 (2026-11-13), 2003 commits between the tags. Every release is anchored by an
+594 releases from v0.1.0 (2026-10-20) to v1.99.0 (2026-11-13), 2006 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.99.0 — 2026-11-13 · 3 commits
+
+[`2957223`](https://github.com/JLRoper/agent-worktree-gui/commit/29572232061f39b198ce7f35a00375a4bfbc866e) · [compare v1.98.1...v1.99.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.98.1...v1.99.0)
+
+### Added
+
+- feat: a SPAWN's TODOs are drawn as its own card's bullets ([`055b20d`](https://github.com/JLRoper/agent-worktree-gui/commit/055b20d75d9d3df4a95b4198a5f151bda9a8b018))
+
+### Docs & tests
+
+- docs: render the changelog - 593 releases ([`f5f08e2`](https://github.com/JLRoper/agent-worktree-gui/commit/f5f08e2c7e9a87b0dff57abd8a14af867f136ffb))
+
+### Other
+
+- chore: 1.99.0 - the version this landing carries ([`2957223`](https://github.com/JLRoper/agent-worktree-gui/commit/29572232061f39b198ce7f35a00375a4bfbc866e))
 
 ## v1.98.1 — 2026-11-13 · 3 commits
 
