@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
+<title>The two leftovers the cleanup named - one locked tree and ten orphan refs</title>
+<style>
+  :root{ color-scheme:dark; --ink:#e9e7e2; --paper:#121417; --panel:#171a1f; --rule:#2b3038; --muted:#9aa3ad; --accent:#c8a6ff; --ok:#7ee2a8; --bad:#e5534b; --warn:#f0c987; --sunk:#1b1e24; --code:#f0c987; }
+  html,body{ margin:0; background:var(--paper); color:var(--ink); font:15px/1.58 -apple-system,Segoe UI,Helvetica,Arial,sans-serif; }
+  main{ max-width:1140px; margin:0 auto; padding:38px 28px 84px; }
+  h1{ font-size:27px; line-height:1.2; margin:0 0 8px; letter-spacing:-.015em; }
+  h2{ font-size:20px; margin:40px 0 10px; padding-bottom:7px; border-bottom:1px solid var(--rule); }
+  h3{ font-size:15.5px; margin:24px 0 8px; }
+  p{ margin:9px 0; max-width:110ch; }
+  .kicker{ color:var(--accent); font:12px ui-monospace,Consolas,monospace; letter-spacing:.08em; text-transform:uppercase; margin:0 0 8px; }
+  .sub{ color:var(--muted); margin:0 0 20px; max-width:112ch; }
+  .cards{ display:grid; grid-template-columns:repeat(auto-fit,minmax(148px,1fr)); gap:10px; margin:18px 0 4px; }
+  .card{ border:1px solid var(--rule); border-radius:10px; padding:11px 13px; background:var(--panel); }
+  .card b{ display:block; font-size:21px; letter-spacing:-.02em; font-variant-numeric:tabular-nums; }
+  .card span{ color:var(--muted); font-size:12.5px; }
+  table{ border-collapse:collapse; width:100%; font-size:12.8px; }
+  th,td{ text-align:left; padding:5px 7px; border-bottom:1px solid var(--rule); vertical-align:top; }
+  th{ color:var(--muted); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.05em; }
+  tr:last-child td{ border-bottom:0; }
+  code{ font:12.2px ui-monospace,Consolas,monospace; background:rgba(127,127,127,.13); padding:1px 5px; border-radius:4px; color:var(--code); overflow-wrap:anywhere; }
+  pre{ background:var(--sunk); border:1px solid var(--rule); border-radius:8px; padding:11px 13px; overflow-x:auto; font:12.3px/1.55 ui-monospace,Consolas,monospace; white-space:pre-wrap; overflow-wrap:anywhere; }
+  pre code{ background:none; padding:0; color:inherit; }
+  .ok{ color:var(--ok); font-weight:600; }
+  .bad{ color:var(--bad); font-weight:600; }
+  .warn{ color:var(--warn); font-weight:600; }
+  .muted{ color:var(--muted); }
+  ul{ margin:8px 0 8px 20px; } li{ margin:5px 0; max-width:110ch; }
+  .scroll{ max-height:620px; overflow:auto; border:1px solid var(--rule); border-radius:8px; }
+  .num{ text-align:right; font-variant-numeric:tabular-nums; }
+  .note{ border-left:3px solid var(--accent); padding:6px 0 6px 13px; color:var(--muted); }
+</style>
+</head>
+<body>
+<main>
+<p class="kicker">agent-worktree-gui / local refs only</p>
+<h1>The two leftovers the cleanup named: one locked tree and ten orphan refs</h1>
+<p class="sub">The executed aggregate cleanup (<code>wtgui/execute-aggregate-report-local-ref-87d11c</code>, job <code>88d8b5f4</code>, done) removed 22 of the 23 trees its report proposed and 122 of the 166 branch refs. It left one tree behind on a stale lock and ten branch refs that its report never listed, because those tips were already in <code>origin/main</code> and so never appeared in a branch table. This pass took those two leftovers only.</p>
+
+<div class="cards">
+  <div class="card"><b>1</b><span>tree removed after unlock</span></div>
+  <div class="card"><b>10 / 10</b><span>orphan refs deleted</span></div>
+  <div class="card"><b>0</b><span>refs skipped, 0 refused</span></div>
+  <div class="card"><b>382 to 382</b><span>origin heads, before and after</span></div>
+  <div class="card"><b>98 to 88</b><span>local branches, before and after</span></div>
+  <div class="card"><b>13 to 12</b><span>registered worktrees</span></div>
+</div>
+
+<h2>Base</h2>
+<table>
+<tr><th>field</th><th>value</th></tr>
+<tr><td>origin/main</td><td><code>f025fa2cba369d1339af0ea36c40fbe7f1dc807e</code></td></tr>
+<tr><td>report re-measured</td><td><code>docs/reports/worktree-aggregate-2026-11-13.html</code> at origin/main</td></tr>
+<tr><td>report tables</td><td>167 branch rows (166 proposed delete, 1 keeper) and 33 worktree rows (23 propose-delete, 8 keep-dirty, 2 skip-live)</td></tr>
+<tr><td>this tree</td><td><code>.worktrees/finish-the-two-leftovers-the-executed-227d97</code>, in this clone</td></tr>
+<tr><td>scope</td><td>local refs only. No push, no remote deletion, no fetch and no prune.</td></tr>
+</table>
+
+<h2>First: the tree that was refused on a lock</h2>
+<p><code>.worktrees/replace-the-console-drawer-s-pacer-with-d0ab42</code> was proposed for deletion and was clean (0 dirty paths). The executed cleanup refused it with this exact message:</p>
+<pre><code>fatal: cannot remove a locked working tree, lock reason: initializing</code></pre>
+<p>Before touching it, the live job list was read from <code>http://127.0.0.1:7331/api/jobs</code> (1,074,247 bytes, 60 rows: 51 done, 4 cancelled, 2 failed, 3 running). The three running rows are <code>712cce6d</code> (this run, this tree), <code>74799394</code> and <code>143979c2</code> (both email-multi trees). No running row names the pacer tree or its thread. The two rows that mention it are both done: <code>4f40100d</code> (thread <code>panel-assistant-3</code>, ended 2026-11-13T07:43:50.767Z) and <code>88d8b5f4</code> (the executed cleanup, ended 2026-11-13T07:42:46.720Z). The lock reason was <code>initializing</code>, left by the tree-creating job that is no longer live.</p>
+<pre><code>git worktree unlock .worktrees/replace-the-console-drawer-s-pacer-with-d0ab42   exit 0, no output
+git worktree remove .worktrees/replace-the-console-drawer-s-pacer-with-d0ab42   exit 0, no output</code></pre>
+<p>The directory is gone, no <code>--force</code> was used and the lock file was not touched by hand. Its branch <code>wtgui/replace-the-console-drawer-s-pacer-with-d0ab42</code> survives at <code>7e3cd3f1dd91</code>, which is also on an origin head, so nothing was lost. That branch is a report row and was left alone.</p>
+
+<h2>Second: the ten refs the tree removals left behind</h2>
+<p>The set was built, not guessed. Of the report's 33 trees, 24 are gone: the 23 propose-delete rows plus one skip-live tree whose own job finished and removed it afterwards. Of those 24 branches, 12 were report rows and were deleted by the executed cleanup, one (<code>wtgui/fix-the-session-console-s-bottom-right-fb0ca1</code>) is absent from the local refs entirely, and 10 still sat as local refs that the report never listed. Each of the 10 was tested with <code>git merge-base --is-ancestor &lt;tip&gt; origin/main</code> in this clone before deletion.</p>
+<div class="scroll">
+<table>
+<tr><th>ref deleted</th><th>tip</th><th>ahead of main</th><th>ancestor of origin/main</th><th>own origin head</th><th>result</th></tr>
+<tr><td><code>wtgui/deep-dive-why-some-assis-e8cb2e</code></td><td><code>bdf198b67bef</code></td><td class="num">0</td><td class="ok">yes</td><td>yes</td><td class="muted">deleted, was bdf198b6</td></tr><tr><td><code>wtgui/fast-forward-primary-checkout-to-origin-693283</code></td><td><code>993bd42f2bf8</code></td><td class="num">0</td><td class="ok">yes</td><td>no</td><td class="muted">deleted, was 993bd42f</td></tr><tr><td><code>wtgui/local-pipeline-walk-author-review-revise-stage-1-author-da66f8</code></td><td><code>f5f9f87490bd</code></td><td class="num">0</td><td class="ok">yes</td><td>no</td><td class="muted">deleted, was f5f9f874</td></tr><tr><td><code>wtgui/local-pipeline-walk-author-review-revise-stage-2-review-29f215</code></td><td><code>ae3d444e68ba</code></td><td class="num">0</td><td class="ok">yes</td><td>no</td><td class="muted">deleted, was ae3d444e</td></tr><tr><td><code>wtgui/local-pipeline-walk-author-review-revise-stage-3-revise-9e5bdc</code></td><td><code>c0644290ed66</code></td><td class="num">0</td><td class="ok">yes</td><td>no</td><td class="muted">deleted, was c0644290</td></tr><tr><td><code>wtgui/make-focus-mode-show-all-live-worktrees-a9627a</code></td><td><code>9be7cb591d86</code></td><td class="num">0</td><td class="ok">yes</td><td>no</td><td class="muted">deleted, was 9be7cb59</td></tr><tr><td><code>wtgui/make-optym-integration-m-b580a2</code></td><td><code>ea15bb1de2cb</code></td><td class="num">0</td><td class="ok">yes</td><td>yes</td><td class="muted">deleted, was ea15bb1d</td></tr><tr><td><code>wtgui/read-docs-reports-gui-improve-experience-28a3ec</code></td><td><code>12307d9c9297</code></td><td class="num">0</td><td class="ok">yes</td><td>no</td><td class="muted">deleted, was 12307d9c</td></tr><tr><td><code>wtgui/read-the-settled-transcript-of-thread-31a9f8</code></td><td><code>e670a95be215</code></td><td class="num">0</td><td class="ok">yes</td><td>no</td><td class="muted">deleted, was e670a95b</td></tr><tr><td><code>wtgui/roll-up-2026-11-13</code></td><td><code>5a9057b6a4a6</code></td><td class="num">0</td><td class="ok">yes</td><td>yes</td><td class="muted">deleted, was 5a9057b6</td></tr>
+</table>
+</div>
+<p>10 deleted, 0 skipped, 0 refused. Each tip was also checked still present after the write (<code>git cat-file -e</code>: 10 of 10) and still an ancestor of <code>origin/main</code> (10 of 10), so every one is recoverable from main. Seven of the ten had no origin head of their own; containment in main is what makes them recoverable.</p>
+
+<h2>What was not touched</h2>
+<ul>
+<li>The <span class="bad">42</span> refs whose commits are in neither <code>origin/main</code> nor any remote head: 44 report delete rows survive, of which 42 are unrecoverable (holding 161 own commits) and 2 are carried by an origin head. All 44 are the reader's decision and none was deleted.</li>
+<li>The keeper <code>wtgui/document-jitter-in-the-p-a2d6df</code>, still at <code>602d2103</code>.</li>
+<li>The primary checkout at the clone root, still on <code>main</code> with its own untracked paths as before.</li>
+<li>The aggregate report's own tree <code>.worktrees/execute-aggregate-report-local-ref-87d11c</code>.</li>
+<li>The 8 keep-dirty trees (still 1 to 22 dirty paths each), the skip-live tree <code>.worktrees/cut-branch-wtgui-aggregate-remainder-5650d5</code> (now clean, present), and the three trees created after the report.</li>
+<li><code>wtgui/replace-the-console-drawer-s-pacer-with-d0ab42</code>: now treeless but a report row and carried by an origin head, so its ref stays.</li>
+</ul>
+
+<h2>Audit after the writes</h2>
+<table>
+<tr><th>check</th><th>before</th><th>after</th></tr>
+<tr><td>origin heads, <code>git ls-remote --heads origin | wc -l</code></td><td class="num">382</td><td class="num">382</td></tr>
+<tr><td>origin/main sha</td><td><code>f025fa2cba36</code></td><td><code>f025fa2cba36</code></td></tr>
+<tr><td>local branches, <code>git branch | wc -l</code></td><td class="num">98</td><td class="num">88</td></tr>
+<tr><td>registered worktrees</td><td class="num">13</td><td class="num">12</td></tr>
+<tr><td>deleted tips still present and still ancestors of origin/main</td><td class="muted">n/a</td><td class="ok">10 of 10</td></tr>
+</table>
+<p class="note">The remote head count is unchanged at 382 and origin/main is the same sha, so the no-remote-change claim is measured, not asserted. No push, no <code>git fetch --prune</code> and no remote branch deletion ran in this pass.</p>
+
+<h2>What was run</h2>
+<pre><code>curl -s -m 10 http://127.0.0.1:7331/api/jobs                     60 rows, 3 running, none for the pacer tree
+git worktree unlock &lt;pacer tree&gt;                                 exit 0
+git worktree remove &lt;pacer tree&gt;                                 exit 0
+git merge-base --is-ancestor &lt;tip&gt; origin/main                   x10, all true
+git branch -D &lt;ref&gt;                                              x10, one at a time, checked-out map and tip re-read each time
+git ls-remote --heads origin | wc -l                             382 before, 382 after
+git cat-file -e &lt;tip&gt;                                            x10, all present</code></pre>
+
+<h2>Landing state</h2>
+<p>This report is committed on <code>wtgui/finish-the-two-leftovers-the-executed-227d97</code>, a tree cut from <code>main</code>. No push was attempted: the panel's push resolver answers <code>permission: refuse</code> for this tree because its branch-parents record says <code>kind: research</code> with <code>kindLifted: false</code>, and that lift is the reader's own answer, never the worker's. The reader chose to keep the branch local, so no remote ref was created, no pull request was opened, and the record was not lifted. The branch and its commit are the deliverable the reader lands later.</p>
+
+<h2>Dashes</h2>
+<p>U+2014 count: 0. U+2013 count: 0. This document uses plain ASCII hyphens only.</p>
+</main>
+</body>
+</html>
