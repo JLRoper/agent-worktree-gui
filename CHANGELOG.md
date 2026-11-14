@@ -17,7 +17,7 @@ has no tag.
 
 ## v1.102.1 — 2026-11-14 · 6 commits
 
-[`8511e78`](https://github.com/JLRoper/agent-worktree-gui/commit/8511e78457a8e4e80dcdfdb069981c24800abf4e) · [compare v1.102.0...v1.102.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.102.0...v1.102.1)
+[`98fefe5`](https://github.com/JLRoper/agent-worktree-gui/commit/98fefe5491c249159f7b71f8a9e9f606d77d32b5) · [compare v1.102.0...v1.102.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.102.0...v1.102.1)
 
 ### Docs & tests
 
@@ -25,11 +25,11 @@ has no tag.
 - docs: the report says the last pass runs at 1440x900 ([`9e29f03`](https://github.com/JLRoper/agent-worktree-gui/commit/9e29f033957256709c7f5e89d40d23bae2d2eafe))
 - docs: render the changelog from the reworded history - 601 releases ([`6661462`](https://github.com/JLRoper/agent-worktree-gui/commit/6661462d6df6c782bf399af820fdb575ebc84711))
 - docs: render the changelog - 601 releases ([`05e2683`](https://github.com/JLRoper/agent-worktree-gui/commit/05e26837e73c523a3c2105be516148154e941b2b))
-- docs: every figure in the card report says what it was taken in ([`135e39b`](https://github.com/JLRoper/agent-worktree-gui/commit/135e39b485b548983b61bf8401a734b7a9dbbd3c))
+- docs: every figure in the card report says what it was taken in ([`4bc8662`](https://github.com/JLRoper/agent-worktree-gui/commit/4bc866247a87b9321b3d5007a49eef78976ca06d))
 
 ### Other
 
-- chore: 1.102.1 - the version this landing carries ([`8511e78`](https://github.com/JLRoper/agent-worktree-gui/commit/8511e78457a8e4e80dcdfdb069981c24800abf4e))
+- chore: 1.102.1 - the version this landing carries ([`98fefe5`](https://github.com/JLRoper/agent-worktree-gui/commit/98fefe5491c249159f7b71f8a9e9f606d77d32b5))
 
 ## v1.102.0 — 2026-11-14 · 4 commits
 
