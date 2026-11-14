@@ -3,7 +3,7 @@
 //
 // THE CHANGE. A reply's TODOs are written under the SPAWN that names the tree they belong to. They used to be drawn
 // as five cards of their own under the SPAWN card; they are now bullet rows INSIDE that card, each reading
-// `<category> - <todo>` (the category being the TODO's leading `[Title]`), with the checkbox glyph, and the card's
+// `<category> - <todo>` (the category being the TODO's leading `[Title]`, drawn BOLD - the reader's ask), with the checkbox glyph, and the card's
 // head counting them. The bullets sit between the head and the body, so folding the card to two lines never hides
 // them. A TODO with no SPAWN above it keeps the card it always had. DISPLAY ONLY: lib/assistant/actions.js parses
 // the line byte for byte as before, and lib/todos.js is untouched.
@@ -285,6 +285,10 @@ const readMessage = (id) => {
       bullets: [...box.querySelectorAll(".code-bullet")].map((b) => ({
         text: b.querySelector(".code-bullet-text") ? String(b.querySelector(".code-bullet-text").textContent || "").trim() : "",
         glyph: b.querySelector(".code-bullet-glyph") ? String(b.querySelector(".code-bullet-glyph").textContent || "").trim() : "",
+        // The reader asked for the category BOLD: the weight is read off the painted DOM, not the stylesheet.
+        catWeight: b.querySelector(".code-bullet-cat") ? getComputedStyle(b.querySelector(".code-bullet-cat")).fontWeight : "",
+        textWeight: b.querySelector(".code-bullet-text") ? getComputedStyle(b.querySelector(".code-bullet-text")).fontWeight : "",
+        catText: b.querySelector(".code-bullet-cat") ? String(b.querySelector(".code-bullet-cat").textContent || "").trim() : "",
         title: b.getAttribute("title"),
         inBody: Boolean(body && body.contains(b)),
       })),
@@ -467,6 +471,11 @@ try {
         card.bullets.map((b) => b.text).join(" | "),
       );
       check(card.count === `${TODO_LINES.length} todos` && card.countShown, "AFTER: the head shows the count", `${card.count}${card.countShown ? "" : " (hidden)"}`);
+      check(
+        card.bullets.every((b) => Number(b.catWeight) >= 700 && Number(b.catWeight) > Number(b.textWeight || 0)),
+        "AFTER: the category is the bold part of the row, and the item reads at the body's own weight",
+        `${card.bullets.length ? `${card.bullets[0].catWeight} on "${card.bullets[0].catText}" vs ${card.bullets[0].textWeight} on the row` : "(no bullets)"}`,
+      );
       check(card.bullets.length === 0 || card.bullets.every((b) => !b.inBody), "AFTER: no bullet is inside the body - the clamp cannot hide them");
       check(card.clamped && card.aria === "false" && card.clamp === "2", "AFTER: the card is folded to two lines, as every command card is", `clamped ${card.clamped} · aria ${card.aria} · clamp ${card.clamp}`);
       check(
@@ -639,7 +648,7 @@ the throwaway folder under the OS temp directory.</p>
 <figure>
   <img alt="this branch: one SPAWN card with five bullet rows inside it" src="${dataUri(out.after && out.after.shot)}">
   <figcaption>this branch: one card. The head reads <code>5 todos</code>, the five bullet rows sit between the head
-  and the body, each reading <code>&lt;category&gt; - &lt;todo&gt;</code> with the checkbox glyph, and no TODO box is
+  and the body, each reading <code>&lt;category&gt; - &lt;todo&gt;</code> with the checkbox glyph and the category in bold, and no TODO box is
   drawn beside it. The bullet rows are outside the clamped body, so they are all visible on the folded card.</figcaption>
 </figure>
 <table>

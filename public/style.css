@@ -1968,6 +1968,9 @@ textarea.drop-target, .chipbox.drop-target { outline: 2px dashed var(--violet); 
 .code-bullet { display: flex; gap: 6px; white-space: normal; overflow-wrap: anywhere; }
 .code-bullet-glyph { flex: none; }
 .code-bullet-text { flex: 1 1 auto; min-width: 0; }
+/* The category is the label the reader scans for - the manager's short name for the item - so it carries the weight
+   and the item reads after it. */
+.code-bullet-cat { font-weight: 700; color: #e2e9f3; }
 /* Folded, the card sits in a folded turn's tail where every other line is quiet: a 4px margin there would read as
    a gap in the head, so the tail keeps the card tight against it. */
 .turn-peek.is-command { font-style: normal; }

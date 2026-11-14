@@ -198,6 +198,15 @@
     return bullet.text ? `${bullet.category} - ${bullet.text}` : bullet.category;
   }
 
+  // The same label as markup: the category is the label a reader scans for, so it carries the weight, and the item
+  // reads after the hyphen. Only the category is escaped here - the hyphen and the space are ours, and a bullet with
+  // no category is its item alone, in the same quiet weight as the rest.
+  function bulletText(bullet) {
+    if (!bullet) return "";
+    if (!bullet.category) return escOf(bullet.text);
+    return `<b class="code-bullet-cat">${escOf(bullet.category)}</b>${bullet.text ? ` - ${escOf(bullet.text)}` : ""}`;
+  }
+
   // Lines in, the same lines out, with each SPAWN's following TODOs attached to it and marked `folded` (the caller
   // draws nothing for those). Entries are `{ text, ... }` and are returned shallow-copied, so a caller's own fields
   // (an index, a line id) survive. Ownership is the nearest SPAWN above and is not reset by prose: a reply's tail is
@@ -232,7 +241,7 @@
       (b) =>
         `<div class="code-bullet" role="listitem" title="${escOf(b.source || "")}">` +
         `<span class="code-bullet-glyph" aria-hidden="true">${COMMAND_EMOJI.TODO}</span>` +
-        `<span class="code-bullet-text">${escOf(bulletLabel(b))}</span></div>`,
+        `<span class="code-bullet-text">${bulletText(b)}</span></div>`,
     );
     return `<div class="code-bullets" role="list" aria-label="${list.length} todo${list.length === 1 ? "" : "s"} in this tree">${rows.join("")}</div>`;
   }
@@ -331,6 +340,7 @@
     readTitle,
     todoBullet,
     bulletLabel,
+    bulletText,
     foldSpawnTodos,
     bulletsHtml,
     headerOf,
