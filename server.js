@@ -798,7 +798,7 @@ const clients = new Set();
 // What /api/diagnostics reports about the page's own connection: connect/disconnect counts, the
 // last snapshot build, write errors, and the recent slow requests — the frontend's yellow dot,
 // made countable.
-const streamMetrics = { connected: 0, disconnected: 0, writeErrors: 0, lastConnectAt: null, lastDisconnectAt: null, lastDisconnectHeldMs: null, lastSnapshot: null };
+const streamMetrics = { connected: 0, disconnected: 0, writeErrors: 0, bootSuppressed: 0, lastConnectAt: null, lastDisconnectAt: null, lastDisconnectHeldMs: null, lastSnapshot: null };
 const slowRequests = [];
 const SLOW_REQUESTS_KEPT = 20;
 
@@ -873,6 +873,20 @@ store.onEvent((evt) => {
   // scope. The broadcast below carries the frame to whoever IS attached.
   if (typeof invalidateSnapshot === "function") invalidateSnapshot();
   if (!clients.size) return;
+  // NOTHING goes on the wire while the boot pass is still walking the fleet (`bootPassFinishedAt`
+  // is 0 until its finally, see the boot sequence at the end of this file). A boot boards ~400
+  // trees and each one was its own `row` frame, so a page open through a restart drew the board
+  // four hundred times - a placeRow over a 30k-node page per frame - while the loop was also
+  // pausing for seconds inside the pass: the reader's "the page does not respond every time we
+  // restart". The page now hears nothing until the boot's own broadcastSnapshot() hands it the
+  // finished board once, and steady-state frames resume from that moment. The invalidation above
+  // still runs, so a plain /api/state poll during the boot reads fresh rows; the withheld count is
+  // kept for /api/diagnostics. Guarded like the globals above: the extraction test evals this body
+  // with a minimal scope.
+  if (typeof bootPassFinishedAt === "number" && bootPassFinishedAt === 0) {
+    if (typeof streamMetrics === "object" && streamMetrics) streamMetrics.bootSuppressed = (streamMetrics.bootSuppressed || 0) + 1;
+    return;
+  }
   if (evt?.type === "row") broadcast({ ...evt, row: rowExtras(evt.project, evt.row) });
   else broadcast(evt);
 });
@@ -6901,6 +6915,10 @@ try {
 } finally {
   bootPassFinishedAt = Date.now();
   resolveBootPass();
+  // …and every page that sat through the boot draws the board ONCE, complete, instead of watching
+  // ~400 rows arrive one frame at a time while the loop also paused (see the store.onEvent gate
+  // above). This is the same snapshot /api/state would build; nothing about it is special-cased.
+  broadcastSnapshot();
 }
 
 // The exit path, shared by a signal and a panel restart: the replacement has to be able to bind the
