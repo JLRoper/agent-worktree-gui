@@ -134,9 +134,9 @@ test("the card's thread travels from the head to the block, in the shipped rende
   // The button writes the card's thread.
   assert.match(renderSrc, /data-think-thread="\$\{esc\(thread\)\}"/);
   // The card's render hands that same value down to the turn's body, and the body hands it to both switches.
-  assert.match(renderSrc, /turnBody\(turn, copy, conv\.thread\)/);
+  assert.match(renderSrc, /turnBody\(turn, copy, conv\.thread, taskLink\)/);
   assert.match(renderSrc, /function turnBody\(turn, copy = "", thread = /);
-  assert.match(renderSrc, /streamBodyHtml\(turn, lines, lines\.length < all\.length, thread\)/);
+  assert.match(renderSrc, /streamBodyHtml\(turn, lines, lines\.length < all\.length, thread, [a-zA-Z]+\)/);
   assert.match(renderSrc, /thinkHtml\(turn, copy, thread\)/);
   // The block reads visibility from that parameter and nothing else.
   assert.match(consoleSrc, /function thinkHtml\(turn, copy = "", thread = /);

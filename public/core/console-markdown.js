@@ -94,6 +94,44 @@ function cmTrimUrl(raw) {
   return plausible ? { url, tail } : null;
 }
 
+// ---- a task id in the agent's own prose ---------------------------------------------------------------
+
+// `#405` in a sentence is a reference to ONE row of ONE assistant's queue, and the reader follows that reference
+// all day. The anchor is built HERE, at render time, from the resolver the caller hands in - never by a later pass
+// over the DOM: the console is rebuilt on every repaint, so a sweeper would have to run on every path that draws
+// prose, and the one path it missed would leave a dead id behind.
+//
+// NOT GUESSED. Each assistant's queue numbers its own tasks, so two queues can both hold a `#405`. A resolver that
+// cannot name exactly one owner answers null, and the sentence keeps its `#405` as plain words rather than sending
+// the reader to a coin flip. A resolver is optional: a console without one (the board's agent cards) draws text.
+//
+// A PULL REQUEST NUMBER IS NOT A TASK. "PR #760 MERGED" is a sentence this console carries constantly; the marker
+// is skipped when the word before it is `PR`, in any case.
+const CM_TASK_RE = /#(\d{1,7})(?![\w-])/g;
+// The word in front of the marker, with the space and bracket run between them dropped: `PR #760`, `(PR #760)`.
+const CM_PR_BEFORE_RE = /(^|[\s(\[])[Pp][Rr]$/;
+
+// The assistant id is one of this page's own ids, but it still goes through the escaper: an attribute is an
+// attribute whoever writes it.
+function cmTaskAnchor(id, own) {
+  const n = String(id);
+  return (
+    `<a class="as-task-ref" href="#assistant" data-as-task="${n}" data-as-task-own="${cmEsc(String(own))}"` +
+    ` title="show task #${n} in its assistant's queue">#${n}</a>`
+  );
+}
+function cmLiftTasks(s, hold, taskLink) {
+  if (typeof taskLink !== "function") return s;
+  return s.replace(CM_TASK_RE, (m, id, at) => {
+    // The marker needs a word boundary: `abc#405` is a word, not a reference.
+    const before = at === 0 ? "" : s[at - 1];
+    if (before && !/[\s(\[]/.test(before)) return m;
+    if (CM_PR_BEFORE_RE.test(s.slice(0, at).replace(/[\s(\[]+$/, ""))) return m;
+    const own = taskLink(id);
+    return own ? hold(cmTaskAnchor(id, own)) : m;
+  });
+}
+
 // ---- inline ------------------------------------------------------------------------------------------
 
 // A code span opens with a RUN of backticks and closes with a run of the SAME length, so
@@ -174,7 +212,7 @@ function cmRows(html) {
 // do not span a line break), then emphasis is applied to the whole run, so a marker that opens on one line and
 // closes on the next is one run rather than an unpaired marker on each. The result is split back into one string
 // per source line, with every tag still open at a break closed and re-opened.
-function consoleMdInlineLines(texts) {
+function consoleMdInlineLines(texts, taskLink = null) {
   const held = [];
   const hold = (html) => `\u0000${held.push(html) - 1}\u0000`;
   const src = (Array.isArray(texts) ? texts : [texts]).map((text) => String(text ?? ""));
@@ -193,7 +231,9 @@ function consoleMdInlineLines(texts) {
       const hit = cmTrimUrl(raw);
       return hit ? hold(cmAnchor(hit.url, hit.url) + hit.tail) : raw;
     });
-    return s;
+    // A task id the caller's resolver places becomes the anchor into its queue row. After the links, so an id
+    // inside a URL or a link's target is already held and cannot be read as one.
+    return cmLiftTasks(s, hold, taskLink);
   });
   let s = lifted.join("\n");
   // ***both***, **bold**, *italic* - longest marker first, so `***x***` never reads as bold-then-literal. The
@@ -209,10 +249,10 @@ function consoleMdInlineLines(texts) {
   return cmRows(s).map((row) => row.replace(/\u0000(\d+)\u0000/g, (_m, i) => held[Number(i)] || ""));
 }
 
-function consoleMdInline(text) {
+function consoleMdInline(text, taskLink = null) {
   // One string in, one string out: the rows of a multi-line input are joined back with the newlines they had,
   // because a caller that hands this one string (a stored message) owns the line breaks.
-  return consoleMdInlineLines([text]).join("\n");
+  return consoleMdInlineLines([text], taskLink).join("\n");
 }
 // A link's label is a label: bold and italic inside it still work, but a link inside a link does not.
 function consoleMdInlineLabel(label) {
@@ -461,6 +501,9 @@ function cmFenceHtml(block, rowOpts) {
 // carries its own marker (the source line keeps its "- " in data-ltext, so a rebuild is exact).
 function consoleMdBlockHtml(block, opts = {}) {
   const rowOpts = opts.rowOpts || {};
+  // A task id is placed by the caller's resolver, and only in prose: a fence, a command card's fields and a
+  // tool's output are not sentences (see the module header).
+  const taskLink = typeof opts.taskLink === "function" ? opts.taskLink : null;
   // A command line's card IS the block: no `.md-block` wrapper, because the card is a frame of its own (the same one
   // a result is drawn in) and a wrapper would only add margins around margins.
   if (block.type === "cmd") return cmCommandCard(block.lines[0], opts, Number(opts.index) || 0, block.todos);
@@ -470,7 +513,7 @@ function consoleMdBlockHtml(block, opts = {}) {
     const m = CM_HEAD_RE.exec(cmText(block.lines[0]));
     return (
       `<div class="md-block md-head" data-md-block="head" data-md-level="${block.level}">` +
-      consoleMdRow(block.lines[0], { ...rowOpts, cls: `md-head-l md-h${block.level}`, inner: consoleMdInline(m ? m[2] : cmText(block.lines[0])) }) +
+      consoleMdRow(block.lines[0], { ...rowOpts, cls: `md-head-l md-h${block.level}`, inner: consoleMdInline(m ? m[2] : cmText(block.lines[0]), taskLink) }) +
       `</div>`
     );
   }
@@ -481,7 +524,7 @@ function consoleMdBlockHtml(block, opts = {}) {
       return m ? (block.ordered ? m[2] : m[1]) : text;
     });
     // One run, so a bold that opens on one item and closes on the next is bold on both (see consoleMdInlineLines).
-    const inner = consoleMdInlineLines(rests);
+    const inner = consoleMdInlineLines(rests, taskLink);
     const rows = block.lines.map((line, i) => {
       const text = cmText(line);
       const m = CM_OL_RE.exec(text) || CM_UL_RE.exec(text);
@@ -494,7 +537,7 @@ function consoleMdBlockHtml(block, opts = {}) {
     });
     return `<div class="md-block md-list" data-md-block="list"${block.ordered ? ' data-md-ordered="1"' : ""}>${rows.join("")}</div>`;
   }
-  const inner = consoleMdInlineLines(block.lines.map(cmText));
+  const inner = consoleMdInlineLines(block.lines.map(cmText), taskLink);
   const rows = block.lines.map((line, i) => consoleMdRow(line, { ...rowOpts, inner: inner[i] })).join("");
   return `<div class="md-block md-para" data-md-block="para">${rows}</div>`;
 }
@@ -528,7 +571,7 @@ function consoleMdHtml(lines, opts = {}) {
     .map((block, i) => {
       // A typed run is drawn up to the words that may be shown now, row by row: the same blocks, the same
       // fence head, only each row's inner HTML is the visible prefix instead of the whole line.
-      const html = textOf ? consoleMdTypedBlockHtml(block, textOf, opts, i) : consoleMdBlockHtml(block, { cards: opts.cards, index: i });
+      const html = textOf ? consoleMdTypedBlockHtml(block, textOf, opts, i) : consoleMdBlockHtml(block, { cards: opts.cards, index: i, taskLink: opts.taskLink });
       return i === 0 && opts.sep ? `<div class="md-sep ${opts.sep}"></div>${html}` : html;
     })
     .join("");
@@ -537,6 +580,7 @@ function consoleMdHtml(lines, opts = {}) {
 // The typed variant: every row's inner HTML is the stream's visible prefix, rendered inline. Nothing else
 // changes — the block, the fence and its head are the same shapes.
 function consoleMdTypedBlockHtml(block, textOf, opts = {}, index = 0) {
+  const taskLink = typeof opts.taskLink === "function" ? opts.taskLink : null;
   const shownOf = (line) => {
     const shown = textOf(line);
     return shown == null ? cmText(line) : String(shown);
@@ -545,7 +589,7 @@ function consoleMdTypedBlockHtml(block, textOf, opts = {}, index = 0) {
     // The card waits for the whole line (see cmCommandCard): until the stream has released the last character, the
     // line is the plain row it was while it was being written.
     const line = block.lines[0];
-    if (shownOf(line) !== cmText(line)) return consoleMdRow(line, { inner: consoleMdInline(shownOf(line)) });
+    if (shownOf(line) !== cmText(line)) return consoleMdRow(line, { inner: consoleMdInline(shownOf(line), taskLink) });
     return cmCommandCard(line, opts, index, block.todos);
   }
   if (block.type === "fence") {
@@ -562,13 +606,13 @@ function consoleMdTypedBlockHtml(block, textOf, opts = {}, index = 0) {
     const shown = shownOf(block.lines[0]).replace(/^\s{0,3}#{1,6}\s+/, "");
     return (
       `<div class="md-block md-head" data-md-block="head" data-md-level="${block.level}">` +
-      consoleMdRow(block.lines[0], { cls: `md-head-l md-h${block.level}`, inner: consoleMdInline(shown) }) +
+      consoleMdRow(block.lines[0], { cls: `md-head-l md-h${block.level}`, inner: consoleMdInline(shown, taskLink) }) +
       `</div>`
     );
   }
   if (block.type === "list") {
     const shownTexts = block.lines.map((line) => shownOf(line).replace(/^\s{0,3}(?:[-*+]|\d{1,9}[.)])\s+/, ""));
-    const inner = consoleMdInlineLines(shownTexts);
+    const inner = consoleMdInlineLines(shownTexts, taskLink);
     const items = block.lines.map((line, i) => {
       const text = cmText(line);
       const m = CM_OL_RE.exec(text) || CM_UL_RE.exec(text);
@@ -583,7 +627,7 @@ function consoleMdTypedBlockHtml(block, textOf, opts = {}, index = 0) {
     });
     return `<div class="md-block md-list" data-md-block="list"${block.ordered ? ' data-md-ordered="1"' : ""}>${items.join("")}</div>`;
   }
-  const inner = consoleMdInlineLines(block.lines.map(shownOf));
+  const inner = consoleMdInlineLines(block.lines.map(shownOf), taskLink);
   return `<div class="md-block md-para" data-md-block="para">${block.lines.map((line, i) => consoleMdRow(line, { inner: inner[i] })).join("")}</div>`;
 }
 
@@ -639,6 +683,7 @@ function consoleMdOpenHtml(plan) {
 // One line's markup, as the append path needs it: inside a paragraph, a list item, a heading, or a fence's code.
 function consoleMdAppendRow(line, type, opts = {}) {
   const text = cmText(line);
+  const taskLink = typeof opts.taskLink === "function" ? opts.taskLink : null;
   // A caller with a drawn stream answers for a line that is still being typed; `null` means it has nothing to say
   // about this one (it has not been queued, or the whole line may be shown), and the line is drawn whole.
   const shown = typeof opts.textOf === "function" ? opts.textOf(line) : null;
@@ -650,13 +695,13 @@ function consoleMdAppendRow(line, type, opts = {}) {
     const marker = ordered && m ? `${m[1]}.` : "\u2022";
     return consoleMdRow(line, {
       cls: "md-li",
-      inner: `<span class="md-marker" aria-hidden="true">${cmEsc(marker)}</span><span class="md-li-t">${consoleMdInline(visible)}</span>`,
+      inner: `<span class="md-marker" aria-hidden="true">${cmEsc(marker)}</span><span class="md-li-t">${consoleMdInline(visible, taskLink)}</span>`,
     });
   }
   if (type === "head") {
-    return consoleMdRow(line, { cls: "md-head-l", inner: consoleMdInline(visible.replace(/^\s{0,3}#{1,6}\s+/, "")) });
+    return consoleMdRow(line, { cls: "md-head-l", inner: consoleMdInline(visible.replace(/^\s{0,3}#{1,6}\s+/, ""), taskLink) });
   }
-  return consoleMdRow(line, { inner: consoleMdInline(visible) });
+  return consoleMdRow(line, { inner: consoleMdInline(visible, taskLink) });
 }
 
 // ---- the raw view -------------------------------------------------------------------------------------
