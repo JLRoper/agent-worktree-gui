@@ -71,8 +71,11 @@ thead th:nth-child(8) { width: 8.2%; }  /* life / next read: "never live" still 
 thead th:nth-child(9) { width: 12.6%; } /* verdict */
 thead th:nth-child(10) { width: 5%; }
 /* The delete cell is its own column: a fixed 34px plus the cell's padding was 4px wider than the card at a
-   narrow window, and the ✕ was the thing that fell off. Slim padding, and let the button sit inside. */
-td.row-actions { padding-left: 4px; padding-right: 4px; }
+   narrow window, and the ✕ was the thing that fell off. Slim on the left, and a real gutter on the RIGHT because
+   the chart draws its closing rule there now: the ✕ used to end 4px from the table's edge, which against a
+   down-to-the-pixel rule reads as touching it. 10px is the same gutter every other cell keeps on its right
+   (`tbody td`), so the newest edge is not the one column that crowds its own control. */
+td.row-actions { padding-left: 4px; padding-right: 10px; }
 /* A verdict badge is an inline-block with its own width, so the cell's ellipsis never reached it: it was cut
    mid-word. Truncate the badge itself, and keep the age cell's chips from spilling past their column. */
 td.age { overflow: hidden; }
@@ -157,10 +160,18 @@ tbody td { padding: 7px 10px; border-bottom: 1px solid #1d222b; vertical-align: 
   /* The rail inset on the left and a matching buffer on the right. It used to be 24px on the left and 2px on the
      right, so the last column (the row's ✕) sat against the panel's rounded corner and the table header bled into
      it - the right edge read as a seam where the left read as a margin. The WRAPPER carries it now, not the table:
-     the rail is the one thing that has to stay put while the chart scrolls sideways under it. */
+     the rail is the one thing that has to stay put while the chart scrolls sideways under it.
+
+     BOTH edges are the SAME 1px rule, drawn here rather than on the table so it spans the header and every row
+     including the detail cards, and so the table's own borders stay what the cell rules say they are. The left rule
+     alone made the right side read as unfinished: the table stopped mid-card with nothing to close it. Each rule's
+     inner edge is the table's own edge (border-box: `clientWidth` is already the content box `fitColumns` plans to),
+     so the pair frames the chart exactly, and `td.row-actions` keeps the gutter the last control needs to clear the
+     right one. */
   width: calc(100% - 48px);
   margin-left: 24px;
   border-left: 1px solid #2b3644;
+  border-right: 1px solid #2b3644;
 }
 
 /* ---- the chart no longer scrolls sideways itself --------------------------------------------------------------
