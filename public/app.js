@@ -12850,39 +12850,65 @@ window.addEventListener("resize", deliverPosition);
 // Terminal font: the text inside an agent card — transcript, prompt, reply box, command preview
 // (--term). They are separate on purpose: a readable serif UI with a monospace transcript is a
 // normal preference, and so is the other way round.
-// Stacks, not families: the first face the machine actually has wins, so listing one that is not
-// installed is harmless.
+//
+// EVERY ENTRY HERE IS A FACE THIS BOX CAN PAINT, and each one names it. The list used to be written from memory of
+// what a developer machine might have: nine of the sixteen console entries drew Consolas under a different name
+// ("JetBrains Mono", "Fira Code", "IBM Plex Mono" and six more), and two of the panel entries drew a face another
+// entry already offered - sixteen choices, five pictures. tools/verify-console-fonts.mjs now drives every entry in a
+// real browser and asks CSS.getPlatformFontsForNode which family painted the glyphs, and these lists are what that
+// readback says: eight distinct console faces and fourteen distinct panel faces, the duplicates gone.
+//
+// Stacks, not families: the first face the machine actually has wins, so the stack still reads correctly on a Mac
+// (where ui-monospace is SF Mono) even though `resolves` names THIS box's face. `resolves` is that readback, and the
+// picker prints it after an arrow wherever the label does not already name it - "Default (system UI) -> Segoe UI" -
+// so a hopeful name can never sit in the list unmeasured again.
 const UI_FONTS = [
-  { id: "default", label: "Default (system UI)", stack: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif' },
-  { id: "segoe", label: "Segoe UI", stack: '"Segoe UI", system-ui, sans-serif' },
-  { id: "calibri", label: "Calibri", stack: 'Calibri, "Segoe UI", sans-serif' },
-  { id: "tahoma", label: "Tahoma", stack: 'Tahoma, Verdana, sans-serif' },
-  { id: "verdana", label: "Verdana", stack: 'Verdana, Geneva, sans-serif' },
-  { id: "trebuchet", label: "Trebuchet MS", stack: '"Trebuchet MS", "Segoe UI", sans-serif' },
-  { id: "georgia", label: "Georgia (serif)", stack: 'Georgia, "Times New Roman", serif' },
-  { id: "consolas", label: "Consolas (monospace UI)", stack: 'Consolas, "Cascadia Mono", monospace' },
-  { id: "cascadia", label: "Cascadia Code (monospace UI)", stack: '"Cascadia Code", Consolas, monospace' },
-  { id: "jetbrains", label: "JetBrains Mono (monospace UI)", stack: '"JetBrains Mono", Consolas, monospace' },
+  { id: "default", label: "Default (system UI)", stack: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif', resolves: "Segoe UI" },
+  { id: "calibri", label: "Calibri", stack: 'Calibri, "Segoe UI", sans-serif', resolves: "Calibri" },
+  { id: "candara", label: "Candara", stack: 'Candara, "Segoe UI", sans-serif', resolves: "Candara" },
+  { id: "tahoma", label: "Tahoma", stack: 'Tahoma, Verdana, sans-serif', resolves: "Tahoma" },
+  { id: "verdana", label: "Verdana", stack: 'Verdana, Geneva, sans-serif', resolves: "Verdana" },
+  { id: "trebuchet", label: "Trebuchet MS", stack: '"Trebuchet MS", "Segoe UI", sans-serif', resolves: "Trebuchet MS" },
+  { id: "arial", label: "Arial", stack: 'Arial, "Segoe UI", sans-serif', resolves: "Arial" },
+  { id: "roboto", label: "Roboto", stack: 'Roboto, "Segoe UI", sans-serif', resolves: "Roboto" },
+  { id: "bahnschrift", label: "Bahnschrift (condensed)", stack: 'Bahnschrift, "Segoe UI", sans-serif', resolves: "Bahnschrift" },
+  { id: "georgia", label: "Georgia (serif)", stack: 'Georgia, "Times New Roman", serif', resolves: "Georgia" },
+  { id: "cambria", label: "Cambria (serif)", stack: 'Cambria, Georgia, serif', resolves: "Cambria" },
+  { id: "palatino", label: "Palatino Linotype (serif)", stack: '"Palatino Linotype", "Book Antiqua", Georgia, serif', resolves: "Palatino Linotype" },
+  { id: "consolas", label: "Consolas (monospace)", stack: 'Consolas, "Cascadia Mono", monospace', resolves: "Consolas" },
+  { id: "cascadia", label: "Cascadia Code (monospace)", stack: '"Cascadia Code", Consolas, monospace', resolves: "Cascadia Code" },
 ];
 
 const TERM_FONTS = [
-  { id: "default", label: "Default (monospace)", stack: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace' },
-  { id: "consolas", label: "Consolas", stack: 'Consolas, "Cascadia Mono", monospace' },
-  { id: "cascadia", label: "Cascadia Code", stack: '"Cascadia Code", Consolas, monospace' },
-  { id: "cascadia-mono", label: "Cascadia Mono", stack: '"Cascadia Mono", Consolas, monospace' },
-  { id: "jetbrains", label: "JetBrains Mono", stack: '"JetBrains Mono", Consolas, monospace' },
-  { id: "fira", label: "Fira Code", stack: '"Fira Code", Consolas, monospace' },
-  { id: "source-code", label: "Source Code Pro", stack: '"Source Code Pro", Consolas, monospace' },
-  { id: "ibm-plex", label: "IBM Plex Mono", stack: '"IBM Plex Mono", Consolas, monospace' },
-  { id: "inconsolata", label: "Inconsolata", stack: 'Inconsolata, "Inconsolata-g", Consolas, monospace' },
-  { id: "victor", label: "Victor Mono", stack: '"Victor Mono", Consolas, monospace' },
-  { id: "ubuntu-mono", label: "Ubuntu Mono", stack: '"Ubuntu Mono", Consolas, monospace' },
-  { id: "hack", label: "Hack", stack: 'Hack, Consolas, monospace' },
-  { id: "menlo", label: "Menlo", stack: 'Menlo, Consolas, monospace' },
-  { id: "lucida", label: "Lucida Console", stack: '"Lucida Console", Consolas, monospace' },
-  { id: "courier", label: "Courier New", stack: '"Courier New", monospace' },
-  { id: "panel", label: "Same as the panel font", stack: "var(--ui)" },
+  { id: "default", label: "Default (system monospace)", stack: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace', resolves: "Consolas" },
+  { id: "cascadia", label: "Cascadia Code", stack: '"Cascadia Code", Consolas, monospace', resolves: "Cascadia Code" },
+  { id: "cascadia-mono", label: "Cascadia Mono", stack: '"Cascadia Mono", Consolas, monospace', resolves: "Cascadia Mono" },
+  { id: "ubuntu-mono", label: "Ubuntu Mono", stack: '"Ubuntu Mono", Consolas, monospace', resolves: "Ubuntu Mono" },
+  { id: "lucida", label: "Lucida Console", stack: '"Lucida Console", Consolas, monospace', resolves: "Lucida Console" },
+  { id: "lucida-typewriter", label: "Lucida Sans Typewriter", stack: '"Lucida Sans Typewriter", "Lucida Console", monospace', resolves: "Lucida Sans Typewriter" },
+  { id: "courier", label: "Courier New", stack: '"Courier New", monospace', resolves: "Courier New" },
+  { id: "rocket", label: "Rocket Mono", stack: '"Rocket Mono", Consolas, monospace', resolves: "Rocket Mono" },
+  { id: "ms-gothic", label: "MS Gothic", stack: '"MS Gothic", Consolas, monospace', resolves: "MS Gothic" },
+  { id: "panel", label: "Same as the panel font", stack: "var(--ui)", resolves: "" },
 ];
+
+// The ids these lists RETIRED, and the entry that draws what they drew. Every one of them resolved to a face another
+// entry still offers - the nine console names were all Consolas - so a reader whose stored choice was one of them keeps
+// exactly the picture they had instead of being silently moved to a different typeface.
+const FONT_RETIRED = {
+  ui: { segoe: "default", jetbrains: "consolas" },
+  term: { consolas: "default", jetbrains: "default", fira: "default", "source-code": "default", "ibm-plex": "default", inconsolata: "default", victor: "default", hack: "default", menlo: "default" },
+};
+
+// What the picker prints for one entry: its label, and - where the label is a description rather than the family this
+// box draws ("Default (system UI)") - the measured face after an arrow. An entry that follows another setting (the
+// console's "same as the panel font") names no face of its own and gets no arrow.
+function fontOptionLabel(font) {
+  const resolves = String(font.resolves || "").trim();
+  const head = String(font.label || "").split(" (")[0].trim().toLowerCase();
+  if (!resolves || head === resolves.toLowerCase()) return font.label;
+  return `${font.label} -> ${resolves}`;
+}
 
 // Console text size and weight. Sizes are px at the console's default line-height; weights are the four
 // the monospace faces on this box actually resolve to.
@@ -12920,7 +12946,10 @@ function currentFontId(kind) {
   } catch {
     /* private mode: the default is fine */
   }
-  return set.list.some((f) => f.id === id) ? id : "default";
+  // A retired id falls FORWARD to the entry that draws what it drew, so a reader who chose "Fira Code" (Consolas on
+  // this box) keeps Consolas rather than being moved to the panel's default serif.
+  const want = (FONT_RETIRED[kind] || {})[id] || id;
+  return set.list.some((f) => f.id === want) ? want : "default";
 }
 
 // Console size/weight are not part of the font stacks: they are two vars the console box reads, so the
@@ -12943,6 +12972,75 @@ function termWeight() {
     /* private mode */
   }
   return TERM_WEIGHTS.some((x) => x.id === w) ? w : "400";
+}
+
+// ---- console row spacing: ONE number between two lines of console text ---------------------------------------
+// The vertical gap between two lines of a card's console - its own words, a tool's call and the output under it, the
+// reasoning lines of the stream and the reasoning block above the console. NOT the prompt box's padding (the command
+// card's own rows own that) and not the console's text size: this is the leading, and nothing else.
+//
+// It is a MULTIPLIER on the console's line-height, written as ONE CSS variable that the stylesheet reads with the
+// console's own 1.5 as its fallback, so an unset key draws exactly what this panel drew before the row existed. A
+// multiplier rather than a pixel count is what keeps it honest beside the two things that already move this text:
+// Console size (--term-size) and a card's Ctrl+wheel zoom, which writes that same variable on the card. A px value
+// would have to be recomputed by whichever of the three moved last; a multiplier is simply multiplied by each of them.
+const CON_ROW_KEY = "wtgui.conRowSpace";
+const CON_ROW_DEFAULT = 1.5;
+// 1.2 is tight but legible over a long transcript, 2.4 is airy, and 1.5 is the number the console has always used.
+const CON_ROW_LIMITS = Object.freeze([1.2, 2.4]);
+const CON_ROW_VAR = "--con-row-space";
+
+// The stored multiplier, clamped to the range this panel offers: a hand-edited key cannot set a line-height of 0.
+function conRowSpace() {
+  let n = CON_ROW_DEFAULT;
+  try {
+    const raw = localStorage.getItem(CON_ROW_KEY);
+    if (raw !== null && Number.isFinite(Number(raw))) n = Number(raw);
+  } catch {
+    /* private mode: the default holds */
+  }
+  return clampConRow(n);
+}
+
+function clampConRow(n) {
+  const [lo, hi] = CON_ROW_LIMITS;
+  const v = Number(n);
+  return Math.min(hi, Math.max(lo, Math.round((Number.isFinite(v) ? v : CON_ROW_DEFAULT) * 100) / 100));
+}
+
+// Write the variable on :root and repaint the row. `value` left out reads the store; a change is saved only when the
+// caller says so, so the drag that previews the gap does not write a key per pixel of travel.
+function applyConRowSpace(value = null, { save = false } = {}) {
+  const n = value === null ? conRowSpace() : clampConRow(value);
+  document.documentElement.style.setProperty(CON_ROW_VAR, String(n));
+  paintConRowSpace(n);
+  if (save) {
+    try {
+      localStorage.setItem(CON_ROW_KEY, String(n));
+    } catch {
+      /* private mode: the spacing applies to this tab only */
+    }
+  }
+  return n;
+}
+
+// The row's own readout: the slider, and what that multiplier is worth in pixels at the console's CURRENT size, so
+// "1.6" reads as a number a reader can check against the text beside it. Console size repaints it (applyTermStyle).
+function paintConRowSpace(n = conRowSpace()) {
+  const input = $("con-row-space");
+  if (input && document.activeElement !== input && input.value !== String(n)) input.value = String(n);
+  const px = $("con-row-space-px");
+  if (px) px.textContent = `${(n * termSize()).toFixed(1)}px`;
+}
+
+// "use defaults" is the console's own 1.5: the same number an unset key draws, written back so the slider shows it.
+function resetConRowSpace() {
+  applyConRowSpace(CON_ROW_DEFAULT, { save: true });
+}
+
+// Paint the saved row spacing before the first console is drawn.
+function initConRowSpace() {
+  applyConRowSpace(null, { save: false });
 }
 
 // ---- text styles: thinking, skill output, console -------------------------------------------------
@@ -16719,7 +16817,7 @@ function initFonts() {
     const set = FONT_SETS[kind];
     const sel = $(set.select);
     if (sel && !sel.options.length) {
-      sel.innerHTML = set.list.map((f) => `<option value="${esc(f.id)}">${esc(f.label)}</option>`).join("");
+      sel.innerHTML = set.list.map((f) => `<option value="${esc(f.id)}">${esc(fontOptionLabel(f))}</option>`).join("");
     }
     applyFont(kind, currentFontId(kind), { save: false });
   }
@@ -16795,6 +16893,11 @@ for (const [kind, set] of Object.entries(TEXT_STYLES)) {
   if (set.size) $(set.size)?.addEventListener("change", (e) => applyTextStyle(kind, { save: true, size: e.target.value }));
 }
 for (const b of document.querySelectorAll("[data-text-reset]")) b.addEventListener("click", () => resetTextStyle(b.dataset.textReset));
+// The console's row spacing follows the slider while it is dragged (a live preview) and is saved when it settles, the
+// way the contrast slider behaves: one key per gesture, not one per pixel of travel.
+$("con-row-space")?.addEventListener("input", (e) => applyConRowSpace(e.target.value));
+$("con-row-space")?.addEventListener("change", (e) => applyConRowSpace(e.target.value, { save: true }));
+$("con-row-reset")?.addEventListener("click", () => resetConRowSpace());
 
 // ---- the command card's five rows: each applies at once, saved in this browser like the rest of Display ------
 // The input is `#cmd-<name>`, one per variable, so a row can only ever write the variable that names it.
@@ -18039,6 +18142,8 @@ document.addEventListener("click", (e) => {
 
 initFonts();
 initQLook();
+// The console's row spacing, on :root, before the first console is drawn.
+initConRowSpace();
 // The command card's five numbers, on :root, before the first console is drawn.
 initCommandCardLook();
 // The question countdowns move on their own; nothing else in the panel needs a 1s clock.

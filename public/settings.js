@@ -555,6 +555,8 @@ function applyTermStyle({ save = false, size = null, weight = null } = {}) {
     preview.style.fontSize = `${n}px`;
     preview.style.fontWeight = w;
   }
+  // The row-spacing row states its multiplier in PIXELS of this console, so a size change rewrites that readout.
+  if (typeof paintConRowSpace === "function") paintConRowSpace();
   if (save) {
     try {
       localStorage.setItem("wtgui.termSize", String(n));
