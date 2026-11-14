@@ -249,7 +249,18 @@ const CHART_COLUMNS = [
     title: "the ring fills up to green as the row becomes due for its next read · the cell beside it is the figure only: \"4s\" while the read is owed, and the lateness in amber once it is past · hover for the sentence, or click the ring to read this worktree now",
   },
   { id: "verdict", label: "Verdict", min: 104, give: 0.5 },
-  { id: "actions", label: "", min: 52, give: 0.15, title: "remove a worktree (sent to the Recycle Bin)" },
+  {
+    id: "actions",
+    // 90, not 52: the floor is the same thing it always was - the column's own content - and that content grew. It
+    // held one ✕ when 52 was chosen; a row with a branch now draws the + (cut a child tree), the ⟳ (reconcile) and
+    // the ✕ side by side, which is measured at 75.5px of controls, plus the cell's 4px inset and the 10px gutter the
+    // closing rule needs (chart.css `td.row-actions`). Under that floor the row's last control hung past the table's
+    // edge and would have been drawn on top of the new rule.
+    label: "",
+    min: 90,
+    give: 0.15,
+    title: "cut a child worktree, reconcile this one, remove it (sent to the Recycle Bin)",
+  },
 ];
 const WT_COLS = CHART_COLUMNS.length;
 // Floors, measured off the real cell text at the panel's own font sizes: the hash, `0 / 0`, `+0/−0`, `none`,
