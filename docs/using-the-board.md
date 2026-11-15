@@ -295,6 +295,31 @@ to cutting from `main`, because that silent cut is the thing this kind exists to
 found branch is briefed to keep its own tree **local** - it does not push its branch and does not cut a new remote
 branch - and its work is rolled back into the turnover branch by fast-forward.
 
+**The cleanup chip** (`cleanup`) is the last pill of that line. Its first press is a **dry run**: it reads every
+worktree of the project (a `git status`, a `rev-list` and a `git cherry` per tree), writes the plan to
+`docs/reports/worktree-cleanup-<date>-<hhmm>.html` in that repo, and opens it. The chip says `cleanup: reading` while
+the read runs, then `cleanup: 2 to drop · apply`; the bar beneath the line lists one row per worktree and branch with
+its verdict, the proof behind it and its `drop` or `keep` call. Nothing has been removed at that point. The second
+press applies the plan and the chip ends `cleanup: 2 dropped · 1 merged`, or - when one tree refused - `cleanup failed:
+<tree>` with the reason in its tooltip.
+
+The rules the plan obeys, each one held by a test in `test/cleanup-plan.test.js`:
+
+- the project's primary checkout and the panel's own tree are never candidates;
+- a locked worktree, or one a live job holds, is skipped before any count is read;
+- a turnover branch (`YYYYMMDD_HHMM_...`) and the branch the project marks as its base are never deleted;
+- a worktree and its branch go only when the branch is an ancestor of `main`, or every commit `main` lacks is
+  cherry-equivalent - a cherry that could not be measured, or that judged fewer commits than `main` lacks, is not a
+  proof;
+- a branch holding work `main` lacks is merged `--no-ff` into a child of the turnover branch when the project has one,
+  else of `main`, and its tree stays;
+- a dirty tree with such work has its **branch** merged and its working tree left exactly where it is, named in the bar
+  and in the page;
+- no `--force` anywhere, and nothing is pushed.
+
+A `drop` call posts the panel's own delete route, so the same lock and live-job guards answer it; `keep` writes
+nothing.
+
 **Project colours.** `Ctrl+click` a project's title line to tint that project with a random hue; `Ctrl+click` again
 rolls a new one; `Ctrl+Shift+click` clears it. The hue tints only the project's own surfaces (box, title row, column
 header, row hover), so it answers "which project is this" and never changes what a badge means. A plain click still

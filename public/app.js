@@ -197,6 +197,8 @@ window.WMApp.scaffold = {
   refreshTurnoverChip, turnoverLine, turnoverBarHtml, toggleTurnoverBar, closeTurnoverBar, saveProjectTurnover,
   boardOf, boardBarOpen, boardChipSig, boardChipHtml, refreshBoardChip, boardLine, boardBarHtml,
   toggleBoardBar, closeBoardBar,
+  cleanupOf, cleanupRuns, cleanupChipSig, cleanupChipHtml, refreshCleanupChip, cleanupBarHtml,
+  cleanupRowHtml, cleanupTreeName, runCleanupChip, answerCleanupCall, closeCleanupBar,
   barsOf, setBarOrder, openBar, closeBar, barHtml, barSelector, projectBarsHtml, repaintBars, repaintBar,
   ruleRowHtml, rulesLine, rulesBarHtml, toggleRulesBar, closeRulesBar, setRules, saveProjectRules,
   addRule, editRule, moveRule, deleteRule,
@@ -10390,6 +10392,41 @@ document.addEventListener("click", async (e) => {
     e.stopPropagation();
     e.preventDefault();
     closeBoardBar(rboardClose.dataset.boardClose);
+    return;
+  }
+  // The cleanup chip, and the keep-or-drop calls in the bar it opens. A fifth chip of the same head line, so it stops
+  // propagation for the same reason: pressing "cleanup" must not also collapse the project. The chip's press is the
+  // dry run or, once it is armed, the apply (`runCleanupChip`); a row's button is one call (`answerCleanupCall`),
+  // where `drop` posts the panel's own delete route and `keep` writes nothing.
+  const rcleanup = e.target.closest("[data-cleanup-chip]");
+  if (rcleanup) {
+    e.stopPropagation();
+    e.preventDefault();
+    void runCleanupChip(rcleanup.dataset.cleanupChip);
+    return;
+  }
+  const rcleanupCall = e.target.closest("[data-cleanup-call]");
+  if (rcleanupCall) {
+    e.stopPropagation();
+    e.preventDefault();
+    void answerCleanupCall(rcleanupCall.dataset.cleanupCall, rcleanupCall);
+    return;
+  }
+  const rcleanupOpen = e.target.closest("[data-cleanup-open]");
+  if (rcleanupOpen) {
+    e.stopPropagation();
+    e.preventDefault();
+    const c = cleanupOf(rcleanupOpen.dataset.cleanupOpen);
+    const target = c?.report?.absPath || c?.report?.path;
+    if (target) void openQuestionFile(target);
+    else showBanner("cleanup: this run wrote no report page to open");
+    return;
+  }
+  const rcleanupClose = e.target.closest("[data-cleanup-close]");
+  if (rcleanupClose) {
+    e.stopPropagation();
+    e.preventDefault();
+    closeCleanupBar(rcleanupClose.dataset.cleanupClose);
     return;
   }
   const rmove = e.target.closest("[data-rule-move]");

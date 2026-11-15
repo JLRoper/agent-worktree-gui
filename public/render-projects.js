@@ -368,7 +368,7 @@ function projectSection(name) {
     </div>
     <div class="project-head meta-line">
       <span class="mono dim">${mainLine}</span><span class="spacer"></span>${tip}
-      <span class="dimmer mono">${p.fetchNote ? esc(p.fetchNote) + " · " : ""}fetched ${relTime(p.fetchedAt)} ago</span>${hostChipHtml(name)}${rulesChipHtml(name)}${turnoverChipHtml(name)}${boardChipHtml(name)}
+      <span class="dimmer mono">${p.fetchNote ? esc(p.fetchNote) + " · " : ""}fetched ${relTime(p.fetchedAt)} ago</span>${hostChipHtml(name)}${rulesChipHtml(name)}${turnoverChipHtml(name)}${boardChipHtml(name)}${cleanupChipHtml(name)}
     </div>
     ${projectBarsHtml(name)}
     <div class="wt-scroll">
@@ -397,6 +397,9 @@ function refreshChips(name) {
   refreshRulesChip(name);
   // The turnover chip is in that same line, and a branch saved in another tab arrives the same way.
   refreshTurnoverChip(name);
+  // The cleanup chip is the fifth of that line and holds the last answer the server sent, so a repaint of the strip
+  // is where a phase that moved while the reader was elsewhere is redrawn.
+  refreshCleanupChip(name);
   // The chart's arrow (top-N collapse) depends on the same rows, so it is refreshed from the same place.
   refreshTopToggle(name);
 }

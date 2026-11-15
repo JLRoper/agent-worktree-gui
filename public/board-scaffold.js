@@ -825,6 +825,250 @@ function closeBoardBar(name) {
   refreshBoardChip(name);
 }
 
+// ---- the cleanup chip -------------------------------------------------------------------------------------------
+// The fifth chip of the project head line, beside host, rules, turnover and board: one press reads every worktree of
+// this project (the dry run), a second press does what the plan allowed (the apply), and the run leaves a page in the
+// target repo with a row per worktree and the keep-or-drop call behind it.
+//
+// TWO PRESSES, not one, and the label says which press is next. A one-press delete of every merged tree in a project
+// is not a control this board should carry: the plan is a read the reader can look at (it opens the page), and the
+// press that acts only arms once that page exists. The chip never guesses at the state either - `cleanupStateCache`
+// holds the last answer the server sent, keyed by project, and every label is drawn from it.
+//
+// The chip does not remove anything itself: a drop row's button posts the panel's OWN delete route
+// (POST /api/worktree/delete), so a cleanup cannot arrive one guard short of the row's x. `keep` writes nothing at
+// all - it drops the call from this list, which is the only thing the server has to do about a tree it kept.
+let cleanupStateCache = null;
+function cleanupRuns() {
+  if (!cleanupStateCache) cleanupStateCache = new Map();
+  return cleanupStateCache;
+}
+
+function cleanupOf(name) {
+  return cleanupRuns().get(name) || null;
+}
+
+// What the chip needs to know changed, so a repaint of the strip does not rebuild a node nothing about it moved.
+function cleanupChipSig(name) {
+  const c = cleanupOf(name);
+  if (!c) return "idle";
+  return `${c.phase}:${c.plan?.counts?.remove ?? ""}:${c.plan?.counts?.merge ?? ""}:${c.run?.counts?.remove ?? ""}:${c.report?.path || ""}:${c.error ? "err" : "ok"}`;
+}
+
+function cleanupChipHtml(name) {
+  const c = cleanupOf(name);
+  const phase = c?.phase || "idle";
+  const counts = c?.run?.counts || c?.plan?.counts || {};
+  let label = "cleanup";
+  let cls = "";
+  let title = "read every worktree of this project and plan a cleanup: the trees and branches already in main, the branches still holding work, the locked and live ones this will not touch - nothing is removed until a second press";
+  if (phase === "planning") {
+    label = "cleanup: reading";
+    cls = " is-busy";
+    title = "reading every worktree of this project - a git status, a rev-list and a git cherry per tree";
+  } else if (phase === "armed") {
+    // The press acts on BOTH kinds of row. A plan with no drops but two merges still moves two branches, so a pill that
+    // read "0 to drop" over a press that merges would be the one label that lies about what the second press does.
+    const drop = Number(counts.remove) || 0;
+    const merge = Number(counts.merge) || 0;
+    const parts = [];
+    if (drop) parts.push(`${drop} to drop`);
+    if (merge) parts.push(`${merge} to merge`);
+    label = parts.length ? `cleanup: ${parts.join(", ")} · apply` : "cleanup: nothing to do";
+    cls = parts.length ? " is-armed" : "";
+    title = parts.length
+      ? `${drop} worktree${drop === 1 ? "" : "s"} and branch${drop === 1 ? "" : "es"} can go, ${merge} branch${merge === 1 ? "" : "es"} would be merged into a child, ${Number(counts.keep) || 0} kept and ${Number(counts.skip) || 0} left alone - press to APPLY, or read the plan page first`
+      : `the plan has no row to act on - ${Number(counts.keep) || 0} kept and ${Number(counts.skip) || 0} left alone, so a second press only reads the project again`;
+  } else if (phase === "applying") {
+    label = "cleanup: applying";
+    cls = " is-busy";
+    title = "removing the trees the plan dropped and merging the branches it kept - no force, no push";
+  } else if (phase === "done") {
+    label = `cleanup: ${Number(counts.remove) || 0} dropped · ${Number(counts.merge) || 0} merged`;
+    cls = " is-done";
+    title = `done at ${c.at || ""}${c.report?.path ? ` - report: ${c.report.path}` : ""} - press to read the project again`;
+  } else if (phase === "error") {
+    label = `cleanup failed: ${c.failing || name}`;
+    cls = " is-error";
+    title = `${c.error || "the run failed"} - the repo that failed is ${c.failing || name}`;
+  }
+  return `<button type="button" class="btn-cleanup${cls}" data-cleanup-chip="${esc(name)}" data-cleanup-sig="${esc(cleanupChipSig(name))}" title="${esc(title)}">${esc(label)}</button>`;
+}
+
+function refreshCleanupChip(name) {
+  const el = projectNode("data-cleanup-chip", name);
+  if (!el) return;
+  if (el.dataset.cleanupSig === cleanupChipSig(name)) return;
+  el.outerHTML = cleanupChipHtml(name);
+}
+
+// The row's short name, so the bar reads as a list of trees rather than a list of paths.
+function cleanupTreeName(row) {
+  const p = String(row?.path || "").replace(/\\/g, "/").replace(/\/+$/, "");
+  return p.slice(p.lastIndexOf("/") + 1) || p;
+}
+
+function cleanupRowHtml(name, row) {
+  const call = row.call === "drop" ? "drop" : "keep";
+  const verdict = String(row.verdict || "keep");
+  const answered = Boolean(row.result);
+  const why = String(row.result?.why || row.reason || "");
+  const branch = row.branch ? `<code>${esc(row.branch)}</code>` : `<span class="dimmer">no branch</span>`;
+  // One button per call, and it only ever asks the server for something the server already offers: `drop` posts the
+  // row's own delete route, `keep` writes nothing and takes the call off this list.
+  const button = call === "drop"
+    ? `<button type="button" class="cleanup-call is-drop" data-cleanup-call="drop" data-cleanup-project="${esc(name)}" data-cleanup-path="${esc(row.path || "")}" data-cleanup-branch="${esc(row.branch || "")}" title="remove this worktree with the panel's own delete path - the branch stays, and the same locks and live jobs guard it">drop</button>`
+    : `<button type="button" class="cleanup-call is-keep" data-cleanup-call="keep" data-cleanup-project="${esc(name)}" data-cleanup-path="${esc(row.path || "")}" title="the plan keeps this one - press to take it off this list; nothing is written">keep</button>`;
+  const merge = row.merge && row.merge.ok
+    ? `<span class="cleanup-merge mono" title="merged --no-ff into a child of ${esc(row.merge.base || "")}">${esc(row.merge.child || "")} · ${Number(row.merge.files) || 0} file${Number(row.merge.files) === 1 ? "" : "s"} · ${Number(row.merge.bytes) || 0} bytes</span>`
+    : "";
+  return `<div class="cleanup-row${answered ? " is-done" : ""}" data-cleanup-row="${esc(row.path || "")}">
+        <span class="cleanup-name mono" title="${esc(row.path || "")}">${esc(cleanupTreeName(row))}</span>
+        <span class="cleanup-branch">${branch}</span>
+        <span class="cleanup-verdict v-${esc(verdict)}">${esc(verdict)}</span>
+        ${merge}
+        <span class="cleanup-why dimmer" title="${esc(why)}">${esc(why)}</span>
+        ${button}
+      </div>`;
+}
+
+function cleanupBarHtml(name) {
+  const c = cleanupOf(name);
+  if (!c || !c.plan) return "";
+  const rows = (c.run?.rows || c.plan.rows || []).filter((r) => !c.dismissed?.has?.(r.path));
+  const counts = c.run?.counts || c.plan.counts || {};
+  const what = c.run
+    ? `${counts.remove || 0} dropped, ${counts.merge || 0} merged, ${(counts.keep || 0) + (counts.skip || 0)} left alone${counts.failed ? `, ${counts.failed} failed` : ""}`
+    : `${counts.remove || 0} to drop, ${counts.merge || 0} to merge, ${counts.keep || 0} kept, ${counts.skip || 0} left alone - nothing has been touched yet`;
+  const report = c.report?.path ? ` · report <code>${esc(c.report.path)}</code>` : "";
+  const body = rows.length
+    ? rows.map((r) => cleanupRowHtml(name, r)).join("")
+    : `<span class="cleanup-empty dimmer mono">every call on this list has been answered</span>`;
+  return `<div class="host-form cleanup-form" data-cleanup-bar="${esc(name)}">
+      <span class="mono host-line" data-cleanup-line>${esc(name)}: ${esc(what)}${report}</span>
+      <div class="cleanup-rows">${body}</div>
+      <span class="cleanup-actions">
+        ${c.report?.path ? `<button type="button" data-cleanup-open="${esc(name)}" title="open the plan page the run wrote in ${esc(name)}">open report</button>` : ""}
+        <button type="button" data-cleanup-close="${esc(name)}" title="close this list; the chip keeps its state">close</button>
+      </span>
+    </div>`;
+}
+
+// The rows a second press would act on: a drop removes, a merge moves a branch. Both are acts; either one earns the press.
+function cleanupActs(c) {
+  const counts = c?.plan?.counts || {};
+  return (Number(counts.remove) || 0) + (Number(counts.merge) || 0);
+}
+
+// The chip's own press: the first is the dry run, the second applies the plan it left armed.
+async function runCleanupChip(name) {
+  const cur = cleanupOf(name);
+  if (cur && (cur.phase === "planning" || cur.phase === "applying")) return;
+  // Armed with nothing to act on is not an apply: it would write an "APPLIED" report about an empty plan. The press
+  // reads the project again instead, which is what the chip's own label says it will do.
+  const apply = Boolean(cur && cur.phase === "armed" && cleanupActs(cur) > 0);
+  const next = { ...(cur || {}), phase: apply ? "applying" : "planning", error: "", failing: "", dismissed: cur?.dismissed || new Set() };
+  cleanupRuns().set(name, next);
+  refreshCleanupChip(name);
+  openBar(name, "cleanup");
+  repaintBars(name);
+  try {
+    const res = await apiFetch(`/api/projects/${encodeURIComponent(name)}/cleanup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dryRun: !apply }),
+    }, { timeoutMs: apply ? 300000 : 180000 });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok || !body.ok) throw new Error(body.error || `HTTP ${res.status} from the panel`);
+    const at = new Date().toLocaleTimeString();
+    // An apply answers 200 even when a single row failed: the plan ran, and one tree refused it. That is an ERROR
+    // state, and the repo that failed is the tree in that row, so the chip names it rather than the project.
+    const failedRow = apply ? (body.run?.rows || []).find((r) => r.result && r.result.ok === false) || null : null;
+    cleanupRuns().set(name, {
+      phase: apply ? (failedRow ? "error" : "done") : "armed",
+      plan: body.plan || next.plan || null,
+      run: apply ? body.run || null : null,
+      report: body.report || null,
+      at,
+      error: failedRow ? String(failedRow.result?.why || "the row failed") : "",
+      failing: failedRow ? cleanupTreeName(failedRow) : "",
+      dismissed: new Set(),
+    });
+    refreshCleanupChip(name);
+    repaintBars(name);
+    // The page the run wrote is the point of the press: open it, through the panel's own opener, once the run ends.
+    // A page that could NOT be written is said out loud: the run still happened, and a silent missing report is the
+    // one outcome the reader cannot check.
+    const target = body.report?.absPath || body.report?.path;
+    if (target) void openQuestionFile(target);
+    else if (body.report?.error) showBanner(`${name}: cleanup ran but its report was not written - ${body.report.error}`);
+    if (apply) {
+      const c = body.run?.counts || {};
+      showBanner(`${name}: cleanup dropped ${c.remove || 0}, merged ${c.merge || 0}, left ${(c.keep || 0) + (c.skip || 0)} alone${c.failed ? `, ${c.failed} failed` : ""}`);
+      // The rows changed under the board: ask for the snapshot rather than wait up to 30s for the next one.
+      void resync();
+    }
+  } catch (e) {
+    cleanupRuns().set(name, {
+      ...next,
+      phase: "error",
+      error: String((e && e.message) || e),
+      // The repo that failed: the project the press was about. It is named in the chip and in its tooltip, because a
+      // banner over a board of twenty projects does not say which one broke.
+      failing: name,
+    });
+    refreshCleanupChip(name);
+    repaintBars(name);
+    showBanner(`${name}: cleanup failed - ${String((e && e.message) || e)}`);
+  }
+}
+
+// A keep-or-drop call from the bar. `drop` asks the panel's own delete route; `keep` writes nothing.
+async function answerCleanupCall(kind, button) {
+  const name = button?.dataset?.cleanupProject || "";
+  const treePath = button?.dataset?.cleanupPath || "";
+  if (!name || !treePath) return;
+  if (kind === "keep") {
+    const cur = cleanupOf(name);
+    if (cur) {
+      cur.dismissed = cur.dismissed || new Set();
+      cur.dismissed.add(treePath);
+      repaintBars(name);
+    }
+    return;
+  }
+  button.disabled = true;
+  button.textContent = "dropping";
+  try {
+    const res = await apiFetch("/api/worktree/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project: name, path: treePath, branch: button.dataset.cleanupBranch || null }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok || body.ok === false) throw new Error(body.error || `HTTP ${res.status} from the panel`);
+    const cur = cleanupOf(name);
+    if (cur) {
+      cur.dismissed = cur.dismissed || new Set();
+      cur.dismissed.add(treePath);
+    }
+    repaintBars(name);
+    void resync();
+  } catch (e) {
+    button.disabled = false;
+    button.textContent = "drop";
+    showBanner(`${name}: drop refused - ${String((e && e.message) || e)}`);
+  }
+}
+
+function closeCleanupBar(name) {
+  closeBar(name, "cleanup");
+  repaintBars(name);
+  refreshCleanupChip(name);
+}
+
+// ---- end the cleanup chip
+
 // ---- the grey strip's stack ------------------------------------------------------------------------------------
 // `state.bars` is a Map of project -> the bar KINDS it has open, in the order they were opened. Rendering walks it
 // backwards, so the most recent bar is the top one. It is kept here, not only in the DOM, for the same reason the
@@ -858,6 +1102,7 @@ function barHtml(name, kind) {
   if (kind === "rules") return rulesBarHtml(name);
   if (kind === "turnover") return turnoverBarHtml(name);
   if (kind === "board") return boardBarHtml(name);
+  if (kind === "cleanup") return cleanupBarHtml(name);
   return "";
 }
 
@@ -865,6 +1110,7 @@ function barSelector(kind) {
   if (kind === "host") return "[data-host-form]";
   if (kind === "rules") return "[data-rules-bar]";
   if (kind === "turnover") return "[data-turnover-bar]";
+  if (kind === "cleanup") return "[data-cleanup-bar]";
   return "[data-board-bar]";
 }
 
