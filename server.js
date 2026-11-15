@@ -97,6 +97,10 @@ import { RULES_PATH, createProjectRulesRoutes } from "./routes/project-rules.js"
 import { baseRefKindLookup, baseRefKindOf, projectTurnoverRow, turnoverBranchFrom, turnoverLookup, validateBaseRefKind, validateTurnoverBranch } from "./lib/project-turnover.js";
 import { BASE_REF_KIND_LABELS, LOCAL_TURNOVER_KIND } from "./lib/base-ref-kind.js";
 import { TURNOVER_PATH, createProjectTurnoverRoutes } from "./routes/project-turnover.js";
+// The cleanup chip's one route (routes/project-cleanup.js): POST /api/projects/:id/cleanup, a dry run that returns
+// the plan and an apply that runs it. The planner, the measuring and the report are lib/cleanup-*.js; this file only
+// hands the route the board's own remover and the events a removed row needs.
+import { CLEANUP_PREFIX, createProjectCleanupRoutes } from "./routes/project-cleanup.js";
 import { safeUrl, openerFor, openerForFolder, chromeFor, openFileWith, resolveFileTarget, resolveDefaultBrowser, browserLabel } from "./lib/open-url.js";
 import { errorStatus } from "./lib/errors.js";
 // The Matrix bridge's process lifecycle (start / stop / liveness / one --self-test). The protocol itself is the
@@ -1746,6 +1750,40 @@ const PREFIX_MOUNTS = [
   // The turnover prefix (routes/project-turnover.js): the branch a project's work rolls up into, drawn in the project
   // settings and read by every cut. Same writer, same transport, its own path.
   { prefix: TURNOVER_PATH, handles: createProjectTurnoverRoutes({ getConfig: () => config, registry, setProjectTurnover, sendJson, readBody, authorised }) },
+  // The cleanup prefix (routes/project-cleanup.js): POST /api/projects/<name>/cleanup. The route owns the path match
+  // and the wire shape; the remover is the board's OWN delete path, so a cleanup cannot arrive one guard short of
+  // the row's x. `onApplied` is what the board needs after an act: a removed tree's row is dropped and its event
+  // broadcast, exactly as POST /api/worktree/delete does for one tree.
+  {
+    prefix: CLEANUP_PREFIX,
+    handles: createProjectCleanupRoutes({
+      getConfig: () => config,
+      registry,
+      jobs,
+      locks,
+      removeTree: deleteWorktreeRow,
+      sendJson,
+      readBody,
+      authorised,
+      log,
+      ownPath: () => process.cwd(),
+      // The remover's platform seam, for the reason lib/worktree-remove.js has one: on Windows removing a tree also
+      // recycles it, and a test that drove a real apply would fill the reader's Recycle Bin with scratch repos. The
+      // env var is the only way a test reaches it through the HTTP route; nothing in a normal run sets it.
+      platform: process.env.WTGUI_TEST_PLATFORM || process.platform,
+      onApplied: ({ project: projectName, rows }) => {
+        let dropped = 0;
+        for (const row of rows || []) {
+          if (row.verdict !== "remove" || row.result?.ok !== true) continue;
+          // The path the STORE knows, not a resolved one: rows are keyed by the scanned path with forward slashes.
+          scheduler.store.dropRow(projectName, row.path);
+          broadcast({ type: "drop", project: projectName, path: row.path });
+          dropped += 1;
+        }
+        if (dropped) broadcastSnapshot();
+      },
+    }),
+  },
 ];
 // The reset's route: the gateway client, the store path and the single-flight map live in that module; this file only
 // hands the same transport helpers to it and mounts it below.

@@ -187,13 +187,15 @@ function project() {
   doc.reset();
   chips.html = "<span class=chip>3 worktrees</span>";
   chips.chipsHtml = () => chips.html;
-  // `refreshChips` also refreshes the rules, board and turnover chips in the same head line (board-scaffold.js). All
-  // three are stubbed here because THIS test measures the counts strip's own lookups; each chip's caching is measured
-  // on its own, below. The turnover chip was missing from this list, so all three of these tests died on
-  // `refreshTurnoverChip is not defined` - a red suite on main, not a defect in the counts strip.
+  // `refreshChips` also refreshes the rules, board, turnover and cleanup chips in the same head line
+  // (board-scaffold.js). All four are stubbed here because THIS test measures the counts strip's own lookups; each
+  // chip's caching is measured on its own, below. The turnover chip was missing from this list, so all three of
+  // these tests died on `refreshTurnoverChip is not defined` - a red suite on main, not a defect in the counts strip.
+  // The cleanup chip joined the line later and had to be added here for the same reason.
   chips.refreshRulesChip = () => {};
   chips.refreshBoardChip = () => {};
   chips.refreshTurnoverChip = () => {};
+  chips.refreshCleanupChip = () => {};
   chips.topSlotHtml = () => ""; // nothing held back: no arrow
   const strip = doc.add(new Node({ "data-chips": "alpha" }));
   const slot = doc.add(new Node({ "data-age-slot": "alpha" }));
@@ -343,6 +345,69 @@ test("a project with no board summary draws no chip, and one with no live claims
   assert.match(none, />board: 0<\/button>$/, "no live claim is a zero, not a missing chip");
   assert.doesNotMatch(none, /is-live/, "and not the live colour");
   assert.match(none, /no live entries \(0 stale\)/, "the sentence it replaced survives in the tooltip");
+});
+
+// ---- the cleanup chip: on the same line, and asked for by the node the last refresh kept --------------------------
+// The fifth chip sits in that head line and is refreshed from the same per-snapshot path as the counts strip, so it
+// carries the same cost: a by-attribute lookup per refresh would put another whole-document walk on every row placed.
+// It goes through `projectNode` and rewrites only when its own signature moved.
+// `cleanupStateCache` is the module-level `let` the card keeps its runs in; the slice below carries the functions only,
+// so the context carries the variable. Everything else the chip touches is stubbed or real by name.
+const cleanupCtx = { document: doc, CSS, Map, Number, String, esc: (s) => String(s ?? ""), cleanupStateCache: null };
+vm.createContext(cleanupCtx);
+let cleanupLoaded = false;
+// A chip node that behaves like the element it stands for: assigning `outerHTML` replaces it in the page and stamps
+// the new node with the signature in the markup, which is what `refreshCleanupChip` then compares against.
+class CleanupChipNode extends Node {
+  set outerHTML(html) {
+    this.writes += 1;
+    this.remove();
+    doc.add(new CleanupChipNode({ "data-cleanup-chip": "alpha", "data-cleanup-sig": /data-cleanup-sig="([^"]+)"/.exec(html)[1] }));
+  }
+}
+function cleanupChipDom(run = null) {
+  if (!cleanupLoaded) {
+    const names = ["projectNode", "cleanupRuns", "cleanupOf", "cleanupChipSig", "cleanupChipHtml", "refreshCleanupChip"];
+    vm.runInContext(names.map(grab).join("\n"), cleanupCtx);
+    cleanupLoaded = true;
+  }
+  doc.reset();
+  cleanupCtx.cleanupRuns().clear();
+  if (run) cleanupCtx.cleanupRuns().set("alpha", run);
+  // Drawn by the section render, signature and all: that is the state a refresh meets on a snapshot.
+  return doc.add(new CleanupChipNode({ "data-cleanup-chip": "alpha", "data-cleanup-sig": run ? cleanupCtx.cleanupChipSig("alpha") : "idle" }));
+}
+
+test("the cleanup chip is found once, and a repaint of an unmoved run asks the document nothing", () => {
+  const chip = cleanupChipDom({ phase: "armed", plan: { counts: { remove: 2, merge: 1, keep: 0, skip: 1 } } });
+  cleanupCtx.refreshCleanupChip("alpha");
+  assert.equal(chip.writes, 0, "a chip whose run did not move is not rewritten");
+  const first = doc.queries;
+  assert.equal(first, 1, "the first refresh found the chip, and kept it on the function");
+  cleanupCtx.refreshCleanupChip("alpha");
+  assert.equal(doc.queries, first, "the next one asked the document nothing");
+  assert.equal(chip.writes, 0, "and still rewrote nothing");
+
+  // A run that moved: one swap, and the new node carries the new state.
+  cleanupCtx.cleanupRuns().set("alpha", { phase: "done", plan: { counts: { remove: 2, merge: 1, keep: 0, skip: 1 } }, run: { counts: { remove: 2, merge: 1 } } });
+  cleanupCtx.refreshCleanupChip("alpha");
+  const chips = doc.nodes.filter((n) => n.getAttribute("data-cleanup-chip") === "alpha");
+  assert.equal(chips.length, 1, "the old chip is gone, not duplicated");
+  assert.equal(chips[0].dataset.cleanupSig, "done:2:1:2::ok", "the new chip carries the run's state");
+  assert.equal(chip.writes, 1, "the swap was one write");
+  assert.match(cleanupCtx.cleanupChipHtml("alpha"), /cleanup: 2 dropped · 1 merged/, "and it reads what it did");
+});
+
+test("a rebuilt section finds the cleanup chip again, and paints the node the page holds (control)", () => {
+  cleanupChipDom({ phase: "armed", plan: { counts: { remove: 2, merge: 1, keep: 0, skip: 1 } } });
+  cleanupCtx.refreshCleanupChip("alpha");
+  // renderAll() built the section again: the kept node is out of the page.
+  doc.reset();
+  const rebuilt = doc.add(new CleanupChipNode({ "data-cleanup-chip": "alpha" }));
+  const before = doc.queries;
+  cleanupCtx.refreshCleanupChip("alpha");
+  assert.equal(doc.queries, before + 1, "the detached node was not painted into: one fresh lookup");
+  assert.equal(rebuilt.writes, 1, "and the chip the page now holds is the one painted");
 });
 
 // ---- pulseRow: the row from the map, the flash restarted without a forced layout ---------------------------------
