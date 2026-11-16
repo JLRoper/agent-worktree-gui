@@ -17,11 +17,11 @@ has no tag.
 
 ## v1.112.0 — 2026-11-16 · 6 commits
 
-[`aeddb58`](https://github.com/JLRoper/agent-worktree-gui/commit/aeddb58a964c250c25cc4f38fb2933d97310ce01) · [compare v1.111.1...v1.112.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.111.1...v1.112.0)
+[`59784ba`](https://github.com/JLRoper/agent-worktree-gui/commit/59784ba058238685a4e4a45306277ddcf25d5e1e) · [compare v1.111.1...v1.112.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.111.1...v1.112.0)
 
 ### Added
 
-- feat: the assistant search runs on the keyboard alone ([`11ceb00`](https://github.com/JLRoper/agent-worktree-gui/commit/11ceb007a82888b48da59f886d0c03916589ac32))
+- feat: the assistant search runs on the keyboard alone ([`6f08b88`](https://github.com/JLRoper/agent-worktree-gui/commit/6f08b88120b181e179a579ad80ce2599b71e7383))
 
 ### Docs & tests
 
@@ -32,7 +32,7 @@ has no tag.
 
 ### Other
 
-- chore: 1.112.0 - the version this landing carries ([`aeddb58`](https://github.com/JLRoper/agent-worktree-gui/commit/aeddb58a964c250c25cc4f38fb2933d97310ce01))
+- chore: 1.112.0 - the version this landing carries ([`59784ba`](https://github.com/JLRoper/agent-worktree-gui/commit/59784ba058238685a4e4a45306277ddcf25d5e1e))
 
 ## v1.111.1 — 2026-11-16 · 5 commits
 
