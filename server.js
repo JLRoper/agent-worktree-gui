@@ -3573,6 +3573,13 @@ const bootPass = new Promise((r) => {
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, "http://localhost");
   const route = url.pathname;
+  // The path exactly as it arrived. A WHATWG URL resolves `..` segments, so `route` holds none of
+  // them by the time a handler sees it — and the static route is the one handler that has to see
+  // them, because its containment check is what refuses a path that climbs out of the root it
+  // named. A request in absolute form (a proxy's `GET http://host/path`) is not a path at all, so
+  // that shape falls back to the parsed one.
+  const rawRoute = String(req.url || "").split("?")[0];
+  const staticRoute = rawRoute.startsWith("/") ? rawRoute : route;
   // How long this request took, and which ones the page can feel: below the threshold it is one
   // `debug` line; at or above it, one `warn` and a slot in the ring /api/diagnostics serves.
   // `/api/stream` is excluded — it is a long-lived attach, not a request taking minutes.
@@ -6702,7 +6709,7 @@ const server = createServer(async (req, res) => {
 
     if (route === "/api/stream") return handleStream(req, res, { clients, snapshot, metrics: streamMetrics });
 
-    return serveStatic(req, res, route, build);
+    return serveStatic(req, res, staticRoute, build);
   } catch (e) {
     // The answer may already be on the wire (a static file half-written, an SSE client that died
     // mid-write). sendJson there throws ERR_HTTP_HEADERS_SENT *inside* the catch, which rejects the

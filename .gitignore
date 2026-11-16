@@ -29,7 +29,8 @@ config.json
 config.7330.json
 .kilo/
 
-# The docs mirror: the board serves /docs/ and /reviews/ out of these two folders, copied from
-# docs/ and docs/reviews/ when a page is requested (lib/http/docs-mirror.js). Build output.
+# The docs mirror the board used to keep: /docs/ and /reviews/ are served from docs/ and
+# docs/reviews/ themselves (lib/http/static.js), so nothing copies them any more. Both folders stay
+# ignored, so a hand copy cannot come back as untracked source.
 public/docs/
 public/reviews/
