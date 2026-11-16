@@ -35,7 +35,7 @@ const html = read("../public/index.html");
 const css = read("../public/style.css");
 const source = read("../public/core/command-summary.js");
 
-const ROOT = "C:/ProjectDevelopment/agent-worktree-gui";
+const ROOT = "/repo/demo";
 
 // ---------- 1. the split ----------
 test("the split follows the shell: && || ; | and a newline, but not inside quotes or a substitution", () => {
@@ -137,8 +137,8 @@ test("a write outside the repo is called out against the tree, and a write insid
   assert.equal(inside.flags.some((f) => f.kind === "outside"), false);
   // A redirect is a write too, and it is judged the same way.
   assert.equal(M.summarize("echo hi > /etc/hosts", { root: ROOT }).flags.some((f) => f.kind === "outside"), true);
-  // A commit message that quotes a drive letter is not a file being written.
-  assert.equal(M.summarize('git commit -m "C:/Users/roper/notes"', { root: ROOT }).flags.some((f) => f.kind === "outside"), false);
+  // A commit message that quotes an absolute path is a flag VALUE, not a file being written.
+  assert.equal(M.summarize('git commit -m "the notes live in /srv/notes"', { root: ROOT }).flags.some((f) => f.kind === "outside"), false);
   // sudo is an effect of its own.
   assert.equal(M.summarize("sudo rm -rf /var/tmp/x", { root: ROOT }).flags.some((f) => f.kind === "root"), true);
 });
