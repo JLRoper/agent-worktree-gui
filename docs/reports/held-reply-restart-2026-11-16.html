@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
+<title>A reply queued behind a live turn now survives the panel - held on disk, replayed in order, run once</title>
+<style>
+  :root{ color-scheme:dark; --ink:#e8e6e1; --paper:#14161a; --rule:#2a2f38; --muted:#9aa3ad; --accent:#c8a6ff; --warn:#e5534b; --good:#7ee2a8; --sunk:#1a1d22; }
+  html,body{ margin:0; background:var(--paper); color:var(--ink); font:15px/1.55 -apple-system,Segoe UI,Helvetica,Arial,sans-serif; }
+  main{ max-width:1080px; margin:0 auto; padding:36px 28px 80px; }
+  h1{ font-size:26px; margin:0 0 4px; letter-spacing:-.01em; }
+  h2{ font-size:19px; margin:38px 0 10px; padding-bottom:6px; border-bottom:1px solid var(--rule); }
+  h3{ font-size:16px; margin:24px 0 8px; }
+  .sub{ color:var(--muted); margin:0 0 22px; }
+  .prov{ color:var(--ink); margin:0 0 10px; }
+  .prov b{ color:var(--accent); }
+  .cards{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin:18px 0 6px; }
+  .card{ border:1px solid var(--rule); border-radius:10px; padding:12px 14px; }
+  .card b{ display:block; font-size:22px; letter-spacing:-.02em; }
+  .card span{ color:var(--muted); font-size:13px; }
+  table{ border-collapse:collapse; width:100%; font-size:13.5px; }
+  th,td{ text-align:left; padding:6px 8px; border-bottom:1px solid var(--rule); vertical-align:top; }
+  th{ color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+  td.n{ text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  code{ font:12.5px ui-monospace,Consolas,monospace; background:rgba(127,127,127,.12); padding:1px 5px; border-radius:4px; }
+  pre{ font:12.5px ui-monospace,Consolas,monospace; background:var(--sunk); border:1px solid var(--rule); border-radius:8px; padding:12px 14px; overflow-x:auto; margin:12px 0; }
+  pre code{ background:none; padding:0; }
+  .note{ border-left:3px solid var(--accent); padding:6px 0 6px 12px; color:var(--muted); margin:14px 0; }
+  .note b{ color:var(--ink); }
+  ol,ul{ padding-left:22px; }
+  ol li, ul li{ margin:6px 0; }
+  .box{ border:1px solid var(--rule); border-radius:10px; padding:14px 16px; margin:20px 0 0; background:var(--sunk); }
+  .box h2{ margin:0 0 8px; border:0; padding:0; font-size:17px; }
+  .box p{ margin:8px 0 0; }
+  .verdict{ border-left:4px solid var(--accent); }
+  .wide{ overflow-x:auto; }
+  .wide table{ min-width:720px; }
+  .small{ font-size:12.5px; color:var(--muted); }
+  .ok{ color:var(--good); }
+  .bad{ color:var(--warn); }
+  .mono{ font:12.5px ui-monospace,Consolas,monospace; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>A reply queued behind a live turn now survives the panel - held on disk, replayed in order, run once</h1>
+<p class="sub">The message a reader queues while an agent is still turning used to live in one browser tab's memory. It is now a record the panel writes before any turn exists, and the panel itself starts it when the thread is free.</p>
+
+<p class="prov"><b>Measured</b> 2026-11-16, in <code>.worktrees/make-a-message-queued-behind-a-live-turn-2dede9</code> at
+<code>12443a06</code> (main, version 1.110.0), on Windows 11 with node 26.12.1. The kill test ran on port
+<code>55129</code>; the failing-first half ran on <code>53138</code>. Neither 7331 nor 18083 was used, and the live board's
+listener count on 7331 was read before and after both runs (1 before, 1 after).</p>
+
+<div class="cards">
+  <div class="card"><b>42/42</b><span>checks in the kill test, after the change</span></div>
+  <div class="card"><b>7/9</b><span>the same gate on main, stopped at the first 404</span></div>
+  <div class="card"><b>1</b><span>job carrying each held message's id</span></div>
+  <div class="card"><b>0</b><span>second runs, after the drain clock ticked on</span></div>
+</div>
+
+<h2>1. What actually happened before this change</h2>
+<p>The queue the reader sees is <code>state.replyQueue</code> in <code>public/app.js</code>: a <code>Map</code> of thread
+to entries, filled by <code>queueReply</code>, drained by <code>drainReplyQueue</code> on every job event for that thread.
+Entry shape: <code>{text, at, attachments[path,name,type,bytes]}</code>. Nothing on the server knew the queue existed,
+and no route accepted a message that was not already a turn. Three failures follow from that, and each one was traced in
+the code and then measured.</p>
+
+<table>
+  <tr><th>failure</th><th>why, from the code</th><th>what the reader sees</th></tr>
+  <tr>
+    <td><b>a node restart drops it</b></td>
+    <td><code>public/app.js</code> keeps the queue in memory only (no <code>localStorage</code>, no route). The attachment
+    paths it holds are files under the panel's <code>attachmentsDir</code>, and nothing else names them.</td>
+    <td>the message is simply gone. A reload of the tab loses it too, and the files it pointed at stay on disk with no
+    referrer.</td>
+  </tr>
+  <tr>
+    <td><b>a refused send loses it</b></td>
+    <td>in main's <code>drainReplyQueue</code> (line 4396) the entry is <code>splice</code>d out of the queue
+    <b>before</b> <code>sendReply</code> is awaited, and the send's failure is swallowed
+    (<code>catch { /* sendReply reports its own errors */ }</code>).</td>
+    <td>a 409 (<code>tree_busy</code>, <code>tree_released</code>, the gateway refusing) removes the message from the
+    queue and shows an error, and the words are gone.</td>
+  </tr>
+  <tr>
+    <td><b>the thread busy forever</b></td>
+    <td>a restored card whose job carries a <code>runId</code> comes back <b>live and pending</b>
+    (<code>lib/jobs.js:1262</code>), so <code>threadBusy(thread)</code> stays true and the drain returns on its first
+    line. Only a settle event or a manual action frees it.</td>
+    <td>the queued reply never goes out; the card keeps promising "queued 4m ago" while nothing will ever send it. The
+    same job also keeps its tree's other threads out (<code>jobs.busyFor</code> is thread-then-tree).</td>
+  </tr>
+</table>
+
+<p class="note"><b>The one path this change leaves alone:</b> the live-run re-attach path. A run the panel did not start,
+or one it was watching when it died, is re-attached and settled by <code>lib/jobs.js</code> exactly as before
+(<code>reconcileRestored</code>, <code>stopStaleRuns</code>, the orphan sweep). The held replay runs <b>after</b> that
+chain and never touches a live card - it only starts a record whose thread <code>jobs.busyFor</code> already calls free.</p>
+
+<h2>2. What the change is</h2>
+
+<h3>2.1 The record (lib/held-replies.js, new)</h3>
+<p><code>state/held-replies.json</code>, one file for the panel:
+<code>{version, seq, savedAt, replies: [{id, seq, thread, text, attachments, at, state, jobId, why, sentAt}]}</code>.</p>
+<ul>
+  <li><b>Written before the turn</b> - <code>persist()</code> is a <b>synchronous</b> tmp-write plus rename, not the
+  queued async writer the job store uses. A write that lands a few milliseconds later is exactly the window this record
+  exists to close. The file is small, so the cost is sub-millisecond on the press that starts a turn.</li>
+  <li><b>Arrival order</b> - <code>seq</code> is minted from the store's own counter and is what the replay walks;
+  <code>at</code> is the page's clock, kept only for the card's "queued 3m ago" line (two presses in one millisecond
+  share it).</li>
+  <li><b>Idempotent by id</b> - <code>add({id})</code> for an id it already has is a no-op that returns the existing
+  record, so a retried POST cannot queue the message twice.</li>
+  <li><b>One claim</b> - <code>claim(id)</code> flips <code>held</code> to <code>sending</code> synchronously and answers
+  <code>null</code> to every later caller. That is the whole dedupe: the page's drain and the panel's own replay can
+  both ask, and only one gets a record back.</li>
+  <li><b>States</b> held, sending, sent, cancelled. <code>sent</code> carries <code>jobId</code>; <code>held</code> and
+  <code>sending</code> are the two a replay may look at; an unknown state read off a hand-edited file reads as
+  <code>held</code>.</li>
+  <li><b>Boot repair</b> - <code>reconcile(jobFor)</code> settles the one window a crash can leave: a record
+  <code>sending</code> whose id a job carries becomes <code>sent</code> with that job id (the turn happened, do not start
+  another); one with no such job goes back to <code>held</code> with the reason named.</li>
+  <li><b>Caps</b> - 200 records, and the newest 40 terminal ones; a record still owed a turn is never dropped. A file
+  that cannot be parsed is <b>left untouched</b> and no hold is replayed out of it.</li>
+</ul>
+
+<h3>2.2 The routes (server.js)</h3>
+<table>
+  <tr><th>route</th><th>what it does</th></tr>
+  <tr><td><code>GET /api/held-replies[?thread=]</code></td><td>the records, the counts (including <code>open</code>), the file path. Read by the page once after its first snapshot.</td></tr>
+  <tr><td><code>POST /api/held-replies {action:"add"}</code></td><td>writes the hold. 404 for a thread this panel does not have, 400 for no words. Then fires a drain pass, so a free thread starts it at once instead of waiting for the clock.</td></tr>
+  <tr><td><code>POST ... {action:"edit"|"cancel"}</code></td><td>the reader's edit and x, written through so the record the panel would replay is the message the reader last saw. A claimed record answers <code>sending</code> rather than pretending.</td></tr>
+  <tr><td><code>POST ... {action:"send"}</code></td><td>asks the panel to start that record's turn. 202 with the job; 409 with <code>gone:true</code> when the record was already settled; 409 <code>held-waiting</code> when it could not start, with the reason.</td></tr>
+</table>
+
+<h3>2.3 The one acceptance</h3>
+<p>A replayed hold does not get its own way into a tree. It goes through <code>startThreadReply</code> - the same function
+<code>POST /api/agents/reply</code> uses - with the hold's id in <code>origin.heldId</code> on the job, and the
+attachments rebuilt from the record with <code>inheritAttachments</code>/<code>inheritanceBlock</code>
+(<code>lib/attachments.js</code>, the one attachment convention). The id is persisted with the job, which is what lets a
+later boot answer "is there a job for this record" without a second store.</p>
+<p><code>startThreadReply</code> gained two arguments, <code>attachments</code> and <code>attachmentBlock</code>, passed
+straight to <code>jobs.create</code>: the card's chips and the block the run's input carries. A page-started reply passes
+neither, so its text - which already contains the page's own block - is unchanged.</p>
+
+<h3>2.4 When it runs</h3>
+<ul>
+  <li><b>On a settle</b> - a job event whose status is no longer live, when the store has anything open
+  (<code>heldReplies.openCount()</code>, a loop over a few hundred records and free when the store is empty).</li>
+  <li><b>On the clock</b> - one pass every 2s <b>only while something is open</b>; the timer is cleared the moment the
+  store is clear, so a panel with nothing held has no timer at all.</li>
+  <li><b>At boot</b> - <code>replayHeldReplies()</code> after <code>reconcileRestored</code> and <code>stopStaleRuns</code>:
+  repair, then start what can start, in <code>seq</code> order, one turn per thread per pass.</li>
+</ul>
+
+<h3>2.5 The page (public/app.js, public/core/sse.js)</h3>
+<ul>
+  <li><code>queueReply</code> POSTs the hold (fire-and-forget, kept on the entry as <code>entry.held</code>) and
+  <code>entry.heldId</code> is the panel's id.</li>
+  <li><code>drainReplyQueue</code> no longer takes the entry out before the send. It marks it <code>sending</code>, asks
+  the panel to start the record (or sends the words itself when the write-through never landed), and removes the entry
+  only when a turn exists - or when the panel answers <code>gone</code>, which means the panel already settled it.</li>
+  <li>The x and the empty-save now cancel the record; an edit writes the new words to it.</li>
+  <li><code>applyHeldReplies</code> reconciles the page's queue with the panel's: settled records come off, records the
+  page does not hold (a reloaded tab, a panel that replayed while it was away) go back on. It runs once after the first
+  snapshot and on each <code>held-replies</code> event.</li>
+</ul>
+
+<h2>3. The proof</h2>
+<p>One script, <code>tools/verify-held-reply-restart.mjs</code>, boots the real <code>server.js</code> over a throwaway
+state directory against a stub gateway, and kills the node process with <code>taskkill /F</code> in the middle of a run.</p>
+
+<pre><code>node tools/verify-held-reply-restart.mjs
+node tools/verify-held-reply-restart.mjs --root=C:/Users/roper/AppData/Local/Temp/wag/62d69e10/main-12443a06 --label=before</code></pre>
+
+<h3>3.1 The failing-first half (the same gate on main)</h3>
+<pre><code>== A. a hold written while the turn is live ==
+PASS  the long turn is accepted: HTTP 202
+PASS  the gateway was asked to run it: stub-run-1
+FAIL  the second message is held: HTTP 404
+FAIL  ...and it is on DISK before any turn exists for it: ...\logs\held-replies.json
+FAIL  the run itself threw: ENOENT ... \logs\held-replies.json
+
+FAILED  7/9 checks passed (before, port 53138)</code></pre>
+<p>On main there is no route and no file: the second message cannot be held at all. That is the "before" in one line.</p>
+
+<h3>3.2 The change, end to end</h3>
+<p>Port <code>55129</code>, a throwaway state directory, a kill mid-run. Two messages held behind that run, each with an
+attachment uploaded through the panel's own <code>POST /api/attachments</code>.</p>
+<pre><code>== A. a hold written while the turn is live ==
+PASS  the long turn is accepted: HTTP 202
+PASS  the gateway was asked to run it: stub-run-1
+PASS  the second message is held: HTTP 201 held
+PASS  ...and it is on DISK before any turn exists for it: ...\logs\held-replies.json
+PASS  ...under the arrival order the replay will walk: seq 1
+PASS  no second run was submitted while the turn was live
+PASS  when the turn settles the hold becomes its own turn: 1 submission(s)
+PASS  ...and the record says sent, with the turn that carries it: "sent"
+
+== B. two holds, the process killed mid-run, then the restart ==
+PASS  the long turn is accepted: HTTP 202
+PASS  the gateway is running it: stub-run-3
+PASS  two attachments are stored by the panel's own route: 201/201
+PASS  ...inside the sandbox's attachments folder
+PASS  both messages are held: 201/201
+PASS  ...on disk, in arrival order: seq 2 then 3
+PASS  ...with their attachments named on the record: ...\attachments\2026-11-16T20-22-36-held-one.txt
+PASS  ...and neither started while the turn was live
+      the store before the kill: [["HELD-A-1","sent",1],["HELD-ONE","held",2],["HELD-TWO","held",3]]
+PASS  the panel's node process is KILLED mid-run: pid 25796
+PASS  ...and its port is not answering
+      the store after the kill: [["HELD-A-1","sent",1],["HELD-ONE","held",2],["HELD-TWO","held",3]]
+PASS  the panel comes back on the same port: 1 listener(s) on :55129
+PASS  its boot log names the hold it found: held replies: 3 record(s) from ...\held-replies.json, 2 waiting for a turn
+PASS  the FIRST held message becomes its turn after the restart: 1 submission(s)
+PASS  ...and the boot log says the replay pass started it: held replies (a turn settled): 1 started (66c4a1d5 -&gt; aa0b494d)
+PASS  ...with its attachment path in the run's own prompt
+PASS  ...exactly once
+PASS  ...and the words are the reader's, untouched
+PASS  the SECOND hold waits behind it
+PASS  when the first settles, the second becomes its turn: 1 submission(s)
+PASS  ...with ITS attachment, not the first one's
+
+== C. nothing ran twice ==
+PASS  the first held message ran exactly once (one job carries its id): 1 job(s)
+PASS  the second held message ran exactly once: 1 job(s)
+PASS  the gateway saw each message in exactly one submitted run: 1/1
+PASS  the turn's card carries the attachment the record stored: ["held-one.txt"]
+PASS  the store ends with nothing owed a turn: {"total":3,"open":0,"held":0,"sending":0,"sent":3,"cancelled":0}
+PASS  ...and every record on disk is settled
+PASS  ...with the two held ones marked sent and naming their turns: [["sent","aa0b494d"],["sent","5826c729"]]
+PASS  the live board's 7331 listener count is unchanged: 1 before, 1 after
+PASS  no listener of this run's was left behind: :55129 (the panel is still up: the sandbox's own)
+
+OK  42/42 checks passed (after, port 55129)</code></pre>
+
+<p class="note"><b>Why the restart is the hard case and not the easy one:</b> the gateway is told the run finished
+<b>while the panel is down</b>. So the boot finds a record owed a turn and a run it must settle first - if the replay ran
+before the reconcile, or if it trusted its own memory of "busy", it would either start a second run on a live thread or
+wait for ever. The order in the boot chain is what makes that land: <code>reconcileRestored</code> ->
+<code>stopStaleRuns</code> -> the held replay.</p>
+
+<h2>4. The bug this work found in itself</h2>
+<p>The first draft of <code>drainHeldReplies</code> never started anything after a settle, and the kill test found it in
+one run: a pass that ends <b>synchronously</b> (every thread busy, which is the normal case behind a live turn) cleared the
+in-flight flag inside its own body, and the assignment that stored the promise then put the settled promise back. Every
+later pass returned that stale promise and did nothing. The fix is to clear the flag from the promise's own
+<code>.finally</code>, scheduled after the assignment, and the reason is written in the code so it is not undone.</p>
+<p>This is the shape of failure a unit test cannot see: nothing threw, nothing logged, and the clock ticked every two
+seconds into an empty function.</p>
+
+<h2>5. Tests</h2>
+<table>
+  <tr><th>file</th><th>what it pins</th></tr>
+  <tr><td><code>test/held-replies-store.test.js</code> (new, 10 tests)</td><td>the file on disk before anything else, idempotent ids, <code>seq</code> order across a restart, one claim, sent is never replayed, boot repair both ways, edit/cancel rules, an unreadable file left alone, the caps, the two refusals.</td></tr>
+  <tr><td><code>test/queue-single-press.test.js</code></td><td>the new write-through names added to its function list; the press still holds one entry, Enter still goes through the same predicate, the drain still sends in order.</td></tr>
+  <tr><td><code>test/queued-reply-attachments.test.js</code></td><td>the entry's own files still travel once; the send assertion now counts <code>/api/agents/reply</code> calls, because the queue also writes the hold.</td></tr>
+  <tr><td><code>tools/verify-held-reply-restart.mjs</code> (new)</td><td>the end-to-end gate above, including the failing-first half through <code>--root</code>.</td></tr>
+</table>
+<p class="small">138 tests pass across the store, queue, jobs, assistant-queue and steer suites
+(<code>node --test test/held-replies-store.test.js test/queue-*.test.js test/queued-reply-attachments.test.js
+test/steerable.test.js test/jobs.test.js test/assistant-queue*.test.js</code>).</p>
+
+<h2>6. What is deliberately not in this change</h2>
+<ul>
+  <li><b>No push grant and no lifted record.</b> Nothing here asks the panel to allow a push it would otherwise refuse;
+  the branch is landed as a pull request.</li>
+  <li><b>No new UI surface.</b> The card the reader already has ("queued") is the card; what changed is that its entry
+  now has a record behind it. A settled-elsewhere record simply comes off the queue on the next reconcile.</li>
+  <li><b>No gateway-side change.</b> The panel still refuses a second turn on a live thread; the hold waits for
+  <code>jobs.busyFor</code> to say free rather than trying to make the gateway queue it.</li>
+  <li><b>The live panel on 7331 was never restarted, steered, or touched.</b> Both runs measured its listener count
+  before and after.</li>
+</ul>
+
+<div class="box verdict">
+  <h2>The answer</h2>
+  <p class="big">A message queued behind a live turn is now written to <code>state/held-replies.json</code> before any
+  turn is accepted, replayed at boot in arrival order, and started through the same acceptance the reply route uses -
+  with its attachments, and exactly once, on a port that is neither 7331 nor 18083, across the death of the node process
+  that was holding it.</p>
+  <p>42 of 42 checks pass after the change; the same gate reaches 7 of 9 on main and stops at the first write, because
+  main has no place to put the message.</p>
+</div>
+
+</main>
+</body>
+</html>

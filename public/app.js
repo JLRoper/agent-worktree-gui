@@ -3945,6 +3945,13 @@ function turnPrompts(thread) {
 
 // A reply typed while the agent is still working: hold it and start it the moment that turn ends, so
 // Hermes never sees a second session on the same thread at once (which it answers with "busy").
+//
+// The hold is written to the PANEL as well as to this page (POST /api/held-replies, action add) BEFORE any turn is
+// accepted: this Map is one tab's memory, and a panel bounce, a reloaded tab or a dead node process used to drop the
+// words and leave the attachments it named as files nothing pointed at. The record's id rides on the entry
+// (`heldId`), so the drain can ask the panel to start THAT record and a replay by the panel cannot start it twice
+// (the record's claim is the one thing only one caller can win). A POST that failed leaves the entry with no id, and
+// the drain then sends it exactly as this page always did - a panel that cannot store a hold must not also lose it.
 function queueReply(thread, text, attachments = []) {
   const q = state.replyQueue.get(thread) || [];
   // `at` is this entry's identity — the × and the drain both key on it — so two replies held in the same
@@ -3954,14 +3961,146 @@ function queueReply(thread, text, attachments = []) {
   // The files travel WITH the entry. They leave the composer's staged set in the same breath: a chip that
   // stayed there would attach the same file to the next message as well, and a send would carry it twice.
   const files = (Array.isArray(attachments) ? attachments : []).filter((a) => a && a.path);
-  q.push({ text, at, attachments: files });
+  const entry = { text, at, attachments: files };
+  q.push(entry);
   state.replyQueue.set(thread, q);
+  postHeldReply(thread, entry);
   if (files.length) {
     const held = new Set(files.map((a) => a.path));
     setAttachments(thread, attachmentsFor(thread).filter((a) => !held.has(a.path)));
     renderChips(thread);
   }
   renderConversation(thread);
+}
+
+// The write-through that makes a held reply outlive this tab. Resolves to the panel's record (with its id) or null.
+// Kept on the entry so the drain can await it instead of guessing: `entry.held`.
+function postHeldReply(thread, entry, { action = "add" } = {}) {
+  const body =
+    action === "add"
+      ? { action, thread, text: entry.text, attachments: entry.attachments || [], at: entry.at }
+      : { action, id: entry.heldId, text: entry.text };
+  entry.held = apiFetch("/api/held-replies", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
+    .then(async (r) => {
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !d.ok || !d.reply) return null;
+      entry.heldId = d.reply.id;
+      return d.reply;
+    })
+    .catch(() => null);
+  return entry.held;
+}
+
+// A hold the reader took back, or saved empty: the record is cancelled on the panel too, or the panel's own replay
+// would start a message the reader had already withdrawn. Best effort - the page's answer is the removal it already
+// made, and a cancel that arrives too late is answered `sending`/`sent`, which the next reconcile shows.
+function cancelHeldReply(entry) {
+  if (!entry || !entry.heldId) return Promise.resolve(null);
+  const id = entry.heldId;
+  return apiFetch("/api/held-replies", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "cancel", id }),
+  }).catch(() => null);
+}
+
+
+// The panel's own copy of what this tab holds, read ONCE when the page has a job snapshot (so it does not race the
+// page's first paint): every record still owed a turn goes back into its thread's queue, with its text and its
+// attachments, and a settled one is dropped. That is the whole point of the store - the tab that queued the message
+// may not be the tab, or the process, that is running when it comes due.
+let heldRepliesLoaded = false;
+async function loadHeldReplies() {
+  if (heldRepliesLoaded) return;
+  heldRepliesLoaded = true;
+  try {
+    const r = await apiFetch("/api/held-replies");
+    if (!r.ok) return;
+    const d = await r.json();
+    applyHeldReplies(d.replies);
+  } catch {
+    // A panel that cannot answer leaves the page's own queue exactly as it is: the held entries it already has are
+    // still sendable, and the next snapshot tries again.
+    heldRepliesLoaded = false;
+  }
+}
+
+// Ask the panel to start the turn for one held record. The panel is the one acceptor: it rebuilds the words and the
+// files from the record it stored before the turn existed, so nothing here can disagree with the copy a restart
+// replays. Answers `{ok:true, body}` with the panel's own `{job}` answer, or `{ok:false, gone, why}` where `gone`
+// means the record was already settled (sent or cancelled) and the page's copy is a duplicate.
+async function acceptHeldReply(heldId, thread = "") {
+  try {
+    const r = await apiFetch("/api/held-replies", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "send", id: heldId }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (r.ok && d.ok && d.job) return { ok: true, body: d };
+    const why = String(d.error || `HTTP ${r.status}`);
+    const warn = thread ? document.querySelector(`[data-reply-warn="${CSS.escape(thread)}"]`) : null;
+    if (warn) {
+      warn.textContent = d.gone
+        ? "that queued reply was already sent, so it is off the queue"
+        : `still held — ${why}`;
+    }
+    return { ok: false, gone: Boolean(d.gone), why };
+  } catch (err) {
+    const warn = thread ? document.querySelector(`[data-reply-warn="${CSS.escape(thread)}"]`) : null;
+    if (warn) warn.textContent = `still held — the panel could not be asked (${err.message})`;
+    return { ok: false, gone: false, why: err.message };
+  }
+}
+
+// One record's state from the panel, reconciled into this page's queue: an entry the panel has SETTLED comes off
+// (its turn exists, or the reader took it back), and a record the page does not hold is put back where it belongs.
+// This is what a reloaded tab and a panel that replayed a hold both need, and it is also how the SSE `held-replies`
+// event keeps a card from promising a queue that has already gone out.
+function applyHeldReplies(list) {
+  const records = Array.isArray(list) ? list : [];
+  const byId = new Map(records.map((r) => [r.id, r]));
+  const threads = new Set();
+  // A record the panel settled: the page's copy of it is a duplicate.
+  for (const [thread, q] of [...state.replyQueue]) {
+    const keep = [];
+    for (const entry of q) {
+      if (!entry) continue;
+      const rec = entry.heldId ? byId.get(entry.heldId) : null;
+      if (rec && (rec.state === "sent" || rec.state === "cancelled")) {
+        threads.add(thread);
+        continue;
+      }
+      keep.push(entry);
+    }
+    if (keep.length !== q.length) {
+      if (keep.length) state.replyQueue.set(thread, keep);
+      else state.replyQueue.delete(thread);
+      threads.add(thread);
+    }
+  }
+  // A record the page does not hold: the panel kept it while this tab was gone (or restarted under it). It goes in by
+  // its `seq` order, after whatever this page already holds for that thread and before anything held later.
+  const known = new Set();
+  for (const q of state.replyQueue.values()) for (const e of q) if (e?.heldId) known.add(e.heldId);
+  for (const rec of records) {
+    if (!rec || known.has(rec.id)) continue;
+    if (rec.state !== "held" && rec.state !== "sending") continue;
+    if (!rec.thread || !String(rec.text || "").trim()) continue;
+    const q = state.replyQueue.get(rec.thread) || [];
+    q.push({ text: rec.text, at: Number(rec.at) || Date.now(), attachments: rec.attachments || [], heldId: rec.id });
+    q.sort((a, b) => (Number(a.at) || 0) - (Number(b.at) || 0));
+    state.replyQueue.set(rec.thread, q);
+    threads.add(rec.thread);
+  }
+  for (const thread of threads) {
+    renderConversation(thread);
+    void drainReplyQueue(thread);
+  }
 }
 
 // One press of Queue reply, from the button or from Enter: hold what the box holds and send it when the thread
@@ -4185,7 +4324,10 @@ function saveQueuedEdit(thread, at) {
   if (!text) {
     // An empty box is the reader saying the same thing the × says: that entry goes. Taken out by the same removal, so
     // the queue has one way out rather than two — and nothing is sent.
-    takeQueuedReply(thread, at);
+    const gone = takeQueuedReply(thread, at);
+    // The panel's copy goes with it: a hold left `held` there would be started by the panel's own replay, which is
+    // exactly the message the reader just withdrew.
+    cancelHeldReply(gone);
     renderConversation(thread);
     const warn = document.querySelector(`[data-reply-warn="${CSS.escape(thread)}"]`);
     if (warn) warn.textContent = "that held reply was saved empty — it is gone, and nothing was sent";
@@ -4194,6 +4336,10 @@ function saveQueuedEdit(thread, at) {
   }
   q[i] = { ...q[i], text };
   state.replyQueue.set(thread, q);
+  // The panel's record carries the words it will start a turn with, so an edit that stays only in this tab would be
+  // undone by a restart: the new text goes to the record too, and a record already claimed answers "sending", which
+  // the card would show anyway.
+  if (q[i].heldId) postHeldReply(thread, q[i], { action: "edit" });
   renderConversation(thread);
   // Sendable again the moment the edit is saved: if the turn and its subagents are already done, the drain sends it
   // now; if they are not, it stays held exactly as it was and goes when they finish.
@@ -4336,6 +4482,9 @@ function cancelQueuedReply(thread, at) {
   // The box's own text, read the one way a prompt box is read now (a chip is the text it swallowed): the
   // answer decides whether the cancelled reply can come back as a draft.
   const backToDraft = Boolean(box && !readBox(box).trim() && entry.text);
+  // The panel's record is cancelled first thing, before anything on the card moves: a hold the panel still thinks is
+  // owed a turn would be started by its own replay.
+  cancelHeldReply(entry);
   if (backToDraft) state.replyDrafts[thread] = entry.text;
   // The entry's files come back to the composer the same way its text does — only into an empty box, so a file
   // staged since is never joined by one from a reply the reader took back.
@@ -4374,7 +4523,9 @@ async function drainReplyQueue(thread) {
   // answers for both of the reasons an entry must not be sent — the reader took it back with its ×, or the reader has
   // it open in its editor — so the queue has no second check that could disagree with either of them.
   const next = replyQueued(thread)[0];
-  if (!next || threadBusy(thread) || childrenOut(thread)) return;
+  // `sending` is this page's own flight marker: a second drain call (one per job event) must not send the same entry
+  // twice now that the entry stays in the queue until its turn exists.
+  if (!next || next.sending || threadBusy(thread) || childrenOut(thread)) return;
   const blocked = heldReplyBlocked(thread, next);
   if (blocked === "editing") {
     // Held, not sent: the entry keeps its place and its age, the card says why it is waiting, and saving the edit is
@@ -4393,23 +4544,50 @@ async function drainReplyQueue(thread) {
   const q = state.replyQueue.get(thread) || [];
   const i = q.findIndex((entry) => entry && entry.at === next.at);
   if (i < 0) return;
-  const [entry] = q.splice(i, 1);
-  if (!q.length) state.replyQueue.delete(thread);
-  else state.replyQueue.set(thread, q);
-  // Out of the queue, so the send is already on its way and no press can call it back — which is what a ×
-  // landing after this point has to say, instead of claiming a cancellation that did not happen.
-  markReplySent(thread, entry);
+  // The entry is NOT taken out here any more: a send can be refused (the panel still counts a live run in that tree,
+  // the tree was released, the gateway declined the turn), and the old splice-then-send lost the reader's message on
+  // every one of those. It leaves the queue when - and only when - a turn exists for it.
+  const entry = q[i];
+  entry.sending = true;
   renderConversation(thread);
-  // The held reply is drawn now, so the note beside the box counts what is left: the same painter the press used,
-  // answering its own question about a press in flight (there is none) and the queue behind it.
   paintQueueWait(thread);
+  let ok = false;
   try {
-    // The entry's OWN files travel with the send. The composer's staged set belongs to a later message and is
-    // neither read nor cleared here.
-    await sendReply(thread, entry.text, entry.attachments || []);
+    // The entry's OWN files travel with the send (and, for a held record, the panel rebuilds the same block from the
+    // copy it stored). The composer's staged set belongs to a later message and is neither read nor cleared here.
+    ok = await sendReply(thread, entry.text, entry.attachments || [], { heldId: await heldIdFor(entry) });
   } catch {
     /* sendReply reports its own errors */
+  } finally {
+    entry.sending = false;
   }
+  // Already settled on the panel (sent by its own replay, or taken back): the page's copy is a duplicate, not a
+  // message owed a turn, so it comes off without a warning.
+  if (ok === "gone") {
+    takeQueuedReply(thread, entry.at);
+    renderConversation(thread);
+    paintQueueWait(thread);
+    return;
+  }
+  if (!ok) return;
+  // Accepted: the entry's turn exists, so the held copy goes - the one path out that follows a send.
+  takeQueuedReply(thread, entry.at);
+  markReplySent(thread, entry);
+  renderConversation(thread);
+  paintQueueWait(thread);
+  // The next one behind it goes only when that turn ends, so this is one entry per pass, never a burst.
+}
+
+// The panel's id for one held entry, waiting for the write-through when it is still in flight. Null means the page's
+// POST never landed: the drain then sends the words itself, exactly as it did before the panel kept a record.
+async function heldIdFor(entry) {
+  if (!entry) return null;
+  if (entry.heldId) return entry.heldId;
+  if (entry.held) {
+    const rec = await entry.held.catch(() => null);
+    return rec?.id || entry.heldId || null;
+  }
+  return null;
 }
 
 // ---- New-agent prompt history ---------------------------------------------------------
@@ -4926,7 +5104,7 @@ function rememberAddAgentCaret(input) {
   a.end = a.start;
 }
 
-async function sendReply(thread, preset = null, presetAttachments = null) {
+async function sendReply(thread, preset = null, presetAttachments = null, { heldId = null } = {}) {
   const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
   // The one place a box's text is read. A chip serializes back to the text it swallowed, IN PLACE: quotes
   // the reader put around it and the prose on either side arrive in the order they are on screen.
@@ -4935,8 +5113,15 @@ async function sendReply(thread, preset = null, presetAttachments = null) {
   // later message's — never read, never cleared here. A box send passes null and the staged set is its own.
   const held = Array.isArray(presetAttachments);
   const files = held ? presetAttachments : attachmentsFor(thread);
-  const attached = attachmentBlockFor(files);
-  if (!typed && !attached) return false;
+  // A HELD reply is accepted by the panel from its own record (POST action send): the words and the files are the
+  // copy it stored before any turn existed, so this page does not send them a second time - it only asks for that
+  // record's turn. The panel's claim is what makes the page's press and the panel's own replay unable to start two.
+  // `"gone"` is the one answer that takes the entry out of the queue without a turn: it was sent (or taken back)
+  // already, so the page's copy is a duplicate of a settled fact. `false` means the record is still owed a turn.
+  const acc = heldId ? await acceptHeldReply(heldId, thread) : null;
+  if (heldId && !acc.ok) return acc.gone ? "gone" : false;
+  const attached = heldId ? "" : attachmentBlockFor(files);
+  if (!typed && !attached && !acc) return false;
   const text = typed + attached;
   // The typed part only: the attachment block is panel-added, and recalling it would duplicate the files.
   rememberReply(thread, typed);
@@ -4946,11 +5131,13 @@ async function sendReply(thread, preset = null, presetAttachments = null) {
   // board digest to that turn, and a plain reply here would start a turn with neither.
   const toAssistant = assistantSessionFor(thread);
   try {
-    const r = await apiFetch(toAssistant ? "/api/assistant/say" : "/api/agents/reply", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(toAssistant ? { text, assistantId: toAssistant.id } : { thread, text, attachments: files }),
-    });
+    const r = heldId
+      ? { ok: true, json: async () => acc.body }
+      : await apiFetch(toAssistant ? "/api/assistant/say" : "/api/agents/reply", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(toAssistant ? { text, assistantId: toAssistant.id } : { thread, text, attachments: files }),
+        });
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
     state.replyDrafts[thread] = "";

@@ -117,6 +117,12 @@ import { MatrixRemindersStore } from "./lib/matrix-reminders.js";
 import { clarifyWindowSeconds, approvalWindowSeconds } from "./lib/hermes-config.js";
 import { hermesSessionTail } from "./lib/activity.js";
 import { Assistant, ASSISTANT_THREAD, ElementChannel, createBridgeChannel } from "./lib/assistant.js";
+// The page's held reply, made durable: state/held-replies.json. The store owns the record and the claim; server.js
+// owns the one acceptance a claim turns into (`startThreadReply`).
+import { createHeldReplies } from "./lib/held-replies.js";
+// The one attachment convention: the gate that decides which paths a turn may be handed, and the line/block the page
+// writes, built here for a turn the PANEL starts (a replayed hold has no page behind it to build them).
+import { inheritAttachments, inheritanceBlock } from "./lib/attachments.js";
 import { pickDock } from "./lib/assistant/config.js";
 // The per-assistant task queue's prefix, cut into routes/ (step 8 of docs/reports/module-map-2026-11-07.html). One
 // import and one row in the mount table: the module owns the routes and the wire shape, the Assistant owns the file
@@ -1029,6 +1035,11 @@ let assistant = null;
 // panel's own worktree cut are wired; an event that arrives before then is not lost — the 10-second title sweep
 // emits again for any card that still has no name.
 let naming = null;
+// The reader's held replies (state/held-replies.json): a message typed while its agent was still turning, stored
+// BEFORE any turn is accepted so a restart cannot drop it. Declared HERE because the job event stream below reads
+// `openCount()` on every settle, and an event can arrive while this file is still wiring itself up.
+const heldReplies = createHeldReplies({ file: path.join(config.stateDir, "held-replies.json"), onLog: log });
+heldReplies.load();
 const jobs = new Jobs({
   config,
   // The same supervisor server.js holds: a job that settles kills whatever its turn started, and a shutdown
@@ -1048,6 +1059,12 @@ const jobs = new Jobs({
     // A settled turn is the moment a release request can be acted on — and only then: the request was recorded as the
     // run ended, and this sweep is a different pass of this process, never a step inside the run.
     guard("release sweep", () => scheduleReleaseSweep?.());
+    // A turn that just ended is the moment the reply the reader held behind it goes out: the record is on disk
+    // (lib/held-replies.js), the acceptance is the reply route's own (`startThreadReply`), and the claim makes the
+    // page's drain and this panel's replay unable to start two turns for one hold. Cheap when nothing is held.
+    guard("held drain", () => {
+      if (!isLiveJobStatus(evt?.job?.status) && heldReplies.openCount()) void drainHeldReplies({ why: "a turn settled" });
+    });
     guard("assistant observation", () => assistant?.observe(evt));
   },
   onLog: log,
@@ -2219,7 +2236,7 @@ function panelTrees() {
 // branch goes. The stage timer's wake is that turn too (docs/pipelines.md §6), so both go through this one function —
 // a wake that went through a second copy of the reply path would be a turn with a different tree, model or landing
 // paragraph than a reader's reply. `{status, body}` is exactly what the route sends.
-async function startThreadReply({ thread = "", text = "", displayPrompt = null, origin = null, model = undefined, budget = undefined, maxTurns = undefined, yolo = undefined } = {}) {
+async function startThreadReply({ thread = "", text = "", displayPrompt = null, origin = null, model = undefined, budget = undefined, maxTurns = undefined, yolo = undefined, attachments = undefined, attachmentBlock = undefined } = {}) {
   const said = String(text || "").trim();
   if (!said) return { status: 400, body: { error: "reply text is required" } };
   const first = jobs.firstOfThread(String(thread || ""));
@@ -2262,6 +2279,11 @@ async function startThreadReply({ thread = "", text = "", displayPrompt = null, 
     // A reply continues the SAME agent, so it keeps the tree that agent was created for — as the CARD's field, so a
     // parent checkout the old attach fallback recorded is not inherited by the reply (lib/job-trees.js).
     ownerPath: filedOwnerPath(first) || null,
+    // What the reader attached to this turn, when the PANEL is the one that accepted it (a hold replayed after a
+    // restart): the card's chips, and the block the run's input carries. A page-started reply passes neither - its
+    // attachment block is already inside `text`, written by the page that owns the chips.
+    attachments: Array.isArray(attachments) ? attachments : undefined,
+    attachmentBlock: typeof attachmentBlock === "string" ? attachmentBlock : undefined,
     // …and the paragraph about where that tree's branch goes has to quote the policy of ITS project, and its remote,
     // the way the spawn did. A reply that carried neither fell back to the global default and told a worker in a
     // project that ALLOWS pushes that a push "will park and then fail".
@@ -2281,6 +2303,186 @@ async function startThreadReply({ thread = "", text = "", displayPrompt = null, 
     log(`queue resume link failed for ${first.thread}: ${String((e && e.message) || e)}`);
   }
   return { status: 202, body: { job } };
+}
+
+// ---- the page's held reply, made durable ---------------------------------------------------------------
+// A reply typed while its agent is still turning is held by the PAGE (public/app.js `state.replyQueue`): a Map in one
+// browser tab and nothing else. So a panel restart, a reloaded tab, or the death of the node process the page talks
+// to dropped every held entry -- and the attachments it named became files nothing pointed at any more.
+//
+// The hold is now a record on the panel's own disk (state/held-replies.json, lib/held-replies.js), written BEFORE any
+// turn is accepted, and the panel starts it when the thread is free. The acceptance is the SAME one a reader's press
+// takes -- `startThreadReply`, with the hold's id carried in `origin.heldId` on the job -- so a replayed hold cannot
+// reach a tree by a second path. Two callers can race for one record (the page's drain and this panel's own replay),
+// and `claim()` is what makes exactly one of them win.
+// The store itself is created above, beside the job store, because the settle hook in its event stream reads it.
+
+// The job that carries this hold's id, if its turn was already accepted. `origin.heldId` is written by the one
+// acceptance below and PERSISTED with the job (lib/jobs.js `schedulePersist`), so it is readable after the restart
+// this id exists for -- which is what stops a replay from starting a second turn for one hold.
+function jobForHeldId(id) {
+  const wanted = String(id || "");
+  if (!wanted) return null;
+  for (const j of jobs.jobs.values()) {
+    if (j && j.origin && String(j.origin.heldId || "") === wanted) return j;
+  }
+  return null;
+}
+
+// Said in the run's input when a file the hold named is no longer on disk: the reader's message still goes, and a
+// file that vanished between the hold and the turn is named rather than silently missing from the list.
+function heldAttachmentNote(paths = []) {
+  return paths.map((p) => `Attachment missing: ${p} - the file is no longer in the panel's attachments folder, so this turn was not handed it.`).join("\n\n");
+}
+
+// Accept ONE held reply as its turn. Every refusal RELEASES the claim instead of dropping the message: a tree with a
+// live run, a released tree, a gateway that will not take the turn -- each is a reason to try again later, and none of
+// them is the reader's fault. Returns `{ok, job, gone, why}`.
+async function sendHeldReply(entry, { by = "reader" } = {}) {
+  const claimed = heldReplies.claim(entry.id);
+  if (!claimed) {
+    const now = heldReplies.get(entry.id);
+    return {
+      ok: false,
+      state: now?.state || "gone",
+      gone: !now || now.state === "sent" || now.state === "cancelled",
+      why: !now ? "no such held reply" : now.state === "sent" ? `that held reply already started turn ${now.jobId || "(unknown)"}` : `that held reply is ${now.state}`,
+    };
+  }
+  const thread = claimed.thread;
+  // The files the panel STORED are the only ones a turn may be handed, and a path that is gone is named rather than
+  // passed on (lib/attachments.js owns the gate and the line shape the page writes).
+  const gated = inheritAttachments(claimed.attachments, config.attachmentsDir);
+  const present = gated.keep.filter((a) => existsSync(a.path));
+  const missing = gated.keep.filter((a) => !existsSync(a.path)).map((a) => a.path);
+  const block = [inheritanceBlock(present, gated.dropped, config.attachmentsDir).replace(/^\n\n/, ""), heldAttachmentNote(missing)]
+    .filter(Boolean)
+    .join("\n\n");
+  try {
+    if (assistant && assistant.isAssistantThread(thread)) {
+      // The assistant's own thread keeps its own acceptance (`say`): the scratchpad and the board digest ride with the
+      // turn there, and a plain reply route would start a turn with neither. It gates the files itself.
+      if (assistant.assistantLive(assistant.assistantIdForThread(thread))) {
+        heldReplies.release(claimed.id, "the assistant is still thinking about the last message; the held reply waits for it");
+        return { ok: false, busy: true, why: "the assistant is still thinking about the last message" };
+      }
+      const job = await assistant.say(claimed.text, {
+        assistantId: assistant.assistantIdForThread(thread) || undefined,
+        origin: { kind: "held-reply", heldId: claimed.id, by },
+        attachments: claimed.attachments,
+      });
+      heldReplies.sent(claimed.id, job?.id);
+      log(`held reply ${claimed.id}: started assistant turn ${job?.id} on ${thread}`);
+      return { ok: true, job };
+    }
+    const out = await startThreadReply({
+      thread,
+      text: claimed.text,
+      origin: { kind: "held-reply", heldId: claimed.id, by },
+      attachments: present,
+      attachmentBlock: block ? `\n\n${block}` : "",
+    });
+    if (out.status !== 202) {
+      const why = String(out.body?.error || `the panel answered ${out.status}`);
+      heldReplies.release(claimed.id, why);
+      return { ok: false, busy: out.status === 409, why, state: "held" };
+    }
+    const job = out.body.job;
+    heldReplies.sent(claimed.id, job?.id);
+    log(`held reply ${claimed.id}: started turn ${job?.id} on ${thread}`);
+    return { ok: true, job };
+  } catch (e) {
+    const why = String((e && e.message) || e);
+    heldReplies.release(claimed.id, why);
+    return { ok: false, busy: Boolean(e && (e.code === "thread_busy" || e.code === "tree_busy")), why };
+  }
+}
+
+// One drain pass: the OLDEST hold of each thread that is free, one turn per thread per pass, in arrival order. A
+// thread that is still turning holds its head and everything behind it -- one turn at a time is the gateway's own
+// rule, and it is what keeps a replay from racing the run it queued behind. Also called after a job settles, so a
+// finish starts the next hold without waiting for the clock.
+//
+// ONE pass at a time, and the flag is cleared from the promise's own settlement rather than from inside the body: a
+// body that ends synchronously (every thread busy, which is the normal case behind a live turn) would clear the flag
+// BEFORE the assignment below put the settled promise in it, and every later pass would then return that stale
+// promise and never run again. That is measured: it is why the first draft of this never started a hold after a
+// settle.
+let heldDraining = null;
+function drainHeldReplies({ why = "drain" } = {}) {
+  if (heldDraining) return heldDraining;
+  const pass = (async () => {
+    const started = [];
+    let failed = null;
+    const threads = [];
+    for (const r of heldReplies.view().open) if (!threads.includes(r.thread)) threads.push(r.thread);
+    for (const thread of threads) {
+      const head = heldReplies.openForThread(thread)[0];
+      if (!head || head.state !== "held") continue;
+      // A live run on the thread OR in its tree refuses the turn (lib/jobs.js `busyFor`): the hold keeps its place.
+      if (jobs.busyFor(thread).held) continue;
+      if (assistant && assistant.isAssistantThread(thread) && assistant.assistantLive(assistant.assistantIdForThread(thread))) continue;
+      const out = await sendHeldReply(head, { by: why });
+      if (out.ok) started.push({ id: head.id, thread, jobId: out.job?.id || null });
+      else if (out.state === "held") failed = { id: head.id, thread, why: out.why || "" };
+    }
+    if (started.length || failed) {
+      log(
+        `held replies (${why}): ${started.length} started${started.length ? ` (${started.map((s) => `${s.id} -> ${s.jobId || "?"}`).join(", ")})` : ""}` +
+          `${failed ? `; ${failed.id} kept waiting: ${failed.why}` : ""}`,
+      );
+      try {
+        broadcast({ type: "held-replies", held: heldReplies.view() });
+      } catch {
+        /* a broadcast is best effort: the page's next snapshot carries the same records */
+      }
+    }
+    return { started, failed };
+  })();
+  heldDraining = pass;
+  // Scheduled after the assignment above, so it cannot run before it. `armHeldDrain` afterwards: the store's open set
+  // just changed, and that decides whether the clock should be running at all.
+  void pass
+    .catch((e) => log(`held replies (${why}) failed: ${String((e && e.message) || e)}`))
+    .finally(() => {
+      if (heldDraining === pass) heldDraining = null;
+      armHeldDrain();
+    });
+  return pass;
+}
+
+// The clock the store needs while it holds anything: one pass every two seconds, and NO timer at all when nothing is
+// held -- a panel with a clean store pays nothing for this. The event hook below is the fast door (a turn ending
+// starts the hold behind it at once); this is the door for a settle nobody saw, and for the boot that finds a hold
+// whose run is long gone.
+let heldTimer = null;
+function armHeldDrain() {
+  const owed = heldReplies.view().open.length > 0;
+  if (!owed) {
+    if (heldTimer) clearInterval(heldTimer);
+    heldTimer = null;
+    return;
+  }
+  if (heldTimer) return;
+  heldTimer = setInterval(() => {
+    void drainHeldReplies({ why: "the clock" });
+  }, 2_000);
+  heldTimer.unref?.();
+}
+
+// The boot replay, in arrival order: repair the one window a crash can leave (a hold CLAIMED by a process that died
+// before the record said sent), then start what can start. A hold whose thread is still turning stays where it is --
+// the run it waits on is re-attached by lib/jobs.js exactly as it was before this stored anything, and this pass
+// never touches a live card.
+function replayHeldReplies() {
+  const repaired = heldReplies.reconcile((id) => jobForHeldId(id));
+  const open = repaired.view.open;
+  if (repaired.changed) {
+    log(`held replies: repaired ${repaired.changed} record(s) left by the last process (${open.length} still owed a turn)`);
+  }
+  if (!open.length) return Promise.resolve({ started: [], failed: null });
+  armHeldDrain();
+  return drainHeldReplies({ why: "boot" });
 }
 
 // ---- the stage timer: the host read, the wake, and the one ticker ---------------------------------------------------
@@ -5622,7 +5824,76 @@ const server = createServer(async (req, res) => {
       return sendJson(res, out.status, out.body);
     }
 
-    // ---- reviving a conversation the panel no longer has a card for -------------------------
+    // ---- the reader's held reply: one record, four actions --------------------------------------------
+    // A message typed while its agent is still turning. The page writes it HERE before any turn is accepted, so a
+    // restart (a panel bounce, a reloaded tab, a dead node process) finds it again, and its attachments with it. The
+    // panel also replays it on boot (see `replayHeldReplies`), which is why the answer to `add` is a RECORD and not a
+    // turn: nothing starts until the thread is free.
+    if (route === "/api/held-replies" && req.method === "GET") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const thread = String(url.searchParams.get("thread") || "").trim();
+      const view = heldReplies.view();
+      return sendJson(res, 200, {
+        replies: thread ? view.replies.filter((r) => r.thread === thread) : view.replies,
+        counts: view.counts,
+        file: view.file,
+      });
+    }
+
+    if (route === "/api/held-replies" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      const action = String(body.action || "add");
+      const id = String(body.id || "").trim();
+      if (action === "add") {
+        const thread = String(body.thread || "").trim();
+        if (!thread) return sendJson(res, 400, { error: "thread is required" });
+        // A hold is only worth storing for a thread this panel has: a record for an unknown thread could never be
+        // replayed, and it would sit in the store looking like owed work for ever.
+        if (!jobs.firstOfThread(thread)) return sendJson(res, 404, { error: `unknown thread: ${thread}` });
+        try {
+          const out = heldReplies.add({ id: id || null, thread, text: body.text, attachments: body.attachments, at: Number(body.at) || null });
+          armHeldDrain();
+          // A thread that is already free does not need to wait for the clock: the drain sends it now. The page's own
+          // press follows the same record, and the claim decides which of the two wins.
+          void drainHeldReplies({ why: "a hold arrived" });
+          return sendJson(res, out.added ? 201 : 200, { ok: true, added: out.added, reply: out.reply, counts: heldReplies.view().counts });
+        } catch (e) {
+          const code = String((e && e.code) || "");
+          if (/^held-/.test(code)) return sendJson(res, 400, { error: String((e && e.message) || e), code });
+          return sendJson(res, 500, { error: String((e && e.message) || e) });
+        }
+      }
+      if (action === "edit") {
+        const out = heldReplies.edit(id, body.text);
+        if (!out.ok) return sendJson(res, /^no such/.test(out.why) ? 404 : 409, { error: out.why, code: "held-edit" });
+        return sendJson(res, 200, { ok: true, reply: out.reply, counts: heldReplies.view().counts });
+      }
+      if (action === "cancel") {
+        const out = heldReplies.cancel(id, String(body.reason || "the reader took it back"));
+        if (!out.ok) return sendJson(res, 409, { error: out.why, code: "held-cancel", state: out.state || null });
+        return sendJson(res, 200, { ok: true, reply: out.reply, changed: Boolean(out.changed), counts: heldReplies.view().counts });
+      }
+      if (action === "send") {
+        const entry = heldReplies.get(id);
+        if (!entry) return sendJson(res, 404, { error: "no such held reply", code: "held-gone", gone: true });
+        const out = await sendHeldReply(entry, { by: "reader" });
+        armHeldDrain();
+        if (out.ok) return sendJson(res, 202, { ok: true, job: out.job, counts: heldReplies.view().counts });
+        // `gone` is the one answer the page MUST drop its copy on (it was sent, or taken back, already). Everything
+        // else leaves the record owed a turn, and the page keeps it exactly where it was.
+        return sendJson(res, out.gone ? 409 : 409, {
+          error: out.why || "the held reply could not start",
+          code: out.gone ? "held-gone" : "held-waiting",
+          gone: Boolean(out.gone),
+          busy: Boolean(out.busy),
+          state: out.state || "held",
+          counts: heldReplies.view().counts,
+        });
+      }
+      return sendJson(res, 400, { error: `unknown held-reply action: ${action}`, code: "held-action" });
+    }
+
     // A session outlives the panel's job store: the conversation lives in the gateway, so a reset
     // store (or a ✕) leaves the row still saying "Hermes session open here but idle" with nothing to
     // click. These turn that claim into a list, and put ONE back on the board when the reader picks
@@ -6897,6 +7168,9 @@ server.listen(config.port, config.host, () => {
       // The sentence says which failure this was: a probe that timed out is not a gateway that refused, and
       // "until the gateway is back" was a wrong sentence for a slow answer.
       log(`agent transport ${t.timedOut ? "SLOW" : "UNREACHABLE"}: ${gatewayRefusalText(t, jobs.api.url)} - spawns will be refused until it answers`);
+      // A held reply still gets its repair and its attempt: the reconcile settles a claim the last process died on,
+      // and the attempt is refused with the gateway's own words, which is the reason the card shows while it waits.
+      void replayHeldReplies().catch((e) => log(`held replies at boot: ${String((e && e.message) || e)}`));
       return; // nothing to ask: a restored turn stays live and pending, and the orphan sweep asks again
     }
     log(`agent transport ready: hermes ${t.capabilities?.version || "?"} · runs ${t.capabilities?.runs ? "yes" : "no"} · steer ${t.capabilities?.steer ? "yes" : "no"} · per-run cwd ${t.capabilities?.runCwd ? "advertised (a run's tools still start in the gateway's directory — measured 2026-10-27)" : "NO (stock gateway — agents run in the gateway's directory)"}`);
@@ -6926,6 +7200,12 @@ server.listen(config.port, config.host, () => {
     } catch (e) {
       log(`stopping the runs inherited from an earlier gateway failed: ${String((e && e.message) || e)}`);
     }
+    // ...and the reader's held replies, LAST: the reconcile above has already said which restored turn is still live,
+    // so a hold whose thread is turning keeps its place instead of racing a run, and a hold whose turn died with the
+    // last process is started now, in arrival order, with the attachments the record stored. Fired, not awaited: the
+    // panel is answering HTTP already, and a hold whose thread is still busy is started by the settle hook when that
+    // run ends. The record was written BEFORE any turn was accepted, which is the whole reason this boot can find it.
+    void replayHeldReplies().catch((e) => log(`held replies at boot: ${String((e && e.message) || e)}`));
   });
 });
 
