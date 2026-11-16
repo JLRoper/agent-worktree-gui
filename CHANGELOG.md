@@ -17,11 +17,11 @@ has no tag.
 
 ## v1.111.1 — 2026-11-16 · 5 commits
 
-[`ceab430`](https://github.com/JLRoper/agent-worktree-gui/commit/ceab43058a8f9901a683c1997c93e7727cbb98ba) · [compare v1.111.0...v1.111.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.111.0...v1.111.1)
+[`7df43a1`](https://github.com/JLRoper/agent-worktree-gui/commit/7df43a1a87137d8c4338f17473739e72959fb8cd) · [compare v1.111.0...v1.111.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.111.0...v1.111.1)
 
 ### Fixed
 
-- fix: the worker brief says a finding arrives as a report and a card ([`43121eb`](https://github.com/JLRoper/agent-worktree-gui/commit/43121eb67f4bfaa73ad66467c69193cb7046e6a6))
+- fix: the worker brief says a finding arrives as a report and a card ([`6a818a2`](https://github.com/JLRoper/agent-worktree-gui/commit/6a818a2fc2b8bcbfc5b992cb0518dc4ff3f81e64))
 
 ### Docs & tests
 
@@ -31,7 +31,7 @@ has no tag.
 
 ### Other
 
-- chore: 1.111.1 - the version this landing carries ([`ceab430`](https://github.com/JLRoper/agent-worktree-gui/commit/ceab43058a8f9901a683c1997c93e7727cbb98ba))
+- chore: 1.111.1 - the version this landing carries ([`7df43a1`](https://github.com/JLRoper/agent-worktree-gui/commit/7df43a1a87137d8c4338f17473739e72959fb8cd))
 
 ## v1.111.0 — 2026-11-16 · 3 commits
 
