@@ -410,6 +410,13 @@ td.branch .branch-local { font-size: 9.5px; letter-spacing: .04em; text-transfor
    tooltip quotes the project's fetch note. Same box, different colour: the shape is familiar, the claim is weaker. */
 td.branch .branch-unverified { font-size: 9.5px; letter-spacing: .04em; text-transform: uppercase; color: #8a7448; border: 1px dashed #4a3f28; border-radius: 3px; padding: 0 3px; vertical-align: 1px; }
 td.branch .branch-plain { color: #9aa6b4; }
+/* The base this row is measured against, when it is not the project's single base (lib/base-branches.js): a project
+   whose environments are long-lived branches measures each tree against its own. Quiet at rest and smaller than the
+   branch, because it is context for the verdict rather than a second name. A base that is MISSING keeps its chip so
+   a NO BASE REF row names the ref that is gone, in the amber the panel uses for "not answered". */
+td.branch .branch-base { margin-left: 6px; font-size: 10px; color: #6f7c8b; }
+td.branch .branch-base::before { content: "→ "; color: #4f5a68; }
+td.branch .branch-base.is-missing { color: #8a7448; }
 
 .badge {
   display: inline-block;

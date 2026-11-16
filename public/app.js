@@ -6814,7 +6814,10 @@ function deletableWithoutAsking(key) {
   if (row.verdictStale) return false;
   if (row.dirty || row.untracked) return false;
   const verdict = String(row.verdict || "");
-  if (verdict === "ON MAIN") return false;
+  // A row standing on ITS base - the main branch, or an environment branch of a project with several - is not
+  // offered for deletion: the tree is the landing point, not work that has landed.
+  if (verdict === "ON MAIN" || verdict === "ON BASE") return false;
+  if (row.baseBranch && row.branch && row.branch === row.baseBranch) return false;
   const mainBranch = state.projects.get(row.project)?.mainBranch;
   if (row.branch && mainBranch && row.branch === mainBranch) return false;
   return verdict.startsWith("MERGED");
@@ -7251,8 +7254,9 @@ function verdictHtml(row) {
   // beside it are empty by construction: the tooltip is the only place the reader can find out that this is a folder
   // left behind, and which checkout git would answer for there.
   const released = String(row.released?.why || "");
-  // The count against the project's main lives HERE now: the Ahead / Behind column counts the branch against its own
-  // copy on the remote. Every title below ends with it, and a plain badge, which had no title at all, carries it alone.
+  // The count against the row's OWN base lives HERE now (lib/base-branches.js: origin/main for most projects, or the
+  // row's environment branch), because the Ahead / Behind column counts the branch against its own copy on the
+  // remote. Every title below ends with it, and a plain badge, which had no title at all, carries it alone.
   // Inline, not a helper: this region is read out of the page on its own (tools/verify-merge-chip.mjs).
   const vs =
     row.baseRef && row.ahead !== null && row.ahead !== undefined
@@ -7575,11 +7579,34 @@ function prMatchNote(pr) {
 // never pushed, which is the bug: the reader had to open a tooltip to learn the branch was probably on the remote.
 // A project without a remote has every branch local, and the title says that instead of marking each row.
 // ---- branch cell: the link, and the local chip
+//
+// The base chip below is the per-row half of lib/base-branches.js: a project whose environments are long-lived branches
+// (fleet-kafka: dev, qa, uat, prod and no main) measures each tree against ITS OWN base, and the reader has to be
+// able to see which one without opening the verdict's tooltip. It is drawn only when the row's base is NOT the
+// project's single base - a board of ordinary `origin/main` rows stays as quiet as it was - and a row whose own base
+// is missing keeps the chip with a `?` so the NO BASE REF verdict names the ref that is missing. The arrow is CSS, so
+// the cell's copy value (data-copy-value, the branch itself) never grows it.
+function baseChipHtml(row) {
+  const ref = String(row.baseRef || "").trim();
+  if (!ref) return "";
+  const source = String(row.baseSource || "");
+  if (source === "default" && !row.baseMissing) return "";
+  const env = String(row.baseEnv || "").trim();
+  const why = row.baseMissing
+    ? `no base ref for this row: ${ref} does not exist in this checkout, so this row alone reads NO BASE REF`
+    : source === "parent"
+      ? `this row is measured against ${ref} - the branch this tree was cut from${env ? ` (the ${env} environment)` : ""}`
+      : `this row is measured against ${ref} - the ${env ? `${env} environment` : "environment"} carried by this tree or its branch name`;
+  const label = row.baseMissing ? `${ref}?` : ref;
+  return ` <span class="branch-base${row.baseMissing ? " is-missing" : ""}" data-base-ref="${esc(ref)}" data-base-source="${esc(source)}" title="${esc(why)}">${esc(label)}</span>`;
+}
+
 function branchCellHtml(row) {
   const name = esc(row.branch || "—");
+  const base = baseChipHtml(row);
   if (row.branchUrl) {
     const how = row.branchLinkFrom === "local-refs" ? " (found in refs/remotes from the last fetch — the remote itself was not asked)" : "";
-    return `<a class="branch-link" href="${esc(row.branchUrl)}" target="_blank" rel="noopener" title="${esc(`open ${row.branch} on the remote${how}`)}">${name}</a>`;
+    return `<a class="branch-link" href="${esc(row.branchUrl)}" target="_blank" rel="noopener" title="${esc(`open ${row.branch} on the remote${how}`)}">${name}</a>${base}`;
   }
   const why = row.branchWhy || (row.remoteBranch === "n/a" ? "no remote configured" : "not read yet — the remote has not been asked about this branch");
   // `branchChip` is decorate's; the `branchLocalOnly` fallback keeps a row drawn from an older payload's field honest.
@@ -7591,7 +7618,7 @@ function branchCellHtml(row) {
       : chip === "unverified"
         ? `<span class="branch-unverified" title="${esc(why)}">unverified</span>`
         : "";
-  return `<span class="branch-plain" title="${esc(why)}">${name}</span>${chipHtml ? ` ${chipHtml}` : ""}`;
+  return `<span class="branch-plain" title="${esc(why)}">${name}</span>${chipHtml ? ` ${chipHtml}` : ""}${base}`;
 }
 // ---- end branch cell
 

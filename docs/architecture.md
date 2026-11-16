@@ -125,7 +125,7 @@ is read on its new cadence immediately instead of waiting out its old dormant wi
 |---|---|---|
 | sharp | `worktreeSeconds` (5 s) | a panel agent is running here, or the row is live / idle |
 | mid | `midSeconds` (45 s) | dirty, untracked, `verdictStale`, or a verdict of `…` / `UNMERGED` / `ERROR` |
-| coast | `dormantSeconds` (90 s) | MERGED, NO COMMITS or ON MAIN, and clean |
+| coast | `dormantSeconds` (90 s) | MERGED, NO COMMITS, ON MAIN or ON BASE, and clean |
 
 Rows are also **staggered inside their tier** (`tierSlots` offsets each row's first due time), so
 a hundred rows do not all become due on the same tick — which is what keeps a full fleet from
@@ -304,7 +304,7 @@ agree about which tree a TODO, a lock, a name or a release refers to.
 
 | Noun | Shape | Owner | Lives in |
 |---|---|---|---|
-| **Project** | `{name, path, mainBranch, remote, prRepo, activityAt, empty, tier}` | `lib/projects.js` (discovery), `Store.ensureProject` | memory + `projects.json` cache; `tier` + the stat baseline in `tiers.json` |
+| **Project** | `{name, path, mainBranch, remote, baseBranches, prRepo, activityAt, empty, tier}` | `lib/projects.js` (discovery), `Store.ensureProject` | memory + `projects.json` cache; `tier` + the stat baseline in `tiers.json` |
 | **Row** | one worktree: branch, head, ahead/behind, verdict, dirty/untracked, `mergeable`, `sync`, `signals`, `scannedAt` | `lib/scan.js` produces, `Store.putRow` assembles | memory |
 | **Job** | one agent run: `{id, thread, status, runId, project, path, prompt, model, usage…}` | `lib/jobs.js` | `jobs.json` |
 | **Thread** | a Hermes session id; a panel thread name *is* the session id | `lib/jobs.js`, `lib/subagents.js` | gateway + `jobs.json` |
@@ -324,13 +324,17 @@ agree about which tree a TODO, a lock, a name or a release refers to.
 A row is not a database record; it is a **claim with the evidence attached**. Three fields carry
 most of the meaning:
 
-- `verdict` — `ON MAIN`, `MERGED (squash/rebase, N commits)`, `MERGED (content identical)`,
+- `verdict` — `ON MAIN` / `ON BASE`, `MERGED (squash/rebase, N commits)`, `MERGED (content identical)`,
   `UNMERGED (N commits)`, `NO COMMITS`, `NO BASE REF`, `EMPTY REPO`. Deliberately opinionated:
   ancestry is not evidence of landing (a squash merge leaves the branch an ancestor of nothing)
   and an ahead-count is not either (a branch can be 40 commits ahead with every patch already in
   main under other shas). So the scan asks twice — identical trees, or `git cherry` with no `+` —
   and only a branch whose own reflog holds a `commit:` line can be called MERGED at all: a branch
-  that was merely fast-forwarded or reset onto main has nothing of its own to land.
+  that was merely fast-forwarded or reset onto main has nothing of its own to land. A project with
+  several base branches (`projects[].baseBranches`) judges each row against its OWN base — the
+  recorded parent, then the environment its branch or folder name carries, then the single base —
+  so a race between `origin/dev` and `origin/prod` is measured where the work is going, and a row
+  whose own base is missing says `NO BASE REF` for itself alone.
 - `mergeable` — the verdict *and* clean *and* not live. This is the field the row's "safe to
   remove" claim is built from, and `Store.putRow` is where it is derived.
 - `verdictStale` — set when the commit count moved but no full scan has reclassified the row yet.
@@ -714,7 +718,10 @@ panel. It is where the entropy is; §10 points at the review that measures it.
   "scanRoots": ["C:/ProjectDevelopment"],
   "projects": [{ "name": "agent-worktree-gui", "path": "…", "remote": "github",
                  "mainBranch": "main", "prRepo": "JLRoper/agent-worktree-gui",
-                 "pushNewBranches": "allow-name-gate", "releaseWorktrees": true }],
+                 "pushNewBranches": "allow-name-gate", "releaseWorktrees": true },
+               { "name": "fleet-kafka", "path": "…", "remote": "origin", "mainBranch": "main",
+                 "baseBranches": [{ "branch": "dev", "env": "dev" }, { "branch": "qa", "env": "qa" },
+                                  { "branch": "uat", "env": "uat" }, { "branch": "prod", "env": "prod" }] }],
   "worktreeSeconds": 5, "midSeconds": 45, "dormantSeconds": 90,
   "tierDays": 7, "tierBuckets": 60, "tierCheckSeconds": 60,
   "slowSeconds": 300, "collapseAfterSeconds": 30,
@@ -737,6 +744,14 @@ Two elements of the config shape are architectural rather than incidental:
   the routes that change them rewrite exactly one line, re-read the file, and refuse if it does
   not say what was asked (`lib/hermes-config.js`). Values the panel cannot own are reported, not
   faked.
+- **A project may have more than one base branch, and the row resolves which one it is measured against.**
+  `projects[].baseBranches` is a list of `{ branch, env }` entries; `lib/base-branches.js` reads it (also forgiving a
+  plain list of names, or an `env -> branch` object), and `lib/scan.js` tries the row's recorded parent first, then
+  the environment carried by the branch or folder name, then the project's single `<remote>/<mainBranch>` as the
+  fallback. This is what makes a fleet with `dev`, `qa`, `uat` and `prod` (and no `main`) measurable at all: each row
+  is counted and judged against its own base, the chart draws that base beside the branch, and a row whose own base
+  is missing reads `NO BASE REF` alone instead of blanking its project. A project with no list behaves exactly as it
+  did before, because the single base is the last candidate.
 - **The tier gate has three keys, and the page reads none of them as a decision.** `tierDays` (7) is the commit
   window, `tierBuckets` (60) the number of slices in a rotation and `tierCheckSeconds` (60) the length of one, so
   the default gate checks an old repo once an hour. The panel reports them in every snapshot because the All/7d

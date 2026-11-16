@@ -139,7 +139,7 @@ function orderRows(rows) {
 function verdictClass(v) {
   const s = String(v || "");
   if (s.startsWith("MERGED")) return "merged";
-  if (s === "ON MAIN") return "onmain";
+  if (s === "ON MAIN" || s === "ON BASE") return "onmain";
   if (s.startsWith("NO COMMITS") || s.startsWith("EMPTY REPO")) return "nocommits";
   if (s === "RELEASED") return "released";
   if (s.startsWith("UNMERGED")) return "unmerged";
