@@ -1,7 +1,10 @@
 // A reply held behind a live turn, end to end, across the death of the node process that held it.
 //
 //   node tools/verify-held-reply-restart.mjs
-//   node tools/verify-held-reply-restart.mjs --root=C:/path/to/a/git/archive --label=before
+//   node tools/verify-held-reply-restart.mjs --root=.worktrees/held-reply-before --label=before
+//
+// --root names a directory holding a git archive of main; a path relative to this checkout works, and an
+// absolute one is accepted but should not be pasted into a file.
 //
 // WHAT THIS PROVES, on a spare port and a throwaway state directory (the live panel on :7331 is never touched, and a
 // port of 18083 is refused as well because the reader keeps a second board there):
