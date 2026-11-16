@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
+<title>/docs/ and /reviews/ are two static roots now, and the 43 MB copy is gone</title>
+<style>
+  :root{ color-scheme:dark; --ink:#e9e7e2; --paper:#121417; --panel:#171a1f; --rule:#2b3038; --muted:#9aa3ad; --accent:#c8a6ff; --ok:#7ee2a8; --bad:#e5534b; --warn:#f0c987; --sunk:#1b1e24; --code:#f0c987; }
+  html,body{ margin:0; background:var(--paper); color:var(--ink); font:15px/1.58 -apple-system,Segoe UI,Helvetica,Arial,sans-serif; }
+  main{ max-width:1120px; margin:0 auto; padding:38px 28px 84px; }
+  h1{ font-size:27px; line-height:1.22; margin:0 0 8px; letter-spacing:-.015em; }
+  h2{ font-size:19px; margin:40px 0 10px; padding-bottom:7px; border-bottom:1px solid var(--rule); }
+  h3{ font-size:15.5px; margin:22px 0 8px; }
+  p{ margin:9px 0; max-width:108ch; }
+  .kicker{ color:var(--accent); font:12px ui-monospace,Consolas,monospace; letter-spacing:.08em; text-transform:uppercase; margin:0 0 8px; }
+  .sub{ color:var(--muted); margin:0 0 20px; max-width:110ch; }
+  .cards{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin:18px 0 4px; }
+  .card{ border:1px solid var(--rule); border-radius:10px; padding:11px 13px; background:var(--panel); }
+  .card b{ display:block; font-size:20px; letter-spacing:-.02em; font-variant-numeric:tabular-nums; }
+  .card span{ color:var(--muted); font-size:12.5px; }
+  table{ border-collapse:collapse; width:100%; font-size:12.8px; }
+  th,td{ text-align:left; padding:5px 7px; border-bottom:1px solid var(--rule); vertical-align:top; }
+  th{ color:var(--muted); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.05em; }
+  tr:last-child td{ border-bottom:0; }
+  code{ font:12.2px ui-monospace,Consolas,monospace; background:rgba(127,127,127,.13); padding:1px 5px; border-radius:4px; color:var(--code); overflow-wrap:anywhere; }
+  pre{ background:var(--sunk); border:1px solid var(--rule); border-radius:8px; padding:11px 13px; overflow-x:auto; font:12.3px/1.55 ui-monospace,Consolas,monospace; white-space:pre-wrap; overflow-wrap:anywhere; }
+  pre code{ background:none; padding:0; color:inherit; }
+  .ok{ color:var(--ok); font-weight:600; }
+  .bad{ color:var(--bad); font-weight:600; }
+  .warn{ color:var(--warn); font-weight:600; }
+  .muted{ color:var(--muted); }
+  ul{ margin:8px 0 8px 20px; } li{ margin:5px 0; max-width:108ch; }
+  .num{ text-align:right; font-variant-numeric:tabular-nums; }
+  .mono{ font-family:ui-monospace,Consolas,monospace; font-size:12.2px; }
+</style>
+</head>
+<body>
+<main>
+<p class="kicker">agent-worktree-gui - row 504 - two page roots, one handler</p>
+<h1>/docs/ and /reviews/ are two static roots now, and the 43 MB copy is gone</h1>
+<p class="sub">Row 504 was written against a hand-kept copy of the repo's own pages. PR 770 then replaced the hand copy with a request-time one (<code>lib/http/docs-mirror.js</code>), so what the row recorded as a stale copy became an automatic one that still weighed exactly what the pages weigh. The reader's decision stands either way: teach the one static handler the two roots, delete both copies, and retire the mirror so no dead module is left behind.</p>
+<div class="cards">
+  <div class="card"><b>3</b><span>roots on one handler: public/, docs/, docs/reviews/</span></div>
+  <div class="card"><b>403</b><span>on a path that climbs out of the root it named</span></div>
+  <div class="card"><b>0</b><span>copies: public/docs and public/reviews gone</span></div>
+  <div class="card"><b>43M + 12M</b><span>deleted, measured with du before the delete</span></div>
+  <div class="card"><b>33/33</b><span>console-render checks, green</span></div>
+</div>
+
+<h2>What the row asked, and what changed since it was written</h2>
+<p>The row's diagnosis was right about the cause: <code>lib/http/static.js</code> served exactly one root, <code>public/</code>, so <code>docs/</code> pages were unreachable while <code>public/docs/</code> copies answered. Its premise about the copy had moved on by the time it ran. PR 770 landed a mirror that copies on the way to the read (<code>lib/http/docs-mirror.js</code>), so the copy is no longer hand-kept and no longer goes stale - it is simply a second full copy of the pages, rewritten in place, on the same disk.</p>
+<table>
+  <tr><th>folder</th><th class="num">files</th><th class="num">bytes</th><th class="num">du</th><th>source of the same bytes</th></tr>
+  <tr><td><code>public/docs</code></td><td class="num">624</td><td class="num">42,857,151</td><td class="num">43M</td><td><code>docs/</code> - 624 files, 42,857,151 bytes</td></tr>
+  <tr><td><code>public/reviews</code></td><td class="num">225</td><td class="num">11,749,502</td><td class="num">12M</td><td><code>docs/reviews/</code> - 225 files, 11,749,502 bytes</td></tr>
+</table>
+<p class="muted">The row said 42 MB for the docs copy; the brief said the copies now weigh 44M and 13M. Measured on this tree: 40.87 MiB (43M by du) and 11.21 MiB (12M by du). The copy and its source are byte-for-byte the same size, which is the whole point of deleting one of them.</p>
+
+<h2>The change</h2>
+<ul>
+  <li><b>Three roots, one handler.</b> <code>PAGE_ROOTS</code> names <code>docs/</code> at <code>/docs/</code> and <code>docs/reviews/</code> at <code>/reviews/</code>; <code>pageRootFor</code> matches a prefix <i>with</i> its separator, so <code>docs-old/x</code> stays a <code>public/</code> path. Everything else in <code>public/</code> is served exactly as before.</li>
+  <li><b>A containment check per root.</b> The resolved file must be the root or sit under it. <code>insideRoot</code> is asked for every request, so <code>/docs/../config.json</code> and <code>/reviews/../architecture-modules.html</code> are 403s rather than reads of a file beside the root or in the other root. No percent-decoding happens on the way in, so an encoded <code>..</code> is a literal name that 404s instead of a way through.</li>
+  <li><b>The same MIME table and cache policy.</b> One <code>TYPES</code> lookup from <code>lib/http/respond.js</code> and one policy: the shell is <code>no-store, must-revalidate</code>, an asset the build manifest names is immutable only under the URL that names its bytes, and everything else - including every docs page - is <code>no-store</code>. The versioned branch is now gated on <code>!mount</code>, because the manifest is taken over <code>public/</code> alone: a docs page cannot become immutable by colliding with a public/ file's name.</li>
+  <li><b>The route had to be handed the raw path for the check to be reachable at all.</b> <code>server.js</code> parsed every request with <code>new URL(req.url, ...).pathname</code>, and a WHATWG URL resolves <code>..</code> segments before any handler sees them - so the old containment check only ever met clean paths, and a climb answered 404 from a missing file rather than 403 from the check. The static route now gets the path as it arrived; every other route keeps the parsed one.</li>
+  <li><b>The copy and the mirror are gone.</b> <code>lib/http/docs-mirror.js</code> (180 lines) and <code>test/docs-mirror.test.js</code> (172 lines) are deleted, nothing imports them, and <code>public/docs</code> and <code>public/reviews</code> are removed from disk. The two <code>.gitignore</code> lines stay, so a hand copy cannot come back as untracked source.</li>
+  <li><b>Pinned by a new test.</b> <code>test/static-page-roots.test.js</code> (7 cases) serves a real page from each root and compares it byte for byte with its source, refuses six climbing paths with 403, checks a missing page is 404, keeps the shell and an asset at 200, and proves a stale copy left in <code>public/docs</code> cannot shadow the source.</li>
+</ul>
+
+<h2>Proof, over real HTTP</h2>
+<p>A panel was booted from this tree on a free port and asked ten paths with a raw request line, so a <code>..</code> is sent as written. Same script, same paths, before the change and after it:</p>
+<table>
+  <tr><th>request</th><th class="num">before</th><th class="num">after</th><th class="num">bytes</th><th>cache-control</th><th>sha256 of the body</th></tr>
+  <tr><td><code>/docs/gateway-usage-changes.html</code></td><td class="num">200</td><td class="num ok">200</td><td class="num">33,282</td><td>no-store</td><td class="mono">a9e6bf826245d4ed...</td></tr>
+  <tr><td><code>/docs/reports/worktree-aggregate-2026-11-13.html</code></td><td class="num">200</td><td class="num ok">200</td><td class="num">94,220</td><td>no-store</td><td class="mono">f3f8b1c1d9aea948...</td></tr>
+  <tr><td><code>/reviews/architecture-modules.html</code></td><td class="num">200</td><td class="num ok">200</td><td class="num">63,405</td><td>no-store</td><td class="mono">16c2ed204b0123ab...</td></tr>
+  <tr><td><code>/docs/../config.json</code></td><td class="num bad">404</td><td class="num ok">403</td><td class="num">9</td><td class="muted">-</td><td>"forbidden"</td></tr>
+  <tr><td><code>/reviews/../architecture-modules.html</code></td><td class="num bad">404</td><td class="num ok">403</td><td class="num">9</td><td class="muted">-</td><td>"forbidden"</td></tr>
+  <tr><td><code>/docs/no-such-file.html</code></td><td class="num">404</td><td class="num ok">404</td><td class="num">9</td><td class="muted">-</td><td>"not found"</td></tr>
+  <tr><td><code>/</code> (the shell)</td><td class="num">200</td><td class="num ok">200</td><td class="num">143,447</td><td>no-store, must-revalidate</td><td class="mono">97a1360190f74444...</td></tr>
+  <tr><td><code>/app.js</code></td><td class="num">200</td><td class="num ok">200</td><td class="num">965,385</td><td>no-store</td><td class="mono">97e88e7a0faf93dd...</td></tr>
+  <tr><td><code>/style.css</code></td><td class="num">200</td><td class="num ok">200</td><td class="num">357,539</td><td>no-store</td><td class="mono">38541e47f9420976...</td></tr>
+</table>
+<p>The three page bodies hash to exactly their source files, read with <code>sha256sum</code> in the tree:</p>
+<pre><code>a9e6bf826245d4edab9904c14ac9cfb33d63ac453efeea4f24fe9b0146511f79  docs/gateway-usage-changes.html
+f3f8b1c1d9aea948c68739bf6096c6cd1a9622874fe084138b4b82c433b7b96f  docs/reports/worktree-aggregate-2026-11-13.html
+16c2ed204b0123ab6c7e1e69fd33a4494e8e3ffd4af5160899dadfbd453ebbd6  docs/reviews/architecture-modules.html</code></pre>
+<p>The after-run was taken twice: once with <code>public/reviews</code> still on disk (225 files, 11.2 MB) and once after both folders were deleted. Both runs answer the same bytes, which is the second half of the point - the copy was never the thing being read once the root was <code>docs/reviews/</code>.</p>
+<pre><code>du -sh public/docs public/reviews
+du: cannot access 'public/docs': No such file or directory
+du: cannot access 'public/reviews': No such file or directory
+
+du -sh public docs
+5.7M    public
+43M     docs</code></pre>
+
+<h2>What was deleted, and what stayed</h2>
+<table>
+  <tr><th>path</th><th>state</th><th>why</th></tr>
+  <tr><td><code>lib/http/docs-mirror.js</code></td><td class="bad">deleted, 180 lines</td><td>the copy it made is exactly what the new roots serve without</td></tr>
+  <tr><td><code>test/docs-mirror.test.js</code></td><td class="bad">deleted, 172 lines</td><td>its subject no longer exists; the new roots have their own test</td></tr>
+  <tr><td><code>public/docs</code></td><td class="bad">deleted, 624 files, 42,857,151 bytes</td><td>a copy of <code>docs/</code>, read by nothing now</td></tr>
+  <tr><td><code>public/reviews</code></td><td class="bad">deleted, 225 files, 11,749,502 bytes</td><td>a copy of <code>docs/reviews/</code>, read by nothing now</td></tr>
+  <tr><td><code>.gitignore</code> lines for both folders</td><td class="ok">kept</td><td>a hand copy must not come back as untracked source; the comment now says the folders are dead rather than describing the mirror</td></tr>
+</table>
+
+<h2>The gate</h2>
+<ul>
+  <li><code>npm run test:module lib/http/static.js</code>: 2 files, 12 tests, <span class="ok">0 fail</span>. Re-run after the rebase onto the base it lands on: same 2 files, 0 fail.</li>
+  <li><code>npm test</code> (one sweep): 2,923 tests, 2,913 pass, <span class="warn">10 fail</span>. Run alone with one worker, the same files answer 81 tests, 74 pass, <span class="warn">7 fail</span>; <code>gateway-permissions</code> passes once the fresh tree has a <code>config.json</code>, and <code>reasoning-runs</code> and <code>new-project-route</code> pass alone.</li>
+  <li>The 7 that fail alone also fail on a pristine export of <code>origin/main</code> at 1.109.0 (81 tests, 73 pass, 8 fail): <code>assistant-profile</code> "the whitelists are gone", <code>child-route</code>, <code>header-controls</code> "the moved control keeps its handler", <code>paths-http</code> "Clean scratch over HTTP", <code>paths</code> "every *File / *Dir / *Log config key", <code>scan-roots</code>, and <code>windows-hide</code>. So none of them is this branch's, and the repo's gate is not green on main either - reported rather than folded into "the suite is green".</li>
+  <li><code>npm run verify:console-render</code>: <span class="ok">PASS - 33/33 checks</span>.</li>
+</ul>
+
+<h2>One correction to the row's proof list</h2>
+<p>The row asks for <code>/docs/architecture.html</code> at the same sha256 as <code>docs/architecture.html</code>. This repo has no page by that name: the docs root has <code>architecture.md</code> (markdown), and the architecture page is <code>docs/reviews/architecture-modules.html</code>, which the reviews root serves. The proof therefore uses three pages that exist - one in the docs root, one under <code>docs/reports/</code>, one in <code>docs/reviews/</code> - and the reviews page is that architecture page. <code>/docs/architecture.html</code> answers 404, which is the correct answer for a page that is not there.</p>
+<p class="muted">Requests were taken with the panel booted from this tree, on its own free port, one process per run; no browser was launched and the reader's own port was not touched.</p>
+</main>
+</body>
+</html>
