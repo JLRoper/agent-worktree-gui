@@ -1884,6 +1884,9 @@ function permissionBoxHtml({
   forAttr = "",
   head,
   command,
+  // The tree the command runs in, when the surface knows it (the turn's own cwd, the dock's worktree): the
+  // summary block uses it to say when a step writes OUTSIDE the repo, and says nothing of the sort without it.
+  root = "",
   choices = ["once", "deny"],
   deadline = 0,
   windowMs = 0,
@@ -1921,8 +1924,13 @@ function permissionBoxHtml({
       : `<div class="ta-foot${closed ? " is-over" : left <= 20_000 ? " is-low" : ""}" data-approval-until="${deadline}" data-approval-window="${windowMs}" title="time left before this question is denied and the writer is told so">` +
         `<div class="ta-timer"><span style="width:${Math.max(0, Math.min(100, (left / windowMs) * 100)).toFixed(2)}%"></span></div>` +
         `<span class="ta-left mono">${closed ? "expired" : `~${fmtLeft(left)} left`}</span></div>`;
+  // The plain reading of the command, ABOVE it and never instead of it: `wtCommandSummary` (core/command-summary.js)
+  // splits the line into steps and names the effects a reader is deciding about. A module that is absent (an old
+  // page served with a new app.js) draws no block at all, which is exactly what the card did before it existed.
+  const summary = globalThis.wtCommandSummary?.html ? globalThis.wtCommandSummary.html(command, { root, esc }) : "";
   return `<div class="turn-approval${closed ? " is-expired" : ""}${sending ? " is-sending" : ""}" ${forAttr}>
     <div class="ta-head mono">${closed ? esc(closedHead) : head}</div>
+    ${summary}
     <pre class="ta-cmd mono">${esc(command || "(no command text)")}</pre>
     ${note}
     <div class="ta-note mono is-sending" data-ta-flight${sending ? "" : " hidden"}>sending your answer...</div>
@@ -1961,6 +1969,9 @@ function approvalPrompt(turn, copy = "") {
     forAttr: `data-approval-for="${esc(turn.id)}${esc(copy)}"`,
     head: "⚠ waiting on you — this turn is parked until you answer",
     command: approval.command,
+    // The turn's own cwd is where the command runs: the summary says "outside the repo" only when it can compare
+    // against it.
+    root: turn.cwd || "",
     choices,
     deadline,
     windowMs,
@@ -5429,6 +5440,8 @@ function remoteWriteBoxHtml(r) {
     head: `⚠ waiting on you — ${esc(kind)}: ${esc(r.project || "this project")} is local-only`,
     note: r.note ? `<div class="rw-note mono" data-rw-note>⚠ ${esc(r.note)}</div>` : "",
     command: r.command || "",
+    // The dock knows which tree is asking, so the summary can say whether the push writes outside it.
+    root: r.worktree || "",
     choices: Array.isArray(r.allowed) && r.allowed.length ? r.allowed : ["once", "session", "always", "deny"],
     deadline,
     windowMs,
