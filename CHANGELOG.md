@@ -17,11 +17,11 @@ has no tag.
 
 ## v1.111.0 — 2026-11-16 · 3 commits
 
-[`e9d1147`](https://github.com/JLRoper/agent-worktree-gui/commit/e9d1147de276fe5b7760097b50aca40d02537147) · [compare v1.110.0...v1.111.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.110.0...v1.111.0)
+[`c82657d`](https://github.com/JLRoper/agent-worktree-gui/commit/c82657d758cdf87534efbeb4a9b5704507ef6507) · [compare v1.110.0...v1.111.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.110.0...v1.111.0)
 
 ### Added
 
-- feat: a reply queued behind a live turn survives the panel, in arrival order, once ([`24d186b`](https://github.com/JLRoper/agent-worktree-gui/commit/24d186b1e2159868b06c3582121788a56ecb32a8))
+- feat: a reply queued behind a live turn survives the panel, in arrival order, once ([`fd58f93`](https://github.com/JLRoper/agent-worktree-gui/commit/fd58f93a37719a0d737faa58cf1e0ab1fb1f3738))
 
 ### Docs & tests
 
@@ -29,7 +29,7 @@ has no tag.
 
 ### Other
 
-- chore: 1.111.0 - the version this landing carries ([`e9d1147`](https://github.com/JLRoper/agent-worktree-gui/commit/e9d1147de276fe5b7760097b50aca40d02537147))
+- chore: 1.111.0 - the version this landing carries ([`c82657d`](https://github.com/JLRoper/agent-worktree-gui/commit/c82657d758cdf87534efbeb4a9b5704507ef6507))
 
 ## v1.110.0 — 2026-11-16 · 4 commits
 
