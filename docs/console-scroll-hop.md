@@ -318,3 +318,13 @@ console changes is what the reader SEES. One `appendChild` of the sections reset
 (11 of the 13 hop frames carried both), so the two boxes jump together and come back together, which reads as something
 switching between them, not as one box blinking. The cause was never two consoles competing for a writer: it was one
 shared write that did not look at the consoles at all.
+
+## Folded reports
+
+The campaign that found this hop is folded here. Five pages measured it from three slots before the fix landed; the sections below are the findings that still bear on the rule above.
+
+- `console-popping-a.md` - slot A's per-frame measurement of the popping console.
+- `console-popping-b.md` - slot B: the main console hops and the reasoning box does not.
+- `console-popping-c.md` - slot C: one agent at a time, both renderers, and a tail that never held a minute.
+- `console-popping-synthesis.md` - the campaign's synthesis: the writes, the callers, and what stayed unknown.
+- `console-scroll-hop-candidates.md` - every shared write that could move all consoles at once, ranked at 0.32.6.

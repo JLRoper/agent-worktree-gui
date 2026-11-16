@@ -32,16 +32,10 @@ docs/console-combined-first-line.md | 1 | measurement record: the scratch tree t
 docs/console-frames-7393-0461.md | 2 | measurement record: the scratch tree the run measured, as it was
 docs/console-lag.md | 1 | measurement record: the scratch tree the run measured, as it was
 docs/console-live-observation.md | 1 | measurement record: the scratch tree the run measured, as it was
-docs/console-popping-a.md | 13 | measurement record: the scratch tree the run measured, as it was
-docs/console-popping-b.md | 8 | measurement record: the scratch tree the run measured, as it was
-docs/console-popping-c.md | 12 | measurement record: the scratch tree the run measured, as it was
 docs/console-rebuild-built-card.md | 1 | measurement record: the scratch tree the run measured, as it was
-docs/cwd-the-run-does-not-have.md | 15 | doc: the example or the tree it walks the reader through, as it was
 docs/gateway-usage-changes.html | 1 | state record: the files it read on this machine, as they were
 docs/gateway-usage-review.html | 5 | state record: the files it read on this machine, as they were
 docs/hermes-runs-api-knobs.diff | 1 | doc: the example or the tree it walks the reader through, as it was
-docs/jitter-sources.md | 1 | measurement record: the scratch tree the run measured, as it was
-docs/jitter-static.md | 2 | measurement record: the scratch tree the run measured, as it was
 docs/jitter-streaming.md | 2 | measurement record: the scratch tree the run measured, as it was
 docs/jitter-synthesis.md | 1 | measurement record: the scratch tree the run measured, as it was
 docs/landing-assistant-queue-2026-11-02.md | 1 | landing record: the tree the landing was done in, as it was
@@ -59,7 +53,6 @@ docs/plan/deliverables-handback-review.md | 2 | plan: the tree it was written ag
 docs/plan/deliverables-handback.md | 19 | plan: the tree it was written against, as it was
 docs/pushing-to-a-remote.md | 1 | doc: the example or the tree it walks the reader through, as it was
 docs/queue-park-release.md | 9 | state record: the files it read on this machine, as they were
-docs/queue-tab-review.md | 2 | state record: the files it read on this machine, as they were
 docs/reports/deliverables-open-audit-2026-11-05.md | 34 | measurement record: the recorded targets and the route's own bodies are the evidence, kept exactly as the store and the route returned them
 docs/reviews/lanes-and-modules.md | 1 | review record: the checkout it read, as it was
 docs/reviews/pipeline-flow-usability-ledger.md | 1 | review record: the checkout it read, as it was
@@ -72,7 +65,6 @@ docs/rounds/perf-075-vs-078.md | 2 | round record: the tree the round ran in, as
 docs/rounds/perf-hot-paths-078.md | 3 | round record: the tree the round ran in, as it was
 docs/rounds/playwright-round-1.md | 6 | round record: the tree the round ran in, as it was
 docs/runs-api-phase1.md | 4 | doc: the example or the tree it walks the reader through, as it was
-docs/skill-audit-2026-10-30.md | 2 | doc: the example or the tree it walks the reader through, as it was
 docs/steer-refusal.md | 4 | doc: the example or the tree it walks the reader through, as it was
 docs/thinking-block-live-observation.md | 1 | measurement record: the scratch tree the run measured, as it was
 docs/tool-output-truncation.md | 7 | measurement record: the scratch tree the run measured, as it was

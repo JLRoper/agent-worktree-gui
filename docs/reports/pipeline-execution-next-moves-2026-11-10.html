@@ -74,7 +74,7 @@
 </div>
 
 <h2 id="proved">1. What the ladder has proved since 2026-11-09</h2>
-<p>Three landings and one test change since the 2026-11-09 reports are the evidence. Each claim below names the commit or PR behind it, and the test that keeps it. The read is <code>origin/main 33d9f8d9</code>; the two reports this page continues are <code>docs/reports/pipeline-execution-next-test-2026-11-09.html</code> and <code>docs/reports/pipeline-rounds-parent-tree-2026-11-09.html</code>.</p>
+<p>Three landings and one test change since the 2026-11-09 reports are the evidence. Each claim below names the commit or PR behind it, and the test that keeps it. The read is <code>origin/main 33d9f8d9</code>; the two reports this page continues are folded into it: the stage map at 1.76.24 sits in the Folded reports section below, and the rounds' parent-tree measurement was dropped in the 2026-11-16 prune.</p>
 
 <h3 id="walk">1.1 The GitHub landing walk: 6 of 6 stages, no skips, no loops, 0 of 6 gates with a decision</h3>
 <p>The shipped <code>github-force-merge</code> ladder is six stages and five handoffs. A walk from <code>commit</code> through the panel's own resolver enters all six once, in the document's order, and ends on <code>main</code>. That result was recorded at <code>4ff3ab7e</code> (<i>docs: walk the GitHub ladder and file its two next moves</i>, 2026-11-09 19:06 -0500), and the shape was pinned by <code>a5412657</code> (<i>test: the GitHub ladder has no loop to cross - every handoff is a sequence</i>, 2026-11-09 20:20 -0500). Re-walked at <code>33d9f8d9</code> for this page, it still reads the same.</p>
@@ -499,8 +499,8 @@ page nestRowKeys(...) = [main, round, stage1, stage2]</pre>
 
 <h2 id="sources">Sources</h2>
 <ul class="source">
-  <li><code>docs/reports/pipeline-execution-next-test-2026-11-09.html</code>: sections 2.1, 2.2, 3, 4, 5.1, 5.2 and 6. The stage map and the P1-P8 test plan this page continues.</li>
-  <li><code>docs/reports/pipeline-rounds-parent-tree-2026-11-09.html</code>: the round model, findings 1 to 4, and the one-stage assembly finding (now fixed by <code>lib/assistant.js:1912</code>).</li>
+  <li><code>docs/reports/pipeline-execution-next-test-2026-11-09.html</code> (folded into this page): sections 2.1, 2.2, 3, 4, 5.1, 5.2 and 6. The stage map and the P1-P8 test plan this page continues.</li>
+  <li><code>docs/reports/pipeline-rounds-parent-tree-2026-11-09.html</code> (dropped in the 2026-11-16 prune; the round model it measured is in <code>docs/task-pipeline.md</code>): findings 1 to 4, and the one-stage assembly finding (now fixed by <code>lib/assistant.js:1912</code>).</li>
   <li><code>docs/reports/pipeline-next-moves-2026-11-09.html</code>: the GitHub walk, the two gap requests, and the SEFL approval-to-refusal plan.</li>
   <li><code>pipeline-bundle.seed.json</code>: <code>github-force-merge</code> at 4144, <code>sefl-review-loop</code> at 4427, <code>turnover</code> at 3803; H-04 at 4679, H-06 at 4696, G4 at 4741, G7 at 4768.</li>
   <li><code>lib/task-pipeline-drive.js</code>: 213 (<code>reviewEdgeOutOf</code>), 876 (<code>gateAfter</code>), 928 (<code>nextStageOf</code>), 1049-1073 (the cap), 1224 (<code>assemblyPlanOf</code>).</li>
@@ -518,6 +518,15 @@ page nestRowKeys(...) = [main, round, stage1, stage2]</pre>
 
 <p class="small">Written 2026-11-10 in <code>wtgui/round-one-the-parent-tree-note-34d53c</code> at <code>origin/main 33d9f8d9</code> (1.80.7). The page is a report, not a product change; the only code it names is the code it read, and the rows it proposes are not filed.</p>
 
+<section id="folded-reports">
+<h2>Folded reports</h2>
+<p class="sub">The three pages this one continues are folded here. This page is the read; those were its evidence, and the rows they proposed are still the rows this page proposes.</p>
+<ul>
+  <li><b>pipeline-next-moves-2026-11-09.html</b> - the first next-moves page: the GitHub ladder walk and the SEFL refusal test.</li>
+  <li><b>pipeline-execution-next-test-2026-11-09.html</b> - the stage map at 1.76.24: three landing ladders, and the furthest state reachable without SEFL merge rights.</li>
+  <li><b>pipeline-execution-rung4-live-2026-11-10.html</b> - the live rung 4 evidence: the comment loop on one PDL row, 05:05Z to 05:32Z.</li>
+</ul>
+</section>
 </main>
 </body>
 </html>
