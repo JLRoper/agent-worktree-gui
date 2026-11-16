@@ -250,3 +250,10 @@ since been patched rather than rebuilt, and the commands that failed here now pa
 `node --test test/liveness.test.js` pins the two halves of #3 (a frame is liveness; silence and a closed socket are
 the resync), and `node tools/verify-console-jitter.mjs` measures the rest — `--mode stream` stays green, so the
 console's own path did not regress while the block was patched.
+
+## Folded reports
+
+The two measurements this synthesis reconciles are folded here. The ranking above is what survives both of them.
+
+- `jitter-sources.md` - the sources measured per page counter across five sandbox passes.
+- `jitter-static.md` - the two consoles at rest: what still moves with no input.

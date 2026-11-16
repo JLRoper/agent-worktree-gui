@@ -1,6 +1,6 @@
 # The gui-improve recommendations, judged against main
 
-`docs/reports/gui-improve-experience-2026-11-09.html` (last touched at `d4f8217e`) ranks seven improvements to the `gui-improve` pipeline, all measured on row #256. This review reads those seven against the tree at `5ed7f604` and against the ledger the walk left on main, and keeps what still describes a gap. It changes no code, runs no test, and pushes nothing.
+The walk (`gui-improve-experience-2026-11-09.html`, last touched at `d4f8217e`, folded into this page) ranks seven improvements to the `gui-improve` pipeline, all measured on row #256. This review reads those seven against the tree at `5ed7f604` and against the ledger the walk left on main, and keeps what still describes a gap. It changes no code, runs no test, and pushes nothing.
 
 ## Verdict
 
@@ -110,3 +110,9 @@ First move: put the edited document in the seed, or commit it as a document file
 - The rank 1 saving is an upper bound. The record cannot separate the reviewer's reading from its re-derivation; scripting five checks removes the re-derivation, not the reading.
 - Rank 2 adds a stage turn to every walk. What it buys is the end of the hand landing, not a shorter walk.
 - The merge question is not decided. Rank 2 recommends push and PR only; a pipeline that merges its own PR is a doctrine change, not an implementation detail.
+
+## Folded reports
+
+The walk this review adjudicates is folded here: its own record is the evidence behind the verdict table, and the stage commits it names are the ones this review measured.
+
+- `gui-improve-experience-2026-11-09.html` - the walk itself: 71m 40s, four verdicts, four stage commits, and the nine recommendations it produced.

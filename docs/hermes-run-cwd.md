@@ -43,3 +43,9 @@ On this Windows host, some long combined probes stalled while starting/waiting f
 ## Installation is a separate decision
 
 After review, an operator must confirm the target source and clean state, retain a rollback copy, apply the checked patch to the intended profile's runtime source, and schedule a controlled gateway restart. Only then verify `features.run_cwd`, the first relative file read, terminal cwd and relative file write on two different workspaces and a continued session. This preparation does not perform or authorize those steps.
+
+## Folded reports
+
+The dogfood observation that produced this proposal is folded here: it is why the patch below exists, and it is the record of what a run's cwd actually was before it.
+
+- `cwd-the-run-does-not-have.md` - the observation: a run asked for a relative read and the panel had no cwd to resolve it against.
