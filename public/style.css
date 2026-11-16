@@ -942,6 +942,10 @@ body.addbar-top .agents-block > .add-agent-form { order: -1; margin-top: 0; marg
    the shadow, so the inner box keeps its own colour and loses the outer glow. */
 #approval-list .turn-approval { margin: 0 0 0 0; border-radius: 0; border: 0; border-bottom: 1px solid #4a3a17; box-shadow: none; }
 #approval-list .turn-approval .ta-head { font-size: 11px; }
+/* The dock's cards are a corner of the screen, so the summary is trimmed to the steps and the flags: the same
+   reading, less air. It is never removed - a push parked here is exactly the one a reader has to judge. */
+#approval-list .ta-summary { margin: 6px 0 4px; padding: 6px 8px; }
+#approval-list .ta-summary-steps li { font-size: 11px; }
 #approval-list .turn-approval .ta-note { margin-top: 6px; font-size: 11px; color: #d8c79a; }
 #approval-list .turn-approval-done { border-radius: 0; }
 .approval { padding: 10px 14px; border-bottom: 1px solid var(--line); }
@@ -2754,6 +2758,22 @@ a.as-task-ref:focus-visible { outline: 2px solid #7fb3ff; outline-offset: 1px; }
 .turn-approval { margin: 8px 2px 6px; border: 1px solid #6b4d16; border-radius: 8px; background: linear-gradient(180deg, rgba(58,51,32,.55), rgba(38,34,24,.55)); box-shadow: 0 6px 18px rgba(0,0,0,.35); padding: 10px 12px; }
 .ta-head { font-size: 11.5px; color: #ffd479; letter-spacing: .01em; }
 .ta-cmd { margin: 7px 0 9px; padding: 7px 9px; background: rgba(0,0,0,.42); border: 1px solid rgba(107,77,22,.5); border-radius: 5px; color: var(--text); font-size: 12px; white-space: pre-wrap; word-break: break-all; }
+/* The summary above the command (public/core/command-summary.js): the plain reading of what the command does, with
+   the effects flagged. It is a READING, not the thing being allowed - the command stays beneath it, byte for byte -
+   so it is drawn as an inset note with a lighter weight than the command's own box: a head carrying the one chip,
+   the agent's lead line when it wrote one, one row per step, the flags, then the read-only sentence. */
+.ta-summary { margin: 8px 0 6px; padding: 8px 10px; background: rgba(255,212,121,.045); border: 1px solid rgba(107,77,22,.42); border-left: 2px solid #c79a3a; border-radius: 5px; }
+.ta-summary-head { display: flex; align-items: center; gap: 8px; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: #d8c79a; }
+.ta-summary-chip { margin-left: auto; padding: 1px 7px; border: 1px solid #6b4d16; border-radius: 999px; font-size: 9.5px; letter-spacing: .04em; color: #ffd479; background: rgba(107,77,22,.18); }
+.ta-summary-chip.is-read { color: #8fd6a0; border-color: #2f6b3f; background: rgba(47,107,63,.14); }
+.ta-summary-chip.is-danger { color: #ff9c9c; border-color: #6b2a2a; background: rgba(107,42,42,.20); }
+.ta-summary-lead { margin-top: 6px; font-size: 12.5px; color: var(--text); }
+.ta-summary-steps { margin: 5px 0 0; padding: 0; list-style: none; }
+.ta-summary-steps li { position: relative; padding-left: 12px; font-size: 11.5px; line-height: 1.45; color: #ece2c6; }
+.ta-summary-steps li::before { content: "-"; position: absolute; left: 2px; color: #a8842f; }
+.ta-summary-steps li.is-more { color: #b9a97f; font-style: italic; }
+.ta-summary-flag { margin-top: 4px; font-size: 11px; color: #ff9c9c; }
+.ta-summary-read { margin-top: 5px; font-size: 11px; color: #8fd6a0; }
 .ta-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .ta-actions button { padding: 3px 12px; font-size: 11.5px; background: #3a3320; border-color: #6b4d16; color: #ffd479; }
 .ta-actions button:hover { background: #463c24; }

@@ -966,6 +966,13 @@
        needs dom-format's esc and nothing else, so it sits before app.js; both call it through window.ModelMenu. -->
   <script src="/core/model-menu.js"></script>
   <script src="/core/console-format.js"></script>
+  <!-- The permission card's plain reading of the command: split on &&, ; and |, one short sentence per step, and
+       the effects a reader is actually deciding about (deletes, history rewrites, pushes, PROD, a live port, a
+       write outside the repo). NO model call and no lookup: a reading of the string, on the page, at paint time.
+       The agent's own leading [Title] or first-line comment wins for the prose only - never for the flags. Drawn
+       above the command by app.js's permissionBoxHtml, with the command, the choices and the countdown unchanged;
+       test/approval-command-summary.test.js imports this same file. -->
+  <script src="/core/command-summary.js"></script>
   <!-- The assistant's command lines, drawn as the tool card: EVERY readable line, titled or not - the emoji per kind,
        the recipient, the title only when the 80-character rule lets one parse - in the frame console-format.js
        publishes, with the body folded to two lines. DISPLAY ONLY: lib/assistant/actions.js still parses the line the

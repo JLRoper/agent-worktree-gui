@@ -835,6 +835,20 @@ saying `⚠ waiting on you — this turn is parked until you answer`, the comman
 offered (`Allow once`, `Allow for this session`, `Always allow`, `Deny` on a standard host). Answering collapses it to
 one line: `✓ approved once: <command>`, or a red `✕ denied: <command>`. The panel never widens the choice list.
 
+**Above the command, what the command will do.** The box carries a short block headed `WHAT THIS WILL DO`, drawn
+between the head and the command: one sentence per step, from a split of the line on `&&`, `;` and `|`, naming the
+program with its subject - `git add: 12 paths`, `git rm --cached: this one path`,
+`git diff: compare the blob hashes of this path in the index and the worktree` - then the effects a reader is
+actually deciding about, one warn line each: a delete, a history rewrite, a push, anything touching PROD or a live
+port, or a write outside the repo. When the command changes nothing it says so plainly:
+`reads only - nothing here is written, deleted or pushed`. The chip at the right of the head reads `reads only` in
+green, or `changes things` - in red once one of those effects is present. The reading is derived on the page from
+the same string the card shows - no model call and no lookup (`public/core/command-summary.js`) - and it is never a
+replacement: the command stays beneath the block byte for byte with its four choices and its countdown untouched. An
+agent that leads its ask with a `[Title]` or a first-line `#` comment has that line stand as the block's lead above
+the steps; the flags are still read off the command, never off the agent's own words. The dock's cards carry the
+same block, trimmed to the steps and the flags.
+
 An agent's **own question** (the `clarify` tool) is the same kind of control in a light-purple box, drawn as a
 centred 900px column under the console rather than a full-width band: each choice is a full-width row, the
 recommended one is marked by a leading `recommended` chip, multi-select choices are ticked and sent together, and a
