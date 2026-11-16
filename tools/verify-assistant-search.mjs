@@ -221,8 +221,10 @@ try {
             count: n.textContent.trim(),
             matched: Number(n.dataset.searchMatched),
             displayed: Number(n.dataset.searchDisplayed),
+            items: Number(n.dataset.searchItems),
+            current: Number(n.dataset.searchCurrent),
             title: n.title,
-            rows: rows.map((r) => ({ where: r.querySelector(".as-search-where")?.textContent, snip: r.querySelector(".as-search-snip")?.textContent })),
+            rows: rows.map((r) => ({ where: r.querySelector(".as-search-where")?.textContent, item: Number(r.dataset.searchItem), snip: r.querySelector(".as-search-snip")?.textContent })),
           };
         });
       };
@@ -230,7 +232,8 @@ try {
       const found = await typeQuery(phrase);
       console.log(`      query ${JSON.stringify(phrase)} -> count ${found.count} | ${found.title}`);
       v.ok("the phrase answered from the store", found.matched >= 1, `${found.matched} matched, ${found.displayed} displayed`);
-      v.ok("the count prints matched/displayed", /^\d+\/\d+$/.test(found.count), found.count);
+      v.ok("the count reads n of N over the matching ITEMS", /^\d+ of \d+$/.test(found.count), found.count);
+      v.ok("the first item is current on the answer", found.current === 1 && found.count.startsWith(`1 of `), `${found.count}, current ${found.current}`);
       v.ok("the first result row is the reader's own input", found.rows[0]?.where === "you", JSON.stringify(found.rows[0]?.where));
 
       // an independent read of the same endpoint, so the number on the panel is not the only witness
@@ -264,7 +267,7 @@ try {
       const broad = await typeQuery("the");
       console.log(`      query "the" -> count ${broad.count} | ${broad.title}`);
       v.ok("a broad query matches more than it displays", broad.matched > broad.displayed, `${broad.matched} matched, ${broad.displayed} displayed`);
-      v.ok("the count still prints both numbers", broad.count === `${broad.matched}/${broad.displayed}`, broad.count);
+      v.ok("the count still prints an item position, not a hit ratio", broad.count === `1 of ${broad.items}`, broad.count);
       v.ok("the capped list leads with the reader's own input", broad.rows.length > 0 && broad.rows[0].where === "you", JSON.stringify(broad.rows.slice(0, 3).map((r) => r.where)));
       v.ok("the capped count says the input is kept first", /kept first/.test(broad.title), broad.title);
 
