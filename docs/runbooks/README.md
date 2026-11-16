@@ -41,6 +41,12 @@ checkout whose `origin` is https is switched with `git remote set-url` before th
 `GIT_BRIEF` (`lib/jobs.js`, documented in `docs/worker-brief-git-remotes.md`) for every tree run, because
 `projects[].rules` is a store today with no injection into any brief.
 
+The same standard covers a written finding: research, reviews, audits and measurements are a self-contained `.html`
+under `docs/reports/` with the evidence inline and `file:line` citations, declared on a `clarify` card as a labelled
+`links` entry whose choices are the recommended next steps. It is in the worker brief as `REPORT_BRIEF`
+(`lib/jobs.js`, documented in `docs/worker-brief-report-cards.md`) for every tree run, and the assistant's own turns
+get it through their standing rules rather than the brief.
+
 ## The rollup table
 
 `## Landing and turnover` holds one table, newest rollup first:
