@@ -1,0 +1,50 @@
+{
+  "phrase": "zephyr",
+  "viewport": "1440x900",
+  "turns": [
+    "zephyr1",
+    "zephyr2",
+    "zephyr3",
+    "zephyr4"
+  ],
+  "steps": [
+    {
+      "n": 2,
+      "count": "2 of 4",
+      "id": "zephyr3",
+      "inBody": true,
+      "mark": "zephyr",
+      "folded": false
+    },
+    {
+      "n": 3,
+      "count": "3 of 4",
+      "id": "zephyr2",
+      "inBody": true,
+      "mark": "zephyr",
+      "folded": false
+    },
+    {
+      "n": 4,
+      "count": "4 of 4",
+      "id": "zephyr1",
+      "inBody": true,
+      "mark": "zephyr",
+      "folded": false
+    }
+  ],
+  "screenshots": [
+    "01-the-caret-on-a-panel-control-1440x900.png",
+    "02-ctrl-q-lands-in-the-box-1440x900.png",
+    "03-filter-1-of-4-1440x900.png",
+    "04-ctrl-q-selects-the-filter-1440x900.png",
+    "05-down-2-of-4-1440x900.png",
+    "06-down-3-of-4-1440x900.png",
+    "07-down-4-of-4-1440x900.png",
+    "08-wrap-at-both-ends-1440x900.png",
+    "09-folded-before-enter-1440x900.png",
+    "10-enter-opens-the-item-1440x900.png",
+    "11-escape-cleared-and-caret-back-1440x900.png",
+    "12-ignored-in-a-textarea-1440x900.png"
+  ]
+}

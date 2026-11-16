@@ -603,51 +603,88 @@
   // The query's meaning (`*`/`?` wildcards, a plain substring, case-insensitive, metacharacters escaped) is
   // public/core/turn-search.js in both places, so a hit cannot mean one thing here and another in the count.
   //
-  // WHAT A HIT DOES. `openSearchHit` puts the turn in front of the reader through the card's OWN paging:
+  // WHAT A HIT DOES. `revealSearchItem` puts the turn in front of the reader through the card's OWN paging:
   // wtTurnFold.reveal picks the page the turn lives on, unfolds it and writes the page offset, so the repaint
   // below is the ordinary one; then the matched text is marked inside the turn. The results are a fixed popover
   // under the box, so no result can ever add a line to the title row.
+  //
+  // ONE PRESS, ONE ITEM, AND THE KEYBOARD ALONE IS ENOUGH. The box is the keyboard's way in: Ctrl+Q lands in it
+  // from anywhere in the panel with the text it already holds selected (typing replaces the last filter), Up and
+  // Down step the CURRENT MATCH through the transcript one ITEM at a time - never one row of the same message -
+  // Enter opens the item, Escape clears the box and hands the caret back where it was. The item map is
+  // public/core/search-items.js (`wtSearchItems`): one item is one turn, however many of its prompt, reply and
+  // console lines the query hit. The ends WRAP, the same rule Enter has always had, and docs/assistant-search-
+  // keys.md states it for the reader.
   const SEARCH_DEBOUNCE = 200;
   const SEARCH_LIMIT = 10;
   let searchTimer = null;
   let searchSeq = 0;
   let searchHits = [];
+  // The same hits, grouped into the things one press steps through, and the item each hit belongs to (parallel to
+  // searchHits), so a result row can say which item its press would open.
+  let searchItems = [];
+  let searchHitItem = [];
+  let searchItemAt = -1;
   let searchOut = null;
-  let searchAt = -1;
   let searchShownQuery = "";
   let searchScope = "all";
+  // Where the caret was when Ctrl+Q took it. Escape hands it back there: clearing the filter must not also move
+  // the reader somewhere else in the panel.
+  let searchReturnFocus = null;
 
-  function paintSearchCount(out) {
+  // The count beside the box: "n of N", N being the matching ITEMS the box can step through, n the one the reader
+  // is standing on. The hit counts stay on the element (and in its title) because the cap is a fact the count must
+  // not hide: a list that stopped short says so in amber, and the title says how many matched and how many are on
+  // hand. `turns` from the server is every item that matched, so a capped list can say "6 matched, 4 here".
+  function paintSearchCount() {
     const el = as$("as-search-n");
     if (!el) return;
-    const matched = Number(out?.matched) || 0;
-    const displayed = Number(out?.displayed) || 0;
+    const query = searchOut ? String(searchOut.query || "") : "";
+    const matched = Number(searchOut?.matched) || 0;
+    const displayed = Number(searchOut?.displayed) || 0;
+    const items = searchItems.length;
+    const itemsTotal = Math.max(items, Number(searchOut?.turns) || 0);
+    const current = searchItemAt >= 0 && searchItemAt < items ? searchItemAt + 1 : items ? 1 : 0;
+    const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
     el.dataset.searchMatched = String(matched);
     el.dataset.searchDisplayed = String(displayed);
+    el.dataset.searchItems = String(items);
+    el.dataset.searchItemTotal = String(itemsTotal);
+    el.dataset.searchCurrent = String(current);
     // The query this count belongs to. A slow answer for `app` must not be read as the answer for `app.js` - the
     // sequence guard already drops it, and this makes the box's state legible to anything watching (and to the
     // verify script, which waits on it rather than on a sleep).
-    el.dataset.searchQuery = out ? String(out.query || "") : "";
-    if (!matched) {
+    el.dataset.searchQuery = query;
+    if (!query) {
       el.hidden = true;
       el.textContent = "";
       el.removeAttribute("title");
       el.classList.remove("is-capped");
       return;
     }
-    const capped = matched > displayed;
+    const capped = itemsTotal > items || matched > displayed;
     el.hidden = false;
-    el.textContent = `${matched}/${displayed}`;
+    el.textContent = `${current} of ${items}`;
     el.classList.toggle("is-capped", capped);
-    el.title = capped
-      ? `${matched} matched, ${displayed} displayed - your own input is kept first when the cap bites`
-      : `${matched} matched, all ${displayed} displayed`;
+    if (!items) el.title = "no turn matches this filter";
+    else if (capped) {
+      el.title =
+        `${plural(itemsTotal, "matching item", "matching items")} - ${plural(matched, "hit", "hits")} matched, ` +
+        `${displayed} displayed, ${plural(items, "item", "items")} to step through; your own input is kept first ` +
+        "when the cap bites, so the list may not hold every match";
+    } else {
+      el.title =
+        `${plural(itemsTotal, "matching item", "matching items")} - ${plural(matched, "hit", "hits")} matched; ` +
+        "Up and Down step one item per press, Enter opens it";
+    }
   }
 
   // One result row: where the hit is (the reader's input, the reply, or the console line's own kind), the turn's
   // ordinal on ITS card, and a one-line window with the match marked. The window is built by the server and split
-  // into before/hit/after there, so this never re-finds a match with a second regex that could disagree.
-  function searchHitHtml(hit, index) {
+  // into before/hit/after there, so this never re-finds a match with a second regex that could disagree. The row
+  // carries the ITEM it belongs to: a press on it opens that item, and the current item's rows are marked so the
+  // list and the transcript agree about where the reader is.
+  function searchHitHtml(hit, index, itemAt) {
     const where = hit.field === "input" ? "you" : hit.field === "reply" ? "reply" : String(hit.kind || "tool");
     const ordinal = searchTurnOrdinal(hit);
     const when = searchAge(hit.at);
@@ -655,8 +692,10 @@
     const lead = hit.lead ? "..." : "";
     const tail = hit.tail ? "..." : "";
     const marked = hit.hit ? `<mark class="as-search-mark">${esc(hit.hit)}</mark>` : "";
+    const current = itemAt === searchItemAt;
     return (
-      `<button type="button" class="as-search-row" data-search-hit="${index}" title="open this turn in the card">` +
+      `<button type="button" class="as-search-row${current ? " is-current" : ""}" data-search-hit="${index}" data-search-item="${itemAt}"` +
+      `${current ? ' aria-current="true"' : ""} title="open this turn in the card">` +
       `<span class="as-search-where mono">${esc(where)}</span>` +
       `<span class="as-search-meta mono">${esc(meta)}</span>` +
       `<span class="as-search-snip">${lead}${esc(hit.before)}${marked}${esc(hit.after)}${tail}</span>` +
@@ -676,9 +715,10 @@
     const matched = Number(out.matched) || 0;
     const displayed = Number(out.displayed) || 0;
     const foot =
-      `<div class="as-search-more mono">${matched} matched, ${displayed} displayed` +
+      `<div class="as-search-more mono">${searchItems.length} item${searchItems.length === 1 ? "" : "s"} of ` +
+      `${Math.max(searchItems.length, Number(out.turns) || 0)}, ${matched} matched, ${displayed} displayed` +
       `${matched > displayed ? " - your own input is kept first when the cap bites" : ""}</div>`;
-    pop.innerHTML = hits.map((h, i) => searchHitHtml(h, i)).join("") + foot;
+    pop.innerHTML = hits.map((h, i) => searchHitHtml(h, i, searchHitItem[i] ?? 0)).join("") + foot;
     pop.hidden = false;
     placeSearchPop();
   }
@@ -711,8 +751,10 @@
   // before its own answer lands.
   function clearSearch() {
     searchHits = [];
+    searchItems = [];
+    searchHitItem = [];
+    searchItemAt = -1;
     searchOut = null;
-    searchAt = -1;
     searchShownQuery = "";
     if (searchTimer) {
       clearTimeout(searchTimer);
@@ -723,8 +765,9 @@
       pop.hidden = true;
       pop.innerHTML = "";
     }
-    paintSearchCount(null);
     clearSearchMarks();
+    paintSearchCurrent();
+    paintSearchCount();
   }
 
   function clearSearchAll() {
@@ -739,6 +782,17 @@
       searchTimer = null;
       runSearch();
     }, delay);
+  }
+
+  // The hits grouped into items, and the item each hit belongs to. Group() keeps the first-appearance order of the
+  // hits, so walking `searchItems` walks the list the reader sees - and one item per turn is what makes a press
+  // move a whole message rather than one of its rows.
+  function regroupSearch() {
+    searchItems = globalThis.wtSearchItems ? globalThis.wtSearchItems.group(searchHits) : [];
+    searchHitItem = [];
+    for (let i = 0; i < searchItems.length; i += 1) {
+      for (let k = 0; k < searchItems[i].hits.length; k += 1) searchHitItem.push(i);
+    }
   }
 
   // One read. `seq` is the whole guard against a slow answer for `app` landing after a fast one for `app.js`: the
@@ -761,26 +815,34 @@
     } catch (err) {
       if (seq !== searchSeq) return null;
       searchHits = [];
+      searchItems = [];
+      searchHitItem = [];
+      searchItemAt = -1;
       searchOut = null;
-      searchAt = -1;
       searchShownQuery = q;
       clearSearchMarks();
+      paintSearchCurrent();
       const pop = as$("as-search-pop");
       if (pop) {
         pop.innerHTML = `<div class="as-search-more mono">search failed: ${esc(String(err?.message || err))}</div>`;
         pop.hidden = false;
         placeSearchPop();
       }
-      paintSearchCount(null);
+      paintSearchCount();
       return null;
     }
     if (seq !== searchSeq) return null;
     searchHits = Array.isArray(out.hits) ? out.hits : [];
     searchOut = out;
-    searchAt = -1;
+    regroupSearch();
+    // An answer makes its FIRST item current: the count reads "1 of N" and the first press of Down is the second
+    // item, exactly as the reader expects. Nothing scrolls until they press - a keystroke must not throw the
+    // transcript around - but the item is highlighted if it is on the page already.
+    searchItemAt = searchItems.length ? 0 : -1;
     searchShownQuery = String(out.query || q);
-    paintSearchCount(out);
+    paintSearchCount();
     renderSearchPop(out);
+    paintSearchCurrent();
     return out;
   }
 
@@ -835,34 +897,133 @@
     return false;
   }
 
-  // A hit, in front of the reader: the assistant whose turn it is, the page that turn lives on (through the same
-  // reveal the board's jump and the toast use), the turn unfolded, and the match marked in it. Returns whether the
-  // match was marked - false when the turn is gone from the store or the text is not on the page (a tool line
-  // older than the console's window), which the row's own marked excerpt still answers.
-  function openSearchHit(index) {
-    const hit = searchHits[Number(index)];
-    if (!hit) return false;
-    searchAt = Number(index);
-    const rec = sessionRecords().find((r) => r.threadId === hit.thread) || null;
+  // The turn element an item lives in, if the card draws it right now. A turn on another page of its card is not in
+  // the DOM until `revealSearchItem` has repainted; asking for it again after the repaint is the honest answer.
+  function turnElementFor(item) {
+    if (!item) return null;
+    const rec = sessionRecords().find((r) => r.threadId === item.thread) || null;
     const targetId = rec ? rec.id : activeSessionId();
-    const conv = conversationsByThread(hit.thread);
-    if (conv) wtTurnFold.reveal(state, conv.thread, conv.turns, hit.id);
+    const host = hostFor(targetId, "chat");
+    const card = host?.querySelector(`.job[data-thread="${CSS.escape(item.thread)}"]`);
+    return card?.querySelector(`[data-turn="${CSS.escape(item.id)}"]`) || null;
+  }
+
+  // Which item the reader is standing on, drawn once so every surface agrees: the turn gets `.is-search-current` (a
+  // readable ring around the whole message, all of its rows), the mark inside it gets `.is-current` (brighter than a
+  // plain hit's mark), and the result rows of that item are marked `aria-current`. No scroll happens here - the
+  // repaint that lands a highlight must not move the transcript under a reader who is only typing.
+  function paintSearchCurrent() {
+    for (const el of document.querySelectorAll(".turn.is-search-current")) el.classList.remove("is-search-current");
+    for (const mark of document.querySelectorAll("mark.as-search-mark.is-current")) mark.classList.remove("is-current");
+    const pop = as$("as-search-pop");
+    if (pop) {
+      for (const row of pop.querySelectorAll("[data-search-hit]")) {
+        const on = searchItemAt >= 0 && Number(row.dataset.searchItem) === searchItemAt;
+        row.classList.toggle("is-current", on);
+        if (on) row.setAttribute("aria-current", "true");
+        else row.removeAttribute("aria-current");
+      }
+    }
+    const item = searchItems[searchItemAt];
+    const turnEl = turnElementFor(item);
+    if (!turnEl) return null;
+    turnEl.classList.add("is-search-current");
+    const mark = turnEl.querySelector("mark.as-search-mark");
+    if (mark && mark.classList) mark.classList.add("is-current");
+    return turnEl;
+  }
+
+  // One ITEM, in front of the reader: the assistant whose turn it is, the page that turn lives on (through the same
+  // reveal the board's jump and the toast use), the turn unfolded if it was folded, the match marked inside it, the
+  // whole thing scrolled into view and marked as the current match. Returns whether the match was marked - false
+  // when the turn is gone from the store or the text is not on the page (a tool line older than the console's
+  // window), which the row's own marked excerpt still answers.
+  function revealSearchItem(itemAt) {
+    const item = searchItems[Number(itemAt)];
+    if (!item) return false;
+    searchItemAt = Number(itemAt);
+    const rec = sessionRecords().find((r) => r.threadId === item.thread) || null;
+    const targetId = rec ? rec.id : activeSessionId();
+    const conv = conversationsByThread(item.thread);
+    if (conv) wtTurnFold.reveal(state, conv.thread, conv.turns, item.id);
     if (rec && rec.id !== activeSessionId()) setView({ assistant: rec.id, subTab: "chat" });
     renderAssistantChat(targetId);
-    const host = hostFor(targetId, "chat");
-    const card = host?.querySelector(`.job[data-thread="${CSS.escape(hit.thread)}"]`);
-    const turnEl = card?.querySelector(`[data-turn="${CSS.escape(hit.id)}"]`);
-    if (!turnEl) return false;
+    // The popover sits under the box and would cover the item it just opened: the count beside the box carries the
+    // reader's place, and a new answer brings the list back.
+    const pop = as$("as-search-pop");
+    if (pop) pop.hidden = true;
+    const turnEl = turnElementFor(item);
+    if (!turnEl) {
+      paintSearchCount();
+      return false;
+    }
     clearSearchMarks();
-    const marked = markInsideTurn(turnEl, searchShownQuery || hit.hit || "");
+    const marked = markInsideTurn(turnEl, searchShownQuery || item.hits[0]?.hit || "");
     const pageY = window.scrollY;
     turnEl.scrollIntoView({ block: "center" });
     if (window.scrollY !== pageY) window.scrollTo({ top: pageY });
-    // The popover sits under the box and would cover the turn it just opened; step through hits with Enter, or
-    // open the box again with ArrowDown.
-    const pop = as$("as-search-pop");
-    if (pop) pop.hidden = true;
+    paintSearchCount();
+    paintSearchCurrent();
     return marked;
+  }
+
+  // One press, one ITEM. Up and Down move the current match through the matching turns as wholes - a turn with four
+  // matching rows is one press, not four - and WRAP at both ends (docs/assistant-search-keys.md states it): Down on
+  // the last item lands on the first, Up on the first lands on the last. With no answer yet the press flushes the
+  // debounce and lands on the FIRST item rather than on the second, so a reader who types and steps at once still
+  // sees "1 of N" before "2 of N".
+  function stepSearch(delta) {
+    if (searchTimer) {
+      clearTimeout(searchTimer);
+      searchTimer = null;
+    }
+    if (searchItems.length) {
+      searchItemAt = wtSearchItems.step(searchItemAt, delta, searchItems.length);
+      revealSearchItem(searchItemAt);
+      return;
+    }
+    const q = String(as$("as-search-q")?.value || "").trim();
+    if (!q) return;
+    runSearch().then((out) => {
+      if (!out || !searchItems.length) return;
+      searchItemAt = 0;
+      revealSearchItem(0);
+    });
+  }
+
+  // Escape: the filter goes, and the caret goes back where Ctrl+Q took it from. The rail's own Escape closes the
+  // whole panel; a reader clearing the box means the box, not the panel - so this stops the event where it is.
+  function escapeSearch() {
+    clearSearchAll();
+    const back = searchReturnFocus;
+    searchReturnFocus = null;
+    if (back && back.isConnected && typeof back.focus === "function") {
+      back.focus({ preventScroll: true });
+      return;
+    }
+    as$("as-search-q")?.blur();
+  }
+
+  // Ctrl+Q's half: the box takes the caret and SELECTS what it already holds, so the first character typed replaces
+  // the last filter instead of appending to it. Where the caret came from is remembered for Escape.
+  function focusSearch() {
+    const input = as$("as-search-q");
+    if (!input) return false;
+    const active = document.activeElement;
+    if (active && active !== input && active !== document.body && active.isConnected) searchReturnFocus = active;
+    input.focus({ preventScroll: true });
+    input.select();
+    return true;
+  }
+
+  // The hosts Ctrl+Q must not touch: a textarea, and the composer (the card's reply box, which is a contenteditable,
+  // and the board's own prompt field). These are where the reader is WRITING, and a chord that moved the caret out
+  // of them would eat the words being written.
+  function inComposer(node) {
+    const el = node && node.nodeType === 1 ? node : null;
+    if (!el) return false;
+    if (/^TEXTAREA$/.test(el.tagName)) return true;
+    return Boolean(el.closest?.("textarea, .reply-box, [data-reply], #job-prompt"));
   }
 
   function wireSearch() {
@@ -870,17 +1031,29 @@
     if (!input) return;
     input.addEventListener("input", () => armSearch());
     input.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        // Up and Down step the current match one ITEM per press - never one row of the message it is already on -
+        // and the browser's own caret default is suppressed so one press cannot also do that.
+        e.preventDefault();
+        stepSearch(e.key === "ArrowDown" ? 1 : -1);
+        return;
+      }
       if (e.key === "Enter") {
         e.preventDefault();
         if (searchTimer) {
           clearTimeout(searchTimer);
           searchTimer = null;
         }
-        const done = searchHits.length ? Promise.resolve(null) : runSearch();
-        done.then(() => {
-          // Step through the list: the first Enter opens the first hit, the next opens the one after it, and after
-          // the last it wraps. The popover closed on the last jump (it covers the turn), and this keeps going.
-          if (searchHits.length) openSearchHit((searchAt + 1) % searchHits.length);
+        // Enter acts on the CURRENT match: the item the count names, unfolded if it was folded and scrolled into
+        // view. A filter that has not answered yet opens its first item rather than stepping past it.
+        if (searchItems.length) {
+          revealSearchItem(searchItemAt >= 0 ? searchItemAt : 0);
+          return;
+        }
+        const q = String(input.value || "").trim();
+        if (!q) return;
+        runSearch().then((out) => {
+          if (out && searchItems.length) revealSearchItem(0);
         });
         return;
       }
@@ -888,20 +1061,8 @@
         // The rail's own Escape closes the whole panel; a reader clearing the box means the box, not the panel.
         e.preventDefault();
         e.stopPropagation();
-        clearSearchAll();
-        input.blur();
+        escapeSearch();
         return;
-      }
-      if (e.key === "ArrowDown") {
-        // The popover may be closed from a jump that just landed: reopen it from the answer already in hand (no
-        // second read), then hand the caret to the first row.
-        const pop = as$("as-search-pop");
-        if (pop && pop.hidden && searchOut) renderSearchPop(searchOut);
-        const first = pop?.querySelector("[data-search-hit]");
-        if (first) {
-          e.preventDefault();
-          first.focus();
-        }
       }
     });
     const scope = as$("as-search-scope");
@@ -920,14 +1081,14 @@
     });
     as$("as-search-pop")?.addEventListener("click", (e) => {
       const row = e.target.closest?.("[data-search-hit]");
-      if (row) openSearchHit(row.dataset.searchHit);
+      if (row) revealSearchItem(Number(row.dataset.searchItem));
     });
     as$("as-search-pop")?.addEventListener("keydown", (e) => {
       if (e.key === "Escape") {
+        // Same promise as the box's own Escape: the filter goes and the caret returns to where Ctrl+Q took it.
         e.preventDefault();
         e.stopPropagation();
-        clearSearchAll();
-        input.focus();
+        escapeSearch();
       }
     });
     // The popover is placed in viewport coordinates, so a resize or a scroll of the page moves the box: re-place
@@ -1539,6 +1700,10 @@
     // watching for the repaints that come from the board rather than from here.
     watchSlack();
     queueSlackPaint();
+    // A repaint builds a fresh card, so the search's current-match ring went with the old one. While a filter is
+    // live that ring is the reader's place in the transcript, so it is put back on the same item here - and only
+    // painted, never scrolled: a streamed line must not drag a reader who is standing somewhere else.
+    if (searchItems.length) paintSearchCurrent();
   }
 
   // ---- alerts ---------------------------------------------------------------------------------
@@ -5580,6 +5745,19 @@
   // ---- keys ------------------------------------------------------------------------------------
 
   window.addEventListener("keydown", (e) => {
+    // Ctrl+Q is the search box's own key: pressed anywhere in the open panel, the caret lands in the box with the
+    // text it already holds SELECTED, so the first character typed replaces the last filter. It is reported handled
+    // (preventDefault) rather than merely acted on - no browser default may also fire. A caret in a textarea or the
+    // composer is the reader writing, and a chord that stole it would eat their words, so those hosts are left alone.
+    if (e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey && (e.key === "q" || e.key === "Q" || e.code === "KeyQ")) {
+      const panel = as$("assistant");
+      if (!panel || panel.hidden) return;
+      if (inComposer(e.target) || inComposer(document.activeElement)) return;
+      if (!focusSearch()) return;
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
     if (e.ctrlKey && e.shiftKey && !e.altKey && (e.key === "A" || e.key === "a")) {
       e.preventDefault();
       toggleAssistant();

@@ -714,6 +714,13 @@ Each turn is an accordion inside the card:
 - A failed turn that is worth retrying (a timeout, a 5xx, a dropped connection) shows **retry** beside its outcome; it
   sends that turn's prompt again as a new turn, because the failed turn's edits are already on disk.
 
+**Finding a turn again.** The search box in the panel's head filters the assistant's whole transcript - your prompts,
+its replies, every console line - on the server, so it reaches past the page a card is holding. `Ctrl+Q` puts the
+caret in it from anywhere in the panel and selects the filter it holds; `Up`/`Down` step the current match one whole
+turn at a time (a message with four matching rows is one press), scroll it into view and ring it; `Enter` opens the
+current match; `Esc` clears and hands the caret back. The count beside the box reads `2 of 4` while a filter is live.
+`docs/assistant-search-keys.md` states the whole contract, including the wrap at both ends.
+
 ### The console
 
 A reply submits a new run with the **same session id**: it continues the saved conversation, not a new agent
@@ -1118,6 +1125,10 @@ does not price; no press can re-fetch it — `python tools/openrouter-prices.py`
 | `Esc` | Anywhere | Close what is open: an artifacts list, Settings, a maximized card, a clone row, or a folder filter. |
 | `Ctrl+wheel` | Over a card's console text — its words, a tool's output or the reasoning | Size that card's console, all three kinds of text together; anywhere else it zooms the page. |
 | `Ctrl+` / `Ctrl-` / `Ctrl+0` | Anywhere | Page zoom in, out, reset. |
+| `Ctrl+Q` | Anywhere in the assistant panel | Focus the turns search box and select the filter it holds, so typing replaces it. Ignored while the caret is in a textarea or the composer. |
+| `Up` / `Down` | Turns search box | Step the current match one whole turn per press (`2 of 4`, `3 of 4`, ...), scroll it into view and ring it. Wraps at both ends. |
+| `Enter` | Turns search box | Open the current match where it stands - unfold it if it was folded, mark the match inside it. |
+| `Esc` | Turns search box | Clear the filter, the count and the highlight, and hand the caret back to where `Ctrl+Q` took it. |
 | `Ctrl+[` | Anywhere | Fold one tier — the lowest with anything open, in the order turn bodies, cards, worktree rows, projects, folders and the two fixed cards. Nothing open: no-op. |
 | `Ctrl+]` | Anywhere | Expand the whole tree. |
 | Click | Worktree row | Open its detail (description, TODO, merge state, liveness, agents, sessions). |
