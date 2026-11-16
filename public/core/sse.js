@@ -69,7 +69,7 @@ function connect({ waitForSnapshot = false } = {}) {
   }) : null;
   for (const type of ["snapshot", "row", "project", "drop", "job", "jobline", "remote-write",
     "remote-write-answered", "remote-write-review", "remote-write-review-done", "settings", "approval",
-    "approval-answered", "jobs", "assistant", "heartbeat"]) {
+    "approval-answered", "jobs", "assistant", "held-replies", "heartbeat"]) {
     es.addEventListener(type, () => {
       if (state.es === es) state.lastTransportAt = Date.now();
     });
@@ -87,6 +87,10 @@ function connect({ waitForSnapshot = false } = {}) {
     state.lastSnapshotAt = Date.now();
     state.snapshotGeneration += 1;
     state.awaitingStreamSnapshot = false;
+    // The panel's held replies, read once the page has a snapshot: a hold written by a tab that is gone (or by the
+    // panel before this one loaded) belongs back on its card, and a hold the panel settled while this tab was away
+    // must not be offered again. Idempotent, and a no-op after the first answer.
+    if (typeof loadHeldReplies === "function") void loadHeldReplies();
     finishInitial(true);
   });
   es.addEventListener("row", (e) => {
@@ -265,6 +269,14 @@ function connect({ waitForSnapshot = false } = {}) {
     state.lastEventAt = Date.now();
     const d = JSON.parse(e.data);
     if (d.assistant && typeof applyAssistant === "function") applyAssistant(d.assistant);
+  });
+  // The panel's held replies, as it settles them (its own boot replay, or a hold this page asked for): a settled record
+  // comes off the queue here, so a card never promises a queue that has already gone out.
+  es.addEventListener("held-replies", (e) => {
+    state.lastEventAt = Date.now();
+    const d = JSON.parse(e.data);
+    const list = d?.held?.replies || d?.replies;
+    if (Array.isArray(list) && typeof applyHeldReplies === "function") applyHeldReplies(list);
   });
   es.addEventListener("heartbeat", (e) => {
     state.pool = JSON.parse(e.data).pool;

@@ -64,6 +64,12 @@ const APP_NAMES = [
   "replyTakenByDrain",
   "drainReplyQueue",
   "sendReply",
+  // The write-through to the panel's own record (state/held-replies.json): the entry's id, the cancel that follows
+  // the ×, and the accept that asks the panel to start the turn it stored.
+  "postHeldReply",
+  "cancelHeldReply",
+  "acceptHeldReply",
+  "heldIdFor",
   "steerTurn",
 ];
 
@@ -314,8 +320,11 @@ test("the drain sends the entry's own file once and leaves a file staged later o
 
   await h.drainReplyQueue(THREAD);
 
-  assert.equal(h.calls.length, 1, "one send");
-  const body = h.calls[0].body;
+  // The reply route only: queueReply also writes the hold to /api/held-replies, and that is asserted where the store
+  // is (test/held-replies-store.test.js). What this test is about is the ONE send the reply route receives.
+  const sent = h.calls.filter((c) => c.url === "/api/agents/reply");
+  assert.equal(sent.length, 1, "one send");
+  const body = sent[0].body;
   assert.equal(body.thread, THREAD);
   assert.equal(body.text.startsWith("send the turnaround"), true);
   assert.equal(body.text.split(FILE.path).length - 1, 1, "the entry's path appears exactly once in the text");

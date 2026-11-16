@@ -50,7 +50,14 @@ const NAMES = [
   "heldReplyBlocked",
   "markReplySent",
   "replyTakenByDrain",
+  "takeQueuedReply",
   "drainReplyQueue",
+  // The write-through the queue now does to the panel (state/held-replies.json): a held reply that only exists in
+  // this tab is the defect, so queueReply, the ×, the edit and the drain all name these.
+  "postHeldReply",
+  "cancelHeldReply",
+  "acceptHeldReply",
+  "heldIdFor",
 ];
 const source = NAMES.map((n) => grab(app, n)).join("\n");
 
