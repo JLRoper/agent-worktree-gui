@@ -24,3 +24,12 @@ matrix-bridge/*.pid
 
 # The reader's own config: machine paths and their board. config.example.json is the template.
 config.json
+
+# A second panel's own config, and Kilo's local plans/state: this machine only, never source.
+config.7330.json
+.kilo/
+
+# The docs mirror: the board serves /docs/ and /reviews/ out of these two folders, copied from
+# docs/ and docs/reviews/ when a page is requested (lib/http/docs-mirror.js). Build output.
+public/docs/
+public/reviews/
