@@ -209,10 +209,74 @@ tbody td { padding: 7px 10px; border-bottom: 1px solid #1d222b; vertical-align: 
    (the rule that follows), and the └ the row leads with (`.child-tick`, public/render-projects.js). Two L's on one
    row read as a depth of two, and at the second tier they read as a rung of a ladder nobody drew. The rail is the
    PROJECT's line and stops being a group marker at the moment a row hangs under another: a child draws no rail glyph
-   at all, and its single marker is the └ it leads with, in the row's marker gutter (public/style.css), which is a
-   fixed slot so the marker steps in with the cell's padding instead of pushing the text it leads. */
+   at all, and its single marker is the L it leads with.
+
+   ONE GUIDE COLUMN PER DEPTH, AND IT IS THE TRIANGLE'S OWN AXIS. Depth d's axis is 20px + 16px*d from the cell's
+   left edge: the fold's 16px box starts on the cell's own padding (12px + 16px*d), so the triangle is centred on that
+   axis, and the L a child leads with has its vertical stroke 8px to the LEFT of that padding - which is exactly the
+   axis of the depth above. So the guide runs straight down out of the triangle the group hangs from, each depth is
+   one 16px step from its parent's guide, and two children's L's meet on one line instead of stepping away from it.
+   (It used to be neither: the fold was laid out after the tick's 7px box and its 2px gap, so on a parent row the
+   triangle's centre sat 8px LEFT of the L its children drew, and on a child row the triangle sat 25px from the
+   parent's - not the 16 one step is - and 17px right of that row's own L. Two tiers of that and the tree read as a
+   staircase.)
+
+   The L is drawn with borders rather than set in a glyph. A glyph's vertical stroke starts a few pixels into its own
+   box and ends a few pixels above its own baseline, so it can neither stand on the axis nor reach the row's edges -
+   which is the other half of the staircase, and the reason two L's never read as one line. A hairline can be placed
+   on the axis exactly, and it runs the row's full height so the stroke continues into the row above it. */
+/* The line the markers hang on: the row's own text line - the cell's 7px top padding plus half of the 20px play
+   button. The triangle, the L's corner and the lane out of a parent all read it from here. */
+#projects tbody tr.row { --guide-line: 17px; }
 #projects tbody tr.row > td.name { padding-left: calc(12px + 16px * var(--child-depth, 0)); }
 #projects tbody tr.row.is-child > td:first-child::before { content: none; }
+/* The lane a child leads with: its vertical stroke IS the guide, on the axis of the row it hangs from (4px +
+   16px * depth is one step less than the cell's own padding), and its corner is a hairline on the row's line. It runs
+   one pixel past the padding box, over the cell's own bottom border, so it meets the next row's stroke with no seam -
+   a child with a sibling below keeps the stroke to its foot, which is what makes two L's read as one line. */
+#projects tbody tr.row .child-tick {
+  position: absolute;
+  left: calc(4px + 16px * var(--child-depth, 1));
+  top: 0; bottom: -1px;
+  width: 8px;
+  border-left: 1px solid #465668;
+  pointer-events: none;
+}
+/* The last child of a group closes the lane: its stroke stops at the corner instead of running on, because a stroke
+   that continued past the corner would promise a row that is not there. */
+#projects tbody tr.row.is-last-child .child-tick { bottom: auto; height: calc(var(--guide-line) + 1px); }
+/* The corner: from the guide to the cell's own padding, on the row's line. */
+#projects tbody tr.row .child-tick::after {
+  content: "";
+  position: absolute;
+  left: 0; top: var(--guide-line); width: 8px; height: 1px;
+  background: #465668;
+}
+/* The lanes of the ancestors that are still open above this row. A grandchild hangs INSIDE its parent's group, so a
+   group's guide has to keep running past it; without these the line breaks on exactly the rows that are deepest - the
+   parent's stroke ends at the bottom of the parent's row and the next sibling's begins two rows down. One span per
+   open depth, placed on that depth's axis by public/render-projects.js `paintLanes`, and only for the depths whose
+   ancestor still has a sibling below it: the lane of a group's last child turns its corner and stops. */
+#projects tbody tr.row .child-lane {
+  position: absolute;
+  left: calc(4px + 16px * var(--lane-depth));
+  top: 0; bottom: -1px;
+  width: 1px;
+  background: #465668;
+  pointer-events: none;
+}
+/* The lane OUT of a parent's own row: from under the fold to the row's foot, so the line the children's L's are cut
+   from begins at the triangle rather than half a row below it. Same column as the children's own L
+   (20px + 16px * depth). A folded group has nothing under it for the lane to continue into, so it draws none. */
+#projects tbody tr.row.is-parent:not(.is-folded) td:first-child::after {
+  content: "";
+  position: absolute;
+  left: calc(20px + 16px * var(--child-depth, 0));
+  top: calc(var(--guide-line) + 8px);
+  bottom: 0;
+  width: 1px;
+  background: #465668;
+}
 /* A fold hides a whole group where it stands — the child rows AND the details, questions and offers hanging under
    them. Nothing leaves the document, which is the point: an open console, a half-typed reply and a scroll position
    are all still there when the group opens again. */

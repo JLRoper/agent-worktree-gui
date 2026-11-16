@@ -2279,33 +2279,40 @@ tr.row:hover .btn-row-rename { opacity: .9; }
 /* The fold on a parent row: it puts the trees cut from this one out of sight under it, and brings them back. The same
    quiet-at-rest family as the ✎ — a board of rows must not look like a board of buttons — but it stays readable while
    the group is folded (the state has to be visible from the row, not only from the children that are no longer on
-   screen). `is-folded` is the closed chevron; the tooltip and aria-expanded carry the count. */
+   screen). `is-folded` is the closed chevron; the tooltip and aria-expanded carry the count.
+
+   It is PLACED, not laid out: a fixed 16px box centred on the row's guide axis, which is the cell's own padding
+   (12px + 16px * depth) plus half the box, and the same axis the children's L hangs on (public/chart.css). It was a
+   flex item in the name line, which put it after the tick's 7px box and its 2px gap and 9px off that axis - the
+   triangle of a parent row sat off to the left of the guide its children were drawn on. A fold that sized itself to
+   its glyph would also make one row's name line a pixel wider than the next, so the box stays fixed. */
 .btn-row-fold {
+  position: absolute;
+  left: calc(12px + 16px * var(--child-depth, 0));
+  top: calc(var(--guide-line, 17px) - 8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid transparent;
   background: none;
   color: var(--dim);
   border-radius: 4px;
   font: 11px/1.4 var(--term);
-  /* A fixed 16px box: the marker gutter (public/style.css `.row-lead`) is the tick's 7px + the 2px gap + this, and a
-     fold that sized itself to its glyph would make one row's name line a pixel wider than the next. */
-  flex: none; width: 16px; padding: 0; margin-left: 0;
+  width: 16px; height: 16px; padding: 0; margin: 0;
   cursor: pointer;
   opacity: .55;
-  vertical-align: 1px;
 }
 .btn-row-fold:hover { background: #232b3a; border-color: var(--line); color: var(--fg); opacity: 1; }
 .btn-row-fold.is-folded { color: var(--fg); opacity: .9; }
 tr.row:hover .btn-row-fold { opacity: .9; }
-/* The lead slot of a row's name line: the fold control, then the tick that says "cut from the row above". It is a
-   FIXED gutter reserved on every row: 7px for the tick, 2px of gap, 16px for the fold. Because the row's
-   indentation must not depend on which of the two a row carries: while the slot sized itself to its contents, a fold
-   pushed its own row's text 18px right, so a group's parent row sat in its children's column and a nested parent's
-   fold put its name further in than the child's below it. Both markers get a fixed box for the same reason: the
-   gutter's width is the sum, in every font, so one row cannot be a pixel wider than the next. An empty lead keeps
-   its width, which is what makes a group parent match an ungrouped sibling - `:empty { display: none }` was exactly
-   the rule that broke the alignment. */
-td.name > .name-line > .row-lead { display: inline-flex; align-items: center; gap: 2px; flex: none; width: 25px; }
-.child-tick { flex: none; width: 7px; color: #465668; font: 11px/1 var(--term); }
+/* The lead slot of a row's name line: a FIXED 25px gutter reserved on every row, so the row's text starts in the
+   same column whatever markers the row carries. While the slot sized itself to its contents, a fold pushed its own
+   row's text 18px right, so a group's parent row sat in its children's column and a nested parent's fold put its
+   name further in than the child's below it. The markers no longer take part in that layout at all: the fold is
+   placed on the guide axis and the L one step to its left (public/chart.css), both against the cell, so the slot is
+   empty space of a fixed width. `:empty { display: none }` was exactly the rule that broke the alignment; it must
+   never come back. */
+td.name > .name-line > .row-lead { display: block; flex: none; width: 25px; }
 
 /* The reader's lock, on the row itself: an emoji rather than a glyph, because it has to be legible to a person
    scanning a column and to an agent reading the board's own markup. Quiet while unlocked (a board of rows must not

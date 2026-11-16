@@ -308,10 +308,11 @@ function fakeRow() {
   const lead = {
     nodes: [],
     insertAdjacentHTML(where, html) {
-      const kind = html.includes("child-tick") ? "tick" : html.includes("btn-row-fold") ? "fold" : "other";
+      const kind = html.includes("child-lane") ? "lane" : html.includes("child-tick") ? "tick" : html.includes("btn-row-fold") ? "fold" : "other";
       const node = {
         kind,
-        textContent: kind === "tick" ? "\u2514" : "\u25be",
+        html,
+        textContent: /<\/span>|<\/button>/.test(html) ? "" : html,
         title: "",
         attrs: new Map(),
         classList: { toggle() {} },
@@ -324,8 +325,12 @@ function fakeRow() {
       return node;
     },
     querySelector(sel) {
-      const want = sel === ".child-tick" ? "tick" : "fold";
+      const want = sel === ".child-tick" ? "tick" : sel === ".child-lane" ? "lane" : "fold";
       return lead.nodes.find((n) => n.kind === want) || null;
+    },
+    querySelectorAll(sel) {
+      const want = sel === ".child-tick" ? "tick" : sel === ".child-lane" ? "lane" : "fold";
+      return lead.nodes.filter((n) => n.kind === want);
     },
     count(kind) { return lead.nodes.filter((n) => n.kind === kind).length; },
   };
@@ -367,7 +372,10 @@ test("every row writes the depth it draws at: a group parent 0, its children 1, 
     const key = keyOf(row.project, row.path);
     const ctx = groupCtxOf(tree, key, drawn);
     const tr = fakeRow();
-    paintRowGroup(tr, row, key, ctx);
+    // The drawn order the table paints: stage-1 comes first, stage-2 closes the group, and the grandchild hangs inside
+    // stage-1 - which is not the group's foot, so stage-1's own lane has to keep running past it.
+    const place = { lastChild: path === at("group-stage-2-eeeeee"), lanes: path === at("group-stage-1-sub-dddddd") ? [1] : [] };
+    paintRowGroup(tr, row, key, ctx, place);
     return { ctx, tr };
   };
 
@@ -400,7 +408,13 @@ test("every row writes the depth it draws at: a group parent 0, its children 1, 
     assert.equal(child.tr.style.getPropertyValue("--child-depth"), "1", `${tail} writes its own depth`);
     assert.equal(child.tr.lead.count("tick"), 1, `${tail} draws exactly one tick`);
     assert.equal(child.tr.classes.has("is-child"), true);
+    assert.equal(child.tr.lead.count("lane"), 0, `${tail} is a first-level child: no ancestor lane above it`);
   }
+  // The lane of a group closes on its LAST drawn child, and the tick is an empty box the sheet paints - a glyph's
+  // stroke starts inside its own box and stops above its baseline, which is what put the guide off the axis.
+  assert.equal(paint(at("group-stage-2-eeeeee")).tr.classes.has("is-last-child"), true, "the last drawn child turns the corner and stops");
+  assert.equal(paint(at("group-stage-1-cccccc")).tr.classes.has("is-last-child"), false, "a child with a sibling below it keeps its lane open");
+  assert.equal(paint(at("group-stage-1-cccccc")).tr.lead.querySelector(".child-tick").html.includes("\u2514"), false, "the tick is drawn, not set as a glyph");
   const nested = paint(at("group-stage-1-cccccc"));
   assert.equal(nested.ctx.childCount, 1, "the nested group's own child is drawn");
   assert.equal(nested.tr.classes.has("is-parent"), true, "so it carries a fold as well");
@@ -414,6 +428,10 @@ test("every row writes the depth it draws at: a group parent 0, its children 1, 
   assert.equal(grand.tr.style.getPropertyValue("--child-depth"), "2");
   assert.equal(grand.tr.lead.count("tick"), 1);
   assert.equal(grand.tr.lead.count("fold"), 0, "a leaf draws no fold");
+  // It hangs INSIDE stage-1's group, and stage-1 has a sibling below it, so stage-1's lane runs on through this row -
+  // one lane, at depth 1, at the axis of the row above.
+  assert.equal(grand.tr.lead.count("lane"), 1, "the grandchild carries its parent's lane");
+  assert.equal(grand.tr.lead.querySelector(".child-lane").html.includes("--lane-depth:1"), true, "on the depth-1 axis");
 
   // Nesting is EXACTLY one indent per level: each step is +1 on the row above, and the two top-level shapes agree.
   const ladder = [parent.ctx.depth, nested.ctx.depth, grand.ctx.depth];
