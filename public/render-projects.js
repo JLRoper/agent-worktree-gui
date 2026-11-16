@@ -277,7 +277,7 @@ function rootChips(projects, { scanning = null, total = projects.length } = {}) 
   const rows = [...state.rows.values()].filter((r) => names.has(r.project));
   const unmerged = rows.filter((r) => {
     const v = String(r.verdict || "");
-    return v && !v.startsWith("MERGED") && !v.startsWith("NO COMMITS") && v !== "ON MAIN" && v !== "RELEASED";
+    return v && !v.startsWith("MERGED") && !v.startsWith("NO COMMITS") && v !== "ON MAIN" && v !== "ON BASE" && v !== "RELEASED";
   }).length;
   const dirty = rows.filter((r) => r.dirty || r.untracked).length;
   const full = Number.isFinite(Number(total)) ? Math.max(0, Math.round(Number(total))) : projects.length;
@@ -351,9 +351,21 @@ function projectSection(name) {
   // Focus mode force-expands a project that holds a live row (public/app.js projectDrawsOpen), so the class, the
   // chevron and the head's tooltip all follow the answer the rows are built from rather than the stored fold.
   const open = projectDrawsOpen(name);
-  const mainLine = p.localMain && p.remoteTip
-    ? `local ${esc(p.mainBranch)} <code>${esc(p.localMain)}</code> · ${p.mainBehind ?? "?"} behind / ${p.mainAhead ?? "?"} ahead of remote`
-    : p.error ? esc(p.error) : "local main unknown";
+  // A project that names its base branches is described by THAT list, not by an `origin/main` it does not have: the
+  // fleet repositories keep dev, qa, uat and prod long-lived, so the single-base line would read `cannot resolve
+  // origin/main:` under a header whose every row is measured correctly against its own base (lib/base-branches.js).
+  // The list is what the reader checks the rows' chips against, so it is drawn with the resolved branch names.
+  const bases = Array.isArray(p.baseBranches) ? p.baseBranches : [];
+  const baseLine = bases.length
+    ? `${bases.length} base branch${bases.length === 1 ? "" : "es"}: ${bases
+        .map((b) => `${esc(b.branch)}${b.env && b.env !== b.branch ? ` (${esc(b.env)})` : ""}`)
+        .join(", ")}`
+    : null;
+  const mainLine = baseLine
+    ? baseLine
+    : p.localMain && p.remoteTip
+      ? `local ${esc(p.mainBranch)} <code>${esc(p.localMain)}</code> · ${p.mainBehind ?? "?"} behind / ${p.mainAhead ?? "?"} ahead of remote`
+      : p.error ? esc(p.error) : "local main unknown";
   const tip = p.remoteTip
     ? `<span class="mono dim">${esc(p.remoteRef || "")} <code>${esc(p.remoteTip)}</code> ${esc(String(p.remoteTipSubject || "").slice(0, 60))} · ${relTime(p.remoteTipDate)} ago</span>`
     : "";

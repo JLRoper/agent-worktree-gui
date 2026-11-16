@@ -25,8 +25,8 @@ if (!project) {
   console.error(`no such project: ${wanted ?? "(first)"} — have: ${state.projects.map((p) => p.name).join(", ")}`);
   process.exit(2);
 }
-const base = project.remote ? `${project.remote}/${project.mainBranch}` : project.mainBranch;
-console.log(`project ${project.name}  (${project.path})\ncomparing against ${base}\n`);
+const projectBase = project.remote ? `${project.remote}/${project.mainBranch}` : project.mainBranch;
+console.log(`project ${project.name}  (${project.path})\ncomparing each row against ITS OWN base: ${projectBase} unless the row names another\n`);
 
 const porcelain = git(project.path, ["worktree", "list", "--porcelain"]);
 const entries = [];
@@ -46,6 +46,10 @@ let bad = 0;
 console.log("worktree".padEnd(34), "ahead".padStart(5), "own".padStart(4), "expected".padEnd(20), "panel verdict");
 for (const e of entries) {
   const name = e.dir.split(/[\\/]/).pop();
+  // The row is measured against ITS OWN base, the rule lib/base-branches.js resolves: a fleet repository's dev tree
+  // is counted against origin/dev and its prod tree against origin/prod, not both against a main it does not have.
+  const row = rows.get(name);
+  const base = row?.baseRef || projectBase;
   const [behind, ahead] = git(e.dir, ["rev-list", "--left-right", "--count", `${base}...HEAD`])
     .split(/\s+/)
     .map((n) => Number.parseInt(n, 10));
@@ -76,9 +80,13 @@ for (const e of entries) {
     }
   }
 
-  const row = rows.get(name);
   const got = row ? String(row.verdict) : "(row missing)";
-  const want = e.branch === project.mainBranch ? "ON MAIN" : expect;
+  // A row standing on its own base is ON MAIN for the project's main branch and ON BASE for any other base branch
+  // (dev, qa, uat, prod) - the same rule lib/store.js applies to an incoming row.
+  const want =
+    e.branch && row?.baseBranch && e.branch === row.baseBranch
+      ? e.branch === project.mainBranch ? "ON MAIN" : "ON BASE"
+      : expect;
   const ok = got === want || (expect === "UNMERGED" && got.startsWith("UNMERGED")) || (expect === "MERGED" && got.startsWith("MERGED"));
   if (!ok) bad += 1;
   console.log(name.padEnd(34), String(ahead).padStart(5), String(own.size).padStart(4), want.padEnd(20), got.padEnd(24), ok ? "" : "  <== MISMATCH");

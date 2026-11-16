@@ -285,7 +285,7 @@ function chipsHtml(name) {
   const unmerged = rows.filter((r) => {
     const v = String(r.verdict || "");
     // A RELEASED row is a folder left behind, not work waiting to merge: it is counted in the tree total only.
-    return !v.startsWith("MERGED") && !v.startsWith("NO COMMITS") && v !== "ON MAIN" && v !== "RELEASED";
+    return !v.startsWith("MERGED") && !v.startsWith("NO COMMITS") && v !== "ON MAIN" && v !== "ON BASE" && v !== "RELEASED";
   }).length;
   const dirty = rows.filter((r) => r.dirty || r.untracked).length;
   const serving = rows.filter((r) => r.signals?.ports?.on).length;
