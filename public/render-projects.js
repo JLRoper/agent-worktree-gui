@@ -569,16 +569,27 @@ function paintFoldButton(btn, key, row, ctx) {
   btn.classList.toggle("is-folded", ctx.folded);
 }
 
-// Everything the grouping draws for ONE row: its child/parent classes, the indent, the fold control, and the tick
+// Everything the grouping draws for ONE row: its child/parent classes, the indent, the fold control, and the lane
 // that says "cut from the row above". The lead slot is filled in place so a re-rank or a scan tick never rebuilds a
 // control the reader is pointing at.
-function paintRowGroup(tr, row, key, ctx) {
+//
+// `place` is the DRAWN order's answer, never the records': the last child of a group closes its lane, and a re-rank
+// can hand that place to another row, so syncChildGroups works it out from the table it is painting.
+//   lastChild  this row is the last drawn child of its parent, so its L stops at the corner.
+//   lanes      the depths of the ancestors whose own lanes stay open through this row, because that ancestor has a
+//              later sibling below it: a grandchild hangs inside its parent's group, and the group's guide has to run
+//              past it or the line breaks on exactly the rows that are deepest.
+function paintRowGroup(tr, row, key, ctx, place = {}) {
   const child = Boolean(ctx.parentKey);
   tr.classList.toggle("is-child", child);
   tr.classList.toggle("is-parent", ctx.childCount > 0);
   // Hidden because an ANCESTOR is folded. The row itself stays in the document: folding is a class, not a removal,
   // which is what lets an open console, a half-typed reply and a scroll position survive it.
   tr.classList.toggle("is-fold-hidden", ctx.hidden);
+  // Folded itself: the lane out of its own fold has nothing under it to continue into, so the sheet draws none.
+  tr.classList.toggle("is-folded", ctx.folded);
+  // The group's foot: the last DRAWN child of its parent. Its L turns the corner and stops there.
+  tr.classList.toggle("is-last-child", child && Boolean(place.lastChild));
   // The depth is written for EVERY row, a group parent included: 0 is a real answer (it is what keeps the parent in an
   // ungrouped sibling's column) and one rule in public/chart.css reads it off every row, so the indent can no longer
   // depend on which markers a row happens to carry.
@@ -594,7 +605,11 @@ function paintRowGroup(tr, row, key, ctx) {
   if (!lead) return;
   let tick = lead.querySelector(".child-tick");
   if (child && !tick) {
-    lead.insertAdjacentHTML("afterbegin", `<span class="child-tick" aria-hidden="true">\u2514</span>`);
+    // An EMPTY span on purpose: the L is drawn by public/chart.css as a border, so its vertical stroke stands exactly
+    // on the guide axis and reaches the row's edges. The └ glyph it used to carry could do neither - a glyph's stroke
+    // starts inside its box and stops above its baseline - which is what put the guide a few pixels right of the
+    // parent's triangle and left every depth stepping away from the one above it.
+    lead.insertAdjacentHTML("afterbegin", '<span class="child-tick" aria-hidden="true"></span>');
     tick = lead.querySelector(".child-tick");
   } else if (!child && tick) {
     tick.remove();
@@ -608,6 +623,23 @@ function paintRowGroup(tr, row, key, ctx) {
     btn = null;
   }
   if (btn) paintFoldButton(btn, key, row, ctx);
+  paintLanes(lead, child ? place.lanes || [] : []);
+}
+
+// The lanes of the ancestors that are still open above a row. They are kept in place like the tick: only re-drawn when
+// the set of depths moves, so a scan tick that repaints every row does not churn the DOM under the reader.
+const laneSignatures = new WeakMap();
+function paintLanes(lead, lanes) {
+  if (!lead || typeof lead.querySelectorAll !== "function") return;
+  const sig = lanes.join(",");
+  if (laneSignatures.get(lead) === sig) return;
+  laneSignatures.set(lead, sig);
+  for (const el of lead.querySelectorAll(".child-lane")) el.remove();
+  if (!lanes.length) return;
+  lead.insertAdjacentHTML(
+    "afterbegin",
+    lanes.map((depth) => `<span class="child-lane" aria-hidden="true" style="--lane-depth:${Number(depth)}"></span>`).join(""),
+  );
 }
 
 // The nodes painted UNDER a row — its detail, a question it is asking, the ⟳'s offer — say which row they hang from
@@ -635,12 +667,35 @@ function syncChildGroups(project) {
   const rows = [...tbody.children].filter((el) => el.classList.contains("row"));
   const drawn = new Set(rows.map((el) => el.dataset.key));
   const offers = new Map([...tbody.querySelectorAll("tr.refresh-offer")].map((el) => [el.dataset.refreshOffer, el]));
+  // The place of each row in the table, in one pass: the last child of a parent closes the group's lane, and "last"
+  // is the DRAWN order's answer. A re-rank moves a child, so reading it off the records would leave the corner on a
+  // row that is no longer the group's foot.
+  const ctxOf = new Map(rows.map((el) => [el.dataset.key, groupCtxOf(tree, el.dataset.key, drawn)]));
+  const lastChildOf = new Map();
+  for (const el of rows) {
+    const ctx = ctxOf.get(el.dataset.key);
+    if (ctx && ctx.parentKey) lastChildOf.set(ctx.parentKey, el.dataset.key);
+  }
+  // The lanes that stay open above a row: its ancestors' own lanes, each one only while that ancestor has a later
+  // sibling below it. A depth-0 row has no lane of its own, and a row's own lane is drawn by its tick, not here.
+  const laneDepthsOf = (key) => {
+    const out = [];
+    for (let cur = ctxOf.get(key)?.parentKey; cur; cur = ctxOf.get(cur)?.parentKey || null) {
+      const up = ctxOf.get(cur);
+      if (!up || !up.depth) continue;
+      if (up.parentKey && lastChildOf.get(up.parentKey) !== cur) out.push(up.depth);
+    }
+    return out.sort((a, b) => a - b);
+  };
   for (const tr of rows) {
     const key = tr.dataset.key;
     const row = state.rows.get(key);
     if (!row) continue;
-    const ctx = groupCtxOf(tree, key, drawn);
-    paintRowGroup(tr, row, key, ctx);
+    const ctx = ctxOf.get(key);
+    paintRowGroup(tr, row, key, ctx, {
+      lastChild: Boolean(ctx.parentKey) && lastChildOf.get(ctx.parentKey) === key,
+      lanes: ctx.parentKey ? laneDepthsOf(key) : [],
+    });
     for (const el of [state.detailEls.get(key), state.confirmEls.get(key), offers.get(key)]) paintUnder(el, ctx);
   }
 }

@@ -41,6 +41,7 @@
     "verify:matrix-bridge": "node tools/verify-matrix-bridge.mjs",
     "verify:child-rows": "node tools/verify-child-rows.mjs",
     "verify:round-tree-layout": "node tools/verify-round-tree-layout.mjs",
+    "verify:chart-guides": "node tools/verify-chart-guides.mjs",
     "verify:composer-undo": "node tools/verify-composer-undo.mjs",
     "verify:composer-history": "node tools/verify-composer-history.mjs",
     "version:tag": "node tools/version.mjs tag",

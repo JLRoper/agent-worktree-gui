@@ -8,9 +8,10 @@
 // WHAT THIS PROVES. A round cuts one frozen parent tree from main and one tree per stage from that commit. The chart
 // draws that record (lib/parents.js, public/render-projects.js `childTreeOf`): the parent tree is a SIBLING of the
 // checkout's own row - a tree cut from main is not main's child - and every stage tree hangs one indent under the
-// parent tree, its own child one indent further. The grouped-branch marker on such a row is a SINGLE L, the └ the
-// row leads with, stepping in with the row's own depth (public/chart.css). It used to draw two: the project's rail
-// glyph, moved in to the row's depth, and that └.
+// parent tree, its own child one indent further. The grouped-branch marker on such a row is a SINGLE L, drawn one lead
+// to the left of the row's own depth so its stroke stands on the axis the parent's fold triangle is centred on, and
+// running the row's full height so it continues the line above it (public/chart.css). It used to draw two: the
+// project's rail glyph, moved in to the row's depth, and a └ glyph.
 //
 // The proof is a sandbox board of its own: a throwaway repo with the round's parent tree, two stage children, a tree
 // cut from the first stage (the second tier) and a plain tree no round cut, plus the queue task that carries the
@@ -265,7 +266,10 @@ try {
                 parentKey: tr.dataset.parentKey || null,
                 classes: [...tr.classList],
                 ticks: tr.querySelectorAll("td.name .row-lead .child-tick").length,
-                tick: tickBox ? { text: tick.textContent, x: Math.round(tickBox.left), y: Math.round(tickBox.top) } : null,
+                // The L is DRAWN now (public/chart.css), so its box is the measure: an 8px span whose border-left is the
+                // vertical stroke, ending on the cell's own padding. `x` is that stroke's column; `text` must be empty,
+                // because a glyph cannot stand on the axis or reach the row's edges (that was the staircase).
+                tick: tickBox ? { text: tick.textContent, x: Math.round(tickBox.left), width: Math.round(tickBox.width), y: Math.round(tickBox.top) } : null,
                 rail: rail && rail !== "none" && rail !== "normal" && rail !== '""' ? rail : null,
                 // The cell's own indent, which is what "one tier deeper" IS in the layout: `td.name`'s padding-left is
                 // 12px at the top level and +16px per tier (public/chart.css). The NAME's x is not that measure - it
@@ -326,9 +330,11 @@ try {
         check(`${name} is drawn one tier deep`, row.depth, "1");
         check(`${name} draws exactly ONE L`, row.ticks, 1);
         check(`${name} draws no rail L beside it`, row.rail, null);
-        check(`${name}'s L is the └ it leads with`, row.tick?.text, "└");
+        check(`${name}'s L is drawn, not set as a glyph`, row.tick?.text, "");
         check(`${name} is indented one tier past the parent tree`, row.padLeft, TOP_PAD + 16);
-        check(`${name}'s L starts where that indent puts it`, row.tick ? row.tick.x - parentDrawn.cellLeft : null, TOP_PAD + 16);
+        // The stroke stands on the axis of the row ABOVE it, one 8px lead short of this row's own padding - which is
+        // the fold above's centre, so the guide runs straight down out of the triangle it hangs from.
+        check(`${name}'s L starts one lead before its own indent, on the parent's axis`, row.tick ? row.tick.x - parentDrawn.cellLeft : null, TOP_PAD + 16 - 8);
       }
 
       // 4. THE SECOND TIER: a tree cut from a stage steps in again - ONE L, one indent further. This is the "indents
@@ -342,8 +348,8 @@ try {
 
       // 5. THE NAME'S COLUMN IS THE INDENT, one indent per level and nothing else: the parent row lands in the plain
       //    tree's column, the two stage rows share one, the second tier is one step past them. This is the half a
-      //    padLeft check cannot see: the markers live in the row's gutter, so a fold that sized itself to its glyph
-      //    moved the row's TEXT and left the cell's padding honest.
+      //    padLeft check cannot see: the markers are placed against the cell (public/chart.css), so a fold that sized
+      //    itself to its glyph moved the row's TEXT and left the cell's padding honest.
       check("the parent and the plain tree put their names in one column", parentDrawn.nameLeft, plainDrawn.nameLeft);
       check("stage 1's name is exactly one indent past the parent's", stage1Drawn.nameLeft - parentDrawn.nameLeft, 16);
       check("the two stage rows share a column whatever markers they carry", stage2Drawn.nameLeft, stage1Drawn.nameLeft);
