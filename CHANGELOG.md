@@ -17,7 +17,7 @@ has no tag.
 
 ## v1.112.2 — 2026-11-16 · 4 commits
 
-[`0d1f2d5`](https://github.com/JLRoper/agent-worktree-gui/commit/0d1f2d554719ce3ba3eee8ee61d6cff4b4281af5) · [compare v1.112.1...v1.112.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.112.1...v1.112.2)
+[`bed1111`](https://github.com/JLRoper/agent-worktree-gui/commit/bed1111dbe5a497b4232bed8dacea5951b33eead) · [compare v1.112.1...v1.112.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.112.1...v1.112.2)
 
 ### Docs & tests
 
@@ -26,8 +26,8 @@ has no tag.
 
 ### Other
 
-- Write the Prompt tab as a page a reader can open cold ([`6865eb7`](https://github.com/JLRoper/agent-worktree-gui/commit/6865eb75598dda487a2c4c13315aadfca9c98918))
-- chore: 1.112.2 - the version this landing carries ([`0d1f2d5`](https://github.com/JLRoper/agent-worktree-gui/commit/0d1f2d554719ce3ba3eee8ee61d6cff4b4281af5))
+- Write the Prompt tab as a page a reader can open cold ([`46f2c43`](https://github.com/JLRoper/agent-worktree-gui/commit/46f2c433444f92d3b261417bbc6cd0e82866d17b))
+- chore: 1.112.2 - the version this landing carries ([`bed1111`](https://github.com/JLRoper/agent-worktree-gui/commit/bed1111dbe5a497b4232bed8dacea5951b33eead))
 
 ## v1.112.1 — 2026-11-16 · 7 commits
 
