@@ -178,8 +178,8 @@ import { gatewayRefusalText } from "./lib/gateway-refusal.js";
 // The panel's own directories, and every state path derived from them. Nothing below builds one of those
 // paths itself any more: `resolveDirs` answers where, `statePaths` answers which file.
 import {
-  cleanScratch, ensureDirs, humanBytes, measureSize, migrateState, readMigrationJournal, resolveConfigPath, resolveDirs,
-  SCRATCH_MARKER, sizeOf, statePaths,
+  cleanScratch, ensureDirs, humanBytes, insideDir, measureSize, migrateState, openFileRoots, readMigrationJournal,
+  resolveConfigPath, resolveDirs, SCRATCH_MARKER, sizeOf, statePaths,
 } from "./lib/paths.js";
 // HTTP framing lives in lib/http/: respond.js writes the answer and reads the body, transport.js
 // decides who may write and attaches the SSE reader, and static.js serves public/. All three are
@@ -2751,13 +2751,15 @@ function deliverableRepoRoot(entry) {
   }
 }
 
-// Is `target` the root or under it? Case-folded with forward slashes, the house `pathKey` rule: this panel runs on
-// Windows, where one folder has two spellings, and a boundary that can be dodged by capitalisation is not one.
+// Is `target` the root or under it? `insideDir` (lib/paths.js:511) is the one comparison - case-folded with forward
+// slashes, the house `pathKey` rule: this panel runs on Windows, where one folder has two spellings, and a boundary
+// that can be dodged by capitalisation is not one. This only resolves both sides first, because one caller hands it a
+// path out of the store and the other a value a route has just resolved.
 function insideRepo(target, root) {
-  const a = path.resolve(String(target || "")).replace(/\\/g, "/").toLowerCase();
-  const b = path.resolve(String(root || "")).replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
-  if (!b) return false;
-  return a === b || a.startsWith(`${b}/`);
+  const t = String(target || "").trim();
+  const r = String(root || "").trim();
+  if (!t || !r) return false;
+  return insideDir(path.resolve(t), path.resolve(r));
 }
 
 // The browser this machine is registered to use for a web page, asked at most once a minute: the answer comes from a
@@ -6162,11 +6164,19 @@ const server = createServer(async (req, res) => {
       }
       // The boundary: a file a QUESTION points at is a file an agent put in a tree, so the panel opens one only inside
       // a project (or its own checkout), exactly as a deliverable is only opened inside the tree that delivered it.
-      // Without this, any page that can reach this route could open any file on the machine.
-      const roots = [...scheduler.getProjects().map((p) => p.path), HERE].filter(Boolean);
+      // This is also the door a report comes through, and a report is written where the prompt told the worker to put
+      // it - the panel's scratch root (lib/paths.js `scratchLine`), or the agent host's own `<hermes>/cache/scratch`.
+      // Both are roots below, and both are the directory itself rather than the home above it. Without the projects
+      // half, any page that can reach this route could open any file on the machine.
+      const roots = openFileRoots({
+        projects: scheduler.getProjects().map((p) => p.path),
+        panelDir: HERE,
+        scratchDir: config.scratchDir,
+        hermesDir: hermesHome(),
+      });
       if (!roots.some((root) => insideRepo(target, root))) {
         return sendJson(res, 403, {
-          error: `outside every project: ${target} — a question's link is a file inside a project tree, and this one is not`,
+          error: `outside every project and every scratch root: ${target} — a question's link is a file inside a project tree, and this one is not`,
         });
       }
       const opened = await openFileWith(target, { spawn, log });
