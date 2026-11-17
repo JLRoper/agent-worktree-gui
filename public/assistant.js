@@ -913,6 +913,9 @@
     paintSearchCount();
     renderSearchPop(out);
     paintSearchCurrent();
+    // A new answer is drawn from its first row: the popover may still hold the scroll of the list it replaced, so
+    // the row the count is standing on is put back in view rather than left above the fold.
+    if (searchHitAt >= 0) keepSearchRowVisible();
     return out;
   }
 
@@ -1001,8 +1004,9 @@
   // plain hit's mark), the row the hit names gets `.is-search-current-row` (the console draws a tool CALL as a folded
   // group row - "cat" and a chevron, with the command in `data-ltext` - so a hit on that line has no visible text to
   // mark and the row's amber edge is what says where the walk is standing), and the result row of that hit is marked
-  // `aria-current`. No scroll happens here - the repaint that lands a highlight must not move the transcript under a
-  // reader who is only typing.
+  // `aria-current`. No scroll happens here: this repaint runs while the reader is typing, and it must not move the
+  // transcript under them. The LIST's own scroller is the walk's business (`keepSearchRowVisible`), and a new answer
+  // calls it once after this paint.
   function paintSearchCurrent() {
     for (const el of document.querySelectorAll(".turn.is-search-current")) el.classList.remove("is-search-current");
     for (const mark of document.querySelectorAll("mark.as-search-mark.is-current")) mark.classList.remove("is-current");
@@ -1032,13 +1036,29 @@
     return turnEl;
   }
 
+  // The popover's OWN scroller follows the highlight. The list is a fixed popover with its own scroll (`.as-search-pop`
+  // is a flex column, `overflow-y: auto`, and placeSearchPop caps its height), so a row the keyboard stepped to past
+  // its bottom edge is a row the reader cannot see while the header goes on counting. The arithmetic - nearest edge
+  // in, one row per press, a row taller than the band keeping its top, and the way back up retracing the way down -
+  // is public/core/search-scroll.js, which is a pure function with a test; this reads the two nodes and hands them
+  // over. It moves the popover and nothing else: no transcript, no page, no focus, no height.
+  function keepSearchRowVisible() {
+    const pop = as$("as-search-pop");
+    if (!pop || pop.hidden) return null;
+    const row = pop.querySelector("[data-search-hit].is-current");
+    if (!row) return null;
+    const scroll = globalThis.wtSearchScroll;
+    if (!scroll || typeof scroll.place !== "function") return null;
+    return scroll.place(pop, row);
+  }
+
   // ONE MATCH, in front of the reader: the assistant whose turn it is, the page that turn lives on (through the same
   // reveal the board's jump and the toast use), the turn unfolded if it was folded, the match marked inside its own
-  // row, the row scrolled into view and marked as the current match. `keepList` is the keyboard's case: the popover
-  // stays up because its footer is half the count's promise, so the row goes to the BOTTOM of the transcript (below
-  // the popover) rather than the middle. Returns whether the match was marked - false when the turn is gone from the
-  // store or the text is not on the page (a tool line older than the console's window), which the row's own marked
-  // excerpt still answers.
+  // row, and the list's current row kept in view. `keepList` is the keyboard's case: the popover stays up because its
+  // footer is half the count's promise, so the LIST is what follows the walk - its own scroller is moved to the row,
+  // and the transcript is left exactly where the reader had it. Enter and a click still open the turn in the card.
+  // Returns whether the match was marked - false when the turn is gone from the store or the text is not on the page
+  // (a tool line older than the console's window), which the row's own marked excerpt still answers.
   function revealSearchHit(hitAt, { keepList = false } = {}) {
     const prev = searchHits[searchHitAt];
     const hit = searchHits[Number(hitAt)];
@@ -1063,15 +1083,21 @@
     const mark = markInsideTurn(hitScopeIn(turnEl, hit), searchShownQuery || String(hit.hit || ""));
     const sameTurn = Boolean(prev) && prev.id === hit.id && prev.thread === hit.thread;
     const pageY = window.scrollY;
-    // The popover is placed in viewport coordinates under the box, so a match under it is a match the reader cannot
-    // see: with the list up, the row lands at the foot of the transcript, below the list. Inside one turn each press
-    // moves one row, so the row itself is what scrolls.
-    if (keepList) (mark || turnEl).scrollIntoView({ block: "end" });
-    else if (!sameTurn) turnEl.scrollIntoView({ block: "center" });
-    else if (mark) mark.scrollIntoView({ block: "center" });
+    // Enter and a click put the turn in the middle of the card. A keyboard STEP does not touch the transcript at all:
+    // the reader's place is the list, whose row is the thing that has to move, and a press that dragged the card
+    // around under a floating popover would move the text they are not reading.
+    if (!keepList) {
+      if (!sameTurn) turnEl.scrollIntoView({ block: "center" });
+      else if (mark) mark.scrollIntoView({ block: "center" });
+    }
+    // The reveal can still move the window through the card's own pager or a fold; put it back where the reader had
+    // it, whatever asked.
     if (window.scrollY !== pageY) window.scrollTo({ top: pageY });
     paintSearchCount();
     paintSearchCurrent();
+    // The list follows the walk: the popover's own scroller is moved so the row the keyboard is standing on is fully
+    // visible, one row per press, in either direction.
+    if (keepList) keepSearchRowVisible();
     return Boolean(mark);
   }
 

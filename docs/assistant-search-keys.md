@@ -12,7 +12,7 @@ Everything below is doable without the mouse, because a search you have to reach
 | Key | Where | What it does |
 | --- | --- | --- |
 | `Ctrl+Q` | Anywhere in the open assistant panel | Puts the caret in the search box and **selects what it already holds**, so the first character typed replaces the last filter. Ignored while the caret is in a textarea or in the composer. |
-| `Down` | In the search box | Steps the current match to the next matching **row** - one press, one match, in the list's order (newest message first, rows in reading order inside it). Marks it in the transcript and moves the list's current row with it. Wraps at the end. |
+| `Down` | In the search box | Steps the current match to the next matching **row** - one press, one match, in the list's order (newest message first, rows in reading order inside it). Marks it in the transcript, and moves the list's current row with it, scrolling the list so that row is fully visible. Wraps at the end. |
 | `Up` | In the search box | The same step backwards. Wraps at the start. |
 | `Shift+Down` | In the search box | Steps **backwards** - the same move `Up` makes, for a reader who learned that Shift reverses the direction. Wraps like `Up`. |
 | `Shift+Up` | In the search box | Steps backwards too. With `Shift+Down` and `Shift+Enter` it is the reverse of `Down`: all three land on the same row from the same start. |
@@ -131,14 +131,42 @@ Four surfaces say the same thing at once:
 A press repaints the highlight and never scrolls the window. A keystroke that only narrows the filter paints the
 answer's first match where it is, so the transcript does not jump under a reader who is still typing.
 
+## The list follows the walk
+
+The results are a popover with a fold: `placeSearchPop` caps its height at roughly the viewport's 42% and
+`.as-search-pop` is its own scroller, so a filter with more rows than fit is read by scrolling the LIST, not the
+card behind it. A keyboard step therefore moves the popover's scroller - never the transcript, never the page:
+
+- after every `Down`, `Up`, `Shift+Down`, `Shift+Up` and `Shift+Enter`, the row the header counts is fully visible
+  in the list. The caret stays in the box, the count and the box's own row do not move, and the popover's height
+  does not change;
+- the row is brought in from the nearest edge, one row per press. Once the walk is past the fold, each press moves
+  the list by exactly one row, and no press is a page and none is animated (a plain `scrollTop` write, so a held key
+  cannot queue a smooth scroll behind it);
+- a matching row TALLER than the list's visible band keeps its **top** visible rather than its bottom: the text a
+  reader searched for starts at the top of a row, and a bottom-aligned tall row would show them its foot;
+- the way back is the way down. A row's offset is a function of that row's own geometry, not of the direction the
+  walk arrived from, so stepping `Up` from the last result scrolls the list up by exactly the rows the `Down` walk
+  scrolled down, and the first result comes back at the top where it started.
+
+`Enter` and a click on a row are unchanged: they open the turn in the card, scroll the transcript to it and get the
+list out of the way. A click on a partly visible row still selects that row.
+
+The arithmetic is `public/core/search-scroll.js` (`wtSearchScroll.target`, `place` and `shows`), a pure function of
+the row's offset, its height, the band's height and the scroller's reach, loaded as a classic script by
+`public/index.html` before `assistant.js` and unit-tested by `test/assistant-search-scroll.test.js`. `assistant.js`
+reads the two nodes and hands them over (`keepSearchRowVisible`).
+
 ## Proving it
 
 ```
 node --test test/assistant-search-count.test.js       # one count source: header total == footer displayed
 node --test test/assistant-search-items.test.js       # the match-to-turn map and the list's order, in isolation
 node --test test/assistant-search-dismiss.test.js     # the outside-mousedown predicate, and the page that calls it
+node --test test/assistant-search-scroll.test.js      # the scroll target: nearest edge, tall row, reverse walk
 node tools/verify-assistant-search-keys.mjs           # 54 checks in headless Chromium at 1440x900
 node tools/verify-assistant-search-order.mjs          # 44 checks: the order and the dismissal, at 1440x900
+node tools/verify-assistant-search-scroll.mjs         # 117 checks: the list follows the walk, at 1440x900
 ```
 
 The keys script boots this checkout's server on a free port with its own state directory and a synthesized
@@ -171,3 +199,20 @@ the transcript below closes the list with the filter still in the box and no cou
 it at `1 of 4`, a drag that starts on a row does not close it, a row click still selects, and a click on the Settings
 pane (another pane of the same float) closes it. The pictures under `docs/assets/assistant-search-order/` are that
 run, and `assistant-search-order.json` is its record.
+
+The scroll script is the third half: twelve matching messages with bodies long enough that the transcript's own box
+overflows, so the filter shows ten rows in a popover shorter than its content (six fit). It opens the panel with the
+keyboard, types the filter, then walks `Down` from `1 of 10` to `10 of 10` and `Up` all the way back, asserting on
+every press that the current row is fully inside the popover's band, that the popover's height, its top and the box
+above it did not move, that the caret stayed in the box, that the page stayed at `scrollY` 0, and that no box whose
+content did not change scrolled. It then compares the down walk's offsets with the up walk's: they are the same
+numbers in reverse. The pictures under `docs/assets/assistant-search-scroll/` are that run, and
+`assistant-search-scroll.json` is its record:
+
+| Picture | What it shows |
+| --- | --- |
+| `01-first-result-1-of-10-1440x900.png` | `1 of 10`, the first row current at the top of the list, the transcript ringed. |
+| `02-middle-result-5-of-10-1440x900.png` | Five `Down`s: `5 of 10`, the fifth row current and fully visible at the list's bottom edge. |
+| `03-last-result-10-of-10-1440x900.png` | Nine `Down`s: `10 of 10`, the last row current and fully visible, the list at the end of its reach. |
+| `04-back-to-the-middle-5-of-10-1440x900.png` | `Up` from the last: `5 of 10` again, the row in view on the way back. |
+| `05-back-to-the-first-1-of-10-1440x900.png` | Home: `1 of 10`, the list back at the top, the same row and the same offset as the first shot. |

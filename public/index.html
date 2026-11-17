@@ -1144,6 +1144,12 @@
        else (the transcript, another pane, the board) does. Published on globalThis as `wtSearchDismiss`;
        test/assistant-search-dismiss.test.js imports this same file. Loaded before assistant.js, which wires it. -->
   <script src="/core/search-dismiss.js"></script>
+  <!-- The search popover's own scroll: where the list has to sit so the row the keyboard is standing on is inside its
+       visible band. One pure function of the row's geometry - bottom aligned when it fits, top aligned when it is
+       taller than the band, and the same number from either direction so the way back up retraces the way down.
+       Published on globalThis as `wtSearchScroll`; test/assistant-search-scroll.test.js imports this same file.
+       Loaded before assistant.js, which calls it on every keyboard step. -->
+  <script src="/core/search-scroll.js"></script>
   <!-- How fast a run's output reaches the reader's eyes: the word pacer (a paragraph typing out) and the line gate
        (whole lines walking into a console), both driven from app.js by the two Settings > Display rows. Published
        on globalThis as `wtType`; test/type-stream.test.js imports this same file. -->
