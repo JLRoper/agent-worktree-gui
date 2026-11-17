@@ -11,24 +11,27 @@
 // itself stays beneath it with the choices and the countdown untouched.
 //
 // WHAT IS DRIVEN, and nothing synthetic reaches the page: a throwaway panel of its own (its own PANEL_CONFIG, port
-// and jobs store), a stub Runs API on an ephemeral port, and three real runs started through POST /api/agents/reply.
+// and jobs store), a stub Runs API on an ephemeral port, and four real runs started through POST /api/agents/reply.
 // Each run's stream carries an `approval.request` with one command, so the card, its approval record and its
-// deadline are the panel's own. The three commands are the three cases the brief names:
+// deadline are the panel's own. The four commands are the cases the brief names:
 //
-//   read-only    git status --short && git diff -- docs/readme.md
-//   destructive  git reset --hard origin/main && git push --force origin HEAD
-//   titled       [Clean the stale export] git rm --cached vendored/left-pad.js && git commit -m ...
+//   read-only       git status --short && git diff -- docs/readme.md
+//   destructive     git reset --hard origin/main && git push --force origin HEAD
+//   titled          [Clean the stale export] git rm --cached vendored/left-pad.js && git commit -m ...
+//   permission-box  the chained one-liner from the card this brief was written about: eleven shell steps, one delete
 //
 // WHAT IT ASSERTS, off the painted card at 1440x900:
 //   (1) the block is ABOVE the command, and its bottom is above the command's top - the order a reader reads;
 //   (2) the command is byte for byte what the host asked about, inside its own <pre>, with no summary text in it;
-//   (3) every step is named: the chip says `reads only` on the reading command and the read sentence is drawn, and
-//       the destructive one wears the danger chip with a delete, a history-rewrite and a push row;
-//   (4) the agent's own [Title] is the lead line, and it does not suppress the flags;
-//   (5) the four choices and the countdown are still under the command, all four enabled, the timer counting;
-//   (6) nothing is clipped: the block and each row fit inside the card's width;
-//   (7) one screenshot of each case, viewport 1440x900, written under docs/assets/approval-summary/;
-//   (8) no page error was raised, and the browser and the sandbox are gone when the run ends.
+//   (3) the split: eleven shell steps and eight programs on the chained one-liner, and no program is a fragment;
+//   (4) the consequential steps are drawn in full - the delete, the history rewrite, the push, the write outside the
+//       repo - and everything else is ONE folded line that says how many and names each program once;
+//   (5) the folded line starts collapsed, and clicking it opens the rows it counted;
+//   (6) the agent's own [Title] is the lead line, and it does not suppress the flags;
+//   (7) the four choices and the countdown are still under the command, all four enabled, the timer counting;
+//   (8) nothing is clipped: the block and each row fit inside the card's width;
+//   (9) one screenshot of each case, viewport 1440x900, written under docs/assets/approval-summary/;
+//  (10) no page error was raised, and the browser and the sandbox are gone when the run ends.
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
@@ -68,12 +71,31 @@ const ok = (label, cond, detail = "") => {
 const section = (name) => console.log(`\n-- ${name}`);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// ---- the three commands ------------------------------------------------------------------------------------------
-// Every one of them is what a worker actually parks on: a read, a destructive pair, and a titled change whose title
-// is the agent's own words.
+// ---- the four commands -------------------------------------------------------------------------------------------
+// Every one of them is what a worker actually parks on: a read, a destructive pair, a titled change whose title is
+// the agent's own words, and the permission-box card this brief was written about - a chained one-liner whose eleven
+// shell steps carry one delete.
 const READ_ONLY = "git status --short && git diff -- docs/readme.md";
 const DESTRUCTIVE = "git reset --hard origin/main && git push --force origin HEAD";
 const TITLED = '[Clean the stale export] git rm --cached vendored/left-pad.js && git commit -m "drop the vendored copy"';
+// The drive letter is built from its code point: `tools/absolute-paths.mjs` refuses a commit that spells a folder on
+// the machine that wrote it, and the VALUE here is still the exact path the card showed.
+const DRIVE = String.fromCharCode(67);
+const CARD_ROOT = `${DRIVE}:/ProjectDevelopment/sales-cit-dev-POC-build-1/.worktrees/permission-box-exercise-fully-reversible-4d5d95`;
+const CARD_BOX = `${DRIVE}:/Users/roper/AppData/Local/hermes/cache/scratch/perm-test-box`;
+const CHAINED = [
+  `cd "${CARD_ROOT}"`,
+  'echo "START_UTC=$(date -u +%FT%TZ)"',
+  "S=$(date +%s%N)",
+  `find "${CARD_BOX}" -name "proof.txt" -delete`,
+  "RC=$?",
+  "E=$(date +%s%N)",
+  'echo "EXIT_CODE=$RC"',
+  'echo "ELAPSED_MS=$(( (E-S)/1000000 ))"',
+  'echo "END_UTC=$(date -u +%FT%TZ)"',
+  'echo "---BOX AFTER---"',
+  `ls -la "${CARD_BOX}"`,
+].join("; ");
 const CASES = [
   {
     key: "read-only",
@@ -82,7 +104,8 @@ const CASES = [
     command: READ_ONLY,
     chip: "reads only",
     lead: "",
-    steps: ["git status: what has changed in this tree", "git diff: compare the blob hashes of this path in the index and the worktree"],
+    steps: [],
+    folds: ["2 harmless steps: git status, git diff"],
     flags: [],
     readLine: true,
     danger: false,
@@ -95,6 +118,7 @@ const CASES = [
     chip: "changes things",
     lead: "",
     steps: ["git reset --hard: this branch's tip, and every uncommitted change with it", "git push --force: HEAD to origin"],
+    folds: [],
     flags: ["discards uncommitted changes", "moves this branch's history", "pushes to origin"],
     readLine: false,
     danger: true,
@@ -106,10 +130,25 @@ const CASES = [
     command: TITLED,
     chip: "changes things",
     lead: "Clean the stale export",
-    steps: ["git rm --cached: this one path", "git commit: the staged changes"],
+    steps: [],
+    folds: ["2 harmless steps: git rm, git commit"],
     flags: [],
     readLine: false,
     danger: false,
+  },
+  {
+    // The card from the screenshot: eleven shell steps, and the reader needs the one that deletes.
+    key: "permission-box",
+    thread: "th-box",
+    marker: "GATE-BOX",
+    command: CHAINED,
+    chip: "changes things",
+    lead: "",
+    steps: [`find: walks ${CARD_BOX}, deleting what it matches`],
+    folds: ["7 harmless steps: cd, echo, ls"],
+    flags: ["deletes what it matches", "writes outside the repo"],
+    readLine: false,
+    danger: true,
   },
 ];
 
@@ -270,7 +309,20 @@ const readCard = (page, thread) =>
     const summary = box.querySelector("[data-ta-summary]");
     const cmd = box.querySelector("pre.ta-cmd");
     const chip = box.querySelector(".ta-summary-chip");
-    const steps = [...box.querySelectorAll(".ta-summary-steps li")].map((li) => li.textContent.trim());
+    const steps = [...box.querySelectorAll(".ta-summary-steps > li")]
+      .filter((li) => !li.classList.contains("is-fold"))
+      .map((li) => li.textContent.trim());
+    const folds = [...box.querySelectorAll(".ta-summary-steps > li.is-fold details.ta-fold")].map((d) => {
+      const line = d.querySelector("summary");
+      return {
+        kind: d.dataset.taFold,
+        count: Number(d.dataset.taCount),
+        text: line ? line.textContent.trim() : "",
+        rows: [...d.querySelectorAll(".ta-fold-steps li")].map((li) => li.textContent.trim()),
+        open: d.open,
+        lineFits: Boolean(line && line.scrollWidth <= line.clientWidth + 1),
+      };
+    });
     const flags = [...box.querySelectorAll(".ta-summary-flag")].map((el) => ({ kind: el.dataset.taFlag, text: el.textContent.replace(/^\s*\u26a0\s*/, "").trim() }));
     const read = box.querySelector(".ta-summary-read");
     const buttons = [...box.querySelectorAll("button[data-approve]")].map((b) => ({ label: b.textContent.trim(), disabled: b.disabled }));
@@ -288,6 +340,7 @@ const readCard = (page, thread) =>
       chipClass: chip ? chip.className : null,
       lead: (box.querySelector(".ta-summary-lead") || {}).textContent || "",
       steps,
+      folds,
       flags,
       readLine: read ? read.textContent.trim() : "",
       commandText: cmd ? cmd.textContent : null,
@@ -295,7 +348,7 @@ const readCard = (page, thread) =>
       foot: foot ? { text: (foot.querySelector(".ta-left") || {}).textContent || "", barWidth: (foot.querySelector(".ta-timer > span") || {}).style?.width || "" } : null,
       firstButtonBelowCommand: Boolean(firstButton && cmd && r.cmd.bottom <= firstButton.getBoundingClientRect().top),
       blockFits: Boolean(summary && summary.scrollWidth <= summary.clientWidth + 1),
-      rowsFit: [...box.querySelectorAll(".ta-summary-steps li, .ta-summary-flag, .ta-summary-lead")].every((el) => el.scrollWidth <= el.clientWidth + 1),
+      rowsFit: [...box.querySelectorAll(".ta-summary-steps li, .ta-summary-flag, .ta-summary-lead, .ta-fold-line")].every((el) => el.scrollWidth <= el.clientWidth + 1),
       cardFits: Boolean(r.card && r.card.right <= window.innerWidth + 1 && r.card.left >= -1),
       viewport: { width: window.innerWidth, height: window.innerHeight },
       page: { thread: card?.dataset.thread || null },
@@ -329,7 +382,7 @@ async function main() {
   const empty = path.join(dir, "empty");
   mkdirSync(empty, { recursive: true });
   // ONE TREE PER CASE: the panel refuses a second live run in a tree that already has one, and a gate should not need
-  // to settle a run to move on. Three trees, three cases, three real runs.
+  // to settle a run to move on. One tree per case, one real run each.
   const makeRepo = (name) => {
     const dirPath = path.join(repos, name);
     mkdirSync(path.join(dirPath, ".worktrees"), { recursive: true });
@@ -462,7 +515,9 @@ async function main() {
           check("the command under it is byte for byte what the host asked about", card.commandText, c.command);
           check("the chip", card.chipText, c.chip);
           check("the agent's own words are the lead line", card.lead.trim(), c.lead);
-          check("one sentence per step", card.steps, c.steps);
+          check("the consequential steps are drawn in full", card.steps, c.steps);
+          check("everything else is one folded line", card.folds.map((f) => f.text), c.folds);
+          ok("no folded line counts a step it does not hold", card.folds.every((f) => f.rows.length === f.count), JSON.stringify(card.folds.map((f) => [f.count, f.rows.length])));
           for (const want of c.flags) {
             ok(`the flag is drawn: ${want}`, card.flags.some((f) => f.text.includes(want)), card.flags.map((f) => f.text).join(" | "));
           }
@@ -475,6 +530,9 @@ async function main() {
           ok("the countdown is drawn", Boolean(card.foot && /left$/.test(card.foot.text.trim()) && /\d/.test(card.foot.text)), JSON.stringify(card.foot));
           ok("nothing in the block or a row is clipped", card.blockFits && card.rowsFit, JSON.stringify({ blockFits: card.blockFits, rowsFit: card.rowsFit }));
           ok("the card is inside the viewport", card.cardFits, JSON.stringify(card.viewport));
+          ok("every folded line starts collapsed", card.folds.every((f) => !f.open), JSON.stringify(card.folds.map((f) => f.open)));
+          // The pager this replaces is gone: no row says how many steps are "below".
+          ok("no pager row is drawn", !/more step|read the command below/i.test(card.steps.concat(card.folds.map((f) => f.text)).join(" | ")));
 
           await page.locator(`.agents-block .job[data-thread="${c.thread}"] .turn-approval`).scrollIntoViewIfNeeded();
           await sleep(250);
@@ -482,6 +540,20 @@ async function main() {
           await page.screenshot({ path: shot });
           shots.push(shot);
           ok(`captured at 1440x900: ${path.basename(shot)}`, card.viewport.width === 1440 && card.viewport.height === 900, JSON.stringify(card.viewport));
+
+          // After the capture - the picture is of the card as the reader first meets it - the folded line really
+          // opens, and it opens onto the rows it counted.
+          if (c.folds.length) {
+            const line = page.locator(`.agents-block .job[data-thread="${c.thread}"] .turn-approval .ta-fold-line`).first();
+            await line.click();
+            await sleep(200);
+            const open = await readCard(page, c.thread);
+            const fold = open.folds[0];
+            ok("the folded line expands on click", fold.open === true && fold.rows.length === fold.count, JSON.stringify({ open: fold.open, rows: fold.rows.length, count: fold.count }));
+            ok("the expanded rows are visible", fold.rows.length > 0 && fold.lineFits !== false, JSON.stringify(fold.rows));
+            await line.click();
+            await sleep(120);
+          }
 
           // The answer is a real POST through the panel, and the box really closes; only then may the next run start
           // in the same tree.
@@ -495,7 +567,25 @@ async function main() {
           ok("the box is gone once answered", Boolean(cleared));
         }
 
-        section("3. the summary is a reading, not a second command");
+        section("3. the splitter, on the chained one-liner, through the panel's own module");
+        const split = await page.evaluate((cmd) => {
+          const M = window.wtCommandSummary;
+          const raw = M.splitSteps(cmd);
+          const s = M.summarize(cmd, { root: "" });
+          return {
+            raw,
+            programs: s.steps.map((x) => x.program),
+            shown: s.shown.length,
+            harmless: s.harmless.length,
+            fragments: s.steps.map((x) => x.program).filter((p) => !p || /^[-+%()=<>&|;,:]/.test(p) || /[()]/.test(p)),
+          };
+        }, CHAINED);
+        check("eleven shell steps", split.raw.length, 11);
+        check("eight programs, in order", split.programs, ["cd", "echo", "find", "echo", "echo", "echo", "echo", "ls"]);
+        check("no program is a fragment", split.fragments, []);
+        check("one step in full, seven folded", [split.shown, split.harmless], [1, 7]);
+
+        section("4. the summary is a reading, not a second command");
         const dup = await page.evaluate(() =>
           [...document.querySelectorAll(".turn-approval .ta-summary")].map((s) => ({
             inCmd: Boolean(s.closest("pre.ta-cmd")),
@@ -504,7 +594,7 @@ async function main() {
         );
         ok("no summary block is inside a command box", dup.every((d) => !d.inCmd), JSON.stringify(dup));
 
-        section("4. nothing raised a page error");
+        section("5. nothing raised a page error");
         check("page errors", pageErrors, []);
         return failures;
       },

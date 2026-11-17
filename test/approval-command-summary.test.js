@@ -45,10 +45,60 @@ test("the split follows the shell: && || ; | and a newline, but not inside quote
   // A pipe inside quotes is text; a pipe inside a substitution belongs to the inner command.
   assert.deepEqual(M.splitSteps('echo "a | b"'), ['echo "a | b"']);
   assert.deepEqual(M.splitSteps("git rm $(git ls-files -m | head -1)"), ["git rm $(git ls-files -m | head -1)"]);
+  // A backtick span and a `${...}` expansion are text too.
+  assert.deepEqual(M.splitSteps("echo `git log | head -1`"), ["echo `git log | head -1`"]);
+  assert.deepEqual(M.splitSteps("echo ${A:-a|b} && ls"), ["echo ${A:-a|b}", "ls"]);
   // A redirection is not a background job, and `2>&1` is not a separator either.
   assert.deepEqual(M.splitSteps("node x.mjs > out.log 2>&1"), ["node x.mjs > out.log 2>&1"]);
   // An empty step is not a step.
   assert.deepEqual(M.splitSteps("a && && b"), ["a", "b"]);
+});
+
+// THE CARD THIS BRIEF WAS WRITTEN ABOUT. Its command, transcribed from the permission box's own <pre>: eleven shell
+// steps, three of them assignments, and the weight in the `find ... -delete`. The drive letter is built from its code
+// point because `tools/absolute-paths.mjs` refuses a commit that spells a folder on the machine that wrote it - the
+// VALUE below is still the exact path the card showed, and that is what the test compares.
+const DRIVE = String.fromCharCode(67);
+const CARD_ROOT = `${DRIVE}:/ProjectDevelopment/sales-cit-dev-POC-build-1/.worktrees/permission-box-exercise-fully-reversible-4d5d95`;
+const CARD_BOX = `${DRIVE}:/Users/roper/AppData/Local/hermes/cache/scratch/perm-test-box`;
+const CARD = [
+  `cd "${CARD_ROOT}"`,
+  'echo "START_UTC=$(date -u +%FT%TZ)"',
+  "S=$(date +%s%N)",
+  `find "${CARD_BOX}" -name "proof.txt" -delete`,
+  "RC=$?",
+  "E=$(date +%s%N)",
+  'echo "EXIT_CODE=$RC"',
+  'echo "ELAPSED_MS=$(( (E-S)/1000000 ))"',
+  'echo "END_UTC=$(date -u +%FT%TZ)"',
+  'echo "---BOX AFTER---"',
+  `ls -la "${CARD_BOX}"`,
+].join("; ");
+
+test("the chained one-liner splits into eleven shell steps and eight programs, none of them a fragment", () => {
+  assert.equal(M.splitSteps(CARD).length, 11);
+  // `S=$(date +%s%N)` and `E=$(date +%s%N)` are assignments, and each stays inside the step it belongs to - the
+  // splitter used to cut at the space inside the substitution and draw `+%s%N)` as a program.
+  const s = M.summarize(CARD, { root: CARD_ROOT });
+  assert.deepEqual(s.steps.map((x) => x.program), ["cd", "echo", "find", "echo", "echo", "echo", "echo", "ls"]);
+  assert.equal(s.steps.every((x) => x.program && !/[()]/.test(x.program)), true);
+  const out = M.html(CARD, { root: CARD_ROOT });
+  assert.doesNotMatch(out, /\(empty\)/);
+  assert.doesNotMatch(out, /\+%s%N\)/);
+  assert.doesNotMatch(out, /: no argument/);
+  assert.doesNotMatch(out, /(^|>)--</);
+});
+
+test("an assignment or a bare token stays inside its step, and a fragment is never a program", () => {
+  // `x=$(date +%s)` sets up the echo after it; `--`, `%s%N` and `+` are fragments and set up nothing.
+  assert.deepEqual(M.summarize("x=$(date +%s) ; echo -- ; -- ; %s%N ; + ; ls -la").steps.map((x) => x.program), ["echo", "ls"]);
+  assert.deepEqual(M.summarize("FOO=bar BAZ=1 git status").steps.map((x) => x.program), ["git status"]);
+  // A subshell's inside is the steps it runs, and a group is not a program called `(cd`.
+  assert.deepEqual(M.summarize("(cd docs && ls) && pwd").steps.map((x) => x.program), ["cd", "ls", "pwd"]);
+  // A line that is only an assignment has nothing to describe, so it draws no block at all.
+  assert.equal(M.html("FOO=bar"), "");
+  // A redirect with no program before it still raises its warning.
+  assert.equal(M.summarize("> /etc/hosts", { root: ROOT }).flags[0].kind, "outside");
 });
 
 // ---------- 2. the three sentences ----------
@@ -207,18 +257,79 @@ test("nothing here calls a model, the network or the clock", () => {
   assert.doesNotMatch(source, /\brequire\s*\(/);
 });
 
-test("an unknown command is described honestly, and a long one is cut with a count", () => {
+test("an unknown command is described honestly, and a harmless one folds instead of paging", () => {
   const unknown = M.summarize("frobnicate --now dist/widget.bin");
   assert.equal(unknown.steps[0].text, "frobnicate: dist/widget.bin");
   assert.equal(unknown.readOnly, false);
-  const many = M.summarize(Array.from({ length: 12 }, (_, i) => `echo ${i}`).join(" && "));
-  assert.equal(many.steps.length, M.MAX_STEPS);
-  assert.equal(many.more, 2);
-  assert.match(M.html(Array.from({ length: 12 }, (_, i) => `echo ${i}`).join(" && ")), /and 2 more steps/);
+  // Twelve echoes have nothing to weigh: one folded line, not ten rows and a pager.
+  const many = Array.from({ length: 12 }, (_, i) => `echo ${i}`).join(" && ");
+  const s = M.summarize(many);
+  assert.equal(s.steps.length, 12);
+  assert.equal(s.harmless.length, 12);
+  assert.equal(s.shown.length, 0);
+  assert.match(M.html(many), /12 harmless steps: echo/);
+  assert.doesNotMatch(M.html(many), /read the command below/);
   // An empty command draws no block at all rather than an empty frame.
   assert.equal(M.html(""), "");
   assert.equal(M.html("   \n  "), "");
 });
+
+// ---------- 10. the list earns its length ----------
+test("the card's own command draws its one delete in full and folds seven harmless steps into one line", () => {
+  const s = M.summarize(CARD, { root: CARD_ROOT });
+  assert.equal(s.consequential.length, 1);
+  assert.equal(s.shown.length, 1);
+  assert.equal(s.shown[0].program, "find");
+  assert.match(s.shown[0].text, /deleting what it matches/);
+  assert.equal(s.harmless.length, 7);
+  const out = M.html(CARD, { root: CARD_ROOT });
+  // The line says how many, and names each program ONCE: five echoes are one `echo`.
+  assert.match(out, /<summary class="ta-fold-line mono">7 harmless steps: cd, echo, ls<\/summary>/);
+  assert.match(out, /data-ta-fold="harmless" data-ta-count="7"/);
+  // The pager this replaces is gone.
+  assert.doesNotMatch(out, /more step/);
+  assert.doesNotMatch(out, /read the command below/);
+  // The two warnings stay, as their own rows, in the block above the command.
+  assert.match(out, /data-ta-flag="delete">&#9888; deletes what it matches</);
+  assert.match(out, /data-ta-flag="outside">&#9888; writes outside the repo/);
+});
+
+test("a read-only command collapses to a single harmless line and draws no row in full", () => {
+  const s = M.summarize("git status --short && git diff -- docs/readme.md");
+  assert.equal(s.shown.length, 0);
+  assert.equal(s.harmless.length, 2);
+  const out = M.html("git status --short && git diff -- docs/readme.md");
+  assert.match(out, /2 harmless steps: git status, git diff/);
+  // The list's first item IS the folded line: there is nothing above it.
+  assert.match(out, /<ul class="ta-summary-steps"><li class="is-fold">/);
+});
+
+test("at most four consequential steps are drawn in full, and the rest fold into a line that says so", () => {
+  const cmd = "rm -rf build && git push origin main && git reset --hard HEAD~1 && cp x /srv/x && curl -s http://api.example.test/x && npm install";
+  const s = M.summarize(cmd, { root: ROOT });
+  assert.equal(s.consequential.length, 6);
+  assert.equal(s.shown.length, 4);
+  assert.equal(s.folded.length, 2);
+  assert.deepEqual(s.folded.map((x) => x.program), ["curl", "npm"]);
+  const out = M.html(cmd, { root: ROOT });
+  assert.match(out, /2 more consequential steps: curl, npm/);
+  // A network fetch and a package install each earn a row; so does a write outside the repo.
+  assert.deepEqual(s.consequential.map((x) => x.program), ["rm", "git push", "git reset", "cp", "curl", "npm"]);
+});
+
+test("a destructive command keeps its delete in full, and only the harmless tail folds", () => {
+  const cmd = "git clean -fdx && git status --short";
+  const s = M.summarize(cmd, { root: ROOT });
+  assert.deepEqual(s.shown.map((x) => x.program), ["git clean"]);
+  assert.equal(s.harmless.length, 1);
+  const out = M.html(cmd, { root: ROOT });
+  assert.match(out, /<li>git clean -fd: every untracked file this pattern matches<\/li>/);
+  assert.match(out, /1 harmless step: git status/);
+  assert.match(out, /data-ta-flag="delete"/);
+  // sudo is a row, not a harmless step: a step that runs as root is never folded away.
+  assert.equal(M.summarize("sudo systemctl restart nginx").consequential.length, 1);
+});
+
 
 test("one summary per card, derived at paint time from the same string the card shows", () => {
   // The block is built from `command`, the same variable the <pre> is built from: a second source would let the
