@@ -9,11 +9,16 @@
 //   * a turn's prompt, reply and every console line are ONE item, however many of them matched;
 //   * the item's place in the list is the place of its FIRST hit, never a second ordering the list does not show;
 //   * the key is thread + turn id, so the same turn id on two threads is two items and never one.
+//
+// THE ORDER is the second subject (`order`). The answer arrives in the cap's preference - input, then replies, then
+// console lines - which decides which matches survive, not the order a reader walks them in. `order` puts the items
+// newest first by their newest row, the rows inside an item in reading order, and breaks equal timestamps by the
+// conversation's own numbering, so the list a Down walks is the list the popover draws.
 import assert from "node:assert/strict";
 import test from "node:test";
 import "../public/core/search-items.js";
 
-const { group, keyOf } = globalThis.wtSearchItems;
+const { group, keyOf, order } = globalThis.wtSearchItems;
 
 const hit = (thread, id, field, extra = {}) => ({ thread, id, turn: Number(id.replace(/\D/g, "")) || 0, field, ...extra });
 
@@ -95,5 +100,87 @@ test("an empty list is no item, never a crash", () => {
 test("the module's answers are functions on one global, and the walk is not one of them", () => {
   assert.equal(typeof globalThis.wtSearchItems.group, "function");
   assert.equal(typeof globalThis.wtSearchItems.keyOf, "function");
+  assert.equal(typeof globalThis.wtSearchItems.order, "function");
   assert.equal(globalThis.wtSearchItems.step, undefined, "the walk belongs to public/core/search-count.js");
+});
+
+// ---- the order the list reads in ----------------------------------------------------------------------------
+// The defect: the answer arrives in the cap's preference, so the reader's oldest prompt sat on top of a reply from
+// five minutes ago. These cases pin the walk's order - newest message first, rows inside a message in reading order,
+// ties by conversation order - because the popover draws exactly the list this function answers.
+const at = (hours, minutes = 0) => Date.UTC(2026, 10, 12, hours, minutes);
+const t = (id, turn, field, when, extra = {}) => ({ thread: "panel-assistant", id, turn, field, at: when, ...extra });
+
+test("items are ordered by their own newest row, newest first - not by the field the cap preferred", () => {
+  // The server's order for this answer is input first, then reply, then console - so today's list reads the
+  // six-hour-old prompt on top and the five-minute-old reply at the bottom.
+  const hits = [
+    t("old-prompt", 1, "input", at(6)),
+    t("recent-reply", 4, "reply", at(11, 55)),
+    t("middle-reply", 3, "reply", at(10)),
+    t("oldest-line", 2, "tool", at(7)),
+  ];
+  const out = order(hits);
+  assert.deepEqual(
+    out.map((h) => h.id),
+    ["recent-reply", "middle-reply", "oldest-line", "old-prompt"],
+    "the newest row is 1 of N and Down walks backwards in time",
+  );
+  assert.equal(out.length, hits.length, "no hit is dropped from the walk");
+  assert.deepEqual(hits.map((h) => h.id), ["old-prompt", "recent-reply", "middle-reply", "oldest-line"], "the answer it was given is not reordered in place");
+  // The item map built over the ordered list draws the same order and reports the item's newest row as its stamp.
+  const items = group(out);
+  assert.deepEqual(items.map((i) => i.id), ["recent-reply", "middle-reply", "oldest-line", "old-prompt"]);
+  assert.equal(items[0].stamp, at(11, 55), "the header's age is the newest row in that message");
+});
+
+test("rows inside one item keep reading order: prompt, console lines by index, reply", () => {
+  const hits = [
+    t("one", 7, "reply", at(9, 30)),
+    t("one", 7, "tool", at(9, 20), { index: 1 }),
+    t("one", 7, "input", at(9)),
+    t("one", 7, "tool", at(9, 10), { index: 0 }),
+    t("one", 7, "tool", at(9, 25), { index: 2 }),
+  ];
+  const out = order(hits);
+  assert.deepEqual(
+    out.map((h) => (h.field === "tool" ? `tool:${h.index}` : h.field)),
+    ["input", "tool:0", "tool:1", "tool:2", "reply"],
+    "the turn still reads top to bottom, whatever order the answer listed its rows in",
+  );
+});
+
+test("equal timestamps break by conversation order, so a tie is stable", () => {
+  // Both messages' newest rows carry the same millisecond; the store's own numbering says which came first. Without
+  // the tie-break the sort would be free to shuffle them between paints.
+  const hits = [t("later", 5, "input", at(8)), t("earlier", 2, "input", at(8))];
+  assert.deepEqual(order(hits).map((h) => h.id), ["earlier", "later"], "the earlier turn in the conversation stays first");
+  assert.deepEqual(order([...hits].reverse()).map((h) => h.id), ["earlier", "later"], "the answer's own order cannot change a tie");
+  // A tie with no numbering at all still keeps the answer's order: the sort is stable.
+  const unnumbered = [{ thread: "t", id: "b", field: "input", at: at(8) }, { thread: "t", id: "a", field: "input", at: at(8) }];
+  assert.deepEqual(order(unnumbered).map((h) => h.id), ["b", "a"]);
+});
+
+test("an item's stamp is its newest row, so a long turn sorts by its last activity", () => {
+  const hits = [
+    t("long", 1, "input", at(6)),
+    t("long", 1, "tool", at(11, 55), { index: 0 }),
+    t("other", 2, "input", at(10)),
+  ];
+  const out = order(hits);
+  assert.deepEqual(out.map((h) => h.id), ["long", "long", "other"], "the message that did something five minutes ago is first");
+  assert.equal(out[0].at, at(6), "and its rows are still in reading order - the prompt leads the message");
+});
+
+test("a hit that cannot name a message stays in the walk, after the items", () => {
+  const loose = { field: "tool", at: at(12) };
+  const out = order([t("one", 1, "input", at(9)), loose]);
+  assert.equal(out.length, 2);
+  assert.equal(out[1], loose, "dropping it would make the header divide fewer rows than the footer's matched count");
+});
+
+test("an empty or absent answer is an empty walk, never a crash", () => {
+  assert.deepEqual(order([]), []);
+  assert.deepEqual(order(null), []);
+  assert.deepEqual(order(undefined), []);
 });

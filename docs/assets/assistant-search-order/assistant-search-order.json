@@ -1,0 +1,85 @@
+{
+  "viewport": "1440x900",
+  "filters": {
+    "harbor": {
+      "text": "1 of 4",
+      "foot": "4 hits matched, 4 displayed, in 4 turns",
+      "rows": [
+        "harbor: the newest reply",
+        "harbor is quiet now",
+        "grep -n harbor lib/x.js",
+        "harbor: the request from six hours ago"
+      ],
+      "answer": [
+        "harbor-a",
+        "harbor-d",
+        "harbor-c",
+        "harbor-b"
+      ]
+    },
+    "lantern": {
+      "text": "1 of 5",
+      "head": "turn 5 - 26m - 5 rows",
+      "rows": [
+        "lantern: read me top to bottom",
+        "lantern row one",
+        "lantern row two",
+        "lantern row three",
+        "lantern: the reply, last"
+      ],
+      "answer": [
+        "input",
+        "reply",
+        "tool",
+        "tool",
+        "tool"
+      ]
+    }
+  },
+  "steps": [
+    {
+      "press": "ArrowDown",
+      "count": "2 of 4",
+      "turn": "harbor-c"
+    },
+    {
+      "press": "ArrowDown x2",
+      "count": "4 of 4",
+      "turn": "harbor-a"
+    },
+    {
+      "click": "transcript",
+      "x": 1201,
+      "y": 405,
+      "hidden": true,
+      "input": "harbor",
+      "count": ""
+    },
+    {
+      "press": "ArrowDown after reopen",
+      "count": "1 of 4",
+      "turn": "harbor-d"
+    },
+    {
+      "click": "row 2",
+      "count": "3 of 4",
+      "turn": "harbor-b"
+    },
+    {
+      "click": "settings pane",
+      "x": 985,
+      "y": 263,
+      "hidden": true,
+      "input": "harbor"
+    }
+  ],
+  "screenshots": [
+    "01-newest-first-1-of-4-1440x900.png",
+    "02-down-second-newest-2-of-4-1440x900.png",
+    "03-oldest-last-4-of-4-1440x900.png",
+    "04-one-message-reading-order-1-of-5-1440x900.png",
+    "05-outside-click-closed-1440x900.png",
+    "06-one-key-reopened-1-of-4-1440x900.png",
+    "07-inside-click-selects-3-of-4-1440x900.png"
+  ]
+}

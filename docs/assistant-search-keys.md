@@ -12,7 +12,7 @@ Everything below is doable without the mouse, because a search you have to reach
 | Key | Where | What it does |
 | --- | --- | --- |
 | `Ctrl+Q` | Anywhere in the open assistant panel | Puts the caret in the search box and **selects what it already holds**, so the first character typed replaces the last filter. Ignored while the caret is in a textarea or in the composer. |
-| `Down` | In the search box | Steps the current match to the next matching **row** - one press, one match. Marks it in the transcript and moves the list's current row with it. Wraps at the end. |
+| `Down` | In the search box | Steps the current match to the next matching **row** - one press, one match, in the list's order (newest message first, rows in reading order inside it). Marks it in the transcript and moves the list's current row with it. Wraps at the end. |
 | `Up` | In the search box | The same step backwards. Wraps at the start. |
 | `Shift+Down` | In the search box | Steps **backwards** - the same move `Up` makes, for a reader who learned that Shift reverses the direction. Wraps like `Up`. |
 | `Shift+Up` | In the search box | Steps backwards too. With `Shift+Down` and `Shift+Enter` it is the reverse of `Down`: all three land on the same row from the same start. |
@@ -47,6 +47,45 @@ The turns are still mapped, once, in `public/core/search-items.js` (loaded as a 
 the whole message and the footer's "in N turns" both read the turn a match belongs to. The walk itself belongs to
 `public/core/search-count.js`.
 
+## The order the list reads in
+
+The server answers in the **cap's** preference: your own input first, then replies, then console lines. That order
+decides which matches survive ten rows; it is not the order a reader wants to walk. The list is ordered here, by
+the clock (`public/core/search-items.js`'s `order`):
+
+- **one item per message, newest first** - an item's place is its newest matching row, so a reply from five minutes
+  ago sits above a console line from five hours ago whatever field the server preferred;
+- **rows inside one message in reading order** - the prompt, then the console lines in the order they ran, then the
+  reply, so a message still reads top to bottom;
+- **ties broken by conversation order** - two messages whose newest rows share a timestamp keep the conversation's
+  numbering, so the list does not shuffle between paints;
+- **a row that cannot name a message** stays at the end of the walk rather than being dropped, because the header
+  divides `displayed` and must count every row the list holds.
+
+One header is drawn **above** each message's rows and never after them: a title with no rows under it reads as one
+more, empty result. The header says the message's place in the conversation, when it last did something and how many
+of its rows matched (`turn 5 - 26m - 5 rows`); each row's own age stays on the row, so a console line an hour into a
+turn is not made to look an hour newer than it is.
+
+`Down` therefore walks **backwards in time**: `1 of N` is the newest match and the oldest is last. `test/assistant-search-items.test.js`
+pins the order, the reading order inside an item and the tie case.
+
+## Clicking away closes the list
+
+A mousedown anywhere **outside the search box and outside the results panel** closes the list and drops the
+highlight; the filter stays in the box, so the next keystroke - or one `Down` - asks the same question again without
+retyping it. The count beside the box goes with the list, so no stale `3 of 5` is left pointing at nothing.
+
+- a click **inside** the results still selects that row, as before;
+- a **drag that starts inside** the results never closes them: the decision is made on `mousedown`, and only a
+  mousedown outside is a dismissal;
+- **another pane** of the same float, the transcript below, the board behind it - all count as outside;
+- `Esc` keeps its own behaviour (clear, caret stays in the box) and the panel's `Esc` still closes the panel.
+
+The rule itself is one pure predicate in `public/core/search-dismiss.js` (`globalThis.wtSearchDismiss`), loaded by
+`public/index.html` before `assistant.js` and unit-tested by `test/assistant-search-dismiss.test.js` - the two
+protected zones, the drag case, and the fact that `assistant.js` clears the answer without emptying the box.
+
 ## The ends wrap
 
 `Down` on the last match lands on the first, and `Up` on the first lands on the last. That is the rule `Enter`
@@ -73,7 +112,8 @@ site and the script order in `public/index.html`.
 When the cap bites (the result list keeps your own input first, then replies, then console lines, up to ten rows)
 the count turns amber rather than pretending the list is the whole answer: the header divides the ten rows on
 hand, and the footer says `12 hits matched, 10 displayed, in 4 turns`. The turn count is secondary text in the
-footer, never the number the header divides.
+footer, never the number the header divides. The cap's note names the selection rule - `your own input is kept when
+the cap bites` - and no longer claims an order for the list, which is the clock's.
 
 ## What the current match looks like
 
@@ -95,11 +135,13 @@ answer's first match where it is, so the transcript does not jump under a reader
 
 ```
 node --test test/assistant-search-count.test.js       # one count source: header total == footer displayed
-node --test test/assistant-search-items.test.js       # the match-to-turn map, in isolation
+node --test test/assistant-search-items.test.js       # the match-to-turn map and the list's order, in isolation
+node --test test/assistant-search-dismiss.test.js     # the outside-mousedown predicate, and the page that calls it
 node tools/verify-assistant-search-keys.mjs           # 54 checks in headless Chromium at 1440x900
+node tools/verify-assistant-search-order.mjs          # 44 checks: the order and the dismissal, at 1440x900
 ```
 
-The verify script boots this checkout's server on a free port with its own state directory and a synthesized
+The keys script boots this checkout's server on a free port with its own state directory and a synthesized
 store: one turn whose prompt and four console rows match one filter, five turns with one matching row each, and
 four turns matching in three fields (twelve rows for a ten-row list). It opens the panel with the keyboard, types,
 presses, and shoots each step. Every subject is a key press - nothing in the run clicks, focuses a locator or calls
@@ -108,7 +150,7 @@ a page function that acts. The pictures committed under `docs/assets/assistant-s
 | Picture | What it shows |
 | --- | --- |
 | `01-five-rows-in-one-turn-1-of-5-1440x900.png` | Five rows of one turn matching: the header reads `1 of 5`, the footer `5 hits matched, 5 displayed, in 1 turn`, the prompt bright. |
-| `02-down-2-of-5-1440x900.png` | One `Down`: `2 of 5`, the highlight on the newest console row of that same turn, the page not scrolled. |
+| `02-down-2-of-5-1440x900.png` | One `Down`: `2 of 5`, the highlight on the next console row of that same turn, the page not scrolled. |
 | `03-shift-up-back-to-1-of-5-1440x900.png` | `Shift+Up`: `1 of 5` again, the highlight back on the prompt. |
 | `04-five-turns-2-of-5-1440x900.png` | The five-turn filter, one `Down`: `2 of 5` and the next message ringed. |
 | `05-capped-amber-1-of-10-1440x900.png` | Twelve matches, ten rows: `1 of 10` in amber, `12 hits matched, 10 displayed, in 4 turns`. |
@@ -119,3 +161,13 @@ landed on, and the file names of the shots.
 The script also checks that `Shift+Down` and `Shift+Enter` step backwards, that `Down` on the last row wraps, that
 `Enter` opens without stepping, that `Esc` empties the filter and leaves the caret in the box, and that no page
 error came out of any of it.
+
+The order script is the second half: a store whose `harbor` hits are six hours, five hours, two hours and five
+minutes old, one in a different field each, and one `lantern` message matching in its prompt, three console rows and
+its reply. It proves the store's answer leads with the six-hour prompt while the popover leads with the five-minute
+reply, that `1 of 4` is the newest and `4 of 4` the oldest, that one `Down` is the second newest, that a message's
+rows still read top to bottom under one header, and that the last row before the footer is a row. Then it clicks:
+the transcript below closes the list with the filter still in the box and no count left behind, one `Down` reopens
+it at `1 of 4`, a drag that starts on a row does not close it, a row click still selects, and a click on the Settings
+pane (another pane of the same float) closes it. The pictures under `docs/assets/assistant-search-order/` are that
+run, and `assistant-search-order.json` is its record.

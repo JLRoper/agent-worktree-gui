@@ -984,13 +984,15 @@
         <!-- The header search: one box in the gap the spacer leaves between the mode chip and the chips row. It
              searches the assistant's OWN turns on the server (routes/assistant-search.js), so it reaches past the
              five turns a card holds; * and ? are wildcards, a plain query is a substring, and the count beside the
-             box reads "n of N" - the item the reader is standing on, of the matching ITEMS (one turn, however many
-             of its rows matched) - whenever a query is live. Ctrl+Q lands in it from anywhere in the panel with the
-             text it holds selected; Up/Down step one item per press, Enter opens the item, Escape clears and hands
-             the caret back (docs/assistant-search-keys.md). The results are a popover under the bar (position:
-             fixed, because the pane clips its own overflow), so the row never grows. -->
+             box reads "n of N" - the MATCH the reader is standing on, of the matching rows the keyboard steps (a
+             turn's prompt, its reply and each of its console lines are separate rows) - whenever a query is live.
+             Ctrl+Q lands in it from anywhere in the panel with the text it holds selected; Up/Down step one row per
+             press, Enter opens it, Escape clears and hands the caret back (docs/assistant-search-keys.md), and a
+             mousedown outside the box and the results closes the results while the filter stays. The results are a
+             popover under the bar (position: fixed, because the pane clips its own overflow), so the row never
+             grows. -->
         <span class="as-search" id="as-search">
-          <input id="as-search-q" class="as-search-q" type="search" placeholder="search turns" aria-label="search this assistant's turns - Ctrl+Q focuses this box, * and ? are wildcards" title="Ctrl+Q focuses this box from anywhere in the panel; Up and Down step one matching turn per press" autocomplete="off" spellcheck="false" />
+          <input id="as-search-q" class="as-search-q" type="search" placeholder="search turns" aria-label="search this assistant's turns - Ctrl+Q focuses this box, * and ? are wildcards" title="Ctrl+Q focuses this box from anywhere in the panel; Up and Down step one matching row per press" autocomplete="off" spellcheck="false" />
           <span class="as-search-n mono" id="as-search-n" hidden></span>
           <button type="button" id="as-search-scope" class="as-search-scope" aria-pressed="false" title="search your own input only - every turn the store kept, not just the page on screen">mine</button>
         </span>
@@ -1137,6 +1139,11 @@
        message, the footer's turn count and a result row read this grouping. Published on globalThis as
        `wtSearchItems`; test/assistant-search-items.test.js imports this same file. Loaded before app.js. -->
   <script src="/core/search-items.js"></script>
+  <!-- The search's dismissal: does a mousedown close the results? One pure predicate over two zones - the box and the
+       list - so a click inside a row still selects it, a drag that starts in the list never closes it, and anything
+       else (the transcript, another pane, the board) does. Published on globalThis as `wtSearchDismiss`;
+       test/assistant-search-dismiss.test.js imports this same file. Loaded before assistant.js, which wires it. -->
+  <script src="/core/search-dismiss.js"></script>
   <!-- How fast a run's output reaches the reader's eyes: the word pacer (a paragraph typing out) and the line gate
        (whole lines walking into a console), both driven from app.js by the two Settings > Display rows. Published
        on globalThis as `wtType`; test/type-stream.test.js imports this same file. -->

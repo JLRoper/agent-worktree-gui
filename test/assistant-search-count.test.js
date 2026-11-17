@@ -45,7 +45,7 @@ test("the header's total IS the footer's displayed count, so one view cannot pri
   assert.equal(c.foot, "12 hits matched, 10 displayed, in 6 turns");
   assert.equal(c.capped, true, "the cap is a fact the count must not hide");
   assert.match(c.title, /12 hits matched, 10 displayed/);
-  assert.match(c.title, /kept first/, "the capped title says why the list may not hold every match");
+  assert.match(c.title, /kept when the cap bites/, "the capped title says why the list may not hold every match, without claiming an order the list does not use");
 });
 
 test("a server number that disagreed with the list cannot reach the footer", () => {

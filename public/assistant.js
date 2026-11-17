@@ -620,6 +620,22 @@
   // would be the same two-numbers-in-one-view defect in another form. The turn (or the matched row, inside one
   // turn) is scrolled to the bottom of the transcript, below the popover, so the highlight stays visible.
   //
+  // THE ORDER OF THE LIST. The server sends the matches in the cap's own preference (your input, then replies, then
+  // console lines) because that is what survives the ten-row cap, not the order a reader walks them in. The list is
+  // ordered here instead, by public/core/search-items.js's `order`: one item (message) per group, newest first by
+  // the item's newest row, and the rows inside an item in reading order - prompt, console lines, reply - so a
+  // message still reads top to bottom and a Down walks backwards in time. Equal timestamps break by the
+  // conversation's own numbering, so a tie cannot shuffle between paints. The header, the footer and the amber note
+  // all divide the SAME ordered list: the walk's total is its length, and the footer's "displayed" is that length.
+  // Each item is introduced by its own header and never followed by one, so the last row before the footer is a
+  // result and not a title with nothing under it.
+  //
+  // A MOUSEDOWN OUTSIDE CLOSES IT. The box and the list are the two places a press belongs to the search; anywhere
+  // else - the transcript below, another pane of this float, the board - closes the list and drops the highlight,
+  // while the FILTER stays in the box so the next keystroke or Down asks the same question again. The decision is
+  // taken on mousedown, through public/core/search-dismiss.js, so a drag that starts inside the results never
+  // closes them, and a click on a row still selects it.
+  //
   // ALSO TRUE: Ctrl+Q lands in the box from anywhere in the panel with the text it already holds selected
   // (typing replaces the last filter); Escape clears the filter and leaves the caret in the box; the ends WRAP,
   // the same rule Enter has always had, and docs/assistant-search-keys.md states it for the reader.
@@ -697,16 +713,15 @@
     el.title = c.title;
   }
 
-  // One result row: where the hit is (the reader's input, the reply, or the console line's own kind), the turn's
-  // ordinal on ITS card, and a one-line window with the match marked. The window is built by the server and split
-  // into before/hit/after there, so this never re-finds a match with a second regex that could disagree. The row
-  // carries the HIT it stands for (its press opens that match) and the TURN it belongs to, and the standing row
-  // is marked - the list, the ring and the count agree about where the reader is.
+  // One result row: where the hit is (the reader's input, the reply, or the console line's own kind) and a one-line
+  // window with the match marked. The window is built by the server and split into before/hit/after there, so this
+  // never re-finds a match with a second regex that could disagree. The row carries the HIT it stands for (its press
+  // opens that match) and the TURN it belongs to, and the standing row is marked - the list, the ring and the count
+  // agree about where the reader is. The row's age is its OWN (a console line from an hour into a turn is an hour
+  // old); which message it belongs to is the item header above it, so the two facts are said once each.
   function searchHitHtml(hit, index, itemAt) {
     const where = hit.field === "input" ? "you" : hit.field === "reply" ? "reply" : String(hit.kind || "tool");
-    const ordinal = searchTurnOrdinal(hit);
     const when = searchAge(hit.at);
-    const meta = [ordinal ? `turn ${ordinal}` : "", when].filter(Boolean).join(" - ");
     const lead = hit.lead ? "..." : "";
     const tail = hit.tail ? "..." : "";
     const marked = hit.hit ? `<mark class="as-search-mark">${esc(hit.hit)}</mark>` : "";
@@ -715,16 +730,29 @@
       `<button type="button" class="as-search-row${current ? " is-current" : ""}" data-search-hit="${index}" data-search-item="${itemAt}"` +
       `${current ? ' aria-current="true"' : ""} title="open this turn in the card">` +
       `<span class="as-search-where mono">${esc(where)}</span>` +
-      `<span class="as-search-meta mono">${esc(meta)}</span>` +
+      `<span class="as-search-meta mono">${esc(when)}</span>` +
       `<span class="as-search-snip">${lead}${esc(hit.before)}${marked}${esc(hit.after)}${tail}</span>` +
       `</button>`
     );
   }
 
+  // One item's head: which message the rows under it belong to, when it last did something, and how many of its rows
+  // matched. It is drawn BEFORE the item's rows and never after them - a title with no rows under it reads as one
+  // more, empty result - so the last row before the footer is always a result.
+  function searchItemHtml(item) {
+    if (!item) return "";
+    const ordinal = searchTurnOrdinal(item.hits[0]);
+    const when = searchAge(item.stamp);
+    const rows = item.hits.length;
+    const meta = [ordinal ? `turn ${ordinal}` : "", when, rows > 1 ? `${rows} rows` : ""].filter(Boolean).join(" - ");
+    if (!meta) return "";
+    return `<div class="as-search-item mono">${esc(meta)}</div>`;
+  }
+
   function renderSearchPop(out) {
     const pop = as$("as-search-pop");
     if (!pop) return;
-    const hits = Array.isArray(out?.hits) ? out.hits : [];
+    const hits = searchHits;
     if (!out || !out.matched || !hits.length) {
       pop.hidden = true;
       pop.innerHTML = "";
@@ -736,8 +764,26 @@
     const c = searchReadout();
     const foot =
       `<div class="as-search-more mono">${esc(c.foot)}` +
-      `${c.capped ? " - your own input is kept first when the cap bites" : ""}</div>`;
-    pop.innerHTML = hits.map((h, i) => searchHitHtml(h, i, searchHitItem[i] ?? 0)).join("") + foot;
+      `${c.capped ? " - your own input is kept when the cap bites" : ""}</div>`;
+    // One header per item, then that item's rows in reading order. The order the rows are drawn in IS the order the
+    // walk steps: the index each row carries is its position in `searchHits`, incremented as the items are walked, so
+    // a press cannot open a row the list drew somewhere else.
+    const parts = [];
+    if (searchItems.length) {
+      let at = 0;
+      for (let i = 0; i < searchItems.length; i += 1) {
+        parts.push(searchItemHtml(searchItems[i]));
+        for (const hit of searchItems[i].hits) {
+          parts.push(searchHitHtml(hit, at, i));
+          at += 1;
+        }
+      }
+      // A hit the map could not place (no thread or no id) is not on a message: draw the flat list rather than lose
+      // a row the header is counting.
+      if (at !== hits.length) parts.length = 0;
+    }
+    if (!parts.length) for (let i = 0; i < hits.length; i += 1) parts.push(searchHitHtml(hits[i], i, 0));
+    pop.innerHTML = parts.join("") + foot;
     pop.hidden = false;
     placeSearchPop();
   }
@@ -803,8 +849,9 @@
     }, delay);
   }
 
-  // The hits grouped into the turns they belong to, and the turn each hit belongs to. group() keeps the
-  // first-appearance order of the hits, so the footer's turn count and the ring speak the list the reader sees.
+  // The hits grouped into the turns they belong to, and the turn each hit belongs to. `searchHits` is already in the
+  // walk's order (public/core/search-items.js's `order`), so group() keeps the items in that order and each item's
+  // hits in reading order - the list, the ring, the footer's turn count and the walk all speak one list.
   function regroupSearch() {
     searchItems = globalThis.wtSearchItems ? globalThis.wtSearchItems.group(searchHits) : [];
     searchHitItem = [];
@@ -850,7 +897,12 @@
       return null;
     }
     if (seq !== searchSeq) return null;
-    searchHits = Array.isArray(out.hits) ? out.hits : [];
+    const answered = Array.isArray(out.hits) ? out.hits : [];
+    // The server's order is the CAP's preference (what survives ten rows), not the walk's: order the list here, by
+    // the clock, newest message first with its rows in reading order. `matched` and `turns` stay the server's own
+    // counts over every match, and the walk's total is this list's length, so the header, the footer and the amber
+    // note keep dividing one list.
+    searchHits = globalThis.wtSearchItems?.order ? globalThis.wtSearchItems.order(answered) : answered;
     searchOut = out;
     regroupSearch();
     // An answer makes its FIRST row current: the count reads "1 of N" and the first press of Down is the second
@@ -1096,6 +1148,19 @@
     as$("as-search-q")?.focus({ preventScroll: true });
   }
 
+  // A mousedown OUTSIDE the box and outside the list: the reader has gone somewhere else, so the list closes and the
+  // highlight goes with it. The FILTER stays in the box - the text is the reader's work, not the popover's - so the
+  // next keystroke (or a Down) asks the same question again and the list comes back. The answer is dropped rather
+  // than parked: the sequence moves on so a read already in flight cannot reopen what this closed, and
+  // `clearSearch()` is what hides the count beside the box, so no stale number is left behind.
+  function dismissSearch() {
+    const pop = as$("as-search-pop");
+    const open = Boolean(pop && !pop.hidden);
+    if (!open && !searchOut && !searchHits.length) return;
+    searchSeq += 1;
+    clearSearch();
+  }
+
   // Ctrl+Q's half: the box takes the caret and SELECTS what it already holds, so the first character typed replaces
   // the last filter instead of appending to it.
   function focusSearch() {
@@ -1176,6 +1241,21 @@
     // rather than leave it pointing at where the row used to be. The rail's own scroll does not move a fixed row.
     window.addEventListener("resize", placeSearchPop);
     window.addEventListener("scroll", placeSearchPop, { passive: true, capture: true });
+    // A mousedown anywhere outside the box and the list closes the list: the transcript below it, another pane of
+    // this float, the board. `mousedown`, not `click`, so a drag that STARTS inside the results is not a dismissal,
+    // and capture phase, so the decision is made before a handler that might rebuild the pane under it. The predicate
+    // is public/core/search-dismiss.js, which knows the two protected zones and nothing else.
+    document.addEventListener(
+      "mousedown",
+      (e) => {
+        const pop = as$("as-search-pop");
+        if (!pop || pop.hidden) return;
+        const mod = globalThis.wtSearchDismiss;
+        if (!mod || typeof mod.outside !== "function") return;
+        if (mod.outside(e.target, { input: as$("as-search-q"), pop })) dismissSearch();
+      },
+      true,
+    );
   }
 
 
