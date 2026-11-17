@@ -4,16 +4,31 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.112.2 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.113.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-620 releases from v0.1.0 (2026-10-20) to v1.112.2 (2026-11-16), 2116 commits between the tags. Every release is anchored by an
+621 releases from v0.1.0 (2026-10-20) to v1.113.0 (2026-11-16), 2121 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.113.0 — 2026-11-16 · 5 commits
+
+[`76dec4d`](https://github.com/JLRoper/agent-worktree-gui/commit/76dec4d8a26698128e3826a6eb80b28f093f68a9) · [compare v1.112.2...v1.113.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.112.2...v1.113.0)
+
+### Docs & tests
+
+- docs: render the changelog - 620 releases ([`d93265c`](https://github.com/JLRoper/agent-worktree-gui/commit/d93265cb45e02fdb3d57228d57b2cb2c9641bbf5))
+- docs: render the changelog - 620 releases ([`e791f8a`](https://github.com/JLRoper/agent-worktree-gui/commit/e791f8a5033be6b9916eab2f48c5f4e415982016))
+- docs: the landing note for 1.112.2 - the Prompt tab written as a page ([`7680be3`](https://github.com/JLRoper/agent-worktree-gui/commit/7680be32a863990e7a1079341cc9f9401789c45f))
+
+### Other
+
+- assistant search: one count, and Down steps the match it counts ([`f87875d`](https://github.com/JLRoper/agent-worktree-gui/commit/f87875dfd6aeeab71fd8207c3d54e38d23bf0727))
+- chore: 1.113.0 - the version this landing carries ([`76dec4d`](https://github.com/JLRoper/agent-worktree-gui/commit/76dec4d8a26698128e3826a6eb80b28f093f68a9))
 
 ## v1.112.2 — 2026-11-16 · 4 commits
 
