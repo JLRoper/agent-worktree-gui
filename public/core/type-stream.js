@@ -22,14 +22,15 @@
 //     jumping the queue, and a held line is not in the console's record yet, so a repaint mid-burst shows the
 //     transcript as far as it has got, which is the truth.
 //
-//   * the REASONING HOLD keeps a tool's lines out of the console until the reasoning in front of them has finished
-//     being written. The stream types a thought at the reader's words-a-second, and a tool call (and its output)
-//     that follows it is whole lines on the wire: left alone it lands while the thought above it is still being
-//     typed, and the reader watches the answer arrive before the question. The hold queues those frames, in order,
-//     behind the thought and lets them go the moment the stream has nothing left to say for it. It knows nothing
-//     about the page: the caller says which frames wait (`wants`), what they wait for (`busy`) and what to do when
-//     a hold begins (`start` - the page uses it to read the store again, because a reply's reasoning lands there a
-//     moment after the tool call it made is already on the wire).
+//   * the REASONING HOLD keeps a tool's lines out of the console until every segment AHEAD of them has finished being
+//     written. The stream types a thought, a paragraph of the agent's own words and the rows of a skill's result at
+//     the reader's words-a-second, and a tool call (and its output) that follows one of them is whole lines on the
+//     wire: left alone it lands while the text above it is still being typed, and the card appears mid-sentence. The
+//     hold queues those frames, in order, and lets them go the moment nothing in front of them is owed a character -
+//     the stream's own (at, seq) order decides that (pendingBefore), so it makes no difference which kind of segment
+//     is still typing. It knows nothing about the page: the caller says which frames wait (`wants`), what they wait
+//     for (`busy`) and what to do when a hold begins (`start` - the page uses it to read the store again, because a
+//     reply's reasoning lands there a moment after the tool call it made is already on the wire).
 //
 // All three are flushed by the caller when the turn settles, so nothing is ever left sitting in a buffer: the clock
 // here outlives the wire, not the run.
@@ -474,12 +475,46 @@
     }
 
     // Is any segment of this job still being written? `test(key)` narrows it to the segments the asker cares about
-    // (the reasoning hold asks about thoughts only, and only the ones that belong in front of the call it is holding).
+    // (a console row's own line, a job's worth of history). This is the QUEUE's answer, not the order's: it says
+    // nothing about where the asker's own frame belongs, which is what pendingBefore answers.
     function pendingFor(job, test) {
       const id = String(job ?? "");
       for (const s of queue) {
         if (s.job !== id || s.shown >= s.text.length) continue;
         if (!test || test(s.key)) return true;
+      }
+      return false;
+    }
+
+    /**
+     * Is anything AHEAD of a frame stamped `at` still being written? This is the hold's question, answered from the
+     * order the queue is kept in - the same (at, seq) order every segment is drawn in - and nothing else.
+     *
+     * A frame the hold is keeping out of a console is NOT in the stream and has no seq yet: it would arrive now, so
+     * every segment already held got here first. `at` alone therefore places it against them - a segment stamped
+     * earlier, or stamped the same millisecond (it was already here), stands in front. Whether that segment is a
+     * paragraph of the agent's words, a reasoning block or one line of a skill's result makes no difference: if it is
+     * still being written, the frame is not drawn yet.
+     *
+     * `from` is the caller's statement about its own transcript: the stamp of the newest line it has already DRAWN.
+     * A segment at or behind that stamp cannot be in front of a frame the caller is about to append - the console
+     * has moved past it - so it is not waited for. (The page passes the moment of the last tool result it holds; see
+     * reasoningFloor in public/board/console.js.) Without it, every segment ahead counts.
+     *
+     * A frame with no stamp of its own has no place in the order, so nothing is ahead of it and it is never held on
+     * this rule: the page draws it when it arrives, exactly as it did before.
+     */
+    function pendingBefore(job, at, from = 0) {
+      const id = String(job ?? "");
+      const stamp = Number(at);
+      if (!Number.isFinite(stamp) || stamp <= 0) return false;
+      const drawn = Number(from);
+      const since = Number.isFinite(drawn) && drawn > 0 ? drawn : 0;
+      for (const s of queue) {
+        if (s.job !== id) continue;
+        if (s.at > stamp) break; // the queue is in (at, seq) order: nothing later for this job is in front
+        if (s.at <= since) continue;
+        if (s.shown < s.text.length) return true;
       }
       return false;
     }
@@ -494,6 +529,7 @@
       jobFor: (key) => segs.get(String(key))?.job ?? null,
       kindFor: (key) => segs.get(String(key))?.kind ?? null,
       pendingFor,
+      pendingBefore,
       tick,
       flush,
       flushJob,

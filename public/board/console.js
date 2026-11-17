@@ -1430,18 +1430,24 @@ async function toggleSubConsole(id) {
   paintSubagents();
 }
 
-// ---- reasoning first: a tool's lines wait for the thought in front of them -----------------------------------
-// A reply's reasoning is written at the reader's words-a-second, and the tool call that reply made (and its output) are
-// whole lines on the wire, so left alone they land while the thought above them is still being written — the answer
-// before the question. This holds those frames (core/type-stream.js createReasoningHold: in order, a whole job's
-// queue at once) until two things are true: the store has been read again since the call arrived — the reasoning is
-// written to the store a moment AFTER its tool call is on the stream, and only a read finds it — and the stream has
-// written every word of the thoughts that belong in front of the call. "In front of" is every thought newer than
-// the last tool result already in the console: a reader who opens a card mid-turn gets the whole backlog typing in
-// parallel, and none of that is a reason to hold a call it does not precede.
+// ---- reasoning first: a tool's lines wait for everything in front of them --------------------------------------
+// A reply's reasoning, its prose and the rows of a skill's result are all written at the reader's words-a-second, and
+// the tool call that follows one of them (and its output) is whole lines on the wire, so left alone it lands while
+// the text above it is still being written - the answer before the question, a card in the middle of a sentence. This
+// holds those frames (core/type-stream.js createReasoningHold: in order, a whole job's queue at once) until two things
+// are true: the store has been read again since the call arrived - the reasoning is written to the store a moment
+// AFTER its tool call is on the stream, and only a read finds it - and nothing ahead of the call in the stream's own
+// (at, seq) order is owed a character (typeStream.pendingBefore). The kind of segment makes no difference any more:
+// a paragraph of prose and a row of a paced skill result hold a call exactly as a thought does.
+//
+// "Ahead" stops at the last tool result already in the console (reasoningFloor): a segment stamped behind a line the
+// reader has already been handed cannot be in front of a call that follows it, so it is not waited for. That is also
+// what keeps a late reasoning block - one whose own stamp precedes a call already on screen - from stranding a hold:
+// it is either behind that floor, or it is still in the stream's queue and is typed by the same clock until it is
+// complete, so the hold ends by itself and never has to wait out MAX_HOLD_MS.
 //
 // Only while there is something to wait for AND a reader watching it: the words/s setting is on (0 keeps the console
-// exactly as the run sent it), the turn is live, the tab is visible, and the reasoning is on screen — the 🌊 stream
+// exactly as the run sent it), the turn is live, the tab is visible, and the reasoning is on screen - the 🌊 stream
 // always draws it, the 🧠 block only while it is open (typing into a folded block is a wait for nothing).
 const REASONING_READ_WAIT_MS = 2000; // a store read that has not answered by now is not worth holding a console for
 const REASONING_READ_COOLDOWN_MS = 250; // one read serves a whole burst of calls
@@ -1469,6 +1475,16 @@ function reasoningFloor(job) {
   return 0;
 }
 
+// The order decides, never the kind of segment: a call or a result waits while any segment stamped before it - a
+// thought, a paragraph of the agent's own prose, one row of a paced skill result - still has characters to emit. The
+// stream answers that from its own queue (typeStream.pendingBefore), so this page keeps no second ordering. A frame
+// the stream has no stamp for has no place in that order, and is drawn when it arrives.
+function reasoningBusy(job, evt) {
+  const rec = state.reasoningReads.get(job);
+  if (rec && !rec.done && Date.now() - rec.at < REASONING_READ_WAIT_MS) return true;
+  return Boolean(state.typeStream?.pendingBefore(job, Number(evt?.line?.at), reasoningFloor(job)));
+}
+
 // A call, or the header of a result, is the cue to look at the store again. A read already in flight may have been
 // answered before the store held this reply, so a cue waits for it and asks once more (loadThinkingAfter).
 function reasoningStart(job, evt) {
@@ -1486,15 +1502,6 @@ function reasoningStart(job, evt) {
     .finally(() => {
       rec.done = true;
     });
-}
-
-function reasoningBusy(job) {
-  const rec = state.reasoningReads.get(job);
-  if (rec && !rec.done && Date.now() - rec.at < REASONING_READ_WAIT_MS) return true;
-  const floor = reasoningFloor(job);
-  return Boolean(
-    state.typeStream?.pendingFor(job, (lid) => lid.startsWith("think:") && (Number(lid.slice(6)) || 0) > floor),
-  );
 }
 
 // Reasoning types out on the same stream, at the same words/s the prose uses — it is the same reading. A block is
