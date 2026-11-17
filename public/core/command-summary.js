@@ -13,15 +13,27 @@
 // mistaken for the thing being approved would be worse than no summary, so every line here is either a fact read
 // off the command or a plain statement that the command could not be read.
 //
-// HOW THE COMMAND IS SPLIT. On `&&`, `||`, a lone `;` or `|`, and on a newline - the five ways one shell line
-// carries several steps. The split is quote-aware and parenthesis-aware, because `echo "a | b"` is one step and
-// `git rm $(git ls-files x)` is one step too: a splitter that cut inside either would invent steps that do not
-// exist. A card is a display of what will run, so the split has to follow the same shell the command will.
+// HOW THE COMMAND IS SPLIT. On `&&`, `||`, a lone `;` or `|`, and on a newline - the real separators, the ways one
+// shell line carries several steps. The split is quote-aware, substitution-aware and parenthesis-aware, because
+// `echo "a | b"` is one step, `git rm $(git ls-files -m | head -1)` is one step, and `S=$(date +%s%N)` is one
+// assignment: a splitter that cut inside any of those would invent steps that do not exist. A card is a display of
+// what will run, so the split has to follow the same shell the command will.
+//
+// A STEP IS ONLY A STEP WHEN IT HAS A PROGRAM. An assignment (`RC=$?`, `S=$(date +%s%N)`) belongs to the step it
+// sets up and rides along with it; a fragment (a lone `--`, `+`, `%s%N)`, the tail of an arithmetic expansion)
+// belongs to nothing and is dropped. Neither is drawn as a row: the card used to show `+%s%N): no argument` and
+// `(empty): no argument` for an eleven-step command whose weight was in two of them.
 //
 // EACH STEP IS A PROGRAM AND ITS SUBJECT. `git add` with twelve paths is `git add: 12 paths`; `git rm --cached`
 // with one is `git rm --cached: this one path`; `git rev-parse :a.txt` beside `git hash-object a.txt` is the two
 // blob hashes that compare the index against the worktree. The subject is counted from the arguments where a
 // count is the fact (paths, directories) and named where the fact is which thing (a branch, a remote, a file).
+//
+// THE LIST EARNS ITS LENGTH. At most four CONSEQUENTIAL steps are drawn in full - a delete, a history rewrite, a
+// push, a write outside the repo, a PROD or live-port action, a network fetch, a package install, and a step that
+// runs as root, which is never harmless. Every other step folds into ONE line that says how many there are and
+// names each program once (`7 harmless steps: cd, echo, ls`), expanding on click. A command that only reads
+// therefore draws no rows at all: one line, and the reader is done.
 //
 // THE EFFECTS A READER CARES ABOUT. Deletes, history rewrites, pushes, anything naming PROD or a live port, a
 // write outside the repo, and sudo. Those are drawn as their own rows under the steps, in the order that matters,
@@ -40,9 +52,9 @@
 (function (root) {
   "use strict";
 
-  // A command with more steps than this is drawn to this many and says how many are left: the card is a prompt,
-  // not a man page, and the full command is one line below it anyway.
-  const MAX_STEPS = 10;
+  // A step list longer than this is not a prompt any more: four rows carry what a reader is deciding about, and
+  // the rest of the command folds behind one line that still says what is in there.
+  const MAX_CONSEQUENTIAL = 4;
   const SUBJECT_MAX = 72;
   const LEAD_MAX = 160;
 
@@ -57,6 +69,51 @@
   const isDevNull = (p) => /^\/(dev\/)?null$/i.test(String(p || "")) || /^nul$/i.test(String(p || ""));
 
   // ---------- the split ----------
+  // A span that must be copied whole, because a separator inside it belongs to the inner command: `$(...)`,
+  // `${...}` and a backtick pair. Each returns the index just past the closing character, or the end of the text
+  // when the span is never closed - the reader is looking at a broken command, and inventing a step for the tail
+  // would be worse than keeping it.
+  function skipBalanced(text, at, open, close) {
+    let depth = 0;
+    let quote = "";
+    for (let j = at; j < text.length; j += 1) {
+      const ch = text[j];
+      if (quote) {
+        if (ch === "\\" && quote === '"') {
+          j += 1;
+          continue;
+        }
+        if (ch === quote) quote = "";
+        continue;
+      }
+      if (ch === "'" || ch === '"') {
+        quote = ch;
+        continue;
+      }
+      if (ch === "\\") {
+        j += 1;
+        continue;
+      }
+      if (ch === open) depth += 1;
+      else if (ch === close) {
+        depth -= 1;
+        if (depth === 0) return j + 1;
+      }
+    }
+    return text.length;
+  }
+
+  function skipBacktick(text, at) {
+    for (let j = at + 1; j < text.length; j += 1) {
+      if (text[j] === "\\") {
+        j += 1;
+        continue;
+      }
+      if (text[j] === "`") return j + 1;
+    }
+    return text.length;
+  }
+
   // One pass, because the same characters decide both where a step ends and what is text: a quote opened before a
   // pipe closes after it, and a `$(` opened before one closes after it. `&>` is a redirect and `2>&1` duplicates a
   // file descriptor - neither is a background job, so neither ends a step.
@@ -75,7 +132,7 @@
       const next = text[i + 1] || "";
       if (quote) {
         buf += ch;
-        if (ch === "\\" && quote === '"' && next) {
+        if (ch === "\\" && quote === '\"' && next) {
           buf += next;
           i += 1;
           continue;
@@ -83,7 +140,7 @@
         if (ch === quote) quote = "";
         continue;
       }
-      if (ch === "'" || ch === '"') {
+      if (ch === "'" || ch === '\"') {
         quote = ch;
         buf += ch;
         continue;
@@ -91,6 +148,24 @@
       if (ch === "\\" && next) {
         buf += ch + next;
         i += 1;
+        continue;
+      }
+      if (ch === "$" && next === "(") {
+        const end = skipBalanced(text, i + 1, "(", ")");
+        buf += text.slice(i, end);
+        i = end - 1;
+        continue;
+      }
+      if (ch === "$" && next === "{") {
+        const end = skipBalanced(text, i + 1, "{", "}");
+        buf += text.slice(i, end);
+        i = end - 1;
+        continue;
+      }
+      if (ch === "`") {
+        const end = skipBacktick(text, i);
+        buf += text.slice(i, end);
+        i = end - 1;
         continue;
       }
       if (ch === "(") {
@@ -128,6 +203,9 @@
   }
 
   // ---------- one step as words ----------
+  // A word keeps whatever a shell glues to it: a quoted string, a `$(...)` substitution, a `${...}` expansion or a
+  // backtick span. `S=$(date +%s%N)` is ONE word, which is why the assignment reads as an assignment and not as a
+  // program called `+%s%N)`.
   function tokenize(step) {
     const out = [];
     let buf = "";
@@ -157,6 +235,27 @@
       if (ch === "\\" && next) {
         buf += next;
         i += 1;
+        any = true;
+        continue;
+      }
+      if (ch === "$" && next === "(") {
+        const end = skipBalanced(step, i + 1, "(", ")");
+        buf += step.slice(i, end);
+        i = end - 1;
+        any = true;
+        continue;
+      }
+      if (ch === "$" && next === "{") {
+        const end = skipBalanced(step, i + 1, "{", "}");
+        buf += step.slice(i, end);
+        i = end - 1;
+        any = true;
+        continue;
+      }
+      if (ch === "`") {
+        const end = skipBacktick(step, i);
+        buf += step.slice(i, end);
+        i = end - 1;
         any = true;
         continue;
       }
@@ -224,19 +323,85 @@
     return { sudo, index: i };
   }
 
-  function parseStep(step) {
-    const redirect = stripRedirects(tokenize(step));
-    const { sudo, index } = unwrap(redirect.tokens);
-    const head = redirect.tokens[index] || "";
+  // A program is a word the shell would try to run: not a flag, not a redirection, not a shell operator, and not the
+  // tail of an expansion. `+`, `%s%N`, `--`, `)` and an empty word are exactly the five fragments the old parse
+  // drew as programs, and every one of them fails this test.
+  function isProgramName(token) {
+    const t = String(token || "");
+    if (!t) return false;
+    if (/^[-+%()=<>&|;,:]/.test(t)) return false;
+    if (/[()]/.test(t)) return false;
+    return true;
+  }
+
+  function describeTokens(tokens, redirects, sudo) {
+    const un = unwrap(tokens);
+    const head = tokens[un.index] || "";
     const display = head.split(/[\\/]/).pop().replace(/\.(exe|cmd|bat|ps1)$/i, "") || head;
     return {
       head,
-      display: display || "(empty)",
+      display,
       program: display.toLowerCase(),
-      args: redirect.tokens.slice(index + 1),
-      redirects: redirect.writes,
-      sudo,
+      args: tokens.slice(un.index + 1),
+      tokens,
+      redirects,
+      sudo: sudo || un.sudo,
     };
+  }
+
+  // A `( ... )` group is not a program: its inside is the steps. `(cd docs && ls) && pwd` is three steps in the
+  // shell, and a group that is not closed at its own end (`(a) && (b)`) never reaches here.
+  function innerGroup(raw) {
+    const t = String(raw || "").trim();
+    if (!t.startsWith("(") || !t.endsWith(")")) return null;
+    return skipBalanced(t, 0, "(", ")") === t.length ? t.slice(1, -1) : null;
+  }
+
+  function splitAll(text, depth = 0) {
+    const out = [];
+    for (const raw of splitSteps(text)) {
+      const inner = depth < 4 ? innerGroup(raw) : null;
+      if (inner && inner.trim()) out.push(...splitAll(inner, depth + 1));
+      else out.push(raw);
+    }
+    return out;
+  }
+
+  // THE STEPS A READER IS SHOWN. A step with no program of its own is not a step: its assignments ride along with
+  // the next program (`RC=$?; echo "EXIT_CODE=$RC"` is one row about an echo), and a bare fragment is dropped -
+  // `S=$(date +%s%N)` sets up the step after it, while a lone `--` sets up nothing. Anything left over at the end of
+  // the line joins the last step rather than becoming a row called `(empty)`, and is handed back when there is no
+  // last step so a redirect at the end of a line still raises its own warning.
+  function assembleSteps(text) {
+    const out = [];
+    let carry = null;
+    for (const raw of splitAll(text)) {
+      const redirect = stripRedirects(tokenize(raw));
+      const un = unwrap(redirect.tokens);
+      const head = redirect.tokens[un.index] || "";
+      if (!isProgramName(head)) {
+        const held = carry || { tokens: [], redirects: [], sudo: false };
+        held.tokens = held.tokens.concat(redirect.tokens.slice(0, un.index));
+        held.redirects = held.redirects.concat(redirect.writes);
+        held.sudo = held.sudo || un.sudo;
+        carry = held;
+        continue;
+      }
+      const held = carry || { tokens: [], redirects: [], sudo: false };
+      carry = null;
+      out.push({
+        raw,
+        ...describeTokens(held.tokens.concat(redirect.tokens), held.redirects.concat(redirect.writes), held.sudo || un.sudo),
+      });
+    }
+    if (carry && out.length) {
+      const last = out[out.length - 1];
+      last.tokens = last.tokens.concat(carry.tokens);
+      last.redirects = last.redirects.concat(carry.redirects);
+      last.sudo = last.sudo || carry.sudo;
+      carry = null;
+    }
+    return { steps: out, trailing: carry };
   }
 
   const pathsOf = (args) => args.filter((a) => a !== "--" && !a.startsWith("-"));
@@ -650,12 +815,36 @@
   const KIND_ORDER = ["delete", "rewrite", "push", "prod", "port", "outside", "root", "server"];
   const DANGER = new Set(["delete", "rewrite", "push", "prod", "outside", "root"]);
 
+  // WHAT EARNS A ROW OF ITS OWN. The brief's seven: a delete, a history rewrite, a push, a write outside the repo, a
+  // PROD or live-port action, a network fetch, a package install - and root, because a step that runs as sudo can
+  // change anything the reader owns and folding it into `harmless` would be a lie. Everything else folds.
+  const CONSEQUENTIAL = new Set(["delete", "rewrite", "push", "prod", "port", "outside", "root", "server"]);
+  const NETWORK = new Set(["curl", "wget", "http", "httpie", "ssh", "scp", "sftp", "rsync", "nc", "telnet", "gh"]);
+  const NETWORK_GIT = new Set(["fetch", "pull", "clone", "ls-remote", "push", "submodule"]);
+  const PACKAGE_MANAGERS = new Set([
+    "npm", "pnpm", "yarn", "bun", "pip", "pip3", "pipx", "apt", "apt-get", "brew", "choco", "winget", "gem", "cargo",
+    "go", "dotnet", "nuget", "composer", "poetry", "conda", "mvn", "gradle",
+  ]);
+  const INSTALL_VERB = /^(install|i|ci|add|sync|update|upgrade|restore|get|fetch)$/i;
+
   function portOf(token) {
     const t = String(token || "");
     const url = /^[a-z]+:\/\/[^\s/:]+:(\d{2,5})\b/i.exec(t);
     if (url) return url[1];
     const hostPort = /(?:^|[/@])(?:[a-z0-9_.-]+|\[[0-9a-f:]+\]):(\d{2,5})\b/i.exec(t);
     return hostPort ? hostPort[1] : "";
+  }
+
+  // The port a step names: an explicit `--port 8642`, or a host:port in any of its words. `-p` is left alone here
+  // because half the programs in a shell take it for something else; the whole-line search still reads it.
+  function stepPortOf(text) {
+    const flag = /--port[= ](\d{2,5})\b/.exec(String(text || ""));
+    if (flag) return flag[1];
+    for (const token of String(text || "").split(/\s+/)) {
+      const p = portOf(token);
+      if (p) return p;
+    }
+    return "";
   }
 
   function prodToken(text) {
@@ -711,21 +900,41 @@
     let prod = "";
     let port = "";
 
-    for (const raw of splitSteps(body)) {
-      const parsed = parseStep(raw);
+    // A line that ends in an assignment or a redirect, with no program after it: there is no step to fold it into,
+    // so its write is read here rather than being lost. `> /etc/hosts` on its own is a write outside the repo even
+    // though it names no program.
+    const { steps: assembled, trailing } = assembleSteps(body);
+    for (const target of (trailing && trailing.redirects) || []) {
+      writes = true;
+      if (outsideRepo(target, rootDir)) seen("outside", `writes outside the repo (${clip(target, 40)})`);
+    }
+    if (trailing && trailing.sudo) seen("root");
+
+    for (const parsed of assembled) {
       const git = parsed.program === "git";
       const { sub, rest } = git ? gitParts(parsed.args) : { sub: "", rest: [] };
       const described = git ? gitStep(sub, rest) : nonGitStep(parsed.program, parsed.args, parsed.display);
-
-      steps.push({ program: git && sub ? `git ${sub}` : parsed.display, text: described.text });
+      const reasons = [];
+      const reason = (kind) => {
+        if (!reasons.includes(kind)) reasons.push(kind);
+      };
 
       if (described.writes || parsed.redirects.length) writes = true;
-      for (const [kind, detail] of described.kinds || []) seen(kind, detail);
+      for (const [kind, detail] of described.kinds || []) {
+        seen(kind, detail);
+        if (CONSEQUENTIAL.has(kind)) reason(kind);
+      }
       for (const target of parsed.redirects) {
         writes = true;
-        if (outsideRepo(target, rootDir)) seen("outside", `writes outside the repo (${clip(target, 40)})`);
+        if (outsideRepo(target, rootDir)) {
+          seen("outside", `writes outside the repo (${clip(target, 40)})`);
+          reason("outside");
+        }
       }
-      if (parsed.sudo) seen("root");
+      if (parsed.sudo) {
+        seen("root");
+        reason("root");
+      }
       // A write target the program itself names (cp, mv) is judged the same way as a redirect: a destination
       // outside the tree is the fact a reader needs, whoever wrote the file. A FLAG'S VALUE is not a path - a
       // commit message quoting a drive letter is the one false positive that would make this block cry wolf.
@@ -739,14 +948,29 @@
           }
           if (arg.startsWith("-") || !outsideRepo(arg, rootDir)) continue;
           seen("outside", `writes outside the repo (${clip(arg, 40)})`);
+          reason("outside");
           break;
         }
       }
       // A port the step itself named (a URL or host:port) outranks one found anywhere else in the line.
       const stepHost = described.host || "";
-      const stepPort = described.port || portOf(stepHost) || "";
+      const stepPort = described.port || portOf(stepHost) || stepPortOf(parsed.raw) || "";
       if (stepPort && !port) port = stepPort;
       if (stepHost && !prod) prod = prodToken(stepHost);
+      if (stepPort) reason("port");
+      if (prodToken(stepHost || parsed.raw)) reason("prod");
+      // The two ways a step reaches past this machine's own files: a network fetch, and a package install.
+      if (NETWORK.has(parsed.program) || (git && NETWORK_GIT.has(sub))) reason("network");
+      const verb = (git ? rest : parsed.args).find((a) => !a.startsWith("-")) || "";
+      if (PACKAGE_MANAGERS.has(parsed.program) && INSTALL_VERB.test(verb)) reason("install");
+      else if (/^python3?$/i.test(parsed.program) && /\b(pip|pip3)\b/.test(parsed.raw) && /\binstall\b/.test(parsed.raw)) reason("install");
+
+      steps.push({
+        program: git && sub ? `git ${sub}` : parsed.display,
+        text: described.text,
+        reasons,
+        consequential: reasons.length > 0,
+      });
     }
 
     // The whole line is searched for PROD and for a port: `-H "Host: prod..."`, a `--port 8642`, a cluster name
@@ -772,11 +996,19 @@
       .sort((a, b) => KIND_ORDER.indexOf(a[0]) - KIND_ORDER.indexOf(b[0]))
       .map(([kind, text]) => ({ kind, text }));
 
+    // Four rows at most carry the weight; the rest of the line is one folded row. A command that only reads draws
+    // no row at all - `harmless` holds every step, and the reader gets one line naming the programs.
+    const consequential = steps.filter((step) => step.consequential);
+    const harmless = steps.filter((step) => !step.consequential);
+
     return {
       lead,
       leadKind,
-      steps: steps.slice(0, MAX_STEPS),
-      more: Math.max(0, steps.length - MAX_STEPS),
+      steps,
+      shown: consequential.slice(0, MAX_CONSEQUENTIAL),
+      folded: consequential.slice(MAX_CONSEQUENTIAL),
+      consequential,
+      harmless,
       flags,
       readOnly: !writes,
       danger: flags.some((f) => DANGER.has(f.kind)),
@@ -786,23 +1018,41 @@
 
   function html(command, { root: rootDir = "", esc = escapeHtml } = {}) {
     const s = summarize(command, { root: rootDir });
-    if (!s || !s.steps.length) return "";
+    // An empty command draws nothing. A command with no program step but a write of its own (`> /etc/hosts`) still
+    // draws - its warning is the whole reason the block exists.
+    if (!s || (!s.steps.length && !s.flags.length)) return "";
     const e = (v) => esc(v);
     const chip = s.readOnly ? "reads only" : "changes things";
     const chipClass = s.danger ? "is-danger" : s.readOnly ? "is-read" : "is-write";
-    const steps = s.steps.map((step) => `<li>${e(step.text)}</li>`).join("");
-    const more = s.more ? `<li class="is-more">and ${s.more} more step${s.more === 1 ? "" : "s"} - read the command below</li>` : "";
+    const row = (step) => `<li>${e(step.text)}</li>`;
+    // ONE LINE FOR EVERYTHING THAT DOES NOT MATTER, naming each program once: five `echo`s are one `echo` here and
+    // five rows when the line opens. `<details>` is the expansion, so the card needs no script of its own.
+    const fold = (steps, kind, label) => {
+      if (!steps.length) return "";
+      const names = steps.map((step) => step.program).filter((name, i, all) => name && all.indexOf(name) === i);
+      const count = steps.length;
+      const line = `${count} ${label}${count === 1 ? "" : "s"}: ${names.join(", ")}`;
+      return (
+        `<li class="is-fold"><details class="ta-fold" data-ta-fold="${kind}" data-ta-count="${count}">` +
+        `<summary class="ta-fold-line mono">${e(line)}</summary>` +
+        `<ul class="ta-fold-steps">${steps.map(row).join("")}</ul></details></li>`
+      );
+    };
+    const steps =
+      s.shown.map(row).join("") +
+      fold(s.harmless, "harmless", "harmless step") +
+      fold(s.folded, "consequential", "more consequential step");
     const flags = s.flags.map((f) => `<div class="ta-summary-flag mono" data-ta-flag="${e(f.kind)}">&#9888; ${e(f.text)}</div>`).join("");
     const read = s.readOnly ? `<div class="ta-summary-read mono">reads only - nothing here is written, deleted or pushed</div>` : "";
     const lead = s.lead ? `<div class="ta-summary-lead">${e(s.lead)}</div>` : "";
     return `<div class="ta-summary" data-ta-summary="${e(s.leadKind || "derived")}" role="group" aria-label="what this will do">
     <div class="ta-summary-head mono"><span class="ta-summary-label">what this will do</span><span class="ta-summary-chip ${chipClass}">${chip}</span></div>
     ${lead}
-    <ul class="ta-summary-steps">${steps}${more}</ul>
+    <ul class="ta-summary-steps">${steps}</ul>
     ${flags}
     ${read}
   </div>`;
   }
 
-  root.wtCommandSummary = { summarize, html, splitSteps, MAX_STEPS };
+  root.wtCommandSummary = { summarize, html, splitSteps, MAX_CONSEQUENTIAL };
 })(typeof window !== "undefined" ? window : globalThis);

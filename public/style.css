@@ -2835,7 +2835,18 @@ a.as-task-ref:focus-visible { outline: 2px solid #7fb3ff; outline-offset: 1px; }
 .ta-summary-steps { margin: 5px 0 0; padding: 0; list-style: none; }
 .ta-summary-steps li { position: relative; padding-left: 12px; font-size: 11.5px; line-height: 1.45; color: #ece2c6; }
 .ta-summary-steps li::before { content: "-"; position: absolute; left: 2px; color: #a8842f; }
-.ta-summary-steps li.is-more { color: #b9a97f; font-style: italic; }
+.ta-summary-steps li.is-fold { padding-left: 0; }
+.ta-summary-steps li.is-fold::before { content: ""; }
+.ta-fold { display: block; }
+.ta-fold-line { cursor: pointer; font-size: 11.5px; line-height: 1.45; color: #b9a97f; list-style: none; }
+.ta-fold-line::-webkit-details-marker { display: none; }
+.ta-fold-line::before { content: ">"; display: inline-block; width: 11px; color: #a8842f; }
+.ta-fold[open] > .ta-fold-line::before { content: "v"; }
+.ta-fold-line:hover { color: #d8c79a; }
+.ta-fold-line:focus-visible { outline: 1px solid #6b4d16; outline-offset: 2px; }
+.ta-fold-steps { margin: 3px 0 0; padding: 0 0 0 11px; list-style: none; }
+.ta-fold-steps li { position: relative; padding-left: 11px; font-size: 11px; line-height: 1.45; color: #d9cfb4; }
+.ta-fold-steps li::before { content: "-"; position: absolute; left: 0; color: #7d6a2a; }
 .ta-summary-flag { margin-top: 4px; font-size: 11px; color: #ff9c9c; }
 .ta-summary-read { margin-top: 5px; font-size: 11px; color: #8fd6a0; }
 .ta-actions { display: flex; gap: 6px; flex-wrap: wrap; }
