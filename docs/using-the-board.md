@@ -1071,19 +1071,35 @@ a restart):
 | Updates | Update check | What this tab does when the panel is serving a different build than the one it loaded: **off**, **prompt** (the default — a chip offers the reload), or **auto** (reload as soon as the page is idle). Both modes hold the reload while a reply box or a held draft has text, or while a turn is streaming. Saved in this browser. |
 | Updates | Panel build · Check now | The build this tab is running, and what the panel serves now. **Check now** asks `GET /api/build` at once — it works even with the check set to off. |
 
-**The Prompt tab** is read-only, and it is the picture behind the General tab's **Turn briefing budget**. Three
-box-in-box diagrams draw the prompt one assistant turn is built from: the **first turn of a session** (the charter
-sent whole), an **ordinary turn** (a charter marker and no queue digest) and the **fourth wake** (the queue digest
-due, so it is the largest ordinary turn). The board is the same tail message in all three - one small message a
-turn, whose rows carry their text only when their state token changed - so it has no gate to draw and no marker to
-switch to. The outer box is the whole prompt, the two inside it are its carriers — the standing `system` text and the `turn` text
-appended to the question — and every section inside them is labelled with its characters and its share of that
-turn. The caps are the panel's own constants, not the drawing's: the charter's 20,000 characters, the twelve rule
-seats at 200 characters each, the notes' 1,200-character clip, ten watches at 120, forty project lines, the role
-prompt's 8,000-character cap, the queue digest's rows and the board tail's one-screen budget. The sizes are measured
-by the same `Assistant.briefingParts` a real turn uses (`GET /api/settings/prompt-budget`) and opening the tab
-advances neither the charter's send record nor the board's digest cursor, so looking at the budget cannot make the
-next real turn treat a board it was already shown as new.
+**The Prompt tab** is read-only, and it is the page behind the General tab's **Turn briefing budget**. It opens with
+a **key**: **system text** is the standing half of the prompt, sent as the run's `instructions` and therefore the
+part a provider's prefix cache can reuse, and **turn text** is the half that moves every turn - the board tail, the
+queue digest when its gate is due, and the charter when it rides along, whole or as a one-line marker. The key says
+why the split exists and what follows from it: nothing that moves may ride in the system half, and a block that
+changes at the head costs the prefix cache for the whole thread behind it. Then an **A-to-Z of the tab's own words** -
+board digest, budget, charter, over-cap behaviour, queue digest, resend every N, section and its order, standing
+briefing - each defined in a sentence and marked with the box it describes, so a reader who does not know the words
+can read the diagrams. A table of contents at the top jumps to any of the four sections.
+
+The diagrams are three box-in-box pictures of the prompt one assistant turn is built from: the **first turn of a
+session** (the charter sent whole), an **ordinary turn** (a charter marker and no queue digest) and the **fourth
+wake** (the queue digest due, so it is the largest ordinary turn). The board is the same tail message in all three -
+one small message a turn, whose rows carry their text only when their state token changed - so it has no gate to
+draw and no marker to switch to. The outer box is the whole prompt, the two inside it are its carriers (the standing
+`system` text and the `turn` text appended to the question), and every section inside them is labelled with its
+characters and its share of that turn; each picture is drawn beside the sentence that explains it. The caps are the
+panel's own constants, not the drawing's: the charter's 20,000 characters, the twelve rule seats at 200 characters
+each, the notes' 1,200-character clip, ten watches at 120, forty project lines, the role prompt's 8,000-character
+cap, the queue digest's rows and the board tail's one-screen budget. The sizes are measured by the same
+`Assistant.briefingParts` a real turn uses (`GET /api/settings/prompt-budget`) and opening the tab advances neither
+the charter's send record nor the board's digest cursor, so looking at the budget cannot make the next real turn
+treat a board it was already shown as new.
+
+It closes with **the worker briefs**: the eight paragraphs a tree run's prompt carries after the TODO block, in the
+order they arrive - RELEASE, DELIVER, CLARIFY_LINKS, REPORT, TERMINAL, GIT, PAGE, TESTING - each with when it
+attaches (every tree turn, or only where the project or the tree's `package.json` allows it) and the constant in
+`lib/jobs.js` it comes from. Each points at its own doc rather than restating it, and REPORT carries the pointer to
+`docs/worker-brief-report-cards.md` where that paragraph's proof lives.
 
 **Written to the gateway's `config.yaml`** (the gateway re-reads them; a row whose file is not reachable from this
 machine is disabled, and its note gives the reason):

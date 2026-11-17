@@ -17282,6 +17282,8 @@ void loadChangelog();
 void loadPromptBudget();
 // The window's own gestures: the head drags it, the corner grip sizes it, and the rect is remembered in this browser.
 initSettingsWindow();
+// The Prompt tab's table of contents: four anchors into a page long enough to need them.
+initPromptDocToc();
 // A second way in that is always on screen at the top left: the title opens Settings.
 $("title-settings")?.addEventListener("click", (e) => {
   e.stopPropagation();
@@ -17713,9 +17715,20 @@ function promptSectionHtml(section) {
         </div>`;
 }
 
-// One turn: the prompt box, its two carriers inside it, and the sections inside those. Box-in-box is the reading:
-// the outer box is the whole prompt, each half is a carrier (system text / turn text) and each section is a box in it.
-function promptDiagramHtml(turn) {
+// Why a turn is the size it is, beside its picture: the numbers are the model's, this sentence names the gate
+// that moved and what the turn is for. `queueLabel` is THIS assistant's queue cadence, so the fourth wake's
+// sentence stays true on a panel set to every 3rd wake as well as the default every 2nd.
+function promptTurnWhy(turn, gates = {}) {
+  if (turn.key === "first") return "A session's first turn: the charter is sent whole and the queue digest is carried, so this is the one turn that pays for the long tier.";
+  if (turn.key === "ordinary") return "What most wakes cost: the charter is a one-line marker and the queue digest is not due, so the turn is the board's tail and that marker.";
+  if (turn.key === "fourth") return `The queue gate is due again (${gates.queueLabel || "every 2nd wake"}) while the charter is still a marker, so this is the largest of the ordinary turns.`;
+  return "";
+}
+
+function promptDiagramHtml(turn, gates) {
+  // One turn: the prompt box, its two carriers inside it, and the sections inside those. Box-in-box is the
+  // reading: the outer box is the whole prompt, each half is a carrier (system text / turn text) and each
+  // section is a box in it.
   const half = (name, label) => {
     const sections = (turn.sections || []).filter((s) => s.half === name);
     const total = Number(name === "system" ? turn.system : turn.turn) || 0;
@@ -17729,13 +17742,36 @@ function promptDiagramHtml(turn) {
           <span class="prompt-diagram-title">${esc(turn.label)}</span>
           <span class="prompt-diagram-total mono">${promptNumber(turn.total)} chars</span>
         </div>
-        <div class="prompt-box">
-          <div class="prompt-box-head"><span>the prompt</span><span class="mono">${promptNumber(turn.total)} chars · 100%</span></div>
-          ${half("system", "system text")}
-          ${half("turn", "turn text")}
+        <div class="prompt-diagram-body">
+          <div class="prompt-box">
+            <div class="prompt-box-head"><span>the prompt</span><span class="mono">${promptNumber(turn.total)} chars · 100%</span></div>
+            ${half("system", "system text")}
+            ${half("turn", "turn text")}
+          </div>
+          <aside class="prompt-diagram-side">
+            <p class="prompt-diagram-note">${esc(turn.note || "")}</p>
+            <p class="prompt-diagram-why">${esc(promptTurnWhy(turn, gates))}</p>
+          </aside>
         </div>
-        <div class="prompt-diagram-note">${esc(turn.note || "")}</div>
       </article>`;
+}
+
+// The page's own table of contents: a press scrolls the section into the settings pane's scroll box. The links
+// are real hrefs, so a browser running this page without the script still jumps; this only keeps the jump inside
+// the pane (and off the URL, where a hash would outlive the tab).
+function initPromptDocToc() {
+  const nav = document.getElementById("prompt-toc");
+  if (!nav || nav.dataset.bound === "1") return;
+  nav.dataset.bound = "1";
+  const jump = (ev) => {
+    const link = ev.target.closest ? ev.target.closest("a[href^='#']") : null;
+    if (!link) return;
+    const target = document.getElementById(link.getAttribute("href").slice(1));
+    if (!target) return;
+    ev.preventDefault();
+    target.scrollIntoView({ block: "start" });
+  };
+  nav.addEventListener("click", jump);
 }
 
 function paintPromptBudget(model) {
@@ -17749,7 +17785,7 @@ function paintPromptBudget(model) {
     box.innerHTML = "";
     return;
   }
-  box.innerHTML = turns.map(promptDiagramHtml).join("");
+  box.innerHTML = turns.map((turn) => promptDiagramHtml(turn, model.gates || {})).join("");
   const at = (key) => turns.find((t) => t.key === key) || null;
   const first = at("first") || turns[0];
   const ordinary = at("ordinary");

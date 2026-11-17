@@ -430,6 +430,70 @@ thead th,
 .prompt-section.is-gated { border-style: dashed; }
 .prompt-section.is-gated .prompt-track { background: repeating-linear-gradient(90deg, #1c2531 0 3px, transparent 3px 6px); }
 .prompt-section.is-gated .prompt-fill { display: none; }
+/* ---- Settings > Prompt: the tab as documentation -------------------------------------------------
+   The tab is a page to READ, not a row of controls: a key, an A-to-Z of its own words, the diagrams
+   beside the text that explains them, and the worker briefs. It is read in a window the reader may
+   widen, so the two-column layouts key off the PANEL's width (a container query named promptdoc), not
+   the browser's: at the 340px default the page is one column, and a wide window puts each chart beside
+   its note and each term beside its definition. */
+[data-settings-group="prompt"] { container-type: inline-size; container-name: promptdoc; }
+/* A doc block is a child the tab's search can find (paintSettingsRows walks the panel's children and
+   counts .settings-row), but it is not a control row: the flex layout is undone below. Both halves of
+   the selector are :where() so this lands at the weight of `.settings-row` itself (and no higher), which
+   leaves every component rule below free to give a block its own display; the :not() keeps it off a
+   block the search has hidden, so `.settings-group .search-hidden { display: none }` stays the winner. */
+:where([data-settings-group="prompt"]) :where(.prompt-doc-block.settings-row):not(.search-hidden) { display: block; }
+.prompt-doc-title { margin: 2px 0 4px; font-size: 14px; font-weight: 600; line-height: 1.3; color: var(--text); }
+.prompt-doc-lede { margin: 0 0 10px; max-width: 78ch; font-size: 12px; line-height: 1.5; color: var(--dim); }
+.prompt-toc { display: grid; gap: 2px; margin: 0 0 4px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-2); }
+.prompt-toc a { display: block; padding: 2px 0; font-size: 12px; line-height: 1.4; color: var(--blue); text-decoration: none; }
+.prompt-toc a:hover, .prompt-toc a:focus-visible { text-decoration: underline; }
+.prompt-toc-n { display: inline-block; min-width: 14px; margin-right: 6px; font: 10px var(--mono); color: var(--dimmer); }
+.prompt-doc-h { margin: 16px 0 6px; padding-top: 10px; font-size: 12.5px; font-weight: 600; line-height: 1.35; color: var(--text); border-top: 1px solid var(--line); scroll-margin-top: 4px; }
+.prompt-doc-h4 { margin: 10px 0 3px; font-size: 11.5px; font-weight: 600; color: var(--text); }
+[data-settings-group="prompt"] p, [data-settings-group="prompt"] li { margin: 0 0 6px; font-size: 12px; line-height: 1.5; color: var(--dim); }
+.prompt-doc-note { margin: 0 0 8px; font-size: 11.5px; line-height: 1.45; color: var(--dimmer); }
+[data-settings-group="prompt"] code { font: 10.5px var(--mono); color: var(--text); background: #0f141b; border: 1px solid #232c38; border-radius: 3px; padding: 0 3px; }
+.prompt-doc-list { margin: 2px 0 0; padding-left: 16px; }
+.prompt-doc-list li { margin: 3px 0; }
+.prompt-key { display: grid; gap: 8px; margin: 0 0 4px; }
+.prompt-key-notes { display: grid; gap: 8px 12px; }
+.prompt-key-card { margin: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-2); }
+.prompt-key-card[data-prompt-half="system"] { border-left: 3px solid var(--blue); }
+.prompt-key-card[data-prompt-half="turn"] { border-left: 3px solid var(--violet); }
+.prompt-key-card p { margin: 0; }
+.prompt-key-card .prompt-key-name { margin: 0 0 3px; font-size: 11.5px; font-weight: 600; color: var(--text); }
+.prompt-def { margin: 0 0 6px; padding: 7px 9px; border: 1px solid #232c38; border-radius: 6px; background: var(--surface); }
+.prompt-def .prompt-def-term { margin: 0 0 3px; font-size: 12px; font-weight: 600; color: var(--text); }
+.prompt-def .prompt-def-says { margin: 0; max-width: 78ch; }
+.prompt-box-chip { display: inline-block; margin-left: 6px; border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; font: 9.5px/15px var(--mono); font-weight: 400; color: var(--dim); white-space: nowrap; vertical-align: 1px; }
+.prompt-box-chip[data-prompt-box="system"] { color: var(--blue); border-color: #2f4159; }
+.prompt-box-chip[data-prompt-box="turn"] { color: var(--violet); border-color: #453c2a; }
+.prompt-brief { margin: 0 0 6px; padding: 8px 9px; border: 1px solid #232c38; border-radius: 6px; background: var(--surface); }
+.prompt-brief .prompt-brief-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; margin: 0 0 4px; }
+.prompt-brief-marker { font: 11.5px var(--mono); font-weight: 600; letter-spacing: .04em; color: var(--text); }
+.prompt-brief-when { font: 10px var(--mono); color: var(--dimmer); }
+.prompt-brief .prompt-brief-says { margin: 0 0 4px; }
+.prompt-brief .prompt-brief-from { margin: 0; font-size: 10px; line-height: 1.5; color: var(--dimmer); }
+/* The diagram's own text: the model's sentence about the turn and the page's sentence about why it is
+   that size, beside the picture they explain once the window has the room for two columns. */
+.prompt-diagram-body { display: grid; gap: 8px; }
+.prompt-diagram-side { border-left: 2px solid #2a3340; padding-left: 8px; }
+.prompt-diagram-side .prompt-diagram-note { margin: 0; }
+.prompt-diagram-side .prompt-diagram-why { margin: 4px 0 0; font-size: 10px; line-height: 1.45; color: var(--dim); }
+.prompt-diagram-head { margin-bottom: 6px; }
+@container promptdoc (min-width: 620px) {
+  .prompt-key { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .prompt-key-notes { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .prompt-diagram-body { grid-template-columns: minmax(0, 1.5fr) minmax(180px, 1fr); align-items: start; }
+  .prompt-def { display: grid; grid-template-columns: 200px minmax(0, 1fr); column-gap: 12px; align-items: start; }
+  .prompt-def .prompt-def-term { margin-bottom: 0; }
+  .prompt-def .prompt-def-term .prompt-box-chip { display: block; width: fit-content; margin: 4px 0 0; }
+  .prompt-brief { display: grid; grid-template-columns: 190px minmax(0, 1fr); column-gap: 12px; align-items: start; }
+  .prompt-brief .prompt-brief-head { display: block; margin-bottom: 0; }
+  .prompt-brief-when { display: block; margin-top: 3px; }
+  .prompt-brief .prompt-brief-says, .prompt-brief .prompt-brief-from { grid-column: 2; }
+}
 /* The contrast slider, and a strip of the six layers it moves - each swatch reads the variable it changes, so
    the preview is the setting, not a drawing of it. */
 .settings-row input[type="range"] { flex: 1; min-width: 0; height: 18px; accent-color: #4a90d9; }
