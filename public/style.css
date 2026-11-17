@@ -3838,6 +3838,14 @@ button.btn-cleanup:focus-visible { outline: 1px solid #7fb2e8; outline-offset: 1
   display: grid; grid-template-columns: auto 1fr; gap: 0 6px; text-align: left; cursor: pointer;
   background: none; border: 0; border-radius: 5px; padding: 4px 5px; color: var(--text);
 }
+/* One message's head, above its rows: the turn's place in the conversation, when it last did something, and how many
+   of its rows matched. A quiet band rather than another result - it is not a press target - and the first one sits
+   flush with the popover's padding. */
+.as-search-item {
+  flex: 0 0 auto; padding: 5px 5px 1px; margin-top: 2px; font-size: 9.5px; color: var(--dimmer);
+  border-top: 1px solid var(--line); letter-spacing: .02em;
+}
+.as-search-item:first-child { margin-top: 0; padding-top: 3px; border-top: 0; }
 .as-search-row:hover, .as-search-row:focus-visible { background: #1b2532; outline: none; }
 .as-search-where { grid-row: 1; grid-column: 1; font-size: 9.5px; color: #8fb8ff; text-transform: uppercase; letter-spacing: .05em; }
 .as-search-meta { grid-row: 1; grid-column: 2; font-size: 9.5px; color: var(--dimmer); }

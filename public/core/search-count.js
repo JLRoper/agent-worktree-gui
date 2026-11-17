@@ -78,7 +78,7 @@
     const title = !total
       ? "no turn matches this filter"
       : capped
-        ? `${plural(t, "turn", "turns")}, ${m} hits matched, ${d} displayed; your own input is kept first when the cap bites, so the list may not hold every match`
+        ? `${plural(t, "turn", "turns")}, ${m} hits matched, ${d} displayed; your own input is kept when the cap bites, so the list may not hold every match`
         : `${plural(t, "turn", "turns")}, ${m} hits matched; Up and Down step one match per press, Enter opens the turn it is in`;
     return { current, total, matched: m, displayed: d, turns: t, capped, text, foot, title };
   }

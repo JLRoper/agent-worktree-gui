@@ -81,8 +81,8 @@ const ONE_TURN = {
   lastActiveAt: utc(12, 4, 0),
   prompt: `${ONE_TURN_FILTER} budget: keep the board quiet`,
   finalMessage: "the budget holds",
-  // Four console rows, each with its own lid: the walk lists them newest first, which is the order the cap and the
-  // list both use.
+  // Four console rows, each with its own lid: the walk reads them in their own order (the order the card draws them),
+  // which is the order the message reads on screen - the prompt, then z1 to z4.
   lines: [
     line("z1", `grep -n ${ONE_TURN_FILTER} routes/a.js`, oneTurnAt + 1000),
     line("z2", `rg -n ${ONE_TURN_FILTER} lib/b.js`, oneTurnAt + 2000),
@@ -298,7 +298,7 @@ try {
       const stepped = await markSpot();
       v.ok("one Down reads 2 of 5", two.text === "2 of 5" && two.current === 2, `${two.text}, current ${two.current}`);
       v.ok("the press stayed inside the one turn", stepped.turn === ONE_TURN.id && stepped.rings === 1, JSON.stringify(stepped));
-      v.ok("the highlight moved to the newest console row of that turn", stepped.rowCurrent === "z4" && stepped.prompt === false, JSON.stringify(stepped));
+      v.ok("the highlight moved to the next console row of that turn, in reading order", stepped.rowCurrent === "z1" && stepped.prompt === false, JSON.stringify(stepped));
       v.ok("the mark moved on screen, rather than the count moving alone", stepped.top !== seeded.top, `prompt ${seeded.top}, row ${stepped.top}`);
       v.ok("one Down did not scroll the page", afterDown === beforeDown, `${beforeDown} -> ${afterDown}`);
       record.steps.push({ press: "ArrowDown", count: two.text, lid: stepped.lid, top: stepped.top });
@@ -324,7 +324,7 @@ try {
       const wrappedSpot = await markSpot();
       v.ok("Shift+Down steps backwards, wrapping to 5 of 5", wrappedBack.text === "5 of 5" && wrappedBack.current === 5, wrappedBack.text);
       v.ok("Shift+Down did not scroll the page", afterShiftDown === beforeShiftDown, `${beforeShiftDown} -> ${afterShiftDown}`);
-      v.ok("Shift+Down landed on the oldest console row", wrappedSpot.rowCurrent === "z1", JSON.stringify(wrappedSpot));
+      v.ok("Shift+Down wrapped backwards to the last row of the message", wrappedSpot.rowCurrent === "z4", JSON.stringify(wrappedSpot));
       await page.keyboard.press("Shift+Enter");
       const shiftEnter = await waitCount("4 of 5", ONE_TURN_FILTER);
       v.ok("Shift+Enter steps backwards too", shiftEnter.text === "4 of 5" && shiftEnter.current === 4, shiftEnter.text);
@@ -398,7 +398,7 @@ try {
       ).json();
       v.ok("the store matched more rows than the list shows", cappedApi.matched === 12 && cappedApi.hits.length === 10, `${cappedApi.matched} matched, ${cappedApi.hits.length} displayed`);
       agree("capped", capped, {
-        foot: "12 hits matched, 10 displayed, in 4 turns - your own input is kept first when the cap bites",
+        foot: "12 hits matched, 10 displayed, in 4 turns - your own input is kept when the cap bites",
         matched: 12,
         turns: 4,
       });
