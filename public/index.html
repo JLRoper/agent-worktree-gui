@@ -40,7 +40,7 @@
     </div>
     <div class="settings-tabs" id="settings-tabs" role="tablist" aria-label="Settings sections">
       <button type="button" class="settings-tab" id="settings-tab-general" role="tab" aria-controls="settings-panel-general" aria-selected="false" tabindex="-1" data-settings-tab="general" title="What this panel costs the machine, and what one of its turns costs the model. Scan workers is how many git scans run at once — each one is a process creation, which this machine charges seconds for while an endpoint agent filters it; row refresh is how often a worktree row is re-read, and the board's chips are only as fresh as this number. Both are written into config.json and applied at once, no restart. The turn briefing budget is a ceiling in characters on the text one assistant turn appends (queue digest, board, charter): zero is off, and a turn that fits is sent byte for byte. The tab you choose is remembered in this browser."><span class="settings-tab-label">General</span><span class="settings-tab-count" aria-hidden="true" hidden>0</span></button>
-      <button type="button" class="settings-tab" id="settings-tab-prompt" role="tab" aria-controls="settings-panel-prompt" aria-selected="false" tabindex="-1" data-settings-tab="prompt" title="How much space each section of a built prompt is reserved, in characters. Three box-in-box diagrams, one per turn: the first turn of a session (the charter sent whole), an ordinary turn (the charter's one-line marker, the board's marker, and no queue digest), and the fourth wake (the queue gate and the board's full sweep both due). Every section is labelled with its characters and its share of that turn; the sizes are measured from the panel's own briefing builder and the caps are its real constants — the charter's 20,000 characters, the twelve rule seats at 200 each, the notes' 1,200-character clip, ten watches, forty projects, the role prompt's 8,000-character cap. The queue digest is drawn only when its gate says it is due, and the board is one tail message on every turn (a row carries its text only when its state token changed). Read-only. The tab you choose is remembered in this browser."><span class="settings-tab-label">Prompt</span><span class="settings-tab-count" aria-hidden="true" hidden>0</span></button>
+      <button type="button" class="settings-tab" id="settings-tab-prompt" role="tab" aria-controls="settings-panel-prompt" aria-selected="false" tabindex="-1" data-settings-tab="prompt" title="Read-only: the prompt one assistant turn is built from. The tab opens with a plain key for the two halves - system text, the standing half sent as the run's instructions and the part a provider's prefix cache can reuse, and turn text, the half that moves every turn - then defines every word the tab uses, draws the three turns this panel measures, and lists the worker briefs a tree run carries. The tab you choose is remembered in this browser."><span class="settings-tab-label">Prompt</span><span class="settings-tab-count" aria-hidden="true" hidden>0</span></button>
       <button type="button" class="settings-tab" id="settings-tab-display" role="tab" aria-controls="settings-panel-display" aria-selected="true" tabindex="0" data-settings-tab="display" title="How the board and the agent's output look. Panel font covers the headings, labels, buttons and whatever you type; terminal font and weight cover the console and the tool lines inside it; Thinking text, Skill output and Console text each set a colour for their own part of it; the console also carries the one size its words, a tool's output and the reasoning all read, and a skill's box has a size of its own. All of it is saved in this browser. The tab you choose is remembered in this browser."><span class="settings-tab-label">Display</span><span class="settings-tab-count" aria-hidden="true" hidden>0</span></button>
       <button type="button" class="settings-tab" id="settings-tab-cards" role="tab" aria-controls="settings-panel-cards" aria-selected="false" tabindex="-1" data-settings-tab="cards" title="What a card shows and does for you. The tab you choose is remembered in this browser."><span class="settings-tab-label">Cards</span><span class="settings-tab-count" aria-hidden="true" hidden>0</span></button>
       <button type="button" class="settings-tab" id="settings-tab-board" role="tab" aria-controls="settings-panel-board" aria-selected="false" tabindex="-1" data-settings-tab="board" title="How the board behaves while you are reading it, and the two gestures that read it now instead of on the clock. The tab you choose is remembered in this browser."><span class="settings-tab-label">Board</span><span class="settings-tab-count" aria-hidden="true" hidden>0</span></button>
@@ -104,13 +104,127 @@
       </div>
 
       <div class="settings-group" id="settings-panel-prompt" data-settings-group="prompt" role="tabpanel" aria-labelledby="settings-tab-prompt" hidden>
-        <div class="settings-row" title="The prompt one assistant turn is built from, section by section, measured on this panel and drawn against the panel's own caps. Read-only: there is nothing to save here, and opening it does not advance the charter's send record. The three diagrams are the first turn of a session, an ordinary turn and the fourth wake.">
-          <span>Prompt budget <span class="settings-info">ⓘ</span></span>
-          <span class="settings-unit mono">read only</span>
+
+        <h2 class="prompt-doc-title" id="prompt-doc-title">The prompt one assistant turn is built from</h2>
+        <p class="prompt-doc-lede">Read-only. Every size on this page is measured by the same builder a real turn uses, and every word the tab uses is defined here.</p>
+
+        <nav class="prompt-toc" id="prompt-toc" aria-label="On this page">
+          <a href="#prompt-key"><span class="prompt-toc-n">1</span>The key: system text and turn text</a>
+          <a href="#prompt-words"><span class="prompt-toc-n">2</span>The words, A to Z</a>
+          <a href="#prompt-turns"><span class="prompt-toc-n">3</span>The three turns, drawn</a>
+          <a href="#prompt-briefs"><span class="prompt-toc-n">4</span>The worker briefs</a>
+        </nav>
+
+        <h3 class="prompt-doc-h prompt-doc-section prompt-doc-block settings-row" id="prompt-key">The key: system text and turn text</h3>
+        <div class="prompt-key prompt-doc-block settings-row">
+          <div class="prompt-key-card" data-prompt-half="system">
+            <p class="prompt-key-name">System text</p>
+            <p>The standing half of the prompt. It is sent as the run's <code>instructions</code>, which the gateway applies as the run's ephemeral system prompt and never writes into the thread. It is the part a provider's prefix cache can reuse: the same bytes at the head of every request of a session.</p>
+          </div>
+          <div class="prompt-key-card" data-prompt-half="turn">
+            <p class="prompt-key-name">Turn text</p>
+            <p>The half that moves every turn: the board tail, the queue digest when its gate is due, and the charter when it rides along (whole or as a one-line marker). It is appended after the thread, so a turn pays for the bytes it adds and nothing behind them.</p>
+          </div>
         </div>
+        <div class="prompt-key-notes prompt-doc-block settings-row">
+          <div id="prompt-key-why">
+            <p class="prompt-doc-h4">Why the split exists</p>
+            <p>A provider's prefix cache reuses only the bytes a request shares with the one before it, up to the first that moved. The system text is the head of every request. While the board's and the charter's markers lived there they changed the head on a schedule, and the first call of a turn read 1,536 of 326,319 prompt tokens from cache (0.5%).</p>
+            <p class="prompt-doc-note">The measurement behind that number, and the tiering it produced: <code>docs/design/prompt-tiers-2026-11-08.md</code>.</p>
+          </div>
+          <div id="prompt-key-follows">
+            <p class="prompt-doc-h4">What follows from it</p>
+            <ul class="prompt-doc-list">
+              <li>Nothing that moves may ride in the system half.</li>
+              <li>A block that changes at the head costs the prefix cache for the whole thread behind it.</li>
+              <li>So the moving blocks ride after the thread, where a change costs only what it adds. The diagrams below draw both halves, and the moving boxes are the ones that open and close.</li>
+            </ul>
+          </div>
+        </div>
+
+        <h3 class="prompt-doc-h prompt-doc-section prompt-doc-block settings-row" id="prompt-words">The words, A to Z</h3>
+        <p class="prompt-doc-note">Each entry names the box it describes, as the diagrams below label it.</p>
+        <div class="prompt-def prompt-doc-block settings-row" data-prompt-term="board digest">
+          <p class="prompt-def-term">Board digest<span class="prompt-box-chip" data-prompt-box="turn">turn text · Board tail</span></p>
+          <p class="prompt-def-says">One message appended to the assistant's digest on every turn, moved or not: a row per item, carrying its one-line text only when its state token changed, fitted to one screen (35 lines by 89 columns, 3,115 characters) at no more than 24 rows. It has no gate, which is why all three diagrams draw it whole.</p>
+        </div>
+        <div class="prompt-def prompt-doc-block settings-row" data-prompt-term="budget">
+          <p class="prompt-def-term">Budget<span class="prompt-box-chip" data-prompt-box="turn">turn text · the whole half</span></p>
+          <p class="prompt-def-says">The ceiling on the turn half, set by Settings → General → Turn briefing budget (<code>briefingBudgetChars</code>): characters, 0 for off (the default), 40,000 at most. It covers the queue digest, the board tail and the charter, never the standing half. A turn that fits is sent byte for byte.</p>
+        </div>
+        <div class="prompt-def prompt-doc-block settings-row" data-prompt-term="charter">
+          <p class="prompt-def-term">Charter<span class="prompt-box-chip" data-prompt-box="turn">turn text · Charter</span></p>
+          <p class="prompt-def-says">The long tier: the reasoning behind the standing rules, in a file beside the job store. It rides the turn half because it changes. A turn carries either its text or a one-line marker naming its sha, its size and its file. Its cap is <code>CHARTER_MAX_CHARS</code>, 20,000 characters.</p>
+        </div>
+        <div class="prompt-def prompt-doc-block settings-row" data-prompt-term="over-cap behaviour">
+          <p class="prompt-def-term">Over-cap behaviour<span class="prompt-box-chip" data-prompt-box="turn">turn text · over the budget</span></p>
+          <p class="prompt-def-says">A turn half longer than the budget is cut at a line boundary: the head (the queue digest, written first) is kept, the tail (the board tail and the charter) is dropped, and one sentence naming the budget and where the number lives is appended in its place. That sentence is counted inside the budget, so an over-budget turn never grows by explaining itself.</p>
+        </div>
+        <div class="prompt-def prompt-doc-block settings-row" data-prompt-term="queue digest">
+          <p class="prompt-def-term">Queue digest<span class="prompt-box-chip" data-prompt-box="turn">turn text · Queue digest</span></p>
+          <p class="prompt-def-says">The top of the assistant's own queue: a header with the counts, then up to <code>queueDigestSize</code> queued rows (5 by default, 20 at most, each title clipped to 90 characters), then the running and parked rows, then one line saying how many queued rows are hidden. It is gated: it rides one wake in <code>queueSweepEveryNWakes</code> (2 by default), and a turn the reader asked for always carries it. An empty queue is no block at all, not a closed gate.</p>
+        </div>
+        <div class="prompt-def prompt-doc-block settings-row" data-prompt-term="resend every N">
+          <p class="prompt-def-term">Resend every N<span class="prompt-box-chip" data-prompt-box="turn">turn text · Charter's gate</span></p>
+          <p class="prompt-def-says"><code>CHARTER_RESEND_EVERY</code>, 20 turns. A session's charter is sent whole on its first turn, on any byte change, and every 20th turn as the safety net for a model that lost the text to a compaction or a gateway rewrite. Every other turn carries the marker. The marker claims what was last sent, not what was last seen.</p>
+        </div>
+        <div class="prompt-def prompt-doc-block settings-row" data-prompt-term="section, and its order">
+          <p class="prompt-def-term">Section, and its order<span class="prompt-box-chip" data-prompt-box="prompt">the prompt · every box</span></p>
+          <p class="prompt-def-says">One box in a diagram. Twelve standing boxes come first, in the order the builder writes them: Identity, Role, Role prompt, Queue directive, Restart (the label also carries autonomy and spawn), Projects, Twelve rules, Project landing rules, Notes, Watches, Action grammar, Closing lines. Then the three that move: Queue digest, Board tail, Charter. The order is load-bearing: an over-cap cut keeps the head and drops the tail, so the queue survives the cut and the board and the charter do not.</p>
+        </div>
+        <div class="prompt-def prompt-doc-block settings-row" data-prompt-term="standing briefing">
+          <p class="prompt-def-term">Standing briefing<span class="prompt-box-chip" data-prompt-box="system">system text</span></p>
+          <p class="prompt-def-says">Everything that does not move: those twelve sections, from the identity lines to the closing lines. Built by <code>Assistant.systemBriefing()</code> and sent as the run's instructions, never appended to the thread, so a later turn does not re-read it and a compaction does not re-ingest it.</p>
+        </div>
+
+        <h3 class="prompt-doc-h prompt-doc-section prompt-doc-block settings-row" id="prompt-turns">The three turns, drawn</h3>
+        <p class="prompt-doc-note">The same standing half in all three; only the charter and the queue digest change shape. Every box is measured now, from this panel's own briefing.</p>
         <div class="settings-preview prompt-summary" id="prompt-budget-summary">reading the prompt…</div>
-        <div class="prompt-diagrams" id="prompt-diagrams"></div>
+        <div class="prompt-diagrams prompt-doc-block settings-row" id="prompt-diagrams"></div>
         <div class="settings-preview prompt-legend" id="prompt-budget-legend" hidden></div>
+
+        <h3 class="prompt-doc-h prompt-doc-section prompt-doc-block settings-row" id="prompt-briefs">The worker briefs</h3>
+        <p class="prompt-doc-note">A tree run is a run in a worktree: every worker's turn. Its prompt carries the paragraphs below after the TODO block, in this order, and each is a constant in <code>lib/jobs.js</code>. The board assistant's own turns carry none of them, because they work in no tree.</p>
+        <div class="prompt-brief prompt-doc-block settings-row" data-brief="RELEASE" data-brief-constant="RELEASE_BRIEF" data-brief-when="tree">
+          <p class="prompt-brief-head"><span class="prompt-brief-marker">RELEASE</span><span class="prompt-brief-when">tree run, only where the project allows it</span></p>
+          <p class="prompt-brief-says">End the final message with <code>RELEASE &lt;worktree&gt; | &lt;why it is finished&gt;</code> once the pull request reads MERGED and the tree is clean. The panel decides after the turn, from its own git and PR reads.</p>
+          <p class="prompt-brief-from"><code>RELEASE_BRIEF</code> · sent only where the project carries the <code>releaseWorktrees</code> grant</p>
+        </div>
+        <div class="prompt-brief prompt-doc-block settings-row" data-brief="DELIVER" data-brief-constant="DELIVER_BRIEF" data-brief-when="tree">
+          <p class="prompt-brief-head"><span class="prompt-brief-marker">DELIVER</span><span class="prompt-brief-when">tree run, every turn</span></p>
+          <p class="prompt-brief-says">A deliverable is a file or URL the reader can open. Declare it with one <code>DELIVER &lt;kind&gt; &lt;target&gt; | &lt;title&gt;</code> line in the final message; a finished row with nothing to open is an incomplete row.</p>
+          <p class="prompt-brief-from"><code>DELIVER_BRIEF</code></p>
+        </div>
+        <div class="prompt-brief prompt-doc-block settings-row" data-brief="CLARIFY_LINKS" data-brief-constant="CLARIFY_LINKS_BRIEF" data-brief-when="tree">
+          <p class="prompt-brief-head"><span class="prompt-brief-marker">CLARIFY_LINKS</span><span class="prompt-brief-when">tree run, every turn</span></p>
+          <p class="prompt-brief-says">Put a decision in front of the reader with <code>links</code> beside the question: one entry per thing, each with a label and an absolute path or a url, so the card draws an anchor instead of a path to copy.</p>
+          <p class="prompt-brief-from"><code>CLARIFY_LINKS_BRIEF</code></p>
+        </div>
+        <div class="prompt-brief prompt-doc-block settings-row" data-brief="REPORT" data-brief-constant="REPORT_BRIEF" data-brief-when="tree">
+          <p class="prompt-brief-head"><span class="prompt-brief-marker">REPORT</span><span class="prompt-brief-when">tree run, every turn</span></p>
+          <p class="prompt-brief-says">A finding worth the reader's time is a self-contained <code>.html</code> under <code>docs/reports/</code>, with the evidence inline and <code>file:line</code> citations, declared on a clarify card as a <code>links</code> entry, with the recommended next steps as that card's choices.</p>
+          <p class="prompt-brief-from"><code>REPORT_BRIEF</code> · added in 1.111.1 · the paragraph and its proof: <code>docs/worker-brief-report-cards.md</code></p>
+        </div>
+        <div class="prompt-brief prompt-doc-block settings-row" data-brief="TERMINAL" data-brief-constant="TERMINAL_BRIEF" data-brief-when="tree">
+          <p class="prompt-brief-head"><span class="prompt-brief-marker">TERMINAL</span><span class="prompt-brief-when">tree run, every turn</span></p>
+          <p class="prompt-brief-says">One bounded request per terminal call, never a sleep-poll on a build; no <code>bash -lc</code> wrapper; 8 to 10 second timeouts on remote reads; the pre-execution guard left alone.</p>
+          <p class="prompt-brief-from"><code>TERMINAL_BRIEF</code> · the rules and the numbers behind them: <code>docs/reports/terminal-call-latency-2026-11-11.html</code></p>
+        </div>
+        <div class="prompt-brief prompt-doc-block settings-row" data-brief="GIT" data-brief-constant="GIT_BRIEF" data-brief-when="tree">
+          <p class="prompt-brief-head"><span class="prompt-brief-marker">GIT</span><span class="prompt-brief-when">tree run, every turn</span></p>
+          <p class="prompt-brief-says">Every clone and every remote a run adds uses an ssh URL, never https; an existing https origin is switched with <code>git remote set-url</code> before the fetch.</p>
+          <p class="prompt-brief-from"><code>GIT_BRIEF</code> · why it is the panel-wide lever: <code>docs/worker-brief-git-remotes.md</code></p>
+        </div>
+        <div class="prompt-brief prompt-doc-block settings-row" data-brief="PAGE" data-brief-constant="PAGE_BRIEF" data-brief-when="tree">
+          <p class="prompt-brief-head"><span class="prompt-brief-marker">PAGE</span><span class="prompt-brief-when">tree run, every turn</span></p>
+          <p class="prompt-brief-says">A page is proved by a test or a headless capture, never by a window thrown at the reader. Declare it with DELIVER or a <code>links</code> entry and let the panel's open route open it; if you open one yourself, one plain tab, no <code>--new-window</code> and no scratch profile.</p>
+          <p class="prompt-brief-from"><code>PAGE_BRIEF</code></p>
+        </div>
+        <div class="prompt-brief prompt-doc-block settings-row" data-brief="TESTING" data-brief-constant="TESTING_BRIEF" data-brief-when="tree-scripts">
+          <p class="prompt-brief-head"><span class="prompt-brief-marker">TESTING</span><span class="prompt-brief-when">tree run, only where the tree has both scripts</span></p>
+          <p class="prompt-brief-says">Run the focused set while you work (<code>npm run test:changed</code>, or <code>npm run test:module &lt;file&gt;</code> for one cut) and save <code>npm test</code> for one sweep before the pull request, saying what it answered.</p>
+          <p class="prompt-brief-from"><code>TESTING_BRIEF</code> · sent only where the tree's <code>package.json</code> carries both <code>test:changed</code> and <code>test:module</code>, and appended last</p>
+        </div>
       </div>
 
       <div class="settings-group" id="settings-panel-display" data-settings-group="display" role="tabpanel" aria-labelledby="settings-tab-display">
