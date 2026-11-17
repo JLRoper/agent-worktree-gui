@@ -2100,9 +2100,7 @@ function stickSoon(el) {
   if (typeof stickCardBodySoon === "function") stickCardBodySoon(el);
   if (!consolePinned(el.dataset.out) && el._atBottom !== true) return;
   stickPending.add(el);
-  if (stickFrame) return;
-  stickFrame = requestAnimationFrame(() => {
-    stickFrame = 0;
+  const flush = () => {
     const batch = [...stickPending];
     stickPending.clear();
     for (const out of batch) {
@@ -2116,6 +2114,26 @@ function stickSoon(el) {
       setScroll(out, out.scrollHeight); // one read per console per frame, not one per row
       out._stuckAt = out._grow;
     }
+  };
+  // A row that lands in a TIMER is in the box at the end of that task, and it is painted in the frame that task belongs
+  // to. An animation frame asked for here runs after that paint, so the reader saw the row hanging below the box's
+  // bottom edge for one frame before the next frame's stick put it back: measured on a live turn whose rows are released
+  // by the order-based hold (public/core/type-stream.js createReasoningHold), 81px below the edge and 81px short of the
+  // tail, once per release, against 0.5px before that hold learned to release whole paragraphs late. The microtask below
+  // runs at the end of THIS task and before the browser paints, so the frame the row is in is the frame it is corrected
+  // in. The rAF stays for whatever grows during rendering, and coalesces the same set: the second of the two flushes
+  // finds `_stuckAt` level and costs one comparison.
+  if (!el._stickMicro) {
+    el._stickMicro = true;
+    Promise.resolve().then(() => {
+      el._stickMicro = false;
+      flush();
+    });
+  }
+  if (stickFrame) return;
+  stickFrame = requestAnimationFrame(() => {
+    stickFrame = 0;
+    flush();
   });
 }
 // ---- end console writers
