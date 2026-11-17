@@ -1,27 +1,35 @@
-// The assistant header's search, driven by the KEYBOARD ALONE, in a real browser at 1440x900.
+// The assistant header's search COUNT and its STEP keys, driven by the KEYBOARD ALONE, in a real browser at
+// 1440x900.
+//
+// THE DEFECT THIS PROVES GONE. The header counted turns ("1 of 1") while the footer counted hits ("5 matched, 5
+// displayed, in 1 turn"), so a filter that hit five rows of ONE turn printed two numbers that disagreed and the box
+// looked broken. There is one count source now (public/core/search-count.js): the header divides the rows the
+// keyboard steps, and the footer's "displayed" is that same number.
 //
 // WHAT IT ASSERTS, in the order a reader would meet it:
 //
-//   1. Ctrl+Q LANDS IN THE BOX. Pressed while the caret is on a panel control - reached with Tab, not a click - the
-//      box takes the caret, reports the key handled (a cancelable synthetic keydown answers `defaultPrevented`), and
-//      a second Ctrl+Q SELECTS the filter it already holds, so the next character typed replaces it instead of
-//      appending. A textarea and the composer are left alone: a chord that stole the caret there would eat words.
-//   2. ONE PRESS, ONE ITEM. Against a filter that matches FOUR multi-row turns (each turn's prompt, reply and
-//      console line match), the count beside the box reads "1 of 4" and one Down per press walks 2 of 4, 3 of 4,
-//      4 of 4 - each press moving a whole message, scrolling it into view and ringing it as the current match.
-//   3. THE ENDS WRAP. Down on the last item lands on the first (stated in docs/assistant-search-keys.md).
-//   4. ENTER OPENS THE CURRENT MATCH. With the current turn folded (Ctrl+[ folds the turn tier), Enter unfolds it,
-//      marks the match inside it and leaves the count where it was - it acts on the current item, it does not step.
-//   5. ESCAPE CLEARS AND HANDS THE CARET BACK. The filter and the count go, and focus returns to the control Ctrl+Q
-//      took it from.
+//   1. ONE COUNT SOURCE, FIVE ROWS IN ONE TURN. A filter that matches five rows of a single message reads
+//      "1 of 5" beside the box and "5 hits matched, 5 displayed, in 1 turn" in the footer: the header's total and
+//      the footer's displayed are the same five rows.
+//   2. ONE PRESS, ONE MATCH. One Down moves to "2 of 5" and the bright mark moves from the prompt to the newest
+//      console row inside that same message - not to another message, and not nowhere.
+//   3. SHIFT GOES BACK. Shift+Up returns to "1 of 5", Shift+Down wraps backwards to "5 of 5", and Shift+Enter steps
+//      backwards too. No arrow press scrolls the page.
+//   4. FIVE TURNS READ THE SAME WAY. A filter that matches five separate messages reads "1 of 5" with
+//      "5 hits matched, 5 displayed, in 5 turns", and a Down moves to the next message.
+//   5. THE CAP KEEPS ITS AMBER. A filter that matches twelve rows of four turns shows ten rows: the header reads
+//      "1 of 10", the footer "12 hits matched, 10 displayed, in 4 turns", and the count turns amber.
+//   6. ENTER AND ESCAPE KEEP THEIR PROMISES. Enter opens the current match where it is (marks it, hides the list)
+//      and does not step; Escape clears the filter and leaves the caret in the box.
 //
 // HOW TO RUN:  node tools/verify-assistant-search-keys.mjs
-//              node tools/verify-assistant-search-keys.mjs --out <dir>   (defaults to the temp dir)
+//              node tools/verify-assistant-search-keys.mjs --out <dir>   (defaults to the committed asset dir)
 //              node tools/verify-assistant-search-keys.mjs --keep         (leave the sandbox store behind)
 //
-// It boots THIS checkout's server.js on a free port with its own state directory and a SYNTHESIZED store - four
-// turns that all match one phrase, each with three matching rows - so the proof is the same on a machine that has
-// never opened the panel. No live panel is touched, and every action under test is a key press.
+// It boots THIS checkout's server.js on a free port with its own state directory and a SYNTHESIZED store - one turn
+// with five matching rows, five turns with one matching row each, four turns that match in three fields - so the
+// proof is the same on a machine that has never opened the panel. No live panel is touched, and every action under
+// test is a key press: nothing here clicks, focuses a locator or calls a page function that acts.
 import { mkdirSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -34,8 +42,8 @@ const argOf = (name, fallback = null) => {
   return i >= 0 ? argv[i + 1] : fallback;
 };
 const keep = argv.includes("--keep");
-const outDir = argOf("out", path.join(os.tmpdir(), "wag-assistant-search-keys"));
-const dir = argOf("dir", path.join(os.tmpdir(), "wag-assistant-search-keys-sandbox"));
+const outDir = argOf("out", path.join(ROOT, "docs", "assets", "assistant-search-count"));
+const dir = argOf("dir", path.join(os.tmpdir(), "wag-assistant-search-count-sandbox"));
 mkdirSync(outDir, { recursive: true });
 mkdirSync(dir, { recursive: true });
 const shot = (name) => path.join(outDir, name);
@@ -46,39 +54,80 @@ const fail = (msg) => {
 };
 
 // ---- the store ---------------------------------------------------------------------------------------------
-// Four turns, and every one of them matches the filter in THREE fields: its prompt, its reply and one console line.
-// That is what makes an "item" visible: four messages, twelve matching rows, and a step that must move between the
-// four, not the twelve.
-const PHRASE = "zephyr";
-const TURNS = [1, 2, 3, 4].map((i) => {
-  const at = new Date(Date.UTC(2026, 10, 12, 9, i * 5, 0)).toISOString();
-  const end = new Date(Date.UTC(2026, 10, 12, 9, i * 5 + 4, 0)).toISOString();
-  return {
-    id: `zephyr${i}`,
-    thread: "panel-assistant",
-    turn: i,
-    origin: "assistant",
-    status: "done",
-    startedAt: at,
-    endedAt: end,
-    lastActiveAt: end,
-    prompt: `${PHRASE} budget ${i}: keep the board quiet`,
-    finalMessage: `${PHRASE} reply ${i}: the budget holds for turn ${i}`,
-    lines: [{ kind: "tool", text: `grep -n ${PHRASE} routes/turn-${i}.js`, at: Date.parse(end) - 1000 }],
-  };
-});
+// ONE_TURN: a single message whose prompt and four console rows all match ONE_TURN_FILTER. That is the defect's
+// shape: five rows, one turn, and a count that used to read "1 of 1".
+//
+// FIVE_TURNS: five separate messages, one matching row each, so the same "1 of 5" must also be the five-turn case.
+//
+// CAPPED: four messages matching in their prompt, reply and console line - twelve rows for a ten-row list, which
+// is what keeps the amber note honest.
+const ONE_TURN_FILTER = "zephyr";
+const FIVE_TURNS_FILTER = "quasar";
+const CAPPED_FILTER = "common";
+const THREAD = "panel-assistant";
+
+const utc = (h, m, s = 0) => new Date(Date.UTC(2026, 10, 12, h, m, s)).toISOString();
+const oneTurnAt = Date.parse(utc(12, 0, 0));
+const line = (lid, text, at) => ({ kind: "tool", lid, text, at });
+
+const ONE_TURN = {
+  id: "zephyr-turn",
+  thread: THREAD,
+  turn: 10,
+  origin: "assistant",
+  status: "done",
+  startedAt: utc(12, 0, 0),
+  endedAt: utc(12, 4, 0),
+  lastActiveAt: utc(12, 4, 0),
+  prompt: `${ONE_TURN_FILTER} budget: keep the board quiet`,
+  finalMessage: "the budget holds",
+  // Four console rows, each with its own lid: the walk lists them newest first, which is the order the cap and the
+  // list both use.
+  lines: [
+    line("z1", `grep -n ${ONE_TURN_FILTER} routes/a.js`, oneTurnAt + 1000),
+    line("z2", `rg -n ${ONE_TURN_FILTER} lib/b.js`, oneTurnAt + 2000),
+    line("z3", `node tools/c.mjs ${ONE_TURN_FILTER}`, oneTurnAt + 3000),
+    line("z4", `cat docs/${ONE_TURN_FILTER}.md`, oneTurnAt + 4000),
+  ],
+};
+const FIVE_TURNS = [1, 2, 3, 4, 5].map((i) => ({
+  id: `quasar-${i}`,
+  thread: THREAD,
+  turn: i,
+  origin: "assistant",
+  status: "done",
+  startedAt: utc(9, i * 5, 0),
+  endedAt: utc(9, i * 5 + 4, 0),
+  lastActiveAt: utc(9, i * 5 + 4, 0),
+  prompt: `${FIVE_TURNS_FILTER} request ${i}: check the queue`,
+  finalMessage: `done ${i}`,
+  lines: [line(`q${i}`, `echo done ${i}`, Date.parse(utc(9, i * 5 + 1, 0)))],
+}));
+const CAPPED = [1, 2, 3, 4].map((i) => ({
+  id: `common-${i}`,
+  thread: THREAD,
+  turn: i,
+  origin: "assistant",
+  status: "done",
+  startedAt: utc(8, i * 5, 0),
+  endedAt: utc(8, i * 5 + 4, 0),
+  lastActiveAt: utc(8, i * 5 + 4, 0),
+  prompt: `${CAPPED_FILTER} step ${i}: read the board`,
+  finalMessage: `${CAPPED_FILTER} reply ${i}: nothing to do`,
+  lines: [line(`c${i}`, `grep ${CAPPED_FILTER} board.json`, Date.parse(utc(8, i * 5 + 1, 0)))],
+}));
+const TURNS = [...CAPPED, ...FIVE_TURNS, ONE_TURN];
 const jobsFile = { version: 3, savedAt: new Date().toISOString(), jobs: TURNS };
-const assistantsFile = { version: 2, assistants: [{ id: "assistant-1", name: "Assistant #1", threadId: "panel-assistant" }] };
+const assistantsFile = { version: 2, assistants: [{ id: "assistant-1", name: "Assistant #1", threadId: THREAD }] };
 const logsDir = path.join(dir, "logs");
 mkdirSync(logsDir, { recursive: true });
 // Written every run, never merged: the sandbox exists to hold exactly this fixture.
 writeFileSync(path.join(logsDir, "jobs.json"), JSON.stringify(jobsFile, null, 1), "utf8");
 writeFileSync(path.join(logsDir, "assistants.json"), JSON.stringify(assistantsFile, null, 1), "utf8");
-// The four items, in the order the search answers them: the newest prompt first, then the older ones.
-const EXPECTED_ITEMS = ["zephyr4", "zephyr3", "zephyr2", "zephyr1"];
 
-console.log(`store: ${TURNS.length} turns, ${TURNS.length * 3} matching rows, filter ${JSON.stringify(PHRASE)}`);
-console.log(`expected items, newest first: ${EXPECTED_ITEMS.join(", ")}`);
+console.log(
+  `store: ${TURNS.length} turns; ${ONE_TURN_FILTER} = 5 rows in 1 turn, ${FIVE_TURNS_FILTER} = 1 row in 5 turns, ${CAPPED_FILTER} = 12 rows in 4 turns`,
+);
 
 // ---- the browser -------------------------------------------------------------------------------------------
 const pw = loadPlaywright();
@@ -89,7 +138,7 @@ if (!pw) {
 
 const panel = await startPanel({ root: ROOT, dir, keep });
 const v = createVerifier();
-const record = { phrase: PHRASE, viewport: "1440x900", turns: TURNS.map((t) => t.id), steps: [], screenshots: [] };
+const record = { viewport: "1440x900", filters: {}, steps: [], screenshots: [] };
 try {
   const browserHalf = await withBrowser(
     async ({ page }) => {
@@ -109,282 +158,274 @@ try {
       const count = () =>
         page.evaluate(() => {
           const n = document.getElementById("as-search-n");
+          const foot = document.querySelector("#as-search-pop .as-search-more");
           return {
             text: n.textContent.trim(),
             hidden: n.hidden,
             current: Number(n.dataset.searchCurrent),
-            items: Number(n.dataset.searchItems),
-            total: Number(n.dataset.searchItemTotal),
+            total: Number(n.dataset.searchTotal),
             matched: Number(n.dataset.searchMatched),
             displayed: Number(n.dataset.searchDisplayed),
+            turns: Number(n.dataset.searchTurns),
             query: n.dataset.searchQuery,
             title: n.title,
-          };
-        });
-      // The turn the box is standing on, where it is on screen, and the mark inside it - read from the page, so the
-      // highlight is judged where the reader sees it.
-      const currentMatch = () =>
-        page.evaluate(() => {
-          const turns = [...document.querySelectorAll("#as-chat .turn.is-search-current")];
-          const el = turns[0] || null;
-          const body = document.querySelector("#as-chat > .job > .job-body");
-          const view = (node) => {
-            if (!node) return null;
-            const r = node.getBoundingClientRect();
-            return { top: Math.round(r.top), bottom: Math.round(r.bottom), left: Math.round(r.left), right: Math.round(r.right) };
-          };
-          const bodyRect = body ? body.getBoundingClientRect() : null;
-          const r = el ? el.getBoundingClientRect() : null;
-          const mark = el ? el.querySelector("mark.as-search-mark.is-current") : null;
-          return {
-            marked: turns.length,
-            id: el ? el.dataset.turn : null,
-            folded: el ? el.classList.contains("folded") : null,
-            rect: view(el),
-            body: bodyRect ? { top: Math.round(bodyRect.top), bottom: Math.round(bodyRect.bottom) } : null,
-            inBody:
-              Boolean(r && bodyRect) &&
-              r.top >= bodyRect.top - 2 &&
-              r.bottom <= bodyRect.bottom + 2 &&
-              r.top < window.innerHeight &&
-              r.bottom > 0,
-            mark: mark ? mark.textContent : null,
-            marks: el ? el.querySelectorAll("mark.as-search-mark").length : 0,
+            capped: n.classList.contains("is-capped"),
+            amber: getComputedStyle(n).color,
+            foot: foot ? foot.textContent.trim() : "",
             popHidden: document.getElementById("as-search-pop").hidden,
+            rows: document.querySelectorAll("#as-search-pop [data-search-hit]").length,
           };
         });
+      const footNums = (foot) => {
+        const m = /^(\d+) hits? matched, (\d+) displayed, in (\d+) turns?/.exec(foot);
+        return m ? { matched: Number(m[1]), displayed: Number(m[2]), turns: Number(m[3]) } : null;
+      };
+      // The bright mark, and the row it landed in: the prompt rides the turn's head, every console row is a
+      // .jl[data-lid] line. "top" is the mark's screen position, so a step that did not move is a number that did
+      // not change.
+      const markSpot = () =>
+        page.evaluate(() => {
+          const turn = document.querySelector("#as-chat .turn.is-search-current");
+          const mark = document.querySelector("#as-chat mark.as-search-mark.is-current");
+          const row = mark ? mark.closest("[data-lid]") : null;
+          const prompt = mark ? mark.closest(".turn-prompt-inline") : null;
+          const curRow = document.querySelector("#as-chat .is-search-current-row");
+          const curId = curRow ? (curRow.dataset.lid || (curRow.classList.contains("turn-prompt-inline") ? "prompt" : "?")) : null;
+          const curRect = curRow ? curRow.getBoundingClientRect() : null;
+          const r = mark ? mark.getBoundingClientRect() : curRect;
+          return {
+            turn: turn ? turn.dataset.turn : null,
+            rings: document.querySelectorAll("#as-chat .turn.is-search-current").length,
+            lid: row ? row.dataset.lid : null,
+            prompt: Boolean(prompt),
+            rowCurrent: curId,
+            text: mark ? mark.textContent : null,
+            top: r ? Math.round(r.top) : null,
+            left: r ? Math.round(r.left) : null,
+            marks: document.querySelectorAll("#as-chat mark.as-search-mark").length,
+          };
+        });
+      const pageScroll = () => page.evaluate(() => window.scrollY);
       const focus = () =>
         page.evaluate(() => {
           const el = document.activeElement;
           const input = document.getElementById("as-search-q");
-          const value = String(input?.value || "");
           return {
             id: el ? el.id || "" : "",
             tag: el ? el.tagName : "",
-            cls: el && el.className ? String(el.className).split(" ").filter(Boolean).slice(0, 2).join(".") : "",
-            inPanel: Boolean(document.getElementById("assistant")?.contains(el)),
             searchFocused: el === input,
-            composerFocused: Boolean(el?.closest?.(".reply-box, [data-reply], textarea")),
-            value,
+            value: String(input?.value || ""),
             selStart: input ? input.selectionStart : null,
             selEnd: input ? input.selectionEnd : null,
           };
         });
-      const waitCount = async (text) => {
+      const waitCount = async (text, query) => {
         await page.waitForFunction(
-          (want) => {
+          ({ want, q }) => {
             const n = document.getElementById("as-search-n");
-            return Boolean(n && !n.hidden && n.textContent.trim() === want && n.dataset.searchQuery);
+            return Boolean(n && !n.hidden && n.textContent.trim() === want && n.dataset.searchQuery === q);
           },
-          text,
-          { timeout: 10000 },
+          { want: text, q: query },
+          { timeout: 15000 },
         );
         return count();
+      };
+      // The footer the page prints must be the module's own sentence, and its numbers must be the header's numbers.
+      const agree = (label, c, want) => {
+        const nums = footNums(c.foot);
+        v.ok(`${label}: the footer reads "${want.foot}"`, c.foot === want.foot, c.foot);
+        v.ok(
+          `${label}: the header's total is the footer's displayed count`,
+          c.total === nums?.displayed && c.displayed === nums?.displayed,
+          JSON.stringify({ header: c.text, total: c.total, displayed: c.displayed, foot: c.foot }),
+        );
+        v.ok(
+          `${label}: the footer's matched count is the answer's own`,
+          nums?.matched === want.matched && c.matched === want.matched,
+          JSON.stringify({ foot: nums, matched: c.matched }),
+        );
+        v.ok(
+          `${label}: the footer names ${want.turns} matching turn${want.turns === 1 ? "" : "s"}`,
+          nums?.turns === want.turns && c.turns === want.turns,
+          JSON.stringify({ foot: nums, turns: c.turns }),
+        );
+        v.ok(`${label}: the header prints only "n of N"`, /^\d+ of \d+$/.test(c.text), c.text);
       };
 
       await page.goto(panel.base, { waitUntil: "domcontentloaded" });
       await page.waitForSelector("#btn-assistant", { timeout: 45000 });
 
-      // ---- 0. the panel, opened with the keyboard -----------------------------------------------------------------
-      // A bare `a` is the documented way in (and the same keys handler Ctrl+Q lives in), so the whole run starts on
-      // the keyboard rather than a click on the button.
+      // ---- 0. the panel, opened on the keyboard ------------------------------------------------------------------
+      // A bare `a` is the documented way in (and the same keys handler Ctrl+Q lives in), so the run starts on the
+      // keyboard rather than a click on the button. Nothing below clicks, focuses a locator or calls a page function
+      // that acts: every subject is a key press.
       await page.keyboard.press("a");
       await page.waitForSelector("#assistant:not([hidden]) #as-chat [data-turn]", { timeout: 20000 });
       const drawn = await page.evaluate(() => [...document.querySelectorAll("#as-chat [data-turn]")].map((el) => el.dataset.turn));
-      v.check("the panel opened on the keyboard, showing all four turns", drawn.slice().sort(), EXPECTED_ITEMS.slice().sort());
+      v.ok("the panel opened on the keyboard and drew its turns", drawn.length > 0, `${drawn.length} turns on screen`);
 
-      // The reader's place: Tab until the caret is inside the panel (Shift+Tab from the body lands on the last
-      // tabbable in the document, which is the rail). If the browser's tab order refuses, the scope button is the
-      // stand-in and the run says which it used.
-      let place = null;
-      for (const key of ["Shift+Tab", "Shift+Tab", "Shift+Tab", "Shift+Tab"]) {
-        await page.keyboard.press(key);
-        const f = await focus();
-        if (f.inPanel) {
-          place = f;
-          break;
-        }
-      }
-      if (!place) {
-        await page.locator("#as-search-scope").focus();
-        place = await focus();
-      }
-      v.ok("the caret is on a control inside the panel before Ctrl+Q", place.inPanel === true, `${place.tag}#${place.id || place.cls}`);
-      await shoot("01-the-caret-on-a-panel-control.png");
-
-      // ---- 1. Ctrl+Q lands in the box, and reports the key handled ----------------------------------------------
-      // A synthetic cancelable keydown is how "handled" is read: dispatchEvent answers false exactly when
-      // preventDefault was called, and the browser's own default would have been the next thing to run.
-      const synthetic = await page.evaluate(() => {
-        const target = document.activeElement || document.body;
-        const e = new KeyboardEvent("keydown", { key: "q", code: "KeyQ", ctrlKey: true, bubbles: true, cancelable: true });
-        const dispatched = target.dispatchEvent(e);
-        const input = document.getElementById("as-search-q");
-        return { dispatched, prevented: e.defaultPrevented, focused: document.activeElement === input };
-      });
-      v.ok("Ctrl+Q reports the key handled", synthetic.prevented === true && synthetic.dispatched === false, JSON.stringify(synthetic));
-      v.ok("Ctrl+Q landed the caret in the search box", synthetic.focused === true);
-
-      // The real press, from wherever the caret was: the same two facts, and the selection is empty on an empty box.
+      // ---- 1. Ctrl+Q lands in the box, and selects what it holds -------------------------------------------------
       await page.keyboard.press("Control+q");
       const landed = await focus();
-      v.ok("a real Ctrl+Q focuses the box", landed.searchFocused === true, `${landed.tag}#${landed.id}`);
-      v.ok("the box holds nothing yet, so nothing is selected", landed.value === "" && landed.selStart === 0 && landed.selEnd === 0, JSON.stringify(landed));
-      await shoot("02-ctrl-q-lands-in-the-box.png");
-
-      // ---- 2. the filter: a live n of N over FOUR multi-row items ------------------------------------------------
-      await page.keyboard.type(PHRASE);
-      const first = await waitCount("1 of 4");
-      const api = await (await fetch(`${panel.base}/api/assistant/search?q=${encodeURIComponent(PHRASE)}&scope=all&limit=10&assistantId=assistant-1`)).json();
-      // An independent read of the same endpoint, grouped by thread and turn id here rather than by the page's own
-      // module: twelve matching rows in four turns.
-      const apiItems = [];
-      for (const hit of api.hits || []) {
-        const key = `${hit.thread}|${hit.id}`;
-        if (!apiItems.includes(key)) apiItems.push(key);
-      }
-      v.ok("the store answers twelve matching rows in four turns", api.matched === 12 && apiItems.length === 4, `${api.matched} hits, ${apiItems.length} turns over HTTP`);
-      v.ok("the count beside the box reads 1 of 4", first.text === "1 of 4" && first.items === 4, `${first.text}, items ${first.items}, total ${first.total}`);
-      v.ok("the count knows all four items even though the hit list is capped", first.total === 4 && first.matched === 12 && first.displayed === 10, JSON.stringify({ total: first.total, matched: first.matched, displayed: first.displayed }));
-      v.ok("the current item is the first, before any press", first.current === 1, `current ${first.current}`);
-      const rows = await page.evaluate(() =>
-        [...document.querySelectorAll("#as-search-pop [data-search-hit]")].map((r) => ({
-          item: Number(r.dataset.searchItem),
-          where: r.querySelector(".as-search-where")?.textContent || "",
-          current: r.classList.contains("is-current"),
-        })),
+      v.ok("Ctrl+Q focuses the search box", landed.searchFocused === true, `${landed.tag}#${landed.id}`);
+      v.ok(
+        "the box holds nothing yet, so nothing is selected",
+        landed.value === "" && landed.selStart === 0 && landed.selEnd === 0,
+        JSON.stringify(landed),
       );
-      v.check("the list's rows carry their item, and all four items are in it", [...new Set(rows.map((r) => r.item))], [0, 1, 2, 3]);
-      v.ok("the current item's rows are the ones marked current", rows.filter((r) => r.current).length === 3 && rows.filter((r) => r.current).every((r) => r.item === 0), `${rows.filter((r) => r.current).length} rows marked current`);
-      const seeded = await currentMatch();
-      v.ok("the first item is highlighted on the page before any press", seeded.id === EXPECTED_ITEMS[0] && seeded.marked === 1, `${seeded.id}, ${seeded.marked} ringed`);
-      await shoot("03-filter-1-of-4.png");
 
-      // ---- 2b. a second Ctrl+Q SELECTS the filter, so typing replaces it -----------------------------------------
-      await page.keyboard.press("Control+q");
-      const selected = await focus();
-      v.ok("a second Ctrl+Q selects everything the box holds", selected.selStart === 0 && selected.selEnd === PHRASE.length, JSON.stringify({ value: selected.value, start: selected.selStart, end: selected.selEnd }));
-      await shoot("04-ctrl-q-selects-the-filter.png");
-      await page.keyboard.type(PHRASE);
-      const replaced = await focus();
-      v.ok("typing over the selection replaces it instead of appending", replaced.value === PHRASE, JSON.stringify(replaced.value));
-      await waitCount("1 of 4");
+      // ---- 2. five rows in ONE turn: 1 of 5, and the footer agrees ------------------------------------------------
+      await page.keyboard.type(ONE_TURN_FILTER);
+      const one = await waitCount("1 of 5", ONE_TURN_FILTER);
+      const api = await (
+        await fetch(`${panel.base}/api/assistant/search?q=${encodeURIComponent(ONE_TURN_FILTER)}&scope=all&limit=10&assistantId=assistant-1`)
+      ).json();
+      v.ok("the store answers five matching rows", api.matched === 5 && api.hits.length === 5, `${api.matched} matched, ${api.hits.length} hits over HTTP`);
+      v.ok("the five rows belong to one turn", api.turns === 1, `${api.turns} turn`);
+      agree("one turn", one, { foot: "5 hits matched, 5 displayed, in 1 turn", matched: 5, turns: 1 });
+      v.ok("the count is not amber for a list that holds every match", one.capped === false, one.amber);
+      const seeded = await markSpot();
+      v.ok("the first row is the turn's prompt, before any press", seeded.turn === ONE_TURN.id && seeded.prompt === true && seeded.rings === 1, JSON.stringify(seeded));
+      v.ok("the list shows all five rows, one per match", one.rows === 5, `${one.rows} rows`);
+      record.filters.oneTurn = { text: one.text, foot: one.foot, matched: one.matched, turns: one.turns };
+      await shoot("01-five-rows-in-one-turn-1-of-5.png");
 
-      // ---- 3. one press, one item: 2 of 4, 3 of 4, 4 of 4 --------------------------------------------------------
-      const steps = [];
-      for (let n = 2; n <= 4; n += 1) {
-        await page.keyboard.press("ArrowDown");
-        const c = await waitCount(`${n} of 4`);
-        const at = await currentMatch();
-        steps.push({ n, count: c.text, id: at.id, inBody: at.inBody, mark: at.mark, folded: at.folded });
-        v.ok(`one Down moves to item ${n} of 4`, c.text === `${n} of 4` && c.current === n, `${c.text}, current ${c.current}`);
-        v.ok(
-          `item ${n} is the next whole message, not a row of the last one`,
-          at.id === EXPECTED_ITEMS[n - 1] && steps.length && (n === 2 || steps[steps.length - 2].id !== at.id),
-          `${at.id} (expected ${EXPECTED_ITEMS[n - 1]})`,
-        );
-        v.ok(`item ${n} is scrolled into view`, at.inBody === true, JSON.stringify({ rect: at.rect, body: at.body }));
-        v.ok(`item ${n} carries exactly one current-match ring`, at.marked === 1, `${at.marked} turns ringed`);
-        v.ok(`item ${n} marks the matched text inside it`, Boolean(at.mark) && at.mark.toLowerCase().includes(PHRASE), JSON.stringify(at.mark));
-        await shoot(`0${n + 3}-down-${n}-of-4.png`);
-      }
-      record.steps = steps;
-
-      // ---- 4. the ends WRAP: Down on the last item lands on the first ---------------------------------------------
+      // ---- 3. one Down steps to 2 of 5, inside the SAME turn, and does not scroll the page ------------------------
+      const beforeDown = await pageScroll();
       await page.keyboard.press("ArrowDown");
-      const wrapped = await waitCount("1 of 4");
-      const firstAgain = await currentMatch();
-      v.ok("Down on the last item wraps to the first", wrapped.text === "1 of 4" && firstAgain.id === EXPECTED_ITEMS[0], `${wrapped.text}, ${firstAgain.id}`);
-      await page.keyboard.press("ArrowUp");
-      const back = await waitCount("4 of 4");
-      const lastAgain = await currentMatch();
-      v.ok("Up on the first item wraps to the last", back.text === "4 of 4" && lastAgain.id === EXPECTED_ITEMS[3], `${back.text}, ${lastAgain.id}`);
-      await shoot("08-wrap-at-both-ends.png");
+      const two = await waitCount("2 of 5", ONE_TURN_FILTER);
+      const afterDown = await pageScroll();
+      const stepped = await markSpot();
+      v.ok("one Down reads 2 of 5", two.text === "2 of 5" && two.current === 2, `${two.text}, current ${two.current}`);
+      v.ok("the press stayed inside the one turn", stepped.turn === ONE_TURN.id && stepped.rings === 1, JSON.stringify(stepped));
+      v.ok("the highlight moved to the newest console row of that turn", stepped.rowCurrent === "z4" && stepped.prompt === false, JSON.stringify(stepped));
+      v.ok("the mark moved on screen, rather than the count moving alone", stepped.top !== seeded.top, `prompt ${seeded.top}, row ${stepped.top}`);
+      v.ok("one Down did not scroll the page", afterDown === beforeDown, `${beforeDown} -> ${afterDown}`);
+      record.steps.push({ press: "ArrowDown", count: two.text, lid: stepped.lid, top: stepped.top });
+      await shoot("02-down-2-of-5.png");
 
-      // ---- 5. Enter opens the CURRENT match, folded or not --------------------------------------------------------
-      // Leave the box the way a reader would (Tab), fold the turn tier with the documented Ctrl+[, then come back
-      // with Ctrl+Q and press Enter: the count must not move, and the folded turn must open and mark its match.
-      await page.keyboard.press("Tab");
-      const outside = await focus();
-      v.ok("Tab leaves the box for the next control, so Ctrl+[ is not swallowed by a field", outside.searchFocused === false, `${outside.tag}#${outside.id || outside.cls}`);
-      // The turn the box is standing on is the one Enter must open - read it before the fold, so the fold is proved
-      // on that turn and not on a guess about which item the walk ended on.
-      const targetId = lastAgain.id;
-      await page.keyboard.press("Control+BracketLeft");
-      await page.waitForFunction(
-        (id) => document.querySelector(`#as-chat .turn[data-turn="${id}"]`)?.classList.contains("folded") === true,
-        targetId,
-        { timeout: 8000 },
-      );
-      v.ok("the current turn is folded before Enter", true, targetId);
-      await page.keyboard.press("Control+q");
-      const backIn = await focus();
-      v.ok("Ctrl+Q comes back into the box with the filter intact", backIn.searchFocused === true && backIn.value === PHRASE, JSON.stringify({ focused: backIn.searchFocused, value: backIn.value }));
-      await shoot("09-folded-before-enter.png");
+      // ---- 4. Shift+Up steps back to 1 of 5, and the mark returns to the prompt -----------------------------------
+      const beforeUp = await pageScroll();
+      await page.keyboard.press("Shift+ArrowUp");
+      const backToOne = await waitCount("1 of 5", ONE_TURN_FILTER);
+      const afterUp = await pageScroll();
+      const backSpot = await markSpot();
+      v.ok("Shift+Up reads 1 of 5 again", backToOne.text === "1 of 5" && backToOne.current === 1, backToOne.text);
+      v.ok("Shift+Up put the highlight back on the prompt row", backSpot.prompt === true && backSpot.rowCurrent === "prompt", JSON.stringify(backSpot));
+      v.ok("Shift+Up did not scroll the page", afterUp === beforeUp, `${beforeUp} -> ${afterUp}`);
+      record.steps.push({ press: "Shift+ArrowUp", count: backToOne.text, lid: backSpot.lid, top: backSpot.top });
+      await shoot("03-shift-up-back-to-1-of-5.png");
+
+      // ---- 5. Shift+Down and Shift+Enter also go BACK (from the first row they wrap to the last) ------------------
+      const beforeShiftDown = await pageScroll();
+      await page.keyboard.press("Shift+ArrowDown");
+      const wrappedBack = await waitCount("5 of 5", ONE_TURN_FILTER);
+      const afterShiftDown = await pageScroll();
+      const wrappedSpot = await markSpot();
+      v.ok("Shift+Down steps backwards, wrapping to 5 of 5", wrappedBack.text === "5 of 5" && wrappedBack.current === 5, wrappedBack.text);
+      v.ok("Shift+Down did not scroll the page", afterShiftDown === beforeShiftDown, `${beforeShiftDown} -> ${afterShiftDown}`);
+      v.ok("Shift+Down landed on the oldest console row", wrappedSpot.rowCurrent === "z1", JSON.stringify(wrappedSpot));
+      await page.keyboard.press("Shift+Enter");
+      const shiftEnter = await waitCount("4 of 5", ONE_TURN_FILTER);
+      v.ok("Shift+Enter steps backwards too", shiftEnter.text === "4 of 5" && shiftEnter.current === 4, shiftEnter.text);
+      // Back to the first row for the Enter check: two Downs from 4 of 5 (5 of 5, then the wrap).
+      await page.keyboard.press("ArrowDown");
+      await waitCount("5 of 5", ONE_TURN_FILTER);
+      await page.keyboard.press("ArrowDown");
+      const round = await waitCount("1 of 5", ONE_TURN_FILTER);
+      v.ok("Down on the last row wraps to the first", round.text === "1 of 5" && round.current === 1, round.text);
+
+      // ---- 6. Enter opens the current match where it is, and does not step ----------------------------------------
+      const beforeEnter = await count();
       await page.keyboard.press("Enter");
       await page.waitForFunction(
-        (id) => {
-          const el = document.querySelector(`#as-chat .turn[data-turn="${id}"]`);
-          return Boolean(el && !el.classList.contains("folded") && el.querySelector("mark.as-search-mark.is-current"));
-        },
-        targetId,
+        (id) => Boolean(document.querySelector(`#as-chat .turn[data-turn="${id}"] mark.as-search-mark.is-current`)),
+        ONE_TURN.id,
         { timeout: 8000 },
       );
-      const afterEnter = await currentMatch();
-      const countAfterEnter = await count();
-      v.ok("Enter opens the current match where it was folded", afterEnter.id === targetId && afterEnter.folded === false, `${afterEnter.id}, folded ${afterEnter.folded}`);
-      v.ok("Enter marks the match inside the item it opened", Boolean(afterEnter.mark) && afterEnter.mark.toLowerCase().includes(PHRASE), JSON.stringify(afterEnter.mark));
-      v.ok("Enter acts on the current item and does not step past it", countAfterEnter.text === "4 of 4", countAfterEnter.text);
-      await shoot("10-enter-opens-the-item.png");
+      const opened = await count();
+      const openedSpot = await markSpot();
+      v.ok("Enter leaves the count where it was", opened.text === beforeEnter.text && opened.current === beforeEnter.current, `${beforeEnter.text} -> ${opened.text}`);
+      v.ok("Enter gets the list out of the way", opened.popHidden === true);
+      v.ok("Enter opens and marks the current match", openedSpot.turn === ONE_TURN.id && openedSpot.marks >= 1, JSON.stringify(openedSpot));
 
-      // ---- 6. Escape clears the filter and hands the caret back --------------------------------------------------
+      // ---- 7. Escape clears the filter and leaves the caret IN the box -------------------------------------------
       await page.keyboard.press("Escape");
-      const cleared = await page.evaluate(() => {
-        const input = document.getElementById("as-search-q");
-        const n = document.getElementById("as-search-n");
-        return {
-          value: input.value,
-          countHidden: n.hidden,
-          countText: n.textContent.trim(),
-          popHidden: document.getElementById("as-search-pop").hidden,
-          rings: document.querySelectorAll("#as-chat .turn.is-search-current").length,
-          marks: document.querySelectorAll("#as-chat mark.as-search-mark").length,
-          panelOpen: !document.getElementById("assistant").hidden,
-        };
-      });
+      const cleared = await count();
       const afterEscape = await focus();
-      v.ok("Escape empties the filter", cleared.value === "" && cleared.countHidden === true && cleared.countText === "", JSON.stringify(cleared));
-      v.ok("Escape clears the list and the highlight", cleared.popHidden === true && cleared.rings === 0 && cleared.marks === 0, JSON.stringify(cleared));
-      v.ok("Escape leaves the panel open", cleared.panelOpen === true);
       v.ok(
-        "Escape hands the caret back where Ctrl+Q took it",
-        afterEscape.searchFocused === false && afterEscape.id === outside.id && afterEscape.cls === outside.cls,
-        `taken from ${outside.tag}#${outside.id || outside.cls}, back on ${afterEscape.tag}#${afterEscape.id || afterEscape.cls}`,
+        "Escape empties the filter and hides the count",
+        cleared.hidden === true && cleared.text === "" && afterEscape.value === "",
+        JSON.stringify({ count: cleared.text, hidden: cleared.hidden, value: afterEscape.value }),
       );
-      await shoot("11-escape-cleared-and-caret-back.png");
+      const escapeMarks = await page.evaluate(() => document.querySelectorAll("#as-chat mark.as-search-mark").length);
+      v.ok("Escape clears the list and the highlight", cleared.popHidden === true && cleared.rows === 0 && escapeMarks === 0, `${cleared.rows} rows, ${escapeMarks} marks`);
+      v.ok("Escape leaves the caret in the search box", afterEscape.searchFocused === true, `${afterEscape.tag}#${afterEscape.id}`);
+      v.ok("Escape leaves the panel open", await page.evaluate(() => !document.getElementById("assistant").hidden));
 
-      // ---- 7. the hosts Ctrl+Q must not touch: the composer, then a textarea --------------------------------------
-      await page.locator("#as-chat .reply-box").first().focus();
-      const composerBefore = await focus();
-      v.ok("the composer has the caret for this check", composerBefore.composerFocused === true, `${composerBefore.tag}#${composerBefore.id || composerBefore.cls}`);
+      // ---- 8. the same 1 of 5 for FIVE turns, and one Down moves to the next message -----------------------------
       await page.keyboard.press("Control+q");
-      const composerAfter = await focus();
-      v.ok("Ctrl+Q is ignored while the caret is in the composer", composerAfter.composerFocused === true && composerAfter.searchFocused === false, JSON.stringify({ tag: composerAfter.tag, search: composerAfter.searchFocused }));
+      await page.keyboard.type(FIVE_TURNS_FILTER);
+      const five = await waitCount("1 of 5", FIVE_TURNS_FILTER);
+      const fiveApi = await (
+        await fetch(`${panel.base}/api/assistant/search?q=${encodeURIComponent(FIVE_TURNS_FILTER)}&scope=all&limit=10&assistantId=assistant-1`)
+      ).json();
+      v.ok("the store answers five matching rows in five turns", fiveApi.matched === 5 && fiveApi.turns === 5, `${fiveApi.matched} hits, ${fiveApi.turns} turns over HTTP`);
+      agree("five turns", five, { foot: "5 hits matched, 5 displayed, in 5 turns", matched: 5, turns: 5 });
+      const firstTurn = await markSpot();
+      v.ok("the first match is the newest matching message", firstTurn.turn === "quasar-5" && firstTurn.prompt === true, JSON.stringify(firstTurn));
+      record.filters.fiveTurns = { text: five.text, foot: five.foot, matched: five.matched, turns: five.turns };
+      const beforeFiveDown = await pageScroll();
+      await page.keyboard.press("ArrowDown");
+      const secondTurn = await waitCount("2 of 5", FIVE_TURNS_FILTER);
+      const fiveSpot = await markSpot();
+      const afterFiveDown = await pageScroll();
+      v.ok("one Down moves to 2 of 5 of the five messages", secondTurn.text === "2 of 5", secondTurn.text);
+      v.ok("the press moved to the NEXT message", fiveSpot.turn === "quasar-4", JSON.stringify(fiveSpot));
+      v.ok("the message press did not scroll the page", afterFiveDown === beforeFiveDown, `${beforeFiveDown} -> ${afterFiveDown}`);
+      await shoot("04-five-turns-2-of-5.png");
+      await page.keyboard.press("Shift+ArrowUp");
+      const fiveBack = await waitCount("1 of 5", FIVE_TURNS_FILTER);
+      const fiveBackSpot = await markSpot();
+      v.ok("Shift+Up goes back to the first message", fiveBack.text === "1 of 5" && fiveBackSpot.turn === "quasar-5", JSON.stringify({ count: fiveBack.text, turn: fiveBackSpot.turn }));
 
-      // The Pad pane is the panel's textarea host; switching to it is setup, the key press is the subject.
-      await page.evaluate(() => document.querySelector('#as-subtabs [data-as-subtab="pad"]')?.click());
-      await page.waitForSelector("#as-pad textarea", { timeout: 8000 });
-      await page.locator("#as-pad textarea").first().focus();
-      const areaBefore = await focus();
-      v.ok("a textarea has the caret for this check", areaBefore.tag === "TEXTAREA", `${areaBefore.tag}#${areaBefore.id || areaBefore.cls}`);
+      // ---- 9. the cap keeps its amber, and its two numbers still agree --------------------------------------------
       await page.keyboard.press("Control+q");
-      const areaAfter = await focus();
-      v.ok("Ctrl+Q is ignored while the caret is in a textarea", areaAfter.tag === "TEXTAREA" && areaAfter.searchFocused === false, JSON.stringify({ tag: areaAfter.tag, search: areaAfter.searchFocused }));
-      await shoot("12-ignored-in-a-textarea.png");
+      await page.keyboard.type(CAPPED_FILTER);
+      const capped = await waitCount("1 of 10", CAPPED_FILTER);
+      const cappedApi = await (
+        await fetch(`${panel.base}/api/assistant/search?q=${encodeURIComponent(CAPPED_FILTER)}&scope=all&limit=10&assistantId=assistant-1`)
+      ).json();
+      v.ok("the store matched more rows than the list shows", cappedApi.matched === 12 && cappedApi.hits.length === 10, `${cappedApi.matched} matched, ${cappedApi.hits.length} displayed`);
+      agree("capped", capped, {
+        foot: "12 hits matched, 10 displayed, in 4 turns - your own input is kept first when the cap bites",
+        matched: 12,
+        turns: 4,
+      });
+      v.ok("the capped count is amber", capped.capped === true && capped.amber === "rgb(227, 179, 65)", `${capped.capped}, ${capped.amber}`);
+      v.ok(
+        "the header divides the ten rows the list holds, not the twelve it lost",
+        capped.total === 10 && capped.rows === 10,
+        JSON.stringify({ text: capped.text, total: capped.total, rows: capped.rows }),
+      );
+      record.filters.capped = { text: capped.text, foot: capped.foot, matched: capped.matched, turns: capped.turns };
+      await shoot("05-capped-amber-1-of-10.png");
 
-      // ---- 8. no page error came from any of it ------------------------------------------------------------------
+      // ---- 10. a Down pressed BEFORE the answer lands still steps the answer (no Enter, no second press) --------
+      await page.keyboard.press("Control+q");
+      await page.keyboard.type(ONE_TURN_FILTER);
+      await page.keyboard.press("ArrowDown");
+      const raced = await waitCount("1 of 5", ONE_TURN_FILTER);
+      const racedSpot = await markSpot();
+      v.ok(
+        "a press before the answer lands on the first row, without Enter",
+        raced.text === "1 of 5" && racedSpot.turn === ONE_TURN.id && racedSpot.prompt === true,
+        JSON.stringify({ count: raced.text, spot: racedSpot }),
+      );
+
+      // ---- 11. no page error came from any of it ------------------------------------------------------------------
       v.ok("no page error was raised by the run", errors.length === 0, errors.slice(0, 3).join(" | "));
-      return { drawn, first, rows, steps, seeded, afterEnter, cleared };
+      return { drawn, one, two, backToOne, wrappedBack, shiftEnter, round, five, capped };
     },
     { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 },
   );
@@ -392,7 +433,7 @@ try {
   console.log(`screenshots: ${record.screenshots.length} in ${outDir}`);
 } finally {
   await panel.stop();
-  writeFileSync(path.join(outDir, "assistant-search-keys.json"), JSON.stringify(record, null, 2), "utf8");
+  writeFileSync(path.join(outDir, "assistant-search-count.json"), JSON.stringify(record, null, 2), "utf8");
 }
 
 console.log(`\n${v.checks - v.failures}/${v.checks} checks passed`);

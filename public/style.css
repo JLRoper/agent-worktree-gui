@@ -3852,6 +3852,10 @@ mark.as-search-mark { background: #5c4310; color: #ffe9a8; border-radius: 2px; p
    ring plus a soft halo: legible on the dark card, and it moves no layout. */
 .turn.is-search-current { box-shadow: 0 0 0 1px #d9a521, 0 0 0 4px rgba(217, 165, 33, .16); border-radius: 6px; }
 mark.as-search-mark.is-current { background: #f2c744; color: #17110a; box-shadow: 0 0 0 1px #ffdf8a; }
+/* The row the walk is standing on when the card has no visible text to mark: a console tool CALL is drawn as a
+   folded group row (the tool's name and a chevron, the command kept in data-ltext), so the amber edge is the only
+   honest way to say where the match is. */
+.jl.is-search-current-row, .turn-prompt-inline.is-search-current-row { background: rgba(242, 199, 68, .12); box-shadow: inset 2px 0 0 #f2c744; border-radius: 2px; }
 .as-search-row.is-current { background: #1b2532; box-shadow: inset 2px 0 0 #e3b341; }
 .as-search-row.is-current .as-search-where { color: #ffd479; }
 

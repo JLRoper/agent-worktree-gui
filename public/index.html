@@ -1127,10 +1127,15 @@
        this file, and lib/assistant/search.js imports the same one so the server and the page cannot disagree
        about what a hit is. Loaded before app.js. -->
   <script src="/core/turn-search.js"></script>
-  <!-- The search's ITEM map: which hits are one thing to step through. A turn's prompt, its reply and every console
-       line are ONE item however many of them matched, so Up and Down move between messages rather than between rows.
-       Published on globalThis as `wtSearchItems`; assistant.js's box reads it and test/assistant-search-items.test.js
-       imports this same file. Loaded before app.js. -->
+  <!-- The search's ONE count: what the header beside the box says (`2 of 5`), what the footer says
+       (`5 hits matched, 5 displayed, in 1 turn`) and the tooltip on both, computed from the same row list so the two
+       surfaces cannot print disagreeing totals. Published on globalThis as `wtSearchCount`;
+       test/assistant-search-count.test.js imports this same file. Loaded before assistant.js, which paints it. -->
+  <script src="/core/search-count.js"></script>
+  <!-- The search's TURN map: which hits belong to one message. A turn's prompt, its reply and every console line are
+       ONE item however many of them matched; the walk steps the hits (search-count.js), while the ring round the
+       message, the footer's turn count and a result row read this grouping. Published on globalThis as
+       `wtSearchItems`; test/assistant-search-items.test.js imports this same file. Loaded before app.js. -->
   <script src="/core/search-items.js"></script>
   <!-- How fast a run's output reaches the reader's eyes: the word pacer (a paragraph typing out) and the line gate
        (whole lines walking into a console), both driven from app.js by the two Settings > Display rows. Published
