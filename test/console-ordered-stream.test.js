@@ -24,7 +24,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (f) => readFileSync(path.join(root, f), "utf8");
 
 await import("../public/core/type-stream.js");
-const { createDrawStream } = globalThis.wtType;
+const { createDrawStream, createReasoningHold } = globalThis.wtType;
 
 // ---- the shipped modules, in one vm context ---------------------------------------------------------------
 const context = vm.createContext({ window: {}, console });
@@ -60,6 +60,125 @@ function page(stream) {
   return { ...made, document };
 }
 
+// ---- the order the hold asks about: what is ahead of a call, in the stream's own (at, seq) order ------------------
+// The console's own answer to "may this call be drawn yet", sliced out of the shipped file with the record it reads:
+// reasoningFloor (the stamp of the last tool result the console has already drawn) and reasoningBusy (the hold's
+// `busy`). `lines` is the console's own buffer of lines, which is what the floor reads.
+const busyCode = `${between("const REASONING_READ_WAIT_MS", "function reasoningShown(turn)")}
+${between("// The moment of the last tool result already in the console", "// A call, or the header of a result, is the cue")}`;
+function consoleBusy(stream, lines) {
+  const state = { reasoningReads: new Map(), typeStream: stream };
+  const scope = new Function("state", "jobLines", `${busyCode}\nreturn { reasoningBusy, reasoningFloor };`);
+  return scope(state, () => lines);
+}
+
+// A hold wired exactly as public/app.js wires it: the page's own busy, the stream's clock, one queue in order.
+function holdFor(clock, busy, drawn, maxWaitMs = 60_000) {
+  return createReasoningHold({
+    ...clock,
+    maxWaitMs,
+    wants: (evt) => evt.line.kind === "tool" || evt.line.kind === "tool-out",
+    busy: (job, head) => busy.reasoningBusy(job, head),
+    release: (evt) => drawn.push(evt.line.text),
+  });
+}
+
+// The page's append: the hold sees the frame first, and whatever it lets past is drawn at once.
+const arrive = (hold, drawn, evt) => {
+  if (!hold.push(evt)) drawn.push(evt.line.text);
+  return evt;
+};
+
+const PROSE = "the agent is still writing this sentence when the call arrives";
+const LATE_THOUGHT = "a thought the store handed over only after the call it belongs to was already on screen";
+
+test("a paragraph still being typed holds the call that follows it, until its last word is out", () => {
+  const { stream, step, clock } = clockwork(20); // twenty words a second
+  const busy = consoleBusy(stream, []);
+  const drawn = [];
+  const hold = holdFor(clock, busy, drawn);
+
+  // The prose joins the stream and is part way out when the call arrives.
+  stream.feed("11", "job", PROSE, { kind: "text", at: 2000, cap: true });
+  step(200);
+  const part = stream.emitted("11");
+  assert.ok(part.length > 0 && part.length < PROSE.length, "the sentence is half drawn");
+
+  const call = { id: "job", line: { kind: "tool", text: "▸ terminal", lid: 900, at: 2001 } };
+  assert.equal(hold.push(call), true, "held: the prose in front of the call is not written out");
+  // The question the hold used to ask - is a THOUGHT pending - says no, which is the defect this pins: the card
+  // landed mid-sentence because a paragraph of the agent's own words was not a segment the hold knew about.
+  assert.equal(stream.pendingFor("job", (lid) => lid.startsWith("think:")), false);
+  // And the shipped busy asks the order, not a kind: this is the one line a revert would have to change.
+  assert.match(busyCode, /pendingBefore/);
+  assert.equal(busyCode.includes('startsWith("think:")'), false, "the page keeps no second ordering by segment kind");
+
+  step(120);
+  assert.deepEqual(drawn, [], "the card has not landed in the middle of the sentence");
+
+  const startedAt = clock.now();
+  let atRelease = null;
+  for (let i = 0; i < 300 && !drawn.length; i++) {
+    step(20);
+    if (drawn.length) atRelease = stream.emitted("11");
+  }
+  assert.deepEqual(drawn, ["▸ terminal"], "drawn once the prose was finished");
+  assert.equal(atRelease, PROSE, "and not one word before the last");
+  assert.ok(clock.now() - startedAt < 5000, "the prose finished on its own clock, nowhere near the hold's fence");
+  assert.equal(hold.queued(), 0);
+  assert.equal(hold.isHolding("job"), false);
+});
+
+test("a late block ahead of a call already on screen cannot strand the hold", () => {
+  const { stream, step, clock } = clockwork(20);
+  const busy = consoleBusy(stream, []);
+  const drawn = [];
+  const hold = holdFor(clock, busy, drawn);
+
+  // A first call is drawn at once: nothing is in front of it.
+  arrive(hold, drawn, { id: "job", line: { kind: "tool", text: "▸ read_file", lid: 910, at: 1500 } });
+  assert.deepEqual(drawn, ["▸ read_file"]);
+  // Its prose is drawn out in full, so there is content on screen when the late block arrives.
+  stream.feed("12", "job", "a line of prose", { kind: "text", at: 1500, cap: true });
+  step(500);
+  assert.equal(stream.emitted("12"), "a line of prose");
+
+  // The store now hands over a reasoning block stamped BEFORE that call - late, and out of order by arrival. The
+  // stream places it at the head and counts the one thing the order cannot undo.
+  stream.feed("think:1000", "job", LATE_THOUGHT, { kind: "think", at: 1000 });
+  assert.equal(stream.stats().late, 1);
+  assert.equal(stream.order()[0], "think:1000");
+
+  // The result of that first call arrives. By stamp the block is in front of it, and the block is still being typed.
+  const result = { id: "job", line: { kind: "tool-out", text: "↳ read_file · 0.1s", lid: 911, at: 1600 } };
+  assert.equal(hold.push(result), true, "it waits for the block the store put in front of it");
+
+  // The block is typed by the SAME one clock the prose uses: it finishes by itself, so the hold ends there and never
+  // waits out its ceiling - a late block delays a card, it does not deadlock one.
+  const startedAt = clock.now();
+  for (let i = 0; i < 400 && drawn.length < 2; i++) step(25);
+  assert.deepEqual(drawn, ["▸ read_file", "↳ read_file · 0.1s"], "released once the late block was written");
+  assert.equal(stream.emitted("think:1000"), LATE_THOUGHT);
+  assert.ok(clock.now() - startedAt < 60_000, "the fence never had to run");
+});
+
+test("a block behind a result the console has already drawn is not waited for at all", () => {
+  const { stream, step, clock } = clockwork(20);
+  // The console has already handed the reader the result at 4000, so its transcript has moved past it.
+  const lines = [{ kind: "tool-out", text: "↳ terminal · 0.2s", at: 4000 }];
+  const busy = consoleBusy(stream, lines);
+  const drawn = [];
+  const hold = holdFor(clock, busy, drawn);
+
+  // A late block stamped before that result is still being typed, and a call follows it by stamp.
+  stream.feed("think:1000", "job", LATE_THOUGHT, { kind: "think", at: 1000 });
+  step(100);
+  assert.ok(stream.pendingWords() > 0, "the late block is still owed characters");
+  const call = { id: "job", line: { kind: "tool", text: "▸ patch", lid: 920, at: 4001 } };
+  arrive(hold, drawn, call);
+  assert.deepEqual(drawn, ["▸ patch"], "behind the floor it is not in front of this call, so nothing is waited for");
+});
+
 // ---- a clock and a timer queue, driven by hand ------------------------------------------------------------
 function clockwork(rate) {
   let t = 1_000_000;
@@ -87,7 +206,7 @@ function clockwork(rate) {
     cancel: (key) => timers.delete(key),
   };
   const stream = createDrawStream({ ...c, rate });
-  return { stream, step, now: () => t };
+  return { stream, step, now: () => t, clock: c };
 }
 
 // ---- the run ----------------------------------------------------------------------------------------------

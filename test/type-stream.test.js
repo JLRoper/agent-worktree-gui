@@ -282,6 +282,57 @@ test("a turn settling releases its own segments only, and leaves the queue in or
   assert.deepEqual(b.pacer.order(), ["1", "2"], "and the queue is still one order");
 });
 
+// ---- the hold's question: what is AHEAD of a frame, in the queue's own order -------------------------------------
+// The page's hold used to ask a KIND question (`pendingFor(job, lid => lid.startsWith("think:"))`), so a paragraph of
+// the agent's own prose still being typed at the reader's words-a-second let the call that follows it land
+// mid-sentence. The hold now asks the queue's own (at, seq) order: nothing stamped before the frame may still be owed
+// a character. Every case below is FALSE under the kind predicate and TRUE under the order rule, or the reverse.
+
+test("a frame waits for a paragraph of prose in front of it, whatever kind of segment that is", () => {
+  const b = bench({ words: 10 });
+  b.pacer.feed("11", "job", "one two three four five", { kind: "text", at: 2000 });
+  b.step(100);
+  assert.ok(b.pacer.emitted("11").length > 0, "the prose is being typed");
+  // The question the hold used to ask: no thought is pending, so a call was let through mid-sentence.
+  assert.equal(b.pacer.pendingFor("job", (lid) => lid.startsWith("think:")), false, "the kind predicate says nothing waits");
+  assert.equal(b.pacer.pendingBefore("job", 3000), true, "the order says the paragraph in front of the call is not written");
+  b.step(600);
+  assert.equal(b.pacer.emitted("11"), "one two three four five");
+  assert.equal(b.pacer.pendingBefore("job", 3000), false, "and the call may go once the last word is out");
+});
+
+test("a paced skill row in front of a frame holds it exactly as prose does", () => {
+  const b = bench({ words: 10 });
+  b.pacer.feed("s1", "job", "the first row of a skill's result", { kind: "tool-out", at: 2000, cap: true });
+  b.step(100);
+  assert.equal(b.pacer.pendingFor("job", (lid) => lid.startsWith("think:")), false);
+  assert.equal(b.pacer.pendingBefore("job", 3000), true, "a row written like prose is a row that holds the call");
+  b.step(1200);
+  assert.equal(b.pacer.pendingBefore("job", 3000), false);
+});
+
+test("only what is ahead holds a frame: later, another job, behind the caller's floor, or unstamped", () => {
+  const b = bench({ words: 10 });
+  // Another job's prose is another card's transcript, and it holds nothing here.
+  b.pacer.feed("other", "job-b", "another card's words", { kind: "text", at: 2000 });
+  assert.equal(b.pacer.pendingBefore("job", 3000), false, "another job's segment is not in this job's way");
+  // A segment stamped AFTER the frame is behind it in the order, so the frame is drawn first.
+  b.pacer.feed("21", "job", "after the call", { kind: "text", at: 4000 });
+  assert.equal(b.pacer.pendingBefore("job", 3000), false, "a segment stamped after the frame is not in front of it");
+  // The same millisecond: the segment already in the queue got here first, so it stands in front.
+  b.pacer.feed("22", "job", "same millisecond", { kind: "text", at: 3000 });
+  assert.equal(b.pacer.pendingBefore("job", 3000), true, "a segment stamped the same millisecond arrived first");
+  // The caller has already drawn past a segment: it cannot be in front of a frame the caller is about to append.
+  assert.equal(b.pacer.pendingBefore("job", 3000, 2500), true, "the floor only excludes what is at or behind it");
+  assert.equal(b.pacer.pendingBefore("job", 3000, 3000), false, "at or behind the floor is not waited for");
+  // A frame with no stamp of its own has no place in the order, so nothing is in front of it.
+  assert.equal(b.pacer.pendingBefore("job", undefined), false);
+  assert.equal(b.pacer.pendingBefore("job", 0), false);
+  // And a frame behind everything already written waits for nothing.
+  b.step(2000);
+  assert.equal(b.pacer.pendingBefore("job", 5000), false, "every segment ahead is emitted in full");
+});
+
 // ---- the words themselves ---------------------------------------------------------------------
 
 test("wordsIn and advance agree about where a word ends", () => {
