@@ -1,20 +1,19 @@
-// The assistant search's ITEM map: public/core/search-items.js.
+// The assistant search's TURN map: public/core/search-items.js.
 //
 // WHAT THIS FILE IS FOR. A search hit is one FIELD of one turn - the prompt, the reply, or one console line - and
-// one query can hit several of them in the SAME turn. Up and Down must move the reader's current match from one
-// message to the next, so the hits have to collapse into items BEFORE a press is counted. The mapping is the whole
-// subject here:
+// one query can hit several of them in the SAME turn. The walk steps matches (that count is
+// test/assistant-search-count.test.js's subject); this mapping is what lets every surface name the TURN a match
+// belongs to - the ring round the message, the turn count in the footer, a result row's press. The mapping is the
+// whole subject here:
 //
 //   * a turn's prompt, reply and every console line are ONE item, however many of them matched;
-//   * the item's place in the walk is the place of its FIRST hit, never a second ordering the list does not show;
-//   * the walk WRAPS at both ends (docs/assistant-search-keys.md states it), so Down on the last item lands on the
-//     first and Up on the first lands on the last;
+//   * the item's place in the list is the place of its FIRST hit, never a second ordering the list does not show;
 //   * the key is thread + turn id, so the same turn id on two threads is two items and never one.
 import assert from "node:assert/strict";
 import test from "node:test";
 import "../public/core/search-items.js";
 
-const { group, step, keyOf } = globalThis.wtSearchItems;
+const { group, keyOf } = globalThis.wtSearchItems;
 
 const hit = (thread, id, field, extra = {}) => ({ thread, id, turn: Number(id.replace(/\D/g, "")) || 0, field, ...extra });
 
@@ -41,7 +40,7 @@ test("four hits in one turn are one item, in the order the hits first appear", (
   assert.equal(items[0].hits[0], hits[0], "the item holds the hit objects themselves, not copies");
 });
 
-test("an item of one turn per press: three rows of one message do not make three presses", () => {
+test("a list of hits collapses to the turns it touches, one entry per message", () => {
   const hits = [
     hit("panel-assistant", "a", "input"),
     hit("panel-assistant", "a", "reply"),
@@ -51,33 +50,12 @@ test("an item of one turn per press: three rows of one message do not make three
   ];
   const items = group(hits);
   assert.equal(items.length, 3);
-  // Walking the items, one press each, visits a, b, c - never a twice for its two hits.
-  let at = 0;
-  const seen = [items[at].id];
-  for (let i = 0; i < 2; i += 1) {
-    at = step(at, 1, items.length);
-    seen.push(items[at].id);
-  }
-  assert.deepEqual(seen, ["a", "b", "c"]);
-});
-
-test("the walk wraps at both ends, which is the stated behaviour", () => {
-  assert.equal(step(0, 1, 4), 1);
-  assert.equal(step(3, 1, 4), 0, "Down on the last item lands on the first");
-  assert.equal(step(0, -1, 4), 3, "Up on the first lands on the last");
-  assert.equal(step(2, -1, 4), 1);
-  // Nothing current yet: Down lands on the first, Up on the last.
-  assert.equal(step(-1, 1, 4), 0);
-  assert.equal(step(-1, -1, 4), 3);
-  // One item is still a ring: both directions land on it.
-  assert.equal(step(0, 1, 1), 0);
-  assert.equal(step(0, -1, 1), 0);
-  // No items: there is nothing to stand on.
-  assert.equal(step(0, 1, 0), -1);
-  assert.equal(step(-1, -1, 0), -1);
-  // An out-of-range index is treated as "nothing current" rather than trusted.
-  assert.equal(step(9, 1, 4), 0);
-  assert.equal(step(9, -1, 4), 3);
+  // The footer's turn count is this length: five matching rows, three messages.
+  assert.deepEqual(
+    items.map((i) => i.id),
+    ["a", "b", "c"],
+    "the turns are listed once each, in the order their first hit appears",
+  );
 });
 
 test("the key is thread and turn id, so one id on two threads is two items", () => {
@@ -108,15 +86,14 @@ test("a hit that could not be opened is not an item", () => {
   assert.equal(items[0].id, "t1");
 });
 
-test("an empty list is no item and no step, never a crash", () => {
+test("an empty list is no item, never a crash", () => {
   assert.deepEqual(group([]), []);
   assert.deepEqual(group(null), []);
   assert.deepEqual(group(undefined), []);
-  assert.equal(step(0, 1, 0), -1);
 });
 
-test("the module's three answers are functions on one global", () => {
+test("the module's answers are functions on one global, and the walk is not one of them", () => {
   assert.equal(typeof globalThis.wtSearchItems.group, "function");
-  assert.equal(typeof globalThis.wtSearchItems.step, "function");
   assert.equal(typeof globalThis.wtSearchItems.keyOf, "function");
+  assert.equal(globalThis.wtSearchItems.step, undefined, "the walk belongs to public/core/search-count.js");
 });

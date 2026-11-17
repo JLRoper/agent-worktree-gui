@@ -1,0 +1,44 @@
+{
+  "viewport": "1440x900",
+  "filters": {
+    "oneTurn": {
+      "text": "1 of 5",
+      "foot": "5 hits matched, 5 displayed, in 1 turn",
+      "matched": 5,
+      "turns": 1
+    },
+    "fiveTurns": {
+      "text": "1 of 5",
+      "foot": "5 hits matched, 5 displayed, in 5 turns",
+      "matched": 5,
+      "turns": 5
+    },
+    "capped": {
+      "text": "1 of 10",
+      "foot": "12 hits matched, 10 displayed, in 4 turns - your own input is kept first when the cap bites",
+      "matched": 12,
+      "turns": 4
+    }
+  },
+  "steps": [
+    {
+      "press": "ArrowDown",
+      "count": "2 of 5",
+      "lid": null,
+      "top": 712
+    },
+    {
+      "press": "Shift+ArrowUp",
+      "count": "1 of 5",
+      "lid": null,
+      "top": 405
+    }
+  ],
+  "screenshots": [
+    "01-five-rows-in-one-turn-1-of-5-1440x900.png",
+    "02-down-2-of-5-1440x900.png",
+    "03-shift-up-back-to-1-of-5-1440x900.png",
+    "04-five-turns-2-of-5-1440x900.png",
+    "05-capped-amber-1-of-10-1440x900.png"
+  ]
+}

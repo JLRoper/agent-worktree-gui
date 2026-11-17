@@ -1,17 +1,15 @@
-// search-items.js - the search's ITEM map: which hits are one thing to step through.
+// search-items.js - the search's TURN map: which hits belong to one message.
 //
-// WHY AN ITEM IS NOT A HIT. The search reads three fields of a turn - the prompt, the reply, and every console line
-// - and one query can hit four of them in ONE turn. A reader stepping "next match" means the next MESSAGE, not the
-// next row of the message they are already on: four hits in one turn are one press, and the count beside the box
-// reads "2 of 4" for four matching turns, never "5 of 12" for the hits inside them. So hits are grouped here, once,
-// by (thread, turn id), and the page steps the groups.
+// WHY THIS EXISTS. The search reads three fields of a turn - the prompt, the reply, and every console line - and
+// one query can hit four of them in ONE turn. The walk steps MATCHES (public/core/search-count.js owns that
+// count), but several surfaces still need the turn a match belongs to: the ring round the whole message, the
+// turn count in the footer, and a result row that says which message its press would open. So hits are grouped
+// here, once, by (thread, turn id), and every surface reads the same grouping.
 //
-// WRAP, NOT CLAMP. step() wraps at both ends: Down on the last item lands on the first, Up on the first lands on the
-// last. That is the rule Enter already had, so no key disagrees with another about what comes after the end;
-// docs/assistant-search-keys.md states it for the reader.
-//
-// Published on globalThis as `wtSearchItems`, loaded as a classic script by public/index.html (before assistant.js)
-// and imported by test/assistant-search-items.test.js - the same load contract public/core/turn-search.js has.
+// Published on globalThis as `wtSearchItems`, loaded as a classic script by public/index.html (before
+// assistant.js) and imported by test/assistant-search-items.test.js - the same load contract
+// public/core/turn-search.js has.
+
 (function (root) {
   "use strict";
 
@@ -49,17 +47,7 @@
     return items;
   }
 
-  // One press, one item: the next index, wrapping at both ends. `current` may be -1 (nothing current yet): a Down
-  // from there lands on the first item and an Up on the last. A `total` of 0 answers -1 - an empty list has no item
-  // to stand on - and an out-of-range `current` is treated as "nothing current" rather than trusted.
-  function step(current, delta, total) {
-    const n = Math.max(0, Number(total) || 0);
-    if (!n) return -1;
-    const d = Number(delta) < 0 ? -1 : 1;
-    const c = Number(current);
-    if (!Number.isFinite(c) || c < 0 || c >= n) return d < 0 ? n - 1 : 0;
-    return (c + d + n) % n;
-  }
-
-  root.wtSearchItems = { keyOf, group, step };
+  // One press, one MATCH is the walk's rule (public/core/search-count.js's `step`), so the item map answers
+  // only the grouping question: which turn does this hit belong to, and how many turns does a list hold.
+  root.wtSearchItems = { keyOf, group };
 })(globalThis);
