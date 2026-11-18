@@ -1437,7 +1437,8 @@ async function toggleSubConsole(id) {
 // holds those frames (core/type-stream.js createReasoningHold: in order, a whole job's queue at once) until two things
 // are true: the store has been read again since the call arrived - the reasoning is written to the store a moment
 // AFTER its tool call is on the stream, and only a read finds it - and nothing ahead of the call in the stream's own
-// (at, seq) order is owed a character (typeStream.pendingBefore). The kind of segment makes no difference any more:
+// (at, seq) order is owed a WORD (typeStream.pendingBefore - a segment whose remaining text is whitespace is
+// complete, so the unit is the word, never the character). The kind of segment makes no difference any more:
 // a paragraph of prose and a row of a paced skill result hold a call exactly as a thought does.
 //
 // "Ahead" stops at the last tool result already in the console (reasoningFloor): a segment stamped behind a line the
@@ -1476,7 +1477,7 @@ function reasoningFloor(job) {
 }
 
 // The order decides, never the kind of segment: a call or a result waits while any segment stamped before it - a
-// thought, a paragraph of the agent's own prose, one row of a paced skill result - still has characters to emit. The
+// thought, a paragraph of the agent's own prose, one row of a paced skill result - is still owed a word. The
 // stream answers that from its own queue (typeStream.pendingBefore), so this page keeps no second ordering. A frame
 // the stream has no stamp for has no place in that order, and is drawn when it arrives.
 function reasoningBusy(job, evt) {
