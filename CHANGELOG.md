@@ -4,16 +4,32 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.115.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.115.1 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-628 releases from v0.1.0 (2026-10-20) to v1.115.0 (2026-11-18), 2145 commits between the tags. Every release is anchored by an
+629 releases from v0.1.0 (2026-10-20) to v1.115.1 (2026-11-18), 2148 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.115.1 — 2026-11-18 · 3 commits
+
+[`bc08c36`](https://github.com/JLRoper/agent-worktree-gui/commit/bc08c36eb823a08f7503042a411a680f80b8da89) · [compare v1.115.0...v1.115.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.115.0...v1.115.1)
+
+### Fixed
+
+- fix(search): the landing holds while the board repaints, and the flash is state first ([`f3273c9`](https://github.com/JLRoper/agent-worktree-gui/commit/f3273c95d0b758be11166e9053a856dfb0345d81))
+
+### Docs & tests
+
+- docs: render the changelog - 628 releases ([`286b5bf`](https://github.com/JLRoper/agent-worktree-gui/commit/286b5bfdd1aa356ca1bc1abd9cf971e43fd0d1cb))
+
+### Other
+
+- chore: 1.115.1 - the version this landing carries ([`bc08c36`](https://github.com/JLRoper/agent-worktree-gui/commit/bc08c36eb823a08f7503042a411a680f80b8da89))
 
 ## v1.115.0 — 2026-11-18 · 4 commits
 
