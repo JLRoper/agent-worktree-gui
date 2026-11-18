@@ -4,16 +4,32 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.114.2 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.114.3 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-626 releases from v0.1.0 (2026-10-20) to v1.114.2 (2026-11-17), 2138 commits between the tags. Every release is anchored by an
+627 releases from v0.1.0 (2026-10-20) to v1.114.3 (2026-11-17), 2141 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.114.3 — 2026-11-17 · 3 commits
+
+[`c1c16a1`](https://github.com/JLRoper/agent-worktree-gui/commit/c1c16a14db7ad4ab73d1fb087f8f65f99d19e148) · [compare v1.114.2...v1.114.3](https://github.com/JLRoper/agent-worktree-gui/compare/v1.114.2...v1.114.3)
+
+### Fixed
+
+- fix(assistant-search): the popover's own scroller follows the keyboard walk ([`cf5f10e`](https://github.com/JLRoper/agent-worktree-gui/commit/cf5f10e3aafed1a7765546b18213b0c833462716))
+
+### Docs & tests
+
+- docs: render the changelog - 626 releases ([`c1b68d6`](https://github.com/JLRoper/agent-worktree-gui/commit/c1b68d6941594aae099b6b8c519368fdaa63f308))
+
+### Other
+
+- chore: 1.114.3 - the version this landing carries ([`c1c16a1`](https://github.com/JLRoper/agent-worktree-gui/commit/c1c16a14db7ad4ab73d1fb087f8f65f99d19e148))
 
 ## v1.114.2 — 2026-11-17 · 3 commits
 
