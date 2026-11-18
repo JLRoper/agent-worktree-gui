@@ -39,7 +39,9 @@ const {
   reviewKey,
 } = await import("../lib/review-inbox.js");
 
-const TREE = "C:/ProjectDevelopment/agent-worktree-gui/.worktrees/lane-fixture-a1b2c3";
+// A tree path the fixtures can name without writing one machine's own folder: the OS temp is where a test fixture
+// belongs, and the forward-slash spelling is the one a row carries (lib/scan.js).
+const TREE = path.join(tmpdir(), "lane-fixture-a1b2c3").replace(/\\/g, "/");
 
 function sandbox(t) {
   const dir = mkdtempSync(path.join(tmpdir(), "wtgui-review-"));
@@ -68,8 +70,8 @@ test("the report anchor is the first docs/reports path the run named", () => {
 });
 
 test("several reports: the first is the anchor and the order is the run's own", () => {
-  const text = "report at `docs/reports/b.html`, earlier at docs/reports/a.html, absolute C:/work/docs/reports/c.html";
-  assert.deepEqual(findReports(text), ["docs/reports/b.html", "docs/reports/a.html", "C:/work/docs/reports/c.html"]);
+  const text = "report at `docs/reports/b.html`, earlier at docs/reports/a.html, absolute /work/docs/reports/c.html";
+  assert.deepEqual(findReports(text), ["docs/reports/b.html", "docs/reports/a.html", "/work/docs/reports/c.html"]);
   assert.equal(parseDelivery({ text }).report, "docs/reports/b.html");
   // A backslash path is the same file, said the way Windows says it.
   assert.deepEqual(findReports("see docs\\reports\\win.html"), ["docs/reports/win.html"]);
@@ -115,7 +117,7 @@ test("a heading with no bullets is no next steps, and a plain sentence is not a 
 });
 
 test("the panel's own marker lines are never the summary", () => {
-  const text = ["TODO DONE 4", "TODO DONE 5", "RELEASE C:/tree | merged", "DELIVER file docs/reports/x.html | the report", "The lane is landed and green."].join("\n");
+  const text = ["TODO DONE 4", "TODO DONE 5", "RELEASE p/tree | merged", "DELIVER file docs/reports/x.html | the report", "The lane is landed and green."].join("\n");
   assert.equal(firstLine(text), "The lane is landed and green.");
   assert.equal(parseDelivery({ text }).summary, "The lane is landed and green.");
 });
@@ -237,8 +239,11 @@ test("the count is awaiting entries only, and the state carries the split", (t) 
 });
 
 test("the key is the tree path, normalised, so two spellings of one tree are one delivery", () => {
-  assert.equal(normReviewPath("C:\\Work\\Tree\\"), "c:/work/tree");
-  assert.equal(reviewKey("proj", "C:\\Work\\Tree\\"), reviewKey("other-project", "c:/work/tree"));
+  // The backslash spelling, with the trailing separator a Windows tool prints, and the forward-slash one a row
+  // carries: same tree, same key.
+  const win = `${TREE.replace(/\//g, "\\")}\\`;
+  assert.equal(normReviewPath(win), TREE.toLowerCase());
+  assert.equal(reviewKey("proj", win), reviewKey("other-project", TREE.toUpperCase()));
   assert.equal(reviewKey("proj", ""), null);
   assert.equal(reviewKey("proj", "   "), null);
 });
