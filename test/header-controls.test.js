@@ -1,10 +1,14 @@
-// The header's three named controls, and where Pause lives.
+// The header's four named controls, and where Pause lives.
 //
-// The board's header carries three named controls side by side: Assistant, Human and Deliverables. They used to
+// The board's header carries four named controls side by side: Assistant, Hot, Human and Deliverables. They used to
 // speak in two registers - a Title Case name behind a sparkle, beside two SHOUTED tags - so the pair read as a
 // different kind of control from the one next to it. One shape now: a leading glyph, a space, and Title Case.
 //
-// Pause was the fourth control in that row, and it is not a header gesture: it freezes the board's own reads, and
+// HOT is the newest of them and the only one that is not always drawn: it is the marker for an agent that is working
+// right now, so it ships hidden and public/app.js paintHotButton brings it in and takes it away with the work. Its
+// label is still the family's shape - that is what this file pins.
+//
+// Pause was the fifth control in that row, and it is not a header gesture: it freezes the board's own reads, and
 // the rows that govern those reads (the folders the board scans, Read now, and the bundle re-read on the Bundles
 // tab) live in Settings. It moved there, and the handler did not change - the press is found by id, so the markup
 // moved and the behaviour did not. Both halves are pinned here, because no browser gate names Pause: the shipped
@@ -23,21 +27,24 @@ const headerBlock = () => {
   return found[0];
 };
 
-test("the three named header controls share one label shape: a leading glyph and Title Case", () => {
+test("the four named header controls share one label shape: a leading glyph and Title Case", () => {
   const assistant = html.match(/<button id="btn-assistant"[^>]*>([\s\S]*?)<span id="assistant-badge"/);
+  const hot = html.match(/<span id="hot-label">([^<]*)<\/span>/);
   const human = html.match(/<span id="human-label">([^<]*)<\/span>/);
   const deliver = html.match(/<span id="deliver-label">([^<]*)<\/span>/);
   assert.ok(assistant, "no #btn-assistant");
+  assert.ok(hot, "no #hot-label");
   assert.ok(human, "no #human-label");
   assert.ok(deliver, "no #deliver-label");
 
-  // The precedent, then the two that now match it. Exact strings: a "cleaned up" label that drops the glyph, or
+  // The precedent, then the three that now match it. Exact strings: a "cleaned up" label that drops the glyph, or
   // one that goes back to caps, has to change this line and say why.
   assert.equal(assistant[1].trim(), "✧ Assistant", "the precedent: a sparkle, a space, Title Case");
+  assert.equal(hot[1].trim(), "⚡ Hot", "Hot is drawn the way Assistant is");
   assert.equal(human[1].trim(), "🙋 Human", "Human is drawn the way Assistant is");
   assert.equal(deliver[1].trim(), "📦 Deliverables", "Deliverables is drawn the way Assistant is");
 
-  for (const [name, text] of [["assistant", assistant[1]], ["human", human[1]], ["deliver", deliver[1]]]) {
+  for (const [name, text] of [["assistant", assistant[1]], ["hot", hot[1]], ["human", human[1]], ["deliver", deliver[1]]]) {
     const label = text.trim();
     // The `u` flag matters: the human and deliver glyphs are astral code points, and without it `\S` matches one
     // UTF-16 surrogate at a time and the space assertion fails on a label that is drawn correctly.

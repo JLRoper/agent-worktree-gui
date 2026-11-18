@@ -1,0 +1,12 @@
+{
+ "harness": "tools/verify-hot-mark.mjs",
+ "viewport": "1440x900",
+ "shots": [
+  "hot-mark-header-1440x900.png",
+  "hot-mark-header-crop-1440x900.png",
+  "hot-mark-press-1440x900.png"
+ ],
+ "checks": 38,
+ "failures": 0,
+ "at": "2026-11-18T22:58:11.163Z"
+}

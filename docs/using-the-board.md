@@ -38,9 +38,24 @@ is `rev-parse`, `rev-list`, `merge-base`, `cherry`, `diff`, `status` and `log`.
 | Config line | Version, how many projects are being watched, the two main cadences, scan threads, bind host — and `refresh on screen only` when that refresh mode is on. |
 | Stream readout | `pool 1/3 · 3 conversations · 29 events · 2.4/s`: scan workers busy, how many conversations, and the event rate arriving over SSE. |
 | **🙋 Human** | Every open permission and clarify question on the board, in one rotation. See below. |
+| **⚡ Hot** | The agents working right now, in one rotation: an amber count and a bolt that is drawn only while one is. See below. |
 | **✧ Assistant** | Opens the assistant panel beside the board (`A` or `Ctrl+Shift+A`) — a rail by default, and a floating window for an assistant whose own **Settings** says `floating`. Its purple badge counts the open alerts; the `⧗` pill beside it counts the **spawn cards** waiting for a click, amber once the oldest has waited over two minutes. |
 | **Collapse all** | Folds the whole tree in one press — every folder, project, worktree row, card and turn. The button then reads **Expand all**. `Ctrl+]` also opens everything; `Ctrl+[` folds one tier per press instead. |
 | **⚙ Settings** | The Settings panel (`Ctrl+,`). **Refresh now**, **Fetch remotes** and **Live updates → Pause** live in it too, under Board. |
+
+### The HOT AGENTS bolt
+
+**⚡ Hot** is the red **🙋 Human** count read the other way. Human is every agent stopped until you answer; Hot is
+every agent still inside a turn - running, starting, queued, or between two tool calls. Click it (no key) and the
+panel lands on the next one: its row unfolds, the board scrolls to its card and the card flashes, and the label
+counts its place (`Hot 1/2`). The tooltip names them, with the worktree each is in.
+
+- Zero is **absent**, not quiet: with nothing working there is no bolt in the header at all, which is why it looks
+  like the header lost a button when the last agent finishes.
+- A turn parked on a permission or a clarify question is **not** hot - that agent is waiting on you, and it is the
+  red count and the Human rotation that own it. One question never appears in two counts.
+- It is not the row's yellow lock (a tree held by a live run), not the blue turnover mark (a branch relationship)
+  and not the amber ▣ Review mark (a result to read).
 
 ### The HUMAN rotation
 

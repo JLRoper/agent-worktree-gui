@@ -853,6 +853,9 @@ function updateJob(j, { scroll = false } = {}) {
   // Every turn change lands here, so this is where the HUMAN count is kept honest without waiting for the page's
   // clock: a question that arrived, or one the reader just answered, moves the number in the same repaint.
   paintHumanButton();
+  // …and the HOT AGENTS bolt, which is the same list read the other way: a turn starting makes it appear, a turn
+  // ending takes it away, and neither should wait for the next tick.
+  paintHotButton();
 }
 
 // What the card actually draws. If none of this changed, the DOM does not need rebuilding — and

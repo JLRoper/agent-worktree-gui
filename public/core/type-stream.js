@@ -26,7 +26,7 @@
 //     written. The stream types a thought, a paragraph of the agent's own words and the rows of a skill's result at
 //     the reader's words-a-second, and a tool call (and its output) that follows one of them is whole lines on the
 //     wire: left alone it lands while the text above it is still being typed, and the card appears mid-sentence. The
-//     hold queues those frames, in order, and lets them go the moment nothing in front of them is owed a character -
+//     hold queues those frames, in order, and lets them go the moment nothing in front of them is owed a word -
 //     the stream's own (at, seq) order decides that (pendingBefore), so it makes no difference which kind of segment
 //     is still typing. It knows nothing about the page: the caller says which frames wait (`wants`), what they wait
 //     for (`busy`) and what to do when a hold begins (`start` - the page uses it to read the store again, because a
