@@ -43,6 +43,7 @@ import { answerDeletes, answerLine, answeredChecks } from "./lib/verify-landed.j
 import { deleteWorktreeRow } from "./lib/worktree-remove.js";
 import { ReleaseRequests, agentCleanupFrom, releaseWorktree, releasesEnabled } from "./lib/worktrees.js";
 import { Deliverables } from "./lib/deliverables.js";
+import { ReviewInbox } from "./lib/review-inbox.js";
 import { Hosts, docOf, prListing, proposeMapping, renderTemplate } from "./lib/hosts.js";
 // What a worktree is FOR: the definition catalogue (reader-edited over the shipped seed), where each tree stands in
 // one, and the ladder that is the only way a tree's kind may change (docs/pipelines.md §1–§3).
@@ -2699,6 +2700,18 @@ jobs.releaseBrief = (opts) => {
 // the six-hex tag, so an auto-rename moves the row with the tree instead of leaving it pointing at a name that is gone.
 const deliverables = new Deliverables({ file: config.deliverablesFile, log, trees: panelTrees });
 jobs.deliverables = deliverables;
+
+// ---- the REVIEW LANE: what a finished run handed back, and whether the reader has checked it ---------------------
+// The delivery is inferred at the run's settle from the run's own last words and the row's close reason
+// (`Jobs.harvestReview` -> `lib/review-inbox.js`), carried on the row by `withReviews`, and cleared by the reader's
+// own Reviewed press. The card that presents a finished result is drawn by the PANEL from this record, never by the
+// agent inside the run: an unanswered card costs the run nothing, and the row stays amber and counted. Keyed by the
+// tree path alone, so a row that is archived or deleted drops out of the lane with the row.
+const reviews = new ReviewInbox({ file: config.reviewsFile, log });
+jobs.reviewInbox = reviews;
+// One SSE frame when a delivery lands, so a second tab's count moves without waiting for the next scan. The frame is
+// a hint only - the page re-reads the snapshot - and it is wired here so the store never learns what a socket is.
+reviews.onChange = (entry) => broadcast({ type: "review", path: entry?.path || null, at: entry?.at || null });
 // One SSE frame per delivery, so a list open in another tab (or this one) gains its row without a reload. The frame is
 // a summary only — the page re-reads the store — and it is wired here so the store never learns what a socket is.
 deliverables.onChange = (entry) =>
@@ -2906,6 +2919,39 @@ function withTodos(snap) {
   return snap;
 }
 
+// The review lane travels with the snapshot the same way: the row carries its delivery - summary, report path,
+// next steps - and whether it is still awaiting a check. A tree with no delivery carries no `review` field at all,
+// so the marker and the card are simply absent rather than an empty box, and a row that was archived or deleted
+// never gets one because it is not in this list to decorate.
+function withReviews(snap) {
+  for (const project of snap.projects || []) {
+    for (const row of project.worktrees || []) {
+      const rec = reviews.forRow(project.name, row.path);
+      if (!rec) {
+        delete row.review;
+        continue;
+      }
+      row.review = rec;
+    }
+  }
+  return snap;
+}
+
+// The row's own answer, for the two routes below: the same shape `withReviews` puts on the snapshot, so a button
+// that presses and a page that reloads paint the identical card.
+function reviewRow(project, treePath) {
+  const rec = reviews.forRow(project, treePath);
+  if (!rec) return null;
+  return { ...rec, project: rec.project || project || null };
+}
+
+// A delivery is a row: the same full snapshot the TODO harvest sends, so the marker and the header count repaint
+// without waiting for the next scan. A REMOVAL (a reviewed press) also takes the row out of the rotation, and the
+// page's own list is rebuilt from this snapshot.
+function broadcastReviews() {
+  broadcastSnapshot();
+}
+
 // A list that changed is a row that changed: the same full snapshot the description harvest sends, so the strip
 // repaints without waiting for the next scan to happen to mention that row.
 function broadcastTodos() {
@@ -2931,8 +2977,16 @@ function todoSay(op, item) {
 // pass at boot, because a panel started over a store whose trees were all scanned long ago has no row event coming.
 store.onEvent((evt) => {
   if (evt?.type === "row") descriptions.harvest();
+  // THE LANE'S ONE REMOVAL. A `drop` is the store SAYING a row stopped being a row: its tree went, or its project left
+  // the board. That is the only moment a delivery can be known to have nowhere to sit, so it is the only moment one is
+  // deleted. A sweep over "the rows visible right now" would not be safe: a scan emits partial sets while it walks,
+  // and deleting against one of those would throw away the delivery the reader is coming back for.
+  if (evt?.type === "drop" && reviews.forget({ project: evt.project, path: evt.path }).removed) broadcastSnapshot();
 });
 descriptions.harvest(2500);
+
+// THE LANE'S HOUSEKEEPING is the `drop` handler just above: one verb, one row, at the moment the store says the row is
+// gone. There is no sweep, because a sweep needs a COMPLETE row set and the scan only ever offers partial ones.
 
 function worktreeDirName(name, tag) {
   // The same rule the cut uses (lib/tree-slug.js): whole words, cut between them. An empty name still yields an
@@ -3674,8 +3728,9 @@ function snapshotBody() {
     ),
   );
   // The owner and the round's name ride the snapshot like the lock does: per-row fields the page can read without a
-  // second call. Both are applied last so no earlier overlay resets them.
-  return withRoundNames(withAssistantOwners(snap));
+  // second call. Both are applied last so no earlier overlay resets them. THE REVIEW LANE IS APPLIED LAST OF ALL, so
+  // a row's delivery is on the row whenever a snapshot leaves this function - nothing above it can strip the field.
+  return withReviews(withRoundNames(withAssistantOwners(snap)));
 }
 
 const heartbeat = setInterval(() => {
@@ -5373,6 +5428,42 @@ const server = createServer(async (req, res) => {
         key: r.key || null,
         summary: r.key ? todos.summary(r.key) : null,
         journal: r.list ? r.list.journal.slice(-6) : [],
+      });
+    }
+
+    // ---- the review lane ------------------------------------------------------------------------------
+    // What a finished run left behind, and whether the reader has checked it. GET is the whole record (the page
+    // counts from the ROWS, so a stale entry can never inflate the header badge); POST is the reader's own press.
+    if (route === "/api/review" && req.method === "GET") {
+      const asked = String(url.searchParams.get("path") || url.searchParams.get("tree") || "").trim();
+      if (asked) {
+        const rec = reviews.forRow(null, asked);
+        return sendJson(res, 200, { path: rec?.path || null, review: rec, count: reviews.count() });
+      }
+      return sendJson(res, 200, reviews.state());
+    }
+
+    if (route === "/api/review" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      const op = String(body?.op || "reviewed").toLowerCase();
+      const treePath = body?.path || body?.tree || null;
+      const project = body?.project || null;
+      let r;
+      if (op === "reviewed") r = reviews.markReviewed({ project, path: treePath, by: "reader" });
+      else if (op === "review-all" || op === "all") r = reviews.markAll({ by: "reader" });
+      else r = { ok: false, error: `unknown review op “${op || "(none)"}” - one of reviewed, review-all` };
+      // The reviewer's press changes a row: the same full snapshot the TODO press sends, so the marker, the card and
+      // the header count all repaint from one answer. The row itself rides back too, so a page that paints from the
+      // answer is correct even if its socket is asleep.
+      if (r.ok) broadcastReviews();
+      return sendJson(res, r.ok ? 200 : 400, {
+        ok: Boolean(r.ok),
+        error: r.error || null,
+        changed: Boolean(r.changed),
+        message: r.say || null,
+        count: reviews.count(),
+        row: treePath ? reviewRow(project, treePath) : null,
       });
     }
 
