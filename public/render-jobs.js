@@ -255,7 +255,11 @@ function turnBlock(conv, turn, index, copy = "", taskLink = null) {
   // is the only state the CSS needs from here.
   const running = turnLive(turn);
   const compact = !open && state.turnCompact.has(tkey);
-  const cls = `turn${open ? "" : " folded"}${compact ? " compact" : ""}${running ? " is-running" : ""}`;
+  // The Hot Agent search's ring, from STATE so a repaint keeps it: the card was rebuilt when the row opened, and a
+  // class added to the element that stood here before would have gone with it. `until` closes the window on its own,
+  // so a repaint after it can never ring the turn again.
+  const rang = state.haHit && state.haHit.thread === conv.thread && state.haHit.id === turn.id && Date.now() < state.haHit.until ? " ha-hit" : "";
+  const cls = `turn${open ? "" : " folded"}${compact ? " compact" : ""}${running ? " is-running" : ""}${rang}`;
   if (compact) {
     return `<div class="${cls}" data-turn="${esc(turn.id)}">${turnHead(turn, index, false, copy, true)}` +
       `${turnAttachmentsHtml(turn)}${compactHtml(turn, copy)}${subagentsCompactHtml(turn, copy)}</div>`;

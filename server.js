@@ -137,6 +137,9 @@ import { DIGEST_PATH, READ_PATH, createDigestRoutes } from "./routes/assistant-d
 // The header search's one read: every persisted turn of one assistant, filtered by a query the module (with
 // public/core/turn-search.js) interprets - wildcards, a plain substring, and an escaped query that cannot throw.
 import { SEARCH_PATH, createSearchRoutes } from "./routes/assistant-search.js";
+// The second header search (routes/hot-agent-search.js): the turns the reader wrote to worker agents, across every
+// tree. Its prefix shares nothing with the assistant search's, and its module owns what is eligible there.
+import { HOT_AGENT_SEARCH_PATH, createHotAgentSearchRoutes } from "./routes/hot-agent-search.js";
 // The state read's prefix, cut into routes/ beside the queue and the delete control: one module for /api/state and
 // its /api/audit alias, and one table row each because the alias shares no prefix with the path the board polls.
 import { STATE_PATH, AUDIT_PATH, createStateRoutes } from "./routes/state.js";
@@ -1745,6 +1748,10 @@ const PREFIX_MOUNTS = [
   // The header search (routes/assistant-search.js): one read over the turns the job store kept, for one assistant
   // or all of them. The Assistant owns the store read and the thread set, the module owns the query's meaning.
   { prefix: SEARCH_PATH, handles: createSearchRoutes({ assistant, sendJson }) },
+  // The Hot Agent search (routes/hot-agent-search.js): the turns the READER wrote to worker agents, newest first.
+  // It reads the same job store, so the store and the transport helpers travel in beside it; the module decides
+  // what a row may be and what the query means.
+  { prefix: HOT_AGENT_SEARCH_PATH, handles: createHotAgentSearchRoutes({ jobs, assistant, sendJson }) },
   // The state read (routes/state.js), which is the snapshot and nothing else: the store, the registry, the jobs and
   // the assistants are this file's own, so the assembled snapshot stays here and travels in as a function.
   { prefix: STATE_PATH, handles: stateRoutes },

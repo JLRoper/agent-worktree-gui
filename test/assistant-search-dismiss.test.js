@@ -67,9 +67,20 @@ const dismissBody = dismissAt >= 0 ? page.slice(dismissAt, page.indexOf("// Ctrl
 
 test("the page listens on mousedown and hands the predicate the box and the list", () => {
   assert.ok(wireBody, "wireSearch exists in public/assistant.js");
-  assert.match(wireBody, /addEventListener\(\s*"mousedown"/, "the decision is made on mousedown, so a drag out of the list cannot close it");
-  assert.match(wireBody, /wtSearchDismiss/, "the page uses the shared predicate");
-  assert.match(wireBody, /outside\(e\.target, \{ input: as\$\("as-search-q"\), pop \}\)/, "the two zones are the box and the results panel");
+  assert.ok(wireBody.includes("bar.wire()"), "the page wires the shared popover module");
+  // The listener itself MOVED into that module (public/core/search-popover.js) when the two search bars were given
+  // one component, so the assertions below read the module wire() - the same behaviour at the one place it now
+  // lives - and the mount is what tells it which box and which list are the pair.
+  const popoverSrc = readFileSync(new URL("../public/core/search-popover.js", import.meta.url), "utf8");
+  const popWireAt = popoverSrc.indexOf("function wire");
+  const mountWire = popWireAt >= 0 ? popoverSrc.slice(popWireAt, popoverSrc.indexOf("return api;", popWireAt)) : "";
+  assert.ok(mountWire, "wire() exists in public/core/search-popover.js");
+  assert.ok(mountWire.includes("mousedown"), "the decision is made on mousedown, so a drag out of the list cannot close it");
+  assert.ok(mountWire.includes("wtSearchDismiss"), "the page uses the shared predicate");
+  assert.ok(mountWire.includes("outside(e.target, { input, pop })"), "the two zones are the box and the results panel");
+  // The third argument is the capture flag, written as the lone `true,` that ends the listener call.
+  const mouseAt = mountWire.indexOf('"mousedown"');
+  assert.ok(mouseAt >= 0 && mountWire.indexOf('true,', mouseAt) > mouseAt, 'and it listens in the capture phase, before a handler can rebuild the pane under it');
 });
 
 test("closing drops the answer and leaves the filter in the box", () => {

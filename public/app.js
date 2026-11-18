@@ -276,6 +276,11 @@ const state = {
   // window closes. (The NOT-RUNNING rotation that first drew this ring is gone; HUMAN kept the ring.)
   hotFlash: { thread: null, until: 0 },
   hotFlashTimer: null,
+  // The Hot Agent search's ring on ONE TURN: `{thread, id, until}`, held in state for the same reason hotFlash is -
+  // opening the row or a repaint rebuilds the card, and a class put on the old element dies with it (the renderer's
+  // `turnBlock` re-applies this one until the window closes). flashHotCard says WHICH CARD; this says WHICH TURN.
+  haHit: { thread: null, id: null, until: 0 },
+  haHitTimer: null,
   // HUMAN: the rotation through every OPEN permission and clarify question. `key` is the question last shown
   // and `at` its place in that sample; `sig` is what was last painted on the button. The list itself is never
   // stored — it is rebuilt from live state on every press, so an answered question cannot linger in it.
@@ -18622,6 +18627,27 @@ for (const b of document.querySelectorAll("[data-reorder-set]")) {
   });
 }
 
+// ---- how many turns the Hot Agent search lists ----------------------------------------------
+// The number the bar sends with every read, the server's fallback (lib/hot-agent/search.js) and the Settings row all
+// come from public/core/hot-agent-list.js: one default (20), one range (1..100) and one browser key, so the three
+// cannot disagree. This row is the only place the reader edits it.
+function paintHotAgentListSetting() {
+  const mod = globalThis.wtHotAgentList;
+  const n = mod && typeof mod.read === "function" ? mod.read(localStorage) : 20;
+  const input = $("hot-agent-list");
+  if (input && document.activeElement !== input) input.value = String(n);
+  const preview = $("hot-agent-list-preview");
+  if (preview) preview.textContent = `Ctrl+Shift+Q opens on the newest ${n} ${n === 1 ? "turn" : "turns"} you wrote to worker agents`;
+}
+
+function saveHotAgentListSetting(value) {
+  const mod = globalThis.wtHotAgentList;
+  if (!mod || typeof mod.write !== "function") return;
+  const saved = mod.write(localStorage, value);
+  paintHotAgentListSetting();
+  showNote(`Hot agent list ${saved} ${saved === 1 ? "turn" : "turns"} - the next Ctrl+Shift+Q lists that many`);
+}
+
 // The rank window: a number of seconds, saved in this browser like the other Display rows.
 $("rank-window")?.addEventListener("change", (e) => saveRankWindow(e.target.value));
 $("rank-window")?.addEventListener("keydown", (e) => {
@@ -18632,6 +18658,18 @@ $("rank-window")?.addEventListener("keydown", (e) => {
   }
 });
 paintRankWindow();
+$("hot-agent-list")?.addEventListener("change", (e) => saveHotAgentListSetting(e.target.value));
+$("hot-agent-list")?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    saveHotAgentListSetting(e.target.value);
+    e.target.blur();
+  }
+});
+for (const btn of document.querySelectorAll("[data-hot-agent-list-set]")) {
+  btn.addEventListener("click", () => saveHotAgentListSetting(btn.dataset.hotAgentListSet));
+}
+paintHotAgentListSetting();
 startReorderClock();
 paintReorderSetting();
 

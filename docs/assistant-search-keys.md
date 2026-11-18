@@ -216,3 +216,12 @@ numbers in reverse. The pictures under `docs/assets/assistant-search-scroll/` ar
 | `03-last-result-10-of-10-1440x900.png` | Nine `Down`s: `10 of 10`, the last row current and fully visible, the list at the end of its reach. |
 | `04-back-to-the-middle-5-of-10-1440x900.png` | `Up` from the last: `5 of 10` again, the row in view on the way back. |
 | `05-back-to-the-first-1-of-10-1440x900.png` | Home: `1 of 10`, the list back at the top, the same row and the same offset as the first shot. |
+
+## The other search in the same head
+
+Beside this box sits the **Hot Agent search** (`Ctrl+Shift+Q`), which asks about the turns you wrote to worker
+agents rather than about this assistant's own transcript. It is the same popover, the same keys and the same scroller
+follow - `public/core/search-popover.js` is the one component both bars mount - so `Down`, `Up`, `Shift+Enter`,
+`Enter` and `Esc` mean here exactly what the table above says. What differs is the data and the landing: a row names
+the agent, its thread and the project tree, and `Enter` opens the turn's card in the board. See
+`docs/hot-agent-search-keys.md`.

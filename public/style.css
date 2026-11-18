@@ -3818,7 +3818,7 @@ button.btn-cleanup:focus-visible { outline: 1px solid #7fb2e8; outline-offset: 1
    its tallest child plus the bar's own 7px padding - measures the same with this control in it as without. Nothing
    here sets the row's height: the results are position: fixed (the pane clips its own overflow), so a result can
    never wrap the row or add a line to it. */
-#assistant > .as-bar .as-search { display: flex; align-items: center; gap: 4px; flex: 1 1 120px; min-width: 120px; max-width: 190px; height: 20px; }
+#assistant > .as-bar .as-search { display: flex; align-items: center; gap: 4px; flex: 1 1 120px; min-width: 96px; max-width: 164px; height: 20px; }
 #assistant > .as-bar .as-search-q {
   flex: 1 1 auto; min-width: 0; width: 100%; height: 20px; box-sizing: border-box;
   font-family: var(--mono); font-size: 10.5px; line-height: 18px; color: var(--text);
@@ -3877,6 +3877,52 @@ mark.as-search-mark.is-current { background: #f2c744; color: #17110a; box-shadow
 .jl.is-search-current-row, .turn-prompt-inline.is-search-current-row { background: rgba(242, 199, 68, .12); box-shadow: inset 2px 0 0 #f2c744; border-radius: 2px; }
 .as-search-row.is-current { background: #1b2532; box-shadow: inset 2px 0 0 #e3b341; }
 .as-search-row.is-current .as-search-where { color: #ffd479; }
+
+/* The SECOND header search: the Hot Agent bar beside the turn search (Ctrl+Shift+Q). It wears the same skin as the
+   search beside it - the same 20px control row, the same popover border, the same .as-search-row grid and its
+   where/meta/snip cells - because the two bars are one pair, and the popover, the keys and the follow are one module
+   (public/core/search-popover.js). Only what differs is here: the opener button, the popover's own head/list/footer
+   (the LIST scrolls, so the box and the footer never scroll away), and the thread line a hot agent row adds to name
+   where the turn came from. Nothing here sets the title row's height: the popover is fixed. */
+#assistant > .as-bar .ha-search-open {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 3px; height: 20px; box-sizing: border-box;
+  font-family: var(--mono); font-size: 9.5px; line-height: 1; letter-spacing: .04em;
+  color: var(--dim); background: #171f2a; border: 1px solid #2a3444; border-radius: 99px;
+  padding: 0 5px; cursor: pointer;
+}
+#assistant > .as-bar .ha-search-open:hover { color: var(--text); border-color: var(--dim); background: #1d2734; }
+#assistant > .as-bar .ha-search-open[aria-expanded="true"] { color: #ffd479; border-color: #b8860b; background: #221a0c; }
+#assistant > .as-bar .ha-search-open:focus-visible { outline: 1px solid #3b6ea8; outline-offset: 1px; }
+
+.ha-search-pop {
+  position: fixed; z-index: 96; display: flex; flex-direction: column; gap: 0;
+  padding: 4px; overflow: hidden; background: #121821; border: 1px solid #2a3444; border-radius: 7px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .55);
+}
+.ha-search-pop[hidden] { display: none; }
+.ha-search-head { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; padding: 1px 1px 4px; }
+.ha-search-q {
+  flex: 1 1 auto; min-width: 0; width: 100%; height: 22px; box-sizing: border-box;
+  font-family: var(--mono); font-size: 11px; line-height: 20px; color: var(--text);
+  background: #0d121a; border: 1px solid var(--line); border-radius: 5px; padding: 0 5px;
+}
+.ha-search-q::placeholder { color: var(--dimmer); }
+.ha-search-q:focus { outline: none; border-color: #3b6ea8; background: #0b1017; }
+.ha-search-pop .as-search-n { flex: 0 0 auto; font-size: 10px; color: var(--dim); white-space: nowrap; }
+.ha-search-pop .as-search-n.is-capped { color: #e3b341; }
+.ha-search-pop .as-search-n[hidden] { display: none; }
+/* The list is the scroller: the module follows the walk inside THIS element, and the head and the footer stay put.
+   min-height: 0 is what lets a flex child shrink below its content and scroll at all. */
+.ha-search-list { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 1px; overflow-y: auto; }
+.ha-search-pop .as-search-more { flex: 0 0 auto; position: sticky; bottom: 0; background: #121821; }
+/* A hot agent row's third line: the thread the turn ran in and the turn's own counter. A quiet mono line, so the
+   agent (row 1, left) and the tree (row 1, right) stay the loud half of the row. */
+.ha-search-row .as-search-snip { grid-row: 3; }
+.ha-search-thread { grid-row: 2; grid-column: 1 / -1; font-size: 9px; color: var(--dimmer); letter-spacing: .02em; overflow-wrap: anywhere; }
+.ha-search-empty { padding: 6px 5px 8px; font-size: 11px; color: var(--dim); }
+/* The turn a Hot Agent row opened: the same amber ring the turn search draws round its current match, on the turn
+   inside the card (the card's own hot-flash says which agent). It is removed on a timer by assistant.js. */
+.turn.ha-hit { box-shadow: 0 0 0 1px #d9a521, 0 0 0 4px rgba(217, 165, 33, .16); border-radius: 6px; }
 
 .as-tabs { display: flex; gap: 2px; padding: 4px 6px 0; background: var(--panel-2); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .as-tabs button {

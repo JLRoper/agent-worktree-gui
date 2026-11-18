@@ -543,6 +543,19 @@
           <span class="settings-unit mono">s</span>
         </label>
 
+        <label class="settings-row settings-gap" for="hot-agent-list" title="How many recent turns the Hot Agent search lists when its box is empty. That is the Ctrl+Shift+Q search beside the assistant's turn search: it reads only the turns YOU wrote to worker agents (never the assistant's own turns, never an agent's reply), newest first, each row naming the agent, its thread and the project tree. The list is the newest this many turns across every tree the panel has run an agent in; type in the box and the filter narrows it, and a query changes the number on screen, not this one. 20 is the default, 1 to 100 is the range, and a fractional value is rounded. Saved in this browser, and the next time the search opens it reads this number.">
+          <span>Hot agent list <span class="settings-info">ⓘ</span></span>
+          <input id="hot-agent-list" type="number" inputmode="numeric" step="5" min="1" max="100">
+          <span class="settings-unit mono">turns</span>
+        </label>
+        <div class="settings-presets">
+          <button type="button" data-hot-agent-list-set="10">10</button>
+          <button type="button" data-hot-agent-list-set="20">20</button>
+          <button type="button" data-hot-agent-list-set="50">50</button>
+          <button type="button" data-hot-agent-list-set="100">100</button>
+        </div>
+        <div class="settings-preview mono" id="hot-agent-list-preview">…</div>
+
         <label class="settings-row settings-gap" for="anchor-hover" title="The hover anchor: the card the pointer is moving over keeps its screen position while other cards above it grow. It lingers for the seconds beside it after the pointer stops. Off, hovering chooses nothing and the anchor falls through to the next rule. Saved in this browser.">
           <span>Hover anchor <span class="settings-info">ⓘ</span></span>
           <input id="anchor-hover" type="checkbox" checked>
@@ -996,12 +1009,32 @@
           <span class="as-search-n mono" id="as-search-n" hidden></span>
           <button type="button" id="as-search-scope" class="as-search-scope" aria-pressed="false" title="search your own input only - every turn the store kept, not just the page on screen">mine</button>
         </span>
+        <!-- The Hot Agent search: a SECOND bar beside the turn search, opened by Ctrl+Shift+Q from anywhere in the
+             panel. It reads /api/hot-agent/search, which lists ONLY the turns the reader wrote to worker agents -
+             never an assistant manager turn, never an agent's reply - newest first, each row naming the agent, its
+             thread and the project tree it ran in. The popover, the keys and the scroller follow are the ones the
+             turn search beside it uses (public/core/search-popover.js, public/core/search-scroll.js), so the two
+             bars cannot drift. An empty box lists the most recent N turns; N is the Settings > Board row "Hot agent
+             list" (public/core/hot-agent-list.js, 20 unless the reader changed it). -->
+        <button type="button" class="ha-search-open" id="ha-search-open" aria-haspopup="dialog" aria-expanded="false" aria-controls="ha-search-pop" aria-label="Hot Agent search (Ctrl+Shift+Q)" title="Hot Agent search (Ctrl+Shift+Q): the turns you wrote to worker agents, newest first - never the assistant's own turns, never an agent reply">⚡</button>
         <span class="chips" id="as-chips"></span>
         <button id="btn-as-close" type="button" title="close (Esc) — it keeps watching while closed">✕</button>
       </div>
       <!-- The search results: one row per hit, drawn here and placed under the box by assistant.js. It is outside
            the bar so it can never add a line to the title row; the pane's overflow does not clip it (fixed). -->
       <div class="as-search-pop" id="as-search-pop" role="group" aria-label="search results" hidden></div>
+      <!-- ...and the Hot Agent search's popover, the same look and the same keys: a head carrying the box and its
+           count, the list the walk scrolls (its own element, so the head and the footer never scroll away), and a
+           footer that says what the list is. Placed under the button by assistant.js through the shared
+           search-popover module. -->
+      <div class="ha-search-pop" id="ha-search-pop" role="dialog" aria-label="hot agent search - the turns you wrote to agents" hidden>
+        <div class="ha-search-head">
+          <input id="ha-search-q" class="ha-search-q" type="search" placeholder="what you wrote to agents" aria-label="search the turns you wrote to worker agents - Ctrl+Shift+Q opens this box, * and ? are wildcards" title="Up and Down step one turn per press; Enter opens its card, Escape closes" autocomplete="off" spellcheck="false" />
+          <span class="as-search-n mono" id="ha-search-n" hidden></span>
+        </div>
+        <div class="ha-search-list" id="ha-search-list" role="group" aria-label="hot agent results"></div>
+        <div class="ha-search-more mono" id="ha-search-more"></div>
+      </div>
       <!-- The float's own row: the assistant sessions — each one a real agent thread of its own — and the three
            panes that belong to the PANEL rather than to one session: the ROLE library, the sentry's Watchdog, and
            the Matrix/Element BRIDGE (one agent, no worktree, no queue of its own). Everything that is about ONE
@@ -1150,6 +1183,18 @@
        Published on globalThis as `wtSearchScroll`; test/assistant-search-scroll.test.js imports this same file.
        Loaded before assistant.js, which calls it on every keyboard step. -->
   <script src="/core/search-scroll.js"></script>
+  <!-- The popover, the keyboard walk and the scroller follow, in ONE place for BOTH header searches: the assistant's
+       turn search (Ctrl+Q) and the Hot Agent search (Ctrl+Shift+Q) mount this module with their own readout and rows,
+       so the two bars cannot drift - the same keys, the same placement arithmetic, the same count's DOM and the same
+       follow through search-scroll.js. Published on globalThis as `wtSearchPopover`;
+       test/search-popover.test.js imports this same file. Loaded after search-scroll.js and search-dismiss.js (it
+       calls both), before assistant.js, which mounts two bars over it. -->
+  <script src="/core/search-popover.js"></script>
+  <!-- How many recent turns the Hot Agent search lists with an empty box: 20 unless the reader changed the Settings >
+       Board row, clamped to 1..100. The page sends it with every read and lib/hot-agent/search.js falls back to the
+       same number, so the two ends cannot disagree. Published on globalThis as `wtHotAgentList`;
+       test/hot-agent-search.test.js imports this same file. Loaded before assistant.js. -->
+  <script src="/core/hot-agent-list.js"></script>
   <!-- How fast a run's output reaches the reader's eyes: the word pacer (a paragraph typing out) and the line gate
        (whole lines walking into a console), both driven from app.js by the two Settings > Display rows. Published
        on globalThis as `wtType`; test/type-stream.test.js imports this same file. -->

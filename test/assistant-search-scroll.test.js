@@ -194,10 +194,17 @@ test("the keyboard step scrolls the popover, not the transcript", () => {
   assert.ok(movement.indexOf("if (!keepList) {") < movement.indexOf("scrollIntoView("), "and no reveal outside that block");
   assert.ok(movement.includes("window.scrollTo({ top: pageY })"), "the window is still put back where the reader had it");
   assert.ok(keepBody, "keepSearchRowVisible exists in public/assistant.js");
-  assert.match(keepBody, /as-search-pop/, "it reads the popover's own scroller");
-  assert.match(keepBody, /\[data-search-hit\]\.is-current/, "and the row the walk is standing on");
-  assert.match(keepBody, /wtSearchScroll/, "through the tested module, not a second copy of the arithmetic");
-  assert.match(keepBody, /\.place\(/, "place() is the call that moves it");
+  // The arithmetic MOVED into the shared popover module (public/core/search-popover.js), which both the turn search
+  // and the Hot Agent search mount, so these four read the module's `follow()` - the same assertions, at the one
+  // place the behaviour now lives - and the page is pinned to the module rather than to a copy of it.
+  const popover = readFileSync(new URL("../public/core/search-popover.js", import.meta.url), "utf8");
+  const followAt = popover.indexOf("function follow");
+  const followBody = followAt >= 0 ? popover.slice(followAt, popover.indexOf("function wire", followAt)) : "";
+  assert.ok(followBody, "follow() exists in public/core/search-popover.js");
+  assert.match(followBody, /rowAt\(\s*Number\(current\(\)\)\s*\)/, "it reads the row the walk is standing on");
+  assert.match(followBody, /wtSearchScroll/, "through the tested module, not a second copy of the arithmetic");
+  assert.match(followBody, /\.place\(list, row\)/, "place() is the call that moves the bar's own list");
+  assert.match(keepBody, /bar\.follow\(\)/, "and the page hands the press to that module's follow()");
 });
 
 test("the page loads the scroll module before the page that calls it", () => {
