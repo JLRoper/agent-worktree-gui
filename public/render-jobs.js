@@ -663,6 +663,16 @@ function scheduleRenderJobs() {
   });
 }
 
+// THE HOT AGENT LANDING'S ANCHOR. While the ring is on a turn, every render pass that has just re-placed the cards
+// asks the landing to re-aim, so a repaint that moves the card by a screenful is corrected in the same pass rather
+// than at the next 100ms sample - or not at all, once the ring's own window has closed. The landing clears the hook
+// when it stops, and the deadline is checked here too, so a stale hook can never outlive the ring.
+function reaimHotHit() {
+  const hit = state.haHit;
+  if (!hit || !hit.thread || !(Date.now() < hit.until)) return;
+  if (typeof globalThis.wtHotAim === "function") globalThis.wtHotAim();
+}
+
 function renderJobs() {
   // The reader's corner gesture is holding a console in the unattached list: this rebuild replaces every card in it,
   // and the box under their pointer with them. The release asks for the repaint back (public/app.js's endOutGrip).
@@ -750,6 +760,7 @@ function renderJobs() {
     // Their thinking blocks and any open picker have to be put back the way the row path does it: the blocks where the
     // reader had them, the picker under its control.
     settleScrolls($("jobs"));
+    reaimHotHit();
   }
   scheduleBoardSweep(anchor);
   const running = convs.filter((c) => c.turns.some((t) => turnLive(t))).length;
@@ -1048,6 +1059,7 @@ function renderConversation(thread, { scroll = false, card = null } = {}) {
     noteCardBodyScroll(body);
   }
   settleScrolls(fresh);
+  reaimHotHit();
   // A repaint replaces the card node, and the node that held the caret is gone with it — so a spawn
   // that asked for the reply box puts the caret back here, once the new card is in the document.
   applyPendingFocus();
