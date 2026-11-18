@@ -129,6 +129,40 @@ test("a paragraph still being typed holds the call that follows it, until its la
   assert.equal(hold.isHolding("job"), false);
 });
 
+test("a paragraph the wire ended with a space owes no word, so the call behind it streams at once", () => {
+  const { stream, step, clock } = clockwork(20); // twenty words a second
+  const busy = consoleBusy(stream, []);
+  const drawn = [];
+  const hold = holdFor(clock, busy, drawn);
+
+  // Every other fixture in this file ends on a word, which is why thirty-six tests could not see this. A real frame
+  // does not: the model wrote a sentence and then a space, and the call it decided on follows. advance() ends a
+  // release at the last character of the last WORD, so the trailing space is never shown, and the hold's question
+  // asked per character - "is anything unshown" - answers yes for ever about a space.
+  const SPACED = "the sentence is finished and the wire ended it with a space ";
+  stream.feed("41", "job", SPACED, { kind: "text", at: 2000, cap: true });
+  const spoken = SPACED.slice(0, -1);
+  for (let i = 0; i < 400 && stream.emitted("41") !== spoken; i++) step(20);
+  assert.equal(stream.emitted("41"), spoken, "every word is out; only the trailing space is left");
+  assert.equal(stream.pendingWords(), 0, "the clock owes no words at all");
+
+  // The call arrives with the paragraph's last word already out. Nothing in front of it is owed a WORD, so it must
+  // not be held: before the fix this push returns true and the turn hangs until the hold's own 60 s fence.
+  const call = { id: "job", line: { kind: "tool", text: "▸ terminal", lid: 941, at: 2001 } };
+  arrive(hold, drawn, call);
+  assert.deepEqual(drawn, ["▸ terminal"], "the card lands at once, with nothing queued behind it");
+  assert.equal(hold.queued(), 0);
+
+  // A paragraph AFTER it still types: the finished segment must not sit at the head of the queue for ever, which is
+  // what a character count makes it do - headPending() hands out the same one-char-short segment on every tick.
+  stream.feed("42", "job", "and this paragraph follows it", { kind: "text", at: 2002, cap: true });
+  for (let i = 0; i < 400 && stream.pendingWords() > 0; i++) step(20);
+  assert.equal(stream.emitted("42"), "and this paragraph follows it", "the head moved past the finished segment");
+
+  // And the clock is not left running on a space: the paragraph reads complete, not still being written.
+  assert.equal(stream.pending(), false, "the stream owes nothing and keeps no timer for it");
+});
+
 test("a late block ahead of a call already on screen cannot strand the hold", () => {
   const { stream, step, clock } = clockwork(20);
   const busy = consoleBusy(stream, []);
