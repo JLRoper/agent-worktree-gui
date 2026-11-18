@@ -1767,6 +1767,7 @@ function detailHtml(row) {
       </div>`
     : "";
   return `<tr class="detail" data-detail="${esc(key)}"><td colspan="${wtColspan()}"><div class="detail-inner">
+    ${reviewBlockHtml(row, key)}
     ${releaseBlock}
     ${descBlock}
     ${todoBlockHtml(row, key)}
@@ -1791,6 +1792,53 @@ function detailHtml(row) {
     ${agentsHtml}
     ${sessionsHtml}
   </div></td></tr>`;
+}
+
+// THE RESULT CARD. A row whose last run left something to check carries one: the one-line summary the run ended
+// with, the report it named as a real anchor through the panel's own open-file route, and its next steps as chips.
+//
+// WHO EMITS IT, AND WHEN. The PANEL, from the stored delivery (lib/review-inbox.js), every time the row's detail is
+// drawn - never the agent inside the run, and never at the run's own moment. That is what makes an unanswered card
+// free: the record is written after the run settled, and this card exists whether or not anybody ever presses
+// Reviewed. Nothing here waits, times out, or reports back to a run.
+//
+// The anchor carries the TREE as its base (the same `data-open-file-base` a clarify card carries), because the
+// report path is relative to the worktree the run worked in - resolved against the project's checkout it would name
+// a file that is not there.
+//
+// A delivery with no report and no steps still draws its card: the summary is the deliverable, and the card says so
+// in a sentence rather than leaving a blank space where a report would have been.
+function reviewBlockHtml(row, key) {
+  const rec = row && row.review;
+  if (!rec || !rec.summary) return "";
+  const awaiting = window.wtReviewLane ? window.wtReviewLane.awaiting(row) : !rec.reviewedAt;
+  const when = rec.at ? `${relTime(rec.at)} ago` : "";
+  const next = Array.isArray(rec.next) ? rec.next : [];
+  const anchor = rec.report
+    ? fileAnchor(rec.report, {
+        label: tailPath(rec.report),
+        base: row.path,
+        title: `open ${rec.report} in your browser - the report this run left, opened by the panel's own file route`,
+      }) || `<span class="review-path mono">${esc(rec.report)}</span>`
+    : `<span class="review-none">no report path - the summary above is the whole of what this run left</span>`;
+  const chipList = next.length
+    ? `<ul class="review-chips" aria-label="next steps this run named">${next.map((s) => `<li class="review-chip" title="${esc(s)}">${esc(s)}</li>`).join("")}</ul>`
+    : `<span class="review-none">no next steps were named</span>`;
+  return `<div class="review-block${awaiting ? " is-awaiting" : " is-reviewed"}" data-review-block="${esc(key)}">
+      <div class="review-head">
+        <span class="review-mark" role="img" aria-label="${esc(awaiting ? "result awaiting review" : "result reviewed")}" title="${esc(awaiting ? "result awaiting review" : "result reviewed")}">${awaiting ? "\u25a3" : "\u2713"}</span>
+        <h4>Result</h4>
+        <span class="review-summary">${esc(rec.summary)}</span>
+        <span class="review-when mono">${esc([when, rec.runId ? `run ${rec.runId}` : ""].filter(Boolean).join(" · "))}</span>
+        ${awaiting
+          ? `<button class="btn-review-done" type="button" data-review-done="${esc(key)}" data-review-project="${esc(row.project)}" data-review-path="${esc(row.path)}" title="mark this result reviewed - it leaves the review lane and the header count, and this card stays with what the run left">\u2713 Reviewed</button>`
+          : `<span class="review-stamp mono" title="you checked this result; the card stays so it is still readable">reviewed${rec.reviewedAt ? ` ${relTime(rec.reviewedAt)} ago` : ""}</span>`}
+      </div>
+      <div class="review-body">
+        <div class="review-anchor" data-review-anchor="${esc(key)}">${anchor}</div>
+        ${chipList}
+      </div>
+    </div>`;
 }
 
 // The refresh offer: the card the row's own refresh opens, and the wiring that keeps it under its row.

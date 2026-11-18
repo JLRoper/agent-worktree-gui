@@ -492,6 +492,12 @@ function applySnapshot(data) {
     }
   }
   reorderProjects();
+  // THE REVIEW LANE's header count, and - while its filter is on - the narrowed table itself. A delivery lands when a
+  // run settles and a row can be reviewed in another tab, so both facts have to reach this page without a press.
+  if (typeof paintReviewChip === "function") {
+    if (typeof reviewModeOn === "function" && reviewModeOn()) paintReviewTable();
+    else paintReviewChip();
+  }
   $("health").className = "dot ok";
   // A healthy snapshot clears a green confirmation (it was about one gesture, and the board is fine) but never a
   // red one: a failure is the reader's to dismiss with its ✕, and a poll every few seconds would wipe it before it

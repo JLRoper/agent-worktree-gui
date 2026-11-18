@@ -302,6 +302,10 @@ const state = {
   // job starting or finishing repaints the board once rather than once per event.
   focusMode: false,
   focusSig: "",
+  // The REVIEW lane's filter: true while the table is narrowed to the rows awaiting a review (the header's review
+  // count is what toggles it). It is a second narrowing beside focus mode and the chart's top N, and it overrides
+  // both - see tableHidesRow in the focus-mode section.
+  reviewMode: false,
   rowEls: new Map(),
   detailEls: new Map(),
   // The open "remove this worktree?" row, by row key. It lives in the table between the row and its
@@ -6007,6 +6011,9 @@ function tickApprovals() {
   // longer open, and a number that kept counting it would send the reader to a box that is over. One clock for
   // both, so nothing else has to remember to repaint it.
   paintHumanButton();
+  // The review count is the same kind of live fact: a delivery lands when a run settles, and a row reviewed in
+  // another tab or by the bulk press has to leave the count on this clock too.
+  paintReviewChip();
 }
 setInterval(tickApprovals, 1000);
 
@@ -11815,7 +11822,36 @@ function projectHasFocusRow(name, trees = null) {
 // the trees a live panel is working in, and a project left folded would hide the very rows the list exists to show.
 // This reads the two records and writes neither, so `expandedProjects` keeps the reader's own folds for the way out.
 function projectDrawsOpen(name) {
-  return state.expandedProjects.has(name) || (focusModeOn() && projectHasFocusRow(name));
+  return state.expandedProjects.has(name) || (focusModeOn() && projectHasFocusRow(name)) || (reviewModeOn() && projectHasReviewRow(name));
+}
+
+// ---- the review lane's filter --------------------------------------------------------------------------------
+// The header count filters the table to exactly the rows it counted. It is a second narrowing beside focus mode and
+// the chart's top N, and it OVERRIDES both: the lane's promise is "these rows, all of them", so an awaiting row that
+// the chart held back or focus mode hid is still drawn while the filter is on. Everything else is narrowed away.
+function reviewModeOn() {
+  return Boolean(state.reviewMode);
+}
+
+// A row the filter hides: any row that is not awaiting a check. When the filter is off nothing is hidden by it.
+function reviewHidesRow(row) {
+  return reviewModeOn() && !wtReviewLane.awaiting(row);
+}
+
+// A project belongs to the filtered table while at least one of its rows is awaiting, counted from state.rows rather
+// than from the document, so a folded project answers exactly like an open one.
+function projectHasReviewRow(name) {
+  for (const row of state.rows.values()) if (row.project === name && wtReviewLane.awaiting(row)) return true;
+  return false;
+}
+
+// THE ONE ANSWER to "does the table draw this row". Two narrowings, in a fixed order: the review filter wins when it
+// is on (and overrides the chart's hold and focus mode), and otherwise the chart's top N and focus mode decide. Both
+// places that build rows - placeRow and renderProjectRows - ask this, so an incremental paint and a full rebuild
+// cannot disagree about which rows are on screen.
+function tableHidesRow(row) {
+  if (reviewModeOn()) return !wtReviewLane.awaiting(row);
+  return rowTopHidden(row) || focusHidesRow(row);
 }
 
 // Is this row DRAWN open? While the mode is on no row is: the narrowed board is one line per live tree, and the
@@ -12827,6 +12863,9 @@ function humanQuestions() {
           turnId: t.id,
           agent: humanAgentName(c.thread),
           deadline: Number(ask?.deadline) || 0,
+          // The rotation's second key: oldest first inside a kind (public/core/review-lane.js `sortHuman`). A turn
+          // that has been parked longest is the one most likely to be the thing that is stuck.
+          sinceMs: Date.parse(t.startedAt || "") || 0,
         });
       }
     }
@@ -12840,6 +12879,7 @@ function humanQuestions() {
       thread: r.thread || null,
       agent: approvalAgentName(r),
       deadline: Number(r.deadline) || 0,
+      sinceMs: Number(r.receivedAt) || 0,
     })),
     ...[...state.rwPending.values()].filter(approvalLive).map((r) => ({
       kind: "write",
@@ -12849,10 +12889,165 @@ function humanQuestions() {
       thread: r.thread || null,
       agent: baseNameOf(r.worktree || "") || r.project || "a worktree",
       deadline: Number(r.deadline) || 0,
+      sinceMs: Number(r.receivedAt) || 0,
     })),
   ].sort((a, b) => (a.deadline > 0 ? a.deadline : Infinity) - (b.deadline > 0 ? b.deadline : Infinity));
-  return [...out, ...dock];
+  // THE THIRD KIND: rows whose result nobody has checked yet (lib/review-inbox.js). They are read from state.rows,
+  // the same list the board draws, so a row that was archived or deleted is not in the rotation at all - and one that
+  // has just been reviewed stops being in it the moment the snapshot lands, because `awaiting` reads the stamp.
+  out.push(...reviewRotationRows());
+  // Permissions first, then clarify questions, then rows to review, oldest first inside each kind. The order is the
+  // lane's own (public/core/review-lane.js `sortHuman`), not this function's, so the count, the title and the
+  // rotation cannot disagree about which kind a row is.
+  return wtReviewLane.sortHuman([...out, ...dock]);
 }
+
+// The review lane's share of the rotation: one entry per row awaiting a check, keyed by the row so the rotation's
+// own memory (state.human.key) survives a repaint. `path` is what the landing path opens with.
+function reviewRotationRows() {
+  const out = [];
+  for (const row of state.rows.values()) {
+    if (!wtReviewLane.awaiting(row)) continue;
+    out.push({
+      kind: "review",
+      review: true,
+      key: `review:${keyOf(row.project, row.path)}`,
+      rowKey: keyOf(row.project, row.path),
+      project: row.project,
+      path: row.path,
+      agent: row.name || row.project,
+      deadline: 0,
+      sinceMs: wtReviewLane.since(row),
+    });
+  }
+  return out;
+}
+
+// ---- the header's REVIEW control ----------------------------------------------------------------------------
+// One count of the rows awaiting review, and the filter that shows exactly those rows. The count is read from
+// state.rows through public/core/review-lane.js, the same list the table draws, so the number and the rows it filters
+// to are the same number by construction: a delivery whose tree was archived or deleted is not a row, and is not
+// counted here whatever the store still holds.
+//
+// ZERO IS QUIET, the same rule the Human badge has: no red badge, no amber, and a button that says the lane is empty
+// rather than one that looks broken.
+function paintReviewChip() {
+  const btn = $("btn-review");
+  if (!btn) return;
+  const n = wtReviewLane.count(state.rows.values());
+  const badge = $("review-badge");
+  const label = $("review-label");
+  const all = $("btn-review-all");
+  const on = reviewModeOn();
+  if (badge) {
+    badge.hidden = n === 0;
+    badge.textContent = String(n);
+  }
+  if (label) label.textContent = on ? `▣ Review ${n}` : "▣ Review";
+  btn.classList.toggle("has-review", n > 0);
+  btn.classList.toggle("is-on", on);
+  btn.setAttribute("aria-pressed", on ? "true" : "false");
+  btn.title = n
+    ? `Review — ${n} finished row${n === 1 ? "" : "s"} whose result you have not checked yet. ${on ? "The table is filtered to them now: click to show everything again." : "Click to filter the table to exactly these rows."} Each row carries an amber ▣ — not the yellow lock and not the blue turnover mark — with ✓ Reviewed beside it, and a result card under it: the run's one-line summary, the report it named as a real link, and its next steps as chips. Mark all reviewed clears the batch in one press. Press H to step into the oldest one.`
+    : `Review — nothing is waiting for a check: no finished row on this board has a result you have not seen${on ? ". The filter is on, so the table is showing nothing; click to show every row again." : "."} A row lands here when a run ends with something to read, and leaves when you press ✓ Reviewed.`;
+  if (all) {
+    all.hidden = !(on && n > 0);
+    all.textContent = `Mark all ${n} reviewed`;
+  }
+}
+
+// The filter's own repaint: a STRUCTURAL rebuild, because the narrowing is a property of each section too - a project
+// that holds none of the lane's rows goes quiet, and one the lane forces open has to be drawn open (its class comes
+// from projectDrawsOpen). An incremental row paint cannot change a fold, so this is the one path that rebuilds the
+// sections.
+function paintReviewTable() {
+  paintReviewChip();
+  renderAll();
+  reorderProjects();
+  renderJobs();
+  // The lane is the Human rotation's THIRD KIND, so a change to it is a change to that button's count and title: a
+  // reviewed press that left the red badge saying what it said a second earlier would be the panel claiming work that
+  // is gone. Cheap and idempotent - the button repaints from the same list this table was just narrowed by.
+  paintHumanButton();
+}
+
+function toggleReviewFilter() {
+  state.reviewMode = !state.reviewMode;
+  paintReviewTable();
+  const n = wtReviewLane.count(state.rows.values());
+  showBanner(
+    state.reviewMode
+      ? n
+        ? `Review: showing the ${n} row${n === 1 ? "" : "s"} awaiting a check — press H to step into one, or ✓ Reviewed to clear it`
+        : "Review: nothing is awaiting a check — the table is empty while the filter is on; click Review again for every row"
+      : "Review: every row is shown again",
+  );
+}
+
+$("btn-review")?.addEventListener("click", (e) => {
+  e.stopPropagation();
+  toggleReviewFilter();
+});
+
+$("btn-review-all")?.addEventListener("click", async (e) => {
+  e.stopPropagation();
+  await reviewPress({ op: "review-all" });
+});
+
+// One press, one route. `reviewed` clears the row it names; `review-all` clears the batch. Both answer with the new
+// count and the row itself, so a page whose socket is asleep still paints the truth from the answer.
+async function reviewPress({ op, path = null, project = null, key = null }) {
+  const body = { op };
+  if (path) body.path = path;
+  if (project) body.project = project;
+  try {
+    const r = await apiFetch("/api/review", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || d.ok === false) {
+      showBanner(`${op === "review-all" ? "Mark all reviewed" : "Reviewed"}: ${d.error || `HTTP ${r.status}`}`);
+      return false;
+    }
+    // THE ANSWER IS PAINTED AS WELL AS THE SNAPSHOT. The route sends the full snapshot to every page and this one
+    // also holds the row it just changed; painting both means a reader never sees the amber mark a second after
+    // pressing it, however the socket is behaving.
+    if (d.row && key) placeRow(project, { ...d.row, project, path: d.row.path || path });
+    else if (key) {
+      const row = state.rows.get(key);
+      if (row) {
+        // The row's own record is the delivery's home: stamp it here so the marker, the card and the count agree even
+        // before the snapshot arrives.
+        row.review = d.row || (row.review ? { ...row.review, reviewedAt: new Date().toISOString(), awaiting: false } : row.review);
+        placeRow(row.project, row);
+      }
+    }
+    paintReviewTable();
+    showBanner(d.message || (op === "review-all" ? "Marked reviewed" : "Reviewed"));
+    return true;
+  } catch (err) {
+    showBanner(`${op === "review-all" ? "Mark all reviewed" : "Reviewed"}: ${err.message || err}`);
+    return false;
+  }
+}
+
+document.addEventListener("click", async (e) => {
+  const done = e.target.closest("[data-review-done]");
+  if (!done) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const key = done.dataset.reviewDone;
+  const project = done.dataset.reviewProject || null;
+  const path = done.dataset.reviewPath || state.rows.get(key)?.path || null;
+  if (!path) return;
+  done.disabled = true;
+  const ok = await reviewPress({ op: "reviewed", path, project, key });
+  // A refused press must leave the button pressable: the row is still awaiting and the reader has to be able to ask
+  // again (the answer may have been a lock on the store, not a decision).
+  if (!ok && done.isConnected) done.disabled = false;
+});
 
 // The header control: one red count of everything waiting on a human, and a title that splits it. Zero questions
 // means no badge at all — a quiet button, not a broken one — and the count is repainted from live state on the
@@ -12861,37 +13056,47 @@ function paintHumanButton() {
   const btn = $("btn-human");
   if (!btn) return;
   const list = humanQuestions();
-  const perms = list.filter((q) => q.kind !== "question").length;
-  const asks = list.length - perms;
+  // THREE KINDS, one count. A permission and a clarify question are runs stopped until the reader answers; a row to
+  // review is work already finished that needs looking at. The badge is their sum and the title splits it, so a
+  // reader who sees "3" can tell whether it is three blocked runs or three results to read
+  // (public/core/review-lane.js `badge`).
+  const counts = wtReviewLane.badge(list);
+  const perms = counts.permissions;
+  const asks = counts.questions;
+  const reviews = counts.reviews;
   // How many of the open questions the panel has already asked again about. Not a second count on the
   // button — the button counts QUESTIONS, and a re-ask never adds one — it is said in the title so a
   // reader who has been away can tell "nobody answered" from "you were asked again and missed it".
   const repeats = list.filter((q) => Number(q.reasks) > 0).length;
-  const agents = [...new Set(list.map((q) => q.agent).filter(Boolean))];
+  // Only the AGENTS an answer is waiting on: a review row's name is a worktree, not an agent holding a question.
+  const agents = [...new Set(list.filter((q) => q.kind !== "review").map((q) => q.agent).filter(Boolean))];
   const at = state.human.key ? list.findIndex((q) => q.key === state.human.key) : -1;
   const label = $("human-label");
   const badge = $("human-badge");
-  const sig = `${list.length}|${perms}|${asks}|${repeats}|${agents.join(",")}|${at}`;
+  const sig = `${list.length}|${perms}|${asks}|${reviews}|${repeats}|${agents.join(",")}|${at}`;
   if (sig === state.human.sig) return;
   state.human.sig = sig;
   // The label is Title Case with a leading glyph, the way ✧ Assistant is — the button's word is its name, not a
   // shouted tag. The rotation counter keeps the same shape: `🙋 Human 2/3`.
   if (label) label.textContent = at >= 0 ? `🙋 Human ${at + 1}/${list.length}` : "🙋 Human";
   if (badge) {
+    // ZERO IS QUIET: no badge, no red, and a button that says why nothing is waiting rather than one that looks
+    // broken. It is the same rule the count has always had, now covering three kinds.
     badge.hidden = list.length === 0;
     badge.textContent = String(list.length);
   }
   btn.classList.toggle("has-questions", list.length > 0);
+  const split = `${perms} permission${perms === 1 ? "" : "s"}, ${asks} clarify question${asks === 1 ? "" : "s"}, ${reviews} to review`;
   btn.setAttribute(
     "aria-label",
     list.length
-      ? `Human — ${list.length} open question${list.length === 1 ? "" : "s"} waiting on you: ${perms} permission${perms === 1 ? "" : "s"}, ${asks} clarify question${asks === 1 ? "" : "s"}${repeats ? `, ${repeats} asked again` : ""}`
+      ? `Human — ${list.length} waiting on you: ${split}${repeats ? `, ${repeats} asked again` : ""}`
       : "Human — nothing is waiting on you",
   );
   const named = agents.length > 4 ? `${agents.slice(0, 4).join(", ")} and ${agents.length - 4} more` : agents.join(", ");
   btn.title = list.length
-    ? `Human — ${list.length} open question${list.length === 1 ? "" : "s"} waiting on you: ${perms} permission${perms === 1 ? "" : "s"}, ${asks} clarify question${asks === 1 ? "" : "s"}${named ? ` — held by ${named}` : ""}${repeats ? `. ${repeats} of them the panel has already asked again about (once an hour, on its own clock)` : ""}. Click or press H to step through them: each agent is opened, its prompt centred and flashed red, and its answer control focused. A question that is answered, expires or whose turn ends drops out.`
-    : "Human — nothing is waiting on you: no permission or clarify question is open on this board. Click or press H to check again.";
+    ? `Human — ${list.length} waiting on you: ${split}${named ? ` — questions held by ${named}` : ""}${repeats ? `. ${repeats} of them the panel has already asked again about (once an hour, on its own clock)` : ""}. Click or press H to step through them: a permission or a question opens its agent, centres its prompt and flashes it red with its answer control focused; a row to review opens the row, brings its report anchor and next steps into view and puts ✓ Reviewed under the caret, so one more press clears it. Anything answered, expired, reviewed, archived or deleted drops out.`
+    : "Human — nothing is waiting on you: no permission, clarify question or result to review is open on this board. Click or press H to check again.";
 }
 
 // Open exactly the path to one question and put it in front of the reader. A board question: its project and row
@@ -12901,6 +13106,10 @@ function paintHumanButton() {
 // focused. Returns false when the question can no longer be drawn — the caller steps on instead of opening a dead
 // agent.
 function humanShow(q) {
+  // A REVIEW ROW is the third kind: it has no turn, no card and no answer box, so it has its own landing path - the
+  // row opens, the amber marker, the report anchor and the next steps are brought into view, and ✓ Reviewed takes
+  // the caret so one more key clears it.
+  if (q.kind === "review") return humanShowReview(q);
   if (q.dock) return humanShowDock(q);
   const conv = conversations().find((c) => c.thread === q.thread);
   if (!conv) return false;
@@ -12936,6 +13145,49 @@ function humanShow(q) {
   }
   if (!card) return false;
   return humanLandOnQuestion(card, q);
+}
+
+// A ROW TO REVIEW, brought in front of the reader. The row opens (its project unfolded, the other projects folded -
+// hotOpenPath, the same opener the question path uses), then the result card is centred and flashed amber, and the
+// Reviewed control takes the caret so one more key clears the lane.
+//
+// Returns false when the row is no longer there or no longer awaiting: a row that was archived, deleted or reviewed
+// between the sample and the press is stepped over rather than opened onto nothing.
+function humanShowReview(q) {
+  const row = state.rows.get(q.rowKey);
+  if (!row || !wtReviewLane.awaiting(row)) return false;
+  hotOpenPath(row);
+  const key = q.rowKey;
+  let block = document.querySelector(`[data-review-block="${CSS.escape(key)}"]`);
+  if (!block) {
+    // The detail was not in the document yet (a row opened by this press paints on the next frame): place the row's
+    // own answer now rather than leaving the rotation with nothing to point at.
+    renderProjectRows(row.project);
+    block = document.querySelector(`[data-review-block="${CSS.escape(key)}"]`);
+  }
+  const target = block || document.querySelector(`tr.row[data-key="${CSS.escape(key)}"]`);
+  if (!target) return false;
+  programmaticScroll();
+  target.scrollIntoView({ block: "center", behavior: "smooth" });
+  for (const el of document.querySelectorAll(".human-flash")) el.classList.remove("human-flash");
+  target.classList.remove("human-flash");
+  void target.offsetWidth; // restart the ring on every hop, even while the last one is still fading
+  target.classList.add("human-flash");
+  clearTimeout(state.humanFlashTimer);
+  state.humanFlashTimer = setTimeout(() => {
+    for (const el of document.querySelectorAll(".human-flash")) el.classList.remove("human-flash");
+  }, 1900);
+  // THE CONTROL THE READER WOULD REACH FOR: ✓ Reviewed. The row's own button comes first in the document, so this is
+  // the one beside the amber marker; the card's copy is the same press and the same route.
+  const press = document.querySelector(`[data-review-done="${CSS.escape(key)}"]`);
+  if (press) {
+    try {
+      press.focus({ preventScroll: true });
+    } catch {
+      press.focus();
+    }
+  }
+  return true;
 }
 
 // The last step of every show path, board or float: find the box that carries the question on the card holding it,
