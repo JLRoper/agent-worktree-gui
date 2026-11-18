@@ -286,6 +286,11 @@ const state = {
   // stored — it is rebuilt from live state on every press, so an answered question cannot linger in it.
   human: { key: null, at: -1, sig: "" },
   humanFlashTimer: null,
+  // The HOT AGENTS marker's rotation: the agent the last press landed on, and the list signature that press last
+  // painted. The list itself is sampled on every paint (it is `state.jobs`, which the snapshot and every job frame
+  // keep current), so a turn that ends between two presses can never leave a stale entry behind - only the key is
+  // remembered, the same way the Human rotation remembers its question.
+  hot: { key: null, sig: "" },
   // The prompt a HUMAN hop just landed on, held for a beat so the repaint a row-opening causes puts the ring and
   // the caret back instead of dropping them: { thread, turnId, kind, until }.
   humanFocus: null,
@@ -6011,6 +6016,9 @@ function tickApprovals() {
   // longer open, and a number that kept counting it would send the reader to a box that is over. One clock for
   // both, so nothing else has to remember to repaint it.
   paintHumanButton();
+  // The HOT marker is a live fact of the same kind: a turn starts and stops on the gateway's own clock, and a bolt
+  // that waited for the next job frame would be drawn after the agent had already begun (or leave a finished one up).
+  paintHotButton();
   // The review count is the same kind of live fact: a delivery lands when a run settles, and a row reviewed in
   // another tab or by the bulk press has to leave the count on this clock too.
   paintReviewChip();
@@ -13373,6 +13381,85 @@ document.addEventListener("keydown", (e) => {
   if (humanTextEntry(document.activeElement)) return;
   e.preventDefault();
   humanStep();
+});
+
+// ---- the header's HOT AGENTS marker ---------------------------------------------------------------------------
+// One amber bolt that is DRAWN ONLY WHILE AN AGENT IS WORKING, and the press that lands on one. It is the other half
+// of the count beside it: the red Human badge is everything stopped until the reader answers, and this is everything
+// burning right now. The evidence is the page's own job list - `state.jobs`, filled by the snapshot and every job
+// frame, the same records the cards draw - read through public/core/hot-mark.js, so the bolt's existence, its count,
+// its tooltip and the press cannot disagree about which agent is hot.
+//
+// NOT A LOCK, NOT A TURNOVER MARK, NOT A SECOND REVIEW MARK. The row's yellow lock is a tree the reader pinned, the
+// blue turnover mark is a branch relationship, the amber ▣ is a result to read; this is none of them - it is a bolt
+// in the header, and its amber is the panel's own (#d29922), not the lock's #ffb454. A turn parked on a permission
+// or a question is deliberately NOT hot: that agent is waiting on the reader, and the red Human count is where it is
+// counted. One question never shows up in two places.
+function hotAgents() {
+  // A board agent, not the panel's own assistant: an assistant's turn has no worktree row and no card on this board,
+  // and the board's agents are who a bolt in the header is about (the same line the Hot Agent search draws).
+  const convs = conversations().filter((c) => !assistantSessionFor(c.thread));
+  return wtHotMark.agents(convs).map((a) => ({
+    ...a,
+    name: humanAgentName(a.thread),
+    // The tree it is working in, when the run was handed one: a run in a project's own checkout has no tree of its
+    // own, and naming the checkout would claim a worktree that was never cut.
+    where: baseNameOf(a.turn?.worktreePath || ""),
+  }));
+}
+
+function paintHotButton() {
+  const btn = $("btn-hot");
+  if (!btn) return;
+  const list = hotAgents();
+  const at = state.hot.key ? list.findIndex((a) => a.key === state.hot.key) : -1;
+  const sig = `${list.map((a) => a.key).join(",")}|${at}`;
+  if (sig === state.hot.sig) return;
+  state.hot.sig = sig;
+  // ZERO IS ABSENT. Every other header count is quiet at zero - a badge with no number, a button that says the lane
+  // is empty - but this marker IS the fact that an agent is hot: with none there is nothing to mark, and a grey bolt
+  // would be a claim about the board that is not true. So the button comes and goes with the work.
+  btn.hidden = list.length === 0;
+  const label = $("hot-label");
+  // The rotation counter keeps the shape Human's has (`🙋 Human 2/3`), and only while the press is inside the list.
+  if (label) label.textContent = at >= 0 ? `⚡ Hot ${at + 1}/${list.length}` : "⚡ Hot";
+  const badge = $("hot-badge");
+  if (badge) {
+    badge.hidden = list.length === 0;
+    badge.textContent = String(list.length);
+  }
+  btn.classList.toggle("is-hot", list.length > 0);
+  btn.setAttribute("aria-label", list.length ? `Hot Agents - ${list.length} working right now` : "Hot Agents - nothing is working right now");
+  btn.title = wtHotMark.title(list);
+}
+
+// One press: the next hot agent, wrapping past the last one, landed on the way the dock's own cards are - unfold the
+// row, then jump to the card and flash it (public/app.js `revealAgentHome` -> `jumpToAgent`). The list is sampled
+// here and not kept: the key and the list are re-read on every press, so an agent that finished between two presses
+// hands the press to the one after it instead of opening a card that has stopped.
+function hotStep() {
+  const list = hotAgents();
+  if (!list.length) {
+    state.hot.key = null;
+    state.hot.sig = "";
+    paintHotButton();
+    showBanner("Hot Agents: no agent is working right now");
+    return;
+  }
+  const next = wtHotMark.step(list, state.hot.key);
+  if (!next) return;
+  state.hot.key = next.key;
+  state.hot.sig = "";
+  paintHotButton();
+  revealAgentHome(next.thread);
+  showBanner(
+    `Hot Agents: ${list.length === 1 ? "1 agent is" : `${list.length} agents are`} working - landing on ${next.name}${next.where ? ` in ${next.where}` : ""}`,
+  );
+}
+
+$("btn-hot")?.addEventListener("click", (e) => {
+  e.stopPropagation();
+  hotStep();
 });
 
 document.addEventListener("keydown", (e) => {

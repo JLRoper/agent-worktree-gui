@@ -142,6 +142,25 @@ body.focus-mode .topbar {
 }
 #human-badge[hidden] { display: none; }
 
+/* HOT AGENTS: the bolt that is drawn only while an agent is working. It is the other half of the Human count read
+   beside it - amber for an agent burning right now, red on Human for one stopped until you answer - so the colour is
+   the panel's own amber (#d29922 / #f0c674), never the yellow lock's #ffb454 in a row's name line and never the
+   turnover mark's blue-violet. `is-hot` is the state, the way `has-questions` is Human's, and the button exists at
+   all only while one agent is hot: zero is not a quiet control here, it is no control (public/app.js
+   paintHotButton). The `[hidden]` rule is explicit because this button's own display would otherwise beat the
+   attribute and a dead bolt would sit in the header at rest. */
+#btn-hot { display: inline-flex; align-items: center; gap: 6px; }
+#btn-hot[hidden] { display: none; }
+#btn-hot.is-hot { border-color: #4d3d12; background: var(--amber-bg); color: #f0c674; }
+#btn-hot.is-hot:hover { border-color: #6b531b; background: #332a14; color: #ffd479; }
+#hot-badge {
+  display: inline-block; min-width: 17px; height: 17px; padding: 0 4px;
+  border-radius: 9px; background: var(--amber); color: #1a1408;
+  font: 700 10.5px/17px var(--ui); text-align: center;
+  box-shadow: 0 0 0 1px #d2992255;
+}
+#hot-badge[hidden] { display: none; }
+
 /* DELIVERABLES: every thing an agent handed back, in one list. A quiet header button while there is nothing new —
    this is an archive, not a queue — and it carries a count ONLY for what arrived above the reader's watermark, never
    everything ever delivered. `has-unseen` is the highlight, a class on the button (no inline style, so the pressed

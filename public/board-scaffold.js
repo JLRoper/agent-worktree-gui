@@ -259,6 +259,9 @@ function repaintAgentState() {
   // A job that started, stopped or parked changes the HUMAN rotation's own list, and the count on its button is
   // how the reader notices a question without looking for it — so it is repainted with the rest of the state.
   paintHumanButton();
+  // The HOT AGENTS bolt is drawn from the same list and by the same rule: a turn starting or stopping is exactly
+  // when the marker has to appear or go, and this is the seam every turn change already passes through.
+  paintHotButton();
   // Focus mode draws only the trees a live panel is working in, so a turn starting or stopping moves the board
   // itself. `repaintFocus` repaints only when that set actually changed (app.js owns the predicate).
   if (typeof repaintFocus === "function") repaintFocus();
