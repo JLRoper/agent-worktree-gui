@@ -1811,7 +1811,7 @@ function detailHtml(row) {
 function reviewBlockHtml(row, key) {
   const rec = row && row.review;
   if (!rec || !rec.summary) return "";
-  const awaiting = window.wtReviewLane ? window.wtReviewLane.awaiting(row) : !rec.reviewedAt;
+  const awaiting = typeof wtReviewLane !== "undefined" && wtReviewLane ? wtReviewLane.awaiting(row) : !rec.reviewedAt;
   const when = rec.at ? `${relTime(rec.at)} ago` : "";
   const next = Array.isArray(rec.next) ? rec.next : [];
   const anchor = rec.report

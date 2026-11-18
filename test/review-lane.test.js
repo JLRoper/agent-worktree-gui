@@ -159,7 +159,7 @@ test("the count filters the table, and the filter overrides the chart's hold and
   // Both row builders ask the one answer: an incremental paint and a full rebuild cannot disagree.
   assert.match(rowsSrc, /if \(tableHidesRow\(row\)\) \{/);
   assert.match(rowsSrc, /const laneOrder = reviewModeOn\(\)/);
-  assert.match(rowsSrc, /\.filter\(\(r\) => r\.project === name && wtReviewLane\.awaiting\(r\)\)/);
+  assert.match(rowsSrc, /\.filter\(\(r\) => r\.project === name && typeof wtReviewLane !== "undefined" && wtReviewLane && wtReviewLane\.awaiting\(r\)\)/);
   // And a lane project is drawn open, so a folded project cannot hide a row the count promised.
   assert.match(app, /projectDrawsOpen\(name\)[\s\S]{0,200}reviewModeOn\(\) && projectHasReviewRow\(name\)/);
 });
@@ -174,7 +174,7 @@ test("the row carries an amber mark and a Reviewed press, distinct from the lock
   const name = sliceBetween(rowsSrc, 'name: `<td class="name"', "// Same rule for the branch");
   assert.match(name, /\$\{turnoverRowMarkHtml\(row\)\}\$\{reviewRowMarkHtml\(row\)\}/);
   // The row's own <tr> says it too, at rest, without a tooltip being opened.
-  assert.match(rowsSrc, /wtReviewLane\?\.awaiting\(row\) \? " has-review" : ""/);
+  assert.match(rowsSrc, /typeof wtReviewLane !== "undefined" && wtReviewLane\.awaiting\(row\) \? " has-review" : ""/);
   assert.match(read("public/style.css"), /tr\.row\.has-review \{/);
 });
 
