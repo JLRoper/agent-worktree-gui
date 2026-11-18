@@ -4,16 +4,35 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.115.1 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.115.2 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-629 releases from v0.1.0 (2026-10-20) to v1.115.1 (2026-11-18), 2148 commits between the tags. Every release is anchored by an
+630 releases from v0.1.0 (2026-10-20) to v1.115.2 (2026-11-18), 2154 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.115.2 — 2026-11-18 · 6 commits
+
+[`dd298a6`](https://github.com/JLRoper/agent-worktree-gui/commit/dd298a662f65a8b72ba7510e94183dfa67a73e99) · [compare v1.115.1...v1.115.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.115.1...v1.115.2)
+
+### Fixed
+
+- fix(console): the hold counts owed words, not characters ([`158a5e9`](https://github.com/JLRoper/agent-worktree-gui/commit/158a5e9518c38e816cc395e5c885af69828a0bd0))
+
+### Docs & tests
+
+- docs: render the changelog - 629 releases ([`bf66fb8`](https://github.com/JLRoper/agent-worktree-gui/commit/bf66fb818a21373625dfa080e2bd91cd4775475e))
+- docs: the landing note for 1.115.0 and 1.115.1 - the Hot Agent search, and the landing it had to hold ([`ee8b4f7`](https://github.com/JLRoper/agent-worktree-gui/commit/ee8b4f77b92cacc018675ef8f80ba14e86595510))
+- test(console): measure what the console holds, not only what it draws ([`a57d497`](https://github.com/JLRoper/agent-worktree-gui/commit/a57d49749b8267f409d46b5f5b6ae6ad4b8fdc52))
+- docs(console): the page's own comment says the hold waits on a word ([`25190bd`](https://github.com/JLRoper/agent-worktree-gui/commit/25190bd8bfdf8ac82987beb63fb742410fcd2176))
+
+### Other
+
+- chore: 1.115.2 - the version this landing carries ([`dd298a6`](https://github.com/JLRoper/agent-worktree-gui/commit/dd298a662f65a8b72ba7510e94183dfa67a73e99))
 
 ## v1.115.1 — 2026-11-18 · 3 commits
 
