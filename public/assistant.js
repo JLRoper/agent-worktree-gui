@@ -1553,25 +1553,54 @@
     // there now, every 100ms, until three samples in a row have it still and inside the viewport - and stops at the
     // ring's own window regardless, so nothing outlives the ring and the page is never pulled from a reader who has
     // started scrolling it.
-    let calm = 0;
-    let prevTop = null;
+    // A reader who has started moving the page themselves owns it: the loop stops on their first wheel, touch or
+    // navigation key rather than pulling the page back under them.
+    let readerMoved = false;
+    const handOver = () => {
+      readerMoved = true;
+    };
+    const NAV = new Set(["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "]);
+    const onKey = (e) => {
+      if (NAV.has(e.key)) readerMoved = true;
+    };
+    globalThis.addEventListener?.("wheel", handOver, { passive: true, once: true });
+    globalThis.addEventListener?.("touchstart", handOver, { passive: true, once: true });
+    globalThis.addEventListener?.("keydown", onKey, { passive: true });
+    const stopWatching = () => {
+      globalThis.removeEventListener?.("wheel", handOver);
+      globalThis.removeEventListener?.("touchstart", handOver);
+      globalThis.removeEventListener?.("keydown", onKey);
+      if (globalThis.wtHotAim === aim) delete globalThis.wtHotAim;
+    };
+    // The card is looked up EVERY time: the board repaints on its poll, so the node found a moment ago is gone by
+    // the next sample, and giving up on the first miss was the one way the landing could leave the reader at the top
+    // of a page with the ringed turn a screenful away. A miss is not an answer - it is a reason to look again.
     const aim = () => {
+      if (readerMoved || Date.now() >= until) {
+        stopWatching();
+        return true;
+      }
       const live = document.querySelector(`.job[data-thread="${CSS.escape(hit.thread)}"]`);
       const node = live?.querySelector(`[data-turn="${CSS.escape(hit.id)}"]`) || live;
-      if (!node) return true;
-      const r = node.getBoundingClientRect();
-      const inside = r.top >= 0 && r.bottom <= (window.innerHeight || 0);
-      calm = inside && prevTop !== null && Math.abs(r.top - prevTop) <= 2 ? calm + 1 : 0;
-      prevTop = r.top;
-      if (!inside && Date.now() < until) node.scrollIntoView({ block: "center" });
-      return calm >= 3 || Date.now() >= until;
+      if (node) {
+        const r = node.getBoundingClientRect();
+        const inside = r.top >= 0 && r.bottom <= (globalThis.innerHeight || 0);
+        if (!inside) node.scrollIntoView({ block: "center" });
+      }
+      return false;
     };
+    // Every render pass asks for a re-aim while the ring is live (render-jobs.js reaimHotHit), which is what makes a
+    // repaint that moves the card a correction in the same frame instead of a jump the reader has to find.
+    globalThis.wtHotAim = aim;
     if (!aim()) {
       const timer = setInterval(() => {
         if (aim()) clearInterval(timer);
       }, 100);
       // A hard stop of its own: a card that never settles must not leave an interval running behind the panel.
-      setTimeout(() => clearInterval(timer), 3000);
+      setTimeout(() => {
+        clearInterval(timer);
+        stopWatching();
+      }, 3000);
     }
     return true;
   }

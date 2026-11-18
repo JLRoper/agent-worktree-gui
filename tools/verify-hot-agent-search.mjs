@@ -341,34 +341,57 @@ try {
         target,
         { timeout: 10000 },
       );
-      const landedY = await settle();
+      // The flash is 1.3 s and the ring 2.6 s, so they are read at the moment each one is due: the flash with the
+      // ring (right after the render that draws both), the geometry after the page has been re-aimed. Reading them
+      // together made the flash assertion depend on how long the landing took, which is not what it is pinning.
+      const readLanding = (thread) =>
+        page.evaluate((th) => {
+          const card = document.querySelector(`.job[data-thread="${CSS.escape(th)}"]`);
+          const turn = card?.querySelector(".turn.ha-hit") || null;
+          const tr = turn ? turn.getBoundingClientRect() : null;
+          const cr = card ? card.getBoundingClientRect() : null;
+          return {
+            card: Boolean(card),
+            ring: Boolean(turn),
+            ringTurn: turn?.dataset.turn || null,
+            flipped: Boolean(card && card.classList.contains("hot-flash")),
+            onScreen: Boolean(tr && tr.top < window.innerHeight && tr.bottom > 0),
+            rect: tr ? { top: Math.round(tr.top), bottom: Math.round(tr.bottom), h: Math.round(tr.height), wh: window.innerHeight } : null,
+            cardRect: cr ? { top: Math.round(cr.top), bottom: Math.round(cr.bottom), h: Math.round(cr.height) } : null,
+            elapsed: Date.now() - (globalThis.__t0 || Date.now()),
+            flash: (() => { try { return JSON.stringify(state.hotFlash); } catch { return "?"; } })(),
+            popHidden: document.getElementById("ha-search-pop").hidden,
+            expanded: document.getElementById("ha-search-open").getAttribute("aria-expanded"),
+            focusButton: document.activeElement === document.getElementById("ha-search-open"),
+          };
+        }, thread);
+      const early = await readLanding(target);
+      v.ok("Enter closes the list", early.popHidden === true, `hidden ${early.popHidden}`);
+      v.ok("the header button collapses with it", early.expanded === "false", String(early.expanded));
+      v.ok("the turn's own card is on the board", early.card === true, `thread ${target}`);
+      v.ok("the turn itself wears the ring", early.ring === true && early.ringTurn === target.replace("wtgui-hot-agent-", "hot-"), JSON.stringify({ ring: early.ring, turn: early.ringTurn }));
+      v.ok("the card wears the board's own flash", early.flipped === true, `hot-flash ${early.flipped} at ${early.elapsed}ms`);
+      v.ok("focus is back on the button, so the next press is one keystroke away", early.focusButton === true, `focus button ${early.focusButton}`);
 
-      const landed = await page.evaluate((thread) => {
-        const card = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`);
-        const turn = card?.querySelector(".turn.ha-hit") || null;
-        const tr = turn ? turn.getBoundingClientRect() : null;
-        return {
-          card: Boolean(card),
-          ring: Boolean(turn),
-          ringTurn: turn?.dataset.turn || null,
-          flipped: Boolean(card && card.classList.contains("hot-flash")),
-          onScreen: Boolean(tr && tr.top < window.innerHeight && tr.bottom > 0),
-          rect: tr ? { top: Math.round(tr.top), bottom: Math.round(tr.bottom), h: Math.round(tr.height), wh: window.innerHeight } : null,
-          cardRect: (() => { const c = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`); const r = c ? c.getBoundingClientRect() : null; return r ? { top: Math.round(r.top), bottom: Math.round(r.bottom), h: Math.round(r.height) } : null; })(),
-          elapsed: Date.now() - (globalThis.__t0 || Date.now()),
-          flash: (() => { try { return JSON.stringify(state.hotFlash); } catch { return "?"; } })(),
-          popHidden: document.getElementById("ha-search-pop").hidden,
-          expanded: document.getElementById("ha-search-open").getAttribute("aria-expanded"),
-          focusButton: document.activeElement === document.getElementById("ha-search-open"),
-        };
-      }, target);
-      v.ok("Enter closes the list", landed.popHidden === true, `hidden ${landed.popHidden}`);
-      v.ok("the header button collapses with it", landed.expanded === "false", String(landed.expanded));
-      v.ok("the turn's own card is on the board", landed.card === true, `thread ${target}`);
-      v.ok("the turn itself wears the ring", landed.ring === true && landed.ringTurn === target.replace("wtgui-hot-agent-", "hot-"), JSON.stringify({ ring: landed.ring, turn: landed.ringTurn }));
-      v.ok("the card wears the board's own flash", landed.flipped === true, `hot-flash ${landed.flipped}`);
+      // The page is re-aimed while the board settles, for the ring's own window: wait inside that window for the turn
+      // to be in view rather than sampling once and racing the paint. The assertion still judges the outcome - a
+      // landing that never arrives fails at 2.6 s.
+      await page
+        .waitForFunction(
+          (thread) => {
+            const card = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`);
+            const turn = card ? card.querySelector(".turn.ha-hit") : null;
+            if (!turn) return false;
+            const r = turn.getBoundingClientRect();
+            return r.top >= 0 && r.bottom <= window.innerHeight;
+          },
+          target,
+          { timeout: 2600 },
+        )
+        .catch(() => {});
+      const landedY = await settle();
+      const landed = await readLanding(target);
       v.ok("the turn is on screen", landed.onScreen === true, JSON.stringify({ turn: landed.rect, card: landed.cardRect }));
-      v.ok("focus is back on the button, so the next press is one keystroke away", landed.focusButton === true, `focus button ${landed.focusButton}`);
       record.steps.push({ step: "enter", target, ...landed });
       await shoot("04-enter-on-the-turn");
 

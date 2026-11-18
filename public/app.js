@@ -12730,18 +12730,22 @@ function hotOpenPath(row) {
 // The whole card flashes, not just the box: the rotation moves the reader's attention to a panel, and a ring
 // around the panel is what says "this one". The caret still lands in the prompt's answer control.
 function flashHotCard(thread) {
-  const card = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`);
-  if (!card) return;
+  // STATE FIRST, THE NODE SECOND. The renderer stamps `hot-flash` from state.hotFlash on every pass (render-jobs.js
+  // jobHtml), so a card the board has not placed yet - or has just replaced under the reader - still flashes when it
+  // is drawn. Setting the state only after finding the node made the flash depend on that lookup winning a race with
+  // a repaint, and the losing case was a landing that rang the turn with no flash at all.
   const until = Date.now() + 1300;
   state.hotFlash = { thread, until };
-  card.classList.remove("hot-flash");
-  void card.offsetWidth; // restart it even when the last flash is still fading
-  card.classList.add("hot-flash");
   clearTimeout(state.hotFlashTimer);
   state.hotFlashTimer = setTimeout(() => {
     state.hotFlash = { thread: null, until: 0 };
     document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`)?.classList.remove("hot-flash");
   }, 1300);
+  const card = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`);
+  if (!card) return;
+  card.classList.remove("hot-flash");
+  void card.offsetWidth; // restart it even when the last flash is still fading
+  card.classList.add("hot-flash");
 }
 
 // ---- HUMAN (the question rotation) -----------------------------------------------------------
