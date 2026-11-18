@@ -2408,6 +2408,108 @@ tr.row:hover .btn-row-lock { opacity: .85; }
    column without any tooltip being opened. */
 tr.row.is-locked td.name .row-name { color: #e8c07a; }
 tr.row.is-locked { box-shadow: inset 2px 0 0 #6b5324; }
+/* THE AMBER REVIEW MARK, and the press that clears it. A third row mark, deliberately unlike the other two: the lock
+   is the yellow 🔒 (an emoji, a state the reader sets), the turnover mark is a blue ⇄ (a branch relationship), and
+   this one is an AMBER ▣ - a filled square with a corner cut (a box to tick), its own colour, its own class. It sits
+   after both in the name line, so a row carrying all three reads left to right: name, lock, branch, review.
+   Amber (#ffb454) is used by nothing else in the name line: the lock's amber is the text colour of a LOCKED row and
+   the emoji itself, never a glyph in this family, so the two cannot be confused at a glance. */
+.review-mark {
+  flex: none;
+  margin-left: 3px;
+  font: 11px/1 var(--term);
+  color: #ffb454;
+  vertical-align: 1px;
+  cursor: help;
+}
+.btn-review-done {
+  border: 1px solid #6b4b1c;
+  background: #2a2110;
+  border-radius: 4px;
+  color: #ffca7a;
+  font: 10px/1.5 var(--term);
+  padding: 0 5px;
+  margin-left: 4px;
+  cursor: pointer;
+  vertical-align: 1px;
+  white-space: nowrap;
+}
+.btn-review-done:hover { background: #3a2c14; border-color: #a5762a; color: #ffe2ae; }
+.btn-review-done:focus-visible { outline: 2px solid #ffb454; outline-offset: 1px; }
+.btn-review-done:disabled { opacity: .45; cursor: progress; }
+/* A row carrying an unconsumed result is marked at rest, not only on hover: the lane exists so a finished row cannot
+   be forgotten, and a marker that appears on hover is a marker nobody sees. */
+tr.row.has-review { box-shadow: inset 2px 0 0 #7a5a1e; }
+
+/* The header's review count and its bulk press. Quiet at zero (no badge, no amber) and unmistakable above it. */
+.btn-review { position: relative; }
+.btn-review.has-review { border-color: #6b4b1c; color: #ffca7a; }
+.btn-review.is-on { background: #2a2110; border-color: #a5762a; color: #ffe2ae; box-shadow: inset 0 0 0 1px #a5762a; }
+#review-badge {
+  display: inline-block;
+  min-width: 16px;
+  margin-left: 5px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #ffb454;
+  color: #1a1408;
+  font: 600 10px/16px var(--term);
+  text-align: center;
+}
+#review-badge[hidden] { display: none; }
+.btn-review-all {
+  border: 1px solid #6b4b1c;
+  background: #2a2110;
+  border-radius: 6px;
+  color: #ffca7a;
+  font: 11px/1.6 var(--sans, var(--term));
+  padding: 0 8px;
+  cursor: pointer;
+}
+.btn-review-all:hover { background: #3a2c14; border-color: #a5762a; }
+.btn-review-all[hidden] { display: none; }
+
+/* THE RESULT CARD, under a finished row: the run's one-line summary, the report as a real anchor, and the next steps
+   as chips. Not folded - it is the thing the lane brought the reader here to read - and its own amber edge says the
+   same thing the row's ▣ says. */
+.review-block {
+  margin: 6px 0 8px;
+  border: 1px solid #4a3a18;
+  border-left: 3px solid #ffb454;
+  border-radius: 6px;
+  background: #1c1810;
+  padding: 6px 10px 8px;
+}
+.review-block.is-reviewed { border-left-color: #3c6b46; background: #141a15; border-color: #2a4432; }
+.review-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.review-head .review-mark { margin-left: 0; font-size: 12px; }
+.review-block.is-reviewed .review-head .review-mark { color: #7fd39a; }
+.review-head h4 { margin: 0; font: 600 11px/1.6 var(--sans, var(--term)); text-transform: uppercase; letter-spacing: .05em; color: #ffca7a; }
+.review-block.is-reviewed .review-head h4 { color: #9fe0b4; }
+.review-summary { font: 12px/1.6 var(--sans, var(--term)); color: #f0e6d2; }
+.review-when { margin-left: auto; font-size: 10px; color: var(--dimmer); }
+.review-stamp { font-size: 10px; color: #9fe0b4; border: 1px solid #2a4432; border-radius: 999px; padding: 0 6px; }
+.review-body { margin-top: 5px; display: flex; flex-direction: column; gap: 5px; }
+.review-anchor { font: 11px/1.7 var(--term); }
+.review-anchor .out-file { color: #8fd3ff; text-decoration: underline dotted; }
+.review-none { font-size: 11px; color: var(--dimmer); font-style: italic; }
+.review-path { color: var(--dim); }
+/* The next steps, as chips: one per line the run put under its "Next steps" heading, capped at four by the stores so
+   a long list can never push the agents below the fold. */
+.review-chips { list-style: none; display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; }
+.review-chip {
+  border: 1px solid #3b3322;
+  background: #262117;
+  border-radius: 999px;
+  padding: 1px 8px;
+  font: 11px/1.6 var(--term);
+  color: #e4d8bd;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.review-chip::before { content: "→ "; color: #a5762a; }
 /* The refusal shown in place of the delete question. Same row chrome, in the lock's ink rather than the delete's red,
    because nothing was deleted and the answer is "unlock it first", not "are you sure". */
 tr.row-confirm.row-locked td { background: #1b170d; border-top-color: #6b5324; border-bottom-color: #6b5324; color: #f0e0b8; }

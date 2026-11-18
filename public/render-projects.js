@@ -804,7 +804,7 @@ function rowHtml(row, forceOwner = false) {
     // value instead of the fragment the selection covers. It is NOT `data-copy`, which is the console's block-lift
     // attribute and would grow a ⧉ button inside the cell.
     name: `<td class="name" data-copy-value="${esc(shownName)}"><div class="name-line"><span class="row-lead"></span><button class="btn-row-agent" data-agent-path="${esc(row.path)}" data-agent-name="${esc(row.name)}" data-agent-project="${esc(row.project)}"
-      title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">\u25b6</button><span class="row-name${onTurnoverBranch ? " is-turnover" : ""}"${onTurnoverBranch ? ' style="color:var(--blue)"' : ""} title="${esc(row.path)}">${esc(shownName)}</span>${renameBtn}${treeLockBtn}${turnoverRowMarkHtml(row)}${agentBadgeHtml(row)}</div></td>`,
+      title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">\u25b6</button><span class="row-name${onTurnoverBranch ? " is-turnover" : ""}"${onTurnoverBranch ? ' style="color:var(--blue)"' : ""} title="${esc(row.path)}">${esc(shownName)}</span>${renameBtn}${treeLockBtn}${turnoverRowMarkHtml(row)}${reviewRowMarkHtml(row)}${agentBadgeHtml(row)}</div></td>`,
     // Same rule for the branch, whose whole column is one ellipsis (chart.css line 83). The cell also holds the
     // remote link, a `local` chip and the branch's padlock, so the value is the branch itself, never the cell's text.
     branch: `<td class="mono branch" data-copy-value="${esc(row.branch || "")}">${branchCellHtml(row)}${branchLockBtn}</td>`,
@@ -822,7 +822,7 @@ function rowHtml(row, forceOwner = false) {
     verdict: `<td class="verdict">${badge}</td>`,
     actions: `<td class="row-actions">${isProjectRoot ? "" : `${childBtn}<button class="btn-refresh-tree" data-refresh-tree="${esc(delKey)}" type="button" title="reconcile this one worktree — re-read its git state (dirty, ahead/behind, cherry, verdict, PR), then check its TODO list against what the tree now contains (a proposal, nothing closed) and its description, re-derived only if it has gone stale; every action is journalled under the row">\u27f3</button><button class="btn-del-tree${delDirect ? " is-direct" : ""}" data-del-tree="${esc(delKey)}" title="${delDirect ? "this worktree is merged and clean — deletes it straight away, its files go to the Recycle Bin and git's record is pruned" : "remove this worktree — asks first; its files go to the Recycle Bin and git's record of it is pruned"}">✕</button>`}</td>`,
   };
-  return `<tr class="row${isOpen ? " expanded" : ""}${lock ? " is-locked" : ""}" data-key="${esc(keyOf(row.project, row.path))}">
+  return `<tr class="row${isOpen ? " expanded" : ""}${lock ? " is-locked" : ""}${window.wtReviewLane?.awaiting(row) ? " has-review" : ""}" data-key="${esc(keyOf(row.project, row.path))}">
     ${shownColumns(forceOwner).map((i) => cells[CHART_COLUMNS[i].id]).join("\n    ")}
   </tr>`;
 }
@@ -846,6 +846,27 @@ function isTurnoverBranchRow(row) {
 function turnoverRowMarkHtml(row) {
   if (!isTurnoverBranchRow(row)) return "";
   return `<span class="turnover-mark" role="img" aria-label="${esc(TURNOVER_ROW_SAY)}" title="${esc(TURNOVER_ROW_SAY)}">\u21c4</span>`;
+}
+
+// THE AMBER REVIEW MARK, and the one press that clears it. A row is marked while its last run left something to
+// check (lib/review-inbox.js), and the mark means exactly that: "this row has a result you have not looked at".
+//
+// IT IS NOT THE OTHER TWO. The yellow 🔒 beside it is the reader's lock ("nothing may delete this tree"), and the
+// blue ⇄ is the turnover branch ("children are cut from here"). Neither reads the other's state and neither borrows
+// the other's shape or colour: this one is an amber ▣ (a filled square, the shape of a box to tick), its own class,
+// its own tooltip, and its own aria-label. A row can carry it with either, both or neither.
+//
+// The button sits on the row rather than inside the card on purpose: the lane's promise is that a finished result
+// cannot be forgotten, and a control that costs a click to reveal is a control the reader skips. It is also the
+// element the Human rotation lands on, so H then Enter clears one without a mouse.
+function reviewRowMarkHtml(row) {
+  const rec = row?.review;
+  if (!rec || !rec.summary) return "";
+  const awaiting = window.wtReviewLane ? window.wtReviewLane.awaiting(row) : !rec.reviewedAt;
+  if (!awaiting) return "";
+  const say = window.wtReviewLane ? window.wtReviewLane.markerTitle(row) : `result to review - ${rec.summary}`;
+  const press = "mark this result reviewed - it leaves the review lane and the header count, and the card stays here with what the run left";
+  return `<span class="review-mark" role="img" aria-label="${esc(say)}" title="${esc(say)}">\u25a3</span><button class="btn-review-done" type="button" data-review-done="${esc(keyOf(row.project, row.path))}" data-review-project="${esc(row.project)}" data-review-path="${esc(row.path)}" title="${esc(press)}">\u2713 Reviewed</button>`;
 }
 
 // ---- the age column: last life seen, plus a ring that fills toward the next read --------------
@@ -1331,7 +1352,7 @@ function placeRow(project, row, { flash = false } = {}) {
   // whose tree has no live panel (public/app.js's focusHidesRow). The state, the chips and the agents still know the
   // row (they always did; only the drawing is narrowed), and a newer activity can have changed either answer since the
   // last paint - so the row has to leave the DOM here rather than wait for the next full rebuild of the project.
-  if (rowTopHidden(row) || focusHidesRow(row)) {
+  if (tableHidesRow(row)) {
     const gone = state.rowEls.get(key);
     if (gone) {
       state.detailEls.get(key)?.remove();
@@ -1545,7 +1566,15 @@ function renderProjectRows(name, { typing = null } = {}) {
   // Rows below the chart's top N are not built at all: the chart draws what it is showing, and the arrow in the
   // legend below it is what brings the rest back, in the same order they were chosen (see rowTopHidden). The ranking
   // above still sees them, so a row that comes back to life takes its place in the order the moment it is drawn again.
-  const rowsInOrder = chartDrawOrder(name).filter((r) => !focusHidesRow(r));
+  // THE REVIEW FILTER replaces the order outright: every awaiting row of this project, oldest first, whether or not
+  // the chart was holding it back or focus mode hid it. That is what "filters the table to exactly those rows" has to
+  // mean - a counted row the reader cannot see would be a count that lied.
+  const laneOrder = reviewModeOn()
+    ? [...state.rows.values()]
+        .filter((r) => r.project === name && wtReviewLane.awaiting(r))
+        .sort((a, b) => wtReviewLane.since(a) - wtReviewLane.since(b))
+    : null;
+  const rowsInOrder = laneOrder || chartDrawOrder(name).filter((r) => !focusHidesRow(r));
   if (stabilizeOn() && projectHasOpenRow(name) && prevRowKeys.length) {
     const pos = new Map(prevRowKeys.map((k, i) => [k, i]));
     rowsInOrder.sort(
