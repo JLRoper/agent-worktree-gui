@@ -335,6 +335,28 @@ test("only what is ahead holds a frame: later, another job, behind the caller's 
 
 // ---- the words themselves ---------------------------------------------------------------------
 
+test("a segment owes a WORD, not a character: a trailing space is already complete", () => {
+  const b = bench({ words: 10 });
+  b.pacer.feed("51", "job", "one two three ", { kind: "text", at: 2000 });
+  assert.equal(b.pacer.pendingBefore("job", 3000), true, "while a word is still owed, the frame in front waits");
+  b.step(400);
+  assert.equal(b.pacer.emitted("51"), "one two three", "the last word is out; the space after it is not a word");
+  assert.equal(b.pacer.pendingWords(), 0, "the clock owes no words");
+  assert.equal(b.pacer.pendingBefore("job", 3000), false, "so nothing stands in front of the call any more");
+  assert.equal(b.pacer.pendingFor("job"), false, "and no segment of this job is still being written");
+  assert.equal(b.pacer.pending(), false, "the clock has nothing left to spend");
+});
+
+test("a frame that is nothing but whitespace is complete on arrival and never strands the queue", () => {
+  const b = bench({ words: 10 });
+  b.pacer.feed("52", "job", " ", { kind: "text", at: 2000 });
+  b.pacer.feed("53", "job", "the words after it", { kind: "text", at: 2001 });
+  b.step(1200);
+  assert.equal(b.pacer.emitted("52"), "", "a space is not a word, so nothing is drawn for it");
+  assert.equal(b.pacer.emitted("53"), "the words after it", "and it does not stand at the head of the queue");
+  assert.equal(b.pacer.pendingBefore("job", 3000), false, "a call stamped after both is held by neither");
+});
+
 test("wordsIn and advance agree about where a word ends", () => {
   assert.equal(wordsIn("one two three"), 3);
   assert.equal(wordsIn("  one  two  "), 2);

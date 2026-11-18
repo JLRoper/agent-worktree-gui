@@ -159,6 +159,13 @@
     const stats = { enqueued: 0, emitted: 0, rewrites: 0, replaced: 0, late: 0, ticks: 0, paints: 0, capped: 0 };
 
     const restOf = (s) => wordsIn(s.text, s.shown);
+    // Is this segment still OWED a word? `shown` can stop one character short of `text.length`, and for ever: advance()
+    // ends a release at the last character of the last WORD, so the space a frame ends on is never shown. A character
+    // count reads that leftover as work the stream still owes - so the hold waits on a space it can never release, the
+    // queue hands out the same segment on every tick and nothing behind it is typed, and the clock never stops. The
+    // reader's question is about WORDS: a segment is complete when it owes no word, whatever whitespace trails it.
+    // forgetOldest() has always used this rule; the hold, the head and the pending answers use it too now.
+    const owesWord = (s) => restOf(s) > 0;
     // How far behind the wire the QUEUE may be, in words. Paced reveal is for prose arriving at readable speed; a
     // burst - ten whole lines of a paragraph each, a result's whole head, one frame carrying a document - is one
     // queue, and every line in it can be under any per-line cap while the reader waits seconds for the console to
@@ -190,7 +197,7 @@
     // converted once instead of counting words on every tick.
     const CAP_CHARS = 6;
     const pendingAny = () => {
-      for (const s of queue) if (s.shown < s.text.length) return true;
+      for (const s of queue) if (owesWord(s)) return true;
       return false;
     };
     const tickMs = () => Math.max(MIN_TICK_MS, Math.min(250, Math.round(1000 / Math.max(0.5, rate))));
@@ -249,9 +256,10 @@
     }
 
     // The earliest segment with words left to show. Everything in front of it has caught up with the text it has,
-    // which is exactly "the reader has seen everything that comes before this".
+    // which is exactly "the reader has seen everything that comes before this". A segment that owes no word - one
+    // whose remaining text is the whitespace advance() stops short of - is one of those, not a head to wait behind.
     function headPending() {
-      for (const s of queue) if (s.shown < s.text.length) return s;
+      for (const s of queue) if (owesWord(s)) return s;
       return null;
     }
 
@@ -480,7 +488,7 @@
     function pendingFor(job, test) {
       const id = String(job ?? "");
       for (const s of queue) {
-        if (s.job !== id || s.shown >= s.text.length) continue;
+        if (s.job !== id || !owesWord(s)) continue;
         if (!test || test(s.key)) return true;
       }
       return false;
@@ -495,6 +503,11 @@
      * earlier, or stamped the same millisecond (it was already here), stands in front. Whether that segment is a
      * paragraph of the agent's words, a reasoning block or one line of a skill's result makes no difference: if it is
      * still being written, the frame is not drawn yet.
+     *
+     * STILL BEING WRITTEN means it owes a WORD, never a character. advance() ends a release at the last character of
+     * the last word, so a frame that ends in a space keeps that space unshown for ever; counted per character it reads
+     * as work in front of the call, and the hold waits on a space it can never release until its own fence lets the
+     * turn go. A segment whose remaining text is whitespace is complete, and holds nothing (owesWord).
      *
      * `from` is the caller's statement about its own transcript: the stamp of the newest line it has already DRAWN.
      * A segment at or behind that stamp cannot be in front of a frame the caller is about to append - the console
@@ -514,7 +527,7 @@
         if (s.job !== id) continue;
         if (s.at > stamp) break; // the queue is in (at, seq) order: nothing later for this job is in front
         if (s.at <= since) continue;
-        if (s.shown < s.text.length) return true;
+        if (owesWord(s)) return true;
       }
       return false;
     }
