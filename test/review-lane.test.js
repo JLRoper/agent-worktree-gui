@@ -33,7 +33,7 @@ const lane = globalThis.wtReviewLane;
 
 const row = (over = {}) => ({
   project: "proj",
-  path: "C:/p/tree",
+  path: "p/tree",
   ...over,
   review: { summary: "a result", report: null, next: [], at: "2026-11-18T10:00:00.000Z", reviewedAt: null, ...(over.review || {}) },
 });
@@ -53,8 +53,8 @@ test("count is over ROWS, so a stale entry for a gone tree cannot inflate the ba
   const rows = new Map([
     ["a", row()],
     ["b", reviewed()],
-    ["c", row({ path: "C:/p/other" })],
-    ["d", { path: "C:/p/plain" }],
+    ["c", row({ path: "p/other" })],
+    ["d", { path: "p/plain" }],
   ]);
   assert.equal(lane.count(rows.values()), 2);
   assert.equal(lane.count([]), 0);
@@ -62,7 +62,7 @@ test("count is over ROWS, so a stale entry for a gone tree cannot inflate the ba
   // The rows the filter keeps are exactly the rows the count counted.
   const kept = [...rows.values()].filter((r) => lane.keeps(r, true));
   assert.equal(kept.length, lane.count(rows.values()));
-  assert.deepEqual(kept.map((r) => r.path), ["C:/p/tree", "C:/p/other"]);
+  assert.deepEqual(kept.map((r) => r.path), ["p/tree", "p/other"]);
 });
 
 test("the filter keeps everything when it is off, and exactly the lane when it is on", () => {
