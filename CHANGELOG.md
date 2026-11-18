@@ -4,16 +4,39 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.115.2 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.116.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-630 releases from v0.1.0 (2026-10-20) to v1.115.2 (2026-11-18), 2154 commits between the tags. Every release is anchored by an
+631 releases from v0.1.0 (2026-10-20) to v1.116.0 (2026-11-18), 2161 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.116.0 — 2026-11-18 · 7 commits
+
+[`c687b03`](https://github.com/JLRoper/agent-worktree-gui/commit/c687b0385c123216339395bb6dc1e30faf614639) · [compare v1.115.2...v1.116.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.115.2...v1.116.0)
+
+### Added
+
+- feat(review): the delivery store and the settle seam ([`785cdf2`](https://github.com/JLRoper/agent-worktree-gui/commit/785cdf20e16f3b828536668ebb68fd620697f187))
+- feat(review): the amber mark, the count, the card and the Human rotation's third kind ([`8923667`](https://github.com/JLRoper/agent-worktree-gui/commit/8923667f86ad30da1f68ecf93c07a9e7b540b86a))
+
+### Fixed
+
+- fix(review): read the lane through typeof at every call site ([`fd23eec`](https://github.com/JLRoper/agent-worktree-gui/commit/fd23eec23a6c622d399e9ce5418f23a6b29cb010))
+- fix(test): the lane's fixtures name a temp tree, not this machine's folder ([`5b99eee`](https://github.com/JLRoper/agent-worktree-gui/commit/5b99eee0535167b3fced50c35c503c12908e5d60))
+
+### Docs & tests
+
+- docs: render the changelog - 630 releases ([`a888448`](https://github.com/JLRoper/agent-worktree-gui/commit/a888448f5f26f20462198835c63f1badd9c546b0))
+- docs: the landing note for 1.115.2 - the hold counts owed words, not characters ([`c024f6e`](https://github.com/JLRoper/agent-worktree-gui/commit/c024f6e7bcbee0745653f3fa61a8063f094d3770))
+
+### Other
+
+- chore: 1.116.0 - the version this landing carries ([`c687b03`](https://github.com/JLRoper/agent-worktree-gui/commit/c687b0385c123216339395bb6dc1e30faf614639))
 
 ## v1.115.2 — 2026-11-18 · 6 commits
 
