@@ -653,6 +653,36 @@
   let searchOut = null;
   let searchShownQuery = "";
   let searchScope = "all";
+  // The popover, the keyboard walk and the scroller follow are ONE module for BOTH header searches
+  // (public/core/search-popover.js). This bar supplies the hits, the readout and the rows; the module owns the
+  // element's life, its placement, the keys, the count's DOM, which row is current and the follow through
+  // public/core/search-scroll.js. Mounted on the first `wireSearch()` (the nodes exist by then) and kept.
+  let mountedSearchBar = null;
+  function searchBar() {
+    if (mountedSearchBar) return mountedSearchBar;
+    const mod = globalThis.wtSearchPopover;
+    const input = as$("as-search-q");
+    const pop = as$("as-search-pop");
+    if (!mod || typeof mod.mount !== "function" || !input || !pop) return null;
+    mountedSearchBar = mod.mount({
+      input,
+      pop,
+      count: as$("as-search-n"),
+      // The whole `.as-search` span, not the input: the popover aligns with the control the reader sees, which is
+      // what this bar has always used.
+      anchor: as$("as-search"),
+      readout: searchReadout,
+      current: () => searchHitAt,
+      onStep: stepSearch,
+      onOpen: openCurrentSearchHit,
+      onEscape: escapeSearch,
+      onDismiss: dismissSearch,
+      onType: () => armSearch(),
+      onPick: (at) => revealSearchHit(at),
+    });
+    return mountedSearchBar;
+  }
+
   // One readout, one source. `searchReadout` is the ONLY place the header and the footer get their numbers:
   // public/core/search-count.js turns the rows the box steps plus the server's own counts into the header text
   // ("2 of 5"), the footer text ("5 hits matched, 5 displayed, in 1 turn") and the title. A page that counted the
@@ -660,9 +690,12 @@
   // `searchHits`, and the turn count is secondary text the footer carries.
   function searchReadout() {
     const out = searchOut || {};
+    const query = String(out.query || "");
     const mod = globalThis.wtSearchCount;
     if (mod && typeof mod.readout === "function") {
-      return mod.readout({ hits: searchHits, matched: out.matched, turns: out.turns, at: searchHitAt });
+      // The count is hidden until a filter exists - "0 of 0" beside an empty box is noise - and the MODULE paints
+      // that visibility from this flag, so the bar keeps its own rule while the writing lives in one place.
+      return { ...mod.readout({ hits: searchHits, matched: out.matched, turns: out.turns, at: searchHitAt }), query, hidden: !query };
     }
     // A page that did not load the module still draws its counts rather than nothing: the numbers are the same
     // arithmetic, minus the module's wording. It is a degraded path, not a second source the page may choose.
@@ -679,6 +712,8 @@
       text: `${current} of ${total}`,
       foot: `${matched} ${matched === 1 ? "hit" : "hits"} matched, ${total} displayed`,
       title: "Up and Down step one match per press, Enter opens the turn it is in",
+      query,
+      hidden: !query,
     };
   }
 
@@ -689,28 +724,24 @@
   function paintSearchCount() {
     const el = as$("as-search-n");
     if (!el) return;
-    const query = searchOut ? String(searchOut.query || "") : "";
+    const bar = searchBar();
+    if (bar) {
+      bar.paintCount();
+      return;
+    }
+    // The module missing is a build error, not a state to design for; the count still paints from the same readout.
     const c = searchReadout();
     el.dataset.searchCurrent = String(c.current);
     el.dataset.searchTotal = String(c.total);
     el.dataset.searchMatched = String(c.matched);
     el.dataset.searchDisplayed = String(c.displayed);
     el.dataset.searchTurns = String(c.turns);
-    // The query this count belongs to. A slow answer for `app` must not be read as the answer for `app.js` - the
-    // sequence guard already drops it, and this makes the box's state legible to anything watching (and to the
-    // verify script, which waits on it rather than on a sleep).
-    el.dataset.searchQuery = query;
-    if (!query) {
-      el.hidden = true;
-      el.textContent = "";
-      el.removeAttribute("title");
-      el.classList.remove("is-capped");
-      return;
-    }
-    el.hidden = false;
-    el.textContent = c.text;
-    el.classList.toggle("is-capped", c.capped);
-    el.title = c.title;
+    el.dataset.searchQuery = String(c.query || "");
+    el.hidden = Boolean(c.hidden);
+    el.textContent = c.hidden ? "" : c.text;
+    el.classList.toggle("is-capped", Boolean(c.capped));
+    if (c.title) el.title = c.title;
+    else el.removeAttribute("title");
   }
 
   // One result row: where the hit is (the reader's input, the reply, or the console line's own kind) and a one-line
@@ -752,10 +783,14 @@
   function renderSearchPop(out) {
     const pop = as$("as-search-pop");
     if (!pop) return;
+    const bar = searchBar();
     const hits = searchHits;
     if (!out || !out.matched || !hits.length) {
-      pop.hidden = true;
-      pop.innerHTML = "";
+      if (bar) bar.hide();
+      else {
+        pop.hidden = true;
+        pop.innerHTML = "";
+      }
       return;
     }
     // The footer is the readout's own sentence, so it cannot print a total the header contradicts: the header's
@@ -783,26 +818,22 @@
       if (at !== hits.length) parts.length = 0;
     }
     if (!parts.length) for (let i = 0; i < hits.length; i += 1) parts.push(searchHitHtml(hits[i], i, 0));
-    pop.innerHTML = parts.join("") + foot;
-    pop.hidden = false;
-    placeSearchPop();
+    if (bar) bar.show(parts.join("") + foot);
+    else {
+      pop.innerHTML = parts.join("") + foot;
+      pop.hidden = false;
+      placeSearchPop();
+    }
   }
 
   // Under the box, right edges aligned and never off the screen: the rail hugs the window's right edge and the
-  // popover is wider than the box, so it grows leftwards.
+  // popover is wider than the box, so it grows leftwards. The arithmetic is public/core/search-popover.js's
+  // `placeGeometry`, one pure function both header searches use; this keeps the old read of the two nodes for a page
+  // that did not load the module.
   function placeSearchPop() {
-    const pop = as$("as-search-pop");
-    const box = as$("as-search");
-    if (!pop || !box || pop.hidden) return;
-    const r = box.getBoundingClientRect();
-    const width = Math.min(380, Math.max(250, r.width + 140));
-    const right = Math.min(window.innerWidth - 8, Math.max(8, r.right));
-    const left = Math.max(8, right - width);
-    const top = Math.round(r.bottom + 6);
-    pop.style.width = `${width}px`;
-    pop.style.left = `${left}px`;
-    pop.style.top = `${top}px`;
-    pop.style.maxHeight = `${Math.max(120, Math.min(window.innerHeight * 0.42, window.innerHeight - top - 12))}px`;
+    const bar = searchBar();
+    if (bar) return bar.place();
+    return null;
   }
 
   function clearSearchMarks() {
@@ -827,8 +858,12 @@
     }
     const pop = as$("as-search-pop");
     if (pop) {
-      pop.hidden = true;
-      pop.innerHTML = "";
+      const bar = searchBar();
+      if (bar) bar.hide();
+      else {
+        pop.hidden = true;
+        pop.innerHTML = "";
+      }
     }
     clearSearchMarks();
     paintSearchCurrent();
@@ -1011,15 +1046,9 @@
     for (const el of document.querySelectorAll(".turn.is-search-current")) el.classList.remove("is-search-current");
     for (const mark of document.querySelectorAll("mark.as-search-mark.is-current")) mark.classList.remove("is-current");
     for (const row of document.querySelectorAll(".is-search-current-row")) row.classList.remove("is-search-current-row");
-    const pop = as$("as-search-pop");
-    if (pop) {
-      for (const row of pop.querySelectorAll("[data-search-hit]")) {
-        const on = searchHitAt >= 0 && Number(row.dataset.searchHit) === searchHitAt;
-        row.classList.toggle("is-current", on);
-        if (on) row.setAttribute("aria-current", "true");
-        else row.removeAttribute("aria-current");
-      }
-    }
+    // Which row of the LIST is current: the shared module marks it (`.is-current` plus aria-current) from the
+    // `current` accessor this bar supplied, so the assistant's list and the Hot Agent list mark rows the same way.
+    searchBar()?.markCurrent();
     const hit = searchHits[searchHitAt];
     if (!hit) return null;
     const turnEl = turnElementFor(hit);
@@ -1043,13 +1072,9 @@
   // is public/core/search-scroll.js, which is a pure function with a test; this reads the two nodes and hands them
   // over. It moves the popover and nothing else: no transcript, no page, no focus, no height.
   function keepSearchRowVisible() {
-    const pop = as$("as-search-pop");
-    if (!pop || pop.hidden) return null;
-    const row = pop.querySelector("[data-search-hit].is-current");
-    if (!row) return null;
-    const scroll = globalThis.wtSearchScroll;
-    if (!scroll || typeof scroll.place !== "function") return null;
-    return scroll.place(pop, row);
+    const bar = searchBar();
+    if (bar) return bar.follow();
+    return null;
   }
 
   // ONE MATCH, in front of the reader: the assistant whose turn it is, the page that turn lives on (through the same
@@ -1073,7 +1098,11 @@
     // Enter and a click open the turn: the popover gets out of its way (the count beside the box carries the
     // reader's place, and a new answer brings the list back). A keyboard STEP keeps it, footer and all.
     const pop = as$("as-search-pop");
-    if (pop && !keepList) pop.hidden = true;
+    if (pop && !keepList) {
+      const bar = searchBar();
+      if (bar) bar.hide();
+      else pop.hidden = true;
+    }
     const turnEl = turnElementFor(hit);
     if (!turnEl) {
       paintSearchCount();
@@ -1210,33 +1239,12 @@
   function wireSearch() {
     const input = as$("as-search-q");
     if (!input) return;
-    input.addEventListener("input", () => armSearch());
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-        // Down steps forward, Up steps back, and Shift reverses either - four keys, one walk. preventDefault on
-        // every one of them is the promise that a press never scrolls the page instead of stepping: the box is a
-        // text input, and the browser's ArrowUp/ArrowDown default is the page's scroll.
-        e.preventDefault();
-        const forward = e.key === "ArrowDown" && !e.shiftKey;
-        stepSearch(forward ? 1 : -1);
-        return;
-      }
-      if (e.key === "Enter") {
-        e.preventDefault();
-        // Shift+Enter is the third way back (docs/assistant-search-keys.md names all three); plain Enter keeps
-        // today's jump into the turn the current match lives in.
-        if (e.shiftKey) stepSearch(-1);
-        else openCurrentSearchHit();
-        return;
-      }
-      if (e.key === "Escape") {
-        // The rail's own Escape closes the whole panel; a reader clearing the box means the box, not the panel.
-        e.preventDefault();
-        e.stopPropagation();
-        escapeSearch();
-        return;
-      }
-    });
+    // The input, the keys, the popover's own Escape, a result press, the place-on-resize/scroll and the mousedown
+    // dismissal are all the shared module's (public/core/search-popover.js), mounted here with this bar's callbacks.
+    // The scope chip is this bar's own control and stays below.
+    const bar = searchBar();
+    if (!bar) return;
+    bar.wire();
     const scope = as$("as-search-scope");
     scope?.addEventListener("click", (e) => {
       searchScope = searchScope === "input" ? "all" : "input";
@@ -1251,37 +1259,401 @@
         runSearch();
       }
     });
-    as$("as-search-pop")?.addEventListener("click", (e) => {
-      const row = e.target.closest?.("[data-search-hit]");
-      if (row) revealSearchHit(Number(row.dataset.searchHit));
+  }
+
+  // ---- the Hot Agent search: the turns the READER wrote to worker agents, beside the turn search ---------------
+  //
+  // WHAT IT LISTS, and why the page does not filter. `/api/hot-agent/search` (routes/hot-agent-search.js over
+  // lib/hot-agent/search.js) answers only the turns the reader wrote to worker agents, read from the panel's job
+  // store: an assistant manager turn, an agent's own reply and a turn the assistant started on a worker's behalf are
+  // excluded THERE, so this bar cannot draw a row the server refused. An empty box is a real read - the most recent N
+  // turns - with N from public/core/hot-agent-list.js, the number the Settings > Board row writes.
+  //
+  // NEWEST FIRST is the server's order (startedAt, then the turn counter, then the id, so a tie is stable) and the
+  // page does not re-sort: a Down walks down the clock, which is the direction a reader browses a store in. The row
+  // names the AGENT (its label or its session title, the thread id when it has neither), the THREAD and the PROJECT
+  // TREE it ran in; Enter lands on the turn's own card in the board.
+  //
+  // THE LIST IS THE SAME COMPONENT as the turn search beside it: public/core/search-popover.js supplies the popover,
+  // the keys, the count's DOM, which row is current and the follow through public/core/search-scroll.js, so the row
+  // the keyboard stands on stays inside the list's own scroller (the head and the footer do not scroll). The bar
+  // supplies the hits, the readout wording and the row markup - nothing else.
+  const HOT_AGENT_DEBOUNCE = 180;
+  let hotHits = [];
+  let hotOut = null;
+  let hotAt = -1;
+  let hotShownQuery = "";
+  let hotSeq = 0;
+  let hotTimer = null;
+  let mountedHotBar = null;
+
+  // The list's size, as this browser holds it: the module's read is the same default and clamp the server falls back
+  // to (lib/hot-agent/search.js imports the identical file), so a Settings row and a request cannot disagree.
+  function hotLimit() {
+    const mod = globalThis.wtHotAgentList;
+    if (mod && typeof mod.read === "function") return mod.read(window.localStorage);
+    return 20;
+  }
+
+  function hotBar() {
+    if (mountedHotBar) return mountedHotBar;
+    const mod = globalThis.wtSearchPopover;
+    const input = as$("ha-search-q");
+    const pop = as$("ha-search-pop");
+    if (!mod || typeof mod.mount !== "function" || !input || !pop) return null;
+    mountedHotBar = mod.mount({
+      input,
+      pop,
+      // The popover has a permanent head (the box) and a footer, so the LIST is the scroller the walk follows.
+      scroller: as$("ha-search-list"),
+      count: as$("ha-search-n"),
+      anchor: as$("ha-search-open"),
+      readout: hotReadout,
+      current: () => hotAt,
+      onStep: hotStep,
+      onOpen: hotEnter,
+      onEscape: hotEscape,
+      onDismiss: hotDismiss,
+      onType: () => hotArm(),
+      onPick: (at) => openHotAt(at),
+      // The assistant's popover opens under a box in the rail's title row; this one opens under a 90px button, so it
+      // starts wider than the assistant's 250px floor and grows leftwards by the same rule.
+      placeOptions: { minWidth: 330, widthCap: 420 },
     });
-    as$("as-search-pop")?.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") {
-        // Same promise as the box's own Escape: the filter goes and the caret lands in the box, ready for the next.
-        e.preventDefault();
-        e.stopPropagation();
-        escapeSearch();
-      }
-    });
-    // The popover is placed in viewport coordinates, so a resize or a scroll of the page moves the box: re-place
-    // rather than leave it pointing at where the row used to be. The rail's own scroll does not move a fixed row.
-    window.addEventListener("resize", placeSearchPop);
-    window.addEventListener("scroll", placeSearchPop, { passive: true, capture: true });
-    // A mousedown anywhere outside the box and the list closes the list: the transcript below it, another pane of
-    // this float, the board. `mousedown`, not `click`, so a drag that STARTS inside the results is not a dismissal,
-    // and capture phase, so the decision is made before a handler that might rebuild the pane under it. The predicate
-    // is public/core/search-dismiss.js, which knows the two protected zones and nothing else.
-    document.addEventListener(
-      "mousedown",
-      (e) => {
-        const pop = as$("as-search-pop");
-        if (!pop || pop.hidden) return;
-        const mod = globalThis.wtSearchDismiss;
-        if (!mod || typeof mod.outside !== "function") return;
-        if (mod.outside(e.target, { input: as$("as-search-q"), pop })) dismissSearch();
-      },
-      true,
+    return mountedHotBar;
+  }
+
+  // The one readout both the count header and the footer are drawn from. The assistant's wording is its own
+  // (public/core/search-count.js); this bar's wording is its own too, while the walk's arithmetic stays shared: a
+  // press goes through `wtSearchCount.step`, whose wrap is the same rule at both ends.
+  function hotReadout() {
+    const query = String(hotOut?.query || "");
+    const total = hotHits.length;
+    const matched = hotOut ? Number(hotOut.matched) || 0 : 0;
+    const current = total ? Math.min(total, Math.max(1, hotAt + 1)) : 0;
+    // A cap is a cap whichever question was asked: more turns answered than are on hand. The filter says so in the
+    // footer's first clause, the empty box in its second - and both flag it, so the amber means one thing.
+    const capped = matched > total;
+    if (query) {
+      return {
+        query,
+        hidden: false,
+        current,
+        total,
+        matched,
+        displayed: total,
+        turns: total,
+        capped,
+        text: total ? `${current} of ${total}` : "0 of 0",
+        foot: `${matched} ${matched === 1 ? "turn" : "turns"} matched, ${total} displayed, newest first`,
+        title: `${matched} ${matched === 1 ? "turn" : "turns"} you wrote to worker agents match this filter - Up and Down step one turn per press, Enter opens its card`,
+      };
+    }
+    // The empty box is not a filter: the list IS the newest N, so the count reads as a size and the footer says how
+    // many the store holds when that is more.
+    return {
+      query: "",
+      hidden: false,
+      current,
+      total,
+      matched: Math.max(matched, total),
+      displayed: total,
+      turns: total,
+      capped,
+      // The count's TEXT: the size while the reader is standing on the first row, the position once a press has moved
+      // them. A browsing list that counts nothing would leave the reader with no way back to "where am I", and the
+      // size is the right answer exactly once - when the list opens.
+      text: hotAt > 0 ? `${current} of ${total}` : `${total} ${total === 1 ? "turn" : "turns"}`,
+      foot: total
+        ? `${capped ? `${total} of ${matched} turns, ` : `${total} ${total === 1 ? "turn" : "turns"}, `}newest first, every tree`
+        : "no turn you wrote to an agent is in the store yet",
+      title: `the ${total} most recent turns you wrote to worker agents, newest first - type to filter, Up and Down step one turn, Enter opens its card`,
+    };
+  }
+
+  // One turn: the agent (loud), the tree and the age, then the project and the thread on their own quiet line, then a
+  // one-line window with the match marked. The three names the brief asks for are all on the row, and the tree's PATH
+  // rides the tooltip rather than a fourth line.
+  function hotRowHtml(hit, index) {
+    const current = index === hotAt;
+    const lead = hit.lead ? "..." : "";
+    const tail = hit.tail ? "..." : "";
+    const marked = hit.hit ? `<mark class="as-search-mark">${esc(hit.hit)}</mark>` : "";
+    const tree = String(hit.tree || "");
+    const meta = [tree, searchAge(hit.at)].filter(Boolean).join(" - ");
+    const project = String(hit.project || "") && hit.project !== tree ? hit.project : "";
+    // The thread is named unless the agent IS its thread id (a job with no session title), because printing the
+    // same string on two lines of one row spends the row's height to say nothing twice.
+    const named = String(hit.agent || "").trim();
+    const thread = named && named === String(hit.thread || "").trim() ? "" : `thread ${hit.thread}${hit.turn ? ` - turn ${hit.turn}` : ""}`;
+    const tip = `${hit.agent || hit.thread}${tree ? ` in ${tree}` : ""}${hit.treePath ? ` (${hit.treePath})` : ""} - press Enter to open this turn's card`;
+    return (
+      `<button type="button" class="as-search-row ha-search-row${current ? " is-current" : ""}" data-search-hit="${index}" data-thread="${esc(hit.thread)}" data-agent="${esc(hit.agent)}" data-tree="${esc(tree)}"${current ? ' aria-current="true"' : ""} title="${esc(tip)}">` +
+      `<span class="as-search-where mono">${esc(hit.agent || hit.thread)}</span>` +
+      `<span class="as-search-meta mono">${esc(meta)}</span>` +
+      `<span class="ha-search-thread mono">${esc([project, thread].filter(Boolean).join(" - "))}</span>` +
+      `<span class="as-search-snip">${lead}${esc(hit.before)}${marked}${esc(hit.after)}${tail}</span>` +
+      `</button>`
     );
+  }
+
+  // The count in the popover's head and the footer under its list, both from `hotReadout()`.
+  function paintHotReadout() {
+    hotBar()?.paintCount();
+    const foot = as$("ha-search-more");
+    if (!foot) return;
+    const c = hotReadout();
+    foot.textContent = c.foot || "";
+    foot.classList.toggle("is-capped", Boolean(c.capped));
+  }
+
+  function renderHotPop() {
+    const bar = hotBar();
+    if (!bar) return;
+    const c = hotReadout();
+    if (!hotHits.length) {
+      const none = c.query ? "no turn you wrote to an agent matches this filter" : "no turn you wrote to an agent is in the store yet";
+      bar.show(`<div class="ha-search-empty">${esc(none)}</div>`);
+    } else {
+      bar.show(hotHits.map((hit, i) => hotRowHtml(hit, i)).join(""));
+    }
+    paintHotReadout();
+    bar.markCurrent();
+  }
+
+  function hotArm(delay = HOT_AGENT_DEBOUNCE) {
+    if (hotTimer) clearTimeout(hotTimer);
+    hotTimer = setTimeout(() => {
+      hotTimer = null;
+      void runHotSearch();
+    }, delay);
+  }
+
+  // One read. `seq` is the same guard the turn search uses: a slow answer for `saff` must not land over a fast one for
+  // `saffron`, and a read already in flight when the reader closes the list must not reopen it.
+  async function runHotSearch() {
+    const input = as$("ha-search-q");
+    if (!input) return null;
+    const q = String(input.value || "").trim();
+    const seq = ++hotSeq;
+    let out = null;
+    try {
+      const params = new URLSearchParams({ q, limit: String(hotLimit()) });
+      const r = await apiFetch(`/api/hot-agent/search?${params.toString()}`, {}, { timeoutMs: 8000 });
+      if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+      out = await r.json();
+    } catch (err) {
+      if (seq !== hotSeq) return null;
+      hotHits = [];
+      hotOut = null;
+      hotAt = -1;
+      hotShownQuery = q;
+      hotBar()?.show(`<div class="ha-search-empty">search failed: ${esc(String(err?.message || err))}</div>`);
+      paintHotReadout();
+      return null;
+    }
+    if (seq !== hotSeq) return null;
+    hotHits = Array.isArray(out.hits) ? out.hits : [];
+    hotOut = out;
+    hotShownQuery = String(out.query || q);
+    hotAt = hotHits.length ? 0 : -1;
+    renderHotPop();
+    // A new answer is drawn from its first row: the list may still hold the scroll of the one it replaced, so put the
+    // row the count is standing on back in view instead of leaving it above the fold.
+    if (hotAt >= 0) hotBar()?.follow();
+    return out;
+  }
+
+  // One press, one TURN: the walk steps the list the count divides, wrapping at both ends through the same
+  // public/core/search-count.js `step` the turn search uses. A press that arrives while a new filter is still being
+  // read answers THAT filter and lands on its first row.
+  function hotStep(delta) {
+    const q = String(as$("ha-search-q")?.value || "").trim();
+    if (hotTimer || q !== hotShownQuery) {
+      if (hotTimer) {
+        clearTimeout(hotTimer);
+        hotTimer = null;
+      }
+      void runHotSearch().then((out) => {
+        if (!out || !hotHits.length) return;
+        hotAt = 0;
+        hotBar()?.markCurrent();
+        hotBar()?.follow();
+      });
+      return;
+    }
+    if (!hotHits.length) return;
+    const walk = globalThis.wtSearchCount?.step;
+    const total = hotHits.length;
+    hotAt = typeof walk === "function" ? walk(hotAt, delta, total) : (hotAt + delta + total) % total;
+    paintHotReadout();
+    hotBar()?.markCurrent();
+    hotBar()?.follow();
+  }
+
+  function hotEnter() {
+    const q = String(as$("ha-search-q")?.value || "").trim();
+    if (hotTimer || (q && q !== hotShownQuery)) {
+      if (hotTimer) {
+        clearTimeout(hotTimer);
+        hotTimer = null;
+      }
+      void runHotSearch().then((out) => {
+        if (out && hotHits.length) openHotAt(0);
+      });
+      return;
+    }
+    if (hotHits.length) openHotAt(hotAt >= 0 ? hotAt : 0);
+  }
+
+  // Enter (or a click) on one turn: the board's own landing, then the turn itself ringed. This is HUMAN's board
+  // path (public/app.js `humanShow`) step for step - the fold reveals the page the turn lives on, hotOpenPath opens
+  // the project and the row, the card is unfolded, renderConversation draws it - because a second idea of "open this
+  // turn" is exactly what drifts. `programmaticScroll` keeps the panel's scroll-follow from reading the landing as
+  // the reader taking the page over, and the amber ring says WHICH TURN, where the card's own flash says which agent.
+  function revealHotTurn(hit) {
+    if (!hit) return false;
+    const conv = conversationsByThread(hit.thread);
+    if (conv && globalThis.wtTurnFold?.reveal) {
+      try {
+        wtTurnFold.reveal(state, conv.thread, conv.turns, hit.id);
+      } catch {
+        /* the card falls back to the page it was on */
+      }
+    }
+    // The ring goes into STATE before the card is drawn, so the renderer stamps it on the turn it belongs to and a
+    // repaint (opening the row rebuilds the card) carries it rather than dropping a class put on the old element.
+    const until = Date.now() + 2600;
+    state.haHit = { thread: hit.thread, id: hit.id, until };
+    clearTimeout(state.haHitTimer);
+    state.haHitTimer = setTimeout(() => {
+      state.haHit = { thread: null, id: null, until: 0 };
+      for (const el of document.querySelectorAll(".turn.ha-hit")) el.classList.remove("ha-hit");
+    }, 2600);
+    const row = typeof hotRowFor === "function" ? hotRowFor(hit.thread) : null;
+    if (row) hotOpenPath(row);
+    if (state.collapsedJobs?.has?.(hit.thread)) state.collapsedJobs.delete(hit.thread);
+    renderConversation(hit.thread);
+    let card = document.querySelector(`.job[data-thread="${CSS.escape(hit.thread)}"]`);
+    if (!card && typeof renderJobs === "function") {
+      // An unattached card that no render has placed yet: #jobs is the panel's own renderer for that set.
+      renderJobs();
+      card = document.querySelector(`.job[data-thread="${CSS.escape(hit.thread)}"]`);
+    }
+    if (!card) return false;
+    const turn = card.querySelector(`[data-turn="${CSS.escape(hit.id)}"]`);
+    flashHotCard(hit.thread);
+    if (typeof programmaticScroll === "function") programmaticScroll();
+    // INSTANT, like the board's own landing (`humanShow`): a smooth scroll is cancelled the moment the card is
+    // re-rendered under it - and opening the row does re-render - which left the reader at the top of a page with
+    // the turn a screenful away.
+    //
+    // AND AGAIN WHILE THE BOARD SETTLES. A repaint can move the card by a screenful (other cards fold, a project
+    // closes, the poll re-sorts), so one scroll is a scroll to where the card WAS. This re-aims at whatever card is
+    // there now, every 100ms, until three samples in a row have it still and inside the viewport - and stops at the
+    // ring's own window regardless, so nothing outlives the ring and the page is never pulled from a reader who has
+    // started scrolling it.
+    let calm = 0;
+    let prevTop = null;
+    const aim = () => {
+      const live = document.querySelector(`.job[data-thread="${CSS.escape(hit.thread)}"]`);
+      const node = live?.querySelector(`[data-turn="${CSS.escape(hit.id)}"]`) || live;
+      if (!node) return true;
+      const r = node.getBoundingClientRect();
+      const inside = r.top >= 0 && r.bottom <= (window.innerHeight || 0);
+      calm = inside && prevTop !== null && Math.abs(r.top - prevTop) <= 2 ? calm + 1 : 0;
+      prevTop = r.top;
+      if (!inside && Date.now() < until) node.scrollIntoView({ block: "center" });
+      return calm >= 3 || Date.now() >= until;
+    };
+    if (!aim()) {
+      const timer = setInterval(() => {
+        if (aim()) clearInterval(timer);
+      }, 100);
+      // A hard stop of its own: a card that never settles must not leave an interval running behind the panel.
+      setTimeout(() => clearInterval(timer), 3000);
+    }
+    return true;
+  }
+
+  function openHotAt(at) {
+    const hit = hotHits[Number(at)];
+    if (!hit) return false;
+    // Close before opening: the popover is over the board, and the card has to be visible when the ring lands on it.
+    closeHotSearch();
+    const opened = revealHotTurn(hit);
+    // The box went with the popover, so the keyboard's place is the button that opened it - Escape and Enter both
+    // leave the reader somewhere they can press again.
+    as$("ha-search-open")?.focus({ preventScroll: true });
+    if (!opened) showNote(`no card on the board for ${hit.agent || hit.thread}`);
+    return opened;
+  }
+
+  // Close the list. `clear` empties the box (Escape), `focus` hands the keyboard back to the button; a dismissal
+  // leaves the filter in place, like the turn search, so the next open asks the same question.
+  function closeHotSearch({ clear = false, focus = false } = {}) {
+    if (hotTimer) {
+      clearTimeout(hotTimer);
+      hotTimer = null;
+    }
+    // The sequence moves on: a read already in flight must not reopen what this closed.
+    hotSeq += 1;
+    hotBar()?.hide();
+    as$("ha-search-open")?.setAttribute("aria-expanded", "false");
+    if (clear) {
+      const input = as$("ha-search-q");
+      if (input) input.value = "";
+    }
+    hotHits = [];
+    hotOut = null;
+    hotAt = -1;
+    hotShownQuery = "";
+    paintHotReadout();
+    if (focus) as$("ha-search-open")?.focus({ preventScroll: true });
+  }
+
+  function hotEscape() {
+    // Escape closes the list, clears the filter and hands focus back to the button that opened it.
+    closeHotSearch({ clear: true, focus: true });
+  }
+
+  function hotDismiss() {
+    closeHotSearch();
+  }
+
+  // Ctrl+Shift+Q, and the header button, land here: the panel opens if it was closed (the bar lives in its header),
+  // the popover opens on the reader's last filter (or the most recent N), the box takes the caret with its text
+  // selected so the first character typed replaces it, and the store is read again - the empty box promises "the most
+  // recent", not "the most recent at page load".
+  function openHotSearch() {
+    const panel = as$("assistant");
+    const bar = hotBar();
+    const input = as$("ha-search-q");
+    if (!panel || !bar || !input) return false;
+    if (panel.hidden) toggleAssistant(true);
+    if (!bar.isOpen()) {
+      bar.show(`<div class="ha-search-empty">reading the turns you wrote to agents...</div>`);
+      paintHotReadout();
+      as$("ha-search-open")?.setAttribute("aria-expanded", "true");
+    }
+    input.focus({ preventScroll: true });
+    input.select();
+    if (hotTimer) {
+      clearTimeout(hotTimer);
+      hotTimer = null;
+    }
+    void runHotSearch();
+    return true;
+  }
+
+  function wireHotSearch() {
+    const bar = hotBar();
+    if (!bar) return;
+    bar.wire();
+    as$("ha-search-open")?.addEventListener("click", () => {
+      if (bar.isOpen()) closeHotSearch({ focus: true });
+      else openHotSearch();
+    });
   }
 
 
@@ -1346,6 +1718,9 @@
       // Closed, the rail takes no room: the row goes back to the board's own height.
       const shell = el?.parentElement;
       if (shell) shell.style.minHeight = "";
+      // A list left open inside a closed rail is a button that still says it is expanded: close it rather than let the
+      // panel's own state disagree with what is on screen.
+      closeHotSearch();
     }
     // The board's row just gained or lost the rail's width: the room goes to the open turn's console, not to the
     // spacer above it.
@@ -5932,6 +6307,17 @@
   // ---- keys ------------------------------------------------------------------------------------
 
   window.addEventListener("keydown", (e) => {
+    // Ctrl+Shift+Q is the Hot Agent search's key, beside Ctrl+Q and deliberately SHIFTED: the branch below refuses
+    // every shifted press, so one press cannot be answered by both bars. It opens the panel when it is closed (the
+    // bar lives in its header) and lands in the Hot Agent box with its text selected, so a typed filter replaces the
+    // last one. Unlike Ctrl+Q it is honoured from a composer: the chord is explicit - nobody types it by accident -
+    // and the popover never touches the reply's text.
+    if (!e.repeat && e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey && (e.key === "q" || e.key === "Q" || e.code === "KeyQ")) {
+      e.preventDefault();
+      e.stopPropagation();
+      openHotSearch();
+      return;
+    }
     // Ctrl+Q is the search box's own key: pressed anywhere in the open panel, the caret lands in the box with the
     // text it already holds SELECTED, so the first character typed replaces the last filter. It is reported handled
     // (preventDefault) rather than merely acted on - no browser default may also fire. A caret in a textarea or the
@@ -6009,6 +6395,9 @@
     // The header's search box: one listener set for the life of the page. Wired before the first render so a
     // restored frame that is already open can be typed into at once.
     wireSearch();
+    // ...and the Hot Agent bar beside it, on the same one-listener-per-page rule: both mounts are idempotent (each
+    // keeps its own module instance), and restoreFrame runs once.
+    wireHotSearch();
     if (state.assistantOpen) renderAssistant();
   })();
 
