@@ -266,3 +266,4 @@ docs/reports/terminal-call-latency-2026-11-11.html | 3 | record: a landed report
 docs/reports/local-turnover-base-2026-11-12.html | 5 | record: the report quotes the scratch repository the resolver ran against, so its three branches and their rejection reasons can be re-read
 docs/reports/email-multi-272-session-review-2026-11-09.html | 13 | record: the #272 email-multi resume review quotes the state files and worktree paths its commands read, and this roll-up carries it, not rewrites it
 docs/reports/held-reply-restart-2026-11-16.html | 1 | record: the 1.111.0 report quotes the scratch archive its run extracted, and this landing carries it, not rewrites it
+docs/landing-assistant-search-every-assistant-1.122.0-2026-11-19.md | 1 | record: the 1.122.0 landing note quotes the primary checkout its search measured in, and this landing carries that file, not rewrites it
