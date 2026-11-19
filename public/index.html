@@ -1241,6 +1241,13 @@
        same number, so the two ends cannot disagree. Published on globalThis as `wtHotAgentList`;
        test/hot-agent-search.test.js imports this same file. Loaded before assistant.js. -->
   <script src="/core/hot-agent-list.js"></script>
+  <!-- The Initiatives tab's three small rules, as pure answers: what a press inside an initiative card means (the
+       title card folds, the description's header folds only the description, a link or a button acts on itself),
+       where a two-line description preview stops (backed up to a whole word, with no dots when the text fits), and
+       the four per-assistant chips in their fixed order with their zeros. Published on globalThis as
+       `wtInitiativeFold`; test/initiative-fold.test.js imports this same file. Loaded before assistant.js, which
+       paints every initiative card through it. -->
+  <script src="/core/initiative-fold.js"></script>
   <!-- How fast a run's output reaches the reader's eyes: the word pacer (a paragraph typing out) and the line gate
        (whole lines walking into a console), both driven from app.js by the two Settings > Display rows. Published
        on globalThis as `wtType`; test/type-stream.test.js imports this same file. -->

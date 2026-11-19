@@ -19,12 +19,17 @@
 //   4. THE QUESTION: pressing Add a worktree parks a permission card that NAMES the tree and the initiative, and the
 //      store's bytes do not move while it waits. Allow once performs the move; Deny leaves the bytes identical and the
 //      chip in place.
-//   5. THE FOLDS: a project is folded until it is opened, worktrees only exist on expand, and the assistant detail rows
-//      are folded too - four worktrees over two projects cost two rows when closed and six when open.
-//   6. THE LINK: a worktree link opens that row, scrolls the window to it and leaves the row flashing.
+//   5. THE FOLDS: a card starts as its TITLE CARD - a title, a two-line preview of the description and the counts -
+//      and a press anywhere on the title unfolds it. Inside an open card the description folds on its own: its
+//      header, a button, gives Enter or Space, and the card's own state is not touched by it. A project is folded
+//      until it is opened, worktrees only exist on expand, and the assistant detail rows are folded too. The preview
+//      is two line boxes of the card's own prose, cut on a word boundary, with three dots only when there is more
+//      text than those two lines.
+//   6. THE LINK: a worktree link acts on itself - it opens that row, scrolls the window to it and leaves the row
+//      flashing - and the initiative's card is still open behind it.
 //   7. THE NAME: an assistant's name opens its pane and puts the caret in the box it types into - nothing is sent.
-//   8. THE COUNTS, ORDERED: beside each assistant, running/completed/parked for THIS initiative's trees, newest work
-//      first.
+//   8. THE COUNTS, ORDERED: beside each assistant, queued/running/completed/parked for THIS initiative's trees,
+//      newest work first, all four drawn always - a zero is a chip, not an absence - so the strip never shifts.
 //   9. HEALTH: zero page errors and zero console errors, and the tab is drawn in the panel's own chips and type: the
 //      card is an .as-group, the chip is .chip, the fold rows are 24px high at the rail's 11.5px.
 //
@@ -174,6 +179,8 @@ try {
     { id: 2, title: "Land the Menu login page", state: "done", worktree: slash(trees.menuOne), project: "beta", doneAt: iso(2 * 3_600_000) },
     { id: 3, title: "Map the two roles", state: "done", worktree: slash(trees.ssoTwo), project: "alpha", doneAt: iso(3 * 3_600_000) },
     { id: 4, title: "Wait for the DBA on sessions", state: "parked", reason: "waiting on the DBA", worktree: slash(trees.menuTwo), project: "beta" },
+    // Filed and not started: the first chip of the strip, counted by the same read as the other three.
+    { id: 5, title: "Queue the gateway retry", state: "queued", worktree: slash(trees.ssoTwo), project: "alpha", createdAt: iso(30_000) },
   ];
   writeFileSync(q1File, `${JSON.stringify({ version: 1, nextId: 9, tasks: tasks1 }, null, 1)}\n`, "utf8");
   const made = await POST("/api/assistant/assistants", {});
@@ -275,15 +282,34 @@ try {
         console.log("\n== create from the tab ==");
         await page.locator("#as-initiatives .init-empty [data-init-new]").click();
         await page.fill("#as-init-new-title", "SSO migration");
-        await page.fill("#as-init-new-desc", "Move the Menu and the gateway onto Okta SSO, one app at a time.");
+        // Three paragraphs, the first long enough to run past two lines at the rail's width: the preview has to cut
+        // inside it, and the expanded description has to show the breaks the reader typed.
+        const descWords = [
+          "Move the Menu and the gateway onto Okta SSO, one app at a time, so a cutover that goes wrong is one app and one toggle away from the way it works today.",
+          "The Menu is the last surface still on LDAP, and the gateway carries the sessions the Menu reads. Both go through the same Okta org, so cutting over one app at a time keeps the blast radius small and the rollback a single toggle.",
+          "Done when a reader signs in to the Menu through Okta and the gateway still answers its own callers.",
+        ].join("\n\n");
+        await page.fill("#as-init-new-desc", descWords);
         await page.click("[data-init-create]");
         await page.waitForSelector("#as-initiatives .init-card", { timeout: 15_000 });
         const created = await store();
         ok("the first write creates the store beside the panel's other state", created.found === true && existsSync(created.file), slash(created.file));
-        check("the words come back exactly as typed", created.initiatives.map((i) => [i.title, i.description]), [["SSO migration", "Move the Menu and the gateway onto Okta SSO, one app at a time."]]);
+        check("the words come back exactly as typed", created.initiatives.map((i) => [i.title, i.description]), [["SSO migration", descWords]]);
         const initId = created.initiatives[0].id;
         const cardTitle = await page.locator(`[data-init-card="${initId}"] .init-title`).innerText();
         check("the card shows the title", cardTitle, "SSO migration");
+        const firstDraw = await page.locator(`[data-init-card="${initId}"]`).evaluate((el) => ({
+          titlecard: /is-titlecard/.test(el.className),
+          projects: el.querySelectorAll(".init-project").length,
+          desc: el.querySelector(".init-desc")?.textContent || "",
+          head: el.querySelector("[data-init-card-toggle]")?.getAttribute("aria-expanded"),
+        }));
+        ok("a new card arrives as its title card: the title, a fold control saying so, and no body", firstDraw.titlecard && firstDraw.head === "false" && firstDraw.projects === 0, `titlecard=${firstDraw.titlecard} aria-expanded=${firstDraw.head}`);
+        ok("…with the description's preview already drawn", firstDraw.desc.startsWith("Move the Menu and the gateway onto Okta SSO"), firstDraw.desc.slice(0, 60));
+        // Unfold it: the body of a card with no worktrees says so, and shows no folds. Every step below needs the
+        // body in the DOM, which is the point of the fold.
+        await page.locator(`[data-init-card="${initId}"] .init-title`).click();
+        await page.waitForSelector(`[data-init-card="${initId}"] .init-no-trees`, { timeout: 15_000 });
         const folded = await page.locator(`[data-init-card="${initId}"]`).evaluate((el) => ({
           projects: el.querySelectorAll(".init-project").length,
           trees: el.querySelectorAll(".init-tree").length,
@@ -332,26 +358,131 @@ try {
         check("the snapshot's row carries the initiative, so the chart is fed by the store", (overlay?.initiatives || []).map((i) => i.title), ["SSO migration"]);
 
         // ---- 5. the folds --------------------------------------------------------------------------
+        // TWO FOLDS, TWO STATES. The card starts as its title card (title, preview, counts) and a press anywhere on
+        // the title unfolds it; the description then folds on its own inside the open card. The card's own state and
+        // the description's are kept apart, so every claim below reads both aria-expanded attributes and both
+        // drawings, and the screenshots show each state of each fold.
         console.log("\n== the folds ==");
+        // One read of the card, the way a reader sees it: both fold headers' state, what the description draws (its
+        // line boxes, its dots) and how much of the body is in the DOM.
+        const cardState = async () =>
+          page.locator(`[data-init-card="${initId}"]`).evaluate((el) => {
+            const head = el.querySelector("[data-init-card-toggle]");
+            const dhead = el.querySelector("[data-init-desc-fold]");
+            const desc = el.querySelector("[data-init-desc-body]");
+            const dots = desc?.querySelector(".init-dots");
+            const cs = desc ? getComputedStyle(desc) : null;
+            let lines = 0;
+            if (desc) {
+              const range = document.createRange();
+              range.selectNodeContents(desc);
+              lines = new Set([...range.getClientRects()].filter((r) => r.width > 0 && r.height > 0).map((r) => Math.round(r.top))).size;
+            }
+            return {
+              group: el.className,
+              open: head?.getAttribute("aria-expanded") === "true",
+              headTag: head?.tagName || "",
+              headText: head?.textContent.replace(/\s+/g, " ").trim() || "",
+              descOpen: dhead?.getAttribute("aria-expanded") === "true",
+              hasDescHeader: Boolean(dhead),
+              descHeadTag: dhead?.tagName || "",
+              projects: el.querySelectorAll(".init-project").length,
+              trees: el.querySelectorAll(".init-tree").length,
+              assistRows: el.querySelectorAll(".init-assist").length,
+              edit: el.querySelectorAll("[data-init-edit]").length,
+              dots: dots?.textContent || "",
+              text: desc?.textContent || "",
+              lines,
+              font: cs?.fontSize || "",
+              white: cs?.whiteSpace || "",
+              height: Math.round(el.getBoundingClientRect().height),
+            };
+          });
+        const waitDesc = async (want) =>
+          page.waitForFunction(
+            ([id, open]) => document.querySelector(`[data-init-card="${id}"] [data-init-desc-fold]`)?.getAttribute("aria-expanded") === open,
+            [initId, want ? "true" : "false"],
+            { timeout: 15_000 },
+          );
         await page.reload({ waitUntil: "domcontentloaded" });
         await page.waitForSelector("section.project", { timeout: 60_000 });
         await expand();
         await openTab();
         await page.waitForSelector(`[data-init-card="${initId}"]`, { timeout: 15_000 });
-        const closed = await page.locator(`[data-init-card="${initId}"]`).evaluate((el) => ({
-          projects: [...el.querySelectorAll(".init-project")].map((b) => b.textContent.replace(/\s+/g, " ").trim()),
-          trees: el.querySelectorAll(".init-tree").length,
-          height: Math.round(el.getBoundingClientRect().height),
-          assistRows: el.querySelectorAll(".init-assist").length,
-          group: el.className,
-        }));
-        check("two project folds, one per project, closed by default", closed.projects.length, 2);
-        ok("…named alpha and beta with their tree counts", /alpha/.test(closed.projects[0]) && /beta/.test(closed.projects[1]) && /\b2\b/.test(closed.projects[0]), closed.projects.join(" | "));
-        check("a folded project has no worktree rows in the DOM", closed.trees, 0);
-        check("assistant detail rows are folded too", closed.assistRows, 0);
-        ok("the card is the panel's own .as-group", /(^|\s)as-group(\s|$)/.test(closed.group), closed.group);
-        await shot("folded");
-        await paneShot("folded-pane");
+        const storeDesc = (await store()).initiatives[0].description;
+        const titleCard = await cardState();
+        ok("a card starts as its title card", /(^|\s)is-titlecard(\s|$)/.test(titleCard.group), titleCard.group);
+        ok("…whose title is the fold's own button, saying it is folded", titleCard.headTag === "BUTTON" && titleCard.open === false && /^[▸▾]\s*SSO migration/.test(titleCard.headText), `${titleCard.headTag} aria-expanded=${titleCard.open} ${titleCard.headText}`);
+        check("…with the body behind the fold: no project folds, no worktree rows, no Edit", { projects: titleCard.projects, trees: titleCard.trees, edit: titleCard.edit }, { projects: 0, trees: 0, edit: 0 });
+        check("the collapsed card shows the description's first two lines", titleCard.lines, 2);
+        ok("…ending with three dots because there is more text", titleCard.dots === "...", JSON.stringify(titleCard.text.slice(-40)));
+        const previewText = titleCard.text.replace(/\.\.\.$/, "");
+        ok(
+          "…cut on a word boundary, never mid-word",
+          storeDesc.startsWith(previewText) && /^\s/.test(storeDesc.slice(previewText.length)),
+          JSON.stringify(storeDesc.slice(Math.max(0, previewText.length - 14), previewText.length + 14)),
+        );
+        ok("the preview is the rail's own prose, pre-wrapped so its breaks survive", titleCard.font === "11.5px" && titleCard.white === "pre-wrap", `${titleCard.font} ${titleCard.white}`);
+        await shot("title-card-preview");
+        await paneShot("title-card-preview-pane");
+
+        // A press on the TITLE WORDS, not on the chevron: the whole title card is the control.
+        await page.locator(`[data-init-card="${initId}"] .init-title`).click();
+        await page.waitForSelector(`[data-init-card="${initId}"] .init-project`, { timeout: 15_000 });
+        const opened = await cardState();
+        ok("a press on the title card unfolds it", opened.open === true && /^▾/.test(opened.headText), `aria-expanded=${opened.open} ${opened.headText}`);
+        check("…its body is drawn: two project folds, no worktree rows yet, Edit present", { projects: opened.projects, trees: opened.trees, edit: opened.edit }, { projects: 2, trees: 0, edit: 1 });
+        ok("…and the description is whole, its own header saying so", opened.descOpen === true && opened.hasDescHeader && opened.descHeadTag === "BUTTON" && opened.dots === "", `desc aria-expanded=${opened.descOpen}`);
+        check("expanded, the description is the store's description, breaks and all", opened.text, storeDesc);
+        ok("…which is more lines than the preview drew", opened.lines > titleCard.lines, `${titleCard.lines} -> ${opened.lines} lines`);
+        await paneShot("card-open-description-whole");
+        await shot("card-open-description-whole-page");
+
+        // ---- the description's own fold: the card stays open -----------------------------------------
+        await page.locator(`[data-init-card="${initId}"] [data-init-desc-fold]`).click();
+        await waitDesc(false);
+        const descFolded = await cardState();
+        ok("pressing the description's header folds only the description", descFolded.open === true && descFolded.descOpen === false, `card ${descFolded.open}, description ${descFolded.descOpen}`);
+        check("…the card's body is still drawn", descFolded.projects, 2);
+        check("…the description is back to its two lines", descFolded.lines, 2);
+        ok("…with the dots again", descFolded.dots === "...", JSON.stringify(descFolded.text.slice(-30)));
+        await paneShot("card-open-description-folded");
+
+        // ---- a keyboard-only toggle: both headers are buttons, so Enter and Space are the browser's -----------------
+        await page.locator(`[data-init-card="${initId}"] [data-init-desc-fold]`).focus();
+        const focusedBefore = await page.evaluate(() => document.activeElement?.hasAttribute?.("data-init-desc-fold") || false);
+        ok("the description's header takes the keyboard's focus", focusedBefore);
+        await page.keyboard.press("Enter");
+        await waitDesc(true);
+        const byEnter = await cardState();
+        ok("Enter on it unfolds the description, and leaves the card open", byEnter.descOpen === true && byEnter.open === true && byEnter.dots === "", `desc ${byEnter.descOpen}, card ${byEnter.open}`);
+        await page.locator(`[data-init-card="${initId}"] [data-init-desc-fold]`).focus();
+        await page.keyboard.press("Space");
+        await waitDesc(false);
+        const bySpace = await cardState();
+        ok("Space on it folds it again, and the card is still open", bySpace.descOpen === false && bySpace.open === true, `desc ${bySpace.descOpen}, card ${bySpace.open}`);
+        await paneShot("keyboard-toggle");
+        await page.locator(`[data-init-card="${initId}"] [data-init-card-toggle]`).focus();
+        await page.keyboard.press("Enter");
+        await page.waitForFunction((id) => document.querySelector(`[data-init-card="${id}"] [data-init-card-toggle]`)?.getAttribute("aria-expanded") === "false", initId, { timeout: 15_000 });
+        const cardByKeyboard = await cardState();
+        ok("Enter on the title card folds the initiative too", cardByKeyboard.open === false && /is-titlecard/.test(cardByKeyboard.group));
+
+        // ---- one open state per initiative, remembered while the tab is open -------------------------
+        await page.locator(`[data-init-card="${initId}"] .init-title`).click();
+        await page.waitForSelector(`[data-init-card="${initId}"] .init-project`, { timeout: 15_000 });
+        const remembered = await cardState();
+        ok("reopening the card remembers the description's fold", remembered.open === true && remembered.descOpen === false && remembered.lines === 2, `card ${remembered.open}, description ${remembered.descOpen}`);
+
+        // ---- the folds inside the open card ----------------------------------------------------------
+        check("two project folds, one per project, closed by default", remembered.projects, 2);
+        const projectTexts = await page.locator(`[data-init-card="${initId}"] .init-project`).allInnerTexts();
+        ok("…named alpha and beta with their tree counts", /alpha/.test(projectTexts[0]) && /beta/.test(projectTexts[1]) && /\b2\b/.test(projectTexts[0]), projectTexts.map((t) => t.replace(/\s+/g, " ")).join(" | "));
+        check("a folded project has no worktree rows in the DOM", remembered.trees, 0);
+        check("assistant detail rows are folded too", remembered.assistRows, 0);
+        ok("the card is the panel's own .as-group", /(^|\s)as-group(\s|$)/.test(remembered.group), remembered.group);
+        await shot("card-open-projects-folded");
+        await paneShot("card-open-projects-folded-pane");
         for (const name of ["alpha", "beta"]) await page.click(`[data-init-fold="${initId}::${name}"]`);
         // The pane repaints from its own document, which is re-read on a 4 s timer: wait until the rows it draws agree
         // with the store the HTTP read sees, rather than reading a card still holding the doc fetched at open.
@@ -385,8 +516,28 @@ try {
         check("unfolded, both projects show all four worktrees, each as a link on its branch", open.trees.map((t) => [t.name, t.branch || null]), expectedTrees);
         ok("…and every one of them is a link", open.trees.every((t) => t.link === "A"), open.trees.map((t) => t.link || "?").join(","));
         ok("the worktree rows are the rail's own 11.5px", open.fontSizes.every((f) => f === "11.5px"), [...new Set(open.fontSizes)].join(","));
-        ok("the unfolded card is taller than the folded one", open.height > closed.height, `${closed.height}px -> ${open.height}px`);
+        ok("the unfolded card is taller than the title card", open.height > titleCard.height, `${titleCard.height}px -> ${open.height}px`);
         await paneShot("unfolded-pane");
+
+        // ---- a description that fits its two lines gets no dots at all ------------------------------
+        // The other half of the preview rule: the dots mean "there is more", so a short description must not carry
+        // them. Created after the reads above, through the same route the tab's own form uses, so it cannot disturb
+        // the counts and words those assertions took.
+        const shortMade = await POST("/api/initiatives", { title: "Gateway cutover", description: "One app at a time.", by: "reader" });
+        ok("a second initiative, with a description short enough to fit two lines", shortMade.status === 201 && Boolean(shortMade.body?.initiative?.id), `HTTP ${shortMade.status}`);
+        const shortId = shortMade.body.initiative.id;
+        await page.waitForSelector(`[data-init-card="${shortId}"]`, { timeout: 25_000 });
+        await page.locator(`[data-init-card="${shortId}"]`).scrollIntoViewIfNeeded();
+        const shortCard = await page.locator(`[data-init-card="${shortId}"]`).evaluate((el) => {
+          const desc = el.querySelector(".init-desc");
+          const range = document.createRange();
+          range.selectNodeContents(desc);
+          const lines = new Set([...range.getClientRects()].filter((r) => r.width > 0 && r.height > 0).map((r) => Math.round(r.top))).size;
+          return { text: desc.textContent, dots: el.querySelector(".init-dots")?.textContent || "", lines };
+        });
+        check("a short description is drawn whole, with no dots", { text: shortCard.text, dots: shortCard.dots, lines: shortCard.lines }, { text: "One app at a time.", dots: "", lines: 1 });
+        await paneShot("short-description-no-dots");
+        check("…and the long one beside it still ends on dots", (await cardState()).dots, "...");
 
         // ---- 6. the link that scrolls and flashes --------------------------------------------------
         console.log("\n== the link to the row ==");
@@ -407,7 +558,12 @@ try {
         ok("pressing a worktree name scrolls the window to its row", landed.scrollY > 0 && landed.inView, `scrollY ${landed.scrollY}, in view ${landed.inView}`);
         ok("…the row is flashing when it arrives", landed.flash);
         check("…and the row opens in its own project", { project: landed.project, expanded: landed.expanded }, { project: "beta", expanded: true });
+        // The link acts on itself and the card keeps its state: a press inside an open card must not fold the
+        // initiative out from under the reader who followed its worktree.
+        const afterLink = await cardState();
+        ok("…and the initiative's card is still open behind it", afterLink.open === true && afterLink.projects === 2, `card ${afterLink.open}, project folds ${afterLink.projects}`);
         await shot("scrolled-flash");
+        await paneShot("scrolled-flash-pane");
 
         // ---- 7 and 8. the assistant's name, and the counts ------------------------------------------
         console.log("\n== the assistant's name and its counts ==");
@@ -424,10 +580,25 @@ try {
         );
         check("two assistants are shown for this initiative", counted.length, 2);
         ok("the newest worker leads", counted[0]?.id === "assistant-1", counted.map((c) => c.id).join(" -> "));
-        check("its counts are running, completed and parked on THIS initiative's trees", counted[0]?.chips, ["1 running", "2 completed", "1 parked"]);
-        check("the second assistant's counts are its own", counted[1]?.chips, ["0 running", "1 completed", "0 parked"]);
+        // Four chips, always four, in the order a task moves through: queued first because it is the state before
+        // running. This assistant has work in all four, so the strip reads as a count of four buckets.
+        check("its counts are queued, running, completed and parked on THIS initiative's trees", counted[0]?.chips, ["1 queued", "1 running", "2 completed", "1 parked"]);
+        check("the second assistant's counts are its own - and its zeros are chips too", counted[1]?.chips, ["0 queued", "0 running", "1 completed", "0 parked"]);
+        const stripOf = async (id) =>
+          page.locator(`[data-init-card="${initId}"] [data-init-assistant-row="${id}"]`).evaluate((el) => ({
+            chips: [...el.querySelectorAll(".init-counts .chip")].map((c) => ({
+              text: c.textContent.trim(),
+              zero: c.classList.contains("is-zero"),
+              tone: [...c.classList].filter((x) => x !== "chip" && x !== "is-zero"),
+            })),
+          }));
+        const zeroRow = await stripOf(counted[1].id);
+        const liveRow = await stripOf(counted[0].id);
+        check("a zero count is drawn, dimmed, not left out", zeroRow.chips.map((c) => c.zero), [true, true, false, true]);
+        ok("…the strip is four chips on both rows", zeroRow.chips.length === 4 && liveRow.chips.length === 4, `${liveRow.chips.length} and ${zeroRow.chips.length}`);
+        ok("…and no fourth colour: queued quiet, running good, parked warn", JSON.stringify(liveRow.chips.map((c) => c.tone)) === JSON.stringify([[], ["good"], [], ["warn"]]), JSON.stringify(liveRow.chips.map((c) => c.tone)));
         ok("the row says when each last worked", /working now|worked .* ago/.test(counted[0]?.when || ""), counted[0]?.when || "");
-        await paneShot("counts");
+        await paneShot("chip-strip");
         const firstBtn = page.locator(`[data-init-card="${initId}"] [data-init-assistant="${counted[0].id}"]`);
         await firstBtn.click();
         await page.waitForSelector("#as-chat", { timeout: 15_000 });
@@ -468,7 +639,8 @@ try {
         await page.locator('#approvals [data-remote-write] [data-choice="deny"]').first().click();
         await page.waitForTimeout(1200);
         ok("denying leaves the store's bytes identical", readFileSync((await store()).file, "utf8") === bytesBefore);
-        check("…and the tree is still on the initiative", (await store()).initiatives[0].treeCount, 4);
+        // By id, not by index: the store lists the most recently touched initiative first, and there are two now.
+        check("…and the tree is still on the initiative", (await store()).initiatives.find((i) => i.id === initId)?.treeCount, 4);
 
         console.log("\n== the words are free to change ==");
         // The link press above collapses every project but its own (hotOpenPath's own rule), so alpha is folded now:
@@ -481,7 +653,7 @@ try {
         await page.click(`[data-init-card="${initId}"] [data-init-save]`);
         await page.waitForTimeout(1500);
         console.log(`      after save: store says ${JSON.stringify((await store()).initiatives[0].title)}, notes ${JSON.stringify(await page.locator(`[data-init-card="${initId}"] .as-ask`).allInnerTexts().catch(() => []))}`);
-        await waitFor(async () => (await store()).initiatives[0].title === "SSO migration (Menu)", { timeoutMs: 15_000, what: "the edited title" });
+        await waitFor(async () => (await store()).initiatives.find((i) => i.id === initId)?.title === "SSO migration (Menu)", { timeoutMs: 15_000, what: "the edited title" });
         // The chart is repainted from the broadcast snapshot; wait for the chip to carry the new words rather than
         // reading the cell a tick before the page applied it.
         await waitFor(
