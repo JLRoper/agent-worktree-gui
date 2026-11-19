@@ -4,16 +4,32 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.119.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.120.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-634 releases from v0.1.0 (2026-10-20) to v1.119.0 (2026-11-19), 2175 commits between the tags. Every release is anchored by an
+635 releases from v0.1.0 (2026-10-20) to v1.120.0 (2026-11-19), 2181 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.120.0 — 2026-11-19 · 6 commits
+
+[`dc3ffcd`](https://github.com/JLRoper/agent-worktree-gui/commit/dc3ffcd7d6bb23b7f79ec656b6f52a3051c6c8fa) · [compare v1.119.0...v1.120.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.119.0...v1.120.0)
+
+### Docs & tests
+
+- docs: render the changelog - 634 releases ([`fc240b0`](https://github.com/JLRoper/agent-worktree-gui/commit/fc240b00a83aac6cc212ea001f836cdcfbbbf45b))
+- docs: the landing note for 1.119.0 - an Initiatives tab beside Role ([`1dcbb64`](https://github.com/JLRoper/agent-worktree-gui/commit/1dcbb646bde424eaff9e1ca73c972fb079ef28e0))
+
+### Other
+
+- Fold the initiative description and the title card, and count queued ([`b9ba1c9`](https://github.com/JLRoper/agent-worktree-gui/commit/b9ba1c9719f9c9f258f1f4e169173b5cce9029ef))
+- Wait for the row's flash and the chart's chip instead of sampling a fixed tick ([`14dfa1d`](https://github.com/JLRoper/agent-worktree-gui/commit/14dfa1d5785cad642579dfaa61078b21e21388dc))
+- Give a title card no description header: there is nothing inside it to fold ([`c6dc946`](https://github.com/JLRoper/agent-worktree-gui/commit/c6dc94696ec58bb4276944e1b8974d9e49839f40))
+- chore: 1.120.0 - the version this landing carries ([`dc3ffcd`](https://github.com/JLRoper/agent-worktree-gui/commit/dc3ffcd7d6bb23b7f79ec656b6f52a3051c6c8fa))
 
 ## v1.119.0 — 2026-11-19 · 7 commits
 
