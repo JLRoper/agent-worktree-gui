@@ -19,7 +19,7 @@
     },
     "lantern": {
       "text": "1 of 5",
-      "head": "turn 5 - 26m - 5 rows",
+      "head": "Assistant #1 - turn 5 - 26m - 5 rows",
       "rows": [
         "lantern: read me top to bottom",
         "lantern row one",
@@ -50,7 +50,7 @@
     {
       "click": "transcript",
       "x": 1201,
-      "y": 405,
+      "y": 407,
       "hidden": true,
       "input": "harbor",
       "count": ""

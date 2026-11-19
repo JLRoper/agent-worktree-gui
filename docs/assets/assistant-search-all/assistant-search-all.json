@@ -1,0 +1,53 @@
+{
+  "viewport": "1440x900",
+  "filters": {
+    "sextant": {
+      "text": "1 of 1",
+      "foot": "1 hit matched, 1 displayed, in 1 turn",
+      "rows": [
+        "Assistant #2: sextant: the phrase only assistant two holds"
+      ],
+      "answer": [
+        "sextant-two:assistant-2"
+      ]
+    },
+    "beacon": {
+      "text": "1 of 2",
+      "foot": "2 hits matched, 2 displayed, in 2 turns",
+      "rows": [
+        "Assistant #1: beacon: assistant one's newest request",
+        "Assistant #2: beacon: assistant two's older request"
+      ]
+    },
+    "common": {
+      "text": "1 of 10",
+      "foot": "120 hits matched, 10 displayed, in 120 turns - your own input is kept when the cap bites",
+      "rows": 10,
+      "matched": 120,
+      "ms": 253
+    }
+  },
+  "steps": [
+    {
+      "press": "Enter",
+      "tab": "assistant-2",
+      "ring": "sextant-two",
+      "inBand": true,
+      "underPointer": true
+    },
+    {
+      "press": "ArrowDown",
+      "count": "2 of 2",
+      "tab": "assistant-2",
+      "ring": "beacon-two"
+    }
+  ],
+  "screenshots": [
+    "01-cross-tab-found-1-of-1-1440x900.png",
+    "02-enter-landed-on-assistant-2-1440x900.png",
+    "03-two-assistants-newest-first-1-of-2-1440x900.png",
+    "04-stepped-to-assistant-2-2-of-2-1440x900.png",
+    "05-whole-store-capped-1-of-10-1440x900.png",
+    "06-hot-agent-search-unchanged-1440x900.png"
+  ]
+}
