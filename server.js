@@ -24,6 +24,7 @@ import { portHolder, refusalLine } from "./lib/port-guard.js";
 import { worktreeList, prIndex, prFor } from "./lib/project.js";
 import { heldBack, failed as hostFailed, answered as hostAnswered, looksLikeHostTrouble } from "./lib/remote-backoff.js";
 import { Store } from "./lib/store.js";
+import { TreeCache } from "./lib/tree-cache.js";
 import { Scheduler, yieldToLoop } from "./lib/scheduler.js";
 import { ProjectRegistry } from "./lib/projects.js";
 // isLiveJobStatus is main's: the 429 hold asks whether a card's run is live before it re-arms the timer.
@@ -754,6 +755,18 @@ function poolOptions() {
 }
 let pool = new Pool(config.threads, poolOptions());
 const store = new Store();
+// THE TREE LIST THE LAST SUCCESSFUL SCAN READ, placed before anything can be asked for it. The store starts empty at
+// every boot; the scan that fills it takes seconds, and every agent whose `ownerPath` was not a row in the meantime was
+// drawn in the unattached workspace and jumped to its worktree when the scan landed - ten or more cards doing it, which
+// is the defect this file exists for (lib/tree-cache.js). Same keys, same paths, same branches as the scan will write,
+// flagged `cached` so the page says the list is the cached one and the first fresh read of a path replaces it in place.
+const treeCache = new TreeCache({ file: config.treeCacheFile, log });
+const cachedTreeList = treeCache.read();
+if (cachedTreeList?.trees?.length) {
+  for (const p of cachedTreeList.projects || []) store.ensureProject(p);
+  for (const t of cachedTreeList.trees) store.seedCached(t);
+  log(`tree cache: ${cachedTreeList.trees.length} tree(s) ready from the last successful scan (read ${cachedTreeList.at}) - the first paint is already placed`);
+}
 // A tree's name is the panel's fact, never git's. The ledger of which trees have a name, who gave it and when
 // (lib/tree-names.js) is read before anything can rename a tree and written the moment the panel learns one:
 // at the cut for a tree this panel makes, at first sight for a tree that was already there.
@@ -810,6 +823,15 @@ let scheduler = new Scheduler({
   panelThreads: () => jobs.panelRunThreads(),
   // Every worktree a listing turns up, before it becomes a row: the naming ledger's seeding (see seedTreeName).
   onWorktreeSeen: (project, tree) => seedTreeName(project, tree),
+  // Every row a scan reads is recorded for the next boot (lib/tree-cache.js). Debounced, and written from the store's
+  // own rows, so a row dropped from the board leaves the file on the next write and no call site has to remember it.
+  onRowRead: () => {
+    treeCache.schedule(store);
+    noteCachedRowsRead();
+  },
+  // A pass that enumerated every project's tree list just finished. The page's one row rule is gated on it (a card may
+  // fall to the unattached list only after a completed scan), so it is pushed the moment it happens.
+  onScanComplete: (info) => broadcastTreeList(info),
 });
 
 // The one settings save that cannot be a plain write: the General tab's worker count replaces the scan pool while
@@ -853,6 +875,41 @@ function broadcastSnapshot() {
   // Invalidate BEFORE building: this frame follows a write, and snapshot() must reflect it.
   invalidateSnapshot();
   broadcast({ type: "snapshot", data: snapshot() });
+}
+
+// The moment the last cached row is read. One frame, once per process: the header chip is the page's own statement that
+// the list it is drawing came from the file, and this is what clears it without waiting for the next periodic snapshot.
+// Every row before the last one is a `row` frame the page already handles - no count is pushed per row.
+let cachedRowsCleared = false;
+function noteCachedRowsRead() {
+  if (cachedRowsCleared || !treeCache.count) return;
+  for (const row of store.rows.values()) if (row.cached) return;
+  cachedRowsCleared = true;
+  broadcastTreeList({ allRead: true });
+}
+
+// What /api/state and the `treelist` frame say about the list this panel is serving. `cached` is true while any row is
+// still a placeholder from state/tree-cache.json: the page says so and holds its rows' order through the scan that
+// replaces them. `completedAt` is the moment a pass enumerated every project's tree list in this process - the gate the
+// page puts in front of the unattached list, so a card never falls there because a scan was slow.
+function treeListInfo() {
+  let cachedTrees = 0;
+  for (const row of store.rows.values()) if (row.cached) cachedTrees += 1;
+  return {
+    cached: cachedTrees > 0,
+    cachedTrees,
+    count: store.rows.size,
+    at: treeCache.at,
+    maxAgeSeconds: Math.round(treeCache.maxAgeMs / 1000),
+    completedAt: (scheduler && scheduler.lastScanCompleteAt) || null,
+  };
+}
+
+// The tree list's own frame. A completed pass is the only thing that changes `completedAt`, and the page must not learn
+// it from a full snapshot rebuild (that is the megabytes this panel spends its time trying not to send): the flag, the
+// cached count and the moment ride a small event, and the rows they describe arrive as their own `row` events.
+function broadcastTreeList(info = {}) {
+  broadcast({ type: "treelist", treeList: treeListInfo(), completed: info });
 }
 
 function broadcast(evt) {
@@ -3917,6 +3974,9 @@ function snapshotBody() {
                 ...store.snapshot({ settings: settingsOut() }),
                 paths: pathsInfo(),
                 jobs: jobs.list(),
+                // The tree list this response carries, and whether it is the CACHED one (lib/tree-cache.js): the pages
+                // that used to open with no rows at all now open on the board the last scan had, marked as cached.
+                treeList: treeListInfo(),
                 approvals: approvals.list(),
                 // The panel's own permission requests (a push a worker's guard parked, a merge the panel itself wants to
                 // write to a remote for). They ride with the snapshot the way the CLI-transport approvals do, so a reload
@@ -7247,7 +7307,20 @@ const server = createServer(async (req, res) => {
         scheduler.stop();
         pool.close();
         pool = new Pool(config.threads);
-        scheduler = new Scheduler({ config, store, pool, registry, getProjects: () => registry.projects, panelAgents: () => jobs.agentPaths(), panelThreads: () => jobs.panelRunThreads(), onWorktreeSeen: (project, tree) => seedTreeName(project, tree) });
+        scheduler = new Scheduler({
+          config,
+          store,
+          pool,
+          registry,
+          getProjects: () => registry.projects,
+          panelAgents: () => jobs.agentPaths(),
+          panelThreads: () => jobs.panelRunThreads(),
+          onWorktreeSeen: (project, tree) => seedTreeName(project, tree),
+          // A reload keeps the store, so the rows are the same rows: the cache keeps recording them and the page keeps
+          // its completion gate. Missing these here is how a reloaded panel would stop writing the file.
+          onRowRead: () => treeCache.schedule(store),
+          onScanComplete: (info) => broadcastTreeList(info),
+        });
         await registry.refresh();
         await scheduler.start();
       }
@@ -7593,6 +7666,13 @@ async function shutdown(code = 0) {
     scheduler.stop();
   } catch {
     /* an already-stopped scheduler is not a failure */
+  }
+  // The last reads of this process go to disk before it goes: the next boot's first paint is the board this one last
+  // had (lib/tree-cache.js). Synchronous on purpose - the exit below does not wait for another tick.
+  try {
+    treeCache.flush(store);
+  } catch (e) {
+    log(`tree cache: the last write failed (${String((e && e.message) || e)})`);
   }
   stopPipelineWaitTicker();
   assistant.roundNameIndex.stop();
