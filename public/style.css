@@ -2490,6 +2490,29 @@ tr.row.has-collision.has-review { box-shadow: inset 2px 0 0 #6b4f9e, inset 4px 0
   white-space: nowrap;
 }
 .collision-none { font-size: 11px; color: var(--dimmer); font-style: italic; }
+/* THE PAIR, drawn once: the two trees side by side, the row's own side marked "this row" and the other named as the
+   counterpart. Both rows draw the same two sides, so neither side has to work out who the other one is. */
+.collision-sides { display: flex; flex-wrap: wrap; gap: 6px; align-items: stretch; }
+.collision-side {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  border: 1px solid #33284d;
+  border-radius: 6px;
+  background: #1b1528;
+  padding: 2px 7px;
+  font-size: 11px;
+  color: #e8ddff;
+}
+.collision-side.is-mine { border-color: #6b4f9e; background: #241a38; }
+.collision-side.is-other { border-style: dashed; }
+.collision-side-role { font-size: 9px; text-transform: uppercase; letter-spacing: .05em; color: #a893d1; }
+.collision-side-name { color: #fff; font-weight: 600; }
+.collision-task { font-size: 10px; color: #c9a0ff; border: 1px solid #3b2d5c; border-radius: 999px; padding: 0 5px; }
+/* A side that yielded, and WHY: "its notice #12 was done". On both rows, because the reason is the thing each side
+   otherwise had to ask the other for. */
+.collision-stood { font-size: 11px; color: #9fe0b4; }
 .collision-peer { font-size: 10px; color: var(--dim); word-break: break-all; }
 .collision-notes { list-style: none; margin: 0; padding: 0; font-size: 11px; color: #e8ddff; }
 .collision-notes li { padding-left: 2px; }
