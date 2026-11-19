@@ -67,8 +67,9 @@ await waitForState(
   { timeout: 120_000 },
 );
 
-// One assistant, three tasks in three states, on the initiative's trees. The queue route is the shipped one; this is
-// the same write an assistant makes when it files a task.
+// One assistant, four tasks in four states, on the initiative's trees. The queue route is the shipped one; this is
+// the same write an assistant makes when it files a task, and a filed task is `queued` - the state before running,
+// counted by the tab's strip with the other three.
 const assistantState = async () => (await get("/api/state")).json.assistant;
 const first = (await assistantState()).assistants[0];
 assert.ok(first?.id, "the panel seeds an assistant");
@@ -89,6 +90,9 @@ const parked = await addTask(first.id, "write the tab", treeB1, "project-b");
 await setState(first.id, parked.id, "parked");
 const running = await addTask(first.id, "prove the column", treeA2, "project-a");
 await setState(first.id, running.id, "running");
+// Filed and not started: the queue route writes a new task as `queued`, which is the state the strip draws first.
+const waiting = await addTask(first.id, "wait for the gateway owner", treeB2, "project-b");
+assert.equal(waiting.state, "queued", "a filed task is queued until an assistant picks it up");
 
 test("the tab's read starts empty, and says the store is a file it can read", async () => {
   const out = await get("/api/initiatives");
@@ -173,9 +177,10 @@ test("the read groups the trees by project and counts the assistants by state, n
   assert.deepEqual(view.projects.map((p) => p.name), ["project-a", "project-b"]);
   assert.deepEqual(view.projects.map((p) => p.trees.length), [2, 2]);
   assert.deepEqual(view.projects[0].trees.map((t) => t.name), ["sso-one", "sso-two"]);
-  // The three tasks are on three different trees of this initiative: one of each state.
+  // The four tasks are on the four trees of this initiative: one of each state, and the four states the strip
+  // draws all counted by the same read.
   assert.equal(view.assistants.length, 1);
-  assert.deepEqual(view.assistants[0].counts, { running: 1, done: 1, parked: 1 });
+  assert.deepEqual(view.assistants[0].counts, { queued: 1, running: 1, done: 1, parked: 1 });
   assert.ok(view.assistants[0].lastAt, "a running task makes the assistant count as working now");
 
   // The chart column's field is on the rows themselves, and only on rows that have one.

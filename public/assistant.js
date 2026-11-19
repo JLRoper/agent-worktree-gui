@@ -3326,6 +3326,14 @@
   // painter, so a project stays folded, an assistant list stays folded and a half-typed title stays typed.
   const initFolds = new Set(); // `${initiativeId}::${projectName}` - projects are folded until the reader opens one
   const initAssistOpen = new Set(); // initiative ids whose assistant rows are unfolded
+  // ONE OPEN STATE PER INITIATIVE, in two books because the card and its description fold separately: `initOpen`
+  // holds the initiatives the reader has unfolded (every card starts as a title card: a title, a two-line preview
+  // and the counts), and `initDescClosed` holds the ones whose description the reader has folded back to that
+  // preview while the card stayed open. Absent is the default in each, so neither book has to grow an entry for a
+  // card nobody touched; both live as long as this tab does, which is what "remembered while the tab is open" means
+  // and why a reload starts folded again.
+  const initOpen = new Set();
+  const initDescClosed = new Set();
   const initNotes = new Map(); // initiative id (or "new") -> { text, bad } - what the last write answered
   let initDoc = null; // the last document this pane read
   let initReadAt = 0; // when, for the freshness gap below
@@ -3412,23 +3420,24 @@
     </div>`;
   }
 
-  // ONE ASSISTANT BESIDE ITS COUNTS. The three numbers are the panel's queue states, named as the reader reads them
-  // ("completed", not "done"), and the order the rows arrive in is the server's: most recently worked on this
-  // initiative first. The name is a button, not a label: pressing it opens that assistant's Chat with the cursor in
-  // the box, which is the whole point of seeing it here.
+  // ONE ASSISTANT BESIDE ITS COUNTS. Four chips, in the order a task moves through them - queued, running,
+  // completed, parked - and all four always drawn, zeros included: a strip that grew a chip the moment a count
+  // stopped being zero would shift the row sideways every time work moved between the states. The order, the
+  // labels, the tones and the zero-marking are one rule in public/core/initiative-fold.js (with a test beside it),
+  // so the strip cannot be drawn here with three of the four or with a colour the rest of the panel does not use.
+  // The counts come from the same queue read that feeds every other surface: GET /api/initiatives counts the rows
+  // whose state is queued in the same pass it counts the other three.
   function initAssistantRowHtml(a) {
     const c = a.counts || {};
     const running = Number(c.running) || 0;
-    const done = Number(c.done) || 0;
-    const parked = Number(c.parked) || 0;
+    const chips = wtInitiativeFold
+      .countChips(c)
+      .map((chip) => `<span class="${chip.cls}" title="${esc(chip.title)}">${chip.text}</span>`)
+      .join("");
     const who = String(a.name || a.id);
     return `<div class="init-assist" data-init-assistant-row="${esc(a.id)}">
       <button type="button" class="init-assist-btn" data-init-assistant="${esc(a.id)}" data-init-thread="${esc(a.thread || "")}" title="open ${esc(who)}'s pane and put the cursor in its chat box - nothing is sent">${esc(who)}</button>
-      <span class="init-counts">
-        <span class="chip${running ? " good" : " is-zero"}" title="${running} task${running === 1 ? "" : "s"} running on this initiative's worktrees, right now">${running} running</span>
-        <span class="chip${done ? "" : " is-zero"}" title="${done} task${done === 1 ? "" : "s"} completed on this initiative's worktrees">${done} completed</span>
-        <span class="chip${parked ? " warn" : " is-zero"}" title="${parked} task${parked === 1 ? "" : "s"} parked on this initiative's worktrees - waiting on something outside the assistant">${parked} parked</span>
-      </span>
+      <span class="init-counts">${chips}</span>
       <span class="as-hint init-assist-when">${running ? "working now" : a.lastAt ? `worked ${esc(relTime(a.lastAt))} ago` : "no stamped work yet"}</span>
     </div>`;
   }
@@ -3468,6 +3477,86 @@
     </div>`;
   }
 
+  // ---- the description's two-line preview, measured --------------------------------------------------------------
+  // A DESCRIPTION FOLDS TO THE FIRST TWO LINES THE CARD ACTUALLY DRAWS. Which character that is, is a fact only the
+  // browser has: `.init-desc` is pre-wrap prose at the rail's own 11.5px, so the break moves with the rail's width,
+  // the zoom and the font. A character budget would be right at one width and wrong at the next. So the whole
+  // description is painted and then cut, in the same task, before a frame of it is drawn: the two lines are
+  // measured with a Range over its text node, the cut is backed up to a whole word (public/core/initiative-fold.js
+  // `cut`, with a test), and the three dots are placed after the text they end.
+  //
+  // WHY NO RESTORE MACHINERY. A repaint rebuilds this pane from the store, so a folded body is always a NEW node
+  // holding the whole description: nothing has to be put back. The one case that is not a new node is a rail dragged
+  // to another width while the pane stands still, and that is what the width observer below re-cuts from the text
+  // this pass remembers.
+  let descCtx = null;
+  const descFull = new WeakMap(); // a folded body -> the whole description it was drawn from, for a re-cut at a new width
+
+  function initDotsWidth(el) {
+    if (!descCtx && typeof document !== "undefined" && document.createElement) descCtx = document.createElement("canvas").getContext("2d");
+    if (!descCtx) return 0;
+    const cs = getComputedStyle(el);
+    descCtx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+    return descCtx.measureText(wtInitiativeFold.DOTS).width;
+  }
+
+  // The last character that renders inside `lines` line boxes of this element, backed off until the dots fit after it
+  // on the same row (three dots that did not fit would be clipped, or wrapped onto a third line of their own).
+  function initDescCutAt(el, lines) {
+    const node = el.firstChild;
+    if (!node || node.nodeType !== 3 || !node.data) return 0;
+    const cs = getComputedStyle(el);
+    const lineHeight = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.45 || 0;
+    const box = el.getBoundingClientRect();
+    const limitY = box.top + (parseFloat(cs.paddingTop) || 0) + lineHeight * lines;
+    const maxX = box.left + el.clientWidth - (parseFloat(cs.paddingRight) || 0) - (parseFloat(cs.borderRightWidth) || 0);
+    const dots = initDotsWidth(el);
+    const range = document.createRange();
+    const at = (i) => {
+      range.setStart(node, Math.max(0, i - 1));
+      range.setEnd(node, i);
+      return range.getBoundingClientRect();
+    };
+    // Text flows down, so a character's bottom only grows with its offset: the last one inside the two line boxes is
+    // one binary search, not a walk over 2000 characters.
+    let lo = 0;
+    let hi = node.data.length;
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2);
+      if (at(mid).bottom <= limitY + 0.5) lo = mid;
+      else hi = mid - 1;
+    }
+    while (lo > 0 && at(lo).right + dots > maxX) lo -= 1;
+    return lo;
+  }
+
+  // One body, whole or folded, from its own full text. Idempotent in both directions: a body being re-measured is
+  // measured on the whole description, never on what the last cut left on screen.
+  function paintInitDescription(el, full) {
+    const text = String(full == null ? "" : full);
+    if (!el) return;
+    descFull.set(el, text);
+    el.textContent = text;
+    const cs = getComputedStyle(el);
+    const lineHeight = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.45 || 0;
+    // A body with no layout (a pane that is not on screen) cannot be measured: it stays whole, and the next paint
+    // - which a tab switch is - measures it.
+    if (!lineHeight || !el.getClientRects().length) return;
+    if (el.scrollHeight <= lineHeight * wtInitiativeFold.PREVIEW_LINES + 1) return; // fits its two lines: no dots
+    const cut = wtInitiativeFold.cut(text, initDescCutAt(el, wtInitiativeFold.PREVIEW_LINES));
+    if (!cut.truncated) return;
+    el.textContent = cut.text;
+    const dots = document.createElement("span");
+    dots.className = "init-dots";
+    dots.textContent = wtInitiativeFold.DOTS;
+    el.appendChild(dots);
+  }
+
+  function paintInitDescriptions(host) {
+    if (!host) return;
+    for (const el of host.querySelectorAll("[data-init-desc-cut]")) paintInitDescription(el, descFull.has(el) ? descFull.get(el) : el.textContent);
+  }
+
   function initCardHtml(init) {
     const blocked = initBlocked();
     const desc = String(init.description || "").trim();
@@ -3475,20 +3564,24 @@
     const assistants = init.assistants || [];
     const editing = initEditId === init.id;
     const adding = initAddId === init.id;
+    const open = initOpen.has(init.id);
+    // A folded description is drawn as a body to be measured (`data-init-desc-cut`), never as text with an ellipsis
+    // typed on: where line two stops is decided on the element, in paintInitDescription below.
+    const descOpen = open && !initDescClosed.has(init.id);
     const assistantsOpen = initAssistOpen.has(init.id);
     const fold = (name) => initFolds.has(`${init.id}::${name}`);
     const projectsHtml = projects.length
       ? projects
           .map((p) => {
-            const open = fold(p.name);
-            const trees = open ? p.trees.map((t) => initTreeRowHtml(init, p.name, t)).join("") : "";
+            const projOpen = fold(p.name);
+            const trees = projOpen ? p.trees.map((t) => initTreeRowHtml(init, p.name, t)).join("") : "";
             return `<div class="init-project">
-              <button type="button" class="init-proj" data-init-fold="${esc(init.id)}::${esc(p.name)}" aria-expanded="${open ? "true" : "false"}" title="${open ? "fold" : "unfold"} ${esc(p.name)}'s worktrees - a project is folded until you open it">
-                <span class="init-caret">${open ? "▾" : "▸"}</span>
+              <button type="button" class="init-proj" data-init-fold="${esc(init.id)}::${esc(p.name)}" aria-expanded="${projOpen ? "true" : "false"}" title="${projOpen ? "fold" : "unfold"} ${esc(p.name)}'s worktrees - a project is folded until you open it">
+                <span class="init-caret">${projOpen ? "▾" : "▸"}</span>
                 <span class="init-proj-name">${esc(p.name)}</span>
                 <span class="chip is-zero">${p.trees.length}</span>
               </button>
-              ${open ? `<div class="init-trees">${trees}</div>` : ""}
+              ${projOpen ? `<div class="init-trees">${trees}</div>` : ""}
             </div>`;
           })
           .join("")
@@ -3511,19 +3604,41 @@
           </div>
         </div>`
       : "";
-    return `<article class="as-group init-card" data-init-card="${esc(init.id)}">
+    // THE DESCRIPTION, IN ITS TWO DRAWINGS. Unfolded, it is the whole text - pre-wrap, so its paragraph breaks come
+    // through untouched. Folded, it is the first two lines with three dots where they stop, and its header says
+    // which way the press goes. A card folded back to its title shows the same preview without a header: there is
+    // nothing inside a title card to fold, so the press belongs to the card.
+    const descBody = desc
+      ? descOpen
+        ? `<p class="init-desc" data-init-desc-body="${esc(init.id)}">${esc(desc)}</p>`
+        : `<p class="init-desc is-cut" data-init-desc-body="${esc(init.id)}" data-init-desc-cut>${esc(desc)}</p>`
+      : `<p class="init-desc is-empty">no description yet - Edit says what this piece of work is</p>`;
+    const descHtml = desc
+      ? `<div class="init-descfold">
+          <button type="button" class="init-proj init-desc-head" data-init-desc-fold="${esc(init.id)}" aria-expanded="${descOpen ? "true" : "false"}" title="the description ${descOpen ? "is whole - fold it back to its first two lines" : "is folded to its first two lines - unfold it for the whole thing, paragraph breaks and all"}. Enter or Space folds it too, and the card's own state is not touched">
+            <span class="init-caret">${descOpen ? "▾" : "▸"}</span>
+            <span class="init-proj-name">Description</span>
+          </button>
+          ${descBody}
+        </div>`
+      : descBody;
+    return `<article class="as-group init-card${open ? "" : " is-titlecard"}" data-init-card="${esc(init.id)}">
       <div class="init-head">
-        <h4 class="init-title">${esc(init.title)}</h4>
-        <button type="button" class="init-mini" data-init-edit="${esc(init.id)}"${blocked || editing ? " disabled" : ""} title="edit the title and the description - the words are free to change, unlike who is behind the work">Edit</button>
+        <button type="button" class="init-head-btn" data-init-card-toggle="${esc(init.id)}" aria-expanded="${open ? "true" : "false"}" title="this initiative ${open ? "is open - a press folds it back to its title card" : "is folded to its title card - a press unfolds it, and one open state is kept per initiative while the tab is open"}">
+          <span class="init-caret">${open ? "▾" : "▸"}</span>
+          <span class="init-title">${esc(init.title)}</span>
+        </button>
+        ${open ? `<button type="button" class="init-mini" data-init-edit="${esc(init.id)}"${blocked || editing ? " disabled" : ""} title="edit the title and the description - the words are free to change, unlike who is behind the work">Edit</button>` : ""}
       </div>
-      <p class="init-desc${desc ? "" : " is-empty"}">${desc ? esc(desc) : "no description yet - Edit says what this piece of work is"}</p>
+      ${descHtml}
       <div class="init-chips">
         <span class="chip" title="${init.projectCount} project${init.projectCount === 1 ? "" : "s"} this initiative spans">${init.projectCount} project${init.projectCount === 1 ? "" : "s"}</span>
         <span class="chip" title="${init.treeCount} worktree${init.treeCount === 1 ? "" : "s"} behind this piece of work">${init.treeCount} worktree${init.treeCount === 1 ? "" : "s"}</span>
         <span class="chip" title="${init.assistantCount} assistant${init.assistantCount === 1 ? "" : "s"} have worked on this initiative's worktrees">${init.assistantCount} assistant${init.assistantCount === 1 ? "" : "s"}</span>
         ${init.updatedAt ? `<span class="as-hint">edited ${esc(relTime(init.updatedAt))} ago${init.updatedBy && init.updatedBy !== "reader" ? ` by ${esc(init.updatedBy)}` : ""}</span>` : ""}
       </div>
-      ${editHtml}
+      ${open
+        ? `${editHtml}
       <div class="init-projects">${projectsHtml}</div>
       <div class="init-addrow">
         ${adding ? initAddFormHtml(init) : `<button type="button" class="init-mini" data-init-add="${esc(init.id)}"${blocked ? " disabled" : ""} title="put another worktree on this piece of work - the panel asks you first, naming the tree and the initiative">+ Add a worktree</button>`}
@@ -3535,7 +3650,8 @@
           <span class="chip is-zero">${assistants.length}</span>
         </button>
         ${assistHtml}
-      </div>
+      </div>`
+        : ""}
       ${initNoteFor(init.id)}
     </article>`;
   }
@@ -3618,6 +3734,9 @@
       </div>
       ${empty}
       ${list.map(initCardHtml).join("")}`;
+    // The markup carries every folded description whole; the paint that folds it to its two lines happens here, in
+    // the same task, so no frame is drawn with the wall of text the fold exists to hide.
+    paintInitDescriptions(host);
     scheduleInitRefresh();
   }
 
@@ -3742,6 +3861,32 @@
     const host = as$("as-initiatives");
     if (!host) return;
     host.addEventListener("click", (e) => {
+      // WHAT THIS PRESS MEANS comes first, and it is a rule with a test rather than the order of the branches
+      // below: the title card folds the initiative, the description's header folds only the description, and every
+      // control inside the card - a project fold, a worktree link, an assistant's name, Edit - acts on itself and
+      // leaves the card's open state alone. Deciding it here means a control added later cannot start folding cards
+      // by accident: it is a button, so it answers for itself.
+      const card = e.target && e.target.closest ? e.target.closest("[data-init-card]") : null;
+      const head = card ? card.querySelector("[data-init-card-toggle]") : null;
+      const cardOpen = String(head?.getAttribute("aria-expanded") || "") === "true";
+      const kind = wtInitiativeFold.press(e.target, { card, open: cardOpen });
+      if (kind === "card") {
+        const id = String(card?.dataset.initCard || "");
+        if (!id) return;
+        if (initOpen.has(id)) initOpen.delete(id);
+        else initOpen.add(id);
+        renderAssistantInitiatives(true);
+        return;
+      }
+      if (kind === "description") {
+        const id = String(e.target.closest("[data-init-desc-fold]")?.dataset.initDescFold || "");
+        if (!id) return;
+        if (initDescClosed.has(id)) initDescClosed.delete(id);
+        else initDescClosed.add(id);
+        renderAssistantInitiatives(true);
+        return;
+      }
+      if (kind !== "self") return;
       const el = e.target.closest("[data-init-fold], [data-init-assist-fold], [data-init-open], [data-init-edit], [data-init-add], [data-init-cancel], [data-init-create], [data-init-save], [data-init-move], [data-init-assistant], [data-init-new], [data-init-refresh]");
       if (!el) return;
       if (el.hasAttribute("data-init-open")) {
@@ -3845,6 +3990,19 @@
       const field = e.target.closest("[data-init-field]");
       if (field && field.dataset.initField === "addTree") initDraft.addTree = String(field.value ?? "");
     });
+    // A RAIL DRAGGED TO ANOTHER WIDTH MOVES THE LINE BREAK, so a folded description is re-cut when the pane's width
+    // changes: the text comes back from the book the pass keeps, never from what the last cut left on screen. The
+    // guard on the width is what stops the re-cut (which changes the pane's height, not its width) from looping.
+    if (typeof ResizeObserver === "function") {
+      let seenW = 0;
+      new ResizeObserver(() => {
+        if (!host.isConnected) return;
+        const w = host.clientWidth;
+        if (!w || w === seenW) return;
+        seenW = w;
+        paintInitDescriptions(host);
+      }).observe(host);
+    }
     // The dock's answer to a move question: the store has moved (or not), so the tab re-reads. The detail carries the
     // question's kind, which is how a push's answer does not cause a read this pane does not need.
     window.addEventListener("wtgui:remote-write-answered", (e) => {

@@ -4241,18 +4241,32 @@ mark.as-search-mark.is-current { background: #f2c744; color: #17110a; box-shadow
    type scale is the rail's - 12px for a name, 11.5px for a row, 10.5px for a hint, the same `.chip` every other
    surface uses - because this tab is a view of the board, not a new design. Row heights are the fold buttons' own
    24px and the worktree rows' 22px, so a folded project and an unfolded one read at the same rhythm. */
-.as-group h4.init-title { margin: 0; font-size: 12px; letter-spacing: 0; text-transform: none; color: var(--text); font-weight: 600; }
 .init-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
-.init-head .init-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* THE TITLE CARD IS ONE BUTTON. A press anywhere on the title - the words, the padding around them, the chevron -
+   folds or unfolds the initiative, so the whole row answers as one control with one aria-expanded; the Edit control
+   beside it is its own button and leaves the card's state alone. The title was an <h4> while the card could not be
+   folded; a heading is not a control, and a press on it has to be one. */
+.init-head-btn { flex: 1 1 auto; min-width: 0; display: flex; align-items: baseline; gap: 6px; margin: 0; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.init-head-btn:hover .init-title { text-decoration: underline; text-decoration-color: var(--dimmer); }
+.init-head-btn:focus-visible { outline: 1px solid var(--blue); outline-offset: 2px; }
+.init-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 600; letter-spacing: 0; color: var(--text); }
 .init-desc { margin: 0 0 7px; font-size: 11.5px; line-height: 1.45; color: var(--dim); white-space: pre-wrap; overflow-wrap: anywhere; }
 .init-desc.is-empty { color: var(--dimmer); font-style: italic; }
+/* The description's own fold: its header is the panel's project-fold row, one line above the text it folds, and the
+   three dots a folded preview ends on are the quiet grey the panel already uses for "there is more". */
+.init-descfold { margin-bottom: 2px; }
+.init-desc-head { margin-bottom: 1px; }
+.init-dots { color: var(--dimmer); }
+/* A title card is a title, the preview and the counts: the fold's hover says the rest of the card is behind it. */
+.init-card.is-titlecard .init-head { margin-bottom: 2px; }
+.init-card.is-titlecard .init-chips { margin-bottom: 2px; }
 .init-chips { display: flex; flex-wrap: wrap; gap: 5px; align-items: baseline; margin-bottom: 8px; }
 .init-chips .chip { font-size: 10px; padding: 1px 6px; }
 .chip.is-zero { color: var(--dimmer); border-color: var(--line); background: transparent; opacity: .8; }
 /* A fold handle: the row height the queue and the alerts rows use, a caret that turns, the name, a count. */
 .init-proj { display: flex; align-items: center; gap: 6px; width: 100%; min-height: 24px; padding: 2px 4px; border: 0; border-radius: 5px; background: transparent; color: var(--dim); font-size: 11.5px; text-align: left; }
 .init-proj:hover { background: var(--hover); color: var(--text); }
-.init-proj .init-caret { width: 10px; color: var(--dimmer); font-size: 10px; text-align: center; }
+.init-proj .init-caret, .init-head-btn .init-caret { flex: 0 0 auto; width: 10px; color: var(--dimmer); font-size: 10px; text-align: center; }
 .init-proj .init-proj-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); }
 .init-proj .chip { font-size: 9.5px; padding: 0 5px; }
 .init-project + .init-project { margin-top: 1px; }

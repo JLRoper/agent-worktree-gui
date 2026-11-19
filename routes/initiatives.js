@@ -82,10 +82,13 @@ export function initiativesView({ initiatives, projectForPath, rowFor, assistant
     for (const { rec, tasks } of board) {
       const mine = tasks.filter((t) => t.worktree && treeKeys.has(normTreePath(t.worktree)));
       if (!mine.length) continue;
-      const counts = { running: 0, done: 0, parked: 0 };
+      const counts = { queued: 0, running: 0, done: 0, parked: 0 };
       let lastAt = null;
       for (const task of mine) {
-        if (task.state === "running") counts.running += 1;
+        // Four states, one pass, one queue read: queued is counted here with the other three, so the strip's first
+        // chip cannot come from a second read that disagrees with the rest of it.
+        if (task.state === "queued") counts.queued += 1;
+        else if (task.state === "running") counts.running += 1;
         else if (task.state === "done") counts.done += 1;
         else if (task.state === "parked") counts.parked += 1;
         const at = lastTouched(task, now);
