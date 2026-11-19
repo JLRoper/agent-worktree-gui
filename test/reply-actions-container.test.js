@@ -68,10 +68,16 @@ const decls = (list, selector) => {
 const has = (body, prop, value) =>
   new RegExp(`${prop}\\s*:\\s*${value}(\\s|;|$)`).test(body);
 
-// The one container block, with a readable failure when the fix is not in the file at all (the case on main).
+// THE REPLY BOX'S container query, with a readable failure when the fix is not in the file at all (the case on
+// main). The file may carry OTHER container queries - the prompt pane answers its own width with a named
+// `@container promptdoc` - so what is counted here is the queries that shape a reply rule, not every block in the
+// stylesheet: a second, unrelated query is not a second version of this fix.
+function replyContainerBlocks() {
+  return atBlocks(css, "container").filter((b) => /\.reply-(wrap|actions)\b/.test(b.body));
+}
 function containerBlock() {
-  const blocks = atBlocks(css, "container");
-  assert.equal(blocks.length, 1, "public/style.css carries exactly one @container block - main carries none");
+  const blocks = replyContainerBlocks();
+  assert.equal(blocks.length, 1, "public/style.css carries exactly one @container block for the reply box - main carries none");
   return blocks[0];
 }
 
@@ -111,9 +117,9 @@ test("the reply box's width is the query's own context", () => {
     "the box is a size container, so the query below can read its width");
 });
 
-test("exactly one container query, at 380px, and no media query stands in for it", () => {
-  const containers = atBlocks(css, "container");
-  assert.equal(containers.length, 1, "one @container block is the whole of this fix");
+test("exactly one container query shapes the reply box, at 380px, and no media query stands in for it", () => {
+  const containers = replyContainerBlocks();
+  assert.equal(containers.length, 1, "one @container block for the reply box is the whole of this fix");
   assert.match(containers[0].prelude, /\(max-width:\s*380px\)/, "the width the button row needs is the threshold");
   const inMedia = atBlocks(css, "media").flatMap((b) => rules(b.body, b.at))
     .filter((r) => /\.reply-(wrap|actions)\b/.test(r.selector));
