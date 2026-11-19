@@ -4,16 +4,35 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.124.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.125.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-640 releases from v0.1.0 (2026-10-20) to v1.124.0 (2026-11-19), 2210 commits between the tags. Every release is anchored by an
+641 releases from v0.1.0 (2026-10-20) to v1.125.0 (2026-11-19), 2216 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.125.0 — 2026-11-19 · 6 commits
+
+[`b3505bd`](https://github.com/JLRoper/agent-worktree-gui/commit/b3505bd1a704ebc551a569321cd7ba8f5912144c) · [compare v1.124.0...v1.125.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.124.0...v1.125.0)
+
+### Added
+
+- feat: a permission tier in settings, and the actor on every change ([`0468986`](https://github.com/JLRoper/agent-worktree-gui/commit/046898610e9fc613a1c92e33d2299a178489547f))
+- feat: WORKTREE_BRIEF tells a worker what to do with the initiative map ([`6fa80e4`](https://github.com/JLRoper/agent-worktree-gui/commit/6fa80e43376ad3acd92ac077b934fb64d3cab14d))
+
+### Docs & tests
+
+- docs: render the changelog - 640 releases ([`d740371`](https://github.com/JLRoper/agent-worktree-gui/commit/d740371e9c9d2e228834c59d624aafe504580bb8))
+- docs: the landing note for 1.124.0 - the Hot Agent search is in the header, behind a hand and a pen ([`da5d834`](https://github.com/JLRoper/agent-worktree-gui/commit/da5d834c3897d16a89397ddd166529815f264b9f))
+- test: the tier's headless proof, and the card's words follow the level ([`5b5d2e5`](https://github.com/JLRoper/agent-worktree-gui/commit/5b5d2e53056c98caf550a97c5a6bb1d3dc561652))
+
+### Other
+
+- chore: 1.125.0 - the version this landing carries ([`b3505bd`](https://github.com/JLRoper/agent-worktree-gui/commit/b3505bd1a704ebc551a569321cd7ba8f5912144c))
 
 ## v1.124.0 — 2026-11-19 · 4 commits
 
