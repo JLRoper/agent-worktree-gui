@@ -4,16 +4,33 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.118.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.119.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-633 releases from v0.1.0 (2026-10-20) to v1.118.0 (2026-11-18), 2168 commits between the tags. Every release is anchored by an
+634 releases from v0.1.0 (2026-10-20) to v1.119.0 (2026-11-19), 2175 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.119.0 — 2026-11-19 · 7 commits
+
+[`b6bab51`](https://github.com/JLRoper/agent-worktree-gui/commit/b6bab51bbb0e22b75a49e26056252870070aa110) · [compare v1.118.0...v1.119.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.118.0...v1.119.0)
+
+### Docs & tests
+
+- docs: render the changelog - 633 releases ([`e8509c1`](https://github.com/JLRoper/agent-worktree-gui/commit/e8509c1785a6d3d97687499ef799bf1e97bcdec5))
+- docs: the landing note for 1.118.0 - a switch per kind for the Human button ([`1945de9`](https://github.com/JLRoper/agent-worktree-gui/commit/1945de9e25a606f3f96d90bd2efaa09b49d20cde))
+
+### Other
+
+- The initiatives store, its endpoints and the question a move asks ([`89eff84`](https://github.com/JLRoper/agent-worktree-gui/commit/89eff845607de0c55ac3f0b054a04fb816e8e8fd))
+- The chart's Initiative column ([`0c13286`](https://github.com/JLRoper/agent-worktree-gui/commit/0c13286a17e549c71b12e76521c860cfe929029f))
+- The Initiatives tab beside Role, and the question a move asks ([`7369920`](https://github.com/JLRoper/agent-worktree-gui/commit/7369920031ac9a950db8f52ff2de3dce245c8ee5))
+- The tests the tab moved: its pane in the list, its gate in the scripts, its fixtures off a drive letter ([`754deb7`](https://github.com/JLRoper/agent-worktree-gui/commit/754deb75f2d2382163e70c57fc385c94dc66b0be))
+- chore: 1.119.0 - the version this landing carries ([`b6bab51`](https://github.com/JLRoper/agent-worktree-gui/commit/b6bab51bbb0e22b75a49e26056252870070aa110))
 
 ## v1.118.0 — 2026-11-18 · 3 commits
 
