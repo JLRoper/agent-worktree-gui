@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Unblocking worktree creation in sales-territory-poc - long path proof</title>
+<style>
+  :root { --ink:#1d1c18; --muted:#5c574d; --line:#d8d2c4; --paper:#faf7f0; --card:#ffffff; --accent:#2f5d50; --warn:#8a4b0f; --bad:#8c2f2f; --ok:#1f6b45; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--paper); color:var(--ink); font:15px/1.55 "Segoe UI", system-ui, -apple-system, sans-serif; }
+  .wrap { max-width:1080px; margin:0 auto; padding:32px 24px 72px; }
+  header { border-bottom:2px solid var(--ink); padding-bottom:14px; margin-bottom:22px; }
+  h1 { font-size:27px; line-height:1.2; margin:0 0 8px; letter-spacing:-0.01em; }
+  .sub { color:var(--muted); font-size:13.5px; }
+  h2 { font-size:19px; margin:34px 0 10px; padding-bottom:5px; border-bottom:1px solid var(--line); }
+  h3 { font-size:15.5px; margin:22px 0 8px; }
+  p { margin:8px 0; }
+  .verdict { background:var(--card); border:1px solid var(--line); border-left:5px solid var(--ok); border-radius:4px; padding:16px 18px; margin:18px 0 6px; }
+  .verdict h2 { border:0; margin:0 0 8px; font-size:16px; text-transform:uppercase; letter-spacing:.06em; color:var(--ok); }
+  .verdict ul { margin:8px 0 0; padding-left:20px; }
+  .verdict li { margin:5px 0; }
+  .flag { border-left-color:var(--warn); }
+  .flag h2 { color:var(--warn); }
+  .bad { color:var(--bad); font-weight:600; }
+  .good { color:var(--ok); font-weight:600; }
+  .note { background:#fffdf5; border:1px solid var(--line); border-radius:4px; padding:12px 14px; margin:14px 0; font-size:14px; }
+  table { width:100%; border-collapse:collapse; margin:12px 0 18px; background:var(--card); font-size:13.5px; table-layout:fixed; }
+  th, td { border:1px solid var(--line); padding:7px 9px; text-align:left; vertical-align:top; overflow-wrap:anywhere; }
+  th { background:#efeade; font-weight:600; }
+  td code, th code { font-family:Consolas, "Courier New", monospace; font-size:12.5px; overflow-wrap:anywhere; }
+  code { font-family:Consolas, "Courier New", monospace; font-size:13px; background:#f2efe8; padding:1px 4px; border-radius:2px; }
+  pre.cmd { background:#23211c; color:#efeade; padding:12px 14px; border-radius:4px; overflow-x:auto; white-space:pre-wrap; word-break:break-word; font:12.5px/1.5 Consolas, "Courier New", monospace; margin:10px 0 18px; }
+  pre.cmd code { background:none; padding:0; color:inherit; font-size:12.5px; }
+  .tablewrap { overflow-x:auto; }
+  .kv td:first-child { width:34%; }
+  .num { text-align:right; font-variant-numeric:tabular-nums; }
+  footer { margin-top:40px; border-top:1px solid var(--line); padding-top:12px; color:var(--muted); font-size:12.5px; }
+  @media print { body { background:#fff; } .wrap { max-width:none; padding:0; } pre.cmd { background:#f4f4f4; color:#000; border:1px solid #ccc; } a { color:#000; text-decoration:none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Unblocking worktree creation in sales-territory-poc</h1>
+  <div class="sub">
+    Evidence page for the failed panel cut at <code>8fe10048825cdb91bb74e028249f64829b9a5adc</code>.
+    Subject repo: <code>C:/ProjectDevelopment/sales-territory-poc</code>, main = <code>8fe1004</code> = origin/main.
+    Measured 2026-11-19 on git 2.53.0.windows.3, Windows 11.
+  </div>
+</header>
+
+<div class="verdict">
+  <h2>Verdict: fixed, and proved by a before and after on the same command</h2>
+  <ul>
+    <li><code>core.longpaths</code> is <code>true</code> in <code>file:.git/config</code> of sales-territory-poc only; global and system scopes still read unset.</li>
+    <li>The orphan branch <code>wtgui/read-the-sales-territory-poc-bugs-folder-c1cdae</code> was at exactly <code>8fe1004</code> and is deleted; <code>git rev-parse --verify</code> on it now exits 1.</li>
+    <li>The identical <code>worktree add</code> that died at 58 percent with <code>Filename too long</code> now exits 0 and checks out all 3831 files, including a 263-character <code>.class</code> path and a 275-character <code>.java</code> path whose MD5 equals the committed blob.</li>
+    <li>Both probes were removed; <code>git worktree prune --dry-run</code> reports no stale entries and the worktree list is back to the original trees.</li>
+  </ul>
+</div>
+
+<div class="verdict flag">
+  <h2>Two things the reader should know before trusting the green</h2>
+  <ul>
+    <li><strong>The short-name probe in the brief is not a proof.</strong> At <code>.worktrees/zz-longpath-probe</code> the longest path in this tree is 245 characters, 15 under MAX_PATH, so that probe passes with or without the fix. It is reported as executed and green, and it is labelled non-discriminating; the proof is the long-name probe in section 4.</li>
+    <li><strong>The worktree list is not byte-identical to the baseline.</strong> The tree <code>.worktrees/push-local-main-to-origin-over-ssh-and-3c3e4e</code> and its branch <code>20261112_1852_ROPER_pushMainToOriginOverSsh</code> disappeared during this run. No command in this run deletes refs; the panel's own release path does exactly this pair. Details and a one-command recovery in section 6.</li>
+  </ul>
+</div>
+
+<h2>1. The failure and the environment</h2>
+<p>
+The panel tried to cut a tree at <code>C:/ProjectDevelopment/sales-territory-poc/.worktrees/read-the-sales-territory-poc-bugs-folder-c1cdae</code>
+from <code>8fe1004</code>. Git died at 58 percent with <code>error: unable to create file ...: Filename too long</code> on committed
+<code>.class</code> files under <code>sales-territory-POC-stage-3/sales-territory-web/bin/test/canary/</code>. The branch was created at
+<code>8fe1004</code> before the checkout failed, leaving an orphan branch and no directory.
+</p>
+<div class="tablewrap">
+<table class="kv">
+  <colgroup><col style="width:38%"><col style="width:62%"></colgroup>
+  <tr><th>Fact</th><th>Value observed in this run</th></tr>
+  <tr><td><code>core.longpaths</code> before the fix</td><td>unset at local, global and system scope</td></tr>
+  <tr><td>HKLM <code>LongPathsEnabled</code></td><td><code>0x0</code> (re-read with <code>reg query</code>, not assumed)</td></tr>
+  <tr><td><code>main</code>, <code>origin/main</code></td><td>both <code>8fe10048825cdb91bb74e028249f64829b9a5adc</code></td></tr>
+  <tr><td>Files in tree <code>8fe1004</code></td><td>3831, of which 374 are <code>.class</code></td></tr>
+  <tr><td>Repo root <code>.gitignore</code></td><td>does not exist (build output under <code>bin/</code> is tracked, not ignored)</td></tr>
+  <tr><td>Longest path, original 46-character tree name</td><td>275 characters, over MAX_PATH by 15</td></tr>
+  <tr><td>Longest path, 16-character probe name</td><td>245 characters, under MAX_PATH by 15</td></tr>
+  <tr><td>Git</td><td>2.53.0.windows.3</td></tr>
+</table>
+</div>
+<p>
+The 15-character margin either way comes from the tree directory name: the relative path
+<code>sales-territory-POC-stage-4/sales-territory-web/src/test/resources/canary/openapi-contract/sales-territory-service/src/main/java/com/sefl/canary/service/AccountsResource.java</code>
+is 174 characters, and it is the same file that decides both numbers. That single measurement is why the short probe cannot
+distinguish a fixed host from a broken one.
+</p>
+
+<h2>2. Step 1: the setting, kept inside this repo</h2>
+<pre class="cmd"><code>git -C C:/ProjectDevelopment/sales-territory-poc config core.longpaths true
+git -C C:/ProjectDevelopment/sales-territory-poc config --get core.longpaths
+git -C C:/ProjectDevelopment/sales-territory-poc config --show-origin --get core.longpaths</code></pre>
+<div class="tablewrap">
+<table>
+  <colgroup><col style="width:46%"><col style="width:18%"><col style="width:36%"></colgroup>
+  <tr><th>Check</th><th>Result</th><th>Meaning</th></tr>
+  <tr><td><code>config --get core.longpaths</code></td><td><span class="good">true</span></td><td>the key reads back as required</td></tr>
+  <tr><td><code>config --show-origin --get core.longpaths</code></td><td><code>file:.git/config</code></td><td>repo-local, not global, not system</td></tr>
+  <tr><td><code>config --global --get core.longpaths</code></td><td>unset</td><td>no machine-wide change</td></tr>
+  <tr><td><code>config --system --get core.longpaths</code></td><td>unset</td><td>no system-wide change</td></tr>
+</table>
+</div>
+<p>
+Because all worktrees of a repository share one <code>.git/config</code>, the four remaining trees under
+<code>.worktrees/</code> inherit the setting without any per-tree edit.
+</p>
+
+<h2>3. Step 2: the orphan branch</h2>
+<pre class="cmd"><code>git -C C:/ProjectDevelopment/sales-territory-poc log -1 --format='%H %s' wtgui/read-the-sales-territory-poc-bugs-folder-c1cdae
+git -C C:/ProjectDevelopment/sales-territory-poc branch -D wtgui/read-the-sales-territory-poc-bugs-folder-c1cdae
+git -C C:/ProjectDevelopment/sales-territory-poc rev-parse --verify --quiet wtgui/read-the-sales-territory-poc-bugs-folder-c1cdae</code></pre>
+<div class="tablewrap">
+<table>
+  <colgroup><col style="width:52%"><col style="width:48%"></colgroup>
+  <tr><th>Observation</th><th>Value</th></tr>
+  <tr><td>Tip before deletion</td><td><code>8fe10048825cdb91bb74e028249f64829b9a5adc</code> ("Pull request #7: Add categorized Sales Territory POC functional QA report and evidence")</td></tr>
+  <tr><td>Deletion output</td><td><code>Deleted branch wtgui/read-the-sales-territory-poc-bugs-folder-c1cdae (was 8fe1004)</code></td></tr>
+  <tr><td><code>rev-parse --verify --quiet</code></td><td>exit 1, no output - the ref does not resolve</td></tr>
+  <tr><td>Residue directory</td><td>absent before and after</td></tr>
+</table>
+</div>
+<p>
+No commit was lost by the deletion: the branch pointed at <code>8fe1004</code>, which is <code>main</code> and <code>origin/main</code>.
+</p>
+
+<h2>4. Step 3: proving the fix, not assuming it</h2>
+
+<h3>4a. The brief's short-name probe, exactly as asked</h3>
+<pre class="cmd"><code>git -C C:/ProjectDevelopment/sales-territory-poc worktree add --detach C:/ProjectDevelopment/sales-territory-poc/.worktrees/zz-longpath-probe 8fe1004</code></pre>
+<div class="tablewrap">
+<table>
+  <colgroup><col style="width:44%"><col style="width:56%"></colgroup>
+  <tr><th>Check</th><th>Result</th></tr>
+  <tr><td>Exit code</td><td><span class="good">0</span></td></tr>
+  <tr><td>Deep <code>.class</code> the brief named</td><td>present, 1040 bytes, magic <code>ca fe ba be</code></td></tr>
+  <tr><td><code>git status --porcelain</code></td><td>0 lines (clean)</td></tr>
+  <tr><td><code>.class</code> files on disk</td><td>374 of 374</td></tr>
+  <tr><td><code>HEAD</code></td><td><code>8fe10048825cdb91bb74e028249f64829b9a5adc</code></td></tr>
+  <tr><td>Longest path in this probe</td><td>245 characters - <span class="bad">under MAX_PATH, so this green does not test the fix</span></td></tr>
+</table>
+</div>
+<p>
+Recorded as green and recorded as inconclusive: a host with <code>core.longpaths</code> unset would produce the same result here.
+</p>
+
+<h3>4b. Counterfactual: the same long-name command with the setting removed</h3>
+<pre class="cmd"><code>git -C C:/ProjectDevelopment/sales-territory-poc config --unset core.longpaths
+git -C C:/ProjectDevelopment/sales-territory-poc worktree add --detach C:/ProjectDevelopment/sales-territory-poc/.worktrees/read-the-sales-territory-poc-bugs-folder-c1cdae 8fe1004</code></pre>
+<p>Exit code <span class="bad">128</span>. Output, abridged to the failing lines:</p>
+<pre class="cmd"><code>error: unable to create file sales-territory-POC-stage-3/sales-territory-web/bin/test/canary/dal-type-leak/sales-territory-business/src/main/java/com/sefl/canary/business/LeakySignature.class: Filename too long
+error: unable to create file sales-territory-POC-stage-3/sales-territory-web/bin/test/canary/openapi-contract/sales-territory-service/src/main/java/com/sefl/canary/service/AccountsResource.class: Filename too long
+error: unable to create file sales-territory-POC-stage-3/sales-territory-web/bin/test/canary/openapi-contract/sales-territory-service/src/main/java/com/sefl/canary/service/AdminResource.class: Filename too long
+Updating files:  58% (2222/3831)
+fatal: cannot create directory at 'sales-territory-POC-stage-3/sales-territory-web/src/test/resources/canary/dal-type-leak/sales-territory-business/src/main/java/com/sefl/canary/business': Filename too long</code></pre>
+<p>
+This reproduces the panel's failure exactly, including the 58 percent mark and the same three <code>.class</code> paths, on the same
+machine where HKLM <code>LongPathsEnabled</code> is <code>0x0</code>. The failed attempt registered no worktree and left no directory; the
+removal attempt answered <code>fatal: ... is not a working tree</code> and the directory was already gone.
+</p>
+
+<h3>4c. The fix: the identical command, with <code>core.longpaths true</code> back in place</h3>
+<pre class="cmd"><code>git -C C:/ProjectDevelopment/sales-territory-poc config core.longpaths true
+git -C C:/ProjectDevelopment/sales-territory-poc worktree add --detach C:/ProjectDevelopment/sales-territory-poc/.worktrees/read-the-sales-territory-poc-bugs-folder-c1cdae 8fe1004</code></pre>
+<div class="tablewrap">
+<table>
+  <colgroup><col style="width:38%"><col style="width:14%"><col style="width:48%"></colgroup>
+  <tr><th>Check</th><th>Result</th><th>Evidence</th></tr>
+  <tr><td>Exit code</td><td><span class="good">0</span></td><td><code>Updating files: 100% (3831/3831), done.</code></td></tr>
+  <tr><td>Checkout complete</td><td><span class="good">0 lines</span></td><td><code>git status --porcelain</code> clean, <code>HEAD</code> = <code>8fe1004</code></td></tr>
+  <tr><td>Deep <code>.class</code>, 263-character path</td><td><span class="good">present</span></td><td>1040 bytes, magic <code>ca fe ba be</code>, MD5 <code>bbb25f37e113a50bf87424880d4990d6</code></td></tr>
+  <tr><td>The same file's committed blob</td><td>-</td><td>MD5 <code>bbb25f37e113a50bf87424880d4990d6</code> (identical)</td></tr>
+  <tr><td>Longest path, 275-character <code>.java</code></td><td><span class="good">present</span></td><td>360 bytes, MD5 <code>bcb29ddda003d8bb803e6b343478a1c2</code>, equal to its blob</td></tr>
+  <tr><td><code>.class</code> files on disk</td><td><span class="good">374 of 374</span></td><td>counted with <code>find</code></td></tr>
+  <tr><td>Files written</td><td>3831</td><td>matches <code>git ls-tree -r</code> count for <code>8fe1004</code></td></tr>
+</table>
+</div>
+<div class="note">
+Python's <code>os.path.isfile</code> reports the 263 and 275 character paths as missing on this host. That is Python's own MAX_PATH limit,
+not the file: HKLM <code>LongPathsEnabled</code> is <code>0x0</code> and CPython only opts into long paths when that flag is set. MSYS
+<code>wc</code>, <code>find</code> and <code>md5sum</code>, and git itself, read both files and agree with the blob hashes. This page uses the MSYS and git
+readings as evidence and records the Python result as a tool limitation.
+</div>
+
+<h3>4d. Removal of both probes</h3>
+<pre class="cmd"><code>git -C C:/ProjectDevelopment/sales-territory-poc worktree remove C:/ProjectDevelopment/sales-territory-poc/.worktrees/read-the-sales-territory-poc-bugs-folder-c1cdae
+git -C C:/ProjectDevelopment/sales-territory-poc worktree prune
+git -C C:/ProjectDevelopment/sales-territory-poc worktree prune --dry-run -v</code></pre>
+<p>
+Both removes exited 0, both directories are absent, and the final <code>prune --dry-run</code> printed nothing, so no stale admin entry survives.
+</p>
+
+<h2>5. Step 4: final state, and the one place it differs from the baseline</h2>
+<div class="tablewrap">
+<table>
+  <colgroup><col style="width:56%"><col style="width:22%"><col style="width:22%"></colgroup>
+  <tr><th>Worktree</th><th>Before</th><th>After</th></tr>
+  <tr><td><code>C:/ProjectDevelopment/sales-territory-poc</code></td><td><code>cefd2ca</code></td><td><code>cefd2ca</code></td></tr>
+  <tr><td><code>.worktrees/cut-stage-3-as-the-project-s-turnover-5322ae</code></td><td><code>bb33dc8</code></td><td><code>bb33dc8</code></td></tr>
+  <tr><td><code>.worktrees/fast-forward-the-local-checkout-main-to-432d62</code></td><td><code>de272dd</code></td><td><code>de272dd</code></td></tr>
+  <tr><td><code>.worktrees/push-local-main-to-origin-over-ssh-and-3c3e4e</code></td><td><code>de272dd</code></td><td><span class="bad">absent</span></td></tr>
+  <tr><td><code>.worktrees/retire-one-redundant-worktree-and-its-38b123</code></td><td><code>de272dd</code></td><td><code>de272dd</code></td></tr>
+  <tr><td><code>.worktrees/zz-longpath-probe</code> (probe)</td><td>-</td><td>absent, as intended</td></tr>
+  <tr><td><code>.worktrees/read-the-...-c1cdae</code> (probe)</td><td>absent</td><td>absent, as intended</td></tr>
+</table>
+</div>
+<div class="tablewrap">
+<table>
+  <colgroup><col style="width:56%"><col style="width:22%"><col style="width:22%"></colgroup>
+  <tr><th>Branch</th><th>Before</th><th>After</th></tr>
+  <tr><td><code>20261112_1852_ROPER_pushMainToOriginOverSsh</code></td><td>present</td><td><span class="bad">absent from local</span>, still on origin at <code>35bb319</code></td></tr>
+  <tr><td><code>20261113_0045_ROPER_salesTerritoryPocStage3</code></td><td>present</td><td>present</td></tr>
+  <tr><td><code>feature/stage-4-java-rebuild</code></td><td>present (checked out)</td><td>present (checked out)</td></tr>
+  <tr><td><code>main</code></td><td>present</td><td>present</td></tr>
+  <tr><td><code>wtgui/fast-forward-the-local-checkout-main-to-432d62</code></td><td>present</td><td>present</td></tr>
+  <tr><td><code>wtgui/read-the-sales-territory-poc-bugs-folder-c1cdae</code></td><td>present (orphan)</td><td>deleted, as asked</td></tr>
+  <tr><td><code>wtgui/retire-one-redundant-worktree-and-its-38b123</code></td><td>present</td><td>present</td></tr>
+</table>
+</div>
+
+<h2>6. The disappearance of the push-local tree: attribution</h2>
+<p>
+That tree and its branch were present in a worktree list read partway through this run and absent from the next read. The commands
+this run executed are <code>worktree add</code>, <code>worktree remove</code>, <code>worktree prune</code>, <code>config</code> and <code>branch -D</code> on the orphan
+only. <code>git worktree prune</code> and <code>git worktree remove</code> delete directories and administrative entries; neither deletes a ref. A missing
+local branch therefore cannot come from this run's command set.
+</p>
+<p>
+The panel's own release path does exactly the observed pair, remove followed by branch delete, in this order:
+</p>
+<div class="tablewrap">
+<table>
+  <colgroup><col style="width:34%"><col style="width:66%"></colgroup>
+  <tr><th>Location</th><th>What it does</th></tr>
+  <tr><td><code>lib/assistant.js:2150</code></td><td><code>git worktree remove --force &lt;treePath&gt;</code></td></tr>
+  <tr><td><code>lib/assistant.js:2157</code></td><td><code>git branch -D &lt;branch&gt;</code> immediately after the remove</td></tr>
+  <tr><td><code>lib/worktrees.js:848</code></td><td><code>git branch -D &lt;branch&gt;</code> in the normalised tree remover</td></tr>
+  <tr><td><code>lib/steward.js:454</code></td><td><code>git branch -D &lt;branch&gt;</code> in the steward cleanup</td></tr>
+</table>
+</div>
+<p>
+Three readings support a concurrent panel release rather than this run: the branch is gone locally and still present on origin at
+<code>35bb319</code>; the tree's admin directory in <code>.git/worktrees</code> is gone while its directory also is; and the repository shows other panel
+activity the same hour (the <code>fast-forward</code> tree's admin entry and the <code>main</code> ref were both rewritten at 13:37, before this run's first read).
+The branch is recoverable, with no data loss, because its tip <code>de272dd</code> is still referenced by two surviving branches:
+</p>
+<pre class="cmd"><code>git -C C:/ProjectDevelopment/sales-territory-poc branch 20261112_1852_ROPER_pushMainToOriginOverSsh de272dd</code></pre>
+<p>
+This run did not run that command. Recreating the branch, or the tree, would undo a release the panel chose to make, so the decision is
+left to the reader; nothing is lost either way.
+</p>
+
+<h2>7. Root cause, and the safe tree-name length</h2>
+<p>
+The longest path in this tree is a tracked source file, not build output: <code>sales-territory-POC-stage-4/sales-territory-web/src/test/resources/canary/openapi-contract/sales-territory-service/src/main/java/com/sefl/canary/service/AccountsResource.java</code>
+is 174 characters on its own, and 275 once it sits under the 46-character tree name the panel chose. The 374 committed <code>.class</code> files under
+<code>bin/</code> are the paths git named first in the failure, but the longest of them is 266 characters, so untracking <code>bin/</code> would not remove the
+blocker: the <code>src/test/resources</code> path would still be 275.
+</p>
+<p>
+The arithmetic is therefore fixed at 229 characters plus the length of the tree directory name (measured: 245 at a 16-character name,
+275 at 46). On Windows with <code>core.longpaths</code> unset and HKLM <code>LongPathsEnabled</code> at <code>0x0</code>, that puts the safe limit on a tree
+directory name at 30 characters:
+</p>
+<div class="tablewrap">
+<table>
+  <colgroup><col style="width:26%"><col style="width:30%"><col style="width:44%"></colgroup>
+  <tr><th>Tree directory name length</th><th>Longest full path</th><th>Result</th></tr>
+  <tr><td>16 (<code>zz-longpath-probe</code>)</td><td>245</td><td><span class="good">passes</span></td></tr>
+  <tr><td>30</td><td>259</td><td><span class="good">passes</span>: MAX_PATH is 260 including the terminating null</td></tr>
+  <tr><td>31</td><td>260</td><td><span class="bad">fails</span></td></tr>
+  <tr><td>46 (<code>read-the-...-c1cdae</code>, the panel's)</td><td>275</td><td><span class="bad">failed at 58 percent</span></td></tr>
+</table>
+</div>
+<div class="tablewrap">
+<table>
+  <colgroup><col style="width:30%"><col style="width:44%"><col style="width:26%"></colgroup>
+  <tr><th>Option</th><th>Effect</th><th>Cost</th></tr>
+  <tr><td><code>core.longpaths true</code> (applied)</td><td>any path length checks out on this machine, and all four trees share the setting because they share one <code>.git/config</code></td><td>one command, already done; a fresh clone needs it again</td></tr>
+  <tr><td>Tree names of 30 characters or fewer</td><td>works on every host and every tool, including Python, with no configuration</td><td>a shorter name in the panel's naming scheme</td></tr>
+  <tr><td>HKLM <code>LongPathsEnabled = 1</code></td><td>machine-wide, and also lets Python and other non-git tools read long paths</td><td>administrator change, outside this repo, not made here</td></tr>
+  <tr><td>Stop tracking <code>bin/</code> build output</td><td>drops 395 committed files and shortens those paths to at most 266</td><td>does not unblock by itself: the 275-character source path remains</td></tr>
+</table>
+</div>
+<p>
+The applied setting is the only option that unblocks the cut at an arbitrary tree name without an administrator change. The name-length
+limit is the one to carry into the panel: a 30-character cap prevents this on any host, in any tool, with no configuration at all.
+</p>
+
+<h2>Appendix: commands from a clean start</h2>
+<pre class="cmd"><code>git -C C:/ProjectDevelopment/sales-territory-poc config core.longpaths true
+git -C C:/ProjectDevelopment/sales-territory-poc config --get core.longpaths
+git -C C:/ProjectDevelopment/sales-territory-poc config --show-origin --get core.longpaths
+git -C C:/ProjectDevelopment/sales-territory-poc branch -D wtgui/read-the-sales-territory-poc-bugs-folder-c1cdae
+git -C C:/ProjectDevelopment/sales-territory-poc worktree add --detach C:/ProjectDevelopment/sales-territory-poc/.worktrees/zz-longpath-probe 8fe1004
+git -C C:/ProjectDevelopment/sales-territory-poc worktree remove C:/ProjectDevelopment/sales-territory-poc/.worktrees/zz-longpath-probe
+git -C C:/ProjectDevelopment/sales-territory-poc worktree list</code></pre>
+
+<footer>
+  Evidence collected by running each command on this host on 2026-11-19; every count, exit code and hash above is a reading, not an estimate.
+  Subject commit <code>8fe10048825cdb91bb74e028249f64829b9a5adc</code> is <code>main</code> and <code>origin/main</code> of sales-territory-poc.
+</footer>
+
+</div>
+</body>
+</html>
