@@ -90,17 +90,55 @@
     return out;
   }
 
-  function title(counts) {
-    // A caller may hand over the LIST (the natural thing: it already has it) or the badge object (when it has just
-    // counted). Counting an array as if it were the badge was the bug this branch exists to make impossible.
-    const b = Array.isArray(counts) ? badge(counts) : counts && typeof counts === "object" ? counts : badge([]);
-    if (!b.total) return "nothing is waiting for you - no permission, no question, no result to review";
-    const parts = [
-      plural(b.permissions, "permission", "permissions"),
-      plural(b.questions, "clarify question", "clarify questions"),
-      plural(b.reviews, "to review", "to review"),
-    ];
-    return `${parts.join(", ")} - press H to step into one, Shift+H back, Esc to step out`;
+  // THE READER'S THREE SWITCHES (Settings > Human): which kinds this button counts. One reading of which switch a
+  // list entry answers to, so the filter, the badge split and the title sentence cannot disagree about a kind.
+  const KIND_KEYS = ["permissions", "clarify", "review"];
+
+  function kindKey(item) {
+    const r = rank(item);
+    return r === 0 ? "permissions" : r === 1 ? "clarify" : r === 2 ? "review" : "";
+  }
+
+  // A kind is on unless the reader switched it off. An entry this module cannot place has no key, and is KEPT: a
+  // switch it does not understand must not drop work it also cannot see.
+  function kindOn(kinds, key) {
+    return !kinds || kinds[key] !== false;
+  }
+
+  function keepKinds(items, kinds) {
+    return [...(items || [])].filter((item) => kindOn(kinds, kindKey(item)));
+  }
+
+  // A caller may hand over the LIST (the natural thing: it already has it) or the badge object (when it has just
+  // counted). Counting an array as if it were the badge was the bug this branch exists to make impossible.
+  function asBadge(counts) {
+    return Array.isArray(counts) ? badge(counts) : counts && typeof counts === "object" ? counts : badge([]);
+  }
+
+  // The split sentence - "2 permissions, 1 clarify question, 2 to review" - naming ONLY the kinds that are on. A
+  // switched-off kind is not a zero in this sentence: it is a kind this button does not count, and "0 to review"
+  // would be a claim about rows it was never shown.
+  function split(counts, kinds) {
+    const b = asBadge(counts);
+    const parts = [];
+    if (kindOn(kinds, "permissions")) parts.push(plural(b.permissions, "permission", "permissions"));
+    if (kindOn(kinds, "clarify")) parts.push(plural(b.questions, "clarify question", "clarify questions"));
+    if (kindOn(kinds, "review")) parts.push(plural(b.reviews, "to review", "to review"));
+    return parts.join(", ");
+  }
+
+  function title(counts, kinds) {
+    const b = asBadge(counts);
+    const named = split(b, kinds);
+    if (!b.total) {
+      if (!named) return "nothing is waiting for you - every kind of the Human button is switched off in Settings";
+      const nouns = [];
+      if (kindOn(kinds, "permissions")) nouns.push("no permission");
+      if (kindOn(kinds, "clarify")) nouns.push("no question");
+      if (kindOn(kinds, "review")) nouns.push("no result to review");
+      return `nothing is waiting for you - ${nouns.join(", ")}`;
+    }
+    return `${named} - press H to step into one, Shift+H back, Esc to step out`;
   }
 
   // The row marker's own wording, so the tooltip and the rotation agree about what the amber mark is. Distinct from
@@ -114,5 +152,5 @@
     return bits.join(" - ");
   }
 
-  root.wtReviewLane = { awaiting, since, count, keeps, rank, sortHuman, badge, title, markerTitle };
+  root.wtReviewLane = { awaiting, since, count, keeps, rank, sortHuman, badge, title, markerTitle, KIND_KEYS, kindKey, keepKinds, split };
 })(globalThis);

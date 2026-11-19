@@ -284,7 +284,7 @@ const state = {
   // HUMAN: the rotation through every OPEN permission and clarify question. `key` is the question last shown
   // and `at` its place in that sample; `sig` is what was last painted on the button. The list itself is never
   // stored — it is rebuilt from live state on every press, so an answered question cannot linger in it.
-  human: { key: null, at: -1, sig: "" },
+  human: { key: null, at: -1, sig: "", kinds: null },
   humanFlashTimer: null,
   // The HOT AGENTS marker's rotation: the agent the last press landed on, and the list signature that press last
   // painted. The list itself is sampled on every paint (it is `state.jobs`, which the snapshot and every job frame
@@ -12842,6 +12842,114 @@ function humanQuestionKey(kind, turnId, requestId) {
   return `${kind}:${turnId}:${requestId || ""}`;
 }
 
+// ---- which kinds the Human button counts (Settings > Human) ----------------------------------------------------
+// THE READER'S THREE SWITCHES. Permissions, clarify questions and review items are three different costs on a reader's
+// attention, and a reader who has stopped reading review results should not be counted down to by them. Each switch
+// is saved in this browser like every other settings row here, and each DEFAULTS ON, so a reader who never opens the
+// setting gets exactly the button this panel has always drawn.
+//
+// ONE OBJECT, READ BY BOTH HALVES. `humanQuestions` filters with it and `paintHumanButton` counts and names with it,
+// so the badge, the title and the H rotation cannot disagree about which kinds exist - the discipline the review
+// lane's own `sortHuman` already enforces for the order.
+const HUMAN_KINDS_KEY = "wtgui.humanKinds";
+// The three, in the rotation's own order, with the words a sentence uses for each. `noun` is singular ("no permission
+// is open"), `many` is what the "switched off" line names.
+const HUMAN_KIND_WORDS = {
+  permissions: { noun: "permission", many: "permissions" },
+  clarify: { noun: "clarify question", many: "clarify questions" },
+  review: { noun: "result to review", many: "review items" },
+};
+const HUMAN_KIND_KEYS = ["permissions", "clarify", "review"];
+
+// The switches, defaulting on. Read once from the browser and kept in state: this is asked on every paint and on
+// every press, and a localStorage read per repaint would be a read per second for a value that only the reader moves.
+function humanKinds() {
+  if (!state.human.kinds) state.human.kinds = loadHumanKinds();
+  return state.human.kinds;
+}
+
+function loadHumanKinds() {
+  const out = {};
+  for (const key of HUMAN_KIND_KEYS) out[key] = true;
+  try {
+    const raw = localStorage.getItem(HUMAN_KINDS_KEY);
+    const saved = raw ? JSON.parse(raw) : null;
+    // A stored value is honoured per key and only as a boolean: a file edited by hand into `"no"` is not a switch,
+    // and an unknown key is ignored rather than resurrected as a kind.
+    if (saved && typeof saved === "object") for (const key of HUMAN_KIND_KEYS) if (typeof saved[key] === "boolean") out[key] = saved[key];
+  } catch {
+    /* private mode, or a corrupt value: today's behaviour is every kind on */
+  }
+  return out;
+}
+
+function humanKindOn(kind) {
+  return humanKinds()[kind] !== false;
+}
+
+function humanAnyKindOn() {
+  const kinds = humanKinds();
+  return HUMAN_KIND_KEYS.some((key) => kinds[key] !== false);
+}
+
+// The kinds that are OFF, in the reader's words, for a sentence that has to stay honest as they change.
+function humanKindsOffWords(kinds = humanKinds()) {
+  return HUMAN_KIND_KEYS.filter((key) => kinds[key] === false).map((key) => HUMAN_KIND_WORDS[key].many);
+}
+
+// "review items are switched off in Settings" / "permissions and clarify questions are switched off in Settings",
+// ending in a full stop. Empty string when every kind is on, so a reader who never opened the setting reads exactly
+// the sentence this panel always wrote.
+function humanKindsOffSentence(kinds = humanKinds()) {
+  const off = humanKindsOffWords(kinds);
+  if (!off.length) return "";
+  const list = off.length === 1 ? off[0] : `${off.slice(0, -1).join(", ")} and ${off[off.length - 1]}`;
+  // Capitalised: every use is a sentence in its own right, after a full stop or on its own in the aria-label.
+  // Every name in `off` is plural ("permissions", "clarify questions", "review items"), so the verb is always "are".
+  const said = `${list} are switched off in Settings (Ctrl+,, Human).`;
+  return said.charAt(0).toUpperCase() + said.slice(1);
+}
+
+function setHumanKind(key, on) {
+  if (!HUMAN_KIND_KEYS.includes(key)) return;
+  const kinds = humanKinds();
+  kinds[key] = Boolean(on);
+  try {
+    localStorage.setItem(HUMAN_KINDS_KEY, JSON.stringify(kinds));
+  } catch {
+    /* private mode: the switches still apply for this page */
+  }
+  // A rotation parked on a kind the reader has just switched off is pointing at something this button no longer
+  // counts, so it is cleared rather than left to resume there if the kind comes back.
+  if (kinds[key] === false) {
+    state.human.key = null;
+    state.human.at = -1;
+  }
+  state.human.sig = "";
+  paintHumanKinds();
+  paintHumanButton();
+  showBanner(`Human: ${HUMAN_KIND_WORDS[key].many} ${kinds[key] ? "counted again" : "switched off"}`);
+}
+
+// The tab's own mirror: the three boxes and the line under them, so a switch that was saved in an earlier session is
+// drawn on rather than being something the reader has to discover by pressing the button.
+function paintHumanKinds() {
+  const kinds = humanKinds();
+  for (const key of HUMAN_KIND_KEYS) {
+    const box = $(`human-kind-${key}`);
+    if (box) box.checked = kinds[key] !== false;
+  }
+  const preview = $("human-kinds-preview");
+  if (!preview) return;
+  const off = humanKindsOffWords(kinds);
+  const on = HUMAN_KIND_KEYS.filter((key) => kinds[key] !== false).map((key) => HUMAN_KIND_WORDS[key].many);
+  preview.textContent = !off.length
+    ? "all three counted - badge, title and H"
+    : !on.length
+      ? "every kind off - no badge, and H does nothing"
+      : `${on.join(" and ")} counted - ${off.join(" and ")} off`;
+}
+
 function humanQuestions() {
   const out = [];
   const convs = conversations();
@@ -12907,7 +13015,11 @@ function humanQuestions() {
   // Permissions first, then clarify questions, then rows to review, oldest first inside each kind. The order is the
   // lane's own (public/core/review-lane.js `sortHuman`), not this function's, so the count, the title and the
   // rotation cannot disagree about which kind a row is.
-  return wtReviewLane.sortHuman([...out, ...dock]);
+  //
+  // AND ONLY THE KINDS THE READER WATCHES (Settings > Human). The filter runs AFTER the sort, so switching a kind off
+  // takes its rows out and leaves every other row in exactly the order it was in - the rotation keeps permissions then
+  // clarify then review among whatever remains, which is what makes H's sequence predictable as the switches move.
+  return wtReviewLane.keepKinds(wtReviewLane.sortHuman([...out, ...dock]), humanKinds());
 }
 
 // The review lane's share of the rotation: one entry per row awaiting a check, keyed by the row so the rotation's
@@ -13063,11 +13175,15 @@ document.addEventListener("click", async (e) => {
 function paintHumanButton() {
   const btn = $("btn-human");
   if (!btn) return;
+  // THE READER'S SWITCHES, read before the list because `humanQuestions` applies the same three: a kind switched off
+  // in Settings is neither counted here nor stepped into by H (Settings > Human, saved in this browser).
+  const kinds = humanKinds();
   const list = humanQuestions();
   // THREE KINDS, one count. A permission and a clarify question are runs stopped until the reader answers; a row to
   // review is work already finished that needs looking at. The badge is their sum and the title splits it, so a
   // reader who sees "3" can tell whether it is three blocked runs or three results to read
-  // (public/core/review-lane.js `badge`).
+  // (public/core/review-lane.js `badge`). The list is already narrowed to the kinds that are on, so this total IS the
+  // enabled kinds' total - there is no second count that could include a kind the reader switched off.
   const counts = wtReviewLane.badge(list);
   const perms = counts.permissions;
   const asks = counts.questions;
@@ -13081,7 +13197,10 @@ function paintHumanButton() {
   const at = state.human.key ? list.findIndex((q) => q.key === state.human.key) : -1;
   const label = $("human-label");
   const badge = $("human-badge");
-  const sig = `${list.length}|${perms}|${asks}|${reviews}|${repeats}|${agents.join(",")}|${at}`;
+  // THE SWITCHES ARE PART OF THE SIGNATURE. Turning review off while nothing is awaiting review still changes what
+  // this title promises, so the same count has to be allowed to repaint the same button differently.
+  const kindSig = HUMAN_KIND_KEYS.map((key) => (kinds[key] === false ? "0" : "1")).join("");
+  const sig = `${list.length}|${perms}|${asks}|${reviews}|${repeats}|${agents.join(",")}|${at}|${kindSig}`;
   if (sig === state.human.sig) return;
   state.human.sig = sig;
   // The label is Title Case with a leading glyph, the way ✧ Assistant is — the button's word is its name, not a
@@ -13094,17 +13213,38 @@ function paintHumanButton() {
     badge.textContent = String(list.length);
   }
   btn.classList.toggle("has-questions", list.length > 0);
-  const split = `${perms} permission${perms === 1 ? "" : "s"}, ${asks} clarify question${asks === 1 ? "" : "s"}, ${reviews} to review`;
+  // The split names ONLY the kinds that are on (public/core/review-lane.js `split`): a kind the reader switched off
+  // is not a zero in this sentence, it is a kind this button does not count, and "0 to review" would be a claim
+  // about rows it was never shown.
+  const split = wtReviewLane.split(counts, kinds);
+  // Said only when something is off, so a reader who never opened the setting reads exactly the sentence this panel
+  // has always written.
+  const offSaid = humanKindsOffSentence(kinds);
+  // What is open when nothing is: the noun per kind, in the rotation's order, from the kinds that are COUNTED.
+  const held = HUMAN_KIND_KEYS.filter((key) => kinds[key] !== false).map((key) => HUMAN_KIND_WORDS[key].noun);
+  const heldList = held.length > 1 ? `${held.slice(0, -1).join(", ")} or ${held[held.length - 1]}` : held[0] || "";
   btn.setAttribute(
     "aria-label",
     list.length
-      ? `Human — ${list.length} waiting on you: ${split}${repeats ? `, ${repeats} asked again` : ""}`
-      : "Human — nothing is waiting on you",
+      ? `Human — ${list.length} waiting on you: ${split}${repeats ? `, ${repeats} asked again` : ""}${offSaid ? `. ${offSaid}` : ""}`
+      : held.length
+        ? `Human — nothing is waiting on you${offSaid ? `. ${offSaid}` : ""}`
+        : "Human — every kind of this button is switched off in Settings: nothing is counted and H does nothing",
   );
   const named = agents.length > 4 ? `${agents.slice(0, 4).join(", ")} and ${agents.length - 4} more` : agents.join(", ");
+  // WHAT A PRESS DOES, in the same three kinds. A switched-off kind is not described as something H will open, because
+  // H will not open it: with every kind on this is the sentence the title has always carried, word for word.
+  const blockers = [];
+  if (kinds.permissions !== false) blockers.push("a permission");
+  if (kinds.clarify !== false) blockers.push("a question");
+  const steps = [];
+  if (blockers.length) steps.push(`${blockers.join(" or ")} opens its agent, centres its prompt and flashes it red with its answer control focused`);
+  if (kinds.review !== false) steps.push("a row to review opens the row, brings its report anchor and next steps into view and puts ✓ Reviewed under the caret, so one more press clears it");
   btn.title = list.length
-    ? `Human — ${list.length} waiting on you: ${split}${named ? ` — questions held by ${named}` : ""}${repeats ? `. ${repeats} of them the panel has already asked again about (once an hour, on its own clock)` : ""}. Click or press H to step through them: a permission or a question opens its agent, centres its prompt and flashes it red with its answer control focused; a row to review opens the row, brings its report anchor and next steps into view and puts ✓ Reviewed under the caret, so one more press clears it. Anything answered, expired, reviewed, archived or deleted drops out.`
-    : "Human — nothing is waiting on you: no permission, clarify question or result to review is open on this board. Click or press H to check again.";
+    ? `Human — ${list.length} waiting on you: ${split}${named ? ` — questions held by ${named}` : ""}${repeats ? `. ${repeats} of them the panel has already asked again about (once an hour, on its own clock)` : ""}. Click or press H to step through them: ${steps.join("; ")}. Anything answered, expired, reviewed, archived or deleted drops out.${offSaid ? ` ${offSaid}` : ""}`
+    : held.length
+      ? `Human — nothing is waiting on you: no ${heldList} is open on this board.${offSaid ? ` ${offSaid}` : ""} Click or press H to check again.`
+      : "Human — every kind of this button is switched off in Settings (Ctrl+,, Human): nothing is counted, so there is nothing to open and H does nothing. Switch one back on there to start counting again.";
 }
 
 // Open exactly the path to one question and put it in front of the reader. A board question: its project and row
@@ -13330,6 +13470,16 @@ function humanShowDock(q) {
 // One press: the next open question, wrapping past the last one. The list is sampled here and NOT kept; only the
 // chosen key and its place are, so the next press knows where to continue from even if this question has gone.
 function humanStep() {
+  // EVERY KIND SWITCHED OFF: the button is quiet and the key is inert. Not a banner about an empty board - there may
+  // be plenty waiting, the reader has told this button not to look - and not an open either, which would be the panel
+  // doing the thing the switch said not to do.
+  if (!humanAnyKindOn()) {
+    state.human.key = null;
+    state.human.at = -1;
+    state.human.sig = "";
+    paintHumanButton();
+    return;
+  }
   const list = humanQuestions();
   const last = state.human.key;
   if (!list.length) {
@@ -13365,6 +13515,13 @@ $("btn-human")?.addEventListener("click", (e) => {
   humanStep();
 });
 
+// THE THREE SWITCHES (Settings > Human). Each writes its own key and repaints the button, so the count, the title and
+// the rotation move together - `humanQuestions` reads the same object, so nothing else needs a repaint to stay honest.
+for (const key of HUMAN_KIND_KEYS) {
+  const box = $(`human-kind-${key}`);
+  box?.addEventListener("change", (e) => setHumanKind(key, e.target.checked));
+}
+
 // H is the rotation's key, and a reader in ANY text field owns that keystroke: an `h` typed into a reply box, a
 // Settings search, an answer box or a contenteditable must not jump the page. Skipped, never swallowed.
 function humanTextEntry(el) {
@@ -13379,6 +13536,9 @@ document.addEventListener("keydown", (e) => {
   if (e.key !== "h" && e.key !== "H") return;
   if (e.repeat) return; // holding the key must not race through the whole rotation
   if (humanTextEntry(document.activeElement)) return;
+  // EVERY KIND OFF: H is inert, not a key that answers with a banner about a board it is not reading. Left
+  // un-prevented, so the keystroke stays an ordinary keypress the page does nothing with.
+  if (!humanAnyKindOn()) return;
   e.preventDefault();
   humanStep();
 });
@@ -18948,6 +19108,8 @@ if ($("group-tools")) $("group-tools").checked = toolGroupsOn();
 if ($("follow-opened")) $("follow-opened").checked = foldFollowsConsole();
 if ($("auto-collect")) $("auto-collect").checked = autoCollectOn();
 if ($("prev-turn-mode")) $("prev-turn-mode").value = prevTurnMode();
+// Settings > Human: the three kinds the Human button counts, each defaulting on.
+paintHumanKinds();
 void refreshSubagentRoster();
 // The model menu is filled once at start-up from the gateway's own provider list; a failure leaves
 // the "(gateway default)" entry, which is what a spawn sends anyway.

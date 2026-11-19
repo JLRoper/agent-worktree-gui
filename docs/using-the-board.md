@@ -68,6 +68,22 @@ answer control. A permission box starts on **Deny**, deliberately: a stray key c
 - The red badge is how many questions are waiting on you. Zero leaves no badge at all.
 - A question that is answered, expires or whose turn ends drops out of the rotation as you go.
 
+#### Which kinds the button counts - Settings > Human
+
+The rotation carries three kinds: a permission, a clarify question, and a finished row whose result nobody has
+checked yet (the amber ▣ Review lane). **Settings > Human** has one switch for each, all three on by default and saved
+in this browser, so a reader who never opens that tab gets exactly the button described above:
+
+- **Permissions** - a run stopped on a command it wants to run.
+- **Clarify questions** - a run waiting on a decision.
+- **Review items** - a result to check.
+
+A kind that is off is not on the badge, is not named in the button's title, and `H` skips it; the order among what
+remains is still permissions, then clarify questions, then review items, oldest first inside each kind. With all three
+off the button is quiet - no badge, a label with no counter, and `H` does nothing at all rather than opening something.
+Nothing else moves: the approval card, the question box, the amber review mark and the header's own **Review** control
+are untouched by these switches.
+
 #### A question nobody answers is asked again — hourly, as one entry
 
 A worker parked on a `clarify` question has stopped emitting anything: no event, no turn to end. It is the one
