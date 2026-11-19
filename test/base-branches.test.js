@@ -272,7 +272,10 @@ test("a single-branch project is untouched: origin/main is the base and its coun
 const appSrc = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
 const cellCode = sliceRegion(appSrc, "branch cell");
 const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-const { baseChipHtml, branchCellHtml } = new Function("esc", `${cellCode}; return { baseChipHtml, branchCellHtml };`)(esc);
+// The branch NAME is drawn by public/core/branch-link.js (shared with the Initiatives tab), so the slice runs with
+// that module's global injected, exactly as the page loads it before app.js.
+await import("../public/core/branch-link.js");
+const { baseChipHtml, branchCellHtml } = new Function("esc", "wtBranchLink", `${cellCode}; return { baseChipHtml, branchCellHtml };`)(esc, globalThis.wtBranchLink);
 const strip = (html) => html.replace(/<[^>]*>/g, "");
 
 test("the chart shows the resolved base beside the branch, and hides it where the base is the single one", () => {
