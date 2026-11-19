@@ -195,7 +195,7 @@ test("the result card is drawn by the panel from the stored delivery: anchor thr
 test("the rotation takes review rows as a THIRD kind, and drops one the moment it is not awaiting", () => {
   const questions = sliceBetween(app, "function humanQuestions()", "// The header control: one red count");
   assert.match(questions, /out\.push\(\.\.\.reviewRotationRows\(\)\)/);
-  assert.match(questions, /return wtReviewLane\.sortHuman\(\[\.\.\.out, \.\.\.dock\]\)/);
+  assert.match(questions, /return wtReviewLane\.keepKinds\(wtReviewLane\.sortHuman\(\[\.\.\.out, \.\.\.dock\]\), humanKinds\(\)\)/);
   const rotation = sliceBetween(app, "function reviewRotationRows()", "// The header control: one red count");
   assert.match(rotation, /if \(!wtReviewLane\.awaiting\(row\)\) continue;/, "reviewed, archived or deleted rows never enter it");
   assert.match(rotation, /kind: "review"/);
@@ -210,7 +210,7 @@ test("the rotation takes review rows as a THIRD kind, and drops one the moment i
   // The badge total includes them and the title splits it three ways.
   const paint = sliceBetween(app, "function paintHumanButton()", "// Open exactly the path to one question");
   assert.match(paint, /wtReviewLane\.badge\(list\)/);
-  assert.match(paint, /\$\{reviews\} to review/);
+  assert.match(paint, /wtReviewLane\.split\(counts, kinds\)/);
 });
 
 test("a press paints from the answer as well as from the snapshot, and a refused press stays pressable", () => {
