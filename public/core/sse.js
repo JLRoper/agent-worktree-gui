@@ -69,7 +69,7 @@ function connect({ waitForSnapshot = false } = {}) {
   }) : null;
   for (const type of ["snapshot", "row", "project", "drop", "job", "jobline", "remote-write",
     "remote-write-answered", "remote-write-review", "remote-write-review-done", "settings", "approval",
-    "approval-answered", "jobs", "assistant", "held-replies", "heartbeat"]) {
+    "approval-answered", "jobs", "assistant", "held-replies", "treelist", "heartbeat"]) {
     es.addEventListener(type, () => {
       if (state.es === es) state.lastTransportAt = Date.now();
     });
@@ -227,6 +227,16 @@ function connect({ waitForSnapshot = false } = {}) {
     if (evt.action === "keep") state.rwReviews.delete(evt.id);
     else if (evt.review && evt.review.id) state.rwReviews.set(evt.review.id, evt.review);
     renderApprovals();
+  });
+  // THE TREE LIST (lib/tree-cache.js). Two moments, one frame type: a pass that enumerated every project's tree list
+  // just completed (so an agent may now be judged unattached, and the "waiting for the scan" group ends), and the count
+  // of rows still served from the cached file has moved. Neither carries rows - those arrive as their own `row` events -
+  // so this is a flag repaint, never a board rebuild.
+  es.addEventListener("treelist", (e) => {
+    if (state.es !== es || state.paused) return;
+    const evt = JSON.parse(e.data);
+    state.lastEventAt = Date.now();
+    applyTreeList(evt.treeList, { completed: evt.completed || null });
   });
   // A settings change made anywhere (the Settings row, another tab, "Always allow" in the permission box): the page
   // repaints from the numbers the server just wrote, rather than keeping its own copy of a policy.

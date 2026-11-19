@@ -457,6 +457,16 @@ td.branch .branch-base.is-missing { color: #8a7448; }
    same grey as a no-commits badge, and its tooltip carries the reason lib/own-tree.js gave. */
 .badge.released { color: var(--dim); background: #20242c; border-color: var(--line); border-style: dashed; }
 .badge.stale { opacity: .65; border-style: dashed; }
+/* A tree that has VANISHED from disk (lib/store.js markStale, for a row the tree cache or an agent still holds): the
+   row stays so its cards stay under it, and the badge says the folder is not there rather than claiming anything about
+   the work. Amber, not red: nothing is wrong with the WORK, the folder moved. The tooltip carries "last seen <when> at
+   <path> - <reason>", so the row answers the question the unattached list would have asked. */
+.badge.gone { color: var(--amber); background: var(--amber-bg); border-color: #5a4a1c; border-style: dashed; }
+/* A row served from the cached tree list (lib/tree-cache.js): its verdict is the unknown one until its own read lands. */
+.badge.cached { opacity: .8; border-style: dotted; }
+/* The "waiting for the first scan" group in the unattached panel: a caption and its cards, never counted as unattached. */
+.job-pending { border-left: 2px dashed #4a3a17; padding-left: 10px; margin-bottom: 10px; }
+.job-pending > p.empty { margin: 0 0 8px; color: var(--amber); }
 
 /* The UNMERGED chip is a control, not a statement: it starts the merge agent for its row. It keeps the badge's own
    colours and shape (it is still a verdict), and only gains what a button needs - a pointer, a hover that is visibly

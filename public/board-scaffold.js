@@ -287,8 +287,10 @@ function chipsHtml(name) {
   }).length;
   const unmerged = rows.filter((r) => {
     const v = String(r.verdict || "");
-    // A RELEASED row is a folder left behind, not work waiting to merge: it is counted in the tree total only.
-    return !v.startsWith("MERGED") && !v.startsWith("NO COMMITS") && v !== "ON MAIN" && v !== "ON BASE" && v !== "RELEASED";
+    // A RELEASED row is a folder left behind, not work waiting to merge: it is counted in the tree total only. A STALE
+    // row is a tree gone from disk, kept so its cards stay under it - also not work waiting to merge (lib/store.js
+    // markStale).
+    return !v.startsWith("MERGED") && !v.startsWith("NO COMMITS") && v !== "ON MAIN" && v !== "ON BASE" && v !== "RELEASED" && v !== "STALE";
   }).length;
   const dirty = rows.filter((r) => r.dirty || r.untracked).length;
   const serving = rows.filter((r) => r.signals?.ports?.on).length;

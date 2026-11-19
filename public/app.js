@@ -301,6 +301,16 @@ const state = {
   // job event (a class added to the node is gone the moment the node is replaced).
   jumpThread: null,
   rows: new Map(),
+  // The tree list this page is drawing, and whether it is the CACHED one (lib/tree-cache.js): `cached` while any row is
+  // still a placeholder from the file, `completedAt` the moment a scan enumerated every project's tree list. Both the
+  // row rule (isHomelessConv) and the cached chip read this one object, which the server sends with every snapshot, so
+  // the page's claim and the rows can never disagree.
+  treeList: null,
+  // The row order is HELD across the cached first paint and the scan that replaces it: a board that re-ranks under the
+  // reader mid-scan is the jump this cache exists to remove. `rowOrderHoldUntil` is the deadline, `settled` stops the
+  // hold being extended forever by later snapshots (see applyTreeList).
+  rowOrderHoldUntil: 0,
+  rowOrderHoldSettled: false,
   expanded: new Set(),
   // Focus mode: a double-click on the top header bar narrows the board to the worktrees a live panel is working in
   // (see the focus-mode section below the listeners). `focusSig` is the kept tree set as it was last painted, so a
@@ -7007,21 +7017,139 @@ async function reviveSession(btn) {
   }
 }
 
+// THE TREE LIST'S OWN STATE, page side (lib/tree-cache.js is the server half). `state.treeList` is what the server says
+// about the list this snapshot carries:
+//
+//   cached        the rows are the last successful scan's, served while this process reads them again
+//   cachedTrees   how many are still placeholders (the flag is this count > 0)
+//   at            when that scan read them
+//   completedAt   the moment a scan enumerated every project's tree list in this process - null before the first one
+//
+// Two things hang off it. The CHIP says the list is the cached one, so a row's "…" verdict is explained rather than
+// mistrusted. The ORDER HOLD keeps every row in the slot it was painted in until the scan that replaces the cached rows
+// has landed and settled: the replacement is the same rows read again, so a re-rank mid-scan would be the jump the
+// cache exists to remove. The hold is bounded on both sides - 30s while the cached list is served (a scan that never
+// lands must not freeze the board), then 10s after the last cached row is replaced - and it is never extended again
+// once settled.
+const TREE_LIST_ORDER_HOLD_MS = 30_000;
+const TREE_LIST_ORDER_SETTLE_MS = 10_000;
+
+function rowOrderHold() {
+  if (!state.rowOrderHoldUntil) return false;
+  if (Date.now() < state.rowOrderHoldUntil) return true;
+  state.rowOrderHoldUntil = 0;
+  state.rowOrderHoldSettled = false;
+  return false;
+}
+
+// The header chip: one place, outside the board, that says the list is cached and when it was read. It is painted from
+// the server's own flag, never from a guess the page makes about a row.
+function paintTreeListChips() {
+  const el = $("chip-trees");
+  if (!el) return;
+  const t = state.treeList;
+  const cached = Boolean(t && t.cached);
+  el.hidden = !cached;
+  if (!cached) {
+    el.textContent = "";
+    el.title = "";
+    return;
+  }
+  const n = Math.max(0, Number(t.cachedTrees) || 0);
+  const count = Math.max(n, Number(t.count) || 0);
+  el.textContent = `tree list cached${t.at ? ` · read ${relTime(t.at)} ago` : ""}`;
+  el.title =
+    `the tree list was read at ${t.at || "an unknown time"} and is being served while this process reads it again; ` +
+    `${n} of ${count} rows are still the cached ones` +
+    (t.completedAt ? "" : ", and no scan has completed yet - no agent is unattached on the strength of a scan that has not finished") +
+    ". Each row is replaced in place as its own read lands.";
+}
+
+function applyTreeList(t, { completed = null } = {}) {
+  if (!t || typeof t !== "object") return;
+  const pendingBefore = pendingScanConversations().length;
+  const prev = state.treeList || {};
+  state.treeList = { ...prev, ...t };
+  const now = Date.now();
+  if (state.treeList.cached) {
+    // The cached list is being served: hold the order it was painted in. A later snapshot re-states the flag, so the
+    // deadline moves with it while the list is genuinely still cached - and only until the scan replaces it.
+    if (!state.rowOrderHoldSettled) state.rowOrderHoldUntil = Math.max(state.rowOrderHoldUntil || 0, now + TREE_LIST_ORDER_HOLD_MS);
+  } else if (state.rowOrderHoldUntil && !state.rowOrderHoldSettled) {
+    // The last cached row has been replaced. Hold the painted order a little longer, so the scan's own frames land
+    // under the reader rather than re-ranking the board under their pointer, then rank normally again.
+    state.rowOrderHoldUntil = now + TREE_LIST_ORDER_SETTLE_MS;
+    state.rowOrderHoldSettled = true;
+  }
+  paintTreeListChips();
+  if (completed) {
+    // A completed scan is what may move a card to the unattached list, and what ends the "waiting for the scan" group:
+    // the unattached panel is the place that answers both, and each open row's card block answers the second. Repaint
+    // those and nothing else - this event carries no rows. A board that had nothing waiting is left alone entirely, so
+    // an ordinary pass costs no repaint.
+    if (pendingBefore) {
+      renderJobs();
+      for (const [key, dEl] of state.detailEls) {
+        const row = state.rows.get(key);
+        if (!row) continue;
+        // The detail is what holds a row's cards, and the agent block is part of its signature: clearing it forces the
+        // ONE rebuild that moves a card from "waiting" into its row, with the card itself carried across (placeRow).
+        dEl.dataset.dsig = "";
+        placeRow(row.project, row, { flash: false });
+      }
+    }
+    paintAgentBadges();
+  }
+}
+
+// THE ROW RULE, page side. A card's owner is the tree it named; the page may say that tree is gone only once a scan has
+// actually completed. Until then an owner the list does not carry is UNKNOWN - the list is still arriving, or it is the
+// cached one being replaced - and an agent is never drawn as unattached because a scan was slow. This is the client half
+// of lib/tree-cache.js: the server serves the last successful tree list, the page refuses to draw a conclusion the list
+// has not given it.
+// ---- tree list row rule -------------------------------------------------
+function treeListComplete() {
+  return Boolean(state.treeList && state.treeList.completedAt);
+}
+
+function rowForOwner(owner) {
+  if (!owner) return null;
+  const k = normPath(owner).toLowerCase();
+  for (const r of state.rows.values()) if (normPath(r.path).toLowerCase() === k) return r;
+  return null;
+}
+
+// A card whose tree the list has not named yet, before any scan has completed: not unattached, pending. Its own group
+// in the unattached panel says so in words (renderJobs), so the reader never reads "waiting" as "no tree".
+function isPendingScanConv(conv) {
+  if (assistantSessionFor(conv?.thread)) return false;
+  const owner = conv.latest.ownerPath || conv.first.ownerPath || null;
+  if (!owner) return false; // no owner at all: genuinely unattached, scan or no scan
+  if (treeListComplete()) return false; // a completed scan is the right to judge
+  return !rowForOwner(owner);
+}
+
 function isHomelessConv(conv) {
   // The assistant is not a homeless worker even though it has no worktree: its card belongs to the floating
   // panel, and listing it in the Agents section as well would put two copies of one thread on the page.
   if (assistantSessionFor(conv?.thread)) return false;
   const owner = conv.latest.ownerPath || conv.first.ownerPath || null;
   if (!owner) return true;
-  const k = normPath(owner).toLowerCase();
-  return ![...state.rows.values()].some((r) => normPath(r.path).toLowerCase() === k);
+  if (rowForOwner(owner)) return false;
+  // THE RULE: before a completed scan, an owner the list does not name is unknown, not unattached (see treeListComplete).
+  return treeListComplete();
 }
 
 function homelessConversations() {
-  // Unattached = no owner, or an owner that is not a row we can show (project root runs, or a
-  // worktree that has since been removed). Without this such an agent would fall off the screen.
+  // Unattached = no owner, or an owner the last COMPLETED scan did not list (project-root runs, or a worktree that has
+  // since been removed). Without this such an agent would fall off the screen.
   return conversations().filter(isHomelessConv);
 }
+
+function pendingScanConversations() {
+  return conversations().filter(isPendingScanConv);
+}
+// ---- end tree list row rule ---------------------------------------------
 
 // The worktrees an agent can be attached to, grouped project-first for a readable picker.
 function worktreeOptionsHtml() {
@@ -7482,8 +7610,17 @@ function rebaseTargetOf(row, parent) {
 
 function verdictHtml(row) {
   const verdict = String(row.verdict || "");
-  const cls = `badge ${verdictClass(verdict)}${row.verdictStale ? " stale" : ""}`;
+  const cls = `badge ${verdictClass(verdict)}${row.verdictStale ? " stale" : ""}${row.cached ? " cached" : ""}`;
   const text = esc(row.verdict);
+  // A CACHED row (lib/tree-cache.js) has not been read in this process: its verdict is the unknown one on purpose, and
+  // the tooltip says where the row came from and when, so "…" reads as "not read yet" rather than as a failure.
+  const cached = row.cached
+    ? `cached from the last successful scan${row.cachedAt ? ` (read ${relTime(row.cachedAt)} ago)` : ""} at ${row.head || "an unknown commit"} — the fresh scan has not reached this tree yet; its own read replaces this row in place`
+    : "";
+  // A STALE row's badge carries the reason its tree is not on disk and the moment it was last seen there
+  // (lib/store.js markStale): "last seen <when> at <path> - <reason>". That is the whole point of keeping the row
+  // instead of letting its agents fall into the unattached list.
+  const staleLine = String(row.stale?.line || "");
   // A RELEASED row's badge carries the REASON its path stopped being a tree (lib/own-tree.js), because the counts
   // beside it are empty by construction: the tooltip is the only place the reader can find out that this is a folder
   // left behind, and which checkout git would answer for there.
@@ -7499,7 +7636,7 @@ function verdictHtml(row) {
   const withVs = (t) => (vs ? `${t} — ${vs}` : t);
   // Every other verdict is a statement; only UNMERGED has an action behind it.
   if (!verdict.startsWith("UNMERGED")) {
-    const title = released || vs;
+    const title = staleLine || cached || released || vs;
     return `<span class="${cls}"${title ? ` title="${esc(title)}"` : ""}>${text}</span>`;
   }
   const key = keyOf(row.project, row.path);
