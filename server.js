@@ -93,6 +93,10 @@ import { installGuard, uninstallGuard, guardState, refreshGuardFiles, normTree }
 import { projectRulesRow, rulesFrom, validateRules } from "./lib/project-rules.js";
 // The rules prefix: the read the chip and the rules bar draw, and the one save that replaces a project's list.
 import { RULES_PATH, createProjectRulesRoutes } from "./routes/project-rules.js";
+// The initiatives: the big pieces of work, keyed by tree path in a side store beside the locks (lib/initiatives.js),
+// overlaid onto the board's rows on every read, and moved only through the permission box.
+import { Initiatives, normTreePath } from "./lib/initiatives.js";
+import { INITIATIVES_PATH, createInitiativesRoutes } from "./routes/initiatives.js";
 // A project's turnover branch: the branch its work rolls up into, named by the reader in the project settings. The
 // row shape and validation live with the module; the config write lives here; the wire shape is its own route.
 import { baseRefKindLookup, baseRefKindOf, projectTurnoverRow, turnoverBranchFrom, turnoverLookup, validateBaseRefKind, validateTurnoverBranch } from "./lib/project-turnover.js";
@@ -1674,6 +1678,11 @@ const spawnFeature = createSpawn({
 // wears it as an emoji, so an agent reading the board sees the lock without opening anything.
 const locks = new Locks({ file: config.locksFile, log });
 
+// The big pieces of work (lib/initiatives.js): a title, a description, and which worktrees are behind each one. Like
+// the lock, this is the reader's map rather than anything git knows, so it lives in a side store under logs/ and is
+// overlaid onto the rows on every read - a scan that rebuilt a row cannot lose a membership it never owned.
+const initiatives = new Initiatives({ file: config.initiativesFile, log });
+
 // The sentry + the assistant's own thread. It reads the same job summaries the page does, so nothing
 // here can see more than the board shows; its own clock is `settings.seconds`. `spawner` is the one act it
 // can perform beyond talk: a worker, in a worktree the panel cuts, exactly the way the New-agent card does.
@@ -1772,6 +1781,27 @@ const PREFIX_MOUNTS = [
   // bar, and replaced wholesale by the one save. The writer owns config.json and the live records, so it stays here
   // and travels in; the module owns the paths, the status codes and the wire shape.
   { prefix: RULES_PATH, handles: createProjectRulesRoutes({ getConfig: () => config, registry, setProjectRules, sendJson, readBody, authorised }) },
+  // The initiatives prefix (routes/initiatives.js): the tab's one read, the create and the title/description edit that
+  // a reader or an assistant may make freely, and the move that parks a permission question and writes the store only
+  // when the reader answers. The store, the board's rows and the queue are this file's, so they travel in beside the
+  // transport helpers; the module owns the wire shape and the question's wording.
+  {
+    prefix: INITIATIVES_PATH,
+    handles: createInitiativesRoutes({
+      initiatives,
+      remoteWrites,
+      getConfig: () => config,
+      registry,
+      store,
+      assistant,
+      projectForPath: (p) => spawnFeature.projectForPath(p),
+      sendJson,
+      readBody,
+      authorised,
+      onChange: () => broadcastSnapshot(),
+      log,
+    }),
+  },
   // The turnover prefix (routes/project-turnover.js): the branch a project's work rolls up into, drawn in the project
   // settings and read by every cut. Same writer, same transport, its own path.
   { prefix: TURNOVER_PATH, handles: createProjectTurnoverRoutes({ getConfig: () => config, registry, setProjectTurnover, sendJson, readBody, authorised }) },
@@ -3469,6 +3499,23 @@ function withLiveAgents(snap) {
   return snap;
 }
 
+// The initiatives a row belongs to (lib/initiatives.js). The store is keyed by tree path and never lives on the row, so
+// this overlay is what puts it there: a scan rebuilds a row and the membership is still read from the one document
+// beside the locks. Absence is the normal case - a worktree with no initiative is drawn as a dash in the chart and
+// nothing anywhere enforces one, because an initiative is a way to hold a big piece of work together and not a field
+// every tree must have. One index per snapshot, not one lookup per row.
+function withInitiatives(snap) {
+  const index = initiatives.index();
+  for (const project of snap.projects || []) {
+    for (const row of project.worktrees || []) {
+      const mine = index.get(normTreePath(row.path));
+      if (mine && mine.length) row.initiatives = mine;
+      else delete row.initiatives;
+    }
+  }
+  return snap;
+}
+
 // The reader's lock travels with the snapshot the way the naming ledger does: git knows nothing about it, the
 // scanner must not have to, and the row is where it has to be visible. A row with no `lock` is unlocked — absence is
 // the default, so an unlocked row costs nothing on the wire and a store that cannot be read cannot make a tree look
@@ -3570,6 +3617,11 @@ function rowExtras(projectName, row) {
     const rec = typeof assistant.roundNames === "function" ? assistant.roundNames().get(roundTreeKey(out.path)) : null;
     if (rec) out.round = rec;
     else delete out.round;
+    // A per-row frame replaces the row wholesale on the page, so the initiative overlay has to travel with it - a row
+    // event without this would blink a chart chip off until the next full snapshot.
+    const mine = initiatives.forTree(out.path);
+    if (mine.length) out.initiatives = mine;
+    else delete out.initiatives;
     return out;
   });
 }
@@ -3728,9 +3780,10 @@ function snapshotBody() {
     ),
   );
   // The owner and the round's name ride the snapshot like the lock does: per-row fields the page can read without a
-  // second call. Both are applied last so no earlier overlay resets them. THE REVIEW LANE IS APPLIED LAST OF ALL, so
-  // a row's delivery is on the row whenever a snapshot leaves this function - nothing above it can strip the field.
-  return withReviews(withRoundNames(withAssistantOwners(snap)));
+  // second call. The initiatives are the same kind of fact and are applied here for the same reason. THE REVIEW LANE
+  // IS APPLIED LAST OF ALL, so a row's delivery is on the row whenever a snapshot leaves this function - nothing above
+  // it can strip the field.
+  return withReviews(withRoundNames(withAssistantOwners(withInitiatives(snap))));
 }
 
 const heartbeat = setInterval(() => {
