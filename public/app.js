@@ -12966,7 +12966,7 @@ function setHumanKind(key, on) {
   showBanner(`Human: ${HUMAN_KIND_WORDS[key].many} ${kinds[key] ? "counted again" : "switched off"}`);
 }
 
-// The tab's own mirror: the three boxes and the line under them, so a switch that was saved in an earlier session is
+// The tab's own mirror: the four boxes and the line under them, so a switch that was saved in an earlier session is
 // drawn on rather than being something the reader has to discover by pressing the button.
 function paintHumanKinds() {
   const kinds = humanKinds();
@@ -12979,7 +12979,7 @@ function paintHumanKinds() {
   const off = humanKindsOffWords(kinds);
   const on = HUMAN_KIND_KEYS.filter((key) => kinds[key] !== false).map((key) => HUMAN_KIND_WORDS[key].many);
   preview.textContent = !off.length
-    ? "all three counted - badge, title and H"
+    ? "all four counted - badge, title and H"
     : !on.length
       ? "every kind off - no badge, and H does nothing"
       : `${on.join(" and ")} counted - ${off.join(" and ")} off`;
@@ -13047,9 +13047,12 @@ function humanQuestions() {
   // the same list the board draws, so a row that was archived or deleted is not in the rotation at all - and one that
   // has just been reviewed stops being in it the moment the snapshot lands, because `awaiting` reads the stamp.
   out.push(...reviewRotationRows());
-  // Permissions first, then clarify questions, then rows to review, oldest first inside each kind. The order is the
-  // lane's own (public/core/review-lane.js `sortHuman`), not this function's, so the count, the title and the
-  // rotation cannot disagree about which kind a row is.
+  // THE FOURTH KIND: live trees in this project that are touching the same work, one entry per pair. Filed last
+  // because a collision is the only kind where nothing has stopped - see review-lane.js's RANK.
+  out.push(...collisionRotationRows());
+  // Permissions first, then clarify questions, then rows to review, then collisions, oldest first inside each kind. The
+  // order is the lane's own (public/core/review-lane.js `sortHuman`), not this function's, so the count, the title and
+  // the rotation cannot disagree about which kind a row is.
   //
   // AND ONLY THE KINDS THE READER WATCHES (Settings > Human). The filter runs AFTER the sort, so switching a kind off
   // takes its rows out and leaves every other row in exactly the order it was in - the rotation keeps permissions then
@@ -13073,6 +13076,29 @@ function reviewRotationRows() {
       agent: row.name || row.project,
       deadline: 0,
       sinceMs: wtReviewLane.since(row),
+    });
+  }
+  return out;
+}
+
+// The collision kind's share of the rotation: ONE entry per PAIR, not per row, because both rows carry the same pair
+// and the reader is being asked one question about it. `wtReviewLane.collisions` does the dedupe and the oldest-first
+// order, so the badge, this list and the marker cannot disagree about how many overlaps are waiting.
+function collisionRotationRows() {
+  const out = [];
+  for (const rec of wtReviewLane.collisions(state.rows.values())) {
+    out.push({
+      kind: "collision",
+      collision: rec,
+      key: `collision:${rec.key}`,
+      rowKey: keyOf(rec.project, rec.path),
+      project: rec.project,
+      path: rec.path,
+      // The counterpart, because that is who this is about: the item is two trees, and the one that is not the row is
+      // the name a reader needs.
+      agent: rec.other?.name || rec.otherTarget || "another tree",
+      deadline: 0,
+      sinceMs: Date.parse(rec.firstAt || "") || 0,
     });
   }
   return out;
@@ -13204,6 +13230,69 @@ document.addEventListener("click", async (e) => {
   if (!ok && done.isConnected) done.disabled = false;
 });
 
+// THE RULING PRESSES. A collision card carries its own controls (`data-collision-rule` with a pick of a/b/clear, and
+// `data-collision-ask`), drawn under BOTH rows. One route, `/api/collisions`, answers with the pair's new state; the
+// page paints it onto every row that carries the pair and repaints the board and the button, so a reader who presses
+// "coll-two goes first" sees the second row's card say the same thing in the same frame, without waiting for a socket.
+async function collisionPress({ op, key, pick = null }) {
+  if (!key) return false;
+  try {
+    const r = await apiFetch("/api/collisions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ op, key, pick }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || d.ok === false) {
+      showBanner(`Collision: ${d.error || `HTTP ${r.status}`}`);
+      return false;
+    }
+    if (d.record) applyCollisionRecord(d.record);
+    paintHumanButton();
+    renderAll();
+    showBanner(d.say || (pick === "clear" ? "Ruling withdrawn - the pair goes back to the assistants" : "Ruled"));
+    return true;
+  } catch (err) {
+    showBanner(`Collision: ${err.message || err}`);
+    return false;
+  }
+}
+
+// One record, every row that carries it. The route answers with the pair as the store now holds it; each row's copy
+// also knows which side it is (`other`, `role`), so only the fields the ruling owns are overwritten - a row is never
+// handed the other row's counterpart.
+function applyCollisionRecord(rec) {
+  if (!rec || !rec.key) return;
+  for (const row of state.rows.values()) {
+    const list = Array.isArray(row.collisions) ? row.collisions : [];
+    const i = list.findIndex((c) => c && c.key === rec.key);
+    if (i < 0) continue;
+    list[i] = {
+      ...list[i],
+      state: rec.state,
+      ruling: rec.ruling || null,
+      canAsk: !!rec.canAsk,
+      files: Array.isArray(rec.files) ? rec.files : list[i].files,
+      relations: Array.isArray(rec.relations) ? rec.relations : list[i].relations,
+      readerAt: rec.readerAt || list[i].readerAt,
+    };
+  }
+}
+
+document.addEventListener("click", async (e) => {
+  const rule = e.target.closest("[data-collision-rule]");
+  const ask = rule ? null : e.target.closest("[data-collision-ask]");
+  if (!rule && !ask) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const el = rule || ask;
+  el.disabled = true;
+  const ok = rule
+    ? await collisionPress({ op: "rule", key: rule.dataset.collisionRule, pick: rule.dataset.collisionPick })
+    : await collisionPress({ op: "ask", key: ask.dataset.collisionAsk });
+  if (!ok && el.isConnected) el.disabled = false;
+});
+
 // The header control: one red count of everything waiting on a human, and a title that splits it. Zero questions
 // means no badge at all — a quiet button, not a broken one — and the count is repainted from live state on the
 // page's own clock so a deadline that passes cannot leave a number claiming a question that is over.
@@ -13223,19 +13312,21 @@ function paintHumanButton() {
   const perms = counts.permissions;
   const asks = counts.questions;
   const reviews = counts.reviews;
+  const collisions = counts.collisions || 0;
   // How many of the open questions the panel has already asked again about. Not a second count on the
   // button — the button counts QUESTIONS, and a re-ask never adds one — it is said in the title so a
   // reader who has been away can tell "nobody answered" from "you were asked again and missed it".
   const repeats = list.filter((q) => Number(q.reasks) > 0).length;
-  // Only the AGENTS an answer is waiting on: a review row's name is a worktree, not an agent holding a question.
-  const agents = [...new Set(list.filter((q) => q.kind !== "review").map((q) => q.agent).filter(Boolean))];
+  // Only the AGENTS an answer is waiting on: a review row's name is a worktree and a collision's is its counterpart
+  // tree, not an agent holding a question.
+  const agents = [...new Set(list.filter((q) => q.kind !== "review" && q.kind !== "collision").map((q) => q.agent).filter(Boolean))];
   const at = state.human.key ? list.findIndex((q) => q.key === state.human.key) : -1;
   const label = $("human-label");
   const badge = $("human-badge");
   // THE SWITCHES ARE PART OF THE SIGNATURE. Turning review off while nothing is awaiting review still changes what
   // this title promises, so the same count has to be allowed to repaint the same button differently.
   const kindSig = HUMAN_KIND_KEYS.map((key) => (kinds[key] === false ? "0" : "1")).join("");
-  const sig = `${list.length}|${perms}|${asks}|${reviews}|${repeats}|${agents.join(",")}|${at}|${kindSig}`;
+  const sig = `${list.length}|${perms}|${asks}|${reviews}|${collisions}|${repeats}|${agents.join(",")}|${at}|${kindSig}`;
   if (sig === state.human.sig) return;
   state.human.sig = sig;
   // The label is Title Case with a leading glyph, the way ✧ Assistant is — the button's word is its name, not a
@@ -13275,6 +13366,7 @@ function paintHumanButton() {
   const steps = [];
   if (blockers.length) steps.push(`${blockers.join(" or ")} opens its agent, centres its prompt and flashes it red with its answer control focused`);
   if (kinds.review !== false) steps.push("a row to review opens the row, brings its report anchor and next steps into view and puts ✓ Reviewed under the caret, so one more press clears it");
+  if (kinds.collisions !== false) steps.push("a collision opens the row whose pair it is, names the counterpart and the shared files, and puts the ruling under the caret");
   btn.title = list.length
     ? `Human — ${list.length} waiting on you: ${split}${named ? ` — questions held by ${named}` : ""}${repeats ? `. ${repeats} of them the panel has already asked again about (once an hour, on its own clock)` : ""}. Click or press H to step through them: ${steps.join("; ")}. Anything answered, expired, reviewed, archived or deleted drops out.${offSaid ? ` ${offSaid}` : ""}`
     : held.length
@@ -13293,6 +13385,10 @@ function humanShow(q) {
   // row opens, the amber marker, the report anchor and the next steps are brought into view, and ✓ Reviewed takes
   // the caret so one more key clears it.
   if (q.kind === "review") return humanShowReview(q);
+  // A COLLISION is the fourth kind: two trees, one decision. Its landing is the row whose pair it is, the collision
+  // card under it, and the first ruling press under the caret - the reader is being asked which side goes first, so
+  // that is the control the rotation should leave them on.
+  if (q.kind === "collision") return humanShowCollision(q);
   if (q.dock) return humanShowDock(q);
   const conv = conversations().find((c) => c.thread === q.thread);
   if (!conv) return false;
@@ -13363,6 +13459,51 @@ function humanShowReview(q) {
   // THE CONTROL THE READER WOULD REACH FOR: ✓ Reviewed. The row's own button comes first in the document, so this is
   // the one beside the amber marker; the card's copy is the same press and the same route.
   const press = document.querySelector(`[data-review-done="${CSS.escape(key)}"]`);
+  if (press) {
+    try {
+      press.focus({ preventScroll: true });
+    } catch {
+      press.focus();
+    }
+  }
+  return true;
+}
+
+// A COLLISION, brought in front of the reader. Same landing rules as a review row - the project unfolded, the row
+// opened, the block centred and ringed - but the block is the pair's card and the caret goes to the FIRST RULING press,
+// because the question is "which side goes first" and the answer is one of those two buttons.
+//
+// The pair is carried by BOTH rows; the rotation entry names one of them (`rowKey`), and either is a valid landing, so
+// a row that vanished between the sample and the press is not a failed step if the other side is still there. If
+// neither row answers, false: the pair is gone and H steps on rather than flashing nothing.
+function humanShowCollision(q) {
+  const rec = q.collision || {};
+  const row = state.rows.get(q.rowKey);
+  const other = rec.other?.path ? state.rows.get(keyOf(rec.other.project || rec.project, rec.other.path)) : null;
+  const land = [row, other].find((r) => r && wtReviewLane.awaitingCollisions(r).some((c) => c.key === rec.key));
+  if (!land) return false;
+  hotOpenPath(land);
+  const key = keyOf(land.project, land.path);
+  const find = () =>
+    document.querySelector(`[data-collision-block="${CSS.escape(key)}"][data-collision-key="${CSS.escape(rec.key)}"]`);
+  let block = find();
+  if (!block) {
+    renderProjectRows(land.project);
+    block = find();
+  }
+  const target = block || document.querySelector(`tr.row[data-key="${CSS.escape(key)}"]`);
+  if (!target) return false;
+  programmaticScroll();
+  target.scrollIntoView({ block: "center", behavior: "smooth" });
+  for (const el of document.querySelectorAll(".human-flash")) el.classList.remove("human-flash");
+  target.classList.remove("human-flash");
+  void target.offsetWidth;
+  target.classList.add("human-flash");
+  clearTimeout(state.humanFlashTimer);
+  state.humanFlashTimer = setTimeout(() => {
+    for (const el of document.querySelectorAll(".human-flash")) el.classList.remove("human-flash");
+  }, 1900);
+  const press = document.querySelector(`[data-collision-rule="${CSS.escape(rec.key)}"][data-collision-pick="a"]`);
   if (press) {
     try {
       press.focus({ preventScroll: true });

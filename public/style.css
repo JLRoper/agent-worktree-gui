@@ -2427,6 +2427,88 @@ tr.row:hover .btn-row-lock { opacity: .85; }
    column without any tooltip being opened. */
 tr.row.is-locked td.name .row-name { color: #e8c07a; }
 tr.row.is-locked { box-shadow: inset 2px 0 0 #6b5324; }
+/* THE VIOLET COLLISION MARK, and the card the reader rules on. The FOURTH row mark, deliberately unlike the other
+   three: the lock is the yellow 🔒 (a state the reader sets), the turnover mark is the blue ⇄ (a branch
+   relationship), the review mark is the amber ▣ (a box to tick), and this one is a VIOLET ◆ - the one mark that is
+   about a RELATIONSHIP BETWEEN TWO ROWS, not about this row alone. It sits between the turnover mark and the review
+   mark, so a row carrying all four reads left to right: name, lock, branch, collision, review.
+   The two states that matter at a glance: `is-reader` (the pair is waiting on the reader) is the bright violet, and
+   `is-ruled` (the pair has been decided) fades to a muted one and keeps the marker, because a ruled overlap is still
+   a fact about the row - it is how a re-detected pair reads as already ruled instead of as a fresh alarm. */
+.collision-mark {
+  flex: none;
+  margin-left: 3px;
+  font: 11px/1 var(--term);
+  color: #c9a0ff;
+  vertical-align: 1px;
+  cursor: help;
+}
+.collision-mark.is-reader { color: #e4c8ff; text-shadow: 0 0 6px #7a4fbf; }
+.collision-mark.is-ruled { color: #8b7aa8; }
+/* A row in a live pair is marked at rest, like a row awaiting review: the point of the mark is that nobody has to
+   hover to discover two workers are in each other's way. */
+tr.row.has-collision { box-shadow: inset 2px 0 0 #6b4f9e; }
+tr.row.has-collision.has-review { box-shadow: inset 2px 0 0 #6b4f9e, inset 4px 0 0 #7a5a1e; }
+
+/* THE COLLISION CARD: the evidence (the shared paths as chips, the branch relation as a sentence, the other tree by
+   path and branch), the state, and the two presses that ARE the ruling. Drawn under both rows, violet-edged, so the
+   reader can tell it from the amber result card beside it at a glance. */
+.collision-block {
+  margin: 6px 0 8px;
+  border: 1px solid #3b2d5c;
+  border-left: 3px solid #a371f7;
+  border-radius: 6px;
+  background: #17131f;
+  padding: 6px 10px 8px;
+}
+.collision-block.is-ruled { border-left-color: #4b6b55; border-color: #2a4432; background: #141a15; }
+.collision-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.collision-head .collision-mark { margin-left: 0; font-size: 12px; }
+.collision-block.is-ruled .collision-head .collision-mark { color: #8b7aa8; }
+.collision-head h4 { margin: 0; font: 600 11px/1.6 var(--sans, var(--term)); text-transform: uppercase; letter-spacing: .05em; color: #c9a0ff; }
+.collision-block.is-ruled .collision-head h4 { color: #9fe0b4; }
+.collision-other { font: 12px/1.6 var(--sans, var(--term)); color: #e8ddff; }
+.collision-other b { color: #fff; font-weight: 600; }
+.collision-branch { font-size: 10px; color: #b79ae6; border: 1px solid #3b2d5c; border-radius: 999px; padding: 0 6px; margin-left: 4px; }
+.collision-state { font-size: 10px; border-radius: 999px; padding: 0 6px; border: 1px solid #3b2d5c; color: #c9a0ff; }
+.collision-state.is-reader { border-color: #6b4f9e; color: #efe2ff; background: #241a38; }
+.collision-state.is-ruled { border-color: #2a4432; color: #9fe0b4; }
+.collision-when { margin-left: auto; font-size: 10px; color: var(--dimmer); }
+.collision-body { margin-top: 5px; display: flex; flex-direction: column; gap: 5px; }
+.collision-say { font: 12px/1.6 var(--sans, var(--term)); color: #f0e6d2; }
+.collision-chips { list-style: none; display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; }
+.collision-chip {
+  font-size: 10px;
+  padding: 0 6px;
+  border-radius: 999px;
+  border: 1px solid #3b2d5c;
+  background: #1e1730;
+  color: #d6c2ff;
+  max-width: 46ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.collision-none { font-size: 11px; color: var(--dimmer); font-style: italic; }
+.collision-peer { font-size: 10px; color: var(--dim); word-break: break-all; }
+.collision-notes { list-style: none; margin: 0; padding: 0; font-size: 11px; color: #e8ddff; }
+.collision-notes li { padding-left: 2px; }
+.collision-ruling-note { font-size: 11px; color: #9fe0b4; }
+.collision-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+.btn-collision-rule, .btn-collision-ask, .btn-collision-clear {
+  border: 1px solid #4b3a75;
+  background: #241a38;
+  border-radius: 5px;
+  color: #e4c8ff;
+  font: 11px/1.8 var(--sans, var(--term));
+  padding: 0 9px;
+  cursor: pointer;
+}
+.btn-collision-rule:hover, .btn-collision-ask:hover { background: #2e2246; border-color: #7a5bb8; color: #fff; }
+.btn-collision-clear { border-color: #2a4432; background: #141a15; color: #9fe0b4; }
+.btn-collision-rule:focus-visible, .btn-collision-ask:focus-visible, .btn-collision-clear:focus-visible { outline: 2px solid #a371f7; outline-offset: 1px; }
+.btn-collision-rule:disabled, .btn-collision-ask:disabled, .btn-collision-clear:disabled { opacity: .45; cursor: progress; }
+
 /* THE AMBER REVIEW MARK, and the press that clears it. A third row mark, deliberately unlike the other two: the lock
    is the yellow 🔒 (an emoji, a state the reader sets), the turnover mark is a blue ⇄ (a branch relationship), and
    this one is an AMBER ▣ - a filled square with a corner cut (a box to tick), its own colour, its own class. It sits

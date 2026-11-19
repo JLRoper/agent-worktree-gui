@@ -1,22 +1,28 @@
-// tools/verify-human-kinds.mjs - the Human button's THREE SWITCHES, driven in a real browser against a real panel.
+// tools/verify-human-kinds.mjs - the Human button's FOUR SWITCHES, driven in a real browser against a real panel.
 // HARNESS: LIVE GATE - it tracks main, and `npm run verify:human-kinds` is how the repo runs it by name.
 //
 //   node tools/verify-human-kinds.mjs                     # boot a throwaway panel and drive it
 //   node tools/verify-human-kinds.mjs --root <tree>        # serve a `git archive` of another build (RED PROOF)
 //   node tools/verify-human-kinds.mjs --shots <dir>        # write the screenshots there (default .shots/)
 //
-// WHAT IT PROVES. Settings > Human carries three switches - Permissions, Clarify questions, Review items - and the
-// button in the header counts, names and steps exactly the kinds that are on:
+// WHAT IT PROVES. Settings > Human carries four switches - Permissions, Clarify questions, Review items, Collisions -
+// and the button in the header counts, names and steps exactly the kinds that are on:
 //
-//   1. all three on, one of each pending: the badge reads 3 and H steps permissions, then clarify, then review;
+//   1. all four on, one of each of the three kinds this fixture can seed pending: the badge reads 3 and H steps
+//      permissions, then clarify, then review; the fourth switch is on with nothing pending, so it is counted but
+//      never named;
 //   2. review items off: the badge drops to 2, the title and the aria-label stop naming review, and H steps the two
 //      blocking kinds and nothing else;
 //   3. permissions off as well: the badge is 1, the split is the clarify question alone, and H lands on it;
-//   4. every kind off: no badge, a label with no counter, an aria-label that says every kind is off, and H inert -
-//      the key opens nothing and says nothing;
-//   5. the switches are BROWSER settings: a reload keeps the three of them where the reader left them;
+//   4. every kind off - collisions included: no badge, a label with no counter, an aria-label that says every kind is
+//      off, and H inert - the key opens nothing and says nothing;
+//   5. the switches are BROWSER settings: a reload keeps the four of them where the reader left them;
 //   6. review items alone, after that reload: the badge is 1 and H steps the one review row, so a single kind is a
 //      rotation of its own.
+//
+// A collision WITH something in it - the markers, the badge, the H landing and the ruling - is proved against two real
+// trees in tools/verify-collisions.mjs: this fixture could not seed a live pair without a second worktree, and a
+// synthetic one would prove the switch against a row the board does not have.
 //
 // HOW THE THREE KINDS ARE MADE. The review row is REAL: a git fixture with one worktree, and a delivery recorded
 // through the panel's own settle seam (`Jobs.harvestReview` -> lib/review-inbox.js), so the row the button counts is
@@ -210,7 +216,7 @@ const result = await (async () => {
               at,
               list,
               preview: (preview?.textContent || "").trim(),
-              boxes: ["permissions", "clarify", "review"].map((k) => {
+              boxes: ["permissions", "clarify", "review", "collisions"].map((k) => {
                 const box = document.getElementById(`human-kind-${k}`);
                 return box ? box.checked : null;
               }),
@@ -251,12 +257,12 @@ const result = await (async () => {
           { timeout: 60_000 },
         );
 
-        // ---- 1. all three on -----------------------------------------------------------------------------
-        section("all three on, one of each pending");
+        // ---- 1. all four on ------------------------------------------------------------------------------
+        section("all four on, one of each of the three that can be seeded pending");
         const all = await human();
-        eq("the switches default to on", all.kinds, { permissions: true, clarify: true, review: true });
-        eq("the tab's boxes are all ticked", all.boxes, [true, true, true]);
-        eq("the list holds the three kinds, in the rotation's order", all.list.map((q) => q.kind), ["approval", "question", "review"]);
+        eq("the switches default to on", all.kinds, { permissions: true, clarify: true, review: true, collisions: true });
+        eq("the tab's boxes are all ticked", all.boxes, [true, true, true, true]);
+        eq("the list holds the three kinds that are pending, in the rotation's order", all.list.map((q) => q.kind), ["approval", "question", "review"]);
         eq("the badge is 3", all.badge, "3");
         ok("the badge is drawn and the button is lit", all.badgeHidden === false && all.hasQuestions === true);
         ok("the aria-label splits it three ways", /^Human — 3 waiting on you: 1 permission, 1 clarify question, 1 to review$/.test(all.aria), all.aria);
@@ -287,12 +293,13 @@ const result = await (async () => {
           return { visible: Boolean(panelEl && !panelEl.hidden), heading: (panelEl?.querySelector(".settings-row span")?.textContent || "").trim(), rows };
         });
         ok("the group has a tab of its own and is on screen", group.visible === true, JSON.stringify(group.rows.map((r) => r.text)));
-        eq("it names its three switches, each labelled and ticked", group.rows.map((r) => [r.text.replace(/\s*ⓘ$/, ""), r.for, r.checked]), [
+        eq("it names its four switches, each labelled and ticked", group.rows.map((r) => [r.text.replace(/\s*ⓘ$/, ""), r.for, r.checked]), [
           ["Permissions", "human-kind-permissions", true],
           ["Clarify questions", "human-kind-clarify", true],
           ["Review items", "human-kind-review", true],
+          ["Collisions", "human-kind-collisions", true],
         ]);
-        eq("the line under them says all three are counted", (await human()).preview, "all three counted - badge, title and H");
+        eq("the line under them says all four are counted", (await human()).preview, "all four counted - badge, title and H");
         await page.locator("#settings-panel-human").screenshot({ path: path.join(shots, "human-kinds-settings-group-1440x900.png") });
         await page.screenshot({ path: path.join(shots, "human-kinds-settings-1440x900.png") });
         console.log(`SHOT  ${path.join(shots, "human-kinds-settings-group-1440x900.png")}`);
@@ -303,12 +310,12 @@ const result = await (async () => {
         await page.click("#human-kind-review");
         await page.waitForTimeout(240);
         const noReview = await human();
-        eq("the switch is off", [noReview.kinds.review, noReview.boxes], [false, [true, true, false]]);
+        eq("the switch is off", [noReview.kinds.review, noReview.boxes], [false, [true, true, false, true]]);
         eq("the badge drops to 2", noReview.badge, "2");
         eq("the review row is out of the rotation", noReview.list.map((q) => q.kind), ["approval", "question"]);
         eq("the aria-label never names review", noReview.aria, "Human — 2 waiting on you: 1 permission, 1 clarify question. Review items are switched off in Settings (Ctrl+,, Human).");
         ok("…and the title neither", !/to review/.test(noReview.title) && /Review items are switched off in Settings/.test(noReview.title), noReview.title.slice(0, 120));
-        eq("the line under the switches follows them", noReview.preview, "permissions and clarify questions counted - review items off");
+        eq("the line under the switches follows them", noReview.preview, "permissions and clarify questions and collisions counted - review items off");
         const r1 = await pressH();
         eq("H steps the permission", [r1.key?.split(":")[0], r1.label], ["approval", "🙋 Human 1/2"]);
         const r2 = await pressH();
@@ -321,7 +328,7 @@ const result = await (async () => {
         await page.click("#human-kind-permissions");
         await page.waitForTimeout(240);
         const noPerms = await human();
-        eq("the switch is off", [noPerms.kinds.permissions, noPerms.boxes], [false, [false, true, false]]);
+        eq("the switch is off", [noPerms.kinds.permissions, noPerms.boxes], [false, [false, true, false, true]]);
         eq("the badge drops to 1", noPerms.badge, "1");
         eq("the split is the clarify question alone", noPerms.aria.split(": ")[1], "1 clarify question. Permissions and review items are switched off in Settings (Ctrl+,, Human).");
         ok("…and no permission is named anywhere in it", !/permission,/.test(noPerms.aria) && !/1 permission/.test(noPerms.aria), noPerms.aria);
@@ -331,9 +338,10 @@ const result = await (async () => {
         // ---- 5. every kind off: the button is quiet and H is inert ---------------------------------------
         section("every kind off");
         await page.click("#human-kind-clarify");
+        await page.click("#human-kind-collisions");
         await page.waitForTimeout(240);
         const quiet = await human();
-        eq("all three are off", quiet.kinds, { permissions: false, clarify: false, review: false });
+        eq("all four are off", quiet.kinds, { permissions: false, clarify: false, review: false, collisions: false });
         eq("no badge at all", [quiet.badgeHidden, quiet.hasQuestions, quiet.label], [true, false, "🙋 Human"]);
         eq("the rotation is empty", quiet.list, []);
         ok("the aria-label says the kinds are off, not that the board is clear", /every kind of this button is switched off in Settings/.test(quiet.aria), quiet.aria);
@@ -367,8 +375,8 @@ const result = await (async () => {
           { timeout: 60_000 },
         );
         const afterReload = await human();
-        eq("the three switches are where the reader left them", afterReload.kinds, { permissions: false, clarify: false, review: false });
-        eq("…and so are the boxes", afterReload.boxes, [false, false, false]);
+        eq("the four switches are where the reader left them", afterReload.kinds, { permissions: false, clarify: false, review: false, collisions: false });
+        eq("…and so are the boxes", afterReload.boxes, [false, false, false, false]);
         eq("the button is still quiet", [afterReload.badgeHidden, afterReload.list.length], [true, 0]);
 
         // ---- 7. one kind back on: a rotation of its own ---------------------------------------------------
@@ -379,9 +387,9 @@ const result = await (async () => {
         await page.click("#human-kind-review");
         await page.waitForTimeout(300);
         const onlyReview = await human();
-        eq("the switch is on", [onlyReview.kinds.review, onlyReview.boxes], [true, [false, false, true]]);
+        eq("the switch is on", [onlyReview.kinds.review, onlyReview.boxes], [true, [false, false, true, false]]);
         eq("the badge counts the review row alone", [onlyReview.badge, onlyReview.list.map((q) => q.kind)], ["1", ["review"]]);
-        eq("the split names one kind", onlyReview.aria.split(": ")[1], "1 to review. Permissions and clarify questions are switched off in Settings (Ctrl+,, Human).");
+        eq("the split names one kind", onlyReview.aria.split(": ")[1], "1 to review. Permissions, clarify questions and collisions are switched off in Settings (Ctrl+,, Human).");
         const solo = await pressH();
         eq("H steps into it", [solo.key?.split(":")[0], solo.label], ["review", "🙋 Human 1/1"]);
 
