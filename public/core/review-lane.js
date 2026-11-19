@@ -100,16 +100,21 @@
     });
   }
 
-  // What the Human button's title says, by kind. The badge total is the sum, and the title splits it, so a reader
-  // who sees "3" can tell whether it is three blocked runs or three results to read.
+  // What the Human button's title says, by kind. The badge total is the sum of the named kinds, and the title splits
+  // it, so a reader who sees "3" can tell whether it is three blocked runs or three results to read.
+  //
+  // An entry of a kind this module cannot NAME is not counted: the badge is a number a reader reads a word for, and an
+  // unnamed kind would put a count in the total that no clause of the sentence accounts for - a "2" whose split names
+  // one thing. Such an entry still steps in the rotation (keepKinds keeps it); dropping work is what this file refuses.
   function badge(items) {
     const out = { total: 0, permissions: 0, questions: 0, reviews: 0, collisions: 0 };
     for (const item of items || []) {
-      const r = rank(item);
-      if (r === 0) out.permissions += 1;
-      else if (r === 1) out.questions += 1;
-      else if (r === 2) out.reviews += 1;
-      else if (r === 3) out.collisions += 1;
+      const key = kindKey(item);
+      if (key === "permissions") out.permissions += 1;
+      else if (key === "clarify") out.questions += 1;
+      else if (key === "review") out.reviews += 1;
+      else if (key === "collisions") out.collisions += 1;
+      else continue;
       out.total += 1;
     }
     return out;
@@ -121,7 +126,10 @@
   const KIND_KEYS = ["permissions", "clarify", "review", "collisions"];
 
   function kindKey(item) {
-    const r = rank(item);
+    // Read the SWITCH off the table, not off `rank`: rank() answers 3 ("steps last") for a kind it does not know, and
+    // that answer is about ORDERING. A kind that is not in the table has no switch, and must not be filed under the
+    // last one - the collision switch would then count work it cannot name.
+    const r = RANK[String(item?.kind || "").toLowerCase()];
     return r === 0 ? "permissions" : r === 1 ? "clarify" : r === 2 ? "review" : r === 3 ? "collisions" : "";
   }
 
@@ -158,7 +166,9 @@
     const b = asBadge(counts);
     const named = split(b, kinds);
     if (!b.total) {
-      if (!named) return "nothing is waiting for you - every kind of the Human button is switched off in Settings";
+      // "Every kind is off" is a fact about the SWITCHES, not about the split: an empty split also happens when the
+      // switches are on and the board is simply clear, and saying "switched off" then would be a lie about Settings.
+      if (KIND_KEYS.every((key) => !kindOn(kinds, key))) return "nothing is waiting for you - every kind of the Human button is switched off in Settings";
       const nouns = [];
       if (kindOn(kinds, "permissions")) nouns.push("no permission");
       if (kindOn(kinds, "clarify")) nouns.push("no question");
