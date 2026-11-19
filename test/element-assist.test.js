@@ -178,6 +178,66 @@ test("a clarify card goes out as ONE message carrying its lettered options, and 
   assert.match(msg.text, /✓ B\. Deploy to prod/, "the one record is edited in place as it resolves");
 });
 
+test("the documented shorthand — the wait number glued to the letter — answers that wait", async (t) => {
+  const dir = await scratch(t, "element-shorthand");
+  const stub = stubBridge(dir);
+  t.after(() => stub.stop());
+  const jobs = stubJobs([clarifyRow()]);
+  const el = channel(dir, jobs, { bridge: stub.bridge });
+
+  await el.sweep();
+  const n = el.state().messages[0].n;
+  assert.ok(Number(n) > 0, "the message carries its wait number");
+  // The text tells the reader to reply "(4A)" — number and letter with nothing between them. That is the
+  // form the message promises, so it must be the form the parser accepts; a separator-only regex made the
+  // documented shorthand the one reply the panel silently ignored.
+  stub.say(`${n}A`);
+  await el.sweep();
+  assert.deepEqual(jobs.calls, [{ kind: "clarify", id: "job-clarify", answer: "Deploy to QA", requestId: "prompt-q1" }], "the glued form picks the wait by its number and applies the letter's value");
+  assert.equal(el.state().messages[0].status, "answered");
+});
+
+test("a numbered pick followed by the reader's own caveat answers that wait WITH the caveat", async (t) => {
+  const dir = await scratch(t, "element-note");
+  const stub = stubBridge(dir);
+  t.after(() => stub.stop());
+  const jobs = stubJobs([clarifyRow()]);
+  const el = channel(dir, jobs, { bridge: stub.bridge });
+
+  await el.sweep();
+  const n = el.state().messages[0].n;
+  // The real room message: the choice, a full stop, then a whole sentence qualifying it. The number is what makes
+  // it unambiguous, so the sentence must travel with the value — a bare-letter parser filed this as prose and the
+  // wait expired unanswered.
+  stub.say(`${n}B. use the javaorcl_two credentials from ServletContainerInformation if the insert is blocked`);
+  await el.sweep();
+  assert.deepEqual(
+    jobs.calls,
+    [{
+      kind: "clarify",
+      id: "job-clarify",
+      answer: "Deploy to prod (Recommended) — use the javaorcl_two credentials from ServletContainerInformation if the insert is blocked",
+      requestId: "prompt-q1",
+    }],
+    "the numbered pick applies the letter's value, with the reader's sentence appended",
+  );
+  assert.equal(el.state().messages[0].status, "answered");
+});
+
+test("prose that merely OPENS with a one-letter word is not read as a choice", async (t) => {
+  const dir = await scratch(t, "element-prose");
+  const stub = stubBridge(dir);
+  t.after(() => stub.stop());
+  const jobs = stubJobs([clarifyRow()]);
+  const el = channel(dir, jobs, { bridge: stub.bridge });
+
+  await el.sweep();
+  stub.say("I think QA is the safer place for it");
+  await el.sweep();
+  assert.deepEqual(jobs.calls, [], "no number, no pick: a sentence is not a letter");
+  assert.equal(el.state().messages[0].status, "open", "the wait is still open and still answerable");
+});
+
 test("an approval waiting on a human goes out too, with the card's own words for each choice", async (t) => {
   const dir = await scratch(t, "element-approval");
   const stub = stubBridge(dir);
