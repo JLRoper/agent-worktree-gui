@@ -7835,16 +7835,23 @@ function baseChipHtml(row) {
   return ` <span class="branch-base${row.baseMissing ? " is-missing" : ""}" data-base-ref="${esc(ref)}" data-base-source="${esc(source)}" title="${esc(why)}">${esc(label)}</span>`;
 }
 
+// THE NAME ITSELF comes from public/core/branch-link.js: one renderer, shared with the Initiatives tab's worktree
+// list, so the anchor (href, target, rel, title) cannot drift between the two surfaces. It draws an `<a>` when the
+// SERVER resolved a page for this branch and a plain `<span>` when it did not - the fallback is the renderer's, so a
+// tree with no resolvable repo reads as a branch name with no dead link. What stays here is the chart's own
+// vocabulary: the one chip that says why there is no link, and the base ref the row is measured against.
+//
+// `branchChip` is decorate's; the `branchLocalOnly` fallback keeps a row drawn from an older payload's field honest.
+// A row with no branch at all carries no word: there is nothing for `local` or `unverified` to be about.
 function branchCellHtml(row) {
-  const name = esc(row.branch || "—");
-  const base = baseChipHtml(row);
-  if (row.branchUrl) {
-    const how = row.branchLinkFrom === "local-refs" ? " (found in refs/remotes from the last fetch — the remote itself was not asked)" : "";
-    return `<a class="branch-link" href="${esc(row.branchUrl)}" target="_blank" rel="noopener" title="${esc(`open ${row.branch} on the remote${how}`)}">${name}</a>${base}`;
-  }
-  const why = row.branchWhy || (row.remoteBranch === "n/a" ? "no remote configured" : "not read yet — the remote has not been asked about this branch");
-  // `branchChip` is decorate's; the `branchLocalOnly` fallback keeps a row drawn from an older payload's field honest.
-  // A row with no branch at all carries no word: there is nothing for `local` or `unverified` to be about.
+  const name = wtBranchLink.branchNameHtml({
+    branch: row.branch,
+    url: row.branchUrl,
+    linkFrom: row.branchLinkFrom,
+    why: row.branchWhy,
+    remoteBranch: row.remoteBranch,
+  });
+  const why = row.branchWhy || (row.remoteBranch === "n/a" ? "no remote configured" : "not read yet - the remote has not been asked about this branch");
   const chip = row.branch ? row.branchChip || (row.branchLocalOnly === true ? "local" : null) : null;
   const chipHtml =
     chip === "local"
@@ -7852,7 +7859,7 @@ function branchCellHtml(row) {
       : chip === "unverified"
         ? `<span class="branch-unverified" title="${esc(why)}">unverified</span>`
         : "";
-  return `<span class="branch-plain" title="${esc(why)}">${name}</span>${chipHtml ? ` ${chipHtml}` : ""}${base}`;
+  return `${name}${chipHtml ? ` ${chipHtml}` : ""}${baseChipHtml(row)}`;
 }
 // ---- end branch cell
 

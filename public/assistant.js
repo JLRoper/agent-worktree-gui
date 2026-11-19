@@ -3407,6 +3407,12 @@
   // A PROJECT'S TREES, unfolded. Each row is a LINK to the board (the row itself, scrolled to and flashed) and one
   // Remove control that asks. A tree the board no longer carries is drawn dimmed rather than dropped: the initiative
   // still counts it, and this is the one place the reader can take it out.
+  //
+  // THE BRANCH is drawn by public/core/branch-link.js, the SAME renderer the chart's branch cell calls: a link to the
+  // branch's page on the remote when the server resolved one for this tree, and the branch name as plain text when
+  // it did not (no dead link). The route hands the tree the row's own `branchUrl`/`branchWhy`/`branchLinkFrom`, so
+  // this pane holds no URL policy of its own. The link is an `<a>`, which the initiative press rule answers as
+  // "self" (public/core/initiative-fold.js): following it changes nothing about the card's open state.
   function initTreeRowHtml(init, project, tree) {
     const name = String(tree.name || tree.path);
     const branch = String(tree.branch || "");
@@ -3415,7 +3421,7 @@
       : `<a href="#" class="init-tree-name" data-init-open="${esc(project)}|${esc(tree.path)}" title="open this worktree's row on the chart: its project unfolds, the window scrolls to it and the row flashes">${esc(name)}</a>`;
     return `<div class="init-tree" data-init-tree-row="${esc(tree.path)}">
       ${link}
-      ${branch ? `<span class="chip init-branch mono" title="the branch this worktree is on">${esc(branch)}</span>` : ""}
+      ${branch ? wtBranchLink.branchNameHtml({ branch, url: tree.branchUrl, linkFrom: tree.branchLinkFrom, why: tree.branchWhy, fallback: "the branch this worktree is on", linkClass: "chip init-branch mono init-branch-link", plainClass: "chip init-branch mono" }) : ""}
       <button type="button" class="init-mini" data-init-move="${esc(init.id)}|remove|${esc(tree.path)}"${initBlocked() ? " disabled" : ""} title="ask to take this worktree out of the initiative - nothing changes until you answer the question in the dock">Remove</button>
     </div>`;
   }

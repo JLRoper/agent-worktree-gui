@@ -14,12 +14,18 @@ import test from "node:test";
 import { readFileSync } from "node:fs";
 import { sliceRegion } from "../tools/panel-testkit.mjs";
 
+// The renderer under test is public/core/branch-link.js, which the chart's cell calls for the NAME: the anchor's
+// shape (href, tab, rel, title) and the plain-text fallback must be the shared one, not a copy that can drift from
+// the Initiatives tab's. The page loads it as a classic script, so the test imports the file and injects the global.
+await import("../public/core/branch-link.js");
+const wtBranchLink = globalThis.wtBranchLink;
+
 const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
 const code = sliceRegion(src, "branch cell: the link, and the local chip", "branch cell");
 
 const esc = (s) =>
   String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-const { branchCellHtml } = new Function("esc", `${code}; return { branchCellHtml };`)(esc);
+const { branchCellHtml } = new Function("esc", "wtBranchLink", `${code}; return { branchCellHtml };`)(esc, wtBranchLink);
 
 // A row as decorate leaves it for a project whose remote is `origin`.
 const decorated = (over = {}) => ({
@@ -104,7 +110,8 @@ test("a row with no branch to speak of carries no chip even if the flag is set",
   // `branchLocalOnly` is only ever true with a real branch name (decorate guards it), and a row mid-read has none.
   const html = branchCellHtml({ project: "prooflib", path: "C:/t", name: "t", branch: null, remoteBranch: "unknown", branchLocalOnly: true, branchChip: "unverified" });
   assert.equal(anyChip(html), false, "there is no branch for either word to be about");
-  assert.match(html, /—/);
+  assert.match(html, new RegExp(`>${wtBranchLink.NO_BRANCH}<`), "the cell still draws the placeholder, not an empty cell");
+  assert.doesNotMatch(html, /<a\s/, "no branch means no link, not a dead one");
 });
 
 test("the chip's word is the ONLY thing gated on the flag: the branch name always reads", () => {

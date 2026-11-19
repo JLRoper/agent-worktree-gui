@@ -4276,6 +4276,14 @@ mark.as-search-mark.is-current { background: #f2c744; color: #17110a; box-shadow
 .init-tree-name:hover { text-decoration: underline; }
 .init-tree-name.is-missing { color: var(--dimmer); text-decoration: line-through; }
 .init-branch { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 9.5px; padding: 0 5px; color: var(--dimmer); }
+/* A branch the panel resolved a page for: the SAME link the chart's branch cell draws (public/core/branch-link.js),
+   so it reads as a link here too - the chart's own link colour, underlined on hover, and a focus ring a keyboard can
+   see. The plain-chip class pair is what it wears when there is no page: no href, no pointer, no underline. The
+   colour is the chart's `td.branch a.branch-link` literally, because "the same affordance" is a claim about what the
+   reader sees, not only about the markup. */
+a.init-branch-link { color: #7fb2e8; text-decoration: none; }
+a.init-branch-link:hover { text-decoration: underline; }
+a.init-branch-link:focus-visible { outline: 1px solid #7fb2e8; outline-offset: 1px; border-radius: 4px; }
 .init-tree .init-mini { margin-left: auto; }
 .init-mini { border: 1px solid var(--line); border-radius: 5px; background: transparent; color: var(--dim); font-size: 10.5px; padding: 1px 6px; line-height: 16px; }
 .init-mini:hover { background: var(--hover); color: var(--text); }
