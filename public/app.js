@@ -7029,10 +7029,12 @@ async function reviveSession(btn) {
 // mistrusted. The ORDER HOLD keeps every row in the slot it was painted in until the scan that replaces the cached rows
 // has landed and settled: the replacement is the same rows read again, so a re-rank mid-scan would be the jump the
 // cache exists to remove. The hold is bounded on both sides - 30s while the cached list is served (a scan that never
-// lands must not freeze the board), then 10s after the last cached row is replaced - and it is never extended again
-// once settled.
+// lands must not freeze the board), then five minutes after the last cached row is replaced: a board read cold on a slow
+// network finishes its first pass well after a ten-second beat, and the reader who watched the file paint must not see
+// the order they arrived at re-rank itself while they are still reading it. It is never extended again once settled, so
+// the board does return to ranking by activity.
 const TREE_LIST_ORDER_HOLD_MS = 30_000;
-const TREE_LIST_ORDER_SETTLE_MS = 10_000;
+const TREE_LIST_ORDER_SETTLE_MS = 5 * 60_000;
 
 function rowOrderHold() {
   if (!state.rowOrderHoldUntil) return false;
