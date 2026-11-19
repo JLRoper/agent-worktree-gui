@@ -336,12 +336,17 @@ try {
         await waitFor(async () => (await store()).initiatives[0].treeCount === 1, { timeoutMs: 20_000, what: "the answered move to land" });
         const moved = await store();
         check("Allow once adds the tree", moved.initiatives[0].projects.map((p) => [p.name, p.trees.map((t) => t.name)]), [["alpha", ["sso-one"]]]);
-        const chip = await page.evaluate((p) => {
-          const want = String(p).replace(/\\/g, "/").toLowerCase();
-          const tr = [...document.querySelectorAll("#projects tr.row")].find((r) => r.dataset.key && r.dataset.key.toLowerCase().endsWith(want));
-          const cell = tr?.querySelector("td.initiative");
-          return cell ? { chips: [...cell.querySelectorAll(".initiative-chip")].map((c) => c.textContent.trim()), dash: cell.textContent.trim() === "-" } : null;
-        }, slash(trees.ssoOne));
+        const chipCell = async () =>
+          page.evaluate((p) => {
+            const want = String(p).replace(/\\/g, "/").toLowerCase();
+            const tr = [...document.querySelectorAll("#projects tr.row")].find((r) => r.dataset.key && r.dataset.key.toLowerCase().endsWith(want));
+            const cell = tr?.querySelector("td.initiative");
+            return cell ? { chips: [...cell.querySelectorAll(".initiative-chip")].map((c) => c.textContent.trim()), dash: cell.textContent.trim() === "-" } : null;
+          }, slash(trees.ssoOne));
+        // The chart cell is repainted from the broadcast snapshot, so wait for it to carry the chip rather than
+        // reading the cell a tick before the page applied it - the same race the edited-title check below guards.
+        await waitFor(async () => Boolean((await chipCell())?.chips?.length), { timeoutMs: 15_000, what: "the chart's chip after the answered move" });
+        const chip = await chipCell();
         check("the answered move updates the chart at once", chip, { chips: ["SSO migration"], dash: false });
         await shot("chart-chip");
 
@@ -542,7 +547,17 @@ try {
         // ---- 6. the link that scrolls and flashes --------------------------------------------------
         console.log("\n== the link to the row ==");
         await page.locator(`[data-init-card="${initId}"] .init-tree`, { hasText: "menu-two" }).locator("a.init-tree-name").click();
-        await page.waitForTimeout(350);
+        // The row is repainted as its project expands, so the flash lands on the row that repaint draws: wait for it
+        // rather than sampling at a fixed tick (the flash is ~0.9 s, and a repaint a tick later drops it).
+        await waitFor(
+          async () =>
+            page.evaluate((p) => {
+              const want = String(p).replace(/\\/g, "/").toLowerCase();
+              const tr = [...document.querySelectorAll("#projects tr.row")].find((r) => r.dataset.key && r.dataset.key.toLowerCase().endsWith(want));
+              return Boolean(tr?.classList.contains("flash"));
+            }, trees.menuTwo),
+          { timeoutMs: 8_000, what: "the row's flash after the link press" },
+        );
         const landed = await page.evaluate((p) => {
           const want = String(p).replace(/\\/g, "/").toLowerCase();
           const tr = [...document.querySelectorAll("#projects tr.row")].find((r) => r.dataset.key && r.dataset.key.toLowerCase().endsWith(want));
