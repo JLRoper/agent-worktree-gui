@@ -51,7 +51,8 @@ test("the title card folds the initiative: the head, the words on it and the dea
   // so this case is written the way the DOM is: a button that carries the title-card marker.
   assert.equal(press(hit("[data-init-card-toggle]", "button"), { card: CARD, open: true }), "card", "the head folds an open card");
   assert.equal(press(hit("[data-init-card-toggle]", "button"), { card: CARD, open: false }), "card", "and unfolds a folded one");
-  assert.equal(press(hit("button"), { card: CARD, open: false }), "card", "a folded card is all title card: anywhere on it unfolds it");
+  assert.equal(press(hit(), { card: CARD, open: false }), "card", "a folded card is all title card: anywhere on it unfolds it");
+  assert.equal(press(hit("button"), { card: CARD, open: false }), "self", "…except a control, which still acts on itself - a press that does something must never also fold the card");
   assert.equal(press(hit(), { card: CARD, open: true }), "none", "the open body's dead space does nothing - folding a card a reader is reading is worse than a press that does nothing");
   assert.equal(press(hit("[data-init-act]"), { card: CARD, open: true }), "self", "an element that says it acts on itself is believed");
 });
