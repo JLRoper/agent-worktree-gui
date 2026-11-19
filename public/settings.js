@@ -360,6 +360,9 @@ function applySnapshot(data) {
   // Captured before anything is mutated: if the set of projects is the same afterwards, the
   // sections on screen are still valid and a full re-render would be pure cost.
   const beforeSig = [...state.projects.keys()].sort().join("|");
+  // The tree list's own state FIRST: the rows below are the ones it describes, and the page's row rule
+  // (isHomelessConv) and order hold both read it. It is the same object /api/state answers with.
+  if (data.treeList) applyTreeList(data.treeList);
   state.settings = data.settings || state.settings;
   // The General tab draws from these numbers, and the pane's frame is one of them (`dockMode`). A snapshot is how a
   // value this page migrated at boot, or another tab saved, reaches that row and the frame — the settings EVENT is

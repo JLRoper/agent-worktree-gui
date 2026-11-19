@@ -277,8 +277,11 @@ function rootChips(projects, { scanning = null, total = projects.length } = {}) 
   const rows = [...state.rows.values()].filter((r) => names.has(r.project));
   const unmerged = rows.filter((r) => {
     const v = String(r.verdict || "");
-    return v && !v.startsWith("MERGED") && !v.startsWith("NO COMMITS") && v !== "ON MAIN" && v !== "ON BASE" && v !== "RELEASED";
+    return v && !v.startsWith("MERGED") && !v.startsWith("NO COMMITS") && v !== "ON MAIN" && v !== "ON BASE" && v !== "RELEASED" && v !== "STALE";
   }).length;
+  // A tree that has vanished from disk is its own count, never folded into unmerged: the row is kept so its cards stay
+  // under it with the reason (lib/store.js markStale), and "unmerged" would be a claim nothing read.
+  const gone = rows.filter((r) => String(r.verdict || "") === "STALE").length;
   const dirty = rows.filter((r) => r.dirty || r.untracked).length;
   const full = Number.isFinite(Number(total)) ? Math.max(0, Math.round(Number(total))) : projects.length;
   const out = [
@@ -287,6 +290,7 @@ function rootChips(projects, { scanning = null, total = projects.length } = {}) 
     `<span class="chip">${rows.length} worktrees</span>`,
   ].filter(Boolean);
   if (unmerged) out.push(`<span class="chip bad">${unmerged} unmerged</span>`);
+  if (gone) out.push(`<span class="chip warn" title="tree rows kept because their folder is gone from disk - their agents stay under them with the reason, instead of falling into the unattached list">${gone} gone</span>`);
   if (dirty) out.push(`<span class="chip warn">${dirty} dirty</span>`);
   return out.join("");
 }
@@ -1180,6 +1184,15 @@ function rememberAgentOrders() {
 function reorder(name) {
   const tbody = state.tbodyEls.get(name);
   if (!tbody) return;
+  // THE ORDER HOLD. While the board is drawing a cached tree list and the scan that replaces it, no row of any project
+  // re-ranks: the cached rows were painted in their last-read order and the fresh rows replace them one for one, so a
+  // re-rank under the reader would be the same jump the cache exists to remove. Grouping still updates (a child that
+  // arrived belongs under its parent), and the hold expires on its own (see applyTreeList in public/app.js), so the
+  // board ranks normally again once the scan has settled.
+  if (typeof rowOrderHold === "function" && rowOrderHold()) {
+    syncChildGroups(name);
+    return;
+  }
   // Stabilized: while one row of this project is open, none of them re-ranks around it.
   if (stabilizeOn() && projectHasOpenRow(name)) {
     // The RANK is held still while a row is open, but the grouping is not a rank: a child that just arrived still
@@ -1349,6 +1362,11 @@ function placeRow(project, row, { flash = false } = {}) {
   row.project = project;
   const key = keyOf(project, row.path);
   const prevRow = state.rows.get(key) || null;
+  // A row seeded from the cached tree list (lib/tree-cache.js) being replaced by its own fresh read is not NEWS: it is
+  // the same row, read at last. No green flash and no rank move - the cached row was painted in the slot its own read
+  // hands back, and the reader watched the list arrive instead of watching it jump.
+  const cachedToRead = Boolean(prevRow?.cached) && !row.cached;
+  if (cachedToRead) flash = false;
   // This path takes the row's detail out of the document and puts a new one back. Anything that measures meanwhile
   // lays the page out with that detail missing, and near the bottom of the page a shorter document clamps the
   // reader's scroll upward for good. Hold the position, and give the sweep the anchor to hold afterwards.
@@ -1360,7 +1378,7 @@ function placeRow(project, row, { flash = false } = {}) {
   const moved = !prevRow || movementKey(prevRow, { onMain }) !== movementKey(row, { onMain });
   // Remembered for the reorder pass that follows this paint: a row that swaps slots because a NEIGHBOUR
   // moved must not flash green for it. Cleared by reorder() once it has coloured the moved rows.
-  if (moved) state.movedRows.add(key);
+  if (moved && !cachedToRead) state.movedRows.add(key);
   else state.movedRows.delete(key);
   const isNew = !state.rows.has(key);
   noteScan(row);
@@ -1616,7 +1634,11 @@ function renderProjectRows(name, { typing = null } = {}) {
         .sort((a, b) => wtReviewLane.since(a) - wtReviewLane.since(b))
     : null;
   const rowsInOrder = laneOrder || chartDrawOrder(name).filter((r) => !focusHidesRow(r));
-  if (stabilizeOn() && projectHasOpenRow(name) && prevRowKeys.length) {
+  // The order is held by the tree list's own hold (public/app.js's rowOrderHold: a cached first paint and the scan that
+  // replaces it) exactly as it is held by an open row: the keys on screen are the keys that were painted, and the same
+  // rows come back in the same slots.
+  const heldOrder = (typeof rowOrderHold === "function" && rowOrderHold()) || (stabilizeOn() && projectHasOpenRow(name));
+  if (heldOrder && prevRowKeys.length) {
     const pos = new Map(prevRowKeys.map((k, i) => [k, i]));
     rowsInOrder.sort(
       (a, b) =>

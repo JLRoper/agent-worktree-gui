@@ -689,7 +689,15 @@ function renderJobs() {
   // "unattached / in worktrees", and it is rendered only inside its floating panel.
   const boardConvs = conversations().filter((c) => !assistantSessionFor(c.thread));
   const convs = homelessConversations();
-  const nested = boardConvs.length - convs.length;
+  // A card whose tree the list has not named YET: no scan has completed in this process, so the page cannot say the
+  // agent is unattached - its owner is a path the list has simply not reached (state/treeList.completedAt is the gate;
+  // see isHomelessConv). They are drawn in their own group, above the unattached list and counted apart from it,
+  // because "waiting for the first scan" and "unattached" are different statements and only the second one is a claim
+  // about the work. A cached first paint has these resolved before the reader looks: the tree list arrives with the
+  // rows, not after them.
+  const pending = pendingScanConversations();
+  const listed = pending.length ? [...pending, ...convs] : convs;
+  const nested = boardConvs.length - convs.length - pending.length;
   for (const id of [...state.collapsedJobs]) if (!conversations().some((c) => c.thread === id)) state.collapsedJobs.delete(id);
   // Forgetting a cleared job's explicit turn state keeps the map from growing forever — and the module owns which
   // keys belong to which turn (a pinned copy prunes on the turn it was cloned from) and a cleared thread's page.
@@ -714,8 +722,8 @@ function renderJobs() {
   // place in both come back as new nodes. So the markup is only written when the set of cards, or any card's own
   // signature, has moved. A card whose run is alive therefore keeps its node through a resync, and a card that is
   // genuinely dead changes signature (its status, its run, its ownership) and is rebuilt exactly as before.
-  const listSig = `${convs.map((c) => `${c.thread}:${conversationSignature(c)}`).join("|")}#${convs.length}`;
-  const sameList = listSig === state.jobsListSig && $("jobs").querySelectorAll(":scope > .job[data-thread]").length === convs.length;
+  const listSig = `${listed.map((c) => `${c.thread}:${conversationSignature(c)}`).join("|")}#${convs.length}#${pending.length}`;
+  const sameList = listSig === state.jobsListSig && $("jobs").querySelectorAll(".job[data-thread]").length === listed.length;
   state.jobsListSig = listSig;
   if (!sameList) {
     // The list is rebuilt wholesale, so remember where every open transcript was and put it back:
@@ -731,8 +739,8 @@ function renderJobs() {
     // And so is the caret: without this, typing in an unattached card's reply box ended the moment anything about the
     // job list changed - the box was replaced under the reader and focus fell to the page.
     const typing = captureTyping($("jobs"));
-    $("jobs").innerHTML = convs.length
-      ? convs.map(conversationHtml).join("")
+    $("jobs").innerHTML = listed.length
+      ? `${pending.length ? `<div class="job-pending" data-pending="${pending.length}"><p class="empty">Waiting for the first scan: ${pending.length} agent${pending.length === 1 ? "" : "s"} whose tree the list has not named yet. Not unattached - the tree list is still arriving.</p>${pending.map(conversationHtml).join("")}</div>` : ""}${convs.map(conversationHtml).join("")}`
       : `<p class="empty">No unattached agents${nested ? ` — ${nested} agent${nested === 1 ? "" : "s"} listed under their worktree rows` : ""}.</p>`;
     restoreTyping($("jobs"), typing);
     // The panel above the board just changed height. This rebuild is one synchronous step, so a moved scroll is the
@@ -745,7 +753,7 @@ function renderJobs() {
     restoreScrolls($("jobs"), prevScrolls);
     applyStoredScrolls($("jobs"));
     restoreThinkBodies($("jobs"));
-    for (const c of convs) restoreReplyDraft(c.thread);
+    for (const c of listed) restoreReplyDraft(c.thread);
     // After the drafts are back in their boxes, put the caret back in the one the reader was typing in - with
     // preventScroll, so a restore never drags the page to the box.
     restoreTyping($("jobs"), typing);
@@ -753,7 +761,7 @@ function renderJobs() {
     // Readers at the bottom stay at the bottom, readers scrolled up keep their line, and only genuinely new cards
     // jump to the newest output.
     restoreScrolls($("jobs"), prevScrolls);
-    for (const c of convs) {
+    for (const c of listed) {
       if (state.collapsedJobs.has(c.thread)) continue;
       if (!prevScrolls.has(c.latest.id)) scrollThreadToBottom(c.thread);
     }
@@ -763,17 +771,20 @@ function renderJobs() {
     reaimHotHit();
   }
   scheduleBoardSweep(anchor);
-  const running = convs.filter((c) => c.turns.some((t) => turnLive(t))).length;
-  const folded = convs.filter((c) => state.collapsedJobs.has(c.thread)).length;
+  const running = listed.filter((c) => c.turns.some((t) => turnLive(t))).length;
+  const folded = listed.filter((c) => state.collapsedJobs.has(c.thread)).length;
   const turns = [...state.jobs.values()].filter((j) => !assistantSessionFor(j.thread || j.id)).length;
   $("agents-chips").innerHTML =
     `<span class="chip">${convs.length} unattached</span>` +
+    // Counted apart from unattached on purpose: these are not a claim that the work has no tree, only that the list has
+    // not finished arriving. The chip clears the moment the scan completes (or the cached list already named the tree).
+    (pending.length ? `<span class="chip warn">${pending.length} waiting for the scan</span>` : "") +
     (nested ? `<span class="chip">${nested} in worktrees</span>` : "") +
-    (turns > convs.length ? `<span class="chip">${turns} turns</span>` : "") +
+    (turns > listed.length ? `<span class="chip">${turns} turns</span>` : "") +
     (running ? `<span class="chip warn">${running} running</span>` : "") +
     (folded ? `<span class="chip">${folded} minimized</span>` : "");
   const fold = $("btn-fold-jobs");
-  if (fold) fold.textContent = convs.length && folded === convs.length ? "Expand all" : "Minimize all";
+  if (fold) fold.textContent = listed.length && folded === listed.length ? "Expand all" : "Minimize all";
   paintAgentBadges();
   // A pending spawn target has to be re-applied here too — renderConversation bails out to renderJobs() whenever the
   // card did not exist yet.
