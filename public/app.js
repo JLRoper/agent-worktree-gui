@@ -12877,23 +12877,24 @@ function humanQuestionKey(kind, turnId, requestId) {
 }
 
 // ---- which kinds the Human button counts (Settings > Human) ----------------------------------------------------
-// THE READER'S THREE SWITCHES. Permissions, clarify questions and review items are three different costs on a reader's
-// attention, and a reader who has stopped reading review results should not be counted down to by them. Each switch
-// is saved in this browser like every other settings row here, and each DEFAULTS ON, so a reader who never opens the
-// setting gets exactly the button this panel has always drawn.
+// THE READER'S FOUR SWITCHES. Permissions, clarify questions, review items and collisions are four different costs on a
+// reader's attention, and a reader who has stopped reading review results should not be counted down to by them. Each
+// switch is saved in this browser like every other settings row here, and each DEFAULTS ON, so a reader who never opens
+// the setting gets exactly the button this panel has always drawn.
 //
 // ONE OBJECT, READ BY BOTH HALVES. `humanQuestions` filters with it and `paintHumanButton` counts and names with it,
 // so the badge, the title and the H rotation cannot disagree about which kinds exist - the discipline the review
 // lane's own `sortHuman` already enforces for the order.
 const HUMAN_KINDS_KEY = "wtgui.humanKinds";
-// The three, in the rotation's own order, with the words a sentence uses for each. `noun` is singular ("no permission
+// The four, in the rotation's own order, with the words a sentence uses for each. `noun` is singular ("no permission
 // is open"), `many` is what the "switched off" line names.
 const HUMAN_KIND_WORDS = {
   permissions: { noun: "permission", many: "permissions" },
   clarify: { noun: "clarify question", many: "clarify questions" },
   review: { noun: "result to review", many: "review items" },
+  collisions: { noun: "collision", many: "collisions" },
 };
-const HUMAN_KIND_KEYS = ["permissions", "clarify", "review"];
+const HUMAN_KIND_KEYS = ["permissions", "clarify", "review", "collisions"];
 
 // The switches, defaulting on. Read once from the browser and kept in state: this is asked on every paint and on
 // every press, and a localStorage read per repaint would be a read per second for a value that only the reader moves.
