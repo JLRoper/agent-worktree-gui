@@ -420,6 +420,7 @@ try {
         ok("…whose title is the fold's own button, saying it is folded", titleCard.headTag === "BUTTON" && titleCard.open === false && /^[▸▾]\s*SSO migration/.test(titleCard.headText), `${titleCard.headTag} aria-expanded=${titleCard.open} ${titleCard.headText}`);
         check("…with the body behind the fold: no project folds, no worktree rows, no Edit", { projects: titleCard.projects, trees: titleCard.trees, edit: titleCard.edit }, { projects: 0, trees: 0, edit: 0 });
         check("the collapsed card shows the description's first two lines", titleCard.lines, 2);
+        check("…and no header to fold: a title card has nothing inside it to fold", titleCard.hasDescHeader, false);
         ok("…ending with three dots because there is more text", titleCard.dots === "...", JSON.stringify(titleCard.text.slice(-40)));
         const previewText = titleCard.text.replace(/\.\.\.$/, "");
         ok(

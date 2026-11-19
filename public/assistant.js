@@ -3606,14 +3606,14 @@
       : "";
     // THE DESCRIPTION, IN ITS TWO DRAWINGS. Unfolded, it is the whole text - pre-wrap, so its paragraph breaks come
     // through untouched. Folded, it is the first two lines with three dots where they stop, and its header says
-    // which way the press goes. A card folded back to its title shows the same preview without a header: there is
-    // nothing inside a title card to fold, so the press belongs to the card.
+    // which way the press goes. A card folded back to its title shows the same preview with NO header: there is
+    // nothing inside a title card to fold, so that press belongs to the card itself.
     const descBody = desc
       ? descOpen
         ? `<p class="init-desc" data-init-desc-body="${esc(init.id)}">${esc(desc)}</p>`
         : `<p class="init-desc is-cut" data-init-desc-body="${esc(init.id)}" data-init-desc-cut>${esc(desc)}</p>`
       : `<p class="init-desc is-empty">no description yet - Edit says what this piece of work is</p>`;
-    const descHtml = desc
+    const descHtml = desc && open
       ? `<div class="init-descfold">
           <button type="button" class="init-proj init-desc-head" data-init-desc-fold="${esc(init.id)}" aria-expanded="${descOpen ? "true" : "false"}" title="the description ${descOpen ? "is whole - fold it back to its first two lines" : "is folded to its first two lines - unfold it for the whole thing, paragraph breaks and all"}. Enter or Space folds it too, and the card's own state is not touched">
             <span class="init-caret">${descOpen ? "▾" : "▸"}</span>
