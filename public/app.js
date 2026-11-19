@@ -7037,6 +7037,11 @@ const TREE_LIST_ORDER_HOLD_MS = 30_000;
 const TREE_LIST_ORDER_SETTLE_MS = 5 * 60_000;
 
 function rowOrderHold() {
+  // The list being served from the file IS the reason to hold: every row on screen came from the cache, and the scan
+  // that replaces them is those same rows read again. A deadline alone got this wrong - the page learns "still cached"
+  // from a snapshot every few seconds, which is not a clock that can keep a thirty-second deadline alive, so a cold
+  // first pass outlived the hold and re-ranked the board under a reader who was still on the first screen.
+  if (state.treeList && state.treeList.cached) return true;
   if (!state.rowOrderHoldUntil) return false;
   if (Date.now() < state.rowOrderHoldUntil) return true;
   state.rowOrderHoldUntil = 0;
@@ -7077,7 +7082,7 @@ function applyTreeList(t, { completed = null } = {}) {
     // The cached list is being served: hold the order it was painted in. A later snapshot re-states the flag, so the
     // deadline moves with it while the list is genuinely still cached - and only until the scan replaces it.
     if (!state.rowOrderHoldSettled) state.rowOrderHoldUntil = Math.max(state.rowOrderHoldUntil || 0, now + TREE_LIST_ORDER_HOLD_MS);
-  } else if (state.rowOrderHoldUntil && !state.rowOrderHoldSettled) {
+  } else if (prev.cached && !state.rowOrderHoldSettled) {
     // The last cached row has been replaced. Hold the painted order a little longer, so the scan's own frames land
     // under the reader rather than re-ranking the board under their pointer, then rank normally again.
     state.rowOrderHoldUntil = now + TREE_LIST_ORDER_SETTLE_MS;
