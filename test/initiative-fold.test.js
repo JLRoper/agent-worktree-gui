@@ -185,6 +185,7 @@ test("the two folds are two states, kept per initiative while the tab is open", 
   assert.match(assistant, /const initOpen = new Set\(\);/, "the card's open state is a book of its own");
   assert.match(assistant, /const initDescClosed = new Set\(\);/, "and so is the description's");
   assert.match(assistant, /const descOpen = open && !initDescClosed\.has\(init\.id\);/, "the description only folds inside an open card");
+  assert.match(assistant, /const descHtml = desc && open/, "…and a title card has no description header to press");
   assert.match(assistant, /aria-expanded="\$\{open \? "true" : "false"\}"/, "the title card states its own state");
   assert.match(assistant, /aria-expanded="\$\{descOpen \? "true" : "false"\}"/, "and so does the description's header");
   assert.match(assistant, /data-init-card-toggle="\$\{esc\(init\.id\)\}"/, "the title card is one control, not a label");
