@@ -110,6 +110,7 @@
     "verify:turn-fold": "node tools/verify-turn-fold.mjs",
     "verify:human-button": "node tools/verify-human-button.mjs",
     "verify:human-kinds": "node tools/verify-human-kinds.mjs",
+    "verify:collisions": "node tools/verify-collisions.mjs",
     "verify:provider-profiles": "node tools/verify-provider-profiles.mjs",
     "verify:assistant-dock-overlap": "node tools/verify-assistant-dock-overlap.mjs",
     "verify:assistant-float-header": "node tools/verify-assistant-float-header.mjs",
