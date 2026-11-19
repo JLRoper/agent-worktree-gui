@@ -140,6 +140,17 @@ test("a stale row whose tree is back loses STALE on its own next read and is not
   assert.equal(store.summaryFor(PROJECT.name).staleTrees, 0);
 });
 
+test("a FAST pass does not mark the tree list complete: a cheap read knows nothing about trees being cut", async () => {
+  tree(A);
+  const { store, scheduler } = harness();
+  const seen = [];
+  scheduler.onScanComplete = (info) => seen.push(info);
+  store.seedCached({ project: PROJECT.name, path: A, name: "a-111111", branch: "wtgui/a-111111", head: "abc1234", readAt: new Date().toISOString() });
+  await scheduler.fastPass();
+  assert.equal(scheduler.lastScanCompleteAt, null, "the page may not call an agent unattached off a fast pass");
+  assert.equal(seen.length, 0, "and nothing is broadcast as a completed scan");
+});
+
 test("a listing that FAILED marks nothing stale: an unanswered listing is not evidence", async () => {
   tree(A);
   const store = new Store();
