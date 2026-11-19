@@ -1,6 +1,7 @@
 # Driving the Hot Agent search from the keyboard
 
-The assistant panel's head has a second search beside its turn search: the **Hot Agent search**. Where the turn
+The **Hot Agent search** is a control in the panel's floating header, the icon-only hand-and-pen button between
+`✧ Assistant` and `🙋 Human` (it used to sit in the assistant panel's head, beside its turn search). Where the turn
 search (`Ctrl+Q`) asks about *one assistant's own transcript*, this one asks about the **turns you wrote to worker
 agents** - every run the panel started in a project tree, across every tree it has run one in. It reads
 `GET /api/hot-agent/search` (`routes/hot-agent-search.js` over `lib/hot-agent/search.js`), so it reaches the whole

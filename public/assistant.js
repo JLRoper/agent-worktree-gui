@@ -1700,10 +1700,11 @@
     closeHotSearch();
   }
 
-  // Ctrl+Shift+Q, and the header button, land here: the panel opens if it was closed (the bar lives in its header),
-  // the popover opens on the reader's last filter (or the most recent N), the box takes the caret with its text
-  // selected so the first character typed replaces it, and the store is read again - the empty box promises "the most
-  // recent", not "the most recent at page load".
+  // Ctrl+Shift+Q, and the header button - the hand-and-pen control in the floating header, beside Human - land here:
+  // the panel opens if it was closed (the popover lives in its title row), the popover opens on the reader's last
+  // filter (or the most recent N), the box takes the caret with its text selected so the first character typed
+  // replaces it, and the store is read again - the empty box promises "the most recent", not "the most recent at page
+  // load".
   function openHotSearch() {
     const panel = as$("assistant");
     const bar = hotBar();

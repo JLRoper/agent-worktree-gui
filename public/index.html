@@ -24,6 +24,14 @@
       <span class="meta" id="stream-rate"></span>
       <button id="btn-assistant" type="button" class="btn-assistant" title="assistant — watches the agents on this board, notices loops and stalls, and drafts answers to a worker's questions (A or Ctrl+Shift+A)">✧ Assistant<span id="assistant-badge" hidden>0</span><span id="assistant-spawn-badge" class="as-spawn-badge" hidden>0</span></button>
       <button id="btn-hot" type="button" hidden title="Hot Agents - the agents on this board that are working right now. This bolt is drawn only while one is: click it to land on the next one, whose row opens and whose card flashes. A turn parked on a permission or a clarify question is not hot - that is the red Human count beside it."><span id="hot-label">⚡ Hot</span><span id="hot-badge" hidden>0</span></button>
+      <!-- The Hot Agent search: the turns the reader wrote to worker agents, opened by this button or by
+           Ctrl+Shift+Q from anywhere. It is a HEADER control, beside Human and after the assistant's own entry,
+           because what it searches is the whole board - every tree the panel has run an agent in - and not one
+           assistant's transcript. What it opens is unchanged and still lives in the aside below (#ha-search-pop,
+           the same keys and rows and scroller follow through public/core/search-popover.js). The glyph is a hand
+           holding a pen, drawn inline in currentColor rather than set as an emoji, so it takes the button's own
+           colour and dim/hover/open states at the weight of the glyphs beside it. -->
+      <button type="button" class="ha-search-open" id="ha-search-open" aria-haspopup="dialog" aria-expanded="false" aria-controls="ha-search-pop" aria-label="Hot Agent search (Ctrl+Shift+Q)" title="Hot Agent search (Ctrl+Shift+Q): the turns you wrote to worker agents, newest first - never the assistant's own turns, never an agent reply"><svg class="ha-search-glyph" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><g fill="currentColor"><rect x="4.6" y="4.7" width="1.5" height="3.8" rx="0.75"/><rect x="7" y="3.9" width="1.5" height="4.6" rx="0.75"/><rect x="9.4" y="4.6" width="1.5" height="3.9" rx="0.75"/><rect x="4" y="7.9" width="8.2" height="3.6" rx="1.7"/><path d="M3.6 7 5.2 10.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></g><path d="M15 0.7 10.6 5.1" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M6 9.9 7.2 10.2 3.8 12.9Z" fill="currentColor"/></svg></button>
       <button id="btn-human" type="button" title="Human — every open permission and clarify question on the board, in one rotation. Click or press H to step through them: each agent is opened, its prompt (the permission box or the agent's own question) centred and flashed red, and its answer control focused. The red count is how many are waiting on you; a question that is answered, expires or whose turn ends drops out of the rotation."><span id="human-label">🙋 Human</span><span id="human-badge" hidden>0</span></button>
       <button id="btn-deliver" type="button" aria-haspopup="dialog" aria-expanded="false" title="Deliverables — every deliverable produced on this panel, newest first, each with how long ago it was handed back. Click or press D to open the list. Each row has one Open control: a link, or a file this panel serves, opens in a new browser tab; a file it cannot serve opens in the browser this machine is registered to use, and names that browser (or the fallback that took it) on the row; and a row that cannot be opened says why on the row itself. Clicking the row opens the agent that produced it. An agent hands something back with one line in its final message: DELIVER <link|file|image> <target> | <title>."><span id="deliver-label">📦 Deliverables</span></button>
       <button id="btn-review" type="button" class="btn-review" aria-pressed="false" title="Review — every finished row whose result you have not checked yet, counted from the rows on the board. A row lands here when its run ends with something to read (what it said last, plus the report path and next steps it named), and leaves when you press ✓ Reviewed on it or Mark all reviewed. Click the count to filter the table to exactly those rows; click it again to show everything. The amber ▣ on a row is this lane — it is not the yellow lock (a tree held by a live run) and not the blue turnover marker. Press H to step into the oldest one: the row opens, the report anchor and the next steps are brought into view, and ✓ Reviewed takes focus so one more key clears it."><span id="review-label">▣ Review</span><span id="review-badge" hidden>0</span></button>
@@ -1047,14 +1055,17 @@
           <span class="as-search-n mono" id="as-search-n" hidden></span>
           <button type="button" id="as-search-scope" class="as-search-scope" aria-pressed="false" title="search your own input only - every turn the store kept, not just the page on screen">mine</button>
         </span>
-        <!-- The Hot Agent search: a SECOND bar beside the turn search, opened by Ctrl+Shift+Q from anywhere in the
-             panel. It reads /api/hot-agent/search, which lists ONLY the turns the reader wrote to worker agents -
-             never an assistant manager turn, never an agent's reply - newest first, each row naming the agent, its
-             thread and the project tree it ran in. The popover, the keys and the scroller follow are the ones the
-             turn search beside it uses (public/core/search-popover.js, public/core/search-scroll.js), so the two
-             bars cannot drift. An empty box lists the most recent N turns; N is the Settings > Board row "Hot agent
-             list" (public/core/hot-agent-list.js, 20 unless the reader changed it). -->
-        <button type="button" class="ha-search-open" id="ha-search-open" aria-haspopup="dialog" aria-expanded="false" aria-controls="ha-search-pop" aria-label="Hot Agent search (Ctrl+Shift+Q)" title="Hot Agent search (Ctrl+Shift+Q): the turns you wrote to worker agents, newest first - never the assistant's own turns, never an agent reply">⚡</button>
+        <!-- The Hot Agent search's OPENING moved out of this bar: #ha-search-open is now a control in the floating
+             header, beside Human (the topbar above), because what it searches is the whole board - the turns the
+             reader wrote to worker agents, in every tree the panel has run one in - and not one assistant's own
+             transcript. Its POPOVER stays here, in this aside: the box, the list and the footer below are exactly
+             what they were, and Ctrl+Shift+Q still opens them from anywhere in the panel. It reads
+             /api/hot-agent/search, which lists ONLY the turns the reader wrote to worker agents - never an assistant
+             manager turn, never an agent's reply - newest first, each row naming the agent, its thread and the
+             project tree it ran in, through the popover and keys the turn search beside it uses
+             (public/core/search-popover.js, public/core/search-scroll.js). An empty box lists the most recent N
+             turns; N is the Settings > Board row "Hot agent list" (public/core/hot-agent-list.js, 20 unless the
+             reader changed it). -->
         <span class="chips" id="as-chips"></span>
         <button id="btn-as-close" type="button" title="close (Esc) — it keeps watching while closed">✕</button>
       </div>

@@ -106,6 +106,7 @@
     "verify:assistant-search-order": "node tools/verify-assistant-search-order.mjs",
     "verify:assistant-search-scroll": "node tools/verify-assistant-search-scroll.mjs",
     "verify:hot-agent-search": "node tools/verify-hot-agent-search.mjs",
+    "verify:hot-agent-header": "node tools/verify-hot-agent-header.mjs",
     "verify:hot-mark": "node tools/verify-hot-mark.mjs",
     "verify:turn-fold": "node tools/verify-turn-fold.mjs",
     "verify:human-button": "node tools/verify-human-button.mjs",

@@ -233,11 +233,13 @@ turns` agrees with the two rows on screen. `common` matches a hundred and twenty
 says `120 hits matched, 10 displayed`, so a filter over a whole store never becomes a whole DOM. The pictures under
 `docs/assets/assistant-search-all/` are that run, and `assistant-search-all.json` is its record.
 
-## The other search in the same head
+## The other search, now in the header
 
-Beside this box sits the **Hot Agent search** (`Ctrl+Shift+Q`), which asks about the turns you wrote to worker
-agents rather than about this assistant's own transcript. It is the same popover, the same keys and the same scroller
-follow - `public/core/search-popover.js` is the one component both bars mount - so `Down`, `Up`, `Shift+Enter`,
-`Enter` and `Esc` mean here exactly what the table above says. What differs is the data and the landing: a row names
-the agent, its thread and the project tree, and `Enter` opens the turn's card in the board. See
+The **Hot Agent search** (`Ctrl+Shift+Q`) asks about the turns you wrote to worker agents rather than about this
+assistant's own transcript. Its button is no longer beside this box: it is an icon-only control in the panel's
+floating header, the hand-and-pen button between `✧ Assistant` and `🙋 Human`, because what it searches is the whole
+board and not one assistant's transcript. The panel it opens is this one: the same popover, the same keys and the
+same scroller follow - `public/core/search-popover.js` is the one component both bars mount - so `Down`, `Up`,
+`Shift+Enter`, `Enter` and `Esc` mean here exactly what the table above says. What differs is the data and the
+landing: a row names the agent, its thread and the project tree, and `Enter` opens the turn's card in the board. See
 `docs/hot-agent-search-keys.md`.

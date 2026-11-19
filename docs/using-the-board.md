@@ -40,6 +40,7 @@ is `rev-parse`, `rev-list`, `merge-base`, `cherry`, `diff`, `status` and `log`.
 | **🙋 Human** | Every open permission and clarify question on the board, in one rotation. See below. |
 | **⚡ Hot** | The agents working right now, in one rotation: an amber count and a bolt that is drawn only while one is. See below. |
 | **✧ Assistant** | Opens the assistant panel beside the board (`A` or `Ctrl+Shift+A`) — a rail by default, and a floating window for an assistant whose own **Settings** says `floating`. Its purple badge counts the open alerts; the `⧗` pill beside it counts the **spawn cards** waiting for a click, amber once the oldest has waited over two minutes. |
+| **Hand-and-pen** (icon only, before 🙋 Human) | The **Hot Agent search** (`Ctrl+Shift+Q`): the turns you wrote to worker agents, newest first, across every project tree the panel has run one in — not one assistant's own transcript. A click opens the assistant panel if it was closed and hangs the list under this button; `Escape` closes it and hands the keyboard back here. Rows and keys: `docs/hot-agent-search-keys.md`. |
 | **Collapse all** | Folds the whole tree in one press — every folder, project, worktree row, card and turn. The button then reads **Expand all**. `Ctrl+]` also opens everything; `Ctrl+[` folds one tier per press instead. |
 | **⚙ Settings** | The Settings panel (`Ctrl+,`). **Refresh now**, **Fetch remotes** and **Live updates → Pause** live in it too, under Board. |
 
