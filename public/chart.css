@@ -90,6 +90,27 @@ td.name, td.branch, td.owner, td.pr, td.verdict { overflow: hidden; text-overflo
    as a value rather than as text that happens to be short, and it is deliberately not `.assistant`: that class is the
    rail's (a sticky 480px flex column), and a cell that carried it inherited the whole rail. */
 td.owner { overflow: hidden; }
+/* The initiative cell: chips, at the panel's chip size and set in the same mono as the owner tag, because the two
+   columns sit beside each other and a reader should read them as the same kind of fact (a name from the panel, not
+   from git). The cell is one line and ellipsised: several initiatives on one tree is legal, but a column cannot grow
+   a second line without breaking the table's row height, so the tooltip carries the whole list and the tab is where
+   the work is read. */
+td.initiative { overflow: hidden; white-space: nowrap; }
+.initiative-chip {
+  display: inline-block;
+  max-width: 100%;
+  margin-right: 4px;
+  padding: 1px 6px;
+  font-size: 10px;
+  line-height: 15px;
+  vertical-align: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #b9c6d8;
+  border-color: #33465c;
+  background: #16202b;
+}
+.initiative-chip:last-child { margin-right: 0; }
 .owner-tag {
   display: inline-block;
   max-width: 100%;

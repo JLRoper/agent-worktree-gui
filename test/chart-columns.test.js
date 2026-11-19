@@ -1,4 +1,4 @@
-// Choosing which of the worktree chart's twelve columns are drawn.
+// Choosing which of the worktree chart's columns are drawn.
 //
 // Five facts, each driven rather than read off the source:
 //
@@ -132,7 +132,7 @@ test("the page's columns are the server's columns, in the same order", () => {
 
 test("nothing hidden draws every header the column can speak for — and the owner column is silent on an idle board", () => {
   const { chartHeaderHtml, shownColumns, wtColspan } = page({}, idle());
-  assert.equal(shownColumns().length, CHART_COLUMN_IDS.length - 1, "eleven of twelve: the owner column hides itself");
+  assert.equal(shownColumns().length, CHART_COLUMN_IDS.length - 1, "one fewer than the chart has: the owner column hides itself");
   assert.equal(wtColspan(), CHART_COLUMN_IDS.length - 1);
   assert.doesNotMatch(chartHeaderHtml(), /data-col-id="assistant"/);
   const html = chartHeaderHtml();
@@ -155,7 +155,7 @@ test("the owner column comes back on its own for a second assistant, or for one 
     ["a tree was moved to another assistant", reassigned()],
   ]) {
     const { chartHeaderHtml, shownColumns } = page({}, board);
-    assert.equal(shownColumns().length, CHART_COLUMN_IDS.length, `all twelve with ${why}`);
+    assert.equal(shownColumns().length, CHART_COLUMN_IDS.length, `every column with ${why}`);
     assert.match(chartHeaderHtml(), /data-col-id="assistant"/, `the header returns with ${why}`);
   }
   // A stored owner that is gone still says something: the cell draws the fallback's owner, and the tooltip why.
@@ -177,15 +177,14 @@ test("the reader's own switch still wins over the column's self-hide", () => {
 
 test("a hidden column leaves the header, the colspan and the order consistent", () => {
   // The owner column is drawn here because a second assistant exists (see the tests above); the three named columns
-  // are the reader's own hidden list.
+  // are the reader's own hidden list. The expected set is spelled out rather than counted, so a NEW column has to be
+  // added here on purpose - a count alone would let one arrive unnoticed in the middle of the row.
   const { chartHeaderHtml, shownColumns, wtColspan } = page({ hiddenColumns: ["tip", "cherry", "life"] }, second());
-  assert.equal(wtColspan(), 9);
-  assert.deepEqual(
-    shownColumns().map((i) => CHART_COLUMN_IDS[i]),
-    ["name", "branch", "assistant", "ahead", "pr", "dirty", "nextread", "verdict", "actions"],
-  );
+  const expected = ["name", "branch", "assistant", "initiative", "ahead", "pr", "dirty", "nextread", "verdict", "actions"];
+  assert.equal(wtColspan(), expected.length);
+  assert.deepEqual(shownColumns().map((i) => CHART_COLUMN_IDS[i]), expected);
   const html = chartHeaderHtml();
-  assert.equal((html.match(/<th /g) || []).length, 9);
+  assert.equal((html.match(/<th /g) || []).length, expected.length);
   assert.doesNotMatch(html, /data-col-id="tip"/);
   assert.doesNotMatch(html, /data-col-id="cherry"/);
   assert.doesNotMatch(html, /data-col-id="life"/);
@@ -275,7 +274,7 @@ test("a write that times out twice still lands, and the switch holds the value w
   const saving = dom.api.saveChartColumns(["life"], { send, waits: [0, 0, 0], sleep: async () => {} });
   // The first paint happens synchronously, before any attempt is answered: the switch is the PENDING list already.
   assert.equal(dom.box("life").checked, false, "the Life switch stays where the reader put it");
-  assert.equal(dom.count.textContent, "11/12", "and the counter counts the pending value");
+  assert.equal(dom.count.textContent, `${CHART_COLUMN_IDS.length - 1}/${CHART_COLUMN_IDS.length}`, "and the counter counts the pending value");
   assert.deepEqual(dom.hiddenIds(), ["life"]);
   assert.match(dom.preview.textContent, /the switch keeps the value you set/);
   assert.equal(dom.state.settings.hiddenColumns.length, 0, "the file's list is untouched until the panel answers");
@@ -285,9 +284,9 @@ test("a write that times out twice still lands, and the switch holds the value w
   assert.deepEqual(dom.state.settings.hiddenColumns, ["life"], "the answer reconciles the page");
   assert.equal(dom.state.chartColsPending, null, "the pending list is cleared by the answer");
   assert.equal(dom.box("life").checked, false, "and the switch still reads the saved value");
-  assert.equal(dom.count.textContent, "11/12");
+  assert.equal(dom.count.textContent, `${CHART_COLUMN_IDS.length - 1}/${CHART_COLUMN_IDS.length}`);
   assert.doesNotMatch(dom.preview.textContent, /NOT SAVED/);
-  assert.match(dom.preview.textContent, /11 of 12 columns on the chart · hidden: life/);
+  assert.match(dom.preview.textContent, new RegExp(`${CHART_COLUMN_IDS.length - 1} of ${CHART_COLUMN_IDS.length} columns on the chart · hidden: life`));
 });
 
 test("the server's answer wins over the list the page asked for", async () => {
@@ -331,7 +330,7 @@ test("a genuine timeout failure is reported and the row stops showing the pendin
   await dom.api.saveChartColumns(["tip", "life"], { send, waits: [0, 0, 0], sleep: async () => {} });
   assert.deepEqual(dom.state.settings.hiddenColumns, ["tip"], "the file's list never moved");
   assert.deepEqual(dom.hiddenIds(), ["tip"], "and the row reads back that list");
-  assert.equal(dom.count.textContent, "11/12");
+  assert.equal(dom.count.textContent, `${CHART_COLUMN_IDS.length - 1}/${CHART_COLUMN_IDS.length}`);
   assert.match(dom.preview.textContent, /^NOT SAVED - the panel did not save it after 3 tries/);
 });
 
