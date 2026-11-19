@@ -15,7 +15,7 @@
     },
     "capped": {
       "text": "1 of 10",
-      "foot": "12 hits matched, 10 displayed, in 4 turns - your own input is kept first when the cap bites",
+      "foot": "12 hits matched, 10 displayed, in 4 turns - your own input is kept when the cap bites",
       "matched": 12,
       "turns": 4
     }
@@ -25,7 +25,7 @@
       "press": "ArrowDown",
       "count": "2 of 5",
       "lid": null,
-      "top": 712
+      "top": 439
     },
     {
       "press": "Shift+ArrowUp",

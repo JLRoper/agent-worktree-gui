@@ -33,77 +33,77 @@
     {
       "step": 5,
       "label": "down-5",
-      "scrollTop": 0,
+      "scrollTop": 41,
       "count": "5 of 10",
       "visible": true
     },
     {
       "step": 6,
       "label": "down-6",
-      "scrollTop": 70,
+      "scrollTop": 116,
       "count": "6 of 10",
       "visible": true
     },
     {
       "step": 7,
       "label": "down-7",
-      "scrollTop": 144,
+      "scrollTop": 190,
       "count": "7 of 10",
       "visible": true
     },
     {
       "step": 8,
       "label": "down-8",
-      "scrollTop": 219,
+      "scrollTop": 265,
       "count": "8 of 10",
       "visible": true
     },
     {
       "step": 9,
       "label": "down-9",
-      "scrollTop": 293,
+      "scrollTop": 340,
       "count": "9 of 10",
       "visible": true
     },
     {
       "step": 10,
       "label": "down-10",
-      "scrollTop": 368,
+      "scrollTop": 414,
       "count": "10 of 10",
       "visible": true
     },
     {
       "step": 9,
       "label": "up-9",
-      "scrollTop": 293,
+      "scrollTop": 340,
       "count": "9 of 10",
       "visible": true
     },
     {
       "step": 8,
       "label": "up-8",
-      "scrollTop": 219,
+      "scrollTop": 265,
       "count": "8 of 10",
       "visible": true
     },
     {
       "step": 7,
       "label": "up-7",
-      "scrollTop": 144,
+      "scrollTop": 190,
       "count": "7 of 10",
       "visible": true
     },
     {
       "step": 6,
       "label": "up-6",
-      "scrollTop": 70,
+      "scrollTop": 116,
       "count": "6 of 10",
       "visible": true
     },
     {
       "step": 5,
       "label": "up-5",
-      "scrollTop": 0,
+      "scrollTop": 41,
       "count": "5 of 10",
       "visible": true
     },
@@ -143,26 +143,26 @@
     "04-back-to-the-middle-5-of-10-1440x900.png",
     "05-back-to-the-first-1-of-10-1440x900.png"
   ],
-  "pitch": 75,
+  "pitch": 90,
   "downTops": [
     0,
     0,
     0,
     0,
-    0,
-    70,
-    144,
-    219,
-    293,
-    368
+    41,
+    116,
+    190,
+    265,
+    340,
+    414
   ],
   "upTops": [
-    368,
-    293,
-    219,
-    144,
-    70,
-    0,
+    414,
+    340,
+    265,
+    190,
+    116,
+    41,
     0,
     0,
     0,
