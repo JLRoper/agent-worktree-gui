@@ -4,16 +4,33 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.120.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.121.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-635 releases from v0.1.0 (2026-10-20) to v1.120.0 (2026-11-19), 2181 commits between the tags. Every release is anchored by an
+636 releases from v0.1.0 (2026-10-20) to v1.121.0 (2026-11-19), 2188 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.121.0 — 2026-11-19 · 7 commits
+
+[`a128083`](https://github.com/JLRoper/agent-worktree-gui/commit/a128083bb5b1c5d817f5cad4bfe8a85998d27b13) · [compare v1.120.0...v1.121.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.120.0...v1.121.0)
+
+### Docs & tests
+
+- docs: render the changelog - 635 releases ([`5ef1430`](https://github.com/JLRoper/agent-worktree-gui/commit/5ef143092aec9326f38c3a8a39a8c2dc22c54807))
+- docs: the landing note for 1.120.0 - the initiative folds, the title card and the queued chip ([`dfe75ea`](https://github.com/JLRoper/agent-worktree-gui/commit/dfe75ea090fc55db833d3ec6d013b809e89ccd3f))
+- test: run the chart's base-branch slice with the shared branch renderer ([`070e092`](https://github.com/JLRoper/agent-worktree-gui/commit/070e0926890c4ad3a2dae7c05ef032a9f86a8fe9))
+
+### Other
+
+- Pin the press rule's real precedence: a control in a folded card still acts on itself ([`079fdde`](https://github.com/JLRoper/agent-worktree-gui/commit/079fdde8929c11eee4e39528841e61a7d12407a9))
+- The branch name links to its repo in the Initiatives tab, from the chart's own renderer ([`5fafc57`](https://github.com/JLRoper/agent-worktree-gui/commit/5fafc57cd08950e280c94c4849b31d549a2be6c1))
+- verify: the initiative branch link, headless at 1440x900 ([`cffe6f0`](https://github.com/JLRoper/agent-worktree-gui/commit/cffe6f0a2a8c2b50546530de5097247e931b2ccd))
+- chore: 1.121.0 - the version this landing carries ([`a128083`](https://github.com/JLRoper/agent-worktree-gui/commit/a128083bb5b1c5d817f5cad4bfe8a85998d27b13))
 
 ## v1.120.0 — 2026-11-19 · 6 commits
 
