@@ -112,16 +112,18 @@ test("an undated item keeps its place at the end of its kind, and the sort is st
 
 // ---- 3. the badge and its title -------------------------------------------------------------------------------
 
-test("the badge is one total split three ways, and the title names each kind", () => {
-  const list = [item("approval", 1), item("write", 2), item("question", 3), item("review", 4), item("review", 5)];
+test("the badge is one total split by kind, and the title names each kind that has something in it", () => {
+  const list = [item("approval", 1), item("write", 2), item("question", 3), item("review", 4), item("review", 5), item("collision", 6)];
   const b = lane.badge(list);
-  assert.deepEqual(b, { total: 5, permissions: 2, questions: 1, reviews: 2 });
+  assert.deepEqual(b, { total: 6, permissions: 2, questions: 1, reviews: 2, collisions: 1 });
   const title = lane.title(b);
-  assert.match(title, /2 permissions, 1 clarify question, 2 to review/);
+  assert.match(title, /2 permissions, 1 clarify question, 2 to review, 1 collision/);
   // Zero is the quiet state: no badge, and the title says so rather than reading "0 permissions, 0 ...".
   assert.match(lane.title(lane.badge([])), /nothing is waiting/);
   assert.equal(lane.badge([]).total, 0);
-  assert.match(lane.title([item("review", 1)]), /0 permissions, 0 clarify questions, 1 to review/);
+  // A kind that is on with nothing in it is not a clause either: the sentence says what is waiting, not what is not.
+  assert.match(lane.title([item("review", 1)]), /^1 to review - press H/);
+  assert.doesNotMatch(lane.title([item("review", 1)]), /0 /);
 });
 
 test("the marker's tooltip names the summary, the report and the step count", () => {
@@ -172,7 +174,7 @@ test("the row carries an amber mark and a Reviewed press, distinct from the lock
   assert.doesNotMatch(mark, /1F512|21c4/, "it does not borrow either other marker's glyph");
   // It is drawn after both of them in the name line, so the three never overwrite one another.
   const name = sliceBetween(rowsSrc, 'name: `<td class="name"', "// Same rule for the branch");
-  assert.match(name, /\$\{turnoverRowMarkHtml\(row\)\}\$\{reviewRowMarkHtml\(row\)\}/);
+  assert.match(name, /\$\{turnoverRowMarkHtml\(row\)\}\$\{collisionRowMarkHtml\(row\)\}\$\{reviewRowMarkHtml\(row\)\}/);
   // The row's own <tr> says it too, at rest, without a tooltip being opened.
   assert.match(rowsSrc, /typeof wtReviewLane !== "undefined" && wtReviewLane\.awaiting\(row\) \? " has-review" : ""/);
   assert.match(read("public/style.css"), /tr\.row\.has-review \{/);
