@@ -4,16 +4,29 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.126.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.127.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-642 releases from v0.1.0 (2026-10-20) to v1.126.0 (2026-11-19), 2219 commits between the tags. Every release is anchored by an
+643 releases from v0.1.0 (2026-10-20) to v1.127.0 (2026-11-19), 2222 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.127.0 — 2026-11-19 · 3 commits
+
+[`16ef0f9`](https://github.com/JLRoper/agent-worktree-gui/commit/16ef0f9af13baaf6f95151e59be033a0ef836a0a) · [compare v1.126.0...v1.127.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.126.0...v1.127.0)
+
+### Docs & tests
+
+- docs: render the changelog - 642 releases ([`6d25db7`](https://github.com/JLRoper/agent-worktree-gui/commit/6d25db7cff18ce0536dae68c217a962dcd6ab121))
+- docs: the landing note for 1.126.0 - an assistant on an initiative, expanded to its exact tasks ([`cc538d3`](https://github.com/JLRoper/agent-worktree-gui/commit/cc538d39da85fd13221aea3fd19f299b0792f076))
+
+### Other
+
+- The floating header's fourth control: every clarify question, answered and greyed ([`16ef0f9`](https://github.com/JLRoper/agent-worktree-gui/commit/16ef0f9af13baaf6f95151e59be033a0ef836a0a))
 
 ## v1.126.0 — 2026-11-19 · 3 commits
 
