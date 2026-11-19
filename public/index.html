@@ -32,6 +32,14 @@
            holding a pen, drawn inline in currentColor rather than set as an emoji, so it takes the button's own
            colour and dim/hover/open states at the weight of the glyphs beside it. -->
       <button type="button" class="ha-search-open" id="ha-search-open" aria-haspopup="dialog" aria-expanded="false" aria-controls="ha-search-pop" aria-label="Hot Agent search (Ctrl+Shift+Q)" title="Hot Agent search (Ctrl+Shift+Q): the turns you wrote to worker agents, newest first - never the assistant's own turns, never an agent reply"><svg class="ha-search-glyph" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><g fill="currentColor"><rect x="4.6" y="4.7" width="1.5" height="3.8" rx="0.75"/><rect x="7" y="3.9" width="1.5" height="4.6" rx="0.75"/><rect x="9.4" y="4.6" width="1.5" height="3.9" rx="0.75"/><rect x="4" y="7.9" width="8.2" height="3.6" rx="1.7"/><path d="M3.6 7 5.2 10.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></g><path d="M15 0.7 10.6 5.1" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M6 9.9 7.2 10.2 3.8 12.9Z" fill="currentColor"/></svg></button>
+      <!-- The Clarify history: every question this panel has asked the reader, answered or not, held on the stored
+           record rather than the live prompt (a question leaves the job record the moment it settles, and a restart
+           must not empty this list). Purple, because it is the reader's own history and not a control on a run; it
+           sits between the Hot Agent pen and Human in the header's order. The popup it opens is built by
+           public/clarify-history.js (a fixed panel, resizable and remembered), and its read is
+           GET /api/clarify/history (routes/clarify-history.js). A row answers nothing by itself: it opens the
+           question, switches to the agent that asked it and pages in the turn it was asked in. -->
+      <button id="btn-clarify" type="button" class="btn-clarify" aria-haspopup="dialog" aria-expanded="false" aria-controls="clarify-pop" title="Clarify history - every question this panel has asked you, newest first. Unanswered rows are in full colour with their choices; answered rows are greyed with the answer you chose standing out; a card that was cancelled or timed out says so instead of looking answered. Click a row to open that question, switch to the agent that asked it, and page in the turn it was asked in. Up and Down step the rows, Enter opens one, Escape closes."><svg class="cl-glyph" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M2.2 2.4h11.6v7.7H7.5L4.2 13.1v-3H2.2z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M6.6 5.2c.15-.75.75-1.2 1.55-1.2.9 0 1.55.5 1.55 1.25 0 .6-.35.95-.85 1.28-.4.27-.5.47-.5.87v.2" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/><circle cx="8.35" cy="9.4" r=".78" fill="currentColor"/></svg><span class="cl-label">Clarify</span></button>
       <button id="btn-human" type="button" title="Human — every open permission and clarify question on the board, in one rotation. Click or press H to step through them: each agent is opened, its prompt (the permission box or the agent's own question) centred and flashed red, and its answer control focused. The red count is how many are waiting on you; a question that is answered, expires or whose turn ends drops out of the rotation."><span id="human-label">🙋 Human</span><span id="human-badge" hidden>0</span></button>
       <button id="btn-deliver" type="button" aria-haspopup="dialog" aria-expanded="false" title="Deliverables — every deliverable produced on this panel, newest first, each with how long ago it was handed back. Click or press D to open the list. Each row has one Open control: a link, or a file this panel serves, opens in a new browser tab; a file it cannot serve opens in the browser this machine is registered to use, and names that browser (or the fallback that took it) on the row; and a row that cannot be opened says why on the row itself. Clicking the row opens the agent that produced it. An agent hands something back with one line in its final message: DELIVER <link|file|image> <target> | <title>."><span id="deliver-label">📦 Deliverables</span></button>
       <button id="btn-review" type="button" class="btn-review" aria-pressed="false" title="Review — every finished row whose result you have not checked yet, counted from the rows on the board. A row lands here when its run ends with something to read (what it said last, plus the report path and next steps it named), and leaves when you press ✓ Reviewed on it or Mark all reviewed. Click the count to filter the table to exactly those rows; click it again to show everything. The amber ▣ on a row is this lane — it is not the yellow lock (a tree held by a live run) and not the blue turnover marker. Press H to step into the oldest one: the row opens, the report anchor and the next steps are brought into view, and ✓ Reviewed takes focus so one more key clears it."><span id="review-label">▣ Review</span><span id="review-badge" hidden>0</span></button>
@@ -1309,24 +1317,27 @@
   <!-- The DELIVERABLES list's two narrowings — the text filter and the kind chips — as pure answers. app.js reads
        them by name at paint time (`window.wtDeliverKinds`), and test/deliver-kinds.test.js imports this same file. -->
   <script src="/core/deliver-kinds.js"></script>
+  <!-- The Clarify history's pure half: the three states, the order, the honest cap. No DOM; imported by
+       test/clarify-history.test.js. -->
+  <script src="/core/clarify-history.js"></script>
   <!-- THE STALE-PAGE GUARD. A tab can be running an app.js older than the shell that loaded it: the shell is served
        no-store, but every asset URL carries the version the shell was rendered with, so a tab opened while app.js was
        being written (or one holding a cached copy under that URL) keeps the old file. If that old app.js predates the
-       DELIVERABLES block, the header button is in the page and nothing is wired to it — a click does nothing and says
-       nothing, which is the worst shape a dead control can take. This block is INLINE, and the only reason it is
-       inline, because it must be the one piece of code that is never stale: a core/*.js guard would be cached at the
-       same old version as the app.js it is meant to catch. At click time it asks whether app.js of THIS build wired
-       the button (`data-wired`), and when it did not it names the build the page loaded with, asks /api/build which
-       build the panel serves, and offers the reload. app.js calls the same reporter if the popover throws for the
-       same reason (an old page against a new API). -->
+       DELIVERABLES block or the CLARIFY HISTORY block, the header button is in the page and nothing is wired to it — a
+       click does nothing and says nothing, which is the worst shape a dead control can take. This block is INLINE, and
+       the only reason it is inline, because it must be the one piece of code that is never stale: a core/*.js guard
+       would be cached at the same old version as the app.js it is meant to catch. At click time it asks whether
+       app.js of THIS build wired the button it was pressed on (`data-wired`), and when it did not it names the build
+       the page loaded with, asks /api/build which build the panel serves, and offers the reload. app.js calls the
+       same reporter if either popover throws for the same reason (an old page against a new API). -->
   <script>
     (() => {
-      const btn = document.getElementById("btn-deliver");
-      if (!btn) return;
+      const buttons = ["btn-deliver", "btn-clarify"].map((id) => ({ id, el: document.getElementById(id) })).filter((b) => b.el);
+      if (!buttons.length) return;
       const meta = document.querySelector('meta[name="panel-build"]');
       const loaded = ((meta && meta.getAttribute("content")) || "").trim() || "unknown";
       let offered = false;
-      const offer = (served) => {
+      const offer = (served, control) => {
         if (offered) return;
         offered = true;
         const bar = document.createElement("div");
@@ -1335,7 +1346,7 @@
         bar.style.cssText = "position:fixed;left:0;right:0;bottom:0;z-index:9999;display:flex;gap:12px;align-items:center;justify-content:center;padding:10px 16px;background:#241012;color:#ffb3ad;border-top:1px solid #7a3138;font:13px/1.4 system-ui,sans-serif";
         const text = document.createElement("span");
         text.id = "stale-build-text";
-        text.textContent = `This page was loaded from build ${loaded}; the panel now serves ${served}. DELIVERABLES cannot open here — reload to pick up the new app.js.`;
+        text.textContent = `This page was loaded from build ${loaded}; the panel now serves ${served}. ${control} cannot open here — reload to pick up the new app.js.`;
         const reload = document.createElement("button");
         reload.type = "button";
         reload.id = "stale-build-reload";
@@ -1345,18 +1356,18 @@
         bar.append(text, reload);
         document.body.append(bar);
       };
-      const report = (why) => {
+      const report = (why, control = "This control") => {
         console.error(
-          `[panel] DELIVERABLES is dead on this page: it was loaded from build ${loaded} and the panel is serving a different build now. ${why} Reload to pick up the new app.js.`,
+          `[panel] ${control.toUpperCase()} is dead on this page: it was loaded from build ${loaded} and the panel is serving a different build now. ${why} Reload to pick up the new app.js.`,
         );
         fetch("/api/build", { cache: "no-store" })
           .then((r) => (r.ok ? r.json() : null))
           .then((d) => {
             const served = (d && (d.version || d.build)) || "unknown";
             console.error(`[panel] stale page: loaded build ${loaded}, the panel serves ${served} — reload to pick up the new app.js.`);
-            offer(served);
+            offer(served, control);
           })
-          .catch(() => offer("unknown"));
+          .catch(() => offer("unknown", control));
       };
       // Capture phase, so a page whose app.js DID wire the button is never touched: the guard returns before the
       // button's own bubble listener runs. `stopPropagation` on the dead path keeps a half-built old handler from
@@ -1364,11 +1375,11 @@
       document.addEventListener(
         "click",
         (e) => {
-          const hit = e.target instanceof Element ? e.target.closest("#btn-deliver") : null;
-          if (!hit || hit.dataset.wired === "1") return;
+          const hit = e.target instanceof Element ? buttons.find((b) => e.target.closest(`#${b.id}`)) : null;
+          if (!hit || hit.el.dataset.wired === "1") return;
           e.preventDefault();
           e.stopPropagation();
-          report("Nothing is wired to the button.");
+          report("Nothing is wired to the button.", hit.id === "btn-clarify" ? "The clarify history" : "DELIVERABLES");
         },
         true,
       );
@@ -1399,6 +1410,10 @@
        window.WMApp.deliverables; it declares only, and the wiring that runs at load (the button's press, the first
        read, the poll and the close/place listeners) stays in app.js. -->
   <script src="/deliverables.js"></script>
+  <!-- The header's Clarify popup: one panel built once, the rows by state, the read of /api/clarify/history, the
+       keyboard, and the place/size it remembers in localStorage. public/app.js wires the button and the outside
+       press; nothing else reaches into it. -->
+  <script src="/clarify-history.js"></script>
   <!-- The turn's own face, cut out of app.js (step 4 of the same order of work): the list a card pages through,
        the fold book's three names, the origin and session-replaced chips, the head and the two ways a turn is
        drawn shut, and the two display switches (thinking and one stream). Loaded before app.js, which calls them

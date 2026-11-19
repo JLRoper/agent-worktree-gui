@@ -13912,6 +13912,47 @@ document.addEventListener("keydown", (e) => {
 window.addEventListener("resize", deliverPosition);
 // ---- end deliverables wiring
 
+// ---- clarify history wiring: the page's half, which calls public/clarify-history.js --------------------
+// The popup itself (the panel, the rows, the read, the keyboard and the remembered size) is in
+// public/clarify-history.js, a classic script the shell loads before this one. What stays here is only the wiring
+// that must run at THIS file's load, after `state` exists: the button's press and its `data-wired` mark (the shell's
+// stale-page guard reads it), the outside press, Escape, and the resize that puts a remembered panel back inside a
+// window that changed size. The button toggles; a row press inside the popup opens the question itself.
+const clarifyBtn = $("btn-clarify");
+clarifyBtn?.addEventListener("click", (e) => {
+  e.stopPropagation();
+  try {
+    clarifyHistoryToggle();
+  } catch (err) {
+    // Same rule as the deliverables button: a control that can be pressed must never be a silent no-op. A page whose
+    // app.js is older than the shell that loaded it is exactly this case, and the guard offers the reload.
+    const why = String((err && err.message) || err);
+    console.error(`[panel] CLARIFY HISTORY could not open on this page: ${why}`);
+    window.__panelStaleBuild?.report?.(`Opening the clarify history threw: ${why}.`);
+  }
+});
+if (clarifyBtn) clarifyBtn.dataset.wired = "1";
+
+// An outside press closes it, mousedown so the reader's next click lands where they aimed. The button's own press is
+// left to the click handler above, which toggles.
+document.addEventListener("mousedown", (e) => {
+  if (!clarifyHist.open) return;
+  if (clarifyHist.el?.contains(e.target)) return;
+  if (e.target.closest?.("#btn-clarify")) return;
+  clarifyHistoryClose();
+});
+
+// Escape from anywhere closes it and hands the caret back to the button. The popup's own keydown handles it first and
+// stops the event, so this is the path for a caret that wandered outside the panel (a repaint can take it).
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || !clarifyHist.open) return;
+  e.preventDefault();
+  clarifyHistoryClose({ focus: true });
+});
+
+window.addEventListener("resize", clarifyHistoryReposition);
+// ---- end clarify history wiring
+
 // ---- fonts: two settings, not one ----------------------------------------------
 // Panel font: the page's own labels, headings and buttons (--ui).
 // Terminal font: the text inside an agent card — transcript, prompt, reply box, command preview
