@@ -29,7 +29,7 @@ const B = `${PROJECT.path}/.worktrees/b-222222`;
 function tree(dir) {
   mkdirSync(dir, { recursive: true });
   // Enough to look like a worktree to `stat(<dir>/.git)`: the scan's own test, no git needed.
-  writeFileSync(path.join(dir, ".git"), "gitdir: C:/repos/demo/.git/worktrees/x\n");
+  writeFileSync(path.join(dir, ".git"), "gitdir: demo/repo/.git/worktrees/x\n");
 }
 
 const LISTED = [{ path: PROJECT.path, branch: PROJECT.mainBranch }];
@@ -72,7 +72,7 @@ test("a CACHED row whose folder is gone renders stale with last seen and the pat
   assert.equal(row.verdict, "STALE");
   assert.equal(row.branch, "wtgui/a-111111", "its branch is still its own, so its card still knows where it was");
   assert.match(row.stale.line, /^last seen /);
-  assert.match(row.stale.line, /at C:\/repos|at C:\/Users|at .*a-111111/, "the reason line carries the path it was read at");
+  assert.match(row.stale.line, /at demo\/repo|at .*a-111111/, "the reason line carries the path it was read at");
   assert.match(row.stale.reason, /gone from disk/);
   // ...and the summary counts it apart from the outstanding work, so a project header does not call it unmerged.
   const summary = store.summaryFor(PROJECT.name);

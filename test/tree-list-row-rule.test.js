@@ -34,24 +34,26 @@ const conv = (thread, ownerPath) => ({ thread, latest: { id: `${thread}-1`, owne
 
 test("before any scan completes, an owner the list does not carry is PENDING, not unattached", () => {
   const { api } = harness({ treeList: { cached: false, completedAt: null } });
-  const c = conv("t1", "C:/repos/demo/.worktrees/new-999999");
+  const c = conv("t1", "demo/repo/.worktrees/new-999999");
   assert.equal(api.isHomelessConv(c), false, "a slow scan is not a statement about the work");
   assert.equal(api.isPendingScanConv(c), true);
 });
 
 test("after a completed scan the same card is unattached - the scan earned the right to say so", () => {
   const { api } = harness({ treeList: { cached: false, completedAt: "2026-11-19T09:00:00.000Z" } });
-  const c = conv("t1", "C:/repos/demo/.worktrees/new-999999");
+  const c = conv("t1", "demo/repo/.worktrees/new-999999");
   assert.equal(api.isHomelessConv(c), true);
   assert.equal(api.isPendingScanConv(c), false);
 });
 
 test("a card whose owner IS a row is attached, cached first paint included", () => {
   const { api } = harness({
-    rows: [{ project: "demo", path: "C:/repos/demo/.worktrees/a-111111", cached: true, verdict: "…" }],
+    rows: [{ project: "demo", path: "demo/repo/.worktrees/a-111111", cached: true, verdict: "…" }],
     treeList: { cached: true, completedAt: null },
   });
-  const c = conv("t1", "c:\\repos\\DEMO\\.worktrees\\a-111111\\");
+  // The owner spells the same tree the Windows way, in another case, with a trailing slash; the row key normalises
+  // all three, so a card on a cached row is attached even though its owner string is not byte-identical to the row.
+  const c = conv("t1", "demo\\repo\\.worktrees\\A-111111\\");
   assert.equal(api.isHomelessConv(c), false);
   assert.equal(api.isPendingScanConv(c), false, "a cached row is a row: this is the jump the cache removes");
   assert.equal(api.rowForOwner(c.latest.ownerPath)?.cached, true);
@@ -66,14 +68,14 @@ test("a card with NO owner is unattached whatever the scan has done", () => {
 
 test("the assistant's own thread is never in either list", () => {
   const { api } = harness({ treeList: { cached: false, completedAt: null }, assistantThread: "assistant-1" });
-  const c = conv("assistant-1", "C:/repos/demo/.worktrees/a-111111");
+  const c = conv("assistant-1", "demo/repo/.worktrees/a-111111");
   assert.equal(api.isHomelessConv(c), false);
   assert.equal(api.isPendingScanConv(c), false);
 });
 
 test("no tree list at all is not a completed scan: nothing may be called unattached", () => {
   const { api } = harness({ treeList: null });
-  const c = conv("t1", "C:/repos/demo/.worktrees/new-999999");
+  const c = conv("t1", "demo/repo/.worktrees/new-999999");
   assert.equal(api.treeListComplete(), false);
   assert.equal(api.isHomelessConv(c), false);
   assert.equal(api.isPendingScanConv(c), true);
@@ -81,12 +83,12 @@ test("no tree list at all is not a completed scan: nothing may be called unattac
 
 test("the two lists never overlap and never lose a card", () => {
   const { api, convs } = harness({
-    rows: [{ project: "demo", path: "C:/repos/demo/.worktrees/a-111111", cached: true }],
+    rows: [{ project: "demo", path: "demo/repo/.worktrees/a-111111", cached: true }],
     treeList: { cached: true, completedAt: null },
   });
   convs([
-    conv("attached", "C:/repos/demo/.worktrees/a-111111"),
-    conv("unknown", "C:/repos/demo/.worktrees/new-999999"),
+    conv("attached", "demo/repo/.worktrees/a-111111"),
+    conv("unknown", "demo/repo/.worktrees/new-999999"),
     { thread: "root", latest: { id: "root-1", ownerPath: null }, first: { ownerPath: null } },
   ]);
   const homeless = api.homelessConversations().map((c) => c.thread);
