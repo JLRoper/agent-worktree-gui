@@ -142,6 +142,9 @@ function verdictClass(v) {
   if (s === "ON MAIN" || s === "ON BASE") return "onmain";
   if (s.startsWith("NO COMMITS") || s.startsWith("EMPTY REPO")) return "nocommits";
   if (s === "RELEASED") return "released";
+  // A tree that has vanished from disk: kept so the cards filed under it stay under it, and drawn as the absence it is
+  // (lib/store.js markStale). Never counted as unmerged: nothing was read about its work.
+  if (s === "STALE") return "gone";
   if (s.startsWith("UNMERGED")) return "unmerged";
   return "error";
 }
