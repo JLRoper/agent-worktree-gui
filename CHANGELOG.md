@@ -4,16 +4,33 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.122.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.123.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-637 releases from v0.1.0 (2026-10-20) to v1.122.0 (2026-11-19), 2194 commits between the tags. Every release is anchored by an
+638 releases from v0.1.0 (2026-10-20) to v1.123.0 (2026-11-19), 2201 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.123.0 — 2026-11-19 · 7 commits
+
+[`80262a7`](https://github.com/JLRoper/agent-worktree-gui/commit/80262a7a441c4c61a2134a76e1e5fd42c5263ce0) · [compare v1.122.0...v1.123.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.122.0...v1.123.0)
+
+### Docs & tests
+
+- docs: render the changelog - 637 releases ([`1de0cd0`](https://github.com/JLRoper/agent-worktree-gui/commit/1de0cd04ddd372d802240732d2e03f79ae8fd112))
+- docs: the landing note for 1.122.0 - the search reads every assistant ([`c4c3256`](https://github.com/JLRoper/agent-worktree-gui/commit/c4c32566272953b8e6c0d81d84498860ef79af29))
+
+### Other
+
+- Detect two live runs stepping on each other, with the evidence ([`6dbcc1d`](https://github.com/JLRoper/agent-worktree-gui/commit/6dbcc1df5d2de8823481e303d48d3cad00e2c93c))
+- Surface a collision on both rows and as the fourth Human kind ([`d7f1fdb`](https://github.com/JLRoper/agent-worktree-gui/commit/d7f1fdb52f238d658b71bed8227feb055e6a9be1))
+- Prove the collision headless: both rows, the badge, H, the ruling, the re-detection ([`dd4945f`](https://github.com/JLRoper/agent-worktree-gui/commit/dd4945f2262ed25132100639fd22ca2aa4c4d0eb))
+- Fix the badge for a kind the lane cannot name, and stop the quiet title lying ([`1461197`](https://github.com/JLRoper/agent-worktree-gui/commit/146119754a3be8ead25a2d81727e8c701635ea89))
+- chore: 1.123.0 - the version this landing carries ([`80262a7`](https://github.com/JLRoper/agent-worktree-gui/commit/80262a7a441c4c61a2134a76e1e5fd42c5263ce0))
 
 ## v1.122.0 — 2026-11-19 · 6 commits
 
