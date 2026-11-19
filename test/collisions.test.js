@@ -140,8 +140,10 @@ test("touchedOf keeps the three sets apart, because the evidence says which one 
 });
 
 test("sideOf names a tree without a lookup: path, directory name, branch, parent", () => {
-  const one = sideOf({ path: "C:\\repos\\proj\\.worktrees\\tree-one\\", branch: "wtgui/tree-one", parent: TURNOVER });
-  assert.deepEqual(one, { path: "C:/repos/proj/.worktrees/tree-one", name: "tree-one", branch: "wtgui/tree-one", parent: TURNOVER });
+  // Backslashes and a trailing separator are the WINDOWS forms the scanner really sees; the tree itself is named
+  // relatively, because a signed drive path would only be true on the machine that wrote it.
+  const one = sideOf({ path: "repos\\proj\\.worktrees\\tree-one\\", branch: "wtgui/tree-one", parent: TURNOVER });
+  assert.deepEqual(one, { path: "repos/proj/.worktrees/tree-one", name: "tree-one", branch: "wtgui/tree-one", parent: TURNOVER });
 });
 
 test("the COLLISION line: a target and a sentence after one pipe", () => {
@@ -155,7 +157,7 @@ test("the COLLISION line: a target and a sentence after one pipe", () => {
   assert.deepEqual(lines[0], { target: "coll-two", text: "both of us are rewriting docs/reports/plan.html and lib/report.js" });
   assert.equal(lines[1].target, "`wtgui/other-tree`");
   // The pipe is the field break: a colon or a slash in the sentence cannot be mistaken for one.
-  assert.deepEqual(parseCollisionLines("COLLISION tree | see: C:/x/y.js, then stop"), [{ target: "tree", text: "see: C:/x/y.js, then stop" }]);
+  assert.deepEqual(parseCollisionLines("COLLISION tree | see: lib/x/y.js, then stop"), [{ target: "tree", text: "see: lib/x/y.js, then stop" }]);
 });
 
 test("a COLLISION line with no pipe is reported, not silently dropped", () => {
