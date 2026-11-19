@@ -351,7 +351,7 @@ const result = await (async () => {
         const rulerTwo = ruled.rows.find((r) => r.path === TWO)?.collisions[0];
         eq("both rows read it as ruled", [rulerOne?.state, rulerTwo?.state], ["ruled", "ruled"]);
         eq("the ruling names the side that goes first, on both rows", [rulerOne?.ruling?.name, rulerTwo?.ruling?.name], ["coll-one-aaaa", "coll-one-aaaa"]);
-        ok("the card says already ruled", ruled.blocks.every((b) => /already ruled: coll-one-aaaa goes first/.test(b.state)), JSON.stringify(ruled.blocks.map((b) => b.state)));
+        ok("the card says already ruled", ruled.blocks.every((b) => /already ruled: coll-one-aaaa( \(#\d+\))? goes first/.test(b.state)), JSON.stringify(ruled.blocks.map((b) => b.state)));
         ok("…and the marker says so too", ruled.marks.every((m) => /already ruled/.test(m.title)), JSON.stringify(ruled.marks.map((m) => m.title)));
         // The button repaints on the page's own clock, so the quiet badge is waited for rather than read on the press.
         const quieted = await page

@@ -310,6 +310,29 @@ const result = await (async () => {
             for (const r of state.rows.values()) hotOpenPath(r);
             renderAll();
           });
+        // A shot of the pair's OWN two rows, stacked: the full page is 3 500 px of one project, and a reader opening
+        // the proof wants the two cards that are being compared side by side, not a scroll.
+        const shotRows = async (file, names) => {
+          // Collapse to the pair being shown first: a shot that keeps every other row open is a scroll with two cards
+          // somewhere in it.
+          await page.evaluate((ns) => {
+            state.expanded.clear();
+            for (const r of state.rows.values()) if (ns.includes(r.name)) hotOpenPath(r);
+            renderAll();
+          }, names);
+          await page.waitForTimeout(120);
+          const box = await page.evaluate((ns) => {
+            const els = [...document.querySelectorAll("tr.detail[data-detail]")].filter((tr) => ns.some((n) => (tr.getAttribute("data-detail") || "").endsWith(n)));
+            if (!els.length) return null;
+            const rects = els.map((e) => e.getBoundingClientRect());
+            const top = Math.min(...rects.map((r) => r.top + window.scrollY));
+            const bottom = Math.max(...rects.map((r) => r.bottom + window.scrollY));
+            return { x: 0, y: Math.max(0, top - 6), width: window.innerWidth, height: Math.min(bottom - top + 12, 1600) };
+          }, names);
+          if (!box) return;
+          await page.screenshot({ path: path.join(shots, file), fullPage: true, clip: box });
+          console.log(`SHOT  ${path.join(shots, file)}`);
+        };
 
         await openPage(page, panel.base, { selector: "header.topbar #btn-human" });
         await rowsLoaded();
@@ -347,8 +370,9 @@ const result = await (async () => {
           ok(`…with the shared file as the evidence on ${label}`, b.chips.includes("lib/shared.js"), JSON.stringify(b.chips));
         }
         eq("six rows wear a marker, one per side of three pairs", v.marks.filter((m) => m.mark).length, 6);
-        await page.screenshot({ path: path.join(shots, "collision-pairs-both-rows-1440x900.png"), fullPage: true });
-        console.log(`SHOT  ${path.join(shots, "collision-pairs-both-rows-1440x900.png")}`);
+        await page.screenshot({ path: path.join(shots, "collision-pairs-board-1440x900.png"), fullPage: true });
+        console.log(`SHOT  ${path.join(shots, "collision-pairs-board-1440x900.png")}`);
+        await shotRows("collision-pairs-both-rows-1440x900.png", ["pair-a", "pair-b"]);
 
         // ---- 2. the filed-and-stood-down pair, its reason readable on both rows ------------------------------
         section("a real pair, filed and stood down");
@@ -360,8 +384,7 @@ const result = await (async () => {
         eq("the card is drawn once on each of its two rows", stoodBlocks.length, 2);
         ok("both cards say which side stood down and why", stoodBlocks.every((b) => /stood-c stood down: its notice #51 was done/.test(b.stood)), JSON.stringify(stoodBlocks.map((b) => b.stood)));
         eq("…and each names the counterpart", stoodBlocks.map((b) => b.other).sort(), ["stood-c", "stood-d"]);
-        await page.screenshot({ path: path.join(shots, "collision-pairs-stood-down-1440x900.png"), fullPage: true });
-        console.log(`SHOT  ${path.join(shots, "collision-pairs-stood-down-1440x900.png")}`);
+        await shotRows("collision-pairs-stood-down-1440x900.png", ["stood-c", "stood-d"]);
 
         // ---- 3. two branches from one parent, caught against each other -------------------------------------
         section("a sibling pair");
@@ -372,6 +395,7 @@ const result = await (async () => {
         eq("…on the committed file both branches change", sibOne?.collisions[0]?.files, ["src/sibling.js"]);
         eq("…each naming the other", [sibOne?.collisions[0]?.other, sibTwo?.collisions[0]?.other], ["sib-two", "sib-one"]);
         ok("…and the primary checkout is NOT one of their pair", ![sibOne?.collisions[0]?.a?.name, sibOne?.collisions[0]?.b?.name].includes("pair-proj"));
+        await shotRows("collision-pairs-siblings-1440x900.png", ["sib-one", "sib-two"]);
 
         // ---- 4. the merge-target-only case files nothing ----------------------------------------------------
         section("the merge-target-only case");
@@ -383,8 +407,7 @@ const result = await (async () => {
         const all = await page.evaluate(async () => (await (await fetch("/api/collisions")).json()).records || []);
         eq("no record on the book is a merge-target relation alone", all.filter((r) => (r.relations || []).length && r.relations.every((x) => x.kind === "merge-target")).length, 0);
         eq("three records for three evidence pairs", all.length, 3);
-        await page.screenshot({ path: path.join(shots, "collision-pairs-merge-target-only-1440x900.png"), fullPage: true });
-        console.log(`SHOT  ${path.join(shots, "collision-pairs-merge-target-only-1440x900.png")}`);
+        await shotRows("collision-pairs-merge-target-only-1440x900.png", ["pair-proj", "pair-a"]);
 
         // ---- 5. the ruling, from the row the reader is looking at -------------------------------------------
         section("the reader rules on the pair");
@@ -414,8 +437,7 @@ const result = await (async () => {
         eq("the ruling names the tree the reader pressed, on both rows", [ruledA?.ruling?.name, ruledB?.ruling?.name], ["pair-a", "pair-a"]);
         ok("both cards say already ruled", v.blocks.filter((b) => b.key === pairKey).every((b) => /already ruled: pair-a( \(#\d+\))? goes first/.test(b.state)), JSON.stringify(v.blocks.filter((b) => b.key === pairKey).map((b) => b.state)));
         eq("the pair's sides carry a queue task id when the panel filed one", [rowA?.collisions[0]?.a?.taskId, rowA?.collisions[0]?.b?.taskId].map((x) => (x === null || typeof x === "number" ? "ok" : "bad")), ["ok", "ok"]);
-        await page.screenshot({ path: path.join(shots, "collision-pairs-ruled-1440x900.png"), fullPage: true });
-        console.log(`SHOT  ${path.join(shots, "collision-pairs-ruled-1440x900.png")}`);
+        await shotRows("collision-pairs-ruled-1440x900.png", ["pair-a", "pair-b"]);
 
         // ---- 6. the badge counts decisions, and a re-detection does not ask again ---------------------------
         section("the badge, and a re-detection");
