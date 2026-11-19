@@ -1,22 +1,25 @@
-// The initiatives: one tab's read, the two writes a reader or an assistant may make freely, and the one write that
-// has to ask first.
+// The initiatives: one tab's read, the writes a reader or an assistant may make, and the permission tier that decides
+// which of them asks first.
 //
-//   GET  /api/initiatives              the store, every initiative with its projects and worktrees, and the assistants
-//                                      that have worked on it (counts and recency)
+//   GET  /api/initiatives              the store, every initiative with its projects, worktrees and history, and the
+//                                      assistants that have worked on it (counts and recency)
 //   POST /api/initiatives              { title, description } - create
 //   POST /api/initiatives/update       { id, title?, description? } - edit the words only
-//   POST /api/initiatives/move         { tree, initiative, action: "add"|"remove" } - PARKS A QUESTION, changes nothing
+//   POST /api/initiatives/move         { tree, initiative, action: "add"|"remove" } - attach or detach, unless the
+//                                      tier says this change has to ask
 //
-// WHY MEMBERSHIP IS A QUESTION AND THE WORDS ARE NOT. A title and a description are text the reader is looking at, and
-// asking about a typo would be noise. Which worktrees are behind a piece of work is the reader's own map of the board,
-// and no agent gets to re-file it behind his back: the move route hands the change to the panel's permission box
-// (lib/remote-writes.js `request`) and the panel makes it only when the reader answers. The resume closure is where
-// the store is written, so a Deny (or a box nobody answered inside its window) leaves the map exactly as it was.
+// WHY THE TIER IS A SETTING AND NOT FOUR ROUTES. The reader's question is "how often do I want to be interrupted about
+// this map", and the answer is one of four levels (lib/initiative-permissions.js). The level decides ONLY whether the
+// panel parks the question: the card, its wording, its once/deny answer and the resume closure are the same at every
+// level, so moving the setting changes how often the reader is asked, not what a change does. At the levels that do
+// not ask, the change is made at once and written into the initiative's history with the actor and the time, so an
+// unasked change is still a recorded one.
 //
 // THE STORE IS REFUSED, NOT REPAIRED. Every write answers 409 with lib/initiatives.js's own sentence when the file
-// exists and cannot be read, and the move route checks that BEFORE parking a question: a card whose answer could only
-// fail is worse than no card. The read carries the same status (`readable`, `error`, `file`) so the tab can say it.
+// exists and cannot be read, and that check runs BEFORE a question is parked: a card whose answer could only fail is
+// worse than no card. The read carries the same status (`readable`, `error`, `file`) so the tab can say it.
 import { DESCRIPTION_MAX, TITLE_MAX, normTreePath } from "../lib/initiatives.js";
+import { initiativeAsks, initiativeTierFrom, initiativeTierInfo, INITIATIVE_TIER_INFO } from "../lib/initiative-permissions.js";
 
 /** The one path this prefix answers, and the row the mount table in server.js matches on. */
 export const INITIATIVES_PATH = "/api/initiatives";
@@ -38,9 +41,10 @@ function lastTouched(task, nowMs) {
  * The whole tab's document, built from the store plus the two things only the composition root knows: which project a
  * path belongs to, and what the board's row for it says. Pure enough to run over a fixture: every seam is a function.
  */
-export function initiativesView({ initiatives, projectForPath, rowFor, assistants = [], queueFor = () => null, now = Date.now() }) {
+export function initiativesView({ initiatives, projectForPath, rowFor, assistants = [], queueFor = () => null, now = Date.now(), tier = null }) {
   const status = initiatives.statusOf();
   const list = initiatives.initiativeList();
+  const level = initiativeTierInfo(tier);
   const board = assistants.map((rec) => {
     let view = null;
     try {
@@ -72,6 +76,10 @@ export function initiativesView({ initiatives, projectForPath, rowFor, assistant
         missing: !row,
         at: rec.at,
         by: rec.by,
+        // The attachment's own actor and time: what the `own` tier reads, and what the Remove hint names, so a reader
+        // can see who put a tree here before deciding to take it out.
+        attachedAt: rec.attachedAt || null,
+        attachedBy: rec.attachedBy || null,
       };
     });
     const byProject = new Map();
@@ -123,6 +131,11 @@ export function initiativesView({ initiatives, projectForPath, rowFor, assistant
       treeCount: trees.length,
       assistants: people,
       assistantCount: people.length,
+      // Newest first, so the fold opens on the change the reader is most likely looking for. Every event names its
+      // actor and its time: a reader's own press is "you", an assistant's change is the assistant's id. A store the
+      // caller handed in without the reader (a fixture with only initiativeList and treesFor) draws no history rather
+      // than failing the whole view: the tab is a read, and a read should not depend on a method added later.
+      history: typeof initiatives.historyFor === "function" ? initiatives.historyFor(init.id) : [],
     };
   });
   return {
@@ -132,6 +145,10 @@ export function initiativesView({ initiatives, projectForPath, rowFor, assistant
     readable: status.readable,
     error: status.error,
     caps: { title: TITLE_MAX, description: DESCRIPTION_MAX },
+    // The level in force, so the tab can say which one decides its questions and the settings select has one source.
+    // `tiers` is the four labels, so a second surface cannot draw a different list.
+    tier: { id: level.id, label: level.label, hint: level.hint },
+    tiers: INITIATIVE_TIER_INFO.map((row) => ({ id: row.id, label: row.label, hint: row.hint })),
     initiatives: out,
   };
 }
@@ -166,6 +183,22 @@ export function createInitiativesRoutes({
     const rows = typeof store?.rowsFor === "function" ? store.rowsFor(project) || [] : [];
     return rows.find((r) => normTreePath(r.path) === key) || null;
   };
+  // The level in force is read from the live config on EVERY request, not captured at boot: the settings route writes
+  // `config.initiativePermissions`, and a card that still asked under a level the reader has just relaxed would be a
+  // setting that only applies after a restart.
+  const tierOf = () => initiativeTierFrom(getConfig()?.initiativePermissions);
+  // Who is making the change. The page sends nothing and means the reader; an assistant sends its own id, and that id
+  // is what the history records and what the `own` tier compares against the attachment's actor.
+  const actorOf = (payload) => String(payload?.by || payload?.actor || "").trim() || "reader";
+  const unreadable = () => {
+    const status = initiatives.statusOf();
+    if (status.readable) return null;
+    return {
+      refused: "unreadable",
+      file: status.file,
+      error: `${status.file || "the initiative store"} could not be read (${status.error || "unknown error"}) - it was NOT overwritten. Fix or move that file, then try again: every initiative on the board lives in it.`,
+    };
+  };
   const view = () =>
     initiativesView({
       initiatives,
@@ -173,6 +206,7 @@ export function createInitiativesRoutes({
       rowFor,
       assistants: Array.isArray(assistant?.assistants) ? assistant.assistants : [],
       queueFor: (id) => (typeof assistant?.queueView === "function" ? assistant.queueView(id) : null),
+      tier: tierOf(),
     });
 
   return async function initiativesRoutes(req, res, route, url) {
@@ -208,31 +242,118 @@ export function createInitiativesRoutes({
 
     // ---- create ----------------------------------------------------------------------------------------------------
     if (route === INITIATIVES_PATH) {
-      const out = initiatives.create({ title: payload.title, description: payload.description, by: payload.by || "reader" });
+      const refused = unreadable();
+      if (refused) {
+        sendJson(res, 409, refused);
+        return true;
+      }
+      const title = String(payload.title ?? "").replace(/\s+/g, " ").trim();
+      if (!title) {
+        sendJson(res, 400, { ok: false, error: "an initiative needs a title - one line saying what the work is" });
+        return true;
+      }
+      const by = actorOf(payload);
+      // The level decides whether this asks. At `all` it does, and the card names the proposed initiative - there is no
+      // tree yet, so the tree line is empty rather than invented. The resume creates it, on the same store the plain
+      // path writes, so an answered card and an unasked create cannot diverge.
+      if (initiativeAsks(tierOf(), "create", { actor: by })) {
+        const request = remoteWrites.request({
+          kind: "initiative",
+          worktree: "",
+          project: "",
+          title: `Create initiative "${title.slice(0, TITLE_MAX)}"`,
+          command: `create initiative "${title.slice(0, TITLE_MAX)}"`,
+          description: `${by === "reader" ? "you are" : `${by} is`} adding an initiative to your map of the work. Nothing is created until you answer; Deny leaves the map exactly as it is.`,
+          allowed: ["once", "deny"],
+          grants: false,
+          resume: () => {
+            const out = initiatives.create({ title: payload.title, description: payload.description, by });
+            if (out.ok) onChange("created");
+            return out;
+          },
+        });
+        log(`initiatives: asked (${request.id}) to create "${title.slice(0, TITLE_MAX)}" as ${by}`);
+        sendJson(res, 202, {
+          ok: true,
+          asked: true,
+          id: request.id,
+          deadline: request.deadline,
+          timeoutSeconds: request.timeoutSeconds,
+          action: "create",
+          title: title.slice(0, TITLE_MAX),
+          tier: tierOf(),
+          note: "the question is in the dock, bottom right - the initiative is created when you answer it",
+        });
+        return true;
+      }
+      const out = initiatives.create({ title: payload.title, description: payload.description, by });
       if (!out.ok) {
         sendJson(res, out.refused === "unreadable" ? 409 : 400, out);
         return true;
       }
-      log(`initiatives: "${out.initiative.title}" created (${out.initiative.id})`);
+      log(`initiatives: "${out.initiative.title}" created (${out.initiative.id}) by ${by}, not asked (tier ${tierOf()})`);
       onChange("created");
-      sendJson(res, 201, { ok: true, initiative: out.initiative, ...view() });
+      sendJson(res, 201, { ok: true, asked: false, changed: true, initiative: out.initiative, ...view() });
       return true;
     }
 
     // ---- edit the words ---------------------------------------------------------------------------------------------
     if (route === `${INITIATIVES_PATH}/update`) {
-      const out = initiatives.update({
-        id: payload.id,
-        title: payload.title,
-        description: payload.description,
-        by: payload.by || "reader",
-      });
+      const refused = unreadable();
+      if (refused) {
+        sendJson(res, 409, refused);
+        return true;
+      }
+      const id = String(payload.id || "").trim();
+      const existing = initiatives.initiativeById(id);
+      if (!existing) {
+        sendJson(res, 404, { error: `no such initiative: ${id || "(none)"}` });
+        return true;
+      }
+      if (payload.title === undefined && payload.description === undefined) {
+        sendJson(res, 400, { ok: false, error: "nothing to change: send a title, a description, or both" });
+        return true;
+      }
+      const by = actorOf(payload);
+      if (initiativeAsks(tierOf(), "edit", { actor: by })) {
+        const bits = [payload.title !== undefined ? "the title" : "", payload.description !== undefined ? "the description" : ""].filter(Boolean);
+        const request = remoteWrites.request({
+          kind: "initiative",
+          worktree: "",
+          project: "",
+          title: `Edit initiative "${existing.title}"`,
+          command: `edit initiative "${existing.title}" (${bits.join(" and ")})`,
+          description: `${by === "reader" ? "you are" : `${by} is`} changing the words of an initiative on your map of the work. Nothing changes until you answer; Deny leaves it exactly as it is.`,
+          allowed: ["once", "deny"],
+          grants: false,
+          resume: () => {
+            const out = initiatives.update({ id: existing.id, title: payload.title, description: payload.description, by });
+            if (out.ok && out.changed !== false) onChange("edited");
+            return out;
+          },
+        });
+        log(`initiatives: asked (${request.id}) to edit "${existing.title}" as ${by}`);
+        sendJson(res, 202, {
+          ok: true,
+          asked: true,
+          id: request.id,
+          deadline: request.deadline,
+          timeoutSeconds: request.timeoutSeconds,
+          action: "edit",
+          initiative: { id: existing.id, title: existing.title },
+          tier: tierOf(),
+          note: "the question is in the dock, bottom right - the words change when you answer it",
+        });
+        return true;
+      }
+      const out = initiatives.update({ id: existing.id, title: payload.title, description: payload.description, by });
       if (!out.ok) {
         sendJson(res, out.refused === "unreadable" ? 409 : 400, out);
         return true;
       }
-      onChange("edited");
-      sendJson(res, 200, { ok: true, initiative: out.initiative, ...view() });
+      if (out.changed !== false) onChange("edited");
+      log(`initiatives: "${out.initiative.title}" edited (${out.initiative.id}) by ${by}, not asked (tier ${tierOf()})`);
+      sendJson(res, 200, { ok: true, asked: false, changed: out.changed !== false, initiative: out.initiative, ...view() });
       return true;
     }
 
@@ -249,15 +370,11 @@ export function createInitiativesRoutes({
         sendJson(res, 400, { error: `a move is add or remove, not ${action || "(none)"}` });
         return true;
       }
-      // The store is re-read before the question: an unreadable file is a 409 now, not a card whose only answer is a
+      // The store is re-read before a question: an unreadable file is a 409 now, not a card whose only answer is a
       // failure, and a membership that is already what was asked for changes nothing and asks nothing.
-      const status = initiatives.statusOf();
-      if (!status.readable) {
-        sendJson(res, 409, {
-          refused: "unreadable",
-          file: status.file,
-          error: `${status.file || "the initiative store"} could not be read (${status.error || "unknown error"}) - it was NOT overwritten. Fix or move that file, then try again: every initiative on the board lives in it.`,
-        });
+      const refusedMove = unreadable();
+      if (refusedMove) {
+        sendJson(res, 409, refusedMove);
         return true;
       }
       const rec = initiatives.initiativeById(initiativeId);
@@ -278,6 +395,31 @@ export function createInitiativesRoutes({
         return true;
       }
       const project = String(projectForPath(tree)?.name || "");
+      const by = actorOf(payload);
+      // WHO PUT THE TREE THERE decides the `own` level, so a detach reads the attachment's actor before it decides
+      // whether to ask. An attach has no earlier attachment to judge; the level reads only the action.
+      const attachedBy = action === "remove" ? initiatives.attachmentInfo(tree, rec.id)?.by || null : null;
+      if (!initiativeAsks(tierOf(), action === "add" ? "attach" : "detach", { actor: by, attachedBy })) {
+        const out = initiatives.move({ tree, initiative: rec.id, action, by });
+        if (!out.ok) {
+          sendJson(res, out.refused === "unreadable" ? 409 : 400, out);
+          return true;
+        }
+        if (out.changed) onChange("moved");
+        log(
+          `initiatives: ${action === "add" ? "attached" : "detached"} ${tree.replace(/\\/g, "/")} ${action === "add" ? "to" : "from"} "${rec.title}" as ${by}, not asked (tier ${tierOf()})`,
+        );
+        sendJson(res, 200, {
+          ok: true,
+          asked: false,
+          changed: out.changed !== false,
+          initiative: { id: rec.id, title: rec.title },
+          tree,
+          action,
+          ...view(),
+        });
+        return true;
+      }
       const title = `${action === "add" ? "Add" : "Remove"} ${nameOf(tree)} ${action === "add" ? "to" : "from"} "${rec.title}"`;
       const request = remoteWrites.request({
         kind: "initiative",
@@ -291,12 +433,12 @@ export function createInitiativesRoutes({
         // The answer is permission for THIS change, not a remote write: no push grant may be left behind by it.
         grants: false,
         resume: () => {
-          const out = initiatives.move({ tree, initiative: rec.id, action, by: payload.by || "reader" });
+          const out = initiatives.move({ tree, initiative: rec.id, action, by });
           if (out.ok && out.changed) onChange("moved");
           return out;
         },
       });
-      log(`initiatives: asked (${request.id}) to ${action} ${tree.replace(/\\/g, "/")} ${action === "add" ? "to" : "from"} "${rec.title}"`);
+      log(`initiatives: asked (${request.id}) to ${action} ${tree.replace(/\\/g, "/")} ${action === "add" ? "to" : "from"} "${rec.title}" as ${by}`);
       sendJson(res, 202, {
         ok: true,
         asked: true,

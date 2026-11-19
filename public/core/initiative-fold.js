@@ -135,5 +135,46 @@
     });
   }
 
-  root.wtInitiativeFold = { DOTS, PREVIEW_LINES, KINDS, COUNT_CHIPS, press, cut, countChips };
+  // ---- one line of an initiative's history ---------------------------------------------------------
+  /**
+   * What one stored event says, in the reader's words.
+   *
+   * The actor is the point: the history exists so a removal can be judged against who put the tree there, and a fold
+   * that said "attached a tree" without naming who would leave the reader exactly where the guess was. `reader` is
+   * drawn as "you" (the panel's own word for the person pressing), an assistant keeps its id, and the time is handed
+   * back untouched for the caller to draw - `at` is the ISO string, and the relative sentence belongs to the page's
+   * clock, not to this module.
+   */
+  function historyLine(event) {
+    const ev = event && typeof event === "object" ? event : {};
+    const by = String(ev.by || "reader");
+    const who = by === "reader" ? "you" : by;
+    const name =
+      String(ev.tree || "")
+        .replace(/\\/g, "/")
+        .replace(/\/+$/, "")
+        .split("/")
+        .filter(Boolean)
+        .pop() || String(ev.tree || "");
+    let what;
+    switch (String(ev.action || "")) {
+      case "create":
+        what = "created this initiative";
+        break;
+      case "edit":
+        what = `edited ${String(ev.detail || "the words").trim() || "the words"}`;
+        break;
+      case "attach":
+        what = name ? `attached ${name}` : "attached a worktree";
+        break;
+      case "detach":
+        what = name ? `removed ${name}` : "removed a worktree";
+        break;
+      default:
+        what = "changed this initiative";
+    }
+    return { who, what, at: typeof ev.at === "string" ? ev.at : null };
+  }
+
+  root.wtInitiativeFold = { DOTS, PREVIEW_LINES, KINDS, COUNT_CHIPS, press, cut, countChips, historyLine };
 })(globalThis);

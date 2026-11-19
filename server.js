@@ -42,6 +42,7 @@ import { verifyLabel, verifyPrompt } from "./lib/verify-prompt.js";
 import { answerDeletes, answerLine, answeredChecks } from "./lib/verify-landed.js";
 import { deleteWorktreeRow } from "./lib/worktree-remove.js";
 import { ReleaseRequests, agentCleanupFrom, releaseWorktree, releasesEnabled } from "./lib/worktrees.js";
+import { INITIATIVE_TIER_INFO, initiativeTierFrom } from "./lib/initiative-permissions.js";
 import { Deliverables } from "./lib/deliverables.js";
 import { ReviewInbox } from "./lib/review-inbox.js";
 // The collisions between two live runs (lib/collisions.js): the detector, the record per pair and the reader's ruling.
@@ -553,6 +554,12 @@ async function loadConfig() {
   // clean up. It is a VETO above every project, so it can only CLOSE the door — a project still needs its own
   // `releaseWorktrees: true` — and a missing key reads as ON, which is what an install written before this row did.
   cfg.agentCleanup = agentCleanupFrom(cfg.agentCleanup);
+  // How often the panel asks the reader before a change to an initiative: `all` (every create, edit, attach and
+  // detach), `remove`, `own`, or `none` (lib/initiative-permissions.js owns the four and the decision). A missing key
+  // reads as `all`, so an install written before this setting asks rather than assumes. The key is not written for the
+  // default: the file stays keyless until the reader moves the select, and the setting applies live (the route reads
+  // this object on every request).
+  cfg.initiativePermissions = initiativeTierFrom(cfg.initiativePermissions);
   // The Matrix bridge the Gateway tab starts. Paths and a room id ONLY: the password lives in bridge.env beside
   // the script, and neither this server nor the page ever reads that file (lib/matrix-bridge.js states the rule
   // and existsSync is the whole of what it does with the path). A missing block normalises to empty strings, so a
@@ -2029,6 +2036,11 @@ const settingsOut = () => ({
   // instead of implying that "on" means every repository is open.
   agentCleanup: agentCleanupFrom(config.agentCleanup),
   releaseProjects: (registry?.projects || []).filter((p) => releasesEnabled(p)).map((p) => p.name),
+  // The initiative permission tier travels with every snapshot because the Settings select, the Initiatives tab's
+  // own line and the card all read the same fact - and a tab opened before another browser moved it has to agree with
+  // the file. `initiativeTiers` is the four rows, so no surface invents a fifth label.
+  initiativeTier: initiativeTierFrom(config.initiativePermissions),
+  initiativeTiers: INITIATIVE_TIER_INFO.map((row) => ({ id: row.id, label: row.label, hint: row.hint })),
   spawnEnabled: true,
 });
 

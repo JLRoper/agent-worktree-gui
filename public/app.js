@@ -16650,6 +16650,9 @@ function toggleSettings(open = null) {
   // The agent-cleanup row reads the last snapshot again on every open, so a switch another tab moved is what the
   // panel shows rather than what this tab last saw.
   paintAgentCleanup();
+  // …and the initiative tier beside it, for the same reason: it is server-side, so another browser may have moved it,
+  // and the row has to open on the level the initiative routes are actually reading.
+  paintInitiativeTier();
   // The reset control names WHICH assistant it acts on, and the roster can have grown since the last snapshot was
   // painted (another tab creates one), so it is read again on every visit — keeping the assistant already chosen.
   paintResetRow();
@@ -18263,6 +18266,63 @@ $("agent-cleanup")?.addEventListener("change", async (e) => {
 });
 
 // ---- end agent cleanup
+
+// ---- initiatives: how often a change to the map asks ---------------------------------------------
+// The level is the panel's own (config.json `initiativePermissions`), so it applies to every browser and to the workers,
+// which have no browser: POST /api/settings/initiative-tier writes it and the initiative routes read the live object on
+// every request, so a save here decides the NEXT change rather than the next boot. The card is not drawn from this: the
+// level only decides whether the panel asks at all, and the page reads the answer off the 202 it gets back.
+function initiativeTierStored() {
+  const id = String(state.settings?.initiativeTier || "all").toLowerCase();
+  const tiers = Array.isArray(state.settings?.initiativeTiers) ? state.settings.initiativeTiers : [];
+  return tiers.some((t) => t.id === id) ? id : "all";
+}
+
+function paintInitiativeTier(note = "", bad = false) {
+  const box = $("initiative-tier");
+  const preview = $("initiative-tier-preview");
+  const id = initiativeTierStored();
+  const tiers = Array.isArray(state.settings?.initiativeTiers) ? state.settings.initiativeTiers : [];
+  const row =
+    tiers.find((t) => t.id === id) ||
+    { label: "ask me for everything", hint: "every create, edit, attach and detach waits for your answer" };
+  // A rejected save leaves the select where the reader put it, saying the save failed: snapping it back reads as "it
+  // saved that", when the save is exactly what failed.
+  if (box && !bad) box.value = id;
+  if (!preview) return;
+  preview.textContent = bad
+    ? `NOT SAVED - ${note}. config.json still says: ${row.label}.`
+    : `${row.label} - ${row.hint}. The card itself never changes, any change is in the initiative's history with its actor and time, and this applies to your presses and to every assistant's.`;
+  preview.classList.toggle("bad", bad);
+}
+
+$("initiative-tier")?.addEventListener("change", async (e) => {
+  const want = String(e.target.value || "");
+  const before = initiativeTierStored();
+  const preview = $("initiative-tier-preview");
+  if (preview) {
+    preview.textContent = "saving…";
+    preview.classList.remove("bad");
+  }
+  try {
+    const r = await apiFetch(
+      "/api/settings/initiative-tier",
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tier: want }) },
+      { timeoutMs: 10000 },
+    );
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    state.settings = { ...(state.settings || {}), ...(d.settings || {}) };
+    paintInitiativeTier();
+    showBanner(`initiative changes: ${d.tier?.label || want}`);
+  } catch (err) {
+    e.target.value = before;
+    paintInitiativeTier(`could not change it: ${err.message}`, true);
+    showBanner(`could not change the initiative tier: ${err.message}`);
+  }
+});
+
+// ---- end initiative tier
 
 // ---- how long a collapsed parent stays a decision about everything under it -----------------------
 // `collapseAfterSeconds` lives in this panel's config.json (POST /api/settings/collapse-after), like the age

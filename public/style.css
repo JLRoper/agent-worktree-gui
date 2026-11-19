@@ -4393,6 +4393,14 @@ a.init-branch-link:focus-visible { outline: 1px solid #7fb2e8; outline-offset: 1
 .init-counts { display: flex; flex-wrap: wrap; gap: 4px; }
 .init-counts .chip { font-size: 9.5px; padding: 0 5px; }
 .init-assist-when { margin-left: auto; white-space: nowrap; }
+.init-histfold { margin-top: 7px; border-top: 1px solid var(--line); padding-top: 5px; }
+.init-history { margin: 2px 0 0 16px; }
+.init-hist-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; min-height: 22px; font-size: 11.5px; }
+.init-hist-what { min-width: 0; overflow-wrap: anywhere; }
+.init-hist-who { color: var(--text); font-weight: 600; }
+.init-hist-when { margin-left: auto; white-space: nowrap; font-family: var(--mono); font-size: 10px; }
+.init-tier b { color: var(--text); }
+.init-hist-none { padding: 2px 0 4px; }
 .init-no-trees, .init-no-assist { padding: 2px 0 4px 16px; }
 .init-empty { line-height: 1.5; }
 .init-empty b { color: var(--text); }

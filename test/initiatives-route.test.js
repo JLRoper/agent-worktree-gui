@@ -57,6 +57,15 @@ const get = async (p) => {
 const readStore = () => JSON.parse(readFileSync(initiativesFile, "utf8"));
 const state = async () => (await get("/api/state")).json;
 
+// The level is a settings value, so a test that is about the wire shape of a write NAMES the level it needs instead
+// of leaning on the default. `all` is the strictest and asks for every change; `remove` leaves create and edit free
+// and asks only about a detach. The four levels' own behaviour is test/initiative-tier-route.test.js's subject.
+const setTier = async (tier) => {
+  const out = await post(base, "/api/settings/initiative-tier", { body: { tier } });
+  assert.equal(out.status, 200, out.text);
+  assert.equal(out.json.tier.id, tier);
+};
+
 await waitForState(
   base,
   (s) => {
@@ -103,6 +112,7 @@ test("the tab's read starts empty, and says the store is a file it can read", as
 });
 
 test("create lands with no trees, and the document is a file beside the panel's other state", async () => {
+  await setTier("remove");
   const made = await post(base, "/api/initiatives", { body: { title: "SSO migration", description: "Menu and oauth2, one piece of work" } });
   assert.equal(made.status, 201, made.text);
   assert.match(made.json.initiative.id, /^init_/);
@@ -115,6 +125,7 @@ test("create lands with no trees, and the document is a file beside the panel's 
 });
 
 test("a move parks a question that names the tree and the initiative - and changes nothing yet", async () => {
+  await setTier("all");
   const init = (await get("/api/initiatives")).json.initiatives[0];
   const asked = await post(base, "/api/initiatives/move", { body: { tree: treeA1, initiative: init.id, action: "add" } });
   assert.equal(asked.status, 202, asked.text);
@@ -195,6 +206,7 @@ test("the read groups the trees by project and counts the assistants by state, n
 });
 
 test("an edit changes the words and nothing else", async () => {
+  await setTier("remove");
   const init = (await get("/api/initiatives")).json.initiatives[0];
   const edited = await post(base, "/api/initiatives/update", { body: { id: init.id, title: "SSO migration, phase two", description: "now with the gateway" } });
   assert.equal(edited.status, 200, edited.text);
@@ -227,6 +239,7 @@ test("an unreadable store is a 409 on every write, and the move asks nothing at 
 });
 
 test("a repaired store works again on the next write", async () => {
+  await setTier("remove");
   writeFileSync(initiativesFile, JSON.stringify({ version: 1, initiatives: [], trees: {} }), "utf8");
   const made = await post(base, "/api/initiatives", { body: { title: "After the repair" } });
   assert.equal(made.status, 201, made.text);
