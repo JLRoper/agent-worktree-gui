@@ -58,6 +58,7 @@ function harness({ turnoverBranch = TURNOVER } = {}) {
     shownColumns: () => CHART_COLUMNS.map((_, i) => i),
     branchCellHtml: () => "",
     ownerCellHtml: () => "",
+    initiativeCellHtml: () => "",
     aheadBehindCellHtml: () => "",
     lifeCellHtml: () => "<td></td>",
     nextReadCellHtml: () => "<td></td>",
@@ -65,7 +66,7 @@ function harness({ turnoverBranch = TURNOVER } = {}) {
   const { rowHtml } = new Function(
     "ctx",
     `const { state, esc, keyOf, rowDrawsOpen, prCellHtml, verdictHtml, isProjectRootRow, treeTitleOf, agentBadgeHtml,
-             deletableWithoutAsking, shownColumns, branchCellHtml, ownerCellHtml, aheadBehindCellHtml,
+             deletableWithoutAsking, shownColumns, branchCellHtml, ownerCellHtml, initiativeCellHtml, aheadBehindCellHtml,
              lifeCellHtml, nextReadCellHtml } = ctx;
      ${turnoverForCode}
      ${columnsCode}

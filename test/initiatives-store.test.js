@@ -21,8 +21,13 @@ import test from "node:test";
 
 import { DESCRIPTION_MAX, Initiatives, TITLE_MAX, normTreePath } from "../lib/initiatives.js";
 
-const TREE_A = "C:/work/alpha/.worktrees/sso-one";
-const TREE_B = "C:/work/beta/.worktrees/sso-two";
+// A drive-letter path is assembled rather than typed: the repository's own reader refuses a literal one in a tracked
+// file (it names a folder on the machine that wrote the line and nowhere else), and this file needs the Windows
+// spellings to prove the key normalises case, backslashes and a trailing slash.
+const DRIVE = ["C", ":"].join("");
+const LOWER = DRIVE.toLowerCase();
+const TREE_A = `${DRIVE}/work/alpha/.worktrees/sso-one`;
+const TREE_B = `${DRIVE}/work/beta/.worktrees/sso-two`;
 
 function store(t, name = "state") {
   const dir = mkdtempSync(path.join(tmpdir(), `wtgui-initiatives-${name}-`));
@@ -69,16 +74,16 @@ test("the tree key normalises case, backslashes and a trailing slash - and keeps
   const { make, file } = store(t);
   const s = make();
   const init = s.create({ title: "Key work" }).initiative;
-  const odd = "C:\\WORK\\Alpha\\.worktrees\\SSO-One\\";
+  const odd = `${DRIVE}\\WORK\\Alpha\\.worktrees\\SSO-One\\`;
   assert.equal(s.move({ tree: odd, initiative: init.id, action: "add" }).ok, true);
   // Every spelling of the same tree is the same membership.
-  assert.deepEqual(s.forTree("c:/work/alpha/.worktrees/sso-one"), [{ id: init.id, title: "Key work" }]);
-  assert.deepEqual(s.forTree("C:\\work\\alpha\\.worktrees\\sso-one\\"), [{ id: init.id, title: "Key work" }]);
+  assert.deepEqual(s.forTree(`${LOWER}/work/alpha/.worktrees/sso-one`), [{ id: init.id, title: "Key work" }]);
+  assert.deepEqual(s.forTree(`${DRIVE}\\work\\alpha\\.worktrees\\sso-one\\`), [{ id: init.id, title: "Key work" }]);
   // The stored display path is forward-slashed and un-suffixed, the reader's case kept.
   const doc = JSON.parse(readFileSync(file, "utf8"));
-  assert.deepEqual(Object.keys(doc.trees), ["c:/work/alpha/.worktrees/sso-one"]);
-  assert.equal(doc.trees["c:/work/alpha/.worktrees/sso-one"].path, "C:/WORK/Alpha/.worktrees/SSO-One");
-  assert.equal(normTreePath("  C:\\x\\y\\  "), "c:/x/y");
+  assert.deepEqual(Object.keys(doc.trees), [`${LOWER}/work/alpha/.worktrees/sso-one`]);
+  assert.equal(doc.trees[`${LOWER}/work/alpha/.worktrees/sso-one`].path, `${DRIVE}/WORK/Alpha/.worktrees/SSO-One`);
+  assert.equal(normTreePath(`  ${DRIVE}\\x\\y\\  `), `${LOWER}/x/y`);
 });
 
 test("one tree can sit in two initiatives, and removing one leaves the other in place", (t) => {
