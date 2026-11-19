@@ -63,6 +63,7 @@
     "verify:chart-top-count": "node tools/verify-chart-top-count.mjs",
     "verify:chart-edges": "node tools/verify-chart-edges.mjs",
     "verify:initiatives-tab": "node tools/verify-initiatives-tab.mjs",
+    "verify:initiative-tier": "node tools/verify-initiative-tier.mjs",
     "verify:initiative-branch-link": "node tools/verify-initiative-branch-link.mjs",
     "verify:task-refs": "node tools/verify-task-refs.mjs",
     "verify:round-tree-names": "node tools/verify-round-tree-names.mjs",

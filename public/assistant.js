@@ -3389,7 +3389,7 @@
   // the first thing a card should spend its height on, and a card opened to read a title should not arrive with forty
   // lines of who did what.
   const initHistoryOpen = new Set();
-  const initNotes = new Map(); // initiative id (or "new") -> { text, bad } - what the last write answered
+  const initNotes = new Map(); // initiative id (or "new") -> { text, bad, requestId } - what the last write answered
   let initDoc = null; // the last document this pane read
   let initReadAt = 0; // when, for the freshness gap below
   let initLoading = false;
@@ -3408,10 +3408,17 @@
 
   function initNoteFor(id) {
     const n = initNotes.get(id);
-    return n && n.text ? `<div class="as-ask${n.bad ? " is-bad" : ""}" role="status">${esc(n.text)}</div>` : "";
+    if (!n || !n.text) return "";
+    // A note that says "answer in the dock" stops being true the moment the question is answered, and leaving it
+    // standing would tell the reader to answer a card that is gone. The answered change is in the history by then.
+    if (n.requestId && !(state.remoteWrites?.pending || []).some((p) => p.id === n.requestId)) {
+      initNotes.delete(id);
+      return "";
+    }
+    return `<div class="as-ask${n.bad ? " is-bad" : ""}" role="status">${esc(n.text)}</div>`;
   }
-  function setInitNote(id, text, bad = false) {
-    initNotes.set(id, { text: String(text || ""), bad });
+  function setInitNote(id, text, bad = false, requestId = "") {
+    initNotes.set(id, { text: String(text || ""), bad, requestId: String(requestId || "") });
   }
 
   function loadInitiatives() {
@@ -3534,13 +3541,16 @@
       )
       .join("");
     const none = groups ? "" : `<option value="">every worktree on the board is already here</option>`;
+    // The button says what the press will do, because the level decides that and only the level: attaching asks only
+    // at "ask me for everything", so at the other three the word "Ask" would promise a question that never comes.
+    const asksAttach = String((initDoc.tier && initDoc.tier.id) || "all") === "all";
     return `<div class="init-form init-addform" data-init-addform="${esc(init.id)}">
       <label class="as-role-caption" for="as-init-add-${esc(init.id)}">worktree</label>
       <select id="as-init-add-${esc(init.id)}" data-init-field="addTree"${groups ? "" : " disabled"}>${none}${groups}</select>
       <div class="as-actions">
-        <button type="button" class="primary" data-init-move="${esc(init.id)}|add|"${groups ? "" : " disabled"}>Ask to add</button>
+        <button type="button" class="primary" data-init-move="${esc(init.id)}|add|"${groups ? "" : " disabled"}>${asksAttach ? "Ask to add" : "Attach"}</button>
         <button type="button" data-init-cancel="add">Cancel</button>
-        <span class="as-hint">the question names the tree and the initiative</span>
+        <span class="as-hint">${asksAttach ? "the question names the tree and the initiative" : "this level attaches at once, and the history records who and when"}</span>
       </div>
     </div>`;
   }
@@ -3900,7 +3910,7 @@
       // in the dock is about to contradict. A 200 with `changed: true` is the level that does not ask, and its own
       // history line is the proof it happened.
       if (d.asked) {
-        setInitNote(id, `${d.note || "asked - answer in the dock, bottom right"} (${action === "add" ? `add ${leaf}` : `remove ${leaf}`})`, false);
+        setInitNote(id, `${d.note || "asked - answer in the dock, bottom right"} (${action === "add" ? `add ${leaf}` : `remove ${leaf}`})`, false, d.id);
       } else if (d.changed === false) {
         setInitNote(id, action === "add" ? "that worktree is already in this initiative" : "that worktree is not in this initiative", false);
       } else {
@@ -3928,7 +3938,7 @@
       if (d.asked) {
         // Nothing exists yet: the form keeps its words, so answering the card creates the initiative the reader was
         // writing, and a Deny leaves the draft exactly where it is.
-        setInitNote("new", `${d.note || "asked - answer in the dock, bottom right"} (create "${title}")`, false);
+        setInitNote("new", `${d.note || "asked - answer in the dock, bottom right"} (create "${title}")`, false, d.id);
         renderAssistantInitiatives(true);
         return;
       }
@@ -3955,7 +3965,7 @@
       const d = await initPost("/api/initiatives/update", { id, title, description });
       adoptInitiatives(d);
       if (d.asked) {
-        setInitNote(id, `${d.note || "asked - answer in the dock, bottom right"} (edit "${title}")`, false);
+        setInitNote(id, `${d.note || "asked - answer in the dock, bottom right"} (edit "${title}")`, false, d.id);
       } else {
         initEditId = "";
         setInitNote(id, d.changed === false ? "nothing changed - the words are the same ones" : "saved", false);
