@@ -179,6 +179,22 @@ test("a hit that cannot name a message stays in the walk, after the items", () =
   assert.equal(out[1], loose, "dropping it would make the header divide fewer rows than the footer's matched count");
 });
 
+test("a tie between two assistants is decided by the assistant, so the list does not depend on the answer's order", () => {
+  // The every-assistant search can answer two assistants' turns at the SAME millisecond. Their turn counters are not
+  // comparable across two stores, so the assistant decides - then the thread - and only then the numbering. Without
+  // that, the order would be whatever the answer happened to list first and would move between paints.
+  const same = at(9);
+  const one = { thread: "panel-assistant", id: "one", turn: 1, field: "input", at: same, assistantId: "assistant-1", assistant: "Assistant #1" };
+  const two = { thread: "panel-assistant-2", id: "two", turn: 1, field: "input", at: same, assistantId: "assistant-2", assistant: "Assistant #2" };
+  assert.deepEqual(order([one, two]).map((h) => h.id), ["one", "two"]);
+  assert.deepEqual(order([two, one]).map((h) => h.id), ["one", "two"], "the answer's own order cannot change a tie between assistants");
+  assert.deepEqual(order([two, one]).map((h) => h.assistant), ["Assistant #1", "Assistant #2"]);
+  // The item remembers whose message it is, so a header can name it without walking the hits again.
+  const items = group([two, one]);
+  assert.deepEqual(items.map((i) => i.assistantId), ["assistant-2", "assistant-1"]);
+  assert.deepEqual(items.map((i) => i.assistant), ["Assistant #2", "Assistant #1"]);
+});
+
 test("an empty or absent answer is an empty walk, never a crash", () => {
   assert.deepEqual(order([]), []);
   assert.deepEqual(order(null), []);

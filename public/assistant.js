@@ -603,6 +603,13 @@
   // The query's meaning (`*`/`?` wildcards, a plain substring, case-insensitive, metacharacters escaped) is
   // public/core/turn-search.js in both places, so a hit cannot mean one thing here and another in the count.
   //
+  // THE CORPUS IS EVERY ASSISTANT. The box used to send the open tab's id, so a phrase in Assistant #2's turns was
+  // invisible while #1 was selected. The request no longer names an assistant: the server searches each assistant's
+  // own threads and merges the lists into one ordered index at query time, and every hit says which assistant it
+  // belongs to. A row therefore names its assistant, and a press lands the panel on THAT assistant's tab, in the
+  // card of the thread the turn is on, with the turn in view and ringed. Nothing is copied: the turns already live
+  // in one store, and the merge is an array of references built while answering.
+  //
   // WHAT A HIT DOES. `revealSearchHit` puts the turn in front of the reader through the card's OWN paging:
   // wtTurnFold.reveal picks the page the turn lives on, unfolds it and writes the page offset, so the repaint
   // below is the ordinary one; then the matched text is marked inside the turn. The results are a fixed popover
@@ -624,11 +631,16 @@
   // console lines) because that is what survives the ten-row cap, not the order a reader walks them in. The list is
   // ordered here instead, by public/core/search-items.js's `order`: one item (message) per group, newest first by
   // the item's newest row, and the rows inside an item in reading order - prompt, console lines, reply - so a
-  // message still reads top to bottom and a Down walks backwards in time. Equal timestamps break by the
-  // conversation's own numbering, so a tie cannot shuffle between paints. The header, the footer and the amber note
-  // all divide the SAME ordered list: the walk's total is its length, and the footer's "displayed" is that length.
-  // Each item is introduced by its own header and never followed by one, so the last row before the footer is a
-  // result and not a title with nothing under it.
+  // message still reads top to bottom and a Down walks backwards in time. Equal timestamps break by the assistant
+  // and the conversation's own numbering, so a tie cannot shuffle between paints. The header, the footer and the
+  // amber note all divide the SAME ordered list: the walk's total is its length, and the footer's "displayed" is
+  // that length. Each item is introduced by its own header and never followed by one, so the last row before the
+  // footer is a result and not a title with nothing under it.
+  //
+  // THE COST OF ONE ANSWER. The server caps the rows it answers (SEARCH_LIMIT) and builds the excerpt only for those,
+  // and the page draws exactly those rows: a filter that matches thousands of turns never becomes thousands of
+  // nodes, and the count's `matched` is the honest total of everything the store held. The input stays responsive
+  // because the read is debounced and every answer but the newest keystroke's is dropped (`searchSeq`).
   //
   // A MOUSEDOWN OUTSIDE CLOSES IT. The box and the list are the two places a press belongs to the search; anywhere
   // else - the transcript below, another pane of this float, the board - closes the list and drops the highlight,
@@ -744,22 +756,45 @@
     else el.removeAttribute("title");
   }
 
-  // One result row: where the hit is (the reader's input, the reply, or the console line's own kind) and a one-line
-  // window with the match marked. The window is built by the server and split into before/hit/after there, so this
-  // never re-finds a match with a second regex that could disagree. The row carries the HIT it stands for (its press
-  // opens that match) and the TURN it belongs to, and the standing row is marked - the list, the ring and the count
-  // agree about where the reader is. The row's age is its OWN (a console line from an hour into a turn is an hour
-  // old); which message it belongs to is the item header above it, so the two facts are said once each.
+  // Which assistant a thread belongs to: its current thread, or one a hard restart left behind. This is what a
+  // result row names and what a press switches the panel to, so it is one resolver rather than two guesses.
+  function assistantIdOfThread(thread) {
+    const t = String(thread || "");
+    if (!t) return null;
+    const rec = sessionRecords().find((r) => r.threadId === t || (Array.isArray(r.previousThreads) && r.previousThreads.includes(t)));
+    return rec ? rec.id : null;
+  }
+
+  // The name a row prints. The server puts it on the hit (`assistant`, from the record it searched); a hit from an
+  // older answer, or one the page mapped itself, falls back to the session record - so a row can never be anonymous
+  // while the panel knows whose turn it is.
+  function searchAssistantName(hit) {
+    const named = String(hit?.assistant || "").trim();
+    if (named) return named;
+    const id = assistantIdOfThread(hit?.thread) || String(hit?.assistantId || "").trim();
+    return id ? sessionById(id)?.name || id : "";
+  }
+
+  // One result row: WHOSE turn it is, where the hit is (the reader's input, the reply, or the console line's own
+  // kind) and a one-line window with the match marked. The window is built by the server and split into
+  // before/hit/after there, so this never re-finds a match with a second regex that could disagree. The row carries
+  // the HIT it stands for (its press opens that match) and the TURN it belongs to, and the standing row is marked -
+  // the list, the ring and the count agree about where the reader is. The assistant's name is on EVERY row because
+  // the corpus is every assistant's turns: two hits from two assistants have to be told apart at a glance. The row's
+  // age is its OWN (a console line from an hour into a turn is an hour old); which message it belongs to is the item
+  // header above it, so the two facts are said once each.
   function searchHitHtml(hit, index, itemAt) {
     const where = hit.field === "input" ? "you" : hit.field === "reply" ? "reply" : String(hit.kind || "tool");
+    const who = searchAssistantName(hit);
     const when = searchAge(hit.at);
     const lead = hit.lead ? "..." : "";
     const tail = hit.tail ? "..." : "";
     const marked = hit.hit ? `<mark class="as-search-mark">${esc(hit.hit)}</mark>` : "";
     const current = index === searchHitAt;
     return (
-      `<button type="button" class="as-search-row${current ? " is-current" : ""}" data-search-hit="${index}" data-search-item="${itemAt}"` +
-      `${current ? ' aria-current="true"' : ""} title="open this turn in the card">` +
+      `<button type="button" class="as-search-row${who ? " as-search-row-who" : ""}${current ? " is-current" : ""}" data-search-hit="${index}" data-search-item="${itemAt}" data-assistant="${esc(hit.assistantId || assistantIdOfThread(hit.thread) || "")}"` +
+      `${current ? ' aria-current="true"' : ""} title="open this turn in ${esc(who || "its assistant")}'s card">` +
+      `${who ? `<span class="as-search-who mono">${esc(who)}</span>` : ""}` +
       `<span class="as-search-where mono">${esc(where)}</span>` +
       `<span class="as-search-meta mono">${esc(when)}</span>` +
       `<span class="as-search-snip">${lead}${esc(hit.before)}${marked}${esc(hit.after)}${tail}</span>` +
@@ -767,15 +802,16 @@
     );
   }
 
-  // One item's head: which message the rows under it belong to, when it last did something, and how many of its rows
-  // matched. It is drawn BEFORE the item's rows and never after them - a title with no rows under it reads as one
-  // more, empty result - so the last row before the footer is always a result.
+  // One item's head: whose message the rows under it belong to, which message, when it last did something, and how
+  // many of its rows matched. It is drawn BEFORE the item's rows and never after them - a title with no rows under
+  // it reads as one more, empty result - so the last row before the footer is always a result.
   function searchItemHtml(item) {
     if (!item) return "";
+    const who = searchAssistantName(item.hits[0]);
     const ordinal = searchTurnOrdinal(item.hits[0]);
     const when = searchAge(item.stamp);
     const rows = item.hits.length;
-    const meta = [ordinal ? `turn ${ordinal}` : "", when, rows > 1 ? `${rows} rows` : ""].filter(Boolean).join(" - ");
+    const meta = [who, ordinal ? `turn ${ordinal}` : "", when, rows > 1 ? `${rows} rows` : ""].filter(Boolean).join(" - ");
     if (!meta) return "";
     return `<div class="as-search-item mono">${esc(meta)}</div>`;
   }
@@ -906,7 +942,10 @@
       return null;
     }
     const seq = ++searchSeq;
-    const params = new URLSearchParams({ q, scope: searchScope, limit: String(SEARCH_LIMIT), assistantId: activeSessionId() });
+    // No assistantId: the corpus is EVERY assistant's turns (the server searches each one's own threads and merges
+    // them into one ordered index), so the open tab no longer decides what is findable. The cap is the render's
+    // too - the answer holds at most SEARCH_LIMIT rows and the popover draws exactly those.
+    const params = new URLSearchParams({ q, scope: searchScope, limit: String(SEARCH_LIMIT) });
     let out = null;
     try {
       const r = await apiFetch(`/api/assistant/search?${params.toString()}`, {}, { timeoutMs: 8000 });
@@ -1008,11 +1047,12 @@
   }
 
   // The turn element a hit lives in, if the card draws it right now. A turn on another page of its card is not in
-  // the DOM until `revealSearchHit` has repainted; asking for it again after the repaint is the honest answer.
+  // the DOM until `revealSearchHit` has repainted; asking for it again after the repaint is the honest answer. The
+  // assistant comes from the THREAD (its current one or a thread a restart left behind), never from the open tab:
+  // a cross-assistant hit has to be looked for in its own assistant's card.
   function turnElementFor(hit) {
     if (!hit) return null;
-    const rec = sessionRecords().find((r) => r.threadId === hit.thread) || null;
-    const targetId = rec ? rec.id : activeSessionId();
+    const targetId = assistantIdOfThread(hit.thread) || activeSessionId();
     const host = hostFor(targetId, "chat");
     const card = host?.querySelector(`.job[data-thread="${CSS.escape(hit.thread)}"]`);
     return card?.querySelector(`[data-turn="${CSS.escape(hit.id)}"]`) || null;
@@ -1082,18 +1122,27 @@
   // row, and the list's current row kept in view. `keepList` is the keyboard's case: the popover stays up because its
   // footer is half the count's promise, so the LIST is what follows the walk - its own scroller is moved to the row,
   // and the transcript is left exactly where the reader had it. Enter and a click still open the turn in the card.
+  //
+  // ACROSS ASSISTANTS. A hit may belong to an assistant whose tab is not the one on screen, so the tab switch comes
+  // FIRST: the panel moves to that assistant's Chat, the card is repainted for that thread, and only then is the turn
+  // looked for. A keyboard STEP within one assistant still leaves the transcript alone (the reader is reading the
+  // list), but a step that CROSSES to another assistant's tab has just put a different card on screen: it scrolls the
+  // turn into view, because a tab switch with the match somewhere below the fold would be a press that showed nothing.
+  //
   // Returns whether the match was marked - false when the turn is gone from the store or the text is not on the page
-  // (a tool line older than the console's window), which the row's own marked excerpt still answers.
+  // (a tool line older than the console's window, or a turn on a thread a hard restart left behind that the card does
+  // not draw), which the row's own marked excerpt still answers.
   function revealSearchHit(hitAt, { keepList = false } = {}) {
     const prev = searchHits[searchHitAt];
     const hit = searchHits[Number(hitAt)];
     if (!hit) return false;
     searchHitAt = Number(hitAt);
-    const rec = sessionRecords().find((r) => r.threadId === hit.thread) || null;
-    const targetId = rec ? rec.id : activeSessionId();
+    const targetId = assistantIdOfThread(hit.thread) || String(hit.assistantId || "").trim() || activeSessionId();
+    const switched = targetId !== activeSessionId() || state.assistantView?.subTab !== "chat";
     const conv = conversationsByThread(hit.thread);
     if (conv) wtTurnFold.reveal(state, conv.thread, conv.turns, hit.id);
-    if (rec && rec.id !== activeSessionId()) setView({ assistant: rec.id, subTab: "chat" });
+    if (targetId !== activeSessionId()) setView({ assistant: targetId, subTab: "chat" });
+    else if (state.assistantView?.subTab !== "chat") setView({ subTab: "chat" });
     renderAssistantChat(targetId);
     // Enter and a click open the turn: the popover gets out of its way (the count beside the box carries the
     // reader's place, and a new answer brings the list back). A keyboard STEP keeps it, footer and all.
@@ -1112,11 +1161,12 @@
     const mark = markInsideTurn(hitScopeIn(turnEl, hit), searchShownQuery || String(hit.hit || ""));
     const sameTurn = Boolean(prev) && prev.id === hit.id && prev.thread === hit.thread;
     const pageY = window.scrollY;
-    // Enter and a click put the turn in the middle of the card. A keyboard STEP does not touch the transcript at all:
-    // the reader's place is the list, whose row is the thing that has to move, and a press that dragged the card
-    // around under a floating popover would move the text they are not reading.
-    if (!keepList) {
-      if (!sameTurn) turnEl.scrollIntoView({ block: "center" });
+    // Enter and a click put the turn in the middle of the card. A keyboard STEP does not touch the transcript at all,
+    // unless it switched tabs: the reader's place is the list, whose row is the thing that has to move, and a press
+    // that dragged the card around under a floating popover would move the text they are not reading. A step that
+    // landed on another assistant's tab has no "their place" left in that card, so it puts the turn in view.
+    if (!keepList || switched) {
+      if (!sameTurn || switched) turnEl.scrollIntoView({ block: "center" });
       else if (mark) mark.scrollIntoView({ block: "center" });
     }
     // The reveal can still move the window through the card's own pager or a fold; put it back where the reader had

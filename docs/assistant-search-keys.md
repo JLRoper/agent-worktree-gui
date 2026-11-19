@@ -1,8 +1,11 @@
 # Driving the assistant's turn search from the keyboard
 
-The search box in the assistant panel's head answers a filter over the assistant's own transcript: the prompt you
+The search box in the assistant panel's head answers a filter over **every assistant's** transcript: the prompt you
 wrote, the reply it gave, and every line of the console. It reads the server's turn store (`GET
-/api/assistant/search`), not the five turns a card holds, so a filter reaches the whole thread; `*` and `?` are
+/api/assistant/search`), not the five turns a card holds, so a filter reaches the whole thread - and not the tab you
+happen to have open: each assistant's own threads are searched and merged into one ordered index while the question
+is answered, so a phrase that exists only in Assistant #2's turns is found while Assistant #1's tab is selected.
+Every result row names its assistant, and opening a hit switches the panel to that assistant. `*` and `?` are
 wildcards and a plain filter is a substring.
 
 Everything below is doable without the mouse, because a search you have to reach for is a search you do not use.
@@ -12,12 +15,12 @@ Everything below is doable without the mouse, because a search you have to reach
 | Key | Where | What it does |
 | --- | --- | --- |
 | `Ctrl+Q` | Anywhere in the open assistant panel | Puts the caret in the search box and **selects what it already holds**, so the first character typed replaces the last filter. Ignored while the caret is in a textarea or in the composer. |
-| `Down` | In the search box | Steps the current match to the next matching **row** - one press, one match, in the list's order (newest message first, rows in reading order inside it). Marks it in the transcript, and moves the list's current row with it, scrolling the list so that row is fully visible. Wraps at the end. |
+| `Down` | In the search box | Steps the current match to the next matching **row** - one press, one match, in the list's order (newest message first, rows in reading order inside it). Marks it in the transcript, and moves the list's current row with it, scrolling the list so that row is fully visible. A match that belongs to another assistant switches the panel to that assistant's tab and puts the turn in view. Wraps at the end. |
 | `Up` | In the search box | The same step backwards. Wraps at the start. |
 | `Shift+Down` | In the search box | Steps **backwards** - the same move `Up` makes, for a reader who learned that Shift reverses the direction. Wraps like `Up`. |
 | `Shift+Up` | In the search box | Steps backwards too. With `Shift+Down` and `Shift+Enter` it is the reverse of `Down`: all three land on the same row from the same start. |
 | `Shift+Enter` | In the search box | Steps backwards, without opening anything. |
-| `Enter` | In the search box | Opens the current match where the reader is standing: unfolds the turn if it was folded, scrolls it into view, marks the match and gets the list out of the way. It does not step. |
+| `Enter` | In the search box | Opens the current match where the reader is standing: switches to the assistant whose turn it is, unfolds the turn if it was folded, scrolls it into view, marks the match and gets the list out of the way. It does not step. |
 | `Esc` | In the search box | Clears the filter, the count, the list and the highlight, and leaves the caret **in the box**. The panel stays open - `Esc` on the panel itself still closes it. |
 
 No arrow press scrolls the page: `Down` and `Up` in the box move the highlight, never the document. A press that
@@ -57,15 +60,17 @@ the clock (`public/core/search-items.js`'s `order`):
   ago sits above a console line from five hours ago whatever field the server preferred;
 - **rows inside one message in reading order** - the prompt, then the console lines in the order they ran, then the
   reply, so a message still reads top to bottom;
-- **ties broken by conversation order** - two messages whose newest rows share a timestamp keep the conversation's
-  numbering, so the list does not shuffle between paints;
+- **ties broken by the assistant, then conversation order** - two messages whose newest rows share a timestamp are
+  ordered by the assistant they belong to (then the thread, then the conversation's numbering), so a tie between two
+  assistants holds the same order on every paint instead of following the order the answer happened to list them in;
 - **a row that cannot name a message** stays at the end of the walk rather than being dropped, because the header
   divides `displayed` and must count every row the list holds.
 
 One header is drawn **above** each message's rows and never after them: a title with no rows under it reads as one
-more, empty result. The header says the message's place in the conversation, when it last did something and how many
-of its rows matched (`turn 5 - 26m - 5 rows`); each row's own age stays on the row, so a console line an hour into a
-turn is not made to look an hour newer than it is.
+more, empty result. The header names the assistant the message belongs to, then says the message's place in that
+conversation, when it last did something and how many of its rows matched (`Assistant #2 - turn 5 - 26m - 5 rows`);
+each row's own age stays on the row, so a console line an hour into a turn is not made to look an hour newer than it
+is. Every row also names its assistant, which is what tells two hits from two assistants apart at a glance.
 
 `Down` therefore walks **backwards in time**: `1 of N` is the newest match and the oldest is last. `test/assistant-search-items.test.js`
 pins the order, the reading order inside an item and the tie case.
@@ -162,11 +167,13 @@ reads the two nodes and hands them over (`keepSearchRowVisible`).
 ```
 node --test test/assistant-search-count.test.js       # one count source: header total == footer displayed
 node --test test/assistant-search-items.test.js       # the match-to-turn map and the list's order, in isolation
+node --test test/assistant-search-merge.test.js       # the every-assistant merge, its order and a tie between two
 node --test test/assistant-search-dismiss.test.js     # the outside-mousedown predicate, and the page that calls it
 node --test test/assistant-search-scroll.test.js      # the scroll target: nearest edge, tall row, reverse walk
 node tools/verify-assistant-search-keys.mjs           # 54 checks in headless Chromium at 1440x900
 node tools/verify-assistant-search-order.mjs          # 44 checks: the order and the dismissal, at 1440x900
 node tools/verify-assistant-search-scroll.mjs         # 117 checks: the list follows the walk, at 1440x900
+node tools/verify-assistant-search-all.mjs            # the cross-assistant find, the landing and the count, at 1440x900
 ```
 
 The keys script boots this checkout's server on a free port with its own state directory and a synthesized
@@ -216,6 +223,15 @@ numbers in reverse. The pictures under `docs/assets/assistant-search-scroll/` ar
 | `03-last-result-10-of-10-1440x900.png` | Nine `Down`s: `10 of 10`, the last row current and fully visible, the list at the end of its reach. |
 | `04-back-to-the-middle-5-of-10-1440x900.png` | `Up` from the last: `5 of 10` again, the row in view on the way back. |
 | `05-back-to-the-first-1-of-10-1440x900.png` | Home: `1 of 10`, the list back at the top, the same row and the same offset as the first shot. |
+
+The every-assistant script is the fourth half: a store with TWO assistants (`panel-assistant` and
+`panel-assistant-2`), each with its own turns, and three filters. `sextant` exists only in Assistant #2's turns, and
+the reader is standing on Assistant #1's tab when they type it: the row names Assistant #2, `Enter` switches the
+panel to #2's tab, unfolds the turn, scrolls it into view and rings it. `beacon` exists in both assistants: the list
+holds both hits, newest first, each row naming its assistant, and the footer's `2 hits matched, 2 displayed, in 2
+turns` agrees with the two rows on screen. `common` matches a hundred and twenty turns: the popover draws ten rows and
+says `120 hits matched, 10 displayed`, so a filter over a whole store never becomes a whole DOM. The pictures under
+`docs/assets/assistant-search-all/` are that run, and `assistant-search-all.json` is its record.
 
 ## The other search in the same head
 
