@@ -152,6 +152,8 @@ import { SEARCH_PATH, createSearchRoutes } from "./routes/assistant-search.js";
 // The second header search (routes/hot-agent-search.js): the turns the reader wrote to worker agents, across every
 // tree. Its prefix shares nothing with the assistant search's, and its module owns what is eligible there.
 import { HOT_AGENT_SEARCH_PATH, createHotAgentSearchRoutes } from "./routes/hot-agent-search.js";
+// The header's Clarify popup: every question the panel has asked, and how each settled (routes/clarify-history.js).
+import { CLARIFY_HISTORY_PATH, createClarifyHistoryRoutes } from "./routes/clarify-history.js";
 // The state read's prefix, cut into routes/ beside the queue and the delete control: one module for /api/state and
 // its /api/audit alias, and one table row each because the alias shares no prefix with the path the board polls.
 import { STATE_PATH, AUDIT_PATH, createStateRoutes } from "./routes/state.js";
@@ -1718,6 +1720,12 @@ assistant = new Assistant({
   onEvent: broadcast,
   onLog: log,
 });
+// WHERE A QUESTION'S NAMES COME FROM. The header's Clarify history names the assistant that asked on every row, and
+// has to keep naming it after a rename: the roster is the authority, resolved at ask time for the record and again at
+// read time by the route. A thread an assistant owns is that assistant's question even when the job predates the
+// split and carries no `assistantId` of its own.
+jobs.assistantNameFor = (id) => assistant.assistants.find((a) => String(a.id) === String(id))?.name || null;
+jobs.assistantIdForThread = (thread) => assistant.assistantIdForThread(thread);
 // WHERE A CUT'S QUESTION GOES. A selection of the third base-ref kind that finds no qualifying branch refuses the cut
 // and asks the reader (lib/turnover-base.js `turnoverBaseQuestion`); this is the card it is asked on - the assistant's
 // own alerts list, at the `question` rule's level, carrying the reason every local branch was refused. A board with no
@@ -1778,6 +1786,10 @@ const PREFIX_MOUNTS = [
   // It reads the same job store, so the store and the transport helpers travel in beside it; the module decides
   // what a row may be and what the query means.
   { prefix: HOT_AGENT_SEARCH_PATH, handles: createHotAgentSearchRoutes({ jobs, assistant, sendJson }) },
+  // The header's Clarify history (routes/clarify-history.js): one read over every question the panel has asked the
+  // reader, answered or not. The store is Jobs's own (lib/clarify-history.js) and the assistant roster is what names
+  // the asker, so both travel in; the module owns the page shape and the honest total.
+  { prefix: CLARIFY_HISTORY_PATH, handles: createClarifyHistoryRoutes({ jobs, nameForAssistant: (id) => jobs.assistantNameFor?.(id) || null, sendJson }) },
   // The state read (routes/state.js), which is the snapshot and nothing else: the store, the registry, the jobs and
   // the assistants are this file's own, so the assembled snapshot stays here and travels in as a function.
   { prefix: STATE_PATH, handles: stateRoutes },

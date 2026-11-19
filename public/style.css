@@ -4106,6 +4106,236 @@ mark.as-search-mark.is-current { background: #f2c744; color: #17110a; box-shadow
 .topbar .ha-search-open[aria-expanded="true"] { color: #ffd479; border-color: #b8860b; background: #221a0c; }
 .topbar .ha-search-open:focus-visible { outline: 1px solid #3b6ea8; outline-offset: 1px; }
 
+/* ---- the header's Clarify control, and the history it opens ---------------------------------------------- */
+/* The fourth control: assistant entry, Hot Agent pen, Clarify, Human. Purple is the header's colour for the reader's
+   own history (--violet), not a state of a run: a green flash means a sign of life and amber means a wait, and this
+   list is neither. The glyph is a speech bubble with a question mark, drawn inline in currentColor so it takes the
+   dim/hover/open states at the weight of the pen beside it. */
+.topbar #btn-clarify {
+  display: inline-flex; align-items: center; gap: 5px;
+  color: var(--violet);
+  border-color: #4b3a6e;
+  background: #191325;
+}
+.topbar #btn-clarify .cl-glyph { display: block; }
+.topbar #btn-clarify .cl-label { color: inherit; }
+.topbar #btn-clarify:hover { color: #c9a8ff; border-color: var(--violet); background: #211931; }
+.topbar #btn-clarify[aria-expanded="true"] { color: #e7d6ff; border-color: var(--violet); background: #2a1f45; box-shadow: 0 0 0 1px rgba(163, 113, 247, .35) inset; }
+.topbar #btn-clarify:focus-visible { outline: 1px solid var(--violet); outline-offset: 1px; }
+
+.ch-pop {
+  position: fixed;
+  z-index: 60;
+  width: min(560px, calc(100vw - 16px));
+  max-height: min(72vh, 640px);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border: 1px solid #3a2f57;
+  border-radius: 10px;
+  background: #0f1219;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, .55), 0 0 0 1px rgba(163, 113, 247, .10);
+  overflow: hidden;
+}
+.ch-pop[hidden] { display: none; }
+.ch-pop:focus { outline: none; }
+.ch-pop .ch-head {
+  display: flex; align-items: center; gap: 8px;
+  flex: none;
+  padding: 7px 10px;
+  border-bottom: 1px solid #2a2340;
+  background: #151122;
+  cursor: grab;
+  touch-action: none;
+}
+.ch-pop.is-dragging .ch-head { cursor: grabbing; }
+/* The drag handle says so twice: the cursor, and the six dots every title bar a reader has ever dragged carries. */
+.ch-pop .ch-head::before {
+  content: "";
+  flex: none;
+  width: 8px; height: 14px;
+  background-image: radial-gradient(circle, #6d5a95 1px, transparent 1.3px);
+  background-size: 4px 4px;
+  background-position: 0 1px;
+  opacity: .9;
+}
+.ch-pop.is-dragging { user-select: none; }
+.ch-pop .ch-dot {
+  flex: none;
+  width: 18px; height: 18px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  font: 700 11px/1 var(--ui);
+  color: #0f1219;
+  background: var(--violet);
+}
+.ch-pop .ch-title { font: 600 11.5px/1.4 var(--ui); color: #e7d6ff; }
+.ch-pop .ch-count {
+  flex: 0 1 auto; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font: 10px/1.5 var(--mono); color: var(--dim);
+}
+.ch-pop .ch-close {
+  margin-left: auto; flex: none;
+  width: 20px; height: 20px; padding: 0;
+  line-height: 1; color: var(--dim);
+  background: none; border: 1px solid transparent; border-radius: 4px; cursor: pointer;
+}
+.ch-pop .ch-close:hover { color: var(--text); border-color: var(--line); }
+/* The list is the scroller: min-height 0 is what lets a flex child shrink below its content and scroll at all, so the
+   head and the honest footer never scroll away. overflow-x stays hidden: a long tree name wraps inside its row rather
+   than pushing the panel wider than a 768-wide window. */
+.ch-pop .ch-list {
+  flex: 1 1 auto; min-height: 0;
+  display: flex; flex-direction: column; gap: 4px;
+  overflow-y: auto; overflow-x: hidden;
+  padding: 4px;
+}
+.ch-pop .ch-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: left;
+  padding: 7px 9px;
+  border: 1px solid #232a36;
+  border-left: 3px solid transparent;
+  border-radius: 7px;
+  background: #131820;
+  color: var(--text);
+  font: 12px/1.45 var(--ui);
+  cursor: pointer;
+}
+.ch-pop .ch-row:hover { background: #182030; border-color: #2f3a4a; }
+.ch-pop .ch-row:focus-visible, .ch-pop .ch-row.is-active { outline: none; border-color: var(--violet); background: #1c1630; }
+.ch-pop .ch-row.is-open { border-left-color: var(--violet); }
+.ch-pop .ch-mark {
+  grid-column: 1;
+  justify-self: start;
+  font: 600 9.5px/1.7 var(--mono);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  padding: 0 5px;
+  border-radius: 3px;
+}
+.ch-pop .ch-mark-open { color: #e7d6ff; background: #2a1f45; }
+.ch-pop .ch-q { grid-column: 1 / -1; color: var(--text); font-weight: 500; overflow-wrap: anywhere; }
+/* An answered row: the QUESTION is the quiet half, the ANSWER is the row's loudest thing. The two rules below are what
+   put that in the paint order the brief asks for, rather than one grey block with nothing standing out of it. */
+.ch-pop .ch-q.is-muted { color: #5f6875; font-weight: 400; }
+.ch-pop .ch-answer {
+  grid-column: 1 / -1;
+  font: 600 12.5px/1.5 var(--ui);
+  color: #f2ecff;
+  background: #241a3c;
+  border: 1px solid #4b3a75;
+  border-left: 3px solid var(--violet);
+  border-radius: 5px;
+  padding: 4px 7px;
+  overflow-wrap: anywhere;
+}
+.ch-pop .ch-when { grid-column: 1 / -1; font: 9.5px/1.5 var(--mono); color: var(--dimmer); }
+.ch-pop .ch-choices { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px; }
+.ch-pop .ch-choice {
+  font: 10.5px/1.6 var(--mono);
+  color: #cdb6ff;
+  background: #1c1730;
+  border: 1px solid #3b2f5c;
+  border-radius: 4px;
+  padding: 1px 5px;
+  overflow-wrap: anywhere;
+}
+.ch-pop .ch-choice.is-free { color: #9aa4b2; background: #171d27; border-color: #2a3444; }
+.ch-pop .ch-row.is-answered { background: #101419; border-left-color: #3a4150; opacity: .86; }
+.ch-pop .ch-row.is-answered:hover { background: #141a22; opacity: 1; }
+.ch-pop .ch-mark-answered { color: #9aa4b2; background: #1c222b; }
+/* A closed row is NOT an answered one: the marker is the amber warning voice and the question keeps its own weight. */
+.ch-pop .ch-row.is-closed { background: #15130d; border-left-color: var(--amber); }
+.ch-pop .ch-row.is-closed:hover { background: #1a170f; }
+.ch-pop .ch-mark-closed { color: #ffd479; background: #2a2312; text-transform: none; }
+.ch-pop .ch-row.is-closed .ch-q { color: #c9cdd4; }
+.ch-pop .ch-meta {
+  grid-column: 1 / -1;
+  display: flex; flex-wrap: wrap; gap: 3px 8px;
+  font: 9.5px/1.6 var(--mono);
+  color: var(--dimmer);
+  overflow-wrap: anywhere;
+}
+.ch-pop .ch-agent { color: #b9c2cf; }
+.ch-pop .ch-tree { color: #7d8797; }
+.ch-pop .ch-assistant { color: var(--violet); }
+.ch-pop .ch-age { margin-left: auto; }
+.ch-pop .ch-foot {
+  flex: none;
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 9px;
+  border-top: 1px solid #2a2340;
+  background: #12101c;
+  font: 10px/1.5 var(--mono);
+  color: var(--dim);
+}
+.ch-pop .ch-foot-text { flex: 1 1 auto; min-width: 0; }
+.ch-pop .ch-more {
+  flex: none;
+  font: 10px/1.6 var(--mono);
+  color: #e7d6ff;
+  background: #241a3c;
+  border: 1px solid #4b3a75;
+  border-radius: 4px;
+  padding: 0 6px;
+  cursor: pointer;
+}
+.ch-pop .ch-more[hidden] { display: none; }
+.ch-pop .ch-none { padding: 14px 10px; color: var(--dim); font-size: 11.5px; }
+.ch-pop .ch-none.is-error { color: #ffb4ae; }
+.ch-pop .ch-retry {
+  margin-left: 6px;
+  font: 10px/1.6 var(--mono);
+  color: #e7d6ff;
+  background: #241a3c;
+  border: 1px solid #4b3a75;
+  border-radius: 4px;
+  padding: 0 6px;
+  cursor: pointer;
+}
+/* The grab handle: the same corner the deliverables panel has, in the header's purple. Visible without hovering,
+   because "this can be resized" is not a fact a reader should have to discover. */
+.ch-pop .ch-resize {
+  position: absolute; right: 3px; bottom: 3px;
+  z-index: 1;
+  width: 16px; height: 16px;
+  border-radius: 2px;
+  cursor: nwse-resize;
+  touch-action: none;
+  opacity: .9;
+  background-image:
+    linear-gradient(135deg, transparent 0 78%, #8b6cf0 78% 90%, transparent 90% 100%),
+    linear-gradient(135deg, transparent 0 52%, #8b6cf0 52% 64%, transparent 64% 100%),
+    linear-gradient(135deg, transparent 0 26%, #8b6cf0 26% 38%, transparent 38% 100%);
+}
+.ch-pop .ch-resize:hover { opacity: 1; }
+.ch-pop.is-resizing { user-select: none; }
+
+/* The landing's flash. A row takes the SAME animation the worktree links use (flashrow, a wash that fades back to
+   --row-rest-bg) in the header's purple rather than the link flash's green: a question picked out of this list is not
+   a sign of life. An assistant's agent has no board row at all, so its card takes the ring instead. */
+@keyframes flashrow-clarify {
+  from { background-color: #2a1f45; }
+  to { background-color: var(--row-rest-bg, transparent); }
+}
+tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms) ease-out; }
+@keyframes flash-clarify-ring {
+  from { box-shadow: 0 0 0 2px #a371f7 inset, 0 0 12px rgba(163, 113, 247, .45); }
+  to { box-shadow: 0 0 0 2px transparent inset, 0 0 0 rgba(163, 113, 247, 0); }
+}
+.job.flash-clarify { animation: flash-clarify-ring 1300ms ease-out; }
+.turn.clarify-flash, .turn-question.clarify-flash {
+  box-shadow: 0 0 0 1px var(--violet), 0 0 0 4px rgba(163, 113, 247, .20);
+  border-radius: 6px;
+}
+
+
 .ha-search-pop {
   position: fixed; z-index: 96; display: flex; flex-direction: column; gap: 0;
   padding: 4px; overflow: hidden; background: #121821; border: 1px solid #2a3444; border-radius: 7px;
