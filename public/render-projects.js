@@ -1633,17 +1633,21 @@ function renderProjectRows(name, { typing = null } = {}) {
         .filter((r) => r.project === name && typeof wtReviewLane !== "undefined" && wtReviewLane && wtReviewLane.awaiting(r))
         .sort((a, b) => wtReviewLane.since(a) - wtReviewLane.since(b))
     : null;
-  const rowsInOrder = laneOrder || chartDrawOrder(name).filter((r) => !focusHidesRow(r));
+  let rowsInOrder = laneOrder || chartDrawOrder(name).filter((r) => !focusHidesRow(r));
   // The order is held by the tree list's own hold (public/app.js's rowOrderHold: a cached first paint and the scan that
   // replaces it) exactly as it is held by an open row: the keys on screen are the keys that were painted, and the same
   // rows come back in the same slots.
   const heldOrder = (typeof rowOrderHold === "function" && rowOrderHold()) || (stabilizeOn() && projectHasOpenRow(name));
   if (heldOrder && prevRowKeys.length) {
-    const pos = new Map(prevRowKeys.map((k, i) => [k, i]));
-    rowsInOrder.sort(
-      (a, b) =>
-        (pos.get(keyOf(name, a.path)) ?? prevRowKeys.length) - (pos.get(keyOf(name, b.path)) ?? prevRowKeys.length),
-    );
+    // THE SET, not only the sequence. The rank decides which rows are drawn at all (the chart's top N), and a cached row
+    // has no verdict to rank with, so taking the set from the rank is what made a fully read board draw a different ten
+    // rows than the cached paint had. While the hold is on, the painted keys ARE the drawn set, in their painted slots;
+    // a row that is genuinely new goes last, and a row that has left the board is simply not in the map.
+    const byKey = new Map(rowsInOrder.map((r) => [keyOf(name, r.path), r]));
+    const painted = prevRowKeys.map((k) => byKey.get(k)).filter(Boolean);
+    const paintedKeys = new Set(prevRowKeys);
+    const arrivals = rowsInOrder.filter((r) => !paintedKeys.has(keyOf(name, r.path)));
+    rowsInOrder = [...painted, ...arrivals];
   }
   if (expanded) {
     // The rank says which rows are drawn; the grouping says where each one hangs. They are one list here: every child
