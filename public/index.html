@@ -649,6 +649,17 @@
           <input id="agent-cleanup" type="checkbox" checked>
         </label>
         <div class="settings-preview mono" id="agent-cleanup-preview">…</div>
+
+        <label class="settings-row settings-gap" for="initiative-tier" title="How often the panel asks you before a change to the initiative map. ask me for everything (the default) - every create, edit, attach and detach parks a permission card naming the initiative and the tree. ask me only to remove things - creating, editing and attaching are free; taking a worktree out of an initiative asks. ask me only to remove trees I attached myself - your own attachments come out without a question, and one an assistant attached still asks, judged against the actor recorded on the attachment rather than guessed. need no permission at all - every change is made at once. At every level a change is recorded in the initiative's history with the actor and the time, and the card itself is unchanged: the level decides only whether it is asked. Written into this panel's config.json (initiativePermissions), so it applies to every browser, every assistant and every worker, and survives a restart.">
+          <span>Initiative changes <span class="settings-info">ⓘ</span></span>
+          <select id="initiative-tier">
+            <option value="all">ask me for everything</option>
+            <option value="remove">ask me only to remove things</option>
+            <option value="own">ask me only to remove trees I attached myself</option>
+            <option value="none">need no permission at all</option>
+          </select>
+        </label>
+        <div class="settings-preview mono" id="initiative-tier-preview">…</div>
       </div>
 
       <div class="settings-group" id="settings-panel-human" data-settings-group="human" role="tabpanel" aria-labelledby="settings-tab-human" hidden>

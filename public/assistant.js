@@ -3385,6 +3385,10 @@
   // and why a reload starts folded again.
   const initOpen = new Set();
   const initDescClosed = new Set();
+  // The initiatives whose history is unfolded. Folded by default: the history is the evidence behind a removal, not
+  // the first thing a card should spend its height on, and a card opened to read a title should not arrive with forty
+  // lines of who did what.
+  const initHistoryOpen = new Set();
   const initNotes = new Map(); // initiative id (or "new") -> { text, bad } - what the last write answered
   let initDoc = null; // the last document this pane read
   let initReadAt = 0; // when, for the freshness gap below
@@ -3467,13 +3471,20 @@
   function initTreeRowHtml(init, project, tree) {
     const name = String(tree.name || tree.path);
     const branch = String(tree.branch || "");
+    // Who attached it, and when, is drawn on the Remove control: the `own` tier relaxes the question for a tree the
+    // reader put here himself, so the actor has to be readable before the press, not only in the history fold.
+    const attachedWho = String(tree.attachedBy || "");
+    const attachedWhen = tree.attachedAt ? `${relTime(tree.attachedAt)} ago` : "";
+    const attachedNote = attachedWho || attachedWhen
+      ? ` - ${attachedWho === "reader" || !attachedWho ? "you" : attachedWho} attached it${attachedWhen ? ` ${attachedWhen}` : ""}`
+      : " - no record of who attached it, so every tier that asks about removals asks";
     const link = tree.missing
       ? `<span class="init-tree-name is-missing" title="this path is no longer a worktree on the board - the initiative still counts it, and Remove takes it out">${esc(name)}</span>`
       : `<a href="#" class="init-tree-name" data-init-open="${esc(project)}|${esc(tree.path)}" title="open this worktree's row on the chart: its project unfolds, the window scrolls to it and the row flashes">${esc(name)}</a>`;
     return `<div class="init-tree" data-init-tree-row="${esc(tree.path)}">
       ${link}
       ${branch ? wtBranchLink.branchNameHtml({ branch, url: tree.branchUrl, linkFrom: tree.branchLinkFrom, why: tree.branchWhy, fallback: "the branch this worktree is on", linkClass: "chip init-branch mono init-branch-link", plainClass: "chip init-branch mono" }) : ""}
-      <button type="button" class="init-mini" data-init-move="${esc(init.id)}|remove|${esc(tree.path)}"${initBlocked() ? " disabled" : ""} title="ask to take this worktree out of the initiative - nothing changes until you answer the question in the dock">Remove</button>
+      <button type="button" class="init-mini" data-init-move="${esc(init.id)}|remove|${esc(tree.path)}"${initBlocked() ? " disabled" : ""} title="take this worktree out of the initiative${esc(attachedNote)} - your tier decides whether that asks, and nothing changes until you answer if it does">Remove</button>
     </div>`;
   }
 
@@ -3626,6 +3637,8 @@
     // typed on: where line two stops is decided on the element, in paintInitDescription below.
     const descOpen = open && !initDescClosed.has(init.id);
     const assistantsOpen = initAssistOpen.has(init.id);
+    const historyOpen = initHistoryOpen.has(init.id);
+    const history = Array.isArray(init.history) ? init.history : [];
     const fold = (name) => initFolds.has(`${init.id}::${name}`);
     const projectsHtml = projects.length
       ? projects
@@ -3642,7 +3655,7 @@
             </div>`;
           })
           .join("")
-      : `<div class="as-hint init-no-trees">no worktrees yet - Add a worktree puts the first one here, and it asks you first</div>`;
+      : `<div class="as-hint init-no-trees">no worktrees yet - Add a worktree puts the first one here, and your tier decides whether it asks first</div>`;
     const assistHtml = assistants.length
       ? assistantsOpen
         ? `<div class="init-assists">${assistants.map(initAssistantRowHtml).join("")}</div>`
@@ -3657,7 +3670,7 @@
           <div class="as-actions">
             <button type="button" class="primary" data-init-save="${esc(init.id)}"${blocked ? " disabled" : ""}>Save words</button>
             <button type="button" data-init-cancel="edit">Cancel</button>
-            <span class="as-hint">you and the assistants may edit these freely - membership is the part that asks</span>
+            <span class="as-hint">you and the assistants may edit these; your tier decides whether that asks first, and membership is the part it is really for</span>
           </div>
         </div>`
       : "";
@@ -3698,7 +3711,7 @@
         ? `${editHtml}
       <div class="init-projects">${projectsHtml}</div>
       <div class="init-addrow">
-        ${adding ? initAddFormHtml(init) : `<button type="button" class="init-mini" data-init-add="${esc(init.id)}"${blocked ? " disabled" : ""} title="put another worktree on this piece of work - the panel asks you first, naming the tree and the initiative">+ Add a worktree</button>`}
+        ${adding ? initAddFormHtml(init) : `<button type="button" class="init-mini" data-init-add="${esc(init.id)}"${blocked ? " disabled" : ""} title="put another worktree on this piece of work - your tier decides whether it asks, and a question names both the tree and the initiative">+ Add a worktree</button>`}
       </div>
       <div class="init-assistfold">
         <button type="button" class="init-proj" data-init-assist-fold="${esc(init.id)}" aria-expanded="${assistantsOpen ? "true" : "false"}" title="${assistantsOpen ? "fold" : "unfold"} the assistants that worked on this initiative, newest first - folded, the card stays a map of the work">
@@ -3707,6 +3720,25 @@
           <span class="chip is-zero">${assistants.length}</span>
         </button>
         ${assistHtml}
+      </div>
+      <div class="init-histfold">
+        <button type="button" class="init-proj" data-init-history-fold="${esc(init.id)}" aria-expanded="${historyOpen ? "true" : "false"}" title="${historyOpen ? "fold" : "unfold"} the history of this initiative: every attach, detach, create and edit, with the actor and the time - the record a removal is judged against, and one every tier writes">
+          <span class="init-caret">${historyOpen ? "▾" : "▸"}</span>
+          <span class="init-proj-name">History</span>
+          <span class="chip is-zero">${history.length}</span>
+        </button>
+        ${historyOpen
+          ? `<div class="init-history">${
+              history.length
+                ? history
+                    .map((ev) => {
+                      const line = wtInitiativeFold.historyLine(ev);
+                      return `<div class="init-hist-row" data-init-hist-row="${esc(line.at || "")}" data-init-hist-actor="${esc(line.who)}"><span class="init-hist-what"><b class="init-hist-who">${esc(line.who)}</b> ${esc(line.what)}</span><span class="as-hint init-hist-when" title="${esc(line.at || "")}">${line.at ? `${esc(relTime(line.at))} ago` : "no time recorded"}</span></div>`;
+                    })
+                    .join("")
+                : `<div class="as-hint init-hist-none">nothing recorded yet - the first change writes the first line</div>`
+            }</div>`
+          : ""}
       </div>`
         : ""}
       ${initNoteFor(init.id)}
@@ -3777,11 +3809,13 @@
           several projects and several assistants, and a worktree with none is normal: nothing is enforced.
           <div class="as-actions"><button type="button" data-init-new${unreadable ? " disabled" : ""}>New initiative</button></div>
         </div>`;
+    const tier = initDoc.tier && initDoc.tier.id ? initDoc.tier : { id: "all", label: "ask me for everything", hint: "every create, edit, attach and detach waits for your answer" };
     host.innerHTML = `
       <div class="as-group">
         <h4>Initiatives <span class="as-hint">the big pieces of work, and the worktrees behind each one</span></h4>
-        <p class="as-help">You and the assistants may create an initiative and edit its title and description. Adding or removing a worktree asks you first, with the tree and the initiative named in the question.</p>
+        <p class="as-help">You and the assistants may create an initiative and edit its title and description. Whether a change asks you first is the tier below - and the card, when it is drawn, always names the initiative and the tree.</p>
         ${storeLine}
+        <p class="as-help init-tier" data-init-tier="${esc(tier.id)}">Initiative changes: <b>${esc(tier.label)}</b> - ${esc(tier.hint)}. Settings, Board tab changes the level; at every level the history records the actor and the time.</p>
         <div class="as-actions">
           <button type="button" data-init-new${unreadable ? " disabled" : ""}${initNewOpen ? " hidden" : ""}>New initiative</button>
           <button type="button" data-init-refresh title="read the store again - the tab also re-reads after every write and every answered move">Refresh</button>
@@ -3860,9 +3894,18 @@
     }
     try {
       const d = await initPost("/api/initiatives/move", { tree, initiative: id, action });
+      adoptInitiatives(d);
+      const leaf = tree.split(/[\\/]/).pop();
       // 202 is the question, not the move: the store has not changed, and saying "moved" here would be a lie the card
-      // in the dock is about to contradict.
-      setInitNote(id, d.asked ? `${d.note || "asked - answer in the dock, bottom right"}${d.action === "add" ? ` (add ${tree.split(/[\\/]/).pop()})` : ` (remove ${tree.split(/[\\/]/).pop()})`}` : d.note || "nothing to change", false);
+      // in the dock is about to contradict. A 200 with `changed: true` is the level that does not ask, and its own
+      // history line is the proof it happened.
+      if (d.asked) {
+        setInitNote(id, `${d.note || "asked - answer in the dock, bottom right"} (${action === "add" ? `add ${leaf}` : `remove ${leaf}`})`, false);
+      } else if (d.changed === false) {
+        setInitNote(id, action === "add" ? "that worktree is already in this initiative" : "that worktree is not in this initiative", false);
+      } else {
+        setInitNote(id, `${action === "add" ? "attached" : "removed"} ${leaf} - recorded in the history with who did it and when`, false);
+      }
       initAddId = "";
       initDraft.addTree = "";
     } catch (err) {
@@ -3882,6 +3925,13 @@
     try {
       const d = await initPost("/api/initiatives", { title, description });
       adoptInitiatives(d);
+      if (d.asked) {
+        // Nothing exists yet: the form keeps its words, so answering the card creates the initiative the reader was
+        // writing, and a Deny leaves the draft exactly where it is.
+        setInitNote("new", `${d.note || "asked - answer in the dock, bottom right"} (create "${title}")`, false);
+        renderAssistantInitiatives(true);
+        return;
+      }
       initNewOpen = false;
       initDraft.newTitle = "";
       initDraft.newDesc = "";
@@ -3904,8 +3954,12 @@
     try {
       const d = await initPost("/api/initiatives/update", { id, title, description });
       adoptInitiatives(d);
-      initEditId = "";
-      setInitNote(id, "saved", false);
+      if (d.asked) {
+        setInitNote(id, `${d.note || "asked - answer in the dock, bottom right"} (edit "${title}")`, false);
+      } else {
+        initEditId = "";
+        setInitNote(id, d.changed === false ? "nothing changed - the words are the same ones" : "saved", false);
+      }
     } catch (err) {
       setInitNote(id, String((err && err.message) || err), true);
     }
@@ -3944,7 +3998,7 @@
         return;
       }
       if (kind !== "self") return;
-      const el = e.target.closest("[data-init-fold], [data-init-assist-fold], [data-init-open], [data-init-edit], [data-init-add], [data-init-cancel], [data-init-create], [data-init-save], [data-init-move], [data-init-assistant], [data-init-new], [data-init-refresh]");
+      const el = e.target.closest("[data-init-fold], [data-init-assist-fold], [data-init-history-fold], [data-init-open], [data-init-edit], [data-init-add], [data-init-cancel], [data-init-create], [data-init-save], [data-init-move], [data-init-assistant], [data-init-new], [data-init-refresh]");
       if (!el) return;
       if (el.hasAttribute("data-init-open")) {
         e.preventDefault();
@@ -3963,6 +4017,13 @@
         const id = String(el.dataset.initAssistFold);
         if (initAssistOpen.has(id)) initAssistOpen.delete(id);
         else initAssistOpen.add(id);
+        renderAssistantInitiatives(true);
+        return;
+      }
+      if (el.dataset.initHistoryFold) {
+        const id = String(el.dataset.initHistoryFold);
+        if (initHistoryOpen.has(id)) initHistoryOpen.delete(id);
+        else initHistoryOpen.add(id);
         renderAssistantInitiatives(true);
         return;
       }

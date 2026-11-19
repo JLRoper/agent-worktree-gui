@@ -30,6 +30,7 @@
 //   POST /api/settings/scan               {mode} - refresh everything, or only what is on screen.
 //   POST /api/settings/scan-roots         {roots} - the folders the board scans, as a whole list.
 //   POST /api/settings/cleanup            {agentCleanup} - the board's veto on an agent releasing its own tree.
+//   POST /api/settings/initiative-tier    {tier} - how often a change to an initiative asks the reader: all, remove, own, none.
 //   POST /api/settings/chart-top          {count} - how many trees a project's chart draws before its arrow.
 //   POST /api/settings/collapse-after     {seconds} - how long a collapsed parent keeps its children's folds.
 //   GET  /api/settings/prompt-budget    the prompt's sections, caps and the three turns the Prompt tab draws.
@@ -65,6 +66,8 @@ import { matrixBlock, matrixPatchFrom } from "../lib/matrix-bridge.js";
 import { readSkillsIndex } from "../lib/skills.js";
 import { readPermissions } from "../lib/gateway-permissions.js";
 import { chartColumnsFrom } from "../lib/chart-columns.js";
+// The initiative permission tier: the four levels, the value a save may write, and the row the Settings select draws.
+import { INITIATIVE_TIERS, initiativeTierFrom, initiativeTierInfo } from "../lib/initiative-permissions.js";
 // Where config.yaml and the skill roots live: the same function the CLI patch and the gateway client read, so the
 // Permissions tab and the Skills tab report on the home a run actually uses rather than a guessed one.
 import { hermesHome } from "../lib/jobs.js";
@@ -643,6 +646,35 @@ export function createSettingsRoutes({
       log(`agent cleanup: ${allowed ? "on — a project's own releaseWorktrees grant decides" : "off — no worktree is removed automatically"}`);
       broadcast({ type: "settings", settings: settingsOut() });
       sendJson(res, 200, { ok: true, agentCleanup: allowed, settings: settingsOut() });
+      return true;
+    }
+
+    // How often the panel asks the reader before a change to an initiative (lib/initiative-permissions.js). Server-side
+    // for the same reason the refresh mode is: the level lives in this panel's config.json, so it survives a restart and
+    // applies to whichever browser is open - and to the workers, which have no browser at all. The route reads the live
+    // config on every request, so a save takes effect on the next change rather than at the next boot.
+    if (route === "/api/settings/initiative-tier" && req.method === "POST") {
+      if (!authorised(req, config.token)) {
+        sendJson(res, 403, { error: "bad or missing x-panel-token" });
+        return true;
+      }
+      const body = await readBody(req).catch(() => ({}));
+      const asked = String(body.tier ?? body.initiativeTier ?? "").trim().toLowerCase();
+      if (!INITIATIVE_TIERS.includes(asked)) {
+        sendJson(res, 400, { error: `the initiative tier is one of ${INITIATIVE_TIERS.join(", ")}, not ${asked || "(none)"}` });
+        return true;
+      }
+      try {
+        await patchPanelConfig({ initiativePermissions: asked });
+      } catch (e) {
+        sendJson(res, 500, { error: `could not write config.json: ${String((e && e.message) || e)}` });
+        return true;
+      }
+      config.initiativePermissions = initiativeTierFrom(asked);
+      const info = initiativeTierInfo(asked);
+      log(`initiatives: permission tier is now ${asked} - ${info.hint}`);
+      broadcast({ type: "settings", settings: settingsOut() });
+      sendJson(res, 200, { ok: true, initiativeTier: config.initiativePermissions, tier: info, settings: settingsOut() });
       return true;
     }
 

@@ -216,3 +216,37 @@ test("queued is counted by the same pass that counts the other three", () => {
   const handed = route.indexOf("people.push(");
   assert.ok(queued > loop && queued < handed, "the queued count is taken inside that loop, before the row is handed to the view");
 });
+
+test("a history line names the actor and what he did, and 'reader' reads as you", () => {
+  const line = (ev) => fold.historyLine(ev);
+  assert.deepEqual(line({ action: "create", by: "reader", at: "2026-11-19T10:00:00.000Z" }), {
+    who: "you",
+    what: "created this initiative",
+    at: "2026-11-19T10:00:00.000Z",
+  });
+  assert.equal(line({ action: "attach", by: "scout", tree: "w/alpha/.worktrees/sso-one" }).who, "scout", "an assistant keeps its id");
+  assert.equal(line({ action: "attach", by: "scout", tree: "w/alpha/.worktrees/sso-one" }).what, "attached sso-one", "the leaf, not the path");
+  assert.equal(line({ action: "detach", by: "reader", tree: "w/alpha/.worktrees/sso-one" }).what, "removed sso-one");
+  assert.equal(line({ action: "edit", by: "scout", detail: "the description" }).what, "edited the description");
+  // The time is handed back untouched: the page draws "12m ago" from its own clock, and a view module that formatted a
+  // second clock would drift from the dock's.
+  assert.equal(line({ action: "edit", by: "scout", at: "nonsense" }).at, "nonsense");
+  assert.equal(line({ action: "edit", by: "scout" }).at, null);
+  // An event this module does not know still reads as a sentence rather than `undefined`.
+  assert.equal(line({ action: "explode", by: "scout" }).what, "changed this initiative");
+  assert.equal(line(null).who, "you", "an empty event is a reader's, the store's own default");
+  // A record with no actor is drawn as the reader the store defaults to, never as "undefined".
+  assert.equal(line({ action: "create" }).who, "you");
+});
+
+test("the history fold is an accordion on the card, folded by default, and the actor and the time are on the row", () => {
+  assert.match(assistant, /data-init-history-fold="\$\{esc\(init\.id\)\}"/, "the fold is a control on the initiative");
+  assert.match(assistant, /const initHistoryOpen = new Set\(\);/, "folded by default: nothing is in the set until pressed");
+  assert.match(assistant, /initHistoryOpen\.has\(init\.id\)/, "the card asks the set");
+  assert.match(assistant, /data-init-hist-actor="\$\{esc\(line\.who\)\}"/, "the row carries the actor for the proof to read");
+  assert.match(assistant, /data-init-hist-row="\$\{esc\(line\.at \|\| ""\)\}"/, "…and the time");
+  assert.match(assistant, /wtInitiativeFold\.historyLine\(ev\)/, "the row's words come from the module, not from a second renderer");
+  // The press handler has to answer the fold, or the button is dead markup.
+  assert.match(assistant, /if \(el\.dataset\.initHistoryFold\) \{/, "the press handler answers the history fold");
+  assert.match(assistant, /\[data-init-fold\], \[data-init-assist-fold\], \[data-init-history-fold\]/, "and the selector includes it");
+});
