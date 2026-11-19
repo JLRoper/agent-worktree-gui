@@ -4,35 +4,48 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.125.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.126.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-641 releases from v0.1.0 (2026-10-20) to v1.125.0 (2026-11-19), 2216 commits between the tags. Every release is anchored by an
+642 releases from v0.1.0 (2026-10-20) to v1.126.0 (2026-11-19), 2219 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
 
+## v1.126.0 — 2026-11-19 · 3 commits
+
+[`cb0bc37`](https://github.com/JLRoper/agent-worktree-gui/commit/cb0bc37ab8d3a4c8c9ba3dd8c9a820081f274b35) · [compare v1.125.0...v1.126.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.125.0...v1.126.0)
+
+### Docs & tests
+
+- docs: render the changelog - 640 releases ([`81829f6`](https://github.com/JLRoper/agent-worktree-gui/commit/81829f6cabea7d8af4f13576203b37a36bcc031b))
+- docs: the landing note for 1.125.0 - a tier that decides only whether the card is asked ([`7a374c5`](https://github.com/JLRoper/agent-worktree-gui/commit/7a374c597749fafa7c9256372d7123cbe740dd54))
+
+### Other
+
+- Expand an assistant on an initiative to the exact tasks it is doing there ([`cb0bc37`](https://github.com/JLRoper/agent-worktree-gui/commit/cb0bc37ab8d3a4c8c9ba3dd8c9a820081f274b35))
+
 ## v1.125.0 — 2026-11-19 · 6 commits
 
-[`b3505bd`](https://github.com/JLRoper/agent-worktree-gui/commit/b3505bd1a704ebc551a569321cd7ba8f5912144c) · [compare v1.124.0...v1.125.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.124.0...v1.125.0)
+[`2b3a599`](https://github.com/JLRoper/agent-worktree-gui/commit/2b3a5991f87b5d428198c945067210478f5da02d) · [compare v1.124.0...v1.125.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.124.0...v1.125.0)
 
 ### Added
 
-- feat: a permission tier in settings, and the actor on every change ([`0468986`](https://github.com/JLRoper/agent-worktree-gui/commit/046898610e9fc613a1c92e33d2299a178489547f))
-- feat: WORKTREE_BRIEF tells a worker what to do with the initiative map ([`6fa80e4`](https://github.com/JLRoper/agent-worktree-gui/commit/6fa80e43376ad3acd92ac077b934fb64d3cab14d))
+- feat: a permission tier in settings, and the actor on every change ([`e41b056`](https://github.com/JLRoper/agent-worktree-gui/commit/e41b056fbe7884a27799de15e3a46e713ebb50e1))
+- feat: WORKTREE_BRIEF tells a worker what to do with the initiative map ([`0c50a19`](https://github.com/JLRoper/agent-worktree-gui/commit/0c50a1968ad845fa47cf7eb555faf4fc418a1f11))
 
 ### Docs & tests
 
 - docs: render the changelog - 640 releases ([`d740371`](https://github.com/JLRoper/agent-worktree-gui/commit/d740371e9c9d2e228834c59d624aafe504580bb8))
 - docs: the landing note for 1.124.0 - the Hot Agent search is in the header, behind a hand and a pen ([`da5d834`](https://github.com/JLRoper/agent-worktree-gui/commit/da5d834c3897d16a89397ddd166529815f264b9f))
-- test: the tier's headless proof, and the card's words follow the level ([`5b5d2e5`](https://github.com/JLRoper/agent-worktree-gui/commit/5b5d2e53056c98caf550a97c5a6bb1d3dc561652))
+- test: the tier's headless proof, and the card's words follow the level ([`a9c897f`](https://github.com/JLRoper/agent-worktree-gui/commit/a9c897fe5f797fb28284d6da8956b486ab2220a9))
 
 ### Other
 
-- chore: 1.125.0 - the version this landing carries ([`b3505bd`](https://github.com/JLRoper/agent-worktree-gui/commit/b3505bd1a704ebc551a569321cd7ba8f5912144c))
+- chore: 1.125.0 - the version this landing carries ([`2b3a599`](https://github.com/JLRoper/agent-worktree-gui/commit/2b3a5991f87b5d428198c945067210478f5da02d))
 
 ## v1.124.0 — 2026-11-19 · 4 commits
 
