@@ -221,6 +221,14 @@ const CHART_COLUMNS = [
     title:
       "the assistant that controls this worktree, as a compact tag: M1 = Manager 1, M2 = Manager 2, A1 = Assistant #1. The cell's tooltip carries the assistant's own name and the role it runs (\"Assistant #2 — Manager\"), and the same fact is a line in the row's detail: \"Controlled by: Assistant #2 — Manager\". The column hides ITSELF while every row is on Assistant #1 and no second assistant exists, because it would be a column of identical tags; it comes back on its own the moment a tree is reassigned or a second assistant is created. Stored per tree and DISPLAY ONLY: it does not change who wakes, who runs, or who answers. Switch it off in Settings → Display → Chart columns.",
   },
+  {
+    id: "initiative",
+    label: "Initiative",
+    min: 92,
+    give: 0.6,
+    title:
+      "the big pieces of work this worktree is behind, as chips. One initiative may span several projects and several assistants, and a tree may be in more than one, so the cell can carry more than one chip. A dash means none - which is the normal case: nothing about an initiative is enforced, and a tree with no initiative behaves exactly as it always did. The membership lives in the panel's initiatives store, keyed by tree path, so a rescan cannot lose it; add or remove a tree in the Initiatives tab beside Role, where a move asks you first. Switch it off in Settings -> Display -> Chart columns.",
+  },
   { id: "tip", label: "Tip", min: 70, give: 1 },
   {
     id: "ahead",

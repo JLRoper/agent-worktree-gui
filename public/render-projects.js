@@ -724,6 +724,24 @@ function toggleChildFold(key) {
 }
 // ---- end children under their parent
 
+// The initiative column: the big pieces of work a tree is behind, as chips. Absence is the normal case and is drawn as
+// a dash with the reason in its tooltip, not as a scolding zero. More than one chip is legal: an initiative is a way to
+// hold a piece of work together across projects, and two pieces of work can share a tree. The value comes from the
+// side store keyed by tree path (lib/initiatives.js), overlaid by the server, so nothing here has to survive a scan.
+function initiativeCellHtml(row) {
+  const list = Array.isArray(row?.initiatives) ? row.initiatives.filter((i) => i && i.title) : [];
+  if (!list.length) {
+    return `<td class="initiative"><span class="dim" title="no initiative - the normal case: nothing enforces one, and a tree with none behaves exactly as it always did. An initiative is a big piece of work that can span several projects and several assistants; add this tree in the Initiatives tab beside Role.">-</span></td>`;
+  }
+  const chips = list
+    .map(
+      (i) =>
+        `<span class="chip initiative-chip" data-initiative-id="${esc(i.id)}" title="initiative: ${esc(i.title)} - the Initiatives tab beside Role holds the whole piece of work">${esc(i.title)}</span>`,
+    )
+    .join("");
+  return `<td class="initiative">${chips}</td>`;
+}
+
 function rowHtml(row, forceOwner = false) {
   const isOpen = rowDrawsOpen(keyOf(row.project, row.path));
   // A row whose path is no longer a tree of its own (lib/scan.js's RELEASED row) has no counts to show: "clean" would
@@ -812,6 +830,7 @@ function rowHtml(row, forceOwner = false) {
     // label and never a dash. OFF by default: lib/chart-columns.js `DEFAULT_HIDDEN_COLUMNS`, applied when the reader
     // has no stored list.
     assistant: ownerCellHtml(row),
+    initiative: initiativeCellHtml(row),
     tip: `<td class="mono dim nowrap">${esc(row.head || "—")}</td>`,
     ahead: `<td class="mono nowrap">${aheadBehindCellHtml(row)}</td>`,
     cherry: `<td class="mono dim nowrap">+${row.cherryPlus ?? 0}/−${row.cherryMinus ?? 0}</td>`,
