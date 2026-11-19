@@ -26,16 +26,40 @@
 
   const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
-  // The three kinds, in the order the H rotation must step them. A permission is a run that cannot proceed without
+  // The four kinds, in the order the H rotation must step them. A permission is a run that cannot proceed without
   // the reader; a question is a run waiting on a decision; a review is work that is already finished and only needs
-  // to be looked at. In that order, because the first two are blocking and the third is not.
-  const RANK = { permission: 0, approval: 0, write: 0, question: 1, clarify: 1, review: 2 };
+  // to be looked at. In that order, because the first two are blocking and the third is not. A COLLISION comes last:
+  // it is the one kind where work has NOT stopped - the two assistants are already on it and the panel only hands it
+  // over when they cannot settle it - so it must not push a blocked run or an unread result down the rotation.
+  const RANK = { permission: 0, approval: 0, write: 0, question: 1, clarify: 1, review: 2, collision: 3 };
 
   // A delivery awaiting a check: the one predicate. `reviewedAt` is the panel's stamp, and its ABSENCE is what the
   // amber marker means - not the presence of the record, because a reviewed delivery keeps its card.
   function awaiting(row) {
     const rec = row && row.review;
     return Boolean(rec && rec.summary && !rec.reviewedAt);
+  }
+
+  // A collision awaiting the reader: the pair has been handed over (state `reader`) and nobody has ruled on it. The
+  // SAME PAIR is carried by BOTH rows, so every count and every list here dedupes on the record's key: one overlap is
+  // one decision, however many rows wear the marker. A ruled pair is not awaiting anything - it renders as already
+  // ruled, which is the whole point of storing the ruling against the pair.
+  function awaitingCollisions(row) {
+    const list = row && Array.isArray(row.collisions) ? row.collisions : [];
+    return list.filter((c) => c && c.state === "reader");
+  }
+
+  // The collisions on a board: unique by pair key, so the badge and the H rotation agree about how many decisions
+  // there are. Returns the records themselves, oldest first, which is the order H steps them.
+  function collisions(rows) {
+    const seen = new Map();
+    for (const row of rows || []) {
+      for (const rec of awaitingCollisions(row)) {
+        if (!rec.key || seen.has(rec.key)) continue;
+        seen.set(rec.key, { ...rec, path: row.path, project: row.project || rec.project || null, agent: row.agent || row.name || null });
+      }
+    }
+    return [...seen.values()].sort((a, b) => String(a.firstAt || "").localeCompare(String(b.firstAt || "")));
   }
 
   // How old a delivery is, in ms, for the oldest-first order. An entry with no readable stamp sorts last within its
@@ -79,24 +103,26 @@
   // What the Human button's title says, by kind. The badge total is the sum, and the title splits it, so a reader
   // who sees "3" can tell whether it is three blocked runs or three results to read.
   function badge(items) {
-    const out = { total: 0, permissions: 0, questions: 0, reviews: 0 };
+    const out = { total: 0, permissions: 0, questions: 0, reviews: 0, collisions: 0 };
     for (const item of items || []) {
       const r = rank(item);
       if (r === 0) out.permissions += 1;
       else if (r === 1) out.questions += 1;
       else if (r === 2) out.reviews += 1;
+      else if (r === 3) out.collisions += 1;
       out.total += 1;
     }
     return out;
   }
 
-  // THE READER'S THREE SWITCHES (Settings > Human): which kinds this button counts. One reading of which switch a
-  // list entry answers to, so the filter, the badge split and the title sentence cannot disagree about a kind.
-  const KIND_KEYS = ["permissions", "clarify", "review"];
+  // THE READER'S FOUR SWITCHES (Settings > Human): which kinds this button counts. One reading of which switch a
+  // list entry answers to, so the filter, the badge split and the title sentence cannot disagree about a kind. The
+  // collision switch is its own - a reader who wants the markers on the rows but not in the rotation can have that.
+  const KIND_KEYS = ["permissions", "clarify", "review", "collisions"];
 
   function kindKey(item) {
     const r = rank(item);
-    return r === 0 ? "permissions" : r === 1 ? "clarify" : r === 2 ? "review" : "";
+    return r === 0 ? "permissions" : r === 1 ? "clarify" : r === 2 ? "review" : r === 3 ? "collisions" : "";
   }
 
   // A kind is on unless the reader switched it off. An entry this module cannot place has no key, and is KEPT: a
@@ -124,6 +150,7 @@
     if (kindOn(kinds, "permissions")) parts.push(plural(b.permissions, "permission", "permissions"));
     if (kindOn(kinds, "clarify")) parts.push(plural(b.questions, "clarify question", "clarify questions"));
     if (kindOn(kinds, "review")) parts.push(plural(b.reviews, "to review", "to review"));
+    if (kindOn(kinds, "collisions")) parts.push(plural(b.collisions || 0, "collision", "collisions"));
     return parts.join(", ");
   }
 
@@ -136,6 +163,7 @@
       if (kindOn(kinds, "permissions")) nouns.push("no permission");
       if (kindOn(kinds, "clarify")) nouns.push("no question");
       if (kindOn(kinds, "review")) nouns.push("no result to review");
+      if (kindOn(kinds, "collisions")) nouns.push("no collision");
       return `nothing is waiting for you - ${nouns.join(", ")}`;
     }
     return `${named} - press H to step into one, Shift+H back, Esc to step out`;
@@ -152,5 +180,37 @@
     return bits.join(" - ");
   }
 
-  root.wtReviewLane = { awaiting, since, count, keeps, rank, sortHuman, badge, title, markerTitle, KIND_KEYS, kindKey, keepKinds, split };
+  // What a collision marker says: the counterpart by NAME, then the evidence, then whose turn it is. The counterpart is
+  // the first thing, because "this row is in a collision" without naming the other tree is the bare flag this whole
+  // feature exists to avoid.
+  function collisionTitle(rec) {
+    if (!rec) return "";
+    const other = rec.other?.name || rec.otherTarget || "an unnamed tree";
+    const files = Array.isArray(rec.files) ? rec.files : [];
+    const bits = [`collision with ${other}`, plural(files.length, "shared file", "shared files")];
+    if (files.length) bits.push(files.slice(0, 4).join(", "));
+    if (rec.state === "ruled") bits.push(`already ruled: ${rec.ruling?.name || "a side"} goes first`);
+    else if (rec.state === "reader") bits.push("yours to rule on - H steps into it");
+    else bits.push("with both assistants");
+    return bits.join(" - ");
+  }
+
+  root.wtReviewLane = {
+    awaiting,
+    awaitingCollisions,
+    collisions,
+    since,
+    count,
+    keeps,
+    rank,
+    sortHuman,
+    badge,
+    title,
+    markerTitle,
+    collisionTitle,
+    KIND_KEYS,
+    kindKey,
+    keepKinds,
+    split,
+  };
 })(globalThis);

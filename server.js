@@ -44,6 +44,12 @@ import { deleteWorktreeRow } from "./lib/worktree-remove.js";
 import { ReleaseRequests, agentCleanupFrom, releaseWorktree, releasesEnabled } from "./lib/worktrees.js";
 import { Deliverables } from "./lib/deliverables.js";
 import { ReviewInbox } from "./lib/review-inbox.js";
+// The collisions between two live runs (lib/collisions.js): the detector, the record per pair and the reader's ruling.
+// lib/collision-flow.js is the sweep that files the pair into the two assistants' queues and hands it to the reader on
+// the three conditions; routes/collisions.js is the read, the ask and the ruling.
+import { CollisionBook, filingKey } from "./lib/collisions.js";
+import { rulingRowsFor, sweepCollisions } from "./lib/collision-flow.js";
+import { COLLISIONS_PATH, createCollisionsRoutes } from "./routes/collisions.js";
 import { Hosts, docOf, prListing, proposeMapping, renderTemplate } from "./lib/hosts.js";
 // What a worktree is FOR: the definition catalogue (reader-edited over the shipped seed), where each tree stands in
 // one, and the ladder that is the only way a tree's kind may change (docs/pipelines.md §1–§3).
@@ -1744,6 +1750,9 @@ if (config.dockMode != null) {
 // The state read's handler is built once, above the table: `snapshot` is a function declaration further down this file
 // (hoisted, so this call is safe), and both of the state rows below are handed this one instance.
 const stateRoutes = createStateRoutes({ snapshot, sendJson });
+// The collisions handler is built further down, with the book it reads (the store is created beside the review lane).
+// A `const` here would be in its temporal dead zone at this point in the file, so the row resolves it per request.
+let collisionsHandle = null;
 const PREFIX_MOUNTS = [
   // The per-assistant task queue (routes/assistant-queue.js). The factory takes the Assistant, which owns each queue's
   // file and its read-modify-write, and the transport helpers this file already imports.
@@ -1805,6 +1814,10 @@ const PREFIX_MOUNTS = [
   // The turnover prefix (routes/project-turnover.js): the branch a project's work rolls up into, drawn in the project
   // settings and read by every cut. Same writer, same transport, its own path.
   { prefix: TURNOVER_PATH, handles: createProjectTurnoverRoutes({ getConfig: () => config, registry, setProjectTurnover, sendJson, readBody, authorised }) },
+  // The collision prefix (routes/collisions.js): every pair the panel knows about with its evidence, the reader's
+  // "bring this to me", and the ruling that both assistants are told about. The book, the sweep and the queue write
+  // are this file's, so the handler is resolved per request (see `collisionsHandle` above).
+  { prefix: COLLISIONS_PATH, handles: (req, res, ctx) => (collisionsHandle ? collisionsHandle(req, res, ctx) : false) },
   // The cleanup prefix (routes/project-cleanup.js): POST /api/projects/<name>/cleanup. The route owns the path match
   // and the wire shape; the remover is the board's OWN delete path, so a cleanup cannot arrive one guard short of
   // the row's x. `onApplied` is what the board needs after an act: a removed tree's row is dropped and its event
@@ -2739,6 +2752,126 @@ jobs.deliverables = deliverables;
 // tree path alone, so a row that is archived or deleted drops out of the lane with the row.
 const reviews = new ReviewInbox({ file: config.reviewsFile, log });
 jobs.reviewInbox = reviews;
+
+// ---- the COLLISIONS: two live runs stepping on each other's work ------------------------------------------------
+// The store is one record per PAIR of overlapping live trees (lib/collisions.js), with the evidence that produced it
+// and the reader's ruling. `withCollisions` carries each tree's own view of those records onto its row (the marker
+// names the OTHER tree), and the sweep below is the only writer of new records: it runs over the rows the scanner has
+// just written, files the pair into the two assistants' queues, and hands it to the reader on the three conditions in
+// lib/collision-flow.js. Nothing here re-reads git - the rows already say what each tree is touching.
+const collisions = new CollisionBook({ file: config.collisionsFile, log });
+// The harvest at a run's close files a worker's own COLLISION line against its tree (lib/jobs.js), so the book travels
+// with the other stores rather than being reachable only from a route.
+jobs.collisions = collisions;
+
+// THE OWNER OF A SIDE. A tree the reader handed to another assistant (lib/locks.js) is that assistant's; every other
+// tree is Assistant #1's, which is the same default every run on this board has had since before a second assistant
+// existed. A stored owner id that no longer exists is not invented onto a queue: it falls back to #1, because a
+// collision filed into a retired assistant is a notice nobody reads.
+const COLLISION_DEFAULT_OWNER = "assistant-1";
+const collisionOwnerOf = (side = {}) => {
+  try {
+    const project = assistant.projectNameFor(side.path) || null;
+    const owned = assistant.ownerOfTree({ path: side.path, project, branch: side.branch });
+    if (owned) return owned;
+    return assistant.assistantRecord(COLLISION_DEFAULT_OWNER) ? COLLISION_DEFAULT_OWNER : assistant.assistants?.[0]?.id || null;
+  } catch {
+    return null;
+  }
+};
+const collisionNameOf = (id) => {
+  try {
+    return assistant.assistantRecord(id)?.name || id || null;
+  } catch {
+    return id || null;
+  }
+};
+// The queue write for one filed row. It goes through `assistant.queueMutate` - the same writer the queue tab, the
+// assistant's own QUEUE lines and a stage link use - so the file, the journal and the repaint stay in one place, and
+// the carried key makes a restart's second sweep find the row it already filed instead of a duplicate.
+function fileCollisionRow(payload) {
+  if (!payload?.assistantId) return null;
+  const out = assistant.queueMutate(
+    payload.assistantId,
+    "add",
+    { title: payload.title, detail: payload.detail, files: payload.files, project: payload.project, worktree: payload.worktree },
+    { by: "panel", carriedKey: filingKey("collision", payload.pairKey, payload.assistantId) },
+  );
+  return out?.ok && out.task ? { taskId: out.task.id } : null;
+}
+// The reader's ruling, broadcast: one row into each owning assistant's queue naming the side that goes first. Filed
+// once per owner and carried-keyed, so a ruling re-read from the file cannot double-post.
+function fileCollisionRuling(record) {
+  for (const payload of rulingRowsFor(record, { ownerOf: collisionOwnerOf, nameOf: collisionNameOf, project: record.project })) {
+    if (!payload.assistantId) continue;
+    try {
+      assistant.queueMutate(
+        payload.assistantId,
+        "add",
+        { title: payload.title, detail: payload.detail, files: payload.files, project: payload.project, worktree: payload.worktree },
+        { by: "panel", carriedKey: filingKey("collision-rule", payload.pairKey, payload.assistantId) },
+      );
+    } catch (err) {
+      log(`collisions: could not file the ruling into ${payload.assistantId}'s queue (${String((err && err.message) || err)})`);
+    }
+  }
+}
+
+// ONE SWEEP, over the rows the scanner already wrote. It files, checks stand-downs and hands pairs over; it never reads
+// git. The book is written only when something moved - an unchanged board must not rewrite a file every tick.
+let collisionSweepCount = 0;
+let collisionSweepLastAt = 0;
+function sweepCollisionsNow() {
+  const before = JSON.stringify(collisions.all());
+  let report = null;
+  try {
+    report = sweepCollisions({
+      rows: rowsWithProject(),
+      book: collisions,
+      ownerOf: collisionOwnerOf,
+      nameOf: collisionNameOf,
+      tasksFor: (id) => {
+        try {
+          return assistant.queueView(id)?.tasks || [];
+        } catch {
+          return [];
+        }
+      },
+      fileQueue: fileCollisionRow,
+    });
+  } catch (err) {
+    log(`collisions: the sweep failed (${String((err && err.message) || err)})`);
+    return null;
+  }
+  collisionSweepCount += 1;
+  collisionSweepLastAt = Date.now();
+  const moved = JSON.stringify(collisions.all()) !== before;
+  if (moved) collisions.save();
+  if (moved && (report.filed.length || report.escalated.length || report.stoodDown.length)) broadcastSnapshot();
+  return report;
+}
+// The sweep's clock. Ten seconds is a scan or two on a busy board and nothing on a quiet one, and the route can ask for
+// one NOW (POST /api/collisions {op:"sweep"}) so a reader or a proof never waits for the tick.
+const collisionSweepTimer = setInterval(() => {
+  try {
+    sweepCollisionsNow();
+  } catch {
+    /* the sweep logs its own failures; the clock must not die with one */
+  }
+}, 10_000);
+if (typeof collisionSweepTimer.unref === "function") collisionSweepTimer.unref();
+// The route the mount table above resolves: the read, the ask, the ruling, and an on-demand sweep.
+collisionsHandle = createCollisionsRoutes({
+  book: collisions,
+  getConfig: () => config,
+  sweep: () => sweepCollisionsNow(),
+  fileRuling: (record) => fileCollisionRuling(record),
+  refresh: () => broadcastSnapshot(),
+  sendJson,
+  readBody,
+  authorised,
+  log,
+});
 // One SSE frame when a delivery lands, so a second tab's count moves without waiting for the next scan. The frame is
 // a hint only - the page re-reads the snapshot - and it is wired here so the store never learns what a socket is.
 reviews.onChange = (entry) => broadcast({ type: "review", path: entry?.path || null, at: entry?.at || null });
@@ -2962,6 +3095,22 @@ function withReviews(snap) {
         continue;
       }
       row.review = rec;
+    }
+  }
+  return snap;
+}
+
+// The collision records travel with the snapshot the way a review does, and for the same reason: the marker and the
+// Human button's collision stop are drawn from the row. Each row carries its OWN view of every pair it is in - with the
+// OTHER tree's name, the shared paths and the branch relation - so a row can always say who it is colliding with. A
+// row in no collision carries no `collisions` field at all, so nothing draws an empty marker. `rowExtras` overlays the
+// same list on a per-row SSE frame, because a frame REPLACES the page's row object wholesale.
+function withCollisions(snap) {
+  for (const project of snap.projects || []) {
+    for (const row of project.worktrees || []) {
+      const list = collisions.forTree(row.path);
+      if (list.length) row.collisions = list;
+      else delete row.collisions;
     }
   }
   return snap;
@@ -3622,6 +3771,11 @@ function rowExtras(projectName, row) {
     const mine = initiatives.forTree(out.path);
     if (mine.length) out.initiatives = mine;
     else delete out.initiatives;
+    // The same for a collision: a per-row frame must carry the marker's list, or a row that has just collided draws
+    // without its marker until the next full snapshot.
+    const crossing = collisions.forTree(out.path);
+    if (crossing.length) out.collisions = crossing;
+    else delete out.collisions;
     return out;
   });
 }
@@ -3783,7 +3937,7 @@ function snapshotBody() {
   // second call. The initiatives are the same kind of fact and are applied here for the same reason. THE REVIEW LANE
   // IS APPLIED LAST OF ALL, so a row's delivery is on the row whenever a snapshot leaves this function - nothing above
   // it can strip the field.
-  return withReviews(withRoundNames(withAssistantOwners(withInitiatives(snap))));
+  return withCollisions(withReviews(withRoundNames(withAssistantOwners(withInitiatives(snap)))));
 }
 
 const heartbeat = setInterval(() => {
