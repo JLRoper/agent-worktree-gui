@@ -78,6 +78,10 @@ test("a CACHED row whose folder is gone renders stale with last seen and the pat
   const summary = store.summaryFor(PROJECT.name);
   assert.equal(summary.staleTrees, 1);
   assert.equal(summary.total, 2, "the stale tree plus the checkout the listing added");
+  // ...and it survives the NEXT pass too: the reason is what the reader is owed while the tree is still recent, not a
+  // one-pass grace the board forgets on its own clock.
+  await scheduler.reconcile(PROJECT);
+  assert.equal(store.rowsFor(PROJECT.name).find((r) => r.path === A)?.verdict, "STALE", "still the same row, still stale");
 });
 
 test("a LIVE row whose folder is gone and whose tree holds an agent is kept stale, not dropped", async () => {
