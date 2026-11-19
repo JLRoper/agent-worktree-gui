@@ -1248,6 +1248,11 @@
        `wtInitiativeFold`; test/initiative-fold.test.js imports this same file. Loaded before assistant.js, which
        paints every initiative card through it. -->
   <script src="/core/initiative-fold.js"></script>
+  <!-- The branch NAME, as a link to its page on the remote or as plain text when there is none: the anchor's whole
+       shape (class, target, rel, title) in one place, called by the chart's branch cell (app.js) and by the
+       Initiatives tab's worktree list (assistant.js). Published on globalThis as `wtBranchLink`;
+       test/branch-link.test.js imports this same file. Loaded before app.js and assistant.js. -->
+  <script src="/core/branch-link.js"></script>
   <!-- How fast a run's output reaches the reader's eyes: the word pacer (a paragraph typing out) and the line gate
        (whole lines walking into a console), both driven from app.js by the two Settings > Display rows. Published
        on globalThis as `wtType`; test/type-stream.test.js imports this same file. -->

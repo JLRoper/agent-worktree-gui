@@ -60,6 +60,12 @@ export function initiativesView({ initiatives, projectForPath, rowFor, assistant
         path: rec.path,
         name: String(row?.round?.display || row?.name || nameOf(rec.path)),
         branch: String(row?.branch || ""),
+        // The branch's page on the remote, exactly as the board row carries it (decorate -> branchLink). Passed
+        // through untouched - the tab draws the SAME link the chart does through public/core/branch-link.js, and a
+        // tree whose row has no resolvable page gets null here, so the tab can only draw plain text.
+        branchUrl: row?.branchUrl || null,
+        branchWhy: String(row?.branchWhy || ""),
+        branchLinkFrom: row?.branchLinkFrom || null,
         project,
         // A tree that is no longer on the board (removed, or outside every scan root) still belongs to the initiative:
         // the tab shows it dimmed with its path, and the reader can take it out. Hiding it would strand the record.
