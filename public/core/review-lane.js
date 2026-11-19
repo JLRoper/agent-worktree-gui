@@ -141,16 +141,16 @@
     return Array.isArray(counts) ? badge(counts) : counts && typeof counts === "object" ? counts : badge([]);
   }
 
-  // The split sentence - "2 permissions, 1 clarify question, 2 to review" - naming ONLY the kinds that are on. A
-  // switched-off kind is not a zero in this sentence: it is a kind this button does not count, and "0 to review"
-  // would be a claim about rows it was never shown.
+  // The split names ONLY the kinds that are on AND have something in them: a switched-off kind is not a zero in this
+  // sentence, and neither is a kind that is on with nothing in it - a kind is named when there is something to name.
+  // Every item in `counts` was counted from the filtered list, so a non-zero total always has at least one named kind.
   function split(counts, kinds) {
     const b = asBadge(counts);
     const parts = [];
-    if (kindOn(kinds, "permissions")) parts.push(plural(b.permissions, "permission", "permissions"));
-    if (kindOn(kinds, "clarify")) parts.push(plural(b.questions, "clarify question", "clarify questions"));
-    if (kindOn(kinds, "review")) parts.push(plural(b.reviews, "to review", "to review"));
-    if (kindOn(kinds, "collisions")) parts.push(plural(b.collisions || 0, "collision", "collisions"));
+    if (kindOn(kinds, "permissions") && b.permissions) parts.push(plural(b.permissions, "permission", "permissions"));
+    if (kindOn(kinds, "clarify") && b.questions) parts.push(plural(b.questions, "clarify question", "clarify questions"));
+    if (kindOn(kinds, "review") && b.reviews) parts.push(plural(b.reviews, "to review", "to review"));
+    if (kindOn(kinds, "collisions") && b.collisions) parts.push(plural(b.collisions, "collision", "collisions"));
     return parts.join(", ");
   }
 

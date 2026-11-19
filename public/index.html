@@ -645,7 +645,7 @@
 
       <div class="settings-group" id="settings-panel-human" data-settings-group="human" role="tabpanel" aria-labelledby="settings-tab-human" hidden>
 
-        <div class="settings-row" title="The Human button in the floating header counts everything on this board that is waiting on YOU, and steps into it with H. It is three different kinds, and they are three different costs on your attention: a permission is a run stopped until you answer, a clarify question is a run waiting on a decision, and a review item is work already finished that needs looking at. Each switch here says whether that kind is counted at all. All three are on by default, which is exactly the button the panel has always drawn, so a reader who never opens this tab changes nothing. A kind that is off is not on the badge, is not named in the button's title, and H skips it: the order among the kinds that remain is still permissions, then clarify questions, then review items, oldest first inside each kind. Nothing else in the panel changes - the rows, the cards, the permission boxes and the amber review marker stay exactly where they were. Saved in this browser.">
+        <div class="settings-row" title="The Human button in the floating header counts everything on this board that is waiting on YOU, and steps into it with H. It is four different kinds, and they are four different costs on your attention: a permission is a run stopped until you answer, a clarify question is a run waiting on a decision, a review item is work already finished that needs looking at, and a collision is two live trees in one project touching the same work, which nothing has stopped yet but which will cost one of them its edits if nobody rules. Each switch here says whether that kind is counted at all. All four are on by default, which is exactly the button the panel has always drawn, so a reader who never opens this tab changes nothing. A kind that is off is not on the badge, is not named in the button's title, and H skips it: the order among the kinds that remain is still permissions, then clarify questions, then review items, then collisions, oldest first inside each kind. Nothing else in the panel changes - the rows, the cards, the permission boxes, the amber review marker and the violet collision marker stay exactly where they were. Saved in this browser.">
           <span>What the Human button counts <span class="settings-info">ⓘ</span></span>
           <span class="settings-unit mono">header</span>
         </div>
@@ -668,7 +668,13 @@
           <span class="settings-unit mono">a finished row</span>
         </label>
 
-        <div class="settings-preview mono" id="human-kinds-preview">all three counted - badge, title and H</div>
+        <label class="settings-row" for="human-kind-collisions" title="Two live trees in one project touching the same work: the same file, one tree's branch being the other's merge target, or two children of one turnover branch changing the same file. Each row wears a violet marker naming the counterpart, and the pair is filed into both assistants' queues before it ever reaches you. On (the default) it is counted, named in the title and stepped into by H after the three earlier kinds. Off, it is not counted, not named and H skips it - the violet markers and the collision card under each row stay exactly as they are, and the pair still goes to the assistants, so you can keep the overlap visible without it being a standing to-do on the button. Saved in this browser.">
+          <span>Collisions <span class="settings-info">ⓘ</span></span>
+          <input id="human-kind-collisions" type="checkbox" checked>
+          <span class="settings-unit mono">two trees, one file</span>
+        </label>
+
+        <div class="settings-preview mono" id="human-kinds-preview">all four counted - badge, title and H</div>
       </div>
 
       <div class="settings-group" id="settings-panel-repo" data-settings-group="repo" role="tabpanel" aria-labelledby="settings-tab-repo" hidden>

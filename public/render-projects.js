@@ -822,7 +822,7 @@ function rowHtml(row, forceOwner = false) {
     // value instead of the fragment the selection covers. It is NOT `data-copy`, which is the console's block-lift
     // attribute and would grow a ⧉ button inside the cell.
     name: `<td class="name" data-copy-value="${esc(shownName)}"><div class="name-line"><span class="row-lead"></span><button class="btn-row-agent" data-agent-path="${esc(row.path)}" data-agent-name="${esc(row.name)}" data-agent-project="${esc(row.project)}"
-      title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">\u25b6</button><span class="row-name${onTurnoverBranch ? " is-turnover" : ""}"${onTurnoverBranch ? ' style="color:var(--blue)"' : ""} title="${esc(row.path)}">${esc(shownName)}</span>${renameBtn}${treeLockBtn}${turnoverRowMarkHtml(row)}${reviewRowMarkHtml(row)}${agentBadgeHtml(row)}</div></td>`,
+      title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">\u25b6</button><span class="row-name${onTurnoverBranch ? " is-turnover" : ""}"${onTurnoverBranch ? ' style="color:var(--blue)"' : ""} title="${esc(row.path)}">${esc(shownName)}</span>${renameBtn}${treeLockBtn}${turnoverRowMarkHtml(row)}${collisionRowMarkHtml(row)}${reviewRowMarkHtml(row)}${agentBadgeHtml(row)}</div></td>`,
     // Same rule for the branch, whose whole column is one ellipsis (chart.css line 83). The cell also holds the
     // remote link, a `local` chip and the branch's padlock, so the value is the branch itself, never the cell's text.
     branch: `<td class="mono branch" data-copy-value="${esc(row.branch || "")}">${branchCellHtml(row)}${branchLockBtn}</td>`,
@@ -842,7 +842,7 @@ function rowHtml(row, forceOwner = false) {
     actions: `<td class="row-actions">${isProjectRoot ? "" : `${childBtn}<button class="btn-refresh-tree" data-refresh-tree="${esc(delKey)}" type="button" title="reconcile this one worktree — re-read its git state (dirty, ahead/behind, cherry, verdict, PR), then check its TODO list against what the tree now contains (a proposal, nothing closed) and its description, re-derived only if it has gone stale; every action is journalled under the row">\u27f3</button><button class="btn-del-tree${delDirect ? " is-direct" : ""}" data-del-tree="${esc(delKey)}" title="${delDirect ? "this worktree is merged and clean — deletes it straight away, its files go to the Recycle Bin and git's record is pruned" : "remove this worktree — asks first; its files go to the Recycle Bin and git's record of it is pruned"}">✕</button>`}</td>`,
   };
   // The lane is read through `typeof`: a scope without it reads as "no delivery" instead of throwing.
-  return `<tr class="row${isOpen ? " expanded" : ""}${lock ? " is-locked" : ""}${typeof wtReviewLane !== "undefined" && wtReviewLane.awaiting(row) ? " has-review" : ""}" data-key="${esc(keyOf(row.project, row.path))}">
+  return `<tr class="row${isOpen ? " expanded" : ""}${lock ? " is-locked" : ""}${typeof wtReviewLane !== "undefined" && wtReviewLane.awaiting(row) ? " has-review" : ""}${typeof wtReviewLane !== "undefined" && wtReviewLane.awaitingCollisions(row).length ? " has-collision" : ""}" data-key="${esc(keyOf(row.project, row.path))}">
     ${shownColumns(forceOwner).map((i) => cells[CHART_COLUMNS[i].id]).join("\n    ")}
   </tr>`;
 }
@@ -887,6 +887,27 @@ function reviewRowMarkHtml(row) {
   const say = typeof wtReviewLane !== "undefined" && wtReviewLane ? wtReviewLane.markerTitle(row) : `result to review - ${rec.summary}`;
   const press = "mark this result reviewed - it leaves the review lane and the header count, and the card stays here with what the run left";
   return `<span class="review-mark" role="img" aria-label="${esc(say)}" title="${esc(say)}">\u25a3</span><button class="btn-review-done" type="button" data-review-done="${esc(keyOf(row.project, row.path))}" data-review-project="${esc(row.project)}" data-review-path="${esc(row.path)}" title="${esc(press)}">\u2713 Reviewed</button>`;
+}
+
+// THE VIOLET COLLISION MARK. A row wears one for every pair of live trees in its project that are touching the same
+// work (lib/collisions.js), and the tooltip NAMES THE COUNTERPART: "collision with coll-two - 1 shared file ...". That
+// is the whole surface: a bare flag would tell the reader two workers are in each other's way and leave them to find
+// out who. The mark is drawn whether the pair is still with the assistants or already handed over, because both rows
+// must show it - the reader seeing one side of an overlap would be the defect this feature exists to end.
+//
+// IT IS NOT THE OTHER THREE: not the yellow lock, not the blue turnover mark, not the amber review mark. It has its own
+// glyph, class and colour (violet, public/style.css), so a row can carry all four and each still mean one thing.
+function collisionRowMarkHtml(row) {
+  const list = Array.isArray(row?.collisions) ? row.collisions : [];
+  if (!list.length) return "";
+  const say = (rec) =>
+    typeof wtReviewLane !== "undefined" && wtReviewLane && typeof wtReviewLane.collisionTitle === "function"
+      ? wtReviewLane.collisionTitle(rec)
+      : `collision with ${rec.other?.name || rec.otherTarget || "another tree"}`;
+  return list
+    .slice(0, 3)
+    .map((rec) => `<span class="collision-mark is-${esc(rec.state || "assistants")}" role="img" data-collision-mark="${esc(rec.key)}" aria-label="${esc(say(rec))}" title="${esc(say(rec))}">◆</span>`)
+    .join("");
 }
 
 // ---- the age column: last life seen, plus a ring that fills toward the next read --------------
