@@ -48,7 +48,7 @@ import { ReviewInbox } from "./lib/review-inbox.js";
 // The collisions between two live runs (lib/collisions.js): the detector, the record per pair and the reader's ruling.
 // lib/collision-flow.js is the sweep that files the pair into the two assistants' queues and hands it to the reader on
 // the three conditions; routes/collisions.js is the read, the ask and the ruling.
-import { CollisionBook, filingKey } from "./lib/collisions.js";
+import { CollisionBook, filingKey, normCollisionPath } from "./lib/collisions.js";
 import { rulingRowsFor, sweepCollisions } from "./lib/collision-flow.js";
 import { COLLISIONS_PATH, createCollisionsRoutes } from "./routes/collisions.js";
 import { Hosts, docOf, prListing, proposeMapping, renderTemplate } from "./lib/hosts.js";
@@ -2810,6 +2810,27 @@ const collisionNameOf = (id) => {
     return id || null;
   }
 };
+// THE TASK STANDING IN A TREE, for the pair's own record: the newest OPEN queue row whose `worktree` is this tree. The
+// record then holds both task ids, which is what lets the card say "#12 and #14" instead of leaving each side to work
+// out which notice is its own. A tree with no open task is null - the panel never invents a number it cannot read.
+const collisionTaskFor = (row = {}) => {
+  try {
+    const who = collisionOwnerOf(row);
+    if (!who) return null;
+    const want = normCollisionPath(row.path);
+    if (!want) return null;
+    let best = null;
+    for (const task of assistant.queueView(who)?.tasks || []) {
+      if (!task || !task.worktree) continue;
+      if (task.state !== "queued" && task.state !== "running") continue;
+      if (normCollisionPath(task.worktree) !== want) continue;
+      if (!best || Number(task.id) > Number(best.id)) best = task;
+    }
+    return best ? Number(best.id) : null;
+  } catch {
+    return null;
+  }
+};
 // The queue write for one filed row. It goes through `assistant.queueMutate` - the same writer the queue tab, the
 // assistant's own QUEUE lines and a stage link use - so the file, the journal and the repaint stay in one place, and
 // the carried key makes a restart's second sweep find the row it already filed instead of a duplicate.
@@ -2854,6 +2875,7 @@ function sweepCollisionsNow() {
       book: collisions,
       ownerOf: collisionOwnerOf,
       nameOf: collisionNameOf,
+      taskIdFor: collisionTaskFor,
       tasksFor: (id) => {
         try {
           return assistant.queueView(id)?.tasks || [];

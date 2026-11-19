@@ -20,6 +20,7 @@ import os from "node:os";
 import path from "node:path";
 
 import {
+  COLLISION_RESOLVED_KEEP_MS,
   CollisionBook,
   detectCollisions,
   brokenCollisionLines,
@@ -70,16 +71,27 @@ test("a dirty file and an untracked file of the same name are the same touch", (
   assert.deepEqual(pairs[0].files, ["docs/plan.md"]);
 });
 
-test("one tree's branch is the other's merge target: a collision with no shared file at all", () => {
-  const rows = [
-    tree("parent-branch", { branch: "feature/roll-up", parent: "main", dirtyFiles: [{ code: "M", path: "a.js" }] }),
-    tree("child-tree", { branch: "wtgui/child-tree", parent: "feature/roll-up", dirtyFiles: [{ code: "M", path: "b.js" }] }),
+test("one tree's branch is the other's merge target: that alone files NOTHING", () => {
+  // The primary checkout on main is every tree's merge target, so this relation is true of most rows on the board.
+  // Filed on its own it is noise: four rows were filed that way in one night and every one was the reader's own
+  // checkout. A pair needs a shared path; the branch relation is context on one that has it.
+  const only = [
+    tree("primary", { branch: "main", parent: null, dirtyFiles: [{ code: "M", path: "notes.txt" }] }),
+    tree("child-tree", { branch: "wtgui/child-tree", parent: "main", dirtyFiles: [{ code: "M", path: "b.js" }] }),
   ];
-  const pairs = detectCollisions(rows);
+  assert.deepEqual(detectCollisions(only), [], "a branch relation with no shared file is not a collision");
+
+  // With a shared file it is still said, after the evidence, so the sentence can name which way the work flows.
+  const both = [
+    tree("parent-branch", { branch: "feature/roll-up", parent: "main", dirtyFiles: [{ code: "M", path: "a.js" }] }),
+    tree("child-tree", { branch: "wtgui/child-tree", parent: "feature/roll-up", dirtyFiles: [{ code: "M", path: "a.js" }] }),
+  ];
+  const pairs = detectCollisions(both);
   assert.equal(pairs.length, 1);
-  assert.deepEqual(pairs[0].files, []);
-  assert.deepEqual(pairs[0].relations, [{ kind: "merge-target", lander: "b", target: "feature/roll-up" }]);
-  assert.match(relationSentence(pairs[0].relations, "child-tree"), /child-tree lands into feature\/roll-up/);
+  assert.deepEqual(pairs[0].files, ["a.js"]);
+  assert.deepEqual(pairs[0].relations.map((r) => r.kind), ["shared-file", "merge-target"]);
+  assert.deepEqual(pairs[0].relations[1], { kind: "merge-target", lander: "a", branch: "wtgui/child-tree", target: "feature/roll-up" });
+  assert.match(relationSentence(pairs[0].relations, "child-tree"), /1 shared file with child-tree; wtgui\/child-tree lands into feature\/roll-up/);
 });
 
 test("two children of one turnover branch whose own commits change the same file", () => {
@@ -89,22 +101,59 @@ test("two children of one turnover branch whose own commits change the same file
   ];
   const pairs = detectCollisions(rows);
   assert.equal(pairs.length, 1);
-  assert.deepEqual(pairs[0].relations, [{ kind: "sibling-turnover", parent: TURNOVER, files: ["src/rating.java"] }]);
+  assert.deepEqual(pairs[0].relations, [{ kind: "sibling", parent: TURNOVER, files: ["src/rating.java"], turnover: true }]);
   assert.deepEqual(pairs[0].files, ["src/rating.java"]);
   assert.match(relationSentence(pairs[0].relations, "turnover-child-two"), /both changed under 20261020/);
 });
 
-test("children of one NON-turnover branch are not siblings: that is not a drop zone both land in", () => {
+test("two branches cut from the same parent and committing the same file are siblings, under any parent", () => {
+  // main is the drop zone every tree lands into, so two branches from main that both commit one file are a PAIR -
+  // not two unrelated collisions with main, which is what the primary checkout row used to be told twice.
   const rows = [
-    tree("one", { parent: "feature/roll-up", commitFiles: ["src/rating.java"] }),
-    tree("two", { parent: "feature/roll-up", commitFiles: ["src/rating.java"] }),
+    tree("from-main-one", { branch: "wtgui/from-main-one", parent: "main", commitFiles: ["src/sibling.js"] }),
+    tree("from-main-two", { branch: "wtgui/from-main-two", parent: "main", commitFiles: ["src/sibling.js"] }),
+    tree("unrelated", { branch: "wtgui/unrelated", parent: "feature/roll-up", commitFiles: ["src/sibling.js"] }),
   ];
   const pairs = detectCollisions(rows);
-  // They DO share a committed file - that is the ordinary shared-file collision - but the turnover relation is not
-  // claimed for a branch that is not a turnover branch: the evidence would name a drop zone that does not exist.
+  // one and two are ONE pair; the tree under another parent shares the path but is not a sibling of either.
+  const sibling = pairs.filter((p) => p.relations.some((r) => r.kind === "sibling" && r.parent === "main"));
+  assert.equal(sibling.length, 1);
+  assert.deepEqual(sibling[0].relations, [{ kind: "sibling", parent: "main", files: ["src/sibling.js"], turnover: false }]);
+  for (const pair of pairs.filter((p) => p !== sibling[0])) {
+    assert.equal(pair.relations.some((r) => r.kind === "sibling"), false, `${pair.a.name}/${pair.b.name} has a different parent`);
+  }
+});
+
+test("siblings are compared on their own COMMITS; two trees merely dirtying the same file stay shared-file", () => {
+  // The distinction the proof needs: work in flight in two trees is the ordinary shared-file pair, while work already
+  // committed on two branches cut from one parent is the conflict waiting in the drop zone.
+  const pairs = detectCollisions([
+    tree("dirty-one", { parent: "main", dirtyFiles: [{ code: "M", path: "lib/shared.js" }] }),
+    tree("dirty-two", { parent: "main", dirtyFiles: [{ code: "M", path: "lib/shared.js" }] }),
+  ]);
   assert.equal(pairs.length, 1);
-  assert.equal(pairs[0].relations.some((r) => r.kind === "sibling-turnover"), false);
   assert.deepEqual(pairs[0].relations.map((r) => r.kind), ["shared-file"]);
+});
+
+test("one record per pair, whichever side the rows arrive on", () => {
+  const one = tree("pair-one", { dirtyFiles: [{ code: "M", path: "lib/shared.js" }] });
+  const two = tree("pair-two", { dirtyFiles: [{ code: "M", path: "lib/shared.js" }] });
+  const forward = detectCollisions([one, two]);
+  const backward = detectCollisions([two, one]);
+  assert.equal(forward.length, 1);
+  assert.equal(backward.length, 1);
+  assert.equal(forward[0].key, backward[0].key, "the pair key is order-free");
+  // The SIDES are ordered too: `a` is the path that sorts first, so a ruling stored as a side keeps naming a tree.
+  assert.deepEqual(forward[0].a, backward[0].a);
+  assert.deepEqual(forward[0].b, backward[0].b);
+  assert.ok(forward[0].a.path < forward[0].b.path, "a is the lexicographically first path");
+
+  // And the book folds both detections into one record, with one ruling slot.
+  const book = new CollisionBook({});
+  book.upsertDetected(forward[0], Date.parse("2026-11-19T12:00:00.000Z"));
+  const second = book.upsertDetected(backward[0], Date.parse("2026-11-19T12:00:05.000Z"));
+  assert.equal(second.isNew, false);
+  assert.equal(book.all().length, 1);
 });
 
 test("the three pairs that are NOT collisions: dormant, another project, nothing in common", () => {
@@ -139,11 +188,14 @@ test("touchedOf keeps the three sets apart, because the evidence says which one 
   assert.deepEqual(t.all, ["a.js", "b.js", "c.js"]);
 });
 
-test("sideOf names a tree without a lookup: path, directory name, branch, parent", () => {
+test("sideOf names a tree without a lookup: path, directory name, branch, parent, and the queue task", () => {
   // Backslashes and a trailing separator are the WINDOWS forms the scanner really sees; the tree itself is named
   // relatively, because a signed drive path would only be true on the machine that wrote it.
   const one = sideOf({ path: "repos\\proj\\.worktrees\\tree-one\\", branch: "wtgui/tree-one", parent: TURNOVER });
-  assert.deepEqual(one, { path: "repos/proj/.worktrees/tree-one", name: "tree-one", branch: "wtgui/tree-one", parent: TURNOVER });
+  assert.deepEqual(one, { path: "repos/proj/.worktrees/tree-one", name: "tree-one", branch: "wtgui/tree-one", parent: TURNOVER, taskId: null });
+  // The task standing in the tree travels on the side, so the pair record can name both task ids.
+  assert.equal(sideOf({ path: "/r/tree-one", taskId: 41 }).taskId, 41);
+  assert.equal(sideOf({ path: "/r/tree-one", taskId: "not a number" }).taskId, null, "a number is read, never invented");
 });
 
 test("the COLLISION line: a target and a sentence after one pipe", () => {
@@ -232,6 +284,160 @@ test("the sweep files one row per owner, once, naming the other tree and the evi
   sweepCollisions({ rows, book, now: Date.parse("2026-11-19T12:00:03.000Z"), ...deps });
   assert.equal(filed.length, 2);
   assert.equal(first.escalated.length, 0);
+});
+
+test("the pair record holds both task ids, and the queue row names the same side", () => {
+  const book = new CollisionBook({});
+  const rows = [
+    tree("coll-one", { dirtyFiles: [{ code: "M", path: "lib/shared.js" }] }),
+    tree("coll-two", { dirtyFiles: [{ code: "M", path: "lib/shared.js" }] }),
+  ];
+  const filed = [];
+  sweepCollisions({
+    rows,
+    book,
+    now: Date.parse("2026-11-19T12:00:00.000Z"),
+    ownerOf: (side) => (side.path.endsWith("coll-one") ? "assistant-1" : "assistant-2"),
+    tasksFor: () => [],
+    // The resolver names the queue task standing in each tree; the record keeps it on the side it belongs to.
+    taskIdFor: (row) => (row.path.endsWith("coll-one") ? 41 : 44),
+    fileQueue: (payload) => {
+      filed.push(payload);
+      return { taskId: 100 + filed.length };
+    },
+  });
+  const [rec] = book.all();
+  assert.equal(rec.a.name, "coll-one");
+  assert.equal(rec.a.taskId, 41);
+  assert.equal(rec.b.taskId, 44);
+  assert.deepEqual(filed.map((f) => [f.side, /task #4[14]/.test(f.detail)]).sort(), [["a", true], ["b", true]].sort());
+  // A re-detection with no resolver must not wipe the ids the record already holds.
+  sweepCollisions({ rows, book, now: Date.parse("2026-11-19T12:00:05.000Z"), tasksFor: () => [], fileQueue: () => ({ taskId: null }) });
+  assert.equal(book.all()[0].a.taskId, 41);
+  // The row's view carries both sides, so each row can draw the pair once and name both trees.
+  const fromTwo = book.forTree(rows[1].path)[0];
+  assert.equal(fromTwo.role, "b");
+  assert.equal(fromTwo.a.name, "coll-one");
+  assert.equal(fromTwo.b.name, "coll-two");
+  assert.equal(fromTwo.other.name, "coll-one");
+});
+
+test("a side that closes its notice stands down WITH its reason, readable from both rows", () => {
+  const book = new CollisionBook({});
+  const rows = [
+    tree("coll-one", { dirtyFiles: [{ code: "M", path: "lib/shared.js" }] }),
+    tree("coll-two", { dirtyFiles: [{ code: "M", path: "lib/shared.js" }] }),
+  ];
+  const tasks = { "assistant-1": [], "assistant-2": [] };
+  const deps = {
+    ownerOf: (side) => (side.path.endsWith("coll-one") ? "assistant-1" : "assistant-2"),
+    tasksFor: (id) => tasks[id] || [],
+    fileQueue: (payload) => {
+      const taskId = payload.assistantId === "assistant-1" ? 51 : 52;
+      tasks[payload.assistantId].push({ id: taskId, state: "queued", files: ["lib/shared.js"] });
+      return { taskId };
+    },
+  };
+  sweepCollisions({ rows, book, now: Date.parse("2026-11-19T12:00:00.000Z"), ...deps });
+  tasks["assistant-1"][0].state = "done";
+  const second = sweepCollisions({ rows, book, now: Date.parse("2026-11-19T12:00:04.000Z"), ...deps });
+  assert.deepEqual(second.stoodDown.map((s) => [s.side, s.taskId, s.state]), [["a", 51, "done"]]);
+  const rec = book.get(pairKey(rows[0].path, rows[1].path));
+  assert.deepEqual(rec.stoodDown.a, { at: "2026-11-19T12:00:04.000Z", taskId: 51, state: "done", name: "coll-one" });
+  // Both rows read the same reason: that is what the card prints, instead of leaving the other side to ask why.
+  for (const path of [rows[0].path, rows[1].path]) {
+    const view = book.forTree(path)[0];
+    assert.deepEqual(view.stoodDown, [{ side: "a", name: "coll-one", at: "2026-11-19T12:00:04.000Z", taskId: 51, state: "done" }]);
+  }
+});
+
+test("a re-detected pair that already has a ruling renders as already ruled, and asks nothing again", () => {
+  const book = new CollisionBook({});
+  const rows = [
+    tree("coll-one", { dirtyFiles: [{ code: "M", path: "lib/shared.js" }] }),
+    tree("coll-two", { dirtyFiles: [{ code: "M", path: "lib/shared.js" }] }),
+  ];
+  const deps = {
+    ownerOf: (side) => (side.path.endsWith("coll-one") ? "assistant-1" : "assistant-2"),
+    tasksFor: () => [],
+    fileQueue: () => ({ taskId: null }),
+  };
+  sweepCollisions({ rows, book, now: Date.parse("2026-11-19T12:00:00.000Z"), ...deps });
+  sweepCollisions({ rows, book, now: Date.parse("2026-11-19T12:00:04.000Z"), ...deps });
+  const key = book.all()[0].key;
+  assert.equal(stateOf(book.get(key)), "reader", "with no stand-down the pair comes to the reader");
+  const ruled = book.rule(key, { pick: "b", by: "reader", note: "coll-two first" });
+  assert.equal(stateOf(ruled.record), "ruled");
+  assert.equal(ruled.record.ruling.name, "coll-two");
+
+  // The same pair, detected again on the next sweep - from the OTHER row's side - is the same record, and it is
+  // already ruled: nothing is asked again, and the ruling's side still names the same tree.
+  const again = sweepCollisions({ rows: [...rows].reverse(), book, now: Date.parse("2026-11-19T12:00:08.000Z"), ...deps });
+  assert.equal(again.pairs, 1);
+  assert.equal(book.all().length, 1);
+  assert.equal(stateOf(book.get(key)), "ruled");
+  assert.equal(book.state().count, 0, "nothing is waiting on the reader for a pair already ruled");
+  for (const path of [rows[0].path, rows[1].path]) {
+    const view = book.forTree(path)[0];
+    assert.equal(view.state, "ruled");
+    assert.equal(view.ruling.name, "coll-two");
+    assert.equal(view.canAsk, false);
+  }
+});
+
+test("a stood-down pair outlives the detection long enough to be read, then it is history", () => {
+  const book = new CollisionBook({});
+  const rows = [
+    tree("coll-one", { dirtyFiles: [{ code: "M", path: "lib/shared.js" }] }),
+    tree("coll-two", { dirtyFiles: [{ code: "M", path: "lib/shared.js" }] }),
+  ];
+  const tasks = { "assistant-1": [], "assistant-2": [] };
+  const deps = {
+    ownerOf: (side) => (side.path.endsWith("coll-one") ? "assistant-1" : "assistant-2"),
+    tasksFor: (id) => tasks[id] || [],
+    fileQueue: (payload) => {
+      const taskId = payload.assistantId === "assistant-1" ? 61 : 62;
+      tasks[payload.assistantId].push({ id: taskId, state: "queued", files: ["lib/shared.js"] });
+      return { taskId };
+    },
+  };
+  const at = Date.parse("2026-11-19T12:00:00.000Z");
+  sweepCollisions({ rows, book, now: at, ...deps });
+  tasks["assistant-1"][0].state = "done";
+  sweepCollisions({ rows, book, now: at + 4000, ...deps });
+  const key = book.all()[0].key;
+  assert.ok(book.get(key).stoodDown.a, "the stand-down is recorded");
+  // The trees move apart: the next sweep sees nothing. The record stays while the reason is still worth reading...
+  book.closeUndetected([], at + 60_000);
+  assert.equal(book.all().length, 1);
+  // ...and is dropped once it is stale.
+  book.closeUndetected([], at + COLLISION_RESOLVED_KEEP_MS + 60_000);
+  assert.deepEqual(book.all(), []);
+});
+
+test("the merge-target-only pair is never filed, however live both rows are", () => {
+  // The reader's own checkout on main, dirty; a worker's tree cut from main, touching a different file. The old
+  // detector filed this pair on the branch relation alone, which is how four rows of noise were filed in one night.
+  const book = new CollisionBook({});
+  const rows = [
+    tree("primary", { branch: "main", parent: null, dirtyFiles: [{ code: "M", path: "notes.txt" }] }),
+    tree("child-tree", { branch: "wtgui/child-tree", parent: "main", dirtyFiles: [{ code: "M", path: "lib/child.js" }] }),
+  ];
+  const filed = [];
+  const report = sweepCollisions({
+    rows,
+    book,
+    now: Date.parse("2026-11-19T12:00:00.000Z"),
+    ownerOf: () => "assistant-1",
+    tasksFor: () => [],
+    fileQueue: (payload) => {
+      filed.push(payload);
+      return { taskId: 1 };
+    },
+  });
+  assert.equal(report.pairs, 0);
+  assert.equal(filed.length, 0);
+  assert.deepEqual(book.all(), []);
 });
 
 test("the sweep escalates a pair that survives one pass with nobody standing down", () => {

@@ -1798,26 +1798,44 @@ function detailHtml(row) {
   </div></td></tr>`;
 }
 
-// THE COLLISION CARD. Two live trees in one project are touching the same work; this card is what the reader rules
-// on, and it is drawn under BOTH rows (each row carries its own view of the pair, with `other` naming the counterpart).
+// THE COLLISION CARD. Two live trees in one project are touching the same work; this is ONE card for the PAIR, drawn
+// under BOTH rows. It names both sides - tree, branch and the queue task each one is being driven by - with this row's
+// own side marked, so neither side has to reconcile the other by hand from a card that only knew its own half. On the
+// other row the two sides are the same two trees, with the mark on the other one.
 //
-// THE EVIDENCE IS ON THE CARD, not behind a hover: the shared paths as chips, the branch relation as a sentence, the
-// other tree's path and branch, and which assistant owns each side. A reader who has to go looking for the files
-// cannot rule on them.
+// THE EVIDENCE IS ON THE CARD, not behind a hover: the shared paths as chips, the relation as a sentence, both trees'
+// paths and branches, and which assistant filed into which side. A reader who has to go looking for the files cannot
+// rule on them.
 //
 // THE TWO PRESSES are the ruling: which side goes first. The panel files the priority into both assistants' queues and
 // stores it against the PAIR, so the same overlap never asks again - it renders as "already ruled" with the side named
 // and a withdraw beside it. "Bring it to me" exists only while the pair is still with the assistants: it is the
 // reader's own way in before the pass would have handed it over.
+//
+// A STAND-DOWN IS SAID OUT LOUD. When one side closed or parked its filed notice the pair stops waiting on the reader,
+// and the card says which side yielded and why ("its notice #12 was done") - on both rows. A quiet stand-down is the
+// hand reconciliation this surface exists to replace.
 function collisionEvidence(rec) {
   const rels = Array.isArray(rec.relations) ? rec.relations : [];
   const bits = [];
   for (const rel of rels) {
     if (rel.kind === "shared-file") bits.push(`both trees touch ${rel.files.length} shared file${rel.files.length === 1 ? "" : "s"}`);
-    else if (rel.kind === "merge-target") bits.push(`${rel.lander === "b" ? "the other tree" : "this tree"} lands into ${rel.target}`);
-    else if (rel.kind === "sibling-turnover") bits.push(`both children of ${rel.parent} change ${rel.files.length} of the same file${rel.files.length === 1 ? "" : "s"}`);
+    else if (rel.kind === "merge-target") bits.push(`${rel.branch ? `branch ${rel.branch}` : "one tree"} lands into ${rel.target}`);
+    else if (rel.kind === "sibling" || rel.kind === "sibling-turnover")
+      bits.push(`both children of ${rel.parent} change ${rel.files.length} of the same file${rel.files.length === 1 ? "" : "s"}`);
   }
   return bits.join("; ");
+}
+
+function collisionSideHtml(rec, side, mine) {
+  if (!side) return "";
+  const role = side === rec.a ? "a" : "b";
+  return `<div class="collision-side is-${role}${mine ? " is-mine" : " is-other"}" data-collision-side="${role}">
+    <span class="collision-side-role">${mine ? "this row" : "counterpart"}</span>
+    <b class="collision-side-name">${esc(side.name || side.path || "a tree")}</b>
+    ${side.branch ? `<span class="collision-branch mono" title="branch">${esc(side.branch)}</span>` : ""}
+    ${side.taskId ? `<span class="collision-task mono" title="the queue task standing in this tree">#${esc(side.taskId)}</span>` : ""}
+  </div>`;
 }
 
 function collisionBlockHtml(row, key) {
@@ -1831,11 +1849,11 @@ function collisionBlockHtml(row, key) {
     const files = Array.isArray(rec.files) ? rec.files : [];
     const chips = files.length
       ? `<ul class="collision-chips" aria-label="the files both trees are touching">${files.map((f) => `<li class="collision-chip mono" title="${esc(f)}">${esc(f)}</li>`).join("")}</ul>`
-      : `<span class="collision-none">no shared file: the collision is the branch relation alone</span>`;
+      : `<span class="collision-none">no shared file is named: the evidence is the worker's own sentence</span>`;
     const when = rec.firstAt ? `${relTime(rec.firstAt)} ago` : "";
     const stateWord =
       state === "ruled"
-        ? `already ruled: ${esc(rec.ruling?.name || "a side")} goes first`
+        ? `already ruled: ${esc(rec.ruling?.name || "a side")}${rec.ruling?.taskId ? ` (#${esc(rec.ruling.taskId)})` : ""} goes first`
         : state === "reader"
           ? "yours to rule on"
           : "with both assistants";
@@ -1855,7 +1873,16 @@ function collisionBlockHtml(row, key) {
           ? `<button class="btn-collision-ask" type="button" data-collision-ask="${esc(rec.key)}" title="bring this pair to you now, instead of waiting for the assistants' pass">bring it to me</button>`
           : "",
     ].filter(Boolean);
-    return `<div class="collision-block is-${esc(state)}" data-collision-block="${esc(key)}" data-collision-key="${esc(rec.key)}">
+    const mineSide = rec.role === "b" ? rec.b : rec.a;
+    const otherSide = rec.role === "b" ? rec.a : rec.b;
+    const stood = (Array.isArray(rec.stoodDown) ? rec.stoodDown : [])
+      .map((s) => {
+        const who = s.name || (s.side === "a" ? rec.a?.name : rec.b?.name) || "one side";
+        const why = s.taskId ? `its notice #${s.taskId} was ${s.state || "closed"}` : "its notice was closed";
+        return `${who} stood down: ${why} - the pair is not waiting on you`;
+      })
+      .join("; ");
+    return `<div class="collision-block is-${esc(state)}" data-collision-block="${esc(key)}" data-collision-key="${esc(rec.key)}" data-collision-pair="${esc(rec.key)}">
       <div class="collision-head">
         <span class="collision-mark" role="img" aria-label="collision with ${esc(other)}">◆</span>
         <h4>Collision</h4>
@@ -1864,8 +1891,10 @@ function collisionBlockHtml(row, key) {
         <span class="collision-when mono">${esc([when, rec.source === "reported" ? "reported by its worker" : ""].filter(Boolean).join(" · "))}</span>
       </div>
       <div class="collision-body">
+        <div class="collision-sides">${collisionSideHtml(rec, mineSide, true)}${collisionSideHtml(rec, otherSide, false)}</div>
         <div class="collision-say">${esc(collisionEvidence(rec))}</div>
         ${chips}
+        ${stood ? `<div class="collision-stood">${esc(stood)}</div>` : ""}
         ${otherPath
           ? `<div class="collision-peer mono" title="the other tree, as the scanner knows it">${esc(otherPath)}${rec.filed && rec.filed.length ? ` · filed with ${esc(rec.filed.map((f) => f.assistantId).join(", "))}` : ""}</div>`
           : `<div class="collision-peer">no row on this board answers to <span class="mono">${esc(rec.otherTarget || "that name")}</span> - nothing but you can look at this one</div>`}

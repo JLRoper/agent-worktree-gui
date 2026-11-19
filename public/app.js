@@ -13272,8 +13272,13 @@ function applyCollisionRecord(rec) {
       state: rec.state,
       ruling: rec.ruling || null,
       canAsk: !!rec.canAsk,
+      // Both sides travel with the answer, so the card on this row can still name the counterpart (and its task)
+      // after a press: a pair is ONE record and both rows draw it.
+      a: rec.a || list[i].a || null,
+      b: rec.b || list[i].b || null,
       files: Array.isArray(rec.files) ? rec.files : list[i].files,
       relations: Array.isArray(rec.relations) ? rec.relations : list[i].relations,
+      stoodDown: Array.isArray(rec.stoodDown) ? rec.stoodDown : list[i].stoodDown,
       readerAt: rec.readerAt || list[i].readerAt,
     };
   }
