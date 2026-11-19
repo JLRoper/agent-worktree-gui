@@ -56,7 +56,7 @@
   // session's to own, so all three stay on the float's row. Everything else that used to be here (alerts, watches,
   // messages, the pad) is a session's OWN: it moved into SUBTABS, where each pane is filled for the assistant whose
   // tab it sits in.
-  const LISTS = ["role", "watchdog", "bridge"];
+  const LISTS = ["role", "initiatives", "watchdog", "bridge"];
   // What a session holds: the card you talk to, how it behaves, the work it is carrying (its queue, its trees) and
   // what it has seen and said (its alerts, watches, messages, pad). Every one of these renders for the ACTIVE
   // session through paneIdFor, so #2's Alerts is #2's list rather than a panel-wide one wearing #2's name.
@@ -2145,6 +2145,7 @@
       else if (view.subTab === "pad") renderAssistantPad(false, view.assistant);
       else pinChatToBottom();
     } else if (view.assistant === "role") renderAssistantRole();
+    else if (view.assistant === "initiatives") renderAssistantInitiatives();
     else if (view.assistant === "watchdog") renderWatchdog();
     else if (view.assistant === "bridge") renderBridge();
   }
@@ -3309,6 +3310,552 @@
   }
 
   // ---- end the role editor ---------------------------------------------------------------------------------------
+
+  // ---- the initiatives tab ---------------------------------------------------------------------------------------
+  // THE PANEL'S MAP OF THE BIG PIECES OF WORK. An initiative is a title, a description and the worktrees behind it,
+  // and this pane is the whole of it: the read comes from GET /api/initiatives, the words are written straight back,
+  // and a membership change is the ONE thing that leaves a question in the dock instead of happening here.
+  //
+  // WHY THE PANE KEEPS A DOCUMENT OF ITS OWN. The snapshot carries the membership (each row's `initiatives`) but not
+  // the title, the description, the projects' names or the assistants' counts - and those are the tab. One small read
+  // on demand is cheaper than growing the snapshot every project table already polls, and the read is re-taken after
+  // every write and every answer to a move question, so the pane is never showing a map the server has moved on from.
+  //
+  // FOLDS ARE MODULE STATE, NOT DOM STATE. Every snapshot repaints this pane from `state.assistant`; a fold kept only
+  // on the <details> element would pop open again on the next job event. The three books below are read back by the
+  // painter, so a project stays folded, an assistant list stays folded and a half-typed title stays typed.
+  const initFolds = new Set(); // `${initiativeId}::${projectName}` - projects are folded until the reader opens one
+  const initAssistOpen = new Set(); // initiative ids whose assistant rows are unfolded
+  const initNotes = new Map(); // initiative id (or "new") -> { text, bad } - what the last write answered
+  let initDoc = null; // the last document this pane read
+  let initReadAt = 0; // when, for the freshness gap below
+  let initLoading = false;
+  let initErr = "";
+  let initSeq = 0;
+  let initNewOpen = false; // the create form
+  let initEditId = ""; // the initiative whose words are in the edit form
+  let initAddId = ""; // the initiative whose "add a worktree" picker is open
+  let initDraft = { newTitle: "", newDesc: "", editTitle: "", editDesc: "", addTree: "" };
+  // A read is not worth repeating on every 2 s snapshot, but it must not be stale either: four seconds is shorter
+  // than the time it takes to open the tab, read a card and press Edit.
+  const INIT_READ_GAP_MS = 4000;
+  const initKey = (p) => normPath(p).toLowerCase();
+  const initById = (id) => (initDoc?.initiatives || []).find((i) => i.id === id) || null;
+  const initBlocked = () => Boolean(initDoc && initDoc.readable === false);
+
+  function initNoteFor(id) {
+    const n = initNotes.get(id);
+    return n && n.text ? `<div class="as-ask${n.bad ? " is-bad" : ""}" role="status">${esc(n.text)}</div>` : "";
+  }
+  function setInitNote(id, text, bad = false) {
+    initNotes.set(id, { text: String(text || ""), bad });
+  }
+
+  function loadInitiatives() {
+    if (initLoading) return Promise.resolve();
+    initLoading = true;
+    const seq = ++initSeq;
+    return apiFetch("/api/initiatives", {}, { timeoutMs: 12000 })
+      .then(async (r) => {
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+        if (seq !== initSeq) return;
+        initDoc = d;
+        initReadAt = Date.now();
+        initErr = "";
+      })
+      .catch((err) => {
+        if (seq !== initSeq) return;
+        // A failed read says so and keeps the last document on screen: the tab is the only place the map exists, so
+        // blanking it on one bad poll would look like the work was deleted.
+        initErr = String((err && err.message) || err);
+      })
+      .finally(() => {
+        if (seq !== initSeq) return;
+        initLoading = false;
+        // Not forced: a read that lands while the reader is typing must leave the box alone, and the words are in the
+        // drafts, so the next paint (any snapshot) carries them back.
+        if (state.assistantView.assistant === "initiatives") renderAssistantInitiatives();
+      });
+  }
+
+  // Every write goes through here: one POST, the server's own sentence on a refusal (a 409 carries the store's
+  // unreadable reason verbatim), and the tab repainted from the answer when the answer is the whole document.
+  async function initPost(route, body) {
+    const r = await apiFetch(route, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }, { timeoutMs: 12000 });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw Object.assign(new Error(d.error || `HTTP ${r.status}`), { data: d, status: r.status });
+    return d;
+  }
+  // The read a write hands back (create and edit both return the whole document) is adopted as-is: a second read
+  // would be a round trip for a fact the write already answered.
+  function adoptInitiatives(d) {
+    if (!d || !Array.isArray(d.initiatives)) return;
+    initDoc = { ...d, at: d.at || new Date().toISOString() };
+    initReadAt = Date.now();
+    initErr = "";
+  }
+
+  // A PROJECT'S TREES, unfolded. Each row is a LINK to the board (the row itself, scrolled to and flashed) and one
+  // Remove control that asks. A tree the board no longer carries is drawn dimmed rather than dropped: the initiative
+  // still counts it, and this is the one place the reader can take it out.
+  function initTreeRowHtml(init, project, tree) {
+    const name = String(tree.name || tree.path);
+    const branch = String(tree.branch || "");
+    const link = tree.missing
+      ? `<span class="init-tree-name is-missing" title="this path is no longer a worktree on the board - the initiative still counts it, and Remove takes it out">${esc(name)}</span>`
+      : `<a href="#" class="init-tree-name" data-init-open="${esc(project)}|${esc(tree.path)}" title="open this worktree's row on the chart: its project unfolds, the window scrolls to it and the row flashes">${esc(name)}</a>`;
+    return `<div class="init-tree" data-init-tree-row="${esc(tree.path)}">
+      ${link}
+      ${branch ? `<span class="chip init-branch mono" title="the branch this worktree is on">${esc(branch)}</span>` : ""}
+      <button type="button" class="init-mini" data-init-move="${esc(init.id)}|remove|${esc(tree.path)}"${initBlocked() ? " disabled" : ""} title="ask to take this worktree out of the initiative - nothing changes until you answer the question in the dock">Remove</button>
+    </div>`;
+  }
+
+  // ONE ASSISTANT BESIDE ITS COUNTS. The three numbers are the panel's queue states, named as the reader reads them
+  // ("completed", not "done"), and the order the rows arrive in is the server's: most recently worked on this
+  // initiative first. The name is a button, not a label: pressing it opens that assistant's Chat with the cursor in
+  // the box, which is the whole point of seeing it here.
+  function initAssistantRowHtml(a) {
+    const c = a.counts || {};
+    const running = Number(c.running) || 0;
+    const done = Number(c.done) || 0;
+    const parked = Number(c.parked) || 0;
+    const who = String(a.name || a.id);
+    return `<div class="init-assist" data-init-assistant-row="${esc(a.id)}">
+      <button type="button" class="init-assist-btn" data-init-assistant="${esc(a.id)}" data-init-thread="${esc(a.thread || "")}" title="open ${esc(who)}'s pane and put the cursor in its chat box - nothing is sent">${esc(who)}</button>
+      <span class="init-counts">
+        <span class="chip${running ? " good" : " is-zero"}" title="${running} task${running === 1 ? "" : "s"} running on this initiative's worktrees, right now">${running} running</span>
+        <span class="chip${done ? "" : " is-zero"}" title="${done} task${done === 1 ? "" : "s"} completed on this initiative's worktrees">${done} completed</span>
+        <span class="chip${parked ? " warn" : " is-zero"}" title="${parked} task${parked === 1 ? "" : "s"} parked on this initiative's worktrees - waiting on something outside the assistant">${parked} parked</span>
+      </span>
+      <span class="as-hint init-assist-when">${running ? "working now" : a.lastAt ? `worked ${esc(relTime(a.lastAt))} ago` : "no stamped work yet"}</span>
+    </div>`;
+  }
+
+  // The "add a worktree" picker: every row on the board that is not already in this initiative, grouped by project.
+  // The list comes from the SAME rows the chart draws, so a tree that exists is offered and a tree that is gone is
+  // not; the move itself is a question either way.
+  function initAddFormHtml(init) {
+    const mine = new Set((init.projects || []).flatMap((p) => p.trees.map((t) => t.key)));
+    const byProject = new Map();
+    for (const row of state.rows.values()) {
+      const key = initKey(row.path);
+      if (mine.has(key)) continue;
+      if (!byProject.has(row.project)) byProject.set(row.project, []);
+      byProject.get(row.project).push(row);
+    }
+    const groups = [...byProject.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(
+        ([name, rows]) =>
+          `<optgroup label="${esc(name)}">${rows
+            .slice()
+            .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")))
+            .map((r) => `<option value="${esc(r.path)}" data-project="${esc(name)}">${esc(r.name || r.path)}</option>`)
+            .join("")}</optgroup>`,
+      )
+      .join("");
+    const none = groups ? "" : `<option value="">every worktree on the board is already here</option>`;
+    return `<div class="init-form init-addform" data-init-addform="${esc(init.id)}">
+      <label class="as-role-caption" for="as-init-add-${esc(init.id)}">worktree</label>
+      <select id="as-init-add-${esc(init.id)}" data-init-field="addTree"${groups ? "" : " disabled"}>${none}${groups}</select>
+      <div class="as-actions">
+        <button type="button" class="primary" data-init-move="${esc(init.id)}|add|"${groups ? "" : " disabled"}>Ask to add</button>
+        <button type="button" data-init-cancel="add">Cancel</button>
+        <span class="as-hint">the question names the tree and the initiative</span>
+      </div>
+    </div>`;
+  }
+
+  function initCardHtml(init) {
+    const blocked = initBlocked();
+    const desc = String(init.description || "").trim();
+    const projects = init.projects || [];
+    const assistants = init.assistants || [];
+    const editing = initEditId === init.id;
+    const adding = initAddId === init.id;
+    const assistantsOpen = initAssistOpen.has(init.id);
+    const fold = (name) => initFolds.has(`${init.id}::${name}`);
+    const projectsHtml = projects.length
+      ? projects
+          .map((p) => {
+            const open = fold(p.name);
+            const trees = open ? p.trees.map((t) => initTreeRowHtml(init, p.name, t)).join("") : "";
+            return `<div class="init-project">
+              <button type="button" class="init-proj" data-init-fold="${esc(init.id)}::${esc(p.name)}" aria-expanded="${open ? "true" : "false"}" title="${open ? "fold" : "unfold"} ${esc(p.name)}'s worktrees - a project is folded until you open it">
+                <span class="init-caret">${open ? "▾" : "▸"}</span>
+                <span class="init-proj-name">${esc(p.name)}</span>
+                <span class="chip is-zero">${p.trees.length}</span>
+              </button>
+              ${open ? `<div class="init-trees">${trees}</div>` : ""}
+            </div>`;
+          })
+          .join("")
+      : `<div class="as-hint init-no-trees">no worktrees yet - Add a worktree puts the first one here, and it asks you first</div>`;
+    const assistHtml = assistants.length
+      ? assistantsOpen
+        ? `<div class="init-assists">${assistants.map(initAssistantRowHtml).join("")}</div>`
+        : ""
+      : `<div class="as-hint init-no-assist">no assistant has worked on these worktrees yet</div>`;
+    const editHtml = editing
+      ? `<div class="init-form" data-init-editform="${esc(init.id)}">
+          <label class="as-role-caption" for="as-init-edit-title-${esc(init.id)}">title</label>
+          <input type="text" id="as-init-edit-title-${esc(init.id)}" data-init-field="editTitle" maxlength="${Number(initDoc?.caps?.title) || 120}" spellcheck="false" value="${esc(initDraft.editTitle)}">
+          <label class="as-role-caption" for="as-init-edit-desc-${esc(init.id)}">description</label>
+          <textarea class="as-note-box" id="as-init-edit-desc-${esc(init.id)}" data-init-field="editDesc" rows="3" spellcheck="false" placeholder="what this piece of work is, in a line or two">${esc(initDraft.editDesc)}</textarea>
+          <div class="as-actions">
+            <button type="button" class="primary" data-init-save="${esc(init.id)}"${blocked ? " disabled" : ""}>Save words</button>
+            <button type="button" data-init-cancel="edit">Cancel</button>
+            <span class="as-hint">you and the assistants may edit these freely - membership is the part that asks</span>
+          </div>
+        </div>`
+      : "";
+    return `<article class="as-group init-card" data-init-card="${esc(init.id)}">
+      <div class="init-head">
+        <h4 class="init-title">${esc(init.title)}</h4>
+        <button type="button" class="init-mini" data-init-edit="${esc(init.id)}"${blocked || editing ? " disabled" : ""} title="edit the title and the description - the words are free to change, unlike who is behind the work">Edit</button>
+      </div>
+      <p class="init-desc${desc ? "" : " is-empty"}">${desc ? esc(desc) : "no description yet - Edit says what this piece of work is"}</p>
+      <div class="init-chips">
+        <span class="chip" title="${init.projectCount} project${init.projectCount === 1 ? "" : "s"} this initiative spans">${init.projectCount} project${init.projectCount === 1 ? "" : "s"}</span>
+        <span class="chip" title="${init.treeCount} worktree${init.treeCount === 1 ? "" : "s"} behind this piece of work">${init.treeCount} worktree${init.treeCount === 1 ? "" : "s"}</span>
+        <span class="chip" title="${init.assistantCount} assistant${init.assistantCount === 1 ? "" : "s"} have worked on this initiative's worktrees">${init.assistantCount} assistant${init.assistantCount === 1 ? "" : "s"}</span>
+        ${init.updatedAt ? `<span class="as-hint">edited ${esc(relTime(init.updatedAt))} ago${init.updatedBy && init.updatedBy !== "reader" ? ` by ${esc(init.updatedBy)}` : ""}</span>` : ""}
+      </div>
+      ${editHtml}
+      <div class="init-projects">${projectsHtml}</div>
+      <div class="init-addrow">
+        ${adding ? initAddFormHtml(init) : `<button type="button" class="init-mini" data-init-add="${esc(init.id)}"${blocked ? " disabled" : ""} title="put another worktree on this piece of work - the panel asks you first, naming the tree and the initiative">+ Add a worktree</button>`}
+      </div>
+      <div class="init-assistfold">
+        <button type="button" class="init-proj" data-init-assist-fold="${esc(init.id)}" aria-expanded="${assistantsOpen ? "true" : "false"}" title="${assistantsOpen ? "fold" : "unfold"} the assistants that worked on this initiative, newest first - folded, the card stays a map of the work">
+          <span class="init-caret">${assistantsOpen ? "▾" : "▸"}</span>
+          <span class="init-proj-name">Assistants</span>
+          <span class="chip is-zero">${assistants.length}</span>
+        </button>
+        ${assistHtml}
+      </div>
+      ${initNoteFor(init.id)}
+    </article>`;
+  }
+
+  function initTyping() {
+    const el = document.activeElement;
+    if (!el || !el.closest || !el.closest("#as-initiatives")) return false;
+    return el.tagName === "TEXTAREA" || el.tagName === "INPUT" || el.isContentEditable;
+  }
+
+  // THE TAB KEEPS ITSELF CURRENT. A snapshot does not always repaint this pane (the rail's own render is driven by the
+  // assistant's state, not by this tab), so a read triggered only from a render would leave the card showing a doc
+  // fetched before the worktree scan filled in its branches. One timer, re-armed after every paint, holds the read at
+  // the same four seconds: the pane is a view of a store that other surfaces write, and it must not go stale while it
+  // is the thing on screen.
+  let initTimer = null;
+  function scheduleInitRefresh() {
+    clearTimeout(initTimer);
+    initTimer = setTimeout(() => {
+      if (state.assistantView.assistant !== "initiatives") return;
+      if (initTyping()) return scheduleInitRefresh();
+      void loadInitiatives();
+    }, INIT_READ_GAP_MS);
+  }
+
+  function renderAssistantInitiatives(force = false) {
+    const host = as$("as-initiatives");
+    if (!host) return;
+    // The pane is rebuilt on every snapshot; a caret in one of its boxes means the reader is writing, and a repaint
+    // would take the sentence with it. The drafts above paint the words back when the render does run, and an action
+    // the reader just pressed (force) paints at once - a button is never protected, only a box being typed in.
+    if (!force && initTyping()) return;
+    if (!initDoc && !initLoading && !initErr) void loadInitiatives();
+    else if (initDoc && !initLoading && Date.now() - initReadAt > INIT_READ_GAP_MS) void loadInitiatives();
+    if (!initDoc) {
+      host.innerHTML = initErr
+        ? `<div class="as-empty">could not read the initiatives: ${esc(initErr)}</div><div class="as-actions"><button type="button" data-init-refresh>Try again</button></div>`
+        : `<div class="as-empty">reading the initiatives…</div>`;
+      return;
+    }
+    const list = initDoc.initiatives || [];
+    const unreadable = initDoc.readable === false;
+    const storeLine = unreadable
+      ? `<div class="as-ask is-bad" role="alert"><b>The initiative store cannot be read, so nothing may be written.</b> ${esc(initDoc.error || "")} The file is left exactly as it is: fix or move it, then try again.</div>`
+      : initDoc.found === false
+        ? `<p class="as-help">nothing saved yet - the first initiative creates <span class="mono">${esc(String(initDoc.file || "initiatives.json").split(/[\\/]/).pop())}</span> beside the panel's other state</p>`
+        : `<p class="as-help">${list.length} initiative${list.length === 1 ? "" : "s"} in <span class="mono" title="${esc(initDoc.file || "")}">${esc(String(initDoc.file || "initiatives.json").split(/[\\/]/).pop())}</span></p>`;
+    const newForm = initNewOpen
+      ? `<div class="init-form" data-init-newform>
+          <label class="as-role-caption" for="as-init-new-title">title</label>
+          <input type="text" id="as-init-new-title" data-init-field="newTitle" maxlength="${Number(initDoc.caps?.title) || 120}" spellcheck="false" placeholder="e.g. SSO migration" value="${esc(initDraft.newTitle)}">
+          <label class="as-role-caption" for="as-init-new-desc">description</label>
+          <textarea class="as-note-box" id="as-init-new-desc" data-init-field="newDesc" rows="3" spellcheck="false" placeholder="what this piece of work is, in a line or two">${esc(initDraft.newDesc)}</textarea>
+          <div class="as-actions">
+            <button type="button" class="primary" data-init-create${unreadable ? " disabled" : ""}>Create initiative</button>
+            <button type="button" data-init-cancel="new">Cancel</button>
+            <span class="as-hint">a title is enough; the description can come later</span>
+          </div>
+          ${initNoteFor("new")}
+        </div>`
+      : "";
+    const empty = list.length
+      ? ""
+      : `<div class="as-empty init-empty" data-init-empty>
+          <b>No initiatives yet.</b> An initiative is a title, a description and the worktrees behind it - one may span
+          several projects and several assistants, and a worktree with none is normal: nothing is enforced.
+          <div class="as-actions"><button type="button" data-init-new${unreadable ? " disabled" : ""}>New initiative</button></div>
+        </div>`;
+    host.innerHTML = `
+      <div class="as-group">
+        <h4>Initiatives <span class="as-hint">the big pieces of work, and the worktrees behind each one</span></h4>
+        <p class="as-help">You and the assistants may create an initiative and edit its title and description. Adding or removing a worktree asks you first, with the tree and the initiative named in the question.</p>
+        ${storeLine}
+        <div class="as-actions">
+          <button type="button" data-init-new${unreadable ? " disabled" : ""}${initNewOpen ? " hidden" : ""}>New initiative</button>
+          <button type="button" data-init-refresh title="read the store again - the tab also re-reads after every write and every answered move">Refresh</button>
+          <span class="as-hint">${initLoading ? "reading…" : initErr ? `read failed: ${esc(initErr)}` : ""}</span>
+        </div>
+        ${newForm}
+      </div>
+      ${empty}
+      ${list.map(initCardHtml).join("")}`;
+    scheduleInitRefresh();
+  }
+
+  // A worktree LINK: the board's own row, unfolded, scrolled to and flashed. `hotOpenPath` is the page's one "open
+  // this row" (it opens the root group, the project and the row's detail), so this does not grow a second opinion
+  // about what opening a row means. The scroll and the pulse are the tab's addition: the reader pressed a name in a
+  // narrow rail, and the row it names may be far down a long board.
+  function openInitiativeTree(project, treePath) {
+    const want = initKey(treePath);
+    const row =
+      state.rows.get(keyOf(project, treePath)) ||
+      [...state.rows.values()].find((r) => r.project === project && initKey(r.path) === want) ||
+      [...state.rows.values()].find((r) => initKey(r.path) === want);
+    if (!row) {
+      showBanner("that worktree is no longer on the board - the initiative still counts it; Remove takes it out");
+      return false;
+    }
+    hotOpenPath(row);
+    const key = keyOf(row.project, row.path);
+    // hotOpenPath opens the project and the row through the page's own render, which may paint on the next frame; the
+    // scroll and the pulse wait one frame rather than reading a node the render has not placed yet.
+    const land = () => {
+      const tr = rowNode(key);
+      if (!tr) return false;
+      tr.scrollIntoView({ block: "center", behavior: "auto" });
+      pulseRow(key);
+      return true;
+    };
+    if (!land()) requestAnimationFrame(land);
+    return true;
+  }
+
+  // An assistant's NAME in the card: that assistant's pane on screen, its Chat selected, and the caret in the box it
+  // types into. The box is the thread's own reply box when the assistant has a thread on screen, and its intro box
+  // when it is new (nothing has been asked of it yet) - the same pair the chat pane itself draws, never a guess. The
+  // caret goes to the END of what is there: pressing a name must not overwrite a draft the reader left in it.
+  function focusInitiativeAssistant(id, thread) {
+    const own = String(id || "");
+    if (!showAssistantPane(own, "chat")) return false;
+    const want = String(thread || "");
+    const chat = as$("as-chat");
+    const box =
+      (want ? chat?.querySelector(`.reply-box[data-reply="${CSS.escape(want)}"]`) : null) ||
+      chat?.querySelector(".reply-box[data-reply]") ||
+      as$(firstBoxId(own));
+    if (!box) return false;
+    box.focus({ preventScroll: true });
+    setCaretOffset(box, readBox(box).length);
+    box.scrollIntoView({ block: "center", behavior: "auto" });
+    return document.activeElement === box;
+  }
+
+  // All three writes the tab makes, in one place. `action` is add or remove and the tree is the select's value for an
+  // add - read from the DOM at the press, because the picker is the reader's choice and a repaint may have moved the
+  // draft.
+  async function initMove(id, action, treeRaw) {
+    const init = initById(id);
+    if (!init) return;
+    const tree = String(treeRaw || "").trim();
+    if (!tree) {
+      setInitNote(id, "choose a worktree first - the question names the tree it will move", true);
+      renderAssistantInitiatives(true);
+      return;
+    }
+    try {
+      const d = await initPost("/api/initiatives/move", { tree, initiative: id, action });
+      // 202 is the question, not the move: the store has not changed, and saying "moved" here would be a lie the card
+      // in the dock is about to contradict.
+      setInitNote(id, d.asked ? `${d.note || "asked - answer in the dock, bottom right"}${d.action === "add" ? ` (add ${tree.split(/[\\/]/).pop()})` : ` (remove ${tree.split(/[\\/]/).pop()})`}` : d.note || "nothing to change", false);
+      initAddId = "";
+      initDraft.addTree = "";
+    } catch (err) {
+      setInitNote(id, String((err && err.message) || err), true);
+    }
+    renderAssistantInitiatives(true);
+  }
+
+  async function initCreate() {
+    const title = String(initDraft.newTitle || "").trim();
+    const description = String(initDraft.newDesc || "");
+    if (!title) {
+      setInitNote("new", "an initiative needs a title - one line saying what the work is", true);
+      renderAssistantInitiatives(true);
+      return;
+    }
+    try {
+      const d = await initPost("/api/initiatives", { title, description });
+      adoptInitiatives(d);
+      initNewOpen = false;
+      initDraft.newTitle = "";
+      initDraft.newDesc = "";
+      initNotes.delete("new");
+      setInitNote(d.initiative?.id || "", "created - Edit changes the words, Add a worktree starts the work", false);
+    } catch (err) {
+      setInitNote("new", String((err && err.message) || err), true);
+    }
+    renderAssistantInitiatives(true);
+  }
+
+  async function initEditSave(id) {
+    const title = String(initDraft.editTitle || "").trim();
+    const description = String(initDraft.editDesc || "");
+    if (!title) {
+      setInitNote(id, "an initiative needs a title - clearing it would leave a piece of work with no name", true);
+      renderAssistantInitiatives(true);
+      return;
+    }
+    try {
+      const d = await initPost("/api/initiatives/update", { id, title, description });
+      adoptInitiatives(d);
+      initEditId = "";
+      setInitNote(id, "saved", false);
+    } catch (err) {
+      setInitNote(id, String((err && err.message) || err), true);
+    }
+    renderAssistantInitiatives(true);
+  }
+
+  // One listener set for the life of the page, on the pane's own host: the cards inside it are rebuilt constantly, and
+  // a listener per card would be a listener per snapshot.
+  function wireInitiativesPane() {
+    const host = as$("as-initiatives");
+    if (!host) return;
+    host.addEventListener("click", (e) => {
+      const el = e.target.closest("[data-init-fold], [data-init-assist-fold], [data-init-open], [data-init-edit], [data-init-add], [data-init-cancel], [data-init-create], [data-init-save], [data-init-move], [data-init-assistant], [data-init-new], [data-init-refresh]");
+      if (!el) return;
+      if (el.hasAttribute("data-init-open")) {
+        e.preventDefault();
+        const [project, ...rest] = String(el.dataset.initOpen || "").split("|");
+        openInitiativeTree(project, rest.join("|"));
+        return;
+      }
+      if (el.dataset.initFold) {
+        const key = String(el.dataset.initFold);
+        if (initFolds.has(key)) initFolds.delete(key);
+        else initFolds.add(key);
+        renderAssistantInitiatives(true);
+        return;
+      }
+      if (el.dataset.initAssistFold) {
+        const id = String(el.dataset.initAssistFold);
+        if (initAssistOpen.has(id)) initAssistOpen.delete(id);
+        else initAssistOpen.add(id);
+        renderAssistantInitiatives(true);
+        return;
+      }
+      if (el.dataset.initAssistant) {
+        focusInitiativeAssistant(String(el.dataset.initAssistant), String(el.dataset.initThread || ""));
+        return;
+      }
+      if (el.dataset.initEdit) {
+        const init = initById(String(el.dataset.initEdit));
+        if (!init) return;
+        initEditId = init.id;
+        initAddId = "";
+        initDraft.editTitle = init.title;
+        initDraft.editDesc = init.description || "";
+        renderAssistantInitiatives(true);
+        as$(`as-init-edit-title-${init.id}`)?.focus();
+        return;
+      }
+      if (el.dataset.initAdd) {
+        initAddId = String(el.dataset.initAdd);
+        initEditId = "";
+        initDraft.addTree = "";
+        renderAssistantInitiatives(true);
+        return;
+      }
+      if (el.dataset.initCancel === "new") {
+        initNewOpen = false;
+        initNotes.delete("new");
+        renderAssistantInitiatives(true);
+        return;
+      }
+      if (el.dataset.initCancel === "edit") {
+        initEditId = "";
+        renderAssistantInitiatives(true);
+        return;
+      }
+      if (el.dataset.initCancel === "add") {
+        initAddId = "";
+        renderAssistantInitiatives(true);
+        return;
+      }
+      if (el.hasAttribute("data-init-new")) {
+        initNewOpen = true;
+        initEditId = "";
+        initAddId = "";
+        renderAssistantInitiatives(true);
+        as$("as-init-new-title")?.focus();
+        return;
+      }
+      if (el.hasAttribute("data-init-refresh")) {
+        initDoc = null;
+        initErr = "";
+        initReadAt = 0;
+        renderAssistantInitiatives(true);
+        return;
+      }
+      if (el.hasAttribute("data-init-create")) {
+        void initCreate();
+        return;
+      }
+      if (el.dataset.initSave) {
+        void initEditSave(String(el.dataset.initSave));
+        return;
+      }
+      if (el.dataset.initMove) {
+        const [id, action, ...rest] = String(el.dataset.initMove).split("|");
+        // An add reads the picker at the press; a remove carries its tree in the attribute, so it cannot depend on a
+        // select that is not on screen.
+        const tree = action === "add" ? String(host.querySelector(`[data-init-addform="${CSS.escape(id)}"] [data-init-field="addTree"]`)?.value || "") : rest.join("|");
+        void initMove(id, action, tree);
+      }
+    });
+    // The words are kept outside the DOM: a snapshot repaints the card under the caret, and a draft the painter cannot
+    // read back would erase what the reader had typed.
+    host.addEventListener("input", (e) => {
+      const field = e.target.closest("[data-init-field]");
+      if (!field) return;
+      const which = String(field.dataset.initField || "");
+      if (which === "newTitle" || which === "newDesc" || which === "editTitle" || which === "editDesc") initDraft[which] = String(field.value ?? "");
+    });
+    host.addEventListener("change", (e) => {
+      const field = e.target.closest("[data-init-field]");
+      if (field && field.dataset.initField === "addTree") initDraft.addTree = String(field.value ?? "");
+    });
+    // The dock's answer to a move question: the store has moved (or not), so the tab re-reads. The detail carries the
+    // question's kind, which is how a push's answer does not cause a read this pane does not need.
+    window.addEventListener("wtgui:remote-write-answered", (e) => {
+      if (String(e?.detail?.kind || "") !== "initiative") return;
+      initReadAt = 0;
+      if (state.assistantView.assistant === "initiatives") void loadInitiatives();
+    });
+  }
+
+  // ---- end the initiatives tab -----------------------------------------------------------------------------------
+
 
   // ---- settings -------------------------------------------------------------------------------
 
@@ -6427,6 +6974,9 @@
     // ...and the Hot Agent bar beside it, on the same one-listener-per-page rule: both mounts are idempotent (each
     // keeps its own module instance), and restoreFrame runs once.
     wireHotSearch();
+    // The Initiatives tab's one listener set, wired before the first render for the same reason: a restored frame can
+    // open straight onto it, and a card painted before its listener exists is a card whose buttons do nothing.
+    wireInitiativesPane();
     if (state.assistantOpen) renderAssistant();
   })();
 

@@ -5633,12 +5633,16 @@ function remoteWriteBoxHtml(r) {
   const deadline = Number(r.deadline) || 0;
   const windowMs = (Number(r.timeoutSeconds) || 0) * 1000;
   const closed = Boolean(deadline) && deadline - Date.now() <= 0;
-  const kind = r.kind === "merge" ? "the panel's own merge flow" : "a push from this worktree";
+  // THREE KINDS, ONE BOX. A push and the panel's merge both write to a remote, so the head says "is local-only". An
+  // initiative move writes nothing outside the panel: its title already names the tree and the initiative, and the
+  // head must not claim a push is waiting when what waits is a change to the reader's own map.
+  const isMove = r.kind === "initiative";
+  const kind = r.kind === "merge" ? "the panel's own merge flow" : isMove ? "a change to your initiative map" : "a push from this worktree";
   return permissionBoxHtml({
     id: r.id,
     requestId: r.id,
     forAttr: `data-remote-write="${esc(r.id)}" data-rw-tree="${esc(r.worktree || "")}"`,
-    head: `⚠ waiting on you — ${esc(kind)}: ${esc(r.project || "this project")} is local-only`,
+    head: isMove ? `⚠ waiting on you - ${esc(r.title || kind)}` : `⚠ waiting on you — ${esc(kind)}: ${esc(r.project || "this project")} is local-only`,
     note: r.note ? `<div class="rw-note mono" data-rw-note>⚠ ${esc(r.note)}</div>` : "",
     command: r.command || "",
     // The dock knows which tree is asking, so the summary can say whether the push writes outside it.
@@ -5647,15 +5651,22 @@ function remoteWriteBoxHtml(r) {
     deadline,
     windowMs,
     closed,
-    closedHead: "⚠ no answer inside the panel's window — this write has been denied",
-    closedNote: `<div class="ta-note mono">the panel stopped waiting and told the writer no; nothing was pushed</div>`,
+    closedHead: isMove ? "⚠ no answer inside the panel's window - the map was left as it was" : "⚠ no answer inside the panel's window — this write has been denied",
+    closedNote: isMove
+      ? `<div class="ta-note mono">the panel stopped waiting and made no change; the worktree stays where it was</div>`
+      : `<div class="ta-note mono">the panel stopped waiting and told the writer no; nothing was pushed</div>`,
     what: "write",
-    titles: {
-      once: "allow this one write — the waiting push is told to go ahead",
-      session: "allow writes from this worktree until the panel restarts",
-      always: "allow remote writes from now on — this WRITES the panel's setting, so the box stops asking",
-      deny: "refuse: nothing is pushed and the remote is left exactly as it is",
-    },
+    titles: isMove
+      ? {
+          once: "allow this one move - the panel writes it and the Initiatives tab re-reads",
+          deny: "refuse: the initiative is left exactly as it is",
+        }
+      : {
+          once: "allow this one write — the waiting push is told to go ahead",
+          session: "allow writes from this worktree until the panel restarts",
+          always: "allow remote writes from now on — this WRITES the panel's setting, so the box stops asking",
+          deny: "refuse: nothing is pushed and the remote is left exactly as it is",
+        },
   });
 }
 
@@ -5665,9 +5676,10 @@ function remoteWriteDecidedHtml(d) {
   const id = String(d.id || "");
   const denied = String(d.choice || "") === "deny";
   const verb = denied ? (d.expired ? "not answered — denied" : "denied") : `allowed ${d.choice}`;
+  const what = d.kind === "initiative" ? "initiative move" : "remote write";
   const note = d.note ? `<div class="rw-note mono" data-rw-note>⚠ ${esc(d.note)}</div>` : "";
   return `<div class="rw-record mono${denied ? " is-deny" : ""}" data-rw-record="${esc(id)}" data-rw-tree="${esc(d.worktree || "")}" data-rw-branch="${esc(d.branch || "")}" title="${esc(d.why || "remote write")} — click to go to the agent this write was about">
-    <span class="rw-record-text">${denied ? "✕" : "✓"} remote write ${esc(verb)}${d.command ? `: ${esc(String(d.command).slice(0, 140))}` : ""}</span>
+    <span class="rw-record-text">${denied ? "✕" : "✓"} ${what} ${esc(verb)}${d.command ? `: ${esc(String(d.command).slice(0, 140))}` : ""}</span>
     <button type="button" class="rw-x" data-rw-dismiss="${esc(id)}" title="dismiss this record">✕</button>
     ${note}
   </div>`;
@@ -6110,12 +6122,27 @@ async function answerRemoteWrite(id, choice, btn) {
       at: Date.now(),
     });
     renderApprovals();
+    // The answer is the panel's, not the push guard's: an initiative move is resumed by the panel itself, and a pane
+    // that draws the map (the Initiatives tab) has to hear that the map moved. The event is fired after the state has
+    // been written, so a listener that re-reads sees the new store rather than the one it asked about.
+    window.dispatchEvent(
+      new CustomEvent("wtgui:remote-write-answered", {
+        detail: { id, choice: out.choice || choice, kind: req?.kind || "push", worktree: req?.worktree || "", resumed: out.resumed || null },
+      }),
+    );
+    const moved = req?.kind === "initiative";
     showBanner(
       choice === "deny"
-        ? "remote write denied — nothing was pushed"
+        ? moved
+          ? "no change - the worktree stays where it was"
+          : "remote write denied — nothing was pushed"
         : choice === "always"
           ? "remote writes are now allowed — the setting is saved (Settings > Branches on the remote)"
-          : `remote write allowed ${choice}${req?.branch ? ` (${req.branch})` : ""} — the waiting push is going ahead`,
+          : moved
+            ? out.resumed?.ok
+              ? `${req?.title || "the move"} - it is in the initiative now`
+              : `the move could not be made: ${out.resumed?.error || "the store refused it"}`
+            : `remote write allowed ${choice}${req?.branch ? ` (${req.branch})` : ""} — the waiting push is going ahead`,
     );
   } catch (e) {
     paintApprovalFlight(id, id, "error");
