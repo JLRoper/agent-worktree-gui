@@ -248,5 +248,5 @@ test("the history fold is an accordion on the card, folded by default, and the a
   assert.match(assistant, /wtInitiativeFold\.historyLine\(ev\)/, "the row's words come from the module, not from a second renderer");
   // The press handler has to answer the fold, or the button is dead markup.
   assert.match(assistant, /if \(el\.dataset\.initHistoryFold\) \{/, "the press handler answers the history fold");
-  assert.match(assistant, /\[data-init-fold\], \[data-init-assist-fold\], \[data-init-history-fold\]/, "and the selector includes it");
+  assert.match(assistant, /\[data-init-fold\], \[data-init-assist-fold\], \[data-init-task-fold\], \[data-init-history-fold\]/, "and the selector includes it");
 });

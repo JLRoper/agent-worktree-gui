@@ -3373,10 +3373,19 @@
   // every write and every answer to a move question, so the pane is never showing a map the server has moved on from.
   //
   // FOLDS ARE MODULE STATE, NOT DOM STATE. Every snapshot repaints this pane from `state.assistant`; a fold kept only
-  // on the <details> element would pop open again on the next job event. The three books below are read back by the
-  // painter, so a project stays folded, an assistant list stays folded and a half-typed title stays typed.
+  // on the <details> element would pop open again on the next job event. The books below are read back by the
+  // painter, so a project stays folded, an assistant list stays folded, one assistant's tasks stay open and a
+  // half-typed title stays typed.
   const initFolds = new Set(); // `${initiativeId}::${projectName}` - projects are folded until the reader opens one
   const initAssistOpen = new Set(); // initiative ids whose assistant rows are unfolded
+  // ONE FOLD PER ASSISTANT PER INITIATIVE, keyed `${initiativeId}::${assistantId}` (public/core/initiative-fold.js
+  // `taskFoldKey`). It is the reader's own state, so it survives every repaint of the pane - a snapshot every couple
+  // of seconds must not shut the list a reader is reading - and two assistants under one initiative fold apart.
+  const initTaskOpen = new Set();
+  // The row NODES already drawn, keyed the same way and then by task id: a live row is patched in place rather than
+  // rebuilt, so its text changes while the element the reader is looking at stays the same element. A rebuilt row
+  // would restart whatever the row animates and drop the focus/selection a reader left on it.
+  const initTaskNodes = new Map();
   // ONE OPEN STATE PER INITIATIVE, in two books because the card and its description fold separately: `initOpen`
   // holds the initiatives the reader has unfolded (every card starts as a title card: a title, a two-line preview
   // and the counts), and `initDescClosed` holds the ones whose description the reader has folded back to that
@@ -3495,14 +3504,20 @@
     </div>`;
   }
 
-  // ONE ASSISTANT BESIDE ITS COUNTS. Four chips, in the order a task moves through them - queued, running,
-  // completed, parked - and all four always drawn, zeros included: a strip that grew a chip the moment a count
-  // stopped being zero would shift the row sideways every time work moved between the states. The order, the
-  // labels, the tones and the zero-marking are one rule in public/core/initiative-fold.js (with a test beside it),
-  // so the strip cannot be drawn here with three of the four or with a colour the rest of the panel does not use.
+  // ONE ASSISTANT BESIDE ITS COUNTS, AND THE FOLD THAT OPENS ITS EXACT TASKS.
+  // Four chips, in the order a task moves through them - queued, running, completed, parked - and all four always
+  // drawn, zeros included: a strip that grew a chip the moment a count stopped being zero would shift the row
+  // sideways every time work moved between the states. The order, the labels, the tones and the zero-marking are one
+  // rule in public/core/initiative-fold.js (with a test beside it), so the strip cannot be drawn here with three of
+  // the four or with a colour the rest of the panel does not use.
   // The counts come from the same queue read that feeds every other surface: GET /api/initiatives counts the rows
   // whose state is queued in the same pass it counts the other three.
-  function initAssistantRowHtml(a) {
+  //
+  // THE FOLD BESIDE THE NAME is a real button with the same chevron the tab's other folds use, and `aria-expanded`
+  // says which way it goes. It sits inside the initiative card, so the card's press rule answers it as a control that
+  // acts on itself (public/core/initiative-fold.js `press`): opening a list of tasks never folds the initiative out
+  // from under the reader. Its open state is kept per initiative AND assistant, in `initTaskOpen`.
+  function initAssistantRowHtml(init, a) {
     const c = a.counts || {};
     const running = Number(c.running) || 0;
     const chips = wtInitiativeFold
@@ -3510,12 +3525,153 @@
       .map((chip) => `<span class="${chip.cls}" title="${esc(chip.title)}">${chip.text}</span>`)
       .join("");
     const who = String(a.name || a.id);
+    const key = wtInitiativeFold.taskFoldKey(init.id, a.id);
+    const tasksOpen = initTaskOpen.has(key);
+    const n = Number(a.tasks) || (Array.isArray(a.taskRows) ? a.taskRows.length : 0);
     return `<div class="init-assist" data-init-assistant-row="${esc(a.id)}">
       <button type="button" class="init-assist-btn" data-init-assistant="${esc(a.id)}" data-init-thread="${esc(a.thread || "")}" title="open ${esc(who)}'s pane and put the cursor in its chat box - nothing is sent">${esc(who)}</button>
-      <span class="init-counts">${chips}</span>
+      <button type="button" class="init-proj init-assist-fold" data-init-task-fold="${esc(key)}" aria-expanded="${tasksOpen ? "true" : "false"}" aria-label="${esc(`${who}: ${tasksOpen ? "hide" : "show"} the ${n} task${n === 1 ? "" : "s"} on this initiative`)}" title="${tasksOpen ? "fold" : "unfold"} the exact tasks ${esc(who)} is doing on this initiative's worktrees - every queue row on its trees, newest activity first">
+        <span class="init-caret">${tasksOpen ? "▾" : "▸"}</span>
+        <span class="init-proj-name">tasks</span>
+        <span class="chip is-zero" data-init-task-count>${n}</span>
+      </button>
       <span class="as-hint init-assist-when">${running ? "working now" : a.lastAt ? `worked ${esc(relTime(a.lastAt))} ago` : "no stamped work yet"}</span>
+      <span class="init-counts">${chips}</span>
+      ${tasksOpen ? `<div class="init-tasks" data-init-tasks="${esc(key)}" role="list" aria-label="${esc(`the tasks ${who} is doing on this initiative`)}"></div>` : ""}
     </div>`;
   }
+
+  // The task rows for one fold, from the document the pane last read: the initiative's assistant entry by id, so a
+  // row the server did not count cannot be drawn and a row it counted cannot be missing. Absent means an empty list,
+  // which the painter draws as the honest "nothing is filed here" line rather than a blank box.
+  function initTaskRowsFor(key) {
+    const at = String(key || "").indexOf("::");
+    if (at < 0) return [];
+    const init = initById(String(key).slice(0, at));
+    const aid = String(key).slice(at + 2);
+    const a = (init?.assistants || []).find((x) => x.id === aid) || null;
+    return a && Array.isArray(a.taskRows) ? a.taskRows : [];
+  }
+
+  // The pull request a row carries, as the panel draws one: a link to its page when the board resolved one, plain
+  // text when it did not (never a dead link). Its own span, so a live patch can leave the anchor alone when the PR
+  // has not changed.
+  function initTaskPrHtml(pr) {
+    const n = Number(pr?.number) || 0;
+    if (!n) return "";
+    const state = String(pr.state || "").trim();
+    const label = `#${n}${state ? ` ${state}` : ""}`;
+    const why = `pull request #${n}${state ? ` (${state})` : ""}`;
+    if (pr.url) return `<a href="${esc(pr.url)}" target="_blank" rel="noopener" title="${esc(`${why} - opens its page on the remote`)}">${esc(label)}</a>`;
+    return `<span title="${esc(`${why} - the panel could not resolve a page for it`)}">${esc(label)}</span>`;
+  }
+
+  // One row's skeleton. Its children never change, so `patchInitTaskRow` can update the text of a row that is
+  // already on screen: an id, the title, the state chip, the thread, the run (live only), the PR, and when it last
+  // moved. Both of the last two are emptied rather than left blank when they do not apply.
+  function initTaskRowEl(task) {
+    const el = document.createElement("div");
+    el.className = "init-task";
+    el.setAttribute("role", "listitem");
+    el.innerHTML = `<span class="init-task-id mono" data-init-task-id></span><span class="init-task-title" data-init-task-title></span><span class="chip init-task-state" data-init-task-chip></span><span class="as-hint init-task-thread mono" data-init-task-thread></span><span class="as-hint init-task-run mono" data-init-task-run></span><span class="init-task-pr mono" data-init-task-pr></span><span class="as-hint init-task-when" data-init-task-when></span>`;
+    return patchInitTaskRow(el, task);
+  }
+
+  // Write one task's facts into a row, in place. The state chip's words and tones come from the module the count strip
+  // already uses, so a row cannot say "running" in a colour the strip does not use. Every write is a textContent or
+  // an attribute on a child that already exists; nothing here recreates the row, which is what makes a live update
+  // an update rather than a repaint of the fold.
+  function patchInitTaskRow(el, task) {
+    if (!el || !task) return el;
+    const chip = wtInitiativeFold.taskChip(task.state);
+    el.dataset.initTask = String(task.id ?? "");
+    el.dataset.initTaskState = String(task.state || "");
+    const id = el.querySelector("[data-init-task-id]");
+    if (id) id.textContent = `#${task.id}`;
+    const title = el.querySelector("[data-init-task-title]");
+    if (title) title.textContent = String(task.title || "(no title)");
+    const state = el.querySelector("[data-init-task-chip]");
+    if (state) {
+      state.className = chip.cls;
+      state.textContent = chip.label;
+      state.title = chip.title;
+    }
+    const thread = el.querySelector("[data-init-task-thread]");
+    if (thread) {
+      thread.textContent = task.thread ? `on ${task.thread}` : "";
+      thread.hidden = !task.thread;
+      thread.title = task.thread ? "the thread this task is on" : "";
+    }
+    const run = el.querySelector("[data-init-task-run]");
+    if (run) {
+      run.textContent = task.runId ? `run ${task.runId}` : "";
+      run.hidden = !task.runId;
+      run.title = task.runId ? `the run this task is on now (${task.runId})` : "";
+    }
+    const pr = el.querySelector("[data-init-task-pr]");
+    if (pr) {
+      const key = task.pr ? `${task.pr.number}|${task.pr.state || ""}|${task.pr.url || ""}` : "";
+      // Rebuild the PR cell only when the pull request it names has changed: a state flip on the task must not
+      // replace the anchor a reader may be about to press.
+      if (String(pr.dataset.initPr || "") !== key) {
+        pr.dataset.initPr = key;
+        pr.innerHTML = initTaskPrHtml(task.pr);
+      }
+      pr.hidden = !task.pr;
+    }
+    const when = el.querySelector("[data-init-task-when]");
+    if (when) {
+      when.textContent = task.at ? `${relTime(task.at)} ago` : "no time recorded";
+      when.title = task.at ? `last activity ${String(task.at)}` : "the queue row carries no timestamp";
+    }
+    return el;
+  }
+
+  // Reconcile every open fold's rows against this pass's document. A task that is still there keeps its element (the
+  // list is rebuilt from the store on every repaint, and replacing the rows would restart them and drop a reader's
+  // place); a task that has gone is removed; a task whose state moved is patched where it stands. `appendChild` on a
+  // node that is already a child MOVES it, which is how an order change costs a reorder and not a redraw.
+  function paintInitTaskLists(host) {
+    if (!host) return;
+    for (const box of host.querySelectorAll("[data-init-tasks]")) {
+      const key = String(box.dataset.initTasks || "");
+      const rows = initTaskRowsFor(key);
+      let kept = initTaskNodes.get(key);
+      if (!kept) {
+        kept = new Map();
+        initTaskNodes.set(key, kept);
+      }
+      const used = new Set();
+      for (const task of rows) {
+        const id = String(task.id ?? "");
+        let el = kept.get(id) || null;
+        if (el) patchInitTaskRow(el, task);
+        else {
+          el = initTaskRowEl(task);
+          kept.set(id, el);
+        }
+        used.add(id);
+        box.appendChild(el);
+      }
+      for (const [id, el] of kept) {
+        if (used.has(id)) continue;
+        el.remove();
+        kept.delete(id);
+      }
+      const none = box.querySelector(".init-task-none");
+      if (!rows.length) {
+        if (!none) {
+          const empty = document.createElement("div");
+          empty.className = "as-hint init-task-none";
+          empty.textContent = "no task is filed on this initiative's worktrees for this assistant right now";
+          box.appendChild(empty);
+        }
+      } else if (none) {
+        none.remove();
+      }
+    }
+  }
+
 
   // The "add a worktree" picker: every row on the board that is not already in this initiative, grouped by project.
   // The list comes from the SAME rows the chart draws, so a tree that exists is offered and a tree that is gone is
@@ -3668,7 +3824,7 @@
       : `<div class="as-hint init-no-trees">no worktrees yet - Add a worktree puts the first one here, and your tier decides whether it asks first</div>`;
     const assistHtml = assistants.length
       ? assistantsOpen
-        ? `<div class="init-assists">${assistants.map(initAssistantRowHtml).join("")}</div>`
+        ? `<div class="init-assists">${assistants.map((a) => initAssistantRowHtml(init, a)).join("")}</div>`
         : ""
       : `<div class="as-hint init-no-assist">no assistant has worked on these worktrees yet</div>`;
     const editHtml = editing
@@ -3838,6 +3994,10 @@
     // The markup carries every folded description whole; the paint that folds it to its two lines happens here, in
     // the same task, so no frame is drawn with the wall of text the fold exists to hide.
     paintInitDescriptions(host);
+    // The open task folds are filled here, from the document above, RECONCILED against the nodes the last pass drew:
+    // a row already on screen is patched where it stands, never rebuilt. The pane repaints on every snapshot, so a
+    // rebuild would restart each row every couple of seconds under a reader's eyes.
+    paintInitTaskLists(host);
     scheduleInitRefresh();
   }
 
@@ -4008,7 +4168,7 @@
         return;
       }
       if (kind !== "self") return;
-      const el = e.target.closest("[data-init-fold], [data-init-assist-fold], [data-init-history-fold], [data-init-open], [data-init-edit], [data-init-add], [data-init-cancel], [data-init-create], [data-init-save], [data-init-move], [data-init-assistant], [data-init-new], [data-init-refresh]");
+      const el = e.target.closest("[data-init-fold], [data-init-assist-fold], [data-init-task-fold], [data-init-history-fold], [data-init-open], [data-init-edit], [data-init-add], [data-init-cancel], [data-init-create], [data-init-save], [data-init-move], [data-init-assistant], [data-init-new], [data-init-refresh]");
       if (!el) return;
       if (el.hasAttribute("data-init-open")) {
         e.preventDefault();
@@ -4027,6 +4187,16 @@
         const id = String(el.dataset.initAssistFold);
         if (initAssistOpen.has(id)) initAssistOpen.delete(id);
         else initAssistOpen.add(id);
+        renderAssistantInitiatives(true);
+        return;
+      }
+      // ONE ASSISTANT'S TASKS, opened and shut by the reader. The key is the initiative AND the assistant, so a press
+      // here never grows or shuts another assistant's list, and the state lives in the module, so the repaint that
+      // follows this press (and every snapshot after it) draws the same open fold.
+      if (el.dataset.initTaskFold) {
+        const key = String(el.dataset.initTaskFold);
+        if (initTaskOpen.has(key)) initTaskOpen.delete(key);
+        else initTaskOpen.add(key);
         renderAssistantInitiatives(true);
         return;
       }

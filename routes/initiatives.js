@@ -20,6 +20,9 @@
 // worse than no card. The read carries the same status (`readable`, `error`, `file`) so the tab can say it.
 import { DESCRIPTION_MAX, TITLE_MAX, normTreePath } from "../lib/initiatives.js";
 import { initiativeAsks, initiativeTierFrom, initiativeTierInfo, INITIATIVE_TIER_INFO } from "../lib/initiative-permissions.js";
+// The thread a row is on NOW, which is the last one it was carried by (lib/assistant/queue.js `currentThread`): the
+// task fold names the run and the thread the same way the queue tab does, from the row itself.
+import { currentThread } from "../lib/assistant/queue.js";
 
 /** The one path this prefix answers, and the row the mount table in server.js matches on. */
 export const INITIATIVES_PATH = "/api/initiatives";
@@ -36,6 +39,38 @@ function lastTouched(task, nowMs) {
   stamps.sort();
   return stamps[stamps.length - 1];
 }
+
+// One queue row, as the assistant's fold draws it. EVERY FIELD IS THE ROW'S OWN or the queue read's decoration of it:
+// id, title, state, thread and run id come from the queue file, and the pull request comes from the row the queue
+// read was decorated against (`task.row.pr`, lib/assistant/queue.js). Nothing here reads a branch name: a task with no
+// worktree is not on any initiative's trees, and a branch that LOOKS like a tree is not a link.
+//
+// `runId` is drawn only while the row is live. A done row keeps the run it finished on in its file, and printing that
+// beside "done" would read as a run still going; the fold says the run only when the state says it is running.
+// The PR's page comes from the board row's own `prUrl` - absent when the panel could not resolve one, so the fold
+// draws plain text rather than a dead link, the same rule the branch chip follows.
+function taskRowOf(task, nowMs, rowFor) {
+  const pr = task?.row?.pr && typeof task.row.pr === "object" ? task.row.pr : null;
+  const number = pr && Number(pr.number) > 0 ? Number(pr.number) : null;
+  let url = null;
+  let prState = pr ? String(pr.state || "") : "";
+  if (number) {
+    const row = rowFor(String(task.project || task.row?.project || ""), task.worktree);
+    url = row?.prUrl || null;
+    // The row's own pr may be the only one with a state (a decorated row carries both, but a fixture need not).
+    if (!prState && row?.pr?.state) prState = String(row.pr.state);
+  }
+  return {
+    id: task.id,
+    title: String(task.title || ""),
+    state: String(task.state || ""),
+    thread: String(currentThread(task) || ""),
+    runId: task.state === "running" ? String(task.runId || "") : "",
+    pr: number ? { number, state: prState, url } : null,
+    at: lastTouched(task, nowMs),
+  };
+}
+
 
 /**
  * The whole tab's document, built from the store plus the two things only the composition root knows: which project a
@@ -114,6 +149,15 @@ export function initiativesView({ initiatives, projectForPath, rowFor, assistant
         thread: String(rec.threadId || ""),
         counts,
         tasks: mine.length,
+        // THE EXACT TASKS, not a count of them. The same `mine` list the counts were taken from, one row each and
+        // newest activity first, so the fold that opens under this assistant cannot disagree with the chips beside
+        // it. A task whose worktree is not one of this initiative's trees is not in `mine` at all: the link is the
+        // row's own `worktree`, never a branch name, so a task with no initiative link cannot appear under one.
+        // A tree attached to two initiatives puts the SAME row under both - each initiative's document is built from
+        // its own tree keys, and a queue row is one entry in each, never two within one.
+        taskRows: mine
+          .map((task) => taskRowOf(task, now, rowFor))
+          .sort((x, y) => String(y.at || "").localeCompare(String(x.at || "")) || Number(y.id) - Number(x.id)),
         lastAt,
       });
     }
