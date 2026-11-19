@@ -58,7 +58,8 @@
   // which parts of the turn matched without walking the hits again. `stamp` is the newest timestamp among its rows
   // (the moment the reader last saw this message do something), and `first` is the item's place in the answer, which
   // is what keeps a time tie stable. A hit with no thread or no id is not an item: there would be nothing on the
-  // page to open.
+  // page to open. `assistantId`/`assistant` ride along from the hit so a header can name whose message it is and the
+  // cross-assistant tie has one fact to read.
   function group(hits) {
     const items = [];
     const byKey = new Map();
@@ -73,6 +74,8 @@
           thread: String(hit.thread),
           id: String(hit.id),
           turn: Number(hit.turn) || 0,
+          assistantId: hit.assistantId == null ? "" : String(hit.assistantId),
+          assistant: hit.assistant == null ? "" : String(hit.assistant),
           stamp: 0,
           first: items.length,
           hits: [],
@@ -84,20 +87,36 @@
       item.hits.push(hit);
       const at = atOf(hit);
       if (at > item.stamp) item.stamp = at;
+      if (!item.assistantId && hit.assistantId != null) item.assistantId = String(hit.assistantId);
+      if (!item.assistant && hit.assistant != null) item.assistant = String(hit.assistant);
       const field = hit.field == null ? "" : String(hit.field);
       if (field && !item.fields.includes(field)) item.fields.push(field);
     }
     return items;
   }
 
-  // The walk's order: items newest first, their rows in reading order, ties by the conversation's own numbering.
-  // The input list is not touched - the caller keeps the answer exactly as the server sent it - and a hit that
-  // cannot name a message stays at the end in its own order, because a walk that silently dropped it would print a
-  // total smaller than the `matched` count beside it.
+  // Two items at the same instant. Inside ONE conversation the store's own numbering decides and then the answer's
+  // order, which is what makes a tie stable. ACROSS conversations - the case the every-assistant search creates - the
+  // numbering is not comparable, so the ASSISTANT decides, then the thread, and only then the numbering: two
+  // assistants that answered at the same millisecond hold their order whatever order the answer listed them in.
+  function tie(a, b) {
+    if (a.thread !== b.thread) {
+      const owner = String(a.assistantId || a.assistant || a.thread).localeCompare(String(b.assistantId || b.assistant || b.thread));
+      if (owner) return owner;
+      const thread = String(a.thread).localeCompare(String(b.thread));
+      if (thread) return thread;
+    }
+    return a.turn - b.turn || a.first - b.first;
+  }
+
+  // The walk's order: items newest first, their rows in reading order, ties by the assistant and the conversation's
+  // own numbering. The input list is not touched - the caller keeps the answer exactly as the server sent it - and a
+  // hit that cannot name a message stays at the end in its own order, because a walk that silently dropped it would
+  // print a total smaller than the `matched` count beside it.
   function order(hits) {
     const list = Array.isArray(hits) ? hits.slice() : [];
     const items = group(list);
-    items.sort((a, b) => b.stamp - a.stamp || a.turn - b.turn || a.first - b.first);
+    items.sort((a, b) => b.stamp - a.stamp || tie(a, b));
     const out = [];
     const kept = new Set();
     for (const item of items) {

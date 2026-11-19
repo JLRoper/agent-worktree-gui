@@ -3998,6 +3998,14 @@ mark.as-search-mark.is-current { background: #f2c744; color: #17110a; box-shadow
 .jl.is-search-current-row, .turn-prompt-inline.is-search-current-row { background: rgba(242, 199, 68, .12); box-shadow: inset 2px 0 0 #f2c744; border-radius: 2px; }
 .as-search-row.is-current { background: #1b2532; box-shadow: inset 2px 0 0 #e3b341; }
 .as-search-row.is-current .as-search-where { color: #ffd479; }
+/* WHOSE TURN a row belongs to. The turn search reads EVERY assistant's turns, so two hits from two assistants have to
+   be told apart at a glance: the assistant's own name leads the row's first line. Only the assistant's bar carries
+   the third cell (`.as-search-row-who`), so the Hot Agent rows beside it keep their two-cell grid and their look. */
+.as-search-row-who { grid-template-columns: auto auto 1fr; }
+.as-search-row-who .as-search-where { grid-column: 2; }
+.as-search-row-who .as-search-meta { grid-column: 3; }
+.as-search-who { grid-row: 1; grid-column: 1; font-size: 9.5px; color: #e3b341; letter-spacing: .02em; }
+.as-search-row.is-current .as-search-who { color: #ffd479; }
 
 /* The SECOND header search: the Hot Agent bar beside the turn search (Ctrl+Shift+Q). It wears the same skin as the
    search beside it - the same 20px control row, the same popover border, the same .as-search-row grid and its
