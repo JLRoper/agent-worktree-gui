@@ -4089,21 +4089,22 @@ mark.as-search-mark.is-current { background: #f2c744; color: #17110a; box-shadow
 .as-search-who { grid-row: 1; grid-column: 1; font-size: 9.5px; color: #e3b341; letter-spacing: .02em; }
 .as-search-row.is-current .as-search-who { color: #ffd479; }
 
-/* The SECOND header search: the Hot Agent bar beside the turn search (Ctrl+Shift+Q). It wears the same skin as the
-   search beside it - the same 20px control row, the same popover border, the same .as-search-row grid and its
-   where/meta/snip cells - because the two bars are one pair, and the popover, the keys and the follow are one module
-   (public/core/search-popover.js). Only what differs is here: the opener button, the popover's own head/list/footer
-   (the LIST scrolls, so the box and the footer never scroll away), and the thread line a hot agent row adds to name
-   where the turn came from. Nothing here sets the title row's height: the popover is fixed. */
-#assistant > .as-bar .ha-search-open {
-  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 3px; height: 20px; box-sizing: border-box;
-  font-family: var(--mono); font-size: 9.5px; line-height: 1; letter-spacing: .04em;
-  color: var(--dim); background: #171f2a; border: 1px solid #2a3444; border-radius: 99px;
-  padding: 0 5px; cursor: pointer;
+/* The SECOND search: the Hot Agent bar's popover, and the opener that moved out of the assistant's title row into
+   the floating header. The popover, the keys and the follow are still the turn search's own module
+   (public/core/search-popover.js), and the rows are the same .as-search-row grid, so the two bars cannot drift.
+   What is here is the opener's skin and the parts only this bar has: the popover's own head/list/footer (the LIST
+   scrolls, so the box and the footer never scroll away) and the thread line a hot agent row adds to name where the
+   turn came from. The opener wears the header family's hit area - the same padding, border and radius as the
+   buttons beside it, so the row's height does not move - and its glyph is the inline SVG hand-and-pen in
+   currentColor, so the control's dim, hover and open states are the ones the 20px pill had in the rail. */
+.topbar .ha-search-open {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 5px 8px; line-height: 0; color: var(--dim);
 }
-#assistant > .as-bar .ha-search-open:hover { color: var(--text); border-color: var(--dim); background: #1d2734; }
-#assistant > .as-bar .ha-search-open[aria-expanded="true"] { color: #ffd479; border-color: #b8860b; background: #221a0c; }
-#assistant > .as-bar .ha-search-open:focus-visible { outline: 1px solid #3b6ea8; outline-offset: 1px; }
+.topbar .ha-search-open .ha-search-glyph { display: block; }
+.topbar .ha-search-open:hover { color: var(--text); border-color: var(--dim); background: #1d2734; }
+.topbar .ha-search-open[aria-expanded="true"] { color: #ffd479; border-color: #b8860b; background: #221a0c; }
+.topbar .ha-search-open:focus-visible { outline: 1px solid #3b6ea8; outline-offset: 1px; }
 
 .ha-search-pop {
   position: fixed; z-index: 96; display: flex; flex-direction: column; gap: 0;
