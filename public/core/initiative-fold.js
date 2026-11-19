@@ -135,6 +135,43 @@
     });
   }
 
+  // ---- the exact tasks, under one assistant --------------------------------------------------------
+  // A task's state, in the reader's four words and the panel's own tones: running is `good`, parked is `warn`, and
+  // the two quiet states stay quiet. `done` is drawn as "done" HERE and as "completed" in the count strip: the strip
+  // counts a bucket, the row names the state the queue file stores, and both are the same four states.
+  const TASK_STATE_INFO = Object.freeze([
+    { id: "queued", label: "queued", tone: "", what: "filed on this initiative's worktrees and not started yet" },
+    { id: "running", label: "running", tone: "good", what: "live on this initiative's worktrees right now" },
+    { id: "parked", label: "parked", tone: "warn", what: "parked on this initiative's worktrees, waiting on something outside the assistant" },
+    { id: "done", label: "done", tone: "", what: "finished on this initiative's worktrees" },
+  ]);
+
+  /**
+   * The chip one task row wears. An unknown or missing state is drawn as itself rather than dropped: a row the queue
+   * cannot place is still a task the reader should see, and a blank chip would read as a rendering defect.
+   */
+  function taskChip(state) {
+    const id = String(state == null ? "" : state);
+    const info = TASK_STATE_INFO.find((row) => row.id === id) || null;
+    const label = info ? info.label : id || "unknown";
+    const tone = info ? info.tone : "";
+    return {
+      state: id,
+      label,
+      tone,
+      cls: `chip init-task-state${tone ? ` ${tone}` : ""}`,
+      title: info ? info.what : `the queue stores "${id || "(no state)"}" for this task`,
+    };
+  }
+
+  /**
+   * The key one assistant's task fold is kept under: the initiative AND the assistant, because two assistants under
+   * one initiative fold separately, and the same assistant under two initiatives is two rows in two cards.
+   */
+  function taskFoldKey(initiativeId, assistantId) {
+    return `${String(initiativeId == null ? "" : initiativeId)}::${String(assistantId == null ? "" : assistantId)}`;
+  }
+
   // ---- one line of an initiative's history ---------------------------------------------------------
   /**
    * What one stored event says, in the reader's words.
@@ -176,5 +213,5 @@
     return { who, what, at: typeof ev.at === "string" ? ev.at : null };
   }
 
-  root.wtInitiativeFold = { DOTS, PREVIEW_LINES, KINDS, COUNT_CHIPS, press, cut, countChips, historyLine };
+  root.wtInitiativeFold = { DOTS, PREVIEW_LINES, KINDS, COUNT_CHIPS, TASK_STATE_INFO, press, cut, countChips, historyLine, taskChip, taskFoldKey };
 })(globalThis);
