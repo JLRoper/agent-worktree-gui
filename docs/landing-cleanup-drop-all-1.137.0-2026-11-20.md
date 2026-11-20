@@ -92,8 +92,11 @@ turnover branch (keep) and the primary checkout (skip). What it asserted:
 - nothing opened a window: the drop-all itself never posts to `/api/open-file` (the chip's own dry run does, and the
   count is recorded before the drop-all press so the assertion is about the button).
 
-Screenshots at 1440x900, in the run's shot directory: `1-armed-1440x900.png`, `1b-head-line-with-button.png`,
-`2-confirm-1440x900.png`, `3-after-1440x900.png`.
+Screenshots at 1440x900, committed beside this note in `docs/reports/cleanup-drop-all-1.137.0/`:
+`1-armed-1440x900.png` (the chip's plan printed, the button reading `drop all 4 suggested`),
+`1b-head-line-with-button.png` (the head line, the button immediately left of the chip, the chip still the last pill),
+`2-confirm-1440x900.png` (the confirm, its sentence and its focused `drop 4`) and
+`3-after-1440x900.png` (after the run: `nothing to drop`, the refusal line naming `late`, the four rows still there).
 
 ## Tests
 
