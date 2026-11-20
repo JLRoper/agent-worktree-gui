@@ -43,10 +43,12 @@
   // A collision awaiting the reader: the pair has been handed over (state `reader`) and nobody has ruled on it. The
   // SAME PAIR is carried by BOTH rows, so every count and every list here dedupes on the record's key: one overlap is
   // one decision, however many rows wear the marker. A ruled pair is not awaiting anything - it renders as already
-  // ruled, which is the whole point of storing the ruling against the pair.
+  // ruled, which is the whole point of storing the ruling against the pair. A pair with a side whose OWN task is done
+  // or parked is not awaiting anything either: the collision is with finished work (lib/collisions.js
+  // `finishedSides`), and a badge that counted it would send the reader to arbitrate work nobody is doing.
   function awaitingCollisions(row) {
     const list = row && Array.isArray(row.collisions) ? row.collisions : [];
-    return list.filter((c) => c && c.state === "reader");
+    return list.filter((c) => c && c.state === "reader" && !(Array.isArray(c.stoodByTask) && c.stoodByTask.length));
   }
 
   // The collisions on a board: unique by pair key, so the badge and the H rotation agree about how many decisions
@@ -192,14 +194,20 @@
 
   // What a collision marker says: the counterpart by NAME, then the evidence, then whose turn it is. The counterpart is
   // the first thing, because "this row is in a collision" without naming the other tree is the bare flag this whole
-  // feature exists to avoid.
+  // feature exists to avoid. The TASK each side is working is named after the evidence, because "two trees landing into
+  // main" and "two trees on one piece of work" are the two things a reader has to tell apart.
   function collisionTitle(rec) {
     if (!rec) return "";
     const other = rec.other?.name || rec.otherTarget || "an unnamed tree";
     const files = Array.isArray(rec.files) ? rec.files : [];
     const bits = [`collision with ${other}`, plural(files.length, "shared file", "shared files")];
     if (files.length) bits.push(files.slice(0, 4).join(", "));
+    const taskOf = (side) =>
+      side?.task ? `#${side.task.id}${side.task.name ? ` ${side.task.name}` : ""}${side.task.state ? ` (${side.task.state})` : ""}` : "no task row";
+    const mine = rec.role === "b" ? rec.b : rec.a;
+    if (mine || rec.other) bits.push(`${mine?.name || "this tree"} ${taskOf(mine)} vs ${other} ${taskOf(rec.other)}`);
     if (rec.state === "ruled") bits.push(`already ruled: ${rec.ruling?.name || "a side"} goes first`);
+    else if (Array.isArray(rec.stoodByTask) && rec.stoodByTask.length) bits.push(`already stood down: ${rec.stoodByTask.map((f) => `${f.tree} is ${f.state}`).join(", ")}`);
     else if (rec.state === "reader") bits.push("yours to rule on - H steps into it");
     else bits.push("with both assistants");
     return bits.join(" - ");

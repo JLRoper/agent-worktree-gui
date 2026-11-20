@@ -2510,6 +2510,21 @@ tr.row.has-collision.has-review { box-shadow: inset 2px 0 0 #6b4f9e, inset 4px 0
 .collision-side-role { font-size: 9px; text-transform: uppercase; letter-spacing: .05em; color: #a893d1; }
 .collision-side-name { color: #fff; font-weight: 600; }
 .collision-task { font-size: 10px; color: #c9a0ff; border: 1px solid #3b2d5c; border-radius: 999px; padding: 0 5px; }
+/* THE TASK A SIDE IS WORKING, beside the tree and branch it already showed: the queue row's number, its own title,
+   the assistant whose queue holds it and its state. It is the one line that says whether two trees are on the SAME
+   work or merely both landing into main - which is the question a collision card exists to answer. A tree with no
+   owning row says so in those words; a side whose task is done or parked reads as already stood down. */
+.collision-side-task { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.collision-task-name { font: 11px/1.5 var(--sans, var(--term)); color: #efe6ff; max-width: 34ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.collision-task-who { font-size: 10px; color: #a893d1; }
+.collision-task-state { font-size: 9px; text-transform: uppercase; letter-spacing: .04em; border-radius: 999px; padding: 0 5px; border: 1px solid #3b2d5c; color: #c9a0ff; }
+.collision-task-state.is-running { border-color: #2f5d6b; color: #8fd7e8; }
+.collision-task-state.is-queued { border-color: #4b3a75; color: #d6c2ff; }
+.collision-task-state.is-done { border-color: #2a4432; color: #9fe0b4; }
+.collision-task-state.is-parked { border-color: #5c4a22; color: #e8c98f; }
+.collision-side-task.is-none { font-size: 10px; color: var(--dimmer); font-style: italic; }
+.collision-side.is-finished { border-style: dotted; }
+.collision-side.is-finished .collision-side-name { color: #c9c2d6; font-weight: 500; }
 /* A side that yielded, and WHY: "its notice #12 was done". On both rows, because the reason is the thing each side
    otherwise had to ask the other for. */
 .collision-stood { font-size: 11px; color: #9fe0b4; }
