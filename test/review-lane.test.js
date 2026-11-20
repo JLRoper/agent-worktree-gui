@@ -207,7 +207,7 @@ test("with its switch off the chip is not rendered at all, and with it on the pr
 });
 
 test("the result card is drawn by the panel from the stored delivery: anchor through open-file, chips beneath", () => {
-  const card = sliceBetween(scaffold, "function reviewBlockHtml(row, key)", "// The refresh offer:");
+  const card = sliceBetween(scaffold, "function reviewBlockHtml(row, key)", "// ---- THE SAME TWO CARDS AS ONE-LINE CHIPS");
   // A REAL anchor through the existing route, with the TREE as its base: a report path is relative to the worktree.
   assert.match(card, /fileAnchor\(rec\.report, \{/);
   assert.match(card, /base: row\.path/);
@@ -216,8 +216,13 @@ test("the result card is drawn by the panel from the stored delivery: anchor thr
   // No report and no steps still draw a card that says so, rather than a blank space.
   assert.match(card, /no report path - the summary above is the whole of what this run left/);
   assert.match(card, /no next steps were named/);
-  // It is emitted with the detail, from the row's stored record - not by the run and not on a timer.
-  assert.match(scaffold, /\$\{reviewBlockHtml\(row, key\)\}/);
+  // It is drawn from the row's stored record - not by the run and not on a timer - as the body of the result CHIP's
+  // popup. The card left the row's detail (it was a paragraph of height under a row the reader had already opened),
+  // and `rowChipInner` is the one place that says which card a chip stands for.
+  const popup = sliceBetween(scaffold, "function rowChipInner(kind, row, key)", "// What the popup draws");
+  assert.match(popup, /reviewBlockHtml\(row, key\)/);
+  // The chip itself rides the row's name line: public/render-projects.js is where that is asserted.
+  assert.ok(!scaffold.includes("${reviewBlockHtml(row, key)}"), "the card no longer costs the row a paragraph");
 });
 
 test("the rotation takes review rows as a THIRD kind, and drops one the moment it is not awaiting", () => {

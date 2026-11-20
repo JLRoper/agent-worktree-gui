@@ -43,6 +43,12 @@
 //                        folded it reads the oldest open item, unfolded every item with its facts and its controls
 //   the refresh offer    refreshOfferHtml, paintRefreshOffer, paintRefreshOffers and clearRefreshOffer: the card the
 //                        row's own refresh opens, placed under its row and repainted after a project rebuild
+//   the two chips        resultChipHtml, collisionChipHtml, rowChipInner, toggleRowChip, paintRowChipMarkers and
+//                        paintRowChipPops: the result card and the collision card as ONE-LINE chips in the row's
+//                        name line (a strip that already exists, so they add no height), each chip opening the same
+//                        card in a popup behind it - the result's first clause, age and "reviewed" collapsed, the
+//                        collision pairs' open and resolved counts - with the expansion remembered per row and per
+//                        card in the browser's own store, so a repaint does not slam it shut
 //
 // WHAT IT REACHES OUT FOR (by name, at call time, exactly as before the move)
 //
@@ -60,10 +66,14 @@
 //
 // THE LOAD CONTRACT. public/index.html loads CLASSIC scripts, so the page is one global scope: a top-level
 // `function` here is a window property and a top-level `const` or `let` is a binding every other script reads by
-// bare name. This file DECLARES ONLY: no top-level statement, no listener and no read of an app.js binding while it
-// loads (panelMapCache, agentsByPathCache, threadRowKeyCache, LIVE_STATUS, DESC_SENTENCE_BREAK and TODO_GLYPH are
-// literal initialisers), so being loaded before app.js costs nothing. public/app.js re-exports these names on
-// window.WMApp.scaffold.
+// bare name. This file DECLARES, with two exceptions, only: no top-level statement, no listener and no read of an
+// app.js binding while it loads (panelMapCache, agentsByPathCache, threadRowKeyCache, LIVE_STATUS,
+// DESC_SENTENCE_BREAK, TODO_GLYPH and ROWCHIP_STORE_KEY are literal initialisers). The exceptions are the CHIPS'
+// OWN WIRING at the end of their block: a document-level click, keydown and scroll handler and a window resize
+// handler for the two cards behind the row's chips, registered beside the markup that draws them so the chips are
+// one file's feature rather than three files' shared secret. They read `state` and the page's helpers only when
+// they fire, never while this file loads, so being loaded before app.js still costs nothing.
+// public/app.js re-exports these names on window.WMApp.scaffold.
 
 // The panel map: which panel agents belong to which worktree, and the liveness reads every chip and row asks.
 // The panel's own agents are the freshest evidence there is — we are literally driving the process
@@ -2001,8 +2011,6 @@ function detailHtml(row) {
       </div>`
     : "";
   return `<tr class="detail" data-detail="${esc(key)}"><td colspan="${wtColspan()}"><div class="detail-inner">
-    ${collisionBlockHtml(row, key)}
-    ${reviewBlockHtml(row, key)}
     ${releaseBlock}
     ${descBlock}
     ${todoBlockHtml(row, key)}
@@ -2029,10 +2037,12 @@ function detailHtml(row) {
   </div></td></tr>`;
 }
 
-// THE COLLISION CARD. Two live trees in one project are touching the same work; this is ONE card for the PAIR, drawn
-// under BOTH rows. It names both sides - tree, branch and the queue task each one is being driven by - with this row's
-// own side marked, so neither side has to reconcile the other by hand from a card that only knew its own half. On the
-// other row the two sides are the same two trees, with the mark on the other one.
+// THE COLLISION CARD. Two live trees in one project are touching the same work; this is ONE card for the PAIR, and it
+// is what the row's collision CHIP opens - the chip carries the pair count (open and resolved, see the chips block
+// below), and this card is behind it, so the pair costs the row one line instead of a paragraph. It names both
+// sides - tree, branch and the queue task each one is being driven by - with this row's own side marked, so neither
+// side has to reconcile the other by hand from a card that only knew its own half. On the other row the two sides
+// are the same two trees, with the mark on the other one.
 //
 // THE EVIDENCE IS ON THE CARD, not behind a hover: the shared paths as chips, the relation as a sentence, both trees'
 // paths and branches, and which assistant filed into which side. A reader who has to go looking for the files cannot
@@ -2201,10 +2211,12 @@ function collisionBlockHtml(row, key) {
 // THE RESULT CARD. A row whose last run left something to check carries one: the one-line summary the run ended
 // with, the report it named as a real anchor through the panel's own open-file route, and its next steps as chips.
 //
-// WHO EMITS IT, AND WHEN. The PANEL, from the stored delivery (lib/review-inbox.js), every time the row's detail is
-// drawn - never the agent inside the run, and never at the run's own moment. That is what makes an unanswered card
-// free: the record is written after the run settled, and this card exists whether or not anybody ever presses
-// Reviewed. Nothing here waits, times out, or reports back to a run.
+// WHO EMITS IT, AND WHEN. The PANEL, from the stored delivery (lib/review-inbox.js), every time the row's result CHIP
+// is opened - never the agent inside the run, and never at the run's own moment. The card is the chip's popup now: the
+// row itself carries only the chip (the summary's first clause, the age, "reviewed"), so the tall card costs the board
+// nothing until somebody asks for it. That is what makes an unanswered card free: the record is written after the run
+// settled, and this card exists whether or not anybody ever presses Reviewed. Nothing here waits, times out, or
+// reports back to a run.
 //
 // The anchor carries the TREE as its base (the same `data-open-file-base` a clarify card carries), because the
 // report path is relative to the worktree the run worked in - resolved against the project's checkout it would name
@@ -2244,6 +2256,391 @@ function reviewBlockHtml(row, key) {
       </div>
     </div>`;
 }
+
+// ---- THE SAME TWO CARDS AS ONE-LINE CHIPS --------------------------------------------------------------------
+// The result block and the collision blocks above are TALL: drawn in the row's detail they cost a paragraph each, and
+// only existed once the reader had opened the row - the reader opened the row to find out whether there was anything
+// worth opening. Both are chips in the row's chip strip now (public/render-projects.js draws them beside the name,
+// with the violet mark and the amber one), so a row carries them without growing a pixel: the strip is one line, the
+// name ellipsises beside them, and the CARD is a popup behind the chip.
+//
+// WHAT THE CHIP SAYS. The result chip is the first clause of the run's summary, the run's age, and "reviewed" once it
+// has been checked (public/core/row-chips.js `resultLabel`). It carries NO chevron and NO path while collapsed: the
+// report path is the one thing the expansion exists to show, and the chevron appears only when the chip is open, so a
+// collapsed strip stays a strip of facts. The collision chip is the row's pairs split into open and resolved, from the
+// store's own records (`tally`), violet only while a pair is still open and muted when every one of them is resolved.
+//
+// THE POPUP IS THE EXISTING CARD, not a second renderer: `reviewBlockHtml` / `collisionBlockHtml` are drawn into a
+// body-level panel anchored to the chip, with the report anchor, the next steps, both sides' task names and the two
+// ruling presses exactly as they were - only the place changed. Placement is measured from the chip's own rect and
+// clamped to the viewport, so neither popup is clipped at 768 wide.
+//
+// REMEMBERED PER ROW AND PER CARD. `wm.openRowChips` holds "<kind>|<row key>" for the chips the reader opened, and
+// only OPENING is remembered - a row nobody has opened starts collapsed. A repaint replaces the row's chip nodes, so
+// `paintRowChipPops` re-anchors an open popup onto the new chip and repaints its body only when the record it draws
+// actually changed: the row's details being redrawn is not news about the card, and a card that snapped shut on every
+// scan would be a card the reader cannot read.
+const ROWCHIP_STORE_KEY = "wm.openRowChips";
+// Wide enough for the pair card's two sides and its two ruling presses, never wider than the viewport: at 768 the
+// panel takes the room the window has and the card inside it wraps rather than being cut off at the edge.
+const ROWCHIP_POP_MAX = 560;
+let rowChipOpenSet = null;
+
+function rowChipStore() {
+  if (rowChipOpenSet) return rowChipOpenSet;
+  let raw = "[]";
+  try {
+    raw = localStorage.getItem(ROWCHIP_STORE_KEY) || "[]";
+  } catch {
+    /* no storage: every chip starts collapsed, and the expansion simply will not survive a reload */
+  }
+  rowChipOpenSet = typeof wtRowChips !== "undefined" ? wtRowChips.readOpen(raw) : new Set();
+  return rowChipOpenSet;
+}
+
+function saveRowChipStore() {
+  try {
+    localStorage.setItem(ROWCHIP_STORE_KEY, typeof wtRowChips !== "undefined" ? wtRowChips.storeValue(rowChipStore()) : "[]");
+  } catch {
+    /* no storage: the expansion is this session's, and a reload folds it again */
+  }
+}
+
+function rowChipIsOpen(kind, key) {
+  return typeof wtRowChips !== "undefined" && wtRowChips.isOpen(rowChipStore(), kind, key);
+}
+
+function setRowChipOpen(kind, key, on) {
+  const open = rowChipIsOpen(kind, key);
+  if (open === Boolean(on)) return;
+  rowChipOpenSet = typeof wtRowChips !== "undefined" ? wtRowChips.toggle(rowChipStore(), kind, key) : rowChipStore();
+  if (!on) rowChipOpenSet.delete(`${kind}|${key}`);
+  saveRowChipStore();
+}
+
+// The chip's own sentence. It names the gesture, not the card: the card is what the press opens.
+function rowChipTitle(kind, row, open) {
+  if (kind === "result") {
+    const rec = (row && row.review) || {};
+    const label = typeof wtRowChips !== "undefined" ? wtRowChips.resultLabel(rec, rec.at ? `${relTime(rec.at)} ago` : "") : "the result";
+    return open
+      ? `collapse the result - ${label}; the card carries the whole summary, the report and the next steps`
+      : `expand the result - ${label}. The card behind this chip carries the whole summary, the docs/reports link and every next step the run named`;
+  }
+  const list = Array.isArray(row && row.collisions) ? row.collisions : [];
+  const counts = typeof wtRowChips !== "undefined" ? wtRowChips.tally(list, row && row.project) : { open: 0, resolved: 0 };
+  return open
+    ? `collapse the collisions - ${counts.open} open, ${counts.resolved} resolved`
+    : `open the collisions on this row - ${counts.open} open, ${counts.resolved} resolved. The card behind this chip names both sides, their tasks, the shared files and the ruling presses`;
+}
+
+// THE RESULT CHIP. Absent on a row with no delivery, exactly as the amber mark is: nothing to read, nothing drawn.
+function resultChipHtml(row, key) {
+  const rec = row && row.review;
+  if (!rec || !rec.summary) return "";
+  if (typeof wtRowChips === "undefined") return "";
+  const open = rowChipIsOpen("result", key);
+  const label = wtRowChips.resultLabel(rec, rec.at ? `${relTime(rec.at)} ago` : "");
+  const awaiting = typeof wtReviewLane !== "undefined" && wtReviewLane ? wtReviewLane.awaiting(row) : !rec.reviewedAt;
+  return `<button type="button" class="rowchip result-chip${awaiting ? " is-awaiting" : " is-reviewed"}" data-rowchip="result" data-rowchip-key="${esc(key)}" aria-expanded="${open ? "true" : "false"}" title="${esc(rowChipTitle("result", row, open))}"><span class="rowchip-glyph" aria-hidden="true">\u25a3</span><span class="rowchip-text">${esc(label)}</span>${open ? `<span class="rowchip-chev" aria-hidden="true">\u25be</span>` : ""}</button>`;
+}
+
+// THE COLLISION CHIP. Two numbers, from the store's own state. The violet accent is the OPEN pairs' alone - the chip
+// goes muted the moment the last one is resolved - which is the same rule the row's violet mark already keeps.
+function collisionChipHtml(row, key) {
+  const list = Array.isArray(row && row.collisions) ? row.collisions : [];
+  if (!list.length) return "";
+  if (typeof wtRowChips === "undefined") return "";
+  const counts = wtRowChips.tally(list, row.project);
+  const open = rowChipIsOpen("collision", key);
+  return `<button type="button" class="rowchip collision-chip${counts.open ? " is-live" : " is-quiet"}" data-rowchip="collision" data-rowchip-key="${esc(key)}" aria-expanded="${open ? "true" : "false"}" title="${esc(rowChipTitle("collision", row, open))}"><span class="rowchip-glyph" aria-hidden="true">\u25c6</span><span class="rowchip-text">${esc(wtRowChips.collisionLabel(counts))}</span>${open ? `<span class="rowchip-chev" aria-hidden="true">\u25be</span>` : ""}</button>`;
+}
+
+// The card behind a chip, from the row the board holds now.
+function rowChipInner(kind, row, key) {
+  return kind === "result" ? reviewBlockHtml(row, key) : collisionBlockHtml(row, key);
+}
+
+// What the popup draws, so a repaint only replaces its body when the record it draws moved: `state` and `ruling` on a
+// pair, the delivery's own fields on a result. A scan that changed nothing leaves the reader's popup exactly as it is.
+function rowChipSig(kind, row) {
+  if (!row) return "";
+  if (kind === "result") {
+    const rec = row.review || {};
+    return JSON.stringify([rec.summary, rec.report, rec.next, rec.reviewedAt, rec.at, rec.runId]);
+  }
+  const list = Array.isArray(row.collisions) ? row.collisions : [];
+  return JSON.stringify(
+    list.map((rec) => [
+      rec.key,
+      rec.state,
+      rec.ruling ? [rec.ruling.pick, rec.ruling.name, rec.ruling.auto === true, rec.ruling.taskId] : null,
+      Array.isArray(rec.stoodDown) ? rec.stoodDown.length : 0,
+      Array.isArray(rec.stoodByTask) ? rec.stoodByTask.length : 0,
+      rec.canAsk === true,
+    ]),
+  );
+}
+
+function rowChipAnchor(kind, key) {
+  return document.querySelector(`[data-rowchip=${JSON.stringify(kind)}][data-rowchip-key=${JSON.stringify(key)}]`);
+}
+
+function rowChipPopEl(kind, key) {
+  for (const el of document.querySelectorAll(".rowchip-pop")) {
+    if (el.dataset.rowchipPop === kind && el.dataset.popKey === key) return el;
+  }
+  return null;
+}
+
+function rowChipPopHtml(kind, key, row) {
+  const label = kind === "result" ? "this run's result" : "the collisions on this row";
+  return `<div class="rowchip-pop" data-rowchip-pop="${esc(kind)}" data-pop-key="${esc(key)}" role="dialog" aria-label="${esc(label)}">
+    <button type="button" class="rowchip-pop-x" data-rowchip-close="${esc(kind)}" data-rowchip-key="${esc(key)}" title="close the card - Escape">\u2715</button>
+    <div class="rowchip-pop-body">${rowChipInner(kind, row, key)}</div>
+  </div>`;
+}
+
+// MEASURED FROM THE CHIP AND CLAMPED TO THE WINDOW. Two things a fixed panel gets wrong by itself: it runs off the
+// right edge on a row whose chip is near it, and it runs off the bottom on a row near the end of the board. So the
+// width never exceeds the viewport minus a gutter (that is the 768 case), it slides left to fit, and it flips above
+// the chip when there is no room below.
+function placeRowChipPop(pop, anchor) {
+  if (!pop || !anchor || !anchor.isConnected) return;
+  const gutter = 10;
+  const vw = Math.max(320, window.innerWidth || document.documentElement.clientWidth || 0);
+  const vh = Math.max(320, window.innerHeight || 0);
+  const width = Math.max(240, Math.min(ROWCHIP_POP_MAX, vw - gutter * 2));
+  pop.style.width = `${width}px`;
+  pop.style.maxHeight = `${Math.round(vh * 0.7)}px`;
+  const rect = anchor.getBoundingClientRect();
+  let left = rect.left;
+  if (left + width > vw - gutter) left = vw - gutter - width;
+  if (left < gutter) left = gutter;
+  const height = Math.min(pop.offsetHeight || 0, Math.round(vh * 0.7));
+  let top = rect.bottom + 6;
+  if (top + height > vh - gutter) top = Math.max(gutter, rect.top - 6 - height);
+  pop.style.left = `${Math.round(left)}px`;
+  pop.style.top = `${Math.round(top)}px`;
+}
+
+function rowChipFocusables(pop) {
+  if (!pop) return [];
+  return [...pop.querySelectorAll("button, a[data-open-file], a[href], [tabindex]:not([tabindex='-1'])")].filter(
+    (el) => !el.disabled && el.offsetParent !== null,
+  );
+}
+
+function openRowChipPop(kind, key, { focus = false } = {}) {
+  const row = state.rows.get(key);
+  const anchor = rowChipAnchor(kind, key);
+  if (!row || !anchor) return false;
+  let pop = rowChipPopEl(kind, key);
+  const sig = rowChipSig(kind, row);
+  if (!pop) {
+    const holder = document.createElement("div");
+    holder.innerHTML = rowChipPopHtml(kind, key, row);
+    pop = holder.firstElementChild;
+    if (!pop) return false;
+    document.body.appendChild(pop);
+  } else if (pop._sig !== sig) {
+    const body = pop.querySelector(".rowchip-pop-body");
+    if (body) body.innerHTML = rowChipInner(kind, row, key);
+  }
+  pop._sig = sig;
+  pop._anchor = anchor;
+  anchor.setAttribute("aria-expanded", "true");
+  placeRowChipPop(pop, anchor);
+  if (focus) {
+    const first = rowChipFocusables(pop)[0];
+    if (first) {
+      try {
+        first.focus({ preventScroll: true });
+      } catch {
+        first.focus();
+      }
+    }
+  }
+  return true;
+}
+
+function closeRowChipPop(kind, key, { focusChip = false } = {}) {
+  const pop = rowChipPopEl(kind, key);
+  if (pop) pop.remove();
+  const anchor = rowChipAnchor(kind, key);
+  if (anchor) {
+    anchor.setAttribute("aria-expanded", "false");
+    const chev = anchor.querySelector(".rowchip-chev");
+    if (chev) chev.remove();
+    const row = state.rows.get(key);
+    if (row) anchor.title = rowChipTitle(kind, row, false);
+  }
+  if (focusChip && anchor) {
+    try {
+      anchor.focus({ preventScroll: true });
+    } catch {
+      anchor.focus();
+    }
+  }
+}
+
+// The press, and the one place the remembered state changes. One card at a time: opening a chip closes any other
+// popup and forgets it, because a reader who has moved to another card has stopped reading the first one.
+function toggleRowChip(kind, key) {
+  const wasOpen = rowChipIsOpen(kind, key);
+  for (const pop of [...document.querySelectorAll(".rowchip-pop")]) {
+    if (pop.dataset.rowchipPop === kind && pop.dataset.popKey === key) continue;
+    closeRowChipPop(pop.dataset.rowchipPop, pop.dataset.popKey);
+    setRowChipOpen(pop.dataset.rowchipPop, pop.dataset.popKey, false);
+  }
+  setRowChipOpen(kind, key, !wasOpen);
+  if (wasOpen) closeRowChipPop(kind, key, { focusChip: true });
+  else openRowChipPop(kind, key, { focus: true });
+  const row = state.rows.get(key);
+  const anchor = rowChipAnchor(kind, key);
+  if (anchor && row) anchor.title = rowChipTitle(kind, row, !wasOpen);
+  return !wasOpen;
+}
+
+// The chips on ONE row, repainted in place: the chevron and `aria-expanded` are the whole visual difference, and a
+// full board repaint for them would be a repaint that also moved the reader's scroll.
+function paintRowChipMarkers(key) {
+  for (const kind of ["result", "collision"]) {
+    const anchor = rowChipAnchor(kind, key);
+    if (!anchor) continue;
+    const open = rowChipIsOpen(kind, key);
+    anchor.setAttribute("aria-expanded", open ? "true" : "false");
+    const chev = anchor.querySelector(".rowchip-chev");
+    if (open && !chev) anchor.insertAdjacentHTML("beforeend", `<span class="rowchip-chev" aria-hidden="true">\u25be</span>`);
+    if (!open && chev) chev.remove();
+  }
+}
+
+// AFTER EVERY REPAINT. A rebuilt row replaces the chip nodes, so an open popup's own anchor is a detached element: it
+// is re-anchored onto the row's new chip (and its body repainted only if the record moved), a chip with no popup that
+// the store says is open gets one back, and a popup whose row has left the board is closed.
+function paintRowChipPops(project = null) {
+  const wanted = typeof wtRowChips !== "undefined" ? wtRowChips.entries(rowChipStore()) : [];
+  for (const pop of [...document.querySelectorAll(".rowchip-pop")]) {
+    const kind = pop.dataset.rowchipPop;
+    const key = pop.dataset.popKey;
+    const anchor = rowChipAnchor(kind, key);
+    const want = wanted.some((w) => w.kind === kind && w.key === key);
+    if (!want || !anchor) {
+      pop.remove();
+      continue;
+    }
+    if (pop._anchor !== anchor) {
+      pop._anchor = anchor;
+      anchor.setAttribute("aria-expanded", "true");
+      openRowChipPop(kind, key);
+      continue;
+    }
+    if (project) placeRowChipPop(pop, anchor);
+  }
+  for (const w of wanted) {
+    if (rowChipPopEl(w.kind, w.key)) continue;
+    const row = state.rows.get(w.key);
+    if (!row) continue;
+    if (project && row.project !== project) continue;
+    if (!rowChipAnchor(w.kind, w.key)) continue;
+    openRowChipPop(w.kind, w.key);
+  }
+}
+
+// ARROWS STEP THE POPUP's own controls, the way a menu's do; Escape closes it and hands the caret back to the chip.
+function stepRowChipPop(pop, by) {
+  const items = rowChipFocusables(pop);
+  if (!items.length) return false;
+  const at = items.indexOf(document.activeElement);
+  const next = items[(at < 0 ? 0 : at + by + items.length) % items.length];
+  if (!next) return false;
+  try {
+    next.focus({ preventScroll: true });
+  } catch {
+    next.focus();
+  }
+  return true;
+}
+
+// The wiring, registered here rather than in app.js: these chips are this file's markup, and the handlers read only
+// this file's own state and the page's row map. `stopPropagation` matters - the row's name cell has its own presses.
+document.addEventListener("click", (e) => {
+  const chip = e.target.closest && e.target.closest("[data-rowchip]");
+  if (chip && chip.dataset.rowchip) {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleRowChip(chip.dataset.rowchip, chip.dataset.rowchipKey || "");
+    return;
+  }
+  const close = e.target.closest && e.target.closest("[data-rowchip-close]");
+  if (close) {
+    e.preventDefault();
+    e.stopPropagation();
+    const kind = close.dataset.rowchipClose;
+    const key = close.dataset.rowchipKey || "";
+    setRowChipOpen(kind, key, false);
+    closeRowChipPop(kind, key, { focusChip: true });
+    return;
+  }
+  // A press inside the open card is the card's own (a ruling, the report anchor, Reviewed): it stays open. A press
+  // anywhere else is the reader leaving it, and leaving it is a close - which forgets the open state, so the next
+  // repaint cannot bring back a card the reader put away.
+  if (document.querySelector(".rowchip-pop") && !(e.target.closest && e.target.closest(".rowchip-pop"))) {
+    for (const pop of [...document.querySelectorAll(".rowchip-pop")]) {
+      setRowChipOpen(pop.dataset.rowchipPop, pop.dataset.popKey, false);
+      closeRowChipPop(pop.dataset.rowchipPop, pop.dataset.popKey);
+    }
+  }
+});
+
+document.addEventListener("keydown", (e) => {
+  const pop = e.target.closest && e.target.closest(".rowchip-pop");
+  if (pop) {
+    const kind = pop.dataset.rowchipPop;
+    const key = pop.dataset.popKey || "";
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      setRowChipOpen(kind, key, false);
+      closeRowChipPop(kind, key, { focusChip: true });
+      return;
+    }
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      if (stepRowChipPop(pop, e.key === "ArrowDown" ? 1 : -1)) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      return;
+    }
+    return;
+  }
+  const chip = e.target.closest && e.target.closest("[data-rowchip]");
+  if (chip && e.key === "Escape" && chip.getAttribute("aria-expanded") === "true") {
+    e.preventDefault();
+    e.stopPropagation();
+    const kind = chip.dataset.rowchip;
+    const key = chip.dataset.rowchipKey || "";
+    setRowChipOpen(kind, key, false);
+    closeRowChipPop(kind, key, { focusChip: true });
+  }
+});
+
+// The popup is fixed, so it does not travel with its chip: a scroll or a resize re-measures it. A chip that left the
+// page takes its card with it.
+const rowChipReposition = () => {
+  for (const pop of [...document.querySelectorAll(".rowchip-pop")]) {
+    if (!pop._anchor || !pop._anchor.isConnected) {
+      setRowChipOpen(pop.dataset.rowchipPop, pop.dataset.popKey, false);
+      pop.remove();
+      continue;
+    }
+    placeRowChipPop(pop, pop._anchor);
+  }
+};
+document.addEventListener("scroll", rowChipReposition, true);
+window.addEventListener("resize", rowChipReposition);
+// ---- end the two cards as chips
 
 // The refresh offer: the card the row's own refresh opens, and the wiring that keeps it under its row.
 // The card the offer opens: the panel's own in-place question (the same `row-confirm` shape the ✕ asks in), under the

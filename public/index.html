@@ -1254,6 +1254,11 @@
        count, the filter and the H rotation cannot disagree about the same row. Published on globalThis as
        `wtReviewLane`; test/review-lane.test.js imports this same file. Loaded before app.js, which wires it. -->
   <script src="/core/review-lane.js"></script>
+  <!-- The two cards' CHIP arithmetic: the result's collapsed label (its first clause, the age, "reviewed"), the
+       collision pairs split into open and resolved, and which chips are expanded per row and per card. ONE reading,
+       so the chip's text, the popup behind it and the remembered expansion cannot disagree. Published on globalThis
+       as `wtRowChips`; test/row-chips.test.js imports this same file. Loaded before app.js, which draws with it. -->
+  <script src="/core/row-chips.js"></script>
   <!-- The HOT AGENTS marker's arithmetic: is this turn hot (working now, not parked on the reader), which agents are,
        and which one the press lands on next. ONE reading of the page's job list, so the button's existence, its count,
        its tooltip and the press cannot disagree. Published on globalThis as `wtHotMark`; test/hot-mark.test.js imports
