@@ -1,4 +1,4 @@
-# Landing: a TO line is delivered once, and its thread is claimed before the send (1.137.1)
+# Landing: a TO line is delivered once, and its thread is claimed before the send (1.138.1)
 
 A panel restart re-delivers old TO lines. The delivery path had no replay key, and it asked the live-run guard
 before the run existed in the store, so two old replies re-read in one pass could each start a run on one thread.
@@ -79,7 +79,7 @@ passing alone.
 ## Known limits, stated rather than hidden
 
 - The ledger starts empty in this version, so a TO carried by an earlier build has no record and one more boot can
-  still deliver it. From the first boot on 1.137.1 every delivery writes its key, and the ledger's cap (200) sits
+  still deliver it. From the first boot on 1.138.1 every delivery writes its key, and the ledger's cap (200) sits
   far beyond the job store's own 80-turn retention, so every turn a boot can re-read has its record.
 - The claim is per process. Two panels pointed at one state directory do not share it; what they do share is the
   ledger, which is written to disk before the send, so the durable half still refuses the replay.
@@ -88,5 +88,5 @@ passing alone.
 
 ## Version
 
-`1.137.1`, patch: a defect fix with no new control and no change to the grammar. Node one on the commit that first
+`1.138.1`, patch: a defect fix with no new control and no change to the grammar. Node one on the commit that first
 declares the number.
