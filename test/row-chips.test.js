@@ -166,6 +166,8 @@ test("an open card survives a re-render, and Escape closes it", () => {
   assert.match(paint, /openRowChipPop\(kind, key\)/);
   assert.match(paint, /wtRowChips\.entries\(rowChipStore\(\)\)/);
   assert.match(scaffold, /if \(pop\._sig !== sig\)/);
+  // A body redrawn under the reader's caret puts the caret back on the same control.
+  assert.match(scaffold, /const at = rowChipFocusables\(pop\)\.indexOf\(document\.activeElement\);/);
   // Every path that replaces a row's chip nodes calls it: placeRow's chip repaint and the project's full rebuild.
   assert.match(rowFile, /if \(typeof paintRowChipPops === "function"\) paintRowChipPops\(\);/);
   assert.match(rowFile, /if \(typeof paintRowChipPops === "function"\) paintRowChipPops\(name\);/);
