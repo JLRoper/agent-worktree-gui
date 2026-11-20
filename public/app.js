@@ -199,6 +199,8 @@ window.WMApp.scaffold = {
   toggleBoardBar, closeBoardBar,
   cleanupOf, cleanupRuns, cleanupChipSig, cleanupChipHtml, refreshCleanupChip, cleanupBarHtml,
   cleanupRowHtml, cleanupTreeName, runCleanupChip, answerCleanupCall, closeCleanupBar,
+  cleanupDropAllBusy, cleanupDropAllSig, cleanupDropAllButtonHtml, refreshCleanupDropAll, cleanupDropAllBlockHtml,
+  openCleanupDropAllConfirm, closeCleanupDropAllConfirm, runCleanupDropAll,
   barsOf, setBarOrder, openBar, closeBar, barHtml, barSelector, projectBarsHtml, repaintBars, repaintBar,
   ruleRowHtml, rulesLine, rulesBarHtml, toggleRulesBar, closeRulesBar, setRules, saveProjectRules,
   addRule, editRule, moveRule, deleteRule,
@@ -10837,6 +10839,30 @@ document.addEventListener("click", async (e) => {
     void answerCleanupCall(rcleanupCall.dataset.cleanupCall, rcleanupCall);
     return;
   }
+  // The drop-all button and the confirm it opens. The button itself opens the confirm (nothing is removed by that
+  // press), the confirm's own button runs the drops through the panel's single-row delete, and cancel closes the
+  // confirm without writing anything. All three stop propagation for the same reason the chip does.
+  const rdropAll = e.target.closest("[data-cleanup-drop-all]");
+  if (rdropAll) {
+    e.stopPropagation();
+    e.preventDefault();
+    openCleanupDropAllConfirm(rdropAll.dataset.cleanupDropAll);
+    return;
+  }
+  const rdropGo = e.target.closest("[data-cleanup-confirm-go]");
+  if (rdropGo) {
+    e.stopPropagation();
+    e.preventDefault();
+    void runCleanupDropAll(rdropGo.dataset.cleanupConfirmGo);
+    return;
+  }
+  const rdropCancel = e.target.closest("[data-cleanup-confirm-cancel]");
+  if (rdropCancel) {
+    e.stopPropagation();
+    e.preventDefault();
+    closeCleanupDropAllConfirm(rdropCancel.dataset.cleanupConfirmCancel);
+    return;
+  }
   const rcleanupOpen = e.target.closest("[data-cleanup-open]");
   if (rcleanupOpen) {
     e.stopPropagation();
@@ -12279,6 +12305,16 @@ document.addEventListener("keydown", async (e) => {
     e.preventDefault();
     setMaximized(null);
     return;
+  }
+  // Esc closes an open drop-all confirm before any other Escape gesture reads it: the confirm is a question, and a
+  // question that Escape walked past would leave the page asking it behind whatever closed instead.
+  if (e.key === "Escape") {
+    const asking = document.querySelector("[data-cleanup-confirm]");
+    if (asking) {
+      e.preventDefault();
+      closeCleanupDropAllConfirm(asking.dataset.cleanupConfirm);
+      return;
+    }
   }
   // The folder clone input: Enter clones, Escape closes the row.
   const cloneInput = e.target.closest && e.target.closest("[data-clone-input]");
