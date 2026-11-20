@@ -148,7 +148,8 @@
     "test:e2e:minimized-composer": "node --test --test-reporter=spec test/e2e/minimized-composer.spec.mjs",
     "test:e2e:deliverables-window": "node --test --test-reporter=spec test/e2e/deliverables-window.spec.mjs",
     "test:e2e:assistant-rail-width": "node --test --test-reporter=spec test/e2e/assistant-rail-width.spec.mjs",
-    "test:e2e:cleanup-chip": "node --test --test-reporter=spec test/e2e/cleanup-chip.spec.mjs"
+    "test:e2e:cleanup-chip": "node --test --test-reporter=spec test/e2e/cleanup-chip.spec.mjs",
+    "test:e2e:cleanup-drop-all": "node --test --test-reporter=spec test/e2e/cleanup-drop-all.spec.mjs"
   },
   "engines": {
     "node": ">=22.5"

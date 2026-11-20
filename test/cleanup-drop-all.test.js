@@ -190,13 +190,14 @@ test("the run carries on past a refusal, collects every one, and paints progress
   assert.deepEqual(outcomes.map((o) => o.ok), [true, false, false, true]);
 
   // One list of everything that did not go: the pre-run refusal first, then each drop that was refused.
-  assert.equal(summary.attempted, 4);
+  assert.equal(summary.attempted, 5, "four rows handed over plus the one the plan check refused");
   assert.equal(summary.dropped, 2);
   assert.equal(summary.refused, 3);
+  assert.equal(summary.dropped + summary.refused, summary.attempted, "the three numbers add up, as the sentence reads");
   assert.deepEqual(summary.failures.map((f) => f.name), ["landed-z", "landed-b", "landed-c"]);
   assert.match(summary.failures[1].why, /an agent is running/);
   assert.match(summary.failures[2].why, /HTTP 409/, "a throw is collected as a refusal, not as a crash");
-  assert.equal(summary.note, "dropped 2 of 4; 3 rows were refused");
+  assert.equal(summary.note, "dropped 2 of 5; 3 rows were refused");
   assert.equal(dropAll.dropAllNote({ attempted: 4, dropped: 4, refused: 0 }), "dropped 4 of 4; nothing was refused");
   assert.equal(dropAll.dropAllNote({ attempted: 1, dropped: 0, refused: 1 }), "dropped 0 of 1; 1 row was refused");
   assert.equal(dropAll.dropAllNote({ attempted: 0, dropped: 0, refused: 0 }), "nothing to drop");

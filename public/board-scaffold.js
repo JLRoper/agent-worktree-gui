@@ -911,9 +911,6 @@ function cleanupChipHtml(name) {
 }
 
 function refreshCleanupChip(name) {
-  // The drop-all button sits beside the chip, in the same head line and the same bar, and reads the same state: it is
-  // repainted from this call so the two can never show two different plans.
-  refreshCleanupDropAll(name);
   const el = projectNode("data-cleanup-chip", name);
   if (!el) return;
   if (el.dataset.cleanupSig === cleanupChipSig(name)) return;
@@ -997,7 +994,7 @@ async function runCleanupChip(name) {
   const apply = Boolean(cur && cur.phase === "armed" && cleanupActs(cur) > 0);
   const next = { ...(cur || {}), phase: apply ? "applying" : "planning", error: "", failing: "", dismissed: cur?.dismissed || new Set() };
   cleanupRuns().set(name, next);
-  refreshCleanupChip(name);
+  refreshCleanupUi(name);
   openBar(name, "cleanup");
   repaintBars(name);
   try {
@@ -1022,7 +1019,7 @@ async function runCleanupChip(name) {
       failing: failedRow ? cleanupTreeName(failedRow) : "",
       dismissed: new Set(),
     });
-    refreshCleanupChip(name);
+    refreshCleanupUi(name);
     repaintBars(name);
     // The page the run wrote is the point of the press: open it, through the panel's own opener, once the run ends.
     // A page that could NOT be written is said out loud: the run still happened, and a silent missing report is the
@@ -1045,7 +1042,7 @@ async function runCleanupChip(name) {
       // banner over a board of twenty projects does not say which one broke.
       failing: name,
     });
-    refreshCleanupChip(name);
+    refreshCleanupUi(name);
     repaintBars(name);
     showBanner(`${name}: cleanup failed - ${String((e && e.message) || e)}`);
   }
@@ -1092,7 +1089,7 @@ async function answerCleanupCall(kind, button) {
 function closeCleanupBar(name) {
   closeBar(name, "cleanup");
   repaintBars(name);
-  refreshCleanupChip(name);
+  refreshCleanupUi(name);
 }
 
 // ---- the cleanup chip's drop-all -----------------------------------------------------------------------------
@@ -1119,39 +1116,45 @@ function cleanupDropAllBusy(name) {
 
 function cleanupDropAllSig(name) {
   const c = cleanupOf(name);
-  if (!c || !c.plan) return "none";
-  const rows = Array.isArray(c.plan.rows) ? c.plan.rows : [];
-  const prog = c.dropAll ? `${c.dropAll.done}/${c.dropAll.total}` : "";
-  return `${wtCleanupDropAll.dropAllCount(rows)}:${cleanupDropAllBusy(name) ? "busy" : "ready"}:${prog}`;
+  const rows = Array.isArray(c?.plan?.rows) ? c.plan.rows : [];
+  const prog = c?.dropAll ? `${c.dropAll.done}/${c.dropAll.total}` : "";
+  return `${c?.plan ? "plan" : "none"}:${wtCleanupDropAll.dropAllCount(rows)}:${cleanupDropAllBusy(name) ? "busy" : "ready"}:${prog}`;
 }
 
 // The one button, drawn in two places: the project head line (before the cleanup chip) and the bar's action row.
+// It is drawn from the first render, like the chip, so a refresh always has a node to correct rather than having to
+// create one: with no plan read yet it reads "nothing to drop" and says why in its tooltip.
 function cleanupDropAllButtonHtml(name) {
   const c = cleanupOf(name);
-  if (!c || !c.plan) return "";
-  const rows = Array.isArray(c.plan.rows) ? c.plan.rows : [];
+  const rows = Array.isArray(c?.plan?.rows) ? c.plan.rows : [];
   const busy = cleanupDropAllBusy(name);
   const disabled = wtCleanupDropAll.dropAllDisabled(rows, { busy });
   const label = wtCleanupDropAll.dropAllLabel(rows);
-  const title = busy && wtCleanupDropAll.dropAllCount(rows)
-    ? "another cleanup action is running in this project - this button is unavailable until it ends"
-    : wtCleanupDropAll.dropAllTitle(rows);
+  const title = !c?.plan
+    ? "press the cleanup chip first: this button drops the worktrees that plan labels drop, and nothing has been read yet"
+    : busy && wtCleanupDropAll.dropAllCount(rows)
+      ? "another cleanup action is running in this project - this button is unavailable until it ends"
+      : wtCleanupDropAll.dropAllTitle(rows);
   return `<button type="button" class="btn-cleanup-drop-all${disabled ? " is-off" : ""}" data-cleanup-drop-all="${esc(name)}" data-cleanup-drop-all-sig="${esc(cleanupDropAllSig(name))}"${disabled ? ' disabled aria-disabled="true"' : ""} title="${esc(title)}">${esc(label)}</button>`;
 }
 
 function refreshCleanupDropAll(name) {
-  const nodes = Array.from(document.querySelectorAll(`[data-cleanup-drop-all="${CSS.escape(name)}"]`));
-  if (!nodes.length) return;
+  // The head line's copy, found by the same cached attribute lookup the chip uses (`projectNode`), so a snapshot's
+  // repaint costs one lookup rather than a whole-document walk per row placed. The bar's copy is not refreshed here:
+  // `repaintBars` rebuilds that block from `cleanupBarHtml`, which draws this button itself.
+  const el = projectNode("data-cleanup-drop-all", name);
+  if (!el) return;
+  if (el.dataset.cleanupDropAllSig === cleanupDropAllSig(name)) return;
   const html = cleanupDropAllButtonHtml(name);
-  const sig = cleanupDropAllSig(name);
-  for (const el of nodes) {
-    if (el.dataset.cleanupDropAllSig === sig) continue;
-    if (!html) {
-      el.remove();
-      continue;
-    }
-    el.outerHTML = html;
-  }
+  if (html) el.outerHTML = html;
+  else el.remove();
+}
+
+// One call for both controls: the chip and the button beside it are drawn from the same state, so every place that
+// repaints one repaints the other.
+function refreshCleanupUi(name) {
+  refreshCleanupChip(name);
+  refreshCleanupDropAll(name);
 }
 
 // The confirm, the run's progress and the list of what was refused: one block, in the bar the chip opens.
@@ -1242,8 +1245,7 @@ async function runCleanupDropAll(name) {
   c.error = "";
   c.failing = "";
   cleanupRuns().set(name, c);
-  refreshCleanupChip(name);
-  refreshCleanupDropAll(name);
+  refreshCleanupUi(name);
   repaintBars(name);
 
   let summary;
@@ -1259,7 +1261,7 @@ async function runCleanupDropAll(name) {
         const cur = cleanupOf(name);
         if (!cur) return;
         cur.dropAll = { done, total, name: tree, path: treePath };
-        refreshCleanupChip(name);
+        refreshCleanupUi(name);
         repaintBars(name);
       },
       dropOne: cleanupDropOne(name),
@@ -1291,8 +1293,7 @@ async function runCleanupDropAll(name) {
     done.failing = "";
   }
   cleanupRuns().set(name, done);
-  refreshCleanupChip(name);
-  refreshCleanupDropAll(name);
+  refreshCleanupUi(name);
   repaintBars(name);
   const refused = Number(summary.refused) || 0;
   showBanner(`${name}: ${summary.note}${refused && summary.failures.length ? " - the refused rows and their reasons are in the cleanup list" : ""}`);
