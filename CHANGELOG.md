@@ -4,16 +4,43 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.129.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.131.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-645 releases from v0.1.0 (2026-10-20) to v1.129.0 (2026-11-19), 2233 commits between the tags. Every release is anchored by an
+646 releases from v0.1.0 (2026-10-20) to v1.131.0 (2026-11-19), 2244 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.131.0 — 2026-11-19 · 11 commits
+
+[`08ab809`](https://github.com/JLRoper/agent-worktree-gui/commit/08ab8093cd6ea3c6cdb6498a1d549b97b36bc732) · [compare v1.129.0...v1.131.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.129.0...v1.131.0)
+
+### Added
+
+- feat: the last successful tree scan is cached, so a boot paints placed rows ([`2715ad0`](https://github.com/JLRoper/agent-worktree-gui/commit/2715ad053c24eba8868dc3a86041b346b58ea0d1))
+- feat: the board waits for the scan instead of calling agents unattached ([`7dbb36d`](https://github.com/JLRoper/agent-worktree-gui/commit/7dbb36db731a91c949c3925da279c56417c9efec))
+
+### Fixed
+
+- fix: a fast pass does not claim the tree list was enumerated ([`575ffc6`](https://github.com/JLRoper/agent-worktree-gui/commit/575ffc653a5b3623007a531629dbc3711059dcd9))
+- fix: the held order holds the SET as well as the sequence ([`df9f40e`](https://github.com/JLRoper/agent-worktree-gui/commit/df9f40ecf84f95f764feceb917dc5c93ec0f920d))
+- fix: the painted order holds through a slow first pass ([`e26150f`](https://github.com/JLRoper/agent-worktree-gui/commit/e26150fa39999ecf2849a801a19d20c563a7b30a))
+- fix: the hold is the cached flag, not a deadline ([`488ecfd`](https://github.com/JLRoper/agent-worktree-gui/commit/488ecfdeb4793d9a438bed0b612db61f2274e57f))
+
+### Docs & tests
+
+- docs: render the changelog - 645 releases ([`42990c2`](https://github.com/JLRoper/agent-worktree-gui/commit/42990c205ba9fb179c15a578c746a613df1fd109))
+- docs: the landing note for 1.129.0 - each collision side names the task it is working ([`31dfb2d`](https://github.com/JLRoper/agent-worktree-gui/commit/31dfb2d4d0a7e256b44c79107fe51b373205c593))
+- test: a stale row survives the pass after the one that marked it ([`44bcead`](https://github.com/JLRoper/agent-worktree-gui/commit/44bceade21755f0f16db7254b0a850d00316f1c8))
+- test: the cache tests name no folder on this machine ([`8a0e687`](https://github.com/JLRoper/agent-worktree-gui/commit/8a0e6873df4fdf14f89762ffa92bf02fee627b7e))
+
+### Other
+
+- chore: 1.131.0 - the version this landing carries ([`08ab809`](https://github.com/JLRoper/agent-worktree-gui/commit/08ab8093cd6ea3c6cdb6498a1d549b97b36bc732))
 
 ## v1.129.0 — 2026-11-19 · 5 commits
 
