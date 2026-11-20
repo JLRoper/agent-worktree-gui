@@ -4,16 +4,35 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.137.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.138.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-650 releases from v0.1.0 (2026-10-20) to v1.137.0 (2026-11-20), 2269 commits between the tags. Every release is anchored by an
+651 releases from v0.1.0 (2026-10-20) to v1.138.0 (2026-11-20), 2275 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.138.0 — 2026-11-20 · 6 commits
+
+[`f74fbf2`](https://github.com/JLRoper/agent-worktree-gui/commit/f74fbf27c1f789d2f10c8361bedaadc6bfde6028) · [compare v1.137.0...v1.138.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.137.0...v1.138.0)
+
+### Added
+
+- feat(clarify): collapse each clarify question to one item, and count only what is waiting ([`7dbd898`](https://github.com/JLRoper/agent-worktree-gui/commit/7dbd89870ae6d8b21a981dc81649a28d3f63260f))
+
+### Docs & tests
+
+- docs: render the changelog - 650 releases ([`8e0c018`](https://github.com/JLRoper/agent-worktree-gui/commit/8e0c0187f757e8a710d7a3e6d70cfd7130e702fd))
+- docs: the landing note for 1.137.0 - the drop-all button removes only the rows labelled drop ([`8ad4f1b`](https://github.com/JLRoper/agent-worktree-gui/commit/8ad4f1b2b7d2878e167ed03a3bde0e5279a81f7e))
+- docs: the 1.137.0 note carries its own gate screenshots ([`1b9ccca`](https://github.com/JLRoper/agent-worktree-gui/commit/1b9cccacf0dd2567093f92bb35ba7b0b821e855e))
+- test(clarify): prove the collapse, the reply and the button count headless at 1440x900 ([`99e64ed`](https://github.com/JLRoper/agent-worktree-gui/commit/99e64edb0a9c7dca489e044323a53e4af3643b15))
+
+### Other
+
+- chore: 1.138.0 - the version this landing carries ([`f74fbf2`](https://github.com/JLRoper/agent-worktree-gui/commit/f74fbf27c1f789d2f10c8361bedaadc6bfde6028))
 
 ## v1.137.0 — 2026-11-20 · 5 commits
 
