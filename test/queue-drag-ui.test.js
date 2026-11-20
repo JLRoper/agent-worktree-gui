@@ -25,15 +25,20 @@ const esc = (s) =>
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 
-const build = () =>
-  new Function(
+const build = () => {
+  const api = new Function(
     "esc",
     "assistantIds",
     "sessionById",
     "assistantThreadName",
     `${region}
-return { queueSorted, queueOrderOf, queueDropBlocked, queueHoldBadge, queueHoldTarget, queueTaskHtml, QUEUE_BUCKET };`,
+return { queueSorted, queueOrderOf, queueDropBlocked, queueHoldBadge, queueHoldTarget, taskCardHtml, QUEUE_BUCKET };`,
   )(esc, () => ["assistant-1", "assistant-2"], (id) => ({ id, name: `Assistant ${id}` }), (t) => t);
+  // The queue pane's own call: a row, the full mode, and what the pane holds in `kit`.
+  const queueTaskHtml = (own, row, jobs = new Map(), byId = new Map(), alerts = []) =>
+    api.taskCardHtml(row, "full", { own, jobs, byId, alerts });
+  return { ...api, queueTaskHtml };
+};
 
 const tasks = () => [
   { id: 1, title: "carrying it", state: "running", files: [] },

@@ -63,7 +63,7 @@ const build = ({ answers = [] } = {}) => {
     "showBanner",
     "document",
     `${region}
-return { queueAgentChip, queueAgentHtml, queueTaskHtml, queueReattach, queueReattachNoteHtml, REATTACH_TEXT };`,
+return { queueAgentChip, queueAgentHtml, taskCardHtml, queueReattach, queueReattachNoteHtml, REATTACH_TEXT };`,
   )(
     esc,
     () => ["assistant-1", "assistant-2"],
@@ -80,7 +80,11 @@ return { queueAgentChip, queueAgentHtml, queueTaskHtml, queueReattach, queueReat
     () => {},
     { getElementById: () => null },
   );
-  return { api, posts, fetches, paints };
+  // The queue pane's own call: a row, the full mode, and what the pane holds in `kit`. The assertions below are about
+  // the full card's markup, which this mode still draws byte for byte.
+  const queueTaskHtml = (own, row, jobs = new Map(), byId = new Map(), alerts = []) =>
+    api.taskCardHtml(row, "full", { own, jobs, byId, alerts });
+  return { api: { ...api, queueTaskHtml }, posts, fetches, paints };
 };
 
 const jobs = (pairs) => new Map(pairs);

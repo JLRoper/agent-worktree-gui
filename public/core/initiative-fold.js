@@ -172,6 +172,53 @@
     return `${String(initiativeId == null ? "" : initiativeId)}::${String(assistantId == null ? "" : assistantId)}`;
   }
 
+  // ---- the cards one fold draws, and how many of them ------------------------------------------------
+  // A compact card is the QUEUE's own card (public/queue-cards.js `taskCardHtml`, mode "compact"), so this module
+  // decides only the two things the fold adds: WHICH cards come first, and HOW MANY are painted before the reader
+  // asks for the rest. An assistant can carry 169 rows on one initiative, and painting all of them into a tab that
+  // is usually closed is the cost this window exists to avoid.
+  //
+  // THE ORDER. Running, then queued, then parked - the states somebody is acting on or waiting on - then the most
+  // recent done rows. Within a bucket the caller's order is kept: the route hands the rows newest activity first, so
+  // the first `running` row is the one that moved most recently. It is the queue pane's own bucket order
+  // (`QUEUE_BUCKET` in queue-cards.js), so the two surfaces cannot disagree about which task matters now.
+  const TASK_CARD_BUCKET = Object.freeze({ running: 0, queued: 1, parked: 2, done: 3 });
+  // How many cards a fold draws before its "show more": enough that an assistant with a handful of rows is complete
+  // on the first look, few enough that the fold never becomes the tab's whole height.
+  const TASK_CARD_FIRST = 6;
+  // What one press adds, the queue pane's own slice size, so the two "more" controls move in the same steps.
+  const TASK_CARD_MORE = 50;
+
+  /**
+   * The rows in the order a fold draws them: the states being acted on first, then the finished ones.
+   */
+  function taskCardOrder(rows) {
+    const list = Array.isArray(rows) ? rows.filter(Boolean) : [];
+    return list
+      .map((row, at) => ({ row, at }))
+      .sort((a, b) => {
+        const ab = TASK_CARD_BUCKET[String(a.row.state || "")];
+        const bb = TASK_CARD_BUCKET[String(b.row.state || "")];
+        return (ab === undefined ? 2 : ab) - (bb === undefined ? 2 : bb) || a.at - b.at;
+      })
+      .map((x) => x.row);
+  }
+
+  /**
+   * The window one fold paints: the first `shown` rows in `taskCardOrder`, and an honest count of what is left.
+   *
+   * `hidden` is the number NOT drawn, `more` is how many one press adds (never more than is left), and `total` is
+   * every row the fold holds - the number the count chip beside the fold already carries. `shown` below one is the
+   * first window rather than an empty list: a fold that opens on nothing is not a state any caller asked for.
+   */
+  function taskCardWindow(rows, shown = TASK_CARD_FIRST) {
+    const ordered = taskCardOrder(rows);
+    const want = Math.max(1, Math.floor(Number(shown)) || TASK_CARD_FIRST);
+    const visible = ordered.slice(0, want);
+    const hidden = ordered.length - visible.length;
+    return { visible, hidden, more: Math.min(TASK_CARD_MORE, hidden), total: ordered.length };
+  }
+
   // ---- one line of an initiative's history ---------------------------------------------------------
   /**
    * What one stored event says, in the reader's words.
@@ -213,5 +260,5 @@
     return { who, what, at: typeof ev.at === "string" ? ev.at : null };
   }
 
-  root.wtInitiativeFold = { DOTS, PREVIEW_LINES, KINDS, COUNT_CHIPS, TASK_STATE_INFO, press, cut, countChips, historyLine, taskChip, taskFoldKey };
+  root.wtInitiativeFold = { DOTS, PREVIEW_LINES, KINDS, COUNT_CHIPS, TASK_STATE_INFO, TASK_CARD_BUCKET, TASK_CARD_FIRST, TASK_CARD_MORE, press, cut, countChips, historyLine, taskChip, taskFoldKey, taskCardOrder, taskCardWindow };
 })(globalThis);

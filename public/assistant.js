@@ -3382,10 +3382,15 @@
   // `taskFoldKey`). It is the reader's own state, so it survives every repaint of the pane - a snapshot every couple
   // of seconds must not shut the list a reader is reading - and two assistants under one initiative fold apart.
   const initTaskOpen = new Set();
-  // The row NODES already drawn, keyed the same way and then by task id: a live row is patched in place rather than
-  // rebuilt, so its text changes while the element the reader is looking at stays the same element. A rebuilt row
-  // would restart whatever the row animates and drop the focus/selection a reader left on it.
+  // THE CARD NODES already drawn, keyed by the fold and then by task id, each carrying the signature of the row it was
+  // drawn for: a card whose row has not moved is kept as the same element, and only a row whose state, title, thread,
+  // clock or run changed is redrawn. The card's MARKUP is never written here - public/queue-cards.js's taskCardHtml
+  // draws it, in compact mode, and this map only decides whether the node it drew last pass can stand.
   const initTaskNodes = new Map();
+  // HOW MANY CARDS the reader has asked for, per fold: the fold opens at public/core/initiative-fold.js's
+  // TASK_CARD_FIRST and one "show more" adds TASK_CARD_MORE. Module state, so the poll that repaints this pane cannot
+  // shut a list the reader opened, and two assistants under one initiative grow apart.
+  const initTaskShown = new Map();
   // ONE OPEN STATE PER INITIATIVE, in two books because the card and its description fold separately: `initOpen`
   // holds the initiatives the reader has unfolded (every card starts as a title card: a title, a two-line preview
   // and the counts), and `initDescClosed` holds the ones whose description the reader has folded back to that
@@ -3537,7 +3542,7 @@
       </button>
       <span class="as-hint init-assist-when">${running ? "working now" : a.lastAt ? `worked ${esc(relTime(a.lastAt))} ago` : "no stamped work yet"}</span>
       <span class="init-counts">${chips}</span>
-      ${tasksOpen ? `<div class="init-tasks" data-init-tasks="${esc(key)}" role="list" aria-label="${esc(`the tasks ${who} is doing on this initiative`)}"></div>` : ""}
+      ${tasksOpen ? `<div class="init-tasks" data-init-tasks="${esc(key)}" data-init-task-own="${esc(a.id)}" aria-label="${esc(`the tasks ${who} is doing on this initiative`)}"></div>` : ""}
     </div>`;
   }
 
@@ -3553,101 +3558,42 @@
     return a && Array.isArray(a.taskRows) ? a.taskRows : [];
   }
 
-  // The pull request a row carries, as the panel draws one: a link to its page when the board resolved one, plain
-  // text when it did not (never a dead link). Its own span, so a live patch can leave the anchor alone when the PR
-  // has not changed.
-  function initTaskPrHtml(pr) {
-    const n = Number(pr?.number) || 0;
-    if (!n) return "";
-    const state = String(pr.state || "").trim();
-    const label = `#${n}${state ? ` ${state}` : ""}`;
-    const why = `pull request #${n}${state ? ` (${state})` : ""}`;
-    if (pr.url) return `<a href="${esc(pr.url)}" target="_blank" rel="noopener" title="${esc(`${why} - opens its page on the remote`)}">${esc(label)}</a>`;
-    return `<span title="${esc(`${why} - the panel could not resolve a page for it`)}">${esc(label)}</span>`;
+  // What one card was drawn FROM, as one string: the five fields a compact card shows. A row that moved in any of them
+  // is redrawn, and a row that did not keeps the element already on screen - the pane repaints on every snapshot, and
+  // 169 cards rebuilt every few seconds would restart the list under a reader who is reading it.
+  function initTaskSig(row) {
+    return [row.state, row.title, row.thread, row.at, row.runId].join("|");
   }
 
-  // One row's skeleton. Its children never change, so `patchInitTaskRow` can update the text of a row that is
-  // already on screen: an id, the title, the state chip, the thread, the run (live only), the PR, and when it last
-  // moved. Both of the last two are emptied rather than left blank when they do not apply.
-  function initTaskRowEl(task) {
-    const el = document.createElement("div");
-    el.className = "init-task";
-    el.setAttribute("role", "listitem");
-    el.innerHTML = `<span class="init-task-id mono" data-init-task-id></span><span class="init-task-title" data-init-task-title></span><span class="chip init-task-state" data-init-task-chip></span><span class="as-hint init-task-thread mono" data-init-task-thread></span><span class="as-hint init-task-run mono" data-init-task-run></span><span class="init-task-pr mono" data-init-task-pr></span><span class="as-hint init-task-when" data-init-task-when></span>`;
-    return patchInitTaskRow(el, task);
-  }
-
-  // Write one task's facts into a row, in place. The state chip's words and tones come from the module the count strip
-  // already uses, so a row cannot say "running" in a colour the strip does not use. Every write is a textContent or
-  // an attribute on a child that already exists; nothing here recreates the row, which is what makes a live update
-  // an update rather than a repaint of the fold.
-  function patchInitTaskRow(el, task) {
-    if (!el || !task) return el;
-    const chip = wtInitiativeFold.taskChip(task.state);
-    el.dataset.initTask = String(task.id ?? "");
-    el.dataset.initTaskState = String(task.state || "");
-    const id = el.querySelector("[data-init-task-id]");
-    if (id) id.textContent = `#${task.id}`;
-    const title = el.querySelector("[data-init-task-title]");
-    if (title) title.textContent = String(task.title || "(no title)");
-    const state = el.querySelector("[data-init-task-chip]");
-    if (state) {
-      state.className = chip.cls;
-      state.textContent = chip.label;
-      state.title = chip.title;
-    }
-    const thread = el.querySelector("[data-init-task-thread]");
-    if (thread) {
-      thread.textContent = task.thread ? `on ${task.thread}` : "";
-      thread.hidden = !task.thread;
-      thread.title = task.thread ? "the thread this task is on" : "";
-    }
-    const run = el.querySelector("[data-init-task-run]");
-    if (run) {
-      run.textContent = task.runId ? `run ${task.runId}` : "";
-      run.hidden = !task.runId;
-      run.title = task.runId ? `the run this task is on now (${task.runId})` : "";
-    }
-    const pr = el.querySelector("[data-init-task-pr]");
-    if (pr) {
-      const key = task.pr ? `${task.pr.number}|${task.pr.state || ""}|${task.pr.url || ""}` : "";
-      // Rebuild the PR cell only when the pull request it names has changed: a state flip on the task must not
-      // replace the anchor a reader may be about to press.
-      if (String(pr.dataset.initPr || "") !== key) {
-        pr.dataset.initPr = key;
-        pr.innerHTML = initTaskPrHtml(task.pr);
-      }
-      pr.hidden = !task.pr;
-    }
-    const when = el.querySelector("[data-init-task-when]");
-    if (when) {
-      when.textContent = task.at ? `${relTime(task.at)} ago` : "no time recorded";
-      when.title = task.at ? `last activity ${String(task.at)}` : "the queue row carries no timestamp";
-    }
-    return el;
-  }
-
-  // Reconcile every open fold's rows against this pass's document. A task that is still there keeps its element (the
-  // list is rebuilt from the store on every repaint, and replacing the rows would restart them and drop a reader's
-  // place); a task that has gone is removed; a task whose state moved is patched where it stands. `appendChild` on a
-  // node that is already a child MOVES it, which is how an order change costs a reorder and not a redraw.
+  // Reconcile every open fold's cards against this pass's document. THE CARD ITSELF is public/queue-cards.js's
+  // taskCardHtml in its compact mode - the queue's own card, with no drag, no edit and no per-row button - so this
+  // painter decides three things and nothing else: which rows are drawn (the fold's window, active states first), how
+  // many (the reader's own count, six by default), and whether the node drawn last pass can stand (its signature).
+  // `appendChild` on a node that is already a child MOVES it, which is how an order change costs a reorder and not a
+  // redraw. The "show more" line is the fold's honest count: how many of how many, and what one press adds.
   function paintInitTaskLists(host) {
     if (!host) return;
     for (const box of host.querySelectorAll("[data-init-tasks]")) {
       const key = String(box.dataset.initTasks || "");
+      const own = String(box.dataset.initTaskOwn || "");
       const rows = initTaskRowsFor(key);
+      const win = wtInitiativeFold.taskCardWindow(rows, initTaskShown.get(key));
       let kept = initTaskNodes.get(key);
       if (!kept) {
         kept = new Map();
         initTaskNodes.set(key, kept);
       }
       const used = new Set();
-      for (const task of rows) {
-        const id = String(task.id ?? "");
+      for (const row of win.visible) {
+        const id = String(row.id ?? "");
+        const sig = initTaskSig(row);
         let el = kept.get(id) || null;
-        if (el) patchInitTaskRow(el, task);
-        else {
-          el = initTaskRowEl(task);
+        if (!el || String(el.dataset.initCardSig || "") !== sig) {
+          const made = document.createElement("div");
+          made.innerHTML = taskCardHtml(row, "compact", { own }).trim();
+          el = made.firstElementChild;
+          if (!el) continue;
+          el.dataset.initCardSig = sig;
           kept.set(id, el);
         }
         used.add(id);
@@ -3657,6 +3603,27 @@
         if (used.has(id)) continue;
         el.remove();
         kept.delete(id);
+      }
+      // The one control under the cards, and the count beside it. It RETIRES when the fold shows everything: with
+      // nothing hidden there is no control to draw, rather than a button that costs a line and does nothing.
+      let more = box.querySelector(".init-tasks-more");
+      if (win.hidden > 0) {
+        if (!more) {
+          more = document.createElement("div");
+          more.className = "init-tasks-more";
+          more.innerHTML = `<button type="button" class="init-mini" data-init-tasks-more></button><span class="as-hint" data-init-tasks-left></span>`;
+        }
+        const btn = more.querySelector("[data-init-tasks-more]");
+        const left = more.querySelector("[data-init-tasks-left]");
+        if (btn) {
+          btn.dataset.initTasksMore = key;
+          btn.textContent = `Show ${win.more} more`;
+          btn.title = `draw the next ${win.more} card${win.more === 1 ? "" : "s"} - the fold opens at the ${wtInitiativeFold.TASK_CARD_FIRST} rows being acted on, then the most recent finished ones`;
+        }
+        if (left) left.textContent = `${win.visible.length} of ${win.total} shown - ${win.hidden} not shown`;
+        box.appendChild(more);
+      } else if (more) {
+        more.remove();
       }
       const none = box.querySelector(".init-task-none");
       if (!rows.length) {
@@ -4168,8 +4135,28 @@
         return;
       }
       if (kind !== "self") return;
-      const el = e.target.closest("[data-init-fold], [data-init-assist-fold], [data-init-task-fold], [data-init-history-fold], [data-init-open], [data-init-edit], [data-init-add], [data-init-cancel], [data-init-create], [data-init-save], [data-init-move], [data-init-assistant], [data-init-new], [data-init-refresh]");
+      const el = e.target.closest("[data-init-fold], [data-init-assist-fold], [data-init-task-fold], [data-init-history-fold], [data-init-task-card], [data-init-tasks-more], [data-init-open], [data-init-edit], [data-init-add], [data-init-cancel], [data-init-create], [data-init-save], [data-init-move], [data-init-assistant], [data-init-new], [data-init-refresh]");
       if (!el) return;
+      // THE QUEUE'S OWN CARD, PRESSED IN THE INITIATIVES TAB. It is the same card the queue draws, in its compact
+      // read-only mode, so the press does what the card can no longer do for itself: it opens that task in its REAL
+      // queue - the assistant's pane on the queue sub-tab, the row widened into the window, centred in the pane's
+      // scroller and flashed - which is the walk the console's `#405` anchors and the chart's owner chips take
+      // (`openTaskRef`), not a second set of controls grown inside this tab.
+      if (el.hasAttribute("data-init-task-card")) {
+        e.preventDefault();
+        void openTaskRef(String(el.dataset.initTaskOwn || ""), String(el.dataset.initTaskCard || ""));
+        return;
+      }
+      // ONE MORE SLICE OF THE FOLD. The window is the tab's own (public/core/initiative-fold.js `taskCardWindow`), so
+      // this press owes no route: it asks the painter for TASK_CARD_MORE more cards and repaints from the document the
+      // pane already holds.
+      if (el.dataset.initTasksMore) {
+        e.preventDefault();
+        const key = String(el.dataset.initTasksMore);
+        initTaskShown.set(key, (initTaskShown.get(key) || wtInitiativeFold.TASK_CARD_FIRST) + wtInitiativeFold.TASK_CARD_MORE);
+        renderAssistantInitiatives(true);
+        return;
+      }
       if (el.hasAttribute("data-init-open")) {
         e.preventDefault();
         const [project, ...rest] = String(el.dataset.initOpen || "").split("|");
@@ -4275,6 +4262,16 @@
         const tree = action === "add" ? String(host.querySelector(`[data-init-addform="${CSS.escape(id)}"] [data-init-field="addTree"]`)?.value || "") : rest.join("|");
         void initMove(id, action, tree);
       }
+    });
+    // A card is a `role="button"` on a div, so Enter and Space are the press it advertises and the browser will not
+    // synthesise one. Only the card itself is answered: a key pressed in the fold's fields inside the card must type,
+    // not open a task.
+    host.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      const card = e.target && e.target.closest ? e.target.closest("[data-init-task-card]") : null;
+      if (!card) return;
+      e.preventDefault();
+      void openTaskRef(String(card.dataset.initTaskOwn || ""), String(card.dataset.initTaskCard || ""));
     });
     // The words are kept outside the DOM: a snapshot repaints the card under the caret, and a draft the painter cannot
     // read back would erase what the reader had typed.
@@ -5104,7 +5101,7 @@
     QUEUE_LIVE, qmoveOpen, closeQueueMove, toggleQueueMove,
     queueDropNotes, queueShown, queueWindowOf, QUEUE_MORE,
     queueCardDown, queueCardMove, queueCardUp, queueCardClickGuard, queueDragReset,
-    taskOwnerOf, taskIndexRev, ensureTaskIndex, queueOpenTask,
+    taskOwnerOf, taskIndexRev, ensureTaskIndex, queueOpenTask, taskCardHtml,
   } = window.WMApp.queueCards({
     asPost,
     setErr,
@@ -6118,7 +6115,7 @@
       openAgentTurn(opener.dataset.asQopen);
       return;
     }
-    const taskRow = e.target.closest(".as-task");
+    const taskRow = e.target.closest(".as-task:not(.is-compact)");
     if (taskRow && !e.target.closest("button, a, input, select, textarea, label, .as-qmove-pop, summary, .as-task-more")) {
       const thread = String(taskRow.dataset.asQthread || "");
       if (thread) {
