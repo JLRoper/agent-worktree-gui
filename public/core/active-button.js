@@ -10,9 +10,9 @@
 // reserved space - which is the same "zero is absent" rule the control already had for a board with no agent
 // working. A reader who never opens the row gets a header without it.
 //
-// THE WIRE NAMES DID NOT CHANGE WITH THE LABEL. `#btn-hot`, `#hot-label`, `#hot-badge` and this browser key are the
-// ids and the storage name the control has always had, so a page that set the key before the rename reads it after,
-// and an older build reading it still understands it. Only the word a person sees is Active.
+// THE WIRE NAMES DID NOT CHANGE WITH THE LABEL. `#btn-hot`, `#hot-label` and `#hot-badge` are the ids the control has
+// always had, so a page written against the older build still finds it. The switch itself is new, so it has its own
+// key - `wtgui.activeButton` - and a browser that never set it reads the default. Only the word a person sees is Active.
 //
 // Published on globalThis as `wtActiveButton`, loaded as a classic script by public/index.html before app.js, and
 // imported by test/active-button-toggle.test.js.
