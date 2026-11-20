@@ -142,13 +142,15 @@ body.focus-mode .topbar {
 }
 #human-badge[hidden] { display: none; }
 
-/* HOT AGENTS: the bolt that is drawn only while an agent is working. It is the other half of the Human count read
-   beside it - amber for an agent burning right now, red on Human for one stopped until you answer - so the colour is
-   the panel's own amber (#d29922 / #f0c674), never the yellow lock's #ffb454 in a row's name line and never the
-   turnover mark's blue-violet. `is-hot` is the state, the way `has-questions` is Human's, and the button exists at
-   all only while one agent is hot: zero is not a quiet control here, it is no control (public/app.js
-   paintHotButton). The `[hidden]` rule is explicit because this button's own display would otherwise beat the
-   attribute and a dead bolt would sit in the header at rest. */
+/* ACTIVE AGENTS (the control whose id, label span and badge keep the old word `hot`): the bolt that is drawn only
+   while an agent is working. It is the other half of the Human count read beside it - amber for an agent burning
+   right now, red on Human for one stopped until you answer - so the colour is the panel's own amber (#d29922 /
+   #f0c674), never the yellow lock's #ffb454 in a row's name line and never the turnover mark's blue-violet.
+   `is-hot` is the state, the way `has-questions` is Human's, and the button exists at all only while one agent is
+   working AND Settings > General has it switched on: zero is not a quiet control here, and neither is a reader who
+   turned it off - both are no control (public/app.js paintHotButton, public/core/active-button.js). The `[hidden]`
+   rule is explicit because this button's own display would otherwise beat the attribute and a dead bolt would sit in
+   the header at rest. */
 #btn-hot { display: inline-flex; align-items: center; gap: 6px; }
 #btn-hot[hidden] { display: none; }
 #btn-hot.is-hot { border-color: #4d3d12; background: var(--amber-bg); color: #f0c674; }

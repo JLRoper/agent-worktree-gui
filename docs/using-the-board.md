@@ -38,23 +38,30 @@ is `rev-parse`, `rev-list`, `merge-base`, `cherry`, `diff`, `status` and `log`.
 | Config line | Version, how many projects are being watched, the two main cadences, scan threads, bind host — and `refresh on screen only` when that refresh mode is on. |
 | Stream readout | `pool 1/3 · 3 conversations · 29 events · 2.4/s`: scan workers busy, how many conversations, and the event rate arriving over SSE. |
 | **🙋 Human** | Every open permission and clarify question on the board, in one rotation. See below. |
-| **⚡ Hot** | The agents working right now, in one rotation: an amber count and a bolt that is drawn only while one is. See below. |
+| **⚡ Active** | The agents working right now, in one rotation: an amber count and a bolt that is drawn only while one is. Off by default - Settings → General → **Show the Active agents button in the floating header** puts it in the header. See below. |
 | **✧ Assistant** | Opens the assistant panel beside the board (`A` or `Ctrl+Shift+A`) — a rail by default, and a floating window for an assistant whose own **Settings** says `floating`. Its purple badge counts the open alerts; the `⧗` pill beside it counts the **spawn cards** waiting for a click, amber once the oldest has waited over two minutes. |
 | **Hand-and-pen** (icon only, before 🙋 Human) | The **Hot Agent search** (`Ctrl+Shift+Q`): the turns you wrote to worker agents, newest first, across every project tree the panel has run one in — not one assistant's own transcript. A click opens the assistant panel if it was closed and hangs the list under this button; `Escape` closes it and hands the keyboard back here. Rows and keys: `docs/hot-agent-search-keys.md`. |
 | **Collapse all** | Folds the whole tree in one press — every folder, project, worktree row, card and turn. The button then reads **Expand all**. `Ctrl+]` also opens everything; `Ctrl+[` folds one tier per press instead. |
 | **⚙ Settings** | The Settings panel (`Ctrl+,`). **Refresh now**, **Fetch remotes** and **Live updates → Pause** live in it too, under Board. |
 
-### The HOT AGENTS bolt
+### The ACTIVE AGENTS bolt
 
-**⚡ Hot** is the red **🙋 Human** count read the other way. Human is every agent stopped until you answer; Hot is
-every agent still inside a turn - running, starting, queued, or between two tool calls. Click it (no key) and the
+**⚡ Active** is the red **🙋 Human** count read the other way. Human is every agent stopped until you answer; Active
+is every agent still inside a turn - running, starting, queued, or between two tool calls. Click it (no key) and the
 panel lands on the next one: its row unfolds, the board scrolls to its card and the card flashes, and the label
-counts its place (`Hot 1/2`). The tooltip names them, with the worktree each is in.
+counts its place (`Active 1/2`). The tooltip names them, with the worktree each is in.
 
-- Zero is **absent**, not quiet: with nothing working there is no bolt in the header at all, which is why it looks
-  like the header lost a button when the last agent finishes.
-- A turn parked on a permission or a clarify question is **not** hot - that agent is waiting on you, and it is the
-  red count and the Human rotation that own it. One question never appears in two counts.
+- It is a **setting**, and it ships **off**: Settings -> General -> **Show the Active agents button in the floating
+  header**. With the switch off the header carries no such control at all - not a grey one, not a zero badge, and no
+  space reserved for it. Switching it on gives exactly the control described here, and the choice is saved in this
+  browser, like the rows on the Board tab.
+- Zero is **absent**, not quiet: with the switch on and nothing working there is no bolt in the header, which is why
+  it looks like the header lost a button when the last agent finishes.
+- A turn parked on a permission or a clarify question is **not** active - that agent is waiting on you, and it is
+  the red count and the Human rotation that own it. One question never appears in two counts.
+- The **Hot Agent pen search** beside it is a different control and keeps its name, its glyph and `Ctrl+Shift+Q`:
+  that is the list of turns you wrote to worker agents. Switching the Active button off leaves the pen exactly as it
+  was, so nobody turns off the wrong one.
 - It is not the row's yellow lock (a tree held by a live run), not the blue turnover mark (a branch relationship)
   and not the amber ▣ Review mark (a result to read).
 

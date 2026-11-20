@@ -1,5 +1,9 @@
 // hot-mark.js - which agents are HOT: the ones working right now, and the press that lands on one.
 //
+// THE WORD, AND THE WIRE. The header control this module feeds is labelled Active (it read Hot before the rename);
+// the file name, the global, the element ids and the browser key keep `hot`, because they are the wire, not the
+// word a person reads. Every title and aria-label this file answers says Active.
+//
 // WHY THIS IS A MODULE. The header's bolt, its count, its tooltip and the press that steps to an agent all have to
 // answer "is this agent hot" the same way, and the answer is one predicate. It lives here so it is answered once:
 // the page reads it (public/app.js `paintHotButton` / `hotStep`), and test/hot-mark.test.js drives the same file with
@@ -84,13 +88,15 @@
 
   // The button's tooltip. It names the agents and the trees they are working in, says what the press does, and draws
   // the line between this amber and Human's red in the reader's own words - the two controls are read side by side.
+  // The word is ACTIVE: the control's ids and its module keep the old name `hot` on the wire (and this file is one of
+  // them), but a person reads Active, and every title and aria-label this file answers says so.
   function title(list) {
     const items = (list || []).filter(Boolean);
     if (!items.length) {
-      return "Hot Agents - nothing is working right now: no agent on this board is inside a turn. This marker is drawn only while one is; a turn parked on a permission or a question is the red Human count, not this.";
+      return "Active agents - nothing is working right now: no agent on this board is inside a turn. This button is drawn only while one is; a turn parked on a permission or a question is the red Human count, not this.";
     }
     const named = items.map((a) => (a.where ? `${a.name || a.key} (${a.where})` : a.name || a.key));
-    return `Hot Agents - ${plural(items.length, "agent", "agents")} working right now: ${named.join(", ")}. Click to land on the next one: its row opens if it has one, the board scrolls to its card and the card flashes. A turn parked on a permission or a question is not hot - that is the red Human count, and the yellow lock and the blue turnover mark on a row are other things again.`;
+    return `Active agents - ${plural(items.length, "agent", "agents")} working right now: ${named.join(", ")}. Click to land on the next one: its row opens if it has one, the board scrolls to its card and the card flashes. A turn parked on a permission or a question is not active - that is the red Human count, and the yellow lock and the blue turnover mark on a row are other things again. Settings > General > "Show the Active agents button in the floating header" turns this button off.`;
   }
 
   root.wtHotMark = { HOT_STATUS, hot, asks, agents, count, step, title };

@@ -23,7 +23,7 @@
       <span class="meta" id="stream-state">—</span>
       <span class="meta" id="stream-rate"></span>
       <button id="btn-assistant" type="button" class="btn-assistant" title="assistant — watches the agents on this board, notices loops and stalls, and drafts answers to a worker's questions (A or Ctrl+Shift+A)">✧ Assistant<span id="assistant-badge" hidden>0</span><span id="assistant-spawn-badge" class="as-spawn-badge" hidden>0</span></button>
-      <button id="btn-hot" type="button" hidden title="Hot Agents - the agents on this board that are working right now. This bolt is drawn only while one is: click it to land on the next one, whose row opens and whose card flashes. A turn parked on a permission or a clarify question is not hot - that is the red Human count beside it."><span id="hot-label">⚡ Hot</span><span id="hot-badge" hidden>0</span></button>
+      <button id="btn-hot" type="button" hidden title="Active agents - the agents on this board that are working right now. This button is drawn only while one is, and only when Settings &gt; General &gt; Show the Active agents button in the floating header is on: click it to land on the next one, whose row opens and whose card flashes. A turn parked on a permission or a clarify question is not active - that is the red Human count beside it. It is not the Hot Agent pen search on its left, which is a different control."><span id="hot-label">⚡ Active</span><span id="hot-badge" hidden>0</span></button>
       <!-- The Hot Agent search: the turns the reader wrote to worker agents, opened by this button or by
            Ctrl+Shift+Q from anywhere. It is a HEADER control, beside Human and after the assistant's own entry,
            because what it searches is the whole board - every tree the panel has run an agent in - and not one
@@ -84,6 +84,12 @@
           </select>
         </label>
         <div class="settings-preview" id="general-dock-help">One frame for every assistant's pane: the rail beside the board, or a window over it at the size and place you last left it. Picking takes effect at once and is saved in this panel's config.json. This used to be each assistant's own setting — where two assistants disagreed, the frame of the assistant the panel was showing at the time is the one that was kept.</div>
+
+        <label class="settings-row settings-gap" for="general-active-button" title="Whether the floating header draws the ⚡ Active agents button at all. It is OFF by default, and off means ABSENT: no bolt, no count, and no space reserved for one. Switched on, it behaves exactly as the panel always has - an amber bolt carrying the count of agents working right now, a tooltip naming them and the trees they are in, and a press that lands on the next one: its row opens if it has one, the board scrolls to its card and the card flashes. Only an agent actually working is counted; a turn parked on a permission or a clarify question is not, and belongs to the red Human count beside it. This is a DIFFERENT control from the Hot Agent pen search on its left in the header: that is the Ctrl+Shift+Q list of the turns you wrote to worker agents, and switching this off leaves its name, its glyph and its chord exactly as they were, so nobody turns off the wrong one. Saved in this browser, like the rows on the Board tab.">
+          <span>Show the Active agents button in the floating header <span class="settings-info">ⓘ</span></span>
+          <input id="general-active-button" type="checkbox">
+          <span class="settings-unit mono">header</span>
+        </label>
 
         <label class="settings-row" for="general-threads" title="How many git scans run at once. Every worktree row is read by spawning git (status, log, rev-list), and each of those is a process creation: this machine charges 0.6-4.7s for one while the endpoint agent filters it, so five workers is five of them running beside every command your agents run. Lowering this makes the background read cheaper and the board no less correct — it only delays a row's refresh. Written into config.json and applied at once: the pool is rebuilt live.">
           <span>Scan workers <span class="settings-info">ⓘ</span></span>
@@ -1245,10 +1251,15 @@
        `wtReviewLane`; test/review-lane.test.js imports this same file. Loaded before app.js, which wires it. -->
   <script src="/core/review-lane.js"></script>
   <!-- The HOT AGENTS marker's arithmetic: is this turn hot (working now, not parked on the reader), which agents are,
-       and which one the press lands on next. ONE reading of the page's job list, so the bolt's existence, its count,
+       and which one the press lands on next. ONE reading of the page's job list, so the button's existence, its count,
        its tooltip and the press cannot disagree. Published on globalThis as `wtHotMark`; test/hot-mark.test.js imports
        this same file. Loaded before app.js, which wires it. -->
   <script src="/core/hot-mark.js"></script>
+  <!-- Whether the header draws that button AT ALL: the one browser switch Settings > General writes, off by default,
+       and the decision the paint asks (switched on AND an agent working). Published on globalThis as
+       `wtActiveButton`; test/active-button-toggle.test.js imports this same file. Loaded before app.js, which wires
+       it. The key and the ids keep the old word `hot`: only the label a person reads is Active. -->
+  <script src="/core/active-button.js"></script>
   <!-- The search's TURN map: which hits belong to one message. A turn's prompt, its reply and every console line are
        ONE item however many of them matched; the walk steps the hits (search-count.js), while the ring round the
        message, the footer's turn count and a result row read this grouping. Published on globalThis as
