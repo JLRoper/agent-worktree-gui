@@ -196,6 +196,10 @@ function project() {
   chips.refreshBoardChip = () => {};
   chips.refreshTurnoverChip = () => {};
   chips.refreshCleanupChip = () => {};
+  // The strip repaints the cleanup chip and the drop-all button beside it through one call (refreshCleanupUi in
+  // board-scaffold.js), so that is the name refreshChips reaches for. Stubbed for the same reason as the four above:
+  // this test measures the counts strip's own lookups, and each chip's caching is measured on its own below.
+  chips.refreshCleanupUi = () => {};
   chips.topSlotHtml = () => ""; // nothing held back: no arrow
   const strip = doc.add(new Node({ "data-chips": "alpha" }));
   const slot = doc.add(new Node({ "data-age-slot": "alpha" }));

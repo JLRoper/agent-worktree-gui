@@ -223,14 +223,13 @@
     const dropOne = input && input.dropOne;
     const onProgress = typeof (input && input.onProgress) === "function" ? input.onProgress : () => {};
     const failures = [];
-    for (const row of Array.isArray(input && input.refused) ? input.refused : []) {
+    const preRefused = Array.isArray(input && input.refused) ? input.refused : [];
+    for (const row of preRefused) {
       failures.push({ path: String(row.path || ""), name: String(row.name || ""), why: String(row.why || "refused") });
     }
     if (typeof dropOne !== "function") {
-      return {
-        outcomes: [],
-        summary: { attempted: 0, dropped: 0, refused: failures.length, failures, note: dropAllNote({ attempted: 0, refused: failures.length }) },
-      };
+      const empty = { attempted: preRefused.length, dropped: 0, refused: failures.length, failures };
+      return { outcomes: [], summary: { ...empty, note: dropAllNote(empty) } };
     }
     const outcomes = [];
     let done = 0;
@@ -258,7 +257,9 @@
     }
     const dropped = outcomes.filter((o) => o.ok).length;
     const summary = {
-      attempted: selection.length,
+      // Every row the run accounted for: the ones it was handed and the ones already refused by the plan check.
+      // `dropped + refused === attempted` always, so the three numbers in the sentence add up for the reader.
+      attempted: selection.length + preRefused.length,
       dropped,
       refused: failures.length,
       failures,
