@@ -51,7 +51,7 @@ import { ReviewInbox } from "./lib/review-inbox.js";
 // the three conditions; routes/collisions.js is the read, the ask and the ruling.
 import { CollisionBook, filingKey, owningTaskFor } from "./lib/collisions.js";
 import { rulingRowsFor, sweepCollisions } from "./lib/collision-flow.js";
-import { probePairMerge } from "./lib/collision-merge.js";
+import { probeLanded, probePairMerge, probeSharedFiles } from "./lib/collision-merge.js";
 import { COLLISIONS_PATH, createCollisionsRoutes } from "./routes/collisions.js";
 import { Hosts, docOf, prListing, proposeMapping, renderTemplate } from "./lib/hosts.js";
 // What a worktree is FOR: the definition catalogue (reader-edited over the shipped seed), where each tree stands in
@@ -2890,6 +2890,35 @@ function collisionQueues() {
   }
   return out;
 }
+// THE BRANCH A PROJECT'S WORK LANDS ON, for the landing check: `projects[].mainBranch` when it names one, else the
+// first base branch the reader listed (a project laid out env by env has no single main), else `main`. The row's own
+// base is preferred over this inside the sweep - a tree cut from `qa` lands on `qa` - so this is only the project-wide
+// answer for a side whose row has not been scanned yet.
+function collisionMainBranch(name) {
+  let record = null;
+  try {
+    record = (registry.projects || []).find((p) => p && String(p.name || "") === String(name || "")) || null;
+  } catch {
+    record = null;
+  }
+  const single = String(record?.mainBranch || "").trim();
+  if (single) return single.replace(/^origin\//, "");
+  const list = Array.isArray(record?.baseBranches) ? record.baseBranches : [];
+  const first = list.map((b) => String((b && b.branch) || b || "").trim()).filter(Boolean)[0];
+  return first ? first.replace(/^origin\//, "") : "main";
+}
+// The queues and rows a worker's COLLISION note is resolved against, read at the moment the note is filed: a note that
+// names a queue row (#12, or the thread it was carried on) and a note that names this same tree both need the board as
+// it stands, not the board as it stood when the panel booted.
+jobs.collisionContext = () => {
+  let rows = [];
+  try {
+    rows = rowsWithProject();
+  } catch {
+    rows = [];
+  }
+  return { rows, queues: collisionQueues() };
+};
 // The queue write for one filed row. It goes through `assistant.queueMutate` - the same writer the queue tab, the
 // assistant's own QUEUE lines and a stage link use - so the file, the journal and the repaint stay in one place, and
 // the carried key makes a restart's second sweep find the row it already filed instead of a duplicate.
@@ -2950,6 +2979,13 @@ function sweepCollisionsNow() {
       // THE MERGE QUESTION, on the panel's own tick: merge-tree in both directions against the pair's two tips, in the
       // object database. No checkout, no model, no worker turn.
       probeMerge: (pair) => probePairMerge(pair),
+      // THE TWO FACTS A REPORT OWES ITS READER, measured here because only the panel can ask git: the files both
+      // branches changed against their merge base, and whether a side's tip has already been carried into main by a
+      // landing LATER than the report. Neither is a claim the worker makes; both are git's answer, stamped with the
+      // tips they were read at.
+      probeShared: (pair) => probeSharedFiles(pair),
+      probeLanded: (side, opts) => probeLanded(side, opts),
+      mainFor: (name) => collisionMainBranch(name),
     });
   } catch (err) {
     log(`collisions: the sweep failed (${String((err && err.message) || err)})`);
@@ -3223,12 +3259,20 @@ function withReviews(snap) {
 // OTHER tree's name, the shared paths and the branch relation - so a row can always say who it is colliding with. A
 // row in no collision carries no `collisions` field at all, so nothing draws an empty marker. `rowExtras` overlays the
 // same list on a per-row SSE frame, because a frame REPLACES the page's row object wholesale.
+//
+// `collisionHistory` is the same view of the records a LANDING has superseded: the live lane drops them (they are not
+// a decision any more, and the chip's open count must not count them), and the card keeps them under a history heading
+// naming the commit that ended the pair. A row that has only history still carries the field, so its chip can open the
+// card and read why the collision is over instead of the card vanishing as if it had never happened.
 function withCollisions(snap) {
   for (const project of snap.projects || []) {
     for (const row of project.worktrees || []) {
       const list = collisions.forTree(row.path);
       if (list.length) row.collisions = list;
       else delete row.collisions;
+      const history = collisions.historyFor(row.path);
+      if (history.length) row.collisionHistory = history;
+      else delete row.collisionHistory;
     }
   }
   return snap;
@@ -3894,6 +3938,9 @@ function rowExtras(projectName, row) {
     const crossing = collisions.forTree(out.path);
     if (crossing.length) out.collisions = crossing;
     else delete out.collisions;
+    const past = collisions.historyFor(out.path);
+    if (past.length) out.collisionHistory = past;
+    else delete out.collisionHistory;
     return out;
   });
 }

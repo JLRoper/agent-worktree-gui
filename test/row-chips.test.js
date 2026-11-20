@@ -160,7 +160,7 @@ test("the row's strip draws both chips, and the detail draws neither card", () =
   assert.match(chip, /open \? `<span class="rowchip-chev"/);
 
   // The two cards themselves are the popup's content now, and the detail no longer emits them.
-  const detail = sliceBetween(scaffold, "function detailHtml(row) {", "// THE COLLISION CARD.");
+  const detail = sliceBetween(scaffold, "function detailHtml(row) {", "// THE COLLISION CARD reads the RECORD");
   assert.ok(!detail.includes("${collisionBlockHtml(row, key)}"), "the collision card left the row's detail");
   assert.ok(!detail.includes("${reviewBlockHtml(row, key)}"), "the result card left the row's detail");
   const pop = sliceBetween(scaffold, "function rowChipInner(kind, row, key)", "// What the popup draws");

@@ -2037,21 +2037,23 @@ function detailHtml(row) {
   </div></td></tr>`;
 }
 
-// THE COLLISION CARD. Two live trees in one project are touching the same work; this is ONE card for the PAIR, and it
-// is what the row's collision CHIP opens - the chip carries the pair count (open and resolved, see the chips block
-// below), and this card is behind it, so the pair costs the row one line instead of a paragraph. It names both
-// sides - tree, branch and the queue task each one is being driven by - with this row's own side marked, so neither
-// side has to reconcile the other by hand from a card that only knew its own half. On the other row the two sides
-// are the same two trees, with the mark on the other one.
+// THE COLLISION CARD reads the RECORD, never a guess of its own. `resolution` is the answer the store gave when the
+// worker's note was filed (lib/collisions.js `resolveCounterpart`): another tree, this same tree, or nothing. Only the
+// first can be ruled on, and only with measured paths between the two branches - so:
 //
-// THE EVIDENCE IS ON THE CARD, not behind a hover: the shared paths as chips, the relation as a sentence, both trees'
-// paths and branches, and which assistant filed into which side. A reader who has to go looking for the files cannot
-// rule on them.
+//   same tree        "same tree, not a collision", one side drawn, no press at all;
+//   no match         the words the worker typed, said back with "no row matches", no press;
+//   no shared file   "no shared file" and no press, whether the set is empty or git could not compute it;
+//   superseded       in HISTORY only: the landing that ended the pair is named, and there is nothing to press.
+//
+// THE EVIDENCE IS MEASURED, not the worker's prose: the paths both branches changed against their merge base, printed
+// as chips. `evidence.ok === false` says git could not answer, which is a different sentence from "nothing in common"
+// and gets its own - a reader is never told a measurement happened when it did not.
 //
 // THE TWO PRESSES are the ruling: which side goes first. The panel files the priority into both assistants' queues and
 // stores it against the PAIR, so the same overlap never asks again - it renders as "already ruled" with the side named
-// and a withdraw beside it. "Bring it to me" exists only while the pair is still with the assistants: it is the
-// reader's own way in before the pass would have handed it over.
+// and a withdraw beside it. "Bring it to me" exists only while the pair is still with the assistants and there is
+// evidence to bring: it is the reader's own way in before the pass would have handed it over.
 //
 // A STAND-DOWN IS SAID OUT LOUD. When one side closed or parked its filed notice the pair stops waiting on the reader,
 // and the card says which side yielded and why ("its notice #12 was done") - on both rows. A quiet stand-down is the
@@ -2099,17 +2101,32 @@ function collisionSideHtml(rec, side, mine) {
 }
 
 function collisionBlockHtml(row, key) {
-  const list = Array.isArray(row?.collisions) ? row.collisions : [];
-  if (!list.length) return "";
-  const blocks = list.map((rec) => {
-    const other = rec.other?.name || rec.otherTarget || "an unnamed tree";
-    const otherPath = rec.other?.path || "";
-    const otherBranch = rec.other?.branch || "";
+  const live = Array.isArray(row?.collisions) ? row.collisions : [];
+  const history = Array.isArray(row?.collisionHistory) ? row.collisionHistory : [];
+  const blockFor = (rec, lane) => {
+    // The ANSWER the store gave for this record: another tree, this same tree, or nothing. Every press and every
+    // sentence below is decided by it, so a card can no longer print a stranger's words as a counterpart.
+    const resolution = rec.resolution && typeof rec.resolution === "object" ? rec.resolution : null;
+    const kind = resolution?.kind || (rec.other?.path ? "tree" : rec.otherTarget ? "none" : "tree");
+    const superseded = rec.superseded && typeof rec.superseded === "object" ? rec.superseded : null;
+    const target = resolution?.target || rec.otherTarget || "";
+    const other = kind === "same-tree" ? target || row.name || "this tree" : rec.other?.name || rec.otherTarget || "an unnamed tree";
+    const otherPath = kind === "tree" ? rec.other?.path || "" : "";
+    const otherBranch = kind === "tree" ? rec.other?.branch || "" : "";
     const state = rec.state || "assistants";
     const files = Array.isArray(rec.files) ? rec.files : [];
+    // MEASURED, OR NOT SAID. `evidence.ok === true` is git's own answer; a false one is "could not be computed" and is
+    // printed as that, never as a set of zero files. With no measurement at all the card says what it has: the worker's
+    // sentence, named as such.
+    const evidence = rec.evidence && typeof rec.evidence === "object" ? rec.evidence : null;
+    const measured = evidence?.ok === true;
     const chips = files.length
-      ? `<ul class="collision-chips" aria-label="the files both trees are touching">${files.map((f) => `<li class="collision-chip mono" title="${esc(f)}">${esc(f)}</li>`).join("")}</ul>`
-      : `<span class="collision-none">no shared file is named: the evidence is the worker's own sentence</span>`;
+      ? `<ul class="collision-chips" aria-label="the files both branches changed against their merge base">${files.map((f) => `<li class="collision-chip mono" title="${esc(f)}">${esc(f)}</li>`).join("")}</ul>`
+      : measured
+        ? `<span class="collision-none" data-collision-files="none">no shared file: both branches changed nothing in common against their merge base</span>`
+        : evidence && evidence.ok === false
+          ? `<span class="collision-none" data-collision-files="unknown" title="${esc(evidence.error || "git could not compute the overlap")}">no shared file - the overlap could not be computed (${esc(evidence.error || "git did not answer")})</span>`
+          : `<span class="collision-none" data-collision-files="none">no shared file is named: the evidence is the worker's own sentence</span>`;
     const when = rec.firstAt ? `${relTime(rec.firstAt)} ago` : "";
     // The sides whose OWN task is finished. Derived by the store on every read (lib/collisions.js `finishedSides`),
     // so it is never a stale flag: work that starts again in that tree brings the pair back as a live one.
@@ -2121,15 +2138,21 @@ function collisionBlockHtml(row, key) {
     // withdraw beside it is the reader's one press to overrule it (withdrawing an automatic pick stops the sweep from
     // putting the same order straight back, so the pair becomes his).
     const auto = state === "ruled" && Boolean(rec.ruling?.auto);
-    const stateWord = auto
-      ? `auto-settled: ${esc(rec.ruling?.name || "a side")} goes first - ${esc(rec.ruling?.reason || "no merge risk either way")}`
-      : state === "ruled"
-        ? `already ruled: ${esc(rec.ruling?.name || "a side")}${rec.ruling?.taskId ? ` (#${esc(rec.ruling.taskId)})` : ""} goes first`
-        : stoodByTask.length
-          ? `already stood down: ${esc(finishedSay)}`
-          : state === "reader"
-            ? "yours to rule on"
-            : "with both assistants";
+    const stateWord = superseded
+      ? `superseded by ${esc(superseded.short || String(superseded.commit || "").slice(0, 12))} - landed ${superseded.landedAt ? `${relTime(superseded.landedAt)} ago` : "after this report"}, after this report`
+      : kind === "same-tree"
+        ? "same tree, not a collision"
+        : kind === "none"
+          ? `no row matches ${esc(target || "that name")} - nothing to rule on`
+          : auto
+            ? `auto-settled: ${esc(rec.ruling?.name || "a side")} goes first - ${esc(rec.ruling?.reason || "no merge risk either way")}`
+            : state === "ruled"
+              ? `already ruled: ${esc(rec.ruling?.name || "a side")}${rec.ruling?.taskId ? ` (#${esc(rec.ruling.taskId)})` : ""} goes first`
+              : stoodByTask.length
+                ? `already stood down: ${esc(finishedSay)}`
+                : state === "reader"
+                  ? "yours to rule on"
+                  : "with both assistants";
     // WHAT GIT SAID, when it said "the reader's": both directions conflict, or it could not answer. A card that asked
     // for a decision with no reason visible is the bare flag this whole surface exists to avoid.
     const dirs = rec.merge || null;
@@ -2139,6 +2162,10 @@ function collisionBlockHtml(row, key) {
         : dirs && (dirs.aFirst?.error || dirs.bFirst?.error)
           ? "git could not answer the merge question - the order is yours"
           : "";
+    // THE RULE: two trees, and paths measured between them. A card with no shared file, no counterpart or a counterpart
+    // that IS this tree offers no press - there is nothing to order, and a press between one tree and itself is the
+    // defect this card was fixed for.
+    const canRule = !superseded && kind === "tree" && Boolean(rec.other?.path) && files.length > 0;
     const ruleBtn = (pick, label, title) =>
       `<button class="btn-collision-rule" type="button" data-collision-rule="${esc(rec.key)}" data-collision-pick="${pick}" title="${esc(title)}">${esc(label)}</button>`;
     const mine = row.name || "this tree";
@@ -2146,19 +2173,22 @@ function collisionBlockHtml(row, key) {
     // b. Labelling by role is what keeps "⇢ this tree goes first" pointing at the tree the reader is looking at.
     const minePick = rec.role === "b" ? "b" : "a";
     const otherPick = minePick === "a" ? "b" : "a";
-    const actions = [
-      ruleBtn(minePick, "⇢ this tree goes first", `rule that ${mine} goes first: the priority is filed into both assistants' queues and stored against this pair`),
-      ruleBtn(otherPick, `⇢ ${other} goes first`, `rule that ${other} goes first: the priority is filed into both assistants' queues and stored against this pair`),
-      state === "ruled"
-        ? `<button class="btn-collision-clear" type="button" data-collision-rule="${esc(rec.key)}" data-collision-pick="clear" title="${
-            auto
-              ? "withdraw this automatic pick - the panel will not put the same order back, so the pair is yours to rule"
-              : "withdraw the ruling - the pair goes back to the assistants' own pass"
-          }">withdraw the ruling</button>`
-        : rec.canAsk
-          ? `<button class="btn-collision-ask" type="button" data-collision-ask="${esc(rec.key)}" title="bring this pair to you now, instead of waiting for the assistants' pass">bring it to me</button>`
-          : "",
-    ].filter(Boolean);
+    const actions = [];
+    if (canRule) {
+      actions.push(ruleBtn(minePick, "⇢ this tree goes first", `rule that ${mine} goes first: the priority is filed into both assistants' queues and stored against this pair`));
+      actions.push(ruleBtn(otherPick, `⇢ ${other} goes first`, `rule that ${other} goes first: the priority is filed into both assistants' queues and stored against this pair`));
+    }
+    if (state === "ruled" && !superseded) {
+      actions.push(
+        `<button class="btn-collision-clear" type="button" data-collision-rule="${esc(rec.key)}" data-collision-pick="clear" title="${
+          auto
+            ? "withdraw this automatic pick - the panel will not put the same order back, so the pair is yours to rule"
+            : "withdraw the ruling - the pair goes back to the assistants' own pass"
+        }">withdraw the ruling</button>`,
+      );
+    } else if (rec.canAsk && canRule) {
+      actions.push(`<button class="btn-collision-ask" type="button" data-collision-ask="${esc(rec.key)}" title="bring this pair to you now, instead of waiting for the assistants' pass">bring it to me</button>`);
+    }
     const mineSide = rec.role === "b" ? rec.b : rec.a;
     const otherSide = rec.role === "b" ? rec.a : rec.b;
     const stood = [
@@ -2178,7 +2208,15 @@ function collisionBlockHtml(row, key) {
     ]
       .flat()
       .join("; ");
-    return `<div class="collision-block is-${esc(state)}" data-collision-block="${esc(key)}" data-collision-key="${esc(rec.key)}" data-collision-pair="${esc(rec.key)}">
+    // The measured stamp names the merge base the paths were read against, so a reader can tell a measurement from a
+    // sentence without trusting either.
+    const measuredSay = measured && files.length ? `git: both branches against merge base ${String(evidence.base || "").slice(0, 12)} - ${files.length} shared` : "";
+    const peerLine = kind === "tree"
+      ? `<div class="collision-peer mono" title="the other tree, as the scanner knows it">${esc(otherPath)}${rec.filed && rec.filed.length ? ` · filed with ${esc(rec.filed.map((f) => f.assistantId).join(", "))}` : ""}</div>`
+      : kind === "same-tree"
+        ? `<div class="collision-peer" data-collision-resolution="same-tree">the counterpart named here is <span class="mono">${esc(target || row.path)}</span> - the tree this card is drawn on. There is no second side and nothing to order.</div>`
+        : `<div class="collision-peer" data-collision-resolution="none">no row on this board answers to <span class="mono">${esc(target || "that name")}</span> - there is no second side to rule against.</div>`;
+    return `<div class="collision-block is-${esc(state)}${lane === "history" ? " is-history" : ""}" data-collision-block="${esc(key)}" data-collision-key="${esc(rec.key)}" data-collision-pair="${esc(rec.key)}" data-collision-lane="${esc(lane)}">
       <div class="collision-head">
         <span class="collision-mark" role="img" aria-label="collision with ${esc(other)}">◆</span>
         <h4>Collision</h4>
@@ -2187,24 +2225,33 @@ function collisionBlockHtml(row, key) {
         <span class="collision-when mono">${esc([when, rec.source === "reported" ? "reported by its worker" : ""].filter(Boolean).join(" · "))}</span>
       </div>
       <div class="collision-body">
-        <div class="collision-sides">${collisionSideHtml(rec, mineSide, true)}${collisionSideHtml(rec, otherSide, false)}</div>
+        <div class="collision-sides">${collisionSideHtml(rec, mineSide, true)}${kind === "tree" ? collisionSideHtml(rec, otherSide, false) : ""}</div>
         <div class="collision-say">${esc(collisionEvidence(rec))}</div>
+        ${measuredSay ? `<div class="collision-say collision-measured">${esc(measuredSay)}</div>` : ""}
         ${conflictSay ? `<div class="collision-say collision-merge-say">${esc(conflictSay)}</div>` : ""}
-        ${chips}
-        ${stood ? `<div class="collision-stood">${esc(stood)}</div>` : ""}
-        ${otherPath
-          ? `<div class="collision-peer mono" title="the other tree, as the scanner knows it">${esc(otherPath)}${rec.filed && rec.filed.length ? ` · filed with ${esc(rec.filed.map((f) => f.assistantId).join(", "))}` : ""}</div>`
-          : `<div class="collision-peer">no row on this board answers to <span class="mono">${esc(rec.otherTarget || "that name")}</span> - nothing but you can look at this one</div>`}
+        ${kind === "tree" ? chips : ""}
+        ${kind === "tree" && stood ? `<div class="collision-stood">${esc(stood)}</div>` : ""}
+        ${peerLine}
         ${rec.notes && rec.notes.length ? `<ul class="collision-notes">${rec.notes.map((n) => `<li>“${esc(n.text)}”</li>`).join("")}</ul>` : ""}
         ${auto
           ? `<div class="collision-ruling-note">settled by the panel from git's own merge check - withdraw it to make this pair yours</div>`
           : rec.ruling?.note
             ? `<div class="collision-ruling-note">your note: ${esc(rec.ruling.note)}</div>`
             : ""}
-        <div class="collision-actions">${actions.join("")}</div>
+        ${superseded
+          ? `<div class="collision-ruling-note collision-superseded" data-collision-superseded="${esc(superseded.commit)}">the landing <span class="mono">${esc(superseded.short || superseded.commit)}</span> carried ${esc(superseded.side === "b" ? rec.b?.name || "the other side" : rec.a?.name || "this side")} into ${esc(superseded.main || "main")}${superseded.landedAt ? ` ${relTime(superseded.landedAt)} ago` : ""}, after this report was stamped${superseded.reportAt ? ` (${esc(String(superseded.reportAt))})` : ""} - the pair is history and asks nothing of you</div>`
+          : ""}
+        ${actions.length ? `<div class="collision-actions">${actions.join("")}</div>` : ""}
       </div>
     </div>`;
-  });
+  };
+  const blocks = live.map((rec) => blockFor(rec, "live"));
+  if (history.length) {
+    blocks.push(`<div class="collision-history" data-collision-history="${esc(key)}">
+      <div class="collision-history-head">history - a landing ended ${history.length === 1 ? "this pair" : "these pairs"}; kept so the reason is still readable</div>
+      ${history.map((rec) => blockFor(rec, "history")).join("")}
+    </div>`);
+  }
   return blocks.join("");
 }
 
@@ -2327,7 +2374,12 @@ function rowChipTitle(kind, row, open) {
       ? `collapse the result - ${label}; the card carries the whole summary, the report and the next steps`
       : `expand the result - ${label}. The card behind this chip carries the whole summary, the docs/reports link and every next step the run named`;
   }
-  const list = Array.isArray(row && row.collisions) ? row.collisions : [];
+  const live = Array.isArray(row && row.collisions) ? row.collisions : [];
+  const history = Array.isArray(row && row.collisionHistory) ? row.collisionHistory : [];
+  // HISTORY COUNTS AS RESOLVED, and a row with ONLY history still carries the chip: the pair is over, and the card
+  // behind it is where the reader finds out which landing ended it. Dropping the chip would make the collision vanish
+  // as if it had never been reported.
+  const list = live.concat(history);
   const counts = typeof wtRowChips !== "undefined" ? wtRowChips.tally(list, row && row.project) : { open: 0, resolved: 0 };
   return open
     ? `collapse the collisions - ${counts.open} open, ${counts.resolved} resolved`
@@ -2348,7 +2400,9 @@ function resultChipHtml(row, key) {
 // THE COLLISION CHIP. Two numbers, from the store's own state. The violet accent is the OPEN pairs' alone - the chip
 // goes muted the moment the last one is resolved - which is the same rule the row's violet mark already keeps.
 function collisionChipHtml(row, key) {
-  const list = Array.isArray(row && row.collisions) ? row.collisions : [];
+  const live = Array.isArray(row && row.collisions) ? row.collisions : [];
+  const history = Array.isArray(row && row.collisionHistory) ? row.collisionHistory : [];
+  const list = live.concat(history);
   if (!list.length) return "";
   if (typeof wtRowChips === "undefined") return "";
   const counts = wtRowChips.tally(list, row.project);
@@ -2369,7 +2423,7 @@ function rowChipSig(kind, row) {
     const rec = row.review || {};
     return JSON.stringify([rec.summary, rec.report, rec.next, rec.reviewedAt, rec.at, rec.runId]);
   }
-  const list = Array.isArray(row.collisions) ? row.collisions : [];
+  const list = (Array.isArray(row.collisions) ? row.collisions : []).concat(Array.isArray(row.collisionHistory) ? row.collisionHistory : []);
   return JSON.stringify(
     list.map((rec) => [
       rec.key,
@@ -2378,6 +2432,12 @@ function rowChipSig(kind, row) {
       Array.isArray(rec.stoodDown) ? rec.stoodDown.length : 0,
       Array.isArray(rec.stoodByTask) ? rec.stoodByTask.length : 0,
       rec.canAsk === true,
+      // A pair that has been superseded changes what the popup says without changing anything above it, so the landing
+      // is part of the signature: the open card repaints to "history" the moment the sweep finds it.
+      rec.superseded ? [rec.superseded.commit, rec.superseded.landedAt] : null,
+      rec.resolution ? [rec.resolution.kind, rec.resolution.target] : null,
+      rec.evidence ? [rec.evidence.ok === true, Array.isArray(rec.evidence.files) ? rec.evidence.files.length : 0] : null,
+      Array.isArray(rec.files) ? rec.files.length : 0,
     ]),
   );
 }
