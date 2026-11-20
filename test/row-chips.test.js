@@ -137,11 +137,17 @@ test("the expansion starts collapsed, and is remembered per row and per card", (
 test("the row's strip draws both chips, and the detail draws neither card", () => {
   const rowFile = read("public/render-projects.js");
   const scaffold = read("public/board-scaffold.js");
-  // The chips ride the name line, beside the marks the row already had - that is the strip that costs no height.
-  const nameLine = sliceBetween(rowFile, 'name: `<td class="name"', "// Same rule for the branch");
-  assert.match(nameLine, /\$\{resultChipHtml\(row, delKey\)\}/);
-  assert.match(nameLine, /\$\{collisionChipHtml\(row, delKey\)\}/);
-  assert.match(nameLine, /\$\{collisionRowMarkHtml\(row\)\}/, "the violet row mark stays");
+  // ONE CHIP PER CELL. The collision chip rides the name line, beside the marks the row already had - that is the strip
+  // that costs no height. The result chip is the chart's `reviewedExtra` column: a cell of its own right after the name,
+  // because two review chips in the name line pushed the name into an ellipsis on every row that carried both.
+  const nameCell = sliceBetween(rowFile, 'name: `<td class="name"', 'reviewedExtra: `<td class="reviewed-extra"');
+  assert.ok(!nameCell.includes("${resultChipHtml(row, delKey)}"), "the result chip left the name cell");
+  assert.match(nameCell, /\$\{collisionChipHtml\(row, delKey\)\}/, "the collision chip stays in the name line");
+  assert.match(nameCell, /\$\{reviewRowMarkHtml\(row\)\}/, "the amber mark and its press stay in the name line");
+  assert.match(nameCell, /\$\{collisionRowMarkHtml\(row\)\}/, "the violet row mark stays");
+  const extraCell = sliceBetween(rowFile, 'reviewedExtra: `<td class="reviewed-extra"', "// Same rule for the branch");
+  assert.match(extraCell, /\$\{resultChipHtml\(row, delKey\)/, "the result chip has a cell of its own");
+  assert.ok(!extraCell.includes('class="name"'), "and it is not inside the name cell");
   // Both are buttons with their own state, so a Tab reaches them and Enter presses them.
   const chip = sliceBetween(scaffold, "function resultChipHtml(row, key)", "// The card behind a chip");
   assert.match(chip, /<button type="button" class="rowchip result-chip/);

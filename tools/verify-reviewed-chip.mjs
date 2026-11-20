@@ -290,12 +290,14 @@ const run = async () => {
   await openSettings(page);
   await page.evaluate(() => document.getElementById("chart-cols-row")?.scrollIntoView({ block: "center" }));
   const control = await controlState(page);
-  const COLUMNS = ["name", "branch", "assistant", "initiative", "tip", "ahead", "cherry", "pr", "dirty", "life", "nextread", "verdict", "actions"];
+  const COLUMNS = ["name", "reviewedExtra", "branch", "assistant", "initiative", "tip", "ahead", "cherry", "pr", "dirty", "life", "nextread", "verdict", "actions"];
   // The owner column hides ITSELF while every tree is on Assistant #1 and there is no second assistant, so the rows
-  // draw twelve of the thirteen cells on this idle board - which is the only reason the count below is not 13.
+  // draw thirteen of the fourteen cells on this idle board - which is the only reason the count below is not 14.
+  // `reviewedExtra` is one of those cells: the row's OTHER review chip moved there, so this switch no longer changes
+  // the cell count, and the name line it measures now carries one review chip instead of two.
   const AT_REST = COLUMNS.filter((id) => id !== "assistant");
   check("one holder carries every switch", control.holders, 1);
-  check("the switches are the thirteen columns, then the chip", control.ids, [...COLUMNS, "reviewed"]);
+  check("the switches are the fourteen columns, then the chip", control.ids, [...COLUMNS, "reviewed"]);
   check("the chip's label reads like a column's", control.labels.at(-1), "Reviewed");
   check("…and its entry carries the chip hook", control.lastChipHook, "reviewed");
   ok("one checkbox per label, as a column's entry has", control.oneBoxPerLabel);

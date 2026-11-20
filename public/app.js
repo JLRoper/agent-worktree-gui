@@ -9285,12 +9285,22 @@ async function todoPost(body) {
 }
 
 const COL_WIDTHS_KEY = "wtgui.colWidths";
+// Where `reviewedExtra` was inserted, so a width list saved before it existed can be shifted to match rather than
+// dropping every remembered width onto its neighbour. It is 1 today (the review chip sits right after the name); a
+// later column inserted elsewhere only needs this number, not a new branch.
+const COL_WIDTHS_INSERTED_AT = CHART_COLUMNS.findIndex((c) => c.id === "reviewedExtra");
 
 function loadColWidths() {
   const out = new Array(WT_COLS).fill(null);
   try {
     const raw = JSON.parse(localStorage.getItem(COL_WIDTHS_KEY) || "[]");
-    if (Array.isArray(raw)) for (let i = 0; i < WT_COLS; i += 1) if (Number.isFinite(raw[i]) && raw[i] > 0) out[i] = Math.round(raw[i]);
+    // A list written before a column was INSERTED is one entry short and every entry after the insertion point belongs
+    // to the column before it: splice the new column's empty slot in, so a hand-set name or branch width stays on the
+    // column the reader gave it to. (`null` is "measure this one", so the new column needs no width of its own.)
+    const saved = Array.isArray(raw) && raw.length === WT_COLS - 1 && COL_WIDTHS_INSERTED_AT > 0
+      ? [...raw.slice(0, COL_WIDTHS_INSERTED_AT), null, ...raw.slice(COL_WIDTHS_INSERTED_AT)]
+      : raw;
+    if (Array.isArray(saved)) for (let i = 0; i < WT_COLS; i += 1) if (Number.isFinite(saved[i]) && saved[i] > 0) out[i] = Math.round(saved[i]);
   } catch {
     /* a corrupt value is the same as none */
   }
@@ -9366,8 +9376,10 @@ function columnPlan(natural, total, cols = CHART_COLUMNS.map((_, i) => i)) {
     // Spare room belongs to the columns whose text truncates: 70/30 worktree and branch, as far as they are drawn.
     // A column the reader sized by hand is a promise, so it is skipped; with both text columns hand-set the room is
     // spread over the rest.
-    const namePos = cols.indexOf(0);
-    const branchPos = cols.indexOf(1);
+    // Found by ID, never by position: `reviewedExtra` sits between the two text columns now, so `cols.indexOf(1)` would
+    // have handed a third of the spare room to the review chip's cell instead of to the branch.
+    const namePos = cols.indexOf(CHART_COLUMNS.findIndex((c) => c.id === "name"));
+    const branchPos = cols.indexOf(CHART_COLUMNS.findIndex((c) => c.id === "branch"));
     let pool = [namePos, branchPos].filter((p) => p >= 0 && !fixed[p]);
     if (!pool.length) pool = want.map((_, p) => p).filter((p) => !fixed[p]);
     if (!pool.length) pool = [0];

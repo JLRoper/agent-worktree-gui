@@ -829,8 +829,17 @@ function rowHtml(row, forceOwner = false) {
     // and the copy handler (public/core/copy-full-value.js) answers a copy OR a highlight inside the cell with this
     // value instead of the fragment the selection covers. It is NOT `data-copy`, which is the console's block-lift
     // attribute and would grow a ⧉ button inside the cell.
+    //
+    // The row's RESULT chip is deliberately not in this line any more: it is the `reviewedExtra` cell below, a column
+    // of its own beside the name. Two review chips in the name line pushed the name into an ellipsis on every row that
+    // carried both; the amber mark and its press stay here, and the chip that prints the summary, the age and
+    // "reviewed" moved out. The collision chip stays: it is this row's own tag, not a second review control.
     name: `<td class="name" data-copy-value="${esc(shownName)}"><div class="name-line"><span class="row-lead"></span><button class="btn-row-agent" data-agent-path="${esc(row.path)}" data-agent-name="${esc(row.name)}" data-agent-project="${esc(row.project)}"
-      title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">\u25b6</button><span class="row-name${onTurnoverBranch ? " is-turnover" : ""}"${onTurnoverBranch ? ' style="color:var(--blue)"' : ""} title="${esc(row.path)}">${esc(shownName)}</span>${renameBtn}${treeLockBtn}${turnoverRowMarkHtml(row)}${collisionRowMarkHtml(row)}${reviewRowMarkHtml(row)}${resultChipHtml(row, delKey)}${collisionChipHtml(row, delKey)}${agentBadgeHtml(row)}</div></td>`,
+      title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">\u25b6</button><span class="row-name${onTurnoverBranch ? " is-turnover" : ""}"${onTurnoverBranch ? ' style="color:var(--blue)"' : ""} title="${esc(row.path)}">${esc(shownName)}</span>${renameBtn}${treeLockBtn}${turnoverRowMarkHtml(row)}${collisionRowMarkHtml(row)}${reviewRowMarkHtml(row)}${collisionChipHtml(row, delKey)}${agentBadgeHtml(row)}</div></td>`,
+    // THE SECOND REVIEW CHIP, in a cell of its own (CHART_COLUMNS `reviewedExtra`). Off means the whole column is
+    // absent - header, cell and colspan - so there is no empty cell to leave behind; the amber mark in the name line
+    // is a different chip with its own switch. A row with no delivery draws the chart's usual dash, never a blank.
+    reviewedExtra: `<td class="reviewed-extra">${resultChipHtml(row, delKey) || `<span class="dimmer">—</span>`}</td>`,
     // Same rule for the branch, whose whole column is one ellipsis (chart.css line 83). The cell also holds the
     // remote link, a `local` chip and the branch's padlock, so the value is the branch itself, never the cell's text.
     branch: `<td class="mono branch" data-copy-value="${esc(row.branch || "")}">${branchCellHtml(row)}${branchLockBtn}</td>`,
