@@ -85,7 +85,18 @@
     if (rec.resolution && rec.resolution.kind && rec.resolution.kind !== "tree") return true;
     // A pair git MEASURED as touching nothing in common is not a decision either: the card prints "no shared file"
     // and offers no press, so counting it open would leave a chip glowing on a pair nobody can act on.
-    if (rec.resolution?.kind === "tree" && rec.evidence?.ok === true && Array.isArray(rec.evidence.files) && rec.evidence.files.length === 0) return true;
+    // ONLY when the pair carries no detected paths of its own: merge-tree reads COMMITS, and two trees both writing
+    // one file uncommitted sit on identical tips, so a clean probe there is not evidence of no overlap - the paths
+    // rec.files carries are the dirty ones, and counting those resolved would paint a chip quiet on a row the state
+    // line still calls the reader's.
+    if (
+      rec.resolution?.kind === "tree" &&
+      rec.evidence?.ok === true &&
+      Array.isArray(rec.evidence.files) &&
+      rec.evidence.files.length === 0 &&
+      !(Array.isArray(rec.files) && rec.files.length)
+    )
+      return true;
     if (rec.ruling) return true;
     const stood = Array.isArray(rec.stoodDown) ? rec.stoodDown : Object.values(rec.stoodDown || {});
     if (stood.some(Boolean)) return true;
