@@ -696,15 +696,23 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 @keyframes copy-flash { 0% { opacity: 0; transform: translateY(-2px); } 12% { opacity: 1; transform: none; }
   72% { opacity: 1; } 100% { opacity: 0; transform: translateY(2px); } }
 
-/* ---- the two per-row cards as one-line chips (public/board-scaffold.js, public/core/row-chips.js) --------------
+/* ---- the two per-row chips as one-line chips (public/board-scaffold.js, public/core/row-chips.js) --------------
    The result card and the collision card used to be blocks in the row's detail: two paragraphs of height that only
-   existed once the row was open. They are chips in the row's existing chip strip now - the name line - so they cost
-   the row NOTHING: that line is already one line, the name ellipsises beside them (td.name .row-name above), and
-   each chip is `flex: none` so it keeps its own width instead of wrapping onto a second line.
+   existed once the row was open. They are chips now, and each costs the row NOTHING: one line, no added height.
+
+   The RESULT chip has a cell of its own - the chart's `reviewedExtra` column, immediately right of the name - because
+   two review chips in the name line left the name ellipsised on every row that carried both. The COLLISION chip stays
+   in the name line, which is already one line: the name ellipsises beside it (td.name .row-name above), and the chip
+   is `flex: none` so it keeps its own width instead of wrapping onto a second line.
 
    Every selector here is this feature's own. The two cards keep their own styles (public/style.css `.review-block`,
    `.collision-block`) and are only re-scoped inside the popup below, so nothing shared is edited. */
 td.name .name-line > .rowchip { flex: none; }
+/* The result chip's own cell: one line, and the chip never wider than the column it was given. The chip's own
+   `max-width: 210px` is what it may take when the column is wide; here it is capped by the cell, and the chip's text
+   ellipsises inside its own pill rather than spilling past the column's edge. */
+td.reviewed-extra { overflow: hidden; white-space: nowrap; }
+td.reviewed-extra .rowchip { max-width: 100%; vertical-align: middle; }
 .rowchip {
   display: inline-flex;
   align-items: center;

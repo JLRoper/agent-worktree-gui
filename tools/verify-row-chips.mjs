@@ -12,8 +12,10 @@
 // headless Chromium.
 //
 // WHAT IS DRIVEN AND WHY EACH ONE MATTERS
-//   1. both chips are IN the row's existing name line - the strip that already carries the marks - so they are not a
-//      second line: the row's own height does not move when the chips are hidden, and the name line does not overflow
+//   1. ONE CHIP PER CELL: the collision chip rides the row's existing name line (the strip that already carries the
+//      marks), and the result chip sits in the chart's own `reviewedExtra` column beside it - so the name is never
+//      blocked by a second review chip, the row's height does not move when the chips are hidden, and neither line
+//      overflows
 //   2. collapsed, the result chip reads the first clause of the summary, the age and (on a checked delivery)
 //      "reviewed"; it carries NO chevron and NO absolute path, and nothing is in the DOM until it is pressed
 //   3. collapsed, the collision chip carries the pair count - and the count is the ROW's: 1 open on the two rows of a
@@ -258,16 +260,19 @@ const result = await withBrowser(async ({ page, pageErrors }) => {
   const rowSel = (t) => `tr.row[data-key="${keyOfTree(t)}"]`;
   const chipSel = (t, kind) => `${rowSel(t)} [data-rowchip="${kind}"]`;
 
-  // ---- 1. the chips exist, in the strip that was already there ------------------------------------------------
-  section("1. both chips are in the row's own name line");
+  // ---- 1. one chip per cell: the collision chip keeps the name line, the result chip has its own column ---------
+  section("1. one chip per cell: the result chip has its own column, the collision chip keeps the name line");
   const present = await page.evaluate(() => {
     const rows = [...document.querySelectorAll("tr.row[data-key]")];
     return rows.map((tr) => {
       const line = tr.querySelector("td.name .name-line");
-      const chips = line ? [...line.querySelectorAll("[data-rowchip]")] : [];
+      const extra = tr.querySelector("td.reviewed-extra");
+      const chips = [...tr.querySelectorAll("[data-rowchip]")];
       return {
         key: tr.dataset.key,
         chips: chips.map((c) => c.dataset.rowchip),
+        inNameLine: line ? [...line.querySelectorAll("[data-rowchip]")].map((c) => c.dataset.rowchip) : [],
+        inExtraCell: extra ? [...extra.querySelectorAll("[data-rowchip]")].map((c) => c.dataset.rowchip) : [],
         parents: chips.map((c) => (c.parentElement && c.parentElement.className) || ""),
         marks: line ? [...line.querySelectorAll(".review-mark, .collision-mark")].length : 0,
         tags: chips.map((c) => c.tagName),
@@ -278,8 +283,12 @@ const result = await withBrowser(async ({ page, pageErrors }) => {
   const rowOne = present.find((r) => r.key === keyOfTree(ONE));
   const rowTwo = present.find((r) => r.key === keyOfTree(TWO));
   const rowThree = present.find((r) => r.key === keyOfTree(THREE));
-  ok("the row with a delivery and two pairs carries both chips, result first", rowOne && JSON.stringify(rowOne.chips) === JSON.stringify(["result", "collision"]), JSON.stringify(rowOne && rowOne.chips));
-  ok("they are children of the row's existing name line - the same strip as the marks", rowOne && rowOne.parents.every((p) => /name-line/.test(p)), JSON.stringify(rowOne && rowOne.parents));
+  // Document order is the name cell first, then the column beside it - so the collision chip is read first.
+  ok("the row with a delivery and two pairs carries both chips", rowOne && JSON.stringify(rowOne.chips) === JSON.stringify(["collision", "result"]), JSON.stringify(rowOne && rowOne.chips));
+  ok("the result chip is in the chart's reviewedExtra cell, OUTSIDE the name cell", rowOne && rowOne.inExtraCell.join(",") === "result", JSON.stringify(rowOne && rowOne.inExtraCell));
+  ok("…so the name cell no longer carries it", rowOne && !rowOne.inNameLine.includes("result"), JSON.stringify(rowOne && rowOne.inNameLine));
+  ok("the collision chip still rides the name line", rowOne && rowOne.inNameLine.join(",") === "collision", JSON.stringify(rowOne && rowOne.inNameLine));
+  ok("one chip per cell, both in the row's one line", rowOne && JSON.stringify(rowOne.parents) === JSON.stringify(["name-line", "reviewed-extra"]), JSON.stringify(rowOne && rowOne.parents));
   ok("the row's marks are still beside them", rowOne && rowOne.marks >= 2, `marks ${rowOne && rowOne.marks}`);
   ok("each chip is a real button, so Tab reaches it and Enter presses it", rowOne && rowOne.tags.every((t) => t === "BUTTON"), JSON.stringify(rowOne && rowOne.tags));
   ok("both start COLLAPSED", rowOne && rowOne.expanded.every((e) => e === "false"), JSON.stringify(rowOne && rowOne.expanded));
@@ -312,11 +321,16 @@ const result = await withBrowser(async ({ page, pageErrors }) => {
     const tr = document.querySelector(`tr.row[data-key="${key}"]`);
     if (!tr) return null;
     const line = tr.querySelector("td.name .name-line");
+    const extra = tr.querySelector("td.reviewed-extra");
+    const resultChip = extra ? extra.querySelector('[data-rowchip="result"]') : null;
     const withChips = tr.getBoundingClientRect().height;
     const lineBox = line.getBoundingClientRect().height;
-    const chips = [...line.querySelectorAll("[data-rowchip]")];
-    const chipTops = chips.map((c) => Math.round(c.getBoundingClientRect().top));
-    // The chips out of the flow: if they were a second line, the row would be shorter without them.
+    const nameCellBox = tr.querySelector("td.name").getBoundingClientRect().height;
+    const extraCellBox = extra ? extra.getBoundingClientRect().height : 0;
+    // Every chip on the row, whichever cell it lives in: the result chip is a column of its own now, and a second line
+    // under the name would show up as a row that is TALLER with the chip than without it - or taller than its sibling
+    // cell, which is the same defect one column over.
+    const chips = [...tr.querySelectorAll("[data-rowchip]")];
     const held = chips.map((c) => c.style.display);
     for (const c of chips) c.style.display = "none";
     const withoutChips = tr.getBoundingClientRect().height;
@@ -325,10 +339,24 @@ const result = await withBrowser(async ({ page, pageErrors }) => {
     chips.forEach((c, i) => {
       c.style.display = held[i];
     });
-    return { withChips, withoutChips, lineBox, lineWithout, lineScroll, chipTops, sameLine: new Set(chipTops).size === 1, nameOneLine: lineBox <= lineWithout + 0.5 };
+    const nameBox = tr.querySelector("td.name").getBoundingClientRect();
+    const resultBox = resultChip ? resultChip.getBoundingClientRect() : null;
+    return {
+      withChips,
+      withoutChips,
+      lineBox,
+      lineWithout,
+      lineScroll,
+      nameCellBox,
+      extraCellBox,
+      chipBesideName: Boolean(resultBox && nameBox && resultBox.top >= nameBox.top - 1 && resultBox.bottom <= nameBox.bottom + 1),
+      nameOneLine: lineBox <= lineWithout + 0.5,
+    };
   }, keyOfTree(ONE));
   ok("the row is exactly as tall with the two chips as without them", height && Math.abs(height.withChips - height.withoutChips) <= 0.5, height ? `${height.withChips} vs ${height.withoutChips}` : "no row");
-  ok("the name line is one line either way, and the chips sit on that line", height && height.nameOneLine && height.sameLine, height ? `line ${height.lineBox} / ${height.lineWithout}, tops ${height.chipTops}` : "no row");
+  ok("the name line is one line either way - the collision chip rides it, nothing stacks", height && height.nameOneLine, height ? `line ${height.lineBox} / ${height.lineWithout}` : "no row");
+  ok("the result cell is one line too: no taller than the name cell beside it", height && height.extraCellBox <= height.nameCellBox + 1, height ? `${height.extraCellBox} vs ${height.nameCellBox}` : "no row");
+  ok("…and the result chip is drawn INSIDE that line's box, beside the name rather than under it", height && height.chipBesideName);
   ok("…so the strip did not overflow: no vertical scroll inside it", height && height.lineScroll <= Math.round(height.lineBox) + 1, height ? `scroll ${height.lineScroll} vs box ${height.lineBox}` : "no row");
 
   if (process.env.PANEL_SHOT_DIR || true) await page.screenshot({ path: path.join(shots, "row-chips-01-both-collapsed-1440x900.png") });

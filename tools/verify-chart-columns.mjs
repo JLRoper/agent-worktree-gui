@@ -251,15 +251,15 @@ const run = async () => {
 
   // ---- at rest -----------------------------------------------------------------------------------
   const before = await chartState(page);
-  const ALL_IDS = ["name", "branch", "assistant", "tip", "ahead", "cherry", "pr", "dirty", "life", "nextread", "verdict", "actions"];
+  const ALL_IDS = ["name", "reviewedExtra", "branch", "assistant", "initiative", "tip", "ahead", "cherry", "pr", "dirty", "life", "nextread", "verdict", "actions"];
   // The owner column draws itself only while it has something to say. The sandbox's config.json carries no
   // hiddenColumns key and the panel's default is empty, so the OWNER SWITCH is on — and the column is still absent,
   // because every tree is on Assistant #1 and there is no second assistant. That self-hide is the column's own rule
   // (public/app.js `ownerMatters`), not a default.
   const AT_REST = ALL_IDS.filter((id) => id !== "assistant");
   note(`chart: ${before.map((t) => `${t.project} ${t.ids.length} cols / ${t.rows} rows`).join(" · ")}`);
-  ok("every project table starts with eleven of its twelve columns", before.every((t) => t.ids.join(",") === AT_REST.join(",")), before[0]?.ids.join(","));
-  ok("every row starts with eleven cells", before.every((t) => t.rowCells.every((n) => n === 11)), JSON.stringify(before[0]?.rowCells));
+  ok("every project table starts with thirteen of its fourteen columns", before.every((t) => t.ids.join(",") === AT_REST.join(",")), before[0]?.ids.join(","));
+  ok("every row starts with thirteen cells", before.every((t) => t.rowCells.every((n) => n === 13)), JSON.stringify(before[0]?.rowCells));
   ok("the owner column hides itself while every tree is on Assistant #1 and there is no second assistant", before.every((t) => !t.ids.includes("assistant")), before[0]?.ids.join(","));
   check("no column key is written for that: it is the page's own rule, not a stored default", "hiddenColumns" in readConfig(), false);
 

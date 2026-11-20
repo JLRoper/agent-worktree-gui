@@ -212,6 +212,21 @@ function toggleShowOld(project) {
 // edge hands the board back to the measurement.
 const CHART_COLUMNS = [
   { id: "name", label: "Worktree", min: 170, give: 0.35 },
+  // THE SECOND REVIEW CELL (see CHART_CHIPS below for the first). A row can carry two review chips, and both in the
+  // name line crowded the name out: this one - the row's result chip, `resultChipHtml` in public/board-scaffold.js,
+  // printing the delivery's first clause, its age and "reviewed" - owns a CELL of its own, immediately to the right of
+  // the name, so the name line never has to make room for it. It is a real column on purpose: the switch in Settings
+  // can then take the header and the cell away together, which is what leaves no empty cell behind when it is off.
+  // The amber mark beside the name is a different chip with its own switch (CHART_CHIPS `reviewed`): either one can be
+  // off while the other stays drawn, and neither reads the other's state.
+  {
+    id: "reviewedExtra",
+    label: "Reviewed (extra)",
+    min: 90,
+    give: 0.6,
+    title:
+      "the row's result chip - the delivery's first clause, how long ago it landed and the word reviewed - in its own cell beside the name, so the two review chips no longer crowd the name out. The chip is the press that opens the result card (the whole summary, the report link and the next steps). Off means the header and the cell are not emitted on any row, so nothing is left of it - no empty cell, no gap - while the amber mark and its ✓ Reviewed press in the name line, the review lane, the counts and the card keep working. The amber chip has its own switch, Reviewed, at the end of this same list. Saved in config.json with the columns.",
+  },
   { id: "branch", label: "Branch", min: 110, give: 0.45 },
   {
     id: "assistant",
@@ -280,6 +295,11 @@ const CHART_COLUMNS = [
 // The reviewed chip is the amber ▣ and its "✓ Reviewed" press in the row's name line (public/render-projects.js
 // `reviewRowMarkHtml`), and the row's amber left edge with it. Off means the element is not emitted at all - not
 // hidden by opacity, not clipped, and not leaving a cell behind: the name line is simply shorter.
+//
+// It is NOT the row's other review chip. The result chip ("Landed - 12m ago - reviewed", public/board-scaffold.js
+// `resultChipHtml`) moved out of the name line into a column of its own, `reviewedExtra` in CHART_COLUMNS above, so
+// this list stays the marks that ride a cell somebody else sized. The two switches are independent: this one takes
+// the amber mark and the press, `reviewedExtra` takes the result chip and its cell, and each leaves the other drawn.
 const CHART_CHIPS = [
   {
     id: "reviewed",
@@ -300,6 +320,9 @@ const COL_GIVE = CHART_COLUMNS.map((c) => c.give);
 
 // The columns the chart hides. Read from the panel's config.json on every render rather than cached, so the row
 // that arrives on the next scan and the header rebuilt by a `project` event agree with the switch the reader moved.
+// Compared WITHOUT case: this list also names `reviewedExtra`, a compound id written as its label reads, while every id
+// stored before it was lowercased - and a config can be hand-edited either way. The server normalises the same way
+// (lib/chart-columns.js `toggleKey`) and rewrites the list in the chart's own order and spelling on the next save.
 function hiddenColumnIds() {
   const raw = state.settings?.hiddenColumns;
   return new Set((Array.isArray(raw) ? raw : []).map((x) => String(x || "").toLowerCase()));
@@ -339,7 +362,7 @@ const OWNER_COLUMN_ID = "assistant";
 
 function shownColumns(forceOwner = false) {
   const hidden = hiddenColumnIds();
-  const shown = CHART_COLUMNS.map((_, i) => i).filter((i) => !hidden.has(CHART_COLUMNS[i].id));
+  const shown = CHART_COLUMNS.map((_, i) => i).filter((i) => !hidden.has(String(CHART_COLUMNS[i].id).toLowerCase()));
   const ownerAt = shown.findIndex((i) => CHART_COLUMNS[i].id === OWNER_COLUMN_ID);
   if (ownerAt >= 0 && !forceOwner && !ownerMatters()) shown.splice(ownerAt, 1);
   return shown.length ? shown : [WT_COLS - 1];
@@ -481,7 +504,7 @@ function chartToggleIds() {
 function chartColumnsStored() {
   const raw = state.settings?.hiddenColumns;
   const hidden = new Set((Array.isArray(raw) ? raw : []).map((x) => String(x || "").toLowerCase()));
-  return chartToggleIds().filter((id) => hidden.has(id));
+  return chartToggleIds().filter((id) => hidden.has(String(id).toLowerCase()));
 }
 
 // The list a save in flight is trying to write. While it is set, the switches and the counter show THIS list rather
@@ -498,11 +521,11 @@ function chartColumnsPending() {
 // read as a bug, so the reason travels with the count — unless the reader hid that column themselves, in which case
 // the list already says it.
 //
-// The count is COLUMNS only. A chip is not a column, so a hidden chip must not turn "13 of 13 columns" into
-// "12 of 13" - it gets its own clause instead, saying which chip is off.
+// The count is COLUMNS only. A chip is not a column, so a hidden chip must not turn "14 of 14 columns" into
+// "13 of 14" - it gets its own clause instead, saying which chip is off.
 function chartColumnsSentence(hidden = chartColumnsStored()) {
-  const columnIds = new Set(CHART_COLUMNS.map((c) => c.id));
-  const hiddenColumns = hidden.filter((id) => columnIds.has(id));
+  const columnIds = new Set(CHART_COLUMNS.map((c) => String(c.id).toLowerCase()));
+  const hiddenColumns = hidden.filter((id) => columnIds.has(String(id).toLowerCase()));
   const shown = CHART_COLUMNS.length - hiddenColumns.length;
   const head = hiddenColumns.length
     ? `${shown} of ${CHART_COLUMNS.length} columns on the chart · hidden: ${hiddenColumns.join(", ")}`
@@ -520,7 +543,7 @@ function paintChartColumns(note = "", bad = false) {
   const pending = chartColumnsPending();
   // A save in flight is drawn from the list it is writing, not from the file it is about to replace.
   const shown = pending || stored;
-  const hidden = new Set(shown);
+  const hidden = new Set(shown.map((id) => String(id).toLowerCase()));
   const holder = $("chart-cols");
   if (holder) {
     if (!holder.childElementCount) {
@@ -532,10 +555,10 @@ function paintChartColumns(note = "", bad = false) {
         `<label${isChip ? ` data-chart-chip="${esc(c.id)}"` : ""} title="${esc(c.title || `${c.label} - the chart's ${c.label || "actions"} column`)}"><input type="checkbox" data-chart-col="${esc(c.id)}"> ${esc(c.label || "Actions")}</label>`;
       holder.innerHTML = `${CHART_COLUMNS.map((c) => label(c, false)).join("")}${CHART_CHIPS.map((c) => label(c, true)).join("")}`;
     }
-    for (const box of holder.querySelectorAll("[data-chart-col]")) box.checked = !hidden.has(box.dataset.chartCol);
+    for (const box of holder.querySelectorAll("[data-chart-col]")) box.checked = !hidden.has(String(box.dataset.chartCol).toLowerCase());
   }
   const count = $("chart-cols-count");
-  if (count) count.textContent = `${CHART_COLUMNS.filter((c) => !hidden.has(c.id)).length}/${CHART_COLUMNS.length}`;
+  if (count) count.textContent = `${CHART_COLUMNS.filter((c) => !hidden.has(String(c.id).toLowerCase())).length}/${CHART_COLUMNS.length}`;
   const preview = $("chart-cols-preview");
   if (preview) {
     preview.textContent = bad

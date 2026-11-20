@@ -168,6 +168,46 @@ test("the reviewed chip is one more entry in the same switch list, after every c
   assert.ok(CHART_CHIPS[0].title.length > 40);
 });
 
+test("the second review chip is a column of its own, and its switch takes the whole cell back", () => {
+  const { CHART_COLUMNS, CHART_CHIPS, chartChipShown, shownColumns, chartHeaderHtml, wtColspan } = page();
+  // A REAL column - a header, a cell and a width - immediately after the name, because that is where the row's result
+  // chip is drawn (public/render-projects.js `reviewedExtra`). Two review chips in the name line crowded the name out:
+  // the amber mark keeps the name line, the result chip gets this cell.
+  const at = CHART_COLUMNS.findIndex((c) => c.id === "reviewedExtra");
+  assert.equal(at, CHART_COLUMNS.findIndex((c) => c.id === "name") + 1, "immediately after the name");
+  assert.equal(CHART_COLUMNS[at].label, "Reviewed (extra)");
+  assert.ok(CHART_COLUMNS[at].title.length > 40, "the switch says what it turns off");
+  // It is NOT one of the chip toggles: the amber chip keeps that list to itself, and the server's column list has it.
+  assert.equal(CHART_CHIPS.some((c) => c.id === "reviewedExtra"), false);
+  assert.deepEqual(chartColumnsFrom(["reviewedExtra"]), ["reviewedExtra"], "the panel knows the id, spelled as the label reads");
+  assert.deepEqual(shownChartColumns(["reviewedExtra"]), CHART_COLUMN_IDS.filter((id) => id !== "reviewedExtra"));
+  // ON by default: no stored list draws the column, its header and its cell.
+  assert.ok(shownColumns().includes(at), "a default the reader has not expressed draws the column");
+  assert.match(chartHeaderHtml(), /data-col-id="reviewedExtra"[^>]*>Reviewed \(extra\)<\/th>/);
+  // OFF: header and cells are not emitted at all, and the colspan follows them - no empty cell is left where the column
+  // was, which is the difference between a column and a chip that rides somebody else's cell.
+  const off = page({ hiddenColumns: ["reviewedExtra"] });
+  assert.ok(!off.shownColumns().includes(at));
+  assert.doesNotMatch(off.chartHeaderHtml(), /data-col-id="reviewedExtra"/);
+  assert.equal(off.wtColspan(), shownColumns().length - 1, "one cell fewer everywhere, including the spanning rows");
+  // The two review switches are independent: either one off leaves the other on.
+  assert.equal(off.chartChipShown("reviewed"), true, "the amber chip is not the extra column's switch");
+  const chipOff = page({ hiddenColumns: ["reviewed"] });
+  assert.ok(chipOff.shownColumns().includes(at), "the amber chip's switch does not take the result cell");
+  assert.match(chipOff.chartHeaderHtml(), /data-col-id="reviewedExtra"/);
+  assert.equal(chipOff.chartChipShown("reviewed"), false);
+  // And both at once: two ids in one list, each doing its own half.
+  const both = page({ hiddenColumns: ["reviewed", "reviewedExtra"] });
+  assert.ok(!both.shownColumns().includes(at));
+  assert.equal(both.chartChipShown("reviewed"), false);
+
+  // The box is built into the columns' own holder, with the columns' own checkbox - its label is what the reader sees.
+  const dom = switchRow({ fresh: true });
+  dom.api.paintChartColumns();
+  assert.match(dom.holder.innerHTML, /<input type="checkbox" data-chart-col="reviewedExtra"> Reviewed \(extra\)/);
+  assert.ok(!/data-chart-chip="reviewedExtra"/.test(dom.holder.innerHTML), "a column entry, not a chip entry");
+});
+
 test("the chip's box is built into the columns' own holder, with the columns' own checkbox", () => {
   const dom = switchRow({ fresh: true });
   dom.api.paintChartColumns();
@@ -232,7 +272,7 @@ test("a hidden column leaves the header, the colspan and the order consistent", 
   // are the reader's own hidden list. The expected set is spelled out rather than counted, so a NEW column has to be
   // added here on purpose - a count alone would let one arrive unnoticed in the middle of the row.
   const { chartHeaderHtml, shownColumns, wtColspan } = page({ hiddenColumns: ["tip", "cherry", "life"] }, second());
-  const expected = ["name", "branch", "assistant", "initiative", "ahead", "pr", "dirty", "nextread", "verdict", "actions"];
+  const expected = ["name", "reviewedExtra", "branch", "assistant", "initiative", "ahead", "pr", "dirty", "nextread", "verdict", "actions"];
   assert.equal(wtColspan(), expected.length);
   assert.deepEqual(shownColumns().map((i) => CHART_COLUMN_IDS[i]), expected);
   const html = chartHeaderHtml();
@@ -311,13 +351,24 @@ test("POST /api/settings/columns stores the chip beside the columns, and a resta
   await panel.stop();
 
   // A restart with no browser attached: the chip's choice is the panel's, like the columns'.
-  const again = await startPanel({ dir: panel.dir, keep: false, reuseConfig: true });
+  const again = await startPanel({ dir: panel.dir, keep: true, reuseConfig: true });
   t.after(() => again.stop());
   assert.deepEqual((await (await fetch(`${again.base}/api/config`)).json()).hiddenColumns, ["reviewed"]);
   // And a chip and a column can be off together without either one being lost.
   const both = await post(again.base, "/api/settings/columns", { body: { hidden: ["reviewed", "tip"] } });
   assert.equal(both.status, 200, both.text);
   assert.deepEqual(both.json.hidden, ["tip", "reviewed"], "the file keeps the chart's order, columns then chips");
+
+  // The SECOND review switch is a column, and it lives in this same list: one id, stored among the columns, read back
+  // by whatever process boots next - the reader is never asked to remember which of the two lists a switch went to.
+  const extra = await post(again.base, "/api/settings/columns", { body: { hidden: ["reviewedExtra", "reviewed", "nonsense"] } });
+  assert.equal(extra.status, 200, extra.text);
+  assert.deepEqual(extra.json.hidden, ["reviewedExtra", "reviewed"], "columns first, then the chip");
+  assert.deepEqual(JSON.parse(readFileSync(path.join(panel.dir, "config.json"), "utf8")).hiddenColumns, ["reviewedExtra", "reviewed"]);
+  await again.stop();
+  const third = await startPanel({ dir: panel.dir, keep: false, reuseConfig: true });
+  t.after(() => third.stop());
+  assert.deepEqual((await (await fetch(`${third.base}/api/config`)).json()).hiddenColumns, ["reviewedExtra", "reviewed"]);
 });
 
 // ---- the write that has to survive a panel slow enough to miss its deadline ----------------------
