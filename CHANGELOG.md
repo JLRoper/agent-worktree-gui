@@ -4,16 +4,37 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.131.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.132.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-646 releases from v0.1.0 (2026-10-20) to v1.131.0 (2026-11-19), 2244 commits between the tags. Every release is anchored by an
+647 releases from v0.1.0 (2026-10-20) to v1.132.0 (2026-11-19), 2252 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.132.0 — 2026-11-19 · 8 commits
+
+[`cef6d6a`](https://github.com/JLRoper/agent-worktree-gui/commit/cef6d6a1bce75cdd93253d24356643d44b9f5c71) · [compare v1.131.0...v1.132.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.131.0...v1.132.0)
+
+### Added
+
+- feat(chart): the reviewed chip is one more switch in the chart's column control ([`229e741`](https://github.com/JLRoper/agent-worktree-gui/commit/229e74174145e7b3ceb15cc0a5afa4aff78f4810))
+
+### Docs & tests
+
+- docs: render the changelog - 646 releases ([`45ebbc3`](https://github.com/JLRoper/agent-worktree-gui/commit/45ebbc3265cc3ac720f40dd8ec718f3493410c28))
+- docs: the landing note for 1.131.0 - the tree list the last scan read, served until the scan replaces it ([`ed9d3ae`](https://github.com/JLRoper/agent-worktree-gui/commit/ed9d3aeb1a77569b26a5b957cc3be280b7361219))
+- test(chart): a live gate drives the chip's switch at 1440x900 - open, on, off, and after a reload ([`9aa5d29`](https://github.com/JLRoper/agent-worktree-gui/commit/9aa5d29962fe621825b855b0f4d6c037bce92e81))
+- docs(board): the reviewed chip is switched in Chart columns, last in the list ([`295f76f`](https://github.com/JLRoper/agent-worktree-gui/commit/295f76f38841031ca4d90cfdf4aa5670282d851f))
+- test(chart): the chip gate's shots are taken on the landed build (1.130.0) ([`d198aa7`](https://github.com/JLRoper/agent-worktree-gui/commit/d198aa72b0a1b2ecf3c354cd64885a0e60a1a5a6))
+- docs(chart): the switch's own words use plain hyphens, not em dashes ([`38cd119`](https://github.com/JLRoper/agent-worktree-gui/commit/38cd11989a515005433446d86d3766bb1b537708))
+
+### Other
+
+- chore: 1.132.0 - the version this landing carries ([`cef6d6a`](https://github.com/JLRoper/agent-worktree-gui/commit/cef6d6a1bce75cdd93253d24356643d44b9f5c71))
 
 ## v1.131.0 — 2026-11-19 · 11 commits
 
