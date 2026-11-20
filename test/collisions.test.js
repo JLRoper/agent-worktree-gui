@@ -195,7 +195,10 @@ test("sideOf names a tree without a lookup: path, directory name, branch, parent
   // Backslashes and a trailing separator are the WINDOWS forms the scanner really sees; the tree itself is named
   // relatively, because a signed drive path would only be true on the machine that wrote it.
   const one = sideOf({ path: "repos\\proj\\.worktrees\\tree-one\\", branch: "wtgui/tree-one", parent: TURNOVER });
-  assert.deepEqual(one, { path: "repos/proj/.worktrees/tree-one", name: "tree-one", branch: "wtgui/tree-one", parent: TURNOVER, taskId: null, task: null });
+  assert.deepEqual(one, { path: "repos/proj/.worktrees/tree-one", name: "tree-one", branch: "wtgui/tree-one", parent: TURNOVER, head: null, taskId: null, task: null });
+  // The scanned tip travels too: the merge question is asked at the sha the pair was detected at, not at a branch name
+  // that may have moved since.
+  assert.equal(sideOf({ path: "/r/tree-one", head: "A".repeat(40) }).head, "a".repeat(40));
   // The task standing in the tree travels on the side, so the pair record can name both task ids.
   assert.equal(sideOf({ path: "/r/tree-one", taskId: 41 }).taskId, 41);
   assert.equal(sideOf({ path: "/r/tree-one", taskId: "not a number" }).taskId, null, "a number is read, never invented");
