@@ -4,16 +4,38 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.140.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.141.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-654 releases from v0.1.0 (2026-10-20) to v1.140.0 (2026-11-20), 2293 commits between the tags. Every release is anchored by an
+655 releases from v0.1.0 (2026-10-20) to v1.141.0 (2026-11-20), 2302 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.141.0 — 2026-11-20 · 9 commits
+
+[`00541e4`](https://github.com/JLRoper/agent-worktree-gui/commit/00541e4b5131b64c3e69eb0fa4e2055ad351da1b) · [compare v1.140.0...v1.141.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.140.0...v1.141.0)
+
+### Fixed
+
+- fix(test): the Initiatives fixture names its tree without a drive letter ([`871346f`](https://github.com/JLRoper/agent-worktree-gui/commit/871346f0916b6ab38698ae6e900f076d8a59b752))
+
+### Docs & tests
+
+- docs: render the changelog - 654 releases ([`2068c7a`](https://github.com/JLRoper/agent-worktree-gui/commit/2068c7a36f4fb5870c27f66d60a1c30817c381fa))
+- docs: the landing note for 1.140.0 - the Initiatives tab draws the queue's own card ([`84513a1`](https://github.com/JLRoper/agent-worktree-gui/commit/84513a1172111d4c588148372cb55766b8da9168))
+- docs: the 1.140.0 note states the width it measured, and the three readings it did not take ([`36b3d01`](https://github.com/JLRoper/agent-worktree-gui/commit/36b3d01af64ac9e6c3f124ec930ce1e628118d1f))
+
+### Other
+
+- Minimise the result and collision cards to one-line chips ([`8805dc8`](https://github.com/JLRoper/agent-worktree-gui/commit/8805dc88243b7487bcf288801c009f585dfe46a5))
+- Hold the caret when a chip's card is redrawn, and repaint its marks on every press ([`943f74c`](https://github.com/JLRoper/agent-worktree-gui/commit/943f74c386b01f91fe0dcf828c3dd7e5cd2dbcd6))
+- Drive the chip gate from the panel's own snapshot, and prove the muted chip ([`3508701`](https://github.com/JLRoper/agent-worktree-gui/commit/350870170da6b8aa69062bd585765f3d5ab71b54))
+- Spell the drive letter from parts, so the tree's own path gate is clean ([`eda1e80`](https://github.com/JLRoper/agent-worktree-gui/commit/eda1e80458402b3bc7584b0052e2b1e180dcaac7))
+- chore: 1.141.0 - the version this landing carries ([`00541e4`](https://github.com/JLRoper/agent-worktree-gui/commit/00541e4b5131b64c3e69eb0fa4e2055ad351da1b))
 
 ## v1.140.0 — 2026-11-20 · 6 commits
 
