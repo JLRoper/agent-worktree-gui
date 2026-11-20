@@ -7,7 +7,8 @@
 // 1. THE ORDER. The header reads assistant search, then this one, then Clarify, then Human - and it is the same order in the DOM and
 //    on screen. The DOM half is pinned here; the screen half is the browser gate's (tools/verify-hot-agent-header.mjs),
 //    because "with nothing visible between them" needs layout. Between the assistant's entry and this control sits one
-//    element, #btn-hot, which ships hidden and is drawn only while an agent is working - so the three are adjacent
+//    element, #btn-hot, which ships hidden and is drawn only while an agent is working and the General settings row is
+//    on - so the three are adjacent
 //    whenever that marker is absent, and Clarify is always immediately before Human.
 // 2. THE GLYPH. A hand holding a pen, drawn inline as SVG in currentColor rather than typed as an emoji, at its
 //    neighbours' size (15px in a 16-unit viewBox), with the tooltip and the aria-label that name the chord and say
@@ -51,13 +52,13 @@ test("the header reads assistant search, then the Hot Agent search, Clarify, the
   assert.ok(at("btn-assistant") < at("ha-search-open"), "the assistant's entry comes before the Hot Agent search");
   assert.ok(at("ha-search-open") < at("btn-clarify"), "the Hot Agent search comes before Clarify");
   assert.ok(at("btn-clarify") < at("btn-human"), "Clarify comes before Human");
-  // One element between the assistant and the search opener, and it is the conditional Hot marker - nothing else may be
-  // inserted there without this line changing. The same is true of Clarify, which takes its place between the search
+  // One element between the assistant and the search opener, and it is the conditional Active marker (the control
+  // whose id keeps the old word `hot`) - nothing else may be inserted there without this line changing. The same is true of Clarify, which takes its place between the search
   // opener and Human: it is the fourth control, and it may not drift to either side of them.
   assert.deepEqual(
     ids.slice(at("btn-assistant"), at("ha-search-open") + 1),
     ["btn-assistant", "btn-hot", "ha-search-open"],
-    "the only control between the assistant and this one is the Hot marker, which ships hidden",
+    "the only control between the assistant and this one is the Active marker, which ships hidden",
   );
   assert.deepEqual(
     ids.slice(at("ha-search-open"), at("btn-human") + 1),
@@ -66,7 +67,7 @@ test("the header reads assistant search, then the Hot Agent search, Clarify, the
   );
 
   // The marker really is conditional, or "adjacent" would be a claim about a page nobody sees.
-  assert.match(html, /<button id="btn-hot" type="button" hidden /, "Hot ships hidden, so the three are adjacent");
+  assert.match(html, /<button id="btn-hot" type="button" hidden /, "Active ships hidden, so the three are adjacent");
 
   // Purple is the whole point of a fourth control rather than a second Human: the control's own rule names the violet,
   // and it is not Human's own colour borrowed.

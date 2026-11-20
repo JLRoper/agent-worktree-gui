@@ -292,7 +292,7 @@ const state = {
   // painted. The list itself is sampled on every paint (it is `state.jobs`, which the snapshot and every job frame
   // keep current), so a turn that ends between two presses can never leave a stale entry behind - only the key is
   // remembered, the same way the Human rotation remembers its question.
-  hot: { key: null, sig: "" },
+  hot: { key: null, sig: "", on: null },
   // The prompt a HUMAN hop just landed on, held for a beat so the repaint a row-opening causes puts the ring and
   // the caret back instead of dropping them: { thread, turnId, kind, until }.
   humanFocus: null,
@@ -13954,21 +13954,31 @@ document.addEventListener("keydown", (e) => {
   humanStep();
 });
 
-// ---- the header's HOT AGENTS marker ---------------------------------------------------------------------------
+// ---- the header's ACTIVE AGENTS marker ------------------------------------------------------------------------
 // One amber bolt that is DRAWN ONLY WHILE AN AGENT IS WORKING, and the press that lands on one. It is the other half
 // of the count beside it: the red Human badge is everything stopped until the reader answers, and this is everything
 // burning right now. The evidence is the page's own job list - `state.jobs`, filled by the snapshot and every job
-// frame, the same records the cards draw - read through public/core/hot-mark.js, so the bolt's existence, its count,
-// its tooltip and the press cannot disagree about which agent is hot.
+// frame, the same records the cards draw - read through public/core/hot-mark.js, so the button's existence, its
+// count, its tooltip and the press cannot disagree about which agent is working.
+//
+// THE WORD IS ACTIVE; THE WIRE IS `hot`. The control read "Hot" before the rename, and its id (#btn-hot), its label
+// and badge spans (#hot-label, #hot-badge), the module and the browser key kept those names on purpose: that is the
+// stored key and the wire name the row said not to move, so existing state keeps reading. Only what a person sees
+// changed.
+//
+// AND IT IS A SETTING. Whether the button is in the header at all is Settings > General > "Show the Active agents
+// button in the floating header", which ships OFF: public/core/active-button.js owns that default and the one
+// decision the paint asks (switched on AND an agent working). With it off the control is absent, never a grey or
+// zero-badge placeholder.
 //
 // NOT A LOCK, NOT A TURNOVER MARK, NOT A SECOND REVIEW MARK. The row's yellow lock is a tree the reader pinned, the
-// blue turnover mark is a branch relationship, the amber ▣ is a result to read; this is none of them - it is a bolt
-// in the header, and its amber is the panel's own (#d29922), not the lock's #ffb454. A turn parked on a permission
-// or a question is deliberately NOT hot: that agent is waiting on the reader, and the red Human count is where it is
-// counted. One question never shows up in two places.
+// blue turnover mark is a branch relationship, the amber ▣ is a result to read; this is none of them - it is a
+// control in the header, and its amber is the panel's own (#d29922), not the lock's #ffb454. A turn parked on a
+// permission or a question is deliberately NOT active: that agent is waiting on the reader, and the red Human count
+// is where it is counted. One question never shows up in two places.
 function hotAgents() {
   // A board agent, not the panel's own assistant: an assistant's turn has no worktree row and no card on this board,
-  // and the board's agents are who a bolt in the header is about (the same line the Hot Agent search draws).
+  // and the board's agents are who a button in the header is about (the same line the Hot Agent search draws).
   const convs = conversations().filter((c) => !assistantSessionFor(c.thread));
   return wtHotMark.agents(convs).map((a) => ({
     ...a,
@@ -13979,42 +13989,56 @@ function hotAgents() {
   }));
 }
 
+// The switch as this page holds it: read from the browser once, and moved by the Settings row's own change handler.
+// Asked on every paint, so a row that writes it is honoured without a reload.
+function activeButtonOn() {
+  if (typeof state.hot.on !== "boolean") state.hot.on = wtActiveButton.read(localStorage);
+  return state.hot.on;
+}
+
 function paintHotButton() {
   const btn = $("btn-hot");
   if (!btn) return;
+  const on = activeButtonOn();
   const list = hotAgents();
   const at = state.hot.key ? list.findIndex((a) => a.key === state.hot.key) : -1;
-  const sig = `${list.map((a) => a.key).join(",")}|${at}`;
+  const sig = `${on ? "1" : "0"}|${list.map((a) => a.key).join(",")}|${at}`;
   if (sig === state.hot.sig) return;
   state.hot.sig = sig;
-  // ZERO IS ABSENT. Every other header count is quiet at zero - a badge with no number, a button that says the lane
-  // is empty - but this marker IS the fact that an agent is hot: with none there is nothing to mark, and a grey bolt
-  // would be a claim about the board that is not true. So the button comes and goes with the work.
-  btn.hidden = list.length === 0;
+  // ZERO IS ABSENT, and so is a switched-off button. Every other header count is quiet at zero - a badge with no
+  // number, a button that says the lane is empty - but this control IS the fact that an agent is working: with none
+  // there is nothing to mark, and a grey bolt would be a claim about the board that is not true. The Settings row
+  // says the same thing about the reader's own choice: off means the header does not carry it, not that it carries an
+  // inert one. So the button comes and goes with the work and with that switch.
+  btn.hidden = !wtActiveButton.show(list, on);
   const label = $("hot-label");
   // The rotation counter keeps the shape Human's has (`🙋 Human 2/3`), and only while the press is inside the list.
-  if (label) label.textContent = at >= 0 ? `⚡ Hot ${at + 1}/${list.length}` : "⚡ Hot";
+  if (label) label.textContent = at >= 0 ? `⚡ Active ${at + 1}/${list.length}` : "⚡ Active";
   const badge = $("hot-badge");
   if (badge) {
     badge.hidden = list.length === 0;
     badge.textContent = String(list.length);
   }
   btn.classList.toggle("is-hot", list.length > 0);
-  btn.setAttribute("aria-label", list.length ? `Hot Agents - ${list.length} working right now` : "Hot Agents - nothing is working right now");
+  btn.setAttribute("aria-label", list.length ? `Active agents - ${list.length} working right now` : "Active agents - nothing is working right now");
   btn.title = wtHotMark.title(list);
 }
 
-// One press: the next hot agent, wrapping past the last one, landed on the way the dock's own cards are - unfold the
-// row, then jump to the card and flash it (public/app.js `revealAgentHome` -> `jumpToAgent`). The list is sampled
+// One press: the next working agent, wrapping past the last one, landed on the way the dock's own cards are - unfold
+// the row, then jump to the card and flash it (public/app.js `revealAgentHome` -> `jumpToAgent`). The list is sampled
 // here and not kept: the key and the list are re-read on every press, so an agent that finished between two presses
 // hands the press to the one after it instead of opening a card that has stopped.
 function hotStep() {
+  // A switched-off button has no press: the row decides whether the control exists at all, so a press that arrives
+  // while it is off (a queued click, or a chord a host shell replayed) lands on nothing rather than on a hidden
+  // rotation the reader cannot see.
+  if (!activeButtonOn()) return;
   const list = hotAgents();
   if (!list.length) {
     state.hot.key = null;
     state.hot.sig = "";
     paintHotButton();
-    showBanner("Hot Agents: no agent is working right now");
+    showBanner("Active agents: no agent is working right now");
     return;
   }
   const next = wtHotMark.step(list, state.hot.key);
@@ -14024,7 +14048,7 @@ function hotStep() {
   paintHotButton();
   revealAgentHome(next.thread);
   showBanner(
-    `Hot Agents: ${list.length === 1 ? "1 agent is" : `${list.length} agents are`} working - landing on ${next.name}${next.where ? ` in ${next.where}` : ""}`,
+    `Active agents: ${list.length === 1 ? "1 agent is" : `${list.length} agents are`} working - landing on ${next.name}${next.where ? ` in ${next.where}` : ""}`,
   );
 }
 
@@ -14032,6 +14056,39 @@ $("btn-hot")?.addEventListener("click", (e) => {
   e.stopPropagation();
   hotStep();
 });
+
+// ---- the ACTIVE AGENTS button's own settings row (Settings > General) -------------------------------------------
+// The switch that decides whether the header draws the control at all. It is a BROWSER setting - the same store and
+// the same one-key save path the Board tab's rows use (public/core/active-button.js holds the key and the default),
+// so a reader who never opens it gets it off, and a browser that refuses storage still applies the press for this
+// page. It is INDEPENDENT of the Hot Agent pen search beside the control: that search keeps its name, its glyph and
+// Ctrl+Shift+Q whatever this says.
+function paintActiveButtonSetting() {
+  const box = $("general-active-button");
+  if (box) box.checked = activeButtonOn();
+}
+
+$("general-active-button")?.addEventListener("change", (e) => {
+  state.hot.on = wtActiveButton.write(localStorage, e.target.checked);
+  // The paint is signature-guarded and the signature carries the switch, so the header changes on this press rather
+  // than on the next job frame. A rotation pointing at an agent the reader has just hidden is dropped with it.
+  if (!state.hot.on) state.hot.key = null;
+  state.hot.sig = "";
+  paintHotButton();
+  showBanner(
+    state.hot.on
+      ? "Active agents: the button is in the header again, drawn while an agent is working"
+      : "Active agents: the button is switched off and drawn nowhere in the header",
+  );
+});
+
+// The row is drawn from the stored value at load, so a setting saved in an earlier session is visible rather than
+// something the reader has to discover by pressing the header.
+try {
+  paintActiveButtonSetting();
+} catch {
+  /* a page with no Settings drawer still paints the header from the same default */
+}
 
 document.addEventListener("keydown", (e) => {
   if (!(e.ctrlKey || e.metaKey) || e.altKey) return;

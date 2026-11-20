@@ -7,6 +7,9 @@
 //
 // WHAT IT PROVES. The bolt is a HEADER CONTROL and it is DRAWN ONLY WHILE AN AGENT IS WORKING:
 //
+//   0. the control is behind Settings > General > "Show the Active agents button in the floating header" and ships
+//      OFF, so this gate turns it ON through that row first - the default and the off/on proof are the subject of
+//      tools/verify-active-button-toggle.mjs;
 //   1. with nothing running it is not in the header at all - not grey, not a zero badge, absent;
 //   2. an agent PARKED on a permission is not hot (it is live, and the red Human count beside it owns it), so the
 //      bolt stays away while Human reads 1 - the two controls never count the same agent;
@@ -222,6 +225,33 @@ const result = await (async () => {
             };
           });
 
+        // ---- 0. the switch that decides whether the header carries it at all --------------------------------------
+        // The control is a SETTINGS row now and ships OFF, so this gate turns it on through the row a reader uses.
+        // The default, the absent-with-it-off state, and the off-and-on round trip are the subject of
+        // tools/verify-active-button-toggle.mjs; here the row is opened only to let the marker exist, and every check
+        // below is about the marker itself.
+        section("the switch, turned on through its own Settings row");
+        const drawerOpen = () => page.evaluate(() => Boolean(document.getElementById("settings") && !document.getElementById("settings").classList.contains("hidden")));
+        if (!(await drawerOpen())) await page.click("#btn-settings");
+        await page.click("#settings-tab-general");
+        const switchRow = await page.evaluate(() => {
+          const box = document.getElementById("general-active-button");
+          return {
+            exists: Boolean(box),
+            checked: box ? box.checked : null,
+            label: (box?.closest("label.settings-row")?.querySelector("span")?.textContent || "").trim(),
+            inGeneral: Boolean(box && box.closest("#settings-panel-general")),
+          };
+        });
+        ok("Settings > General carries the row", switchRow.exists === true && switchRow.inGeneral === true, JSON.stringify(switchRow));
+        eq("...named for the Header control", switchRow.label, "Show the Active agents button in the floating header");
+        eq("...and it ships OFF for a reader who never set it", switchRow.checked, false);
+        await page.check("#general-active-button");
+        await page.waitForTimeout(150);
+        eq("the press stores the browser key", await page.evaluate(() => localStorage.getItem("wtgui.activeButton")), "1");
+        if (await drawerOpen()) await page.click("#btn-settings");
+        await page.evaluate(() => document.activeElement?.blur?.());
+
         // ---- 1. nothing is hot ----------------------------------------------------------------------------------
         section("nothing is hot");
         await seed([]);
@@ -253,7 +283,7 @@ const result = await (async () => {
         s = await hotState();
         ok("the bolt is drawn", s.hidden === false && s.drawn === true, JSON.stringify({ hidden: s.hidden, drawn: s.drawn }));
         ok("...in the header's control group, not on a row", s.inControls === true && s.inRow === false);
-        eq("...labelled as the family's controls are", s.label, "⚡ Hot");
+        eq("...labelled as the family's controls are, with the word Active", s.label, "⚡ Active");
         eq("...carrying the count on its badge", s.badge, "1");
         ok("...with the amber state class on", s.isHot === true);
         eq("Human stays quiet beside it: a working agent is not a question", s.humanBadge, "");
@@ -293,7 +323,7 @@ const result = await (async () => {
         await page.locator("#btn-hot").click();
         await page.waitForTimeout(400);
         s = await hotState();
-        eq("the label steps into the rotation", s.label, "⚡ Hot 1/2");
+        eq("the label steps into the rotation", s.label, "⚡ Active 1/2");
         eq("the rotation remembers the agent", s.key, "hot-one");
         const landed = await page.evaluate(() => ({
           jumped: [...document.querySelectorAll(".job.jump")].map((el) => el.dataset.thread),
@@ -306,7 +336,7 @@ const result = await (async () => {
         await page.locator("#btn-hot").click();
         await page.waitForTimeout(400);
         s = await hotState();
-        eq("a second press steps to the other agent", s.label, "⚡ Hot 2/2");
+        eq("a second press steps to the other agent", s.label, "⚡ Active 2/2");
         eq("...and remembers that one", s.key, "hot-two");
 
         // ---- 6. the work ends, the bolt goes ---------------------------------------------------------------------

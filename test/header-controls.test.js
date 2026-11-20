@@ -1,12 +1,14 @@
 // The header's four named controls, and where Pause lives.
 //
-// The board's header carries four named controls side by side: Assistant, Hot, Human and Deliverables. They used to
-// speak in two registers - a Title Case name behind a sparkle, beside two SHOUTED tags - so the pair read as a
+// The board's header carries four named controls side by side: Assistant, Active, Human and Deliverables. They used
+// to speak in two registers - a Title Case name behind a sparkle, beside two SHOUTED tags - so the pair read as a
 // different kind of control from the one next to it. One shape now: a leading glyph, a space, and Title Case.
 //
-// HOT is the newest of them and the only one that is not always drawn: it is the marker for an agent that is working
-// right now, so it ships hidden and public/app.js paintHotButton brings it in and takes it away with the work. Its
-// label is still the family's shape - that is what this file pins.
+// ACTIVE is the newest of them and the only one that is not always drawn: it is the marker for an agent that is
+// working right now, drawn only while one is and only when Settings > General has it switched on, so it ships hidden
+// and public/app.js paintHotButton brings it in and takes it away with the work and with that switch. It read "Hot"
+// before the rename; its ids (#btn-hot, #hot-label, #hot-badge) kept the old word, which is why this file still
+// says `hot` where it names an element. Its label is the family's shape - that is what this file pins.
 //
 // Pause was the fifth control in that row, and it is not a header gesture: it freezes the board's own reads, and
 // the rows that govern those reads (the folders the board scans, Read now, and the bundle re-read on the Bundles
@@ -40,7 +42,7 @@ test("the four named header controls share one label shape: a leading glyph and 
   // The precedent, then the three that now match it. Exact strings: a "cleaned up" label that drops the glyph, or
   // one that goes back to caps, has to change this line and say why.
   assert.equal(assistant[1].trim(), "✧ Assistant", "the precedent: a sparkle, a space, Title Case");
-  assert.equal(hot[1].trim(), "⚡ Hot", "Hot is drawn the way Assistant is");
+  assert.equal(hot[1].trim(), "⚡ Active", "Active is drawn the way Assistant is");
   assert.equal(human[1].trim(), "🙋 Human", "Human is drawn the way Assistant is");
   assert.equal(deliver[1].trim(), "📦 Deliverables", "Deliverables is drawn the way Assistant is");
 

@@ -1,11 +1,15 @@
-// The header's HOT AGENTS marker: the bolt that is drawn only while an agent is working.
+// The header's ACTIVE AGENTS marker: the bolt that is drawn only while an agent is working.
 //
-// One predicate decides what "hot" means (public/core/hot-mark.js), and four surfaces read it: the button's
+// One predicate decides what "active" means (public/core/hot-mark.js), and four surfaces read it: the button's
 // existence, its count, its tooltip and the press that steps to an agent. This file drives the module directly with
 // turn records in the shape the store writes, and pins the wiring of each surface by slicing the files that draw
 // them - the approach test/review-lane.test.js takes, because a predicate nothing calls is not a marker.
 //
-// The line this file protects is the one the control exists to read: HOT is not LIVE. A turn parked on a permission
+// The control read "Hot" before the rename. Its module, its global and its ids (#btn-hot, #hot-label, #hot-badge)
+// keep that word on the wire on purpose, so a stored setting and an older build keep reading; every string a person
+// reads says Active, which is what the label and the tooltip assertions below pin.
+//
+// The line this file protects is the one the control exists to read: ACTIVE is not LIVE. A turn parked on a permission
 // or a question is live (the panel counts it so, and must), and it is exactly what the red Human count is for. The
 // bolt is the other half: an agent burning right now.
 import assert from "node:assert/strict";
@@ -112,11 +116,16 @@ test("the tooltip names the agents and their trees, and says what the press does
     { key: "a", name: "the light", where: "hot-tree" },
     { key: "b", name: "turn-fix" },
   ]);
+  assert.match(text, /^Active agents - /, "the tooltip leads with the word the reader sees");
+  assert.doesNotMatch(text, /Hot Agents/, "and no title still says Hot Agents");
   assert.match(text, /2 agents working right now/);
   assert.match(text, /the light \(hot-tree\)/, "an agent on a worktree row is named with its tree");
   assert.match(text, /Click to land on the next one/);
   assert.match(text, /red Human count/, "the line between amber and red is said where the reader reads it");
+  assert.match(text, /not active/, "the parked-agent sentence uses the new word");
+  assert.match(text, /Settings > General > "Show the Active agents button in the floating header" turns this button off/, "the tooltip names the row that can take the control out of the header");
   assert.match(mark.title([]), /nothing is working right now/);
+  assert.match(mark.title([]), /^Active agents - /, "the empty tooltip says Active too");
   assert.match(mark.title([{ key: "a", name: "one" }]), /1 agent working right now/, "one agent is singular");
 });
 
@@ -128,13 +137,21 @@ test("the markup is a header control of the same family, immediately before Huma
   assert.match(header, /<button id="btn-hot" type="button" hidden[ >]/, "it ships hidden: zero is absent, not a dead bolt");
   const at = (needle) => header.indexOf(needle);
   assert.ok(at('id="btn-hot"') > 0, "#btn-hot is in the header");
-  assert.ok(at('id="btn-hot"') < at('id="btn-human"'), "the bolt sits before Human in the group");
+  assert.ok(at('id="btn-hot"') < at('id="btn-human"'), "the button sits before Human in the group");
   assert.ok(at('id="btn-assistant"') < at('id="btn-hot"'), "and after Assistant, in the same row");
-  assert.match(header, /<span id="hot-label">⚡ Hot<\/span>/, "one glyph, a space, Title Case - the family's label shape");
+  assert.match(header, /<span id="hot-label">⚡ Active<\/span>/, "one glyph, a space, Title Case - and the word is Active");
   assert.match(header, /<span id="hot-badge" hidden>0<\/span>/, "the count is its own pill, quiet at zero");
-  assert.ok(header.includes('src="/core/hot-mark.js"') || html.includes('src="/core/hot-mark.js"'), "the module is loaded by the page");
+  // Every string a person reads on the closed control says Active, and the tooltip names the setting and the pen.
+  const tag = header.match(/<button id="btn-hot"[\s\S]*?<\/button>/)[0];
+  assert.match(tag, /title="Active agents - /, "the button's own tooltip opens with the new word");
+  assert.doesNotMatch(tag, /Hot Agents/, "no title or label on this control still says Hot Agents");
+  assert.match(tag, /Show the Active agents button in the floating header/, "the tooltip names the setting that draws it");
+  assert.match(tag, /Hot Agent pen search/, "and says the pen beside it is a different control");
+  assert.ok(html.includes('src="/core/hot-mark.js"') || html.includes('src="/core/hot-mark.js"'), "the module is loaded by the page");
+  assert.ok(html.includes('src="/core/active-button.js"'), "the visibility module is loaded by the page");
   assert.ok(html.indexOf('src="/core/review-lane.js"') < html.indexOf('src="/core/hot-mark.js"'), "loaded beside the other lane module, before app.js");
-  assert.ok(html.indexOf('src="/core/hot-mark.js"') < html.indexOf('src="/app.js"'), "before app.js, which wires it");
+  assert.ok(html.indexOf('src="/core/hot-mark.js"') < html.indexOf('src="/core/active-button.js"'), "the switch's module follows the marker's");
+  assert.ok(html.indexOf('src="/core/active-button.js"') < html.indexOf('src="/app.js"'), "before app.js, which wires it");
 });
 
 test("the button's amber is the panel's amber, not the lock's and not the turnover's", () => {
@@ -149,7 +166,7 @@ test("the button's amber is the panel's amber, not the lock's and not the turnov
   assert.doesNotMatch(block, /--violet/, "the turnover mark is blue-violet: not this");
 });
 
-test("the painter reads the module, the count and the tooltip, and hides the button at zero", () => {
+test("the painter reads the module, the count, the tooltip and the switch, and hides the button at zero", () => {
   const app = read("public/app.js");
   const hotAgents = sliceBetween(app, "function hotAgents()", "function paintHotButton()");
   assert.match(hotAgents, /wtHotMark\.agents\(/, "the list is the module's");
@@ -158,19 +175,28 @@ test("the painter reads the module, the count and the tooltip, and hides the but
 
   const paint = sliceBetween(app, "function paintHotButton()", "function hotStep()");
   assert.match(paint, /wtHotMark\.title\(/, "the tooltip is the module's wording");
-  assert.match(paint, /btn\.hidden = list\.length === 0/, "zero is ABSENT: the marker only exists while an agent is hot");
+  assert.match(paint, /const on = activeButtonOn\(\)/, "the paint asks the settings switch once");
+  assert.match(paint, /btn\.hidden = !wtActiveButton\.show\(list, on\)/, "zero is ABSENT, and so is a switched-off row: the module decides, not the paint");
+  assert.match(paint, /Active agents - \$\{list\.length\} working right now/, "the aria-label says Active");
+  assert.match(paint, /⚡ Active \$\{at \+ 1\}\/\$\{list\.length\}/, "the label steps with the new word");
   assert.match(paint, /classList\.toggle\("is-hot"/);
   assert.match(paint, /const sig = /, "the paint is signature-guarded, like the Human count");
   assert.match(paint, /hot-label/);
   assert.match(paint, /hot-badge/);
+
+  // The switch is read through the module (one default, one key) and the page's own read is cached in state.
+  const on = sliceBetween(app, "function activeButtonOn()", "function paintHotButton()");
+  assert.match(on, /wtActiveButton\.read\(localStorage\)/);
+  assert.match(on, /state\.hot\.on/, "one browser read per page, then the state the row moves");
 });
 
-test("the press lands on the next hot agent through the board's own jump", () => {
+test("the press lands on the next working agent through the board's own jump, and does nothing while the row is off", () => {
   const app = read("public/app.js");
   const step = sliceBetween(app, "function hotStep()", '$("btn-hot")?.addEventListener');
   assert.match(step, /wtHotMark\.step\(/, "the rotation arithmetic is the module's");
   assert.match(step, /revealAgentHome\(/, "the landing is the one the dock already uses: unfold, then jump");
   assert.match(step, /paintHotButton\(\)/);
+  assert.match(step, /if \(!activeButtonOn\(\)\) return;/, "a switched-off button has no rotation to step into");
   assert.match(app, /\$\("btn-hot"\)\?\.addEventListener\("click",[\s\S]{0,80}hotStep\(\)/, "the press is bound by id");
 });
 
