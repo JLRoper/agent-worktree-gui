@@ -13416,6 +13416,8 @@ function applyCollisionRecord(rec) {
       state: rec.state,
       ruling: rec.ruling || null,
       canAsk: !!rec.canAsk,
+      // git's own answer travels with the press too: the card says WHY this one is the reader's.
+      merge: rec.merge || list[i].merge || null,
       // Both sides travel with the answer, so the card on this row can still name the counterpart (and its task)
       // after a press: a pair is ONE record and both rows draw it.
       a: rec.a || list[i].a || null,
