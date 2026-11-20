@@ -19,6 +19,12 @@
 //      touches a different file, and the parent book records main as its parent - the exact shape that filed four
 //      rows of noise in one night. The sweep's pair count never includes it, no record exists for it, and the primary
 //      row wears no marker.
+//   5. EACH SIDE NAMES THE TASK IT IS WORKING. Two live trees against TWO REAL QUEUE FILES on disk (state/assistants/
+//      <id>/queue.json, one row per tree, two assistants): both cards name each side's task number, its own title, the
+//      assistant whose queue holds it and its state. The resolution is the row's OWN `worktree` field, so the proof
+//      seeds worktrees, not branches - and a task row whose branch text would have matched somebody else's tree never
+//      answers. A side no queue row owns reads "no task row on this tree"; a side whose own task is done reads as
+//      already stood down and its pair is not counted for the reader.
 //
 // On top of the four: the ruled pair re-reads as "already ruled" on both rows after a fresh detection, the Human badge
 // counts the pair ONCE (a decision, not a marker), H parks on it, and the Collisions switch still turns it off.
@@ -35,6 +41,8 @@ import { loadPlaywright, withBrowser, openPage } from "./browser.mjs";
 import { startPanel } from "./panel-testkit.mjs";
 import { CollisionBook, COLLISION_PASS_MS } from "../lib/collisions.js";
 import { sweepCollisions } from "../lib/collision-flow.js";
+import { writeAssistantsFile } from "../lib/assistants.js";
+import { writeQueueFor } from "../lib/assistant/queue.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const argv = process.argv.slice(2);
@@ -90,6 +98,7 @@ mkdirSync(path.join(repo, "src"), { recursive: true });
 writeFileSync(path.join(repo, "lib", "shared.js"), "export const shared = 1;\n");
 writeFileSync(path.join(repo, "lib", "other.js"), "export const other = 1;\n");
 writeFileSync(path.join(repo, "src", "sibling.js"), "export const sibling = 1;\n");
+writeFileSync(path.join(repo, "lib", "loose.js"), "export const loose = 1;\n");
 git(["add", "-A"]);
 git(["commit", "-m", "fixture"]);
 
@@ -102,19 +111,44 @@ const STOOD2 = path.join(repo, ".worktrees", "stood-d").replace(/\\/g, "/");
 // SIB1 and SIB2: two branches cut from main that each COMMIT the same file - siblings.
 const SIB1 = path.join(repo, ".worktrees", "sib-one").replace(/\\/g, "/");
 const SIB2 = path.join(repo, ".worktrees", "sib-two").replace(/\\/g, "/");
-const branchOf = { [ONE]: "wtgui/pair-a", [TWO]: "wtgui/pair-b", [STOOD1]: "wtgui/stood-c", [STOOD2]: "wtgui/stood-d", [SIB1]: "wtgui/sib-one", [SIB2]: "wtgui/sib-two" };
-const nameOf = { [ONE]: "pair-a", [TWO]: "pair-b", [STOOD1]: "stood-c", [STOOD2]: "stood-d", [SIB1]: "sib-one", [SIB2]: "sib-two" };
+// LOOSE1 and LOOSE2: a shared-file pair where only ONE side is named by a queue row - the honest "no task row" case.
+const LOOSE1 = path.join(repo, ".worktrees", "loose-a").replace(/\\/g, "/");
+const LOOSE2 = path.join(repo, ".worktrees", "loose-b").replace(/\\/g, "/");
+const branchOf = {
+  [ONE]: "wtgui/pair-a",
+  [TWO]: "wtgui/pair-b",
+  [STOOD1]: "wtgui/stood-c",
+  [STOOD2]: "wtgui/stood-d",
+  [SIB1]: "wtgui/sib-one",
+  [SIB2]: "wtgui/sib-two",
+  [LOOSE1]: "wtgui/loose-a",
+  [LOOSE2]: "wtgui/loose-b",
+};
+const nameOf = {
+  [ONE]: "pair-a",
+  [TWO]: "pair-b",
+  [STOOD1]: "stood-c",
+  [STOOD2]: "stood-d",
+  [SIB1]: "sib-one",
+  [SIB2]: "sib-two",
+  [LOOSE1]: "loose-a",
+  [LOOSE2]: "loose-b",
+};
 git(["worktree", "add", "-b", branchOf[ONE], ONE]);
 git(["worktree", "add", "-b", branchOf[TWO], TWO]);
 git(["worktree", "add", "-b", branchOf[STOOD1], STOOD1]);
 git(["worktree", "add", "-b", branchOf[STOOD2], STOOD2]);
 git(["worktree", "add", "-b", branchOf[SIB1], SIB1]);
 git(["worktree", "add", "-b", branchOf[SIB2], SIB2]);
+git(["worktree", "add", "-b", branchOf[LOOSE1], LOOSE1]);
+git(["worktree", "add", "-b", branchOf[LOOSE2], LOOSE2]);
 // The dirty pairs: same file, one per pair, uncommitted.
 writeFileSync(path.join(ONE, "lib", "shared.js"), "export const shared = 'one';\n");
 writeFileSync(path.join(TWO, "lib", "shared.js"), "export const shared = 'two';\n");
 writeFileSync(path.join(STOOD1, "lib", "other.js"), "export const other = 'c';\n");
 writeFileSync(path.join(STOOD2, "lib", "other.js"), "export const other = 'd';\n");
+writeFileSync(path.join(LOOSE1, "lib", "loose.js"), "export const loose = 'one';\n");
+writeFileSync(path.join(LOOSE2, "lib", "loose.js"), "export const loose = 'two';\n");
 // The sibling pair: two branches from ONE parent, each with its OWN commit on the same file.
 writeFileSync(path.join(SIB1, "src", "sibling.js"), "export const sibling = 'one';\n");
 git(["add", "-A"], SIB1);
@@ -132,7 +166,7 @@ writeFileSync(path.join(repo, "README.md"), "# collision pairs fixture - the rea
 const PARENTS_FILE = path.join(dir, "logs", "parents.json");
 const parents = {
   version: 1,
-  records: [ONE, TWO, STOOD1, STOOD2, SIB1, SIB2].map((p) => ({
+  records: [ONE, TWO, STOOD1, STOOD2, SIB1, SIB2, LOOSE1, LOOSE2].map((p) => ({
     project: "pair-proj",
     branch: branchOf[p],
     path: p,
@@ -146,6 +180,35 @@ const parents = {
 };
 mkdirSync(path.dirname(PARENTS_FILE), { recursive: true });
 writeFileSync(PARENTS_FILE, JSON.stringify(parents, null, 2));
+
+// ---- the tasks each side is working: TWO REAL ASSISTANT QUEUES on disk --------------------------------------------
+// The panel resolves a side's task out of every assistant's queue, matched on the row's OWN `worktree` field - the
+// field a spawn writes - so the fixture writes those files exactly as the queue store writes them, and the trees the
+// rows name are the trees this proof made. Two assistants, because the card has to say WHOSE queue a row sits in.
+//
+//   #7  running  pair-a   Assistant #1   the card's own real pair, this side
+//   #8  queued   pair-b   Assistant #2   ...and the other side, a different assistant and a different state
+//   #61 done     sib-one  Assistant #1   a side whose work is finished: the pair is already stood down
+//   #62 queued   sib-two  Assistant #2   the sibling pair's live side
+//   #71 queued   loose-b  Assistant #2   the no-row pair's only named side (loose-a has none)
+const STATE_DIR = path.join(dir, "logs");
+const NOW_ISO = new Date().toISOString();
+writeAssistantsFile(path.join(STATE_DIR, "assistants.json"), [
+  { id: "assistant-1", name: "Assistant #1", threadId: "panel-assistant", rules: [], createdAt: NOW_ISO },
+  { id: "assistant-2", name: "Assistant #2", threadId: "panel-assistant-2", rules: [], createdAt: NOW_ISO },
+]);
+writeQueueFor(STATE_DIR, "assistant-1", [
+  // A row that is on the SAME work as the pair, and one on another tree entirely: only the tree's own worktree field
+  // may answer, because a branch is not the association.
+  { id: 7, title: "Land the collision card on both rows", detail: "the task this side is really on", state: "running", worktree: ONE, files: ["lib/shared.js"], thread: "panel-assistant", createdAt: NOW_ISO },
+  { id: 61, title: "Compare the two siblings", state: "done", worktree: SIB1, files: [], thread: "panel-assistant", doneAt: NOW_ISO, createdAt: NOW_ISO },
+  { id: 99, title: "A row on a different tree that carries pair-a's branch name", state: "queued", worktree: path.join(repo, ".worktrees", "elsewhere").replace(/\\/g, "/"), files: [], createdAt: NOW_ISO },
+]);
+writeQueueFor(STATE_DIR, "assistant-2", [
+  { id: 8, title: "Show each side's task beside its tree", detail: "the other side of the same pair", state: "queued", worktree: TWO, files: [], thread: "panel-assistant-2", createdAt: NOW_ISO },
+  { id: 62, title: "Rewrite the shared module", state: "queued", worktree: SIB2, files: [], thread: "panel-assistant-2", createdAt: NOW_ISO },
+  { id: 71, title: "Rewrite the loose end", state: "queued", worktree: LOOSE2, files: ["lib/loose.js"], thread: "panel-assistant-2", createdAt: NOW_ISO },
+]);
 
 // ---- the stood-down pair: filed through the real sweep, then one side's notice closed -------------------------------
 const BOOK_FILE = path.join(dir, "logs", "collisions.json");
@@ -191,18 +254,27 @@ const result = await (async () => {
   try {
     return await withBrowser(
       async ({ page, pageErrors, consoleErrors }) => {
-        const rowsLoaded = () =>
-          page.waitForFunction(
-            () => {
+        const rowsLoaded = async (want = 9) => {
+          for (let i = 0; i < 120; i += 1) {
+            const seen = await page.evaluate(() => {
               try {
-                return state.rows && state.rows.size >= 7;
+                return [...state.rows.values()].map((r) => r.name || r.path);
               } catch {
-                return false;
+                return [];
               }
-            },
-            null,
-            { timeout: 60_000 },
-          );
+            });
+            if (seen.length >= want) return seen;
+            await page.waitForTimeout(500);
+          }
+          const seen = await page.evaluate(() => {
+            try {
+              return [...state.rows.values()].map((r) => r.name || r.path);
+            } catch {
+              return [];
+            }
+          });
+          throw new Error(`the board never showed ${want} rows, it showed ${seen.length}: ${seen.join(", ")}`);
+        };
         const swept = () =>
           page.evaluate(async () => {
             const r = await fetch("/api/collisions", {
@@ -213,9 +285,9 @@ const result = await (async () => {
             return r.json();
           });
         // The sweep reads the rows the SCANNER wrote, so the first one after boot can run before the boot scan has
-        // finished and see fewer pairs. The proof asks for a sweep until the detector has all THREE, which is what the
+        // finished and see fewer pairs. The proof asks for a sweep until the detector has all FOUR, which is what the
         // panel's own 10 s clock does, only bounded.
-        const sweepUntilPairs = async (want = 3) => {
+        const sweepUntilPairs = async (want = 4) => {
           for (let i = 0; i < 30; i += 1) {
             const out = await swept();
             if (out?.report?.pairs === want) return out;
@@ -236,7 +308,7 @@ const result = await (async () => {
           page.waitForFunction(
             () => {
               try {
-                return [...state.rows.values()].filter((r) => (r.collisions || []).length > 0).length >= 6;
+                return [...state.rows.values()].filter((r) => (r.collisions || []).length > 0).length >= 8;
               } catch {
                 return false;
               }
@@ -256,12 +328,13 @@ const result = await (async () => {
                 state: c.state,
                 role: c.role,
                 other: c.other?.name || null,
-                a: c.a ? { name: c.a.name, path: c.a.path, branch: c.a.branch, taskId: c.a.taskId ?? null } : null,
-                b: c.b ? { name: c.b.name, path: c.b.path, branch: c.b.branch, taskId: c.b.taskId ?? null } : null,
+                a: c.a ? { name: c.a.name, path: c.a.path, branch: c.a.branch, taskId: c.a.taskId ?? null, task: c.a.task || null } : null,
+                b: c.b ? { name: c.b.name, path: c.b.path, branch: c.b.branch, taskId: c.b.taskId ?? null, task: c.b.task || null } : null,
                 files: c.files,
                 relations: (c.relations || []).map((x) => x.kind),
                 source: c.source,
                 stoodDown: c.stoodDown || [],
+                stoodByTask: c.stoodByTask || [],
                 ruling: c.ruling ? { name: c.ruling.name, pick: c.ruling.pick } : null,
                 canAsk: c.canAsk,
               })),
@@ -291,8 +364,13 @@ const result = await (async () => {
                 sides: [...el.querySelectorAll(".collision-side")].map((s) => ({
                   role: s.getAttribute("data-collision-side"),
                   mine: s.classList.contains("is-mine"),
+                  finished: s.classList.contains("is-finished"),
                   name: (s.querySelector(".collision-side-name")?.textContent || "").trim(),
                   task: (s.querySelector(".collision-task")?.textContent || "").trim(),
+                  taskName: (s.querySelector(".collision-task-name")?.textContent || "").trim(),
+                  taskWho: (s.querySelector(".collision-task-who")?.textContent || "").trim(),
+                  taskState: (s.querySelector(".collision-task-state")?.textContent || "").trim(),
+                  taskNone: (s.querySelector(".collision-side-task.is-none")?.textContent || "").trim(),
                 })),
                 other: (el.querySelector(".collision-other b")?.textContent || "").trim(),
                 say: (el.querySelector(".collision-say")?.textContent || "").trim(),
@@ -339,8 +417,8 @@ const result = await (async () => {
 
         // ---- 1. one pair, one record, drawn on both rows ---------------------------------------------------
         section("one pair, one record, drawn on both rows");
-        const first = await sweepUntilPairs(3);
-        ok("the sweep found exactly three pairs", first?.report?.pairs === 3, JSON.stringify(first?.report ? { pairs: first.report.pairs } : first));
+        const first = await sweepUntilPairs(4);
+        ok("the sweep found exactly four pairs", first?.report?.pairs === 4, JSON.stringify(first?.report ? { pairs: first.report.pairs } : first));
         await page.reload({ waitUntil: "domcontentloaded" });
         await rowsLoaded();
         await withCollisions();
@@ -369,7 +447,20 @@ const result = await (async () => {
           eq(`…and the counterpart named in the heading on ${label}`, b.other, label === "pair-a" ? "pair-b" : "pair-a");
           ok(`…with the shared file as the evidence on ${label}`, b.chips.includes("lib/shared.js"), JSON.stringify(b.chips));
         }
-        eq("six rows wear a marker, one per side of three pairs", v.marks.filter((m) => m.mark).length, 6);
+        eq("eight rows wear a marker, one per side of four pairs", v.marks.filter((m) => m.mark).length, 8);
+        // ---- the TASK each side is working, beside the tree and branch it already shows -----------------------
+        // Two real queue files on disk (Assistant #1's and Assistant #2's), matched on each row's own `worktree`
+        // field: this is the distinction the card exists for - two agents on ONE piece of work, or two agents merely
+        // both landing into main. Both cards name both sides' tasks, each with its number, its own title, the
+        // assistant whose queue holds it and its state.
+        const sidesOf = (b) => Object.fromEntries((b?.sides || []).map((s) => [s.name, s]));
+        for (const [label, b] of [[ "pair-a", blocksA[0] ], [ "pair-b", blocksB[0] ]]) {
+          const sides = sidesOf(b);
+          eq(`the card on ${label} names this side's task`, [sides["pair-a"]?.task, sides["pair-a"]?.taskName, sides["pair-a"]?.taskWho, sides["pair-a"]?.taskState], ["#7", "Land the collision card on both rows", "Assistant #1", "running"]);
+          eq(`…and the counterpart's task on ${label}`, [sides["pair-b"]?.task, sides["pair-b"]?.taskName, sides["pair-b"]?.taskWho, sides["pair-b"]?.taskState], ["#8", "Show each side's task beside its tree", "Assistant #2", "queued"]);
+        }
+        eq("the record holds both sides' tasks, with the assistant each belongs to", [rowA?.collisions[0]?.a?.task?.id, rowA?.collisions[0]?.a?.task?.assistant, rowA?.collisions[0]?.b?.task?.id, rowA?.collisions[0]?.b?.task?.assistant, rowA?.collisions[0]?.b?.task?.state], [7, "Assistant #1", 8, "Assistant #2", "queued"]);
+        await shotRows("collision-pairs-tasks-1440x900.png", ["pair-a", "pair-b"]);
         await page.screenshot({ path: path.join(shots, "collision-pairs-board-1440x900.png"), fullPage: true });
         console.log(`SHOT  ${path.join(shots, "collision-pairs-board-1440x900.png")}`);
         await shotRows("collision-pairs-both-rows-1440x900.png", ["pair-a", "pair-b"]);
@@ -396,17 +487,51 @@ const result = await (async () => {
         eq("…each naming the other", [sibOne?.collisions[0]?.other, sibTwo?.collisions[0]?.other], ["sib-two", "sib-one"]);
         ok("…and the primary checkout is NOT one of their pair", ![sibOne?.collisions[0]?.a?.name, sibOne?.collisions[0]?.b?.name].includes("pair-proj"));
         await shotRows("collision-pairs-siblings-1440x900.png", ["sib-one", "sib-two"]);
+        // A SIDE WHOSE OWN TASK IS DONE. sib-one's queue row #61 is done, so the card names it and reads as already
+        // stood down on BOTH rows - and the pair is not counted for the reader, because finished work is not something
+        // anybody has to arbitrate.
+        const sibKey = sibOne?.collisions[0]?.key;
+        {
+          const sibBlocks = v.blocks.filter((b) => b.key === sibKey);
+          eq("the sibling pair is drawn on both its rows", sibBlocks.length, 2);
+          for (const b of sibBlocks) {
+            const sides = Object.fromEntries(b.sides.map((s) => [s.name, s]));
+            eq("sib-one's done task is named on the card", [sides["sib-one"]?.task, sides["sib-one"]?.taskName, sides["sib-one"]?.taskWho, sides["sib-one"]?.taskState, sides["sib-one"]?.finished], ["#61", "Compare the two siblings", "Assistant #1", "done", true]);
+            eq("…and sib-two's live task beside it", [sides["sib-two"]?.task, sides["sib-two"]?.taskName, sides["sib-two"]?.taskState], ["#62", "Rewrite the shared module", "queued"]);
+            ok("…and the card reads as already stood down", /^already stood down: sib-one \(Compare the two siblings\) is done$/.test(b.state), b.state);
+            ok("…with the sentence saying why", /sib-one is already stood down: its task #61 \(Compare the two siblings\) is done - the collision is with finished work, so the pair is not waiting on you/.test(b.stood), b.stood);
+          }
+          eq("the record names the finished side on both rows", [sibOne?.collisions[0]?.stoodByTask?.map((f) => [f.side, f.taskId, f.state]), sibTwo?.collisions[0]?.stoodByTask?.map((f) => [f.side, f.taskId, f.state])], [[["a", 61, "done"]], [["a", 61, "done"]]]);
+          eq("…and the pair is NOT in the reader's rotation", v.list.filter((q) => q.kind === "collision").map((q) => q.key).includes(sibKey), false);
+        }
+        await shotRows("collision-pairs-done-side-1440x900.png", ["sib-one", "sib-two"]);
+
+        // ---- a side with NO owning queue row says so, in words ------------------------------------------------
+        section("a side with no task row");
+        const looseA = v.rows.find((r) => r.name === "loose-a");
+        const looseB = v.rows.find((r) => r.name === "loose-b");
+        eq("the no-row pair is one record on both rows", [looseA?.collisions.length, looseB?.collisions.length, looseA?.collisions[0]?.key === looseB?.collisions[0]?.key], [1, 1, true]);
+        const looseKey = looseA?.collisions[0]?.key;
+        const looseBlocks = v.blocks.filter((b) => b.key === looseKey);
+        eq("…drawn once on each of its rows", looseBlocks.length, 2);
+        for (const b of looseBlocks) {
+          const sides = Object.fromEntries(b.sides.map((s) => [s.name, s]));
+          eq("the side nothing owns says exactly that", [sides["loose-a"]?.taskNone, sides["loose-a"]?.task, sides["loose-a"]?.taskName], ["no task row on this tree", "", ""]);
+          eq("…and the side a queue row does own still names its task", [sides["loose-b"]?.task, sides["loose-b"]?.taskName, sides["loose-b"]?.taskWho, sides["loose-b"]?.taskState], ["#71", "Rewrite the loose end", "Assistant #2", "queued"]);
+        }
+        eq("the record holds null for the unowned side and the row for the other", [looseA?.collisions[0]?.a?.task, looseA?.collisions[0]?.b?.task?.id], [null, 71]);
+        await shotRows("collision-pairs-no-row-1440x900.png", ["loose-a", "loose-b"]);
 
         // ---- 4. the merge-target-only case files nothing ----------------------------------------------------
         section("the merge-target-only case");
         const primary = v.rows.find((r) => r.name === "pair-proj");
         ok("the primary checkout is live and dirty on a file no tree touches", primary?.live === true);
-        eq("the book holds three records, one per evidence pair", (await page.evaluate(async () => (await (await fetch("/api/collisions")).json()).total)), 3);
+        eq("the book holds four records, one per evidence pair", (await page.evaluate(async () => (await (await fetch("/api/collisions")).json()).total)), 4);
         eq("…and it carries NO collision of its own", primary?.collisions?.length ?? -1, 0);
         eq("…and wears no marker", v.marks.find((m) => m.row && m.row.endsWith("pair-proj"))?.mark ?? "", "");
         const all = await page.evaluate(async () => (await (await fetch("/api/collisions")).json()).records || []);
         eq("no record on the book is a merge-target relation alone", all.filter((r) => (r.relations || []).length && r.relations.every((x) => x.kind === "merge-target")).length, 0);
-        eq("three records for three evidence pairs", all.length, 3);
+        eq("four records for four evidence pairs", all.length, 4);
         await shotRows("collision-pairs-merge-target-only-1440x900.png", ["pair-proj", "pair-a"]);
 
         // ---- 5. the ruling, from the row the reader is looking at -------------------------------------------
@@ -443,7 +568,7 @@ const result = await (async () => {
         section("the badge, and a re-detection");
         await page.waitForTimeout(COLLISION_PASS_MS + 600);
         const again = await swept();
-        ok("the sweep still sees three pairs", again?.report?.pairs === 3, JSON.stringify(again?.report ? { pairs: again.report.pairs } : again));
+        ok("the sweep still sees four pairs", again?.report?.pairs === 4, JSON.stringify(again?.report ? { pairs: again.report.pairs } : again));
         const rec = (await page.evaluate(async () => (await (await fetch("/api/collisions")).json()).records || [])).find((r) => r.key === pairKey);
         ok("the ruled pair survived the re-detection, still ruled", rec?.state === "ruled" && rec?.ruling?.name === "pair-a", JSON.stringify(rec ? { state: rec.state, name: rec.ruling?.name } : null));
         eq("…and there is still ONE record for it", (await page.evaluate(async () => (await (await fetch("/api/collisions")).json()).records || [])).filter((r) => r.key === pairKey).length, 1);
