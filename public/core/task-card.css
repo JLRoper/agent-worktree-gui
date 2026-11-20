@@ -1,0 +1,51 @@
+/* task-card.css - THE QUEUE CARD'S COMPACT MODE, and nothing else.
+ *
+ * The card is drawn by ONE renderer, public/queue-cards.js `taskCardHtml`, in two modes: the queue pane calls it in
+ * "full" and the Initiatives tab's Assistants section calls it in "compact". Everything that makes the thing a card -
+ * the marker, the state word and its four tones, the id, the title, the agent row, the dimming of a done row, the
+ * flash when a task is opened from elsewhere - is in public/style.css under `.as-task`, and both modes wear it. That
+ * is the point of the mode: a reader recognises the card he knows from the queue because it IS that card, in fewer
+ * pixels.
+ *
+ * So what is here is only what a compact card ADDS, and not one rule restates a colour, a marker or a state:
+ *   - a shorter box, because the fold sits under an assistant's own line inside an initiative card;
+ *   - the title cut to ONE line, with the whole of it in the card's `title=` (the renderer never truncates the text
+ *     itself, so a copy takes the title the queue holds);
+ *   - the facts line laid out where the queue pane's own scoped rule (`.as-qpane .as-task-facts`) does not reach;
+ *   - the press the Initiatives pane puts on the card, and the "show more" line under the fold's window.
+ *
+ * This file is loaded by public/index.html after public/style.css. It deliberately does NOT edit a selector another
+ * surface owns: every rule below is either `.as-task.is-compact` (a mode only this file's caller draws) or a
+ * `.init-tasks` child class that this change introduced.
+ */
+
+/* One compact card. Same surface, same border, same radius language as the queue's row - just tighter, because it is
+   read as a list item under a fold rather than as the pane's main object. The pointer and the focus ring are the
+   press: the card carries `role="button"` and the Initiatives pane is what opens the task in its real queue. */
+.as-task.is-compact { padding: 5px 8px; margin: 0 0 4px; border-radius: 7px; cursor: pointer; }
+.as-task.is-compact:hover { border-color: #38424f; }
+.as-task.is-compact:focus-visible { outline: 2px solid #6b7b8f; outline-offset: 1px; }
+.as-task.is-compact:last-child { margin-bottom: 0; }
+
+/* The head keeps its gap and its order: marker, id, state, title. The title is the only thing that gives: one line,
+   ellipsis, and the whole title still in title= for the hover and for the copy. */
+.as-task.is-compact .as-task-head { gap: 6px; }
+.as-task.is-compact .as-task-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.as-task.is-compact .as-task-state { flex: 0 0 auto; }
+
+/* The facts line: the agent's thread on the left, when it last moved on the right, on ONE line. The queue pane's own
+   `.as-qpane .as-task-facts` rule is scoped to that pane, so without this the two spans would sit flush as one word.
+   The thread is truncated rather than wrapped - a long `initiatives-draw-the-assistant-s-tasks-...` slug must not turn
+   a one-line card into three. */
+.as-task.is-compact .as-task-facts { display: flex; align-items: baseline; gap: 0 8px; flex-wrap: nowrap; margin: 2px 0 0 19px; min-width: 0; font-size: 9.5px; }
+.as-task.is-compact .as-task-agent { min-width: 0; flex: 0 1 auto; padding: 0; cursor: inherit; }
+.as-task.is-compact .as-task-agent:hover { background: none; }
+.as-task.is-compact .as-task-agent-thread { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: 9.5px; color: var(--dim); }
+.as-task.is-compact .as-task-agent.is-none { color: var(--dimmer); font-style: italic; }
+.as-task.is-compact .as-task-when { flex: 0 0 auto; margin-left: auto; font-size: 9.5px; color: var(--dimmer); white-space: nowrap; }
+
+/* The fold's window, stated: how many cards of how many are drawn, and the one press that draws more. The line is
+   built by the painter (public/assistant.js `paintInitTaskLists`) and retires itself when nothing is hidden. */
+.init-tasks-more { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin: 1px 0 5px; }
+.init-tasks-more .init-mini { font-size: 10px; }
+.init-tasks-more .as-hint { font-size: 9.5px; color: var(--dimmer); }

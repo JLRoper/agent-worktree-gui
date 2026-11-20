@@ -11,6 +11,10 @@
   <!-- The mermaid pipeline card's own stylesheet, shared with public/pipeline-map.html: the flow dialog's Preview
        draws that page's cards, so the two read one file. -->
   <link rel="stylesheet" href="/core/pipeline-card.css" />
+  <!-- The queue card's compact mode: the Initiatives tab's Assistants section draws the queue's own card
+       (public/queue-cards.js taskCardHtml, mode "compact"), so the few rules that mode adds live beside it rather
+       than inside style.css, where every card's shared block is owned by all of them. -->
+  <link rel="stylesheet" href="/core/task-card.css" />
 </head>
 <body>
   <header class="topbar">

@@ -62,13 +62,18 @@ const queueRegion = sliceRegion(cards, "the queue sub-tab");
 const buildWindow = () =>
   new Function("esc", "fmtDur", `${windowRegion}\nreturn { pipelineWindowHtml, pipeWindowStageOptions, pipeWindowAssignHtml, pipeWindowElapsedAt, pipeWindowElapsedText, pipeWindowShow, pipeWindowClose, pipeWindowKey, pipeWindowTick, pipeWindowState };`)(esc, fmtDur);
 
-const buildQueue = () =>
-  new Function("esc", "assistantIds", "sessionById", "assistantThreadName", `${queueRegion}\nreturn { queueTaskHtml };`)(
+const buildQueue = () => {
+  const api = new Function("esc", "assistantIds", "sessionById", "assistantThreadName", `${queueRegion}\nreturn { taskCardHtml };`)(
     esc,
     () => ["assistant-1"],
     (id) => ({ id, name: `Assistant ${id}` }),
     (t) => t,
   );
+  // The queue pane's own call: a row, the full mode, and what the pane holds in `kit`.
+  const queueTaskHtml = (own, row, jobs = new Map(), byId = new Map(), alerts = []) =>
+    api.taskCardHtml(row, "full", { own, jobs, byId, alerts });
+  return { ...api, queueTaskHtml };
+};
 
 const stage = (n, title) => ({
   id: `S${n}`,

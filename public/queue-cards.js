@@ -262,8 +262,9 @@ window.WMApp.queueCards = function queueCards(deps) {
   const queueMark = (state) => (state === "done" ? "✓" : state === "parked" ? "⏸" : state === "running" ? "●" : "○");
   const queueStateName = (state) => (state === "running" ? "running" : state === "parked" ? "parked" : state === "done" ? "done" : "queued");
   // The word in the head is a STATUS, and hover is where it explains itself: a reader who does not know what "parked"
-  // means here gets the rule without a paragraph under every row.
-  const queueStateTitle = (t) =>
+  // means here gets the rule without a paragraph under every row. The compact card passes `compact`, because the one
+  // affordance it does not have is the drag: a tooltip promising one would be a control the card never draws.
+  const queueStateTitle = (t, compact = false) =>
     t.stale
       ? `stale — the file still says running, but ${String(t.staleWhy || "its thread has no live run").replace(/^that thread/, "its thread")}`
       : t.state === "running"
@@ -278,7 +279,9 @@ window.WMApp.queueCards = function queueCards(deps) {
           ? "parked — stopped until the condition in the note is released; nothing starts it by itself"
           : t.state === "done"
             ? "done — the record of finished work; it stays in place, dimmed, and can be re-queued"
-            : "queued — not started; drag the card to change its place, and a card held by another row cannot go above it";
+            : compact
+              ? "queued - not started; its queue is where it is started, parked or put in order"
+              : "queued — not started; drag the card to change its place, and a card held by another row cannot go above it";
   // What a row is waiting on, in the row's head: the lane head that goes first. `waitingOn` and `lane` are DERIVED
   // by the store (lib/assistant/queue.js's laneInfo) — this draws the fact the digest already carries, in three
   // words, with the file it shares in title= so the row stays one line.
@@ -672,7 +675,28 @@ window.WMApp.queueCards = function queueCards(deps) {
   // one facts line, and everything a reader needs only after that question — the tree, the files, the attempts and
   // the task's own detail — sits behind the row's own closed disclosure. Printing all of it is what made one row
   // 166 px tall and put its reason under a paragraph of rationale.
-  function queueTaskHtml(id, t, jobs, byId, alerts) {
+  //
+  // ONE CARD, TWO MODES, AND NO SECOND COPY OF IT. `t` is a queue row and `mode` says who is drawing it:
+  //
+  //   "full"     the queue pane's own row: draggable while queued, the four state presses, the move popover, the
+  //              pipeline and flow presses, the re-attach press, and the disclosure that folds the tree, the files
+  //              and the detail.
+  //   "compact"  the Initiatives tab's Assistants section, where a reader wants to recognise the card he knows from
+  //              the queue rather than read a second, plainer listing of the same rows: the SAME head and facts
+  //              markup and the same classes, so the same styles, with every control left out - no drag class, no
+  //              inline form, no per-row button, no disclosure. The whole title rides in title= and the compact
+  //              card's own CSS is what cuts it to one line, so nothing here truncates the text.
+  //
+  // `kit` carries what a pane has and a row does not: `own` (the assistant whose queue this is - every data-as-qown,
+  // and the id a compact card's press opens), `jobs` (the agent statuses by thread), `byId` (the rows by id a hold's
+  // sentence names) and `alerts` (the assistant's own question chips). A mode this function does not know draws the
+  // full card: a typo must not silently drop every control.
+  function taskCardHtml(t, mode = "full", kit = {}) {
+    const compact = mode === "compact";
+    const id = String(kit.own || "");
+    const jobs = kit.jobs || null;
+    const byId = kit.byId instanceof Map ? kit.byId : new Map();
+    const alerts = Array.isArray(kit.alerts) ? kit.alerts : [];
     const mark = queueMark(t.state);
     const state = queueStateName(t.state);
     // A stale row IS a running row nothing is running any more: the WORD says so where the state is read, instead
@@ -683,6 +707,41 @@ window.WMApp.queueCards = function queueCards(deps) {
     // (rather than on a sub-row) opens.
     const list = Array.isArray(t.threads) && t.threads.length ? t.threads.filter(Boolean) : t.thread ? [t.thread] : [];
     const current = list.length ? list[list.length - 1] : "";
+    // THE HEAD, one piece of markup for both modes: the marker, the id, the state in a word, and the title with the
+    // whole of it in title= (the compact card's own CSS cuts it to one line; nothing here truncates the text, so a
+    // copy takes the title the queue holds). The chips after it are the full card's alone: a lane, a hold and a
+    // question are the three things a row is WAITING ON, and a read-only card leaves every one of them to the queue
+    // that can act on it.
+    const headHtml = (chips) => `<div class="as-task-head">
+              <span class="as-task-mark is-${esc(state)}" aria-hidden="true">${mark}</span>
+              <b class="mono">#${esc(String(t.id))}</b>
+              <span class="as-task-state is-${esc(stateWord)}" title="${esc(queueStateTitle(t, compact))}">${esc(stateWord)}</span>
+              <span class="as-task-title" title="${esc(t.title)}">${esc(t.title)}</span>
+              ${chips}
+            </div>`;
+    if (compact) {
+      // THE COMPACT CARD. Read-only by construction: it draws no press, carries no data-as-qact, no drag class and no
+      // disclosure, and the one control it has is the press its CALLER puts on it (the Initiatives pane jumps to the
+      // row in its real queue). The agent line is the thread alone, with no chip: the run's status is read from
+      // /api/jobs by the queue pane, and a compact card that guessed one would be the second opinion this mode exists
+      // to avoid. `data-init-act` is the Initiatives tab's own rule that a press here acts on the card rather than
+      // folding the initiative around it.
+      const agent = current
+        ? `<span class="as-task-agent" title="the agent on this task - its thread; open the card to see the run's own status"><code class="as-task-agent-thread">${esc(current)}</code></span>`
+        : `<span class="as-task-agent is-none" title="nothing has run this task yet">no agent yet</span>`;
+      const when = t.at
+        ? `<span class="as-task-when" title="last activity ${esc(String(t.at))}">${esc(relTime(t.at))} ago</span>`
+        : `<span class="as-task-when" title="the queue row carries no timestamp">no time recorded</span>`;
+      return `<div class="as-task is-compact${t.state === "done" ? " is-done" : ""}" data-as-qrow="${esc(String(t.id))}" data-as-qstate="${esc(state)}" data-as-qown="${esc(id)}" data-as-qthread="${esc(current)}" data-init-task-card="${esc(String(t.id))}" data-init-task-own="${esc(id)}" data-init-act role="button" tabindex="0" title="open #${esc(String(t.id))} in its own queue - the assistant opens, the row is centred and flashed">
+        <div class="as-task-main">
+          <div class="as-task-body">
+            ${headHtml("")}
+            <div class="as-task-facts">${agent}${when}</div>
+          </div>
+        </div>
+      </div>`;
+    }
+    // ---- the full card: the queue pane's own row --------------------------------------------------
     // The one line that answers WHERE: the project and the PR. FIRST, because the one word that says where the work
     // is must never wrap off the bottom of a card.
     const meta = [];
@@ -754,15 +813,7 @@ window.WMApp.queueCards = function queueCards(deps) {
     return `<div class="as-task${t.state === "done" ? " is-done" : ""}${t.state === "queued" ? " is-draggable" : ""}" data-as-qrow="${esc(String(t.id))}" data-as-qstate="${esc(state)}" data-as-qown="${esc(id)}" data-as-qthread="${esc(current)}">
         <div class="as-task-main">
           <div class="as-task-body"${current ? ` data-as-qopen="${esc(current)}"` : ""}>
-            <div class="as-task-head">
-              <span class="as-task-mark is-${esc(state)}" aria-hidden="true">${mark}</span>
-              <b class="mono">#${esc(String(t.id))}</b>
-              <span class="as-task-state is-${esc(stateWord)}" title="${esc(queueStateTitle(t))}">${esc(stateWord)}</span>
-              <span class="as-task-title" title="${esc(t.title)}">${esc(t.title)}</span>
-              ${queueLaneChip(t)}
-              ${queueHoldBadge(t, byId)}
-              ${queueQuestionChip(t, alerts)}
-            </div>
+            ${headHtml(`${queueLaneChip(t)}${queueHoldBadge(t, byId)}${queueQuestionChip(t, alerts)}`)}
             <div class="as-task-facts">${agents}${meta.length ? `<span class="as-task-meta">${meta.join(" · ")}</span>` : ""}<span class="as-task-pipeline">${queuePipelineChip(t, id)}${queueFlowButton(t, id)}</span></div>
             ${filedBy ? `<div class="as-task-filed" title="who filed this row: the by the write carried, which is not its owner">filed by ${esc(filedBy)}</div>` : ""}
             ${note}
@@ -876,7 +927,7 @@ window.WMApp.queueCards = function queueCards(deps) {
         </details>
         ${queueStateHtml(pane, { id, n, view, rows: sorted })}
         ${dropNote ? `<div class="as-qdrop" data-as-qdrop="${esc(id)}" role="status">${esc(dropNote)}</div>` : ""}
-        ${visible.map((t) => queueTaskHtml(id, t, queueJobs.byThread, byId, state.assistant?.alerts || [])).join("")}
+        ${visible.map((t) => taskCardHtml(t, "full", { own: id, jobs: queueJobs.byThread, byId, alerts: state.assistant?.alerts || [] })).join("")}
         ${queueMoreHtml(id, hidden)}
       </div>`;
   }
@@ -1202,13 +1253,14 @@ window.WMApp.queueCards = function queueCards(deps) {
 
   // The names the panel keeps reading after the move: the paint and its two reads, the one write path, the re-attach
   // press, the order's own constants, the picker's record, the drag's functions, the one line of drag state a fresh
-  // press clears, and the task id's own two answers (whose row it is, and the press that finds it).
+  // press clears, the task id's own two answers (whose row it is, and the press that finds it), and THE ONE CARD
+  // (taskCardHtml), which the Initiatives tab calls in its compact mode rather than keeping a second copy of it.
   return {
     renderAssistantQueue, loadQueue, queueAct, queueReattach,
     QUEUE_LIVE, qmoveOpen, closeQueueMove, toggleQueueMove,
     queueDropNotes, queueShown, queueWindowOf, QUEUE_MORE,
     queueCardDown, queueCardMove, queueCardUp, queueCardClickGuard,
-    taskOwnerOf, taskIndexRev, ensureTaskIndex, queueOpenTask,
+    taskOwnerOf, taskIndexRev, ensureTaskIndex, queueOpenTask, taskCardHtml,
     queueDragReset: () => {
       queueDragEnded = 0;
     },

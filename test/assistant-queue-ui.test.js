@@ -30,15 +30,22 @@ const esc = (s) =>
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 
-const build = ({ ids = ["assistant-1", "assistant-2"], label = (t) => t } = {}) =>
-  new Function(
+const build = ({ ids = ["assistant-1", "assistant-2"], label = (t) => t } = {}) => {
+  const api = new Function(
     "esc",
     "assistantIds",
     "sessionById",
     "assistantThreadName",
     `${region}
-return { queueMark, queueStateName, queueAgentChip, queueTaskHtml };`,
+return { queueMark, queueStateName, queueAgentChip, taskCardHtml };`,
   )(esc, () => ids, (id) => ({ id, name: `Assistant ${id}` }), label);
+  // THE QUEUE PANE'S OWN CALL, as the pane makes it: a row and the mode, with the assistant and its maps in `kit`.
+  // The adapter exists because the renderer gained a mode and a kit object - one function, called twice - and every
+  // assertion below is about the FULL card's markup, which this mode still draws byte for byte.
+  const queueTaskHtml = (own, row, jobs = new Map(), byId = new Map(), alerts = []) =>
+    api.taskCardHtml(row, "full", { own, jobs, byId, alerts });
+  return { ...api, queueTaskHtml };
+};
 
 const jobs = (pairs) => new Map(pairs);
 
