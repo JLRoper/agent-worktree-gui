@@ -415,7 +415,7 @@ function refreshChips(name) {
   refreshTurnoverChip(name);
   // The cleanup chip is the fifth of that line and holds the last answer the server sent, so a repaint of the strip
   // is where a phase that moved while the reader was elsewhere is redrawn.
-  refreshCleanupChip(name);
+  refreshCleanupUi(name);
   // The chart's arrow (top-N collapse) depends on the same rows, so it is refreshed from the same place.
   refreshTopToggle(name);
 }

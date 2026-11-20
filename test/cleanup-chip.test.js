@@ -23,6 +23,11 @@ import test from "node:test";
 
 import { sliceRegion } from "../tools/panel-testkit.mjs";
 
+// The drop-all selection is the real module the page loads, not a stand-in: the chip's bar draws its button and its
+// confirm from these answers, so a harness that stubbed them could pass while the page showed something else.
+await import("../public/core/cleanup-drop-all.js");
+const wtCleanupDropAll = globalThis.wtCleanupDropAll;
+
 const scaffold = readFileSync(new URL("../public/board-scaffold.js", import.meta.url), "utf8");
 const projects = readFileSync(new URL("../public/render-projects.js", import.meta.url), "utf8");
 const css = readFileSync(new URL("../public/style.css", import.meta.url), "utf8");
@@ -46,10 +51,15 @@ const NAMES = [
 ];
 
 // The stubs are the page the section would run in: a banner sink, the panel's fetch, the opener, and the bar stack.
+// `document` answers nothing and `wtCleanupDropAll` is the real selection module, so the drop-all button beside the
+// chip is drawn from the same answers the page uses without needing a DOM.
 function harness({ answer = () => ({ ok: true, status: 200, body: {} }) } = {}) {
   const seen = { banners: [], fetches: [], opened: [], bars: [], opened_bars: [] };
   const stubs = {
     esc,
+    wtCleanupDropAll,
+    document: { querySelectorAll: () => [], querySelector: () => null },
+    CSS: { escape: (s) => String(s ?? "").replace(/["\\]/g, "\\$&") },
     apiFetch: async (url, opts = {}) => {
       seen.fetches.push({ url, body: opts.body ? JSON.parse(opts.body) : null });
       const r = await answer(seen.fetches.length, url, opts);
@@ -89,12 +99,16 @@ const PLAN = {
 };
 
 test("the chip is drawn beside host, rules, turnover and board, and is in the same repaint path", () => {
+  // The drop-all button is drawn immediately BEFORE the cleanup chip, because the chip is the last pill of the line
+  // (test/e2e/cleanup-chip.spec.mjs asserts that), and a control that drops everything belongs beside the control
+  // that reads the plan rather than at a screen's remove from it.
   assert.match(
     projects,
-    /\$\{hostChipHtml\(name\)\}\$\{rulesChipHtml\(name\)\}\$\{turnoverChipHtml\(name\)\}\$\{boardChipHtml\(name\)\}\$\{cleanupChipHtml\(name\)\}/,
+    /\$\{hostChipHtml\(name\)\}\$\{rulesChipHtml\(name\)\}\$\{turnoverChipHtml\(name\)\}\$\{boardChipHtml\(name\)\}\$\{cleanupDropAllButtonHtml\(name\)\}\$\{cleanupChipHtml\(name\)\}/,
   );
-  // ...and refreshChips (the strip's repaint) is where the chip's own phase is redrawn, the way the other four are.
-  assert.match(projects, /refreshTurnoverChip\(name\);\s*\/\/[^\n]*\n\s*\/\/[^\n]*\n\s*refreshCleanupChip\(name\);/);
+  // ...and refreshChips (the strip's repaint) is where the chip's own phase is redrawn, the way the other four are;
+  // the drop-all button beside it is redrawn from the same call, so the two can never show two different plans.
+  assert.match(projects, /refreshTurnoverChip\(name\);\s*\/\/[^\n]*\n\s*\/\/[^\n]*\n\s*refreshCleanupUi\(name\);/);
 });
 
 test("the pill is the board chip's pill: same padding, mono size, radius and left gap", () => {

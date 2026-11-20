@@ -197,7 +197,7 @@ window.WMApp.scaffold = {
   refreshTurnoverChip, turnoverLine, turnoverBarHtml, toggleTurnoverBar, closeTurnoverBar, saveProjectTurnover,
   boardOf, boardBarOpen, boardChipSig, boardChipHtml, refreshBoardChip, boardLine, boardBarHtml,
   toggleBoardBar, closeBoardBar,
-  cleanupOf, cleanupRuns, cleanupChipSig, cleanupChipHtml, refreshCleanupChip, cleanupBarHtml,
+  cleanupOf, cleanupRuns, cleanupChipSig, cleanupChipHtml, refreshCleanupChip, refreshCleanupUi, cleanupBarHtml,
   cleanupRowHtml, cleanupTreeName, runCleanupChip, answerCleanupCall, closeCleanupBar,
   cleanupDropAllBusy, cleanupDropAllSig, cleanupDropAllButtonHtml, refreshCleanupDropAll, cleanupDropAllBlockHtml,
   openCleanupDropAllConfirm, closeCleanupDropAllConfirm, runCleanupDropAll,
