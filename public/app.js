@@ -13313,7 +13313,7 @@ function paintReviewChip() {
   btn.classList.toggle("is-on", on);
   btn.setAttribute("aria-pressed", on ? "true" : "false");
   btn.title = n
-    ? `Review — ${n} finished row${n === 1 ? "" : "s"} whose result you have not checked yet. ${on ? "The table is filtered to them now: click to show everything again." : "Click to filter the table to exactly these rows."} Each row carries an amber ▣ — not the yellow lock and not the blue turnover mark — with ✓ Reviewed beside it, and a result card under it: the run's one-line summary, the report it named as a real link, and its next steps as chips. Mark all reviewed clears the batch in one press. Press H to step into the oldest one.`
+    ? `Review — ${n} finished row${n === 1 ? "" : "s"} whose result you have not checked yet. ${on ? "The table is filtered to them now: click to show everything again." : "Click to filter the table to exactly these rows."} Each row carries an amber ▣ — not the yellow lock and not the blue turnover mark — with ✓ Reviewed beside it, and a one-line result chip: the first clause of the run's summary, its age and whether it has been checked. The chip opens the card behind it — the whole summary, the report as a real link, and its next steps as chips — without adding a line to the row. Mark all reviewed clears the batch in one press. Press H to step into the oldest one.`
     : `Review — nothing is waiting for a check: no finished row on this board has a result you have not seen${on ? ". The filter is on, so the table is showing nothing; click to show every row again." : "."} A row lands here when a run ends with something to read, and leaves when you press ✓ Reviewed.`;
   if (all) {
     all.hidden = !(on && n > 0);
@@ -13600,8 +13600,8 @@ function paintHumanButton() {
   if (kinds.clarify !== false) blockers.push("a question");
   const steps = [];
   if (blockers.length) steps.push(`${blockers.join(" or ")} opens its agent, centres its prompt and flashes it red with its answer control focused`);
-  if (kinds.review !== false) steps.push("a row to review opens the row, brings its report anchor and next steps into view and puts ✓ Reviewed under the caret, so one more press clears it");
-  if (kinds.collisions !== false) steps.push("a collision opens the row whose pair it is, names the counterpart and the shared files, and puts the ruling under the caret");
+  if (kinds.review !== false) steps.push("a row to review opens the row, opens its result chip onto the card behind it - the whole summary, the report anchor and the next steps - and puts ✓ Reviewed under the caret, so one more press clears it");
+  if (kinds.collisions !== false) steps.push("a collision opens the row whose pair it is, opens its collision chip onto the pair card - the counterpart, both tasks, the shared files - and puts the ruling under the caret");
   btn.title = list.length
     ? `Human — ${list.length} waiting on you: ${split}${named ? ` — questions held by ${named}` : ""}${repeats ? `. ${repeats} of them the panel has already asked again about (once an hour, on its own clock)` : ""}. Click or press H to step through them: ${steps.join("; ")}. Anything answered, expired, reviewed, archived or deleted drops out.${offSaid ? ` ${offSaid}` : ""}`
     : held.length
@@ -13672,14 +13672,23 @@ function humanShowReview(q) {
   if (!row || !wtReviewLane.awaiting(row)) return false;
   hotOpenPath(row);
   const key = q.rowKey;
+  // THE RESULT CARD IS A POPUP behind the row's result chip now, not a block in the detail: the chip is opened the
+  // same way the reader's own press opens it (so the remembered state and the card agree), and the card is what the
+  // rotation lands on. A row with no result chip at all is not one this path can land on.
+  if (typeof openRowChipPop === "function") {
+    setRowChipOpen("result", key, true);
+    if (typeof paintRowChipMarkers === "function") paintRowChipMarkers(key);
+    openRowChipPop("result", key);
+  }
   let block = document.querySelector(`[data-review-block="${CSS.escape(key)}"]`);
   if (!block) {
-    // The detail was not in the document yet (a row opened by this press paints on the next frame): place the row's
+    // The row was not in the document yet (a row opened by this press paints on the next frame): place the row's
     // own answer now rather than leaving the rotation with nothing to point at.
     renderProjectRows(row.project);
+    if (typeof openRowChipPop === "function") openRowChipPop("result", key);
     block = document.querySelector(`[data-review-block="${CSS.escape(key)}"]`);
   }
-  const target = block || document.querySelector(`tr.row[data-key="${CSS.escape(key)}"]`);
+  const target = block || document.querySelector(`[data-rowchip="result"][data-rowchip-key="${CSS.escape(key)}"]`) || document.querySelector(`tr.row[data-key="${CSS.escape(key)}"]`);
   if (!target) return false;
   programmaticScroll();
   target.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -13719,14 +13728,22 @@ function humanShowCollision(q) {
   if (!land) return false;
   hotOpenPath(land);
   const key = keyOf(land.project, land.path);
+  // The pair card is a POPUP behind the row's collision chip: open the chip the reader's own press opens, and land
+  // on the card it puts up.
+  if (typeof openRowChipPop === "function") {
+    setRowChipOpen("collision", key, true);
+    if (typeof paintRowChipMarkers === "function") paintRowChipMarkers(key);
+    openRowChipPop("collision", key);
+  }
   const find = () =>
     document.querySelector(`[data-collision-block="${CSS.escape(key)}"][data-collision-key="${CSS.escape(rec.key)}"]`);
   let block = find();
   if (!block) {
     renderProjectRows(land.project);
+    if (typeof openRowChipPop === "function") openRowChipPop("collision", key);
     block = find();
   }
-  const target = block || document.querySelector(`tr.row[data-key="${CSS.escape(key)}"]`);
+  const target = block || document.querySelector(`[data-rowchip="collision"][data-rowchip-key="${CSS.escape(key)}"]`) || document.querySelector(`tr.row[data-key="${CSS.escape(key)}"]`);
   if (!target) return false;
   programmaticScroll();
   target.scrollIntoView({ block: "center", behavior: "smooth" });

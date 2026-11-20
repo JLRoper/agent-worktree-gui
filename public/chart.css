@@ -695,3 +695,81 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
   animation: copy-flash 1.1s ease-out both; }
 @keyframes copy-flash { 0% { opacity: 0; transform: translateY(-2px); } 12% { opacity: 1; transform: none; }
   72% { opacity: 1; } 100% { opacity: 0; transform: translateY(2px); } }
+
+/* ---- the two per-row cards as one-line chips (public/board-scaffold.js, public/core/row-chips.js) --------------
+   The result card and the collision card used to be blocks in the row's detail: two paragraphs of height that only
+   existed once the row was open. They are chips in the row's existing chip strip now - the name line - so they cost
+   the row NOTHING: that line is already one line, the name ellipsises beside them (td.name .row-name above), and
+   each chip is `flex: none` so it keeps its own width instead of wrapping onto a second line.
+
+   Every selector here is this feature's own. The two cards keep their own styles (public/style.css `.review-block`,
+   `.collision-block`) and are only re-scoped inside the popup below, so nothing shared is edited. */
+td.name .name-line > .rowchip { flex: none; }
+.rowchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 210px;
+  padding: 0 6px;
+  border: 1px solid #2f3b4c;
+  border-radius: 999px;
+  background: #1a212b;
+  color: #a9c0dd;
+  font: 600 10px/15px var(--mono);
+  letter-spacing: .02em;
+  vertical-align: 1px;
+  white-space: nowrap;
+  cursor: pointer;
+  appearance: none;
+}
+.rowchip .rowchip-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.rowchip .rowchip-glyph { flex: none; font-size: 9px; opacity: .9; }
+.rowchip .rowchip-chev { flex: none; font-size: 8px; opacity: .85; }
+.rowchip:hover { border-color: #4a6076; color: #d7e6f7; background: #202a36; }
+.rowchip:focus-visible { outline: 2px solid #7fb3ff; outline-offset: 1px; }
+/* Expanded: a ring in the chip's own ink, so the strip says which card is up without a second colour language. */
+.rowchip[aria-expanded="true"] { box-shadow: inset 0 0 0 1px currentColor; }
+/* The RESULT chip wears the card's own two colours: amber while the lane is waiting on a check, green once it has
+   been read. Same pair as .review-block / .review-block.is-reviewed, at chip size. */
+.rowchip.result-chip.is-awaiting { color: #ffca7a; border-color: #4a3a18; background: #1c1810; }
+.rowchip.result-chip.is-reviewed { color: #9fe0b4; border-color: #2a4432; background: #141a15; }
+/* The COLLISION chip: violet ONLY while at least one pair is open - the same violet as the row's ◆ - and muted the
+   moment every pair is resolved. The accent is the open pairs' alone, which is why it is not the chip's default. */
+.rowchip.collision-chip.is-live { color: #c9a0ff; border-color: #3b2d5c; background: #17131f; }
+.rowchip.collision-chip.is-quiet { color: #7f8ea3; border-color: #2c3744; background: #161c24; }
+
+/* THE CARD BEHIND A CHIP. Fixed and measured from the chip by placeRowChipPop(), which clamps its width to the
+   viewport, slides it left to fit and flips it above the chip when there is no room below - so at 768 wide the card
+   takes the window it has and wraps, rather than being clipped at the edge. Scrolling inside it keeps a long pair
+   card readable on a short window. */
+.rowchip-pop {
+  position: fixed;
+  z-index: 80;
+  overflow: auto;
+  padding: 8px 10px 10px;
+  border: 1px solid #33465c;
+  border-radius: 8px;
+  background: #11161d;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .55);
+}
+.rowchip-pop .rowchip-pop-body { min-width: 0; }
+.rowchip-pop .rowchip-pop-x {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  padding: 0 4px;
+  border: 1px solid #2f3b4c;
+  border-radius: 4px;
+  background: #1a212b;
+  color: #a9c0dd;
+  font: 600 10px/15px var(--mono);
+  cursor: pointer;
+}
+.rowchip-pop .rowchip-pop-x:hover { color: #fff; border-color: #4a6076; }
+.rowchip-pop .rowchip-pop-x:focus-visible { outline: 2px solid #7fb3ff; outline-offset: 1px; }
+/* The card keeps its own look and gives up its outer margins (the popup's padding is the frame now), and the two
+   places a pair card can overflow - the sides strip and the shared-file chips - are allowed to wrap and shrink. */
+.rowchip-pop .review-block, .rowchip-pop .collision-block { margin: 0; max-width: 100%; }
+.rowchip-pop .review-summary, .rowchip-pop .collision-say, .rowchip-pop .collision-peer { overflow-wrap: anywhere; }
+.rowchip-pop .collision-sides { min-width: 0; flex-wrap: wrap; }
+.rowchip-pop .collision-side { min-width: 0; }
