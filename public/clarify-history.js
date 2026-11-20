@@ -42,6 +42,10 @@ const clarifyHist = {
   active: 0,         // index into the rows currently drawn
   tick: null,
   seq: 0,            // guards a slow answer landing after a newer one
+  pending: 0,        // items still waiting on an answer - the number on the header button
+  pendingAt: 0,      // when that number was last read
+  pendingTick: null, // the slow count tick, independent of the popup being open
+  pendingOnce: null, // the debounced read after a job frame
 };
 
 // The popup's place and size: LAYOUT lengths are written as styles, but every number read back from the page
@@ -107,6 +111,18 @@ function clarifyHistoryPopEl() {
     const t = e.target;
     if (t.closest?.("#ch-close")) return clarifyHistoryClose({ focus: true });
     if (t.closest?.("#ch-more")) return clarifyHistoryShowAll();
+    // The fold inside a row comes first: pressing "2 attempts" must not also open the question's turn.
+    const fold = t.closest?.(".ch-attempt-toggle");
+    if (fold) {
+      const listEl = fold.parentElement?.querySelector?.(".ch-attempt-list");
+      if (listEl) {
+        const opening = listEl.hidden;
+        listEl.hidden = !opening;
+        fold.setAttribute("aria-expanded", opening ? "true" : "false");
+        fold.classList.toggle("is-open", opening);
+      }
+      return;
+    }
     const row = t.closest?.(".ch-row");
     if (row) return clarifyHistoryOpenItem(Number(row.dataset.seq));
   });
@@ -116,16 +132,51 @@ function clarifyHistoryPopEl() {
 }
 
 // ---- the rows ---------------------------------------------------------------------------------------------------
-// One row per question. The state decides the whole shape: an open row is loud (a purple marker, the question at full
-// weight, its choices as chips), an answered row is quiet except for the answer itself (the question greys out behind
-// it), and a closed row carries its reason instead of an answer, in the warning colour, never the answered grey.
+// One row per QUESTION (not per ask): the server hands the popup items whose attempts are already collapsed, so a
+// question asked twice cannot arrive as one ANSWERED row and one "closed unanswered" row that contradict each other.
+// The state decides the whole shape: an open row is loud (a purple marker, the question at full weight, its choices as
+// chips), an answered row is quiet except for the answer itself (the question greys out behind it), a replied row says
+// so in the answer's own place with the way to the turn, and a closed row carries its reason instead of an answer, in
+// the warning colour, never the answered grey.
+//
+// A row is a DIV with role="option", not a button: an item with several attempts has a fold inside it, and a button
+// inside a button is not HTML. The popup's own keydown opens the row under the caret, so a keyboard reader keeps the
+// same Enter and Space that a button gave them.
+function chRowShell(entry, index, cls, body) {
+  const C = chCore();
+  const active = index === clarifyHist.active;
+  const question = C.questionLine(entry) || "(the question was not recorded)";
+  return `
+    <div class="ch-row ${cls}${active ? " is-active" : ""}" data-seq="${Number(entry.seq) || 0}" role="option" aria-selected="${active ? "true" : "false"}" tabindex="-1" title="${chEsc(question)}">
+      ${body}
+      ${chAttemptsHtml(entry)}
+    </div>`;
+}
+
+// The fold: every time this question was asked, with its OWN timestamp and how that ask settled. Collapsed by default,
+// because the row already says what the reader needs; a reader who wonders "did it ask me twice?" gets the answer in
+// one press without a second row appearing that reads like a question they never saw.
+function chAttemptsHtml(entry) {
+  const C = chCore();
+  const attempts = Array.isArray(entry?.attempts) ? entry.attempts : [];
+  if (attempts.length < 2) return "";
+  const lines = attempts
+    .map((a, i) => `<span class="ch-attempt${i === 0 ? " is-newest" : ""}">${chEsc(C.attemptLine(a))}</span>`)
+    .join("");
+  const asked = attempts.length;
+  return `
+    <span class="ch-attempts">
+      <span class="ch-attempt-toggle mono" role="button" tabindex="-1" aria-expanded="false" title="show every time this question was asked">${asked} attempts <span class="ch-attempt-caret" aria-hidden="true">▸</span></span>
+      <span class="ch-attempt-list mono" hidden>${lines}</span>
+    </span>`;
+}
+
 function clarifyHistoryRowHtml(entry, index) {
   const C = chCore();
   const state = C.stateOf(entry);
   const names = C.namesOf(entry);
   const question = C.questionLine(entry) || "(the question was not recorded)";
   const age = C.ageText(entry);
-  const active = index === clarifyHist.active;
   const meta = `
     <span class="ch-meta mono">
       <span class="ch-agent" title="the agent that asked">${chEsc(names.agent)}</span>
@@ -135,33 +186,60 @@ function clarifyHistoryRowHtml(entry, index) {
     </span>`;
   if (state === "answered") {
     const answer = C.answerText(entry) || "(no answer recorded)";
-    return `
-      <button type="button" class="ch-row is-answered${active ? " is-active" : ""}" data-seq="${Number(entry.seq) || 0}" role="option" aria-selected="${active ? "true" : "false"}" tabindex="-1" title="${chEsc(question)}">
+    const how = entry.via === "reply" ? "answered in a reply" : `answered by ${chEsc(entry.answeredBy || "the reader")}`;
+    return chRowShell(
+      entry,
+      index,
+      "is-answered",
+      `
         <span class="ch-mark ch-mark-answered">✓ answered</span>
         <span class="ch-answer">${chEsc(answer)}</span>
         <span class="ch-q is-muted">${chEsc(question)}</span>
-        <span class="ch-when mono">answered by ${chEsc(entry.answeredBy || "the reader")}${entry.answeredAt ? ` · ${chEsc(C.ageText({ askedAt: entry.answeredAt }))}` : ""}</span>
-        ${meta}
-      </button>`;
+        <span class="ch-when mono">${how}${entry.answeredAt ? ` · ${chEsc(C.ageText({ askedAt: entry.answeredAt }))}` : ""}</span>
+        ${meta}`,
+    );
+  }
+  if (state === "replied") {
+    // The reader answered this in the reply box, and the card itself never saw it. Saying "closed unanswered" here is
+    // the lie the whole collapse exists to stop, so the row says what happened and the press lands on the turn.
+    const said = C.replyText(entry) || "(the reader's reply is in the turn)";
+    const when = entry.reply?.at ? C.ageText({ askedAt: entry.reply.at }) : "";
+    return chRowShell(
+      entry,
+      index,
+      "is-replied",
+      `
+        <span class="ch-mark ch-mark-replied">↩ answered in a reply</span>
+        <span class="ch-answer">${chEsc(said)}</span>
+        <span class="ch-q is-muted">${chEsc(question)}</span>
+        <span class="ch-when mono">the reader replied${when ? ` ${chEsc(when)}` : ""} · <span class="ch-live">open the turn →</span></span>
+        ${meta}`,
+    );
   }
   if (state === "closed") {
-    return `
-      <button type="button" class="ch-row is-closed${active ? " is-active" : ""}" data-seq="${Number(entry.seq) || 0}" role="option" aria-selected="${active ? "true" : "false"}" tabindex="-1" title="${chEsc(question)}">
+    return chRowShell(
+      entry,
+      index,
+      "is-closed",
+      `
         <span class="ch-mark ch-mark-closed">✕ ${chEsc(C.closedLine(entry))}</span>
         <span class="ch-q">${chEsc(question)}</span>
-        ${meta}
-      </button>`;
+        ${meta}`,
+    );
   }
   const choices = Array.isArray(entry.choices) && entry.choices.length
     ? `<span class="ch-choices">${entry.choices.map((c) => `<span class="ch-choice">${chEsc(c)}</span>`).join("")}</span>`
     : `<span class="ch-choices is-open-answer"><span class="ch-choice is-free">a written answer</span></span>`;
-  return `
-    <button type="button" class="ch-row is-open${active ? " is-active" : ""}" data-seq="${Number(entry.seq) || 0}" role="option" aria-selected="${active ? "true" : "false"}" tabindex="-1" title="${chEsc(question)}">
+  return chRowShell(
+    entry,
+    index,
+    "is-open",
+    `
       <span class="ch-mark ch-mark-open">● unanswered</span>
       <span class="ch-q">${chEsc(question)}</span>
       ${choices}
-      ${meta}
-    </button>`;
+      ${meta}`,
+  );
 }
 
 // Repaint the list from `clarifyHist.entries`, drawing at most the current cap and saying the honest total. Focus is
@@ -211,9 +289,15 @@ async function clarifyHistoryFetch() {
     const body = await res.json().catch(() => ({}));
     if (mine !== clarifyHist.seq) return; // a newer read already landed
     if (!res.ok) throw new Error(body?.error || `the panel answered HTTP ${res.status}`);
-    clarifyHist.entries = Array.isArray(body.entries) ? body.entries : [];
-    clarifyHist.total = Number(body.total) || clarifyHist.entries.length;
-    clarifyHist.kept = Number(body.kept) || clarifyHist.entries.length;
+    // `items` is one row per QUESTION, with the attempts already collapsed and a reply standing in for an answer the
+    // card never saw. The route still sends `entries` (one per ask) for anything that wants the raw store, but the
+    // popup draws items - drawing entries is what put an ANSWERED row and a "closed unanswered" row for the same
+    // question side by side.
+    const rows = Array.isArray(body.items) ? body.items : Array.isArray(body.entries) ? body.entries : [];
+    clarifyHist.entries = rows;
+    clarifyHist.total = Number(body.total) || rows.length;
+    clarifyHist.kept = Number(body.kept) || rows.length;
+    if (Number.isFinite(Number(body.outstanding))) setClarifyPending(Number(body.outstanding));
   } catch (e) {
     if (mine !== clarifyHist.seq) return;
     clarifyHist.error = `the panel could not answer: ${String((e && e.message) || e)}`;
@@ -226,6 +310,70 @@ async function clarifyHistoryFetch() {
     }
   }
 }
+
+// ---- the count the header button carries -----------------------------------------------------------------------
+// The button says how many questions are WAITING, the way the Human button says how many questions are waiting, and it
+// is painted by the same code (app.js `paintCountBadge`). The number is `outstanding` from this same route - items
+// whose state is still "open", never attempts, never a question that was answered in a reply - so collapsing three
+// asks into one item counts ONE, and the row's own answer clears it.
+//
+// WHY A COUNT READ RATHER THAN THE SNAPSHOT. The history is not in the board snapshot (the popup fetches it when it
+// opens), so the button's number is read on a slow tick and again shortly after any job frame: a card being answered,
+// cancelled or timed out changes a job, and the frame is the moment to look. The tick also keeps a page that has been
+// open for hours honest without opening the popup.
+const CH_COUNT_MS = 4000;
+const CH_COUNT_AFTER_FRAME_MS = 1200;
+
+function setClarifyPending(n) {
+  const next = Math.max(0, Math.floor(Number(n) || 0));
+  const changed = next !== clarifyHist.pending;
+  clarifyHist.pending = next;
+  clarifyHist.pendingAt = Date.now();
+  if (changed && typeof paintClarifyButton === "function") paintClarifyButton();
+}
+
+/** How many clarify items are waiting. Read by the header button's painting code. */
+function clarifyPendingCount() {
+  return Math.max(0, Number(clarifyHist.pending) || 0);
+}
+
+async function clarifyHistoryRefreshCount() {
+  try {
+    const res = await apiFetch("/api/clarify/history?limit=1", { headers: { accept: "application/json" } }, { timeoutMs: 8000 });
+    if (!res.ok) return;
+    const body = await res.json().catch(() => ({}));
+    if (Number.isFinite(Number(body.outstanding))) setClarifyPending(Number(body.outstanding));
+  } catch {
+    // A count is not worth a banner: the next tick asks again, and the last number stays on the button.
+  }
+}
+
+// A job frame is the moment a question is asked, answered or settled. The read is debounced so a burst of frames (a run
+// starting, a tree landing) costs one request rather than one per frame.
+function clarifyHistoryHookStream() {
+  const es = typeof state !== "undefined" ? state?.es : null;
+  if (!es || typeof es.addEventListener !== "function" || es.__clarifyCount) return;
+  es.__clarifyCount = true;
+  es.addEventListener("jobs", () => {
+    clearTimeout(clarifyHist.pendingOnce);
+    clarifyHist.pendingOnce = setTimeout(() => void clarifyHistoryRefreshCount(), CH_COUNT_AFTER_FRAME_MS);
+  });
+}
+
+function clarifyHistoryCountStart() {
+  clarifyHistoryHookStream();
+  void clarifyHistoryRefreshCount();
+  clearInterval(clarifyHist.pendingTick);
+  clarifyHist.pendingTick = setInterval(() => {
+    clarifyHistoryHookStream();
+    if (document.hidden) return; // a hidden page has nobody reading the button, and the next focus reads again
+    void clarifyHistoryRefreshCount();
+  }, CH_COUNT_MS);
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) void clarifyHistoryRefreshCount();
+});
 
 // ---- open, close, and the shared press ------------------------------------------------------------------------
 function clarifyHistoryIsOpen() {
@@ -303,10 +451,13 @@ function clarifyHistoryKeydown(e) {
   } else if (e.key === "Home" || e.key === "End") {
     e.preventDefault();
     next = e.key === "Home" ? 0 : rows.length - 1;
-  } else if ((e.key === "Enter" || e.key === " ") && on < 0) {
-    // The caret is on the popup (fresh open): the first row is the newest question, which is where the reader starts.
+  } else if (e.key === "Enter" || e.key === " ") {
+    // The row under the caret opens; with the caret on the popup itself (a fresh open) the newest row does - which is
+    // where a reader starts. Rows are divs (a fold inside a button is not HTML), so the press is handled here rather
+    // than by a native button.
     e.preventDefault();
-    return clarifyHistoryOpenItem(Number(rows[clarifyHist.active]?.dataset.seq || rows[0].dataset.seq));
+    const target = on >= 0 ? rows[on] : rows[clarifyHist.active] || rows[0];
+    return clarifyHistoryOpenItem(Number(target.dataset.seq));
   } else if (e.key === "Tab" && on < 0) {
     // Tab leaves a listbox; it does not walk fifty rows. The popup closes behind the reader.
     clarifyHistoryClose();

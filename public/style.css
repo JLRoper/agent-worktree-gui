@@ -4221,6 +4221,19 @@ mark.as-search-mark.is-current { background: #f2c744; color: #17110a; box-shadow
 .topbar #btn-clarify:hover { color: #c9a8ff; border-color: var(--violet); background: #211931; }
 .topbar #btn-clarify[aria-expanded="true"] { color: #e7d6ff; border-color: var(--violet); background: #2a1f45; box-shadow: 0 0 0 1px rgba(163, 113, 247, .35) inset; }
 .topbar #btn-clarify:focus-visible { outline: 1px solid var(--violet); outline-offset: 1px; }
+/* THE COUNT, PURPLE. The same shape as Human's badge and the same painting code (public/app.js paintCountBadge), in
+   the clarify surface's violet rather than the red that means "a run is stopped": zero hides the badge and leaves the
+   button's normal colour, one or more keeps it on and highlights the button for as long as anything is unanswered. The
+   count and the highlight clear the moment the last item is answered, cancelled or times out. */
+#clarify-badge {
+  display: inline-block; min-width: 17px; height: 17px; padding: 0 4px;
+  border-radius: 9px; background: var(--violet); color: #150f22;
+  font: 700 10.5px/17px var(--ui); text-align: center;
+  box-shadow: 0 0 0 1px #a371f755;
+}
+#clarify-badge[hidden] { display: none; }
+.topbar #btn-clarify.has-unanswered { color: #e7d6ff; border-color: var(--violet); background: #2a1f45; }
+.topbar #btn-clarify.has-unanswered:hover { border-color: #c9a8ff; background: #332452; }
 
 .ch-pop {
   position: fixed;
@@ -4354,6 +4367,36 @@ mark.as-search-mark.is-current { background: #f2c744; color: #17110a; box-shadow
 .ch-pop .ch-row.is-closed:hover { background: #1a170f; }
 .ch-pop .ch-mark-closed { color: #ffd479; background: #2a2312; text-transform: none; }
 .ch-pop .ch-row.is-closed .ch-q { color: #c9cdd4; }
+/* ANSWERED IN A REPLY is neither the grey of an answer the card recorded nor the amber of a miss: the reader did
+   answer, the panel just never saw the answer itself. Violet, quieter than the answered row's answer block, with the
+   press and the "open the turn" line carrying the reader to the words they wrote. */
+.ch-pop .ch-row.is-replied { background: #121019; border-left-color: #6d4bb0; }
+.ch-pop .ch-row.is-replied:hover { background: #171423; }
+.ch-pop .ch-mark-replied { color: #d9c6ff; background: #241a3c; text-transform: none; }
+.ch-pop .ch-row.is-replied .ch-answer { color: #e8dfff; background: #1b1630; border-color: #40326a; border-left-color: #8a63d2; }
+.ch-pop .ch-live { color: #b79bff; text-decoration: underline dotted; }
+/* THE ATTEMPTS FOLD. One question asked more than once keeps every ask with its own timestamp behind one small press,
+   so the list cannot grow a second row that reads like a question the reader never saw. It sits under the row's own
+   content and inside the row's press target, which is why the row is a div and the fold is handled before the row. */
+.ch-pop .ch-attempts { grid-column: 1 / -1; display: block; margin-top: 2px; }
+.ch-pop .ch-attempt-toggle {
+  display: inline-block;
+  font: 9.5px/1.6 var(--mono);
+  color: #9d8bc4;
+  background: #1a1526;
+  border: 1px solid #372b52;
+  border-radius: 4px;
+  padding: 0 5px;
+  cursor: pointer;
+  user-select: none;
+}
+.ch-pop .ch-attempt-toggle:hover, .ch-pop .ch-attempt-toggle:focus-visible { color: #d9c6ff; border-color: var(--violet); outline: none; }
+.ch-pop .ch-attempt-caret { display: inline-block; transition: transform .12s ease; }
+.ch-pop .ch-attempt-toggle.is-open .ch-attempt-caret { transform: rotate(90deg); }
+.ch-pop .ch-attempt-list { display: flex; flex-direction: column; gap: 1px; margin: 4px 0 1px 2px; padding-left: 8px; border-left: 1px solid #372b52; }
+.ch-pop .ch-attempt-list[hidden] { display: none; }
+.ch-pop .ch-attempt { font: 9.5px/1.6 var(--mono); color: #8f97a5; overflow-wrap: anywhere; }
+.ch-pop .ch-attempt.is-newest { color: #b9c2cf; }
 .ch-pop .ch-meta {
   grid-column: 1 / -1;
   display: flex; flex-wrap: wrap; gap: 3px 8px;

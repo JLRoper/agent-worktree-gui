@@ -10,7 +10,8 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { ClarifyHistory, CLARIFY_HISTORY_KEEP, clarifyHistoryEntry, closedWhyFor } from "../lib/clarify-history.js";
+import { ClarifyHistory, CLARIFY_HISTORY_KEEP, clarifyHistoryEntry, clarifyItems, closedWhyFor, collapseItems, collapseKey, outstandingOf, readerReplies } from "../lib/clarify-history.js";
+import { createClarifyHistoryRoutes } from "../routes/clarify-history.js";
 import { Jobs } from "../lib/jobs.js";
 import "../public/core/clarify-history.js";
 
@@ -274,4 +275,281 @@ test("every row names the agent, the tree and the assistant, with a fallback rat
   assert.equal(bare.agent, "an agent");
   assert.equal(bare.tree, "(no tree)");
   assert.equal(bare.assistant, "no assistant");
+});
+
+// ---- one row per QUESTION: the collapse, the answered-wins rule, and the count ------------------------------------
+//
+// The store keeps one record per ASK, which is right for an audit trail and wrong for a popup: a question asked,
+// closed and asked again arrived as two rows, one ANSWERED and one "closed unanswered", and the second read as a
+// question the reader had ignored. These pin the rules that turn the store's asks into the popup's items, in the order
+// they decide a row: an answer in ANY attempt wins; otherwise an open attempt wins; otherwise a reader's own reply
+// softens the word; otherwise the closed word stands.
+function entry(n, over = {}, state = {}) {
+  return Object.assign(
+    clarifyHistoryEntry(
+      {
+        key: `clarify:k${n}`,
+        jobId: `job-${n}`,
+        thread: `thread-${n}`,
+        agent: `agent ${n}`,
+        tree: `tree-${n}`,
+        assistantId: "assistant-1",
+        assistantName: "Assistant #1",
+        question: `question ${n}?`,
+        askedAt: iso(Date.UTC(2026, 0, 1, 0, n)),
+        ...over,
+      },
+      { seq: n },
+    ),
+    state,
+  );
+}
+
+const answeredState = (answer, at = Date.UTC(2026, 0, 1, 0, 1)) => ({
+  status: "answered",
+  answer,
+  answeredBy: "reader",
+  answeredAt: iso(at + 60_000),
+});
+
+test("the collapse key is the question's own words and the agent that asked them, not the job", () => {
+  const a = entry(1, { question: "Should WS-4 stay out?", agent: "hot-4", jobId: "job-a", key: "clarify:a" });
+  const b = entry(2, { question: "  should   WS-4 stay out? ", agent: "Hot-4", jobId: "job-b", key: "clarify:b" });
+  const other = entry(3, { question: "Should WS-4 stay out?", agent: "hot-9", jobId: "job-c" });
+  assert.equal(collapseKey(a), collapseKey(b), "spacing, case and the job do not make a new question");
+  assert.notEqual(collapseKey(a), collapseKey(other), "a different agent asking the same words is its own item");
+  // A row with no question at all cannot be compared by its words, so it stands alone rather than swallowing every
+  // other unrecorded row into one item.
+  const blank = entry(4, { question: "" });
+  assert.equal(collapseKey(blank), "seq:4");
+});
+
+test("an answered attempt wins over a later cancelled one, in either order", () => {
+  const firstAnswered = entry(1, { question: "same question?", agent: "hot-4" }, answeredState("yes, wave 2"));
+  const laterCancelled = entry(
+    2,
+    { question: "same question?", agent: "hot-4", thread: "thread-1" },
+    { status: "closed", closedWhy: "cancelled", closedAt: iso(Date.UTC(2026, 0, 1, 0, 9)) },
+  );
+  for (const input of [
+    [firstAnswered, laterCancelled],
+    [laterCancelled, firstAnswered],
+  ]) {
+    const items = collapseItems(input);
+    assert.equal(items.length, 1, "one question, one item");
+    assert.equal(items[0].state, "answered", "the answer cannot be taken back by a later card's outcome");
+    assert.equal(items[0].answer, "yes, wave 2");
+    assert.equal(items[0].closedWhy, "", "an answered item carries no closed word at all");
+    assert.equal(items[0].attemptCount, 2);
+    assert.equal(items[0].seq, 2, "the item stands where its NEWEST attempt stands");
+  }
+});
+
+test("a collapsed item keeps every attempt with its own timestamp, and the item's age is its first ask", () => {
+  const older = entry(
+    1,
+    { question: "one question?", agent: "hot-4", askedAt: iso(Date.UTC(2026, 0, 1, 0, 1)) },
+    { status: "closed", closedWhy: "closed unanswered", closedAt: iso(Date.UTC(2026, 0, 1, 0, 11)) },
+  );
+  const newer = entry(2, { question: "one question?", agent: "hot-4", askedAt: iso(Date.UTC(2026, 0, 1, 0, 8)) }, answeredState("go"));
+  const [item] = collapseItems([older, newer]);
+  assert.deepEqual(item.attempts.map((a) => a.status), ["answered", "closed"], "newest attempt first");
+  assert.equal(item.attempts[1].askedAt, iso(Date.UTC(2026, 0, 1, 0, 1)), "each attempt keeps its own ask time");
+  assert.equal(item.askedAt, iso(Date.UTC(2026, 0, 1, 0, 1)), "the item is as old as the first time it was asked");
+  assert.equal(Core.attemptLine(item.attempts[1], Date.UTC(2026, 0, 1, 1, 1)), "asked 1h ago · closed unanswered after 10m");
+});
+
+test("a closed item counts from the attempt that closed, not from the first ask", () => {
+  const first = entry(
+    1,
+    { question: "asked twice?", agent: "hot-4", askedAt: iso(Date.UTC(2026, 0, 1, 0, 1)) },
+    { status: "closed", closedWhy: "cancelled", closedAt: iso(Date.UTC(2026, 0, 1, 0, 3)) },
+  );
+  const second = entry(
+    2,
+    { question: "asked twice?", agent: "hot-4", askedAt: iso(Date.UTC(2026, 0, 1, 0, 8)) },
+    { status: "closed", closedWhy: "cancelled", closedAt: iso(Date.UTC(2026, 0, 1, 0, 9)) },
+  );
+  const [item] = collapseItems([first, second]);
+  assert.equal(item.closedAskedAt, iso(Date.UTC(2026, 0, 1, 0, 8)), "the second card's own wait is 1m, not the item's 8m");
+  assert.equal(Core.closedLine(item), "cancelled after 1m");
+});
+
+test("the outstanding count is items still waiting, never attempts and never an answered one", () => {
+  const asked = entry(1, { question: "waiting?", agent: "hot-4" }, { status: "open" });
+  const askedAgain = entry(2, { question: "waiting?", agent: "hot-4" }, { status: "open" });
+  const answered = entry(3, { question: "answered?", agent: "hot-4" }, answeredState("yes"));
+  const closed = entry(4, { question: "closed?", agent: "hot-4" }, {
+    status: "closed",
+    closedWhy: "timed out",
+    closedAt: iso(Date.UTC(2026, 0, 1, 0, 5)),
+  });
+  const items = collapseItems([asked, askedAgain, answered, closed]);
+  assert.equal(items.length, 3, "two asks of one question are one item");
+  assert.equal(outstandingOf(items), 1, "one item is still waiting, however many times it was asked");
+  assert.equal(outstandingOf([]), 0);
+  assert.equal(outstandingOf(undefined), 0, "a route with no store answers zero, not a throw");
+});
+
+test("a reader's reply is evidence an answer exists; an assistant's own reply turn is not", () => {
+  const replies = readerReplies([
+    {
+      id: "job-r",
+      reply: true,
+      thread: "thread-1",
+      startedAt: iso(Date.UTC(2026, 0, 1, 0, 30)),
+      prompt: "yes, once CI is green",
+      origin: { kind: "assistant-reply", by: "reader" },
+    },
+    {
+      id: "job-x",
+      reply: true,
+      thread: "thread-1",
+      startedAt: iso(Date.UTC(2026, 0, 1, 0, 31)),
+      prompt: "assistant autonomy",
+      origin: { kind: "assistant-reply", by: "assistant" },
+    },
+    { id: "job-y", reply: true, thread: "thread-1", startedAt: iso(Date.UTC(2026, 0, 1, 0, 32)), prompt: "an older reply with no origin" },
+    { id: "job-z", thread: "thread-1", startedAt: iso(Date.UTC(2026, 0, 1, 0, 33)), prompt: "not a reply turn" },
+    {
+      id: "job-c",
+      reply: true,
+      thread: "thread-1",
+      startedAt: iso(Date.UTC(2026, 0, 1, 0, 34)),
+      prompt: "the panel delivered the card's answer",
+      origin: { kind: "assistant-reply", by: "clarify-answer" },
+    },
+  ]);
+  assert.deepEqual(replies.map((r) => r.jobId), ["job-r", "job-c"], "only the reader's own hand and the panel answering for them");
+});
+
+test("a closed item with a reader reply reads answered in a reply and lands on that turn", () => {
+  const closed = entry(
+    1,
+    { question: "push the tag?", agent: "hot-9", thread: "thread-9" },
+    { status: "closed", closedWhy: "closed unanswered", closedAt: iso(Date.UTC(2026, 0, 1, 0, 20)) },
+  );
+  const replies = readerReplies([
+    {
+      id: "job-reply",
+      reply: true,
+      thread: "thread-9",
+      startedAt: iso(Date.UTC(2026, 0, 1, 0, 25)),
+      prompt: "yes, push it",
+      origin: { kind: "assistant-reply", by: "reader" },
+    },
+  ]);
+  const [item] = clarifyItems([closed], { replies });
+  assert.equal(item.state, "replied");
+  assert.equal(item.jobId, "job-reply", "the press lands on the turn the reader wrote");
+  assert.equal(item.reply.text, "yes, push it");
+  assert.equal(outstandingOf([item]), 0, "a replied item is not waiting on anything");
+});
+
+test("a reply does not answer an item asked after it, and no reply still reads as missed", () => {
+  const before = entry(
+    1,
+    { question: "older question?", agent: "hot-9", thread: "thread-9", askedAt: iso(Date.UTC(2026, 0, 1, 1, 0)) },
+    { status: "closed", closedWhy: "cancelled", closedAt: iso(Date.UTC(2026, 0, 1, 1, 5)) },
+  );
+  const after = entry(
+    2,
+    { question: "newer question?", agent: "hot-9", thread: "thread-9", askedAt: iso(Date.UTC(2026, 0, 1, 2, 0)) },
+    { status: "closed", closedWhy: "timed out", closedAt: iso(Date.UTC(2026, 0, 1, 2, 5)) },
+  );
+  // A reply between the two questions belongs to the older one: that was the card open when the reader wrote.
+  const between = readerReplies([
+    {
+      id: "job-b",
+      reply: true,
+      thread: "thread-9",
+      startedAt: iso(Date.UTC(2026, 0, 1, 1, 30)),
+      prompt: "about the older one",
+      origin: { kind: "assistant-reply", by: "reader" },
+    },
+  ]);
+  const items = clarifyItems([before, after], { replies: between });
+  assert.equal(items.find((i) => i.question === "older question?").state, "replied");
+  assert.equal(items.find((i) => i.question === "newer question?").state, "closed", "a reply before the ask is not an answer to it");
+  // With no reply at all, a genuinely missed item still says so, in the store's own words.
+  const missed = clarifyItems([before, after], { replies: [] });
+  const row = missed.find((i) => i.question === "older question?");
+  assert.equal(row.state, "closed");
+  assert.equal(Core.stateOf(row), "closed");
+  assert.equal(row.closedWhy, "cancelled");
+});
+
+test("an open or answered item is never softened into a reply", () => {
+  const open = entry(1, { question: "still waiting?", agent: "hot-9", thread: "thread-9" }, { status: "open" });
+  const answered = entry(2, { question: "already answered?", agent: "hot-9", thread: "thread-9" }, answeredState("yes"));
+  const replies = readerReplies([
+    {
+      id: "job-r",
+      reply: true,
+      thread: "thread-9",
+      startedAt: iso(Date.UTC(2026, 0, 1, 0, 50)),
+      prompt: "some reply",
+      origin: { kind: "assistant-reply", by: "reader" },
+    },
+  ]);
+  const items = clarifyItems([open, answered], { replies });
+  assert.equal(items.find((i) => i.question === "still waiting?").state, "open");
+  assert.equal(outstandingOf(items), 1, "an open card is waiting even when a reply follows it");
+  assert.equal(items.find((i) => i.question === "already answered?").state, "answered");
+});
+
+test("the route answers items, the item total, the attempt count and the outstanding number", async () => {
+  const store = new ClarifyHistory({ keep: 50 });
+  const mk = (n, question, state) => {
+    const e = store.ask({
+      key: `clarify:r${n}`,
+      jobId: `job-${n}`,
+      thread: `thread-${n}`,
+      agent: "hot-4",
+      question,
+      askedAt: iso(Date.UTC(2026, 0, 1, 0, n)),
+      assistantId: "assistant-1",
+      assistantName: "Assistant #1",
+    });
+    Object.assign(e, state);
+    store.save();
+    return e;
+  };
+  mk(1, "the same question?", { status: "closed", closedWhy: "closed unanswered", closedAt: iso(Date.UTC(2026, 0, 1, 0, 10)) });
+  mk(2, "the same question?", { status: "answered", answer: "yes", answeredBy: "reader", answeredAt: iso(Date.UTC(2026, 0, 1, 0, 11)) });
+  mk(3, "another?", { status: "open" });
+  const jobs = { clarifyHistory: store, list: () => [] };
+  const sent = [];
+  const route = createClarifyHistoryRoutes({ jobs, sendJson: (_res, code, body) => sent.push({ code, body }) });
+  const url = new URL("http://127.0.0.1/api/clarify/history?limit=1");
+  await route({ method: "GET", url: url.pathname + url.search }, {}, "/api/clarify/history", url);
+  assert.equal(sent.length, 1);
+  const body = sent[0].body;
+  assert.equal(sent[0].code, 200);
+  assert.equal(body.items.length, 1, "limit caps the rows drawn");
+  assert.equal(body.total, 2, "and never the total: two questions, three asks");
+  assert.equal(body.attempts, 3);
+  assert.equal(body.outstanding, 1);
+  assert.equal(body.entries.length, 1, "the raw store page keeps its own shape");
+});
+
+// ---- the header count: one painting code, two buttons ------------------------------------------------------------
+// "the same notification counter the Human button carries, drawn by the same painting code" is a claim about two files
+// that no runtime test in this suite can see, so it is pinned at the source: the badge exists in the markup, the
+// painter exists once, and BOTH buttons call it. A future hand-rolled badge on either button fails here.
+test("the header markup carries the clarify badge, hidden at zero, and both buttons are painted by one function", () => {
+  const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
+  const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../public/style.css", import.meta.url), "utf8");
+  assert.match(html, /<span id="clarify-badge" hidden>0<\/span>/, "the badge is in the button and starts hidden");
+  assert.match(html, /<span id="human-badge" hidden>0<\/span>/, "beside the one it mirrors");
+  assert.equal((app.match(/function paintCountBadge\(/g) || []).length, 1, "one painter, not two");
+  assert.match(app, /function paintHumanButton\(\)[\s\S]*?paintCountBadge\(btn, badge, list\.length, "has-questions"\)/);
+  assert.match(app, /function paintClarifyButton\(\)[\s\S]*?paintCountBadge\(btn, \$\("clarify-badge"\), n, "has-unanswered"\)/);
+  // Zero is quiet on both: the painter hides the badge and clears the class, and the CSS keeps a hidden badge hidden
+  // (`display: inline-block` on the badge would otherwise beat the [hidden] attribute it is drawn with).
+  assert.match(app, /badge\.hidden = n === 0/);
+  assert.match(app, /btn\.classList\.toggle\(cls, n > 0\)/);
+  assert.match(css, /#clarify-badge\[hidden\] \{ display: none; \}/);
+  assert.match(css, /#btn-clarify\.has-unanswered/);
 });

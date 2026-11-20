@@ -6040,6 +6040,10 @@ function tickApprovals() {
   // longer open, and a number that kept counting it would send the reader to a box that is over. One clock for
   // both, so nothing else has to remember to repaint it.
   paintHumanButton();
+  // The CLARIFY count is the same kind of live fact, read off the history route on its own slow tick and repainted here
+  // from the number it last read - so the badge and the purple highlight follow an answer, a cancel or a timeout on this
+  // page's own clock, not on whichever frame happened to arrive.
+  paintClarifyButton();
   // The HOT marker is a live fact of the same kind: a turn starts and stops on the gateway's own clock, and a bolt
   // that waited for the next job frame would be drawn after the agent had already begun (or leave a finished one up).
   paintHotButton();
@@ -13483,6 +13487,54 @@ document.addEventListener("click", async (e) => {
 // The header control: one red count of everything waiting on a human, and a title that splits it. Zero questions
 // means no badge at all — a quiet button, not a broken one — and the count is repainted from live state on the
 // page's own clock so a deadline that passes cannot leave a number claiming a question that is over.
+/**
+ * ONE PAINTING CODE for the header's counting buttons. Every one of them says the same thing the same way: the badge
+ * carries the number and is hidden at ZERO (a quiet button, never a broken-looking one), and a class is the highlight
+ * that says something is waiting. Only the colour is the caller's - red for Human, purple for Clarify - because the
+ * colour is the meaning and the shape is not. Returns the number painted, so a caller can word its title from the same
+ * count it just drew.
+ */
+function paintCountBadge(btn, badge, count, cls = "has-questions") {
+  const n = Math.max(0, Math.floor(Number(count) || 0));
+  if (badge) {
+    badge.hidden = n === 0;
+    badge.textContent = String(n);
+  }
+  if (btn && cls) btn.classList.toggle(cls, n > 0);
+  return n;
+}
+
+// The prose the markup ships on the button, captured once: every repaint prefixes the count to the SAME sentence, so a
+// title does not grow a new prefix each time the number changes.
+const CLARIFY_PROSE = String(document.getElementById("btn-clarify")?.title || "").trim();
+
+// The header button's count: how many CLARIFY ITEMS are still waiting on an answer. The number comes from
+// public/clarify-history.js (`clarifyPendingCount`), which reads `outstanding` off the history route - items whose
+// state is "open", so three asks of one question count one and an answered, cancelled or timed-out item counts
+// nothing. Painted by the same `paintCountBadge` as Human's, in the button's own purple.
+let clarifyBadgeSig = "";
+function paintClarifyButton() {
+  const btn = $("btn-clarify");
+  if (!btn) return;
+  const n = typeof clarifyPendingCount === "function" ? clarifyPendingCount() : 0;
+  paintCountBadge(btn, $("clarify-badge"), n, "has-unanswered");
+  // The count is the only thing in this button that changes, so the same count must not rewrite the title every tick.
+  const sig = String(n);
+  if (sig === clarifyBadgeSig) return;
+  clarifyBadgeSig = sig;
+  btn.setAttribute(
+    "aria-label",
+    n
+      ? `Clarify - ${n} question${n === 1 ? "" : "s"} waiting on you. ${CLARIFY_PROSE}`.trim()
+      : `Clarify - nothing is waiting on you: every question this panel asked has an answer, a reason or a reply. ${CLARIFY_PROSE}`.trim(),
+  );
+  // WHAT A PRESS DOES, with the count in front of it so a reader who hovers the button can tell "nothing waiting" from
+  // "I have not looked yet" without opening it.
+  btn.title = n
+    ? `Clarify - ${n} question${n === 1 ? "" : "s"} waiting on you. ${CLARIFY_PROSE}`.trim()
+    : `Clarify - nothing is waiting on you. ${CLARIFY_PROSE}`.trim();
+}
+
 function paintHumanButton() {
   const btn = $("btn-human");
   if (!btn) return;
@@ -13519,13 +13571,9 @@ function paintHumanButton() {
   // The label is Title Case with a leading glyph, the way ✧ Assistant is — the button's word is its name, not a
   // shouted tag. The rotation counter keeps the same shape: `🙋 Human 2/3`.
   if (label) label.textContent = at >= 0 ? `🙋 Human ${at + 1}/${list.length}` : "🙋 Human";
-  if (badge) {
-    // ZERO IS QUIET: no badge, no red, and a button that says why nothing is waiting rather than one that looks
-    // broken. It is the same rule the count has always had, now covering three kinds.
-    badge.hidden = list.length === 0;
-    badge.textContent = String(list.length);
-  }
-  btn.classList.toggle("has-questions", list.length > 0);
+  // ZERO IS QUIET, and the highlight is the count's own: no badge, no red, a button that says why nothing is waiting
+  // rather than one that looks broken. The same call Clarify makes, in this button's red (`paintCountBadge`).
+  paintCountBadge(btn, badge, list.length, "has-questions");
   // The split names ONLY the kinds that are on (public/core/review-lane.js `split`): a kind the reader switched off
   // is not a zero in this sentence, it is a kind this button does not count, and "0 to review" would be a claim
   // about rows it was never shown.
@@ -14119,6 +14167,11 @@ clarifyBtn?.addEventListener("click", (e) => {
   }
 });
 if (clarifyBtn) clarifyBtn.dataset.wired = "1";
+
+// The button's count starts here, not when the popup opens: the whole point is that a reader can see something is
+// waiting without opening the history. It reads the route once, ticks slowly, and re-reads shortly after any job frame.
+clarifyHistoryCountStart();
+paintClarifyButton();
 
 // An outside press closes it, mousedown so the reader's next click lands where they aimed. The button's own press is
 // left to the click handler above, which toggles.

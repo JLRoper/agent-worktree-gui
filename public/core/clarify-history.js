@@ -19,7 +19,9 @@
 
   /** Rows drawn before the reader asks for the rest. The footer names the total either way. */
   const RENDER_CAP = 50;
-  const STATES = ["open", "answered", "closed"];
+  // Four states: the store writes three (open, answered, closed) and the READ resolves a fourth (replied) when the
+  // reader's own reply is the only evidence of an answer. An unknown status reads as closed, never as an answer.
+  const STATES = ["open", "answered", "replied", "closed"];
 
   const MIN = 60 * 1000;
   const HOUR = 60 * MIN;
@@ -31,9 +33,11 @@
     return Number.isFinite(t) ? t : 0;
   };
 
-  /** One of the three states, defensively: an unknown status reads as closed, never as an answer nobody gave. */
+  /** One of the states, defensively: an unknown status reads as closed, never as an answer nobody gave. */
   function stateOf(entry) {
-    const s = String(entry?.status || "").trim();
+    // An ITEM (the collapsed view, lib/clarify-history.js `collapseItems`) carries its resolved `state`; a stored row
+    // carries `status`. The state wins when present, so both read through this one function.
+    const s = String(entry?.state || entry?.status || "").trim();
     if (STATES.includes(s)) return s;
     return s ? "closed" : "open";
   }
@@ -66,11 +70,13 @@
 
   /**
    * What a closed row says. The store records the word and the moment; the span is counted from the ASK, because
-   * "cancelled after 16m" is about how long the reader's card was waiting, not when the row was tidied away.
+   * "cancelled after 16m" is about how long the reader's card was waiting, not when the row was tidied away. An item
+   * collapsed from several attempts carries `closedAskedAt` - the attempt that actually closed - so a question asked
+   * twice does not report the first ask's age as the second card's wait.
    */
   function closedLine(entry) {
     const why = String(entry?.closedWhy || "closed unanswered").trim() || "closed unanswered";
-    const asked = asMs(entry?.askedAt);
+    const asked = asMs(entry?.closedAskedAt || entry?.askedAt);
     const at = asMs(entry?.closedAt || entry?.answeredAt);
     if (!asked || !at || at < asked) return why;
     return `${why} after ${spanText(at - asked)}`;
@@ -79,6 +85,27 @@
   /** The answer as the row prints it: the exact text the reader chose (or the joined multi-select answer). */
   function answerText(entry) {
     return String(entry?.answer ?? "").trim();
+  }
+
+  /** The reply's own first line, when a reply is the only evidence of an answer. */
+  function replyText(entry) {
+    return String(entry?.reply?.text ?? "").trim();
+  }
+
+  /**
+   * One attempt's own line, for the fold: when it was asked, and how it settled. Every attempt keeps its own time, so a
+   * reader can see that the same question was asked at 14:02 and again at 14:09 rather than reading one averaged row.
+   */
+  function attemptLine(attempt, now = Date.now()) {
+    const asked = asMs(attempt?.askedAt);
+    const when = asked ? `asked ${ageText(attempt, now)}`.trim() : "asked at an unrecorded time";
+    const state = stateOf(attempt);
+    if (state === "answered") {
+      const said = answerText(attempt);
+      return `${when} · answered${said ? `: ${said}` : ""}`;
+    }
+    if (state === "open") return `${when} · still waiting`;
+    return `${when} · ${closedLine(attempt)}`;
   }
 
   /** A question's first line, for the muted line under an answered row and the title of any row. */
@@ -126,6 +153,8 @@
     ageText,
     closedLine,
     answerText,
+    replyText,
+    attemptLine,
     questionLine,
     namesOf,
     capOf,
