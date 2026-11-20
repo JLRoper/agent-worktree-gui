@@ -4,16 +4,34 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.136.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.137.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-649 releases from v0.1.0 (2026-10-20) to v1.136.0 (2026-11-19), 2264 commits between the tags. Every release is anchored by an
+650 releases from v0.1.0 (2026-10-20) to v1.137.0 (2026-11-20), 2269 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.137.0 — 2026-11-20 · 5 commits
+
+[`737f5e6`](https://github.com/JLRoper/agent-worktree-gui/commit/737f5e68ebb0cd6f07e4d935c0aa35f7c9d664de) · [compare v1.136.0...v1.137.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.136.0...v1.137.0)
+
+### Added
+
+- feat(cleanup): a drop-all-suggested button that drops only the rows labelled drop ([`74e66dc`](https://github.com/JLRoper/agent-worktree-gui/commit/74e66dc5c1bcc23dc2670e5709aa9e54f6f84ff4))
+
+### Docs & tests
+
+- docs: render the changelog - 649 releases ([`b4cb27e`](https://github.com/JLRoper/agent-worktree-gui/commit/b4cb27e53f9e5c8068e9d2233f343249a51390ea))
+- test(cleanup): the drop-all gate at 1440x900, and the chip's harness learns the button beside it ([`2d411a7`](https://github.com/JLRoper/agent-worktree-gui/commit/2d411a7ac4e1b23eabe741f184ae3ef6201730b5))
+- test(cleanup): the drop-all fixtures use a drive-free path, so the absolute-path gate stays green ([`05129ca`](https://github.com/JLRoper/agent-worktree-gui/commit/05129caabc8b96e67b0712c15b101ce34cdf761d))
+
+### Other
+
+- chore: 1.137.0 - the version this landing carries ([`737f5e6`](https://github.com/JLRoper/agent-worktree-gui/commit/737f5e68ebb0cd6f07e4d935c0aa35f7c9d664de))
 
 ## v1.136.0 — 2026-11-19 · 6 commits
 
