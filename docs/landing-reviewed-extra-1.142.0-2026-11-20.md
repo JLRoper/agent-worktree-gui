@@ -85,6 +85,21 @@ onto the commit `main` carries.
 
 ## The landing
 
-Not pushed, and no pull request: `gh`'s token is invalid in this environment, so the branch is local and the landing
-stops at the commit. The work stands on
-`wtgui/the-worktree-row-name-carries-two-review-4c9db3`, one feature commit plus the bump.
+Landed. `wtgui/the-worktree-row-name-carries-two-review-4c9db3` (tip `07356b40`, one feature commit plus the bump)
+was pushed, opened as PR 814 and squash-merged as ONE commit, `0f7703a7`, so `main` carries this change while the
+branch's own two commit SHAs appear nowhere in its history.
+
+Proved by content, not by ancestry, because a squash rewrites SHAs:
+
+- `origin/main` is `0f7703a7`, and `git diff 07356b40 origin/main` prints nothing: the merged tree is the branch's
+  tree, byte for byte.
+- `public/render-projects.js` on `origin/main` is blob `717f96a1`, the same blob the branch tip carries: it holds
+  `reviewedExtra: <td class="reviewed-extra">` and no `${resultChipHtml(row, delKey)}` in the name cell.
+- `lib/chart-columns.js` on `origin/main` is blob `c8000f64`, with `reviewedExtra` second in `CHART_COLUMN_IDS`.
+- `node tools/verify-reviewed-extra.mjs` on the branch tip, re-run before the merge: 31 checks, 0 failed, 0 page
+  errors. `node --test test/chart-columns.test.js test/row-chips.test.js`: 32 tests, 32 pass, 0 fail.
+
+`v1.142.0` was re-pointed from the bump commit onto the merged commit `0f7703a7` and force-pushed (annotated object
+`35e02cb7`). `node tools/verify-version-tags.mjs --ref origin/main` counts 651 tagged and annotated anchors and
+reports no finding for 1.142.0, only the seven that predate this landing (v1.76.22, v1.76.23, v1.91.2 and v1.92.4 on
+another commit, v1.82.2 missing, and two backwards steps at 1.76.12 and 1.78.0).
