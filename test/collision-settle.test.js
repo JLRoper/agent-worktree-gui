@@ -21,7 +21,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { CollisionBook, deterministicPick, mayAskReader, settleCollision, sideOf, stateOf } from "../lib/collisions.js";
+import { CollisionBook, deterministicPick, mayAskReader, mergeComparedNothing, settleCollision, sideOf, stateOf } from "../lib/collisions.js";
 import { rulingRowsFor, sweepCollisions } from "../lib/collision-flow.js";
 import { mergeConflictPaths, probePairMerge } from "../lib/collision-merge.js";
 
@@ -113,6 +113,26 @@ test("both directions clean: older cut first, then fewer commits, then the branc
   const bare = settleCollision({ ...PAIR(), merge: MERGE({ aClean: true, bClean: true }) });
   assert.equal(bare.pick, "a");
   assert.equal(bare.basis, "branch name");
+});
+
+// ---- 3b. both directions clean, but about nothing ---------------------------------------------------------------
+test("two trees on the same commit, neither committed: git compared nothing, so the pair stays the reader's", () => {
+  const same = { a: { cutAt: "2026-11-19T09:00:00.000Z", commits: 0 }, b: { cutAt: "2026-11-19T09:00:00.000Z", commits: 0 } };
+  const rec = { ...PAIR(), merge: MERGE({ aClean: true, bClean: true, ...same, tips: { a: "a".repeat(40), b: "a".repeat(40) } }) };
+  const settled = settleCollision(rec);
+  assert.equal(settled.pick, null);
+  assert.equal(settled.why, "nothing-committed");
+  assert.match(settled.reason, /git had nothing to compare/);
+  assert.equal(mergeComparedNothing(rec), true);
+  assert.equal(mayAskReader(rec), true);
+  // ONE side carrying a commit is a real comparison - git saw that work - so the tie-break applies.
+  const oneSide = {
+    ...PAIR(),
+    merge: MERGE({ aClean: true, bClean: true, a: { cutAt: "2026-11-19T09:00:00.000Z", commits: 0 }, b: { cutAt: "2026-11-19T10:00:00.000Z", commits: 2 } }),
+  };
+  assert.equal(mergeComparedNothing(oneSide), false);
+  assert.equal(settleCollision(oneSide).pick, "a");
+  assert.equal(mayAskReader(oneSide), false);
 });
 
 // ---- 3. both directions conflict: the only card ----------------------------------------------------------------
@@ -302,6 +322,25 @@ test("a probe git could not answer never settles silently: the pair is still the
   const first = sweepCollisions({ rows, book, now: Date.parse("2026-11-19T12:00:00.000Z"), ...deps });
   assert.deepEqual(first.settled, []);
   assert.equal(book.all()[0].ruling, null);
+  const second = sweepCollisions({ rows, book, now: Date.parse("2026-11-19T12:00:04.000Z"), ...deps });
+  assert.deepEqual(second.escalated.map((e) => e.why), ["no-stand-down"]);
+  assert.equal(stateOf(book.all()[0]), "reader");
+});
+
+test("the ordinary pair - one file dirty in two trees, nothing committed - still comes to the reader", () => {
+  const book = new CollisionBook({});
+  const same = "c".repeat(40);
+  const rows = [TREE("coll-a", { head: same }), TREE("coll-b", { head: same })];
+  const deps = {
+    ownerOf,
+    tasksFor: () => [],
+    fileQueue: () => ({ taskId: 990 }),
+    probeMerge: () => MERGE({ aClean: true, bClean: true, a: { cutAt: null, commits: 0 }, b: { cutAt: null, commits: 0 }, tips: { a: same, b: same } }),
+  };
+  const first = sweepCollisions({ rows, book, now: Date.parse("2026-11-19T12:00:00.000Z"), ...deps });
+  assert.deepEqual(first.settled, [], "the two tips are one commit: there is no order for git to name");
+  assert.equal(book.all()[0].merge.aFirst.clean, true);
+  assert.equal(stateOf(book.all()[0]), "assistants");
   const second = sweepCollisions({ rows, book, now: Date.parse("2026-11-19T12:00:04.000Z"), ...deps });
   assert.deepEqual(second.escalated.map((e) => e.why), ["no-stand-down"]);
   assert.equal(stateOf(book.all()[0]), "reader");
