@@ -4,16 +4,37 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.138.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.138.1 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-651 releases from v0.1.0 (2026-10-20) to v1.138.0 (2026-11-20), 2275 commits between the tags. Every release is anchored by an
+652 releases from v0.1.0 (2026-10-20) to v1.138.1 (2026-11-20), 2283 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.138.1 — 2026-11-20 · 8 commits
+
+[`ab4951c`](https://github.com/JLRoper/agent-worktree-gui/commit/ab4951cf862bb9c44748099b7b5265d6dcd6110c) · [compare v1.138.0...v1.138.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.138.0...v1.138.1)
+
+### Fixed
+
+- fix(assistant): a TO is delivered once, and its thread is claimed before the send ([`6662951`](https://github.com/JLRoper/agent-worktree-gui/commit/666295158b1d9652e208bbe470f239608733ccd3))
+
+### Docs & tests
+
+- docs(clarify): the shots carry 1.138.0 ([`a438493`](https://github.com/JLRoper/agent-worktree-gui/commit/a4384939016f97a4259aa75becf159a824d3c57b))
+- docs: render the changelog - 651 releases ([`090cbfe`](https://github.com/JLRoper/agent-worktree-gui/commit/090cbfeec8652795506d01e242d304218f2b8798))
+- docs: the landing note for 1.138.0 - one row per clarify question, and a count of what is waiting ([`272ba6c`](https://github.com/JLRoper/agent-worktree-gui/commit/272ba6cf3ac607758a1941b26db4b1d20d425e06))
+- docs: the landing note for 1.137.1 - a TO is keyed and its thread is claimed ([`770ab98`](https://github.com/JLRoper/agent-worktree-gui/commit/770ab98f3d823b3ea5b028366579e5f558c36bc2))
+- docs: the 1.137.1 note states the ledger's first-boot gap and the full sweep ([`f7fb76e`](https://github.com/JLRoper/agent-worktree-gui/commit/f7fb76eb4f19dc37ad66343b7da190f2d80727fc))
+- docs: the landing note is 1.138.1, above the base another lane moved ([`4e441b3`](https://github.com/JLRoper/agent-worktree-gui/commit/4e441b3e4f903ce19c798c2fec41f530786757f6))
+
+### Other
+
+- chore: 1.138.1 - the version this landing carries ([`ab4951c`](https://github.com/JLRoper/agent-worktree-gui/commit/ab4951cf862bb9c44748099b7b5265d6dcd6110c))
 
 ## v1.138.0 — 2026-11-20 · 6 commits
 
