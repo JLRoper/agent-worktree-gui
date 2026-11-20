@@ -1,7 +1,7 @@
 // The REVIEWED CHIP as one more switch in the worktree chart's own column control, proved by driving a panel of its
 // own - and a real browser at the reader's window (1440x900).
 //
-//   PANEL_PLAYWRIGHT_ROOT=C:/Users/<user>/AppData/Roaming/npm node tools/verify-reviewed-chip.mjs
+//   PANEL_PLAYWRIGHT_ROOT=<the directory npm installs global packages into> node tools/verify-reviewed-chip.mjs
 //
 // HARNESS: LIVE GATE
 //
