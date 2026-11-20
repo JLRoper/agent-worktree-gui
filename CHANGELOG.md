@@ -4,16 +4,38 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.139.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.140.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-653 releases from v0.1.0 (2026-10-20) to v1.139.0 (2026-11-20), 2287 commits between the tags. Every release is anchored by an
+654 releases from v0.1.0 (2026-10-20) to v1.140.0 (2026-11-20), 2293 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.140.0 — 2026-11-20 · 6 commits
+
+[`a39d4e1`](https://github.com/JLRoper/agent-worktree-gui/commit/a39d4e1bd810c23fd057aa3b7d20379d1c2b3eb1) · [compare v1.139.0...v1.140.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.139.0...v1.140.0)
+
+### Added
+
+- feat(initiatives): draw the assistant's tasks with the queue's own card ([`9c23235`](https://github.com/JLRoper/agent-worktree-gui/commit/9c2323594a2d72daa04c7d5dbb884c818f69e532))
+
+### Fixed
+
+- fix(initiatives): keep the card's node, and prove the card in the gate ([`131daa8`](https://github.com/JLRoper/agent-worktree-gui/commit/131daa89835fd723520e825f145f276ac4c1c363))
+
+### Docs & tests
+
+- docs(header): the Active switch's storage key is new, and the comment says so ([`bc7f73d`](https://github.com/JLRoper/agent-worktree-gui/commit/bc7f73dc08e476c3ef632b85bbf87f91540dd2a6))
+- docs: render the changelog - 653 releases ([`d6e2874`](https://github.com/JLRoper/agent-worktree-gui/commit/d6e28743cf20c19c8061c20e01003045721cf973))
+- docs: the landing note for 1.139.0 - the Active bolt is a General row that ships off ([`e779bb1`](https://github.com/JLRoper/agent-worktree-gui/commit/e779bb139f86cf4c0b1efacd1cc6a312dbf5c1bc))
+
+### Other
+
+- chore: 1.140.0 - the version this landing carries ([`a39d4e1`](https://github.com/JLRoper/agent-worktree-gui/commit/a39d4e1bd810c23fd057aa3b7d20379d1c2b3eb1))
 
 ## v1.139.0 — 2026-11-20 · 4 commits
 
