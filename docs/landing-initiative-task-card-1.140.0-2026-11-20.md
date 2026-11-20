@@ -118,3 +118,7 @@ this landing's own test fixture, which is fixed in the second commit rather than
   queue's own - states being acted on first - not a second sort the tab invented.
 - The card is the press, so a text selection inside the title is hard: a press anywhere on the card opens the queue.
   The whole title is still in `title=` for the hover and for a copy.
+- The gate measured 1440x900 only. The row also asked for a reading at 768 wide, a side-by-side shot of one row as a
+  queue card and as an initiative card, and a render time for 10 and for all 169 rows; none of those three was taken
+  in this landing, and the note does not claim them. The compact card is the same markup under the same `.as-task`
+  rules, so the narrow reading is plausible rather than measured.
