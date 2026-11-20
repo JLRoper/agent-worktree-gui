@@ -529,7 +529,7 @@ function paintChartColumns(note = "", bad = false) {
       // is a test hook only - the input carries `data-chart-col` like every other switch, so the change handler, the
       // "show all" press and the stored list treat a chip as one more entry with no second code path.
       const label = (c, isChip) =>
-        `<label${isChip ? ` data-chart-chip="${esc(c.id)}"` : ""} title="${esc(c.title || `${c.label} — the chart's ${c.label || "actions"} column`)}"><input type="checkbox" data-chart-col="${esc(c.id)}"> ${esc(c.label || "Actions")}</label>`;
+        `<label${isChip ? ` data-chart-chip="${esc(c.id)}"` : ""} title="${esc(c.title || `${c.label} - the chart's ${c.label || "actions"} column`)}"><input type="checkbox" data-chart-col="${esc(c.id)}"> ${esc(c.label || "Actions")}</label>`;
       holder.innerHTML = `${CHART_COLUMNS.map((c) => label(c, false)).join("")}${CHART_CHIPS.map((c) => label(c, true)).join("")}`;
     }
     for (const box of holder.querySelectorAll("[data-chart-col]")) box.checked = !hidden.has(box.dataset.chartCol);
@@ -611,7 +611,7 @@ async function writeChartColumns(want, {
 }
 
 async function saveChartColumns(hidden, opts = {}) {
-  // Canonical order, so the file does not depend on the order the reader clicked the switches — and every switch
+  // Canonical order, so the file does not depend on the order the reader clicked the switches - and every switch
   // (the chip's included) is in the list, so a save never drops the chip's own entry.
   const ids = chartToggleIds();
   const want = ids.filter((id) => hidden.includes(id));
