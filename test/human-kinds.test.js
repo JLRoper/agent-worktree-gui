@@ -175,7 +175,12 @@ test("the count, the sentence and the rotation all read the one object", () => {
   assert.match(paint, /wtReviewLane\.split\(counts, kinds\)/, "the sentence is the module's split, not a second copy");
   assert.match(paint, /humanKindsOffSentence\(kinds\)/, "a switched-off kind is said out loud");
   assert.match(paint, /kindSig/, "a switch repaints a button whose count did not move");
-  assert.match(paint, /badge\.hidden = list\.length === 0/, "zero is quiet");
+  // Zero is quiet and the highlight follows the count: both are the ONE painter's job now, shared with Clarify, so this
+  // pins the call and the painter's own rule rather than a hand-rolled pair of lines in this function.
+  assert.match(paint, /paintCountBadge\(btn, badge, list\.length, "has-questions"\)/, "zero is quiet, by the shared painter");
+  const painter = sliceBetween(app, "function paintCountBadge(", "// The prose the markup ships on the button");
+  assert.match(painter, /badge\.hidden = n === 0/);
+  assert.match(painter, /btn\.classList\.toggle\(cls, n > 0\)/);
   // The aria-label and the title both label the switch that is off, so neither promises a kind that is not counted.
   assert.match(paint, /every kind of this button is switched off in Settings/);
 });
