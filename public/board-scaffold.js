@@ -2444,8 +2444,21 @@ function openRowChipPop(kind, key, { focus = false } = {}) {
     if (!pop) return false;
     document.body.appendChild(pop);
   } else if (pop._sig !== sig) {
+    // The record moved under an open card (a ruling landed, a check was made): the body is redrawn, and the reader's
+    // caret is put back on the same control rather than dropped on the document by the node it was standing on.
+    const at = rowChipFocusables(pop).indexOf(document.activeElement);
     const body = pop.querySelector(".rowchip-pop-body");
     if (body) body.innerHTML = rowChipInner(kind, row, key);
+    if (at >= 0) {
+      const again = rowChipFocusables(pop)[at];
+      if (again) {
+        try {
+          again.focus({ preventScroll: true });
+        } catch {
+          again.focus();
+        }
+      }
+    }
   }
   pop._sig = sig;
   pop._anchor = anchor;
@@ -2496,6 +2509,9 @@ function toggleRowChip(kind, key) {
   setRowChipOpen(kind, key, !wasOpen);
   if (wasOpen) closeRowChipPop(kind, key, { focusChip: true });
   else openRowChipPop(kind, key, { focus: true });
+  // The chip's own marks (the ring, `aria-expanded` and the chevron that appears only when it is open) are one
+  // painter, the same one a repaint calls, so a press and a rebuild cannot disagree about what an open chip looks like.
+  paintRowChipMarkers(key);
   const row = state.rows.get(key);
   const anchor = rowChipAnchor(kind, key);
   if (anchor && row) anchor.title = rowChipTitle(kind, row, !wasOpen);
