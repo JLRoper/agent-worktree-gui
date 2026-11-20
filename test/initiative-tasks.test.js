@@ -240,7 +240,8 @@ test("one row, one head: the compact card is the queue's card with the controls 
     thread: "wtgui-initiatives-draw-the-assistant-s-tasks-a7dc67",
     at: "2026-11-20T10:00:00.000Z",
     files: ["public/queue-cards.js"],
-    worktree: "C:/ProjectDevelopment/agent-worktree-gui/.worktrees/x",
+    // No drive letter: this row is a fixture, and a machine path on this line is what tools/absolute-paths.mjs refuses.
+    worktree: "worktrees/x",
   };
   const full = card.taskCardHtml(row, "full", { own: "assistant-1" });
   const compact = card.taskCardHtml(row, "compact", { own: "assistant-1" });
