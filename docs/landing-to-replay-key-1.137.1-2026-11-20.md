@@ -68,8 +68,19 @@ key was ever written) and the live-thread case passed, which is the guard this l
 The existing suites that own the neighbouring guards were re-run unchanged: `test/assistant-carry-key.test.js` 6 of
 6, `test/command-audit.test.js` 6 of 6, `test/assistant-director.test.js` and `test/spawn-busy.test.js`.
 
+`npm test` once on the branch: 3319 tests, 3309 pass, 10 fail, 12m 20s. Nine of the ten reproduce on a `git archive`
+of `origin/main` with the same assertions (assistant-profile's whitelist shape, assistant-search-scroll's keyboard
+step, paths' `pipelineBundleSeedFile`, gateway-permissions, header-controls' moved control, paths-http's clean
+scratch, child-route's cut, and assistant-message-attachments' image-on-the-Director's-turn read); the tenth,
+child-tree's grandchild settle, is a load flake that passes alone on both trees. No test that exercises TO failed,
+and the changed-set sweep's three extra failures were `ENOTEMPTY` rmdir races in test cleanup under load, each
+passing alone.
+
 ## Known limits, stated rather than hidden
 
+- The ledger starts empty in this version, so a TO carried by an earlier build has no record and one more boot can
+  still deliver it. From the first boot on 1.137.1 every delivery writes its key, and the ledger's cap (200) sits
+  far beyond the job store's own 80-turn retention, so every turn a boot can re-read has its record.
 - The claim is per process. Two panels pointed at one state directory do not share it; what they do share is the
   ledger, which is written to disk before the send, so the durable half still refuses the replay.
 - A send that never settles holds its claim until it does. `jobs.create` carries its own probe timeouts, so the
