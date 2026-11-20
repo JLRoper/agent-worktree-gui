@@ -3565,6 +3565,24 @@
     return [row.state, row.title, row.thread, row.at, row.runId].join("|");
   }
 
+  // Copy one freshly drawn compact card onto the element already on screen: its attributes (the state class, the
+  // tooltip, the values its press reads) and its contents. The ROOT node is never replaced - it is the press target a
+  // reader may have just tabbed onto, and a card that vanished under the caret would take the keyboard's place with it.
+  // No card markup is written here: `html` is the renderer's own output, copied onto the node.
+  //
+  // Attributes are SET, never pruned. The compact mode emits the same set on every draw, so there is nothing stale to
+  // remove - and pruning would delete whatever is not the renderer's: a probe a test hung on the node, a class another
+  // surface added, the very marker that proves this node is the one that was there before.
+  function refreshInitTaskCard(el, html) {
+    const made = document.createElement("div");
+    made.innerHTML = html;
+    const next = made.firstElementChild;
+    if (!next) return el;
+    for (const attr of [...next.attributes]) el.setAttribute(attr.name, attr.value);
+    el.innerHTML = next.innerHTML;
+    return el;
+  }
+
   // Reconcile every open fold's cards against this pass's document. THE CARD ITSELF is public/queue-cards.js's
   // taskCardHtml in its compact mode - the queue's own card, with no drag, no edit and no per-row button - so this
   // painter decides three things and nothing else: which rows are drawn (the fold's window, active states first), how
@@ -3588,14 +3606,18 @@
         const id = String(row.id ?? "");
         const sig = initTaskSig(row);
         let el = kept.get(id) || null;
-        if (!el || String(el.dataset.initCardSig || "") !== sig) {
+        if (!el) {
           const made = document.createElement("div");
           made.innerHTML = taskCardHtml(row, "compact", { own }).trim();
           el = made.firstElementChild;
           if (!el) continue;
-          el.dataset.initCardSig = sig;
           kept.set(id, el);
+        } else if (String(el.dataset.initCardSig || "") !== sig) {
+          // The row moved, so every word on its card may have moved with it: one more draw from the same renderer,
+          // copied onto the node already on screen.
+          el = refreshInitTaskCard(el, taskCardHtml(row, "compact", { own }).trim());
         }
+        el.dataset.initCardSig = sig;
         used.add(id);
         box.appendChild(el);
       }

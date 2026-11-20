@@ -250,7 +250,7 @@ test("one row, one head: the compact card is the queue's card with the controls 
   const withoutTitles = (html) => headOf(html).replace(/title="[^"]*"/g, 'title=""');
   assert.equal(withoutTitles(compact), withoutTitles(full), "the head is one piece of markup, drawn by both modes");
   assert.match(headOf(compact), /class="as-task-state is-queued" title="queued - not started; its queue is where it is started/, "the compact hover points at the queue, not a drag it does not have");
-  assert.match(headOf(full), /class="as-task-state is-queued" title="queued — not started; drag the card to change its place/, "the queue's own card keeps the drag promise");
+  assert.match(headOf(full), /class="as-task-state is-queued" title="queued . not started; drag the card to change its place/, "the queue's own card keeps the drag promise");
   assert.ok(headOf(compact).includes("as-task-mark is-queued"), "the marker is the queue card's own");
   assert.ok(headOf(compact).includes(">queued</span>"), "and the state is a word, not only a colour");
   assert.ok(headOf(compact).includes("<b class=\"mono\">#474</b>"), "the id the queue shows");
@@ -331,12 +331,15 @@ test("the expand control is a real button with aria-expanded and the tab's own c
   );
 });
 
-test("a card that has not moved is kept, and one that moved is redrawn from the one renderer", () => {
+test("a card that has not moved is kept, and one that moved is redrawn onto the same node", () => {
   assert.match(pane, /const initTaskNodes = new Map\(\);/, "the cards drawn last pass are kept");
   assert.match(pane, /function initTaskSig\(row\)/, "one signature for what a compact card draws");
   assert.match(pane, /return \[row\.state, row\.title, row\.thread, row\.at, row\.runId\]\.join\("\|"\);/, "the five fields it reads");
   assert.match(pane, /let el = kept\.get\(id\) \|\| null;/, "a card already drawn is looked up by task id");
-  assert.match(pane, /if \(!el \|\| String\(el\.dataset\.initCardSig \|\| ""\) !== sig\) \{/, "and redrawn only when its row moved");
+  assert.match(pane, /if \(!el\) \{/, "a card never drawn is the renderer's own output");
+  assert.match(pane, /el = refreshInitTaskCard\(el, taskCardHtml\(row, "compact", \{ own \}\)\.trim\(\)\);/, "and one that moved is redrawn from it too");
+  assert.match(pane, /for \(const attr of \[\.\.\.next\.attributes\]\) el\.setAttribute\(attr\.name, attr\.value\);/, "onto the node already on screen, attributes and all");
+  assert.match(pane, /el\.innerHTML = next\.innerHTML;/, "…and its contents");
   assert.match(pane, /box\.appendChild\(el\);/, "appendChild MOVES a node that is already a child");
   assert.match(pane, /paintInitTaskLists\(host\);/, "the painter runs in the same pass that rebuilds the pane");
   assert.match(pane, /kept\.delete\(id\);/, "the residue the rebuild would otherwise leave: a card whose task has gone is removed");
