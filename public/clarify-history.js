@@ -46,6 +46,7 @@ const clarifyHist = {
   pendingAt: 0,      // when that number was last read
   pendingTick: null, // the slow count tick, independent of the popup being open
   pendingOnce: null, // the debounced read after a job frame
+  folds: new Set(),  // the seqs whose attempts the reader has opened, kept across the 5s repaint
 };
 
 // The popup's place and size: LAYOUT lengths are written as styles, but every number read back from the page
@@ -114,12 +115,17 @@ function clarifyHistoryPopEl() {
     // The fold inside a row comes first: pressing "2 attempts" must not also open the question's turn.
     const fold = t.closest?.(".ch-attempt-toggle");
     if (fold) {
+      const row = fold.closest?.(".ch-row");
+      const seq = Number(row?.dataset.seq) || 0;
       const listEl = fold.parentElement?.querySelector?.(".ch-attempt-list");
       if (listEl) {
         const opening = listEl.hidden;
         listEl.hidden = !opening;
         fold.setAttribute("aria-expanded", opening ? "true" : "false");
         fold.classList.toggle("is-open", opening);
+        // Recorded in the model so the next repaint draws it open rather than shutting it under the reader.
+        if (opening) clarifyHist.folds.add(seq);
+        else clarifyHist.folds.delete(seq);
       }
       return;
     }
@@ -163,11 +169,14 @@ function chAttemptsHtml(entry) {
   const lines = attempts
     .map((a, i) => `<span class="ch-attempt${i === 0 ? " is-newest" : ""}">${chEsc(C.attemptLine(a))}</span>`)
     .join("");
+  // The fold's own state lives in `clarifyHist.folds`, not in the DOM: the list is rebuilt on every poll (5s) and on
+  // every frame, and a DOM-only fold would snap shut under the reader's eyes while they were reading it.
+  const open = clarifyHist.folds.has(Number(entry.seq) || 0);
   const asked = attempts.length;
   return `
     <span class="ch-attempts">
-      <span class="ch-attempt-toggle mono" role="button" tabindex="-1" aria-expanded="false" title="show every time this question was asked">${asked} attempts <span class="ch-attempt-caret" aria-hidden="true">▸</span></span>
-      <span class="ch-attempt-list mono" hidden>${lines}</span>
+      <span class="ch-attempt-toggle mono${open ? " is-open" : ""}" role="button" tabindex="-1" aria-expanded="${open ? "true" : "false"}" title="show every time this question was asked">${asked} attempts <span class="ch-attempt-caret" aria-hidden="true">▸</span></span>
+      <span class="ch-attempt-list mono"${open ? "" : " hidden"}>${lines}</span>
     </span>`;
 }
 

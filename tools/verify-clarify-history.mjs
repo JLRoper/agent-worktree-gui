@@ -37,7 +37,7 @@
 // /api/clarify/history. Nothing fabricates page state: the clicks, the drag, the keys and the localStorage reads are
 // the page's own.
 import { execFileSync } from "node:child_process";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import os from "node:os";
 import path from "node:path";
@@ -144,6 +144,19 @@ for (let i = 1; i <= 8; i += 1) {
       lastAskedAt: null,
     };
   }
+  if (i === 2) {
+    // t2 is the reader's own REPLY: the tailor-made evidence that a question which closed unanswered was answered in
+    // the reply box. It is a real job record with the origin a reply carries (`assistant-reply` by `reader`), so the
+    // route's own reply evidence finds it without the gate touching the store, and it keeps the fixture at eight turns
+    // (so t1 is still the oldest and still has to be paged in).
+    t.reply = true;
+    t.origin = { kind: "assistant-reply", by: "reader" };
+    t.prompt = "yes, push it once the docs pair lands";
+    t.finalMessage = "pushed";
+    t.startedAt = iso(now - 80 * MIN);
+    t.endedAt = iso(now - 76 * MIN);
+    t.lastActiveAt = iso(now - 76 * MIN);
+  }
   turns.push(t);
 }
 const jobsStore = { version: 3, savedAt: iso(now), jobs: turns };
@@ -231,7 +244,74 @@ const history = {
       closedWhy: "cancelled",
       closedAt: iso(now - 60 * MIN + 16 * MIN),
     }),
-    ...Array.from({ length: 57 }, (_, i) => entry(i + 4, { seq: 57 - i, askedAt: iso(now - 3 * HOUR - i * 7 * MIN) })),
+    // A GENUINE MISS: closed with no answer, and nothing but an older question on the thread before it, so no reply
+    // can be read into it. It must keep saying "closed unanswered" while the replied row below stops saying it.
+    entry(4, {
+      seq: 57,
+      key: "clarify:t4:p4",
+      requestId: "p4",
+      jobId: "t4",
+      question: "Did the runner report the cached build?",
+      choices: ["it did", "it did not"],
+      askedAt: iso(now - 120 * MIN),
+      status: "closed",
+      answer: "",
+      answeredBy: "",
+      answeredAt: null,
+      closedWhy: "closed unanswered",
+      closedAt: iso(now - 110 * MIN),
+    }),
+    // ANSWERED IN A REPLY: closed unanswered at 85m, and the reader's own reply turn (t2, below) started at 80m, which
+    // is after this ask and before the next question on this thread. The panel cannot prove the reply answered it, so
+    // the row says "answered in a reply" and points at t2 instead of calling it missed.
+    entry(5, {
+      seq: 56,
+      key: "clarify:t5:p5",
+      requestId: "p5",
+      jobId: "t5",
+      question: "Was the tag pushed for the docs pair?",
+      choices: ["push it", "leave it"],
+      askedAt: iso(now - 90 * MIN),
+      status: "closed",
+      answer: "",
+      answeredBy: "",
+      answeredAt: null,
+      closedWhy: "closed unanswered",
+      closedAt: iso(now - 85 * MIN),
+    }),
+    // THE SAME QUESTION TWICE: closed unanswered at 35m, then asked again at 26m and answered. These two rows are ONE
+    // item, and it must read ANSWERED - never one answered row beside a "closed unanswered" one.
+    entry(6, {
+      seq: 54,
+      key: "clarify:t6:p6a",
+      requestId: "p6a",
+      jobId: "t6",
+      question: "Should the runner skip the cached build when the tree is clean?",
+      choices: ["skip it", "rebuild anyway"],
+      askedAt: iso(now - 35 * MIN),
+      status: "closed",
+      answer: "",
+      answeredBy: "",
+      answeredAt: null,
+      closedWhy: "closed unanswered",
+      closedAt: iso(now - 34 * MIN),
+    }),
+    entry(7, {
+      seq: 55,
+      key: "clarify:t7:p6b",
+      requestId: "p6b",
+      jobId: "t7",
+      question: "Should the runner skip the cached build when the tree is clean?",
+      choices: ["skip it", "rebuild anyway"],
+      askedAt: iso(now - 26 * MIN),
+      status: "answered",
+      answer: "skip the cache, it is clean",
+      answeredBy: "reader",
+      answeredAt: iso(now - 25 * MIN),
+      closedWhy: "",
+      closedAt: iso(now - 25 * MIN),
+    }),
+    ...Array.from({ length: 54 }, (_, i) => entry(i + 8, { seq: 53 - i, askedAt: iso(now - 3 * HOUR - i * 7 * MIN) })),
   ],
 };
 const logs = path.join(dir, "logs");
@@ -239,7 +319,7 @@ mkdirSync(logs, { recursive: true });
 writeFileSync(path.join(logs, "jobs.json"), JSON.stringify(jobsStore, null, 1), "utf8");
 writeFileSync(path.join(logs, "clarify-history.json"), JSON.stringify(history, null, 1), "utf8");
 writeFileSync(path.join(logs, "assistants.json"), JSON.stringify({ version: 1, assistants: [{ id: "assistant-1", name: "Assistant #1", threadId: "panel-assistant", rules: [] }] }, null, 1), "utf8");
-note(`fixture: ${turns.length} turns on ${TREE}, ${history.entries.length} history rows (open, answered, cancelled, then 57 older)`);
+note(`fixture: ${turns.length} turns on ${TREE}, ${history.entries.length} history rows (open, answered, cancelled, a miss, a reply, one question asked twice, then 54 older)`);
 
 const pw = loadPlaywright();
 if (!pw) {
@@ -338,7 +418,9 @@ try {
           purple: cs ? cs.color : null,
           border: cs ? cs.borderTopColor : null,
           bg: cs ? cs.backgroundColor : null,
-          label: btn ? btn.textContent.trim() : null,
+          // The LABEL, not the whole button: the badge is a second child of the same button and its count is read
+          // on its own below.
+          label: btn ? (btn.querySelector(".cl-label")?.textContent.trim() ?? btn.textContent.trim()) : null,
           // The four controls of the brief, in the order the header draws them.
           order: {
             penBeforeClarify: pos(pen, btn),
@@ -354,16 +436,51 @@ try {
         };
       });
 
+    // THE BUTTON'S COUNT, read from the page before the popup is ever opened: the number is on the header, not behind a
+    // press. `clarifyPendingCount` is the same function the painting code reads, so this is not a parallel count.
+    const button = async () =>
+      page.evaluate(() => {
+        const btn = document.getElementById("btn-clarify");
+        const badge = document.getElementById("clarify-badge");
+        const cs = getComputedStyle(btn);
+        return {
+          badgePresent: Boolean(badge),
+          badgeHidden: badge ? badge.hidden : null,
+          badgeText: badge ? badge.textContent.trim() : null,
+          hasUnanswered: btn.classList.contains("has-unanswered"),
+          bg: cs.backgroundColor,
+          border: cs.borderTopColor,
+          count: typeof clarifyPendingCount === "function" ? clarifyPendingCount() : null,
+          aria: btn.getAttribute("aria-label"),
+        };
+      });
+    // The count is a read of its own route, so it lands a moment after the page does; the wait is on the number the
+    // button is painted from rather than on a fixed sleep.
+    for (let i = 0; i < 60; i += 1) {
+      if ((await button()).count === 1) break;
+      await sleep(250);
+    }
+
     section("1. the control: fourth in the header, purple");
     const c = await control();
     ok("the Clarify control exists and app.js wired it", c.present && c.wired === "1", JSON.stringify({ present: c.present, wired: c.wired }));
     is("the header's own order: assistant, pen, Clarify, Human", [c.order.assistantBeforePen, c.order.penBeforeClarify, c.order.clarifyBeforeHuman], ["before", "before", "before"]);
     is("the label reads Clarify", c.label, "Clarify");
-    is("its colour is the header's violet", c.purple, "rgb(163, 113, 247)");
-    ok("its border is purple too, not the grey the other controls use", c.border !== c.humanColor, JSON.stringify({ border: c.border, human: c.humanColor }));
+    // While a question waits the button is HIGHLIGHTED, so its text is the light violet over the violet border; the
+    // quiet state (zero waiting) is the button's own violet, and section 9 reads that one for itself.
+    is("its colour is the header's light violet while a question waits", c.purple, "rgb(231, 214, 255)");
+    ok("its border is purple too, not the grey the other controls use", c.border === "rgb(163, 113, 247)" && c.border !== c.humanColor, JSON.stringify({ border: c.border, human: c.humanColor }));
     is("the Hot Agent pen is untouched", { label: c.penLabel, glyph: c.penGlyph }, { label: "Hot Agent search (Ctrl+Shift+Q)", glyph: true });
     ok("the Human button is untouched", String(c.humanLabel || "").startsWith("🙋 Human"), c.humanLabel);
     is("it starts closed and says so", c.clarifyAria, { haspopup: "dialog", expanded: "false" });
+
+    // 1b. THE COUNT ON THE BUTTON, while one question is waiting: the badge is on, it reads 1 (one ITEM, not one ask),
+    // and the button wears the violet wash. The zero state is proved at the end, after the store stops waiting.
+    const btn1 = await button();
+    is("the badge is on and reads the items waiting, not the attempts", [btn1.badgePresent, btn1.badgeHidden, btn1.badgeText, btn1.count], [true, false, "1", 1]);
+    ok("the button is highlighted while something is unanswered", btn1.hasUnanswered === true, JSON.stringify({ class: btn1.hasUnanswered, bg: btn1.bg }));
+    is("the highlight is the header's violet wash", btn1.bg, "rgb(42, 31, 69)");
+    ok("and its label says what is waiting", /^Clarify - 1 question waiting on you\./.test(String(btn1.aria)), btn1.aria);
 
     // The header crop, for the report: the four controls at the size the reader sees them.
     const bar = await page.locator("header.topbar").boundingBox();
@@ -391,7 +508,15 @@ try {
             return { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) };
           })(),
           rows: [...list.querySelectorAll(".ch-row")].map((row) => ({
-            state: row.classList.contains("is-open") ? "open" : row.classList.contains("is-answered") ? "answered" : row.classList.contains("is-closed") ? "closed" : "?",
+            state: row.classList.contains("is-open")
+              ? "open"
+              : row.classList.contains("is-answered")
+                ? "answered"
+                : row.classList.contains("is-replied")
+                  ? "replied"
+                  : row.classList.contains("is-closed")
+                    ? "closed"
+                    : "?",
             mark: text(row.querySelector(".ch-mark")),
             question: text(row.querySelector(".ch-q")),
             questionColour: colour(row.querySelector(".ch-q")),
@@ -400,6 +525,20 @@ try {
             answerColour: colour(row.querySelector(".ch-answer")),
             answerWeight: weight(row.querySelector(".ch-answer")),
             choices: [...row.querySelectorAll(".ch-choice")].map((c) => text(c)),
+            // THE FOLD: the same question's earlier asks, each with its own timestamp, closed by default.
+            attempts: (() => {
+              const box = row.querySelector(".ch-attempts");
+              if (!box) return null;
+              const toggle = box.querySelector(".ch-attempt-toggle");
+              const foldList = box.querySelector(".ch-attempt-list");
+              return {
+                toggle: text(toggle),
+                expanded: toggle ? toggle.getAttribute("aria-expanded") : null,
+                hidden: foldList ? foldList.hidden : null,
+                lines: [...box.querySelectorAll(".ch-attempt")].map((a) => text(a)),
+              };
+            })(),
+            live: Boolean(row.querySelector(".ch-live")),
             agent: text(row.querySelector(".ch-agent")),
             tree: text(row.querySelector(".ch-tree")),
             assistant: text(row.querySelector(".ch-assistant")),
@@ -430,6 +569,66 @@ try {
     ok("its question keeps its weight instead of being greyed as answered", Number(closed.questionWeight) >= Number(open.questionWeight) && closed.answer === "", JSON.stringify({ weight: closed.questionWeight, answer: closed.answer }));
     is("the popup scrolls inside itself, with no sideways overflow", r0.listScrollW <= r0.listClientW, true);
     await page.screenshot({ path: shot("02-rows-1440.png") });
+
+    section("2b. one row per question: the fold, a reply, and a real miss");
+    // THE ROW'S OWN CASES. A question asked, closed and asked again; a question the reader answered in the reply box
+    // after its card closed unanswered; and a question nobody answered at all. The first must read ANSWERED once, the
+    // second "answered in a reply" with the way to the turn, and only the third may still read missed.
+    const COLLAPSED = "Should the runner skip the cached build when the tree is clean?";
+    const collapsedRows = r0.rows.filter((x) => x.question === COLLAPSED);
+    is("a question asked twice is drawn ONCE", collapsedRows.length, 1);
+    const coll = collapsedRows[0] || {};
+    is("and it reads ANSWERED, because an answer in either attempt wins", [coll.state, coll.mark, coll.answer], ["answered", "✓ answered", "skip the cache, it is clean"]);
+    is("its two attempts sit behind a fold that starts closed", [coll.attempts?.toggle, coll.attempts?.lines?.length, coll.attempts?.hidden, coll.attempts?.expanded], ["2 attempts ▸", 2, true, "false"]);
+    ok(
+      "each attempt keeps its own timestamp and its own ending",
+      /^asked .* · answered: skip the cache, it is clean$/.test(coll.attempts?.lines?.[0] || "") &&
+        /^asked .* · closed unanswered after 1m$/.test(coll.attempts?.lines?.[1] || ""),
+      JSON.stringify(coll.attempts?.lines),
+    );
+    ok("no row anywhere calls that question missed", !r0.rows.some((x) => x.question === COLLAPSED && x.state === "closed"));
+    // The fold opens in place, and pressing it does NOT take the row's press (which would close the popup and land).
+    await page.evaluate(() => {
+      const row = document.querySelector('#clarify-pop .ch-row[data-seq="55"]');
+      row.querySelector(".ch-attempt-toggle").click();
+      row.scrollIntoView({ block: "center" });
+    });
+    const folded = await page.evaluate(() => {
+      const row = document.querySelector('#clarify-pop .ch-row[data-seq="55"]');
+      const foldList = row?.querySelector(".ch-attempt-list");
+      return {
+        hidden: foldList ? foldList.hidden : null,
+        expanded: row?.querySelector(".ch-attempt-toggle")?.getAttribute("aria-expanded") || null,
+        open: !document.getElementById("clarify-pop").hidden,
+        seen: [...(foldList?.querySelectorAll(".ch-attempt") || [])].map((a) => a.textContent.replace(/\s+/g, " ").trim()),
+      };
+    });
+    is("the fold opens the attempts in place, and the row's own press is left alone", [folded.hidden, folded.expanded, folded.open], [false, "true", true]);
+    ok("the opened fold shows both asks with their times", folded.seen.length === 2 && folded.seen.every((l) => /^asked /.test(l)), JSON.stringify(folded.seen));
+    // THE POLL MUST NOT SHUT IT. The list is rebuilt every five seconds (and on every frame); the fold's state is in the
+    // model, so a repaint draws it open. This forces the same repaint the poll would.
+    const afterRepaint = await page.evaluate(() => {
+      paintClarifyHistory();
+      const row = document.querySelector('#clarify-pop .ch-row[data-seq="55"]');
+      const foldList = row?.querySelector(".ch-attempt-list");
+      return { hidden: foldList ? foldList.hidden : null, expanded: row?.querySelector(".ch-attempt-toggle")?.getAttribute("aria-expanded") || null };
+    });
+    is("a repaint under the reader's hands leaves the fold open", [afterRepaint.hidden, afterRepaint.expanded], [false, "true"]);
+    await page.screenshot({ path: shot("02b-fold-1440.png") });
+
+    const replied = r0.rows.find((x) => x.question === "Was the tag pushed for the docs pair?") || {};
+    is("an item the reader answered in a reply says so, not missed", [replied.state, replied.mark], ["replied", "↩ answered in a reply"]);
+    is("it shows the reader's own words, read off the reply turn", replied.answer, "yes, push it once the docs pair lands");
+    ok("and it carries the way to that turn", replied.live === true, String(replied.live));
+    const missed = r0.rows.find((x) => x.question === "Did the runner report the cached build?") || {};
+    is("a genuinely missed item still reads closed unanswered", [missed.state, missed.mark], ["closed", "✕ closed unanswered after 10m"]);
+    await page.screenshot({ path: shot("02c-replied-and-missed-1440.png") });
+
+    // The route's own numbers, read from the store rather than from the page's paint: 61 asks are 60 items, and only
+    // the one open item is outstanding.
+    const shape = await (await fetch(`${panel.base}/api/clarify/history`)).json();
+    is("the route answers 60 items over 61 asks, with one outstanding", [shape.items.length, shape.total, shape.attempts, shape.outstanding], [60, 60, 61, 1]);
+    is("and the same question is one item there too", shape.items.filter((i) => i.question === COLLAPSED).length, 1);
 
     section("3. a row lands on the turn that asked");
     // t1 is the oldest of eight turns, so the card opens on its newest page and this click has to page it back.
@@ -616,6 +815,41 @@ try {
     is("the list has no horizontal overflow", narrow.listScrollW <= narrow.listClientW, true);
     is("the honest cap is still said at 768", narrow.foot, "showing 50 of 60");
     await page.screenshot({ path: shot("05-narrow-768.png") });
+    section("7b. the replied row lands on the turn the reader wrote");
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await sleep(200);
+    await page.evaluate(() => {
+      if (!clarifyHist.open) clarifyHistoryOpen({ focus: false });
+      document.querySelector('#clarify-pop .ch-row[data-seq="56"]').click();
+    });
+    const replyLand = await (async () => {
+      const until = Date.now() + 15_000;
+      let last = null;
+      for (;;) {
+        last = await page.evaluate(() => {
+          const thread = "wt-agent-thread";
+          const card = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`);
+          const turn = card?.querySelector('.turn[data-turn="t2"]') || null;
+          const box = turn?.getBoundingClientRect?.() || null;
+          return {
+            card: Boolean(card),
+            hidden: document.getElementById("clarify-pop").hidden,
+            turn: Boolean(turn),
+            folded: turn ? turn.classList.contains("folded") : null,
+            onScreen: box ? box.top < window.innerHeight && box.bottom > 0 : false,
+            page: state.turnPage.get(thread) ?? null,
+            text: turn ? turn.textContent.replace(/\s+/g, " ").slice(0, 120) : "",
+          };
+        });
+        if (last.turn && last.folded === false && last.onScreen) return last;
+        if (Date.now() > until) return last;
+        await sleep(150);
+      }
+    })();
+    ok("pressing it closes the popup and lands on the reply turn, unfolded and on screen", replyLand.hidden === true && replyLand.turn === true && replyLand.folded === false && replyLand.onScreen === true, JSON.stringify(replyLand));
+    ok("that turn carries the reader's own words", /yes, push it once the docs pair lands/.test(replyLand.text), replyLand.text);
+    await page.screenshot({ path: shot("06-reply-landed-1440.png") });
+
     is("the page threw nothing while the control was driven", pageErrors.slice(0, 3), []);
   });
 
@@ -628,6 +862,62 @@ try {
   ok("the answered row kept its answer, who and when", keptAnswer?.status === "answered" && keptAnswer.answer === "the tree, then main" && keptAnswer.answeredBy === "reader" && Boolean(keptAnswer.answeredAt), JSON.stringify(keptAnswer && { status: keptAnswer.status, answer: keptAnswer.answer, by: keptAnswer.answeredBy, at: keptAnswer.answeredAt }));
   const stillOpen = afterRestart.entries.find((e) => e.key === "clarify:t1:p1");
   is("the question still parked on a live turn is still open", stillOpen?.status, "open");
+
+  // ---- 9. the count clears when the last one is answered --------------------------------------------------------
+  // The row's other half of the button: zero is quiet. The store is edited the way the panel writes it (the same file,
+  // the same fields) so the last open question carries an answer, and the panel is booted again on it. The button must
+  // lose its badge AND its highlight, and the popup must still hold every question it ever asked.
+  section("9. the count clears when the last question is answered");
+  await panel.stop();
+  const storePath = path.join(dir, "logs", "clarify-history.json");
+  const onDisk = JSON.parse(readFileSync(storePath, "utf8"));
+  const openRow = onDisk.entries.find((e) => e.key === "clarify:t1:p1");
+  openRow.status = "answered";
+  openRow.answer = "the turn that asked";
+  openRow.answeredBy = "reader";
+  openRow.answeredAt = iso(now);
+  openRow.closedWhy = "";
+  openRow.closedAt = iso(now);
+  writeFileSync(storePath, JSON.stringify(onDisk, null, 1), "utf8");
+  panel = await startPanel({ dir, keep: true, reuseConfig: true, config: { apiServer: API } });
+  const afterAnswer = await (await fetch(`${panel.base}/api/clarify/history`)).json();
+  is("the route reports nothing outstanding once the last one is answered", [afterAnswer.outstanding, afterAnswer.total], [0, 60]);
+  await withBrowser(async ({ page }) => {
+    await page.goto(panel.base, { waitUntil: "domcontentloaded" });
+    await page.waitForSelector("#btn-clarify", { timeout: 45_000 });
+    const read = () =>
+      page.evaluate(() => {
+        const btn = document.getElementById("btn-clarify");
+        const badge = document.getElementById("clarify-badge");
+        return {
+          badgeHidden: badge.hidden,
+          badgeText: badge.textContent.trim(),
+          hasUnanswered: btn.classList.contains("has-unanswered"),
+          count: typeof clarifyPendingCount === "function" ? clarifyPendingCount() : null,
+          bg: getComputedStyle(btn).backgroundColor,
+          aria: btn.getAttribute("aria-label"),
+        };
+      });
+    let zero = await read();
+    for (let i = 0; i < 60 && zero.count !== 0; i += 1) {
+      await sleep(250);
+      zero = await read();
+    }
+    is("zero hides the badge and drops the violet highlight", [zero.badgeHidden, zero.hasUnanswered, zero.count], [true, false, 0]);
+    ok("the button goes back to its own quiet colour, not the violet wash", zero.bg !== "rgb(42, 31, 69)", zero.bg);
+    ok("and its label says nothing is waiting", /^Clarify - nothing is waiting on you/.test(String(zero.aria)), zero.aria);
+    await page.screenshot({ path: shot("07-count-zero-1440.png") });
+    // The history is not emptied by the answer: the popup still lists what was asked.
+    await page.click("#btn-clarify");
+    await page.waitForSelector("#clarify-pop:not([hidden]) .ch-row", { timeout: 10_000 });
+    const still = await page.evaluate(() => ({
+      foot: document.getElementById("ch-foot-text").textContent.trim(),
+      count: document.getElementById("ch-count").textContent.trim(),
+      open: [...document.querySelectorAll("#ch-list .ch-row.is-open")].length,
+    }));
+    is("the popup still holds every question, and none of them is open", [still.foot, still.count, still.open], ["showing 50 of 60", "60 questions", 0]);
+    await page.screenshot({ path: shot("08-answered-rows-1440.png") });
+  });
 } finally {
   await panel.stop();
   await new Promise((r) => stub.close(() => r()));
