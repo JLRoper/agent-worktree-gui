@@ -63,7 +63,14 @@ export function createCollisionsRoutes({ book, getConfig = () => ({}), sweep = n
     try {
       if (op === "sweep") {
         const report = typeof sweep === "function" ? sweep({ why: "asked" }) : null;
-        sendJson(res, 200, { ok: true, say: report ? `swept ${report.pairs} pair${report.pairs === 1 ? "" : "s"}, filed ${report.filed.length}, handed over ${report.escalated.length}` : "no sweep is wired", report, state: view() });
+        sendJson(res, 200, {
+          ok: true,
+          say: report
+            ? `swept ${report.pairs} pair${report.pairs === 1 ? "" : "s"}, settled ${(report.settled || []).length} automatically, filed ${report.filed.length}, handed over ${report.escalated.length}`
+            : "no sweep is wired",
+          report,
+          state: view(),
+        });
         return true;
       }
       if (!key) {

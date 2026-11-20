@@ -206,8 +206,16 @@
       side?.task ? `#${side.task.id}${side.task.name ? ` ${side.task.name}` : ""}${side.task.state ? ` (${side.task.state})` : ""}` : "no task row";
     const mine = rec.role === "b" ? rec.b : rec.a;
     if (mine || rec.other) bits.push(`${mine?.name || "this tree"} ${taskOf(mine)} vs ${other} ${taskOf(rec.other)}`);
-    if (rec.state === "ruled") bits.push(`already ruled: ${rec.ruling?.name || "a side"} goes first`);
-    else if (Array.isArray(rec.stoodByTask) && rec.stoodByTask.length) bits.push(`already stood down: ${rec.stoodByTask.map((f) => `${f.tree} is ${f.state}`).join(", ")}`);
+    if (rec.state === "ruled") {
+      const ruling = rec.ruling || {};
+      // AN AUTOMATIC PICK SAYS SO, with the reason git gave. "already ruled" would credit it to the reader and hide the
+      // one thing he needs to know about it: a pick the panel made is one press from being overruled.
+      bits.push(
+        ruling.auto
+          ? `auto-settled: ${ruling.name || "a side"} goes first${ruling.reason ? ` - ${ruling.reason}` : " - no merge risk either way"}`
+          : `already ruled: ${ruling.name || "a side"} goes first`,
+      );
+    } else if (Array.isArray(rec.stoodByTask) && rec.stoodByTask.length) bits.push(`already stood down: ${rec.stoodByTask.map((f) => `${f.tree} is ${f.state}`).join(", ")}`);
     else if (rec.state === "reader") bits.push("yours to rule on - H steps into it");
     else bits.push("with both assistants");
     return bits.join(" - ");

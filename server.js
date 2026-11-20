@@ -51,6 +51,7 @@ import { ReviewInbox } from "./lib/review-inbox.js";
 // the three conditions; routes/collisions.js is the read, the ask and the ruling.
 import { CollisionBook, filingKey, owningTaskFor } from "./lib/collisions.js";
 import { rulingRowsFor, sweepCollisions } from "./lib/collision-flow.js";
+import { probePairMerge } from "./lib/collision-merge.js";
 import { COLLISIONS_PATH, createCollisionsRoutes } from "./routes/collisions.js";
 import { Hosts, docOf, prListing, proposeMapping, renderTemplate } from "./lib/hosts.js";
 // What a worktree is FOR: the definition catalogue (reader-edited over the shipped seed), where each tree stands in
@@ -2920,8 +2921,9 @@ function fileCollisionRuling(record) {
   }
 }
 
-// ONE SWEEP, over the rows the scanner already wrote. It files, checks stand-downs and hands pairs over; it never reads
-// git. The book is written only when something moved - an unchanged board must not rewrite a file every tick.
+// ONE SWEEP, over the rows the scanner already wrote. It files, checks stand-downs, asks git which side can go first
+// (lib/collision-merge.js, one probe per un-settled pair) and hands over only the pairs git cannot order. The book is
+// written only when something moved - an unchanged board must not rewrite a file every tick.
 let collisionSweepCount = 0;
 let collisionSweepLastAt = 0;
 function sweepCollisionsNow() {
@@ -2945,6 +2947,9 @@ function sweepCollisionsNow() {
         }
       },
       fileQueue: fileCollisionRow,
+      // THE MERGE QUESTION, on the panel's own tick: merge-tree in both directions against the pair's two tips, in the
+      // object database. No checkout, no model, no worker turn.
+      probeMerge: (pair) => probePairMerge(pair),
     });
   } catch (err) {
     log(`collisions: the sweep failed (${String((err && err.message) || err)})`);
@@ -2954,7 +2959,13 @@ function sweepCollisionsNow() {
   collisionSweepLastAt = Date.now();
   const moved = JSON.stringify(collisions.all()) !== before;
   if (moved) collisions.save();
-  if (moved && (report.filed.length || report.escalated.length || report.stoodDown.length)) broadcastSnapshot();
+  // AN AUTOMATIC RULING TAKES EFFECT THROUGH THE SAME RULED ROW a reader's ruling broadcasts: the row is what both
+  // assistants read, so it is filed here, after the pure sweep, tagged automatic by `rulingRowsFor`.
+  for (const settled of report.settled || []) {
+    const record = collisions.get(settled.pairKey);
+    if (record?.ruling?.auto) fileCollisionRuling(record);
+  }
+  if (moved && (report.filed.length || report.settled.length || report.escalated.length || report.stoodDown.length)) broadcastSnapshot();
   return report;
 }
 // The sweep's clock. Ten seconds is a scan or two on a busy board and nothing on a quiet one, and the route can ask for

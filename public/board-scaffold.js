@@ -1878,14 +1878,28 @@ function collisionBlockHtml(row, key) {
     const finishedSay = stoodByTask
       .map((f) => `${f.tree || "one side"}${f.name ? ` (${f.name})` : ""} is ${f.state || "finished"}`)
       .join(", ");
-    const stateWord =
-      state === "ruled"
+    // AN AUTOMATIC PICK IS NOT THE READER'S RULING and does not read like one: it says who chose and why, and the
+    // withdraw beside it is the reader's one press to overrule it (withdrawing an automatic pick stops the sweep from
+    // putting the same order straight back, so the pair becomes his).
+    const auto = state === "ruled" && Boolean(rec.ruling?.auto);
+    const stateWord = auto
+      ? `auto-settled: ${esc(rec.ruling?.name || "a side")} goes first - ${esc(rec.ruling?.reason || "no merge risk either way")}`
+      : state === "ruled"
         ? `already ruled: ${esc(rec.ruling?.name || "a side")}${rec.ruling?.taskId ? ` (#${esc(rec.ruling.taskId)})` : ""} goes first`
         : stoodByTask.length
           ? `already stood down: ${esc(finishedSay)}`
           : state === "reader"
             ? "yours to rule on"
             : "with both assistants";
+    // WHAT GIT SAID, when it said "the reader's": both directions conflict, or it could not answer. A card that asked
+    // for a decision with no reason visible is the bare flag this whole surface exists to avoid.
+    const dirs = rec.merge || null;
+    const conflictSay =
+      dirs && dirs.aFirst?.clean === false && dirs.bFirst?.clean === false
+        ? `git: both directions conflict${Array.isArray(dirs.aFirst.conflicts) && dirs.aFirst.conflicts.length ? ` (${dirs.aFirst.conflicts.slice(0, 3).join(", ")})` : ""} - the order is yours`
+        : dirs && (dirs.aFirst?.error || dirs.bFirst?.error)
+          ? "git could not answer the merge question - the order is yours"
+          : "";
     const ruleBtn = (pick, label, title) =>
       `<button class="btn-collision-rule" type="button" data-collision-rule="${esc(rec.key)}" data-collision-pick="${pick}" title="${esc(title)}">${esc(label)}</button>`;
     const mine = row.name || "this tree";
@@ -1897,7 +1911,11 @@ function collisionBlockHtml(row, key) {
       ruleBtn(minePick, "⇢ this tree goes first", `rule that ${mine} goes first: the priority is filed into both assistants' queues and stored against this pair`),
       ruleBtn(otherPick, `⇢ ${other} goes first`, `rule that ${other} goes first: the priority is filed into both assistants' queues and stored against this pair`),
       state === "ruled"
-        ? `<button class="btn-collision-clear" type="button" data-collision-rule="${esc(rec.key)}" data-collision-pick="clear" title="withdraw the ruling - the pair goes back to the assistants' own pass">withdraw the ruling</button>`
+        ? `<button class="btn-collision-clear" type="button" data-collision-rule="${esc(rec.key)}" data-collision-pick="clear" title="${
+            auto
+              ? "withdraw this automatic pick - the panel will not put the same order back, so the pair is yours to rule"
+              : "withdraw the ruling - the pair goes back to the assistants' own pass"
+          }">withdraw the ruling</button>`
         : rec.canAsk
           ? `<button class="btn-collision-ask" type="button" data-collision-ask="${esc(rec.key)}" title="bring this pair to you now, instead of waiting for the assistants' pass">bring it to me</button>`
           : "",
@@ -1932,13 +1950,18 @@ function collisionBlockHtml(row, key) {
       <div class="collision-body">
         <div class="collision-sides">${collisionSideHtml(rec, mineSide, true)}${collisionSideHtml(rec, otherSide, false)}</div>
         <div class="collision-say">${esc(collisionEvidence(rec))}</div>
+        ${conflictSay ? `<div class="collision-say collision-merge-say">${esc(conflictSay)}</div>` : ""}
         ${chips}
         ${stood ? `<div class="collision-stood">${esc(stood)}</div>` : ""}
         ${otherPath
           ? `<div class="collision-peer mono" title="the other tree, as the scanner knows it">${esc(otherPath)}${rec.filed && rec.filed.length ? ` · filed with ${esc(rec.filed.map((f) => f.assistantId).join(", "))}` : ""}</div>`
           : `<div class="collision-peer">no row on this board answers to <span class="mono">${esc(rec.otherTarget || "that name")}</span> - nothing but you can look at this one</div>`}
         ${rec.notes && rec.notes.length ? `<ul class="collision-notes">${rec.notes.map((n) => `<li>“${esc(n.text)}”</li>`).join("")}</ul>` : ""}
-        ${rec.ruling?.note ? `<div class="collision-ruling-note">your note: ${esc(rec.ruling.note)}</div>` : ""}
+        ${auto
+          ? `<div class="collision-ruling-note">settled automatically: ${esc(rec.ruling?.reason || "git found no conflict in either direction")}</div>`
+          : rec.ruling?.note
+            ? `<div class="collision-ruling-note">your note: ${esc(rec.ruling.note)}</div>`
+            : ""}
         <div class="collision-actions">${actions.join("")}</div>
       </div>
     </div>`;
