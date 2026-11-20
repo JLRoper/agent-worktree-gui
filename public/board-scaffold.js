@@ -857,7 +857,10 @@ function cleanupOf(name) {
 function cleanupChipSig(name) {
   const c = cleanupOf(name);
   if (!c) return "idle";
-  return `${c.phase}:${c.plan?.counts?.remove ?? ""}:${c.plan?.counts?.merge ?? ""}:${c.run?.counts?.remove ?? ""}:${c.report?.path || ""}:${c.error ? "err" : "ok"}`;
+  // The drop-all's progress is in the signature: its label is a count that moves once per row, and a signature that
+  // did not carry it would freeze the chip at "dropping 0 of 41" until the run ended.
+  const prog = c.dropAll ? `:${c.dropAll.done}/${c.dropAll.total}` : "";
+  return `${c.phase}:${c.plan?.counts?.remove ?? ""}:${c.plan?.counts?.merge ?? ""}:${c.run?.counts?.remove ?? ""}:${c.report?.path || ""}:${c.error ? "err" : "ok"}${prog}`;
 }
 
 function cleanupChipHtml(name) {
@@ -888,6 +891,13 @@ function cleanupChipHtml(name) {
     label = "cleanup: applying";
     cls = " is-busy";
     title = "removing the trees the plan dropped and merging the branches it kept - no force, no push";
+  } else if (phase === "dropping") {
+    // The drop-all's own phase, distinct from the plan's apply: it removes one row at a time through the panel's
+    // single-row delete and never merges anything, so it must not borrow the apply's words.
+    const d = c.dropAll || {};
+    label = `cleanup: dropping ${Number(d.done) || 0} of ${Number(d.total) || 0}`;
+    cls = " is-busy";
+    title = `dropping the worktrees labelled drop, one at a time through the panel's own delete route: ${Number(d.done) || 0} of ${Number(d.total) || 0}${d.name ? `, now ${d.name}` : ""} - a refusal is listed and the run carries on`;
   } else if (phase === "done") {
     label = `cleanup: ${Number(counts.remove) || 0} dropped · ${Number(counts.merge) || 0} merged`;
     cls = " is-done";
@@ -901,6 +911,9 @@ function cleanupChipHtml(name) {
 }
 
 function refreshCleanupChip(name) {
+  // The drop-all button sits beside the chip, in the same head line and the same bar, and reads the same state: it is
+  // repainted from this call so the two can never show two different plans.
+  refreshCleanupDropAll(name);
   const el = projectNode("data-cleanup-chip", name);
   if (!el) return;
   if (el.dataset.cleanupSig === cleanupChipSig(name)) return;
@@ -919,11 +932,14 @@ function cleanupRowHtml(name, row) {
   const answered = Boolean(row.result);
   const why = String(row.result?.why || row.reason || "");
   const branch = row.branch ? `<code>${esc(row.branch)}</code>` : `<span class="dimmer">no branch</span>`;
+  // While another cleanup action runs, the per-row call is not pressable either: the drop-all removes one row at a
+  // time through this same route, and a row's own press would join it.
+  const frozen = cleanupDropAllBusy(name) ? ' disabled aria-disabled="true"' : "";
   // One button per call, and it only ever asks the server for something the server already offers: `drop` posts the
   // row's own delete route, `keep` writes nothing and takes the call off this list.
   const button = call === "drop"
-    ? `<button type="button" class="cleanup-call is-drop" data-cleanup-call="drop" data-cleanup-project="${esc(name)}" data-cleanup-path="${esc(row.path || "")}" data-cleanup-branch="${esc(row.branch || "")}" title="remove this worktree with the panel's own delete path - the branch stays, and the same locks and live jobs guard it">drop</button>`
-    : `<button type="button" class="cleanup-call is-keep" data-cleanup-call="keep" data-cleanup-project="${esc(name)}" data-cleanup-path="${esc(row.path || "")}" title="the plan keeps this one - press to take it off this list; nothing is written">keep</button>`;
+    ? `<button type="button" class="cleanup-call is-drop" data-cleanup-call="drop" data-cleanup-project="${esc(name)}" data-cleanup-path="${esc(row.path || "")}" data-cleanup-branch="${esc(row.branch || "")}"${frozen} title="remove this worktree with the panel's own delete path - the branch stays, and the same locks and live jobs guard it">drop</button>`
+    : `<button type="button" class="cleanup-call is-keep" data-cleanup-call="keep" data-cleanup-project="${esc(name)}" data-cleanup-path="${esc(row.path || "")}"${frozen} title="the plan keeps this one - press to take it off this list; nothing is written">keep</button>`;
   const merge = row.merge && row.merge.ok
     ? `<span class="cleanup-merge mono" title="merged --no-ff into a child of ${esc(row.merge.base || "")}">${esc(row.merge.child || "")} · ${Number(row.merge.files) || 0} file${Number(row.merge.files) === 1 ? "" : "s"} · ${Number(row.merge.bytes) || 0} bytes</span>`
     : "";
@@ -942,17 +958,24 @@ function cleanupBarHtml(name) {
   if (!c || !c.plan) return "";
   const rows = (c.run?.rows || c.plan.rows || []).filter((r) => !c.dismissed?.has?.(r.path));
   const counts = c.run?.counts || c.plan.counts || {};
-  const what = c.run
-    ? `${counts.remove || 0} dropped, ${counts.merge || 0} merged, ${(counts.keep || 0) + (counts.skip || 0)} left alone${counts.failed ? `, ${counts.failed} failed` : ""}`
-    : `${counts.remove || 0} to drop, ${counts.merge || 0} to merge, ${counts.keep || 0} kept, ${counts.skip || 0} left alone - nothing has been touched yet`;
+  // While the drop-all runs, the line IS the progress ("dropping 12 of 41 - <name>"): one row at a time, in place,
+  // instead of a count that only moves when the whole run ends.
+  const dropping = c.phase === "dropping" && c.dropAll ? c.dropAll : null;
+  const what = dropping
+    ? `dropping ${Number(dropping.done) || 0} of ${Number(dropping.total) || 0}${dropping.name ? ` - ${dropping.name}` : ""}`
+    : c.run
+      ? `${counts.remove || 0} dropped, ${counts.merge || 0} merged, ${(counts.keep || 0) + (counts.skip || 0)} left alone${counts.failed ? `, ${counts.failed} failed` : ""}`
+      : `${counts.remove || 0} to drop, ${counts.merge || 0} to merge, ${counts.keep || 0} kept, ${counts.skip || 0} left alone - nothing has been touched yet`;
   const report = c.report?.path ? ` · report <code>${esc(c.report.path)}</code>` : "";
   const body = rows.length
     ? rows.map((r) => cleanupRowHtml(name, r)).join("")
     : `<span class="cleanup-empty dimmer mono">every call on this list has been answered</span>`;
   return `<div class="host-form cleanup-form" data-cleanup-bar="${esc(name)}">
       <span class="mono host-line" data-cleanup-line>${esc(name)}: ${esc(what)}${report}</span>
+      ${cleanupDropAllBlockHtml(name)}
       <div class="cleanup-rows">${body}</div>
       <span class="cleanup-actions">
+        ${cleanupDropAllButtonHtml(name)}
         ${c.report?.path ? `<button type="button" data-cleanup-open="${esc(name)}" title="open the plan page the run wrote in ${esc(name)}">open report</button>` : ""}
         <button type="button" data-cleanup-close="${esc(name)}" title="close this list; the chip keeps its state">close</button>
       </span>
@@ -1072,7 +1095,212 @@ function closeCleanupBar(name) {
   refreshCleanupChip(name);
 }
 
-// ---- end the cleanup chip
+// ---- the cleanup chip's drop-all -----------------------------------------------------------------------------
+// One button beside the chip (and the same button in the bar the chip opens), reading "drop all 41 suggested" with
+// the count taken live from the plan. It acts on exactly the rows carrying the drop label and on nothing else: the
+// selection is `wtCleanupDropAll.isDropSuggested` (public/core/cleanup-drop-all.js), a named predicate the unit tests
+// call, not a selector written into this handler.
+//
+// THE PRESS IS TWO STEPS. The button opens a confirm that states the exact count and names every class it will not
+// touch (the classes come from the same rows, so the numbers add up to the whole plan); the confirm's own button is
+// focused the moment it opens, so the whole gesture is reachable from the keyboard. The confirm closes on Escape.
+//
+// THE RUN is the panel's own single-row delete, once per row (POST /api/worktree/delete), the same route the row's x
+// and the per-row drop button use: no second deletion path, the same guards, the same history entry. Before the
+// first drop the plan is read again - the confirm may be minutes old, and a tree that has picked up a commit or an
+// uncommitted file since then is one the planner no longer calls drop. That row is refused with the fresh plan's own
+// sentence and listed; the run carries on past it. A refusal from the remover is collected the same way. At the end
+// the chip and this button are redrawn from a fresh read (so the count is the new state), the report path is the page
+// that read wrote, and the list says what was removed and what was refused and why.
+function cleanupDropAllBusy(name) {
+  const c = cleanupOf(name);
+  return Boolean(c && (c.phase === "planning" || c.phase === "applying" || c.phase === "dropping"));
+}
+
+function cleanupDropAllSig(name) {
+  const c = cleanupOf(name);
+  if (!c || !c.plan) return "none";
+  const rows = Array.isArray(c.plan.rows) ? c.plan.rows : [];
+  const prog = c.dropAll ? `${c.dropAll.done}/${c.dropAll.total}` : "";
+  return `${wtCleanupDropAll.dropAllCount(rows)}:${cleanupDropAllBusy(name) ? "busy" : "ready"}:${prog}`;
+}
+
+// The one button, drawn in two places: the project head line (before the cleanup chip) and the bar's action row.
+function cleanupDropAllButtonHtml(name) {
+  const c = cleanupOf(name);
+  if (!c || !c.plan) return "";
+  const rows = Array.isArray(c.plan.rows) ? c.plan.rows : [];
+  const busy = cleanupDropAllBusy(name);
+  const disabled = wtCleanupDropAll.dropAllDisabled(rows, { busy });
+  const label = wtCleanupDropAll.dropAllLabel(rows);
+  const title = busy && wtCleanupDropAll.dropAllCount(rows)
+    ? "another cleanup action is running in this project - this button is unavailable until it ends"
+    : wtCleanupDropAll.dropAllTitle(rows);
+  return `<button type="button" class="btn-cleanup-drop-all${disabled ? " is-off" : ""}" data-cleanup-drop-all="${esc(name)}" data-cleanup-drop-all-sig="${esc(cleanupDropAllSig(name))}"${disabled ? ' disabled aria-disabled="true"' : ""} title="${esc(title)}">${esc(label)}</button>`;
+}
+
+function refreshCleanupDropAll(name) {
+  const nodes = Array.from(document.querySelectorAll(`[data-cleanup-drop-all="${CSS.escape(name)}"]`));
+  if (!nodes.length) return;
+  const html = cleanupDropAllButtonHtml(name);
+  const sig = cleanupDropAllSig(name);
+  for (const el of nodes) {
+    if (el.dataset.cleanupDropAllSig === sig) continue;
+    if (!html) {
+      el.remove();
+      continue;
+    }
+    el.outerHTML = html;
+  }
+}
+
+// The confirm, the run's progress and the list of what was refused: one block, in the bar the chip opens.
+function cleanupDropAllBlockHtml(name) {
+  const c = cleanupOf(name);
+  if (!c || !c.plan) return "";
+  const rows = Array.isArray(c.plan.rows) ? c.plan.rows : [];
+  const out = [];
+  if (c.confirmOpen) {
+    const n = wtCleanupDropAll.dropAllCount(rows);
+    out.push(`<div class="cleanup-confirm" data-cleanup-confirm="${esc(name)}" role="dialog" aria-modal="false" aria-label="confirm dropping every worktree labelled drop" aria-live="polite">
+          <span class="cleanup-confirm-text">${esc(wtCleanupDropAll.dropAllConfirmText(rows))}</span>
+          <button type="button" class="cleanup-confirm-go" data-cleanup-confirm-go="${esc(name)}" title="run the panel's own single-row drop once for each of the ${n} worktrees labelled drop, refusing any tree the plan no longer calls drop">drop ${n}</button>
+          <button type="button" class="cleanup-confirm-cancel" data-cleanup-confirm-cancel="${esc(name)}" title="cancel this confirm - nothing is removed">cancel</button>
+        </div>`);
+  }
+  const res = c.dropAllResult;
+  if (res) {
+    const fails = Array.isArray(res.failures) ? res.failures : [];
+    out.push(`<div class="cleanup-drop-all-result${fails.length ? " has-failures" : ""}" data-cleanup-drop-all-result="${esc(name)}">
+          <span class="mono">${esc(res.note || wtCleanupDropAll.dropAllNote(res))}</span>
+          ${fails.length ? `<ul class="cleanup-drop-failures">${fails
+            .map((f) => `<li data-cleanup-drop-all-failure="${esc(f.path || f.name || "")}"><code>${esc(f.name || f.path || "")}</code> <span class="dimmer">${esc(f.why || "")}</span></li>`)
+            .join("")}</ul>` : ""}
+        </div>`);
+  }
+  return out.join("");
+}
+
+function openCleanupDropAllConfirm(name) {
+  const c = cleanupOf(name);
+  if (!c || !c.plan) return;
+  if (wtCleanupDropAll.dropAllDisabled(c.plan.rows || [], { busy: cleanupDropAllBusy(name) })) return;
+  c.confirmOpen = true;
+  cleanupRuns().set(name, c);
+  openBar(name, "cleanup");
+  repaintBars(name);
+  refreshCleanupDropAll(name);
+  // The confirm is focused, so the press that opened it can be answered from the keyboard alone.
+  const go = document.querySelector(`section.project[data-project="${CSS.escape(name)}"] [data-cleanup-confirm-go="${CSS.escape(name)}"]`);
+  if (go && typeof go.focus === "function") go.focus();
+}
+
+function closeCleanupDropAllConfirm(name) {
+  const c = cleanupOf(name);
+  if (!c || !c.confirmOpen) return;
+  c.confirmOpen = false;
+  cleanupRuns().set(name, c);
+  repaintBars(name);
+}
+
+// The panel's own single-row drop, as one call, so the run below is a loop over rows rather than a second path.
+function cleanupDropOne(name) {
+  return async (row) => {
+    const res = await apiFetch("/api/worktree/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project: name, path: row.path, branch: row.branch || null }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok || body.ok === false) return { ok: false, why: String(body.error || `HTTP ${res.status} from the panel`) };
+    return { ok: true, why: "" };
+  };
+}
+
+// One read of a project's plan: the chip's dry run, and the guard the drop-all asks again before it acts.
+async function readCleanupPlan(name) {
+  const res = await apiFetch(`/api/projects/${encodeURIComponent(name)}/cleanup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ dryRun: true }),
+  }, { timeoutMs: 180000 });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || !body.ok) throw new Error(body.error || `HTTP ${res.status} from the panel`);
+  return body;
+}
+
+async function runCleanupDropAll(name) {
+  const c = cleanupOf(name);
+  if (!c || !c.plan || cleanupDropAllBusy(name)) return;
+  const planned = Array.isArray(c.plan.rows) ? c.plan.rows : [];
+  const selection = wtCleanupDropAll.suggestedDropRows(planned);
+  if (!selection.length) return;
+  c.confirmOpen = false;
+  c.phase = "dropping";
+  c.dropAll = { done: 0, total: selection.length, name: "" };
+  c.dropAllResult = null;
+  c.error = "";
+  c.failing = "";
+  cleanupRuns().set(name, c);
+  refreshCleanupChip(name);
+  refreshCleanupDropAll(name);
+  repaintBars(name);
+
+  let summary;
+  try {
+    // THE GUARD, asked again: the plan the confirm named its count from, read afresh. A row this read no longer
+    // calls drop is refused here, with the fresh plan's own sentence, and never handed to the remover.
+    const fresh = await readCleanupPlan(name);
+    const guard = wtCleanupDropAll.confirmAgainstFresh({ planned, fresh: (fresh.plan || {}).rows || [] });
+    const run = await wtCleanupDropAll.runDropAll({
+      rows: guard.rows,
+      refused: guard.refused,
+      onProgress: ({ done, total, name: tree, path: treePath }) => {
+        const cur = cleanupOf(name);
+        if (!cur) return;
+        cur.dropAll = { done, total, name: tree, path: treePath };
+        refreshCleanupChip(name);
+        repaintBars(name);
+      },
+      dropOne: cleanupDropOne(name),
+    });
+    summary = run.summary;
+  } catch (e) {
+    const why = String((e && e.message) || e);
+    summary = { attempted: 0, dropped: 0, refused: 0, failures: [], note: `nothing was dropped - the plan could not be re-read (${why})` };
+  }
+
+  const done = cleanupOf(name) || { dismissed: new Set() };
+  done.dropAll = null;
+  done.confirmOpen = false;
+  done.dropAllResult = summary;
+  done.dismissed = new Set();
+  done.at = new Date().toLocaleTimeString();
+  try {
+    // The state AFTER the run, which is what the chip and this button are redrawn from: its counts are the trees
+    // that are left, and its page is the report this run leaves behind.
+    const after = await readCleanupPlan(name);
+    done.plan = after.plan || done.plan;
+    done.report = after.report || null;
+    done.phase = "armed";
+    done.error = "";
+    done.failing = "";
+  } catch (e) {
+    done.phase = "done";
+    done.error = String((e && e.message) || e);
+    done.failing = "";
+  }
+  cleanupRuns().set(name, done);
+  refreshCleanupChip(name);
+  refreshCleanupDropAll(name);
+  repaintBars(name);
+  const refused = Number(summary.refused) || 0;
+  showBanner(`${name}: ${summary.note}${refused && summary.failures.length ? " - the refused rows and their reasons are in the cleanup list" : ""}`);
+  // The rows changed under the board: ask for the snapshot rather than wait up to 30s for the next one.
+  void resync();
+}
+
+// ---- end the cleanup chip's drop-all
 
 // ---- the grey strip's stack ------------------------------------------------------------------------------------
 // `state.bars` is a Map of project -> the bar KINDS it has open, in the order they were opened. Rendering walks it

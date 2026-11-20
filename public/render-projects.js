@@ -384,7 +384,7 @@ function projectSection(name) {
     </div>
     <div class="project-head meta-line">
       <span class="mono dim">${mainLine}</span><span class="spacer"></span>${tip}
-      <span class="dimmer mono">${p.fetchNote ? esc(p.fetchNote) + " · " : ""}fetched ${relTime(p.fetchedAt)} ago</span>${hostChipHtml(name)}${rulesChipHtml(name)}${turnoverChipHtml(name)}${boardChipHtml(name)}${cleanupChipHtml(name)}
+      <span class="dimmer mono">${p.fetchNote ? esc(p.fetchNote) + " · " : ""}fetched ${relTime(p.fetchedAt)} ago</span>${hostChipHtml(name)}${rulesChipHtml(name)}${turnoverChipHtml(name)}${boardChipHtml(name)}${cleanupDropAllButtonHtml(name)}${cleanupChipHtml(name)}
     </div>
     ${projectBarsHtml(name)}
     <div class="wt-scroll">

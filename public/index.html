@@ -1439,6 +1439,12 @@
        which calls them by bare name and re-exports them on window.WMApp.jobs; it declares only, so that order costs
        nothing and nothing here waits on boot. -->
   <script src="/render-jobs.js"></script>
+  <!-- The cleanup chip's drop-all selection: which plan rows carry the drop label, the count on the button, the
+       sentence its confirm shows, the plan re-checked at press time, and the loop that carries on past a refusal.
+       No DOM and no network in it, so test/cleanup-drop-all.test.js imports the same file the page loads. Loaded
+       before board-scaffold.js, which draws the button and presses it by the names published on
+       window.wtCleanupDropAll. -->
+  <script src="/core/cleanup-drop-all.js"></script>
   <!-- The board's shared scaffolding, cut out of app.js (item 2 of "The remaining lane" in
        docs/reports/module-map-2026-11-08.html): the panel map and the liveness reads, the row's chip strip and its
        badge with the painters that keep them current, the project header's counts and its host strip, the row's
