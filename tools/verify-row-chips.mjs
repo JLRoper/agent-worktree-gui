@@ -192,34 +192,67 @@ const ruledRes = await fetch(`${panel.base}/api/collisions`, {
 const ruledBody = await ruledRes.json().catch(() => null);
 ok("POST /api/collisions stored the ruling against the pair", ruledRes.status === 200 && ruledBody?.ok !== false, `${ruledRes.status} ${JSON.stringify(ruledBody)?.slice(0, 160)}`);
 
-// The scan's own pair needs two sweeps more than COLLISION_PASS_MS apart - the panel would take that long on its tick,
-// and a gate that waited for a tick would be a gate nobody runs. The press is the same one the panel makes.
-const sweep = async () => {
-  const r = await fetch(`${panel.base}/api/collisions`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ op: "sweep" }) });
-  return { status: r.status, body: await r.json().catch(() => null) };
-};
-const sweepOne = await sweep();
-await new Promise((resolve) => setTimeout(resolve, COLLISION_PASS_MS + 400));
-const sweepTwo = await sweep();
-const known = await (await fetch(`${panel.base}/api/collisions`)).json();
-const pairs = known?.pairs || known?.entries || known?.records || [];
-console.log(`      pairs after two sweeps: ${pairs.map((p) => `${p.key?.split("/").pop()}:${p.state}${p.ruling ? "(ruled)" : ""}`).join(" | ") || "(none)"}`);
-ok("two sweeps found the detected pair beside the ruled one", sweepOne.status === 200 && sweepTwo.status === 200 && pairs.length >= 2, `${pairs.length} pair(s)`);
+// The scan's own pair is DETECTED BY THE PANEL, not seeded: the sweep runs over the rows the scanner wrote, so it is
+// driven from inside the page section below, once those rows exist. A sweep that runs before the boot scan has
+// finished sees nothing, and a proof cannot assert on that race.
 
 const result = await withBrowser(async ({ page, pageErrors }) => {
   await openPage(page, panel.base, { selector: "#btn-review" });
   await page.setViewportSize({ width: 1440, height: 900 });
 
-  // A root group and a project both start folded: reach the fixture's project the way a reader reaches it.
-  await page.waitForSelector('section.project[data-project="chip-proj"]', { state: "attached", timeout: 60_000 });
-  const rootToggle = await page.evaluate(() => {
-    const sec = document.querySelector('section.project[data-project="chip-proj"]');
-    const group = sec?.closest("section.root-group");
-    return group && group.classList.contains("collapsed") ? group.dataset.root : null;
-  });
-  if (rootToggle) await page.click(`[data-toggle-root="${rootToggle.replace(/"/g, '\\"')}"]`);
-  await page.click('[data-toggle-project="chip-proj"]');
-  await page.waitForFunction(() => document.querySelectorAll("tr.row[data-key]").length >= 4, null, { timeout: 45_000 });
+  // The scanner's own rows, before any sweep: the detector reads THESE, so a sweep asked for before they exist is the
+  // race tools/verify-collisions.mjs documents rather than a finding about the chips.
+  await page.waitForFunction(
+    () => {
+      try {
+        return state.rows.size >= 3;
+      } catch {
+        return false;
+      }
+    },
+    null,
+    { timeout: 60_000 },
+  );
+  const swept = async () => {
+    const r = await fetch(`${panel.base}/api/collisions`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ op: "sweep" }) });
+    return { status: r.status, body: await r.json().catch(() => null) };
+  };
+  let detected = null;
+  for (let i = 0; i < 30; i += 1) {
+    detected = await swept();
+    if ((detected.body?.report?.pairs || 0) >= 1) break;
+    await page.waitForTimeout(1000);
+  }
+  ok("the sweep found the two dirty trees' pair, beside the worker's reported one", (detected.body?.report?.pairs || 0) >= 1, `pairs ${detected.body?.report?.pairs}`);
+  // The panel's own pass hands a detected pair over on a LATER sweep, at least COLLISION_PASS_MS after the first -
+  // the same two-tick rule tools/verify-collisions.mjs drives, so the pair is the reader's and not auto-settled.
+  await page.waitForTimeout(COLLISION_PASS_MS + 600);
+  const handed = await swept();
+  ok("the second sweep handed the detected pair over", handed.status === 200 && (handed.body?.report?.pairs || 0) >= 1, JSON.stringify(handed.body?.report || handed.body)?.slice(0, 200));
+  const known = await (await fetch(`${panel.base}/api/collisions`)).json();
+  const pairs = known?.records || known?.pairs || [];
+  const openPairKey = pairs.find((p) => !p.ruling && p.state !== "ruled")?.key || null;
+  const ruledPairKey = pairs.find((p) => Boolean(p.ruling))?.key || null;
+  console.log(`      pairs after the sweeps: ${pairs.map((p) => `${p.key?.split("/").pop()}:${p.state}${p.ruling ? "(ruled)" : ""}`).join(" | ") || "(none)"}`);
+  ok("the two dirty trees are one OPEN pair, and the ruled pair is still the ruled one", Boolean(openPairKey) && Boolean(ruledPairKey), `${pairs.length} pair(s)`);
+
+  // A reload makes the rows the chips draw carry both pairs: the snapshot attaches `collisions.forTree` to every row.
+  await page.reload({ waitUntil: "domcontentloaded" });
+
+  const reachProject = async () => {
+    await page.waitForSelector('section.project[data-project="chip-proj"]', { state: "attached", timeout: 60_000 });
+    const root = await page.evaluate(() => {
+      const sec = document.querySelector('section.project[data-project="chip-proj"]');
+      const group = sec?.closest("section.root-group");
+      return group && group.classList.contains("collapsed") ? group.dataset.root : null;
+    });
+    if (root) await page.click(`[data-toggle-root="${root.replace(/"/g, '\\"')}"]`);
+    // A project the page restored as open is opened already: pressing its head would FOLD it, and the rows would go.
+    const folded = await page.evaluate(() => Boolean(document.querySelector('section.project[data-project="chip-proj"]')?.classList.contains("collapsed")));
+    if (folded) await page.click('[data-toggle-project="chip-proj"]');
+    await page.waitForFunction(() => document.querySelectorAll("tr.row[data-key]").length >= 4, null, { timeout: 45_000 });
+  };
+  await reachProject();
 
   const keyOfTree = (t) => `chip-proj::${t}`;
   const rowSel = (t) => `tr.row[data-key="${keyOfTree(t)}"]`;
@@ -255,16 +288,23 @@ const result = await withBrowser(async ({ page, pageErrors }) => {
 
   // ---- 2. collapsed, an absolute path is not in the chip -----------------------------------------------------
   section("2. the collapsed result chip reads the clause, the age, and never an absolute path");
+  // By CHIP KIND, not by position: a row with no delivery has no result chip, so the collision chip is its first.
   const labels = await page.evaluate(
-    () => Object.fromEntries([...document.querySelectorAll("tr.row[data-key]")].map((tr) => [tr.dataset.key, [...tr.querySelectorAll("[data-rowchip]")].map((c) => (c.querySelector(".rowchip-text")?.textContent || "").trim())])),
+    () =>
+      Object.fromEntries(
+        [...document.querySelectorAll("tr.row[data-key]")].map((tr) => [
+          tr.dataset.key,
+          Object.fromEntries([...tr.querySelectorAll("[data-rowchip]")].map((c) => [c.dataset.rowchip, (c.querySelector(".rowchip-text")?.textContent || "").trim()])),
+        ]),
+      ),
   );
-  const oneLabels = labels[keyOfTree(ONE)] || [];
-  ok("the result chip reads the FIRST CLAUSE of the run's summary", oneLabels[0] === "Both cards became one-line chips in the row's" || /^Both cards became one-line chips/.test(oneLabels[0] || ""), oneLabels[0]);
-  ok("…then the run's age, as the page's own relative reader spelled it", /\d+[a-z]+ ago$/.test(oneLabels[0] || ""), oneLabels[0]);
-  ok("…and no absolute path anywhere in it", !/[A-Za-z]:[\\/]/.test(oneLabels.join(" ")) && !/\/worktrees\//.test(oneLabels.join(" ")), oneLabels.join(" | "));
-  ok("the collision chip reads this row's pair count, both numbers", oneLabels[1] === "1 open \u00b7 1 resolved", oneLabels[1]);
-  ok("the row with only the detected pair reads 1 open . 0 resolved", (labels[keyOfTree(TWO)] || [])[1] === "1 open \u00b7 0 resolved", (labels[keyOfTree(TWO)] || [])[1]);
-  ok("the row whose pair the reader ruled reads 0 open . 1 resolved", (labels[keyOfTree(THREE)] || [])[1] === "0 open \u00b7 1 resolved", (labels[keyOfTree(THREE)] || [])[1]);
+  const oneLabels = labels[keyOfTree(ONE)] || {};
+  ok("the result chip reads the FIRST CLAUSE of the run's summary", /^Both cards became one-line chips/.test(oneLabels.result || ""), oneLabels.result);
+  ok("…then the run's age, as the page's own relative reader spelled it", /\d+[a-z]+ ago$/.test(oneLabels.result || ""), oneLabels.result);
+  ok("…and no absolute path anywhere in it", !/[A-Za-z]:[\\/]/.test(Object.values(oneLabels).join(" ")) && !/\/worktrees\//.test(Object.values(oneLabels).join(" ")), Object.values(oneLabels).join(" | "));
+  ok("the collision chip reads this row's pair count, both numbers", oneLabels.collision === "1 open \u00b7 1 resolved", oneLabels.collision);
+  ok("the row with only the detected pair reads 1 open . 0 resolved", (labels[keyOfTree(TWO)] || {}).collision === "1 open \u00b7 0 resolved", (labels[keyOfTree(TWO)] || {}).collision);
+  ok("the row whose pair the reader ruled reads 0 open . 1 resolved", (labels[keyOfTree(THREE)] || {}).collision === "0 open \u00b7 1 resolved", (labels[keyOfTree(THREE)] || {}).collision);
 
   // ---- 3. NO ADDED HEIGHT ------------------------------------------------------------------------------------
   section("3. neither chip adds a pixel to the row");
@@ -297,12 +337,12 @@ const result = await withBrowser(async ({ page, pageErrors }) => {
   section("4. the result chip opens the existing card: the paragraph, the report anchor, the next steps");
   await page.click(chipSel(ONE, "result"));
   await page.waitForSelector(".rowchip-pop .review-block", { timeout: 15_000 });
-  const card = await page.evaluate(() => {
+  const card = await page.evaluate((key) => {
     const pop = document.querySelector(".rowchip-pop");
     const anchor = pop?.querySelector(".review-block a[data-open-file]");
     const summary = pop?.querySelector(".review-summary");
     const steps = [...(pop?.querySelectorAll(".review-chip") || [])];
-    const chip = document.querySelector('tr.row[data-key] [data-rowchip="result"]');
+    const chip = document.querySelector(`tr.row[data-key="${key}"] [data-rowchip="result"]`);
     const rect = pop?.getBoundingClientRect();
     return {
       kind: pop?.dataset.rowchipPop,
@@ -316,7 +356,7 @@ const result = await withBrowser(async ({ page, pageErrors }) => {
       inside: Boolean(rect) && rect.left >= 0 && rect.top >= 0 && rect.right <= window.innerWidth + 0.5 && rect.bottom <= window.innerHeight + 0.5,
       popRect: rect ? { l: Math.round(rect.left), t: Math.round(rect.top), w: Math.round(rect.width), h: Math.round(rect.height) } : null,
     };
-  });
+  }, keyOfTree(ONE));
   eq("the popup is the RESULT card", card.kind, "result");
   ok("it carries the WHOLE summary, not the chip's clause", card.summary.startsWith("Both cards became one-line chips in the row's own strip."), card.summary.slice(0, 70));
   eq("the report is the panel's own open-file anchor, on the run's path", card.target, "docs/reports/row-chips.html");
@@ -330,44 +370,53 @@ const result = await withBrowser(async ({ page, pageErrors }) => {
   section("5. the collision chip opens the pair card, and closes the result card");
   await page.click(chipSel(ONE, "collision"));
   await page.waitForSelector(".rowchip-pop .collision-block", { timeout: 15_000 });
-  const pair = await page.evaluate(() => {
+  const pair = await page.evaluate(({ ruledKey, key }) => {
     const pops = [...document.querySelectorAll(".rowchip-pop")];
     const pop = pops.find((p) => p.dataset.rowchipPop === "collision");
-    const text = (pop?.textContent || "").replace(/\s+/g, " ").trim();
+    const tr = document.querySelector(`tr.row[data-key="${key}"]`);
+    const blocks = [...(pop?.querySelectorAll(".collision-block") || [])];
+    // The card behind the chip carries EVERY pair on the row; the ruled one is the block this section is about.
+    const block = blocks.find((b) => b.dataset.collisionKey === ruledKey) || blocks[0];
+    const text = (block?.textContent || "").replace(/\s+/g, " ").trim();
     return {
       count: pops.length,
       kinds: pops.map((p) => p.dataset.rowchipPop),
+      blocks: blocks.length,
       text,
-      sides: [...(pop?.querySelectorAll(".collision-side") || [])].map((s) => (s.textContent || "").replace(/\s+/g, " ").trim()),
-      ruling: Boolean(pop?.querySelector("[data-collision-pick], .collision-ruling, .collision-ruled")),
-      resultExpanded: document.querySelector(`[data-rowchip="result"]`)?.getAttribute("aria-expanded"),
-      collisionExpanded: document.querySelector(`[data-rowchip="collision"]`)?.getAttribute("aria-expanded"),
+      sides: [...(block?.querySelectorAll(".collision-side") || [])].map((s) => (s.textContent || "").replace(/\s+/g, " ").trim()),
+      ruling: Boolean(block?.querySelector("[data-collision-pick], .collision-ruling, .collision-ruled")),
+      resultExpanded: tr?.querySelector('[data-rowchip="result"]')?.getAttribute("aria-expanded"),
+      collisionExpanded: tr?.querySelector('[data-rowchip="collision"]')?.getAttribute("aria-expanded"),
     };
-  });
+  }, { ruledKey: ruledPairKey, key: keyOfTree(ONE) });
   eq("exactly ONE card is open - the collision's", [pair.count, pair.kinds], [1, ["collision"]]);
   eq("the result chip is collapsed again", pair.resultExpanded, "false");
   eq("the collision chip is expanded", pair.collisionExpanded, "true");
-  ok("the pair card names both sides of the pair", pair.sides.length === 2 && pair.sides.join(" ").includes("chip-one") && pair.sides.join(" ").includes("chip-three"), pair.sides.join(" || ").slice(0, 200));
-  ok("…and it says the pair is already ruled, with the ruling's own reason", /ruled|goes first/i.test(pair.text), pair.text.slice(0, 160));
+  ok("the card lists both of the row's pairs", pair.blocks === 2, `${pair.blocks} block(s)`);
+  eq("the ruled pair's block names BOTH sides", pair.sides.length, 2);
+  ok("…one of them this row, one of them chip-three", pair.sides.join(" ").includes("chip-one") && pair.sides.join(" ").includes("chip-three"), pair.sides.join(" || ").slice(0, 200));
+  ok("…and it says the pair is already ruled", /ruled|goes first/i.test(pair.text), pair.text.slice(0, 160));
   await page.screenshot({ path: path.join(shots, "row-chips-03-collision-expanded-1440x900.png") });
 
   // ---- 6. A REPAINT DOES NOT SLAM IT SHUT -------------------------------------------------------------------
   section("6. the page's own repaint leaves the open card open, on the row's NEW chip");
-  const before = await page.evaluate(() => {
+  const before = await page.evaluate((key) => {
     const pop = document.querySelector(".rowchip-pop");
-    const chip = document.querySelector('[data-rowchip="collision"]');
+    const chip = document.querySelector(`tr.row[data-key="${key}"] [data-rowchip="collision"]`);
     window.__chipNode = chip;
-    return { chipMarked: chip?.setAttribute("data-gate-old", "1"), had: Boolean(pop) };
-  });
-  ok("the collision card is open before the repaint", before.had && before.chipMarked === "1");
+    // setAttribute answers undefined, so the MARK is read back rather than trusted to the call's return.
+    if (chip) chip.setAttribute("data-gate-old", "1");
+    return { chipMarked: chip ? chip.getAttribute("data-gate-old") : "", had: Boolean(pop) };
+  }, keyOfTree(ONE));
+  ok("the collision card is open before the repaint", before.had && before.chipMarked === "1", JSON.stringify(before));
   await page.evaluate(() => {
     // Exactly what a scan does: every row of the project is rebuilt, chip nodes and all.
     window.renderProjectRows("chip-proj");
   });
   await page.waitForFunction(() => !document.querySelector('[data-rowchip="collision"][data-gate-old]'), null, { timeout: 10_000 });
-  const after = await page.evaluate(() => {
+  const after = await page.evaluate((key) => {
     const pop = document.querySelector(".rowchip-pop");
-    const chip = document.querySelector('[data-rowchip="collision"]');
+    const chip = document.querySelector(`tr.row[data-key="${key}"] [data-rowchip="collision"]`);
     return {
       open: Boolean(pop),
       kind: pop?.dataset.rowchipPop,
@@ -378,7 +427,7 @@ const result = await withBrowser(async ({ page, pageErrors }) => {
       stored: localStorage.getItem("wm.openRowChips"),
       bodyHasPair: Boolean(pop?.querySelector(".collision-block")),
     };
-  });
+  }, keyOfTree(ONE));
   ok("the repaint really replaced the chip node", after.oldNodeGone);
   ok("the card is STILL open after the repaint", after.open && after.kind === "collision", JSON.stringify(after));
   ok("…anchored to the row's NEW chip, with its body intact", after.anchorConnected && after.anchorIsNewChip && after.bodyHasPair, JSON.stringify({ connected: after.anchorConnected, isNew: after.anchorIsNewChip, body: after.bodyHasPair }));
@@ -390,13 +439,13 @@ const result = await withBrowser(async ({ page, pageErrors }) => {
   section("7. Escape closes the card, hands the caret back, and forgets the expansion");
   await page.keyboard.press("Escape");
   await page.waitForFunction(() => document.querySelectorAll(".rowchip-pop").length === 0, null, { timeout: 10_000 });
-  const closed = await page.evaluate(() => ({
+  const closed = await page.evaluate((key) => ({
     pops: document.querySelectorAll(".rowchip-pop").length,
-    expanded: document.querySelector('[data-rowchip="collision"]')?.getAttribute("aria-expanded"),
+    expanded: document.querySelector(`tr.row[data-key="${key}"] [data-rowchip="collision"]`)?.getAttribute("aria-expanded"),
     chevrons: document.querySelectorAll("[data-rowchip] .rowchip-chev").length,
     focused: document.activeElement?.getAttribute("data-rowchip") || document.activeElement?.tagName,
     stored: localStorage.getItem("wm.openRowChips"),
-  }));
+  }), keyOfTree(ONE));
   eq("the card is gone", closed.pops, 0);
   eq("its chip is collapsed, with no chevron", [closed.expanded, closed.chevrons], ["false", 0]);
   eq("the caret went back to the chip", closed.focused, "collision");
@@ -408,15 +457,7 @@ const result = await withBrowser(async ({ page, pageErrors }) => {
   const checkedBody = await checked.json().catch(() => null);
   ok("POST /api/review marked the second delivery reviewed", checked.status === 200 && checkedBody?.ok !== false, `${checked.status} ${JSON.stringify(checkedBody)}`);
   await page.reload({ waitUntil: "domcontentloaded" });
-  await page.waitForSelector('section.project[data-project="chip-proj"]', { state: "attached", timeout: 60_000 });
-  const rootAgain = await page.evaluate(() => {
-    const sec = document.querySelector('section.project[data-project="chip-proj"]');
-    const group = sec?.closest("section.root-group");
-    return group && group.classList.contains("collapsed") ? group.dataset.root : null;
-  });
-  if (rootAgain) await page.click(`[data-toggle-root="${rootAgain.replace(/"/g, '\\"')}"]`);
-  await page.click('[data-toggle-project="chip-proj"]');
-  await page.waitForFunction(() => document.querySelectorAll("tr.row[data-key]").length >= 4, null, { timeout: 45_000 });
+  await reachProject();
   await page.waitForFunction(
     (key) => {
       const chip = document.querySelector(`tr.row[data-key="${key}"] [data-rowchip="result"]`);
@@ -431,7 +472,7 @@ const result = await withBrowser(async ({ page, pageErrors }) => {
   }, keyOfTree(TWO));
   ok("the checked row's chip says 'reviewed'", / reviewed$/.test(reviewedChip.text), reviewedChip.text);
   ok("…and wears the reviewed colour, not the awaiting one", /is-reviewed/.test(reviewedChip.cls) && !/is-awaiting/.test(reviewedChip.cls), reviewedChip.cls);
-  ok("the unchecked row's chip still reads the clause and its age, with no 'reviewed'", !/reviewed/.test((labels[keyOfTree(ONE)] || [])[0] || ""), (labels[keyOfTree(ONE)] || [])[0]);
+  ok("the unchecked row's chip still reads the clause and its age, with no 'reviewed'", !/reviewed/.test((labels[keyOfTree(ONE)] || {}).result || ""), (labels[keyOfTree(ONE)] || {}).result);
 
   // ---- 9. the expansion is remembered across a reload ---------------------------------------------------------
   section("9. a card the reader opened comes back open after a reload");
@@ -443,15 +484,7 @@ const result = await withBrowser(async ({ page, pageErrors }) => {
   }, `result|${keyOfTree(ONE)}`);
   ok("the press remembered the result card under its own row", remembered.hasId, remembered.stored);
   await page.reload({ waitUntil: "domcontentloaded" });
-  await page.waitForSelector('section.project[data-project="chip-proj"]', { state: "attached", timeout: 60_000 });
-  const rootThird = await page.evaluate(() => {
-    const sec = document.querySelector('section.project[data-project="chip-proj"]');
-    const group = sec?.closest("section.root-group");
-    return group && group.classList.contains("collapsed") ? group.dataset.root : null;
-  });
-  if (rootThird) await page.click(`[data-toggle-root="${rootThird.replace(/\"/g, '\\"')}"]`);
-  await page.click('[data-toggle-project="chip-proj"]');
-  await page.waitForFunction(() => document.querySelectorAll("tr.row[data-key]").length >= 4, null, { timeout: 45_000 });
+  await reachProject();
   await page.waitForSelector('.rowchip-pop[data-rowchip-pop="result"]', { timeout: 20_000 });
   const backOpen = await page.evaluate((key) => {
     const chip = document.querySelector(`tr.row[data-key="${key}"] [data-rowchip="result"]`);
@@ -467,6 +500,12 @@ const result = await withBrowser(async ({ page, pageErrors }) => {
   }, keyOfTree(ONE));
   eq("…the chip is expanded again, with its chevron", [backOpen.expanded, backOpen.chevron], ["true", true]);
   ok("…and its card is back, on the row's own chip, with the paragraph in it", backOpen.open && backOpen.anchored && backOpen.body && backOpen.key === keyOfTree(ONE), JSON.stringify(backOpen));
+  // The restored card is anchored to a chip with no caret in it - a repaint must not steal focus. Tab reaches the
+  // chip, and Escape on the chip is its own dismissal, so that is the press a keyboard reader makes here.
+  await page.evaluate((key) => {
+    const chip = document.querySelector(`tr.row[data-key="${key}"] [data-rowchip="result"]`);
+    if (chip) chip.focus();
+  }, keyOfTree(ONE));
   await page.keyboard.press("Escape");
   await page.waitForFunction(() => document.querySelectorAll(".rowchip-pop").length === 0, null, { timeout: 10_000 });
 
@@ -493,7 +532,9 @@ const result = await withBrowser(async ({ page, pageErrors }) => {
     return { cls: mark?.className || "", colour: mark ? getComputedStyle(mark).color : "" };
   }, keyOfTree(TWO));
   ok("a row with a pair still open keeps the violet mark", /is-assistants|is-reader/.test(liveMark.cls), liveMark.cls);
-  eq("…in the violet ink the chip shares", liveMark.colour, "rgb(201, 160, 255)");
+  // Two violet inks, one meaning: the base violet for a pair with the assistants, the brighter one for a pair waiting
+  // on the reader. Both are the OPEN pair's; the muted #8b7aa8 is the ruled one's alone.
+  ok("…in a violet ink, not the muted ruled one", ["rgb(201, 160, 255)", "rgb(228, 200, 255)"].includes(liveMark.colour), liveMark.colour);
   await page.screenshot({ path: path.join(shots, "row-chips-05-muted-chip-1440x900.png") });
 
   eq("no page error was raised while driving the board", pageErrors.length, 0, pageErrors.slice(0, 3).join(" | "));
