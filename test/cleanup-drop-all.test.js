@@ -36,11 +36,11 @@ const DASHES = /[\u2013\u2014]/;
 
 // A plan shaped like lib/cleanup-plan.js's answer: two trees it may drop and one of each class it may not touch.
 const ROWS = [
-  { path: "C:/p/.worktrees/landed-a", branch: "wtgui/landed-a", verdict: "remove", call: "drop", reason: "already in main by history, and the tree is clean" },
-  { path: "C:/p/.worktrees/ahead", branch: "wtgui/ahead", verdict: "merge", call: "keep", reason: "1 commit main lacks" },
-  { path: "C:/p/.worktrees/landed-b", branch: "wtgui/landed-b", verdict: "remove", call: "drop", reason: "every commit main lacks is cherry-equivalent, and the tree is clean" },
-  { path: "C:/p/.worktrees/rollup", branch: "20261114_0930_DMR-1-rollup", verdict: "keep", call: "keep", reason: "turnover branch" },
-  { path: "C:/p", branch: "main", verdict: "skip", call: "keep", reason: "the project's primary checkout" },
+  { path: "/p/.worktrees/landed-a", branch: "wtgui/landed-a", verdict: "remove", call: "drop", reason: "already in main by history, and the tree is clean" },
+  { path: "/p/.worktrees/ahead", branch: "wtgui/ahead", verdict: "merge", call: "keep", reason: "1 commit main lacks" },
+  { path: "/p/.worktrees/landed-b", branch: "wtgui/landed-b", verdict: "remove", call: "drop", reason: "every commit main lacks is cherry-equivalent, and the tree is clean" },
+  { path: "/p/.worktrees/rollup", branch: "20261114_0930_DMR-1-rollup", verdict: "keep", call: "keep", reason: "turnover branch" },
+  { path: "/p", branch: "main", verdict: "skip", call: "keep", reason: "the project's primary checkout" },
 ];
 const pathsOf = (rows) => rows.map((r) => r.path);
 
@@ -49,7 +49,7 @@ test("the predicate names the rows labelled drop, and never a merge, keep or lef
   assert.equal(typeof dropAll.isDropSuggested, "function", "the guard is a function with a name the test can call");
   assert.deepEqual(
     ROWS.filter((r) => dropAll.isDropSuggested(r)).map((r) => r.path),
-    ["C:/p/.worktrees/landed-a", "C:/p/.worktrees/landed-b"],
+    ["/p/.worktrees/landed-a", "/p/.worktrees/landed-b"],
   );
   // Each class on its own, so a rule that stopped excluding one of them fails here rather than in the page.
   assert.equal(dropAll.isDropSuggested({ verdict: "merge", call: "keep" }), false, "a merge row is never dropped");
@@ -57,12 +57,12 @@ test("the predicate names the rows labelled drop, and never a merge, keep or lef
   assert.equal(dropAll.isDropSuggested({ verdict: "keep", call: "keep" }), false, "a keep row is never dropped");
   assert.equal(dropAll.isDropSuggested({ verdict: "skip", call: "keep" }), false, "a left-alone row is never dropped");
   assert.equal(dropAll.isDropSuggested({ verdict: "remove", call: "keep" }), false, "a `remove` verdict with no drop label is not acted on either");
-  assert.equal(dropAll.isDropSuggested({ path: "C:/p/.worktrees/x", verdict: "remove" }), false, "an unlabelled row is never dropped");
+  assert.equal(dropAll.isDropSuggested({ path: "/p/.worktrees/x", verdict: "remove" }), false, "an unlabelled row is never dropped");
   assert.equal(dropAll.isDropSuggested(null), false);
   assert.equal(dropAll.isDropSuggested("drop"), false, "a bare string is not a row");
 
   // The selection is that predicate and no second rule: one entry per path, in plan order.
-  assert.deepEqual(pathsOf(dropAll.suggestedDropRows(ROWS)), ["C:/p/.worktrees/landed-a", "C:/p/.worktrees/landed-b"]);
+  assert.deepEqual(pathsOf(dropAll.suggestedDropRows(ROWS)), ["/p/.worktrees/landed-a", "/p/.worktrees/landed-b"]);
   const twice = [...ROWS, { ...ROWS[0], branch: "wtgui/landed-a-again" }];
   assert.equal(dropAll.suggestedDropRows(twice).length, 2, "one row per path, however many times the plan lists it");
 });
@@ -110,9 +110,9 @@ test("the confirm states the exact count and names every class it will not touch
   }
   // Forty-one of them, the shape the row asked for: the big number first, then the classes held back.
   const many = [
-    ...Array.from({ length: 41 }, (_, i) => ({ path: `C:/p/.worktrees/drop-${i}`, verdict: "remove", call: "drop", reason: "clean and landed" })),
-    ...Array.from({ length: 3 }, (_, i) => ({ path: `C:/p/.worktrees/merge-${i}`, verdict: "merge", call: "keep", reason: "work main lacks" })),
-    ...Array.from({ length: 2 }, (_, i) => ({ path: `C:/p/.worktrees/keep-${i}`, verdict: "keep", call: "keep", reason: "turnover branch" })),
+    ...Array.from({ length: 41 }, (_, i) => ({ path: `/p/.worktrees/drop-${i}`, verdict: "remove", call: "drop", reason: "clean and landed" })),
+    ...Array.from({ length: 3 }, (_, i) => ({ path: `/p/.worktrees/merge-${i}`, verdict: "merge", call: "keep", reason: "work main lacks" })),
+    ...Array.from({ length: 2 }, (_, i) => ({ path: `/p/.worktrees/keep-${i}`, verdict: "keep", call: "keep", reason: "turnover branch" })),
   ];
   assert.equal(
     dropAll.dropAllConfirmText(many),
@@ -121,7 +121,7 @@ test("the confirm states the exact count and names every class it will not touch
   assert.equal(dropAll.dropAllLabel(many), "drop all 41 suggested", "the button's count is the same 41");
   // An unlabelled row is a class too: it is refused by the predicate, so the sentence has to say so.
   assert.match(
-    dropAll.dropAllConfirmText([...ROWS, { path: "C:/p/.worktrees/odd", verdict: "remove" }]),
+    dropAll.dropAllConfirmText([...ROWS, { path: "/p/.worktrees/odd", verdict: "remove" }]),
     /1 unlabelled row are not touched/,
   );
   // One row, so the verb agrees with it.
@@ -137,14 +137,14 @@ test("a row the fresh read no longer calls drop is refused, and a row only the f
     // landed-b acquired an uncommitted file: the planner's own rule keeps it now, and its sentence says why.
     { ...ROWS[2], verdict: "keep", call: "keep", dirty: true, reason: "its commits are in main but its tree holds uncommitted work (1 file)" },
     // a tree the plan had not seen, which this read calls drop: nobody confirmed it.
-    { path: "C:/p/.worktrees/new", branch: "wtgui/new", verdict: "remove", call: "drop", reason: "already in main" },
+    { path: "/p/.worktrees/new", branch: "wtgui/new", verdict: "remove", call: "drop", reason: "already in main" },
     // and one planned drop row that has vanished from disk entirely.
   ];
   const { rows, refused } = dropAll.confirmAgainstFresh({ planned, fresh });
-  assert.deepEqual(pathsOf(rows), ["C:/p/.worktrees/landed-a"], "only the row both reads call drop is acted on");
+  assert.deepEqual(pathsOf(rows), ["/p/.worktrees/landed-a"], "only the row both reads call drop is acted on");
   assert.deepEqual(refused.map((r) => r.name), ["landed-b"], "the dirtied row is refused, by name");
   assert.match(refused[0].why, /holds uncommitted work/, "and the fresh plan's own sentence is the reason");
-  assert.equal(refused[0].path, "C:/p/.worktrees/landed-b");
+  assert.equal(refused[0].path, "/p/.worktrees/landed-b");
 
   // A row that is gone from the fresh read is refused too, rather than dropped on a path that no longer exists.
   const gone = dropAll.confirmAgainstFresh({ planned, fresh: [ROWS[0]] });
@@ -153,7 +153,7 @@ test("a row the fresh read no longer calls drop is refused, and a row only the f
 
   // Nothing changed: every drop row survives, in plan order.
   const same = dropAll.confirmAgainstFresh({ planned, fresh: ROWS });
-  assert.deepEqual(pathsOf(same.rows), ["C:/p/.worktrees/landed-a", "C:/p/.worktrees/landed-b"]);
+  assert.deepEqual(pathsOf(same.rows), ["/p/.worktrees/landed-a", "/p/.worktrees/landed-b"]);
   assert.deepEqual(same.refused, []);
 });
 
@@ -168,19 +168,19 @@ test("the run carries on past a refusal, collects every one, and paints progress
   };
   const rows = [
     ...ROWS,
-    { path: "C:/p/.worktrees/landed-c", branch: "wtgui/landed-c", verdict: "remove", call: "drop", reason: "already in main" },
-    { path: "C:/p/.worktrees/landed-d", branch: "wtgui/landed-d", verdict: "remove", call: "drop", reason: "already in main" },
+    { path: "/p/.worktrees/landed-c", branch: "wtgui/landed-c", verdict: "remove", call: "drop", reason: "already in main" },
+    { path: "/p/.worktrees/landed-d", branch: "wtgui/landed-d", verdict: "remove", call: "drop", reason: "already in main" },
   ];
   const progress = [];
   const { outcomes, summary } = await dropAll.runDropAll({
     rows,
-    refused: [{ path: "C:/p/.worktrees/landed-z", name: "landed-z", why: "its commits are in main but its tree holds uncommitted work" }],
+    refused: [{ path: "/p/.worktrees/landed-z", name: "landed-z", why: "its commits are in main but its tree holds uncommitted work" }],
     onProgress: ({ done, total, name }) => progress.push(`dropping ${done} of ${total} - ${name}`),
     dropOne,
   });
 
   // Every drop row was attempted, in plan order, and the answer of no did not end the run.
-  assert.deepEqual(seen, ["C:/p/.worktrees/landed-a", "C:/p/.worktrees/landed-b", "C:/p/.worktrees/landed-c", "C:/p/.worktrees/landed-d"]);
+  assert.deepEqual(seen, ["/p/.worktrees/landed-a", "/p/.worktrees/landed-b", "/p/.worktrees/landed-c", "/p/.worktrees/landed-d"]);
   assert.deepEqual(progress, [
     "dropping 1 of 4 - landed-a",
     "dropping 2 of 4 - landed-b",
