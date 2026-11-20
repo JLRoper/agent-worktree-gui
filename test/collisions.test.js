@@ -227,16 +227,16 @@ test("a tree resolves to the queue row that names it in its OWN worktree field",
       assistantId: "assistant-1",
       assistant: "Assistant #1",
       tasks: [
-        { id: 7, title: "Land the collision card on both rows", state: "running", worktree: "C:/repo/.worktrees/pair-a", files: ["lib/shared.js"] },
-        { id: 3, title: "An earlier piece of work in the same tree", state: "done", worktree: "c:\\repo\\.worktrees\\PAIR-A\\", files: [] },
-        { id: 61, title: "Compare the two siblings", state: "done", worktree: "C:/repo/.worktrees/sib-one", files: [] },
+        { id: 7, title: "Land the collision card on both rows", state: "running", worktree: "repos/proj/.worktrees/pair-a", files: ["lib/shared.js"] },
+        { id: 3, title: "An earlier piece of work in the same tree", state: "done", worktree: "repos\\proj\\.worktrees\\PAIR-A\\", files: [] },
+        { id: 61, title: "Compare the two siblings", state: "done", worktree: "repos/proj/.worktrees/sib-one", files: [] },
       ],
     },
-    { assistantId: "assistant-2", assistant: "Assistant #2", tasks: [{ id: 9, title: "Someone else's tree", state: "queued", worktree: "C:/repo/.worktrees/other" }] },
+    { assistantId: "assistant-2", assistant: "Assistant #2", tasks: [{ id: 9, title: "Someone else's tree", state: "queued", worktree: "repos/proj/.worktrees/other" }] },
   ];
   // 1. OPEN ROW: the newest open row wins over an older finished one in the same tree, and the assistant whose queue
   // holds it is named.
-  assert.deepEqual(owningTaskFor("C:/repo/.worktrees/pair-a", queues), {
+  assert.deepEqual(owningTaskFor("repos/proj/.worktrees/pair-a", queues), {
     id: 7,
     name: "Land the collision card on both rows",
     state: "running",
@@ -246,13 +246,13 @@ test("a tree resolves to the queue row that names it in its OWN worktree field",
   });
   // 2. NO ROW: nothing on any queue names the tree, so the answer is null - the card says "no task row on this tree"
   // rather than leaving the line blank or borrowing the branch's name for a row that does not exist.
-  assert.equal(owningTaskFor("C:/repo/.worktrees/loose-a", queues), null);
+  assert.equal(owningTaskFor("repos/proj/.worktrees/loose-a", queues), null);
   assert.equal(owningTaskFor("", queues), null);
   // A row on ANOTHER tree never answers, even when the branch names match: branch names are not the association.
-  assert.equal(owningTaskFor("C:/repo/.worktrees/pair-a", [{ assistantId: "assistant-2", tasks: [{ id: 5, state: "queued", worktree: "C:/repo/.worktrees/pair-b", branch: "wtgui/pair-a" }] }]), null);
+  assert.equal(owningTaskFor("repos/proj/.worktrees/pair-a", [{ assistantId: "assistant-2", tasks: [{ id: 5, state: "queued", worktree: "repos/proj/.worktrees/pair-b", branch: "wtgui/pair-a" }] }]), null);
   // 3. DONE ROW: with no open row, the finished one is still named, with its state, and `open: false` is what the card
   // reads as already stood down.
-  assert.deepEqual(owningTaskFor("C:/repo/.worktrees/sib-one", queues), {
+  assert.deepEqual(owningTaskFor("repos/proj/.worktrees/sib-one", queues), {
     id: 61,
     name: "Compare the two siblings",
     state: "done",
@@ -261,7 +261,7 @@ test("a tree resolves to the queue row that names it in its OWN worktree field",
     assistant: "Assistant #1",
   });
   // A PARKED row is finished the same way - it is a decision, not missing work.
-  assert.equal(owningTaskFor("C:/r/.worktrees/p", [{ assistantId: "assistant-1", tasks: [{ id: 2, state: "parked", worktree: "C:/r/.worktrees/p" }] }]).open, false);
+  assert.equal(owningTaskFor("repos/proj/.worktrees/parked", [{ assistantId: "assistant-1", tasks: [{ id: 2, state: "parked", worktree: "repos/proj/.worktrees/parked" }] }]).open, false);
   // The panel's OWN notice in that tree (filed by the sweep, or a ruling's priority row) is not the work: it names the
   // same worktree and would be the newest row, and answering with it says nothing about what the side is doing.
   const withNotice = [
@@ -269,13 +269,13 @@ test("a tree resolves to the queue row that names it in its OWN worktree field",
       assistantId: "assistant-1",
       assistant: "Assistant #1",
       tasks: [
-        { id: 7, title: "Land the collision card on both rows", state: "running", worktree: "C:/repo/.worktrees/pair-a", carriedKey: "queue:turn-1|queue|0" },
-        { id: 120, title: "Collision with pair-b: 1 shared file with Assistant #2", state: "queued", worktree: "C:/repo/.worktrees/pair-a", carriedKey: "collision:abc123def4:assistant-1" },
-        { id: 121, title: "Ruled: pair-a goes first over pair-b", state: "queued", worktree: "C:/repo/.worktrees/pair-a", carriedKey: "collision-rule:abc123def4:assistant-1" },
+        { id: 7, title: "Land the collision card on both rows", state: "running", worktree: "repos/proj/.worktrees/pair-a", carriedKey: "queue:turn-1|queue|0" },
+        { id: 120, title: "Collision with pair-b: 1 shared file with Assistant #2", state: "queued", worktree: "repos/proj/.worktrees/pair-a", carriedKey: "collision:abc123def4:assistant-1" },
+        { id: 121, title: "Ruled: pair-a goes first over pair-b", state: "queued", worktree: "repos/proj/.worktrees/pair-a", carriedKey: "collision-rule:abc123def4:assistant-1" },
       ],
     },
   ];
-  assert.equal(owningTaskFor("C:/repo/.worktrees/pair-a", withNotice).id, 7);
+  assert.equal(owningTaskFor("repos/proj/.worktrees/pair-a", withNotice).id, 7);
 });
 
 test("finishedSides names the sides whose own task is done or parked, and only those", () => {
