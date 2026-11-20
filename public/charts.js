@@ -270,6 +270,24 @@ const CHART_COLUMNS = [
     title: "cut a child worktree, reconcile this one, remove it (sent to the Recycle Bin)",
   },
 ];
+
+// THE CHIP TOGGLES: marks drawn INSIDE a cell, switched on and off in the SAME Settings row as the columns, because
+// that is where a reader looks for "what the chart shows". A chip is not a column - it has no header, no cell and no
+// width to hand back - so it is declared here rather than in CHART_COLUMNS, where every entry is measured for a
+// table layout. The switch is the same checkbox, the same label and the same stored list (config.json
+// `hiddenColumns`); the only difference is what turning it off removes: the chip's own element, nowhere else.
+//
+// The reviewed chip is the amber ▣ and its "✓ Reviewed" press in the row's name line (public/render-projects.js
+// `reviewRowMarkHtml`), and the row's amber left edge with it. Off means the element is not emitted at all - not
+// hidden by opacity, not clipped, and not leaving a cell behind: the name line is simply shorter.
+const CHART_CHIPS = [
+  {
+    id: "reviewed",
+    label: "Reviewed",
+    title:
+      "the amber ▣ and its ✓ Reviewed press on a row whose last run left a result to check, plus the row's amber left edge. The mark is what says \"this row has a delivery you have not looked at yet\": press ✓ Reviewed and it leaves, while the result card stays in the row's detail. Switching this off removes the mark and the press from every row - the card, the header count and the H rotation are untouched - and the name line closes up with no gap. Saved in config.json with the columns, so it applies to every browser and survives a restart.",
+  },
+];
 const WT_COLS = CHART_COLUMNS.length;
 // Floors, measured off the real cell text at the panel's own font sizes: the hash, `0 / 0`, `+0/−0`, `none`,
 // `clean`/`3 +1?`, `0s` with the ring and one chip, `NO COMMITS` and the row's ⟳ then ✕ each fit whole at these numbers.
@@ -285,6 +303,13 @@ const COL_GIVE = CHART_COLUMNS.map((c) => c.give);
 function hiddenColumnIds() {
   const raw = state.settings?.hiddenColumns;
   return new Set((Array.isArray(raw) ? raw : []).map((x) => String(x || "").toLowerCase()));
+}
+
+// Whether one chip is drawn. A chip has no column of its own, so the row renderer asks THIS at paint time (rather
+// than rebuilding anything): the same `hiddenColumns` entry the switch writes is the one answer, which is what keeps
+// the switch, a reload and a re-render from disagreeing.
+function chartChipShown(id) {
+  return !hiddenColumnIds().has(String(id || "").toLowerCase());
 }
 
 // The columns actually drawn, as indexes into CHART_COLUMNS, in the table's own order. At least one always
@@ -443,14 +468,20 @@ for (const btn of document.querySelectorAll("[data-top-set]")) {
 }
 
 // ---- chart column switches: what the reader keeps, and the write that survives a slow panel ------
+// Every switch in this row, in the order they are drawn: the columns first, then the chips. This is also the order
+// the saved list is normalised to, and the server's `CHART_TOGGLE_IDS` is the same list - a typo on either side hides
+// nothing and reports success.
+function chartToggleIds() {
+  return [...CHART_COLUMNS.map((c) => c.id), ...CHART_CHIPS.map((c) => c.id)];
+}
 // The choice lives in this panel's config.json (POST /api/settings/columns, `hiddenColumns`), like the refresh mode
 // and the age threshold above: one answer for every browser, and it survives a restart. The switches are BUILT from
-// CHART_COLUMNS, so a column cannot be added to the chart and left out of Settings - or named one thing in the table
-// and another in the row.
+// CHART_COLUMNS and CHART_CHIPS, so a column - or a chip - cannot be added to the chart and left out of Settings, or
+// named one thing in the table and another in the row.
 function chartColumnsStored() {
   const raw = state.settings?.hiddenColumns;
   const hidden = new Set((Array.isArray(raw) ? raw : []).map((x) => String(x || "").toLowerCase()));
-  return CHART_COLUMNS.filter((c) => hidden.has(c.id)).map((c) => c.id);
+  return chartToggleIds().filter((id) => hidden.has(id));
 }
 
 // The list a save in flight is trying to write. While it is set, the switches and the counter show THIS list rather
@@ -466,15 +497,22 @@ function chartColumnsPending() {
 // identical tags (ownerMatters). A sentence that counted it as drawn would make a ticked box over a missing column
 // read as a bug, so the reason travels with the count — unless the reader hid that column themselves, in which case
 // the list already says it.
+//
+// The count is COLUMNS only. A chip is not a column, so a hidden chip must not turn "13 of 13 columns" into
+// "12 of 13" - it gets its own clause instead, saying which chip is off.
 function chartColumnsSentence(hidden = chartColumnsStored()) {
-  const shown = CHART_COLUMNS.length - hidden.length;
-  const head = hidden.length
-    ? `${shown} of ${CHART_COLUMNS.length} columns on the chart · hidden: ${hidden.join(", ")}`
+  const columnIds = new Set(CHART_COLUMNS.map((c) => c.id));
+  const hiddenColumns = hidden.filter((id) => columnIds.has(id));
+  const shown = CHART_COLUMNS.length - hiddenColumns.length;
+  const head = hiddenColumns.length
+    ? `${shown} of ${CHART_COLUMNS.length} columns on the chart · hidden: ${hiddenColumns.join(", ")}`
     : `every column is on the chart (${CHART_COLUMNS.length})`;
-  const idle = !hidden.includes(OWNER_COLUMN_ID) && !ownerMatters();
-  return idle
-    ? `${head} · the Owner column hides itself while every tree is on Assistant #1 and there is no second assistant`
-    : head;
+  const idle = !hiddenColumns.includes(OWNER_COLUMN_ID) && !ownerMatters();
+  const chipsOff = CHART_CHIPS.filter((c) => hidden.includes(c.id)).map((c) => c.label.toLowerCase());
+  const chipSaid = chipsOff.length
+    ? ` · the ${chipsOff.join(", ")} chip ${chipsOff.length === 1 ? "is" : "are"} off, so ${chipsOff.length === 1 ? "it is" : "they are"} not drawn on any row`
+    : "";
+  return `${idle ? `${head} · the Owner column hides itself while every tree is on Assistant #1 and there is no second assistant` : head}${chipSaid}`;
 }
 
 function paintChartColumns(note = "", bad = false) {
@@ -486,15 +524,18 @@ function paintChartColumns(note = "", bad = false) {
   const holder = $("chart-cols");
   if (holder) {
     if (!holder.childElementCount) {
-      holder.innerHTML = CHART_COLUMNS.map(
-        (c) =>
-          `<label title="${esc(c.title || `${c.label} — the chart's ${c.label || "actions"} column`)}"><input type="checkbox" data-chart-col="${esc(c.id)}"> ${esc(c.label || "Actions")}</label>`,
-      ).join("");
+      // One label per column, then one per chip: the chip entries sit LAST, in the same box, with the same checkbox
+      // and the same styling, because the reader asked for them where the columns are switched. `data-chart-chip`
+      // is a test hook only - the input carries `data-chart-col` like every other switch, so the change handler, the
+      // "show all" press and the stored list treat a chip as one more entry with no second code path.
+      const label = (c, isChip) =>
+        `<label${isChip ? ` data-chart-chip="${esc(c.id)}"` : ""} title="${esc(c.title || `${c.label} - the chart's ${c.label || "actions"} column`)}"><input type="checkbox" data-chart-col="${esc(c.id)}"> ${esc(c.label || "Actions")}</label>`;
+      holder.innerHTML = `${CHART_COLUMNS.map((c) => label(c, false)).join("")}${CHART_CHIPS.map((c) => label(c, true)).join("")}`;
     }
     for (const box of holder.querySelectorAll("[data-chart-col]")) box.checked = !hidden.has(box.dataset.chartCol);
   }
   const count = $("chart-cols-count");
-  if (count) count.textContent = `${CHART_COLUMNS.length - shown.length}/${CHART_COLUMNS.length}`;
+  if (count) count.textContent = `${CHART_COLUMNS.filter((c) => !hidden.has(c.id)).length}/${CHART_COLUMNS.length}`;
   const preview = $("chart-cols-preview");
   if (preview) {
     preview.textContent = bad
@@ -570,8 +611,9 @@ async function writeChartColumns(want, {
 }
 
 async function saveChartColumns(hidden, opts = {}) {
-  // Canonical order, so the file does not depend on the order the reader clicked the switches.
-  const ids = CHART_COLUMNS.map((c) => c.id);
+  // Canonical order, so the file does not depend on the order the reader clicked the switches - and every switch
+  // (the chip's included) is in the list, so a save never drops the chip's own entry.
+  const ids = chartToggleIds();
   const want = ids.filter((id) => hidden.includes(id));
   // Every press owns a number: a retry loop for an older press must not overwrite a switch the reader moved while
   // it waited, and its answer must not repaint the row the newer press is holding.

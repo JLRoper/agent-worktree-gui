@@ -22,7 +22,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
-import { CHART_COLUMN_IDS, DEFAULT_HIDDEN_COLUMNS, REQUIRED_COLUMN_ID, chartColumnsFrom, shownChartColumns } from "../lib/chart-columns.js";
+import { CHART_CHIP_IDS, CHART_COLUMN_IDS, CHART_TOGGLE_IDS, DEFAULT_HIDDEN_COLUMNS, REQUIRED_COLUMN_ID, chartColumnsFrom, shownChartColumns } from "../lib/chart-columns.js";
 import { post, sliceRegion, startPanel } from "../tools/panel-testkit.mjs";
 
 const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
@@ -38,7 +38,7 @@ const esc = (s) =>
 // owner column is decided from `state.rows` and `state.assistant.assistants`, so both are part of the stub.
 const region = sliceRegion(charts, "chart columns");
 const page = (settings = {}, extra = {}) =>
-  new Function("state", "esc", `${region}; return { CHART_COLUMNS, shownColumns, wtColspan, chartHeaderHtml, ownerMatters };`)(
+  new Function("state", "esc", `${region}; return { CHART_COLUMNS, CHART_CHIPS, chartChipShown, shownColumns, wtColspan, chartHeaderHtml, ownerMatters };`)(
     { settings, rows: new Map(), assistant: null, ...extra },
     esc,
   );
@@ -48,23 +48,27 @@ const page = (settings = {}, extra = {}) =>
 // `send` the test owns, which is how a 60 s retry budget is exercised in milliseconds.
 const switchesSrc = sliceRegion(charts, "chart column switches");
 
-function switchRow({ stored = [], on = {} } = {}) {
-  const boxes = CHART_COLUMNS_STUB().map((c) => ({
+function switchRow({ stored = [], on = {}, fresh = false } = {}) {
+  // One box per SWITCH - every column and then the chips - because that is what the page builds: the chip is one
+  // more entry in this row, not a second control.
+  const boxes = [...CHART_COLUMNS_STUB(), ...CHART_CHIPS_STUB()].map((c) => ({
     dataset: { chartCol: c.id },
     checked: !stored.includes(c.id),
   }));
   const holder = {
-    childElementCount: boxes.length,
+    // `fresh` is a row that has never been painted: the page builds its labels then, and the test can read the markup
+    // it builds instead of the boxes it would have ticked.
+    childElementCount: fresh ? 0 : boxes.length,
     innerHTML: "",
-    querySelectorAll: (sel) => (sel === "[data-chart-col]" ? boxes : []),
+    querySelectorAll: (sel) => (sel === "[data-chart-col]" && !fresh ? boxes : []),
   };
   const count = { textContent: "" };
   const preview = { textContent: "", classes: new Set(), classList: { toggle: (c, on2) => (on2 ? preview.classes.add(c) : preview.classes.delete(c)) } };
   const nodes = { "chart-cols": holder, "chart-cols-count": count, "chart-cols-preview": preview };
   const state = { settings: { hiddenColumns: stored.slice() }, rows: new Map(), assistant: null, ...on };
   const api = new Function(
-    "state", "$", "esc", "apiFetch", "renderAll", "showBanner", "CHART_COLUMNS", "OWNER_COLUMN_ID", "ownerMatters",
-    `${switchesSrc}; return { chartColumnsStored, chartColumnsPending, chartColumnsSentence, paintChartColumns, saveChartColumns, writeChartColumns, postChartColumns, COLUMN_WRITE_TIMEOUT_MS, COLUMN_WRITE_BUDGET_MS, COLUMN_WRITE_WAITS_MS };`,
+    "state", "$", "esc", "apiFetch", "renderAll", "showBanner", "CHART_COLUMNS", "CHART_CHIPS", "chartToggleIds", "OWNER_COLUMN_ID", "ownerMatters",
+    `${switchesSrc}; return { chartColumnsStored, chartColumnsPending, chartColumnsSentence, paintChartColumns, saveChartColumns, writeChartColumns, postChartColumns, chartToggleIds, COLUMN_WRITE_TIMEOUT_MS, COLUMN_WRITE_BUDGET_MS, COLUMN_WRITE_WAITS_MS };`,
   )(
     state,
     (id) => nodes[id] || null,
@@ -75,6 +79,8 @@ function switchRow({ stored = [], on = {} } = {}) {
     () => {},
     () => {},
     CHART_COLUMNS_STUB(),
+    CHART_CHIPS_STUB(),
+    CHART_TOGGLE_STUB(),
     "assistant",
     () => false,
   );
@@ -84,6 +90,7 @@ function switchRow({ stored = [], on = {} } = {}) {
     boxes,
     count,
     preview,
+    holder,
     box: (id) => boxes.find((b) => b.dataset.chartCol === id),
     checkedIds: () => boxes.filter((b) => b.checked).map((b) => b.dataset.chartCol),
     hiddenIds: () => boxes.filter((b) => !b.checked).map((b) => b.dataset.chartCol),
@@ -93,6 +100,14 @@ function switchRow({ stored = [], on = {} } = {}) {
 // The page's column list, read once from the region under test so the stub cannot drift from the page.
 let COLUMNS_CACHE = null;
 const CHART_COLUMNS_STUB = () => (COLUMNS_CACHE ||= page().CHART_COLUMNS);
+// The page's CHIP list, and the one list of every switch (columns, then chips) - read from the same region, for the
+// same reason: the test must not keep its own copy of what the reader is offered.
+let CHIPS_CACHE = null;
+let TOGGLES_CACHE = null;
+const CHART_CHIPS_STUB = () => (CHIPS_CACHE ||= page().CHART_CHIPS);
+// The one list of every switch, columns then chips - spelled with the same spread the page's `chartToggleIds` uses,
+// because that function lives in the switches region (there is exactly one definition; see the test below).
+const CHART_TOGGLE_STUB = () => (TOGGLES_CACHE ||= [...CHART_COLUMNS_STUB().map((c) => c.id), ...CHART_CHIPS_STUB().map((c) => c.id)]);
 // A board with one assistant and every tree on it: the owner column has nothing to say.
 const idle = () => ({ rows: new Map([["a::C:/x", { assistant: { id: "assistant-1", name: "Assistant #1", label: "Manager 1" } }]]), assistant: { assistants: [{ id: "assistant-1" }] } });
 // The same board after the reader cut a second assistant: the column has something to say on every row.
@@ -128,6 +143,43 @@ test("the page's columns are the server's columns, in the same order", () => {
   // A switch with no label is unreadable in Settings, and an empty one is the actions column whose header is blank
   // in the table on purpose.
   for (const c of CHART_COLUMNS) assert.equal(typeof c.label, "string", `${c.id} carries a label`);
+});
+
+test("the reviewed chip is one more entry in the same switch list, after every column, and never a column", () => {
+  const { CHART_COLUMNS, CHART_CHIPS, chartChipShown } = page();
+  // The switch list is defined ONCE, in the region the switches are built from, so there is no second copy to drift.
+  const toggles = switchRow().api.chartToggleIds;
+  // One chip today: the amber ▣ the reader asked to be able to switch off where the columns are switched.
+  assert.deepEqual(CHART_CHIPS.map((c) => c.id), CHART_CHIP_IDS);
+  assert.deepEqual(CHART_CHIP_IDS, ["reviewed"]);
+  // The list the page draws and the list the server normalises to are the SAME list, in the same order: columns
+  // first, then the chip - which is what puts the chip's box last in the control the columns live in.
+  assert.deepEqual(toggles(), CHART_TOGGLE_IDS);
+  assert.equal(toggles().at(-1), "reviewed");
+  // A chip has no header and no cell of its own, so the table's arithmetic cannot see it: it is a mark inside the
+  // name line, and `CHART_COLUMNS` is what a <th>, a colspan and a width are counted from.
+  assert.equal(CHART_COLUMNS.some((c) => c.id === "reviewed"), false);
+  // One reader answers both the switch and the row: on unless the stored list names it.
+  assert.equal(chartChipShown("reviewed"), true);
+  assert.equal(page({ hiddenColumns: ["reviewed"] }).chartChipShown("reviewed"), false);
+  assert.equal(page({ hiddenColumns: ["reviewed"] }).chartChipShown("nonsense"), true, "an id it does not know is not the chip");
+  // Same label styling, and an explanation of its own: the switch has to say what it turns off.
+  assert.equal(typeof CHART_CHIPS[0].label, "string");
+  assert.ok(CHART_CHIPS[0].title.length > 40);
+});
+
+test("the chip's box is built into the columns' own holder, with the columns' own checkbox", () => {
+  const dom = switchRow({ fresh: true });
+  dom.api.paintChartColumns();
+  const markup = dom.holder.innerHTML;
+  const reviewedAt = markup.indexOf('data-chart-col="reviewed"');
+  assert.ok(reviewedAt > 0, "the chip has a box in the column control");
+  assert.ok(reviewedAt > markup.lastIndexOf('data-chart-col="actions"'), "and it comes after every column");
+  assert.match(markup, /data-chart-chip="reviewed"/, "the entry says it is a chip, for the test hook");
+  assert.match(markup, /<input type="checkbox" data-chart-col="reviewed"> Reviewed/, "same tick, same label as a column");
+  // No second menu: every switch on the page is a box in this one holder.
+  assert.equal((markup.match(/<input type="checkbox"/g) || []).length, CHART_TOGGLE_IDS.length);
+  assert.equal((markup.match(/<label/g) || []).length, CHART_TOGGLE_IDS.length);
 });
 
 test("nothing hidden draws every header the column can speak for — and the owner column is silent on an idle board", () => {
@@ -250,6 +302,24 @@ test("POST /api/settings/columns stores the choice in config.json and survives a
   assert.deepEqual(JSON.parse(readFileSync(path.join(panel.dir, "config.json"), "utf8")).hiddenColumns, []);
 });
 
+test("POST /api/settings/columns stores the chip beside the columns, and a restart reads it back", async (t) => {
+  const panel = await startPanel({ keep: true });
+  const first = await post(panel.base, "/api/settings/columns", { body: { hidden: ["reviewed", "nonsense"] } });
+  assert.equal(first.status, 200, first.text);
+  assert.deepEqual(first.json.hidden, ["reviewed"], "the chip is an id this panel knows, and nothing else is stored");
+  assert.deepEqual(JSON.parse(readFileSync(path.join(panel.dir, "config.json"), "utf8")).hiddenColumns, ["reviewed"]);
+  await panel.stop();
+
+  // A restart with no browser attached: the chip's choice is the panel's, like the columns'.
+  const again = await startPanel({ dir: panel.dir, keep: false, reuseConfig: true });
+  t.after(() => again.stop());
+  assert.deepEqual((await (await fetch(`${again.base}/api/config`)).json()).hiddenColumns, ["reviewed"]);
+  // And a chip and a column can be off together without either one being lost.
+  const both = await post(again.base, "/api/settings/columns", { body: { hidden: ["reviewed", "tip"] } });
+  assert.equal(both.status, 200, both.text);
+  assert.deepEqual(both.json.hidden, ["tip", "reviewed"], "the file keeps the chart's order, columns then chips");
+});
+
 // ---- the write that has to survive a panel slow enough to miss its deadline ----------------------
 
 test("the retry schedule waits at least a minute in growing steps, with the budget to finish", () => {
@@ -348,14 +418,38 @@ test("a newer press owns the write: the older retry cannot overwrite it when its
   assert.deepEqual(dom.hiddenIds(), ["tip", "life"]);
 });
 
+test("switching the chip off writes its own id, keeps every column's state, and reads back after a reload", async () => {
+  const dom = switchRow();
+  // The reader unticks the LAST box, which is the chip's, and presses nothing else.
+  dom.box("reviewed").checked = false;
+  await dom.api.saveChartColumns(dom.hiddenIds(), { send: async (want) => want, waits: [0], sleep: async () => {} });
+  assert.deepEqual(dom.state.settings.hiddenColumns, ["reviewed"], "the chip's id is what the panel receives and stores");
+  assert.equal(dom.box("reviewed").checked, false, "the box follows the stored list");
+  // Every column is still on: a chip is not a column, so it never moves a column's own state.
+  assert.equal(dom.checkedIds().length, CHART_COLUMN_IDS.length);
+  assert.deepEqual(dom.checkedIds(), CHART_COLUMN_IDS);
+  // The counter beside the row is a count of COLUMNS, and the sentence says which chip is off instead of counting it.
+  assert.equal(dom.count.textContent, `${CHART_COLUMN_IDS.length}/${CHART_COLUMN_IDS.length}`);
+  assert.match(dom.preview.textContent, /every column is on the chart/);
+  assert.match(dom.preview.textContent, /the reviewed chip is off, so it is not drawn on any row/);
+  // A reload is the same reader over the stored list: the chip comes back off, the columns come back on.
+  const again = switchRow({ stored: ["reviewed"] });
+  assert.equal(again.box("reviewed").checked, false);
+  assert.deepEqual(again.checkedIds(), CHART_COLUMN_IDS);
+  // And "show all" is the empty list, which turns the chip back on with the columns.
+  await again.api.saveChartColumns([], { send: async () => [], waits: [0], sleep: async () => {} });
+  assert.deepEqual(again.state.settings.hiddenColumns, []);
+  assert.equal(again.box("reviewed").checked, true);
+});
+
 test("the one attempt classifies the answer: 2xx reconciles, 4xx is final, 5xx is worth another try", async () => {
   const dom = switchRow();
   const answer = (status, body) => async () => ({ status, ok: status >= 200 && status < 300, json: async () => body });
   const api = (status, body) =>
     new Function(
-      "state", "$", "esc", "apiFetch", "renderAll", "showBanner", "CHART_COLUMNS", "OWNER_COLUMN_ID", "ownerMatters",
+      "state", "$", "esc", "apiFetch", "renderAll", "showBanner", "CHART_COLUMNS", "CHART_CHIPS", "chartToggleIds", "OWNER_COLUMN_ID", "ownerMatters",
       `${switchesSrc}; return { postChartColumns };`,
-    )(dom.state, () => null, esc, answer(status, body), () => {}, () => {}, CHART_COLUMNS_STUB(), "assistant", () => false).postChartColumns;
+    )(dom.state, () => null, esc, answer(status, body), () => {}, () => {}, CHART_COLUMNS_STUB(), CHART_CHIPS_STUB(), CHART_TOGGLE_STUB(), "assistant", () => false).postChartColumns;
 
   assert.deepEqual(await api(200, { hidden: ["tip"] })(["life"]), ["tip"], "the stored list comes back");
   await assert.rejects(() => api(400, { error: "hidden must be an array" })(["life"]), (e) => e.final === true && /hidden must be an array/.test(e.message));
