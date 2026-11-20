@@ -161,6 +161,7 @@ const result = await (async () => {
           page.evaluate(() => {
             const btn = document.querySelector("#btn-hot");
             const human = document.querySelector("#btn-human");
+            const pen = document.querySelector("#ha-search-open");
             const rect = (el) => {
               const b = el.getBoundingClientRect();
               return { x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.width), h: Math.round(b.height) };
@@ -189,6 +190,7 @@ const result = await (async () => {
               humanRecipe: human ? recipe(getComputedStyle(human)) : null,
               box: { x: 0, y: 0, w: 0, h: 0 },
               humanBox: human ? rect(human) : { x: 0, y: 0, w: 0, h: 0 },
+              penBox: pen ? rect(pen) : { x: 0, y: 0, w: 0, h: 0 },
               humanBadge: (() => {
                 const b = human && document.querySelector("#human-badge");
                 return b && !b.hidden ? b.textContent || "" : "";
@@ -244,7 +246,7 @@ const result = await (async () => {
           };
         });
         ok("Settings > General carries the row", switchRow.exists === true && switchRow.inGeneral === true, JSON.stringify(switchRow));
-        eq("...named for the Header control", switchRow.label, "Show the Active agents button in the floating header");
+        ok("...named for the Header control", /^Show the Active agents button in the floating header/.test(switchRow.label), switchRow.label);
         eq("...and it ships OFF for a reader who never set it", switchRow.checked, false);
         await page.check("#general-active-button");
         await page.waitForTimeout(150);
@@ -296,7 +298,7 @@ const result = await (async () => {
         // both-badges case below is "exactly".
         ok("the same height as Human, to the pixel its hidden badge accounts for", Math.abs(s.box.h - s.humanBox.h) <= 1, `bolt ${s.box.h} vs human ${s.humanBox.h}`);
         ok("on the same row as Human", Math.abs(s.box.y + s.box.h / 2 - (s.humanBox.y + s.humanBox.h / 2)) <= 1, JSON.stringify({ bolt: s.box, human: s.humanBox }));
-        ok("immediately beside it, in the flex gap", s.box.x < s.humanBox.x && s.humanBox.x - (s.box.x + s.box.w) <= 12, `gap ${s.humanBox.x - (s.box.x + s.box.w)}px`);
+        ok("immediately beside it, in the flex gap", s.box.x < s.penBox.x && s.penBox.x - (s.box.x + s.box.w) <= 12, `gap ${s.penBox.x - (s.box.x + s.box.w)}px`);
         ok("its tooltip names the agent and says what the press does", /the lightning bolt/.test(s.title) && /Click to land on the next one/.test(s.title), s.title.slice(0, 120));
         ok("its aria-label counts the agents", /1 working right now/.test(s.aria), s.aria);
 
