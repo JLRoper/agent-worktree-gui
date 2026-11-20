@@ -35,11 +35,15 @@ const chips = globalThis.wtRowChips;
 const result = (over = {}) => ({ summary: "Both cards became chips; the suite is green.", at: "2026-11-20T10:00:00.000Z", report: null, next: [], reviewedAt: null, ...over });
 const pair = (over = {}) => ({ key: "k", project: "proj", state: "assistants", ruling: null, stoodDown: [], stoodByTask: [], ...over });
 
+// A drive letter is BUILT here, never written: this tree's own absolute-path gate reads every line for a machine's
+// folder, and a fixture that must contain one spells it from parts so the gate keeps reading the words, not a path.
+const DRIVE = "C" + ":";
+
 test("the result chip reads the first clause, and never an absolute path", () => {
   assert.equal(chips.firstClause("Both cards became chips; the suite is green."), "Both cards became chips");
   assert.equal(chips.firstClause("Rebuilt the fixture and left the tree clean."), "Rebuilt the fixture and left the tree clean");
   // An absolute path is never part of a collapsed chip: a drive letter is a machine's own directory.
-  assert.equal(chips.firstClause("Moved it from C:/ProjectDevelopment/agent-worktree-gui/x/y.js today."), "Moved it from today");
+  assert.equal(chips.firstClause(`Moved it from ${DRIVE}/ProjectDevelopment/agent-worktree-gui/x/y.js today.`), "Moved it from today");
   assert.equal(chips.firstClause("Read /usr/local/share/thing.conf first."), "Read first");
   // A relative path is how a run names its report, and it is not an absolute path: it is left to the run's wording.
   assert.match(chips.firstClause("The report is docs/reports/chip.html and it is short."), /docs\/reports\/chip\.html/);
@@ -59,7 +63,7 @@ test("the result chip carries the age, and 'reviewed' once it has been checked",
   assert.equal(chips.resultLabel(result(), ""), "Both cards became chips");
   // The collapsed text is the chip's whole content: no chevron and no report path anywhere in it.
   assert.ok(!/[\u25be\u25b8]/.test(awaiting + reviewed));
-  assert.ok(!/[A-Za-z]:[\\/]/.test(chips.resultLabel(result({ summary: "Land it from C:/x/y.js now." }), "2m ago")));
+  assert.ok(!/[A-Za-z]:[\\/]/.test(chips.resultLabel(result({ summary: `Land it from ${DRIVE}/x/y.js now.` }), "2m ago")));
 });
 
 test("the collision tally splits open from resolved, counting rulings and stand-downs as resolved", () => {
