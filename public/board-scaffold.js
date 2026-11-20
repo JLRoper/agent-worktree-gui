@@ -1827,14 +1827,33 @@ function collisionEvidence(rec) {
   return bits.join("; ");
 }
 
+// A SIDE OF THE PAIR, and the TASK that side is working. The tree and its branch were already here; what a reader
+// could not see was whether the two sides were on the SAME work or merely both landing into main - which is the whole
+// question a collision card exists to answer. So each side names the queue row that owns its tree: the row's number,
+// its own title, the assistant whose queue holds it and its state, in that order beside the tree and branch.
+//
+// A tree no queue row owns says so ("no task row on this tree") rather than leaving the line blank: a blank reads as
+// "nothing to see" and is exactly the ambiguity this card removes. A row that is done or parked is named with its
+// state and the side reads as already stood down, because a collision against finished work is not one the reader
+// has to arbitrate.
 function collisionSideHtml(rec, side, mine) {
   if (!side) return "";
   const role = side === rec.a ? "a" : "b";
-  return `<div class="collision-side is-${role}${mine ? " is-mine" : " is-other"}" data-collision-side="${role}">
+  const task = side.task || null;
+  const finished = Boolean(task && task.open === false);
+  const taskHtml = task
+    ? `<span class="collision-side-task${finished ? " is-finished" : ""}" data-collision-task="${esc(task.id)}" data-task-state="${esc(task.state || "")}" title="the queue row that owns this tree, matched on its own worktree field">
+        <span class="collision-task" title="the queue task standing in this tree">#${esc(task.id)}</span>
+        ${task.name ? `<span class="collision-task-name">${esc(task.name)}</span>` : ""}
+        ${task.assistant ? `<span class="collision-task-who">${esc(task.assistant)}</span>` : ""}
+        ${task.state ? `<span class="collision-task-state is-${esc(task.state)}">${esc(task.state)}</span>` : ""}
+      </span>`
+    : `<span class="collision-side-task is-none" title="no queue row on this board names this tree in its worktree field">no task row on this tree</span>`;
+  return `<div class="collision-side is-${role}${mine ? " is-mine" : " is-other"}${finished ? " is-finished" : ""}" data-collision-side="${role}">
     <span class="collision-side-role">${mine ? "this row" : "counterpart"}</span>
     <b class="collision-side-name">${esc(side.name || side.path || "a tree")}</b>
     ${side.branch ? `<span class="collision-branch mono" title="branch">${esc(side.branch)}</span>` : ""}
-    ${side.taskId ? `<span class="collision-task mono" title="the queue task standing in this tree">#${esc(side.taskId)}</span>` : ""}
+    ${taskHtml}
   </div>`;
 }
 
@@ -1851,12 +1870,20 @@ function collisionBlockHtml(row, key) {
       ? `<ul class="collision-chips" aria-label="the files both trees are touching">${files.map((f) => `<li class="collision-chip mono" title="${esc(f)}">${esc(f)}</li>`).join("")}</ul>`
       : `<span class="collision-none">no shared file is named: the evidence is the worker's own sentence</span>`;
     const when = rec.firstAt ? `${relTime(rec.firstAt)} ago` : "";
+    // The sides whose OWN task is finished. Derived by the store on every read (lib/collisions.js `finishedSides`),
+    // so it is never a stale flag: work that starts again in that tree brings the pair back as a live one.
+    const stoodByTask = Array.isArray(rec.stoodByTask) ? rec.stoodByTask : [];
+    const finishedSay = stoodByTask
+      .map((f) => `${f.tree || "one side"}${f.name ? ` (${f.name})` : ""} is ${f.state || "finished"}`)
+      .join(", ");
     const stateWord =
       state === "ruled"
         ? `already ruled: ${esc(rec.ruling?.name || "a side")}${rec.ruling?.taskId ? ` (#${esc(rec.ruling.taskId)})` : ""} goes first`
-        : state === "reader"
-          ? "yours to rule on"
-          : "with both assistants";
+        : stoodByTask.length
+          ? `already stood down: ${esc(finishedSay)}`
+          : state === "reader"
+            ? "yours to rule on"
+            : "with both assistants";
     const ruleBtn = (pick, label, title) =>
       `<button class="btn-collision-rule" type="button" data-collision-rule="${esc(rec.key)}" data-collision-pick="${pick}" title="${esc(title)}">${esc(label)}</button>`;
     const mine = row.name || "this tree";
@@ -1875,12 +1902,22 @@ function collisionBlockHtml(row, key) {
     ].filter(Boolean);
     const mineSide = rec.role === "b" ? rec.b : rec.a;
     const otherSide = rec.role === "b" ? rec.a : rec.b;
-    const stood = (Array.isArray(rec.stoodDown) ? rec.stoodDown : [])
-      .map((s) => {
+    const stood = [
+      (Array.isArray(rec.stoodDown) ? rec.stoodDown : []).map((s) => {
         const who = s.name || (s.side === "a" ? rec.a?.name : rec.b?.name) || "one side";
         const why = s.taskId ? `its notice #${s.taskId} was ${s.state || "closed"}` : "its notice was closed";
         return `${who} stood down: ${why} - the pair is not waiting on you`;
-      })
+      }),
+      // A side whose OWN task is done or parked: the work the collision was about has been laid down, so the reader is
+      // not the one to decide. Said on both rows, with the task named, because "why is this pair quiet?" is the same
+      // question the notice stand-down answers.
+      stoodByTask.map((f) => {
+        const who = f.tree || "one side";
+        const what = f.taskId ? `its task #${f.taskId}${f.name ? ` (${f.name})` : ""} is ${f.state || "finished"}` : `its task is ${f.state || "finished"}`;
+        return `${who} is already stood down: ${what} - the collision is with finished work, so the pair is not waiting on you`;
+      }),
+    ]
+      .flat()
       .join("; ");
     return `<div class="collision-block is-${esc(state)}" data-collision-block="${esc(key)}" data-collision-key="${esc(rec.key)}" data-collision-pair="${esc(rec.key)}">
       <div class="collision-head">

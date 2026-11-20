@@ -24,11 +24,14 @@ import {
   CollisionBook,
   detectCollisions,
   brokenCollisionLines,
+  finishedSides,
+  owningTaskFor,
   parseCollisionLines,
   pairKey,
   relationSentence,
   resolveCollisionTarget,
   sideOf,
+  sideTaskOf,
   stateOf,
   touchedOf,
 } from "../lib/collisions.js";
@@ -192,10 +195,97 @@ test("sideOf names a tree without a lookup: path, directory name, branch, parent
   // Backslashes and a trailing separator are the WINDOWS forms the scanner really sees; the tree itself is named
   // relatively, because a signed drive path would only be true on the machine that wrote it.
   const one = sideOf({ path: "repos\\proj\\.worktrees\\tree-one\\", branch: "wtgui/tree-one", parent: TURNOVER });
-  assert.deepEqual(one, { path: "repos/proj/.worktrees/tree-one", name: "tree-one", branch: "wtgui/tree-one", parent: TURNOVER, taskId: null });
+  assert.deepEqual(one, { path: "repos/proj/.worktrees/tree-one", name: "tree-one", branch: "wtgui/tree-one", parent: TURNOVER, taskId: null, task: null });
   // The task standing in the tree travels on the side, so the pair record can name both task ids.
   assert.equal(sideOf({ path: "/r/tree-one", taskId: 41 }).taskId, 41);
   assert.equal(sideOf({ path: "/r/tree-one", taskId: "not a number" }).taskId, null, "a number is read, never invented");
+  // A RESOLVED queue row travels whole: the title, the state and whose queue holds it, beside the number.
+  const side = sideOf({
+    path: "/r/tree-one",
+    task: { id: 41, title: "Land the card on both rows", state: "running", assistantId: "assistant-2", assistant: "Assistant #2" },
+  });
+  assert.deepEqual(side.task, {
+    id: 41,
+    name: "Land the card on both rows",
+    state: "running",
+    open: true,
+    assistantId: "assistant-2",
+    assistant: "Assistant #2",
+  });
+  assert.equal(side.taskId, 41);
+  // An id with no state is "the board does not know", never "done": reading it as finished would call live work laid
+  // down and quietly stand a real pair down.
+  assert.equal(sideOf({ path: "/r/tree-one", taskId: 9 }).task.open, null);
+  assert.equal(sideTaskOf({ id: 0 }), null, "a queue row with no id owns nothing");
+});
+
+test("a tree resolves to the queue row that names it in its OWN worktree field", () => {
+  // Three cases the card has to tell apart: an open row, no row at all, and a row whose work is finished. The match is
+  // the row's `worktree` field - the fact a spawn wrote - never the branch the tree happens to carry.
+  const queues = [
+    {
+      assistantId: "assistant-1",
+      assistant: "Assistant #1",
+      tasks: [
+        { id: 7, title: "Land the collision card on both rows", state: "running", worktree: "C:/repo/.worktrees/pair-a", files: ["lib/shared.js"] },
+        { id: 3, title: "An earlier piece of work in the same tree", state: "done", worktree: "c:\\repo\\.worktrees\\PAIR-A\\", files: [] },
+        { id: 61, title: "Compare the two siblings", state: "done", worktree: "C:/repo/.worktrees/sib-one", files: [] },
+      ],
+    },
+    { assistantId: "assistant-2", assistant: "Assistant #2", tasks: [{ id: 9, title: "Someone else's tree", state: "queued", worktree: "C:/repo/.worktrees/other" }] },
+  ];
+  // 1. OPEN ROW: the newest open row wins over an older finished one in the same tree, and the assistant whose queue
+  // holds it is named.
+  assert.deepEqual(owningTaskFor("C:/repo/.worktrees/pair-a", queues), {
+    id: 7,
+    name: "Land the collision card on both rows",
+    state: "running",
+    open: true,
+    assistantId: "assistant-1",
+    assistant: "Assistant #1",
+  });
+  // 2. NO ROW: nothing on any queue names the tree, so the answer is null - the card says "no task row on this tree"
+  // rather than leaving the line blank or borrowing the branch's name for a row that does not exist.
+  assert.equal(owningTaskFor("C:/repo/.worktrees/loose-a", queues), null);
+  assert.equal(owningTaskFor("", queues), null);
+  // A row on ANOTHER tree never answers, even when the branch names match: branch names are not the association.
+  assert.equal(owningTaskFor("C:/repo/.worktrees/pair-a", [{ assistantId: "assistant-2", tasks: [{ id: 5, state: "queued", worktree: "C:/repo/.worktrees/pair-b", branch: "wtgui/pair-a" }] }]), null);
+  // 3. DONE ROW: with no open row, the finished one is still named, with its state, and `open: false` is what the card
+  // reads as already stood down.
+  assert.deepEqual(owningTaskFor("C:/repo/.worktrees/sib-one", queues), {
+    id: 61,
+    name: "Compare the two siblings",
+    state: "done",
+    open: false,
+    assistantId: "assistant-1",
+    assistant: "Assistant #1",
+  });
+  // A PARKED row is finished the same way - it is a decision, not missing work.
+  assert.equal(owningTaskFor("C:/r/.worktrees/p", [{ assistantId: "assistant-1", tasks: [{ id: 2, state: "parked", worktree: "C:/r/.worktrees/p" }] }]).open, false);
+  // The panel's OWN notice in that tree (filed by the sweep, or a ruling's priority row) is not the work: it names the
+  // same worktree and would be the newest row, and answering with it says nothing about what the side is doing.
+  const withNotice = [
+    {
+      assistantId: "assistant-1",
+      assistant: "Assistant #1",
+      tasks: [
+        { id: 7, title: "Land the collision card on both rows", state: "running", worktree: "C:/repo/.worktrees/pair-a", carriedKey: "queue:turn-1|queue|0" },
+        { id: 120, title: "Collision with pair-b: 1 shared file with Assistant #2", state: "queued", worktree: "C:/repo/.worktrees/pair-a", carriedKey: "collision:abc123def4:assistant-1" },
+        { id: 121, title: "Ruled: pair-a goes first over pair-b", state: "queued", worktree: "C:/repo/.worktrees/pair-a", carriedKey: "collision-rule:abc123def4:assistant-1" },
+      ],
+    },
+  ];
+  assert.equal(owningTaskFor("C:/repo/.worktrees/pair-a", withNotice).id, 7);
+});
+
+test("finishedSides names the sides whose own task is done or parked, and only those", () => {
+  const done = sideOf({ path: "/r/a", task: { id: 61, title: "Compare the siblings", state: "done", assistant: "Assistant #1" } });
+  const live = sideOf({ path: "/r/b", task: { id: 62, title: "Rewrite the same file", state: "queued", assistant: "Assistant #2" } });
+  assert.deepEqual(finishedSides({ a: done, b: live }), [
+    { side: "a", tree: "a", path: "/r/a", taskId: 61, name: "Compare the siblings", state: "done", assistant: "Assistant #1" },
+  ]);
+  assert.deepEqual(finishedSides({ a: live, b: sideOf({ path: "/r/b", taskId: 12 }) }), [], "an id with no state is not finished");
+  assert.deepEqual(finishedSides({ a: sideOf({ path: "/r/a" }), b: sideOf({ path: "/r/b" }) }), [], "no task rows at all is not finished either");
 });
 
 test("the COLLISION line: a target and a sentence after one pipe", () => {
@@ -320,6 +410,97 @@ test("the pair record holds both task ids, and the queue row names the same side
   assert.equal(fromTwo.a.name, "coll-one");
   assert.equal(fromTwo.b.name, "coll-two");
   assert.equal(fromTwo.other.name, "coll-one");
+});
+
+test("the sweep records each side's own queue row: its title, id, state and assistant", () => {
+  const book = new CollisionBook({});
+  const rows = [
+    tree("coll-one", { dirtyFiles: [{ code: "M", path: "lib/shared.js" }] }),
+    tree("coll-two", { dirtyFiles: [{ code: "M", path: "lib/shared.js" }] }),
+  ];
+  const queues = [
+    {
+      assistantId: "assistant-1",
+      assistant: "Assistant #1",
+      tasks: [{ id: 7, title: "Land the collision card on both rows", state: "running", worktree: rows[0].path, files: ["lib/shared.js"] }],
+    },
+    {
+      assistantId: "assistant-2",
+      assistant: "Assistant #2",
+      tasks: [{ id: 8, title: "Show each side's task beside its tree", state: "queued", worktree: rows[1].path, files: ["lib/shared.js"] }],
+    },
+  ];
+  const filed = [];
+  const report = sweepCollisions({
+    rows,
+    book,
+    now: Date.parse("2026-11-19T12:00:00.000Z"),
+    ownerOf: (side) => (side.path.endsWith("coll-one") ? "assistant-1" : "assistant-2"),
+    tasksFor: () => [],
+    // The composition root's resolver: every assistant's queue, matched on the row's OWN worktree field.
+    taskFor: (row) => owningTaskFor(row.path, queues),
+    fileQueue: (payload) => {
+      filed.push(payload);
+      return { taskId: 100 + filed.length };
+    },
+  });
+  assert.equal(report.pairs, 1);
+  const [rec] = book.all();
+  assert.deepEqual(rec.a.task, { id: 7, name: "Land the collision card on both rows", state: "running", open: true, assistantId: "assistant-1", assistant: "Assistant #1" });
+  assert.deepEqual(rec.b.task, { id: 8, name: "Show each side's task beside its tree", state: "queued", open: true, assistantId: "assistant-2", assistant: "Assistant #2" });
+  // The notice filed into each queue names the task the other side is on, not just its number.
+  assert.ok(filed.every((f) => /task #(7|8) \((Land the collision card on both rows|Show each side's task beside its tree), (running|queued)\)/.test(f.detail)), JSON.stringify(filed.map((f) => f.detail)));
+  // A tree no queue row names is an honest null on that side, and the other side still names its own task.
+  const loose = [{ ...rows[0], path: "/repos/coll-proj/.worktrees/loose-a" }, { ...rows[1], path: "/repos/coll-proj/.worktrees/loose-b" }];
+  const second = new CollisionBook({});
+  sweepCollisions({
+    rows: loose,
+    book: second,
+    now: Date.parse("2026-11-19T12:00:00.000Z"),
+    ownerOf: () => "assistant-1",
+    tasksFor: () => [],
+    taskFor: (row) => owningTaskFor(row.path, queues),
+    fileQueue: () => ({ taskId: null }),
+  });
+  const [looseRec] = second.all();
+  assert.equal(looseRec.a.task, null);
+  assert.equal(looseRec.b.task, null);
+});
+
+test("a side whose own task is done stands the pair down: the reader is not asked to arbitrate finished work", () => {
+  const book = new CollisionBook({});
+  const rows = [
+    tree("coll-one", { dirtyFiles: [{ code: "M", path: "lib/shared.js" }] }),
+    tree("coll-two", { dirtyFiles: [{ code: "M", path: "lib/shared.js" }] }),
+  ];
+  const queues = [
+    { assistantId: "assistant-1", assistant: "Assistant #1", tasks: [{ id: 61, title: "Compare the two siblings", state: "done", worktree: rows[0].path }] },
+    { assistantId: "assistant-2", assistant: "Assistant #2", tasks: [{ id: 62, title: "Rewrite the same file", state: "queued", worktree: rows[1].path }] },
+  ];
+  const deps = {
+    ownerOf: (side) => (side.path.endsWith("coll-one") ? "assistant-1" : "assistant-2"),
+    tasksFor: () => [],
+    taskFor: (row) => owningTaskFor(row.path, queues),
+    fileQueue: () => ({ taskId: null }),
+  };
+  const first = sweepCollisions({ rows, book, now: Date.parse("2026-11-19T12:00:00.000Z"), ...deps });
+  assert.equal(first.finished.length, 1);
+  assert.deepEqual([first.finished[0].sides, first.finished[0].tasks, first.finished[0].states], [["a"], [61], ["done"]]);
+  // It never reaches the reader, even on the pass that would otherwise hand it over.
+  const second = sweepCollisions({ rows, book, now: Date.parse("2026-11-19T12:00:04.000Z"), ...deps });
+  assert.equal(second.escalated.length, 0);
+  assert.equal(stateOf(book.all()[0]), "assistants", "finished work is not a decision waiting on the reader");
+  // Both rows' views say which side it is, with the task named - that is what the card prints.
+  for (const path of [rows[0].path, rows[1].path]) {
+    const view = book.forTree(path)[0];
+    assert.deepEqual(view.stoodByTask.map((f) => [f.side, f.taskId, f.name, f.state]), [["a", 61, "Compare the two siblings", "done"]]);
+    assert.equal(view.waiting, false);
+  }
+  // The work starts again in that tree: the derived stand-down goes with it, because nothing was written to the record.
+  queues[0].tasks.push({ id: 63, title: "Pick the comparison back up", state: "running", worktree: rows[0].path });
+  sweepCollisions({ rows, book, now: Date.parse("2026-11-19T12:00:08.000Z"), ...deps });
+  assert.deepEqual(book.forTree(rows[0].path)[0].stoodByTask, []);
+  assert.equal(book.forTree(rows[0].path)[0].waiting, true);
 });
 
 test("a side that closes its notice stands down WITH its reason, readable from both rows", () => {

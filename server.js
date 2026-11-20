@@ -48,7 +48,7 @@ import { ReviewInbox } from "./lib/review-inbox.js";
 // The collisions between two live runs (lib/collisions.js): the detector, the record per pair and the reader's ruling.
 // lib/collision-flow.js is the sweep that files the pair into the two assistants' queues and hands it to the reader on
 // the three conditions; routes/collisions.js is the read, the ask and the ruling.
-import { CollisionBook, filingKey, normCollisionPath } from "./lib/collisions.js";
+import { CollisionBook, filingKey, owningTaskFor } from "./lib/collisions.js";
 import { rulingRowsFor, sweepCollisions } from "./lib/collision-flow.js";
 import { COLLISIONS_PATH, createCollisionsRoutes } from "./routes/collisions.js";
 import { Hosts, docOf, prListing, proposeMapping, renderTemplate } from "./lib/hosts.js";
@@ -2810,27 +2810,28 @@ const collisionNameOf = (id) => {
     return id || null;
   }
 };
-// THE TASK STANDING IN A TREE, for the pair's own record: the newest OPEN queue row whose `worktree` is this tree. The
-// record then holds both task ids, which is what lets the card say "#12 and #14" instead of leaving each side to work
-// out which notice is its own. A tree with no open task is null - the panel never invents a number it cannot read.
-const collisionTaskFor = (row = {}) => {
-  try {
-    const who = collisionOwnerOf(row);
-    if (!who) return null;
-    const want = normCollisionPath(row.path);
-    if (!want) return null;
-    let best = null;
-    for (const task of assistant.queueView(who)?.tasks || []) {
-      if (!task || !task.worktree) continue;
-      if (task.state !== "queued" && task.state !== "running") continue;
-      if (normCollisionPath(task.worktree) !== want) continue;
-      if (!best || Number(task.id) > Number(best.id)) best = task;
+// THE TASK STANDING IN A TREE, for the pair's own record: the queue row whose OWN `worktree` field is that tree, read
+// from every assistant's queue - not the branch name the row happened to carry, and not only the assistant the lock
+// says owns the tree, because the row that owns a tree can sit in any assistant's queue (a moved task keeps its row
+// and takes a new worktree). The record then holds both sides' tasks - id, title, state and whose queue - which is
+// what lets the card tell two agents on one piece of work from two agents merely both landing into main.
+//
+// The queues are read ONCE per sweep: `queueView` decorates every row against the job store, and asking it per tree
+// would decorate the same files once per side of every pair.
+function collisionQueues() {
+  const out = [];
+  for (const rec of assistant.roster()) {
+    try {
+      const view = assistant.queueView(rec.id);
+      out.push({ assistantId: rec.id, assistant: rec.name || rec.id, tasks: view?.tasks || [] });
+    } catch (err) {
+      // A queue that cannot be read is said, not silently treated as empty: every side it owns would read "no task
+      // row on this tree" and the card would be wrong in the one direction that matters.
+      log(`collisions: could not read ${rec.id}'s queue this sweep (${String((err && err.message) || err)}) - its task rows are not named`);
     }
-    return best ? Number(best.id) : null;
-  } catch {
-    return null;
   }
-};
+  return out;
+}
 // The queue write for one filed row. It goes through `assistant.queueMutate` - the same writer the queue tab, the
 // assistant's own QUEUE lines and a stage link use - so the file, the journal and the repaint stay in one place, and
 // the carried key makes a restart's second sweep find the row it already filed instead of a duplicate.
@@ -2870,12 +2871,15 @@ function sweepCollisionsNow() {
   const before = JSON.stringify(collisions.all());
   let report = null;
   try {
+    // Every assistant's queue, read ONCE for this sweep: each side's task is resolved out of these rows by the row's
+    // own `worktree` field (lib/collisions.js `owningTaskFor`), which is the fact a spawn wrote - never a branch name.
+    const queues = collisionQueues();
     report = sweepCollisions({
       rows: rowsWithProject(),
       book: collisions,
       ownerOf: collisionOwnerOf,
       nameOf: collisionNameOf,
-      taskIdFor: collisionTaskFor,
+      taskFor: (row) => owningTaskFor(row?.path, queues),
       tasksFor: (id) => {
         try {
           return assistant.queueView(id)?.tasks || [];
