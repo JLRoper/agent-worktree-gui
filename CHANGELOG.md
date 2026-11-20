@@ -17,24 +17,24 @@ has no tag.
 
 ## v1.132.0 — 2026-11-19 · 8 commits
 
-[`cef6d6a`](https://github.com/JLRoper/agent-worktree-gui/commit/cef6d6a1bce75cdd93253d24356643d44b9f5c71) · [compare v1.131.0...v1.132.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.131.0...v1.132.0)
+[`7b4bcdc`](https://github.com/JLRoper/agent-worktree-gui/commit/7b4bcdc231a21aae6f481c0492e2cb228a2d5baa) · [compare v1.131.0...v1.132.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.131.0...v1.132.0)
 
 ### Added
 
-- feat(chart): the reviewed chip is one more switch in the chart's column control ([`229e741`](https://github.com/JLRoper/agent-worktree-gui/commit/229e74174145e7b3ceb15cc0a5afa4aff78f4810))
+- feat(chart): the reviewed chip is one more switch in the chart's column control ([`de33a82`](https://github.com/JLRoper/agent-worktree-gui/commit/de33a82ac7069ed1238844e07f8e42e8f17c8e89))
 
 ### Docs & tests
 
 - docs: render the changelog - 646 releases ([`45ebbc3`](https://github.com/JLRoper/agent-worktree-gui/commit/45ebbc3265cc3ac720f40dd8ec718f3493410c28))
 - docs: the landing note for 1.131.0 - the tree list the last scan read, served until the scan replaces it ([`ed9d3ae`](https://github.com/JLRoper/agent-worktree-gui/commit/ed9d3aeb1a77569b26a5b957cc3be280b7361219))
-- test(chart): a live gate drives the chip's switch at 1440x900 - open, on, off, and after a reload ([`9aa5d29`](https://github.com/JLRoper/agent-worktree-gui/commit/9aa5d29962fe621825b855b0f4d6c037bce92e81))
-- docs(board): the reviewed chip is switched in Chart columns, last in the list ([`295f76f`](https://github.com/JLRoper/agent-worktree-gui/commit/295f76f38841031ca4d90cfdf4aa5670282d851f))
-- test(chart): the chip gate's shots are taken on the landed build (1.130.0) ([`d198aa7`](https://github.com/JLRoper/agent-worktree-gui/commit/d198aa72b0a1b2ecf3c354cd64885a0e60a1a5a6))
-- docs(chart): the switch's own words use plain hyphens, not em dashes ([`38cd119`](https://github.com/JLRoper/agent-worktree-gui/commit/38cd11989a515005433446d86d3766bb1b537708))
+- test(chart): a live gate drives the chip's switch at 1440x900 - open, on, off, and after a reload ([`825f0ca`](https://github.com/JLRoper/agent-worktree-gui/commit/825f0caed5da65a7040506d404eb1738c34375fe))
+- docs(board): the reviewed chip is switched in Chart columns, last in the list ([`4db3b66`](https://github.com/JLRoper/agent-worktree-gui/commit/4db3b66d979361d10227459356d98e4d52d5dc43))
+- test(chart): the chip gate's shots are taken on the landed build (1.130.0) ([`6e7afea`](https://github.com/JLRoper/agent-worktree-gui/commit/6e7afea102e4d13751c7873402a07ea74f7b1100))
+- docs(chart): the switch's own words use plain hyphens, not em dashes ([`1566f53`](https://github.com/JLRoper/agent-worktree-gui/commit/1566f5349cbf68e540ee874b096f35ed0ed27820))
 
 ### Other
 
-- chore: 1.132.0 - the version this landing carries ([`cef6d6a`](https://github.com/JLRoper/agent-worktree-gui/commit/cef6d6a1bce75cdd93253d24356643d44b9f5c71))
+- chore: 1.132.0 - the version this landing carries ([`7b4bcdc`](https://github.com/JLRoper/agent-worktree-gui/commit/7b4bcdc231a21aae6f481c0492e2cb228a2d5baa))
 
 ## v1.131.0 — 2026-11-19 · 11 commits
 
