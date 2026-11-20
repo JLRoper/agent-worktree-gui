@@ -4,16 +4,38 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.132.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.133.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-647 releases from v0.1.0 (2026-10-20) to v1.132.0 (2026-11-19), 2252 commits between the tags. Every release is anchored by an
+648 releases from v0.1.0 (2026-10-20) to v1.133.0 (2026-11-19), 2258 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.133.0 — 2026-11-19 · 6 commits
+
+[`ff54ac1`](https://github.com/JLRoper/agent-worktree-gui/commit/ff54ac1b313e5fa964320662d4f3f67fbf272f6e) · [compare v1.132.0...v1.133.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.132.0...v1.133.0)
+
+### Added
+
+- feat(collisions): settle a pair from git's own merge answer before the reader sees it ([`ccbd75d`](https://github.com/JLRoper/agent-worktree-gui/commit/ccbd75dff9437660b015187839beedf2c4129667))
+
+### Fixed
+
+- fix(chart): the gate's header names the npm root without a machine path ([`dcd7960`](https://github.com/JLRoper/agent-worktree-gui/commit/dcd7960b296a227a755effbb6a3f82b9e7042d67))
+
+### Docs & tests
+
+- docs: render the changelog - 647 releases ([`199b4f1`](https://github.com/JLRoper/agent-worktree-gui/commit/199b4f18f56a674add404b31917c136f9f826d9b))
+- docs: render the changelog - 647 releases ([`182a223`](https://github.com/JLRoper/agent-worktree-gui/commit/182a223f37322cb0879c0cb0d99dba2098623238))
+- docs: the landing note for 1.132.0 - the reviewed chip is a switch beside the columns ([`91d27bd`](https://github.com/JLRoper/agent-worktree-gui/commit/91d27bd6c89e91f0ffcc7439477fe961a3492a21))
+
+### Other
+
+- chore: 1.133.0 - the version this landing carries ([`ff54ac1`](https://github.com/JLRoper/agent-worktree-gui/commit/ff54ac1b313e5fa964320662d4f3f67fbf272f6e))
 
 ## v1.132.0 — 2026-11-19 · 8 commits
 
