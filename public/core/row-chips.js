@@ -74,11 +74,29 @@
   }
 
   // A pair is RESOLVED when a ruling is recorded against it - the reader's pick or the panel's own automatic one -
-  // or when a side stood down (its notice closed, or its queue row finished: the assistant's own resolution). The
-  // record's `stoodDown` travels as an array from lib/collisions.js's `forTree` and as an object from the store
-  // itself, so both shapes are read.
+  // or when a side stood down (its notice closed, or its queue row finished: the assistant's own resolution), or when
+  // a LANDING has superseded it (lib/collisions.js `supersede`): a pair whose branch is already in main is not open,
+  // and counting it open would keep a row violet for work that is over.
   function pairResolved(rec) {
     if (!rec) return false;
+    if (rec.superseded) return true;
+    // A counterpart resolved to the same tree, or to no tree at all, is settled by that answer: there is no decision
+    // left for the reader, and no press the card could honestly offer.
+    if (rec.resolution && rec.resolution.kind && rec.resolution.kind !== "tree") return true;
+    // A pair git MEASURED as touching nothing in common is not a decision either: the card prints "no shared file"
+    // and offers no press, so counting it open would leave a chip glowing on a pair nobody can act on.
+    // ONLY when the pair carries no detected paths of its own: merge-tree reads COMMITS, and two trees both writing
+    // one file uncommitted sit on identical tips, so a clean probe there is not evidence of no overlap - the paths
+    // rec.files carries are the dirty ones, and counting those resolved would paint a chip quiet on a row the state
+    // line still calls the reader's.
+    if (
+      rec.resolution?.kind === "tree" &&
+      rec.evidence?.ok === true &&
+      Array.isArray(rec.evidence.files) &&
+      rec.evidence.files.length === 0 &&
+      !(Array.isArray(rec.files) && rec.files.length)
+    )
+      return true;
     if (rec.ruling) return true;
     const stood = Array.isArray(rec.stoodDown) ? rec.stoodDown : Object.values(rec.stoodDown || {});
     if (stood.some(Boolean)) return true;

@@ -90,6 +90,17 @@ test("the collision tally splits open from resolved, counting rulings and stand-
   assert.deepEqual(chips.tally([]), { open: 0, resolved: 0, total: 0 });
 });
 
+test("a clean merge probe does not settle a pair that still carries detected paths", () => {
+  // Two trees writing one file uncommitted sit on identical tips, so merge-tree answers clean with no conflicted path.
+  // The paths the detector recorded are the dirty ones, so the pair is still the reader's and the chip must say so.
+  const dirty = pair({ key: "dirty", state: "reader", files: ["lib/shared.js"], resolution: { kind: "tree" }, evidence: { ok: true, files: [] } });
+  assert.equal(chips.pairResolved(dirty), false);
+  assert.deepEqual(chips.tally([dirty]), { open: 1, resolved: 0, total: 1 });
+  // A REPORTED pair that named no file, between tips that merge clean, has nothing to press: that one is settled.
+  const reported = pair({ key: "reported", state: "reader", files: [], resolution: { kind: "tree" }, evidence: { ok: true, files: [] } });
+  assert.equal(chips.pairResolved(reported), true);
+});
+
 test("the tally is scoped to the row's own project", () => {
   const list = [pair({ key: "mine" }), pair({ key: "theirs", project: "another-proj" }), pair({ key: "older", project: null })];
   assert.deepEqual(chips.tally(list, "proj"), { open: 2, resolved: 0, total: 2 });
@@ -160,7 +171,7 @@ test("the row's strip draws both chips, and the detail draws neither card", () =
   assert.match(chip, /open \? `<span class="rowchip-chev"/);
 
   // The two cards themselves are the popup's content now, and the detail no longer emits them.
-  const detail = sliceBetween(scaffold, "function detailHtml(row) {", "// THE COLLISION CARD.");
+  const detail = sliceBetween(scaffold, "function detailHtml(row) {", "// THE COLLISION CARD reads the RECORD");
   assert.ok(!detail.includes("${collisionBlockHtml(row, key)}"), "the collision card left the row's detail");
   assert.ok(!detail.includes("${reviewBlockHtml(row, key)}"), "the result card left the row's detail");
   const pop = sliceBetween(scaffold, "function rowChipInner(kind, row, key)", "// What the popup draws");
