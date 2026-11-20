@@ -4,16 +4,35 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.127.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.128.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-643 releases from v0.1.0 (2026-10-20) to v1.127.0 (2026-11-19), 2222 commits between the tags. Every release is anchored by an
+644 releases from v0.1.0 (2026-10-20) to v1.128.0 (2026-11-19), 2228 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.128.0 — 2026-11-19 · 6 commits
+
+[`9f5d59c`](https://github.com/JLRoper/agent-worktree-gui/commit/9f5d59ce2613b224479dbcb9cd47476ce9e17afa) · [compare v1.127.0...v1.128.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.127.0...v1.128.0)
+
+### Added
+
+- feat(collisions): one card per pair, drawn on both rows, and siblings compared against each other ([`fd14702`](https://github.com/JLRoper/agent-worktree-gui/commit/fd1470244009e51c67f38f7d835874ae0e0a4b50))
+
+### Docs & tests
+
+- docs: render the changelog - 643 releases ([`e8912b1`](https://github.com/JLRoper/agent-worktree-gui/commit/e8912b163237b89bd42aea92f795c1ea0a1855bc))
+- docs: the landing note for 1.127.0 - the clarify history behind the header's fourth control ([`d58d18a`](https://github.com/JLRoper/agent-worktree-gui/commit/d58d18ac6e1fd5e0cc5e3898bb58bbccacaf0976))
+- test(collisions): the pair proof shoots the two rows it compares, and the old harness reads the task label ([`ca7b43e`](https://github.com/JLRoper/agent-worktree-gui/commit/ca7b43e21b051ecf7dac46059039d76d045fa968))
+
+### Other
+
+- The header's own order test now names four controls, Clarify between the search and Human ([`f28675b`](https://github.com/JLRoper/agent-worktree-gui/commit/f28675b4ae6a370f9418358790456809b6aeba04))
+- chore: 1.128.0 - the version this landing carries ([`9f5d59c`](https://github.com/JLRoper/agent-worktree-gui/commit/9f5d59ce2613b224479dbcb9cd47476ce9e17afa))
 
 ## v1.127.0 — 2026-11-19 · 3 commits
 
