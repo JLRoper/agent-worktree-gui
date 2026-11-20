@@ -4437,6 +4437,15 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
 .as-body { flex: 1; overflow: auto; min-height: 0; }
 .as-pane { padding: 8px; }
 .as-pane.hidden { display: none; }
+/* A PANEL-LEVEL PANE IS ITS OWN SCROLLER. While a session's Chat sub-pane exists the float's body is a clipping flex
+   column (`.as-body:has(...)` below), so a pane with no overflow rule grows to the height of its content and every
+   card past the window is painted nowhere: no wheel, no bar, no way down - the Initiatives tab's list of expanded
+   initiatives is the report that found this, and Role, Watchdog and Bridge hang below the float the same way.
+   `flex: 1` + `min-height: 0` size the pane to the body instead of to its content, and `overflow-y: auto` draws a
+   bar only while something is below the fold, so a tab whose content fits is unchanged. The SESSION pane is excluded
+   on purpose: it is a pass-through box whose inner Chat/Settings/Queue sub-panes own their scrollers, and a second
+   one around the pinned composer is how the reply box gets scrolled away. */
+.as-pane:not([data-pane^="assistant-"]) { flex: 1; min-height: 0; overflow-y: auto; }
 /* A session's pane holds its own two, Chat and Settings, so the padding belongs to the inner one and the outer
    level is only the box they share. */
 .as-pane[data-pane^="assistant-"] { padding: 0; }
