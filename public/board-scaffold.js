@@ -1958,7 +1958,7 @@ function collisionBlockHtml(row, key) {
           : `<div class="collision-peer">no row on this board answers to <span class="mono">${esc(rec.otherTarget || "that name")}</span> - nothing but you can look at this one</div>`}
         ${rec.notes && rec.notes.length ? `<ul class="collision-notes">${rec.notes.map((n) => `<li>“${esc(n.text)}”</li>`).join("")}</ul>` : ""}
         ${auto
-          ? `<div class="collision-ruling-note">settled automatically: ${esc(rec.ruling?.reason || "git found no conflict in either direction")}</div>`
+          ? `<div class="collision-ruling-note">settled by the panel from git's own merge check - withdraw it to make this pair yours</div>`
           : rec.ruling?.note
             ? `<div class="collision-ruling-note">your note: ${esc(rec.ruling.note)}</div>`
             : ""}
