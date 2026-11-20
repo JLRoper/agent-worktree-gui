@@ -845,8 +845,11 @@ function rowHtml(row, forceOwner = false) {
     verdict: `<td class="verdict">${badge}</td>`,
     actions: `<td class="row-actions">${isProjectRoot ? "" : `${childBtn}<button class="btn-refresh-tree" data-refresh-tree="${esc(delKey)}" type="button" title="reconcile this one worktree — re-read its git state (dirty, ahead/behind, cherry, verdict, PR), then check its TODO list against what the tree now contains (a proposal, nothing closed) and its description, re-derived only if it has gone stale; every action is journalled under the row">\u27f3</button><button class="btn-del-tree${delDirect ? " is-direct" : ""}" data-del-tree="${esc(delKey)}" title="${delDirect ? "this worktree is merged and clean — deletes it straight away, its files go to the Recycle Bin and git's record is pruned" : "remove this worktree — asks first; its files go to the Recycle Bin and git's record of it is pruned"}">✕</button>`}</td>`,
   };
-  // The lane is read through `typeof`: a scope without it reads as "no delivery" instead of throwing.
-  return `<tr class="row${isOpen ? " expanded" : ""}${lock ? " is-locked" : ""}${typeof wtReviewLane !== "undefined" && wtReviewLane.awaiting(row) ? " has-review" : ""}${typeof wtReviewLane !== "undefined" && wtReviewLane.awaitingCollisions(row).length ? " has-collision" : ""}" data-key="${esc(keyOf(row.project, row.path))}">
+  // The lane is read through `typeof`: a scope without it reads as "no delivery" instead of throwing. The amber left
+  // edge is part of the reviewed chip, so it goes when the chip's switch is off: a row still banded amber beside a
+  // name line with no mark would be the chart half-hiding the thing the reader switched off.
+  const reviewOn = reviewChipShown();
+  return `<tr class="row${isOpen ? " expanded" : ""}${lock ? " is-locked" : ""}${reviewOn && typeof wtReviewLane !== "undefined" && wtReviewLane.awaiting(row) ? " has-review" : ""}${typeof wtReviewLane !== "undefined" && wtReviewLane.awaitingCollisions(row).length ? " has-collision" : ""}" data-key="${esc(keyOf(row.project, row.path))}">
     ${shownColumns(forceOwner).map((i) => cells[CHART_COLUMNS[i].id]).join("\n    ")}
   </tr>`;
 }
@@ -872,6 +875,7 @@ function turnoverRowMarkHtml(row) {
   return `<span class="turnover-mark" role="img" aria-label="${esc(TURNOVER_ROW_SAY)}" title="${esc(TURNOVER_ROW_SAY)}">\u21c4</span>`;
 }
 
+// ---- reviewed chip: the amber mark, its press, and the switch that takes both away -----------------
 // THE AMBER REVIEW MARK, and the one press that clears it. A row is marked while its last run left something to
 // check (lib/review-inbox.js), and the mark means exactly that: "this row has a result you have not looked at".
 //
@@ -883,7 +887,19 @@ function turnoverRowMarkHtml(row) {
 // The button sits on the row rather than inside the card on purpose: the lane's promise is that a finished result
 // cannot be forgotten, and a control that costs a click to reveal is a control the reader skips. It is also the
 // element the Human rotation lands on, so H then Enter clears one without a mouse.
+//
+// Whether the reader's Reviewed chip is drawn at all. The switch lives with the chart's columns (Settings > Board >
+// Chart columns), the same stored list, so the one answer is `chartChipShown("reviewed")` in public/charts.js. Read
+// through `typeof` so a harness that slices this file without charts.js still draws a row: a chip nobody has switched
+// off is the default, exactly as every chart toggle starts ON.
+function reviewChipShown() {
+  return typeof chartChipShown === "function" ? chartChipShown("reviewed") : true;
+}
+
 function reviewRowMarkHtml(row) {
+  // Switched off means the element is NOT EMITTED: no span, no button, no placeholder. Hiding it with a class would
+  // leave the name line's gap behind and make the chart lie about what it is drawing.
+  if (!reviewChipShown()) return "";
   const rec = row?.review;
   if (!rec || !rec.summary) return "";
   const awaiting = typeof wtReviewLane !== "undefined" && wtReviewLane ? wtReviewLane.awaiting(row) : !rec.reviewedAt;
@@ -892,6 +908,7 @@ function reviewRowMarkHtml(row) {
   const press = "mark this result reviewed - it leaves the review lane and the header count, and the card stays here with what the run left";
   return `<span class="review-mark" role="img" aria-label="${esc(say)}" title="${esc(say)}">\u25a3</span><button class="btn-review-done" type="button" data-review-done="${esc(keyOf(row.project, row.path))}" data-review-project="${esc(row.project)}" data-review-path="${esc(row.path)}" title="${esc(press)}">\u2713 Reviewed</button>`;
 }
+// ---- end reviewed chip
 
 // THE VIOLET COLLISION MARK. A row wears one for every pair of live trees in its project that are touching the same
 // work (lib/collisions.js), and the tooltip NAMES THE COUNTERPART: "collision with coll-two - 1 shared file ...". That

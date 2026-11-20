@@ -175,9 +175,35 @@ test("the row carries an amber mark and a Reviewed press, distinct from the lock
   // It is drawn after both of them in the name line, so the three never overwrite one another.
   const name = sliceBetween(rowsSrc, 'name: `<td class="name"', "// Same rule for the branch");
   assert.match(name, /\$\{turnoverRowMarkHtml\(row\)\}\$\{collisionRowMarkHtml\(row\)\}\$\{reviewRowMarkHtml\(row\)\}/);
-  // The row's own <tr> says it too, at rest, without a tooltip being opened.
-  assert.match(rowsSrc, /typeof wtReviewLane !== "undefined" && wtReviewLane\.awaiting\(row\) \? " has-review" : ""/);
+  // The row's own <tr> says it too, at rest, without a tooltip being opened - and only while the chip's own switch
+  // is on (Settings > Board > Chart columns, "Reviewed"): a switched-off chip leaves no amber edge behind.
+  assert.match(rowsSrc, /const reviewOn = reviewChipShown\(\);/);
+  assert.match(rowsSrc, /reviewOn && typeof wtReviewLane !== "undefined" && wtReviewLane\.awaiting\(row\) \? " has-review" : ""/);
   assert.match(read("public/style.css"), /tr\.row\.has-review \{/);
+});
+
+test("with its switch off the chip is not rendered at all, and with it on the press is unchanged", () => {
+  // The region is run on its own, with the one predicate it asks about stubbed: this is the chart's paint, not a
+  // browser, so "not rendered" means the string a row is built from carries no element - not a class that hides one.
+  const region = sliceBetween(rowsSrc, "// ---- reviewed chip", "// ---- end reviewed chip");
+  const build = (shown) =>
+    new Function("esc", "keyOf", "wtReviewLane", "chartChipShown", `${region}; return { reviewRowMarkHtml, reviewChipShown };`)(
+      (s) => String(s),
+      (p, w) => `${p}::${w}`,
+      { awaiting: () => true, markerTitle: () => "a result to review" },
+      () => shown,
+    );
+  const row = { project: "proj", path: "p/tree", review: { summary: "a result", reviewedAt: null } };
+  assert.equal(build(false).reviewChipShown(), false);
+  assert.equal(build(false).reviewRowMarkHtml(row), "", "off emits nothing: no span, no button, no placeholder");
+  // On is exactly what the row draws today: the mark, its sentence, and the one press that clears it.
+  const on = build(true).reviewRowMarkHtml(row);
+  assert.match(on, /class="review-mark"/);
+  assert.match(on, /data-review-done="proj::p\/tree"/);
+  assert.match(on, /✓ Reviewed/);
+  // A row with nothing to review is empty either way - the switch only decides which of the two reasons applies.
+  assert.equal(build(true).reviewRowMarkHtml({ project: "p", path: "w", review: { reviewedAt: "x" } }), "");
+  assert.equal(build(true).reviewRowMarkHtml({ project: "p", path: "w" }), "");
 });
 
 test("the result card is drawn by the panel from the stored delivery: anchor through open-file, chips beneath", () => {
