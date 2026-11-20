@@ -2498,6 +2498,8 @@ tr.row.has-collision.has-review { box-shadow: inset 2px 0 0 #6b4f9e, inset 4px 0
   align-items: center;
   gap: 5px;
   flex-wrap: wrap;
+  min-width: 0;
+  flex: 1 1 30ch;
   border: 1px solid #33284d;
   border-radius: 6px;
   background: #1b1528;
@@ -2515,7 +2517,7 @@ tr.row.has-collision.has-review { box-shadow: inset 2px 0 0 #6b4f9e, inset 4px 0
    work or merely both landing into main - which is the question a collision card exists to answer. A tree with no
    owning row says so in those words; a side whose task is done or parked reads as already stood down. */
 .collision-side-task { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
-.collision-task-name { font: 11px/1.5 var(--sans, var(--term)); color: #efe6ff; max-width: 34ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.collision-task-name { font: 11px/1.5 var(--sans, var(--term)); color: #efe6ff; min-width: 0; overflow-wrap: anywhere; }
 .collision-task-who { font-size: 10px; color: #a893d1; }
 .collision-task-state { font-size: 9px; text-transform: uppercase; letter-spacing: .04em; border-radius: 999px; padding: 0 5px; border: 1px solid #3b2d5c; color: #c9a0ff; }
 .collision-task-state.is-running { border-color: #2f5d6b; color: #8fd7e8; }
