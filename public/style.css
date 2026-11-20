@@ -3844,6 +3844,65 @@ button.btn-cleanup:focus-visible { outline: 1px solid #7fb2e8; outline-offset: 1
 .cleanup-form .cleanup-actions { display: flex; gap: 6px; }
 .cleanup-form .cleanup-actions > button { align-self: flex-start; }
 
+/* ---- the cleanup chip's drop-all button, its confirm and the list of what it refused --------------------------- */
+/* The SAME pill again, one control to the LEFT of the cleanup chip in the head line and the first button of the
+   bar's action row (one renderer draws both). Red-inked while it has rows to drop, because it removes things; muted
+   and unpressable at zero and while another cleanup action is running. */
+button.btn-cleanup-drop-all {
+  margin-left: 6px;
+  padding: 1px 7px;
+  font: 10.5px/1.6 var(--mono);
+  border-radius: 9px;
+  border: 1px solid #5a2a26;
+  background: #2a1817;
+  color: #f28b82;
+  cursor: pointer;
+  white-space: nowrap;
+}
+button.btn-cleanup-drop-all:hover { color: #ffb4ad; border-color: #7a3a34; }
+button.btn-cleanup-drop-all:focus-visible { outline: 1px solid #7fb2e8; outline-offset: 1px; }
+button.btn-cleanup-drop-all.is-off,
+button.btn-cleanup-drop-all:disabled { color: var(--dimmer); border-color: var(--line); background: #20242c; cursor: default; opacity: .8; }
+/* The confirm: a sentence, then the two answers. It sits under the bar's line and above the rows it is about, so the
+   count and the list it counts are read together. */
+.cleanup-form .cleanup-confirm {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 5px 8px;
+  border: 1px solid #4a3a1f;
+  border-radius: 8px;
+  background: #241f16;
+}
+.cleanup-form .cleanup-confirm-text { flex: 1 1 320px; min-width: 0; color: #f0c674; overflow-wrap: anywhere; }
+.cleanup-form .cleanup-confirm-go {
+  font: 10.5px var(--mono);
+  padding: 1px 8px;
+  border-radius: 9px;
+  border: 1px solid #5a2a26;
+  background: #2a1817;
+  color: #f28b82;
+  cursor: pointer;
+}
+.cleanup-form .cleanup-confirm-go:focus-visible { outline: 1px solid #f0c674; outline-offset: 2px; }
+.cleanup-form .cleanup-confirm-cancel {
+  font: 10.5px var(--mono);
+  padding: 1px 8px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: #20242c;
+  color: var(--dimmer);
+  cursor: pointer;
+}
+/* What the run did: one line, and one list entry per refusal with its own reason. */
+.cleanup-form .cleanup-drop-all-result { display: flex; flex-direction: column; gap: 3px; }
+.cleanup-form .cleanup-drop-all-result .mono { font: 11px var(--mono); color: #9fd7b4; }
+.cleanup-form .cleanup-drop-all-result.has-failures .mono { color: #f0c674; }
+.cleanup-form .cleanup-drop-failures { list-style: none; margin: 0; padding: 0 0 0 12px; display: flex; flex-direction: column; gap: 2px; }
+.cleanup-form .cleanup-drop-failures li { font: 11px var(--mono); color: var(--dimmer); overflow-wrap: anywhere; }
+.cleanup-form .cleanup-drop-failures li::before { content: "refused: "; color: #f28b82; }
+
 /* The stack under the head: bars are appended in open order and the newest is drawn FIRST, so a rules bar opened
    while the host bar is up sits directly above it. The bars keep `.host-form`'s grey band, so the strip is the same
    one the host chip has always opened; only the reading order inside the rules bar is a column. */

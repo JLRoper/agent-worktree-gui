@@ -352,6 +352,24 @@ The rules the plan obeys, each one held by a test in `test/cleanup-plan.test.js`
 A `drop` call posts the panel's own delete route, so the same lock and live-job guards answer it; `keep` writes
 nothing.
 
+**Drop all suggested.** Beside the chip (and as the first button of the bar's action row, the same button in both
+places) is `drop all 41 suggested`, whose number is the live count of the plan's `drop` rows. It removes every
+worktree labelled `drop` in one action and never touches a row labelled merge, keep or left alone: the selection is
+one predicate, `isDropSuggested` in `public/core/cleanup-drop-all.js`, which asks for the `drop` label **and** the
+plan's `remove` verdict, so a row where the two disagree is acted on by neither. At zero rows the button reads
+`nothing to drop` and is not pressable, and while a read, an apply or another drop-all runs it is unavailable too.
+
+Pressing it opens a confirm that states the exact count and names what it will not touch - `41 worktrees will be
+removed; 3 merge rows and 2 keep rows are not touched.` - with its own `drop 41` button focused, so the whole gesture
+works from the keyboard and Escape cancels it. The confirm closes and the run re-reads the plan before its first
+drop: a tree the fresh read no longer calls `drop` (it picked up a commit, or an uncommitted file, since the plan was
+printed) is **refused by the planner's own rule**, with that read's sentence, and never handed to the remover. Each
+accepted row then goes through the same single-row delete the row's `drop` button uses, one at a time, with the bar's
+line reading `dropping 12 of 41 - <tree>`. A refusal never stops the run: every one is collected and the bar ends with
+`dropped 31 of 33; 2 rows were refused` and one line per refused tree naming it and why. The chip and the button are
+then redrawn from a fresh read - so the count is the trees that are left and the report path is the page that read
+wrote - and the board's rows follow.
+
 **Project colours.** `Ctrl+click` a project's title line to tint that project with a random hue; `Ctrl+click` again
 rolls a new one; `Ctrl+Shift+click` clears it. The hue tints only the project's own surfaces (box, title row, column
 header, row hover), so it answers "which project is this" and never changes what a badge means. A plain click still
