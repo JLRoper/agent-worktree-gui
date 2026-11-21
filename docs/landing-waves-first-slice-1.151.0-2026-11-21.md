@@ -78,6 +78,11 @@ The four gate words are kept apart on purpose: `met`, `not met`, `cannot tell`, 
 check name would make an unknown gate look passed; a chip that drew "failed" for a gate nobody can read would claim a
 fact about the work that is really a fact about the reader.
 
+An initiative with NO waves draws no lane at all: the section appears when there is a wave, a refused record or an
+unreadable store to show, and an empty "Waves 0" box on every card would be a box a reader learns to skip - this slice
+has no write route to put anything in it. That is also what keeps the Initiatives pane's scroll proof green: the
+neighbouring gate `tools/verify-initiatives-scroll.mjs` still answers 33/33, and it measures card heights.
+
 The same fold rides `GET /api/initiatives`, so the card and `GET /api/waves?initiative=<id>` cannot tell a reader two
 different states about one wave. The route is READ only: no write route, no tier question, no history.
 
