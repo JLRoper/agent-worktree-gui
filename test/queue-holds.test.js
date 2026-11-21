@@ -284,8 +284,9 @@ test("the digest puts the hold FIRST, so a 200-character title and reason cannot
 
   assert.match(line, /^- ⏸ #1 parked on thread abc123 \(live\) · Tt{1,}/, "the hold is the first thing on the line");
   assert.ok(line.indexOf("parked on thread abc123") < line.indexOf("Ttt"), "…ahead of the title");
-  assert.match(line, /· PARKED: Rr+/, "and the reason is still last, as it always was");
-  const parkedPart = line.slice(line.indexOf("PARKED: ") + 8);
+  assert.match(line, /· PARKED, and a SPAWN carrying this id is refused until it is unparked: Rr+/, "and the reason is still last, as it always was");
+  const marker = "refused until it is unparked: ";
+  const parkedPart = line.slice(line.indexOf(marker) + marker.length);
   assert.ok(parkedPart.length <= 100, `the reason is clipped to its 100 characters (got ${parkedPart.length})`);
   // The whole phrase the brief quotes, intact, however long the prose is.
   assert.ok(line.includes("parked on thread abc123 (live)"));
@@ -380,7 +381,7 @@ test("a manual park whose reason names a DONE row reads stale — and is still n
   assert.deepEqual(staleReason(q[1], q), { task: 1, state: "done", why: "#1 is done" });
   const line = queueDigest(q, { isLive: () => false }).find((l) => l.includes("#2")) || "";
   assert.match(line, /^- ⏸ #2 parked \(manual, stale reason: #1 is done\) · parked on it in prose/, line);
-  assert.match(line, /· PARKED: blocked on #1 landing as PR #276$/, "and the reader's own sentence is still last");
+  assert.match(line, /· PARKED, and a SPAWN carrying this id is refused until it is unparked: blocked on #1 landing as PR #276$/, "and the reader's own sentence is still last");
 
   // The marker is a READ: a thousand sweeps with every job terminal leave the row exactly where it is.
   let after = q;

@@ -187,7 +187,9 @@ test("a SPAWN naming a parked task is refused: a park is a hold, not a start", a
   assistant.queueMutate("assistant-1", "state", { id: added.id, state: "parked", reason: "waiting on the deploy" });
   await assistant.harvest(turn("turn-parked", `SPAWN #${added.id} agent-worktree-gui | start it anyway`));
   assert.equal(started.length, 0);
-  assert.match(String(assistant.journal.find((j) => j.kind === "spawn-refused")?.text), /is parked — waiting on the deploy/);
+  assert.match(String(assistant.journal.find((j) => j.kind === "spawn-refused")?.text), /is parked \(waiting on the deploy\) - a park is a hold/);
+  // …and the refusal names the FIX, not only the obstacle: the queue action that unparks the row.
+  assert.match(String(assistant.journal.find((j) => j.kind === "spawn-refused")?.text), /unpark it first: queue action state queued with a reason/);
   assert.equal(rowOf(added.id).state, "parked");
 });
 
