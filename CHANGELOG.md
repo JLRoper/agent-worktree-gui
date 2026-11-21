@@ -4,16 +4,45 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.141.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.142.2 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-655 releases from v0.1.0 (2026-10-20) to v1.141.0 (2026-11-20), 2302 commits between the tags. Every release is anchored by an
+658 releases from v0.1.0 (2026-10-20) to v1.142.2 (2026-11-20), 2307 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.142.2 — 2026-11-20 · 1 commit
+
+[`f66432c`](https://github.com/JLRoper/agent-worktree-gui/commit/f66432cc1357abe125e3d7f196b87f31eedbf246) · [compare v1.142.1...v1.142.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.142.1...v1.142.2)
+
+### Other
+
+- Resolve a collision card's counterpart, and retire a report its landing has passed (#816) ([`f66432c`](https://github.com/JLRoper/agent-worktree-gui/commit/f66432cc1357abe125e3d7f196b87f31eedbf246))
+
+## v1.142.1 — 2026-11-20 · 1 commit
+
+[`4fd508d`](https://github.com/JLRoper/agent-worktree-gui/commit/4fd508df6ce75e89f7245403774b5873a3dbd3dd) · [compare v1.142.0...v1.142.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.142.0...v1.142.1)
+
+### Docs & tests
+
+- docs: the landing note records the landing, with PR 814 and the merge sha ([`4fd508d`](https://github.com/JLRoper/agent-worktree-gui/commit/4fd508df6ce75e89f7245403774b5873a3dbd3dd))
+
+## v1.142.0 — 2026-11-20 · 3 commits
+
+[`0f7703a`](https://github.com/JLRoper/agent-worktree-gui/commit/0f7703a7b8fb7de45b8bbd2cfe8b4d1070bde19a) · [compare v1.141.0...v1.142.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.141.0...v1.142.0)
+
+### Docs & tests
+
+- docs: render the changelog - 655 releases ([`a33e7b9`](https://github.com/JLRoper/agent-worktree-gui/commit/a33e7b9617654b27fab167ff20b55c0a85847055))
+- docs: the row chips landing note - what the reader sees, and the gate that proved it ([`a0b63d5`](https://github.com/JLRoper/agent-worktree-gui/commit/a0b63d5039c0db1fc62384c98c0e1f7414a7280c))
+
+### Other
+
+- the row's result review chip gets a column of its own, so the name is not squeezed ([`0f7703a`](https://github.com/JLRoper/agent-worktree-gui/commit/0f7703a7b8fb7de45b8bbd2cfe8b4d1070bde19a))
 
 ## v1.141.0 — 2026-11-20 · 9 commits
 
