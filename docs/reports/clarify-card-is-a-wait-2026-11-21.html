@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
+<title>A clarify card is a wait, not a stall - 2026-11-21</title>
+<style>
+  :root{ color-scheme:dark; --ink:#e9e7e2; --paper:#121417; --panel:#171a1f; --rule:#2b3038; --muted:#9aa3ad; --accent:#c8a6ff; --ok:#7ee2a8; --bad:#e5534b; --sunk:#1b1e24; --code:#f0c987; }
+  html,body{ margin:0; background:var(--paper); color:var(--ink); font:15px/1.58 -apple-system,Segoe UI,Helvetica,Arial,sans-serif; }
+  main{ max-width:1120px; margin:0 auto; padding:38px 28px 84px; }
+  h1{ font-size:28px; line-height:1.2; margin:0 0 8px; letter-spacing:-.015em; }
+  h2{ font-size:20px; margin:42px 0 10px; padding-bottom:7px; border-bottom:1px solid var(--rule); }
+  h3{ font-size:15.5px; margin:24px 0 8px; }
+  p{ margin:9px 0; }
+  .kicker{ color:var(--accent); font:12px ui-monospace,Consolas,monospace; letter-spacing:.08em; text-transform:uppercase; margin:0 0 8px; }
+  .sub{ color:var(--muted); margin:0 0 20px; max-width:100ch; }
+  .cards{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin:18px 0 4px; }
+  .card{ border:1px solid var(--rule); border-radius:10px; padding:11px 13px; background:var(--panel); }
+  .card b{ display:block; font-size:21px; letter-spacing:-.02em; font-variant-numeric:tabular-nums; }
+  .card span{ color:var(--muted); font-size:12.5px; }
+  table{ border-collapse:collapse; width:100%; font-size:13.5px; }
+  th,td{ text-align:left; padding:6px 8px; border-bottom:1px solid var(--rule); vertical-align:top; }
+  th{ color:var(--muted); font-weight:600; font-size:11.5px; text-transform:uppercase; letter-spacing:.05em; }
+  tr:last-child td{ border-bottom:0; }
+  code{ font:12.5px ui-monospace,Consolas,monospace; background:rgba(127,127,127,.13); padding:1px 5px; border-radius:4px; color:var(--code); overflow-wrap:anywhere; }
+  pre{ background:var(--sunk); border:1px solid var(--rule); border-radius:8px; padding:11px 13px; overflow-x:auto; font:12.3px/1.55 ui-monospace,Consolas,monospace; white-space:pre-wrap; overflow-wrap:anywhere; }
+  pre code{ background:none; padding:0; color:inherit; }
+  .ok{ color:var(--ok); font-weight:600; }
+  .bad{ color:var(--bad); font-weight:600; }
+  ul{ margin:8px 0 8px 20px; } li{ margin:5px 0; }
+  .small{ color:var(--muted); font-size:12.5px; }
+</style>
+</head>
+<body>
+<main>
+<p class="kicker">agent-worktree-gui - the sentry's quiet-window stop - clarify and approval</p>
+<h1>A clarify card is a wait, not a stall: the sentry exempts it, and a wake waits for the answer</h1>
+<p class="sub">The sentry stopped every assistant turn that produced nothing for four of its own quiet windows, and let the
+queued wake go out when the stop landed. A turn parked on the <code>clarify</code> tool produces nothing at all - the wait
+is silent by design - so a card waiting on a person read exactly like a hung turn and was killed. The fix is two lines
+of rule and one helper: a turn whose record carries an open question or an open approval is exempt from the stop (its
+clock keeps running), and a wake that arrives during that wait is held in <code>pendingWake</code> and released by the
+answer. A turn with no open question is still stopped exactly as before, and that half is pinned on the pre-fix tree as
+well as on this one, so the exemption cannot quietly become a licence to hang.</p>
+
+<div class="cards">
+  <div class="card"><b>3 of 4</b><span>proofs that fail on the pre-fix tree</span></div>
+  <div class="card"><b>5 of 5</b><span>the same file green after the fix</span></div>
+  <div class="card"><b>16 min</b><span>four quiet windows at the reader's 240 s</span></div>
+  <div class="card"><b>2 + 1</b><span>code files changed, test file added</span></div>
+  <div class="card"><b>8 cards</b><span>2026-11-21 questions closed with no answer, in the store</span></div>
+  <div class="card"><b>1.150.1</b><span>the patch this landing carries</span></div>
+</div>
+
+<h2>Base and version</h2>
+<p>The branch <code>wtgui/stop-the-sentry-killing-a-clarify-card-f99ddd</code> is cut from <code>main</code> at
+<code>e8341c636ab6e3367e861de3b0835400ad20a422</code> (<code>docs: render the changelog - 667 releases</code>, version
+1.149.0), which is what <code>git rev-parse HEAD origin/main</code> answered on this tree before the first change: the two
+refs printed the same oid. That build already carries row 185's SPAWN check.</p>
+<p>Main moved while this ran: six commits landed, up to <code>e27192a6</code> (<code>docs: render the changelog - 668
+releases</code>, version 1.150.0), none of them touching a file this branch changes. The commit was rebased onto that tip
+and the only conflict was <code>package.json</code>'s version line, resolved to the next number above main's. The patch
+bump is therefore 1.150.0 to 1.150.1, and it is a fix, read off <code>docs/versioning.md</code> ("a fix" is a patch). No
+tag is claimed here: the anchor belongs on the commit main carries after the merge.</p>
+
+<h2>The defect, read from the code</h2>
+<p>In <code>supervise()</code>, before this branch, every assistant's own turn was judged at its own quiet window and
+stopped when it had produced nothing for four of them; the queued wake went out when the stop landed
+(<code>lib/assistant.js:4039-4043</code> on <code>e8341c63</code>, the <code>four of them</code> comment):</p>
+<pre><code>// Every assistant's turn is judged at ITS OWN quiet window and stopped when it has produced nothing
+// for four of them; the queued wake goes out when the stop lands.
+...
+const quiet = Date.now() - (lineAt || startAt);
+const limit = Math.max(300_000, num(this.settingsFor(rec.id).quietSeconds, this.settings.quietSeconds) * 1000 * 4);
+if (!(quiet > limit)) continue;
+</code></pre>
+<p>Nothing in that path asked whether the turn was waiting on a person. The same file already states the correct rule for
+the Element room, in its own words, at <code>lib/assistant.js:8696</code> on this branch: "What travels is ONLY a wait a
+person can answer - a clarify card, a run's approval, the panel's own". And the worker-side quiet alert keeps it too:
+<code>lib/assistant.js:4438</code> reads <code>j.status === "running" &amp;&amp; !j.question</code> before it fires. Only the
+sentry did not apply it.</p>
+<p>Two facts make the silence structural rather than slow:</p>
+<ul>
+  <li>a parked run emits no events at all; the gateway only touches its own activity clock, so no line ever reaches
+  <code>job.lines</code> while the card is up;</li>
+  <li>the stop was filed as the reader's own: <code>jobs.stop</code> calls <code>terminate(j, "reader")</code> before it
+  posts to the gateway (<code>lib/jobs.js:6230</code>), so a card the sentry killed is indistinguishable on the board from
+  one the reader cancelled.</li>
+</ul>
+<p>At the reader's default <code>quietSeconds</code> of 240 the window is <code>max(300 s, 240 x 4)</code>, sixteen
+minutes, so any clarify wait longer than that was stopped by the panel, not by the gateway.</p>
+
+<h2>The fix</h2>
+<h3>A. The exemption, where the four-window rule is written</h3>
+<p><code>lib/assistant/read.js:180</code> adds the predicate the rule was missing, beside the module's other facts about a
+turn:</p>
+<pre><code>export function awaitsPerson(j) {
+  return Boolean(j) &amp;&amp; Boolean(j.question || j.approval);
+}
+</code></pre>
+<p><code>lib/assistant.js:4065</code> applies it before the clock is read, and the comment above the loop
+(<code>lib/assistant.js:4045-4050</code>) now says so where the four-quiet-window rule is written: "Four quiet windows are
+evidence of a stall only when the turn has something it could have said... Such a turn is exempt and its clock runs; what
+releases it is the answer, not a watchdog. A turn with NO open question is still stopped exactly as before." Nothing else
+about the turn changes: it is answered, resumed and settled by the path every turn takes.</p>
+<h3>B. The wake is held, and the answer releases it</h3>
+<p>A parked turn keeps its run live: the store writes <code>clarify.request</code> onto the job record without touching
+its status, so the turn stays <code>running</code>, and <code>isLive()</code> already answers true for any record carrying
+an <code>approval</code> (<code>lib/assistant/read.js:171</code>). That is what makes the existing hold in
+<code>lib/assistant/wakes.js:233</code> do the right thing: <code>flushWakes</code> puts a batch back on
+<code>pendingWake</code> while that assistant has a live turn, so a wake that arrives during the wait is held, not dropped
+and not started, and the end of the answered turn is what calls it again. That comment now names the rule
+(<code>lib/assistant/wakes.js:227-232</code>) instead of leaving it as a side effect of a status word. The behaviour is
+proved end to end below, including the sentry pass in the middle of the wait, which was the moment the wake used to get
+out.</p>
+
+<h2>The proof</h2>
+<p>One file, <code>test/assistant-sentry-question.test.js</code>, five tests, each written from the shortest public path
+into the module: <code>supervise()</code> for the stop, <code>wake()</code> and <code>flushWake()</code> for the hold,
+<code>observe()</code> for the turn's end. The pre-fix tree is <code>e8341c63</code>, extracted with
+<code>git archive e8341c63 | tar -x</code> into a scratch directory; no worktree was created for the comparison. The same
+file was copied in with its <code>awaitsPerson</code> unit test removed, because the pre-fix module does not export the
+helper.</p>
+<table>
+  <tr><th>What the row asked for</th><th>Test</th><th>On <code>e8341c63</code></th><th>On this branch</th></tr>
+  <tr>
+    <td>1. a turn with an open clarify is not stopped after four quiet windows</td>
+    <td><code>a turn parked on a clarify question is not stopped by the sentry after four quiet windows</code></td>
+    <td><span class="bad">fails</span> - <code>actual: [{ assistantId: 'assistant-1', thread: 'panel-assistant', turnId: 'a1-turn' }]</code>, the parked turn is in <code>stalledTurns</code></td>
+    <td><span class="ok">passes</span></td>
+  </tr>
+  <tr>
+    <td>2. a wake arriving during that wait is in <code>pendingWake</code> and goes out once the question is answered</td>
+    <td><code>a wake that arrives during an open question is held in pendingWake and goes out once the answer lands</code></td>
+    <td><span class="bad">fails</span> - <code>nothing was started beside the parked turn: actual 1, expected 0</code>; the sentry stopped the card and the wake left</td>
+    <td><span class="ok">passes</span></td>
+  </tr>
+  <tr>
+    <td>3. a turn with NO open question that produces nothing for four windows is STILL stopped</td>
+    <td><code>a turn with NO open question that produces nothing for four windows is still stopped</code></td>
+    <td><span class="ok">passes</span>, unchanged behaviour</td>
+    <td><span class="ok">passes</span></td>
+  </tr>
+  <tr>
+    <td>4. an approval waiting on the reader is exempt on the same rule</td>
+    <td><code>an approval waiting on the reader is exempt on the same rule</code></td>
+    <td><span class="bad">fails</span> - <code>a card waiting on the reader's approval is not a stall either</code>, <code>actual: [{ ... turnId: 'a1-approval' }]</code></td>
+    <td><span class="ok">passes</span></td>
+  </tr>
+</table>
+<p>The commands, run from the tree and from the scratch export:</p>
+<pre><code># pre-fix tree
+command node --test test/red-sentry-question.test.js
+  x a turn parked on a clarify question is not stopped by the sentry after four quiet windows
+  x a wake that arrives during an open question is held in pendingWake and goes out once the answer lands
+  ok a turn with NO open question that produces nothing for four windows is still stopped
+  x an approval waiting on the reader is exempt on the same rule
+  tests 4, pass 1, fail 3
+
+# this branch
+command node --test test/assistant-sentry-question.test.js
+  ok 5 tests, 5 pass, 0 fail
+</code></pre>
+
+<h2>Why the rule did not get loose</h2>
+<ul>
+  <li>The control test is the same on both trees. A turn with no open question, silent for thirty minutes, is judged,
+  stopped, and journalled with the same stall line; the fix does not touch that path, and the test fails if it does.</li>
+  <li>The predicate is a fact about the record, not a mood: <code>question</code> or <code>approval</code> present on the
+  job, both of which the store writes on arrival and clears the moment the prompt settles (<code>lib/jobs.js:4697</code>,
+  <code>6208</code>, and <code>settle</code>'s own close at <code>4832</code>). There is no clock in it, so a turn cannot
+  become exempt by being slow.</li>
+  <li>The exemption is in the sentry's assistant-turn loop only. The worker-side quiet rule already carried
+  <code>!j.question</code>, and it is unchanged; the other sentry rules are untouched.</li>
+  <li>The fifth test of the same file (<code>a question is a wait, an approval is a wait, and a finished card is
+  neither</code>) pins the predicate itself, so a later edit that widens it to "any record" fails a test rather than
+  quietly exempting every turn.</li>
+</ul>
+
+<h2>What the store says about the four cards</h2>
+<p>The row's evidence sentence is cut off in the brief at "the tree-kind card", so the other three cannot be quoted here.
+The panel's own state does carry the shape: on 2026-11-21, eight cards closed a question with no answer, nine questions
+in all, and six of them closed at 89 or 90 seconds after they were asked:</p>
+<table>
+  <tr><th>Asked (UTC)</th><th>Card</th><th>Thread</th><th>Closed</th><th>Waited</th><th>The question, in short</th></tr>
+  <tr><td>18:08:50</td><td><code>1ab8c967</code></td><td>row 182 worktree</td><td>18:10:20</td><td>90 s</td><td>lift the research mark so the branch can push</td></tr>
+  <tr><td>18:11:12</td><td><code>85269c73</code></td><td>panel-assistant-3</td><td>18:12:42</td><td>90 s</td><td>the one-diamond change is committed, the tree is marked research</td></tr>
+  <tr><td>18:52:18</td><td><code>e8e8cab3</code></td><td>row 182 worktree</td><td>18:53:48</td><td>90 s</td><td>the push was rejected non-fast-forward</td></tr>
+  <tr><td>19:22:26</td><td><code>d0692cc2</code></td><td>panel-assistant-3</td><td>19:23:56</td><td>89 s</td><td><b>a tree's kind is set at the cut and shown nowhere</b> (the tree-kind card)</td></tr>
+  <tr><td>20:15:53</td><td><code>2f4e110c</code></td><td>panel-assistant-3</td><td>20:17:24</td><td>90 s</td><td>how is a wave's pipeline bound?</td></tr>
+  <tr><td>21:18:40</td><td><code>f978f76c</code></td><td>panel-assistant-2</td><td>21:20:10</td><td>90 s</td><td>restart the panel now?</td></tr>
+  <tr><td>21:58:43</td><td><code>d7c97a1b</code></td><td>panel-assistant-3</td><td>22:01:52</td><td>188 s</td><td>waves: research only, or something that solidifies it?</td></tr>
+  <tr><td>22:00:22</td><td><code>d7c97a1b</code></td><td>panel-assistant-3</td><td>22:01:52</td><td>89 s</td><td>waves: the research is open in your browser, what next?</td></tr>
+  <tr><td>22:12:56</td><td><code>ecf5d6a3</code></td><td>design-doc worktree</td><td>22:14:26</td><td>89 s</td><td>the report is written, what next?</td></tr>
+</table>
+<p>Two readings matter, and they point in different directions:</p>
+<ul>
+  <li><b>The sentry can kill this card, and the panel cannot tell you it did.</b> At 240 s quiet windows the stop lands
+  after sixteen minutes, and it is filed as the reader's own stop (<code>lib/jobs.js:6230</code>). That is the defect the
+  row names, and the tests above prove the old code did it and the new code does not.</li>
+  <li><b>These eight cards did not die that way.</b> None of the cards in the table carries a
+  <code>termination</code> record, and each closed at 89 or 90 seconds with the panel's own deadline an hour away
+  (<code>clarifyWindowSeconds()</code> reads 3600 s, from the default: no <code>clarify.timeout</code> is written in the
+  gateway config). The wait ended on the gateway's side, the turn went on to its end, and the panel closed the question
+  with "the turn ended". That is a second cause of the same symptom - a card dying unanswered - and it is named below
+  rather than folded into this fix.</li>
+</ul>
+
+<h2>What this does not fix</h2>
+<p>A question with a 3600 s panel deadline is being withdrawn by the gateway after about 90 s. The panel never asked for
+that: its countdown says an hour, the card is drawn with an hour, and the reader loses it in a minute and a half. The
+sentry exemption does not help (the sentry had not fired), and the wake hold does not help (the turn was never live long
+enough to matter). It needs its own row: either the gateway's clarify wait is raised to the window the panel reads, or the
+panel stops promising a window the waiter does not honour. This report names it, and the question on this row's card
+offers it as the first next direction.</p>
+
+<h2>Verification, as run</h2>
+<pre><code>git rev-parse HEAD origin/main            # e8341c636ab6... twice, before the first change
+command node --test test/assistant-sentry-question.test.js
+  tests 5, pass 5, fail 0
+command node --test test/red-sentry-question.test.js   # in the e8341c63 export
+  tests 4, pass 1, fail 3
+command node tools/test-changed.mjs --list              # 4 changed files, 166 test files selected
+command node tools/test-changed.mjs                     # 166 files, 391.7 s, exit 1, 6 failures
+command node --test --test-concurrency=4 test/*.test.js # the full suite, once, at the rebased tip
+  tests 3397, pass 3386, fail 11
+</code></pre>
+<p>Every one of those 11 was run on its own afterwards, and the whole reading is attributable without this branch:</p>
+<ul>
+  <li>eight fail identically in the <code>e8341c63</code> export - <code>assistant-profile</code> (1),
+  <code>assistant-search-scroll</code> (2), <code>paths</code> (1), <code>junctioned-node-modules</code> (1),
+  <code>child-route</code> (1), <code>child-tree</code> (1), <code>paths-http</code> (1);</li>
+  <li><code>gateway-permissions.test.js</code> reads a <code>config.json</code> at the worktree root that this
+  checkout does not carry, so the file dies on its import line in any worktree without one;</li>
+  <li>the two in <code>settle-wake.test.js</code> ("a run that ends done with no watch..." and "the real settle path
+  reaches the assistant...") pass 12 of 12 when that file is run alone: they collide on Windows scratch cleanup
+  (<code>ENOTEMPTY ... rmdir</code>) at concurrency 4.</li>
+</ul>
+<p class="small">Files changed: <code>lib/assistant.js</code> (the exemption and the comment where the rule is written),
+<code>lib/assistant/read.js</code> (<code>awaitsPerson</code>), <code>lib/assistant/wakes.js</code> (the hold, stated),
+<code>test/assistant-sentry-question.test.js</code> (five tests), <code>package.json</code> 1.150.1.</p>
+</main>
+</body>
+</html>
