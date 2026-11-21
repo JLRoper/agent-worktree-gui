@@ -1,11 +1,11 @@
 {
-  "at": "2026-11-21T07:15:13.789Z",
+  "at": "2026-11-21T07:47:00.964Z",
   "version": "1.144.0",
   "home": "$SCRATCH",
   "baseline": {
     "passed": 4,
     "total": 16,
-    "source": "docs/reports/initiatives-redesign/before/measurements-before.json"
+    "source": "git archive of 158d0f69 captured into docs/reports/initiatives-redesign/before"
   },
   "after": {
     "passed": 16,
