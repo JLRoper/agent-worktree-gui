@@ -4,16 +4,29 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.143.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.144.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-659 releases from v0.1.0 (2026-10-20) to v1.143.0 (2026-11-21), 2309 commits between the tags. Every release is anchored by an
+660 releases from v0.1.0 (2026-10-20) to v1.144.0 (2026-11-21), 2312 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.144.0 — 2026-11-21 · 3 commits
+
+[`5b351ee`](https://github.com/JLRoper/agent-worktree-gui/commit/5b351eee51ac93ae2f5a1b271a4b48fbc886e5d1) · [compare v1.143.0...v1.144.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.143.0...v1.144.0)
+
+### Docs & tests
+
+- docs: render the changelog - 659 releases ([`c2bd55f`](https://github.com/JLRoper/agent-worktree-gui/commit/c2bd55f03e5a36401ac9a01a6d583e3519202e6f))
+
+### Other
+
+- Redesign the Initiatives tab, measured before and after ([`8c65066`](https://github.com/JLRoper/agent-worktree-gui/commit/8c65066b5f8c3147cdd5f358b2a9567f73258205))
+- chore: 1.144.0 - the version this landing carries ([`5b351ee`](https://github.com/JLRoper/agent-worktree-gui/commit/5b351eee51ac93ae2f5a1b271a4b48fbc886e5d1))
 
 ## v1.143.0 — 2026-11-21 · 2 commits
 
