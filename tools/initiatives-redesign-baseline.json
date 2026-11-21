@@ -1,7 +1,7 @@
 {
   "label": "before",
   "version": "1.142.2",
-  "source": "docs/reports/initiatives-redesign/before/measurements-before.json",
+  "source": "git archive of 158d0f69 captured into docs/reports/initiatives-redesign/before",
   "at": "2026-11-21T06:53:45.494Z",
   "checks": [
     {
