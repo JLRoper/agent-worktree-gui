@@ -4,16 +4,31 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.148.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.148.1 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-665 releases from v0.1.0 (2026-10-20) to v1.148.0 (2026-11-21), 2328 commits between the tags. Every release is anchored by an
+666 releases from v0.1.0 (2026-10-20) to v1.148.1 (2026-11-21), 2333 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.148.1 — 2026-11-21 · 5 commits
+
+[`9a4b9a7`](https://github.com/JLRoper/agent-worktree-gui/commit/9a4b9a733d582736ea83de61e4fdb4cf3a3a7746) · [compare v1.148.0...v1.148.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.148.0...v1.148.1)
+
+### Docs & tests
+
+- docs: render the changelog - 665 releases ([`e2bebda`](https://github.com/JLRoper/agent-worktree-gui/commit/e2bebdab71fa51ca9ec175fcd30cb40291edf3e8))
+- docs: the 1.148.0 landing note records the landing - PR 823, its squash commit and the tip ([`0551b8e`](https://github.com/JLRoper/agent-worktree-gui/commit/0551b8e99604fa11f906aa3975ceb17d26cad6d1))
+- docs: the landing note names the render, not a tip that its own commit moves ([`1aad736`](https://github.com/JLRoper/agent-worktree-gui/commit/1aad736b742fbff155a8fb9240dedeab94df7273))
+- docs: the waves-of-work design note, grounded in the records and the gates ([`2362ea3`](https://github.com/JLRoper/agent-worktree-gui/commit/2362ea3ea6b4c1fddc01b10bd12b09da701019c0))
+
+### Other
+
+- chore: 1.148.1 - the version this landing carries ([`9a4b9a7`](https://github.com/JLRoper/agent-worktree-gui/commit/9a4b9a733d582736ea83de61e4fdb4cf3a3a7746))
 
 ## v1.148.0 — 2026-11-21 · 2 commits
 
