@@ -2447,6 +2447,10 @@ tr.row.is-locked { box-shadow: inset 2px 0 0 #6b5324; }
 }
 .collision-mark.is-reader { color: #e4c8ff; text-shadow: 0 0 6px #7a4fbf; }
 .collision-mark.is-ruled { color: #8b7aa8; }
+/* A VERDICT, not an alarm: a note the panel settled by absence (nothing on the board and no live agent answers to the
+   name). It keeps the marker, because the report is still a fact about the row, but it fades to the quietest violet -
+   the same "nothing is waiting on you" the ruled state reads as. */
+.collision-mark.is-absent { color: #6f6285; }
 /* A row in a live pair is marked at rest, like a row awaiting review: the point of the mark is that nobody has to
    hover to discover two workers are in each other's way. */
 tr.row.has-collision { box-shadow: inset 2px 0 0 #6b4f9e; }
@@ -2464,6 +2468,9 @@ tr.row.has-collision.has-review { box-shadow: inset 2px 0 0 #6b4f9e, inset 4px 0
   padding: 6px 10px 8px;
 }
 .collision-block.is-ruled { border-left-color: #4b6b55; border-color: #2a4432; background: #141a15; }
+/* Settled without a ruling: quiet, not green (green reads as a decision the reader made). */
+.collision-block.is-absent { border-left-color: #4a4458; border-color: #2c2836; background: #16141b; }
+.collision-block.is-absent .collision-head h4 { color: #b9aed0; }
 .collision-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .collision-head .collision-mark { margin-left: 0; font-size: 12px; }
 .collision-block.is-ruled .collision-head .collision-mark { color: #8b7aa8; }
@@ -2475,6 +2482,7 @@ tr.row.has-collision.has-review { box-shadow: inset 2px 0 0 #6b4f9e, inset 4px 0
 .collision-state { font-size: 10px; border-radius: 999px; padding: 0 6px; border: 1px solid #3b2d5c; color: #c9a0ff; }
 .collision-state.is-reader { border-color: #6b4f9e; color: #efe2ff; background: #241a38; }
 .collision-state.is-ruled { border-color: #2a4432; color: #9fe0b4; }
+.collision-state.is-absent { border-color: #4a4458; color: #c3b6dc; }
 .collision-when { margin-left: auto; font-size: 10px; color: var(--dimmer); }
 .collision-body { margin-top: 5px; display: flex; flex-direction: column; gap: 5px; }
 .collision-say { font: 12px/1.6 var(--sans, var(--term)); color: #f0e6d2; }
@@ -2536,6 +2544,8 @@ tr.row.has-collision.has-review { box-shadow: inset 2px 0 0 #6b4f9e, inset 4px 0
 .collision-notes { list-style: none; margin: 0; padding: 0; font-size: 11px; color: #e8ddff; }
 .collision-notes li { padding-left: 2px; }
 .collision-ruling-note { font-size: 11px; color: #9fe0b4; }
+/* The verdict line: quiet violet, not the green of a ruling the reader made. */
+.collision-ruling-note.collision-absent { color: #c3b6dc; }
 .collision-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
 .btn-collision-rule, .btn-collision-ask, .btn-collision-clear {
   border: 1px solid #4b3a75;

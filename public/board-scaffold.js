@@ -2109,6 +2109,10 @@ function collisionBlockHtml(row, key) {
     const resolution = rec.resolution && typeof rec.resolution === "object" ? rec.resolution : null;
     const kind = resolution?.kind || (rec.other?.path ? "tree" : rec.otherTarget ? "none" : "tree");
     const superseded = rec.superseded && typeof rec.superseded === "object" ? rec.superseded : null;
+    // THE VERDICT, when the panel settled this note without a second side: no row on the board and no live agent
+    // answers to the name (lib/collisions.js `absent`). The card prints it as the answer it is - settled, nothing to
+    // press, not waiting on anybody - instead of the old "no row matches" line beside a card that still read live.
+    const absent = rec.absent && typeof rec.absent === "object" ? rec.absent : null;
     const target = resolution?.target || rec.otherTarget || "";
     const other = kind === "same-tree" ? target || row.name || "this tree" : rec.other?.name || rec.otherTarget || "an unnamed tree";
     const otherPath = kind === "tree" ? rec.other?.path || "" : "";
@@ -2140,19 +2144,21 @@ function collisionBlockHtml(row, key) {
     const auto = state === "ruled" && Boolean(rec.ruling?.auto);
     const stateWord = superseded
       ? `superseded by ${esc(superseded.short || String(superseded.commit || "").slice(0, 12))} - landed ${superseded.landedAt ? `${relTime(superseded.landedAt)} ago` : "after this report"}, after this report`
-      : kind === "same-tree"
-        ? "same tree, not a collision"
-        : kind === "none"
-          ? `no row matches ${esc(target || "that name")} - nothing to rule on`
-          : auto
-            ? `auto-settled: ${esc(rec.ruling?.name || "a side")} goes first - ${esc(rec.ruling?.reason || "no merge risk either way")}`
-            : state === "ruled"
-              ? `already ruled: ${esc(rec.ruling?.name || "a side")}${rec.ruling?.taskId ? ` (#${esc(rec.ruling.taskId)})` : ""} goes first`
-              : stoodByTask.length
-                ? `already stood down: ${esc(finishedSay)}`
-                : state === "reader"
-                  ? "yours to rule on"
-                  : "with both assistants";
+      : absent
+        ? `resolved by absence: no row on this board and no live agent answers to ${esc(target || "that name")} - settled, nothing to rule on`
+        : kind === "same-tree"
+          ? "same tree, not a collision"
+          : kind === "none"
+            ? `no row matches ${esc(target || "that name")} - nothing to rule on`
+            : auto
+              ? `auto-settled: ${esc(rec.ruling?.name || "a side")} goes first - ${esc(rec.ruling?.reason || "no merge risk either way")}`
+              : state === "ruled"
+                ? `already ruled: ${esc(rec.ruling?.name || "a side")}${rec.ruling?.taskId ? ` (#${esc(rec.ruling.taskId)})` : ""} goes first`
+                : stoodByTask.length
+                  ? `already stood down: ${esc(finishedSay)}`
+                  : state === "reader"
+                    ? "yours to rule on"
+                    : "with both assistants";
     // WHAT GIT SAID, when it said "the reader's": both directions conflict, or it could not answer. A card that asked
     // for a decision with no reason visible is the bare flag this whole surface exists to avoid.
     const dirs = rec.merge || null;
@@ -2215,7 +2221,9 @@ function collisionBlockHtml(row, key) {
       ? `<div class="collision-peer mono" title="the other tree, as the scanner knows it">${esc(otherPath)}${rec.filed && rec.filed.length ? ` · filed with ${esc(rec.filed.map((f) => f.assistantId).join(", "))}` : ""}</div>`
       : kind === "same-tree"
         ? `<div class="collision-peer" data-collision-resolution="same-tree">the counterpart named here is <span class="mono">${esc(target || row.path)}</span> - the tree this card is drawn on. There is no second side and nothing to order.</div>`
-        : `<div class="collision-peer" data-collision-resolution="none">no row on this board answers to <span class="mono">${esc(target || "that name")}</span> - there is no second side to rule against.</div>`;
+        : absent
+          ? `<div class="collision-peer" data-collision-resolution="none">no row on this board answers to <span class="mono">${esc(target || "that name")}</span>, and no live agent is standing in a tree it names - there is no second side to rule against, so the panel recorded this as resolved by absence and it is not waiting on you.</div>`
+          : `<div class="collision-peer" data-collision-resolution="none">no row on this board answers to <span class="mono">${esc(target || "that name")}</span> - there is no second side to rule against.</div>`;
     return `<div class="collision-block is-${esc(state)}${lane === "history" ? " is-history" : ""}" data-collision-block="${esc(key)}" data-collision-key="${esc(rec.key)}" data-collision-pair="${esc(rec.key)}" data-collision-lane="${esc(lane)}">
       <div class="collision-head">
         <span class="collision-mark" role="img" aria-label="collision with ${esc(other)}">◆</span>
@@ -2240,6 +2248,9 @@ function collisionBlockHtml(row, key) {
             : ""}
         ${superseded
           ? `<div class="collision-ruling-note collision-superseded" data-collision-superseded="${esc(superseded.commit)}">the landing <span class="mono">${esc(superseded.short || superseded.commit)}</span> carried ${esc(superseded.side === "b" ? rec.b?.name || "the other side" : rec.a?.name || "this side")} into ${esc(superseded.main || "main")}${superseded.landedAt ? ` ${relTime(superseded.landedAt)} ago` : ""}, after this report was stamped${superseded.reportAt ? ` (${esc(String(superseded.reportAt))})` : ""} - the pair is history and asks nothing of you</div>`
+          : ""}
+        ${absent
+          ? `<div class="collision-ruling-note collision-absent" data-collision-absent="${esc(absent.at || "")}">recorded as resolved by absence${absent.at ? ` ${relTime(absent.at)} ago` : ""}: ${esc(absent.why || "the target names nothing on this board and no live agent stands in a tree it names")} - kept so the report stays readable, and it is not waiting on you</div>`
           : ""}
         ${actions.length ? `<div class="collision-actions">${actions.join("")}</div>` : ""}
       </div>
@@ -2435,6 +2446,9 @@ function rowChipSig(kind, row) {
       // A pair that has been superseded changes what the popup says without changing anything above it, so the landing
       // is part of the signature: the open card repaints to "history" the moment the sweep finds it.
       rec.superseded ? [rec.superseded.commit, rec.superseded.landedAt] : null,
+      // The absence verdict, for the same reason: a note the panel settles without a second side must stop reading as
+      // an open report the moment the verdict is on the record.
+      rec.absent ? [rec.absent.at, rec.absent.upgraded === true] : null,
       rec.resolution ? [rec.resolution.kind, rec.resolution.target] : null,
       rec.evidence ? [rec.evidence.ok === true, Array.isArray(rec.evidence.files) ? rec.evidence.files.length : 0] : null,
       Array.isArray(rec.files) ? rec.files.length : 0,

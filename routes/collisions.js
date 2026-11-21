@@ -1,6 +1,7 @@
 // THE COLLISIONS ROUTE. One read and three writes on `/api/collisions`:
 //
-//   GET  /api/collisions                 every record, its state (assistants | reader | ruled), and the evidence
+//   GET  /api/collisions                 every record, its state (assistants | reader | ruled | superseded | absent),
+//                                        and the evidence
 //   POST /api/collisions {op:"sweep"}    look now, instead of waiting for the panel's own tick
 //   POST /api/collisions {op:"ask", key} the reader saying "bring this one to me" - the third of the three conditions
 //   POST /api/collisions {op:"rule", key, pick:"a"|"b"|"clear", note}
