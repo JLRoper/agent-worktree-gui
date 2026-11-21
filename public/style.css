@@ -2480,17 +2480,40 @@ tr.row.has-collision.has-review { box-shadow: inset 2px 0 0 #6b4f9e, inset 4px 0
 .collision-block.is-ruled .collision-head .collision-mark { color: #8b7aa8; }
 .collision-head h4 { margin: 0; font: 600 11px/1.6 var(--sans, var(--term)); text-transform: uppercase; letter-spacing: .05em; color: #c9a0ff; }
 .collision-block.is-ruled .collision-head h4 { color: #9fe0b4; }
-.collision-other { font: 12px/1.6 var(--sans, var(--term)); color: #e8ddff; }
+.collision-other { font: 12px/1.6 var(--sans, var(--term)); color: #e8ddff; min-width: 0; }
 .collision-other b { color: #fff; font-weight: 600; }
-.collision-branch { font-size: 10px; color: #b79ae6; border: 1px solid #3b2d5c; border-radius: 999px; padding: 0 6px; margin-left: 4px; }
+.collision-branch {
+  display: inline-block;
+  vertical-align: middle;
+  font-size: 10px;
+  color: #b79ae6;
+  border: 1px solid #3b2d5c;
+  border-radius: 999px;
+  padding: 0 6px;
+  margin-left: 4px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .collision-state { font-size: 10px; border-radius: 999px; padding: 0 6px; border: 1px solid #3b2d5c; color: #c9a0ff; }
 .collision-state.is-reader { border-color: #6b4f9e; color: #efe2ff; background: #241a38; }
 .collision-state.is-ruled { border-color: #2a4432; color: #9fe0b4; }
 .collision-state.is-absent { border-color: #4a4458; color: #c3b6dc; }
 .collision-when { margin-left: auto; font-size: 10px; color: var(--dimmer); }
-.collision-body { margin-top: 5px; display: flex; flex-direction: column; gap: 5px; }
+/* THE CARD ABOVE THE FOLD, and it is three compact rows: the two sides (identity on one line, the task's title on
+   the next), the shared files as chips, and the two ruling presses. Everything that took a paragraph - the git
+   lines, the stand-down prose, task numbers - is an accordion section below, closed until asked for. */
+.collision-summary { margin-top: 6px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+/* A column flex container still refuses to shrink below its widest child unless every level says it may: a branch
+   name is one long token, and without these the whole summary pushed past the 560px popup and clipped its own right
+   edge instead of ellipsising inside it. */
+.collision-summary > *, .collision-sides, .collision-side, .collision-side-top, .collision-side-title { min-width: 0; }
+.collision-side-title { overflow: hidden; }
 .collision-say { font: 12px/1.6 var(--sans, var(--term)); color: #f0e6d2; }
-.collision-chips { list-style: none; display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; }
+.collision-chips { list-style: none; display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; min-width: 0; }
+.collision-files { display: flex; align-items: center; gap: 6px; min-width: 0; flex-wrap: wrap; }
+.collision-files-label { font-size: 9px; text-transform: uppercase; letter-spacing: .05em; color: var(--dimmer); }
 .collision-chip {
   font-size: 10px;
   padding: 0 6px;
@@ -2504,27 +2527,34 @@ tr.row.has-collision.has-review { box-shadow: inset 2px 0 0 #6b4f9e, inset 4px 0
   white-space: nowrap;
 }
 .collision-none { font-size: 11px; color: var(--dimmer); font-style: italic; }
-/* THE PAIR, drawn once: the two trees side by side, the row's own side marked "this row" and the other named as the
-   counterpart. Both rows draw the same two sides, so neither side has to work out who the other one is. */
-.collision-sides { display: flex; flex-wrap: wrap; gap: 6px; align-items: stretch; }
+/* THE PAIR, drawn once: the two trees as two compact blocks, the row's own side marked "this row" and the other named
+   as the counterpart. Both rows draw the same two sides, so neither side has to work out who the other one is. They
+   stack rather than sit side by side: at 560px a shared row gave each tree 250px, which ellipsised the name and
+   wrapped the branch - the identity a reader came for was the first thing squeezed out. */
+.collision-sides { display: flex; flex-wrap: nowrap; gap: 4px; align-items: stretch; flex-direction: column; }
 .collision-side {
   display: flex;
-  align-items: center;
-  gap: 5px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 1px;
   min-width: 0;
-  flex: 1 1 30ch;
+  width: 100%;
+  max-width: 100%;
   border: 1px solid #33284d;
   border-radius: 6px;
   background: #1b1528;
-  padding: 2px 7px;
+  padding: 3px 7px 4px;
   font-size: 11px;
   color: #e8ddff;
 }
 .collision-side.is-mine { border-color: #6b4f9e; background: #241a38; }
 .collision-side.is-other { border-style: dashed; }
+.collision-side-top { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; min-width: 0; }
 .collision-side-role { font-size: 9px; text-transform: uppercase; letter-spacing: .05em; color: #a893d1; }
-.collision-side-name { color: #fff; font-weight: 600; }
+.collision-side-name { color: #fff; font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+/* The task's own title, ONE line: the full title is the This row / Counterpart section's, and a summary that wrapped
+   every long title is the paragraph this redesign removed. The title attribute still hands over the whole of it. */
+.collision-side-title { display: flex; min-width: 0; padding-left: 2px; }
+.collision-side-title .collision-task-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #d7cbf0; }
 .collision-task { font-size: 10px; color: #c9a0ff; border: 1px solid #3b2d5c; border-radius: 999px; padding: 0 5px; }
 /* THE TASK A SIDE IS WORKING, beside the tree and branch it already showed: the queue row's number, its own title,
    the assistant whose queue holds it and its state. It is the one line that says whether two trees are on the SAME
@@ -2541,6 +2571,45 @@ tr.row.has-collision.has-review { box-shadow: inset 2px 0 0 #6b4f9e, inset 4px 0
 .collision-side-task.is-none { font-size: 10px; color: var(--dimmer); font-style: italic; }
 .collision-side.is-finished { border-style: dotted; }
 .collision-side.is-finished .collision-side-name { color: #c9c2d6; font-weight: 500; }
+/* THE ACCORDION. A section header is a real button carrying its own one line of key info, and the body below it is
+   `hidden` while closed - so a minimised section still reads, and a closed one is out of the tab order. */
+.collision-accordion { margin-top: 6px; border-top: 1px solid #2c2340; }
+.collision-acc { border-bottom: 1px solid #241d33; }
+.collision-acc:last-child { border-bottom: 0; }
+.collision-acc-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  width: 100%;
+  padding: 3px 2px;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  min-width: 0;
+}
+.collision-acc-head:hover { background: #1d172a; }
+.collision-acc-head:focus-visible { outline: 2px solid #a371f7; outline-offset: 1px; }
+.collision-acc-chev { flex: none; width: 8px; font-size: 9px; color: #a893d1; }
+.collision-acc-title { flex: none; font: 600 10px/1.7 var(--sans, var(--term)); text-transform: uppercase; letter-spacing: .05em; color: #c9a0ff; }
+.collision-acc-key {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 10px;
+  color: #b9aed0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.collision-acc-body { display: flex; flex-direction: column; gap: 4px; padding: 1px 2px 6px 16px; }
+/* `display:flex` above would beat the `hidden` attribute's UA rule, so the closed state is said here as well. */
+.collision-acc-body[hidden] { display: none; }
+.collision-acc-line { display: flex; align-items: baseline; gap: 6px; min-width: 0; font-size: 11px; color: #e8ddff; flex-wrap: wrap; }
+.collision-acc-label { flex: none; font-size: 9px; text-transform: uppercase; letter-spacing: .05em; color: var(--dimmer); min-width: 4ch; }
+.collision-acc-none { font-size: 11px; color: var(--dimmer); font-style: italic; }
+.collision-acc-path { font-size: 10px; color: var(--dim); word-break: break-all; }
 /* A side that yielded, and WHY: "its notice #12 was done". On both rows, because the reason is the thing each side
    otherwise had to ask the other for. */
 .collision-stood { font-size: 11px; color: #9fe0b4; }
@@ -2550,7 +2619,7 @@ tr.row.has-collision.has-review { box-shadow: inset 2px 0 0 #6b4f9e, inset 4px 0
 .collision-ruling-note { font-size: 11px; color: #9fe0b4; }
 /* The verdict line: quiet violet, not the green of a ruling the reader made. */
 .collision-ruling-note.collision-absent { color: #c3b6dc; }
-.collision-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+.collision-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 1px; }
 .btn-collision-rule, .btn-collision-ask, .btn-collision-clear {
   border: 1px solid #4b3a75;
   background: #241a38;

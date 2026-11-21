@@ -280,3 +280,64 @@ test("the Human rotation opens the chip, and the header copy no longer promises 
   assert.match(app, /opens its result chip onto the card behind it/);
   assert.match(app, /presses its collision diamond to open the pair card/);
 });
+
+// THE PAIR CARD IS A SUMMARY OVER FOUR CLOSED SECTIONS. The card's job is to state the decision - which side goes
+// first - without the reader scrolling: two trees, the file they share and the two order presses fit above the fold,
+// and the prose that used to sit there (the stand-down paragraph, git's own sentences, task numbers) moved into
+// sections that are closed until asked for. Each header keeps its one line, so a minimised section still reads.
+test("the pair card is a summary over four closed sections", () => {
+  const scaffold = read("public/board-scaffold.js");
+  const css = read("public/style.css");
+  const block = sliceBetween(scaffold, "function collisionBlockHtml(row, key) {", "// The card behind a chip, from the row the board holds now.");
+  // ABOVE THE FOLD: the two sides, the shared files and the presses are one summary, drawn BEFORE any section.
+  const summary = block.indexOf('class="collision-summary"');
+  const sections = block.indexOf('class="collision-accordion"');
+  assert.ok(summary > 0 && sections > summary, "the summary is drawn before the sections");
+  const above = block.slice(summary, sections);
+  assert.match(above, /collisionSideSummaryHtml\(rec, mineSide, true\)/);
+  assert.match(above, /collisionSideSummaryHtml\(rec, otherSide, false\)/);
+  assert.match(above, /chipsHtml/);
+  assert.match(above, /collision-actions/);
+  // FOUR sections, in the brief's order: this row, its counterpart, the merge check, the history.
+  assert.match(block, /collisionAccordionHtml\(secId\("this-row"\), "This row", sideKeyInfo\(mineSide\)/);
+  assert.match(block, /collisionAccordionHtml\(secId\("counterpart"\), "Counterpart", sideKeyInfo\(otherSide\)/);
+  assert.match(block, /collisionAccordionHtml\(secId\("merge"\), "Merge check", mergeKey/);
+  assert.match(block, /collisionAccordionHtml\(secId\("history"\), "History", historyKey/);
+  // EVERY header carries its own one line: the side's task number, assistant and state; git's verdict and the shared
+  // file count; the task numbers and their states.
+  assert.match(block, /const sideKeyInfo = \(side\) =>/);
+  assert.match(block, /const mergeKey = \[/);
+  assert.match(block, /const historyKey =/);
+  assert.match(block, /\[`#\$\{t\.id\}`, t\.assistant, t\.state\]/);
+  assert.match(block, /both directions conflict/);
+  // THE PILL IS A WORD, NOT THE PARAGRAPH: the stand-down prose and the superseded sentence are History's now.
+  assert.ok(!block.includes("finishedSay"), "the pill no longer prints the stand-down prose");
+  assert.match(block, /const stateWord = superseded/);
+  assert.match(block, /"stood down"/);
+  assert.match(block, /const stood = \[/);
+  // The header is a real button, the body is closed by the `hidden` attribute, and the chevrons are real escapes in
+  // the source rather than the double-escaped text that once printed a literal `\u25be`.
+  const acc = sliceBetween(scaffold, "function collisionAccordionHtml(", "// The press that opens and closes one section.");
+  assert.match(acc, /<button type="button" class="collision-acc-head" data-collision-acc-toggle="\$\{esc\(id\)\}"/);
+  assert.match(acc, /aria-expanded="\$\{open \? "true" : "false"\}"/);
+  assert.match(acc, /aria-controls="cacc-\$\{esc\(id\)\}"/);
+  assert.match(acc, /\$\{open \? "" : " hidden"\}/);
+  const BS = String.fromCharCode(92);
+  assert.ok(!acc.includes(BS + BS + "u25be"), "the chevron is one escape, not two");
+  // The press is the section's own: it toggles the attribute and the body, and the row-chip wiring already treats a
+  // press inside the card as the card's.
+  const toggle = sliceBetween(scaffold, "function toggleCollisionSection(section)", "// A press on a header is the section's own");
+  assert.match(toggle, /head\.setAttribute\("aria-expanded", open \? "false" : "true"\)/);
+  assert.match(toggle, /body\.hidden = open;/);
+  assert.match(scaffold, /const head = e\.target\.closest && e\.target\.closest\("\[data-collision-acc-toggle\]"\)/);
+  assert.match(scaffold, /e\.stopPropagation\(\);/);
+  // A repaint under an open card reopens the sections the reader had open before it puts the caret back.
+  assert.match(scaffold, /const opened = kind === "collision" \? \[\.\.\.pop\.querySelectorAll\("\.collision-block"\)\]/);
+  assert.match(scaffold, /toggleCollisionSection\(sec\)/);
+  // The styles the card depends on: a closed body is display:none even though it is a flex column, the summary is
+  // allowed to shrink below a long branch name, and the header's own focus ring is drawn.
+  assert.match(css, /\.collision-acc-body\[hidden\] \{ display: none; \}/);
+  assert.match(css, /\.collision-summary \{[^}]*min-width: 0;/);
+  assert.match(css, /\.collision-acc-head:focus-visible \{ outline: 2px solid #a371f7/);
+  assert.ok(!/\.collision-body \{/.test(css), "the old one-paragraph body rule is gone");
+});
