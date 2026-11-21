@@ -153,7 +153,18 @@ export async function withBrowser(fn, options = {}) {
     launchOptions = {},
   } = options;
   const engine = playwright || requirePlaywright(options);
-  const browser = await engine.chromium.launch({ headless, args, ...launchOptions });
+  // A HOST CAN CARRY THE FULL CHROMIUM BUILD AND NOT THE HEADLESS SHELL Playwright prefers (`chrome-headless-shell`),
+  // and a gate that cannot launch proves nothing. The launch falls back to the full build once, NAMES which it did, and
+  // only rethrows when that fails too, so a missing binary is never silence.
+  let browser = null;
+  try {
+    browser = await engine.chromium.launch({ headless, args, ...launchOptions });
+  } catch (err) {
+    const missingShell = /Executable doesn't exist|headless[_-]shell/i.test(String((err && err.message) || err));
+    if (!missingShell || launchOptions.channel) throw err;
+    console.log("BROWSER  the headless shell binary is not installed - launching the full chromium build instead");
+    browser = await engine.chromium.launch({ headless, args, ...launchOptions, channel: "chromium" });
+  }
   const boundWithPage = (innerFn, pageOpts = {}) =>
     withPage(browser, innerFn, { viewport, deviceScaleFactor, ...pageOpts });
   try {

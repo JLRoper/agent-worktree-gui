@@ -2222,7 +2222,7 @@ function collisionBlockHtml(row, key) {
       : kind === "same-tree"
         ? `<div class="collision-peer" data-collision-resolution="same-tree">the counterpart named here is <span class="mono">${esc(target || row.path)}</span> - the tree this card is drawn on. There is no second side and nothing to order.</div>`
         : absent
-          ? `<div class="collision-peer" data-collision-resolution="none">no row on this board answers to <span class="mono">${esc(target || "that name")}</span>, and no live agent is standing in a tree it names - there is no second side to rule against, so the panel recorded this as resolved by absence and it is not waiting on you.</div>`
+          ? `<div class="collision-peer" data-collision-resolution="none">no row on this board answers to <span class="mono">${esc(target || "that name")}</span>, and no live agent is standing in a tree it names - there is no second side to rule against.</div>`
           : `<div class="collision-peer" data-collision-resolution="none">no row on this board answers to <span class="mono">${esc(target || "that name")}</span> - there is no second side to rule against.</div>`;
     return `<div class="collision-block is-${esc(state)}${lane === "history" ? " is-history" : ""}" data-collision-block="${esc(key)}" data-collision-key="${esc(rec.key)}" data-collision-pair="${esc(rec.key)}" data-collision-lane="${esc(lane)}">
       <div class="collision-head">

@@ -293,7 +293,7 @@ const result = await (async () => {
         ok("the card is drawn for it, settled", Boolean(absentBlock) && /resolved by absence/.test(absentBlock.state), absentBlock ? absentBlock.state : "no block");
         ok("…carrying the verdict line, not a fresh alarm", /recorded as resolved by absence/.test(absentBlock?.absentLine || ""), String(absentBlock?.absentLine).slice(0, 120));
         ok("…with the absent class, not the reader's strong one", /is-absent/.test(absentBlock?.cls || "") && !/is-reader/.test(absentBlock?.cls || ""), String(absentBlock?.cls));
-        ok("…and the peer line says there is no second side and it is not waiting on you", /no live agent/.test(absentBlock?.peer || "") && /not waiting on you/.test(absentBlock?.peer || ""), String(absentBlock?.peer).slice(0, 160));
+        ok("…and the peer line says there is no second side", /no live agent/.test(absentBlock?.peer || "") && /no second side/.test(absentBlock?.peer || ""), String(absentBlock?.peer).slice(0, 160));
         eq("…and NO ruling press and NO ask press", [absentBlock?.rules, absentBlock?.asks], [0, 0]);
         ok("…while the pair's own card still offers both", v.blocks.some((b) => b.key !== ABSENT_KEY && b.rules > 0), JSON.stringify(v.blocks.map((b) => [b.key, b.rules, b.asks])));
 
