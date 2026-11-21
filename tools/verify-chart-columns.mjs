@@ -13,19 +13,19 @@
 //
 //   driven    at rest: fourteen of the fifteen headers drawn while every tree is on Assistant #1 and there is no second
 //             assistant — the OWNER column ("assistant") hides ITSELF there, with its switch ON and the Settings row
-//             saying why — fourteen cells per row, no hiddenColumns key in config.json (the page's own rule is not a
+//             saying why - fourteen cells per row, no hiddenColumns key in config.json (the page's own rule is not a
 //             stored default, and the file stays keyless until the reader moves a switch), fifteen switches checked
 //   driven    a SECOND assistant brings the owner column back with no switch touched: its header, its cell — the
 //             compact TAG ("M1") the numbered role label resolves to, never `assistant-1`, never the name and never a
 //             dash, while the tooltip carries the tag, the name and the label ("M1 — Assistant #1 (Manager 1) owns
-//             this worktree") beside the display-only sentence — and the counter says 15/15; switching it off again
+//             this worktree") beside the display-only sentence - and the counter says 15/15; switching it off again
 //             stores exactly that one column, and hides it even with the second assistant there
 //   driven    the KIND column is one more switch in this row and starts on: unchecking it takes its header and its cell
 //             out of every table (the verdict cell and its badge stay exactly where they are), checking it again brings
 //             both back, and the stored list names it in the chart's own order
 //   driven    an expanded worktree's detail carries its own line, "Controlled by: Assistant #1 — Manager", beside
 //             the branch and the verdict
-//   driven    unchecking Cherry and Tip rebuilds every project table to twelve columns — the header loses those two
+//   driven    unchecking Cherry and Tip rebuilds every project table to twelve columns - the header loses those two
 //             <th>, each row loses those two <td>, an expanded worktree's detail row spans exactly twelve, and the
 //             remaining columns still add up to the table's width (no horizontal scroll where there was none)
 //   driven    the write is the panel's, not the tab's: config.json carries ["assistant","tip","cherry"] in the
@@ -451,7 +451,7 @@ const run = async () => {
     return { ids: boxes.map((b) => b.dataset.chartCol), checked: boxes.filter((b) => b.checked).length, count: document.querySelector("#chart-cols-count")?.textContent };
   });
   check("Settings carries one switch per column, and the one chip that rides a column beside them", switches.ids, [...ALL_IDS, "reviewed"]);
-  check("all sixteen start switched on — the fifteen columns and the chip, the owner column included, which is on and simply has nothing to say yet", switches.checked, 16);
+  check("all sixteen start switched on - the fifteen columns and the chip, the owner column included, which is on and simply has nothing to say yet", switches.checked, 16);
   check("the row's counter reads the whole chart", switches.count, "15/15");
   const offSwitch = await page.evaluate(() => {
     const box = document.querySelector('#chart-cols input[data-chart-col="assistant"]');
@@ -493,7 +493,7 @@ const run = async () => {
     "the tooltip carries the tag, the owner's name and its numbered role label beside the display-only sentence",
     ownerTitles.length > 0 &&
       ownerTitles.every((t) =>
-        /^M1 — Assistant #1 \(Manager 1\) owns this worktree\. Display only: it does not change who wakes or runs\. Press to open Assistant #1's chat, started with this worktree and branch named\.$/.test(t),
+        /^M1 \u2014 Assistant #1 \(Manager 1\) owns this worktree\. Display only: it does not change who wakes or runs\. Press to open Assistant #1's chat, started with this worktree and branch named\.$/.test(t),
       ),
     JSON.stringify(ownerTitles.slice(0, 2)),
   );
