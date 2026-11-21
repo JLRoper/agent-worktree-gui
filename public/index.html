@@ -1304,6 +1304,11 @@
        `wtInitiativeFold`; test/initiative-fold.test.js imports this same file. Loaded before assistant.js, which
        paints every initiative card through it. -->
   <script src="/core/initiative-fold.js"></script>
+  <!-- The Initiatives tab's WAVE LANE: one wave's position, title, derived state word, both gate chips and its member
+       rows, as strings built from the read (public/core/waves-lane.js). Published on globalThis as `wtWavesLane`;
+       test/waves-lane.test.js imports this same file. Loaded before assistant.js, which draws the lane in every
+       initiative card. -->
+  <script src="/core/waves-lane.js"></script>
   <!-- The branch NAME, as a link to its page on the remote or as plain text when there is none: the anchor's whole
        shape (class, target, rel, title) in one place, called by the chart's branch cell (app.js) and by the
        Initiatives tab's worktree list (assistant.js). Published on globalThis as `wtBranchLink`;

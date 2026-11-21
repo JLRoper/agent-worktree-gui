@@ -20,6 +20,7 @@
 // worse than no card. The read carries the same status (`readable`, `error`, `file`) so the tab can say it.
 import { DESCRIPTION_MAX, TITLE_MAX, normTreePath } from "../lib/initiatives.js";
 import { initiativeAsks, initiativeTierFrom, initiativeTierInfo, INITIATIVE_TIER_INFO } from "../lib/initiative-permissions.js";
+import { waveLane } from "../lib/waves.js";
 // The thread a row is on NOW, which is the last one it was carried by (lib/assistant/queue.js `currentThread`): the
 // task fold names the run and the thread the same way the queue tab does, from the row itself.
 import { currentThread } from "../lib/assistant/queue.js";
@@ -76,7 +77,7 @@ function taskRowOf(task, nowMs, rowFor) {
  * The whole tab's document, built from the store plus the two things only the composition root knows: which project a
  * path belongs to, and what the board's row for it says. Pure enough to run over a fixture: every seam is a function.
  */
-export function initiativesView({ initiatives, projectForPath, rowFor, assistants = [], queueFor = () => null, now = Date.now(), tier = null }) {
+export function initiativesView({ initiatives, projectForPath, rowFor, assistants = [], queueFor = () => null, now = Date.now(), tier = null, waves = null, templateExists = null }) {
   const status = initiatives.statusOf();
   const list = initiatives.initiativeList();
   const level = initiativeTierInfo(tier);
@@ -89,6 +90,10 @@ export function initiativesView({ initiatives, projectForPath, rowFor, assistant
     }
     return { rec, tasks: Array.isArray(view?.tasks) ? view.tasks : [] };
   });
+  // Every assistant's rows, flattened once: a wave's members are the tasks that NAME it, from any project (decision
+  // 2, 2026-11-21), so the fold must not filter them by this initiative's tree keys the way the assistant strips do.
+  const waveTasks = board.flatMap((b) => b.tasks);
+  const waveStatus = waves && typeof waves.statusOf === "function" ? waves.statusOf() : null;
   const out = list.map((init) => {
     const trees = initiatives.treesFor(init.id).map((rec) => {
       const found = projectForPath(rec.path) || null;
@@ -163,6 +168,12 @@ export function initiativesView({ initiatives, projectForPath, rowFor, assistant
     }
     // How recently it worked on THIS initiative: newest first, a row with no clock after the ones that have one.
     people.sort((a, b) => String(b.lastAt || "").localeCompare(String(a.lastAt || "")) || a.name.localeCompare(b.name));
+    // THE WAVE LANE (lib/waves.js): this initiative's waves in position order, each folded with the tasks that name
+    // it, its derived state and its gate reads. A read, not a record: nothing here is stored on the initiative, and a
+    // wave with no member draws as `empty` rather than as a default membership.
+    const lane = waves
+      ? waveLane({ waves, initiativeId: init.id, tasks: waveTasks, rowFor, templateExists })
+      : { waves: [], skipped: [], currentId: null };
     return {
       id: init.id,
       title: init.title,
@@ -175,6 +186,11 @@ export function initiativesView({ initiatives, projectForPath, rowFor, assistant
       treeCount: trees.length,
       assistants: people,
       assistantCount: people.length,
+      // The lane's own three facts: the waves, the records the store refused (one sentence each, drawn beside the
+      // lane so a bad record is visible rather than silently missing), and which wave the stated order makes current.
+      waves: lane.waves,
+      waveSkipped: lane.skipped,
+      waveCurrentId: lane.currentId,
       // Newest first, so the fold opens on the change the reader is most likely looking for. Every event names its
       // actor and its time: a reader's own press is "you", an assistant's change is the assistant's id. A store the
       // caller handed in without the reader (a fixture with only initiativeList and treesFor) draws no history rather
@@ -193,6 +209,11 @@ export function initiativesView({ initiatives, projectForPath, rowFor, assistant
     // `tiers` is the four labels, so a second surface cannot draw a different list.
     tier: { id: level.id, label: level.label, hint: level.hint },
     tiers: INITIATIVE_TIER_INFO.map((row) => ({ id: row.id, label: row.label, hint: row.hint })),
+    // The wave store's own status, so the lane can say "this file cannot be read" without a second request. Null when
+    // the composition root handed in no wave store (a fixture that predates waves), which the lane draws as no waves.
+    waveStatus: waveStatus
+      ? { file: waveStatus.file, found: waveStatus.found, readable: waveStatus.readable, error: waveStatus.error }
+      : null,
     initiatives: out,
   };
 }
@@ -208,6 +229,10 @@ export function createInitiativesRoutes({
   sendJson,
   readBody,
   authorised,
+  // The wave store and its template read (lib/waves.js, routes/waves.js). Optional: a fixture that predates waves
+  // still drives this route, and the tab then draws an empty lane rather than failing.
+  waves = null,
+  templateExists = null,
   // Called after a write the tab should see at once (create, edit, an answered move): the composition root invalidates
   // the board snapshot and broadcasts it, so a chart chip appears the moment a membership changes rather than on the
   // next unrelated repaint. Defaulted so a fixture can drive the routes without a server.
@@ -251,6 +276,8 @@ export function createInitiativesRoutes({
       assistants: Array.isArray(assistant?.assistants) ? assistant.assistants : [],
       queueFor: (id) => (typeof assistant?.queueView === "function" ? assistant.queueView(id) : null),
       tier: tierOf(),
+      waves,
+      templateExists,
     });
 
   return async function initiativesRoutes(req, res, route, url) {

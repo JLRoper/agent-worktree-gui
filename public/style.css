@@ -4916,13 +4916,59 @@ a.init-branch-link:hover { text-decoration: underline; }
 .init-empty h5 { margin: 0 0 8px; font-size: 14px; letter-spacing: 0; text-transform: none; color: var(--text); }
 .init-empty p { max-width: 60ch; margin: 0 0 16px; font-size: 12px; line-height: 1.55; color: var(--dim); }
 .init-empty .as-actions { margin-top: 0; }
+/* ---- the WAVE LANE: waves inside an initiative card -------------------------------------------------
+   A LANE, NOT A TAB: one row per wave inside the card the initiative already draws. Nothing here is fixed-width
+   and every row wraps, because a pane may be 768 wide and a wave title, a member title or a template id can each be
+   a long unbroken token - the lane must never push the pane sideways. The gate chips are the only coloured thing on
+   the row, so "not met", "cannot tell" and "no gate" read apart at a glance. */
+.init-wavefold { margin: 0 0 12px; border-top: 1px solid var(--line); padding-top: 8px; }
+.init-wavefold .init-sechead { display: flex; align-items: center; gap: 8px; }
+.init-wavefold .init-sechead .chip { font-size: 10.5px; padding: 2px 8px; text-transform: none; letter-spacing: 0; }
+.init-waves { display: flex; flex-direction: column; gap: 8px; }
+.wave-row { min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.wave-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.wave-pos { flex: 0 0 auto; font-family: var(--mono); font-size: 11px; color: var(--dim); }
+.wave-title { flex: 1 1 160px; min-width: 0; font-size: 12.5px; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.wave-head .chip { font-size: 10.5px; padding: 2px 8px; }
+.wave-state.is-empty, .wave-state.is-unentered { color: var(--dim); }
+.wave-state.is-ready { color: #9ecbff; border-color: #1c3a56; background: var(--blue-bg); }
+.wave-state.is-running { color: #7ee787; border-color: #1f4a2a; background: var(--green-bg); }
+.wave-state.is-blocked { color: #f0c674; border-color: #4d3d12; background: var(--amber-bg); }
+.wave-state.is-unknown { color: #c8a6ff; border-color: #3b2d5c; background: var(--violet-bg); }
+.wave-state.is-done { color: #6fcf97; border-color: #2a4432; }
+.wave-current { color: #ecd9ff; border-color: #55407a; background: #2a2044; }
+.wave-gates { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 4px; }
+.wave-gate { font-size: 10.5px; padding: 2px 8px; }
+.wave-gate.is-met { color: #7ee787; border-color: #1f4a2a; background: var(--green-bg); }
+.wave-gate.is-unmet { color: var(--dim); }
+.wave-gate.is-unknown { color: #f0c674; border-color: #4d3d12; background: var(--amber-bg); }
+.wave-gate.is-none { color: var(--dimmer); border-style: dashed; }
+.wave-auto { font-size: 10.5px; padding: 2px 8px; }
+.wave-auto.is-on { color: #f0c674; border-color: #4d3d12; background: var(--amber-bg); }
+.wave-auto.is-off { color: var(--dimmer); }
+.wave-members { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 6px; min-width: 0; }
+.wave-member { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; max-width: 100%; min-width: 0; padding: 2px 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 11.5px; line-height: 1.5; }
+.wave-member-id { flex: 0 0 auto; font-family: var(--mono); font-weight: 600; color: var(--text); }
+.wave-member-title { min-width: 0; overflow-wrap: anywhere; color: var(--dim); }
+.wave-member-project { min-width: 0; overflow-wrap: anywhere; font-family: var(--mono); font-size: 10.5px; color: var(--dimmer); }
+.wave-member .chip { font-size: 10px; padding: 0 6px; }
+.wave-mstate.is-queued { color: var(--dim); }
+.wave-mstate.is-running { color: #7ee787; border-color: #1f4a2a; background: var(--green-bg); }
+.wave-mstate.is-parked { color: #f0c674; border-color: #4d3d12; background: var(--amber-bg); }
+.wave-mstate.is-done { color: #6fcf97; border-color: #2a4432; }
+.wave-template { margin-top: 6px; overflow-wrap: anywhere; }
+.wave-unresolved { color: #ff9c94; font-weight: 600; }
+.wave-skipped { margin-top: 6px; }
+.wave-skip-row { overflow-wrap: anywhere; }
+.wave-none { padding: 2px 0; }
+.wave-store-bad { margin: 0; }
 /* THE WIDE FLOAT IS TWO COLUMNS, not a 217-character measure: the words and the map of projects sit side
    by side, and the folds that belong to the whole initiative (assistants, history) run beneath both. */
 @container (min-width: 1000px) {
   .init-card:not(.is-titlecard) {
     display: grid;
     grid-template-columns: minmax(0, 72ch) minmax(320px, 640px);
-    grid-template-areas: "head side" "desc side" "chips side" "assist assist" "hist hist";
+    grid-template-areas: "head side" "desc side" "chips side" "waves waves" "assist assist" "hist hist";
     column-gap: 24px;
     align-items: start;
     justify-content: start;
@@ -4931,6 +4977,7 @@ a.init-branch-link:hover { text-decoration: underline; }
   .init-card .init-title { font-size: 15px; }
   .init-card > .init-descfold, .init-card > .init-desc { grid-area: desc; }
   .init-card > .init-chips { grid-area: chips; }
+  .init-card > .init-wavefold { grid-area: waves; }
   .init-card > .init-side { grid-area: side; }
   .init-card > .init-assistfold { grid-area: assist; }
   .init-card > .init-histfold { grid-area: hist; }
