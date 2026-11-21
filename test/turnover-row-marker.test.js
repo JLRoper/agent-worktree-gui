@@ -54,6 +54,9 @@ function harness({ turnoverBranch = TURNOVER } = {}) {
     isProjectRootRow: () => false,
     treeTitleOf: () => "",
     agentBadgeHtml: () => "",
+    // The two name-line chips are stubs like the other cell builders: this file is about the turnover mark.
+    resultChipHtml: () => "",
+    collisionDiamondHtml: () => "",
     deletableWithoutAsking: () => false,
     shownColumns: () => CHART_COLUMNS.map((_, i) => i),
     branchCellHtml: () => "",
@@ -67,6 +70,7 @@ function harness({ turnoverBranch = TURNOVER } = {}) {
     "ctx",
     `const { state, esc, keyOf, rowDrawsOpen, prCellHtml, verdictHtml, isProjectRootRow, treeTitleOf, agentBadgeHtml,
              deletableWithoutAsking, shownColumns, branchCellHtml, ownerCellHtml, initiativeCellHtml, aheadBehindCellHtml,
+             resultChipHtml, collisionDiamondHtml,
              lifeCellHtml, nextReadCellHtml } = ctx;
      ${turnoverForCode}
      ${columnsCode}
