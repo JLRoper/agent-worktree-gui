@@ -133,13 +133,12 @@ test("a lane of two waves draws both in the order given, with a count", () => {
   assert.match(html, />Next</);
 });
 
-test("no waves is an empty lane with a sentence, not an error", () => {
-  const html = lane.laneHtml({ id: "init_a", waves: [] }, { readable: true, found: true });
-  assert.match(html, /data-wave-none/);
-  assert.match(html, /no waves recorded on this initiative yet/);
+test("an initiative with no waves draws no lane at all, so the card is as it was", () => {
+  assert.equal(lane.laneHtml({ id: "init_a", waves: [] }, { readable: true, found: true }), "");
+  assert.equal(lane.laneHtml({ id: "init_a", waves: [], waveSkipped: [] }, null), "");
 });
 
-test("an unreadable store is said as unreadable, never as no waves", () => {
+test("an unreadable store is said as unreadable, never as nothing at all", () => {
   const html = lane.laneHtml({ id: "init_a", waves: [] }, { readable: false, found: true, error: "Unexpected token } in JSON" });
   assert.match(html, /wave-store-bad/);
   assert.match(html, /cannot be read/);

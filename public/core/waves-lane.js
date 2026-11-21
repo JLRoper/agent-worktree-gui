@@ -96,12 +96,18 @@
   /**
    * The lane for one initiative, as the card draws it. `waveStatus` is the store's own status (`readable`, `found`,
    * `error`): an unreadable store is SAID rather than drawn as "no waves", because those are different answers.
+   *
+   * AN INITIATIVE WITH NO WAVES DRAWS NO LANE. The section is the surface for waves, so an initiative that has none
+   * leaves the card as it was: "Waves 0 / nothing here yet" on every card would be a box a reader learns to skip, and
+   * this slice has no write route to put anything in it. A store that cannot be read, or a record the loader refused,
+   * IS drawn, because those are facts a reader has to see.
    */
   function laneHtml(init, waveStatus = null, esc = defaultEsc) {
     const waves = Array.isArray(init && init.waves) ? init.waves : [];
     const skipped = Array.isArray(init && init.waveSkipped) ? init.waveSkipped : [];
     const currentId = init && init.waveCurrentId ? String(init.waveCurrentId) : null;
     const unreadable = Boolean(waveStatus && waveStatus.readable === false);
+    if (!waves.length && !skipped.length && !unreadable) return "";
     const rows = waves.length
       ? waves.map((w) => waveHtml(w, currentId, esc)).join("")
       : unreadable
