@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>A SPAWN that carries a queue row cuts a pushable tree</title>
+<style>
+  :root { --ink:#1c2126; --dim:#5c6771; --line:#d8dee4; --bg:#fbfcfd; --code:#f2f4f6; --ok:#1f7a4d; --no:#a12d2d; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:32px 28px 64px; background:var(--bg); color:var(--ink);
+         font:15px/1.55 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 1000px; margin: 0 auto; }
+  h1 { font-size:24px; margin:0 0 4px; letter-spacing:-0.01em; }
+  h2 { font-size:17px; margin:34px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  h3 { font-size:14px; margin:20px 0 6px; color:var(--dim); text-transform:uppercase; letter-spacing:0.06em; }
+  p { margin:8px 0; }
+  .sub { color:var(--dim); margin:0 0 18px; }
+  .facts { display:grid; grid-template-columns: 210px 1fr; gap:4px 14px; margin:14px 0 0; font-size:14px; }
+  .facts dt { color:var(--dim); }
+  .facts dd { margin:0; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; }
+  code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:13px; background:var(--code); padding:1px 5px; border-radius:3px; }
+  pre { background:var(--code); border:1px solid var(--line); border-radius:5px; padding:12px 14px; overflow:auto;
+        font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; line-height:1.5; margin:10px 0; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:14px; }
+  th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:12.5px; text-transform:uppercase; letter-spacing:0.05em; }
+  .ok { color:var(--ok); font-weight:600; }
+  .no { color:var(--no); font-weight:600; }
+  .note { border-left:3px solid var(--line); padding:2px 0 2px 12px; color:var(--dim); margin:12px 0; }
+  ul { margin:8px 0 8px 20px; padding:0; }
+  li { margin:4px 0; }
+  .small { font-size:13px; color:var(--dim); }
+</style>
+</head>
+<body>
+<main>
+<h1>A SPAWN that carries a queue row cuts a pushable tree</h1>
+<p class="sub">agent-worktree-gui 1.149.0. The record a cut writes, the row that pre-lifts it, and the hand lifts it replaces. All line numbers are this branch's files at its cut from <code>1aad736b</code>.</p>
+
+<dl class="facts">
+  <dt>base</dt><dd>1aad736b, the tip of origin/main on 2026-11-21</dd>
+  <dt>branch</dt><dd>wtgui/make-a-spawn-that-carries-a-queue-row-84ecd0</dd>
+  <dt>the cut's record</dt><dd>lib/jobs.js makeWorktree:3152 (lifted), 3154 (rememberParent), 3219 (preLiftedBy written)</dd>
+  <dt>the SPAWN path</dt><dd>lib/features/spawn.js:214 (rowId), 379 (landing + preLiftedBy on the new tree's create)</dd>
+  <dt>the refusal it removes</dt><dd>lib/push-permissions.js:88 treeKindRefusal</dd>
+  <dt>the read-back</dt><dd>lib/jobs.js loadParents:3181, treeKindFor; server.js applyTreeKind:3862</dd>
+  <dt>the vocabulary</dt><dd>lib/branch-kind.js BRANCH_KINDS: turnover, research - unchanged, no third kind</dd>
+  <dt>row fields</dt><dd>branchKind, branchKindLabel, branchKindLifted, branchKindPreLiftedBy, branchKindParent</dd>
+</dl>
+
+<h2>1. What a push meets, and what a lift is</h2>
+<p>A cut writes one record into the branch-parents book, keyed by the tree's six hex tag: <code>{ parent, branch, tree, at, kind, lifted?, preLiftedBy? }</code>. One kind is local only by definition: <code>research</code>, cut from the project's main parent. <code>treeKindRefusal</code> (lib/push-permissions.js:88) answers with a refusal for a research record that is not lifted, and <code>RemoteWrites.decision</code> returns it <em>first</em>: before the policy, before the push controls, before the landing mark, before any grant (lib/remote-writes.js:145). A push from an unlifted research tree is therefore not asked about and not granted - it is refused, and the sentence names the tree and the kind.</p>
+<p>The lift is one boolean on that record. <code>POST /api/worktree/kind-lift</code> calls <code>jobs.liftKind</code> (lib/jobs.js:3252), which rewrites the record with <code>lifted: true</code> and leaves the kind alone. Nothing else moves: the push guard's policy and controls are untouched, and the worker's landing paragraph is untouched. After a lift the push falls through to the ordinary decision - the project's policy, the two branch controls, the permission box - exactly as it would for a turnover child with no lift needed.</p>
+<p>So the state a queue row wants at the cut is the state a person reaches by pressing <em>Lift</em>. This change reaches it at the cut instead of after the first refusal.</p>
+
+<h2>2. The refusals this replaces, in one evening</h2>
+<p>The first two are the reader's own record of that evening; the last three are measured on this machine while the workers ran. Each one is the same defect: the tree was cut research and unlifted, and the worker's push was refused.</p>
+<table>
+  <tr><th>run</th><th>record</th><th>what it cost</th></tr>
+  <tr>
+    <td><strong>PR 819</strong>, the one-diamond landing<br><span class="small">commit 2e6889d2, v1.145.0: row-chips, one collision diamond per row</span></td>
+    <td><span class="no">research, unlifted</span><br><span class="small">the row's own landing, so its worker was told to push</span></td>
+    <td>the push was refused; the landing needed a hand lift before it could push at all.</td>
+  </tr>
+  <tr>
+    <td><strong>PR 821</strong>, the kind control<br><span class="small">commit fb46b15, v1.146.0: the kind a cut recorded is on the row, and its lift has a control</span></td>
+    <td><span class="no">research, unlifted</span></td>
+    <td>the same refusal and the same hand lift. docs/landing-collision-card-accordion-1.147.0-2026-11-21.md:74 names the squash that carried it, 56929642, as "the kind-lift control from #821".</td>
+  </tr>
+  <tr>
+    <td><strong>row 185</strong>, wtgui/give-an-assistant-a-way-to-know-what-a-65e039<br><span class="small">tag 65e039, cut 2026-11-21T21:53:23.882Z</span></td>
+    <td><span class="no">research, unlifted</span> while job <code>5974d4c2</code> was <code>running</code> (started 21:53:18Z)</td>
+    <td>would have been refused at push time; the manager lifted it by hand through <code>POST /api/worktree/kind-lift</code>. The record now reads <code>lifted: true</code> and carries <strong>no preLiftedBy</strong> - the fingerprint of a person, which is what this change makes readable.</td>
+  </tr>
+  <tr>
+    <td><strong>row 184</strong>, wtgui/land-the-review-chip-lane-as-a-squash-pr-58597e<br><span class="small">tag 58597e, cut 2026-11-20T18:57:26.214Z</span></td>
+    <td><span class="no">research, unlifted</span> while job <code>49bbfce6</code> was <code>running</code> (started 2026-11-21T21:51:52Z)</td>
+    <td>the same: hand-lifted, and its record now reads <code>lifted: true</code> with no <code>preLiftedBy</code>.</td>
+  </tr>
+  <tr>
+    <td><strong>this tree</strong>, wtgui/make-a-spawn-that-carries-a-queue-row-84ecd0<br><span class="small">row 186 in assistant-3's queue, tag 84ecd0, cut 2026-11-21T21:57:56.946Z, job b540ff57 running since 21:57:54Z</span></td>
+    <td><span class="no">research, unlifted</span> at the time of this report, while its own brief says "push it and open a pull request"</td>
+    <td>the defect measured on the tree that lands the fix. The panel's kind rule answers a refusal for that record (<code>treeKindRefusal</code>); under the guard's ask path that is the refusal PR 819 and PR 821 met. This tree's own guard controls are allow-all, so its hook returns before the request route and never reaches that rule - the record is still the wrong answer for a row's tree, and the rule this branch adds writes the right one at the cut.</td>
+  </tr>
+</table>
+<p class="note">The two live rows are read from <code>~/.wag/state/branch-parents.json</code> and from <code>/api/state</code> on the running panel: both rows carry <code>branchKind: "research"</code> with <code>branchKindLifted: true</code>, and neither record has a <code>preLiftedBy</code>. A lifted record with no reason is a person's lift; a lifted record that names a row is the panel's, written at the cut. That distinction did not exist before this branch.</p>
+
+<h2>3. The change</h2>
+<p>One input decides it: the SPAWN line named a task id. <code>assistantSpawnRun</code> reads it once (lib/features/spawn.js:214) and, only on the branch that CUTS a new tree, adds two fields to the same <code>jobs.create</code> it always called (lib/features/spawn.js:379):</p>
+<pre>...(rowId ? { landing: true, preLiftedBy: `row ${rowId}` } : {}),</pre>
+<p><code>landing: true</code> is the mechanism that already existed and had no caller on this path. At the cut, <code>makeWorktree</code> writes the record lifted (lib/jobs.js:3152, 3154) and <code>made.localOnly</code> false (lib/jobs.js:3156), which is precisely the pre-lifted research record the brief describes. <code>preLiftedBy</code> is the new fact: <code>rememberParent</code> writes it only on a lifted record (lib/jobs.js:3219), and <code>loadParents</code> reads it back beside <code>rec.lifted</code> (lib/jobs.js:3181), so a restart keeps the reason as well as the flag.</p>
+<p>What the SPAWN does NOT get is the other half of <code>landing: true</code>. In this panel that flag also means "a run started to LAND": the merge flow's trees are marked that way, their guard allows a push outright (server.js:1343, lib/remote-writes.js:153), and their brief is the blanket <code>WILL LAND</code> paragraph (lib/jobs.js:4089). A row pre-lift is the record only:</p>
+<ul>
+  <li>the guard is installed with <code>landing: false</code> (lib/jobs.js:3971), so the push meets the project's policy and its two branch controls, the ordinary decision - the same thing a hand lift leaves behind;</li>
+  <li>the worker keeps the parent's own LANDING paragraph (lib/jobs.js:4089), which is the only one that knows whether the project has a turnover branch and what its push policy is. A blanket <code>WILL LAND</code> on a turnover project would tell a worker to push a new remote branch, which the turnover doctrine forbids.</li>
+</ul>
+<p>That is the one judgement this branch makes beyond the brief, and it is the reason the code separates <code>cutPreLiftedBy</code> (the record) from <code>landing</code> (the run) in <code>jobs.create</code>. The cut is still made with <code>landing: true</code>; only its two run-level meanings are withheld because a pre-lift is not a merge run.</p>
+
+<h3>The boundary the vocabulary keeps</h3>
+<p>A row SPAWN cut from a turnover branch is a <code>turnover</code> child: not local only, so there is nothing to lift, and the record stays <code>kind: "turnover"</code> with no <code>lifted</code> and no <code>preLiftedBy</code> (pinned by the fourth test). No third kind was added; <code>BRANCH_KINDS</code> and <code>KIND_LABELS</code> are untouched, and the verdict cell that draws them is not edited.</p>
+
+<h3>What the record looks like</h3>
+<pre>// a SPAWN that carried row 186, cut from main
+{ "parent":"main", "branch":"wtgui/...", "tree":"<repo>/.worktrees/...", "at":"...",
+  "kind":"research", "lifted":true, "preLiftedBy":"row 186" }
+
+// the same tree lifted by a person (POST /api/worktree/kind-lift)
+{ "parent":"main", ..., "kind":"research", "lifted":true }
+
+// a tree cut by hand, or a SPAWN that named no row
+{ "parent":"main", ..., "kind":"research" }
+
+// a row SPAWN cut from a turnover branch
+{ "parent":"20261121_1200_ROPER-186_demo", ..., "kind":"turnover" }</pre>
+<p>The row carries the same fact for a surface that has no book in hand: <code>branchKindPreLiftedBy</code> is stamped beside <code>branchKindLifted</code> by <code>applyTreeKind</code> (server.js:3862) and returned by the lift route (server.js:5514). It is null unless a row pre-lifted the record, so a page or a later agent can say "lifted, because row 186" instead of only "lifted".</p>
+
+<h2>4. Tests</h2>
+<p><code>test/spawn-row-prelift.test.js</code> drives the real assistant spawn path (<code>startSpawn</code>), the real spawner (<code>assistantSpawnRun</code>), the real <code>Jobs.create</code>/<code>makeWorktree</code> and a real repository; a stub gateway only accepts the run and ends it. Four tests:</p>
+<ul>
+  <li><strong>row cut</strong>: a SPAWN carrying a queue row writes <code>kind research</code>, <code>lifted: true</code>, <code>preLiftedBy: "row N"</code>, reads it back through <code>loadParents</code> and the file, installs the guard with <code>landing: false</code>, and still hands the worker the parent's paragraph (not <code>WILL LAND</code>);</li>
+  <li><strong>no-row cut</strong>: the same path with no task id writes research, unlifted, no <code>preLiftedBy</code>, guard <code>landing: false</code>;</li>
+  <li><strong>hand cut</strong>: <code>jobs.create</code> with no landing flag stays unlifted, a person's <code>liftKind</code> adds <code>lifted</code> and no row, and <code>makeWorktree</code> with <code>landing: true, preLiftedBy</code> returns <code>localOnly: false</code> while a plain cut returns <code>localOnly: true</code>;</li>
+  <li><strong>turnover parent</strong>: a row SPAWN cut from a turnover branch records a turnover child, never lifted, and its worker is told to roll up locally.</li>
+</ul>
+<p>Focused run while working: the new file's 4 tests pass, and 47 tests pass across the seven files that already pin this machinery (<code>branch-kind</code>, <code>spawn-stage-landing</code>, <code>spawn-from</code>, <code>spawn-queue-link</code>, <code>spawn-busy</code>, <code>human-kinds</code>, <code>spawn-cards</code>), plus <code>node tools/verify-branch-kind.mjs</code> with 57 checks and 0 failed.</p>
+<p>The full sweep is reported as it happened, because it did not reach its summary. <code>npm test</code> was run once and printed 1,485 passes and 8 failures, then stopped producing output for 14 minutes with six heavy files still in flight (a sibling tree was running its own suite at the same time); it was cancelled at the 20 minute limit this project's worker briefs set. The eight failing files were re-run on their own: three pass alone (<code>assistant-carry-key</code>, <code>assistant-to-replay</code>, <code>child-tree</code>), and the other five fail identically on a clean <code>git archive main</code> tree, so none is this change:</p>
+<ul>
+  <li><code>assistant-profile</code> - "the whitelists are gone from the profile, the payloads, the page and the route";</li>
+  <li><code>assistant-search-scroll</code> - "the keyboard step scrolls the popover, not the transcript";</li>
+  <li><code>child-route</code> - "the child route cuts from the row's branch, records the cut, and hands the rollup a rollable child";</li>
+  <li><code>gateway-permissions</code> - the file itself, because it starts <code>server.js</code> in a worktree that has no <code>config.json</code> (ENOENT on <code>config.json</code>, measured on both trees);</li>
+  <li><code>header-controls</code> - "the moved control keeps its handler: one press closes the stream, the next reconnects".</li>
+</ul>
+
+<h2>5. What is not changed</h2>
+<ul>
+  <li><code>SPAWN IN</code> cuts nothing, so it writes no record and lifts nothing: an existing tree's kind is the one it was cut with.</li>
+  <li>A tree cut by hand, and a SPAWN that names no task, are untouched: research, local only, lifted only by a person.</li>
+  <li>A turnover child is untouched: it was never local only.</li>
+  <li>The two kinds, their labels and the verdict cell that draws them are untouched; another live run is rewriting that cell.</li>
+</ul>
+</main>
+</body>
+</html>
