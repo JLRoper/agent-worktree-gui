@@ -650,7 +650,7 @@ test("every digest line carries state, thread, worktree, PR state and its skip r
   assert.match(text, /- ● #9 running · running · thread T1 · tree C:\/wt · PR OPEN #3 · files a\.js · STALE: that thread has no live run/);
   // A parked task: the same facts, plus why it is parked. The park carries no hold, so it reads `parked (manual)` — the
   // release condition slot says out loud that there is nothing the panel can test (see test/queue-holds.test.js).
-  assert.match(text, /- ⏸ #10 parked \(manual\) · parked · thread \(none\) · tree C:\/wt2 · PR none · PARKED: waiting on review/);
+  assert.match(text, /- ⏸ #10 parked \(manual\) · parked · thread \(none\) · tree C:\/wt2 · PR none · PARKED, and a SPAWN carrying this id is refused until it is unparked: waiting on review/);
   assert.ok(!text.includes("queued 5"), "only the top N queued are listed");
   assert.match(text, /and 5 more queued/);
 });
@@ -661,9 +661,31 @@ test("a task whose thread is live reads LIVE, never STALE", () => {
   const rowFor = () => ({ path: "C:/wt", verdict: "MERGED", pr: { number: 7, state: "MERGED" } });
   const lines = queueDigest(q, { isLive: (t) => t === "T1", rowFor });
   const text = lines.join("\n");
-  assert.match(text, /- ● #1 running · live one · thread T1 · tree C:\/wt · PR MERGED #7 · LIVE$/m);
+  assert.match(text, /- ● #1 running · live one · thread T1 · tree C:\/wt · PR MERGED #7 · LIVE, and a SPAWN into its tree is refused until this run ends$/m);
   assert.ok(!/STALE/.test(text), "a live thread is never called stale");
   assert.match(lines[0], /0 queued · 1 running · 0 parked · 0 done/, "and the header counts no stale task");
+});
+
+test("a queued row whose tree a live run holds says whose run holds it", () => {
+  // The half a state word cannot say: the row is `queued`, and a SPAWN naming its TREE would still be refused by
+  // lib/jobs.js, because a live run stands in it. The line names the holder, so the reader can wait for it or pick
+  // another tree instead of learning the refusal at the cut.
+  const q = addTask([], { title: "someone else's tree", worktree: "C:/held" }).tasks;
+  const jobs = [{ id: "job-5962", status: "running", thread: "T-other", cwd: "C:/held" }];
+  const lines = queueDigest(q, { isLive: () => false, jobs });
+  assert.match(
+    lines.join("\n"),
+    /- ○ #1 queued · someone else's tree · thread \(none\) · tree C:\/held · PR none · TREE HELD by job job-5962 on thread T-other - a SPAWN into it is refused until that run ends$/m,
+  );
+});
+
+test("a row's own run is not a second holder of its tree", () => {
+  let q = addTask([], { title: "second in the same tree", thread: "T-held", worktree: "C:/held" }).tasks;
+  q = setTaskState(q, 1, "running").tasks;
+  const jobs = [{ id: "job-held", status: "running", thread: "T-held", cwd: "C:/held" }];
+  const text = queueDigest(q, { isLive: (t) => t === "T-held", jobs }).join("\n");
+  assert.match(text, /· LIVE, and a SPAWN into its tree is refused until this run ends$/m);
+  assert.ok(!text.includes("TREE HELD"), "the row's own run is the LIVE half, not a second holder");
 });
 
 test("a row whose only PR is CLOSED reads PR none, never a merged claim", () => {

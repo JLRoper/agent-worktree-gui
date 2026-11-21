@@ -148,6 +148,7 @@ import { DELETE_PATH, createDeleteRoutes } from "./routes/assistant-delete.js";
 // The digest tail and its READ tool: two GETs over one assistant's transcript and the turn a row's pointer names.
 // The module is a reader only - every append is the Assistant's - so mounting it cannot change what a turn says.
 import { DIGEST_PATH, READ_PATH, createDigestRoutes } from "./routes/assistant-digest.js";
+import { SPAWN_CHECK_PATH, createSpawnCheckRoutes } from "./routes/assistant-spawn-check.js";
 // The header search's one read: every persisted turn of one assistant, filtered by a query the module (with
 // public/core/turn-search.js) interprets - wildcards, a plain substring, and an escaped query that cannot throw.
 import { SEARCH_PATH, createSearchRoutes } from "./routes/assistant-search.js";
@@ -1837,6 +1838,13 @@ const PREFIX_MOUNTS = [
   // a row's pointer with the sending turn's final message and last few tool calls.
   { prefix: DIGEST_PATH, handles: createDigestRoutes({ assistant, config, sendJson, authorised }) },
   { prefix: READ_PATH, handles: createDigestRoutes({ assistant, config, sendJson, authorised }) },
+  // The SPAWN pre-flight (routes/assistant-spawn-check.js): what the cut would refuse, and what would fix it, asked
+  // BEFORE the line is written. Read only - the same restriction the digest's reader lives under - and computed
+  // from the cut's own checks (lib/spawn-check.js), so its answer cannot drift from what the cut would do.
+  {
+    prefix: SPAWN_CHECK_PATH,
+    handles: createSpawnCheckRoutes({ assistant, getProjects: () => registry.list(), config, sendJson, authorised }),
+  },
   // The header search (routes/assistant-search.js): one read over the turns the job store kept, for one assistant
   // or all of them. The Assistant owns the store read and the thread set, the module owns the query's meaning.
   { prefix: SEARCH_PATH, handles: createSearchRoutes({ assistant, sendJson }) },
