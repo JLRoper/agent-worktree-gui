@@ -4,16 +4,29 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.145.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.145.1 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-661 releases from v0.1.0 (2026-10-20) to v1.145.0 (2026-11-21), 2319 commits between the tags. Every release is anchored by an
+662 releases from v0.1.0 (2026-10-20) to v1.145.1 (2026-11-21), 2322 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.145.1 — 2026-11-21 · 3 commits
+
+[`46f9f63`](https://github.com/JLRoper/agent-worktree-gui/commit/46f9f631c16eb32fccff29006eb61472ad31bff1) · [compare v1.145.0...v1.145.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.145.0...v1.145.1)
+
+### Fixed
+
+- fix: the own-tree guard asks whether the cwd is inside the tree (#820) ([`46f9f63`](https://github.com/JLRoper/agent-worktree-gui/commit/46f9f631c16eb32fccff29006eb61472ad31bff1))
+
+### Docs & tests
+
+- test: give the turnover-mark harness the two name-line chips it was missing ([`1728527`](https://github.com/JLRoper/agent-worktree-gui/commit/17285275b461407b4cd10b88f2b2a3b22837bb47))
+- docs: render the changelog - 661 releases ([`7bf705a`](https://github.com/JLRoper/agent-worktree-gui/commit/7bf705a4ae98cd42c3e8681371a6f4bddf20234d))
 
 ## v1.145.0 — 2026-11-21 · 7 commits
 
