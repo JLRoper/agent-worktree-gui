@@ -172,9 +172,10 @@ test("the row carries an amber mark and a Reviewed press, distinct from the lock
   assert.match(mark, /data-review-done=/, "the press lives on the row");
   assert.match(mark, /\\u25a3/, "an amber filled square - not the 🔒 and not the ⇄");
   assert.doesNotMatch(mark, /1F512|21c4/, "it does not borrow either other marker's glyph");
-  // It is drawn after both of them in the name line, so the three never overwrite one another.
+  // It is drawn after both of them in the name line, so the three never overwrite one another: turnover, the row's one
+  // collision diamond, then the amber mark.
   const name = sliceBetween(rowsSrc, 'name: `<td class="name"', "// Same rule for the branch");
-  assert.match(name, /\$\{turnoverRowMarkHtml\(row\)\}\$\{collisionRowMarkHtml\(row\)\}\$\{reviewRowMarkHtml\(row\)\}/);
+  assert.match(name, /\$\{turnoverRowMarkHtml\(row\)\}\$\{collisionDiamondHtml\(row, delKey\)\}\$\{reviewRowMarkHtml\(row\)\}/);
   // The row's own <tr> says it too, at rest, without a tooltip being opened - and only while the chip's own switch
   // is on (Settings > Board > Chart columns, "Reviewed"): a switched-off chip leaves no amber edge behind.
   assert.match(rowsSrc, /const reviewOn = reviewChipShown\(\);/);

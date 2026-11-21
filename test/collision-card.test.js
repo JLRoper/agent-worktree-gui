@@ -209,6 +209,9 @@ test("a note whose target names no row and no live agent is recorded resolved-by
   assert.deepEqual(lane.collisions([row]), [], "no collision item for H to step into");
   // THE CHIP: resolved, so the row is not painted as a live alarm by the other surface that reads the same record.
   assert.deepEqual(chips.tally([view], PROJECT), { open: 0, resolved: 1, total: 1 });
+  // …and the row's ONE diamond says so in words, since it draws no number: the card and the control read one tally.
+  assert.equal(chips.collisionWords(chips.tally([view], PROJECT)), "1 collision, resolved");
+  assert.match(chips.collisionDiamondLabel(chips.tally([view], PROJECT), false), /^1 collision, resolved on this worktree; press to open every pair/);
 
   // AND A PAIR THE READER COULD RULE ON STILL COUNTS OPEN: the verdict does not swallow the lane it arrived in.
   const pair = book.recordNote({ project: PROJECT, treePath: rows[0].path, branch: rows[0].branch, target: "card-b", text: "we both touch lib/shared.js", rows, queues: [], liveAgents: [], at: REPORT_AT }).record;

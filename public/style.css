@@ -2432,11 +2432,15 @@ tr.row.is-locked { box-shadow: inset 2px 0 0 #6b5324; }
 /* THE VIOLET COLLISION MARK, and the card the reader rules on. The FOURTH row mark, deliberately unlike the other
    three: the lock is the yellow 🔒 (a state the reader sets), the turnover mark is the blue ⇄ (a branch
    relationship), the review mark is the amber ▣ (a box to tick), and this one is a VIOLET ◆ - the one mark that is
-   about a RELATIONSHIP BETWEEN TWO ROWS, not about this row alone. It sits between the turnover mark and the review
-   mark, so a row carrying all four reads left to right: name, lock, branch, collision, review.
-   The two states that matter at a glance: `is-reader` (the pair is waiting on the reader) is the bright violet, and
-   `is-ruled` (the pair has been decided) fades to a muted one and keeps the marker, because a ruled overlap is still
-   a fact about the row - it is how a re-detected pair reads as already ruled instead of as a fresh alarm. */
+   about a RELATIONSHIP BETWEEN TWO ROWS, not about this row alone.
+   ON A ROW THE MARK IS THE PRESS, not a passive glyph: `collisionDiamondHtml` (public/board-scaffold.js) draws ONE
+   button per row with this class plus `collision-diamond`, and public/chart.css owns its box, its 24x24 hit target,
+   its filled/open and outlined/resolved states and its focus ring. This rule is the ink and the glyph both surfaces
+   share; the card's head mark below is still a `role="img"` span.
+   The two inks that matter: `is-reader` (the pair is waiting on the reader) was the brightest violet, and the ruled
+   state faded to a muted one and kept the marker, because a ruled overlap is still a fact about the row - it is how a
+   re-detected pair reads as already ruled instead of as a fresh alarm. The row's diamond now says that through its
+   two diamond states (`is-open` / `is-waiting` / `is-resolved`), which is what the browser gates read. */
 .collision-mark {
   flex: none;
   margin-left: 3px;

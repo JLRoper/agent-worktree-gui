@@ -833,9 +833,10 @@ function rowHtml(row, forceOwner = false) {
     // The row's RESULT chip is deliberately not in this line any more: it is the `reviewedExtra` cell below, a column
     // of its own beside the name. Two review chips in the name line pushed the name into an ellipsis on every row that
     // carried both; the amber mark and its press stay here, and the chip that prints the summary, the age and
-    // "reviewed" moved out. The collision chip stays: it is this row's own tag, not a second review control.
+    // "reviewed" moved out. The collision side is ONE diamond button in this line - it replaced both the per-pair
+    // marks and the counts chip that used to sit after them, so the width those two spent is the name's again.
     name: `<td class="name" data-copy-value="${esc(shownName)}"><div class="name-line"><span class="row-lead"></span><button class="btn-row-agent" data-agent-path="${esc(row.path)}" data-agent-name="${esc(row.name)}" data-agent-project="${esc(row.project)}"
-      title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">\u25b6</button><span class="row-name${onTurnoverBranch ? " is-turnover" : ""}"${onTurnoverBranch ? ' style="color:var(--blue)"' : ""} title="${esc(row.path)}">${esc(shownName)}</span>${renameBtn}${treeLockBtn}${turnoverRowMarkHtml(row)}${collisionRowMarkHtml(row)}${reviewRowMarkHtml(row)}${collisionChipHtml(row, delKey)}${agentBadgeHtml(row)}</div></td>`,
+      title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">\u25b6</button><span class="row-name${onTurnoverBranch ? " is-turnover" : ""}"${onTurnoverBranch ? ' style="color:var(--blue)"' : ""} title="${esc(row.path)}">${esc(shownName)}</span>${renameBtn}${treeLockBtn}${turnoverRowMarkHtml(row)}${collisionDiamondHtml(row, delKey)}${reviewRowMarkHtml(row)}${agentBadgeHtml(row)}</div></td>`,
     // THE SECOND REVIEW CHIP, in a cell of its own (CHART_COLUMNS `reviewedExtra`). Off means the whole column is
     // absent - header, cell and colspan - so there is no empty cell to leave behind; the amber mark in the name line
     // is a different chip with its own switch. A row with no delivery draws the chart's usual dash, never a blank.
@@ -923,26 +924,11 @@ function reviewRowMarkHtml(row) {
 }
 // ---- end reviewed chip
 
-// THE VIOLET COLLISION MARK. A row wears one for every pair of live trees in its project that are touching the same
-// work (lib/collisions.js), and the tooltip NAMES THE COUNTERPART: "collision with coll-two - 1 shared file ...". That
-// is the whole surface: a bare flag would tell the reader two workers are in each other's way and leave them to find
-// out who. The mark is drawn whether the pair is still with the assistants or already handed over, because both rows
-// must show it - the reader seeing one side of an overlap would be the defect this feature exists to end.
-//
-// IT IS NOT THE OTHER THREE: not the yellow lock, not the blue turnover mark, not the amber review mark. It has its own
-// glyph, class and colour (violet, public/style.css), so a row can carry all four and each still mean one thing.
-function collisionRowMarkHtml(row) {
-  const list = Array.isArray(row?.collisions) ? row.collisions : [];
-  if (!list.length) return "";
-  const say = (rec) =>
-    typeof wtReviewLane !== "undefined" && wtReviewLane && typeof wtReviewLane.collisionTitle === "function"
-      ? wtReviewLane.collisionTitle(rec)
-      : `collision with ${rec.other?.name || rec.otherTarget || "another tree"}`;
-  return list
-    .slice(0, 3)
-    .map((rec) => `<span class="collision-mark is-${esc(rec.state || "assistants")}" role="img" data-collision-mark="${esc(rec.key)}" aria-label="${esc(say(rec))}" title="${esc(say(rec))}">◆</span>`)
-    .join("");
-}
+// THE VIOLET COLLISION DIAMOND, drawn by public/board-scaffold.js `collisionDiamondHtml`. A row carries ONE of them
+// while any pair of live trees in its project is touching the same work (lib/collisions.js), and it is the button the
+// pair card sits behind: the per-pair marks and the "0 open . 1 resolved" counts chip that used to share this line
+// were the width the reader asked back. The state and the count are in the button's own name and title, so the
+// distinction the chip carried is still there - spoken instead of drawn.
 
 // ---- the age column: last life seen, plus a ring that fills toward the next read --------------
 // The number is NOT "time since last poll" (that is the ring): it is the last moment any liveness

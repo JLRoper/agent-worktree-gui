@@ -211,7 +211,13 @@ function toggleShowOld(project) {
 // headers sets those two by hand (remembered in this browser, shared by every project table); a double-click on any
 // edge hands the board back to the measurement.
 const CHART_COLUMNS = [
-  { id: "name", label: "Worktree", min: 170, give: 0.35 },
+  // The worktree column's floor is the NAME's, not its buttons'. It was 170 while the collision counts chip sat in the
+  // same line: 170 held the ▶, the lock, the ✎, the marks, the ✓ Reviewed press and the chip, and the name lived off
+  // whatever was left. The chip is gone, but the line still carries those controls (191px measured) plus the 24px
+  // diamond, so the name needs the room the pillar used to hold. 320 is that: the strip's own controls, a readable
+  // name and the diamond, measured at 1440x900. A longer name still ellipsises, and the count of pairs no longer
+  // moves this number.
+  { id: "name", label: "Worktree", min: 320, give: 0.35 },
   // THE SECOND REVIEW CELL (see CHART_CHIPS below for the first). A row can carry two review chips, and both in the
   // name line crowded the name out: this one - the row's result chip, `resultChipHtml` in public/board-scaffold.js,
   // printing the delivery's first clause, its age and "reviewed" - owns a CELL of its own, immediately to the right of
