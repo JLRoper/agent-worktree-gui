@@ -5708,38 +5708,67 @@ function reviewAgentName(r) {
 }
 
 // An auto-allowed write, after the fact: the panel was never asked, so this is the only record that it happened.
-// Keep closes it; Unwind names EXACTLY what it would do — a remote branch delete, or a message drafted to the agent
-// when there is no safe inverse. The panel never runs an inverse of its own, and the button is the confirmation.
+// Keep closes it; Unwind is the ONE inverse the record offers - a remote branch delete, or a message drafted to the
+// agent when there is no safe inverse. The panel never runs an inverse of its own, and the button is the
+// confirmation.
 // ---- rw review card
-// Keep is the safe action and the whole width of the card, with Unwind as the red bar under it (`.rw-keep` +
-// `.rw-review .ap-actions` in the sheet). The class goes on the control in BOTH states, because the dismissed
-// record's one control is the same slot.
+// The card is ONE summary line: what was written, the branch, the repo, the sha and when. The full command, the
+// tree it ran from, the allow-policy and what Unwind would run live behind the Details disclosure, so the branch
+// is stated once instead of five times down a 400px dock. Keep is the safe action and the whole width of the card,
+// with Unwind as the red bar under it (`.rw-keep` + `.rw-review .ap-actions` in the sheet). The class goes on the
+// control in BOTH states, because the dismissed record's one control is the same slot.
 function remoteWriteReviewHtml(r) {
   const unwind = r.unwind && r.unwind.type ? r.unwind : { type: "message", text: "" };
   const target = r.branch ? `${r.remote || "origin"}/${r.branch}` : "";
+  const repo = r.project || String(r.worktree || "").replace(/[\\/]+$/, "").split(/[\\/]/).pop() || "";
+  const unwound = r.state === "unwound";
+  const action = unwound ? "✕ unwound" : r.kind === "merge" ? "✓ merge started" : "✓ pushed";
+  const meta = [repo, r.sha ? String(r.sha).slice(0, 7) : "", fmtAgo(r.at)].filter(Boolean);
+  // The clock is the head's tooltip: the line says "just now" (these records live 90 s), and the exact second is
+  // one hover away, beside the full branch a narrow dock ellipsizes.
+  const clock = r.at ? new Date(Number(r.at)).toLocaleTimeString([], { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
+  const whole = [action, r.branch, ...meta, clock].filter(Boolean).join(" · ");
   const head =
-    r.state === "unwound"
-      ? `✕ unwound — ${esc(r.unwind?.label || "the write was reversed")}`
-      : `✓ remote write allowed without asking${r.sha ? ` · <code>${esc(String(r.sha).slice(0, 7))}</code>` : ""}`;
-  const why = [r.why, target].filter(Boolean).join(" · ");
+    `<div class="rw-review-head mono" title="${esc(whole)}">` +
+      `<span class="rw-review-line">` +
+        `<span class="rw-review-act">${esc(action)}</span>` +
+        (r.branch ? `<span class="rw-review-branch">${esc(r.branch)}</span>` : "") +
+      `</span>` +
+      (meta.length ? `<span class="rw-review-meta">${esc(`${r.branch ? "· " : ""}${meta.join(" · ")}`)}</span>` : "") +
+    `</div>`;
   const buttons =
-    r.state === "unwound"
+    unwound
       ? `<button type="button" class="rw-keep" data-rw-review-keep="${esc(r.id)}" title="dismiss this record">Dismiss</button>`
-      : `<button type="button" class="rw-keep" data-rw-review-keep="${esc(r.id)}" title="keep it — the write stands and this card goes">Keep</button>` +
+      : `<button type="button" class="rw-keep" data-rw-review-keep="${esc(r.id)}" title="keep it - the write stands and this card goes">Keep</button>` +
         (unwind.type === "delete-branch"
-          ? `<button type="button" class="btn-deny" data-rw-review-unwind="${esc(r.id)}" title="deletes ${esc(unwind.label || "the remote branch")} on the remote — this click is its confirmation">Unwind — ${esc(unwind.label || "delete the remote branch")}</button>`
-          : `<button type="button" data-rw-review-unwind="${esc(r.id)}" title="nothing is run: this drafts a message to the agent instead">Unwind — draft a message to ${esc(reviewAgentName(r))}</button>`);
-  const detail =
-    unwind.type === "delete-branch"
-      ? `<div class="rw-note mono" data-rw-note>unwind runs exactly: ${esc(unwind.command || "")} — this deletes the remote branch, and the click above is its confirmation</div>`
-      : `<div class="rw-note mono" data-rw-note>no safe inverse for this write — unwind drafts a message to the agent and the panel runs nothing</div>`;
+          ? `<button type="button" class="btn-deny" data-rw-review-unwind="${esc(r.id)}" title="deletes ${esc(target || "the remote branch")} on the remote - the exact command is under Details, and this click is its confirmation">Unwind</button>`
+          : `<button type="button" data-rw-review-unwind="${esc(r.id)}" title="nothing is run: this drafts a message to ${esc(reviewAgentName(r))} instead">Unwind</button>`);
+  // Everything the summary left out, in the record's own words: the disclosure costs one muted line closed, and
+  // the branch does not have to be repeated to say any of it.
+  const line = (key, value) => `<div class="rw-detail"><span class="rw-detail-key">${esc(key)}</span><span class="rw-detail-val">${value}</span></div>`;
+  const allowed = [r.why, target].filter(Boolean).join(" · ");
+  const unwindText = unwound
+    ? r.alreadyGone
+      ? `${esc(target || "the remote branch")} was already gone on the remote - nothing was deleted`
+      : `${esc(target || "the remote branch")} was deleted from the remote; this record is its receipt`
+    : unwind.type === "delete-branch"
+      ? `<code>${esc(unwind.command || "")}</code> - this deletes ${esc(target || "the remote branch")}, and the Unwind click is its confirmation`
+      : "no safe inverse for this write - Unwind drafts a message to the agent and the panel runs nothing";
+  const details =
+    `<details class="rw-review-details">` +
+      `<summary class="rw-review-sum mono" title="the full command, the tree it ran from, why nobody was asked, and what Unwind runs">details</summary>` +
+      `<div class="rw-review-body">` +
+        (r.command ? `<pre class="ap-cmd mono">${esc(r.command)}</pre>` : "") +
+        (r.worktree ? line("worktree", esc(r.worktree)) : "") +
+        (allowed ? line("allowed", esc(allowed)) : "") +
+        line("unwind", unwindText) +
+      `</div>` +
+    `</details>`;
   const jumpNote = r.note ? `<div class="rw-note mono" data-rw-jump-note>⚠ ${esc(r.note)}</div>` : "";
   return `<div class="rw-review" data-rw-review="${esc(r.id)}" data-rw-tree="${esc(r.worktree || "")}" data-rw-branch="${esc(r.branch || "")}" title="click to go to the agent this write came from">
-    <div class="rw-review-head mono">${head}</div>
-    <pre class="ap-cmd mono">${esc(r.command || "(no command text)")}</pre>
-    ${why ? `<div class="rw-review-why dim">${esc(why)}</div>` : ""}
+    ${head}
     <div class="ap-actions">${buttons}</div>
-    ${detail}${jumpNote}
+    ${details}${jumpNote}
   </div>`;
 }
 // ---- end rw review card
@@ -11239,8 +11268,9 @@ document.addEventListener("click", async (e) => {
       return;
     }
     // The choice buttons keep the pointerup path that answers them; every other button inside a card (a link, a
-    // control this function does not know) must not turn into a jump.
-    if (e.target.closest("button, a, input, select, textarea, label")) return;
+    // control this function does not know) must not turn into a jump. `summary` and `details` are here for the
+    // review card's disclosure: the jump path calls preventDefault(), which would swallow the toggle itself.
+    if (e.target.closest("button, a, input, select, textarea, label, summary, details")) return;
     e.preventDefault();
     e.stopPropagation();
     dockGoto(e.target.closest("[data-approval], [data-remote-write], [data-rw-record], [data-rw-review]"));
