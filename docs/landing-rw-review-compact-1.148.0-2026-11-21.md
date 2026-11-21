@@ -58,11 +58,12 @@ that first declares the number.
 
 ## The landing
 
-Squash merge, per the brief, and the changelog rendered at the merged tip afterwards. The review round on the
-rebased branch resolved nothing: `public/style.css` and `package.json` both auto-merged, so the three public files
-the brief expected to stop the rebase never did.
-
-<the record is appended on main after the merge: PR, merge sha, main's tip>
+Squash merge, per the brief: PR #823 merged into `main` as `d839fe3fe8` at 21:13Z on 2026-11-21, one parent
+(`fb5dea9f`) and the branch's three commits composed into one. The rebase onto the #629 landing resolved nothing:
+`public/style.css` and `package.json` both auto-merged, so the three public files the brief expected to stop the
+rebase never did. The changelog was rendered at the merged tip afterwards (`e2bebda`, 665 releases, current) and
+`v1.148.0` was moved from the branch's bump commit to `d839fe3fe8`, the commit on `main` that first declares the
+number. The post-render tip is `e2bebda`.
 
 ## The clock
 
