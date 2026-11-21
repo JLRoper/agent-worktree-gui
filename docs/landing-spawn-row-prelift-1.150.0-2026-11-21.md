@@ -1,4 +1,4 @@
-# Landing: a SPAWN that carries a queue row cuts a pushable tree (1.149.0)
+# Landing: a SPAWN that carries a queue row cuts a pushable tree (1.150.0)
 
 A research tree is local only until somebody lifts it: `lib/push-permissions.js` `treeKindRefusal` answers with a
 refusal before the policy, the controls, the landing mark or any grant, so a worker in one that was never lifted is
@@ -25,23 +25,23 @@ now made with the answer a person's lift writes, decided from the spec's own `ta
 ```
 
 `landing: true` is the mechanism that already existed at the cut and had no caller on this path: `lib/jobs.js`
-`makeWorktree` writes the branch-kind record lifted (`:3152`, `:3154`) and `made.localOnly = false` (`:3156`). The
+`makeWorktree` writes the branch-kind record lifted (`:3155`, `:3157`) and `made.localOnly = false` (`:3160`). The
 record therefore reads `kind: "research"` with `lifted: true`, which is exactly what `/api/worktree/kind-lift`
 writes, and the worker's push falls through to the ordinary decision. The new field is the reason:
-`rememberParent` writes `preLiftedBy` only on a lifted record (`lib/jobs.js:3219`) and `loadParents` reads it back
-beside `rec.lifted` (`lib/jobs.js:3181`), so a restart keeps it.
+`rememberParent` writes `preLiftedBy` only on a lifted record (`lib/jobs.js:3222`) and `loadParents` reads it back
+beside `rec.lifted` (`lib/jobs.js:3184`), so a restart keeps it.
 
 A record lifted by a person carries `lifted: true` and no `preLiftedBy`; a record a row pre-lifted carries both. That
-is how a later reader tells the two apart, on the book and on the row (`server.js` `applyTreeKind:3862` stamps
-`branchKindPreLiftedBy`, and the lift route returns it at `:5514`).
+is how a later reader tells the two apart, on the book and on the row (`server.js` `applyTreeKind:3870` stamps
+`branchKindPreLiftedBy`, and the lift route returns it at `:5522`).
 
 ## The judgement: the record, not a merge run
 
 `landing: true` would also have meant "a run started to LAND" - the merge flow's trees are marked that way, their
-guard allows a push outright (`server.js:1343`, `lib/remote-writes.js:153`), and their brief is the blanket
-`WILL LAND` paragraph (`lib/jobs.js:4089`). A row pre-lift gets neither. `jobs.create` separates the two: the cut
-carries `cutPreLiftedBy`, the guard is installed with `landing: false` (`lib/jobs.js:3971`), and the paragraph stays
-the parent's (`lib/jobs.js:4089`). The reason is that the parent's paragraph is the only one that knows whether the
+guard allows a push outright (`server.js:1344`, `lib/remote-writes.js:153`), and their brief is the blanket
+`WILL LAND` paragraph (`lib/jobs.js:4092`). A row pre-lift gets neither. `jobs.create` separates the two: the cut
+carries `cutPreLiftedBy`, the guard is installed with `landing: false` (`lib/jobs.js:3974`), and the paragraph stays
+the parent's (`lib/jobs.js:4092`). The reason is that the parent's paragraph is the only one that knows whether the
 project has a turnover branch and what its push policy is; a blanket `WILL LAND` on a turnover project would tell a
 worker to push a new remote branch, which that project's doctrine forbids. The pre-lift is the state a hand lift
 leaves behind, reached at the cut instead of after a refusal.
@@ -84,5 +84,6 @@ SPAWN with no row, a tree cut by hand, and a `SPAWN IN` (which cuts nothing) are
 
 ## The version
 
-`main` read 1.148.0 when this branch was cut, so the branch carries 1.149.0 - a minor, because the cut's record
-gains a reason and a worker's push decision changes for a queue-row SPAWN.
+`main` read 1.149.0 when this branch was rebased onto it - the row 185 landing took that number first - so the
+branch carries 1.150.0: a minor, because the cut's record gains a reason and a worker's push decision changes for a
+queue-row SPAWN.
