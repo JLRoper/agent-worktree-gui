@@ -131,6 +131,10 @@ The live gate, `node tools/verify-waves-lane.mjs --shots <dir>`, answers 40/40 o
 - the three member chips read queued, running and done, across two projects, and the task that names no wave is not
   drawn.
 
+`test/harness.test.js` caught the one failure this branch introduced on its first pass: a live gate with no
+`package.json` script is "a rumour", and `verify:waves-lane` is the registration. That is the gate working, and it is
+worth recording that the wiring was added because a test refused the branch without it.
+
 Those are the brief's four acceptance lines, each with its own proof above: three members drawing queued/running/closed
 from the members alone with no wave-state field anywhere (store and derive tests, and the route's read-back of the
 file); a test that the derived state cannot read green or closed while a member runs (the stubbed always-met gate);
@@ -158,7 +162,10 @@ task with no `waveId` not silently counted as a member (the route test and the l
 
 ## The landing
 
-- Base: `origin/main` `e27192a6`, version 1.150.0.
+- Base: cut from `origin/main` `e27192a6` (1.150.0); rebased onto `origin/main` `3a32f5db` (1.150.1) before the push,
+  so the branch is not behind the tip it will land on.
 - Branch: `wtgui/build-the-first-slice-of-waves-of-work-c86bf5`.
 - Version: 1.151.0 (minor: a new route, a new store and a new lane, and nothing existing moves).
-- PR: opened and left OPEN for the panel to land.
+- PR: #829, open and left OPEN for the panel to land. The release tag `v1.151.0` is anchored on the bump commit and
+  pushed; a rebase merge re-creates that commit, and the landing moves the tag onto the commit main carries.
+- The full suite on this branch, and the pre-existing failures it re-measures, are in the PR body.
