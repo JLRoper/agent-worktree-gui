@@ -3845,6 +3845,8 @@ function withInitiatives(snap) {
 //   branchKind        "turnover" | "research", absent when no record was written for this tree
 //   branchKindLabel   the reader's words from lib/branch-kind.js KIND_LABELS (one vocabulary, not a second copy)
 //   branchKindLifted  true once the reader lifted a local-only kind; the kind itself never changes
+//   branchKindPreLiftedBy  the queue row ("row 186") a SPAWN carried when the cut itself was recorded lifted; absent
+//                     when a person lifted it at /api/worktree/kind-lift - the same flag, with its reason said
 //   branchKindParent  the parent branch the record names, for the mark's tooltip
 //
 // The lookup is `jobs.treeKindFor`, the same matcher the push rule and the lift route use, so a branch renamed after
@@ -3858,12 +3860,14 @@ function applyTreeKind(row) {
     delete row.branchKind;
     delete row.branchKindLabel;
     delete row.branchKindLifted;
+    delete row.branchKindPreLiftedBy;
     delete row.branchKindParent;
     return row;
   }
   row.branchKind = kind;
   row.branchKindLabel = KIND_LABELS[kind] || kind;
   row.branchKindLifted = rec.lifted === true;
+  row.branchKindPreLiftedBy = rec.lifted === true && rec.preLiftedBy ? String(rec.preLiftedBy) : null;
   row.branchKindParent = rec.parent || null;
   return row;
 }
@@ -5515,6 +5519,7 @@ const server = createServer(async (req, res) => {
         // The answer names the fact the row draws, so the page that pressed it does not have to read `record`'s shape.
         branchKind: rec.kind || null,
         branchKindLifted: rec.lifted === true,
+        branchKindPreLiftedBy: rec.lifted === true && rec.preLiftedBy ? String(rec.preLiftedBy) : null,
         branchKindParent: rec.parent || null,
         kinds: BRANCH_KINDS,
         choices: kindChoices(),
