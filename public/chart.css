@@ -143,9 +143,13 @@ button.owner-tag:focus-visible { outline: 2px solid #7fb3ff; outline-offset: 1px
 /* The worktree cell is the only cell whose content competes for its own width: a name that can run long, the rename
    ✎, and the agent chips. Laid out as inline content the name took the whole cell, and the chips were the part that
    got clipped - the row showed "…" where its agents were. As a flex row the name ellipsizes instead, and the
-   buttons and chips keep their whole width: what the row is called is the one thing that can afford to lose letters. */
+   buttons and chips keep their whole width: what the row is called is the one thing that can afford to lose letters.
+
+   THE NAME COLUMN'S FLOOR IS IN public/charts.js (CHART_COLUMNS `name`), not here: the chart is `table-layout: fixed`
+   and sizes every column from that measured plan, so a min-width on this line would be a second opinion nobody reads.
+   The floor moved with the counts chip's removal - the pill's width used to be part of what the column asked for. */
 td.name > .name-line { display: flex; align-items: center; gap: 6px; min-width: 0; }
-td.name .row-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+td.name .row-name { flex: 0 1 auto; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 td.name .btn-row-agent, td.name .btn-row-rename, td.name .sig { flex: none; }
 
 /* The edge between two header cells is the column's handle. The header is already `position: sticky`, so it is a
@@ -696,18 +700,23 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 @keyframes copy-flash { 0% { opacity: 0; transform: translateY(-2px); } 12% { opacity: 1; transform: none; }
   72% { opacity: 1; } 100% { opacity: 0; transform: translateY(2px); } }
 
-/* ---- the two per-row chips as one-line chips (public/board-scaffold.js, public/core/row-chips.js) --------------
+/* ---- the result chip, and the collision diamond, as one-line controls (public/board-scaffold.js,
+   public/core/row-chips.js) ---------------------------------------------------------------------------------------
    The result card and the collision card used to be blocks in the row's detail: two paragraphs of height that only
-   existed once the row was open. They are chips now, and each costs the row NOTHING: one line, no added height.
+   existed once the row was open. The result is a chip now, and both cards are popups behind their controls.
 
    The RESULT chip has a cell of its own - the chart's `reviewedExtra` column, immediately right of the name - because
-   two review chips in the name line left the name ellipsised on every row that carried both. The COLLISION chip stays
-   in the name line, which is already one line: the name ellipsises beside it (td.name .row-name above), and the chip
-   is `flex: none` so it keeps its own width instead of wrapping onto a second line.
+   two review chips in the name line left the name ellipsised on every row that carried both.
+
+   The COLLISION side is ONE 24x24 diamond in the name line, and no counts chip: the row used to spend two small
+   diamonds plus a "0 open . 1 resolved" pill on the same fact. The diamond IS the press now, so the width that pill
+   took belongs to the name. Its box is 24x24 (the hit target a control needs) and it is pulled back by a 4px negative
+   block margin, so the row's one-line height does not move: the pill it replaced was 17px tall, and the diamond's
+   outer box is 16px in the line's flow.
 
    Every selector here is this feature's own. The two cards keep their own styles (public/style.css `.review-block`,
    `.collision-block`) and are only re-scoped inside the popup below, so nothing shared is edited. */
-td.name .name-line > .rowchip { flex: none; }
+td.name .name-line > .rowchip, td.name .name-line > .collision-diamond { flex: none; }
 /* The result chip's own cell: one line, and the chip never wider than the column it was given. The chip's own
    `max-width: 210px` is what it may take when the column is wide; here it is capped by the cell, and the chip's text
    ellipsises inside its own pill rather than spilling past the column's edge. */
@@ -741,10 +750,42 @@ td.reviewed-extra .rowchip { max-width: 100%; vertical-align: middle; }
    been read. Same pair as .review-block / .review-block.is-reviewed, at chip size. */
 .rowchip.result-chip.is-awaiting { color: #ffca7a; border-color: #4a3a18; background: #1c1810; }
 .rowchip.result-chip.is-reviewed { color: #9fe0b4; border-color: #2a4432; background: #141a15; }
-/* The COLLISION chip: violet ONLY while at least one pair is open - the same violet as the row's ◆ - and muted the
-   moment every pair is resolved. The accent is the open pairs' alone, which is why it is not the chip's default. */
-.rowchip.collision-chip.is-live { color: #c9a0ff; border-color: #3b2d5c; background: #17131f; }
-.rowchip.collision-chip.is-quiet { color: #7f8ea3; border-color: #2c3744; background: #161c24; }
+/* THE COLLISION DIAMOND: one per row, the press the pair card hangs off. The INK states are the same two the row's
+   mark kept - the bright violet is a pair waiting on the READER, the calmer violet a pair still with both assistants -
+   and the resolved state is BOTH quieter and a different SHAPE (◇ instead of ◆), so a reader who cannot tell the two
+   violets apart still reads the state. The open state also grows a ring, which is a non-colour cue of its own. */
+.collision-diamond {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px;
+  /* 24x24 is the control's hit target, not the line's height: the 4px the box adds at each end is taken back by the
+     margin, so a row that carries a collision is exactly as tall as one that does not (and as tall as it was when the
+     counts pill sat here). See the section comment above. */
+  margin: -4px 0 -4px 2px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: #c9a0ff;
+  font: 12px/1 var(--term);
+  appearance: none;
+  cursor: pointer;
+  vertical-align: 1px;
+}
+.collision-diamond .collision-diamond-glyph { line-height: 1; }
+.collision-diamond.is-waiting { color: #e4c8ff; border-color: #6b4f9e; background: #241a38; text-shadow: 0 0 6px #7a4fbf; }
+.collision-diamond.is-open { color: #c9a0ff; border-color: #3b2d5c; background: #17131f; }
+.collision-diamond.is-resolved { color: #8b7aa8; border-color: #2c3744; background: transparent; }
+.collision-diamond:hover { color: #efe2ff; border-color: #6b4f9e; background: #241a38; }
+/* The focus ring is a solid 2px light blue at 2px offset: 9.6:1 against the row's own #161c24 and 3.4:1 against the
+   diamond's own violet border, so it clears 3:1 on both sides of the edge it draws. */
+.collision-diamond:focus-visible { outline: 2px solid #9ec6ff; outline-offset: 2px; }
+/* Open: the same inset ring the chips wear, in the diamond's own ink, so "this card is up" reads without a chevron. */
+.collision-diamond[aria-expanded="true"] { box-shadow: inset 0 0 0 1px currentColor; }
 
 /* THE CARD BEHIND A CHIP. Fixed and measured from the chip by placeRowChipPop(), which clamps its width to the
    viewport, slides it left to fit and flips it above the chip when there is no room below - so at 768 wide the card

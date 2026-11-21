@@ -1,15 +1,17 @@
-// The two per-row cards as one-line chips: the result's collapsed label, the collision pairs split into open and
-// resolved, and which chips a row remembers as expanded.
+// The two per-row cards behind their controls: the result's collapsed label, the words the collision diamond says, and
+// which of them a row remembers as expanded.
 //
-// Three things are pinned here, because each of them is a place the chips can lie:
+// Three things are pinned here, because each of them is a place the controls can lie:
 //
 //   1. THE LABEL. The result chip reads the first CLAUSE of the run's summary, the run's age and "reviewed" once it
 //      has been checked - and it carries no absolute path and no chevron while it is collapsed (the path and the
 //      chevron are the expansion's own).
-//   2. THE COUNT. The collision chip's two numbers come from the store's own records: a ruling - the reader's or the
-//      panel's automatic pick - and a stand-down are RESOLVED, everything else is OPEN, one row's project only. A
-//      ruling stops counting as open the moment it is recorded, which is what applyCollisionRecord writes.
-//   3. THE MEMORY. A chip starts collapsed; only opening is remembered, per row and per card, so a repaint that
+//   2. THE WORDS. The collision row carries ONE diamond and no counts chip, so the tally's two numbers are SPOKEN:
+//      `collisionWords` says the state and the count ("2 collisions: 1 open, 1 resolved"), and `collisionDiamondLabel`
+//      is the control's accessible name and title. A ruling - the reader's or the panel's automatic pick - and a
+//      stand-down are RESOLVED, everything else is OPEN, one row's project only. A ruling stops counting as open the
+//      moment it is recorded, which is what applyCollisionRecord writes.
+//   3. THE MEMORY. A control starts collapsed; only opening is remembered, per row and per card, so a repaint that
 //      rebuilds the row reads the same set and comes back open.
 //
 // The wiring is pinned by slicing the files that draw it - the same approach test/review-lane.test.js takes, because
@@ -82,12 +84,37 @@ test("the collision tally splits open from resolved, counting rulings and stand-
     pair({ key: "stood-3", stoodByTask: [{ side: "a", taskId: 14, state: "done" }] }),
   ];
   assert.deepEqual(chips.tally(list), { open: 2, resolved: 5, total: 7 });
-  assert.equal(chips.collisionLabel(chips.tally(list)), "2 open \u00b7 5 resolved");
-  // Every pair resolved is a muted chip, and its sentence still carries both numbers.
+  assert.equal(chips.collisionWords(chips.tally(list)), "7 collisions: 2 open, 5 resolved");
+  // Every pair resolved: the diamond goes outlined, and its sentence still carries both numbers.
   const quiet = chips.tally(list.filter((r) => chips.pairResolved(r)));
   assert.deepEqual([quiet.open, quiet.resolved], [0, 5]);
-  assert.equal(chips.collisionLabel(quiet), "0 open \u00b7 5 resolved");
+  assert.equal(chips.collisionWords(quiet), "5 collisions, all resolved");
   assert.deepEqual(chips.tally([]), { open: 0, resolved: 0, total: 0 });
+});
+
+test("the diamond's words are the count in words, in every shape a row can be in", () => {
+  const words = (open, resolved) => chips.collisionWords({ open, resolved });
+  assert.equal(words(1, 0), "1 collision, open");
+  assert.equal(words(0, 1), "1 collision, resolved");
+  assert.equal(words(2, 0), "2 collisions, all open");
+  assert.equal(words(1, 1), "2 collisions: 1 open, 1 resolved");
+  assert.equal(words(3, 1), "4 collisions: 3 open, 1 resolved");
+  assert.equal(words(0, 0), "");
+  // Never a numeral drawn as a bare pair of counts: an "N open . M resolved" string is the chip this replaced.
+  assert.ok(!/^\d+ open/.test(words(2, 5)));
+});
+
+test("the accessible name and the title say the state, the count, and what the press does", () => {
+  const collapsed = chips.collisionDiamondLabel({ open: 1, resolved: 1 }, false);
+  assert.match(collapsed, /^2 collisions: 1 open, 1 resolved on this worktree/);
+  assert.match(collapsed, /press to open every pair/);
+  assert.match(collapsed, /both sides, the shared files and the ruling presses/);
+  const expanded = chips.collisionDiamondLabel({ open: 1, resolved: 1 }, true);
+  assert.match(expanded, /^2 collisions: 1 open, 1 resolved on this worktree/);
+  assert.match(expanded, /press to close it/);
+  // The state is in WORDS on the resolved side too: a quiet diamond still says it is resolved, not just dimmer.
+  assert.match(chips.collisionDiamondLabel({ open: 0, resolved: 3 }, false), /^3 collisions, all resolved/);
+  assert.match(chips.collisionDiamondLabel({ open: 0, resolved: 1 }, false), /^1 collision, resolved/);
 });
 
 test("a clean merge probe does not settle a pair that still carries detected paths", () => {
@@ -145,17 +172,19 @@ test("the expansion starts collapsed, and is remembered per row and per card", (
   assert.deepEqual(chips.entries(chips.readOpen('["result|a::b","nonsense|a::b","result|",5]')), [{ kind: "result", key: "a::b" }]);
 });
 
-test("the row's strip draws both chips, and the detail draws neither card", () => {
+test("the row's strip draws the result chip and ONE collision diamond, and the detail draws neither card", () => {
   const rowFile = read("public/render-projects.js");
   const scaffold = read("public/board-scaffold.js");
-  // ONE CHIP PER CELL. The collision chip rides the name line, beside the marks the row already had - that is the strip
-  // that costs no height. The result chip is the chart's `reviewedExtra` column: a cell of its own right after the name,
-  // because two review chips in the name line pushed the name into an ellipsis on every row that carried both.
+  // ONE CONTROL PER CELL. The collision diamond rides the name line, where the per-pair marks and the counts chip used
+  // to sit; that is the strip that costs no height. The result chip is the chart's `reviewedExtra` column: a cell of
+  // its own right after the name, because two review chips in the name line pushed the name into an ellipsis on every
+  // row that carried both.
   const nameCell = sliceBetween(rowFile, 'name: `<td class="name"', 'reviewedExtra: `<td class="reviewed-extra"');
   assert.ok(!nameCell.includes("${resultChipHtml(row, delKey)}"), "the result chip left the name cell");
-  assert.match(nameCell, /\$\{collisionChipHtml\(row, delKey\)\}/, "the collision chip stays in the name line");
+  assert.match(nameCell, /\$\{collisionDiamondHtml\(row, delKey\)\}/, "the one collision diamond is in the name line");
+  assert.ok(!nameCell.includes("${collisionChipHtml("), "no counts chip is drawn on the row");
+  assert.ok(!nameCell.includes("${collisionRowMarkHtml("), "no per-pair mark is drawn beside it - the diamond replaced both");
   assert.match(nameCell, /\$\{reviewRowMarkHtml\(row\)\}/, "the amber mark and its press stay in the name line");
-  assert.match(nameCell, /\$\{collisionRowMarkHtml\(row\)\}/, "the violet row mark stays");
   const extraCell = sliceBetween(rowFile, 'reviewedExtra: `<td class="reviewed-extra"', "// Same rule for the branch");
   assert.match(extraCell, /\$\{resultChipHtml\(row, delKey\)/, "the result chip has a cell of its own");
   assert.ok(!extraCell.includes('class="name"'), "and it is not inside the name cell");
@@ -164,11 +193,24 @@ test("the row's strip draws both chips, and the detail draws neither card", () =
   assert.match(chip, /<button type="button" class="rowchip result-chip/);
   assert.match(chip, /aria-expanded="\$\{open \? "true" : "false"\}"/);
   assert.match(chip, /data-rowchip-key="\$\{esc\(key\)\}"/);
-  // The collision chip carries the tally of the row's own project, violet only while a pair is open.
-  assert.match(chip, /wtRowChips\.tally\(list, row\.project\)/);
-  assert.match(chip, /counts\.open \? " is-live" : " is-quiet"/);
   // A collapsed chip carries no chevron: the expansion is the only thing that draws one.
   assert.match(chip, /open \? `<span class="rowchip-chev"/);
+
+  // THE DIAMOND is a real button: the row's own tally, the panel's own words, and a press the existing chip wiring
+  // already owns (the same `data-rowchip="collision"` contract), so a click, Enter, Space and Escape all reach it.
+  const diamond = sliceBetween(scaffold, "function collisionDiamondHtml(row, key)", "// THE RESULT CHIP");
+  assert.match(diamond, /<button type="button" class="collision-mark collision-diamond/);
+  assert.match(diamond, /data-rowchip="collision" data-rowchip-key="\$\{esc\(key\)\}"/);
+  assert.match(diamond, /aria-expanded="\$\{open \? "true" : "false"\}"/);
+  assert.match(diamond, /aria-label="\$\{esc\(say\)\}"/);
+  assert.match(diamond, /title="\$\{esc\(say\)\}"/);
+  assert.match(diamond, /wtRowChips\.tally\(list, row\.project\)/);
+  assert.match(diamond, /const say = rowChipTitle\("collision", row, open\)/);
+  // The fill is the state and the OUTLINE is the resolved state: the glyph changes with the count, never colour alone.
+  assert.match(diamond, /const glyph = counts\.open \? "\\u25c6" : "\\u25c7"/);
+  assert.match(diamond, /const state = counts\.open \? \(waiting \? "is-waiting" : "is-open"\) : "is-resolved"/);
+  // ONE per row: the builder takes the row, not one record, and never maps over the pairs.
+  assert.ok(!/\.map\(/.test(diamond), "one diamond for the row, not one per pair");
 
   // The two cards themselves are the popup's content now, and the detail no longer emits them.
   const detail = sliceBetween(scaffold, "function detailHtml(row) {", "// THE COLLISION CARD reads the RECORD");
@@ -212,9 +254,16 @@ test("the popup is clamped to the window, so neither card is clipped at 768", ()
   const css = read("public/chart.css");
   assert.match(css, /\.rowchip-pop \{[^}]*position: fixed;/);
   assert.match(css, /\.rowchip-pop \{[^}]*overflow: auto;/);
-  // The two colours the brief names: violet while a pair is open, muted when every one is resolved.
-  assert.match(css, /\.rowchip\.collision-chip\.is-live \{[^}]*color: #c9a0ff/);
-  assert.match(css, /\.rowchip\.collision-chip\.is-quiet/);
+  // The diamond's two inks and its 24x24 box: filled violet while a pair is open, outlined and quieter when every one
+  // is resolved, the box the hit target the brief asks for, and the focus ring the keyboard reader needs.
+  assert.match(css, /\.collision-diamond\.is-open \{[^}]*color: #c9a0ff/);
+  assert.match(css, /\.collision-diamond\.is-waiting \{[^}]*color: #e4c8ff/);
+  assert.match(css, /\.collision-diamond\.is-resolved \{[^}]*color: #8b7aa8/);
+  assert.match(css, /\.collision-diamond \{[^}]*width: 24px;/);
+  assert.match(css, /\.collision-diamond \{[^}]*height: 24px;/);
+  assert.match(css, /\.collision-diamond:focus-visible \{[^}]*outline: 2px solid #9ec6ff/);
+  // The counts chip is gone from the sheet as well as the markup: a rule nobody matches is how the old shape returns.
+  assert.ok(!/\.rowchip\.collision-chip/.test(css), "no collision-chip rule survives");
 });
 
 test("the Human rotation opens the chip, and the header copy no longer promises a card under the row", () => {
@@ -229,5 +278,5 @@ test("the Human rotation opens the chip, and the header copy no longer promises 
   const titles = app.includes("result card under it");
   assert.equal(titles, false, "no title promises a card under the row");
   assert.match(app, /opens its result chip onto the card behind it/);
-  assert.match(app, /opens its collision chip onto the pair card/);
+  assert.match(app, /presses its collision diamond to open the pair card/);
 });

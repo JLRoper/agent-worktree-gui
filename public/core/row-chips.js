@@ -1,5 +1,5 @@
-// row-chips.js - the two per-row cards as one-line chips: the collapsed label of the RESULT, the open/resolved
-// count of the COLLISION pairs, and the per-row remembered expansion both of them read.
+// row-chips.js - the two per-row cards behind one-line controls: the collapsed label of the RESULT chip, the words
+// the COLLISION diamond says, and the per-row remembered expansion both of them read.
 //
 // WHY THIS EXISTS. The result card and the collision card were blocks in the row's detail: two tall paragraphs that
 // only existed once the reader opened the row, and the reader opened the row to find out whether there was anything
@@ -9,11 +9,13 @@
 //   the label      the result's first CLAUSE, the run's age, and "reviewed" once it has been checked - never a
 //                  path (the report path is what the popup is for) and never a chevron (a collapsed chip carries
 //                  neither; the chevron appears when the chip is expanded)
-//   the count      the collision pairs of ONE row, split into open and resolved. A pair is RESOLVED when a ruling
-//                  is recorded against it - the reader's or the panel's own automatic pick - or when a side stood
-//                  down, which is the assistant's resolution of it. Both numbers come from the store's own state
-//                  (the record the row carries), so a ruling stops counting as open the moment it is recorded and
-//                  not when the card is next drawn.
+//   the words      the collision pairs of ONE row, split into open and resolved and then SPOKEN rather than drawn:
+//                  the row carries one diamond, and its accessible name and title say the state and the count
+//                  ("2 collisions: 1 open, 1 resolved"). A pair is RESOLVED when a ruling is recorded against it -
+//                  the reader's or the panel's own automatic pick - or when a side stood down, which is the
+//                  assistant's resolution of it. Both numbers come from the store's own state (the record the row
+//                  carries), so a ruling stops counting as open the moment it is recorded and not when the card is
+//                  next drawn.
 //   the memory     which chips are expanded, per row and per card, as a set of "<kind>|<row key>" entries that the
 //                  page persists in its browser settings store. Only OPENING is remembered, so a row nobody has
 //                  opened starts collapsed, and a repaint that rebuilds the row reads the same set and comes back
@@ -122,12 +124,29 @@
     return { open, resolved, total: open + resolved };
   }
 
-  // The collision chip's two numbers. Both are always drawn: "0 open . 5 resolved" is the sentence that says the
-  // row is quiet, which a lone "5 resolved" leaves the reader to infer.
-  function collisionLabel(counts) {
+  // The collision diamond's sentence. The row no longer draws a number: the one control says the state and the count
+  // in WORDS, so the open/resolved distinction survives the width it gave back. Four shapes, because "0 open" is not
+  // a sentence a reader should have to parse off a glyph:
+  //   1 collision, open | 1 collision, resolved | 2 collisions, all open | 2 collisions: 1 open, 1 resolved
+  function collisionWords(counts) {
     const open = Math.max(0, Math.floor(Number(counts && counts.open) || 0));
     const resolved = Math.max(0, Math.floor(Number(counts && counts.resolved) || 0));
-    return `${open} open \u00b7 ${resolved} resolved`;
+    const total = open + resolved;
+    if (!total) return "";
+    const head = `${total} collision${total === 1 ? "" : "s"}`;
+    if (!open) return `${head}, ${total === 1 ? "resolved" : "all resolved"}`;
+    if (!resolved) return `${head}, ${total === 1 ? "open" : "all open"}`;
+    return `${head}: ${open} open, ${resolved} resolved`;
+  }
+
+  // The control's accessible name AND its tooltip, one sentence: what is on this row, what the press does. Colour is
+  // never the only difference - the glyph is filled while a pair is open and outlined once every one is resolved - and
+  // this sentence is the third channel, for a reader who sees neither.
+  function collisionDiamondLabel(counts, expanded) {
+    const words = collisionWords(counts) || "no collisions";
+    return expanded
+      ? `${words} on this worktree; the card lists every pair - press to close it`
+      : `${words} on this worktree; press to open every pair, with both sides, the shared files and the ruling presses`;
   }
 
   // ---- the remembered expansion ----------------------------------------------------------------------------------
@@ -185,7 +204,8 @@
     resultLabel,
     pairResolved,
     tally,
-    collisionLabel,
+    collisionWords,
+    collisionDiamondLabel,
     chipId,
     readOpen,
     storeValue,

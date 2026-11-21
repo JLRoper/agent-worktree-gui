@@ -43,12 +43,11 @@
 //                        folded it reads the oldest open item, unfolded every item with its facts and its controls
 //   the refresh offer    refreshOfferHtml, paintRefreshOffer, paintRefreshOffers and clearRefreshOffer: the card the
 //                        row's own refresh opens, placed under its row and repainted after a project rebuild
-//   the two chips        resultChipHtml, collisionChipHtml, rowChipInner, toggleRowChip, paintRowChipMarkers and
-//                        paintRowChipPops: the result card and the collision card as ONE-LINE chips in the row's
-//                        name line (a strip that already exists, so they add no height), each chip opening the same
-//                        card in a popup behind it - the result's first clause, age and "reviewed" collapsed, the
-//                        collision pairs' open and resolved counts - with the expansion remembered per row and per
-//                        card in the browser's own store, so a repaint does not slam it shut
+//   the two chips        resultChipHtml, collisionDiamondHtml, rowChipInner, toggleRowChip, paintRowChipMarkers and
+//                        paintRowChipPops: the result card as a ONE-LINE chip in the name strip, and the collision card
+//                        behind the row's ONE diamond - a real 24x24 button that says the state and the count in words
+//                        and opens the card listing every pair on that worktree. The expansion is remembered per row
+//                        and per card in the browser's own store, so a repaint does not slam a card shut
 //
 // WHAT IT REACHES OUT FOR (by name, at call time, exactly as before the move)
 //
@@ -2322,11 +2321,12 @@ function reviewBlockHtml(row, key) {
 // with the violet mark and the amber one), so a row carries them without growing a pixel: the strip is one line, the
 // name ellipsises beside them, and the CARD is a popup behind the chip.
 //
-// WHAT THE CHIP SAYS. The result chip is the first clause of the run's summary, the run's age, and "reviewed" once it
-// has been checked (public/core/row-chips.js `resultLabel`). It carries NO chevron and NO path while collapsed: the
+// WHAT EACH CONTROL SAYS. The result chip is the first clause of the run's summary, the run's age, and "reviewed" once
+// it has been checked (public/core/row-chips.js `resultLabel`). It carries NO chevron and NO path while collapsed: the
 // report path is the one thing the expansion exists to show, and the chevron appears only when the chip is open, so a
-// collapsed strip stays a strip of facts. The collision chip is the row's pairs split into open and resolved, from the
-// store's own records (`tally`), violet only while a pair is still open and muted when every one of them is resolved.
+// collapsed strip stays a strip of facts. The collision side is ONE diamond per row, not a chip: the row's pairs are
+// counted from the store's own records (`tally`) and said in words by the control's accessible name and title, filled
+// while a pair is open and outlined when every one of them is resolved.
 //
 // THE POPUP IS THE EXISTING CARD, not a second renderer: `reviewBlockHtml` / `collisionBlockHtml` are drawn into a
 // body-level panel anchored to the chip, with the report anchor, the next steps, both sides' task names and the two
@@ -2387,14 +2387,41 @@ function rowChipTitle(kind, row, open) {
   }
   const live = Array.isArray(row && row.collisions) ? row.collisions : [];
   const history = Array.isArray(row && row.collisionHistory) ? row.collisionHistory : [];
-  // HISTORY COUNTS AS RESOLVED, and a row with ONLY history still carries the chip: the pair is over, and the card
-  // behind it is where the reader finds out which landing ended it. Dropping the chip would make the collision vanish
-  // as if it had never been reported.
+  // HISTORY COUNTS AS RESOLVED, and a row with ONLY history still carries the diamond: the pair is over, and the card
+  // behind it is where the reader finds out which landing ended it. Dropping the control would make the collision
+  // vanish as if it had never been reported.
   const list = live.concat(history);
   const counts = typeof wtRowChips !== "undefined" ? wtRowChips.tally(list, row && row.project) : { open: 0, resolved: 0 };
-  return open
-    ? `collapse the collisions - ${counts.open} open, ${counts.resolved} resolved`
-    : `open the collisions on this row - ${counts.open} open, ${counts.resolved} resolved. The card behind this chip names both sides, their tasks, the shared files and the ruling presses`;
+  return wtRowChips.collisionDiamondLabel(counts, open);
+}
+
+// THE COLLISION DIAMOND, and the ONE control a row with a collision carries. It used to be two things: a violet mark
+// per pair (up to three of them) and, further along the line, a chip reading "0 open . 1 resolved". The chip was the
+// width the reader complained about, and the second diamond said the same thing again. Now: ONE diamond per row
+// whenever the row has any pair at all, filled ◆ while a pair is open and outlined ◇ once every one is resolved, and
+// the chip's press moved onto it - so a press opens the card that lists ALL pairs on this worktree, not the first one.
+//
+// IT IS A REAL BUTTON, not a mark with a click listener: it is keyboard reachable in the row's own tab order, Enter
+// and Space activate it for free, it carries `aria-expanded`, and its accessible name (and title) say the state and
+// the count in words (`collisionDiamondLabel`), so nothing but the width was given up. The 24x24 box it needs is
+// bought with a negative block margin, so the row's one-line height does not move (public/chart.css).
+function collisionDiamondHtml(row, key) {
+  const live = Array.isArray(row && row.collisions) ? row.collisions : [];
+  const history = Array.isArray(row && row.collisionHistory) ? row.collisionHistory : [];
+  const list = live.concat(history);
+  if (!list.length) return "";
+  if (typeof wtRowChips === "undefined") return "";
+  const counts = wtRowChips.tally(list, row.project);
+  if (!counts.total) return "";
+  const open = rowChipIsOpen("collision", key);
+  // The bright accent stays the pairs waiting on the READER (the mark's is-reader ink); an open pair with both
+  // assistants is the calmer violet. Both are filled diamonds - the fill is what "something is open" means - and only
+  // the resolved state changes the SHAPE, so colour is never the only channel.
+  const waiting = list.some((rec) => rec && rec.state === "reader" && !wtRowChips.pairResolved(rec));
+  const state = counts.open ? (waiting ? "is-waiting" : "is-open") : "is-resolved";
+  const say = rowChipTitle("collision", row, open);
+  const glyph = counts.open ? "\u25c6" : "\u25c7";
+  return `<button type="button" class="collision-mark collision-diamond ${state}" data-rowchip="collision" data-rowchip-key="${esc(key)}" data-collision-diamond="${esc(key)}" aria-expanded="${open ? "true" : "false"}" aria-label="${esc(say)}" title="${esc(say)}"><span class="collision-diamond-glyph" aria-hidden="true">${glyph}</span></button>`;
 }
 
 // THE RESULT CHIP. Absent on a row with no delivery, exactly as the amber mark is: nothing to read, nothing drawn.
@@ -2406,19 +2433,6 @@ function resultChipHtml(row, key) {
   const label = wtRowChips.resultLabel(rec, rec.at ? `${relTime(rec.at)} ago` : "");
   const awaiting = typeof wtReviewLane !== "undefined" && wtReviewLane ? wtReviewLane.awaiting(row) : !rec.reviewedAt;
   return `<button type="button" class="rowchip result-chip${awaiting ? " is-awaiting" : " is-reviewed"}" data-rowchip="result" data-rowchip-key="${esc(key)}" aria-expanded="${open ? "true" : "false"}" title="${esc(rowChipTitle("result", row, open))}"><span class="rowchip-glyph" aria-hidden="true">\u25a3</span><span class="rowchip-text">${esc(label)}</span>${open ? `<span class="rowchip-chev" aria-hidden="true">\u25be</span>` : ""}</button>`;
-}
-
-// THE COLLISION CHIP. Two numbers, from the store's own state. The violet accent is the OPEN pairs' alone - the chip
-// goes muted the moment the last one is resolved - which is the same rule the row's violet mark already keeps.
-function collisionChipHtml(row, key) {
-  const live = Array.isArray(row && row.collisions) ? row.collisions : [];
-  const history = Array.isArray(row && row.collisionHistory) ? row.collisionHistory : [];
-  const list = live.concat(history);
-  if (!list.length) return "";
-  if (typeof wtRowChips === "undefined") return "";
-  const counts = wtRowChips.tally(list, row.project);
-  const open = rowChipIsOpen("collision", key);
-  return `<button type="button" class="rowchip collision-chip${counts.open ? " is-live" : " is-quiet"}" data-rowchip="collision" data-rowchip-key="${esc(key)}" aria-expanded="${open ? "true" : "false"}" title="${esc(rowChipTitle("collision", row, open))}"><span class="rowchip-glyph" aria-hidden="true">\u25c6</span><span class="rowchip-text">${esc(wtRowChips.collisionLabel(counts))}</span>${open ? `<span class="rowchip-chev" aria-hidden="true">\u25be</span>` : ""}</button>`;
 }
 
 // The card behind a chip, from the row the board holds now.
@@ -2560,7 +2574,11 @@ function closeRowChipPop(kind, key, { focusChip = false } = {}) {
     const chev = anchor.querySelector(".rowchip-chev");
     if (chev) chev.remove();
     const row = state.rows.get(key);
-    if (row) anchor.title = rowChipTitle(kind, row, false);
+    if (row) {
+      const say = rowChipTitle(kind, row, false);
+      anchor.title = say;
+      if (anchor.hasAttribute("data-collision-diamond")) anchor.setAttribute("aria-label", say);
+    }
   }
   if (focusChip && anchor) {
     try {
@@ -2593,13 +2611,25 @@ function toggleRowChip(kind, key) {
 }
 
 // The chips on ONE row, repainted in place: the chevron and `aria-expanded` are the whole visual difference, and a
-// full board repaint for them would be a repaint that also moved the reader's scroll.
+// full board repaint for them would be a repaint that also moved the reader's scroll. The collision diamond takes no
+// chevron - it has no text to keep on one line, and a second glyph beside it would spend the width it just gave back -
+// so its open state is `aria-expanded` and the ring public/chart.css draws for it, and its sentence is re-said for the
+// new state.
 function paintRowChipMarkers(key) {
   for (const kind of ["result", "collision"]) {
     const anchor = rowChipAnchor(kind, key);
     if (!anchor) continue;
     const open = rowChipIsOpen(kind, key);
     anchor.setAttribute("aria-expanded", open ? "true" : "false");
+    if (anchor.hasAttribute("data-collision-diamond")) {
+      const row = state.rows.get(key);
+      if (row) {
+        const say = rowChipTitle("collision", row, open);
+        anchor.title = say;
+        anchor.setAttribute("aria-label", say);
+      }
+      continue;
+    }
     const chev = anchor.querySelector(".rowchip-chev");
     if (open && !chev) anchor.insertAdjacentHTML("beforeend", `<span class="rowchip-chev" aria-hidden="true">\u25be</span>`);
     if (!open && chev) chev.remove();

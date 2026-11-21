@@ -243,6 +243,7 @@ const result = await (async () => {
                 row: el.closest("tr.row")?.getAttribute("data-key") || null,
                 state: [...el.classList].filter((c) => c.startsWith("is-")).join(","),
                 title: el.getAttribute("title") || "",
+                text: (el.textContent || "").trim(),
               })),
             };
           });
@@ -279,9 +280,24 @@ const result = await (async () => {
         await page.waitForTimeout(300);
         v = await view();
         const marks = v.marks;
-        eq("two row markers, one per row", marks.length, 2);
-        ok("each marker names the other tree and the file", marks.every((m) => /collision with coll-(one|two)-[a-z]+/.test(m.title) && /1 shared file/.test(m.title) && /lib\/shared\.js/.test(m.title)), JSON.stringify(marks.map((m) => m.title)));
-        ok("the markers are violet, and not the review or turnover mark", marks.every((m) => !/is-(review|turnover)/.test(m.state)), JSON.stringify(marks.map((m) => m.state)));
+        eq("two row diamonds, one per row", marks.length, 2);
+        // The counterpart is no longer in the row's own tooltip: the row spends 24px on ONE press now, and the names are
+        // one press away. The diamond says what the row is holding - the state and the count, in words, on the
+        // accessible name and the title - and the press opens the card that names the two sides.
+        ok("each diamond says the state and the count in words", marks.every((m) => /^1 collision, open on this worktree/.test(m.title) && /press to open every pair/.test(m.title)), JSON.stringify(marks.map((m) => m.title)));
+        // Nothing is DRAWN but the glyph: the count lives in the sentence, so the row spends no width on a number.
+        ok("…and no digit is drawn in it at all", marks.every((m) => /^◆$/.test(m.text || "") && !/\d/.test(m.text || "")), JSON.stringify(marks.map((m) => m.text)));
+        ok("the diamonds are violet, and not the review or turnover mark", marks.every((m) => !/is-(review|turnover)/.test(m.state)), JSON.stringify(marks.map((m) => m.state)));
+        // …and one press names them, which is the job the per-pair tooltip used to do.
+        await page.click("tr.row .collision-mark[data-collision-diamond]");
+        await page.waitForSelector(".rowchip-pop .collision-block", { timeout: 15_000 });
+        const spoken = await page.evaluate(() => ({
+          blocks: document.querySelectorAll(".rowchip-pop .collision-block").length,
+          text: (document.querySelector(".rowchip-pop")?.textContent || "").replace(/\s+/g, " "),
+        }));
+        ok("pressing it names the other tree and the shared file", spoken.blocks >= 1 && /coll-two-bbbb|coll-one-aaaa/.test(spoken.text) && /lib\/shared\.js/.test(spoken.text), spoken.text.slice(0, 200));
+        await page.keyboard.press("Escape");
+        await page.waitForFunction(() => document.querySelectorAll(".rowchip-pop").length === 0, null, { timeout: 10_000 });
         eq("both rows are marked at rest", await page.evaluate(() => document.querySelectorAll("tr.row.has-collision").length), 2);
 
         // ---- 3. the panel's own pass hands the pair over --------------------------------------------------
@@ -352,7 +368,7 @@ const result = await (async () => {
         eq("both rows read it as ruled", [rulerOne?.state, rulerTwo?.state], ["ruled", "ruled"]);
         eq("the ruling names the side that goes first, on both rows", [rulerOne?.ruling?.name, rulerTwo?.ruling?.name], ["coll-one-aaaa", "coll-one-aaaa"]);
         ok("the card says already ruled", ruled.blocks.every((b) => /already ruled: coll-one-aaaa( \(#\d+\))? goes first/.test(b.state)), JSON.stringify(ruled.blocks.map((b) => b.state)));
-        ok("…and the marker says so too", ruled.marks.every((m) => /already ruled/.test(m.title)), JSON.stringify(ruled.marks.map((m) => m.title)));
+        ok("…and the row's diamond says every pair is resolved", ruled.marks.length === 2 && ruled.marks.every((m) => /^1 collision, resolved/.test(m.title)), JSON.stringify(ruled.marks.map((m) => m.title)));
         // The button repaints on the page's own clock, so the quiet badge is waited for rather than read on the press.
         const quieted = await page
           .waitForFunction(() => document.getElementById("human-badge")?.hidden === true, null, { timeout: 20_000 })

@@ -13613,7 +13613,7 @@ function paintHumanButton() {
   const steps = [];
   if (blockers.length) steps.push(`${blockers.join(" or ")} opens its agent, centres its prompt and flashes it red with its answer control focused`);
   if (kinds.review !== false) steps.push("a row to review opens the row, opens its result chip onto the card behind it - the whole summary, the report anchor and the next steps - and puts ✓ Reviewed under the caret, so one more press clears it");
-  if (kinds.collisions !== false) steps.push("a collision opens the row whose pair it is, opens its collision chip onto the pair card - the counterpart, both tasks, the shared files - and puts the ruling under the caret");
+  if (kinds.collisions !== false) steps.push("a collision opens the row whose pair it is, presses its collision diamond to open the pair card - the counterpart, both tasks, the shared files, every pair on that worktree - and puts the ruling under the caret");
   btn.title = list.length
     ? `Human — ${list.length} waiting on you: ${split}${named ? ` — questions held by ${named}` : ""}${repeats ? `. ${repeats} of them the panel has already asked again about (once an hour, on its own clock)` : ""}. Click or press H to step through them: ${steps.join("; ")}. Anything answered, expired, reviewed, archived or deleted drops out.${offSaid ? ` ${offSaid}` : ""}`
     : held.length
@@ -13740,8 +13740,8 @@ function humanShowCollision(q) {
   if (!land) return false;
   hotOpenPath(land);
   const key = keyOf(land.project, land.path);
-  // The pair card is a POPUP behind the row's collision chip: open the chip the reader's own press opens, and land
-  // on the card it puts up.
+  // The pair card is a POPUP behind the row's collision diamond: open the one control the reader's own press opens,
+  // and land on the card it puts up (which lists every pair on that worktree).
   if (typeof openRowChipPop === "function") {
     setRowChipOpen("collision", key, true);
     if (typeof paintRowChipMarkers === "function") paintRowChipMarkers(key);

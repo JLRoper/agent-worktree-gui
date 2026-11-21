@@ -321,7 +321,7 @@ const result = await (async () => {
         await painted();
         v = await view();
         eq("…and the badge still counts the pair alone", [v.badge, v.badgeHidden], ["1", false]);
-        ok("…and the absent record is still drawn as settled", /is-absent/.test(v.marks.map((m) => m.state).join(",")) || v.blocks.some((b) => b.key === ABSENT_KEY && /is-absent/.test(b.cls)), JSON.stringify(v.marks.map((m) => m.state)));
+        ok("…and the absent record is still drawn as settled", /is-resolved/.test(v.marks.map((m) => m.state).join(",")) || v.blocks.some((b) => b.key === ABSENT_KEY && /is-absent/.test(b.cls)), JSON.stringify(v.marks.map((m) => m.state)));
 
         ok("no page error", pageErrors.length === 0, pageErrors.join(" | "));
         ok("no failed request the panel made", failed.length === 0, failed.join(" | "));
