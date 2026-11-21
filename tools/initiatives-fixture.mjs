@@ -98,14 +98,17 @@ export function initiativesDocument(home) {
   };
   const all = treePaths(home);
   const by = (name) => all.find((t) => t.name === name);
+  // A path the board does not carry: it lives under this fixture's own home, so the line names a folder on no
+  // particular machine and the row is still missing on every machine the fixture runs on.
+  const missingTree = path.join(home, "state", "missing-trees", "retired-cert-probe").replace(/\\/g, "/");
 
   for (const entry of all.filter((t) => t.initiative)) {
     attach(entry, entry.initiative, ago(hours(entry.initiative === "init_sso" ? 52 : entry.initiative === "init_release" ? 28 : 9)));
   }
   // A tree the board no longer carries, still counted by its initiative. It is the one state a reader can only see
   // here, and the only place it can be removed from.
-  trees["c:/projectdevelopment/optym-integration-multi/.worktrees/retired-cert-probe"] = {
-    path: "C:/ProjectDevelopment/optym-integration-multi/.worktrees/retired-cert-probe",
+  trees[missingTree.toLowerCase()] = {
+    path: missingTree,
     initiatives: ["init_release"],
     members: { init_release: { at: ago(hours(96)), by: "assistant-1" } },
     at: ago(hours(96)),
@@ -141,7 +144,7 @@ export function initiativesDocument(home) {
       history: [
         { at: ago(hours(190)), by: "assistant-2", action: "create", detail: "Quarter-end release readiness" },
         { at: ago(hours(120)), by: "reader", action: "attach", tree: by("menu-role-map").path.replace(/\\/g, "/") },
-        { at: ago(hours(96)), by: "assistant-1", action: "attach", tree: "C:/ProjectDevelopment/optym-integration-multi/.worktrees/retired-cert-probe" },
+        { at: ago(hours(96)), by: "assistant-1", action: "attach", tree: missingTree },
         { at: ago(hours(28)), by: "assistant-2", action: "attach", tree: by("event-hubs-cert").path.replace(/\\/g, "/") },
         { at: ago(hours(28)), by: "assistant-2", action: "attach", tree: by("turnover-budget").path.replace(/\\/g, "/") },
         { at: ago(hours(21)), by: "reader", action: "edit", detail: "added the rollback risk" },
