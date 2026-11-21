@@ -4,16 +4,33 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.144.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.145.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-660 releases from v0.1.0 (2026-10-20) to v1.144.0 (2026-11-21), 2312 commits between the tags. Every release is anchored by an
+661 releases from v0.1.0 (2026-10-20) to v1.145.0 (2026-11-21), 2319 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.145.0 — 2026-11-21 · 7 commits
+
+[`f04a525`](https://github.com/JLRoper/agent-worktree-gui/commit/f04a525965ef3e1a16d54c4f650e8e781b7a6406) · [compare v1.144.0...v1.145.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.144.0...v1.145.0)
+
+### Docs & tests
+
+- docs: render the changelog - 660 releases ([`a5f2646`](https://github.com/JLRoper/agent-worktree-gui/commit/a5f26461a3563df41ab54cfa1921c9091e8d34f8))
+
+### Other
+
+- Seed the missing worktree under the fixture's own home ([`4ee6e5c`](https://github.com/JLRoper/agent-worktree-gui/commit/4ee6e5c2549fcc031ffe40cbaea33301121f7cff))
+- Record the gate ledger from the final run ([`68652ec`](https://github.com/JLRoper/agent-worktree-gui/commit/68652ec2d502b9b09b9eeab20666ddb1eb3377e1))
+- Record 1.144.0 in the report header ([`b96d462`](https://github.com/JLRoper/agent-worktree-gui/commit/b96d462638c22eec0c96e767c70ba73b3a9c135a))
+- Point the baseline at its capture set, not a scratch ledger ([`417a189`](https://github.com/JLRoper/agent-worktree-gui/commit/417a1897e4c2fa0e1aeba112e4c619ec95c6d7a1))
+- row-chips: one collision diamond per row, and no counts chip ([`2e6889d`](https://github.com/JLRoper/agent-worktree-gui/commit/2e6889d29dc1cb69c36d1e65fc5a4a11e0c663ad))
+- chore: 1.145.0 - the version this landing carries ([`f04a525`](https://github.com/JLRoper/agent-worktree-gui/commit/f04a525965ef3e1a16d54c4f650e8e781b7a6406))
 
 ## v1.144.0 — 2026-11-21 · 3 commits
 
