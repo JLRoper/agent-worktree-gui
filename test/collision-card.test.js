@@ -19,9 +19,17 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { CollisionBook, resolveCounterpart, sideOf, stateOf, targetTaskId } from "../lib/collisions.js";
+import { CollisionBook, resolveCounterpart, sideOf, stateOf, targetNamesLiveAgent, targetTaskId } from "../lib/collisions.js";
 import { sweepCollisions } from "../lib/collision-flow.js";
 import { probeLanded, probeSharedFiles } from "../lib/collision-merge.js";
+
+// THE COUNT'S OWN ARITHMETIC, imported the way the page loads it (public/index.html loads both as classic scripts and
+// a test reaches them through globalThis - the same contract test/review-lane.test.js uses). A verdict is only worth
+// recording if the Human button and the chip agree it is settled, and those are the two halves that read it.
+await import("../public/core/review-lane.js");
+await import("../public/core/row-chips.js");
+const lane = globalThis.wtReviewLane;
+const chips = globalThis.wtRowChips;
 
 const PROJECT = "card-proj";
 // Built from parts so the address never has to be typed as one literal; git only needs it to be non-empty.
@@ -150,6 +158,154 @@ test("measured files, and only measured files, put the two presses on the record
   assert.deepEqual(view.files, ["lib/shared.js"], "the set is normalised and deduped");
   assert.equal(view.canRule, true);
   assert.equal(view.relations[0].measured, true);
+});
+
+// ---- the absence verdict: a counterpart that names nothing alive is recorded, not asked ------------------------
+// WHY. A worker can write a COLLISION line naming a tree the board does not have (a tree made by hand, a name typed
+// wrong, a row archived while the run kept going). Nothing answers to it, so there is no second side and NO RULING
+// EXISTS that the reader could give - but the panel used to hand the note over anyway, which put a count on the Human
+// button and an H stop on a card whose only sentence was "no row matches". These cases pin the verdict in its place:
+//
+//   * no row AND no live agent       -> `absent`: recorded, kept readable, counted resolved, never on the Human button;
+//   * a live agent's tree            -> still the reader's (that is exactly what the board has not scanned yet);
+//   * the caller did not look        -> still the reader's, because "nobody is there" was never established;
+//   * an older record (readerAt set by the old code at filing time) -> upgraded on read, so old boards stop asking.
+const NOTE_TEXT = "something is in my way and I cannot tell whose tree it is";
+const noteBook = (name) => new CollisionBook({ file: path.join(CARDS_DIR, `${name}.json`) });
+
+test("a note whose target names no row and no live agent is recorded resolved-by-absence, not held on the Human button", () => {
+  const rows = [TREE("card-a"), TREE("card-b")];
+  const book = noteBook("book-absent");
+  const out = book.recordNote({
+    project: PROJECT,
+    treePath: rows[0].path,
+    branch: rows[0].branch,
+    target: "card-nope",
+    text: NOTE_TEXT,
+    rows,
+    queues: [],
+    liveAgents: [],
+    at: REPORT_AT,
+  });
+  assert.equal(out.saved, true);
+  assert.equal(out.record.resolve.kind, "none", "the target still names nothing on the board");
+  assert.equal(out.record.absent.target, "card-nope");
+  assert.match(out.record.absent.why, /no row on this board and no live agent/);
+  assert.equal(out.record.readerAt, null, "a verdict is not a hand-over");
+  assert.equal(stateOf(out.record), "absent");
+  assert.match(out.line, /recorded as resolved by absence/);
+
+  const view = book.forTree(rows[0].path).find((v) => v.key === out.record.key);
+  assert.equal(view.state, "absent");
+  assert.equal(view.waiting, false, "nothing is waiting on the reader");
+  assert.equal(view.canRule, false, "there is no second side to order");
+  assert.equal(view.canAsk, false, "and nothing to bring in front of him");
+  assert.equal(view.other, null);
+  assert.equal(view.otherTarget, "card-nope", "the words are kept, as the words");
+
+  // THE HUMAN BUTTON, through the lane's own arithmetic: its count is a count of decisions, and this is not one.
+  const row = { project: PROJECT, path: rows[0].path, name: rows[0].name, collisions: [view] };
+  assert.deepEqual(lane.awaitingCollisions(row), []);
+  assert.deepEqual(lane.collisions([row]), [], "no collision item for H to step into");
+  // THE CHIP: resolved, so the row is not painted as a live alarm by the other surface that reads the same record.
+  assert.deepEqual(chips.tally([view], PROJECT), { open: 0, resolved: 1, total: 1 });
+
+  // AND A PAIR THE READER COULD RULE ON STILL COUNTS OPEN: the verdict does not swallow the lane it arrived in.
+  const pair = book.recordNote({ project: PROJECT, treePath: rows[0].path, branch: rows[0].branch, target: "card-b", text: "we both touch lib/shared.js", rows, queues: [], liveAgents: [], at: REPORT_AT }).record;
+  const pairView = book.forTree(rows[0].path).find((v) => v.key === pair.key);
+  assert.equal(pairView.absent, null);
+  assert.deepEqual(chips.tally([pairView], PROJECT), { open: 1, resolved: 0, total: 1 });
+  assert.equal(lane.awaitingCollisions({ collisions: [pairView] }).length, 0, "a pair still with the assistants is not the reader's yet either");
+});
+
+test("a target that names a live agent's tree is still the reader's, and a caller that did not look settles nothing", () => {
+  const rows = [TREE("card-a")];
+  const live = [{ path: "/repos/card-proj/.worktrees/card-unscanned", branch: "wtgui/card-unscanned", name: "card-unscanned" }];
+  const book = noteBook("book-live-agents");
+  const note = (target, liveAgents, at = REPORT_AT) =>
+    book.recordNote({ project: PROJECT, treePath: rows[0].path, branch: rows[0].branch, target, text: NOTE_TEXT, rows, queues: [], liveAgents, at });
+
+  // (a) NOT ASKED: null is "the store could not be read", not "nobody is there" - the note keeps its hand-over.
+  const notAsked = note("card-nope", null);
+  assert.equal(notAsked.record.absent, null);
+  assert.equal(stateOf(notAsked.record), "reader");
+
+  // (b) ASKED, and a live agent stands in the tree the note names. The board has no row for it yet, so the note is
+  // still the reader's: a person can look at what the scan has not written down.
+  const asked = note("card-unscanned", live);
+  assert.equal(asked.record.resolve.kind, "none");
+  assert.equal(asked.record.absent, null);
+  assert.equal(stateOf(asked.record), "reader");
+  assert.match(asked.record.readerWhy, /names no row/);
+
+  // (c) THE MATCHING, in the three spellings a COLLISION line uses: the path, its directory name, the branch.
+  assert.equal(targetNamesLiveAgent("card-unscanned", live)?.path, live[0].path);
+  assert.equal(targetNamesLiveAgent(live[0].path, live)?.path, live[0].path);
+  assert.equal(targetNamesLiveAgent("wtgui/card-unscanned", live)?.path, live[0].path);
+  assert.equal(targetNamesLiveAgent("card-other", live), null);
+  assert.equal(targetNamesLiveAgent("card-unscanned", null), null, "not looked is not a match");
+
+  // (d) THE VERDICT IS RECOMPUTED on a re-report: the same note, now naming a tree a live agent has appeared in, is
+  // the reader's again - the verdict was about the board at the moment it was written, not a permanent sentence.
+  const later = note("card-later", []);
+  assert.equal(stateOf(later.record), "absent");
+  const again = note("card-later", [{ path: "/repos/card-proj/.worktrees/card-later", branch: "wtgui/card-later", name: "card-later" }], LANDED_AT);
+  assert.equal(stateOf(again.record), "reader");
+  assert.equal(again.record.absent, null);
+});
+
+test("a record the old code handed over on the spot reads back as an absence, and one escalated later does not", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "collision-absent-"));
+  const file = path.join(dir, "collisions.json");
+  const base = {
+    project: PROJECT,
+    source: "reported",
+    a: SIDE("card-a"),
+    b: null,
+    bTarget: "card-nope",
+    sameTree: false,
+    resolve: { kind: "none", how: null, target: "card-nope", taskId: null, thread: null, said: 'no tree on this board answers to "card-nope"' },
+    reportedAt: REPORT_AT,
+    notes: [{ at: REPORT_AT, text: NOTE_TEXT, target: "card-nope", runId: "run-old", thread: null }],
+    firstAt: REPORT_AT,
+    lastAt: REPORT_AT,
+    passAt: REPORT_AT,
+    passes: 1,
+    filed: {},
+    stoodDown: {},
+    ruling: null,
+  };
+  writeFileSync(
+    file,
+    `${JSON.stringify({
+      version: 1,
+      records: [
+        // Exactly what the previous code wrote for a note whose target named nothing: handed over at the moment of
+        // filing, so `readerAt` IS the report's stamp.
+        { ...base, key: "note:old", readerAt: REPORT_AT, readerWhy: "reported - the target names no row on this board" },
+        // A note the reader pressed "bring it to me" on: `readerAt` is LATER than the report, so it stays his.
+        { ...base, key: "note:asked", readerAt: LANDED_AT, readerWhy: "asked by reader" },
+      ],
+    })}\n`,
+  );
+  try {
+    const book = new CollisionBook({ file });
+    const old = book.get("note:old");
+    assert.equal(stateOf(old), "absent", "an old none-note is the verdict, without anybody editing the file");
+    assert.equal(old.absent.upgraded, true);
+    assert.equal(old.readerAt, null, "the old hand-over is folded into the verdict, not kept beside it");
+    const asked = book.get("note:asked");
+    assert.equal(stateOf(asked), "reader");
+    assert.equal(asked.absent, null, "a note the reader brought in himself is left exactly as it was");
+    // The verdict survives a save and a reload: it is written, not re-derived on every read.
+    assert.equal(book.save().ok, true);
+    const reread = new CollisionBook({ file });
+    assert.equal(stateOf(reread.get("note:old")), "absent");
+    assert.equal(reread.get("note:old").absent.upgraded, undefined, "the reload reads a verdict, not a migration");
+    assert.equal(reread.forTree(SIDE("card-a").path).length, 2);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 // ---- fix one, measured for real: two branches, one merge base --------------------------------------------------

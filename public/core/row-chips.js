@@ -80,6 +80,9 @@
   function pairResolved(rec) {
     if (!rec) return false;
     if (rec.superseded) return true;
+    // A pair or note the panel settled by ABSENCE (lib/collisions.js `absent`): nothing on the board and no live agent
+    // answers to the name, so there is no decision left for the reader and no press the card could honestly offer.
+    if (rec.absent) return true;
     // A counterpart resolved to the same tree, or to no tree at all, is settled by that answer: there is no decision
     // left for the reader, and no press the card could honestly offer.
     if (rec.resolution && rec.resolution.kind && rec.resolution.kind !== "tree") return true;

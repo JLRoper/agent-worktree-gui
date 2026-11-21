@@ -217,6 +217,9 @@
       );
     } else if (Array.isArray(rec.stoodByTask) && rec.stoodByTask.length) bits.push(`already stood down: ${rec.stoodByTask.map((f) => `${f.tree} is ${f.state}`).join(", ")}`);
     else if (rec.state === "reader") bits.push("yours to rule on - H steps into it");
+    // A VERDICT: the note named nothing alive, so the panel settled it and the marker says so instead of reading like
+    // an alarm. It is checked before the "with both assistants" fallback, which would claim a live pair.
+    else if (rec.state === "absent") bits.push("resolved by absence - no row on this board and no live agent answers to it");
     else bits.push("with both assistants");
     return bits.join(" - ");
   }
