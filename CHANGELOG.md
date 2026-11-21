@@ -4,16 +4,34 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.151.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.152.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-670 releases from v0.1.0 (2026-10-20) to v1.151.0 (2026-11-21), 2349 commits between the tags. Every release is anchored by an
+671 releases from v0.1.0 (2026-10-20) to v1.152.0 (2026-11-21), 2357 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.152.0 — 2026-11-21 · 8 commits
+
+[`983e373`](https://github.com/JLRoper/agent-worktree-gui/commit/983e373c2eb78398d94edaed70b6800d2a94c206) · [compare v1.151.0...v1.152.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.151.0...v1.152.0)
+
+### Docs & tests
+
+- docs: render the changelog - 670 releases ([`6ff3187`](https://github.com/JLRoper/agent-worktree-gui/commit/6ff31874bc0c14c05cf332c8344da2cda7c93f9e))
+- docs: the landing note states the slice, its four acceptance lines and what proves each ([`93a3738`](https://github.com/JLRoper/agent-worktree-gui/commit/93a3738ac550eb1f6fbd60c3a54a8efd467c20a6))
+- docs: the landing note names PR 829, the rebased base and the harness catch ([`66b505c`](https://github.com/JLRoper/agent-worktree-gui/commit/66b505c7e48dfcdfd0f8d2233c79591b3e81334b))
+
+### Other
+
+- a wave of tasks has no record and no state a reader can see, so the tab cannot draw one ([`4b35d8f`](https://github.com/JLRoper/agent-worktree-gui/commit/4b35d8f6df38467c75df5bf7119a608f439deaaa))
+- the wave lane's live gate is a rumour without a script, so verify:waves-lane runs it ([`54ab3d5`](https://github.com/JLRoper/agent-worktree-gui/commit/54ab3d59c155dabcf1a923171d1bcc1262c21813))
+- an initiative with no waves grew a lane of nothing that pushed its card past the pane ([`9093c68`](https://github.com/JLRoper/agent-worktree-gui/commit/9093c6886728b02d685bd28d96f9010db4477e2c))
+- the landing note shows the lane at both widths, so the two captures ride with it ([`7eaa712`](https://github.com/JLRoper/agent-worktree-gui/commit/7eaa712ffe7570f438e094ae18d1b57eb7d48764))
+- chore: 1.152.0 - the version this landing carries ([`983e373`](https://github.com/JLRoper/agent-worktree-gui/commit/983e373c2eb78398d94edaed70b6800d2a94c206))
 
 ## v1.151.0 — 2026-11-21 · 2 commits
 
