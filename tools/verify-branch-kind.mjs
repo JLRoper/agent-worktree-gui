@@ -298,7 +298,7 @@ try {
   const landed = await markState(LANDED);
   ok("the landed row's badge reads MERGED in full", /^MERGED \(1 commit\)/.test(landed.badgeText), landed.badgeText);
   check("...and its verdict cell is that badge alone, with the R in the Kind column", [landed.verdictMarks, landed.verdictText, landed.text, landed.inKind], [0, landed.badgeText, "R", true]);
-  ok("...so the words sit in the cell with the whole width to themselves", landed.badgeWidth >= landed.verdictWidth - 24 && landed.verdictText === landed.badgeText, `${landed.verdictText}: badge ${landed.badgeWidth}px in a ${landed.verdictWidth}px cell`);
+  ok("...so the badge has the cell to itself, with no mark beside it eating its pixels", landed.badgeWidth >= landed.verdictWidth - 24 && landed.verdictText === landed.badgeText, `${landed.verdictText}: badge ${landed.badgeWidth}px in a ${landed.verdictWidth}px cell`);
   // The width budget: a column added beside the verdict is paid for out of other columns' floors (public/charts.js),
   // and if it is not, `columnPlan` scales the whole chart down and the verdict loses the pixel that showed
   // "MERGED (1..." instead of "MERGED (...". This asserts the cell kept the floor it had before the mark existed.
