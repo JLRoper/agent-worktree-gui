@@ -1,0 +1,106 @@
+{
+  "label": "before",
+  "version": "1.142.2",
+  "source": "docs/reports/initiatives-redesign/before/measurements-before.json",
+  "at": "2026-11-21T06:53:45.494Z",
+  "checks": [
+    {
+      "id": "type-title",
+      "label": "the card title is at least 13px and heavier than the body",
+      "ok": false,
+      "detail": "12px, weight 600"
+    },
+    {
+      "id": "type-body",
+      "label": "the description is at least 12px with 1.5 line-height",
+      "ok": false,
+      "detail": "11.5px / 16.7px"
+    },
+    {
+      "id": "type-fold",
+      "label": "project, tree and assistant rows are at least 12px",
+      "ok": false,
+      "detail": "11.5px fold, 11.5px tree, 11.5px assistant"
+    },
+    {
+      "id": "type-meta",
+      "label": "hints and chips are at least 10.5px",
+      "ok": false,
+      "detail": "10.5px hint, 10px chip"
+    },
+    {
+      "id": "contrast-aa",
+      "label": "every text run is at least 4.5:1 against its own background",
+      "ok": false,
+      "detail": "worst 3.6:1 at .init-chips .as-hint"
+    },
+    {
+      "id": "spacing-4",
+      "label": "padding, gaps and margins sit on a 4px scale",
+      "ok": false,
+      "detail": "off-grid: 9, 10, 7, 5, 6, 2px"
+    },
+    {
+      "id": "hit-targets",
+      "label": "every control is at least 28px tall and 24px wide",
+      "ok": false,
+      "detail": ".init-head-btn 401.4x17.4; .init-project .init-proj 441x24; .init-mini 31.6x20; .init-tree-name 109.8x16.7; .init-assist-btn 45.3x15; .init-assist-fold 72.9x20; .init-desc-head 441x24"
+    },
+    {
+      "id": "chips-fit",
+      "label": "no chip clips its text",
+      "ok": true,
+      "detail": "21 chips, widest 147.8px"
+    },
+    {
+      "id": "alignment",
+      "label": "the card's text shares one left edge",
+      "ok": true,
+      "detail": "left edges 956, 940, 940, 940, 940, 956 (spread 16px)"
+    },
+    {
+      "id": "line-length",
+      "label": "a full description stays under 80 characters per line",
+      "ok": false,
+      "detail": "217 ch at 1344px"
+    },
+    {
+      "id": "empty-state",
+      "label": "the empty tab has a heading, a sentence and its primary action",
+      "ok": false,
+      "detail": "heading none, 215 chars, primary false"
+    },
+    {
+      "id": "focus-ring",
+      "label": "a keyboard-reached control paints a 2px ring at 3:1",
+      "ok": false,
+      "detail": "1px auto, 1:1"
+    },
+    {
+      "id": "hover",
+      "label": "folds, buttons and links answer a hover",
+      "ok": true,
+      "detail": "project fold, mini button and tree link each change a computed colour or decoration"
+    },
+    {
+      "id": "active",
+      "label": "a pressed button paints a state beyond its own hover",
+      "ok": false,
+      "detail": "pressed transform none, background rgb(26, 32, 40)"
+    },
+    {
+      "id": "keyboard",
+      "label": "a project fold opens from the keyboard",
+      "ok": true,
+      "detail": "reached the fold after 6 Tab press(es), Enter changed its aria-expanded: yes"
+    },
+    {
+      "id": "focus-persist",
+      "label": "keyboard focus survives the tab's own repaint",
+      "ok": false,
+      "detail": "focus was outside the pane after 4.6s"
+    }
+  ],
+  "passed": 4,
+  "total": 16
+}

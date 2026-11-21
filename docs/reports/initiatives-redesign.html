@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Initiatives tab: measured before, redesigned after</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #161a21; --card: #151a22; --line: #262c37;
+    --text: #e6e9ef; --dim: #9aa4b2; --dimmer: #6b7482; --blue: #7fb2e8;
+    --good: #7ec699; --bad: #e08a8a; --warn: #d8b06a;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.65 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1120px; margin: 0 auto; padding: 48px 24px 80px; }
+  h1 { margin: 0 0 6px; font-size: 34px; line-height: 1.15; letter-spacing: -0.02em; }
+  h2 { margin: 48px 0 12px; font-size: 22px; line-height: 1.25; }
+  h3 { margin: 28px 0 8px; font-size: 16px; }
+  p { max-width: 78ch; color: #c6cdd8; }
+  .sub { margin: 0 0 28px; color: var(--dim); font-size: 13px; }
+  .verdict { margin: 26px 0; padding: 18px 20px; border: 1px solid var(--line); border-left: 4px solid var(--bad); border-radius: 8px; background: var(--panel); }
+  .verdict strong { color: var(--text); }
+  .verdict.after { border-left-color: var(--good); }
+  .scores { display: flex; gap: 12px; flex-wrap: wrap; margin: 18px 0 8px; }
+  .score { flex: 1 1 200px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
+  .score b { display: block; font-size: 30px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .score span { color: var(--dim); font-size: 12px; }
+  .score.bad b { color: var(--bad); }
+  .score.good b { color: var(--good); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0 8px; font-size: 13px; }
+  th, td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  th { color: var(--dim); font-weight: 600; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .bad { color: var(--bad); }
+  .good { color: var(--good); }
+  .warn { color: var(--warn); }
+  code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; color: #c9d6e8; background: #11161d; border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
+  pre { margin: 12px 0; padding: 14px 16px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: #11161d; color: #c9d6e8; font: 12px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace; }
+  .shots { display: grid; gap: 18px; margin: 16px 0 8px; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+  .pair figure { margin: 0; }
+  .pair img { width: 100%; height: auto; display: block; border: 1px solid var(--line); border-radius: 6px; background: #0b0d11; }
+  .pair figcaption { margin-top: 6px; color: var(--dim); font-size: 12px; }
+  .pair figcaption b { color: var(--text); font-weight: 600; }
+  .note { padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--dim); font-size: 13px; }
+  ul { max-width: 80ch; color: #c6cdd8; }
+  li { margin: 4px 0; }
+  .tag { display: inline-block; padding: 0 6px; border: 1px solid var(--line); border-radius: 999px; font-size: 10.5px; color: var(--dim); }
+  @media (max-width: 760px) { .pair { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Initiatives tab: measured before, redesigned after</h1>
+  <p class="sub">agent-worktree-gui 1.143.0 on <code>wtgui/read-row-180-in-c-users-roper-wag-state-f308b5</code>, 2026-11-21. All numbers below are read from a headless Chromium against a private panel, not from the stylesheet.</p>
+
+  <div class="verdict">
+    <strong>The tab was poor.</strong> On a sixteen point rubric it scored <b>4 of 16 (25%)</b>. The title was 12px, the body 11.5px and the hint 10.5px at <b>3.6:1</b> against its own background, which fails AA. Card padding and gaps were 9, 10, 7, 5, 6 and 2px, so nothing lined up to a scale. Seven controls were under 28px tall, the smallest 15px. A description ran <b>217 characters</b> per line in the floating panel. The empty tab had no heading and no primary action. The keyboard focus ring was <code>1px auto</code> at <b>1:1</b>, and a pressed button painted exactly the hover state. Worst of all, the pane rebuilds itself every four seconds and <b>dropped keyboard focus on the floor</b>: the ring was gone 4.6 seconds after a Tab. The four passes were chip fit, left edge, hover and Enter on a fold.
+  </div>
+  <div class="verdict after">
+    <strong>The same sixteen checks now pass at 16 of 16 (100%).</strong> The title is 13.5px, body 12px at 18.6px line height, rows 12px, hints 11px and chips 10.5px. The worst text contrast is <b>6.7:1</b>. Padding and gaps are 4, 8, 12, 16 and 24px. Every control is at least 28px tall. The docked description is 68 characters per line and the floating one is 72. The empty tab has an <code>h5</code>, a sentence and a primary action. The focus ring is 2px at <b>8.3:1</b>, a pressed button moves 1px and darkens, and focus now <b>survives the pane's own repaint</b>.
+  </div>
+
+  <div class="scores">
+    <div class="score bad"><b>4/16</b><span>before: 25%</span></div>
+    <div class="score good"><b>16/16</b><span>after: 100%, docked</span></div>
+    <div class="score"><b>15/16</b><span>after: floating, one deliberate miss</span></div>
+    <div class="score"><b>0</b><span>page or console errors after</span></div>
+  </div>
+
+  <h2>How this was measured</h2>
+  <p>The live panel on <code>0.0.0.0:7331</code> was never used. A sandbox panel was booted from <code>server.js</code> on a free port with <code>WAG_HOME</code> pointed at a scratch directory, so the reader's <code>~/.wag</code> state was never read or written. The fixture holds four initiatives over three projects and seven worktrees: two initiatives with two trees each, one with four trees over three projects including a worktree whose path is missing, and one with no trees at all. The descriptions range from one line to six paragraphs, and the chips are mixed. The rendered page is the real route, scan and queue read, not injected DOM.</p>
+  <p>The live listener was recorded before and after every run. It was the same process throughout: <code>TCP 0.0.0.0:7331 LISTENING 39596</code>, <code>GET /api/health</code> 200, before and after. The redesign did not restart, reload or write the reader's panel.</p>
+
+  <h2>The measurements, side by side</h2>
+  <table>
+    <thead><tr><th>Check</th><th>Before</th><th>After</th><th>Result</th></tr></thead>
+    <tbody>
+      <tr><td>Card title</td><td class="num bad">12px / 600, 17.4px line</td><td class="num good">13.5px / 600, 18.2px line</td><td>pass</td></tr>
+      <tr><td>Description</td><td class="num bad">11.5px / 16.7px</td><td class="num good">12px / 18.6px</td><td>pass</td></tr>
+      <tr><td>Project, tree and assistant rows</td><td class="num bad">11.5px</td><td class="num good">12px</td><td>pass</td></tr>
+      <tr><td>Hints and chips</td><td class="num bad">10.5px hint, 10px chip</td><td class="num good">11px hint, 10.5px chip</td><td>pass</td></tr>
+      <tr><td>Worst text contrast</td><td class="num bad">3.6:1 at <code>.init-chips .as-hint</code></td><td class="num good">6.7:1 at <code>.init-desc</code></td><td>AA</td></tr>
+      <tr><td>Spacing values</td><td class="num bad">9, 10, 7, 5, 6, 2px</td><td class="num good">4, 8, 12, 16, 24px</td><td>4px grid</td></tr>
+      <tr><td>Control height</td><td class="num bad">smallest 15px; 7 under 28px</td><td class="num good">smallest 28px; 9 measured</td><td>pass</td></tr>
+      <tr><td>Chips</td><td class="num">21, widest 147.8px, none clipped</td><td class="num">21, widest 168.1px, none clipped</td><td>pass</td></tr>
+      <tr><td>Description line length, docked</td><td class="num">71 ch at 441px</td><td class="num good">68 ch at 437px</td><td>under 80</td></tr>
+      <tr><td>Description line length, floating</td><td class="num bad">217 ch at 1344px</td><td class="num good">72 ch at 466px</td><td>pass</td></tr>
+      <tr><td>Empty tab</td><td class="num bad">no heading, 215 chars, no primary</td><td class="num good"><code>h5</code>, 213 chars, primary</td><td>pass</td></tr>
+      <tr><td>Focus ring</td><td class="num bad">1px auto, 1:1</td><td class="num good">2px solid, 8.3:1</td><td>pass</td></tr>
+      <tr><td>Pressed vs hover</td><td class="num bad">identical</td><td class="num good">1px down, background 35,42,53</td><td>pass</td></tr>
+      <tr><td>Focus after the 4 second repaint</td><td class="num bad">lost</td><td class="num good">kept, 2px ring</td><td>pass</td></tr>
+      <tr><td>Rubric</td><td class="num bad">4/16 = 25%</td><td class="num good">16/16 = 100%</td><td>green</td></tr>
+    </tbody>
+  </table>
+  <p class="note">The card is 463px wide in the dock in both runs, so the width itself was not the fix. Padding went from 9/10px to 12px, the radius from 7 to 8, the gap between cards from 9 to 12, and the height of an open card grew because the rows are now readable controls rather than 17px text lines.</p>
+
+  <h2>The same states, before and after</h2>
+  <div class="shots">
+    <div class="pair">
+      <figure><img src="initiatives-redesign/before/01-default-list.png" alt="Before: the default Initiatives list"><figcaption><b>Before:</b> the default list. Twelve pixel titles, eleven and a half pixel body, and three chips that read as one run-on line.</figcaption></figure>
+      <figure><img src="initiatives-redesign/after/01-default-list.png" alt="After: the default Initiatives list"><figcaption><b>After:</b> the same four initiatives. A 13.5px title, a 12px description, a chip row and a quieter meta line.</figcaption></figure>
+    </div>
+    <div class="pair">
+      <figure><img src="initiatives-redesign/before/02-expanded-card.png" alt="Before: an expanded initiative card"><figcaption><b>Before:</b> an open card. The title starts at one edge and its body at another, the project count is a bare number, and every row is a 17 to 24px target.</figcaption></figure>
+      <figure><img src="initiatives-redesign/after/02-expanded-card.png" alt="After: an expanded initiative card"><figcaption><b>After:</b> the open card. Title and body share the left edge, the caret moved to the right, the project count says <code>1 tree</code>, and every row is 32px.</figcaption></figure>
+    </div>
+    <div class="pair">
+      <figure><img src="initiatives-redesign/before/03-attach-detach.png" alt="Before: attach and detach controls"><figcaption><b>Before:</b> a worktree row, its branch chip and the Remove control, with the add picker below. Remove is a 20px target and the branch chip is 10px.</figcaption></figure>
+      <figure><img src="initiatives-redesign/after/03-attach-detach.png" alt="After: attach and detach controls"><figcaption><b>After:</b> the same surface with 28px controls, a 10.5px branch chip, and the add picker separated as the initiative's action rather than a project's.</figcaption></figure>
+    </div>
+    <div class="pair">
+      <figure><img src="initiatives-redesign/before/04-empty-tab.png" alt="Before: the empty Initiatives tab"><figcaption><b>Before:</b> an empty tab. One block of 11.5px prose with no heading and no primary action. Nothing says what to do first.</figcaption></figure>
+      <figure><img src="initiatives-redesign/after/04-empty-tab.png" alt="After: the empty Initiatives tab"><figcaption><b>After:</b> an empty tab with a heading, one sentence that defines an initiative, and a primary New initiative action.</figcaption></figure>
+    </div>
+    <div class="pair">
+      <figure><img src="initiatives-redesign/before/05-long-description.png" alt="Before: a long description"><figcaption><b>Before:</b> a long description. The text runs the full 441px, the paragraphs blur together, and the line height is 16.7px.</figcaption></figure>
+      <figure><img src="initiatives-redesign/after/05-long-description.png" alt="After: a long description"><figcaption><b>After:</b> the same description at 12px and 18.6px line height, capped at 72 characters, with a 12px paragraph gap.</figcaption></figure>
+    </div>
+    <div class="pair">
+      <figure><img src="initiatives-redesign/before/06-empty-initiative.png" alt="Before: an initiative with no worktrees"><figcaption><b>Before:</b> an initiative with no worktrees. The projects section is a dashed line with a one-line hint, and the assistant fold says nothing useful.</figcaption></figure>
+      <figure><img src="initiatives-redesign/after/06-empty-initiative.png" alt="After: an initiative with no worktrees"><figcaption><b>After:</b> a real empty state: <code>No worktrees yet</code>, one sentence naming the next action, and the Add a worktree control directly below it.</figcaption></figure>
+    </div>
+    <div class="pair">
+      <figure><img src="initiatives-redesign/before/08-float-widest.png" alt="Before: the floating panel at its widest"><figcaption><b>Before:</b> the float at 1384px. The description is one 217 character line across the whole pane; the card is a single undifferentiated column.</figcaption></figure>
+      <figure><img src="initiatives-redesign/after/08-float-widest.png" alt="After: the floating panel at its widest"><figcaption><b>After:</b> the same float. Prose is held to 72 characters and the projects move to a 640px second column, with the title at 15px.</figcaption></figure>
+    </div>
+    <div class="pair">
+      <figure><img src="initiatives-redesign/before/09-keyboard-focus.png" alt="Before: keyboard focus in the Initiatives pane"><figcaption><b>Before:</b> a Tab into the pane. There is no visible ring, and the pane's four second rebuild takes the focus away within 4.6 seconds.</figcaption></figure>
+      <figure><img src="initiatives-redesign/after/09b-keyboard-focus-ring.png" alt="After: a 2px focus ring at 8.3:1"><figcaption><b>After:</b> the same Tab, zoomed: a 2px <code>#7fb2e8</code> ring at 8.3:1. The focus is restored after the repaint and the ring stays.</figcaption></figure>
+    </div>
+    <div class="pair">
+      <figure><img src="initiatives-redesign/before/07-narrow-900.png" alt="Before: the panel at 900px"><figcaption><b>Before:</b> a 900px window. The rail is 450px, the card is 441px, and the chips wrap into a dense block with no vertical rhythm.</figcaption></figure>
+      <figure><img src="initiatives-redesign/after/07-narrow-900.png" alt="After: the panel at 900px"><figcaption><b>After:</b> the same window. The pane does not scroll sideways (449px pane, 449px scroll width), and the one column keeps its hierarchy.</figcaption></figure>
+    </div>
+  </div>
+
+  <h2>What changed in the panel's own language</h2>
+  <p>The redesign did not invent a third style. It keeps the panel's <code>.as-group</code> card, its <code>.chip</code> pill and its palette (<code>#0f1115</code>, <code>#161a21</code>, <code>#151a22</code>, <code>#262c37</code>, <code>#e6e9ef</code>, <code>#9aa4b2</code>), and adds a scale where the old block had none.</p>
+  <ul>
+    <li><b>A 4px spacing scale</b> for padding, gaps and margins, with 12px card padding and a 12px stack gap. The old 9, 10, 7, 5, 6 and 2px values are gone. <code>public/style.css:4719</code></li>
+    <li><b>A four step type scale:</b> 13.5px title (15px in the wide float), 12px body and rows, 11px hints, 10.5px chips. Nothing is below 10.5px, and the hint that scored 3.6:1 is now 6.7:1. <code>public/style.css:4725</code></li>
+    <li><b>A real empty state, twice:</b> the tab gets an <code>h5</code>, one sentence and a primary action (<code>public/assistant.js:4007</code>); an initiative with no worktrees gets <code>No worktrees yet</code> and the next action (<code>public/assistant.js:3815</code>).</li>
+    <li><b>Cards that scan:</b> the caret moved to the right so the title and body share one left edge, the project count says <code>1 tree</code> or <code>2 trees</code> instead of a bare number, and the title keeps its one-line clamp only while folded.</li>
+    <li><b>A two column card only when there is room:</b> <code>#as-initiatives</code> is an inline-size container, and the card becomes a 72ch prose column plus a 640px project column above 1000px. The 480px dock never sees it. <code>public/style.css:4722</code>, <code>public/style.css:4815</code></li>
+    <li><b>States that exist:</b> hover on project folds, Remove and tree links; <code>:active</code> on the title button moves 1px and darkens; the focus ring is 2px at 8.3:1. <code>public/style.css:4842</code></li>
+    <li><b>Focus survives the repaint:</b> the pane remembers the focused control by its own <code>data-init-*</code> value before rebuilding, finds it again by value, and restores it without scrolling. A keyboard focus also gets the ring back for as long as it keeps focus. <code>public/assistant.js:3934</code>, <code>public/assistant.js:4035</code></li>
+  </ul>
+
+  <h2>The gate</h2>
+  <p><code>tools/verify-initiatives-redesign.mjs</code> is the deterministic before and after gate. It builds the same fixture under a scratch <code>WAG_HOME</code>, boots the panel on a free port, measures the docked card, the empty tab, the 900px window and the wide float, and compares the result with the recorded 1.142.2 baseline in <code>tools/initiatives-redesign-baseline.json</code>. It does not touch 7331. Exit 0 is green, 1 is a regression or a failed check, and 2 means Playwright never ran.</p>
+  <pre>node tools/verify-initiatives-redesign.mjs
+
+score (docked): 16/16 = 100%   before 4/16 = 25%
+PASS  the card title is at least 13px and heavier than the body [FAIL -&gt; PASS]: 13.5px, weight 600
+PASS  the description is at least 12px with 1.5 line-height [FAIL -&gt; PASS]: 12px / 18.6px
+PASS  every text run is at least 4.5:1 against its own background [FAIL -&gt; PASS]: worst 6.7:1
+PASS  the card's text shares one left edge [PASS -&gt; PASS]: spread 16px
+PASS  a keyboard-reached control paints a 2px ring at 3:1 [FAIL -&gt; PASS]: 2px solid, 8.3:1
+PASS  keyboard focus survives the tab's own repaint [FAIL -&gt; PASS]: 4.6s after Tab, ring 2px
+PASS  the reader's 7331 listener is the same process after the sandbox: pid 39596 -&gt; 39596, health 200 -&gt; 200</pre>
+  <p>The wide float is scored 15 of 16. The one miss is the single-left-edge check: the layout deliberately puts the project column at x=597.4, so a one-column edge rule cannot pass there. The gate allows exactly that one check in the wide score and requires every other check, including the 72 character line length, the assistant row and the empty state. That exception is named in the gate, not hidden in a threshold.</p>
+
+  <h2>What is not claimed</h2>
+  <ul>
+    <li>The screenshots are the seeded sandbox, not the reader's live data. The live panel was left alone; no live state was read or written.</li>
+    <li>The fixture is four initiatives, three projects, seven worktrees, one empty initiative and one missing path. It is representative, not exhaustive.</li>
+    <li>The two column float is a design decision, not a measurement win: it buys 72 character prose at 1384px and costs the one-column left edge. The one column remains the dock's layout.</li>
+    <li>Focus restoration is best effort if the focused control itself disappears between reads (for example, a project fold that closes). In that case the control no longer exists and the focus is not invented.</li>
+  </ul>
+
+  <p class="note">Evidence: <code>docs/reports/initiatives-redesign/before/</code> (12 PNGs) and <code>docs/reports/initiatives-redesign/after/</code> (13 PNGs), both produced by <code>tools/capture-initiatives-redesign.mjs</code>. The before and after numbers are recorded in <code>tools/initiatives-redesign-baseline.json</code> and <code>docs/reports/initiatives-redesign/gate.json</code>. The raw per-element ledgers were scratch files and are not committed.</p>
+</main>
+</body>
+</html>

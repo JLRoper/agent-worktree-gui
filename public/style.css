@@ -4720,97 +4720,136 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
 .as-group button.as-danger:hover, .as-group button[data-as-delete-go]:hover { background: rgba(255, 90, 90, .18); }
 
 /* ---- the initiatives tab -------------------------------------------------------------------------
-   The card is the panel's own `.as-group` (same border, radius, padding and background) with the work inside it: a
-   title that is a NAME rather than a field label, one line of description, chips, then the projects as folds. The
-   type scale is the rail's - 12px for a name, 11.5px for a row, 10.5px for a hint, the same `.chip` every other
-   surface uses - because this tab is a view of the board, not a new design. Row heights are the fold buttons' own
-   24px and the worktree rows' 22px, so a folded project and an unfolded one read at the same rhythm. */
-.init-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
-/* THE TITLE CARD IS ONE BUTTON. A press anywhere on the title - the words, the padding around them, the chevron -
-   folds or unfolds the initiative, so the whole row answers as one control with one aria-expanded; the Edit control
-   beside it is its own button and leaves the card's state alone. The title was an <h4> while the card could not be
-   folded; a heading is not a control, and a press on it has to be one. */
-.init-head-btn { flex: 1 1 auto; min-width: 0; display: flex; align-items: baseline; gap: 6px; margin: 0; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
-.init-head-btn:hover .init-title { text-decoration: underline; text-decoration-color: var(--dimmer); }
-.init-head-btn:focus-visible { outline: 1px solid var(--blue); outline-offset: 2px; }
-.init-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 600; letter-spacing: 0; color: var(--text); }
-.init-desc { margin: 0 0 7px; font-size: 11.5px; line-height: 1.45; color: var(--dim); white-space: pre-wrap; overflow-wrap: anywhere; }
-.init-desc.is-empty { color: var(--dimmer); font-style: italic; }
-/* The description's own fold: its header is the panel's project-fold row, one line above the text it folds, and the
-   three dots a folded preview ends on are the quiet grey the panel already uses for "there is more". */
-.init-descfold { margin-bottom: 2px; }
-.init-desc-head { margin-bottom: 1px; }
-.init-dots { color: var(--dimmer); }
-/* A title card is a title, the preview and the counts: the fold's hover says the rest of the card is behind it. */
-.init-card.is-titlecard .init-head { margin-bottom: 2px; }
-.init-card.is-titlecard .init-chips { margin-bottom: 2px; }
-.init-chips { display: flex; flex-wrap: wrap; gap: 5px; align-items: baseline; margin-bottom: 8px; }
-.init-chips .chip { font-size: 10px; padding: 1px 6px; }
-.chip.is-zero { color: var(--dimmer); border-color: var(--line); background: transparent; opacity: .8; }
-/* A fold handle: the row height the queue and the alerts rows use, a caret that turns, the name, a count. */
-.init-proj { display: flex; align-items: center; gap: 6px; width: 100%; min-height: 24px; padding: 2px 4px; border: 0; border-radius: 5px; background: transparent; color: var(--dim); font-size: 11.5px; text-align: left; }
+   THE MAP OF THE WORK, IN THE PANEL'S OWN LANGUAGE. This is still `.as-group`'s card (its border, its
+   surface, its line), but the card is the unit a reader scans, so it owns a type scale and a spacing
+   scale rather than inheriting a dozen one-off values. The scale is 4px: 4 between a chip's lines, 8
+   between rows, 12 around a card's content, 16 for the one indent a nested list gets, 24 between the
+   two columns a wide float can afford. Type is 13.5 title / 12 body and rows / 11 meta / 10.5 chips -
+   four sizes with a job each, all at 4.5:1 or better on the card. */
+.init-card { padding: 12px; border-radius: 8px; margin-bottom: 12px; }
+/* The pane is the container the two-column card answers to, not the window: a 480px dock inside a 1400px
+   window must stay one column, and only the float that is actually wide gets the second one. */
+#as-initiatives { container-type: inline-size; }
+#as-initiatives > .as-group:first-child { padding: 12px; }
+#as-initiatives > .as-group:first-child h4 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-size: 13.5px; letter-spacing: 0; text-transform: none; color: var(--text); }
+#as-initiatives .as-help { font-size: 11.5px; line-height: 1.45; color: var(--dim); }
+#as-initiatives > .as-group:first-child .as-help { max-width: 72ch; }
+#as-initiatives .init-tier { margin-top: 8px; }
+.init-head { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
+/* THE TITLE CARD IS ONE BUTTON, 32px tall, and its title may use two lines: a 110-character initiative
+   name that is cut after 60 characters cannot be read even after the card is opened. Folded it clamps at
+   two lines; opened it is whole. */
+.init-head-btn { flex: 1 1 auto; min-width: 0; min-height: 32px; display: flex; align-items: flex-start; gap: 8px; margin: 0; padding: 4px 0; border: 0; border-radius: 6px; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.init-head-btn:hover { background: transparent; }
+.init-head-btn:hover .init-title { text-decoration: underline; text-decoration-color: var(--dim); text-underline-offset: 2px; }
+.init-head-btn:active { transform: translateY(1px); }
+.init-title { flex: 1 1 auto; min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; font-size: 13.5px; font-weight: 600; line-height: 1.35; letter-spacing: 0; color: var(--text); white-space: normal; }
+.init-card:not(.is-titlecard) .init-title { display: block; -webkit-line-clamp: unset; overflow: visible; }
+.init-desc { max-width: 72ch; margin: 0 0 12px; font-size: 12px; line-height: 1.55; color: var(--dim); white-space: pre-wrap; overflow-wrap: anywhere; }
+.init-desc.is-empty { color: var(--dim); font-style: italic; }
+.init-descfold { margin-bottom: 8px; }
+.init-desc-head { margin-bottom: 4px; }
+.init-dots { color: var(--dim); }
+.init-card.is-titlecard .init-head { margin-bottom: 4px; }
+.init-card.is-titlecard .init-chips { margin-bottom: 0; }
+/* THE COUNTS ARE CHIPS; THE PROVENANCE IS A LINE. Four things on one baseline made the row read as a
+   sentence and squeezed the chips; the edit line gets its own 11px row under them. */
+.init-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-bottom: 12px; }
+.init-chips .chip { font-size: 10.5px; padding: 2px 8px; line-height: 16px; }
+.init-chips .init-meta { flex: 1 0 100%; font-size: 11px; line-height: 1.45; color: var(--dim); }
+.chip.is-zero { color: var(--dim); border-color: var(--line); background: transparent; }
+.init-sechead { margin: 0 0 4px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); }
+/* A FOLD HANDLE: the row height the queue and the alerts rows use, a caret that turns, the name, a count. */
+.init-proj { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 4px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--dim); font-size: 12px; line-height: 1.4; text-align: left; cursor: pointer; }
 .init-proj:hover { background: var(--hover); color: var(--text); }
-.init-proj .init-caret, .init-head-btn .init-caret { flex: 0 0 auto; width: 10px; color: var(--dimmer); font-size: 10px; text-align: center; }
+.init-proj:active { transform: translateY(1px); }
+.init-caret { flex: 0 0 auto; width: 12px; color: var(--dim); font-size: 10px; line-height: 20px; text-align: center; }
+.init-head-btn .init-caret { width: 12px; padding-top: 2px; line-height: 1.35; }
 .init-proj .init-proj-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); }
-.init-proj .chip { font-size: 9.5px; padding: 0 5px; }
-.init-project + .init-project { margin-top: 1px; }
-.init-trees { margin: 1px 0 4px 16px; border-left: 1px solid var(--line); padding-left: 7px; }
-.init-tree { display: flex; align-items: center; gap: 6px; min-height: 22px; font-size: 11.5px; }
-.init-tree-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--blue); text-decoration: none; }
+.init-proj .chip { font-size: 10.5px; padding: 2px 8px; }
+.init-project + .init-project { margin-top: 2px; }
+.init-trees { margin: 4px 0 8px 16px; border-left: 1px solid var(--line); padding-left: 12px; }
+/* ONE WORKTREE IS TWO LINES: the name and Remove, then its branch as a chip that wraps instead of being
+   cut. The branch is the longest text in the tab and the one a reader copies, so it is never ellipsised. */
+.init-tree { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; border-top: 1px solid var(--line); }
+.init-tree:first-child { border-top: 0; }
+.init-tree-main { display: flex; align-items: center; gap: 8px; min-height: 28px; }
+.init-tree-name { flex: 0 1 auto; min-width: 0; display: inline-flex; align-items: center; min-height: 28px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-radius: 4px; color: #7fb2e8; font-size: 12px; text-decoration: none; }
 .init-tree-name:hover { text-decoration: underline; }
-.init-tree-name.is-missing { color: var(--dimmer); text-decoration: line-through; }
-.init-branch { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 9.5px; padding: 0 5px; color: var(--dimmer); }
-/* A branch the panel resolved a page for: the SAME link the chart's branch cell draws (public/core/branch-link.js),
-   so it reads as a link here too - the chart's own link colour, underlined on hover, and a focus ring a keyboard can
-   see. The plain-chip class pair is what it wears when there is no page: no href, no pointer, no underline. The
-   colour is the chart's `td.branch a.branch-link` literally, because "the same affordance" is a claim about what the
-   reader sees, not only about the markup. */
+.init-tree-name.is-missing { color: var(--dim); text-decoration: line-through; }
+.init-tree-main .init-mini { margin-left: auto; }
+.init-tree-branch { min-width: 0; }
+.init-branch { display: inline-flex; max-width: 100%; overflow: hidden; font-size: 10.5px; padding: 2px 8px; line-height: 1.35; color: var(--dim); white-space: normal; overflow-wrap: anywhere; }
 a.init-branch-link { color: #7fb2e8; text-decoration: none; }
 a.init-branch-link:hover { text-decoration: underline; }
-a.init-branch-link:focus-visible { outline: 1px solid #7fb2e8; outline-offset: 1px; border-radius: 4px; }
-.init-tree .init-mini { margin-left: auto; }
-.init-mini { border: 1px solid var(--line); border-radius: 5px; background: transparent; color: var(--dim); font-size: 10.5px; padding: 1px 6px; line-height: 16px; }
+.init-mini { min-height: 28px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--dim); font-size: 11.5px; line-height: 18px; cursor: pointer; }
 .init-mini:hover { background: var(--hover); color: var(--text); }
-.init-mini[disabled] { opacity: .45; cursor: not-allowed; }
-.init-form { display: flex; flex-direction: column; gap: 6px; padding: 8px; margin: 6px 0 8px; border: 1px dashed var(--line); border-radius: 7px; background: var(--surface); }
-.init-form input[type="text"], .init-form select { width: 100%; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 5px 7px; font-size: 11.5px; font-family: var(--mono); }
+.init-mini:active { transform: translateY(1px); background: #232a35; color: var(--text); }
+.init-mini[disabled] { opacity: .55; cursor: not-allowed; }
+.init-form { display: flex; flex-direction: column; gap: 8px; padding: 12px; margin: 8px 0 12px; border: 1px dashed var(--line); border-radius: 8px; background: var(--surface); }
+.init-form input[type="text"], .init-form select { width: 100%; min-height: 32px; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; font-size: 12px; font-family: var(--mono); }
 .init-form .as-note-box { width: 100%; }
-.init-form .as-role-caption { margin: 0; }
+.init-form .as-role-caption { margin: 0; color: var(--dim); font-size: 11px; }
 .init-form .as-actions { margin-top: 0; }
-.init-addrow { margin-top: 6px; }
-.init-assistfold { margin-top: 7px; border-top: 1px solid var(--line); padding-top: 5px; }
-.init-assists { margin: 2px 0 0 16px; }
-.init-assist { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; min-height: 24px; font-size: 11.5px; }
-.init-assist-btn { border: 0; background: transparent; color: var(--blue); font-size: 11.5px; padding: 0; text-align: left; }
-.init-assist-btn:hover { text-decoration: underline; }
+.init-form .primary, .init-form button { min-height: 32px; }
+.init-addrow { margin-top: 8px; }
+.init-assistfold, .init-histfold { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 8px; }
+.init-assists { margin: 4px 0 0 16px; }
+.init-assist { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-height: 32px; font-size: 12px; }
+.init-assist-btn { display: inline-flex; align-items: center; min-height: 28px; padding: 0 4px; border: 0; border-radius: 4px; background: transparent; color: #7fb2e8; font-size: 12px; text-align: left; cursor: pointer; }
+.init-assist-btn:hover { background: transparent; text-decoration: underline; }
 .init-counts { display: flex; flex-wrap: wrap; gap: 4px; }
-.init-counts .chip { font-size: 9.5px; padding: 0 5px; }
-.init-assist-when { margin-left: auto; white-space: nowrap; }
-/* THE FOLD THAT OPENS ONE ASSISTANT'S EXACT TASKS. The same handle the tab's other folds are (a caret, a name, a
-   count), sized to sit in the assistant's row instead of across the card. The row reads name, fold, when-it-worked on
-   one line and the four state counts on the next: four chips plus a fold beside a name is wider than the rail, and
-   letting them fall where they fit left "working now" alone on a line of its own. Then the list, indented the way a
-   project's worktrees are. */
-.init-assist .init-proj.init-assist-fold { width: auto; flex: 0 0 auto; min-height: 20px; padding: 0 3px; gap: 4px; }
+.init-counts .chip { font-size: 10.5px; padding: 2px 8px; }
+.init-assist-when { margin-left: auto; white-space: nowrap; color: var(--dim); font-size: 11px; }
+.init-assist .init-proj.init-assist-fold { width: auto; flex: 0 0 auto; min-height: 28px; padding: 4px 6px; gap: 4px; }
 .init-assist-fold .init-proj-name { flex: 0 0 auto; }
 .init-assist .init-counts { flex: 1 0 100%; }
-.init-tasks { flex: 1 0 100%; margin: 1px 0 3px 16px; border-left: 1px solid var(--line); padding-left: 7px; }
-/* The rows inside a fold are the QUEUE's own card (public/queue-cards.js `taskCardHtml`, compact mode), so the
-   listing that used to be drawn here - .init-task, .init-task-id, .init-task-title, .init-task-state,
-   .init-task-thread, .init-task-run, .init-task-pr, .init-task-when - has no rule left to own. The one line that
-   said "no task is filed..." stays: it is the fold's own words, not a card's. */
-.init-task-none { padding: 2px 0 4px; }
-.init-histfold { margin-top: 7px; border-top: 1px solid var(--line); padding-top: 5px; }
-.init-history { margin: 2px 0 0 16px; }
-.init-hist-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; min-height: 22px; font-size: 11.5px; }
+.init-tasks { flex: 1 0 100%; margin: 4px 0 4px 16px; border-left: 1px solid var(--line); padding-left: 12px; }
+.init-task-none { padding: 4px 0; }
+.init-history { margin: 4px 0 0 16px; }
+.init-hist-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; min-height: 28px; font-size: 12px; }
 .init-hist-what { min-width: 0; overflow-wrap: anywhere; }
 .init-hist-who { color: var(--text); font-weight: 600; }
-.init-hist-when { margin-left: auto; white-space: nowrap; font-family: var(--mono); font-size: 10px; }
+.init-hist-when { margin-left: auto; white-space: nowrap; font-family: var(--mono); font-size: 11px; color: var(--dim); }
 .init-tier b { color: var(--text); }
-.init-hist-none { padding: 2px 0 4px; }
-.init-no-trees, .init-no-assist { padding: 2px 0 4px 16px; }
-.init-empty { line-height: 1.5; }
-.init-empty b { color: var(--text); }
+.init-hist-none { padding: 4px 0; }
+.init-none { margin: 4px 0 0; padding: 8px 12px; border: 1px dashed var(--line); border-radius: 8px; color: var(--dim); font-size: 12px; line-height: 1.5; }
+.init-none b { display: block; margin-bottom: 2px; color: var(--text); font-size: 12px; }
+.init-none span { display: block; }
+.init-empty { max-width: 560px; padding: 24px; border: 1px dashed var(--line); border-radius: 8px; background: var(--surface); color: var(--dim); }
+.init-empty h5 { margin: 0 0 8px; font-size: 14px; letter-spacing: 0; text-transform: none; color: var(--text); }
+.init-empty p { max-width: 60ch; margin: 0 0 16px; font-size: 12px; line-height: 1.55; color: var(--dim); }
+.init-empty .as-actions { margin-top: 0; }
+/* THE WIDE FLOAT IS TWO COLUMNS, not a 217-character measure: the words and the map of projects sit side
+   by side, and the folds that belong to the whole initiative (assistants, history) run beneath both. */
+@container (min-width: 1000px) {
+  .init-card:not(.is-titlecard) {
+    display: grid;
+    grid-template-columns: minmax(0, 72ch) minmax(320px, 640px);
+    grid-template-areas: "head side" "desc side" "chips side" "assist assist" "hist hist";
+    column-gap: 24px;
+    align-items: start;
+    justify-content: start;
+  }
+  .init-card > .init-head { grid-area: head; }
+  .init-card .init-title { font-size: 15px; }
+  .init-card > .init-descfold, .init-card > .init-desc { grid-area: desc; }
+  .init-card > .init-chips { grid-area: chips; }
+  .init-card > .init-side { grid-area: side; }
+  .init-card > .init-assistfold { grid-area: assist; }
+  .init-card > .init-histfold { grid-area: hist; }
+  .init-card > .init-form { grid-column: 1 / -1; }
+  .init-card > .init-desc { max-width: 72ch; }
+}
+/* A KEYBOARD RING THE READER CAN SEE: 2px at 8:1 on the card, on every control in the tab. */
+#as-initiatives button:focus-visible,
+#as-initiatives a:focus-visible,
+#as-initiatives select:focus-visible,
+#as-initiatives input:focus-visible,
+#as-initiatives textarea:focus-visible { outline: 2px solid #7fb2e8; outline-offset: 2px; border-radius: 6px; }
+/* A focus the pane restored after its own repaint: same ring as :focus-visible, worn only while that control keeps
+   the focus. */
+#as-initiatives .init-focus-restored { outline: 2px solid #7fb2e8; outline-offset: 2px; border-radius: 6px; }
 
 
 /* ---- the worktrees sub-tab: one board project card per project ------------------------------------
