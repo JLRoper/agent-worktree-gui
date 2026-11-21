@@ -178,4 +178,9 @@ task with no `waveId` not silently counted as a member (the route test and the l
 - Version: 1.152.0 (minor: a new route, a new store and a new lane, and nothing existing moves).
 - PR: #829, open and left OPEN for the panel to land. The release tag `v1.152.0` is anchored on the bump commit and
   pushed; a rebase merge re-creates that commit, and the landing moves the tag onto the commit main carries.
-- The full suite on this branch, and the pre-existing failures it re-measures, are in the PR body.
+- The full suite, one run on this branch at `f33e9ddc`: 3454 tests, 3445 passed, 9 failed. Eight of the nine reproduce
+  on a `git archive` of `origin/main` unchanged (`paths.test.js`'s `pipelineBundleSeedFile`, `assistant-profile`,
+  `assistant-search-scroll`, `paths-http`, `header-controls`, `junctioned-node-modules`, `child-route`,
+  `gateway-permissions`), and the ninth, `reasoning-runs`' level-survives-a-restart, passes alone on this branch and on
+  `origin/main` and failed only under the full sweep's load. `test/harness.test.js`, which DID fail on the first pass,
+  is the one this branch caused and the one this branch fixed.
