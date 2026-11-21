@@ -3503,9 +3503,11 @@
       ? `<span class="init-tree-name is-missing" title="this path is no longer a worktree on the board - the initiative still counts it, and Remove takes it out">${esc(name)}</span>`
       : `<a href="#" class="init-tree-name" data-init-open="${esc(project)}|${esc(tree.path)}" title="open this worktree's row on the chart: its project unfolds, the window scrolls to it and the row flashes">${esc(name)}</a>`;
     return `<div class="init-tree" data-init-tree-row="${esc(tree.path)}">
-      ${link}
-      ${branch ? wtBranchLink.branchNameHtml({ branch, url: tree.branchUrl, linkFrom: tree.branchLinkFrom, why: tree.branchWhy, fallback: "the branch this worktree is on", linkClass: "chip init-branch mono init-branch-link", plainClass: "chip init-branch mono" }) : ""}
-      <button type="button" class="init-mini" data-init-move="${esc(init.id)}|remove|${esc(tree.path)}"${initBlocked() ? " disabled" : ""} title="take this worktree out of the initiative${esc(attachedNote)} - your tier decides whether that asks, and nothing changes until you answer if it does">Remove</button>
+      <div class="init-tree-main">
+        ${link}
+        <button type="button" class="init-mini init-detach" data-init-move="${esc(init.id)}|remove|${esc(tree.path)}"${initBlocked() ? " disabled" : ""} aria-label="remove ${esc(name)} from this initiative" title="take this worktree out of the initiative${esc(attachedNote)} - your tier decides whether that asks, and nothing changes until you answer if it does">Remove</button>
+      </div>
+      ${branch ? `<div class="init-tree-branch">${wtBranchLink.branchNameHtml({ branch, url: tree.branchUrl, linkFrom: tree.branchLinkFrom, why: tree.branchWhy, fallback: "the branch this worktree is on", linkClass: "chip init-branch mono init-branch-link", plainClass: "chip init-branch mono" })}</div>` : ""}
     </div>`;
   }
 
@@ -3804,18 +3806,18 @@
               <button type="button" class="init-proj" data-init-fold="${esc(init.id)}::${esc(p.name)}" aria-expanded="${projOpen ? "true" : "false"}" title="${projOpen ? "fold" : "unfold"} ${esc(p.name)}'s worktrees - a project is folded until you open it">
                 <span class="init-caret">${projOpen ? "▾" : "▸"}</span>
                 <span class="init-proj-name">${esc(p.name)}</span>
-                <span class="chip is-zero">${p.trees.length}</span>
+                <span class="chip" title="${p.trees.length} worktree${p.trees.length === 1 ? "" : "s"} in this project">${p.trees.length} tree${p.trees.length === 1 ? "" : "s"}</span>
               </button>
               ${projOpen ? `<div class="init-trees">${trees}</div>` : ""}
             </div>`;
           })
           .join("")
-      : `<div class="as-hint init-no-trees">no worktrees yet - Add a worktree puts the first one here, and your tier decides whether it asks first</div>`;
+      : `<div class="init-none init-no-trees"><b>No worktrees yet</b><span>Add a worktree puts the first one here, and your tier decides whether it asks first</span></div>`;
     const assistHtml = assistants.length
       ? assistantsOpen
         ? `<div class="init-assists">${assistants.map((a) => initAssistantRowHtml(init, a)).join("")}</div>`
         : ""
-      : `<div class="as-hint init-no-assist">no assistant has worked on these worktrees yet</div>`;
+      : `<div class="init-none init-no-assist"><span>no assistant has worked on these worktrees yet</span></div>`;
     const editHtml = editing
       ? `<div class="init-form" data-init-editform="${esc(init.id)}">
           <label class="as-role-caption" for="as-init-edit-title-${esc(init.id)}">title</label>
@@ -3850,8 +3852,8 @@
     return `<article class="as-group init-card${open ? "" : " is-titlecard"}" data-init-card="${esc(init.id)}">
       <div class="init-head">
         <button type="button" class="init-head-btn" data-init-card-toggle="${esc(init.id)}" aria-expanded="${open ? "true" : "false"}" title="this initiative ${open ? "is open - a press folds it back to its title card" : "is folded to its title card - a press unfolds it, and one open state is kept per initiative while the tab is open"}">
-          <span class="init-caret">${open ? "▾" : "▸"}</span>
           <span class="init-title">${esc(init.title)}</span>
+          <span class="init-caret" aria-hidden="true">${open ? "▾" : "▸"}</span>
         </button>
         ${open ? `<button type="button" class="init-mini" data-init-edit="${esc(init.id)}"${blocked || editing ? " disabled" : ""} title="edit the title and the description - the words are free to change, unlike who is behind the work">Edit</button>` : ""}
       </div>
@@ -3860,13 +3862,16 @@
         <span class="chip" title="${init.projectCount} project${init.projectCount === 1 ? "" : "s"} this initiative spans">${init.projectCount} project${init.projectCount === 1 ? "" : "s"}</span>
         <span class="chip" title="${init.treeCount} worktree${init.treeCount === 1 ? "" : "s"} behind this piece of work">${init.treeCount} worktree${init.treeCount === 1 ? "" : "s"}</span>
         <span class="chip" title="${init.assistantCount} assistant${init.assistantCount === 1 ? "" : "s"} have worked on this initiative's worktrees">${init.assistantCount} assistant${init.assistantCount === 1 ? "" : "s"}</span>
-        ${init.updatedAt ? `<span class="as-hint">edited ${esc(relTime(init.updatedAt))} ago${init.updatedBy && init.updatedBy !== "reader" ? ` by ${esc(init.updatedBy)}` : ""}</span>` : ""}
+        ${init.updatedAt ? `<span class="as-hint init-meta">edited ${esc(relTime(init.updatedAt))} ago${init.updatedBy && init.updatedBy !== "reader" ? ` by ${esc(init.updatedBy)}` : ""}</span>` : ""}
       </div>
       ${open
         ? `${editHtml}
-      <div class="init-projects">${projectsHtml}</div>
-      <div class="init-addrow">
-        ${adding ? initAddFormHtml(init) : `<button type="button" class="init-mini" data-init-add="${esc(init.id)}"${blocked ? " disabled" : ""} title="put another worktree on this piece of work - your tier decides whether it asks, and a question names both the tree and the initiative">+ Add a worktree</button>`}
+      <div class="init-side">
+        <div class="init-sechead">Projects</div>
+        <div class="init-projects">${projectsHtml}</div>
+        <div class="init-addrow">
+          ${adding ? initAddFormHtml(init) : `<button type="button" class="init-mini init-add" data-init-add="${esc(init.id)}"${blocked ? " disabled" : ""} title="put another worktree on this piece of work - your tier decides whether it asks, and a question names both the tree and the initiative">+ Add a worktree</button>`}
+        </div>
       </div>
       <div class="init-assistfold">
         <button type="button" class="init-proj" data-init-assist-fold="${esc(init.id)}" aria-expanded="${assistantsOpen ? "true" : "false"}" title="${assistantsOpen ? "fold" : "unfold"} the assistants that worked on this initiative, newest first - folded, the card stays a map of the work">
@@ -3921,6 +3926,45 @@
     }, INIT_READ_GAP_MS);
   }
 
+  // FOCUS SURVIVES THE FOUR-SECOND REPAINT. The pane is rebuilt from a read on a timer, so a keyboard user who has
+  // tabbed to a fold loses it every few seconds and the ring blinks out mid-task. The control is remembered by its
+  // own data attribute (each one names the initiative, the fold or the tree it acts on), then found again by value in
+  // the new markup and focused without scrolling. Inputs are already protected by initTyping(), so a caret is never
+  // rebuilt; this is for the buttons a keyboard reaches.
+  const INIT_FOCUS_ATTRS = [
+    "data-init-card-toggle", "data-init-fold", "data-init-desc-fold", "data-init-assist-fold", "data-init-task-fold",
+    "data-init-history-fold", "data-init-add", "data-init-edit", "data-init-move", "data-init-open", "data-init-new",
+    "data-init-refresh", "data-init-task-card", "data-init-tasks-more", "data-init-assistant", "data-init-create",
+    "data-init-save", "data-init-cancel", "data-init-field",
+  ];
+  let initKeyboardModality = false;
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Tab" || e.key === "Enter" || e.key === " ") initKeyboardModality = true;
+  }, true);
+  document.addEventListener("pointerdown", () => { initKeyboardModality = false; }, true);
+  function initFocusToken(host) {
+    const el = document.activeElement;
+    if (!el || !host.contains(el)) return null;
+    for (const attr of INIT_FOCUS_ATTRS) {
+      if (el.hasAttribute(attr)) return { attr, value: el.getAttribute(attr), keyboard: initKeyboardModality };
+    }
+    return el.id ? { id: el.id, keyboard: initKeyboardModality } : null;
+  }
+  function restoreInitFocus(host, token) {
+    if (!token) return;
+    const target = token.attr
+      ? [...host.querySelectorAll(`[${token.attr}]`)].find((n) => n.getAttribute(token.attr) === token.value)
+      : document.getElementById(token.id);
+    if (!target || target === document.activeElement) return;
+    target.focus({ preventScroll: true });
+    // A script focus after a rebuild does not always paint `:focus-visible` in Chromium even when the reader reached
+    // the control with Tab. The token knows the last input was the keyboard, so the ring is re-applied for exactly as
+    // long as that control keeps focus, and the next Tab paints its own.
+    if (!token.keyboard) return;
+    target.classList.add("init-focus-restored");
+    target.addEventListener("blur", () => target.classList.remove("init-focus-restored"), { once: true });
+  }
+
   function renderAssistantInitiatives(force = false) {
     const host = as$("as-initiatives");
     if (!host) return;
@@ -3960,19 +4004,20 @@
     const empty = list.length
       ? ""
       : `<div class="as-empty init-empty" data-init-empty>
-          <b>No initiatives yet.</b> An initiative is a title, a description and the worktrees behind it - one may span
-          several projects and several assistants, and a worktree with none is normal: nothing is enforced.
-          <div class="as-actions"><button type="button" data-init-new${unreadable ? " disabled" : ""}>New initiative</button></div>
+          <h5>No initiatives yet</h5>
+          <p class="init-empty-copy">An initiative is a title, a description and the worktrees behind it. One may span several projects and several assistants, and a worktree with none is normal: nothing is enforced.</p>
+          <div class="as-actions"><button type="button" class="primary" data-init-new="empty"${unreadable ? " disabled" : ""}>New initiative</button></div>
         </div>`;
     const tier = initDoc.tier && initDoc.tier.id ? initDoc.tier : { id: "all", label: "ask me for everything", hint: "every create, edit, attach and detach waits for your answer" };
+    const focusToken = initFocusToken(host);
     host.innerHTML = `
       <div class="as-group">
         <h4>Initiatives <span class="as-hint">the big pieces of work, and the worktrees behind each one</span></h4>
-        <p class="as-help">You and the assistants may create an initiative and edit its title and description. Whether a change asks you first is the tier below - and the card, when it is drawn, always names the initiative and the tree.</p>
+        <p class="as-help">You and the assistants create and edit initiatives; the tier below decides whether a change asks you first. Every change records the actor and the time.</p>
         ${storeLine}
-        <p class="as-help init-tier" data-init-tier="${esc(tier.id)}">Initiative changes: <b>${esc(tier.label)}</b> - ${esc(tier.hint)}. Settings, Board tab changes the level; at every level the history records the actor and the time.</p>
+        <p class="as-help init-tier" data-init-tier="${esc(tier.id)}">Initiative changes: <b>${esc(tier.label)}</b> - ${esc(tier.hint)}. Settings, Board tab changes the level.</p>
         <div class="as-actions">
-          <button type="button" data-init-new${unreadable ? " disabled" : ""}${initNewOpen ? " hidden" : ""}>New initiative</button>
+          <button type="button" data-init-new="head"${unreadable ? " disabled" : ""}${initNewOpen ? " hidden" : ""}>New initiative</button>
           <button type="button" data-init-refresh title="read the store again - the tab also re-reads after every write and every answered move">Refresh</button>
           <span class="as-hint">${initLoading ? "reading…" : initErr ? `read failed: ${esc(initErr)}` : ""}</span>
         </div>
@@ -3987,6 +4032,7 @@
     // a row already on screen is patched where it stands, never rebuilt. The pane repaints on every snapshot, so a
     // rebuild would restart each row every couple of seconds under a reader's eyes.
     paintInitTaskLists(host);
+    restoreInitFocus(host, focusToken);
     scheduleInitRefresh();
   }
 

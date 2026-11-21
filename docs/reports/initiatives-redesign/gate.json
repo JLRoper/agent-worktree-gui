@@ -1,0 +1,146 @@
+{
+  "at": "2026-11-21T07:08:10.704Z",
+  "version": "1.143.0",
+  "home": "$SCRATCH",
+  "baseline": {
+    "passed": 4,
+    "total": 16,
+    "source": "docs/reports/initiatives-redesign/before/measurements-before.json"
+  },
+  "after": {
+    "passed": 16,
+    "total": 16,
+    "score": 1,
+    "checks": [
+      {
+        "id": "type-title",
+        "label": "the card title is at least 13px and heavier than the body",
+        "ok": true,
+        "detail": "13.5px, weight 600"
+      },
+      {
+        "id": "type-body",
+        "label": "the description is at least 12px with 1.5 line-height",
+        "ok": true,
+        "detail": "12px / 18.6px"
+      },
+      {
+        "id": "type-fold",
+        "label": "project, tree and assistant rows are at least 12px",
+        "ok": true,
+        "detail": "12px fold, 12px tree, 12px assistant"
+      },
+      {
+        "id": "type-meta",
+        "label": "hints and chips are at least 10.5px",
+        "ok": true,
+        "detail": "11px hint, 10.5px chip"
+      },
+      {
+        "id": "contrast-aa",
+        "label": "every text run is at least 4.5:1 against its own background",
+        "ok": true,
+        "detail": "worst 6.7:1 at .init-desc"
+      },
+      {
+        "id": "spacing-4",
+        "label": "padding, gaps and margins sit on a 4px scale",
+        "ok": true,
+        "detail": "3 values, all multiples of 4"
+      },
+      {
+        "id": "hit-targets",
+        "label": "every control is at least 28px tall and 24px wide",
+        "ok": true,
+        "detail": "9 controls measured, smallest 28px"
+      },
+      {
+        "id": "chips-fit",
+        "label": "no chip clips its text",
+        "ok": true,
+        "detail": "21 chips, widest 168.1px"
+      },
+      {
+        "id": "alignment",
+        "label": "the card's text shares one left edge",
+        "ok": true,
+        "detail": "left edges 982, 982, 982, 982, 982, 998 (spread 16px)"
+      },
+      {
+        "id": "line-length",
+        "label": "a full description stays under 80 characters per line",
+        "ok": true,
+        "detail": "72 ch at 466px"
+      },
+      {
+        "id": "empty-state",
+        "label": "the empty tab has a heading, a sentence and its primary action",
+        "ok": true,
+        "detail": "heading h5, 213 chars, primary true"
+      },
+      {
+        "id": "focus-ring",
+        "label": "a keyboard-reached control paints a 2px ring at 3:1",
+        "ok": true,
+        "detail": "2px solid, 8.3:1"
+      },
+      {
+        "id": "hover",
+        "label": "folds, buttons and links answer a hover",
+        "ok": true,
+        "detail": "project fold, mini button and tree link each change a computed colour or decoration"
+      },
+      {
+        "id": "active",
+        "label": "a pressed button paints a state beyond its own hover",
+        "ok": true,
+        "detail": "pressed transform matrix(1, 0, 0, 1, 0, 1), background rgb(35, 42, 53)"
+      },
+      {
+        "id": "keyboard",
+        "label": "a project fold opens from the keyboard",
+        "ok": true,
+        "detail": "reached the fold after 5 Tab press(es), Enter changed its aria-expanded: yes"
+      },
+      {
+        "id": "focus-persist",
+        "label": "keyboard focus survives the tab's own repaint",
+        "ok": true,
+        "detail": "4.6s after Tab: data-init-new=head, ring 2px"
+      }
+    ]
+  },
+  "wide": {
+    "passed": 15,
+    "total": 16,
+    "misses": [
+      "alignment"
+    ]
+  },
+  "narrow": {
+    "width": 449,
+    "scrollWidth": 449,
+    "clientWidth": 449,
+    "overflowing": 0,
+    "cardWidth": 433
+  },
+  "live": {
+    "before": {
+      "line": "TCP    0.0.0.0:7331           0.0.0.0:0              LISTENING       39596",
+      "pid": 39596,
+      "health": {
+        "status": 200
+      }
+    },
+    "after": {
+      "line": "TCP    0.0.0.0:7331           0.0.0.0:0              LISTENING       39596",
+      "pid": 39596,
+      "health": {
+        "status": 200
+      }
+    },
+    "untouched": true
+  },
+  "pageErrors": [],
+  "consoleErrors": []
+}
