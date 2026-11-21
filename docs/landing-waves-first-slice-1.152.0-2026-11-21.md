@@ -1,4 +1,4 @@
-# Landing: the first slice of waves of work (1.151.0)
+# Landing: the first slice of waves of work (1.152.0)
 
 `docs/reports/waves-of-work.html` landed on main as a design and said so plainly: "The first slice in section 6 is a
 plan; nothing in this page was produced by wave code, because none exists." This branch is that slice. It adds the
@@ -171,10 +171,11 @@ task with no `waveId` not silently counted as a member (the route test and the l
 
 ## The landing
 
-- Base: cut from `origin/main` `e27192a6` (1.150.0); rebased onto `origin/main` `3a32f5db` (1.150.1) before the push,
-  so the branch is not behind the tip it will land on.
+- Base: cut from `origin/main` `e27192a6` (1.150.0), rebased onto `6ff31874` (1.151.0) before the push, so the branch
+  is not behind the tip it will land on. That rebase is also why the number is 1.152.0 and not 1.151.0: the
+  branch-kind column landing (PR #828) took 1.151.0 first, and a number is claimed by its tag.
 - Branch: `wtgui/build-the-first-slice-of-waves-of-work-c86bf5`.
-- Version: 1.151.0 (minor: a new route, a new store and a new lane, and nothing existing moves).
-- PR: #829, open and left OPEN for the panel to land. The release tag `v1.151.0` is anchored on the bump commit and
+- Version: 1.152.0 (minor: a new route, a new store and a new lane, and nothing existing moves).
+- PR: #829, open and left OPEN for the panel to land. The release tag `v1.152.0` is anchored on the bump commit and
   pushed; a rebase merge re-creates that commit, and the landing moves the tag onto the commit main carries.
 - The full suite on this branch, and the pre-existing failures it re-measures, are in the PR body.
