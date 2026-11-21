@@ -3866,6 +3866,11 @@
       </div>
       ${open
         ? `${editHtml}
+      ${/* THE WAVE LANE (public/core/waves-lane.js). A lane inside this card, not a tab of its own: position, members and
+           gate state, drawn from the same GET /api/initiatives read the rest of the card comes from. Every word is the
+           server's fold - the state, the gate reads and which wave the stated order makes current - so a repaint cannot
+           disagree with the route, and nothing here writes a wave. */ ""}
+      ${wtWavesLane.laneHtml(init, initDoc?.waveStatus || null, esc)}
       <div class="init-side">
         <div class="init-sechead">Projects</div>
         <div class="init-projects">${projectsHtml}</div>

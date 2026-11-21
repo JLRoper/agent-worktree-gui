@@ -1,0 +1,134 @@
+// The waves of work: one READ, and only one, for this slice.
+//
+//   GET /api/waves?initiative=<id>   the waves of one initiative, each folded with its members, its derived state and
+//                                    its gate reads
+//
+// WHY A READ AND NOTHING ELSE. The design (docs/reports/waves-of-work.html, section 6) sizes the first slice so it can be
+// judged before anything acts on it: no write route, no evaluator, no scheduler, no auto start. This module is the
+// wire half of that read, and the same fold is what GET /api/initiatives carries into the Initiatives tab, so the lane
+// and this route cannot disagree about a wave's state.
+//
+// MEMBERS COME FROM EVERY ASSISTANT'S QUEUE, not from the initiative's tree keys. Membership is the task's own
+// `waveId` (decision 2, 2026-11-21): a wave may span projects, so filtering by tree would silently drop a member whose
+// worktree belongs to another initiative - the exact inference the design forbids.
+//
+// AN UNREADABLE STORE IS A 409 AND NOTHING IS WRITTEN. The sentence is the store's own, with the path in it, and this
+// module has no writer to overwrite the bytes with; a refused read leaves the file for the reader to repair.
+import { statSync } from "node:fs";
+
+import { normTreePath } from "../lib/initiatives.js";
+import { readBundle } from "../lib/pipeline-bundle.js";
+import { WAVE_MEMBERS_MAX, WAVES_MAX, WAVES_VERSION, waveLane } from "../lib/waves.js";
+
+/** The one path this prefix answers. */
+export const WAVES_PATH = "/api/waves";
+
+/**
+ * Whether the bundle still holds a template id, cached by the bundle file's stamp.
+ *
+ * The lane must read a template that disappeared as UNRESOLVED rather than null it, and the bundle is 175 KB: parsing
+ * it on every snapshot the tab takes would be a real cost for a boolean. The stamp makes a re-export visible on the
+ * next read and nothing else re-parse.
+ */
+export function waveTemplateLookup(bundleFile) {
+  let cache = { stamp: null, ids: new Set() };
+  return (id) => {
+    const wanted = String(id || "");
+    if (!wanted) return null;
+    let stamp = "missing";
+    try {
+      const st = statSync(bundleFile);
+      stamp = `${st.mtimeMs}:${st.size}`;
+    } catch {
+      stamp = "missing";
+    }
+    if (cache.stamp !== stamp) {
+      const source = bundleFile ? readBundle(bundleFile) : null;
+      const bundle = source && source.ok ? source.bundle : null;
+      cache = { stamp, ids: new Set(bundle ? (bundle.pipelines || []).map((p) => p.id) : []) };
+    }
+    return cache.ids.has(wanted);
+  };
+}
+
+/** One line per assistant's queue rows, flattened. A queue that cannot be read is an empty one FOR THIS READ. */
+export function queueRows(assistant) {
+  const out = [];
+  const assistants = Array.isArray(assistant?.assistants) ? assistant.assistants : [];
+  for (const rec of assistants) {
+    let view = null;
+    try {
+      view = typeof assistant?.queueView === "function" ? assistant.queueView(rec.id) : null;
+    } catch {
+      view = null; // its own pane reports the error; a wave read must not fail because one queue did
+    }
+    for (const task of Array.isArray(view?.tasks) ? view.tasks : []) out.push(task);
+  }
+  return out;
+}
+
+export function createWavesRoutes({
+  waves,
+  assistant,
+  store,
+  sendJson,
+  templateExists = () => null,
+  log = () => {},
+} = {}) {
+  if (!waves) throw new Error("createWavesRoutes needs the Waves store");
+  if (typeof sendJson !== "function") throw new Error("createWavesRoutes needs sendJson from the server's transport");
+
+  const rowFor = (project, treePath) => {
+    const key = normTreePath(treePath);
+    if (!key) return null;
+    const rows = typeof store?.rowsFor === "function" ? store.rowsFor(project) || [] : [];
+    return rows.find((r) => normTreePath(r.path) === key) || null;
+  };
+
+  return async function wavesRoutes(req, res, route, url) {
+    if (route !== WAVES_PATH && !route.startsWith(`${WAVES_PATH}/`)) return false;
+    if (route !== WAVES_PATH) {
+      sendJson(res, 404, { error: `no such waves route: ${route}` });
+      return true;
+    }
+    if (req.method !== "GET") {
+      sendJson(res, 405, { error: `${req.method} is not allowed on ${route} - this slice reads waves and writes none` });
+      return true;
+    }
+    const params = url?.searchParams || new URL(req.url || "/", "http://127.0.0.1").searchParams;
+    const initiativeId = String(params.get("initiative") || "").trim();
+    if (!initiativeId) {
+      sendJson(res, 400, { error: "a wave read needs ?initiative=<id> - a wave lives inside one initiative, and the store is keyed by it" });
+      return true;
+    }
+    const status = waves.statusOf();
+    if (!status.readable) {
+      sendJson(res, 409, {
+        refused: "unreadable",
+        file: status.file,
+        error: `${status.file || "the wave store"} could not be read (${status.error || "unknown error"}) - it was NOT overwritten. Fix or move that file, then try again: every wave on the board lives in it.`,
+      });
+      return true;
+    }
+    const lane = waveLane({
+      waves,
+      initiativeId,
+      tasks: queueRows(assistant),
+      rowFor,
+      templateExists,
+    });
+    log(`waves: read ${lane.waves.length} wave${lane.waves.length === 1 ? "" : "s"} for ${initiativeId}`);
+    sendJson(res, 200, {
+      at: new Date().toISOString(),
+      file: status.file,
+      found: status.found,
+      readable: status.readable,
+      error: status.error,
+      initiative: initiativeId,
+      caps: { waves: WAVES_MAX, members: WAVE_MEMBERS_MAX },
+      store: { version: WAVES_VERSION },
+      ...lane,
+    });
+    return true;
+  };
+}

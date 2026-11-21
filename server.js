@@ -106,6 +106,10 @@ import { RULES_PATH, createProjectRulesRoutes } from "./routes/project-rules.js"
 // overlaid onto the board's rows on every read, and moved only through the permission box.
 import { Initiatives, normTreePath } from "./lib/initiatives.js";
 import { INITIATIVES_PATH, createInitiativesRoutes } from "./routes/initiatives.js";
+// The waves of work: an ordered, gated group of tasks inside one initiative (lib/waves.js), in their own store
+// keyed by initiative id. This slice is a READ: the lane in the Initiatives tab, and one GET beside it.
+import { Waves } from "./lib/waves.js";
+import { WAVES_PATH, createWavesRoutes, waveTemplateLookup } from "./routes/waves.js";
 // A project's turnover branch: the branch its work rolls up into, named by the reader in the project settings. The
 // row shape and validation live with the module; the config write lives here; the wire shape is its own route.
 import { baseRefKindLookup, baseRefKindOf, projectTurnoverRow, turnoverBranchFrom, turnoverLookup, validateBaseRefKind, validateTurnoverBranch } from "./lib/project-turnover.js";
@@ -1756,6 +1760,13 @@ const locks = new Locks({ file: config.locksFile, log });
 // the lock, this is the reader's map rather than anything git knows, so it lives in a side store under logs/ and is
 // overlaid onto the rows on every read - a scan that rebuilt a row cannot lose a membership it never owned.
 const initiatives = new Initiatives({ file: config.initiativesFile, log });
+// The waves of work (lib/waves.js): a sibling store keyed by initiative id, so neither document rewrites the other.
+// It has no writer in this slice - the lane and GET /api/waves only read it - and it keeps the initiative store's
+// refuse-not-repair rule the day a write route arrives.
+const waves = new Waves({ file: config.wavesFile, log });
+// Whether a wave's template id is still in the bundle, parsed once per bundle stamp (routes/waves.js). The lane reads
+// a template it cannot find as unresolved, never null.
+const waveTemplateExists = waveTemplateLookup(config.pipelineBundleFile);
 
 // The sentry + the assistant's own thread. It reads the same job summaries the page does, so nothing
 // here can see more than the board shows; its own clock is `settings.seconds`. `spawner` is the one act it
@@ -1893,8 +1904,18 @@ const PREFIX_MOUNTS = [
       readBody,
       authorised,
       onChange: () => broadcastSnapshot(),
+      // The wave lane the Initiative cards draw (lib/waves.js): the same fold GET /api/waves answers, so the tab and
+      // that route cannot tell a reader two different states about one wave.
+      waves,
+      templateExists: waveTemplateExists,
       log,
     }),
+  },
+  // The waves of work: one READ, the lane's own query. No write route in this slice - the design sizes it so the
+  // record, the membership and the derived state can be judged before anything acts on them.
+  {
+    prefix: WAVES_PATH,
+    handles: createWavesRoutes({ waves, assistant, store, sendJson, templateExists: waveTemplateExists, log }),
   },
   // The turnover prefix (routes/project-turnover.js): the branch a project's work rolls up into, drawn in the project
   // settings and read by every cut. Same writer, same transport, its own path.
