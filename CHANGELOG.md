@@ -4,16 +4,30 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.150.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.150.1 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-668 releases from v0.1.0 (2026-10-20) to v1.150.0 (2026-11-21), 2343 commits between the tags. Every release is anchored by an
+669 releases from v0.1.0 (2026-10-20) to v1.150.1 (2026-11-21), 2347 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.150.1 — 2026-11-21 · 4 commits
+
+[`2b7a0d9`](https://github.com/JLRoper/agent-worktree-gui/commit/2b7a0d9be75baab62c00a21aec2f3d209fb33105) · [compare v1.150.0...v1.150.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.150.0...v1.150.1)
+
+### Fixed
+
+- fix: a turn parked on a clarify or an approval is not a stall ([`2b7a0d9`](https://github.com/JLRoper/agent-worktree-gui/commit/2b7a0d9be75baab62c00a21aec2f3d209fb33105))
+
+### Docs & tests
+
+- docs: the landing note and the report carry 1.150.0 and the rebased line numbers ([`61ba276`](https://github.com/JLRoper/agent-worktree-gui/commit/61ba27688d9e906691d556b75ec1883f97dc1fc9))
+- docs: the sweep paragraph names both runs and what each answered ([`c19e9e1`](https://github.com/JLRoper/agent-worktree-gui/commit/c19e9e193e9c402182e08f3a33247a6eed5bf8b9))
+- docs: render the changelog - 668 releases ([`e27192a`](https://github.com/JLRoper/agent-worktree-gui/commit/e27192a6b274b545c00f56609a854d40dd3b2177))
 
 ## v1.150.0 — 2026-11-21 · 6 commits
 
