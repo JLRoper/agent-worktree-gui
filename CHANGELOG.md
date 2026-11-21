@@ -4,16 +4,28 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.150.1 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.151.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-669 releases from v0.1.0 (2026-10-20) to v1.150.1 (2026-11-21), 2347 commits between the tags. Every release is anchored by an
+670 releases from v0.1.0 (2026-10-20) to v1.151.0 (2026-11-21), 2349 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.151.0 — 2026-11-21 · 2 commits
+
+[`852cac4`](https://github.com/JLRoper/agent-worktree-gui/commit/852cac454d84d2d5f78f6f63fdadeed2814a39d7) · [compare v1.150.1...v1.151.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.150.1...v1.151.0)
+
+### Docs & tests
+
+- docs: render the changelog - 669 releases ([`3a32f5d`](https://github.com/JLRoper/agent-worktree-gui/commit/3a32f5db7b5d224bac58883814fef77f16fec400))
+
+### Other
+
+- the verdict cell is the badge alone, and the kind gets its own column (#828) ([`852cac4`](https://github.com/JLRoper/agent-worktree-gui/commit/852cac454d84d2d5f78f6f63fdadeed2814a39d7))
 
 ## v1.150.1 — 2026-11-21 · 4 commits
 
