@@ -74,13 +74,15 @@ SPAWN with no row, a tree cut by hand, and a `SPAWN IN` (which cuts nothing) are
 - `node tools/verify-branch-kind.mjs` - 57 checks, 0 failed: the row still draws R and R-with-a-tick, the lift
   route's 404 and its recorded `lifted: true` are unchanged, the cut dialog offers exactly the two kinds, and no
   page error.
-- `npm test`, once, before the pull request: it printed 1,485 passes and 8 failures before it stopped producing
-  output for 14 minutes with six heavy files still in flight (a sibling tree was running its own suite at the same
-  time), and it was cancelled at the 20 minute limit this project's worker briefs set - the run did not reach its
-  summary. The eight failing files were re-run on their own: `assistant-carry-key`, `assistant-to-replay` and
-  `child-tree` pass alone, and the other five - `assistant-profile`, `assistant-search-scroll`, `child-route`,
-  `gateway-permissions`, `header-controls` - fail identically on a clean `git archive main` tree, so none of them is
-  this change. `gateway-permissions` fails because it starts `server.js` in a worktree that has no `config.json`.
+- `npm test` was run first and was cancelled at the 20 minute limit with its totals lost (it was piped through a
+  tail, which printed some failures and no summary). The same runner was then run at concurrency 8
+  (`node --test --test-concurrency=8 test/*.test.js`): it printed 1,485 passes and 8 failures before it stopped
+  producing output for 14 minutes with six heavy files in flight (a sibling tree was running its own suite at the
+  same time), and it was cancelled at the same limit. The eight failing files were re-run on their own:
+  `assistant-carry-key`, `assistant-to-replay` and `child-tree` pass alone, and the other five - `assistant-profile`,
+  `assistant-search-scroll`, `child-route`, `gateway-permissions`, `header-controls` - fail identically on a clean
+  `git archive main` tree, so none of them is this change. `gateway-permissions` fails because it starts `server.js`
+  in a worktree that has no `config.json`.
 
 ## The version
 
