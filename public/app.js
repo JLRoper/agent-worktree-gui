@@ -7578,6 +7578,130 @@ async function cutChildTree(btn) {
 }
 // ---- end a child worktree off this row's branch
 
+// ---- lifting a research tree's local-only kind: the R on the row, its confirm, and the one request ----------
+// THE MISSING CONTROL. A cut records what kind of tree it made (lib/branch-kind.js): a turnover child has a
+// destination on the remote, a research tree is local only and its push meets a refusal until the reader lifts it.
+// Both facts were already written, read by the push rule and answerable by POST /api/worktree/kind-lift - and the
+// route had NO control in the page at all, so finishing a landing on a research tree meant opening
+// ~/.wag/state/branch-parents.json or hand-calling the API.
+//
+// The R in the row's verdict cell is that control (`kindMarkHtml`, public/render-projects.js). It opens an inline
+// confirm in the same shape as the delete question, because a lift changes what a later push is allowed to do. The
+// confirm says the one thing it does - the tree's push stops meeting the research refusal - and the answer is written
+// on the record, so a restart keeps it. Nothing is pushed here and no branch moves.
+const kindConfirmEls = new Map(); // row key -> the inline <tr> that is asking
+
+function kindConfirmOf(key) {
+  return (
+    kindConfirmEls.get(key) ||
+    document.querySelector(`tr.row-kind-confirm[data-kind-confirm="${CSS.escape(key)}"]`) ||
+    null
+  );
+}
+
+function closeKindConfirm(key, { focusTrigger = false } = {}) {
+  const el = kindConfirmOf(key);
+  el?.remove();
+  kindConfirmEls.delete(key);
+  if (!focusTrigger) return;
+  const trigger = document.querySelector(`[data-kind-lift="${CSS.escape(key)}"]`);
+  if (trigger?.isConnected) trigger.focus();
+}
+
+function showKindConfirm(key, trigger = null) {
+  const row = state.rows.get(key);
+  // The question is inserted under the table the press came from: the board and the assistant's Worktrees tab draw
+  // the same row builder, and a confirm under the WRONG copy of the row is a question about a table the reader is
+  // not looking at.
+  const rowEl = (trigger && typeof trigger.closest === "function" && trigger.closest("tr.row")) || document.querySelector(`tr.row[data-key="${CSS.escape(key)}"]`);
+  if (!row || !rowEl) return;
+  if (row.branchKind !== "research" || row.branchKindLifted === true) return;
+  closeKindConfirm(key);
+  const el = document.createElement("tr");
+  el.className = "row-confirm row-kind-confirm";
+  el.dataset.kindConfirm = key;
+  // The question names the tree it is about at the moment it is asked. The request reads THESE, not the row's live
+  // fields, so a repaint or a rename between the press and the answer cannot lift a different tree than the one the
+  // reader was looking at.
+  el.dataset.kindPath = row.path;
+  el.dataset.kindBranch = row.branch || "";
+  el.innerHTML = `<td colspan="${wtColspan()}">
+      <div class="row-confirm-cell">
+        <span class="rc-msg"><span class="rc-kind">Lift the research kind</span> on <b>${esc(row.name || row.branch || key)}</b><span class="dimmer">?</span> The tree's push stops meeting the research refusal: the kind stays research and the record keeps lifted: true, so a restart keeps it. Nothing is pushed and no branch moves.</span>
+        <span class="rc-actions"><button class="btn-del-no" type="button" data-kind-lift-no="${esc(key)}">Cancel</button><button class="btn-refresh-yes" type="button" data-kind-lift-yes="${esc(key)}">Lift</button></span>
+      </div>
+    </td>`;
+  rowEl.after(el);
+  kindConfirmEls.set(key, el);
+  markUnder(el, key);
+  // The keyboard lands on the question, not on the action: a reader who pressed Enter to OPEN the confirm does not
+  // get the lift by pressing Enter again, and Cancel is where Escape would leave them.
+  el.querySelector("[data-kind-lift-no]")?.focus();
+  el.addEventListener("focusin", () => {
+    el.dataset.focused = "1";
+  });
+  el.addEventListener("focusout", (ev) => {
+    if (!el.contains(ev.relatedTarget)) delete el.dataset.focused;
+  });
+  el.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Escape") return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    closeKindConfirm(key, { focusTrigger: true });
+  });
+  return el;
+}
+
+async function confirmKindLift(key, btn = null) {
+  const row = state.rows.get(key);
+  const el = kindConfirmOf(key);
+  if (!row) return;
+  const msg = el?.querySelector(".rc-msg");
+  const yes = btn && btn.isConnected ? btn : el?.querySelector("[data-kind-lift-yes]");
+  // What the question was asked about, bound when it opened (`showKindConfirm`). Falling back to the row keeps a
+  // question drawn before this attribute existed answerable.
+  const targetPath = String(el?.dataset.kindPath || row.path || "");
+  const targetBranch = el?.dataset.kindBranch !== undefined ? String(el.dataset.kindBranch) : String(row.branch || "");
+  if (yes) {
+    yes.disabled = true;
+    yes.textContent = "lifting...";
+  }
+  const ask = async () => {
+    const r = await apiFetch(
+      "/api/worktree/kind-lift",
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path: targetPath, branch: targetBranch }) },
+      { timeoutMs: 20000 },
+    );
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(String(d.error || `HTTP ${r.status}`));
+    return d;
+  };
+  const refuse = (why) => {
+    if (msg) {
+      msg.querySelectorAll(".rc-refusal").forEach((n) => n.remove());
+      msg.insertAdjacentHTML("beforeend", ` <span class="rc-refusal">${esc(why)}</span>`);
+    }
+    showBanner(`lift refused: ${why}`);
+    if (yes && yes.isConnected) {
+      yes.disabled = false;
+      yes.textContent = "Lift";
+    }
+  };
+  try {
+    const d = await ask();
+    closeKindConfirm(key);
+    const label = String(d?.branchKind || row.branchKind || "research").toLowerCase() === "research" ? "research tree" : "tree";
+    // The row first, the note second: the note is what the reader checks the row against, so it must not start its
+    // four seconds while the snapshot is still landing. A resync that fails does not turn a written lift into a
+    // refusal - the record is the truth and the next frame will draw it.
+    await resync().catch(() => {});
+    showNote(`${label} on ${row.name || row.branch || key} is lifted - its push now meets the ordinary controls, and the record keeps it`);
+  } catch (err) {
+    refuse(String((err && err.message) || err));
+  }
+}
+// ---- end the kind's lift
+
 // ---- merge control: the UNMERGED chip ------------------------------------------------------
 // A row that carries commits main does not have is the one row with an action worth taking, so that chip is a button:
 // one click starts an agent IN that worktree whose whole job is to land the branch (the script is lib/merge-prompt.js
@@ -9696,6 +9820,21 @@ function renderAll() {
   // here: renderProjectRows would otherwise re-insert the old node into a fresh table.
   for (const el of state.confirmEls.values()) el.remove();
   state.confirmEls.clear();
+  // The kind's lift question is NOT thrown away by a repaint: the reader asked it, and a board that answers a press
+  // by removing the question mid-read is the silent no-op this control exists to avoid. Put the same <tr> back under
+  // its row in the new table, and give the keyboard back to Cancel when the question had it.
+  for (const [key, el] of [...kindConfirmEls]) {
+    const row = $("projects").querySelector(`tr.row[data-key="${CSS.escape(key)}"]`);
+    if (!row) {
+      el.remove();
+      kindConfirmEls.delete(key);
+      continue;
+    }
+    const hadFocus = el.dataset.focused === "1";
+    row.after(el);
+    markUnder(el, key);
+    if (hadFocus) el.querySelector("[data-kind-lift-no]")?.focus();
+  }
   // The rebuild sorted every folder by activity; put the open ones back in the slot they held.
   for (const g of $("projects").querySelectorAll("section.root-group")) {
     pinOpenProjects(g.querySelector(".root-body"), prevRoots.get(g.dataset.root));
@@ -10652,6 +10791,30 @@ document.addEventListener("click", async (e) => {
     e.preventDefault();
     e.stopPropagation();
     void renameWorktreePrompt(renameTree);
+    return;
+  }
+  // The row's kind mark: R on a research tree opens the inline lift confirm under THIS row (the board's table and the
+  // assistant's Worktrees tab both draw it, so the press names the row it came from). T is a statement and has no
+  // handler; a lifted R stops being a button at all.
+  const kindLift = e.target.closest("[data-kind-lift]");
+  if (kindLift) {
+    e.preventDefault();
+    e.stopPropagation();
+    showKindConfirm(kindLift.dataset.kindLift, kindLift);
+    return;
+  }
+  const kindLiftYes = e.target.closest("[data-kind-lift-yes]");
+  if (kindLiftYes) {
+    e.preventDefault();
+    e.stopPropagation();
+    void confirmKindLift(kindLiftYes.dataset.kindLiftYes, kindLiftYes);
+    return;
+  }
+  const kindLiftNo = e.target.closest("[data-kind-lift-no]");
+  if (kindLiftNo) {
+    e.preventDefault();
+    e.stopPropagation();
+    closeKindConfirm(kindLiftNo.dataset.kindLiftNo, { focusTrigger: true });
     return;
   }
   const delTreeYes = e.target.closest("[data-del-tree-yes]");

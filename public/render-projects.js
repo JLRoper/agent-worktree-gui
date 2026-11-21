@@ -390,7 +390,7 @@ function projectSection(name) {
     <div class="wt-scroll">
       <table><thead><tr>${chartHeaderHtml()}</tr></thead><tbody data-tbody="${esc(name)}"></tbody></table>
     </div>
-    <div class="legend"><span class="age-slot" data-age-slot="${esc(name)}"></span>liveness evidence: <span class="sig sig-hermes">⧉ hermes</span> session active · <span class="sig sig-claude">⧉ claude</span> Claude Code session active · <span class="sig sig-board">● board</span> live board PID · <span class="sig sig-port">:port</span> dev server listening · <span class="sig sig-files">✎ files</span> edited recently — a row is live only if one of these fired · the number is time since that last happened, the ring fills up to green as the row becomes due for its next read · a tree cut from another one hangs under it, one indent in, and the ▾ on its parent folds the group out of sight — a fold only hides, every chip and open panel stays as it was</div>
+    <div class="legend"><span class="age-slot" data-age-slot="${esc(name)}"></span>liveness evidence: <span class="sig sig-hermes">⧉ hermes</span> session active · <span class="sig sig-claude">⧉ claude</span> Claude Code session active · <span class="sig sig-board">● board</span> live board PID · <span class="sig sig-port">:port</span> dev server listening · <span class="sig sig-files">✎ files</span> edited recently - a row is live only if one of these fired · the number is time since that last happened, the ring fills up to green as the row becomes due for its next read · the kind a cut recorded: <span class="kind-mark kind-turnover" role="img" aria-label="turnover child">T</span> turnover child, <span class="kind-mark kind-research" role="img" aria-label="research tree">R</span> research tree (local only - press R on the row to lift the refusal) · a tree cut from another one hangs under it, one indent in, and the ▾ on its parent folds the group out of sight - a fold only hides, every chip and open panel stays as it was</div>
   </section>`;
 }
 
@@ -856,7 +856,7 @@ function rowHtml(row, forceOwner = false) {
     dirty: `<td class="mono nowrap">${dirty}</td>`,
     life: lifeCellHtml(row),
     nextread: nextReadCellHtml(row),
-    verdict: `<td class="verdict">${badge}</td>`,
+    verdict: `<td class="verdict">${kindMarkHtml(row)}${badge}</td>`,
     actions: `<td class="row-actions">${isProjectRoot ? "" : `${childBtn}<button class="btn-refresh-tree" data-refresh-tree="${esc(delKey)}" type="button" title="reconcile this one worktree — re-read its git state (dirty, ahead/behind, cherry, verdict, PR), then check its TODO list against what the tree now contains (a proposal, nothing closed) and its description, re-derived only if it has gone stale; every action is journalled under the row">\u27f3</button><button class="btn-del-tree${delDirect ? " is-direct" : ""}" data-del-tree="${esc(delKey)}" title="${delDirect ? "this worktree is merged and clean — deletes it straight away, its files go to the Recycle Bin and git's record is pruned" : "remove this worktree — asks first; its files go to the Recycle Bin and git's record of it is pruned"}">✕</button>`}</td>`,
   };
   // The lane is read through `typeof`: a scope without it reads as "no delivery" instead of throwing. The amber left
@@ -866,6 +866,38 @@ function rowHtml(row, forceOwner = false) {
   return `<tr class="row${isOpen ? " expanded" : ""}${lock ? " is-locked" : ""}${reviewOn && typeof wtReviewLane !== "undefined" && wtReviewLane.awaiting(row) ? " has-review" : ""}${typeof wtReviewLane !== "undefined" && wtReviewLane.awaitingCollisions(row).length ? " has-collision" : ""}" data-key="${esc(keyOf(row.project, row.path))}">
     ${shownColumns(forceOwner).map((i) => cells[CHART_COLUMNS[i].id]).join("\n    ")}
   </tr>`;
+}
+
+// ---- the kind a cut recorded, in the row -----------------------------------------------------
+// WHAT KIND OF TREE THIS IS, drawn from the record the cut wrote (lib/branch-kind.js, branch-parents.json) and the
+// server stamps on the row (`branchKind`, `branchKindLabel`, `branchKindLifted`, `branchKindParent`).
+//
+// IT IS ONE LETTER, IN THE VERDICT CELL. The name line already carries the row's own controls and marks, and the
+// landing before this one had to move a review chip into a cell of its own because two chips squeezed the name out.
+// This answers that with the smallest thing that can be read: T for a turnover child, R for a research tree, a title
+// and an aria-label that spell the kind out, and the chart's legend decoding the pair. The verdict cell is where it
+// belongs because the kind is exactly what the verdict's landing question meets: a research tree's push is refused
+// until the reader lifts it.
+//
+// T is a statement: a turnover child has a destination on the remote already. R is a BUTTON while the record is
+// unlifted: pressing it opens the inline confirm (public/app.js `showKindConfirm`) that lifts the research refusal
+// through POST /api/worktree/kind-lift. A lifted tree keeps its R with a tick - the kind never changes, only the
+// reader's answer to it does. A tree with no record draws nothing at all.
+function kindMarkHtml(row) {
+  const kind = String(row?.branchKind || "").toLowerCase();
+  if (kind !== "turnover" && kind !== "research") return "";
+  const label = String(row.branchKindLabel || (kind === "research" ? "research tree" : "turnover child"));
+  const parent = String(row.branchKindParent || "").trim() || (kind === "research" ? "the project's main parent" : "a turnover branch");
+  if (kind === "research") {
+    if (row.branchKindLifted === true) {
+      const says = `${label} - cut from ${parent}, lifted by the reader: its push meets the ordinary controls. The kind stays research.`;
+      return `<span class="kind-mark kind-research is-lifted" role="img" aria-label="${esc(`${label}, lifted`)}" title="${esc(says)}">R<span class="kind-tick" aria-hidden="true">\u2713</span></span>`;
+    }
+    const says = `${label} - cut from ${parent}, local only: its push meets the research refusal until you lift it. Press to lift: the kind stays research, the record keeps your answer, and nothing is pushed and no branch moves.`;
+    return `<button class="kind-mark kind-research" type="button" data-kind-lift="${esc(keyOf(row.project, row.path))}" aria-label="${esc(`${label}, local only - press to lift the research refusal`)}" title="${esc(says)}">R</button>`;
+  }
+  const says = `${label} - cut from ${parent}, with a destination on the remote: its push meets the ordinary controls.`;
+  return `<span class="kind-mark kind-turnover" role="img" aria-label="${esc(label)}" title="${esc(says)}">T</span>`;
 }
 
 // The row's turnover mark, drawn beside the lock. `turnoverFor` (public/board-scaffold.js) is the branch the project's
