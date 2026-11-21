@@ -63,7 +63,7 @@ Squash merge, per the brief: PR #823 merged into `main` as `d839fe3fe8` at 21:13
 `public/style.css` and `package.json` both auto-merged, so the three public files the brief expected to stop the
 rebase never did. The changelog was rendered at the merged tip afterwards (`e2bebda`, 665 releases, current) and
 `v1.148.0` was moved from the branch's bump commit to `d839fe3fe8`, the commit on `main` that first declares the
-number. The post-render tip is `e2bebda`.
+number. The render landed at `e2bebda`; this record is one docs commit on top of it.
 
 ## The clock
 
