@@ -49,13 +49,41 @@ test("the primary checkout is skipped, even on a branch that is already landed a
   assert.equal(r.droppable, 0);
 });
 
-test("the panel's own tree is skipped, and so is anything inside it", () => {
-  const r = plan([tree({ path: OWN, branch: "wtgui/panel", ancestor: true }), tree({ path: `${OWN}/nested`, branch: "wtgui/nested", ancestor: true })]);
-  assert.equal(r.rows.length, 2);
-  for (const row of r.rows) {
-    assert.equal(row.verdict, "skip", `${row.path} must not be a candidate`);
-    assert.match(row.reason, /panel's own tree/);
-  }
+test("a tree that CONTAINS the panel's cwd is skipped even when the cwd is below its root", () => {
+  const r = plan([tree({ path: OWN, branch: "wtgui/panel", ancestor: true })], PROJECT, { ownPath: `${OWN}/sub/deeper` });
+  assert.equal(r.rows[0].verdict, "skip");
+  assert.match(r.rows[0].reason, /panel's own tree/);
+});
+
+test("a sibling worktree is NOT the panel's own tree: only the tree the cwd sits in is", () => {
+  // The old guard asked `tree.startsWith(own + "/")`, so a worktree under the same folder as the own tree was swept
+  // in too. The own tree is a containment question, asked one way only.
+  const r = plan([tree({ path: "/repos/demo/.worktrees/x", branch: "wtgui/x", ancestor: true })]);
+  assert.equal(r.rows[0].verdict, "remove");
+  assert.equal(r.droppable, 1);
+});
+
+test("a plan whose ownPath IS the primary path still drops an ancestor-clean tree", () => {
+  // The live bug: routes/project-cleanup.js passes process.cwd(), and a panel started from the primary checkout has
+  // its cwd at the project root. Reading that as "every tree under here is the panel's own" made all 31 rows skip.
+  const r = planCleanup({
+    project: PROJECT,
+    trees: [
+      tree({ path: PROJECT.path, branch: "main", ancestor: true }),
+      tree({ path: `${PROJECT.path}/.worktrees/landed`, branch: "wtgui/landed", ancestor: true }),
+      tree({ path: `${PROJECT.path}/.worktrees/dirty`, branch: "wtgui/dirty", ancestor: true, dirty: true, dirtyFiles: ["lib/x.js"] }),
+    ],
+    primaryPath: PROJECT.path,
+    ownPath: PROJECT.path,
+  });
+  const primary = rowFor(r.rows, PROJECT.path);
+  const landed = rowFor(r.rows, `${PROJECT.path}/.worktrees/landed`);
+  const dirty = rowFor(r.rows, `${PROJECT.path}/.worktrees/dirty`);
+  assert.match(primary.reason, /primary checkout/);
+  assert.equal(landed.verdict, "remove");
+  assert.equal(landed.call, "drop");
+  assert.equal(dirty.verdict, "keep");
+  assert.equal(r.droppable, 1);
 });
 
 test("the own-tree skip holds even when the own tree's branch is fully merged: the guard is the path, not the git state", () => {
