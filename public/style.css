@@ -1005,13 +1005,31 @@ body.addbar-top .agents-block > .add-agent-form { order: -1; margin-top: 0; marg
 .rw-x { flex: 0 0 auto; border: 0; background: none; color: inherit; opacity: .55; font: inherit; line-height: 1; padding: 0 3px; cursor: pointer; }
 .rw-x:hover { opacity: 1; }
 /* An auto-allowed write, after the fact. Same raised box as a question, in green: the reader was never asked, so the
-   card is the only record — Keep closes it, Unwind names exactly what it would do. */
+   card is the only record - Keep closes it, Unwind is the one inverse the record offers. The card is ONE summary
+   line (what, the branch, the repo, the sha and when); the command, the tree, the policy and what Unwind runs sit
+   behind the `details` disclosure, so the branch is stated once instead of four times down a 400px dock. */
 .rw-review { padding: 8px 12px; border-bottom: 1px solid var(--line); background: rgba(47,107,63,.06); }
 .rw-review:last-child { border-bottom: 0; }
-.rw-review-head { font-size: 11px; color: #8fd6a0; }
-.rw-review-head code { color: var(--text); }
-.rw-review .ap-cmd { margin: 5px 0 4px; }
-.rw-review-why { font-size: 11px; margin-bottom: 2px; }
+/* The summary: one line carrying the action and the branch, and - when a long branch needs the width - the
+   repo/sha/when as a muted second line. The branch keeps its TAIL (the identifying part, the way tailPath keeps a
+   path's last segments) rather than being cut down to "wtgui/...", and the full text with the exact clock is the
+   head's title. */
+.rw-review-head { display: flex; flex-wrap: wrap; align-items: baseline; min-width: 0; white-space: nowrap; font-size: 11px; color: #8fd6a0; }
+.rw-review-line { display: flex; align-items: baseline; gap: 6px; flex: 1 1 auto; min-width: 0; }
+.rw-review-act { flex: 0 0 auto; }
+.rw-review-branch { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; color: var(--text); }
+.rw-review-meta { flex: 0 0 auto; margin-left: auto; padding-left: 6px; font-size: 10px; color: var(--dim); }
+.rw-review .ap-cmd { margin: 0 0 5px; max-height: 120px; }
+.rw-review-details { margin-top: 6px; }
+.rw-review-sum { font-size: 10.5px; color: var(--dim); cursor: pointer; width: fit-content; }
+.rw-review-sum:hover { color: var(--text); }
+.rw-review-sum:focus-visible { outline: 1px solid #3fb950; outline-offset: 2px; }
+.rw-review-details[open] .rw-review-sum { color: var(--text); }
+.rw-review-body { margin: 4px 0 0 2px; padding: 4px 0 1px 12px; border-left: 1px solid #2a3a2f; }
+.rw-detail { display: flex; align-items: baseline; gap: 8px; margin-top: 3px; font-size: 10.5px; line-height: 1.45; }
+.rw-detail-key { flex: 0 0 62px; color: var(--dimmer); }
+.rw-detail-val { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; color: #c9d3c2; }
+.rw-detail-val code { color: var(--text); }
 .rw-note { margin-top: 5px; font-size: 10.5px; line-height: 1.4; color: #d8c79a; }
 .rw-review .btn-deny { border-color: #6b2a2a; color: #ff9c9c; }
 .rw-review .btn-deny:hover { background: rgba(107,42,42,.18); }

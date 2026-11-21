@@ -20,9 +20,10 @@
 //     `jumpToAgent()` a row chip uses (unfolding its root, project and row first, so the card exists to jump to);
 //     a write whose agent cannot be found says so in the card and in the banner, instead of doing nothing;
 //   * nothing pending and no records => the dock hides, with no empty box left in the corner;
-//   * an auto-allowed write comes back as a REVIEW card with Keep / Unwind. Unwind names exactly what it will do:
-//     a remote branch delete is a delete and the click is its confirmation, and a write with no safe inverse is a
-//     drafted message to the agent — the panel never runs an inverse of its own.
+//   * an auto-allowed write comes back as a REVIEW card with Keep / Unwind. The card is one summary line and
+//     everything else (the exact command, the tree, the allow-policy, what Unwind runs) is behind Details; the
+//     Unwind label is the word alone, and for a write with no safe inverse it drafts a message to the agent - the
+//     panel never runs an inverse of its own.
 //
 // WHAT IS DRIVEN, on a throwaway panel of this checkout (real server.js, temp config, its own port) in real
 // Chromium, with the page's own EventSource kept live so the requests below are real POSTs the panel broadcasts:
@@ -33,9 +34,9 @@
 //   * four decisions show three records (the trim), and a record ages out of its own account
 //   * with an agent card on the board (a `jobs` frame for the write's own tree), clicking the head unfolds the dock,
 //     scrolls the card into view and flashes it; a decided record jumps back to it the same way
-//   * an auto-allowed write arrives as a review card: Keep dismisses it; the Unwind button names the exact remote
-//     branch delete it would run; and for a write with no safe inverse the Unwind button drafts a message in the
-//     agent's reply box and posts nothing
+//   * an auto-allowed write arrives as a review card: one summary line (action, branch, repo, sha, when) with
+//     Keep and Unwind; the exact delete command lives in the closed Details; Keep dismisses it; and for a write
+//     with no safe inverse the Unwind button drafts a message in the agent's reply box and posts nothing
 //
 // BEFORE IT LANDED. Run this file on the branch's base (0.66.1): it fails on the head that still says waiting with
 // nothing pending, on the absent ✕ / clear / review card, and on the click that does nothing — which is the defect.
@@ -116,8 +117,12 @@ const read = (page) =>
       reviews: [...document.querySelectorAll("#approval-list [data-rw-review]")].map((r) => ({
         id: r.dataset.rwReview,
         text: text(r),
+        head: text(r.querySelector(".rw-review-head")),
         keep: Boolean(r.querySelector("[data-rw-review-keep]")),
         unwind: text(r.querySelector("[data-rw-review-unwind]")),
+        summary: text(r.querySelector(".rw-review-sum")),
+        open: Boolean(r.querySelector(".rw-review-details")?.open),
+        detail: text(r.querySelector(".rw-review-body")),
         note: text(r.querySelector("[data-rw-note]")),
       })),
     };
@@ -382,8 +387,11 @@ async function main() {
         const review = (await read(page)).reviews[0] || {};
         check(reviewUp, "an auto-allowed write is surfaced as a review card", JSON.stringify(review));
         check(Boolean(review.keep), "with Keep", `text ${JSON.stringify(review.text)}`);
-        check(/--delete wtgui\/probe-27-dock/.test(review.text || ""), "and Unwind that names the exact remote branch delete", `unwind ${JSON.stringify(review.unwind)}`);
-        check(/delete remote branch origin\/wtgui\/probe-27-dock/.test(review.unwind || ""), "the Unwind button itself names the branch", `unwind ${JSON.stringify(review.unwind)}`);
+        check(review.unwind === "Unwind", "and Unwind, whose label no longer repeats the branch", `unwind ${JSON.stringify(review.unwind)}`);
+        check(review.open === false, "the full record sits behind a closed Details line", `open ${review.open} summary ${JSON.stringify(review.summary)}`);
+        check(/--delete wtgui\/probe-27-dock/.test(review.detail || ""), "which carries the exact remote branch delete", `detail ${JSON.stringify(review.detail)}`);
+        check(review.head.includes("wtgui/probe-27-dock"), "the summary line still names the branch, once", `head ${JSON.stringify(review.head)}`);
+        check((review.head.match(/wtgui\/probe-27-dock/g) || []).length === 1, "and the visible card repeats it nowhere else", `head ${JSON.stringify(review.head)}`);
         check(/nothing pending/i.test((await read(page)).head), "the review sits under a head that is not claiming a wait", `head ${JSON.stringify((await read(page)).head)}`);
         await page.click("[data-rw-review-keep]");
         const kept = await waitFor(async () => (await read(page)).reviews.length === 0, { what: "Keep to dismiss the review", timeoutMs: 6_000 });
@@ -422,7 +430,8 @@ async function main() {
         const messageUp = await waitFor(async () => (await read(page)).reviews.length === 1, { what: "the message review", timeoutMs: 8_000 });
         check(messageUp, "the message review is on the dock", JSON.stringify((await read(page)).reviews));
         const msgReview = (await read(page)).reviews[0] || {};
-        check(/message|draft/i.test(msgReview.unwind || ""), "a write with no safe inverse offers a draft message, not a command", `unwind ${JSON.stringify(msgReview.unwind)}`);
+        check(msgReview.unwind === "Unwind", "a write with no safe inverse still offers Unwind, with no branch in its label", `unwind ${JSON.stringify(msgReview.unwind)}`);
+        check(/no safe inverse/i.test(msgReview.detail || "") && /drafts a message/i.test(msgReview.detail || ""), "and its Details says a message is drafted, not a command", `detail ${JSON.stringify(msgReview.detail)}`);
         await page.click("[data-rw-review-unwind]");
         await sleep(300);
         const drafted = await page.evaluate((t) => {
