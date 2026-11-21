@@ -187,7 +187,9 @@ const result = await (async () => {
           page.waitForFunction(
             () => {
               const btn = document.getElementById("btn-human");
-              return Boolean(btn && btn.title && !/^Human — every open permission/.test(btn.title));
+              // index.html's STATIC title is the one that says "every open permission"; the painted one names the
+              // counts. Waiting on that difference needs no dash of its own.
+              return Boolean(btn && btn.title && !/every open permission/.test(btn.title));
             },
             null,
             { timeout: 20_000 },
