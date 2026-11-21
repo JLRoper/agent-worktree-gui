@@ -57,7 +57,14 @@ node tools/verify-collision-pairs.mjs
   Space closes it again, Escape closes the card and returns the caret to the diamond
 node tools/verify-row-chips.mjs
   101 checks, 0 failed
+npm test
+  3376 tests, 3366 pass, 10 fail - all ten are the base's own reds or the host's
 ```
+
+The ten: nine reproduce on a `git archive` of main 56929642 (assistant-profile,
+assistant-search-scroll, child-route, gateway-permissions, header-controls, paths-http, paths,
+reasoning-runs and junctioned-node-modules), and the tenth is `assistant-to-replay`'s
+temp-directory cleanup answering ENOTEMPTY, which passes 4/4 when run alone.
 
 The same harness opens each card behind its diamond now (the card is a popup, so "drawn once per row" is only
 checkable by opening one at a time), reads the four headers and their key lines, and takes the shot of the card.
