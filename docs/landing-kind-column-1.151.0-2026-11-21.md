@@ -69,7 +69,7 @@ capture. The gate now asserts the verdict cell's 104px floor, so the scale branc
   `docs/assets/branch-kind-column/before-0*.png`, `after-0*.png` and `pre-821-0*.png`:
   research, turnover, landed MERGED and lifted, each at 1440x900 and 768x900.
 - `npm test`, once, on this branch - **3392 tests, 3381 pass, 11 fail**. None is this branch's: the eleven files were
-  run in isolation against a `git archive origin/main` export (1.150.0) and against this branch, 91 tests each time -
+  run in isolation against a `git archive origin/main` export (1.150.0 when the sweep ran) and against this branch, 91 tests each time -
   main answers 80 pass and 11 fail, this branch 82 pass and 9 fail, so every file that went red under the full suite
   here is red on the base as well. The eleven: `assistant-profile`, `assistant-search-scroll`, `assistant-to-replay`,
   `child-route`, `gateway-permissions`, `header-controls`, `junctioned-node-modules`, `paths`, `paths-http`,
@@ -79,8 +79,10 @@ capture. The gate now asserts the verdict cell's 104px floor, so the scale branc
 
 ## The version and the tag
 
-`main` moved twice while this branch was cut: `1aad736b` read 1.148.0, `e8341c63` read 1.149.0 and `e27192a6` reads
-1.150.0, with `v1.149.0` and `v1.150.0` both already on the remote. A new column with its own switch is a
+`main` moved three times while this branch was cut: `1aad736b` read 1.148.0, `e8341c63` read 1.149.0, `e27192a6`
+read 1.150.0, and `3a32f5db` reads 1.150.1 - the last of those landed as PR #827 while this branch was in review, so
+the branch was rebased again onto it. The only conflict was `package.json`'s version line, kept at the branch's own
+number. With `v1.149.0`, `v1.150.0` and `v1.150.1` all on the remote, a new column with its own switch is a
 reader-facing affordance, so the branch carries **1.151.0** - the next minor above the taken number.
 `node tools/version.mjs check` reads "the branch's number is above origin/main's", and the tag is the landing's: the
 merge commit moves `v1.151.0` onto the commit `main` first declares the number at.
