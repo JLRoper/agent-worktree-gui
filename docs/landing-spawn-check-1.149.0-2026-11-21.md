@@ -78,9 +78,9 @@ and `heldTreeWork` this branch ships; the commit counts have moved since the bri
   **122 tests, 122 pass, 0 fail** (it prints `git` LF/CRLF warnings from the temp repos it builds; that is the
   fixture, not this branch).
 - `node --test test/assistant-queue-directive.test.js test/spawn-watch.test.js` - **11 tests, 11 pass, 0 fail**.
-- `npm run absolute-paths` - **clean, 1957 tracked files, none new**. The one allow count it touched is the fixture
-  row for `test/assistant-queue.test.js`, raised from 24 to 29 because the held-tree digest rows add five fixture
-  tree paths of the same kind the file already carries.
+- `npm run absolute-paths` - **clean, 1962 files at the rebased tip, 1353 paths in 252 allowlisted files, none new**.
+  The one allow count it touched is the fixture row for `test/assistant-queue.test.js`, raised from 24 to 29 because
+  the held-tree digest rows add five fixture tree paths of the same kind the file already carries.
 - `npm test`, the full sweep, was started once and **killed at 27.9 minutes with no result** - the 20-minute cap
   this project's worker briefs set, and two other suites were running on this host at the same time (a second
   `npm test` and an `--test-concurrency=8` run belonging to another tree, both left alone). So the suite's own
@@ -90,9 +90,13 @@ and `heldTreeWork` this branch ships; the commit counts have moved since the bri
 ## The version and the tag
 
 `main` read 1.148.0 at `1aad736b` when this branch was cut, so the branch carries 1.149.0: a minor, because the
-panel gains a new route and the digest says a fact it did not say before. The `v1.149.0` anchor is the landing's
-step, not this branch's: `tools/land-pr.mjs` runs `release-tag` after the merge to put the annotated tag on the
-commit `main` shows first declaring the number (`node tools/version.mjs check` reads ok on this branch now).
+panel gains a new route and the digest says a fact it did not say before. Main then moved to 1.148.1 (`99b7466b`, a
+patch landing and a report page) while this ran, which came back `CONFLICTING` on the version line only: the branch
+was rebased onto it, the 1.149.0 hunk kept (it is the higher number, and `git show --stat HEAD~1` still lists
+`package.json` after the rebase), and every number below re-measured on the rebased tip. The `v1.149.0` anchor is the
+landing's step, not this branch's: `tools/land-pr.mjs` runs `release-tag` after the merge to put the annotated tag on
+the commit `main` shows first declaring the number (`node tools/version.mjs check` reads
+`branch 1.149.0 / base origin/main 1.148.1` on this branch now).
 
 ## The landing
 
