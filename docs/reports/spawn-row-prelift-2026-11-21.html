@@ -34,22 +34,22 @@
 <body>
 <main>
 <h1>A SPAWN that carries a queue row cuts a pushable tree</h1>
-<p class="sub">agent-worktree-gui 1.149.0. The record a cut writes, the row that pre-lifts it, and the hand lifts it replaces. All line numbers are this branch's files at its cut from <code>1aad736b</code>.</p>
+<p class="sub">agent-worktree-gui 1.150.0. The record a cut writes, the row that pre-lifts it, and the hand lifts it replaces. All line numbers are this branch's files at its rebase onto <code>e8341c63</code>.</p>
 
 <dl class="facts">
-  <dt>base</dt><dd>1aad736b, the tip of origin/main on 2026-11-21</dd>
+  <dt>base</dt><dd>e8341c63, the tip of origin/main on 2026-11-21 (the row 185 landing took 1.149.0 first)</dd>
   <dt>branch</dt><dd>wtgui/make-a-spawn-that-carries-a-queue-row-84ecd0</dd>
-  <dt>the cut's record</dt><dd>lib/jobs.js makeWorktree:3152 (lifted), 3154 (rememberParent), 3219 (preLiftedBy written)</dd>
+  <dt>the cut's record</dt><dd>lib/jobs.js makeWorktree:3155 (lifted), 3157 (rememberParent), 3222 (preLiftedBy written)</dd>
   <dt>the SPAWN path</dt><dd>lib/features/spawn.js:214 (rowId), 379 (landing + preLiftedBy on the new tree's create)</dd>
-  <dt>the refusal it removes</dt><dd>lib/push-permissions.js:88 treeKindRefusal</dd>
-  <dt>the read-back</dt><dd>lib/jobs.js loadParents:3181, treeKindFor; server.js applyTreeKind:3862</dd>
+  <dt>the refusal it removes</dt><dd>lib/push-permissions.js:89 treeKindRefusal</dd>
+  <dt>the read-back</dt><dd>lib/jobs.js loadParents:3184, treeKindFor; server.js applyTreeKind:3870</dd>
   <dt>the vocabulary</dt><dd>lib/branch-kind.js BRANCH_KINDS: turnover, research - unchanged, no third kind</dd>
   <dt>row fields</dt><dd>branchKind, branchKindLabel, branchKindLifted, branchKindPreLiftedBy, branchKindParent</dd>
 </dl>
 
 <h2>1. What a push meets, and what a lift is</h2>
-<p>A cut writes one record into the branch-parents book, keyed by the tree's six hex tag: <code>{ parent, branch, tree, at, kind, lifted?, preLiftedBy? }</code>. One kind is local only by definition: <code>research</code>, cut from the project's main parent. <code>treeKindRefusal</code> (lib/push-permissions.js:88) answers with a refusal for a research record that is not lifted, and <code>RemoteWrites.decision</code> returns it <em>first</em>: before the policy, before the push controls, before the landing mark, before any grant (lib/remote-writes.js:145). A push from an unlifted research tree is therefore not asked about and not granted - it is refused, and the sentence names the tree and the kind.</p>
-<p>The lift is one boolean on that record. <code>POST /api/worktree/kind-lift</code> calls <code>jobs.liftKind</code> (lib/jobs.js:3252), which rewrites the record with <code>lifted: true</code> and leaves the kind alone. Nothing else moves: the push guard's policy and controls are untouched, and the worker's landing paragraph is untouched. After a lift the push falls through to the ordinary decision - the project's policy, the two branch controls, the permission box - exactly as it would for a turnover child with no lift needed.</p>
+<p>A cut writes one record into the branch-parents book, keyed by the tree's six hex tag: <code>{ parent, branch, tree, at, kind, lifted?, preLiftedBy? }</code>. One kind is local only by definition: <code>research</code>, cut from the project's main parent. <code>treeKindRefusal</code> (lib/push-permissions.js:89) answers with a refusal for a research record that is not lifted, and <code>RemoteWrites.decision</code> returns it <em>first</em>: before the policy, before the push controls, before the landing mark, before any grant (lib/remote-writes.js:145). A push from an unlifted research tree is therefore not asked about and not granted - it is refused, and the sentence names the tree and the kind.</p>
+<p>The lift is one boolean on that record. <code>POST /api/worktree/kind-lift</code> calls <code>jobs.liftKind</code> (lib/jobs.js:3255), which rewrites the record with <code>lifted: true</code> and leaves the kind alone. Nothing else moves: the push guard's policy and controls are untouched, and the worker's landing paragraph is untouched. After a lift the push falls through to the ordinary decision - the project's policy, the two branch controls, the permission box - exactly as it would for a turnover child with no lift needed.</p>
 <p>So the state a queue row wants at the cut is the state a person reaches by pressing <em>Lift</em>. This change reaches it at the cut instead of after the first refusal.</p>
 
 <h2>2. The refusals this replaces, in one evening</h2>
@@ -87,11 +87,11 @@
 <h2>3. The change</h2>
 <p>One input decides it: the SPAWN line named a task id. <code>assistantSpawnRun</code> reads it once (lib/features/spawn.js:214) and, only on the branch that CUTS a new tree, adds two fields to the same <code>jobs.create</code> it always called (lib/features/spawn.js:379):</p>
 <pre>...(rowId ? { landing: true, preLiftedBy: `row ${rowId}` } : {}),</pre>
-<p><code>landing: true</code> is the mechanism that already existed and had no caller on this path. At the cut, <code>makeWorktree</code> writes the record lifted (lib/jobs.js:3152, 3154) and <code>made.localOnly</code> false (lib/jobs.js:3156), which is precisely the pre-lifted research record the brief describes. <code>preLiftedBy</code> is the new fact: <code>rememberParent</code> writes it only on a lifted record (lib/jobs.js:3219), and <code>loadParents</code> reads it back beside <code>rec.lifted</code> (lib/jobs.js:3181), so a restart keeps the reason as well as the flag.</p>
-<p>What the SPAWN does NOT get is the other half of <code>landing: true</code>. In this panel that flag also means "a run started to LAND": the merge flow's trees are marked that way, their guard allows a push outright (server.js:1343, lib/remote-writes.js:153), and their brief is the blanket <code>WILL LAND</code> paragraph (lib/jobs.js:4089). A row pre-lift is the record only:</p>
+<p><code>landing: true</code> is the mechanism that already existed and had no caller on this path. At the cut, <code>makeWorktree</code> writes the record lifted (lib/jobs.js:3155, 3157) and <code>made.localOnly</code> false (lib/jobs.js:3160), which is precisely the pre-lifted research record the brief describes. <code>preLiftedBy</code> is the new fact: <code>rememberParent</code> writes it only on a lifted record (lib/jobs.js:3222), and <code>loadParents</code> reads it back beside <code>rec.lifted</code> (lib/jobs.js:3184), so a restart keeps the reason as well as the flag.</p>
+<p>What the SPAWN does NOT get is the other half of <code>landing: true</code>. In this panel that flag also means "a run started to LAND": the merge flow's trees are marked that way, their guard allows a push outright (server.js:1344, lib/remote-writes.js:153), and their brief is the blanket <code>WILL LAND</code> paragraph (lib/jobs.js:4092). A row pre-lift is the record only:</p>
 <ul>
-  <li>the guard is installed with <code>landing: false</code> (lib/jobs.js:3971), so the push meets the project's policy and its two branch controls, the ordinary decision - the same thing a hand lift leaves behind;</li>
-  <li>the worker keeps the parent's own LANDING paragraph (lib/jobs.js:4089), which is the only one that knows whether the project has a turnover branch and what its push policy is. A blanket <code>WILL LAND</code> on a turnover project would tell a worker to push a new remote branch, which the turnover doctrine forbids.</li>
+  <li>the guard is installed with <code>landing: false</code> (lib/jobs.js:3974), so the push meets the project's policy and its two branch controls, the ordinary decision - the same thing a hand lift leaves behind;</li>
+  <li>the worker keeps the parent's own LANDING paragraph (lib/jobs.js:4092), which is the only one that knows whether the project has a turnover branch and what its push policy is. A blanket <code>WILL LAND</code> on a turnover project would tell a worker to push a new remote branch, which the turnover doctrine forbids.</li>
 </ul>
 <p>That is the one judgement this branch makes beyond the brief, and it is the reason the code separates <code>cutPreLiftedBy</code> (the record) from <code>landing</code> (the run) in <code>jobs.create</code>. The cut is still made with <code>landing: true</code>; only its two run-level meanings are withheld because a pre-lift is not a merge run.</p>
 
@@ -111,7 +111,7 @@
 
 // a row SPAWN cut from a turnover branch
 { "parent":"20261121_1200_ROPER-186_demo", ..., "kind":"turnover" }</pre>
-<p>The row carries the same fact for a surface that has no book in hand: <code>branchKindPreLiftedBy</code> is stamped beside <code>branchKindLifted</code> by <code>applyTreeKind</code> (server.js:3862) and returned by the lift route (server.js:5514). It is null unless a row pre-lifted the record, so a page or a later agent can say "lifted, because row 186" instead of only "lifted".</p>
+<p>The row carries the same fact for a surface that has no book in hand: <code>branchKindPreLiftedBy</code> is stamped beside <code>branchKindLifted</code> by <code>applyTreeKind</code> (server.js:3870) and returned by the lift route (server.js:5522). It is null unless a row pre-lifted the record, so a page or a later agent can say "lifted, because row 186" instead of only "lifted".</p>
 
 <h2>4. Tests</h2>
 <p><code>test/spawn-row-prelift.test.js</code> drives the real assistant spawn path (<code>startSpawn</code>), the real spawner (<code>assistantSpawnRun</code>), the real <code>Jobs.create</code>/<code>makeWorktree</code> and a real repository; a stub gateway only accepts the run and ends it. Four tests:</p>
