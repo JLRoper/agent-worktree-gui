@@ -245,7 +245,7 @@ const CHART_COLUMNS = [
   {
     id: "initiative",
     label: "Initiative",
-    min: 92,
+    min: 76,
     give: 0.6,
     title:
       "the big pieces of work this worktree is behind, as chips. One initiative may span several projects and several assistants, and a tree may be in more than one, so the cell can carry more than one chip. A dash means none - which is the normal case: nothing about an initiative is enforced, and a tree with no initiative behaves exactly as it always did. The membership lives in the panel's initiatives store, keyed by tree path, so a rescan cannot lose it; add or remove a tree in the Initiatives tab beside Role, where a move asks you first. Switch it off in Settings -> Display -> Chart columns.",
@@ -265,7 +265,7 @@ const CHART_COLUMNS = [
   {
     id: "life",
     label: "Life",
-    min: 92,
+    min: 76,
     give: 0.6,
     title:
       "time since this worktree was last seen alive (any evidence firing) · chips are the evidence: ⧉ hermes session · ● board PID · :port dev server · ✎ files edited. The next-read ring and its countdown are the column beside this one.",
@@ -273,9 +273,29 @@ const CHART_COLUMNS = [
   {
     id: "nextread",
     label: "Next read",
-    min: 92,
+    min: 76,
     give: 0.5,
     title: "the ring fills up to green as the row becomes due for its next read · the cell beside it is the figure only: \"4s\" while the read is owed, and the lateness in amber once it is past · hover for the sentence, or click the ring to read this worktree now",
+  },
+  // THE KIND A CUT RECORDED, in a cell of its own immediately left of the verdict (public/render-projects.js
+  // `kindMarkHtml`). It used to sit INSIDE the verdict cell, before the badge, and the cell clipped the words the
+  // reader needs: the badge is what says ON MAIN or MERGED, and the mark must not be the thing that pushes it out.
+  // The floor is the mark's own box plus the cell's insets - 12px left, 10px right, and the widest mark (a lifted
+  // R with its tick) measured at 22.1px in tools/verify-branch-kind.mjs. 46 is that with the border and a pixel to
+  // spare; the column gives its room up readily (give 1.2) because a one-letter cell reads the same squeezed.
+  //
+  // WHAT PAYS FOR IT. At 1440 the chart's floors already fill the card's 1324px, so a floor this size on its own
+  // tips `columnPlan` into its scale branch (public/app.js), which shaves about 4% off EVERY column - and the verdict
+  // then loses the pixel that showed "MERGED (1..." and shows "MERGED (...". The three short-count columns beside it
+  // (Initiative, Life, Next read) hold a chip, a "0s" or a ring, and each gives up 16px of floor, which is exactly
+  // what keeps the rest of the chart - the verdict included - at the width it had before the mark existed.
+  {
+    id: "kind",
+    label: "Kind",
+    min: 46,
+    give: 1.2,
+    title:
+      "the kind a cut recorded for this tree: T for a turnover child (its destination on the remote already exists), R for a research tree (local only - press it to lift the research refusal, and a lifted tree keeps its R with a tick). An empty cell means no record was written, which is the normal case for a tree cut before the kind rule. The mark lives here rather than in the Verdict cell so the branch status keeps its whole words. Off means the header and the cell are not emitted on any row; the Verdict cell is untouched either way. Switch it off in Settings -> Board -> Chart columns.",
   },
   { id: "verdict", label: "Verdict", min: 104, give: 0.5 },
   {

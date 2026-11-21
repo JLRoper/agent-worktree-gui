@@ -7614,7 +7614,7 @@ async function cutChildTree(btn) {
 // route had NO control in the page at all, so finishing a landing on a research tree meant opening
 // ~/.wag/state/branch-parents.json or hand-calling the API.
 //
-// The R in the row's verdict cell is that control (`kindMarkHtml`, public/render-projects.js). It opens an inline
+// The R in the row's Kind column is that control (`kindMarkHtml`, public/render-projects.js). It opens an inline
 // confirm in the same shape as the delete question, because a lift changes what a later push is allowed to do. The
 // confirm says the one thing it does - the tree's push stops meeting the research refusal - and the answer is written
 // on the record, so a restart keeps it. Nothing is pushed here and no branch moves.
@@ -9438,22 +9438,27 @@ async function todoPost(body) {
 }
 
 const COL_WIDTHS_KEY = "wtgui.colWidths";
-// Where `reviewedExtra` was inserted, so a width list saved before it existed can be shifted to match rather than
-// dropping every remembered width onto its neighbour. It is 1 today (the review chip sits right after the name); a
-// later column inserted elsewhere only needs this number, not a new branch.
-const COL_WIDTHS_INSERTED_AT = CHART_COLUMNS.findIndex((c) => c.id === "reviewedExtra");
+// Where each column that was added AFTER this storage existed sits, and how many entries a saved list has when that
+// column was not there yet. A stored width list is positional, so an inserted column is one entry MISSING and every
+// entry after the insertion point belongs to the column before it: each entry below splices its empty slot in, in
+// age order, so a hand-set name or branch width stays on the column the reader gave it to. This used to be one
+// constant for `reviewedExtra`; the Kind column is a second insertion at a different point, and a single index would
+// have shifted the oldest lists in the wrong place. `null` is "measure this one", so a new column needs no width.
+const COL_WIDTHS_INSERTIONS = [
+  { id: "reviewedExtra", writtenBefore: 13 }, // name, branch, assistant, initiative, tip, ahead, cherry, pr, dirty, life, nextread, verdict, actions
+  { id: "kind", writtenBefore: 14 }, // the same list with reviewedExtra in it: name .. nextread, verdict, actions
+];
 
 function loadColWidths() {
   const out = new Array(WT_COLS).fill(null);
   try {
     const raw = JSON.parse(localStorage.getItem(COL_WIDTHS_KEY) || "[]");
-    // A list written before a column was INSERTED is one entry short and every entry after the insertion point belongs
-    // to the column before it: splice the new column's empty slot in, so a hand-set name or branch width stays on the
-    // column the reader gave it to. (`null` is "measure this one", so the new column needs no width of its own.)
-    const saved = Array.isArray(raw) && raw.length === WT_COLS - 1 && COL_WIDTHS_INSERTED_AT > 0
-      ? [...raw.slice(0, COL_WIDTHS_INSERTED_AT), null, ...raw.slice(COL_WIDTHS_INSERTED_AT)]
-      : raw;
-    if (Array.isArray(saved)) for (let i = 0; i < WT_COLS; i += 1) if (Number.isFinite(saved[i]) && saved[i] > 0) out[i] = Math.round(saved[i]);
+    let saved = Array.isArray(raw) ? raw : [];
+    for (const { id, writtenBefore } of COL_WIDTHS_INSERTIONS) {
+      const at = CHART_COLUMNS.findIndex((c) => c.id === id);
+      if (at > 0 && saved.length === writtenBefore) saved = [...saved.slice(0, at), null, ...saved.slice(at)];
+    }
+    for (let i = 0; i < WT_COLS; i += 1) if (Number.isFinite(saved[i]) && saved[i] > 0) out[i] = Math.round(saved[i]);
   } catch {
     /* a corrupt value is the same as none */
   }

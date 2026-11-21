@@ -272,7 +272,7 @@ test("a hidden column leaves the header, the colspan and the order consistent", 
   // are the reader's own hidden list. The expected set is spelled out rather than counted, so a NEW column has to be
   // added here on purpose - a count alone would let one arrive unnoticed in the middle of the row.
   const { chartHeaderHtml, shownColumns, wtColspan } = page({ hiddenColumns: ["tip", "cherry", "life"] }, second());
-  const expected = ["name", "reviewedExtra", "branch", "assistant", "initiative", "ahead", "pr", "dirty", "nextread", "verdict", "actions"];
+  const expected = ["name", "reviewedExtra", "branch", "assistant", "initiative", "ahead", "pr", "dirty", "nextread", "kind", "verdict", "actions"];
   assert.equal(wtColspan(), expected.length);
   assert.deepEqual(shownColumns().map((i) => CHART_COLUMN_IDS[i]), expected);
   const html = chartHeaderHtml();
