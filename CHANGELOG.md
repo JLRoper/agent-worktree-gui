@@ -4,16 +4,32 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.149.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.150.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-667 releases from v0.1.0 (2026-10-20) to v1.149.0 (2026-11-21), 2337 commits between the tags. Every release is anchored by an
+668 releases from v0.1.0 (2026-10-20) to v1.150.0 (2026-11-21), 2343 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.150.0 — 2026-11-21 · 6 commits
+
+[`acd3d7c`](https://github.com/JLRoper/agent-worktree-gui/commit/acd3d7c490e86618a16f736ec3f022c1e67f9338) · [compare v1.149.0...v1.150.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.149.0...v1.150.0)
+
+### Docs & tests
+
+- docs: the 1.149.0 landing note records the pre-flight, the digest block and the refusals' remedies ([`7ae7769`](https://github.com/JLRoper/agent-worktree-gui/commit/7ae7769d12b5f9a4607a6cf831e02567b2fe2d4d))
+- docs: the landing note records the catch-up onto 1.148.1 and the tip's re-measured numbers ([`69acee7`](https://github.com/JLRoper/agent-worktree-gui/commit/69acee7bac305ffdf06907415368975d69507964))
+- docs: render the changelog - 667 releases ([`e8341c6`](https://github.com/JLRoper/agent-worktree-gui/commit/e8341c636ab6e3367e861de3b0835400ad20a422))
+- docs: the 1.149.0 landing note and the pre-lift evidence page ([`e470931`](https://github.com/JLRoper/agent-worktree-gui/commit/e470931929dc6517594bccea146221b1534ecbe1))
+
+### Other
+
+- a SPAWN carrying a queue row cuts a tree that is already lifted ([`b76da2c`](https://github.com/JLRoper/agent-worktree-gui/commit/b76da2cbb64985f630c3bb1404f9c6e4b9716ab1))
+- chore: 1.150.0 - the version this landing carries ([`acd3d7c`](https://github.com/JLRoper/agent-worktree-gui/commit/acd3d7c490e86618a16f736ec3f022c1e67f9338))
 
 ## v1.149.0 — 2026-11-21 · 4 commits
 
