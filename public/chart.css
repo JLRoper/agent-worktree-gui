@@ -80,12 +80,13 @@ td.row-actions { padding-left: 4px; padding-right: 10px; }
    mid-word. Truncate the badge itself, and keep the age cell's chips from spilling past their column. */
 td.age { overflow: hidden; }
 td.verdict .badge { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
-/* ---- the kind a cut recorded: ONE LETTER in the verdict cell ------------------------------------
-   T = turnover child (a destination on the remote already), R = research tree (local only). It sits BEFORE the badge,
-   because the badge is the part that may ellipsize and the kind must always be readable. The letter is a chip the
-   size of the branch cell's `local` one, never a word: the name line's controls already compete for the row's width,
-   and a sentence there is what this landing exists to avoid. R is a button while the record is unlifted, with the
-   focus ring a real control needs; a lifted tree keeps its R and gains a tick, in the allowed green. */
+/* ---- the kind a cut recorded: ONE LETTER in a column of its own --------------------------------
+   T = turnover child (a destination on the remote already), R = research tree (local only). The cell is the column
+   `kind` (public/charts.js CHART_COLUMNS), immediately LEFT of the verdict, because it used to lead the verdict cell
+   and the badge's words (ON MAIN, MERGED) were the part that got clipped. The letter is a chip the size of the branch
+   cell's `local` one, never a word: the name line's controls already compete for the row's width,
+   and a sentence there is what the earlier landing exists to avoid. R is a button while the record is unlifted, with
+   the focus ring a real control needs; a lifted tree keeps its R and gains a tick, in the allowed green. */
 .kind-mark {
   display: inline-block;
   margin-right: 5px;
@@ -110,7 +111,11 @@ button.kind-mark.kind-research:focus-visible { outline: 2px solid #ffb454; outli
 /* By CLASS, not by position: the chart draws between ten and twelve cells per row (the owner column comes and goes by
    itself, and any column can be hidden in Settings), so `nth-child(9)` pointed at a different column on almost every
    board. A cell that ellipsizes its own text is what keeps the table inside the card at any width. */
-td.name, td.branch, td.owner, td.pr, td.verdict { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+td.name, td.branch, td.owner, td.pr, td.verdict, td.kind { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The kind's own cell is one chip wide. The mark's right margin separates it from a neighbour inside a shared cell,
+   and there is no neighbour here any more, so the cell's inset is all the room it needs. */
+td.kind { overflow: hidden; white-space: nowrap; }
+td.kind .kind-mark { margin-right: 0; }
 /* The owner cell's compact tag: "M1" for Manager 1, "M2" for the second Manager, "A1" for a row the server could not
    label. A tag and not a word, because the column that answers "whose tree is this" has to fit beside ten others —
    the long form ("Assistant #2 — Manager") is the cell's tooltip and the row's detail bullet. It is a chip so it reads
