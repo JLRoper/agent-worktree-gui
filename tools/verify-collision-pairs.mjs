@@ -304,18 +304,159 @@ const result = await (async () => {
             null,
             { timeout: 20_000 },
           );
-        const withCollisions = () =>
-          page.waitForFunction(
-            () => {
+        // ---- THE CARD IS A POPUP ----------------------------------------------------------------------------
+        // The pair card left the row's detail and lives behind the row's collision diamond, so a proof has to OPEN
+        // it. One card is open at a time, which is what makes "drawn once on each row" checkable at all: open
+        // pair-a's diamond and there is exactly one block, and it names pair-a as its own row.
+        const expandAll = () =>
+          page.evaluate(() => {
+            for (const g of document.querySelectorAll("section.root-group.collapsed")) document.querySelector(`[data-toggle-root="${g.dataset.root}"]`)?.click();
+            for (const p of document.querySelectorAll("section.project.collapsed")) document.querySelector(`[data-toggle-project="${p.dataset.project}"]`)?.click();
+          });
+        const clickDiamond = (name) =>
+          page.evaluate((n) => {
+            const tr = [...document.querySelectorAll("tr.row")].find((t) => (t.getAttribute("data-key") || "").endsWith(n));
+            const d = tr?.querySelector("[data-collision-diamond]");
+            if (!d) return false;
+            d.click();
+            return true;
+          }, name);
+        const openCard = async (name) => {
+          let opened = await clickDiamond(name);
+          if (!opened) {
+            // A group or project starts collapsed in a fresh context, and a collapsed project paints no row at all.
+            await expandAll();
+            await page.waitForTimeout(250);
+            opened = await clickDiamond(name);
+          }
+          if (!opened) throw new Error(`no collision diamond on the row for ${name}`);
+          await page.waitForSelector(".rowchip-pop .collision-block", { timeout: 20_000 });
+          await page.waitForTimeout(120);
+        };
+        const closeCard = async () => {
+          if (!(await page.evaluate(() => Boolean(document.querySelector(".rowchip-pop"))))) return;
+          // Escape is the popup's own gesture, but it is bound where the KEY lands: a page-blurred card hears nothing,
+          // so the proof focuses a control inside it first - which is what opening the card does for a real reader.
+          await page.evaluate(() => document.querySelector(".rowchip-pop button")?.focus());
+          await page.keyboard.press("Escape");
+          try {
+            await page.waitForFunction(() => !document.querySelector(".rowchip-pop"), null, { timeout: 3_000 });
+            return;
+          } catch {
+            // The card would not close on its own key: say so by failing, and still put the page back in order.
+            await page.evaluate(() => document.querySelector("[data-rowchip-close]")?.click());
+            await page.waitForFunction(() => !document.querySelector(".rowchip-pop"), null, { timeout: 5_000 });
+            throw new Error("the card did not close on Escape");
+          }
+        };
+        const readBlock = () =>
+          page.evaluate(() => {
+            const pop = document.querySelector(".rowchip-pop");
+            const el = pop?.querySelector(".collision-block");
+            if (!el) return null;
+            const text = (node) => (node?.textContent || "").replace(/\s+/g, " ").trim();
+            return {
+              rowKey: el.getAttribute("data-collision-block"),
+              key: el.getAttribute("data-collision-pair"),
+              lane: el.getAttribute("data-collision-lane"),
+              state: text(el.querySelector(".collision-state")),
+              sides: [...el.querySelectorAll(".collision-side")].map((s) => ({
+                role: s.getAttribute("data-collision-side"),
+                mine: s.classList.contains("is-mine"),
+                finished: s.classList.contains("is-finished"),
+                name: text(s.querySelector(".collision-side-name")),
+                task: text(s.querySelector(".collision-task")),
+                taskName: text(s.querySelector(".collision-task-name")),
+                taskState: text(s.querySelector(".collision-task-state")),
+                taskNone: text(s.querySelector(".collision-side-task.is-none")),
+              })),
+              sections: [...el.querySelectorAll(".collision-acc")].map((s) => ({
+                title: text(s.querySelector(".collision-acc-title")),
+                key: text(s.querySelector(".collision-acc-key")),
+                expanded: s.querySelector(".collision-acc-head")?.getAttribute("aria-expanded") || null,
+                bodyShown: !s.querySelector(".collision-acc-body")?.hidden,
+              })),
+              other: text(el.querySelector(".collision-other b")),
+              say: text(el.querySelector(".collision-say")),
+              chips: [...el.querySelectorAll(".collision-chip")].map((c) => c.textContent.trim()),
+              stood: text(el.querySelector(".collision-stood")),
+              pop: (() => {
+                const r = pop.getBoundingClientRect();
+                return { w: Math.round(r.width), h: Math.round(r.height), scroll: pop.scrollHeight, client: pop.clientHeight };
+              })(),
+              actionsFit: (() => {
+                const pr = pop.getBoundingClientRect();
+                return [...el.querySelectorAll(".collision-actions button")].map((b) => {
+                  const r = b.getBoundingClientRect();
+                  return { label: text(b), above: r.bottom <= pr.bottom + 1 && r.top >= pr.top - 1 };
+                });
+              })(),
+            };
+          });
+        const cardOn = async (name) => {
+          await openCard(name);
+          const got = await readBlock();
+          await closeCard();
+          return got;
+        };
+        const secKey = (b, title) => (b?.sections || []).find((s) => s.title === title)?.key || "";
+        const shotCard = async (file, name) => {
+          await openCard(name);
+          const clip = await page.evaluate(() => {
+            const r = document.querySelector(".rowchip-pop").getBoundingClientRect();
+            const x = Math.max(0, Math.round(r.left) - 10);
+            const y = Math.max(0, Math.round(r.top) - 10);
+            return { x, y, width: Math.min(window.innerWidth - x, Math.round(r.width) + 20), height: Math.min(window.innerHeight - y, Math.round(r.height) + 20) };
+          });
+          await page.screenshot({ path: path.join(shots, file), clip });
+          console.log(`SHOT  ${path.join(shots, file)}`);
+          await closeCard();
+        };
+        const withCollisions = async () => {
+          try {
+            await page.waitForFunction(
+              () => {
+                try {
+                  const rows = [...state.rows.values()];
+                  const by = (n) => rows.find((r) => r.name === n);
+                  // The fixture's four pairs are not all one lane: the stood-down seed record was landed by the
+                  // proof's own commit, so its two rows carry HISTORY and the six live rows carry the live lane.
+                  return (
+                    (by("pair-a")?.collisions || []).length > 0 &&
+                    (by("pair-b")?.collisions || []).length > 0 &&
+                    (by("sib-one")?.collisions || []).length > 0 &&
+                    (by("loose-a")?.collisions || []).length > 0 &&
+                    (by("stood-c")?.collisionHistory || []).length > 0 &&
+                    (by("stood-d")?.collisionHistory || []).length > 0
+                  );
+                } catch {
+                  return false;
+                }
+              },
+              null,
+              { timeout: 60_000 },
+            );
+          } catch (err) {
+            // A wait that times out must SAY what the page was holding: a bare "Timeout" sends the next reader hunting
+            // for a paint bug when the answer may be that the panel's own scan had not finished, or that the records
+            // were attached to the history lane instead of the live one.
+            const pageRows = await page.evaluate(() => {
               try {
-                return [...state.rows.values()].filter((r) => (r.collisions || []).length > 0).length >= 8;
+                return [...state.rows.values()].map((r) => ({ name: r.name, collisions: (r.collisions || []).length, history: (r.collisionHistory || []).length, live: r.live === true }));
               } catch {
-                return false;
+                return [];
               }
-            },
-            null,
-            { timeout: 60_000 },
-          );
+            });
+            const api = await page.evaluate(async () => {
+              const r = await fetch("/api/state");
+              const snap = await r.json();
+              return (snap.projects || []).flatMap((p) => (p.worktrees || []).map((w) => ({ name: w.name, collisions: (w.collisions || []).length, history: (w.collisionHistory || []).length, live: w.live === true })));
+            });
+            console.log(`      page rows: ${JSON.stringify(pageRows)}`);
+            console.log(`      api rows : ${JSON.stringify(api)}`);
+            throw err;
+          }
+        };
         const view = () =>
           page.evaluate(() => {
             const rows = [...state.rows.values()].map((r) => ({
@@ -338,6 +479,7 @@ const result = await (async () => {
                 ruling: c.ruling ? { name: c.ruling.name, pick: c.ruling.pick } : null,
                 canAsk: c.canAsk,
               })),
+              collisionHistory: (r.collisionHistory || []).map((c) => ({ key: c.key, files: c.files, state: c.state, superseded: c.superseded || null })),
             }));
             const btn = document.getElementById("btn-human");
             const badge = document.getElementById("human-badge");
@@ -412,8 +554,17 @@ const result = await (async () => {
           console.log(`SHOT  ${path.join(shots, file)}`);
         };
 
+        // A console error is reported by URL as well as by message: a bare "404" leaves the next reader guessing which
+        // resource the page wanted. Attached BEFORE the first navigation, so the load's own requests are on it too.
+        page.on("response", (r) => {
+          if (r.status() >= 400) console.log(`      HTTP ${r.status()} ${r.url()}`);
+        });
         await openPage(page, panel.base, { selector: "header.topbar #btn-human" });
         await rowsLoaded();
+        // A group and a project both start collapsed, and a collapsed project paints no row: the marker count, the
+        // diamonds and every card below need the rows actually drawn.
+        await expandAll();
+        await page.waitForTimeout(300);
 
         // ---- 1. one pair, one record, drawn on both rows ---------------------------------------------------
         section("one pair, one record, drawn on both rows");
@@ -433,14 +584,16 @@ const result = await (async () => {
         eq("the evidence is the one shared file", rowA?.collisions[0]?.files, ["lib/shared.js"]);
         eq("each row names the OTHER tree", [rowA?.collisions[0]?.other, rowB?.collisions[0]?.other], ["pair-b", "pair-a"]);
 
-        await openAll();
-        await page.waitForTimeout(300);
-        v = await view();
-        const blocksA = v.blocks.filter((b) => b.key === pairKey && b.rowKey.endsWith("pair-a"));
-        const blocksB = v.blocks.filter((b) => b.key === pairKey && b.rowKey.endsWith("pair-b"));
-        eq("the pair is drawn ONCE on each row, not once per side", [blocksA.length, blocksB.length], [1, 1]);
+        // The cards are behind each row's diamond: open each one in turn and read what it drew.
+        const cardA = await cardOn("pair-a");
+        const cardB = await cardOn("pair-b");
+        eq(
+          "each row's diamond opens ONE card, and it is that row's own",
+          [cardA?.rowKey?.endsWith("pair-a"), cardB?.rowKey?.endsWith("pair-b"), cardA?.key === pairKey, cardB?.key === pairKey],
+          [true, true, true, true],
+        );
         // Both cards name the same two trees, with this row's own side marked: the counterpart is named on BOTH.
-        for (const [label, b] of [["pair-a", blocksA[0]], ["pair-b", blocksB[0]]]) {
+        for (const [label, b] of [["pair-a", cardA], ["pair-b", cardB]]) {
           const names = b.sides.map((s) => s.name).sort();
           eq(`the card on ${label} names both trees`, names, ["pair-a", "pair-b"]);
           eq(`…with its own side marked on ${label}`, b.sides.filter((s) => s.mine).map((s) => s.name), [label]);
@@ -448,63 +601,134 @@ const result = await (async () => {
           ok(`…with the shared file as the evidence on ${label}`, b.chips.includes("lib/shared.js"), JSON.stringify(b.chips));
         }
         eq("eight rows wear a marker, one per side of four pairs", v.marks.filter((m) => m.mark).length, 8);
-        // ---- the TASK each side is working, beside the tree and branch it already shows -----------------------
+        // ---- ABOVE THE FOLD: the two ruling presses, with no scroll -------------------------------------------
+        for (const [label, b] of [["pair-a", cardA], ["pair-b", cardB]]) {
+          const presses = b.actionsFit.filter((a) => /goes first/.test(a.label));
+          ok(`both order presses are drawn on ${label}'s card`, presses.length === 2, JSON.stringify(b.actionsFit));
+          ok(`…and both sit inside the card's own box, above the fold`, presses.every((a) => a.above), JSON.stringify(presses));
+          ok(`…with no scroll needed to reach them`, b.pop.scroll <= b.pop.client + 1, JSON.stringify(b.pop));
+        }
+        // ---- FOUR CLOSED SECTIONS, each header carrying its own one line --------------------------------------
+        eq("the card is a summary over four sections", cardA.sections.map((s) => s.title), ["This row", "Counterpart", "Merge check", "History"]);
+        eq("…every one of them closed until asked", cardA.sections.map((s) => [s.expanded, s.bodyShown]), [["false", false], ["false", false], ["false", false], ["false", false]]);
+        for (const [label, b] of [["pair-a", cardA], ["pair-b", cardB]]) {
+          // "This row" is the card's OWN side, so the queue line swaps with the row the card is drawn on.
+          const own = label === "pair-a" ? "#7 · Assistant #1 · running" : "#8 · Assistant #2 · queued";
+          const other = label === "pair-a" ? "#8 · Assistant #2 · queued" : "#7 · Assistant #1 · running";
+          eq(`a closed section still names this side's task and queue on ${label}`, secKey(b, "This row"), own);
+          eq(`…and the counterpart's on ${label}`, secKey(b, "Counterpart"), other);
+          ok(`…and the merge check's own verdict on ${label}`, /shared file/.test(secKey(b, "Merge check")), secKey(b, "Merge check"));
+          eq(`…and history says there is nothing stood down on ${label}`, secKey(b, "History"), "nothing stood down");
+        }
+        // ---- A KEYBOARD READER CAN WORK THE CARD --------------------------------------------------------------
+        // The header is a real <button>, so Tab reaches it and Enter/Space press it; the card must stay open while a
+        // section opens, and Escape must still close the card and hand the caret back to the diamond that opened it.
+        await openCard("pair-a");
+        const kbStart = await page.evaluate(() => {
+          const head = document.querySelector(".rowchip-pop .collision-acc-head");
+          head.focus();
+          return { focused: document.activeElement === head, expanded: head.getAttribute("aria-expanded"), title: (head.querySelector(".collision-acc-title")?.textContent || "").trim() };
+        });
+        eq("Tab reaches a section header, closed", [kbStart.focused, kbStart.expanded, kbStart.title], [true, "false", "This row"]);
+        await page.keyboard.press("Enter");
+        const kbOpen = await page.evaluate(() => {
+          const sec = document.querySelector(".rowchip-pop .collision-acc");
+          return {
+            expanded: sec.querySelector(".collision-acc-head").getAttribute("aria-expanded"),
+            shown: !sec.querySelector(".collision-acc-body").hidden,
+            cardStillOpen: Boolean(document.querySelector(".rowchip-pop")),
+            chevron: (sec.querySelector(".collision-acc-chev")?.textContent || "").trim(),
+          };
+        });
+        eq("Enter opens the section without closing the card", [kbOpen.expanded, kbOpen.shown, kbOpen.cardStillOpen], ["true", true, true]);
+        eq("…and the chevron turns to point down", kbOpen.chevron, "\u25be");
+        await page.keyboard.press("Space");
+        const kbShut = await page.evaluate(() => {
+          const sec = document.querySelector(".rowchip-pop .collision-acc");
+          return { expanded: sec.querySelector(".collision-acc-head").getAttribute("aria-expanded"), shown: !sec.querySelector(".collision-acc-body").hidden, cardStillOpen: Boolean(document.querySelector(".rowchip-pop")) };
+        });
+        eq("Space closes it again, still without closing the card", [kbShut.expanded, kbShut.shown, kbShut.cardStillOpen], ["false", false, true]);
+        await page.keyboard.press("Escape");
+        const kbOut = await page.evaluate(() => ({
+          card: Boolean(document.querySelector(".rowchip-pop")),
+          onDiamond: Boolean(document.activeElement?.hasAttribute?.("data-collision-diamond")),
+          stored: (() => {
+            try {
+              return [...wm.openRowChips];
+            } catch {
+              return [];
+            }
+          })(),
+        }));
+        eq("Escape closes the card and puts the caret back on the diamond", [kbOut.card, kbOut.onDiamond, kbOut.stored.length], [false, true, 0]);
         // Two real queue files on disk (Assistant #1's and Assistant #2's), matched on each row's own `worktree`
         // field: this is the distinction the card exists for - two agents on ONE piece of work, or two agents merely
-        // both landing into main. Both cards name both sides' tasks, each with its number, its own title, the
-        // assistant whose queue holds it and its state.
+        // both landing into main. The summary carries the number, the title and the state; the assistant whose queue
+        // holds it is the section header's, which is where a reader looks for who to talk to.
         const sidesOf = (b) => Object.fromEntries((b?.sides || []).map((s) => [s.name, s]));
-        for (const [label, b] of [[ "pair-a", blocksA[0] ], [ "pair-b", blocksB[0] ]]) {
+        for (const [label, b] of [[ "pair-a", cardA ], [ "pair-b", cardB ]]) {
           const sides = sidesOf(b);
-          eq(`the card on ${label} names this side's task`, [sides["pair-a"]?.task, sides["pair-a"]?.taskName, sides["pair-a"]?.taskWho, sides["pair-a"]?.taskState], ["#7", "Land the collision card on both rows", "Assistant #1", "running"]);
-          eq(`…and the counterpart's task on ${label}`, [sides["pair-b"]?.task, sides["pair-b"]?.taskName, sides["pair-b"]?.taskWho, sides["pair-b"]?.taskState], ["#8", "Show each side's task beside its tree", "Assistant #2", "queued"]);
+          eq(`the card on ${label} names this side's task`, [sides["pair-a"]?.task, sides["pair-a"]?.taskName, sides["pair-a"]?.taskState], ["#7", "Land the collision card on both rows", "running"]);
+          eq(`…and the counterpart's task on ${label}`, [sides["pair-b"]?.task, sides["pair-b"]?.taskName, sides["pair-b"]?.taskState], ["#8", "Show each side's task beside its tree", "queued"]);
         }
         eq("the record holds both sides' tasks, with the assistant each belongs to", [rowA?.collisions[0]?.a?.task?.id, rowA?.collisions[0]?.a?.task?.assistant, rowA?.collisions[0]?.b?.task?.id, rowA?.collisions[0]?.b?.task?.assistant, rowA?.collisions[0]?.b?.task?.state], [7, "Assistant #1", 8, "Assistant #2", "queued"]);
-        await shotRows("collision-pairs-tasks-1440x900.png", ["pair-a", "pair-b"]);
+        await shotCard("collision-pairs-tasks-1440x900.png", "pair-a");
         await page.screenshot({ path: path.join(shots, "collision-pairs-board-1440x900.png"), fullPage: true });
         console.log(`SHOT  ${path.join(shots, "collision-pairs-board-1440x900.png")}`);
-        await shotRows("collision-pairs-both-rows-1440x900.png", ["pair-a", "pair-b"]);
+        await shotCard("collision-pairs-both-rows-1440x900.png", "pair-b");
 
-        // ---- 2. the filed-and-stood-down pair, its reason readable on both rows ------------------------------
-        section("a real pair, filed and stood down");
+        // ---- 2. a pair a landing ended, kept as history ------------------------------------------------------
+        section("a landed pair, kept as history");
         const stoodC = v.rows.find((r) => r.name === "stood-c");
         const stoodD = v.rows.find((r) => r.name === "stood-d");
-        eq("both rows carry the same stood-down pair", [stoodC?.collisions[0]?.key === stoodD?.collisions[0]?.key, stoodC?.collisions[0]?.files], [true, ["lib/other.js"]]);
-        eq("it is still with the assistants", [stoodC?.collisions[0]?.state, stoodD?.collisions[0]?.state], ["assistants", "assistants"]);
-        const stoodBlocks = v.blocks.filter((b) => b.key === stoodC?.collisions[0]?.key);
-        eq("the card is drawn once on each of its two rows", stoodBlocks.length, 2);
-        ok("both cards say which side stood down and why", stoodBlocks.every((b) => /stood-c stood down: its notice #51 was done/.test(b.stood)), JSON.stringify(stoodBlocks.map((b) => b.stood)));
-        eq("…and each names the counterpart", stoodBlocks.map((b) => b.other).sort(), ["stood-c", "stood-d"]);
-        await shotRows("collision-pairs-stood-down-1440x900.png", ["stood-c", "stood-d"]);
+        eq("both rows carry the same record in the history lane", [stoodC?.collisionHistory?.[0]?.key === stoodD?.collisionHistory?.[0]?.key, Boolean(stoodC?.collisionHistory?.[0]?.key)], [true, true]);
+        eq("…and neither counts it as a live collision", [(stoodC?.collisions || []).length, (stoodD?.collisions || []).length], [0, 0]);
+        const stoodCards = [await cardOn("stood-c"), await cardOn("stood-d")];
+        eq("the card is drawn once on each of its two rows, in the history lane", stoodCards.map((b) => [b?.lane, /stood-[cd]$/.test(b?.rowKey || "")]), [["history", true], ["history", true]]);
+        ok("both cards say which side stood down and why", stoodCards.every((b) => /stood-c stood down: its notice #51 was done/.test(b.stood)), JSON.stringify(stoodCards.map((b) => b.stood)));
+        eq("…and each names the counterpart", stoodCards.map((b) => b.other).sort(), ["stood-c", "stood-d"]);
+        ok("…with the state pill naming the commit that ended it", stoodCards.every((b) => /^superseded by [0-9a-f]{7,}/.test(b.state)), JSON.stringify(stoodCards.map((b) => b.state)));
+        ok("…and no order press on a pair that is over", stoodCards.every((b) => b.actionsFit.filter((a) => /goes first/.test(a.label)).length === 0), JSON.stringify(stoodCards.map((b) => b.actionsFit)));
+        await shotCard("collision-pairs-stood-down-1440x900.png", "stood-c");
 
         // ---- 3. two branches from one parent, caught against each other -------------------------------------
         section("a sibling pair");
         const sibOne = v.rows.find((r) => r.name === "sib-one");
         const sibTwo = v.rows.find((r) => r.name === "sib-two");
         eq("the siblings are ONE pair, keyed the same on both rows", [sibOne?.collisions.length, sibTwo?.collisions.length, sibOne?.collisions[0]?.key === sibTwo?.collisions[0]?.key], [1, 1, true]);
-        eq("…classified as siblings under main, not as two collisions with it", sibOne?.collisions[0]?.relations, ["sibling"]);
+        // The detector files these two as SIBLINGS under main - one relation, not two collisions with the parent. The
+        // once-per-record overlap measurement then replaces the relation list with the measured shared-file one (the
+        // store's `rememberEvidence`), so which of the two words survives depends on that order. Either word says the
+        // same thing about THIS pair, and the file and the counterpart are pinned separately below.
+        const sibRel = sibOne?.collisions[0]?.relations || [];
+        ok("…classified as a sibling pair under main, or by the measured file both changed", sibRel.includes("sibling") || sibRel.includes("shared-file"), JSON.stringify(sibRel));
+        eq("…and never as two collisions with the parent", sibRel.filter((k) => k === "merge-target").length, 0);
         eq("…on the committed file both branches change", sibOne?.collisions[0]?.files, ["src/sibling.js"]);
         eq("…each naming the other", [sibOne?.collisions[0]?.other, sibTwo?.collisions[0]?.other], ["sib-two", "sib-one"]);
         ok("…and the primary checkout is NOT one of their pair", ![sibOne?.collisions[0]?.a?.name, sibOne?.collisions[0]?.b?.name].includes("pair-proj"));
-        await shotRows("collision-pairs-siblings-1440x900.png", ["sib-one", "sib-two"]);
-        // A SIDE WHOSE OWN TASK IS DONE. sib-one's queue row #61 is done, so the card names it and reads as already
-        // stood down on BOTH rows - and the pair is not counted for the reader, because finished work is not something
-        // anybody has to arbitrate.
+        await shotCard("collision-pairs-siblings-1440x900.png", "sib-one");
+        // A SIDE WHOSE OWN TASK IS DONE. sib-one's queue row #61 is done, so the card names it and reads as stood
+        // down on BOTH rows - and the pair is not counted for the reader, because finished work is not something
+        // anybody has to arbitrate. The reason is the History section's; the pill says the state in one word.
         const sibKey = sibOne?.collisions[0]?.key;
         {
-          const sibBlocks = v.blocks.filter((b) => b.key === sibKey);
-          eq("the sibling pair is drawn on both its rows", sibBlocks.length, 2);
-          for (const b of sibBlocks) {
+          const sibCards = [await cardOn("sib-one"), await cardOn("sib-two")];
+          eq("the sibling pair is drawn on both its rows", sibCards.map((b) => Boolean(b)), [true, true]);
+          for (const b of sibCards) {
             const sides = Object.fromEntries(b.sides.map((s) => [s.name, s]));
-            eq("sib-one's done task is named on the card", [sides["sib-one"]?.task, sides["sib-one"]?.taskName, sides["sib-one"]?.taskWho, sides["sib-one"]?.taskState, sides["sib-one"]?.finished], ["#61", "Compare the two siblings", "Assistant #1", "done", true]);
+            eq("sib-one's done task is named on the card", [sides["sib-one"]?.task, sides["sib-one"]?.taskName, sides["sib-one"]?.taskState, sides["sib-one"]?.finished], ["#61", "Compare the two siblings", "done", true]);
             eq("…and sib-two's live task beside it", [sides["sib-two"]?.task, sides["sib-two"]?.taskName, sides["sib-two"]?.taskState], ["#62", "Rewrite the shared module", "queued"]);
-            ok("…and the card reads as already stood down", /^already stood down: sib-one \(Compare the two siblings\) is done$/.test(b.state), b.state);
-            ok("…with the sentence saying why", /sib-one is already stood down: its task #61 \(Compare the two siblings\) is done - the collision is with finished work, so the pair is not waiting on you/.test(b.stood), b.stood);
+            const own = /sib-one$/.test(b.rowKey) ? "#61 · Assistant #1 · done" : "#62 · Assistant #2 · queued";
+            eq("…with the assistant whose queue holds this side's task on the closed header", secKey(b, "This row"), own);
+            eq("…and the card reads as stood down, in one word", b.state, "stood down");
+            eq("…with the task number in the History header", secKey(b, "History"), "#61 done");
+            ok("…and the sentence saying why inside History", /sib-one is already stood down: its task #61 \(Compare the two siblings\) is done - the collision is with finished work, so the pair is not waiting on you/.test(b.stood), b.stood);
+            eq("…which stays closed until the reader asks", b.sections.find((s) => s.title === "History")?.expanded, "false");
           }
           eq("the record names the finished side on both rows", [sibOne?.collisions[0]?.stoodByTask?.map((f) => [f.side, f.taskId, f.state]), sibTwo?.collisions[0]?.stoodByTask?.map((f) => [f.side, f.taskId, f.state])], [[["a", 61, "done"]], [["a", 61, "done"]]]);
           eq("…and the pair is NOT in the reader's rotation", v.list.filter((q) => q.kind === "collision").map((q) => q.key).includes(sibKey), false);
         }
-        await shotRows("collision-pairs-done-side-1440x900.png", ["sib-one", "sib-two"]);
+        await shotCard("collision-pairs-done-side-1440x900.png", "sib-two");
 
         // ---- a side with NO owning queue row says so, in words ------------------------------------------------
         section("a side with no task row");
@@ -512,15 +736,19 @@ const result = await (async () => {
         const looseB = v.rows.find((r) => r.name === "loose-b");
         eq("the no-row pair is one record on both rows", [looseA?.collisions.length, looseB?.collisions.length, looseA?.collisions[0]?.key === looseB?.collisions[0]?.key], [1, 1, true]);
         const looseKey = looseA?.collisions[0]?.key;
-        const looseBlocks = v.blocks.filter((b) => b.key === looseKey);
-        eq("…drawn once on each of its rows", looseBlocks.length, 2);
-        for (const b of looseBlocks) {
+        const looseCards = [await cardOn("loose-a"), await cardOn("loose-b")];
+        eq("…drawn once on each of its rows", looseCards.map((b) => Boolean(b)), [true, true]);
+        for (const b of looseCards) {
           const sides = Object.fromEntries(b.sides.map((s) => [s.name, s]));
           eq("the side nothing owns says exactly that", [sides["loose-a"]?.taskNone, sides["loose-a"]?.task, sides["loose-a"]?.taskName], ["no task row on this tree", "", ""]);
-          eq("…and the side a queue row does own still names its task", [sides["loose-b"]?.task, sides["loose-b"]?.taskName, sides["loose-b"]?.taskWho, sides["loose-b"]?.taskState], ["#71", "Rewrite the loose end", "Assistant #2", "queued"]);
+          eq("…and the side a queue row does own still names its task", [sides["loose-b"]?.task, sides["loose-b"]?.taskName, sides["loose-b"]?.taskState], ["#71", "Rewrite the loose end", "queued"]);
+          // On loose-a's card the COUNTERPART is loose-b, the one a queue row owns; on loose-b's card the counterpart
+          // is loose-a, and the closed header says in words that nothing owns it.
+          const counterpart = /loose-a$/.test(b.rowKey) ? "#71 · Assistant #2 · queued" : "no task row on this tree";
+          eq("…with the counterpart's line on the closed header", secKey(b, "Counterpart"), counterpart);
         }
         eq("the record holds null for the unowned side and the row for the other", [looseA?.collisions[0]?.a?.task, looseA?.collisions[0]?.b?.task?.id], [null, 71]);
-        await shotRows("collision-pairs-no-row-1440x900.png", ["loose-a", "loose-b"]);
+        await shotCard("collision-pairs-no-row-1440x900.png", "loose-b");
 
         // ---- 4. the merge-target-only case files nothing ----------------------------------------------------
         section("the merge-target-only case");
@@ -532,17 +760,15 @@ const result = await (async () => {
         const all = await page.evaluate(async () => (await (await fetch("/api/collisions")).json()).records || []);
         eq("no record on the book is a merge-target relation alone", all.filter((r) => (r.relations || []).length && r.relations.every((x) => x.kind === "merge-target")).length, 0);
         eq("four records for four evidence pairs", all.length, 4);
-        await shotRows("collision-pairs-merge-target-only-1440x900.png", ["pair-proj", "pair-a"]);
+        await shotCard("collision-pairs-merge-target-only-1440x900.png", "pair-a");
 
         // ---- 5. the ruling, from the row the reader is looking at -------------------------------------------
         section("the reader rules on the pair");
         const mineRole = rowA?.collisions[0]?.role === "b" ? "b" : "a";
+        await openCard("pair-a");
         const pressed = await page.evaluate(
           ({ k, pick }) => {
-            const block = [...document.querySelectorAll("[data-collision-block]")].find(
-              (x) => x.getAttribute("data-collision-pair") === k && (x.getAttribute("data-collision-block") || "").endsWith("pair-a"),
-            );
-            const el = block?.querySelector(`[data-collision-rule="${CSS.escape(k)}"][data-collision-pick="${pick}"]`);
+            const el = document.querySelector(`.rowchip-pop [data-collision-rule="${CSS.escape(k)}"][data-collision-pick="${pick}"]`);
             if (!el) return false;
             el.click();
             return true;
@@ -555,14 +781,17 @@ const result = await (async () => {
           pairKey,
           { timeout: 20_000 },
         );
+        await page.keyboard.press("Escape").catch(() => {});
+        await page.waitForTimeout(200);
         v = await view();
         const ruledA = v.rows.find((r) => r.name === "pair-a")?.collisions[0];
         const ruledB = v.rows.find((r) => r.name === "pair-b")?.collisions[0];
         eq("both rows read it as ruled", [ruledA?.state, ruledB?.state], ["ruled", "ruled"]);
         eq("the ruling names the tree the reader pressed, on both rows", [ruledA?.ruling?.name, ruledB?.ruling?.name], ["pair-a", "pair-a"]);
-        ok("both cards say already ruled", v.blocks.filter((b) => b.key === pairKey).every((b) => /already ruled: pair-a( \(#\d+\))? goes first/.test(b.state)), JSON.stringify(v.blocks.filter((b) => b.key === pairKey).map((b) => b.state)));
+        const ruledCards = [await cardOn("pair-a"), await cardOn("pair-b")];
+        ok("both cards say already ruled", ruledCards.every((b) => /already ruled: pair-a( \(#\d+\))? goes first/.test(b.state)), JSON.stringify(ruledCards.map((b) => b.state)));
         eq("the pair's sides carry a queue task id when the panel filed one", [rowA?.collisions[0]?.a?.taskId, rowA?.collisions[0]?.b?.taskId].map((x) => (x === null || typeof x === "number" ? "ok" : "bad")), ["ok", "ok"]);
-        await shotRows("collision-pairs-ruled-1440x900.png", ["pair-a", "pair-b"]);
+        await shotCard("collision-pairs-ruled-1440x900.png", "pair-b");
 
         // ---- 6. the badge counts decisions, and a re-detection does not ask again ---------------------------
         section("the badge, and a re-detection");

@@ -100,8 +100,14 @@ export function attachPageCollectors(page) {
   const consoleErrors = [];
   page?.on?.("pageerror", (e) => pageErrors.push(String((e && e.message) || e)));
   page?.on?.("console", (m) => {
-    if (m && typeof m.type === "function" && m.type() === "error" && !/favicon/i.test(m.text())) {
-      consoleErrors.push(m.text());
+    if (m && typeof m.type === "function" && m.type() === "error") {
+      // The URL travels with the message: "404" on its own names no resource, and the next reader has to guess which
+      // file or route the page wanted. A missing favicon is the browser's own ask, not a page defect, so it is
+      // filtered on the URL as well as on the text.
+      const where = typeof m.location === "function" ? m.location() : null;
+      const url = (where && where.url) || "";
+      if (/favicon/i.test(m.text()) || /favicon/i.test(url)) return;
+      consoleErrors.push(url ? `${m.text()} (${url})` : m.text());
     }
   });
   return { pageErrors, consoleErrors };

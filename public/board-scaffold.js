@@ -1593,7 +1593,7 @@ function gitSubHtml(key, kind, title, count, items) {
   const what = kind === "modified" ? "changed" : "untracked";
   return `<div class="git-sub${open ? "" : " collapsed"}" data-git-sub="${esc(subKey)}">
         <div class="git-sub-head" data-toggle-git-sub="${esc(subKey)}" title="${open ? "fold" : "unfold"} the ${count} ${what} file${count === 1 ? "" : "s"}">
-          <span class="chev">${open ? "\u25be" : "\u25b8"}</span>
+          <span class="chev">${open ? "▾" : "▸"}</span>
           <h4>${esc(title)} (${count})</h4>
         </div>
         <ul>${items.join("")}</ul>
@@ -1789,7 +1789,7 @@ function todoBlockHtml(row, key) {
     : "";
   return `<div class="todo-block${open ? "" : " collapsed"}" data-todo-block="${esc(key)}">
     <button type="button" class="todo-head" data-toggle-todo="${esc(key)}" aria-expanded="${open ? "true" : "false"}" title="${open ? "fold" : "unfold"} this worktree's TODO list — folded it reads the OLDEST item still open">
-      <span class="chev">${open ? "\u25be" : "\u25b8"}</span>
+      <span class="chev">${open ? "▾" : "▸"}</span>
       <span class="todo-title">TODO</span>
       <span class="todo-count mono" title="${done} done of ${total}">${count}</span>
       ${proposalChip}
@@ -2074,30 +2074,104 @@ function collisionEvidence(rec) {
 // question a collision card exists to answer. So each side names the queue row that owns its tree: the row's number,
 // its own title, the assistant whose queue holds it and its state, in that order beside the tree and branch.
 //
+// TWO PLACES, TWO JOBS. The SUMMARY line wears the whole identity in one line per side - role, tree, branch, task
+// number and state - and the task's own title clamped to one line beneath it, so both sides, the shared files and the
+// two ruling presses fit above the fold on a 560px card. The full title, the assistant whose queue holds it and the
+// tree's path are the side's own accordion section, below.
+//
 // A tree no queue row owns says so ("no task row on this tree") rather than leaving the line blank: a blank reads as
 // "nothing to see" and is exactly the ambiguity this card removes. A row that is done or parked is named with its
 // state and the side reads as already stood down, because a collision against finished work is not one the reader
 // has to arbitrate.
-function collisionSideHtml(rec, side, mine) {
+function collisionTaskChip(task, finished) {
+  if (!task) return `<span class="collision-side-task is-none" title="no queue row on this board names this tree in its worktree field">no task row on this tree</span>`;
+  return `<span class="collision-side-task${finished ? " is-finished" : ""}" data-collision-task="${esc(task.id)}" data-task-state="${esc(task.state || "")}" title="the queue row that owns this tree, matched on its own worktree field">
+      <span class="collision-task" title="the queue task standing in this tree">#${esc(task.id)}</span>
+      ${task.state ? `<span class="collision-task-state is-${esc(task.state)}">${esc(task.state)}</span>` : ""}
+    </span>`;
+}
+
+function collisionSideSummaryHtml(rec, side, mine) {
   if (!side) return "";
   const role = side === rec.a ? "a" : "b";
   const task = side.task || null;
   const finished = Boolean(task && task.open === false);
-  const taskHtml = task
-    ? `<span class="collision-side-task${finished ? " is-finished" : ""}" data-collision-task="${esc(task.id)}" data-task-state="${esc(task.state || "")}" title="the queue row that owns this tree, matched on its own worktree field">
-        <span class="collision-task" title="the queue task standing in this tree">#${esc(task.id)}</span>
-        ${task.name ? `<span class="collision-task-name">${esc(task.name)}</span>` : ""}
-        ${task.assistant ? `<span class="collision-task-who">${esc(task.assistant)}</span>` : ""}
-        ${task.state ? `<span class="collision-task-state is-${esc(task.state)}">${esc(task.state)}</span>` : ""}
-      </span>`
-    : `<span class="collision-side-task is-none" title="no queue row on this board names this tree in its worktree field">no task row on this tree</span>`;
   return `<div class="collision-side is-${role}${mine ? " is-mine" : " is-other"}${finished ? " is-finished" : ""}" data-collision-side="${role}">
-    <span class="collision-side-role">${mine ? "this row" : "counterpart"}</span>
-    <b class="collision-side-name">${esc(side.name || side.path || "a tree")}</b>
-    ${side.branch ? `<span class="collision-branch mono" title="branch">${esc(side.branch)}</span>` : ""}
-    ${taskHtml}
+    <div class="collision-side-top">
+      <span class="collision-side-role">${mine ? "this row" : "counterpart"}</span>
+      <b class="collision-side-name">${esc(side.name || side.path || "a tree")}</b>
+      ${side.branch ? `<span class="collision-branch mono" title="branch">${esc(side.branch)}</span>` : ""}
+      ${collisionTaskChip(task, finished)}
+    </div>
+    ${task && task.name ? `<div class="collision-side-title" title="${esc(task.name)}"><span class="collision-task-name">${esc(task.name)}</span></div>` : ""}
   </div>`;
 }
+
+// The accordion section's own body: everything the summary line had to clamp or leave out. Labels are dim and the
+// values are what a reader copies (a path) or reads twice (a task's whole title).
+function collisionSideDetailHtml(rec, side, mine) {
+  if (!side) return "";
+  const task = side.task || null;
+  const path = side.path || "";
+  const out = [];
+  out.push(
+    `<div class="collision-acc-line"><span class="collision-acc-label">tree</span><b>${esc(side.name || path || "a tree")}</b>${
+      side.branch ? ` <span class="collision-branch mono" title="branch">${esc(side.branch)}</span>` : ""
+    }</div>`,
+  );
+  if (task && task.name) out.push(`<div class="collision-acc-line"><span class="collision-acc-label">task</span><span class="collision-task-name">${esc(task.name)}</span></div>`);
+  out.push(
+    task
+      ? `<div class="collision-acc-line"><span class="collision-acc-label">queue</span>#${esc(task.id)}${
+          task.assistant ? ` · <span class="collision-task-who">${esc(task.assistant)}</span>` : ""
+        }${task.state ? ` · <span class="collision-task-state is-${esc(task.state)}">${esc(task.state)}</span>` : ""}</div>`
+      : `<div class="collision-acc-line"><span class="collision-acc-label">queue</span><span class="collision-acc-none">no queue row on this board names this tree in its worktree field</span></div>`,
+  );
+  if (path) out.push(`<div class="collision-acc-path mono">${esc(path)}</div>`);
+  return out.join("");
+}
+
+// ONE COLLAPSED SECTION. A real <button> header, so Tab reaches it and Enter/Space opens it for free; the header
+// keeps its one-line key info (the task numbers, the git verdict, the shared-file count) so a minimised section
+// still says what is inside it. The body is `hidden` rather than merely styled away: a closed section is not in the
+// tab order and not in a screen reader's read of the card.
+function collisionAccordionHtml(id, title, keyInfo, bodyHtml, open = false) {
+  return `<section class="collision-acc${open ? " is-open" : ""}" data-collision-acc="${esc(id)}">
+    <button type="button" class="collision-acc-head" data-collision-acc-toggle="${esc(id)}" aria-expanded="${open ? "true" : "false"}" aria-controls="cacc-${esc(id)}">
+      <span class="collision-acc-chev" aria-hidden="true">${open ? "\u25be" : "\u25b8"}</span>
+      <span class="collision-acc-title">${esc(title)}</span>
+      <span class="collision-acc-key mono" title="${esc(keyInfo)}">${esc(keyInfo)}</span>
+    </button>
+    <div class="collision-acc-body" id="cacc-${esc(id)}"${open ? "" : " hidden"}>${bodyHtml}</div>
+  </section>`;
+}
+
+// The press that opens and closes one section. The chevron and `aria-expanded` are the whole visual difference, and
+// the body is shown/hidden by the attribute rather than a class, so a keyboard reader and a pointer reader see the
+// same thing.
+function toggleCollisionSection(section) {
+  if (!section) return false;
+  const head = section.querySelector(".collision-acc-head");
+  const body = section.querySelector(".collision-acc-body");
+  if (!head || !body) return false;
+  const open = head.getAttribute("aria-expanded") === "true";
+  head.setAttribute("aria-expanded", open ? "false" : "true");
+  section.classList.toggle("is-open", !open);
+  body.hidden = open;
+  const chev = head.querySelector(".collision-acc-chev");
+  if (chev) chev.textContent = open ? "\u25b8" : "\u25be";
+  return true;
+}
+
+// A press on a header is the section's own: it never closes the popup it sits in (the row-chip wiring treats a press
+// inside the card as the card's). Registered here because this markup is this file's.
+document.addEventListener("click", (e) => {
+  const head = e.target.closest && e.target.closest("[data-collision-acc-toggle]");
+  if (!head) return;
+  e.preventDefault();
+  e.stopPropagation();
+  toggleCollisionSection(head.closest(".collision-acc"));
+});
 
 function collisionBlockHtml(row, key) {
   const live = Array.isArray(row?.collisions) ? row.collisions : [];
@@ -2123,8 +2197,13 @@ function collisionBlockHtml(row, key) {
     // sentence, named as such.
     const evidence = rec.evidence && typeof rec.evidence === "object" ? rec.evidence : null;
     const measured = evidence?.ok === true;
-    const chips = files.length
+    // THE SHARED FILES ARE THE SUMMARY'S, the explanation of an empty set is the Merge check section's: a chip row is
+    // something a reader scans, and a sentence about git is something they open.
+    const chipsHtml = files.length
       ? `<ul class="collision-chips" aria-label="the files both branches changed against their merge base">${files.map((f) => `<li class="collision-chip mono" title="${esc(f)}">${esc(f)}</li>`).join("")}</ul>`
+      : "";
+    const noFilesSay = files.length
+      ? ""
       : measured
         ? `<span class="collision-none" data-collision-files="none">no shared file: both branches changed nothing in common against their merge base</span>`
         : evidence && evidence.ok === false
@@ -2134,39 +2213,50 @@ function collisionBlockHtml(row, key) {
     // The sides whose OWN task is finished. Derived by the store on every read (lib/collisions.js `finishedSides`),
     // so it is never a stale flag: work that starts again in that tree brings the pair back as a live one.
     const stoodByTask = Array.isArray(rec.stoodByTask) ? rec.stoodByTask : [];
-    const finishedSay = stoodByTask
-      .map((f) => `${f.tree || "one side"}${f.name ? ` (${f.name})` : ""} is ${f.state || "finished"}`)
-      .join(", ");
     // AN AUTOMATIC PICK IS NOT THE READER'S RULING and does not read like one: it says who chose and why, and the
     // withdraw beside it is the reader's one press to overrule it (withdrawing an automatic pick stops the sweep from
     // putting the same order straight back, so the pair becomes his).
     const auto = state === "ruled" && Boolean(rec.ruling?.auto);
+    // THE PILL IS A WORD, NOT A PARAGRAPH. It used to print the whole stand-down - "already stood down: <tree>
+    // (<task title>) is parked, <tree> ... is done" - which is the same prose the History section repeats in full,
+    // and it is why the card's first screen was a wall of text. At a glance a reader needs to know WHICH of these
+    // states the pair is in; who yielded and why is History's job, one press away.
     const stateWord = superseded
-      ? `superseded by ${esc(superseded.short || String(superseded.commit || "").slice(0, 12))} - landed ${superseded.landedAt ? `${relTime(superseded.landedAt)} ago` : "after this report"}, after this report`
+      ? `superseded by ${esc(superseded.short || String(superseded.commit || "").slice(0, 12))}`
       : absent
-        ? `resolved by absence: no row on this board and no live agent answers to ${esc(target || "that name")} - settled, nothing to rule on`
+        ? "resolved by absence"
         : kind === "same-tree"
           ? "same tree, not a collision"
           : kind === "none"
-            ? `no row matches ${esc(target || "that name")} - nothing to rule on`
+            ? "no row matches"
             : auto
-              ? `auto-settled: ${esc(rec.ruling?.name || "a side")} goes first - ${esc(rec.ruling?.reason || "no merge risk either way")}`
+              ? `auto-settled: ${esc(rec.ruling?.name || "a side")} goes first`
               : state === "ruled"
                 ? `already ruled: ${esc(rec.ruling?.name || "a side")}${rec.ruling?.taskId ? ` (#${esc(rec.ruling.taskId)})` : ""} goes first`
                 : stoodByTask.length
-                  ? `already stood down: ${esc(finishedSay)}`
+                  ? "stood down"
                   : state === "reader"
                     ? "yours to rule on"
                     : "with both assistants";
     // WHAT GIT SAID, when it said "the reader's": both directions conflict, or it could not answer. A card that asked
     // for a decision with no reason visible is the bare flag this whole surface exists to avoid.
     const dirs = rec.merge || null;
-    const conflictSay =
-      dirs && dirs.aFirst?.clean === false && dirs.bFirst?.clean === false
-        ? `git: both directions conflict${Array.isArray(dirs.aFirst.conflicts) && dirs.aFirst.conflicts.length ? ` (${dirs.aFirst.conflicts.slice(0, 3).join(", ")})` : ""} - the order is yours`
-        : dirs && (dirs.aFirst?.error || dirs.bFirst?.error)
-          ? "git could not answer the merge question - the order is yours"
-          : "";
+    const bothConflict = Boolean(dirs && dirs.aFirst?.clean === false && dirs.bFirst?.clean === false);
+    const gitUnknown = Boolean(dirs && (dirs.aFirst?.error || dirs.bFirst?.error));
+    const anyClean = Boolean(dirs && (dirs.aFirst?.clean === true || dirs.bFirst?.clean === true));
+    const conflictSay = bothConflict
+      ? `git: both directions conflict${Array.isArray(dirs.aFirst.conflicts) && dirs.aFirst.conflicts.length ? ` (${dirs.aFirst.conflicts.slice(0, 3).join(", ")})` : ""} - the order is yours`
+      : gitUnknown
+        ? "git could not answer the merge question - the order is yours"
+        : "";
+    // THE MERGE CHECK SECTION'S ONE LINE: git's own verdict on the order, and how many files the two branches share.
+    // That is the whole reason to open the section, said in its header so a closed section still reads.
+    const mergeKey = [
+      bothConflict ? "both directions conflict" : gitUnknown ? "git could not answer" : anyClean ? "clean one way" : "not checked",
+      files.length ? `${files.length} shared file${files.length === 1 ? "" : "s"}` : measured ? "no shared file" : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
     // THE RULE: two trees, and paths measured between them. A card with no shared file, no counterpart or a counterpart
     // that IS this tree offers no press - there is nothing to order, and a press between one tree and itself is the
     // defect this card was fixed for.
@@ -2223,6 +2313,48 @@ function collisionBlockHtml(row, key) {
         : absent
           ? `<div class="collision-peer" data-collision-resolution="none">no row on this board answers to <span class="mono">${esc(target || "that name")}</span>, and no live agent is standing in a tree it names - there is no second side to rule against.</div>`
           : `<div class="collision-peer" data-collision-resolution="none">no row on this board answers to <span class="mono">${esc(target || "that name")}</span> - there is no second side to rule against.</div>`;
+    // THE FOUR SECTIONS, COLLAPSED. Each header keeps the one line a minimised section still has to say: the side's
+    // task number, assistant and state; git's verdict and the shared-file count; the task numbers and their states.
+    const sideKeyInfo = (side) => {
+      const t = side?.task || null;
+      return t ? [`#${t.id}`, t.assistant, t.state].filter(Boolean).join(" · ") : "no task row on this tree";
+    };
+    const historyKey =
+      [
+        ...stoodByTask.map((f) => `#${f.taskId}${f.state ? ` ${f.state}` : ""}`),
+        ...(Array.isArray(rec.stoodDown) ? rec.stoodDown : []).map((s) => `notice #${s.taskId}${s.state ? ` ${s.state}` : ""}`),
+        superseded ? `superseded ${superseded.short || String(superseded.commit || "").slice(0, 7)}` : "",
+        absent ? "resolved by absence" : "",
+        rec.ruling ? `${rec.ruling.auto ? "auto-picked" : "ruled"}: ${rec.ruling.name || "a side"}` : "",
+      ]
+        .filter(Boolean)
+        .slice(0, 5)
+        .join(" · ") || "nothing stood down";
+    const mergeBody = [
+      collisionEvidence(rec) ? `<div class="collision-say">${esc(collisionEvidence(rec))}</div>` : "",
+      measuredSay ? `<div class="collision-say collision-measured">${esc(measuredSay)}</div>` : "",
+      conflictSay ? `<div class="collision-say collision-merge-say">${esc(conflictSay)}</div>` : "",
+      noFilesSay ? `<div class="collision-say">${noFilesSay}</div>` : "",
+    ].join("");
+    const historyBody = [
+      stood ? `<div class="collision-stood">${esc(stood)}</div>` : "",
+      peerLine,
+      rec.notes && rec.notes.length ? `<ul class="collision-notes">${rec.notes.map((n) => `<li>“${esc(n.text)}”</li>`).join("")}</ul>` : "",
+      auto
+        ? `<div class="collision-ruling-note">settled by the panel from git's own merge check - withdraw it to make this pair yours</div>`
+        : rec.ruling?.note
+          ? `<div class="collision-ruling-note">your note: ${esc(rec.ruling.note)}</div>`
+          : "",
+      superseded
+        ? `<div class="collision-ruling-note collision-superseded" data-collision-superseded="${esc(superseded.commit)}">the landing <span class="mono">${esc(superseded.short || superseded.commit)}</span> carried ${esc(superseded.side === "b" ? rec.b?.name || "the other side" : rec.a?.name || "this side")} into ${esc(superseded.main || "main")}${superseded.landedAt ? ` ${relTime(superseded.landedAt)} ago` : ""}, after this report was stamped${superseded.reportAt ? ` (${esc(String(superseded.reportAt))})` : ""} - the pair is history and asks nothing of you</div>`
+        : "",
+      absent
+        ? `<div class="collision-ruling-note collision-absent" data-collision-absent="${esc(absent.at || "")}">recorded as resolved by absence${absent.at ? ` ${relTime(absent.at)} ago` : ""}: ${esc(absent.why || "the target names nothing on this board and no live agent stands in a tree it names")} - kept so the report stays readable, and it is not waiting on you</div>`
+        : "",
+    ].join("");
+    // An id that survives a repaint and stays unique on a card carrying several pairs: the record's key, the lane
+    // and the section's own slug, with everything a browser refuses in an id folded to a dash.
+    const secId = (slug) => `${String(rec.key || key).replace(/[^A-Za-z0-9]+/g, "-")}-${lane}-${slug}`;
     return `<div class="collision-block is-${esc(state)}${lane === "history" ? " is-history" : ""}" data-collision-block="${esc(key)}" data-collision-key="${esc(rec.key)}" data-collision-pair="${esc(rec.key)}" data-collision-lane="${esc(lane)}">
       <div class="collision-head">
         <span class="collision-mark" role="img" aria-label="collision with ${esc(other)}">◆</span>
@@ -2231,27 +2363,16 @@ function collisionBlockHtml(row, key) {
         <span class="collision-state is-${esc(state)}">${stateWord}</span>
         <span class="collision-when mono">${esc([when, rec.source === "reported" ? "reported by its worker" : ""].filter(Boolean).join(" · "))}</span>
       </div>
-      <div class="collision-body">
-        <div class="collision-sides">${collisionSideHtml(rec, mineSide, true)}${kind === "tree" ? collisionSideHtml(rec, otherSide, false) : ""}</div>
-        <div class="collision-say">${esc(collisionEvidence(rec))}</div>
-        ${measuredSay ? `<div class="collision-say collision-measured">${esc(measuredSay)}</div>` : ""}
-        ${conflictSay ? `<div class="collision-say collision-merge-say">${esc(conflictSay)}</div>` : ""}
-        ${kind === "tree" ? chips : ""}
-        ${kind === "tree" && stood ? `<div class="collision-stood">${esc(stood)}</div>` : ""}
-        ${peerLine}
-        ${rec.notes && rec.notes.length ? `<ul class="collision-notes">${rec.notes.map((n) => `<li>“${esc(n.text)}”</li>`).join("")}</ul>` : ""}
-        ${auto
-          ? `<div class="collision-ruling-note">settled by the panel from git's own merge check - withdraw it to make this pair yours</div>`
-          : rec.ruling?.note
-            ? `<div class="collision-ruling-note">your note: ${esc(rec.ruling.note)}</div>`
-            : ""}
-        ${superseded
-          ? `<div class="collision-ruling-note collision-superseded" data-collision-superseded="${esc(superseded.commit)}">the landing <span class="mono">${esc(superseded.short || superseded.commit)}</span> carried ${esc(superseded.side === "b" ? rec.b?.name || "the other side" : rec.a?.name || "this side")} into ${esc(superseded.main || "main")}${superseded.landedAt ? ` ${relTime(superseded.landedAt)} ago` : ""}, after this report was stamped${superseded.reportAt ? ` (${esc(String(superseded.reportAt))})` : ""} - the pair is history and asks nothing of you</div>`
-          : ""}
-        ${absent
-          ? `<div class="collision-ruling-note collision-absent" data-collision-absent="${esc(absent.at || "")}">recorded as resolved by absence${absent.at ? ` ${relTime(absent.at)} ago` : ""}: ${esc(absent.why || "the target names nothing on this board and no live agent stands in a tree it names")} - kept so the report stays readable, and it is not waiting on you</div>`
-          : ""}
+      <div class="collision-summary">
+        <div class="collision-sides">${collisionSideSummaryHtml(rec, mineSide, true)}${kind === "tree" ? collisionSideSummaryHtml(rec, otherSide, false) : ""}</div>
+        ${kind === "tree" && chipsHtml ? `<div class="collision-files"><span class="collision-files-label">shared</span>${chipsHtml}</div>` : ""}
         ${actions.length ? `<div class="collision-actions">${actions.join("")}</div>` : ""}
+      </div>
+      <div class="collision-accordion">
+        ${collisionAccordionHtml(secId("this-row"), "This row", sideKeyInfo(mineSide), collisionSideDetailHtml(rec, mineSide, true))}
+        ${kind === "tree" ? collisionAccordionHtml(secId("counterpart"), "Counterpart", sideKeyInfo(otherSide), collisionSideDetailHtml(rec, otherSide, false)) : ""}
+        ${kind === "tree" ? collisionAccordionHtml(secId("merge"), "Merge check", mergeKey, mergeBody) : ""}
+        ${collisionAccordionHtml(secId("history"), "History", historyKey, historyBody)}
       </div>
     </div>`;
   };
@@ -2533,10 +2654,21 @@ function openRowChipPop(kind, key, { focus = false } = {}) {
     document.body.appendChild(pop);
   } else if (pop._sig !== sig) {
     // The record moved under an open card (a ruling landed, a check was made): the body is redrawn, and the reader's
-    // caret is put back on the same control rather than dropped on the document by the node it was standing on.
+    // caret is put back on the same control rather than dropped on the document by the node it was standing on. An
+    // ACCORDION the reader opened is part of what they were reading, so the sections they had open are reopened on
+    // the redrawn body before the caret is placed - otherwise a scan would fold the section under their eyes.
     const at = rowChipFocusables(pop).indexOf(document.activeElement);
+    const opened = kind === "collision" ? [...pop.querySelectorAll(".collision-block")].map((blk, i) => [...blk.querySelectorAll(".collision-acc.is-open")].map((sec) => [i, sec.dataset.collisionAcc || ""])) : [];
     const body = pop.querySelector(".rowchip-pop-body");
-    if (body) body.innerHTML = rowChipInner(kind, row, key);
+    if (body) {
+      body.innerHTML = rowChipInner(kind, row, key);
+      for (const [bi, slug] of opened.flat()) {
+        if (!slug) continue;
+        const blk = body.querySelectorAll(".collision-block")[bi];
+        const sec = blk?.querySelector(`.collision-acc[data-collision-acc="${CSS.escape(slug)}"]`);
+        if (sec && sec.querySelector(".collision-acc-head")?.getAttribute("aria-expanded") !== "true") toggleCollisionSection(sec);
+      }
+    }
     if (at >= 0) {
       const again = rowChipFocusables(pop)[at];
       if (again) {
