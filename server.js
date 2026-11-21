@@ -72,7 +72,7 @@ import { TodoLists, todoSummary } from "./lib/todos.js";import { auditRepo } fro
 import { REFRESH_LINES_SHOWN, RefreshJournal, liveRunIn, mergeDelta, normaliseRefreshAgent, parseCommitFiles, todoProposals } from "./lib/refresh-row.js";
 import { ParentBook } from "./lib/parents.js";
 import { cutChildWorktree } from "./lib/child-worktree.js";
-import { BRANCH_KINDS, kindChoices, kindFromAnswer, planCut } from "./lib/branch-kind.js";
+import { BRANCH_KINDS, KIND_LABELS, kindChoices, kindFromAnswer, planCut } from "./lib/branch-kind.js";
 import { Questions, applyPlan, buildPlan, inspectProject, parentWorktreeOf, readPlan, rollGate, rollUp, worktrees as stewardWorktrees, writePlan } from "./lib/steward.js";
 import { REASON_REQUIRED, RestartController, providerKeyCheck } from "./lib/restart.js";
 import { readPipelineDocument } from "./lib/pipeline-doc.js";
@@ -3827,6 +3827,49 @@ function withInitiatives(snap) {
   return snap;
 }
 
+// WHAT KIND OF TREE THE CUT MADE, stamped on the row so the page can draw it without reading the book.
+//
+// The record is written once, at the cut (lib/branch-kind.js; lib/jobs.js `rememberParent`), keyed by the tree's tag
+// in branch-parents.json. Until this overlay the only readers were the push rule and a hand-written lookup: a row said
+// nothing about its kind, and finishing a landing on a research tree meant opening the JSON file or calling
+// /api/worktree/kind-lift by hand. The fields travel the way the lock, the owner and the round's name do:
+//
+//   branchKind        "turnover" | "research", absent when no record was written for this tree
+//   branchKindLabel   the reader's words from lib/branch-kind.js KIND_LABELS (one vocabulary, not a second copy)
+//   branchKindLifted  true once the reader lifted a local-only kind; the kind itself never changes
+//   branchKindParent  the parent branch the record names, for the mark's tooltip
+//
+// The lookup is `jobs.treeKindFor`, the same matcher the push rule and the lift route use, so a branch renamed after
+// its cut still finds its record by tag and the row cannot disagree with the gate. A row with no record carries none
+// of these fields: absence is "nothing was written here", not a third kind.
+function applyTreeKind(row) {
+  if (!row) return row;
+  const rec = typeof jobs.treeKindFor === "function" ? jobs.treeKindFor({ tree: row.path, branch: row.branch }) : null;
+  const kind = rec && BRANCH_KINDS.includes(String(rec.kind || "").trim()) ? String(rec.kind).trim() : "";
+  if (!kind) {
+    delete row.branchKind;
+    delete row.branchKindLabel;
+    delete row.branchKindLifted;
+    delete row.branchKindParent;
+    return row;
+  }
+  row.branchKind = kind;
+  row.branchKindLabel = KIND_LABELS[kind] || kind;
+  row.branchKindLifted = rec.lifted === true;
+  row.branchKindParent = rec.parent || null;
+  return row;
+}
+
+// The same fact over every row a snapshot carries. Cost is one scan of the branch-parents book per row, capped at
+// 500 records (lib/jobs.js `saveParents`); measured at ~4 ms for a 140-row board, against a snapshot build that is
+// already 300 ms.
+function withTreeKinds(snap) {
+  for (const project of snap.projects || []) {
+    for (const row of project.worktrees || []) applyTreeKind(row);
+  }
+  return snap;
+}
+
 // The reader's lock travels with the snapshot the way the naming ledger does: git knows nothing about it, the
 // scanner must not have to, and the row is where it has to be visible. A row with no `lock` is unlocked — absence is
 // the default, so an unlocked row costs nothing on the wire and a store that cannot be read cannot make a tree look
@@ -3923,8 +3966,12 @@ function withAssistantOwners(snap) {
 function rowExtras(projectName, row) {
   return syncTiming.measure("row extras", () => {
     if (!row) return row;
-    if (!assistant) return row;
-    const out = { ...row, assistant: assistantForRow(projectName, row) };
+    const out = { ...row };
+    // The kind rides the row frame for the same reason the owner and the round's name do: a `row` event REPLACES the
+    // page's row, so a kind stamped only into the snapshot would blink off the mark on the next scan of that tree.
+    applyTreeKind(out);
+    if (!assistant) return out;
+    out.assistant = assistantForRow(projectName, out);
     const rec = typeof assistant.roundNames === "function" ? assistant.roundNames().get(roundTreeKey(out.path)) : null;
     if (rec) out.round = rec;
     else delete out.round;
@@ -4105,7 +4152,7 @@ function snapshotBody() {
   // second call. The initiatives are the same kind of fact and are applied here for the same reason. THE REVIEW LANE
   // IS APPLIED LAST OF ALL, so a row's delivery is on the row whenever a snapshot leaves this function - nothing above
   // it can strip the field.
-  return withCollisions(withReviews(withRoundNames(withAssistantOwners(withInitiatives(snap)))));
+  return withCollisions(withReviews(withRoundNames(withAssistantOwners(withInitiatives(withTreeKinds(snap))))));
 }
 
 const heartbeat = setInterval(() => {
@@ -5390,7 +5437,10 @@ const server = createServer(async (req, res) => {
         log(`child: ${out.branch} was cut but its parent record failed (${String((e && e.message) || e)})`);
       }
       try {
-        jobs.rememberParent(out.path, out.branch, row.branch, { kind: plan.kind, lifted: plan.localOnly && body.landing === true });
+        // AWAITED: the kind is part of the record this file IS, and the answer below is what the page draws the new
+        // row from. saveParents returns its write for exactly this caller (lib/jobs.js); a cut that answered first
+        // was a row whose T or R could be missing for one frame, and a push decided against a record not yet written.
+        await jobs.rememberParent(out.path, out.branch, row.branch, { kind: plan.kind, lifted: plan.localOnly && body.landing === true });
       } catch {
         /* the landing paragraph falls back to git's upstream for this tree; nothing about the cut depends on it */
       }
@@ -5447,7 +5497,20 @@ const server = createServer(async (req, res) => {
       const rec = await jobs.liftKind({ tree: path, branch });
       if (!rec) return sendJson(res, 404, { error: `no branch-parents record for ${cleanPath(path)} - nothing to lift` });
       log(`kind: ${cleanPath(path)} is lifted (kind ${rec.kind}) - its push now meets the ordinary controls`);
-      return sendJson(res, 200, { ok: true, record: rec, kinds: BRANCH_KINDS, choices: kindChoices() });
+      // The record is on every surface that reads it now: the push rule (which reads the book), the row that pressed
+      // the lift, and every other open tab. Broadcast so a second tab's row turns from R to R-with-a-tick without a
+      // reload - the same full frame a write of any other per-row fact sends.
+      broadcastSnapshot();
+      return sendJson(res, 200, {
+        ok: true,
+        record: rec,
+        // The answer names the fact the row draws, so the page that pressed it does not have to read `record`'s shape.
+        branchKind: rec.kind || null,
+        branchKindLifted: rec.lifted === true,
+        branchKindParent: rec.parent || null,
+        kinds: BRANCH_KINDS,
+        choices: kindChoices(),
+      });
     }
 
     // ---- rolling one child into its parent ---------------------------------------------------------------------

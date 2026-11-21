@@ -2670,6 +2670,11 @@ tr.row.has-review { box-shadow: inset 2px 0 0 #7a5a1e; }
 /* The refusal shown in place of the delete question. Same row chrome, in the lock's ink rather than the delete's red,
    because nothing was deleted and the answer is "unlock it first", not "are you sure". */
 tr.row-confirm.row-locked td { background: #1b170d; border-top-color: #6b5324; border-bottom-color: #6b5324; color: #f0e0b8; }
+/* The lift question: the same row chrome in the kind mark's ink. A lift is not a delete and it is not a refusal, so it
+   borrows neither the red question nor the amber refusal; its yes is the panel's green "start something" button. */
+tr.row-confirm.row-kind-confirm td { background: #0f1620; border-top-color: #22364c; border-bottom-color: #22364c; color: #d5e5f5; }
+tr.row-confirm .rc-kind { color: #9ecbff; font-weight: 600; }
+tr.row-confirm .rc-refusal { color: #ff9c94; font-weight: 600; }
 tr.row-confirm .rc-lock { color: #e8c07a; font-weight: 600; }
 /* A delete that has been accepted but has not finished scanning: the x stays put, greyed and click-proof,
    so the click is visibly registered and cannot be repeated. */

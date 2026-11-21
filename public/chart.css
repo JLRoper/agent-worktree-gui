@@ -80,6 +80,33 @@ td.row-actions { padding-left: 4px; padding-right: 10px; }
    mid-word. Truncate the badge itself, and keep the age cell's chips from spilling past their column. */
 td.age { overflow: hidden; }
 td.verdict .badge { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
+/* ---- the kind a cut recorded: ONE LETTER in the verdict cell ------------------------------------
+   T = turnover child (a destination on the remote already), R = research tree (local only). It sits BEFORE the badge,
+   because the badge is the part that may ellipsize and the kind must always be readable. The letter is a chip the
+   size of the branch cell's `local` one, never a word: the name line's controls already compete for the row's width,
+   and a sentence there is what this landing exists to avoid. R is a button while the record is unlifted, with the
+   focus ring a real control needs; a lifted tree keeps its R and gains a tick, in the allowed green. */
+.kind-mark {
+  display: inline-block;
+  margin-right: 5px;
+  padding: 0 3px;
+  border: 1px solid #1c3a56;
+  border-radius: 3px;
+  background: var(--blue-bg);
+  color: #9ecbff;
+  font: 600 9.5px/13px var(--mono);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  vertical-align: 1px;
+}
+button.kind-mark { appearance: none; cursor: pointer; }
+.kind-mark.kind-research { color: #ffca7a; border-color: #5a4a1c; background: #221a0c; }
+button.kind-mark.kind-research:hover { color: #ffe2ae; border-color: #a5762a; background: #2f2410; }
+button.kind-mark.kind-research:focus-visible { outline: 2px solid #ffb454; outline-offset: 1px; }
+.kind-mark.is-lifted { color: #8fe3b0; border-color: #2b4a37; background: #14211a; }
+.kind-mark .kind-tick { margin-left: 1px; font-size: 9px; }
+/* In the legend the same letters are a decoder, not a cell's mark: they keep their ink and lose the cell's margins. */
+.legend .kind-mark { margin-right: 3px; margin-left: 3px; vertical-align: 0; }
 /* By CLASS, not by position: the chart draws between ten and twelve cells per row (the owner column comes and goes by
    itself, and any column can be hidden in Settings), so `nth-child(9)` pointed at a different column on almost every
    board. A cell that ellipsizes its own text is what keeps the table inside the card at any width. */
