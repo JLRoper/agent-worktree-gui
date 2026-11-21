@@ -125,7 +125,7 @@
       <tr>
         <td><b>Task</b> (assistant queue row)</td>
         <td><code>{id, title, detail, state, owner, thread, threads[], project, worktree, files[], lane, order, attempts, reason, hold, movedFrom[], runId, pipelineRun}</code>. Four states: queued, running, parked, done.</td>
-        <td>One piece of work, its tree, the run carrying it now, the run history, its park with a machine-readable hold, a 600 character reason, a drag order INSIDE its state bucket, and a bundle assignment.</td>
+        <td>One piece of work: its state (queued, running, parked or done), the thread and the run carrying it now, its tree and project, its detail, the pull request it landed as (read from the board row, not stored on the task), its reason, its park with a machine-readable hold, a drag order INSIDE its state bucket, and a bundle assignment.</td>
         <td>A group of rows. Order across state buckets. A gate between rows. Membership that is not its worktree: the initiative view filters tasks by tree path, and a task with no worktree is on no initiative at all.</td>
         <td><code>lib/assistant/queue.js:10-13</code>, <code>:52</code>, <code>:68</code>, <code>:676-745</code></td>
       </tr>
