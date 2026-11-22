@@ -1,0 +1,1055 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Initiatives tab: research round A, before any change</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #161a21; --card: #151a22; --line: #262c37;
+    --text: #e6e9ef; --dim: #9aa4b2; --dimmer: #6b7482; --blue: #7fb2e8;
+    --good: #7ec699; --bad: #e08a8a; --warn: #d8b06a; --violet: #c8a6ff;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.65 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1180px; margin: 0 auto; padding: 48px 24px 96px; }
+  h1 { margin: 0 0 8px; font-size: 36px; line-height: 1.12; letter-spacing: -0.025em; }
+  h2 { margin: 56px 0 14px; font-size: 24px; line-height: 1.25; letter-spacing: -0.01em; }
+  h3 { margin: 30px 0 8px; font-size: 17px; line-height: 1.35; }
+  h4 { margin: 20px 0 6px; font-size: 14px; }
+  p { max-width: 82ch; color: #c6cdd8; }
+  .sub { margin: 0 0 26px; color: var(--dim); font-size: 13px; max-width: none; }
+  .lede { font-size: 17px; line-height: 1.6; color: #d7dde6; max-width: 84ch; }
+  .verdict { margin: 24px 0; padding: 20px 22px; border: 1px solid var(--line); border-left: 4px solid var(--warn); border-radius: 8px; background: var(--panel); }
+  .verdict strong { color: var(--text); }
+  .verdict.good { border-left-color: var(--good); }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 18px 0 4px; }
+  .kpi { padding: 14px 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
+  .kpi b { display: block; font-size: 28px; line-height: 1.1; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+  .kpi span { color: var(--dim); font-size: 11.5px; line-height: 1.4; display: block; margin-top: 3px; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0 8px; font-size: 13px; }
+  th, td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  th { color: var(--dim); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; position: sticky; top: 0; background: var(--bg); z-index: 1; }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  tr.group td { padding-top: 18px; border-bottom: 1px solid #3a4250; color: var(--text); font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; background: #12161d; }
+  .bad { color: var(--bad); } .good { color: var(--good); } .warn { color: var(--warn); }
+  code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; color: #c9d6e8; background: #11161d; border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
+  pre { margin: 12px 0; padding: 14px 16px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: #0b0f14; color: #c9d6e8; font: 12px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace; }
+  .shots { display: grid; gap: 18px; margin: 16px 0 8px; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+  .pair figure { margin: 0; }
+  .pair img, figure.shot img { width: 100%; height: auto; display: block; border: 1px solid var(--line); border-radius: 6px; background: #0b0d11; }
+  .pair figcaption, figure.shot figcaption { margin-top: 6px; color: var(--dim); font-size: 12px; }
+  .pair figcaption b, figure.shot figcaption b { color: var(--text); font-weight: 600; }
+  figure.shot { margin: 16px 0; }
+  .railshot { max-width: 520px; }
+  .three { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; align-items: start; }
+  .three figure { margin: 0; }
+  .three img { width: 100%; height: auto; display: block; border: 1px solid var(--line); border-radius: 6px; background: #0b0d11; }
+  .three figcaption { margin-top: 6px; color: var(--dim); font-size: 11.5px; }
+  .note { padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--dim); font-size: 13px; }
+  .note b { color: var(--text); }
+  ul, ol { max-width: 84ch; color: #c6cdd8; }
+  li { margin: 4px 0; }
+  .tag { display: inline-block; padding: 0 6px; border: 1px solid var(--line); border-radius: 999px; font-size: 10.5px; color: var(--dim); vertical-align: 1px; }
+  .tag.g { color: var(--good); border-color: #2a4432; }
+  .tag.w { color: var(--warn); border-color: #4d3d12; }
+  .tag.b { color: var(--bad); border-color: #4a2a2a; }
+  .toc { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 18px 0 8px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); font-size: 12.5px; }
+  .toc a { color: var(--blue); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .dir { margin: 40px 0 8px; padding: 26px 26px 22px; border: 1px solid var(--line); border-radius: 12px; background: #12161d; }
+  .dir > h3 { margin: 0 0 4px; font-size: 22px; letter-spacing: -0.01em; }
+  .dir .promise { margin: 0 0 16px; color: var(--dim); font-size: 13.5px; }
+  .dir .badge { display: inline-block; margin-right: 8px; padding: 2px 9px; border-radius: 999px; background: #1b2a20; color: #7ee787; font: 600 11px ui-monospace, monospace; letter-spacing: .08em; vertical-align: 3px; }
+  .dir > h4 { margin: 22px 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); }
+  .keeps { columns: 2; column-gap: 28px; font-size: 12.5px; color: #c6cdd8; padding-left: 18px; }
+  .keeps li { break-inside: avoid; margin: 3px 0; }
+  .tradeoff { margin: 14px 0 0; padding: 14px 16px; border: 1px solid #4d3d12; border-left: 3px solid var(--warn); border-radius: 8px; background: #1a1710; color: #d8c9a8; font-size: 13px; }
+  .tradeoff b { color: #f0c674; }
+  .theme { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin: 10px 0 4px; }
+  .sw { padding: 8px 10px; border-radius: 7px; border: 1px solid var(--line); font-size: 10.5px; color: #e6e9ef; }
+  .sw span { display: block; font-family: ui-monospace, monospace; color: #9aa4b2; font-size: 10px; }
+  .vtable td:first-child { font-weight: 600; color: var(--text); white-space: nowrap; }
+  .cap { font-size: 11.5px; color: var(--dimmer); margin: 2px 0 10px; }
+  details { margin: 12px 0; border: 1px solid var(--line); border-radius: 8px; background: #11161d; padding: 10px 14px; }
+  summary { cursor: pointer; color: var(--text); font-size: 13px; }
+  details[open] summary { margin-bottom: 8px; }
+  .fine { font-size: 11.5px; color: var(--dimmer); }
+  .split { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 24px; align-items: start; }
+  .side { padding: 14px 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); font-size: 12.5px; color: var(--dim); }
+  .side b { color: var(--text); }
+  @media (max-width: 900px) { .pair, .three, .split { grid-template-columns: 1fr; } .keeps { columns: 1; } }
+
+  /* ---------- the three sketches ---------- */
+  .sk { margin: 18px 0 6px; padding: 18px; border: 1px solid #222a35; border-radius: 12px; background: #0a0e12; overflow: hidden; }
+  .sk, .sk * { box-sizing: border-box; }
+  .sk .mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-variant-numeric: tabular-nums; }
+  .sk .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #7ee787; vertical-align: 1px; }
+  .sk .dot.no { background: #3c4655; }
+
+  /* A: the register */
+  .sk-a .win { max-width: 560px; margin: 0 auto; background: #10151b; border: 1px solid #232b36; border-radius: 10px; overflow: hidden; }
+  .sk-a .topbar { display: flex; align-items: center; gap: 8px; padding: 11px 14px; border-bottom: 1px solid #1e2530; background: #0e1319; }
+  .sk-a .topbar b { font-size: 14px; font-weight: 650; letter-spacing: -.01em; }
+  .sk-a .topbar .n { font: 11px ui-monospace, monospace; color: #6b7482; }
+  .sk-a .topbar .act { margin-left: auto; display: flex; gap: 6px; }
+  .sk-a .btn { border: 1px solid #2b3440; background: transparent; color: #c6cdd8; border-radius: 6px; font-size: 11px; padding: 4px 9px; }
+  .sk-a .btn.pri { background: #1b3a26; border-color: #2f6b45; color: #b9f3c9; }
+  .sk-a .toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-bottom: 1px solid #1e2530; color: #9aa4b2; font-size: 11px; }
+  .sk-a .toolbar .chip { border: 1px solid #2b3440; border-radius: 99px; padding: 1px 7px; font-size: 10.5px; }
+  .sk-a .toolbar .r { margin-left: auto; color: #6b7482; }
+  .sk-a .line { display: grid; grid-template-columns: 10px minmax(0,1fr) auto 14px; gap: 8px; align-items: start; padding: 11px 14px; border-bottom: 1px solid #1a212a; }
+  .sk-a .line:hover { background: #131a22; }
+  .sk-a .line .mark { margin-top: 5px; width: 8px; height: 8px; border-radius: 50%; border: 1px solid #3c6b4d; background: #16301f; }
+  .sk-a .line .mark.run { background: #7ee787; box-shadow: 0 0 0 3px rgba(126,231,135,.12); border-color: #7ee787; }
+  .sk-a .line h5 { margin: 0; font-size: 13.5px; font-weight: 620; line-height: 1.3; }
+  .sk-a .line .desc { margin: 3px 0 4px; font-size: 11.5px; color: #9aa4b2; line-height: 1.4; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; }
+  .sk-a .line .meta { font-size: 10.5px; color: #6b7482; }
+  .sk-a .line .meta .mono { color: #9aa4b2; }
+  .sk-a .line .w { font: 10.5px ui-monospace, monospace; color: #8fd8a8; padding-top: 3px; white-space: nowrap; }
+  .sk-a .line .chev { color: #6b7482; font-size: 11px; padding-top: 2px; }
+  .sk-a .page { padding: 14px 14px 10px; background: #0f141a; border-bottom: 1px solid #1a212a; }
+  .sk-a .page .back { font: 10.5px ui-monospace, monospace; color: #7fb2e8; margin-bottom: 6px; }
+  .sk-a .page h4 { margin: 0 0 3px; font-size: 16px; letter-spacing: -.01em; }
+  .sk-a .page .pdesc { margin: 0 0 8px; font-size: 12px; color: #9aa4b2; line-height: 1.5; }
+  .sk-a .page .pmeta { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 10.5px; color: #6b7482; padding-bottom: 10px; border-bottom: 1px solid #1a212a; }
+  .sk-a .page .pmeta .mono { color: #9aa4b2; }
+  .sk-a .sechead { display: flex; justify-content: space-between; margin: 12px 0 6px; font: 10px ui-monospace, monospace; letter-spacing: .1em; text-transform: uppercase; color: #6b7482; }
+  .sk-a .sechead .mono { letter-spacing: 0; text-transform: none; color: #8fd8a8; }
+  .sk-a ol.route { list-style: none; margin: 0; padding: 0; }
+  .sk-a ol.route li { position: relative; margin-left: 7px; padding: 0 0 13px 22px; border-left: 1px solid #2a3a31; }
+  .sk-a ol.route li:last-child { border-left-color: transparent; padding-bottom: 0; }
+  .sk-a .node { position: absolute; left: -7px; top: 1px; width: 13px; height: 13px; border-radius: 50%; background: #10151b; border: 1px solid #3c6b4d; color: #8fd8a8; font: 8px/11px ui-monospace, monospace; text-align: center; }
+  .sk-a li.run .node { background: #7ee787; border-color: #7ee787; color: #0b120e; box-shadow: 0 0 0 3px rgba(126,231,135,.12); }
+  .sk-a .wh { display: flex; align-items: baseline; gap: 7px; }
+  .sk-a .wh .pos { font: 10.5px ui-monospace, monospace; color: #6b7482; }
+  .sk-a .wh h6 { margin: 0; font-size: 12.5px; font-weight: 620; flex: 1; line-height: 1.3; }
+  .sk-a .wh .state { font: 10px ui-monospace, monospace; color: #8fd8a8; text-transform: uppercase; letter-spacing: .07em; }
+  .sk-a .wh .state.blocked { color: #f0c674; }
+  .sk-a .facts { display: flex; flex-wrap: wrap; gap: 3px 10px; margin: 4px 0 5px; font-size: 10.5px; color: #9aa4b2; }
+  .sk-a .facts .ok { color: #8fd8a8; }
+  .sk-a .facts .no { color: #d99a93; }
+  .sk-a .lane { margin: 3px 0 0 10px; padding-left: 10px; border-left: 1px dashed #2a3a31; }
+  .sk-a .lanehead { font: 10px ui-monospace, monospace; color: #9aa4b2; }
+  .sk-a .lanehead em { font-style: normal; color: #8fd8a8; }
+  .sk-a .m { display: grid; grid-template-columns: 34px minmax(0,1fr) auto; gap: 6px; align-items: baseline; padding: 2px 0; font-size: 11.5px; }
+  .sk-a .m b { font: 600 11px ui-monospace, monospace; color: #e6e9ef; }
+  .sk-a .m i { font-style: normal; color: #6b7482; font: 10px ui-monospace, monospace; }
+  .sk-a .m span { font: 10px ui-monospace, monospace; color: #8fd8a8; }
+  .sk-a .join { margin-top: 4px; font: 10px ui-monospace, monospace; color: #f0c674; }
+  .sk-a .casts { display: grid; gap: 5px; padding: 10px 14px 12px; background: #0e1319; font-size: 11px; color: #9aa4b2; }
+  .sk-a .castrow { display: flex; gap: 8px; align-items: baseline; }
+  .sk-a .castrow b { width: 72px; flex: 0 0 72px; color: #e6e9ef; font-weight: 600; }
+  .sk-a .castrow .mono { color: #9aa4b2; }
+  .sk-a .castrow .r { margin-left: auto; color: #6b7482; font: 10px ui-monospace, monospace; }
+
+  /* B: the route */
+  .sk-b .win { max-width: 980px; margin: 0 auto; background: #0c1310; border: 1px solid #1f2c24; border-radius: 12px; overflow: hidden; color: #e9efe9; }
+  .sk-b .bar { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid #1c2921; }
+  .sk-b .bar b { font-size: 15px; letter-spacing: -.01em; }
+  .sk-b .bar .cnt { font: 11px ui-monospace, monospace; color: #7d8f82; }
+  .sk-b .bar .act { margin-left: auto; display: flex; gap: 6px; }
+  .sk-b .btn { border: 1px solid #2b4034; background: transparent; color: #cfe6d6; border-radius: 7px; font-size: 11.5px; padding: 5px 10px; }
+  .sk-b .btn.pri { background: #6fe3a5; border-color: #6fe3a5; color: #08110c; font-weight: 650; }
+  .sk-b .meta { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-bottom: 1px solid #1c2921; font-size: 11px; color: #9baa9e; }
+  .sk-b .meta .ask { margin-left: auto; border-bottom: 1px dotted #4b6354; color: #cfe6d6; }
+  .sk-b .rows { padding: 8px 10px; }
+  .sk-b .rrow { display: grid; grid-template-columns: 22px minmax(0,1fr) auto 12px; gap: 8px; align-items: start; padding: 10px 8px; border-radius: 8px; }
+  .sk-b .rrow:hover { background: #111d16; }
+  .sk-b .rrow.on { background: #101a14; }
+  .sk-b .glyph { display: flex; gap: 2px; padding-top: 5px; }
+  .sk-b .glyph i { display: block; width: 5px; height: 5px; border-radius: 50%; background: #2b4034; }
+  .sk-b .glyph i.d { background: #6fe3a5; }
+  .sk-b .glyph i.c { background: #6fe3a5; box-shadow: 0 0 0 2px rgba(111,227,165,.18); }
+  .sk-b .rrow h5 { margin: 0; font-size: 15px; font-weight: 620; line-height: 1.3; }
+  .sk-b .rrow .sub { margin: 2px 0 3px; font-size: 11.5px; color: #9baa9e; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sk-b .rrow .stats { font-size: 10.5px; color: #78897c; }
+  .sk-b .rrow .stats .mono { color: #cfe6d6; }
+  .sk-b .rrow .w { font: 10.5px ui-monospace, monospace; color: #6fe3a5; padding-top: 3px; white-space: nowrap; }
+  .sk-b .rrow .chev { color: #78897c; font-size: 11px; padding-top: 2px; }
+  .sk-b .plate { margin: 2px 10px 14px; padding: 16px; border-radius: 14px; background: #0e1712; }
+  .sk-b .ptop { display: grid; grid-template-columns: minmax(0,1fr) 250px; gap: 20px; padding-bottom: 12px; border-bottom: 1px solid #1c2921; }
+  .sk-b .ptop h4 { margin: 0 0 4px; font-size: 21px; letter-spacing: -.015em; }
+  .sk-b .ptop p { margin: 0 0 8px; font-size: 12.5px; color: #9baa9e; max-width: 64ch; }
+  .sk-b .ptop .pmeta { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 10.5px; color: #78897c; }
+  .sk-b .ptop .pmeta .mono { color: #cfe6d6; }
+  .sk-b .side { padding: 0; border: 0; background: transparent; }
+  .sk-b .side .sh { font: 10px ui-monospace, monospace; letter-spacing: .1em; text-transform: uppercase; color: #78897c; margin-bottom: 5px; }
+  .sk-b .side .prow { display: flex; gap: 8px; align-items: baseline; padding: 3px 0; font-size: 11.5px; color: #9baa9e; }
+  .sk-b .side .prow b { font: 600 11.5px ui-monospace, monospace; color: #e9efe9; }
+  .sk-b .side .prow .n { margin-left: auto; color: #78897c; font-size: 10.5px; }
+  .sk-b .side .add { margin-top: 4px; font-size: 11px; color: #86c2ec; }
+  .sk-b .wh2 { display: flex; align-items: baseline; gap: 8px; margin: 14px 0 2px; }
+  .sk-b .wh2 .pos { font: 11px ui-monospace, monospace; color: #78897c; }
+  .sk-b .wh2 h5 { margin: 0; font-size: 15px; font-weight: 620; flex: 1; }
+  .sk-b .wh2 .st { font: 10.5px ui-monospace, monospace; color: #6fe3a5; text-transform: uppercase; letter-spacing: .07em; }
+  .sk-b .tpl { font: 10.5px ui-monospace, monospace; color: #e2b366; margin-bottom: 6px; }
+  .sk-b .signals { display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 6px 0 8px; font-size: 10.5px; color: #9baa9e; border-bottom: 1px solid #1c2921; }
+  .sk-b .signals span b { font-weight: 500; color: #cfe6d6; }
+  .sk-b .signals .met { color: #6fe3a5; }
+  .sk-b .signals .none { color: #78897c; }
+  .sk-b .lanes { display: grid; grid-template-columns: 1fr 1fr 118px; gap: 12px; margin-top: 10px; }
+  .sk-b .lane { padding: 8px 9px; border-left: 2px solid #2b4034; background: #0b120e; border-radius: 0 7px 7px 0; }
+  .sk-b .lane .lh { font: 10.5px ui-monospace, monospace; color: #cfe6d6; }
+  .sk-b .lane .lh em { font-style: normal; color: #6fe3a5; }
+  .sk-b .lane .lr { font-size: 10px; color: #78897c; margin: 1px 0 5px; }
+  .sk-b .card { padding: 6px 7px; border-radius: 6px; background: #111d16; margin-top: 4px; }
+  .sk-b .card .ct { font-size: 11.5px; line-height: 1.35; }
+  .sk-b .card .cm { display: flex; gap: 6px; margin-top: 3px; font: 9.5px ui-monospace, monospace; color: #78897c; }
+  .sk-b .card .cm .st { margin-left: auto; color: #6fe3a5; }
+  .sk-b .join { padding: 8px 9px; border: 1px dashed #4b3d1b; border-radius: 8px; color: #e2b366; font-size: 10.5px; line-height: 1.45; }
+  .sk-b .join b { color: #f3d59a; }
+  .sk-b .casts { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; margin-top: 12px; }
+  .sk-b .cast { border-top: 1px solid #1c2921; padding-top: 8px; }
+  .sk-b .cast .ch { display: flex; align-items: baseline; gap: 8px; font-size: 11.5px; color: #6fe3a5; }
+  .sk-b .cast .ch .n { margin-left: auto; font: 10px ui-monospace, monospace; color: #78897c; }
+  .sk-b .cast .cl { font-size: 11px; color: #9baa9e; padding: 3px 0; }
+  .sk-b .cast .cl .mono { color: #cfe6d6; }
+
+  /* C: the cockpit */
+  .sk-c .win { max-width: 1000px; margin: 0 auto; background: #0d1117; border: 1px solid #232c38; border-radius: 12px; overflow: hidden; display: grid; grid-template-columns: 268px minmax(0,1fr); }
+  .sk-c .idx { background: #0f141b; border-right: 1px solid #202834; padding: 12px 10px; }
+  .sk-c .idx .ih { display: flex; align-items: baseline; gap: 6px; padding: 0 4px 8px; font-size: 13px; font-weight: 650; }
+  .sk-c .idx .ih .n { font: 10.5px ui-monospace, monospace; color: #6b7482; }
+  .sk-c .idx .find { display: flex; align-items: center; gap: 6px; margin: 0 2px 8px; padding: 4px 7px; border: 1px solid #242e3b; border-radius: 6px; color: #6b7482; font-size: 10.5px; }
+  .sk-c .irow { position: relative; padding: 8px 8px 8px 12px; border-radius: 7px; margin-bottom: 2px; }
+  .sk-c .irow.on { background: #151d27; }
+  .sk-c .irow.on:before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 2px; border-radius: 2px; background: #7ee787; }
+  .sk-c .irow h5 { margin: 0 0 2px; font-size: 11.5px; font-weight: 600; line-height: 1.3; color: #e6e9ef; }
+  .sk-c .irow .is { font-size: 10px; color: #9aa4b2; }
+  .sk-c .irow .is .run { color: #7ee787; }
+  .sk-c .irow .im { margin-top: 3px; font: 9.5px ui-monospace, monospace; color: #6b7482; }
+  .sk-c .det { padding: 16px 18px 16px; min-width: 0; }
+  .sk-c .dhead { display: flex; align-items: baseline; gap: 8px; }
+  .sk-c .dhead h4 { margin: 0; font-size: 18px; letter-spacing: -.01em; flex: 1; }
+  .sk-c .dhead .btn { border: 1px solid #2b3542; border-radius: 6px; padding: 3px 8px; font-size: 10.5px; color: #c6cdd8; }
+  .sk-c .dmeta { margin: 3px 0 10px; font-size: 10.5px; color: #6b7482; }
+  .sk-c .ddesc { margin: 0 0 12px; font-size: 11.5px; line-height: 1.5; color: #9aa4b2; max-width: 66ch; }
+  .sk-c .track { display: flex; align-items: flex-start; margin: 8px 0 12px; padding: 10px 0 8px; border-top: 1px solid #202834; border-bottom: 1px solid #202834; }
+  .sk-c .step { position: relative; flex: 1 1 0; min-width: 0; padding-top: 15px; text-align: left; }
+  .sk-c .step:before { content: ""; position: absolute; top: 6px; left: 0; right: 0; height: 2px; background: #26303c; }
+  .sk-c .step:first-child:before { left: 7px; }
+  .sk-c .step:last-child:before { right: calc(100% - 7px); }
+  .sk-c .step.done:before, .sk-c .step.now:before { background: #2f6b45; }
+  .sk-c .step .kn { position: absolute; top: 0; left: 0; width: 14px; height: 14px; border-radius: 50%; background: #0d1117; border: 2px solid #3a4653; z-index: 1; }
+  .sk-c .step.done .kn { border-color: #2f6b45; background: #7ee787; }
+  .sk-c .step.now .kn { border-color: #7ee787; box-shadow: 0 0 0 4px rgba(126,231,135,.1); }
+  .sk-c .step .sl { font: 9.5px ui-monospace, monospace; color: #6b7482; }
+  .sk-c .step .st { display: block; font-size: 10.5px; color: #c6cdd8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 6px; }
+  .sk-c .step .sw { display: block; font: 9px ui-monospace, monospace; color: #7ee787; text-transform: uppercase; letter-spacing: .06em; }
+  .sk-c .board { border: 1px solid #202834; border-radius: 9px; background: #10161e; padding: 10px; }
+  .sk-c .bh { display: flex; align-items: baseline; gap: 7px; margin-bottom: 6px; }
+  .sk-c .bh b { font: 10px ui-monospace, monospace; color: #6b7482; }
+  .sk-c .bh h5 { margin: 0; font-size: 12.5px; flex: 1; }
+  .sk-c .bh .st { font: 9.5px ui-monospace, monospace; color: #7ee787; text-transform: uppercase; letter-spacing: .06em; }
+  .sk-c .cells { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 9px; }
+  .sk-c .cell { padding: 5px 7px; border: 1px solid #202834; border-radius: 5px; background: #0d131a; }
+  .sk-c .cell span { display: block; font: 8.5px ui-monospace, monospace; color: #6b7482; text-transform: uppercase; letter-spacing: .06em; }
+  .sk-c .cell b { font-size: 10.5px; font-weight: 500; color: #c6cdd8; }
+  .sk-c .cell b.g { color: #7ee787; } .sk-c .cell b.w { color: #f0c674; } .sk-c .cell b.n { color: #6b7482; }
+  .sk-c .cols { display: grid; grid-template-columns: 1fr 1fr 96px; gap: 8px; }
+  .sk-c .col { border-left: 2px solid #2f6b45; padding: 5px 7px; background: #0d131a; border-radius: 0 5px 5px 0; }
+  .sk-c .col .cl { display: flex; gap: 6px; font: 9.5px ui-monospace, monospace; color: #c6cdd8; }
+  .sk-c .col .cl span { margin-left: auto; color: #7ee787; }
+  .sk-c .col .cr { font-size: 9px; color: #6b7482; margin-bottom: 4px; }
+  .sk-c .col .cc { margin-top: 4px; padding: 4px 5px; background: #131c25; border-radius: 4px; }
+  .sk-c .col .cc b { font: 9.5px ui-monospace, monospace; color: #e6e9ef; }
+  .sk-c .col .cc p { margin: 1px 0; font-size: 10px; color: #c6cdd8; line-height: 1.3; }
+  .sk-c .col .cc span { font: 8.5px ui-monospace, monospace; color: #7ee787; }
+  .sk-c .merge { display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; border: 1px dashed #4b3d1b; border-radius: 6px; color: #f0c674; font: 8.5px/1.4 ui-monospace, monospace; padding: 4px; }
+  .sk-c .segs { display: flex; gap: 14px; margin-top: 12px; border-bottom: 1px solid #202834; }
+  .sk-c .segs b { padding: 6px 1px; font-size: 10.5px; font-weight: 500; color: #9aa4b2; border-bottom: 2px solid transparent; }
+  .sk-c .segs b.on { color: #e6e9ef; border-color: #7ee787; }
+  .sk-c .segs b .n { font: 9px ui-monospace, monospace; color: #6b7482; }
+  .sk-c .trows { padding-top: 7px; }
+  .sk-c .trow { display: flex; align-items: baseline; gap: 7px; padding: 4px 0; font-size: 10.5px; color: #9aa4b2; border-bottom: 1px solid #171e27; }
+  .sk-c .trow b { font: 9.5px ui-monospace, monospace; color: #e6e9ef; }
+  .sk-c .trow .st { margin-left: auto; font: 9px ui-monospace, monospace; color: #7ee787; }
+  .sk-c .trow .st.dim { color: #6b7482; }
+  @media (max-width: 720px) { .sk-c .win { grid-template-columns: 1fr; } .sk-c .idx { border-right: 0; border-bottom: 1px solid #202834; } .sk-c .cols { grid-template-columns: 1fr; } .sk-c .merge { display: none; } .sk-b .ptop { grid-template-columns: 1fr; } .sk-b .lanes { grid-template-columns: 1fr; } .sk-b .casts { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Initiatives tab: research round A, before any change</h1>
+  <p class="sub">agent-worktree-gui 1.155.1, branch <code>wtgui/research-round-a-for-initiatives-tab-e85acb</code>, cut from <code>origin/main</code> at <code>ac327faf</code>, 2026-11-22. Every number and every picture below was read from a headless Chromium against a private fixture panel, not from the stylesheet and not from the reader's live panel on 7331.</p>
+
+  <p class="lede">The tab is not broken. It is <b>information-inverted</b>: at rest it spends its pixels on prose, and it hides the one thing the tab exists to answer - which piece of work is moving, where it has got to, and what is in the way - three hundred pixels down inside a card. All 104 fields, chips, counts, links, controls and empty states are present today, and this report lists every one of them so the redesign can be checked against a list instead of against memory. Three directions follow, each with a static sketch, its files and its trade-off.</p>
+
+  <div class="verdict">
+    <strong>What is wrong, in one sentence:</strong> five levels of nested boxes at one border weight, 29 chips and 42 bordered elements in a single open card, and a 204px preamble of self-explanation before the first initiative, so status, identity, gate result and task all look the same and sequence has to be read as text.
+  </div>
+
+  <div class="kpis">
+    <div class="kpi"><b>104</b><span>fields, chips, counts, links, controls and states in the inventory, each with a capture or a stated reason</span></div>
+    <div class="kpi"><b>42</b><span>bordered descendants and 29 chips in the open Menu SSO card</span></div>
+    <div class="kpi"><b>2,845px</b><span>of pane scroll for four initiatives at the 480px dock</span></div>
+    <div class="kpi"><b>0</b><span>product files changed in this round; the only writes are this report and the captures</span></div>
+  </div>
+
+  <div class="toc">
+    <a href="#proof">How this was proved</a>
+    <a href="#where">Where the tab lives</a>
+    <a href="#inventory">The 104-item inventory</a>
+    <a href="#now">The tab now, at three widths</a>
+    <a href="#readings">Three independent readings</a>
+    <a href="#a">A: The Register</a>
+    <a href="#b">B: The Route</a>
+    <a href="#c">C: The Cockpit</a>
+    <a href="#compare">How they compare</a>
+    <a href="#recommend">Recommendation</a>
+    <a href="#appendix">Appendix</a>
+  </div>
+
+  <h2 id="proof">How this was proved</h2>
+  <div class="split">
+    <div>
+      <p>The panel was booted from <code>server.js</code> on a free loopback port with <code>WAG_HOME</code> pointed at <code>C:/Users/roper/AppData/Local/Temp/wag/330fb817/home-main</code>. <code>PANEL_CONFIG</code> was not set, so the instance could not fall back to the reader's <code>~/.wag</code>; nothing under the live panel's state was read or written. The fixture is the repository's own <code>tools/initiatives-fixture.mjs</code>: four initiatives over three projects and eight worktrees, including one worktree whose path is missing. Waves were seeded into the fixture's own <code>state/waves.json</code>, because <code>routes/waves.js</code> is read-only in this slice and has no writer to call. Tasks were pointed at those waves through the queue's own <code>waveId</code>, which is the only link between a task and a wave.</p>
+      <p>The captures are real renders of <code>GET /api/initiatives</code> and <code>GET /api/waves</code> through the real scan and the real queue read. They are not mock-ups and they are not injected DOM. The harness is about 150 lines of Playwright that imports <code>tools/browser.mjs</code>; it lives in the scratch directory, not in the repository, because this round is allowed to write only the report and <code>docs/assets/initiatives-redesign/a/</code>.</p>
+    </div>
+    <div class="side">
+      <b>The live listener was never touched.</b><br>
+      <code>TCP 0.0.0.0:7331 LISTENING</code><br>
+      <code>GET /api/health</code> 200 before and after each run.<br><br>
+      The sandbox ports were 59521, 59981, 65112 and others; none is 7331. No product file, route, store or settings value in the live panel was written.
+    </div>
+  </div>
+
+  <h3>The exact capture command and viewports</h3>
+  <pre>node C:/Users/roper/AppData/Local/Temp/wag/330fb817/capture-main.mjs
+node C:/Users/roper/AppData/Local/Temp/wag/330fb817/capture-crops.mjs
+node C:/Users/roper/AppData/Local/Temp/wag/330fb817/capture-loading.mjs</pre>
+  <p class="cap">1440x900 for the realistic default, 1440x3000, 1024x3000 and 768x3000 for the tall open-card evidence, 1024x900 and 768x900 for the same list at a real window height, and 1440x1600 in the wide floating panel. The tall viewport is only a way to fit the whole card in one PNG; the width is the width named. The tab was opened by pressing <code>#btn-assistant</code>, then <code>#as-tabs [data-as-tab="initiatives"]</code>, and the harness waited for at least four <code>.init-card</code> elements before every shot.</p>
+
+  <h2 id="where">Where the tab is drawn today, and whether extracting it is the first move</h2>
+  <p>The brief says to start from <code>public/app.js</code> (20,238 lines) and <code>public/core/initiative-fold.js</code> (264 lines). <b><code>public/app.js</code> does not draw this tab.</b> It is the board: rows, columns, filters, the pipeline chart, settings. Its only initiative surfaces are the permission and tier code at <code>public/app.js:5781-5823</code> (a move versus a remote write), <code>:6302-6320</code> (the panel resumes its own move) and <code>:18978-19033</code> (the settings block that posts the tier). None of them renders a card.</p>
+  <p>The tab is drawn in <b><code>public/assistant.js</code></b>, which is 7,539 lines. The block that owns it runs from about line 3365 to 4360, so roughly <b>995 lines</b>, not twenty thousand. The pure rules it already shares are <code>public/core/initiative-fold.js</code> (264 lines: the press rule, the word-safe cut, the count chips, the task window and the history sentence) and <code>public/core/waves-lane.js</code> (211 lines: the wave row, gates, lanes, members and the store states). The task cards come from <code>public/queue-cards.js</code> in its compact read-only mode. The CSS is one block at <code>public/style.css:4834-5007</code>. The read is <code>routes/initiatives.js:80-240</code>, and the wave rules are <code>lib/waves.js</code>.</p>
+
+  <table class="vtable">
+    <thead><tr><th>Surface</th><th>File and lines</th><th>What it owns</th></tr></thead>
+    <tbody>
+      <tr><td>Tab button</td><td><code>public/index.html:1126</code></td><td>The word "Initiatives" in the float's tab strip. No count badge.</td></tr>
+      <tr><td>Pane host</td><td><code>public/index.html:1159</code></td><td><code>section#as-initiatives</code>, the only scroller.</td></tr>
+      <tr><td>Renderer</td><td><code>public/assistant.js:3973</code></td><td>Header, store line, tier, forms, empty and loading states, card list, 4s re-read.</td></tr>
+      <tr><td>Card</td><td><code>public/assistant.js:3785</code></td><td>Title, description fold, counts, edit form, waves, projects, assistants, history.</td></tr>
+      <tr><td>Tree and assistant rows</td><td><code>public/assistant.js:3492, 3527</code></td><td>Links, branches, Remove, four counts, task fold.</td></tr>
+      <tr><td>Pure press and cut</td><td><code>public/core/initiative-fold.js</code></td><td>The four-answer press rule, word-safe cut, count chips, task order and window, history line.</td></tr>
+      <tr><td>Wave lane markup</td><td><code>public/core/waves-lane.js</code></td><td>Wave row, position, state, gates, auto, template, lanes, members, store states.</td></tr>
+      <tr><td>Task card</td><td><code>public/queue-cards.js:684-800</code></td><td>Compact read-only card, reused from the queue. Not a second renderer.</td></tr>
+      <tr><td>CSS</td><td><code>public/style.css:4834-5007</code></td><td>163 lines of <code>.init-*</code> and <code>.wave-*</code>, including the 1000px two-column container.</td></tr>
+      <tr><td>Read route</td><td><code>routes/initiatives.js:80-240</code></td><td>Store, trees, assistants, counts, waves, tier and caps in one payload.</td></tr>
+      <tr><td>Wave rules</td><td><code>lib/waves.js</code></td><td>Gate readers, derived state, auto-open, lanes, current wave.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="verdict">
+    <strong>Is extraction the right first move? No.</strong> The first move is the cheapest change that tests the actual hypothesis - that the problem is chrome, not type - and that is a CSS-only de-pill inside <code>#as-initiatives</code>: make the state, gate, count and member pills borderless text tokens, keep one card edge and every control's border, touch no markup and no handler. The engineering reading above argues this explicitly, and it is right: <code>initCardHtml</code> is a 127-line template wrapped in about twenty wiring hooks, so moving it first adds a load-order contract and a third render path before anyone has proved the visual direction. If the directions below outgrow <code>assistant.js</code>, extract the whole <b>995-line block</b> (not just the card) into <code>public/initiatives.js</code> as a separate no-op commit, with the same markup, and gate it on a byte-identical fixture capture. Do not mix the move with the redesign.</div>
+
+  <p>Two facts make the later extraction cheap if it is wanted: the pure rules are already out, and the block is contiguous. Two facts make it expensive: the block calls about twenty pane functions (<code>as$</code>, <code>state</code>, <code>apiFetch</code>, <code>esc</code>, <code>relTime</code>, <code>setView</code>, <code>showBanner</code>, <code>hotOpenPath</code>, <code>rowNode</code>, <code>pulseRow</code>, the queue card painter), and it shares module state with the float's repaint. A moved module would need that context passed in, which is a real interface, not a file move.</p>
+
+<style>
+  .inv td { padding: 6px 8px; }
+  .inv td b { font-weight: 600; color: var(--text); }
+  .inv .d { color: var(--dim); font-size: 12px; line-height: 1.5; }
+  .inv .invshots { font-size: 11.5px; line-height: 1.75; }
+  .inv code { font-size: 11px; }
+  .inv .invshots a { color: var(--blue); text-decoration: none; }
+  .inv .invshots a:hover { text-decoration: underline; }
+  .inv tr:hover td { background: #12161d; }
+  .nowgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+  .nowgrid figure { margin: 0; }
+  .nowgrid img { width: 100%; display: block; border: 1px solid var(--line); border-radius: 6px; background: #0b0d11; }
+  .nowgrid figcaption { color: var(--dim); font-size: 11.5px; margin-top: 5px; }
+  .keygrid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 14px; }
+  .keygrid figure { margin: 0; }
+  .keygrid img { width: 100%; display: block; border: 1px solid var(--line); border-radius: 6px; background: #0b0d11; }
+  .keygrid figcaption { color: var(--dim); font-size: 11.5px; margin-top: 5px; }
+  @media (max-width: 820px) { .nowgrid, .keygrid { grid-template-columns: 1fr; } }
+</style>
+
+<h2 id="inventory">The inventory: 104 things the tab draws today, each one a line the redesign must answer for</h2>
+<p>The list is grouped by the surface it belongs to. Every row names the code that draws it and the capture that shows it. Behavior rows cite the state after the press, because a click is proved by what it changes, not by a screenshot of a cursor. Two rows are marked <b>state not in fixture</b>: the code draws them, but this fixture cannot reach them without inventing a broken record, and inventing one would have made the rest of the captures unrepresentative. Everything else has a real picture.</p>
+<p class="cap">Counts by group: Shell 17, Card 14, Waves 23, Worktrees 11, Assistants 12, History 5, Order 7, Interaction 15. Total 104.</p>
+
+<h2 id="inventory">The inventory: 104 things the tab draws today, each one a line the redesign must answer for</h2>
+<p>The list is grouped by the surface it belongs to. Every row names the code that draws it and the capture that shows it. Behavior rows cite the state after the press, because a click is proved by what it changes, not by a screenshot of a cursor. Two rows are marked <b>state not in fixture</b>: the code draws them, but this fixture cannot reach them without inventing a broken record, and inventing one would have made the rest of the captures unrepresentative. Everything else has a real picture.</p>
+<p class="cap">Counts by group: Shell 17, Card 14, Waves 23, Worktrees 11, Assistants 12, History 5, Order 7, Interaction 15. Total 104.</p>
+<table class="inv"><thead><tr><th style="width:42px">#</th><th>What is drawn</th><th style="width:230px">Where</th><th style="width:190px">Capture</th></tr></thead><tbody>
+<tr class="group"><td colspan="4">Shell</td></tr>
+<tr><td class="num">A1</td><td><b>Initiatives tab button</b><br><span class="d">The tab strip's own button, label only, no count badge. Pressing it selects the tab and paints the pane.</span></td><td><code>public/index.html:1126</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/00-1440-default-page.png">00-1440-default-page</a></td></tr>
+<tr><td class="num">A2</td><td><b>Pane host</b><br><span class="d">section#as-initiatives inside the assistant float. The pane is the scroller; the tab strip and topbar are not.</span></td><td><code>public/index.html:1159</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/00-1440-default-page.png">00-1440-default-page</a></td></tr>
+<tr><td class="num">A3</td><td><b>Tab activation</b><br><span class="d">Tab click routes to renderAssistantInitiatives. No URL or board selection changes.</span></td><td><code>public/assistant.js:2199</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/00-1440-default-page.png">00-1440-default-page</a></td></tr>
+<tr><td class="num">A4</td><td><b>Heading and hint</b><br><span class="d">Word 'Initiatives' plus 'the big pieces of work, and the worktrees behind each one'.</span></td><td><code>public/assistant.js:4020</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/20-tab-head.png">20-tab-head</a></td></tr>
+<tr><td class="num">A5</td><td><b>Help paragraph</b><br><span class="d">Three lines: you and the assistants edit; the tier decides whether a change asks first; every change records the actor and the time.</span></td><td><code>public/assistant.js:4021</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/20-tab-head.png">20-tab-head</a></td></tr>
+<tr><td class="num">A6</td><td><b>Store line</b><br><span class="d">'N initiatives in initiatives.json', the full path in the tooltip. found:false says nothing is saved yet; unreadable says the alert instead.</span></td><td><code>public/assistant.js:3987-3995</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/20-tab-head.png">20-tab-head</a><br><a href="../assets/initiatives-redesign/a/46-error-store.png">46-error-store</a></td></tr>
+<tr><td class="num">A7</td><td><b>Tier line</b><br><span class="d">'Initiative changes: <label> - <hint>' with a pointer to Settings, Board tab. Three tiers and their sentences.</span></td><td><code>public/assistant.js:4023</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/20-tab-head.png">20-tab-head</a></td></tr>
+<tr><td class="num">A8</td><td><b>New initiative button</b><br><span class="d">Opens the new form and is then hidden while the form is open. Disabled when the store is unreadable.</span></td><td><code>public/assistant.js:4025</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/20-tab-head.png">20-tab-head</a><br><a href="../assets/initiatives-redesign/a/39-new-form.png">39-new-form</a></td></tr>
+<tr><td class="num">A9</td><td><b>Refresh button</b><br><span class="d">Forces a store read. Every write and every answered move also re-reads.</span></td><td><code>public/assistant.js:4026</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/20-tab-head.png">20-tab-head</a></td></tr>
+<tr><td class="num">A10</td><td><b>Read hint</b><br><span class="d">'reading...' while a read is in flight, 'read failed: <error>' beside Refresh.</span></td><td><code>public/assistant.js:4027</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/48-loading.png">48-loading</a></td></tr>
+<tr><td class="num">A11</td><td><b>New form: title</b><br><span class="d">Label, text input, maxlength caps.title (120), placeholder 'e.g. SSO migration'.</span></td><td><code>public/assistant.js:3996-4000</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/39-new-form.png">39-new-form</a></td></tr>
+<tr><td class="num">A12</td><td><b>New form: description</b><br><span class="d">Label and a three-row textarea, placeholder 'what this piece of work is, in a line or two'.</span></td><td><code>public/assistant.js:4001-4002</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/39-new-form.png">39-new-form</a></td></tr>
+<tr><td class="num">A13</td><td><b>New form: actions</b><br><span class="d">Create initiative (primary, disabled when unreadable), Cancel, 'a title is enough; the description can come later'.</span></td><td><code>public/assistant.js:4003-4006</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/39-new-form.png">39-new-form</a></td></tr>
+<tr><td class="num">A14</td><td><b>Empty tab</b><br><span class="d">h5 'No initiatives yet', a 213-character explanation, and a primary New initiative button.</span></td><td><code>public/assistant.js:4008-4015</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/45-empty-tab.png">45-empty-tab</a></td></tr>
+<tr><td class="num">A15</td><td><b>Cold read</b><br><span class="d">'reading the initiatives...' skeleton only. Neither the tier line nor any button is drawn yet.</span></td><td><code>public/assistant.js:3984</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/48-loading.png">48-loading</a></td></tr>
+<tr><td class="num">A16</td><td><b>Unreadable store</b><br><span class="d">Red alert with the store error, 'The file is left exactly as it is: fix or move it, then try again', Try again, and New disabled.</span></td><td><code>public/assistant.js:3983, 3987</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/46-error-store.png">46-error-store</a></td></tr>
+<tr><td class="num">A17</td><td><b>Form note line</b><br><span class="d">Per-form result or refusal in an as-ask box, good or bad. Cleared when the form is opened or cancelled.</span></td><td><code>public/assistant.js:3423-3438</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/46-error-store.png">46-error-store</a></td></tr>
+<tr class="group"><td colspan="4">Card</td></tr>
+<tr><td class="num">B1</td><td><b>Card shell</b><br><span class="d">article.init-card, data-init-card, is-titlecard while folded. One card per initiative, in store order.</span></td><td><code>public/assistant.js:3851</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/01-1440-default-pane.png">01-1440-default-pane</a></td></tr>
+<tr><td class="num">B2</td><td><b>Title press</b><br><span class="d">The whole head is one button, with aria-expanded, Enter and Space. Pressing a control inside never folds the card.</span></td><td><code>public/assistant.js:3854-3857</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/21-card-head.png">21-card-head</a></td></tr>
+<tr><td class="num">B3</td><td><b>Folded title clamp</b><br><span class="d">Two lines with an ellipsis while folded; the open card shows the full title. 13.5px / 600.</span></td><td><code>public/assistant.js:3855; style.css:4851</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/01-1440-default-pane.png">01-1440-default-pane</a></td></tr>
+<tr><td class="num">B4</td><td><b>Caret</b><br><span class="d">A small right or down glyph, aria-hidden.</span></td><td><code>public/assistant.js:3856</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/21-card-head.png">21-card-head</a></td></tr>
+<tr><td class="num">B5</td><td><b>Edit</b><br><span class="d">Open cards only. Disabled when the tier blocks the write or the card is already in its edit form.</span></td><td><code>public/assistant.js:3858</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/21-card-head.png">21-card-head</a><br><a href="../assets/initiatives-redesign/a/25-edit-form.png">25-edit-form</a></td></tr>
+<tr><td class="num">B6</td><td><b>Description fold header</b><br><span class="d">Caret and the word 'Description', aria-expanded. It folds only the description, never the card.</span></td><td><code>public/assistant.js:3843-3849</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/23-desc-open.png">23-desc-open</a><br><a href="../assets/initiatives-redesign/a/24-desc-refolded.png">24-desc-refolded</a></td></tr>
+<tr><td class="num">B7</td><td><b>Description, whole</b><br><span class="d">pre-wrap, 72ch measure, paragraphs kept, 12px at 18.6px line.</span></td><td><code>public/assistant.js:3837</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/23-desc-open.png">23-desc-open</a></td></tr>
+<tr><td class="num">B8</td><td><b>Description, cut</b><br><span class="d">Two lines then a dots mark. The cut is word-safe and re-measured when the rail width changes.</span></td><td><code>public/assistant.js:3720-3783</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/22-desc-folded-card.png">22-desc-folded-card</a></td></tr>
+<tr><td class="num">B9</td><td><b>No description</b><br><span class="d">Italic 'no description yet - Edit says what this piece of work is'.</span></td><td><code>public/assistant.js:3839</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/35-empty-card.png">35-empty-card</a></td></tr>
+<tr><td class="num">B10</td><td><b>Count chips</b><br><span class="d">N projects, N worktrees, N assistants. All three always drawn, zeros included, singular and plural said in the tooltip.</span></td><td><code>public/assistant.js:3861-3865</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/21-card-head.png">21-card-head</a></td></tr>
+<tr><td class="num">B11</td><td><b>Edited line</b><br><span class="d">'edited 6h ago by assistant-1'. The actor is omitted when the reader did it; the line is absent when no updatedAt is held.</span></td><td><code>public/assistant.js:3866</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/21-card-head.png">21-card-head</a></td></tr>
+<tr><td class="num">B12</td><td><b>Edit form</b><br><span class="d">Title input, description textarea, Save words, Cancel, a hint. A blocked tier draws the refusal instead.</span></td><td><code>public/assistant.js:3822-3835</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/25-edit-form.png">25-edit-form</a></td></tr>
+<tr><td class="num">B13</td><td><b>Card press rule</b><br><span class="d">Four answers: card, description, self, none. It has its own test, so a control added later cannot start folding cards.</span></td><td><code>public/core/initiative-fold.js:64</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/02-1440-expanded-pane.png">02-1440-expanded-pane</a></td></tr>
+<tr><td class="num">B14</td><td><b>Card note</b><br><span class="d">Write result or refusal under the card, in the same as-ask box as the forms.</span></td><td><code>public/assistant.js:3908</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/46-error-store.png">46-error-store</a></td></tr>
+<tr class="group"><td colspan="4">Waves</td></tr>
+<tr><td class="num">C1</td><td><b>Waves section head</b><br><span class="d">'WAVES' plus a count chip. Drawn only when the initiative has waves, refused records, or an unreadable store.</span></td><td><code>public/core/waves-lane.js:175-193</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/26-wave-flat.png">26-wave-flat</a></td></tr>
+<tr><td class="num">C2</td><td><b>No waves at all</b><br><span class="d">An initiative with none draws no section and no empty box; the card is what it was.</span></td><td><code>public/core/waves-lane.js:181</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/36-no-waves-card.png">36-no-waves-card</a></td></tr>
+<tr><td class="num">C3</td><td><b>Wave store unreadable</b><br><span class="d">Red alert naming the store error; the file is left alone.</span></td><td><code>public/core/waves-lane.js:188-190</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/47-error-waves.png">47-error-waves</a></td></tr>
+<tr><td class="num">C4</td><td><b>No valid waves hint</b><br><span class="d">'no waves recorded on this initiative yet...' Drawn when the store holds a refused record and no valid wave.</span></td><td><code>public/core/waves-lane.js:190</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/35-empty-card.png">35-empty-card</a></td></tr>
+<tr><td class="num">C5</td><td><b>Refused records</b><br><span class="d">One muted line per skipped record: the record id and the loader's own error.</span></td><td><code>public/core/waves-lane.js:194-199</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/35-empty-card.png">35-empty-card</a><br><a href="../assets/initiatives-redesign/a/37-wave-skipped.png">37-wave-skipped</a></td></tr>
+<tr><td class="num">C6</td><td><b>Wave row</b><br><span class="d">data-wave-id, data-wave-state, data-wave-current. One row per wave, position order.</span></td><td><code>public/core/waves-lane.js:145</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/26-wave-flat.png">26-wave-flat</a></td></tr>
+<tr><td class="num">C7</td><td><b>Position</b><br><span class="d">W1, W2, W3; W? when the record has no position. The tooltip says 'wave N of this initiative'.</span></td><td><code>public/core/waves-lane.js:147-149</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/26-wave-flat.png">26-wave-flat</a></td></tr>
+<tr><td class="num">C8</td><td><b>Wave title</b><br><span class="d">Full title, wraps anywhere, 12.5px / 600.</span></td><td><code>public/core/waves-lane.js:150</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/26-wave-flat.png">26-wave-flat</a></td></tr>
+<tr><td class="num">C9</td><td><b>Wave state chip</b><br><span class="d">Eight states: running, blocked, unknown, done, abandoned, ready, unentered, empty. Tones and the derived why in the tooltip.</span></td><td><code>public/core/waves-lane.js:151</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/26-wave-flat.png">26-wave-flat</a><br><a href="../assets/initiatives-redesign/a/27-wave-auto-open.png">27-wave-auto-open</a><br><a href="../assets/initiatives-redesign/a/28-wave-lanes.png">28-wave-lanes</a></td></tr>
+<tr><td class="num">C10</td><td><b>Current chip</b><br><span class="d">Marks the lowest-position wave the order makes current: running first, then ready, then not entered.</span></td><td><code>public/core/waves-lane.js:152</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/28-wave-lanes.png">28-wave-lanes</a></td></tr>
+<tr><td class="num">C11</td><td><b>Template line</b><br><span class="d">'template turnover' plus unresolved (bundle lacks the id), resolved (members inherit it), or unchecked.</span></td><td><code>public/core/waves-lane.js:155-160</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/28-wave-lanes.png">28-wave-lanes</a></td></tr>
+<tr><td class="num">C12</td><td><b>Auto chip</b><br><span class="d">auto on or auto off. The tooltip is the whole rule: one switch, read on a live read, never in the background.</span></td><td><code>public/core/waves-lane.js:153-154</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/26-wave-flat.png">26-wave-flat</a><br><a href="../assets/initiatives-redesign/a/27-wave-auto-open.png">27-wave-auto-open</a></td></tr>
+<tr><td class="num">C13</td><td><b>Opened or waiting chip</b><br><span class="d">'opened by w_callback' when a predecessor's switch opened this wave, or 'auto wait - <gate>' when it did not.</span></td><td><code>public/core/waves-lane.js:138-145</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/27-wave-auto-open.png">27-wave-auto-open</a></td></tr>
+<tr><td class="num">C14</td><td><b>Entry gate</b><br><span class="d">'entry <check> - met/not met/cannot tell/no check/abandoned'. Tone plus the evaluator's why in the tooltip.</span></td><td><code>public/core/waves-lane.js:164</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/26-wave-flat.png">26-wave-flat</a></td></tr>
+<tr><td class="num">C15</td><td><b>Exit gate</b><br><span class="d">Same words and tones for the exit gate. This is the gate the state derivation reads.</span></td><td><code>public/core/waves-lane.js:165</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/26-wave-flat.png">26-wave-flat</a></td></tr>
+<tr><td class="num">C16</td><td><b>Join line</b><br><span class="d">'N lanes - closing this wave is ONE commit that names them all', only when two or more lanes owe a join.</span></td><td><code>public/core/waves-lane.js:161</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/28-wave-lanes.png">28-wave-lanes</a></td></tr>
+<tr><td class="num">C17</td><td><b>Members, flat</b><br><span class="d">With zero or one lane, members sit in one wrapped row under the gates.</span></td><td><code>public/core/waves-lane.js:167-171</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/26-wave-flat.png">26-wave-flat</a></td></tr>
+<tr><td class="num">C18</td><td><b>Members, in lanes</b><br><span class="d">With two or more lanes, each member is drawn inside its own lane; the grouping is the read.</span></td><td><code>public/core/waves-lane.js:98-106, 167</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/28-wave-lanes.png">28-wave-lanes</a></td></tr>
+<tr><td class="num">C19</td><td><b>Lane row</b><br><span class="d">Lane name and state chip, then 'runs in N tree(s)' or the reason the lane cannot be pinned.</span></td><td><code>public/core/waves-lane.js:78-96</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/28-wave-lanes.png">28-wave-lanes</a></td></tr>
+<tr><td class="num">C20</td><td><b>Member</b><br><span class="d">#id, title, project, state word. An abandoned member carries its reason in the tooltip.</span></td><td><code>public/core/waves-lane.js:60-76</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/26-wave-flat.png">26-wave-flat</a><br><a href="../assets/initiatives-redesign/a/28-wave-lanes.png">28-wave-lanes</a></td></tr>
+<tr><td class="num">C21</td><td><b>Lane refused alert</b><br><span class="d">Red alert when the lane set cannot be isolated: a member that ran and named no tree. Not reachable in this fixture without such a task.</span></td><td><code>public/core/waves-lane.js:98-106</code></td><td class="invshots"><span class="fine">(state not in fixture)</span></td></tr>
+<tr><td class="num">C22</td><td><b>No members</b><br><span class="d">'no task names this wave yet' inside the wave row.</span></td><td><code>public/core/waves-lane.js:171</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/38-wave-empty.png">38-wave-empty</a></td></tr>
+<tr><td class="num">C23</td><td><b>Zero wave count</b><br><span class="d">The count chip keeps its place and reads 0 when a refused record is all the store holds.</span></td><td><code>public/core/waves-lane.js:192</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/35-empty-card.png">35-empty-card</a></td></tr>
+<tr class="group"><td colspan="4">Worktrees</td></tr>
+<tr><td class="num">D1</td><td><b>Projects head</b><br><span class="d">The 'PROJECTS' section head.</span></td><td><code>public/assistant.js:3876</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/29-projects.png">29-projects</a></td></tr>
+<tr><td class="num">D2</td><td><b>Project fold</b><br><span class="d">Caret, project name in mono, and an 'N trees' chip. aria-expanded; folded until the reader opens it.</span></td><td><code>public/assistant.js:3806-3810</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/29-projects.png">29-projects</a></td></tr>
+<tr><td class="num">D3</td><td><b>Project order</b><br><span class="d">Alphabetical by project name; fixed, with no control.</span></td><td><code>routes/initiatives.js:118-124</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/29-projects.png">29-projects</a></td></tr>
+<tr><td class="num">D4</td><td><b>No worktrees</b><br><span class="d">'No worktrees yet' plus a sentence that an add puts the first one here.</span></td><td><code>public/assistant.js:3812</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/35-empty-card.png">35-empty-card</a></td></tr>
+<tr><td class="num">D5</td><td><b>Tree link</b><br><span class="d">The tree's name opens its board row, scrolls it into view and flashes it. The tooltip names that walk.</span></td><td><code>public/assistant.js:3503-3506</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/30-tree-rows.png">30-tree-rows</a></td></tr>
+<tr><td class="num">D6</td><td><b>Missing tree</b><br><span class="d">Line-through, dimmed, not a link; the tooltip says the path is not on disk.</span></td><td><code>public/assistant.js:3504</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/37-wave-skipped.png">37-wave-skipped</a></td></tr>
+<tr><td class="num">D7</td><td><b>Remove</b><br><span class="d">Tooltip names who attached it and when, and says the tier decides whether that asks. Disabled when blocked.</span></td><td><code>public/assistant.js:3508</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/30-tree-rows.png">30-tree-rows</a><br><a href="../assets/initiatives-redesign/a/41-hover-remove.png">41-hover-remove</a></td></tr>
+<tr><td class="num">D8</td><td><b>Branch chip</b><br><span class="d">A link when the host has a branch URL, plain otherwise; a long branch wraps; the why sits in the tooltip.</span></td><td><code>public/assistant.js:3511-3516</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/30-tree-rows.png">30-tree-rows</a></td></tr>
+<tr><td class="num">D9</td><td><b>Add a worktree</b><br><span class="d">'+ Add a worktree', disabled when the tier blocks it.</span></td><td><code>public/assistant.js:3878</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/29-projects.png">29-projects</a></td></tr>
+<tr><td class="num">D10</td><td><b>Add form</b><br><span class="d">A select grouped by project, already-attached trees omitted, a placeholder when none is free; Attach or Ask to add; Cancel; hint.</span></td><td><code>public/assistant.js:3694-3702</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/31-add-form.png">31-add-form</a></td></tr>
+<tr><td class="num">D11</td><td><b>Tree order</b><br><span class="d">Path alphabetical inside a project; fixed.</span></td><td><code>routes/initiatives.js:325</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/30-tree-rows.png">30-tree-rows</a></td></tr>
+<tr class="group"><td colspan="4">Assistants</td></tr>
+<tr><td class="num">E1</td><td><b>Assistants fold</b><br><span class="d">Caret, the word 'Assistants', and a count chip; folded until pressed.</span></td><td><code>public/assistant.js:3880-3889</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/32-assistants.png">32-assistants</a></td></tr>
+<tr><td class="num">E2</td><td><b>No assistants</b><br><span class="d">'no assistant has worked on these worktrees yet'.</span></td><td><code>public/assistant.js:3814-3818</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/35-empty-card.png">35-empty-card</a></td></tr>
+<tr><td class="num">E3</td><td><b>Assistant name</b><br><span class="d">Opens that assistant's chat, focuses the reply box, and carries a caret to the chat.</span></td><td><code>public/assistant.js:3538</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/32-assistants.png">32-assistants</a></td></tr>
+<tr><td class="num">E4</td><td><b>Tasks fold</b><br><span class="d">Caret, the word 'tasks', and an N chip. The key is initiative plus assistant, so it never opens another row's list.</span></td><td><code>public/assistant.js:3540-3544</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/32-assistants.png">32-assistants</a><br><a href="../assets/initiatives-redesign/a/33-task-fold.png">33-task-fold</a></td></tr>
+<tr><td class="num">E5</td><td><b>When line</b><br><span class="d">'working now', 'worked N ago', or 'no stamped work yet'.</span></td><td><code>public/assistant.js:3545</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/32-assistants.png">32-assistants</a></td></tr>
+<tr><td class="num">E6</td><td><b>Four count chips</b><br><span class="d">queued, running, completed, parked, always in that order, zeros included, each with its own tone.</span></td><td><code>public/core/initiative-fold.js:120-150</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/32-assistants.png">32-assistants</a></td></tr>
+<tr><td class="num">E7</td><td><b>Task list</b><br><span class="d">Compact queue cards, newest activity first, painted from the pane's own document.</span></td><td><code>public/assistant.js:3546, 3594</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/33-task-fold.png">33-task-fold</a></td></tr>
+<tr><td class="num">E8</td><td><b>Compact card fields</b><br><span class="d">#id, state word, title, agent thread or 'no agent', relative time. No task controls: the card is read-only here.</span></td><td><code>public/queue-cards.js:720-740</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/33-task-fold.png">33-task-fold</a></td></tr>
+<tr><td class="num">E9</td><td><b>Task window</b><br><span class="d">The first 6 cards, 'Show N more' adding 50 a press, and 'N more' left.</span></td><td><code>public/core/initiative-fold.js:214-228</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/33-task-fold.png">33-task-fold</a></td></tr>
+<tr><td class="num">E10</td><td><b>Task press</b><br><span class="d">Opens that task in its real queue row, widened, centred and flashed.</span></td><td><code>public/assistant.js:4222-4226</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/33-task-fold.png">33-task-fold</a></td></tr>
+<tr><td class="num">E11</td><td><b>Empty task list</b><br><span class="d">'nothing is filed here'. Unreachable while an assistant row exists only when its count is above zero.</span></td><td><code>public/assistant.js:3660-3666</code></td><td class="invshots"><span class="fine">(state not reachable)</span></td></tr>
+<tr><td class="num">E12</td><td><b>Task order</b><br><span class="d">Newest activity first, bucketed by the queue's own states.</span></td><td><code>public/core/initiative-fold.js:195-212</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/33-task-fold.png">33-task-fold</a></td></tr>
+<tr class="group"><td colspan="4">History</td></tr>
+<tr><td class="num">F1</td><td><b>History fold</b><br><span class="d">Caret, 'History', and a count chip; folded until pressed.</span></td><td><code>public/assistant.js:3890-3896</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/34-history.png">34-history</a></td></tr>
+<tr><td class="num">F2</td><td><b>History rows</b><br><span class="d">Actor (you or an assistant), what happened, and a relative time whose tooltip is the exact stamp.</span></td><td><code>public/assistant.js:3897-3905</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/34-history.png">34-history</a></td></tr>
+<tr><td class="num">F3</td><td><b>History verbs</b><br><span class="d">created, edited, attached, removed, each with the subject it names.</span></td><td><code>public/core/initiative-fold.js:232-260</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/34-history.png">34-history</a></td></tr>
+<tr><td class="num">F4</td><td><b>Empty history</b><br><span class="d">'nothing recorded yet...' with the reason a record would appear.</span></td><td><code>public/assistant.js:3902</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/35-empty-card.png">35-empty-card</a></td></tr>
+<tr><td class="num">F5</td><td><b>History order</b><br><span class="d">Newest first, capped at HISTORY_MAX (80) per initiative.</span></td><td><code>routes/initiatives.js:213</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/34-history.png">34-history</a></td></tr>
+<tr class="group"><td colspan="4">Order</td></tr>
+<tr><td class="num">G1</td><td><b>Initiative order</b><br><span class="d">updatedAt descending, createdAt as the fallback. Fixed, with no control.</span></td><td><code>lib/initiatives.js:285</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/01-1440-default-pane.png">01-1440-default-pane</a></td></tr>
+<tr><td class="num">G2</td><td><b>Sort control</b><br><span class="d">None exists. There is no sort menu, no direction toggle and no grouping switch.</span></td><td><code>public/assistant.js:4020-4027</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/20-tab-head.png">20-tab-head</a></td></tr>
+<tr><td class="num">G3</td><td><b>Filter or search</b><br><span class="d">None exists. Every initiative is drawn on every paint.</span></td><td><code>public/assistant.js:4020-4027</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/01-1440-default-pane.png">01-1440-default-pane</a></td></tr>
+<tr><td class="num">G4</td><td><b>Collapse all</b><br><span class="d">None exists. One open state per initiative, toggled on its own head.</span></td><td><code>public/assistant.js:4190-4201</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/01-1440-default-pane.png">01-1440-default-pane</a></td></tr>
+<tr><td class="num">G5</td><td><b>Pagination</b><br><span class="d">None exists. All cards are rendered; the pane is the only scroller.</span></td><td><code>public/assistant.js:3973</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/02-1440-expanded-pane.png">02-1440-expanded-pane</a></td></tr>
+<tr><td class="num">G6</td><td><b>Picker filter</b><br><span class="d">The add select omits trees already on the initiative. It is the only select on the tab.</span></td><td><code>public/assistant.js:3670-3693</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/31-add-form.png">31-add-form</a></td></tr>
+<tr><td class="num">G7</td><td><b>Full store path</b><br><span class="d">Drawn as the file name only; the absolute path lives in the tooltip.</span></td><td><code>public/assistant.js:3991</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/20-tab-head.png">20-tab-head</a></td></tr>
+<tr class="group"><td colspan="4">Interaction</td></tr>
+<tr><td class="num">H1</td><td><b>Title press folds the card</b><br><span class="d">One open state per initiative, kept in module state for the life of the tab.</span></td><td><code>public/assistant.js:4190-4201</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/01-1440-default-pane.png">01-1440-default-pane</a><br><a href="../assets/initiatives-redesign/a/02-1440-expanded-pane.png">02-1440-expanded-pane</a></td></tr>
+<tr><td class="num">H2</td><td><b>Description press</b><br><span class="d">Folds only the description; the card's open state is untouched.</span></td><td><code>public/assistant.js:4203-4209</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/23-desc-open.png">23-desc-open</a><br><a href="../assets/initiatives-redesign/a/24-desc-refolded.png">24-desc-refolded</a></td></tr>
+<tr><td class="num">H3</td><td><b>Project press</b><br><span class="d">Folds one project's worktrees. The key is initiative plus project.</span></td><td><code>public/assistant.js:4236-4242</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/29-projects.png">29-projects</a><br><a href="../assets/initiatives-redesign/a/30-tree-rows.png">30-tree-rows</a></td></tr>
+<tr><td class="num">H4</td><td><b>Assistants, tasks, history folds</b><br><span class="d">Each fold has its own key, its own aria-expanded, and its own remembered state.</span></td><td><code>public/assistant.js:4244-4270</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/32-assistants.png">32-assistants</a><br><a href="../assets/initiatives-redesign/a/33-task-fold.png">33-task-fold</a><br><a href="../assets/initiatives-redesign/a/34-history.png">34-history</a></td></tr>
+<tr><td class="num">H5</td><td><b>Tree press</b><br><span class="d">Selects the board row, scrolls it into view and pulses it; the Initiatives tab stays open.</span></td><td><code>public/assistant.js:4048-4076</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/30-tree-rows.png">30-tree-rows</a></td></tr>
+<tr><td class="num">H6</td><td><b>Assistant press</b><br><span class="d">Switches the float to that assistant's chat and focuses the reply box.</span></td><td><code>public/assistant.js:4077-4095</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/32-assistants.png">32-assistants</a></td></tr>
+<tr><td class="num">H7</td><td><b>Remove press</b><br><span class="d">A write governed by the tier; at 'ask' it raises a question and changes nothing until answered.</span></td><td><code>public/assistant.js:4096-4125</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/30-tree-rows.png">30-tree-rows</a><br><a href="../assets/initiatives-redesign/a/41-hover-remove.png">41-hover-remove</a></td></tr>
+<tr><td class="num">H8</td><td><b>Add press</b><br><span class="d">Reads the picker at the press; the button says Ask to add at the ask tier and Attach otherwise.</span></td><td><code>public/assistant.js:4330-4338</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/31-add-form.png">31-add-form</a></td></tr>
+<tr><td class="num">H9</td><td><b>Edit, Save, Cancel</b><br><span class="d">Edit opens with the current words, Save posts the change, Cancel clears it.</span></td><td><code>public/assistant.js:4156-4180</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/25-edit-form.png">25-edit-form</a></td></tr>
+<tr><td class="num">H10</td><td><b>New, Create, Cancel</b><br><span class="d">New opens the form and focuses the title; Create posts; Cancel clears the note.</span></td><td><code>public/assistant.js:4127-4155</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/39-new-form.png">39-new-form</a></td></tr>
+<tr><td class="num">H11</td><td><b>Refresh</b><br><span class="d">Drops the document and forces one read.</span></td><td><code>public/assistant.js:4316-4320</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/48-loading.png">48-loading</a></td></tr>
+<tr><td class="num">H12</td><td><b>Repaint and focus</b><br><span class="d">The pane is rebuilt on every snapshot and re-read every 4s; folds survive, and the focused control's token is restored.</span></td><td><code>public/assistant.js:3973, 3950</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/43-focus-remove.png">43-focus-remove</a></td></tr>
+<tr><td class="num">H13</td><td><b>Keyboard</b><br><span class="d">Enter and Space press a task card; every control takes a 2px #7fb2e8 ring.</span></td><td><code>public/assistant.js:4332-4340; style.css:4990</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/43-focus-remove.png">43-focus-remove</a></td></tr>
+<tr><td class="num">H14</td><td><b>Hover and press</b><br><span class="d">Project rows take a hover background, names underline, every button moves 1px on press.</span></td><td><code>public/style.css:4868-4870, 4890-4892, 4904</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/40-hover-project.png">40-hover-project</a><br><a href="../assets/initiatives-redesign/a/41-hover-remove.png">41-hover-remove</a><br><a href="../assets/initiatives-redesign/a/42-hover-title.png">42-hover-title</a></td></tr>
+<tr><td class="num">H15</td><td><b>Reasons in tooltips</b><br><span class="d">Gate words, state words, auto, template, lane reads, attach history and branch links all carry the sentence behind them.</span></td><td><code>public/core/waves-lane.js:51-165; assistant.js:3508-3544</code></td><td class="invshots"><a href="../assets/initiatives-redesign/a/26-wave-flat.png">26-wave-flat</a><br><a href="../assets/initiatives-redesign/a/28-wave-lanes.png">28-wave-lanes</a><br><a href="../assets/initiatives-redesign/a/30-tree-rows.png">30-tree-rows</a></td></tr>
+</tbody></table>
+<p class="fine">"State not in fixture" rows: C21 is the lane-refused alert, drawn when two lanes name one tree or a member that ran names no tree; E11 is the empty task list, which cannot occur while an assistant row exists only when its task count is above zero. Both are named here so the implementation does not quietly drop them.</p>
+
+<p class="fine">"State not in fixture" rows: C21 is the lane-refused alert, drawn when two lanes name one tree or a member that ran names no tree; E11 is the empty task list, which cannot occur while an assistant row exists only when its task count is above zero. Both are named here so the implementation does not quietly drop them.</p>
+
+<h2 id="now">The tab now, at 1440, 1024 and 768</h2>
+<p>The dock does not grow with the window: at 1440 and at 1024 the assistant rail is the same 480px and the card is the same 463px. The width only changes at the 768 window, where the rail is 348px and the card 331px. That is the first practical finding: two of the three requested widths are the same layout, and the third is a narrower version of it. The wide layout exists only in the floating panel.</p>
+
+<div class="nowgrid">
+  <figure class="shot">
+    <img src="../assets/initiatives-redesign/a/01-1440-default-pane.png" alt="The folded Initiatives list at 1440">
+    <figcaption><b>1440, default, folded.</b> Four cards, 2,845px of pane scroll for four. Each folded card shows a two-line title, a two-line description preview, three count chips and one "edited" line. Nothing says which initiative is moving.</figcaption>
+  </figure>
+  <figure class="shot">
+    <img src="../assets/initiatives-redesign/a/02-1440-expanded-pane.png" alt="The open Menu SSO card with three waves, two lanes and five members">
+    <figcaption><b>1440, Menu SSO open.</b> The same 463px card, 967px tall: three waves, two lanes, five members, 29 chips and 42 bordered descendants. This is the card the three directions are judged against.</figcaption>
+  </figure>
+</div>
+
+<h3>The same wave lane at all three widths</h3>
+<p>These three crops are the wave section of the Menu SSO card at each width, captured in one run. The 1440 and 1024 crops are identical in size (437x503) because the rail is fixed; the 768 crop is 305x706, so the same content becomes taller by a third. W1, W2 and W3 are present in all three, with their gates, auto state, members and the two lanes in W3.</p>
+<div class="three">
+  <figure>
+    <img src="../assets/initiatives-redesign/a/49-waves-1440.png" alt="Wave lane at 1440">
+    <figcaption><b>1440.</b> 437x503. Three waves, five members, two lanes.</figcaption>
+  </figure>
+  <figure>
+    <img src="../assets/initiatives-redesign/a/50-waves-1024.png" alt="Wave lane at 1024">
+    <figcaption><b>1024.</b> 437x503, pixel for pixel the same as 1440. The dock is still 480.</figcaption>
+  </figure>
+  <figure>
+    <img src="../assets/initiatives-redesign/a/51-waves-768.png" alt="Wave lane at 768">
+    <figcaption><b>768.</b> 305x706. The same fields, 40% taller; every gate row wraps.</figcaption>
+  </figure>
+</div>
+<p class="cap">The full open pane at 1024 and 768 is <a href="../assets/initiatives-redesign/a/04-1024-expanded-pane.png">04-1024-expanded-pane.png</a> and <a href="../assets/initiatives-redesign/a/06-768-expanded-pane.png">06-768-expanded-pane.png</a>. The whole page at each width is <a href="../assets/initiatives-redesign/a/00-1440-default-page.png">00</a><br><a href="../assets/initiatives-redesign/a/03-1024-expanded-page.png">03</a> and <a href="../assets/initiatives-redesign/a/05-768-expanded-page.png">05</a>.</p>
+
+<h3>The measurements</h3>
+<table>
+  <thead><tr><th>Measure</th><th>1440 dock</th><th>1024 dock</th><th>768 dock</th><th>1400 float</th></tr></thead>
+  <tbody>
+    <tr><td>Assistant rail</td><td class="num">480px</td><td class="num">480px</td><td class="num">348px</td><td class="num">1400px</td></tr>
+    <tr><td>Card width</td><td class="num">463px</td><td class="num">463px</td><td class="num">331px</td><td class="num">1382px</td></tr>
+    <tr><td>Open Menu SSO card height</td><td class="num">967px</td><td class="num">967px</td><td class="num">1188px</td><td class="num">775px (two columns)</td></tr>
+    <tr><td>Pane scroll for four initiatives</td><td class="num">2,845px</td><td class="num">2,845px</td><td class="num">2,735px</td><td class="num">1,472px</td></tr>
+    <tr><td>Title</td><td class="num">13.5px / 600</td><td class="num">13.5px / 600</td><td class="num">13.5px / 600</td><td class="num">15px / 600</td></tr>
+    <tr><td>Description</td><td class="num">12px / 18.6</td><td class="num">12px / 18.6</td><td class="num">12px / 18.6</td><td class="num">12px / 18.6</td></tr>
+    <tr><td>Chip</td><td class="num">10.5px / 16</td><td class="num">10.5px / 16</td><td class="num">10.5px / 16</td><td class="num">10.5px / 16</td></tr>
+    <tr><td>Wave title</td><td class="num">12.5px / 600</td><td class="num">12.5px / 600</td><td class="num">12.5px / 600</td><td class="num">12.5px / 600</td></tr>
+    <tr><td>Gate chip</td><td class="num">10.5px</td><td class="num">10.5px</td><td class="num">10.5px</td><td class="num">10.5px</td></tr>
+    <tr><td>Chips in the open card</td><td class="num">29</td><td class="num">29</td><td class="num">29</td><td class="num">29</td></tr>
+    <tr><td>Bordered descendants</td><td class="num">42</td><td class="num">42</td><td class="num">42</td><td class="num">42</td></tr>
+    <tr><td>Controls, and the smallest</td><td class="num">8, min 28px</td><td class="num">8, min 28px</td><td class="num">8, min 28px</td><td class="num">8, min 28px</td></tr>
+  </tbody>
+</table>
+<p class="cap">Measured by <code>getBoundingClientRect</code> and <code>getComputedStyle</code> in the page, on the open <code>init_sso</code> card. The 28px control floor is the one the 1.144 readability pass set; this round did not re-audit contrast, focus or hit targets, and the redesign must keep that floor rather than renegotiate it.</p>
+
+<h3>The wide float is the only place the width is used, and only halfway</h3>
+<figure class="shot">
+  <img src="../assets/initiatives-redesign/a/10-1440-float-pane.png" alt="The floating panel at 1400px">
+  <figcaption><b>1400 float.</b> The top of the open card splits into a 72ch description on the left and the projects on the right, but the waves run full width below both. The three wave rows are 1,382px wide and their content occupies the left 700px, so half of every wave row is empty. Assistants and History become full-width shelves at the bottom. The extra width buys a readable prose measure, not a better wave read.</figcaption>
+</figure>
+
+<h3>The states a redesign must not lose, in one place</h3>
+<div class="keygrid">
+  <figure><img src="../assets/initiatives-redesign/a/21-card-head.png" alt="Card head"><figcaption><b>Card head.</b> Title, Edit, Description header, three count chips, edited line. 21-card-head.png.</figcaption></figure>
+  <figure><img src="../assets/initiatives-redesign/a/28-wave-lanes.png" alt="Wave with two lanes"><figcaption><b>The hard wave.</b> W3 running and current, a turnover template that does not resolve, no entry gate, a met exit gate, two lanes, two running members and the join sentence. 28-wave-lanes.png.</figcaption></figure>
+  <figure><img src="../assets/initiatives-redesign/a/33-task-fold.png" alt="Task fold"><figcaption><b>The task fold.</b> Six compact queue cards, then "Show 3 more"; each card is #id, state, title, thread and time. 33-task-fold.png.</figcaption></figure>
+  <figure><img src="../assets/initiatives-redesign/a/35-empty-card.png" alt="Empty card"><figcaption><b>The empty card.</b> No description, 0 projects, 0 worktrees, 0 assistants, WAVES 0, the no-waves hint and one refused record. 35-empty-card.png.</figcaption></figure>
+  <figure><img src="../assets/initiatives-redesign/a/45-empty-tab.png" alt="Empty tab"><figcaption><b>The empty tab.</b> Heading, explanation and a primary action. 45-empty-tab.png.</figcaption></figure>
+  <figure><img src="../assets/initiatives-redesign/a/47-error-waves.png" alt="Unreadable wave store"><figcaption><b>The unreadable store.</b> The alert names the error and leaves the file alone. 47-error-waves.png.</figcaption></figure>
+</div>
+
+<h3>What the current tab does not have</h3>
+<ul>
+  <li><b>No sort control.</b> Initiatives are ordered by <code>updatedAt</code> descending, projects alphabetically, trees by path, assistants by last work, history newest first. Every order is fixed in the route or the store.</li>
+  <li><b>No filter and no search.</b> Every initiative is drawn on every paint. There is no way to ask for "only what is running" or "only what is blocked".</li>
+  <li><b>No collapse all.</b> One open state per initiative, toggled on its own head. With five initiatives that is fine; with twenty it is a scroll.</li>
+  <li><b>No status at rest.</b> A folded card carries counts, not state. The current wave, its running members and the blocked gate exist only inside the open card.</li>
+  <li><b>No cross-initiative signal.</b> The tab cannot answer "what is moving anywhere" without opening every card.</li>
+</ul>
+
+<h2 id="readings">Three independent readings of the same evidence</h2>
+<p>Three passes were run independently, each given the same captures and a different lens: information architecture, visual craft, and engineering cost. None saw the others' proposals. Their concepts were <b>Register and Spine</b>, <b>Greenline</b> and <b>Initiative Spine</b>. They converged on the diagnosis, which is why all three directions below are built on it; they disagreed on how far to go, which is the real choice.</p>
+
+<div class="three">
+  <div class="side">
+    <b>1. Register and Spine (information architecture)</b><br>
+    "Status before prose, at the line. Borders hold things; marks carry state." A register line per initiative with a numeric fingerprint, opening into a page whose waves hang on one rail. At 1300 the register becomes a table with sortable columns. It argues the description should open folded and that 10.5px should be retired from this pane.
+  </div>
+  <div class="side">
+    <b>2. Greenline (visual craft)</b><br>
+    "The initiative is a route, not a card stack." One 2px line through the waves, stations on it, lanes as branch rails, gates as signal words. Flat ledger headers, a toolbar plus an About fold, a type scale from 11.5 to 22, and a scoped greener palette. It retires the chip form but keeps every chip's content.
+  </div>
+  <div class="side">
+    <b>3. Initiative Spine (engineering cost)</b><br>
+    "A compact signal index that opens into a dossier, with a cast rail." It recommends a <b>CSS-only de-pill as the first commit</b> and explicitly argues <b>against</b> extracting the card first. At 1300 the dossier splits into a wave main column and a projects/assistants/history rail. It names the test surface and what it would deliberately not build.
+  </div>
+</div>
+
+<h3>Where they agree</h3>
+<ul>
+  <li>The tab reads its own manual before its work; the three paragraphs and the tier line belong behind one help control, with the words kept.</li>
+  <li>A folded initiative must carry its status, not just its counts and a description preview.</li>
+  <li>The pills are the problem: state, gate, count, lane and member all wear the same outline, so hierarchy is flat. De-pill first, then restructure.</li>
+  <li>The wave sequence wants one leading line or rail, not a nested box per wave.</li>
+  <li>The wide panel should spend its width on the waves and the cast, not on a 72ch column above full-width wave slabs.</li>
+  <li>Every field, fold, route and the 16-point accessibility floor stay.</li>
+</ul>
+
+<h3>Where they disagree</h3>
+<ul>
+  <li><b>Extraction.</b> The IA pass splits the card into a line and a page; the engineering pass says do not extract first, because the card is 127 lines wrapped in twenty hooks. The report's own answer, above, sides with the engineering pass: de-pill first, extract only later and only the whole block.</li>
+  <li><b>The wide layout.</b> The IA pass wants a table; the visual pass wants a vertical route with lanes side by side; the engineering pass wants a main column plus a cast rail. Those are three different uses of the same 1,180px.</li>
+  <li><b>How much to hide.</b> The IA pass hides the description at rest and opens it on the page; the visual pass hides the manual behind About; the engineering pass hides non-current waves behind one press. Each buys density with a click, and the three directions price that click differently.</li>
+</ul>
+
+<style>
+  .sk-b .spine { margin-top: 12px; border-left: 1px solid #2b4034; padding-left: 18px; }
+  .sk-b .station { position: relative; padding-bottom: 15px; }
+  .sk-b .station:before { content: ""; position: absolute; left: -23px; top: 4px; width: 9px; height: 9px; border-radius: 50%; background: #0c1310; border: 1px solid #2b4034; }
+  .sk-b .station.done:before { background: #6fe3a5; border-color: #6fe3a5; }
+  .sk-b .station.now:before { background: #6fe3a5; border-color: #6fe3a5; box-shadow: 0 0 0 4px rgba(111,227,165,.14); }
+  .sk-b .station .sh { display: flex; align-items: baseline; gap: 7px; }
+  .sk-b .station .sh .pos { font: 10.5px ui-monospace, monospace; color: #78897c; }
+  .sk-b .station .sh h5 { margin: 0; font-size: 13.5px; font-weight: 620; flex: 1; }
+  .sk-b .station .sh .st { font: 10px ui-monospace, monospace; color: #6fe3a5; text-transform: uppercase; letter-spacing: .07em; }
+</style>
+
+<div class="dir" id="a">
+  <h3><span class="badge">A</span>The Register</h3>
+  <p class="promise">Every initiative becomes one aligned line that says what it is and how far it has got; a press opens a page whose waves hang on a single spine.</p>
+
+  <h4>Why this direction</h4>
+  <p>The current card is information-inverted. At rest it spends about 150px per initiative on a two-line title and a two-line description, and shows nothing about the thing the tab exists for: which wave is current, what is running, what is blocked. The register line keeps every field but re-weights it: title, one description line, a state fingerprint (<code>W2/3</code>, "1 running", "3h"), and the three counts. The open page then keeps the current order - head, description, counts, waves, projects, assistants, history - so it can be audited against the inventory line by line. This is the lowest-risk way to get most of the modern feel without changing the navigation model.</p>
+
+  <h4>The sketch</h4>
+  <div class="sk sk-a">
+    <div class="win">
+      <div class="topbar"><b>Initiatives</b><span class="n">4</span><span class="act"><button class="btn pri">New</button><button class="btn">Refresh</button></span></div>
+      <div class="toolbar"><span class="chip">recent</span><span class="chip">all states</span><span class="r">4 in initiatives.json</span></div>
+
+      <div class="line">
+        <span class="mark"></span>
+        <div><h5>Kafka rating pipeline hardening across the consumer, the retry topic and the DBA-signed verify pack</h5>
+          <div class="desc">Hardening the rating pipeline from the consumer inward: retry topics, dead-letter handling, and a DBA-signed verify pack.</div>
+          <div class="meta"><span class="mono">2 projects</span> · <span class="mono">2 worktrees</span> · <span class="mono">2 assistants</span> · edited 3h ago</div></div>
+        <span class="w">no waves</span><span class="chev">></span>
+      </div>
+
+      <div class="page">
+        <h4>Menu SSO migration</h4>
+        <p class="pdesc">Move the Menu login from LDAP to Okta through oauth2-multi, keep the session cookie sticky through the VIP, and prove a real two-factor login before the login page is cut over.</p>
+        <div class="pmeta"><span class="mono">2 projects</span><span class="mono">2 worktrees</span><span class="mono">2 assistants</span><span>edited 6h ago by assistant-1</span><span style="margin-left:auto">Edit</span></div>
+
+        <div class="sechead">Waves <span class="mono">2 done / 1 running</span></div>
+        <ol class="route">
+          <li>
+            <span class="node">✓</span>
+            <div class="wh"><span class="pos">W1</span><h6>Prove the Okta callback on the VIP</h6><span class="state">done</span></div>
+            <div class="facts"><span class="ok">entry clean met</span><span class="ok">exit clean met</span><span>auto on</span></div>
+            <div class="m"><b>#30</b><span>Prove the Okta callback on the VIP <i>oauth2-multi</i></span><span>done</span></div>
+            <div class="m"><b>#21</b><span>Second pass over the callback <i>oauth2-multi</i></span><span>done</span></div>
+          </li>
+          <li>
+            <span class="node">✓</span>
+            <div class="wh"><span class="pos">W2</span><h6>One real two-factor login</h6><span class="state">done</span></div>
+            <div class="facts"><span class="ok">entry clean met</span><span class="ok">exit clean met</span><span>auto off</span><span class="ok">opened by w_callback</span></div>
+            <div class="m"><b>#12</b><span>Retry the state cookie on a node switch <i>oauth2-multi</i></span><span style="color:#f0c674">queued</span></div>
+          </li>
+          <li class="run">
+            <span class="node">●</span>
+            <div class="wh"><span class="pos">W3</span><h6>Cut the login page over behind the switch</h6><span class="state">running</span></div>
+            <div class="facts"><span>template turnover <span class="no">unresolved</span></span><span>entry no check</span><span class="ok">exit clean met</span><span>auto off</span></div>
+            <div class="lane"><div class="lanehead">lane auth/callback · <em>running</em> · runs in 1 tree</div>
+              <div class="m"><b>#11</b><span>Validate the Okta callback against the VIP <i>oauth2-multi</i></span><span>running</span></div></div>
+            <div class="lane"><div class="lanehead">lane menu/login · <em>running</em> · runs in 1 tree</div>
+              <div class="m"><b>#31</b><span>Cut the login page over <i>Menu</i></span><span>running</span></div></div>
+            <div class="join">2 lanes - closing this wave is ONE commit that names them all</div>
+          </li>
+        </ol>
+
+        <div class="sechead">Cast <span class="mono">projects / assistants / history</span></div>
+        <div class="casts">
+          <div class="castrow"><b>Projects</b><span class="mono">Menu 1 tree · oauth2-multi 1 tree</span><span class="r">+ add</span></div>
+          <div class="castrow"><b>Assistants</b><span class="mono">assistant-1 1q 2r 6d 0p · assistant-2 0q 0r 1d 0p</span><span class="r">2</span></div>
+          <div class="castrow"><b>History</b><span>created, attached x2, edited x2</span><span class="r">5</span></div>
+        </div>
+      </div>
+
+      <div class="line">
+        <span class="mark"></span>
+        <div><h5>Batch sweeper retry budget</h5>
+          <div class="desc" style="font-style:italic">no description yet</div>
+          <div class="meta"><span class="mono">0 projects</span> · <span class="mono">0 worktrees</span> · <span class="mono">0 assistants</span> · edited 9h ago</div></div>
+        <span class="w">no waves</span><span class="chev">></span>
+      </div>
+      <div class="line">
+        <span class="mark run"></span>
+        <div><h5>Quarter-end release readiness</h5>
+          <div class="desc">The DBA-signed rating pack, the turnover rehearsals and the release notes, all before the quarter closes.</div>
+          <div class="meta"><span class="mono">2 projects</span> · <span class="mono">2 worktrees</span> · <span class="mono">1 assistant</span> · edited 1d ago</div></div>
+        <span class="w">W2/2</span><span class="chev">></span>
+      </div>
+    </div>
+  </div>
+  <p class="cap">Static sketch, real Menu SSO data. Not product code. It shows the folded register, one open page, the spine, lanes, and the cast rows at 480.</p>
+
+  <h4>At 480 and at 1300</h4>
+  <p><b>480 (463px card, 331px at the 768 rail):</b> a 44px toolbar, a 28px meta line, then 68 to 96px register lines. The open page replaces the line in its slot. Waves are a 24px gutter with numbered nodes and state words in a fixed right column. Gates are one line of marks and words, not three pills. Members are 26px rows. Projects, assistants and history are compact rows, not boxes.</p>
+  <p><b>1300 (float, about 1,180px):</b> the register becomes a table: a two-line initiative cell, then tabular columns for waves, running tasks, people and edited time. The column headers are the sort controls. The open page keeps a 1fr / 360px split: waves and members on the left, projects on the right. The list itself stays one column, so opening a card never reflows the order.</p>
+
+  <h4>What it would change in files</h4>
+  <ul>
+    <li><code>public/style.css:4834-5007</code>: replace the <code>.init-*</code> block with the register, page, spine and cast rules; keep the 2px focus ring at <code>5000-5007</code>.</li>
+    <li><code>public/assistant.js:3973-4042</code>: header becomes toolbar plus meta plus an About fold; list paints register lines; sort and filter state added (<code>initSort</code>, <code>initFilter</code>, <code>initQuery</code>), default order unchanged.</li>
+    <li><code>public/assistant.js:3785-3911</code>: <code>initCardHtml</code> splits into <code>initLineHtml</code> and <code>initPageHtml</code>; same fold keys and the same <code>wtInitiativeFold.press</code> rule.</li>
+    <li><code>public/core/initiative-fold.js</code>: add pure <code>initiativeSignal(init)</code>, <code>indexMeta(init)</code> and <code>sortLines</code>/<code>filterLines</code>; existing helpers untouched.</li>
+    <li><code>public/core/waves-lane.js</code>: same data contract, new spine markup for the node, signals, lane stub and member row; every <code>data-wave-*</code> attribute kept.</li>
+    <li><code>test/initiative-fold.test.js</code>, <code>test/waves-lane.test.js</code>, <code>tools/initiatives-measure.mjs</code>: new cases and selectors.</li>
+    <li>No route, store or server change. The fingerprint is derived from fields the read already returns.</li>
+  </ul>
+
+  <h4>What it keeps</h4>
+  <ul class="keeps">
+    <li>Every inventory row A1 to H15; the 104-item list is the acceptance test.</li>
+    <li>The accordion and one scroller; no new navigation and no selection state.</li>
+    <li>All three fold keys and the four-answer press rule.</li>
+    <li>Every count, including the zeros, and every state word and its tooltip.</li>
+    <li>All four alerts and both store states.</li>
+    <li>Every route and every tier question.</li>
+    <li>The 28px control floor and the 2px focus ring.</li>
+    <li>The 4s repaint, the focus token and the typing guard.</li>
+    <li>The description cut and its resize re-measure.</li>
+    <li>The compact queue card as the only task renderer.</li>
+  </ul>
+
+  <div class="tradeoff"><b>The trade-off:</b> this is the smallest visual distance of the three. It fixes status at rest and the box soup, but at 1300 it is still one list with a table header, and the open page is still a long scroll. The density comes from folding the description at rest, so reading an initiative's words costs one press. A reader who wanted the tab "completely reinvented" may call this a very good tidy-up.</div>
+
+  <h4>Theme: what stays, where it stretches</h4>
+  <p>Stays: <code>#0f1115</code> page, <code>#151a22</code> card, <code>#262c37</code> lines, <code>#e6e9ef</code> text, <code>#9aa4b2</code> dim, <code>#7ee787</code> running, <code>#6fcf97</code> done, <code>#7fb2e8</code> links, <code>#f0c674</code> blocked.</p>
+  <p>Stretches: a green-tinted spine (<code>#1c3a2a</code>), a slightly warmer surface on the current row (<code>#17211b</code>), and four elevation steps taken from the existing palette so depth stops coming from 1px borders. No new hue, no new font, no icon pack.</p>
+
+  <p class="fine">Effort: medium. Risk: low. Best if the reader wants the tab to feel current without changing how he moves through it.</p>
+</div>
+
+<div class="dir" id="b">
+  <h3><span class="badge">B</span>The Route</h3>
+  <p class="promise">The wave sequence is the page. One green line runs through every initiative; lanes branch from it, and the green stops being a chip accent and becomes the structure.</p>
+
+  <h4>Why this direction</h4>
+  <p>The data already has a shape: ordered waves, one current position, gates before and after, and lanes that run in parallel and join. The current screen draws that shape as a column of identical rounded boxes, then writes it a second time in 10.5px pills. Drawing it once, as a route, does three things at the same time: it makes sequence readable before any word is read, it removes two of the five border levels, and it gives the wide float a real use, because lanes can sit side by side and members can align as a manifest. This is the direction that most directly answers "far more modern" while keeping every field and the accordion.</p>
+
+  <h4>The sketch</h4>
+  <div class="sk sk-b">
+    <div class="win">
+      <div class="bar"><b>Initiatives</b><span class="cnt">4</span><span class="act"><button class="btn pri">New initiative</button><button class="btn">Refresh</button></span></div>
+      <div class="meta"><span>4 in initiatives.json</span><span class="ask">ask me for everything</span></div>
+      <div class="rows">
+        <div class="rrow"><div class="glyph"><i class="d"></i><i class="d"></i><i></i></div>
+          <div><h5>Kafka rating pipeline hardening across the consumer, the retry topic and the DBA-signed verify pack</h5>
+            <div class="sub">Hardening the rating pipeline from the consumer inward: retry topics, dead-letter handling, and a signed verify pack.</div>
+            <div class="stats"><span class="mono">2 projects</span> · <span class="mono">2 worktrees</span> · <span class="mono">2 assistants</span> · edited 3h ago</div></div>
+          <span class="w">no waves</span><span class="chev">></span></div>
+        <div class="rrow on"><div class="glyph"><i class="d"></i><i class="d"></i><i class="c"></i></div>
+          <div><h5>Menu SSO migration</h5>
+            <div class="sub">Move the Menu login from LDAP to Okta through oauth2-multi, keep the session cookie sticky through the VIP.</div>
+            <div class="stats"><span class="mono">2 projects</span> · <span class="mono">2 worktrees</span> · <span class="mono">2 assistants</span> · edited 6h ago by assistant-1</div></div>
+          <span class="w">W3 running</span><span class="chev">v</span></div>
+
+        <div class="plate">
+          <div class="ptop">
+            <div><h4>Menu SSO migration</h4>
+              <p>Move the Menu login from LDAP to Okta through oauth2-multi, keep the session cookie sticky through the VIP, and prove a real two-factor login before the login page is cut over.</p>
+              <div class="pmeta"><span class="mono">2 projects</span><span class="mono">2 worktrees</span><span class="mono">2 assistants</span><span>edited 6h ago by assistant-1</span><span style="color:#86c2ec">Edit</span></div></div>
+            <div class="side"><div class="sh">Projects</div>
+              <div class="prow"><b>Menu</b><span class="n">1 tree</span></div>
+              <div class="prow"><b>oauth2-multi</b><span class="n">1 tree</span></div>
+              <div class="add">+ Add a worktree</div></div>
+          </div>
+
+          <div class="spine">
+            <div class="station done">
+              <div class="sh"><span class="pos">W1</span><h5>Prove the Okta callback on the VIP</h5><span class="st">done</span></div>
+              <div class="signals"><span>entry <b class="met">clean met</b></span><span>exit <b class="met">clean met</b></span><span>auto <b>on</b></span></div>
+              <div class="card"><div class="ct">#30 Prove the Okta callback on the VIP</div><div class="cm"><span>oauth2-multi</span><span class="st">done</span></div></div>
+              <div class="card"><div class="ct">#21 Second pass over the callback</div><div class="cm"><span>oauth2-multi</span><span class="st">done</span></div></div>
+            </div>
+            <div class="station done">
+              <div class="sh"><span class="pos">W2</span><h5>One real two-factor login</h5><span class="st">done</span></div>
+              <div class="signals"><span>entry <b class="met">clean met</b></span><span>exit <b class="met">clean met</b></span><span>auto <b>off</b></span><span style="color:#6fe3a5">opened by w_callback</span></div>
+              <div class="card"><div class="ct">#12 Retry the state cookie on a node switch</div><div class="cm"><span>oauth2-multi</span><span class="st" style="color:#e2b366">queued</span></div></div>
+            </div>
+            <div class="station now">
+              <div class="sh"><span class="pos">W3</span><h5>Cut the login page over behind the switch</h5><span class="st">running</span></div>
+              <div class="tpl">template turnover unresolved - the bundle does not hold this id</div>
+              <div class="signals"><span>entry <b class="none">no check</b></span><span>exit <b class="met">clean met</b></span><span>auto <b>off</b></span><span style="color:#6fe3a5">current</span></div>
+              <div class="lanes">
+                <div class="lane"><div class="lh">auth/callback · <em>running</em></div><div class="lr">runs in 1 tree</div>
+                  <div class="card"><div class="ct">#11 Validate the Okta callback against the VIP</div><div class="cm"><span>oauth2-multi</span><span class="st">running</span></div></div></div>
+                <div class="lane"><div class="lh">menu/login · <em>running</em></div><div class="lr">runs in 1 tree</div>
+                  <div class="card"><div class="ct">#31 Cut the login page over</div><div class="cm"><span>Menu</span><span class="st">running</span></div></div></div>
+                <div class="join"><b>2 lanes</b><br>closing this wave<br>is ONE commit<br>that names them all</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="casts">
+            <div class="cast"><div class="ch">Assistants <span class="n">2</span></div>
+              <div class="cl"><span class="mono">assistant-1</span> · working now · 1 queued · 2 running · 6 done · 0 parked</div>
+              <div class="cl"><span class="mono">assistant-2</span> · worked 1d ago · 0 queued · 0 running · 1 done · 0 parked</div></div>
+            <div class="cast"><div class="ch">History <span class="n">5</span></div>
+              <div class="cl">assistant-1 created this · 2d ago</div>
+              <div class="cl">assistant-1 attached menu-sso-state-cookie · 6h ago</div></div>
+          </div>
+        </div>
+
+        <div class="rrow"><div class="glyph"><i></i></div>
+          <div><h5>Batch sweeper retry budget</h5><div class="sub" style="font-style:italic">no description yet</div>
+            <div class="stats"><span class="mono">0 projects</span> · <span class="mono">0 worktrees</span> · <span class="mono">0 assistants</span> · edited 9h ago</div></div>
+          <span class="w">no waves</span><span class="chev">></span></div>
+        <div class="rrow"><div class="glyph"><i class="d"></i><i class="c"></i></div>
+          <div><h5>Quarter-end release readiness</h5><div class="sub">The DBA-signed rating pack, the turnover rehearsals and the release notes, all before the quarter closes.</div>
+            <div class="stats"><span class="mono">2 projects</span> · <span class="mono">2 worktrees</span> · <span class="mono">1 assistant</span> · edited 1d ago</div></div>
+          <span class="w">W2/2</span><span class="chev">></span></div>
+      </div>
+    </div>
+  </div>
+  <p class="cap">Static sketch, real Menu SSO data. Not product code. At 480 the lanes stack and the project column moves under the description; the sketch shows the 980px form so the route, rails and manifest are visible.</p>
+
+  <h4>At 480 and at 1300</h4>
+  <p><b>480:</b> a 48px toolbar, then a 36px meta line. Folded initiatives are flat 76 to 112px ledger rows with a four-dot route glyph, a title, a two-line preview, the counts as text and the edited line. The open initiative is a full-bleed plate: title, description, counts, then a vertical route with 28px station gaps. Each station is title, template, a signal strip, then lanes that stack or members as rows. Projects, assistants and history are disclosure rows under a hairline.</p>
+  <p><b>1300:</b> the open plate is 1,180px. The head splits into title and description on the left and a 360px projects column on the right, divided by a hairline. The route runs full width; lanes sit side by side with a 320px minimum and wrap rather than squeeze; members align as a manifest (44px id, flexible title, 150px project, 80px state). Assistants and history run full width beneath the route. The list stays one column, so no card moves when another opens.</p>
+
+  <h4>What it would change in files</h4>
+  <ul>
+    <li><code>public/style.css:4834-5007</code>: replace the initiatives block with the Greenline system, scoped <code>--init-*</code> tokens, and container queries at 560 and 900; replace the blue focus ring inside this tab only.</li>
+    <li><code>public/core/waves-lane.js</code>: new markup grammar for the station, signal strip, lane rail, member row and join bracket. The public API and every <code>data-wave-*</code> attribute stay.</li>
+    <li><code>public/assistant.js:3973-4042</code>: toolbar, meta line, About fold; <code>3785-3911</code>: plate head and the compact casts; <code>3527-3661</code>: count strip and task footer.</li>
+    <li><code>public/core/initiative-fold.js</code>: add pure <code>routeGlyph(init)</code> and <code>gateSummary(wave)</code>; the press rule, cut, count chips, task window and history line stay.</li>
+    <li><code>test/waves-lane.test.js</code> and <code>test/initiative-fold.test.js</code>: rewrite only the markup-shape assertions; keep every data and state assertion.</li>
+    <li>No change to <code>routes/initiatives.js</code>, <code>lib/waves.js</code>, <code>public/queue-cards.js</code>, <code>public/index.html</code> or the server.</li>
+  </ul>
+
+  <h4>What it keeps</h4>
+  <ul class="keeps">
+    <li>Every inventory row A1 to H15, including all four alerts and both store states.</li>
+    <li>The accordion and one scroll; no new navigation.</li>
+    <li>Every count, state word, gate word and tooltip sentence.</li>
+    <li>Every fold, its key and its aria-expanded.</li>
+    <li>Every route, tier question and pending-question note.</li>
+    <li>The compact queue card and its show-more window.</li>
+    <li>The 28px floor, the focus token and the 4s repaint.</li>
+    <li>The description cut and re-measure on resize.</li>
+    <li>The files and the store schema; no server change.</li>
+    <li>The name of every class and data attribute, so fixtures and tests still find them.</li>
+  </ul>
+
+  <div class="tradeoff"><b>The trade-off:</b> it buys a header about half its height, one leading line instead of 42 borders, a current wave visible before reading, and a wide layout that uses its width. It pays with vertical air: 28px station gaps and 32 to 44px member rows make the open card somewhat taller at 480 than the current 8px boxes. It also gives up the card outline as the fold affordance (the 48px row, hover wash and chevron must carry it), moves the explanatory prose one press away, and makes this one tab darker and greener than the rest of the float, which only works if the tokens are scoped.</div>
+
+  <h4>Theme: what stays, where it stretches</h4>
+  <p>Stays: the panel's dark base and its green/blue/amber/violet state vocabulary. Stretches, scoped to <code>#as-initiatives</code>: field <code>#0A100D</code>, open plate <code>#0E1712</code>, hairline <code>#1E2C24</code>, rail <code>#2B4034</code>, text <code>#E9EFE9</code>, dim <code>#9BAA9E</code>, mint <code>#6FE3A5</code> for done/running/met, sky <code>#86C2EC</code> for ready and links, amber <code>#E2B366</code> for blocked and auto-wait, coral <code>#EC8B82</code> for not met and unresolved, violet <code>#B7A4E6</code> for cannot tell. No filled chip backgrounds: a 6 to 10% mint tint on the current station, coral tint on errors. This is the biggest stretch of the three, and the only one that changes the tab's base tone rather than just its accents.</p>
+
+  <p class="fine">Effort: high. Risk: medium. Best if the reader wants the tab to feel genuinely new and is happy for this one surface to be greener than the rest of the panel.</p>
+</div>
+
+<div class="dir" id="c">
+  <h3><span class="badge">C</span>The Cockpit</h3>
+  <p class="promise">The tab becomes a workspace: an initiative index on the left, a workbench on the right, and a wave track across the top of the workbench.</p>
+
+  <h4>Why this direction</h4>
+  <p>At 480 there is no room for two panes, so the cockpit is an index that opens a detail with a Back control. At 900 and above it becomes what the wide float already has space for: a persistent index of initiatives, a selected detail, and a horizontal wave track that makes the sequence visible in one glance. Status becomes comparable across initiatives without opening each one, which is the thing the folded list cannot do today. The casts (projects, assistants, history) become segments of the detail rather than three stacked folds, so every field is still one press away but the page stops being a vertical stack of everything. This is the most reinvented direction and the one that would scale to other areas of the panel.</p>
+
+  <h4>The sketch</h4>
+  <div class="sk sk-c">
+    <div class="win">
+      <div class="idx">
+        <div class="ih">Initiatives <span class="n">4</span></div>
+        <div class="find">Search initiatives, projects, tasks</div>
+        <div class="irow"><h5>Kafka rating pipeline hardening</h5><div class="is">no waves</div><div class="im">2p · 2w · 2a · 3h</div></div>
+        <div class="irow on"><h5>Menu SSO migration</h5><div class="is"><span class="run">W3 running</span> · 2 of 3 done</div><div class="im">2p · 2w · 2a · 6h</div></div>
+        <div class="irow"><h5>Batch sweeper retry budget</h5><div class="is" style="color:#6b7482">no description</div><div class="im">0p · 0w · 0a · 9h</div></div>
+        <div class="irow"><h5>Quarter-end release readiness</h5><div class="is">W2 running · 1 of 2 done</div><div class="im">2p · 2w · 1a · 1d</div></div>
+      </div>
+      <div class="det">
+        <div class="dhead"><h4>Menu SSO migration</h4><span class="btn">Edit</span></div>
+        <div class="dmeta">2 projects · 2 worktrees · 2 assistants · edited 6h ago by assistant-1</div>
+        <p class="ddesc">Move the Menu login from LDAP to Okta through oauth2-multi, keep the session cookie sticky through the VIP, and prove a real two-factor login before the login page is cut over.</p>
+
+        <div class="track">
+          <div class="step done"><span class="kn"></span><span class="sl">W1</span><span class="st">Okta callback on the VIP</span><span class="sw">done</span></div>
+          <div class="step done"><span class="kn"></span><span class="sl">W2</span><span class="st">One real two-factor login</span><span class="sw">done</span></div>
+          <div class="step now"><span class="kn"></span><span class="sl">W3</span><span class="st">Cut the login page over</span><span class="sw">running</span></div>
+        </div>
+
+        <div class="board">
+          <div class="bh"><b>W3</b><h5>Cut the login page over behind the switch</h5><span class="st">running · current</span></div>
+          <div class="cells">
+            <div class="cell"><span>entry</span><b class="n">no check</b></div>
+            <div class="cell"><span>exit</span><b class="g">clean met</b></div>
+            <div class="cell"><span>auto</span><b class="n">off</b></div>
+            <div class="cell"><span>template</span><b class="w">turnover unresolved</b></div>
+          </div>
+          <div class="cols">
+            <div class="col"><div class="cl">auth/callback <span>running</span></div><div class="cr">runs in 1 tree</div>
+              <div class="cc"><b>#11</b><p>Validate the Okta callback against the VIP</p><span>oauth2-multi · running</span></div></div>
+            <div class="col"><div class="cl">menu/login <span>running</span></div><div class="cr">runs in 1 tree</div>
+              <div class="cc"><b>#31</b><p>Cut the login page over</p><span>Menu · running</span></div></div>
+            <div class="merge">2 lanes<br>→<br>ONE close</div>
+          </div>
+        </div>
+
+        <div class="segs"><b class="on">Worktrees <span class="n">2</span></b><b>Assistants <span class="n">2</span></b><b>History <span class="n">5</span></b></div>
+        <div class="trows">
+          <div class="trow"><b>Menu</b><span>menu-login-page</span><span class="st">wtgui/menu-login-page</span></div>
+          <div class="trow"><b>oauth2-multi</b><span>menu-sso-state-cookie</span><span class="st">wtgui/menu-sso-state-cookie</span></div>
+          <div class="trow"><b>+ Add a worktree</b><span style="color:#6b7482">grouped picker, tier decides</span><span class="st dim">ask</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="cap">Static sketch, real Menu SSO data. Not product code. The sketch is the 1000px form; below 720 it collapses to the index and the detail becomes a drill-down with a Back control.</p>
+
+  <h4>At 480 and at 1300</h4>
+  <p><b>480:</b> the tab opens on the index: four rows of title, status, counts and edited time, around 320 to 380px in total. Pressing a row opens its detail in place, with a 32px Back row; the horizontal wave track scrolls and snaps the current node into view; gates become a four-cell strip; lanes stack as columns; the casts are segments. The selected initiative and the Back position live in module state, so the 4s repaint does not lose them.</p>
+  <p><b>1300:</b> a 268px index and a detail that fills the rest. The wave track is always visible at the top of the detail, the current wave opens into the board, and the three casts are segments with the Worktrees table shown by default. The index is searchable and each row carries the current-wave status, so the reader can compare without opening. The track is the only horizontal scroller; the page itself does not scroll sideways.</p>
+
+  <h4>What it would change in files</h4>
+  <ul>
+    <li><code>public/initiatives.js</code> (new): the whole 995-line block from <code>assistant.js</code>, moved as a classic script loaded before <code>assistant.js</code>, with a context object for <code>as$</code>, state, <code>apiFetch</code>, <code>esc</code>, <code>relTime</code>, <code>setView</code>, the queue painter and the focus token. This direction is big enough to justify the move, unlike A or B.</li>
+    <li><code>public/index.html</code>: one script tag for the new module. No pane markup change.</li>
+    <li><code>public/style.css</code>: index, detail, track, board, lane columns and segments; scoped tokens; the focus ring.</li>
+    <li><code>public/core/waves-lane.js</code>: a compact track node plus the full board mode; keep the full <code>waveHtml</code> for the current wave.</li>
+    <li><code>public/core/initiative-fold.js</code>: pure <code>indexSignal(init)</code>, <code>selectedAfterFilter</code>, <code>trackSteps(init)</code>.</li>
+    <li><code>routes/initiatives.js</code> and <code>lib/waves.js</code>: no change; the index status is derived from <code>waveCurrentId</code>, <code>wave.state</code>, <code>waveStatus</code> and <code>waveSkipped</code>.</li>
+    <li>New browser gate at 480 and 1300 for the index height, the selected-state persistence, the track and the no-horizontal-scroll rule.</li>
+  </ul>
+
+  <h4>What it keeps</h4>
+  <ul class="keeps">
+    <li>Every inventory row A1 to H15, in the detail or the index.</li>
+    <li>Every wave, gate, lane, member, project, tree, assistant, task and history row.</li>
+    <li>Every fold's content, now a segment or a disclosure inside the detail.</li>
+    <li>Every route, tier question and alert.</li>
+    <li>Every count, including zeros, and every tooltip sentence.</li>
+    <li>The compact queue card and its window.</li>
+    <li>The 28px floor, focus token, typing guard and 4s repaint.</li>
+    <li>The store, the server and the schema.</li>
+    <li>The board and the other tabs; this is still one tab.</li>
+  </ul>
+
+  <div class="tradeoff"><b>The trade-off:</b> it changes the navigation model, which is the one thing the other two deliberately keep. At 480, comparing two initiatives costs a Back press and a re-open, and the open state of a card is no longer visible while another is being read. At 1300 it is the best of the three at a glance, but it needs a selected initiative, a filtered-index fallback and careful keyboard and aria work; it is the largest diff and the largest test surface. It also takes the most risk with "keep the structure": all the content is kept, but the accordion becomes a master-detail.</div>
+
+  <h4>Theme: what stays, where it stretches</h4>
+  <p>Stays: the dark base, the green running/done words, blue links, amber blocked, violet unknown. Stretches: three surfaces for index, detail and selected row (<code>#0d1117</code>, <code>#0f141b</code>, <code>#151d27</code>), a green 2px selection rail, a green progress track with a halo on the current node, and a single amber join cell. The green is used for position and progress, not for decoration; the rest of the panel does not change.</p>
+
+  <p class="fine">Effort: very high. Risk: high. Best if the reader wants the Initiatives tab to become the panel's workspace pattern and intends to expand the same language to other tabs.</p>
+</div>
+
+<h2 id="compare">How the three compare</h2>
+<table>
+  <thead><tr><th>Question</th><th>A: The Register</th><th>B: The Route</th><th>C: The Cockpit</th></tr></thead>
+  <tbody>
+    <tr><td>Status at rest</td><td class="good">Yes: W2/3, state word, counts as text</td><td class="good">Yes: route glyph, current station, status word</td><td class="good">Yes: index row status, selected track</td></tr>
+    <tr><td>Sequence legibility</td><td>Good: vertical spine</td><td class="good">Best: one continuous route</td><td class="good">Best at 1300: horizontal track</td></tr>
+    <tr><td>Lanes</td><td>Indented stubs under the wave</td><td>Branch rails, side by side at 1300</td><td>Columns with a merge cell</td></tr>
+    <tr><td>Wide panel</td><td>Table header, one list</td><td>Plate split, waves full width, lanes side by side</td><td class="good">Index plus workbench, best use of width</td></tr>
+    <tr><td>Structure kept</td><td class="good">Fully: accordion, one scroller</td><td class="good">Fully: accordion, one scroller</td><td>Content kept; navigation changes</td></tr>
+    <tr><td>New state</td><td>Sort and filter only</td><td>About fold only</td><td>Selected initiative, Back, segment</td></tr>
+    <tr><td>First commit</td><td>CSS de-pill</td><td>CSS de-pill</td><td>CSS de-pill, then extraction</td></tr>
+    <tr><td>Files touched</td><td>CSS, assistant.js, 2 core, tests</td><td>CSS, assistant.js, 2 core, tests</td><td>New module, index.html, CSS, 2 core, tests</td></tr>
+    <tr><td>Risk of losing a field</td><td>Low</td><td>Low to medium (markup rewrite)</td><td>Medium (move plus nav)</td></tr>
+    <tr><td>Effort</td><td>Medium</td><td>High</td><td>Very high</td></tr>
+    <tr><td>Best if</td><td>He wants a modern tidy-up with the least risk</td><td>He wants the tab to feel new without a new navigation model</td><td>He wants a workspace and may expand the language</td></tr>
+  </tbody>
+</table>
+
+<h2 id="recommend">Recommendation</h2>
+<div class="verdict good">
+  <strong>My order is B, then A, then C.</strong> B (The Route) is the direction that answers the request most directly: it makes the wave sequence the page, it turns the green theme into structure, it fixes the wide float, and it keeps the accordion and every field. A is the safe fallback if the reader wants the smallest change; C is the ambition if he wants the Initiatives tab to become the panel's workspace pattern. All three share the same first commit, so choosing B does not throw away A's work: the de-pill, the header compression and the register line are the first three steps of either.
+</div>
+
+<h3>The first three commits, whichever direction is chosen</h3>
+<ol>
+  <li><b>CSS-only de-pill.</b> Inside <code>#as-initiatives</code>, make <code>.chip</code>, <code>.wave-gate</code>, <code>.wave-state</code>, <code>.wave-current</code>, <code>.wave-auto</code>, <code>.wave-mstate</code> and the member chips borderless text tokens. Keep one card edge and every control border. No markup, no handler, no server. Measure: bordered descendants in the open card should fall from 42 to about 12; filled pills from 29 to 0; the 16-point readability floor must stay green.</li>
+  <li><b>Header compression.</b> Replace the 204px preamble with a 48px toolbar and a 36px meta line. Move the three explanatory paragraphs and the tier hint behind one About control, word for word; keep the store count visible. Measure: distance from the pane top to the first initiative title, 204px to about 90px.</li>
+  <li><b>Register line with status.</b> One line per initiative carrying the current wave, its state, one running count and the edited time, in tabular numerals. Keep the description preview to one line at rest. Measure: four folded initiatives, 660px to about 300px, and a status readable without opening.</li>
+</ol>
+<p>Then the direction-specific work: A builds the page and the spine; B builds the route and the rails; C builds the index and the track. Only C should extract the block first, and only as its own no-op commit.</p>
+
+<h3>How the result will be checked</h3>
+<ul>
+  <li><b>A field-parity test, not a promise.</b> A fixture that holds met, not met, cannot tell and no gate; auto on and off; opened and waiting; two lanes; a skipped record; an unreadable wave store; a missing tree; zero assistants; no description. Every one of the 104 inventory items must appear in the DOM, at the right fold, before the direction is called done.</li>
+  <li><b>Pure tests</b> for the new helpers in <code>initiative-fold.js</code> and the new markup contract in <code>waves-lane.js</code>. The press rule, cut, count chips, task window and history line keep their existing tests.</li>
+  <li><b>One browser gate</b> at 480 and 1300, using <code>tools/initiatives-fixture.mjs</code>: folded-list height, open-card height, pane scroll, border and chip counts, no horizontal scroll, and the 16-point floor.</li>
+  <li><b>Captures</b> at the same three widths, from the same fixture, so the before and after are comparable without a second harness.</li>
+</ul>
+
+<h3>Deliberately not built in any direction</h3>
+<ul>
+  <li>No server change, no new store, no wave write path. The wave lane stays read-only in this slice.</li>
+  <li>No new fields: no health score, priority, owner, dates or client-invented progress. Status comes only from the read.</li>
+  <li>No filter that hides work by default. If a filter is added, "all" is the default and the counts stay visible.</li>
+  <li>No hover-only Remove and no colour-only state: every mark keeps its word.</li>
+  <li>No smaller type, no smaller hit targets, no light theme, no icon pack, no framework, no build step.</li>
+  <li>No virtualization while the list is this short; it would hide fields before it saves anything.</li>
+</ul>
+
+<h2 id="appendix">Appendix</h2>
+<h3>The fixture, as run</h3>
+<p>The committed fixture was extended in scratch with waves and task links. This is the waves document the captures used, verbatim in substance. It holds the shapes the report needs: a done wave with two done members, a done wave with a queued member, a running wave with two lanes and two running members, a wave with no members, and two refused records.</p>
+<pre>{
+  "byInitiative": {
+    "init_sso": [
+      { "id": "w_callback", "position": 1, "title": "Prove the Okta callback on the VIP",
+        "entryGate": { "check": "clean" }, "exitGate": { "check": "clean" }, "auto": true },
+      { "id": "w_login", "position": 2, "title": "One real two-factor login",
+        "entryGate": { "check": "clean" }, "exitGate": { "check": "clean" }, "auto": false },
+      { "id": "w_cutover", "position": 3, "title": "Cut the login page over behind the switch",
+        "entryGate": null, "exitGate": { "check": "clean" }, "template": "turnover", "auto": false }
+    ],
+    "init_release": [
+      { "id": "w_land", "position": 1, "title": "Land the release notes", "exitGate": { "check": "commits", "min": 1 } },
+      { "id": "w_empty", "position": 2, "title": "The clean install on DEV", "exitGate": { "check": "clean" } },
+      { "id": "w_bad", "position": 2, "title": "" }
+    ],
+    "init_sweeper": [
+      { "id": "w_probe", "position": 1, "title": "" }
+    ]
+  }
+}</pre>
+<p class="cap">The task side: the fixture's #11 was given <code>waveId: "w_cutover"</code> and lane <code>auth/callback</code>; #12 was given <code>w_login</code>; #21 and #30 were given <code>w_callback</code>; #31 was added as a running member of <code>w_cutover</code> in lane <code>menu/login</code>. Four more done tasks on the same trees were added so the task fold would draw its six-card window and its "Show 3 more" line. Nothing in the repository was changed.</p>
+
+<h3>Capture manifest</h3>
+<table>
+  <thead><tr><th>Group</th><th>Files</th><th>What they prove</th></tr></thead>
+  <tbody>
+    <tr><td>Widths</td><td><code>00</code> to <code>09</code>, <code>49</code> to <code>51</code></td><td>The tab at 1440, 1024 and 768, default and open; the wave lane at each width; the 768 release card.</td></tr>
+    <tr><td>Wide float</td><td><code>10-1440-float-pane.png</code></td><td>The only two-column layout, at 1400px, with the wave lane full width below it.</td></tr>
+    <tr><td>Card and forms</td><td><code>20</code> to <code>25</code>, <code>39</code></td><td>Tab head, card head, folded and open description, edit form, new form.</td></tr>
+    <tr><td>Waves</td><td><code>26</code> to <code>28</code>, <code>37</code>, <code>38</code></td><td>A flat wave, an auto-opened wave, the two-lane wave, skipped records, a wave with no members.</td></tr>
+    <tr><td>Worktrees and assistants</td><td><code>29</code> to <code>34</code></td><td>Projects, tree rows, add form, assistant counts, task fold, history.</td></tr>
+    <tr><td>Empty and error</td><td><code>35</code>, <code>36</code>, <code>44</code> to <code>48</code></td><td>Every empty state, no-wave card, empty tab, unreadable store, unreadable waves, cold read.</td></tr>
+    <tr><td>Interaction</td><td><code>40</code> to <code>43</code></td><td>Hover on project, Remove and title; keyboard focus on Remove.</td></tr>
+  </tbody>
+</table>
+<p class="cap">All files are under <code>docs/assets/initiatives-redesign/a/</code>. Forty-three PNGs, 1.9 MB. The inventory links each one directly.</p>
+
+<h3>What is not claimed</h3>
+<ul>
+  <li>This is not a usability test with people. It is a measured reading of the rendered tab plus three independent design passes.</li>
+  <li>It is one fixture, not the reader's fleet. It holds the shapes that matter (waves, lanes, members, empty and error states), but a fleet with twenty initiatives or a wave with ten lanes may expose something this one does not.</li>
+  <li>The 1.144 readability floor is cited, not re-audited. This round changed no product code, so contrast, hit targets and focus were not re-measured; the redesign must keep that floor rather than beat it by accident.</li>
+  <li>The sketches are static HTML with real data. They are not interactive, they do not run the product's JavaScript, and their colours are proposals, not shipped tokens.</li>
+  <li>No product file, route, store, setting or live panel was written. The only writes are this report and the captures under <code>docs/assets/initiatives-redesign/a/</code>.</li>
+</ul>
+
+<h3>What was run</h3>
+<p><code>npm run test:changed -- --list</code> named no test: the only changed path is <code>docs/assets/initiatives-redesign/</code>, and no test names or imports it. No product test suite was run, because the diff is documentation and images only. The capture harness itself was run four times against private panels, each waiting for four initiatives before it took a shot. The live listener on 7331 was read, never written.</p>
+
+<p class="fine" style="margin-top:28px">Report written 2026-11-22 for the landing branch <code>wtgui/research-round-a-for-initiatives-tab-e85acb</code>. Captures and inventory are the evidence; the three directions are the choice.</p>
+</main>
+</body>
+</html>
