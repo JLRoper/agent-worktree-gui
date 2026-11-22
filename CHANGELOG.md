@@ -4,16 +4,31 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.152.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.153.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-671 releases from v0.1.0 (2026-10-20) to v1.152.0 (2026-11-21), 2357 commits between the tags. Every release is anchored by an
+672 releases from v0.1.0 (2026-10-20) to v1.153.0 (2026-11-21), 2362 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.153.0 — 2026-11-21 · 5 commits
+
+[`bccae4d`](https://github.com/JLRoper/agent-worktree-gui/commit/bccae4d437b8aa21acb6ee8abccd594f69a5f99c) · [compare v1.152.0...v1.153.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.152.0...v1.153.0)
+
+### Docs & tests
+
+- docs: render the changelog - 671 releases ([`881b12c`](https://github.com/JLRoper/agent-worktree-gui/commit/881b12c0ac9182c7a6148381e79708e7186e473a))
+- docs: the landing note for 1.153.0, and the version it carries ([`bccae4d`](https://github.com/JLRoper/agent-worktree-gui/commit/bccae4d437b8aa21acb6ee8abccd594f69a5f99c))
+
+### Other
+
+- the note carries the number the branch actually lands, 1.152.0, and the rebase that moved it ([`f34cce0`](https://github.com/JLRoper/agent-worktree-gui/commit/f34cce05456bd41b938430f68ad49bddb4587e5e))
+- the note and the PR say what the full sweep answered, not that it ran ([`8f9cda9`](https://github.com/JLRoper/agent-worktree-gui/commit/8f9cda9e86862ac9657b67b146b38f4bdc5b2925))
+- a wave gate reads evidence: the PR through the API, the landing by content, an abandonment by its reason ([`1676ba4`](https://github.com/JLRoper/agent-worktree-gui/commit/1676ba49d6dfc6151881e17a5410484055c828d3))
 
 ## v1.152.0 — 2026-11-21 · 8 commits
 
