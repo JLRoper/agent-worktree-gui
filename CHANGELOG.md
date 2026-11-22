@@ -4,16 +4,34 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.153.2 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.154.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-674 releases from v0.1.0 (2026-10-20) to v1.153.2 (2026-11-21), 2368 commits between the tags. Every release is anchored by an
+675 releases from v0.1.0 (2026-10-20) to v1.154.0 (2026-11-21), 2373 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.154.0 — 2026-11-21 · 5 commits
+
+[`cdb330c`](https://github.com/JLRoper/agent-worktree-gui/commit/cdb330c4194b3e1f9e2c85f24e732e014e70a9cc) · [compare v1.153.2...v1.154.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.153.2...v1.154.0)
+
+### Fixed
+
+- fix: answer the spawn pre-flight from the registry's projects getter ([`365899c`](https://github.com/JLRoper/agent-worktree-gui/commit/365899ce8127b4343193b9ee92f0932458e334ab))
+
+### Docs & tests
+
+- docs: render the changelog - 674 releases ([`5dbe556`](https://github.com/JLRoper/agent-worktree-gui/commit/5dbe5569248e06293749f5f603d5c88661a4e3b6))
+- docs: the landing note for a wave's lanes, with what the sweep answered ([`1588b62`](https://github.com/JLRoper/agent-worktree-gui/commit/1588b6266bf97f95892599a809b94eed1377062f))
+
+### Other
+
+- a wave's lanes are derived from its members, and its close is one join ([`88ecc74`](https://github.com/JLRoper/agent-worktree-gui/commit/88ecc74ebc8f3bc07c417b7db96c4078d53fb201))
+- chore: 1.154.0 - the version this landing carries ([`cdb330c`](https://github.com/JLRoper/agent-worktree-gui/commit/cdb330c4194b3e1f9e2c85f24e732e014e70a9cc))
 
 ## v1.153.2 — 2026-11-21 · 2 commits
 
