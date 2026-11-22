@@ -23,12 +23,12 @@ screen at the same time and the assertion was false at every scroll position: th
 The repair, in `tools/verify-initiatives-scroll.mjs`:
 
 - `geometry()` now reports `lastHeight`, `lastBottomInPane` and `lastTallerThanPane` beside the old `lastInPane`
-  (`:205-216`).
+  (`:211-216`).
 - `:340` asserts the last card's REACHABLE BOTTOM is inside the pane at maximum scroll, and `:341` still asserts the
   whole box whenever the card fits - the old claim survives in the case where it is meaningful, and the failure line
   says which card height made it impossible.
 - `:351-352` do the same after the five-second re-read.
-- The header (`:21-33`) states the reason and the two commits, so the next reader does not re-learn it.
+- The header (`:20-33`) states the reason and the two commits, so the next reader does not re-learn it.
 
 The gate now answers 35/35, and it is in the round's gate list: `docs/reports/initiatives-redesign/gates-1.157.6.json`
 names the four gates, the command that runs each, and the rule that the round is green only when every one of them is.
