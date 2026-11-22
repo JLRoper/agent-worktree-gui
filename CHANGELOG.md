@@ -11,13 +11,13 @@ Pass that version here and read only what came after it:
 npm run changelog -- --since v0.80.0
 ```
 
-674 releases from v0.1.0 (2026-10-20) to v1.153.2 (2026-11-21), 2369 commits between the tags. Every release is anchored by an
+674 releases from v0.1.0 (2026-10-20) to v1.153.2 (2026-11-21), 2368 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
 
-## v1.153.2 — 2026-11-21 · 3 commits
+## v1.153.2 — 2026-11-21 · 2 commits
 
-[`d4ebf68`](https://github.com/JLRoper/agent-worktree-gui/commit/d4ebf68b9a0829436e3daf3b9de383b7063b0f63) · [compare v1.153.1...v1.153.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.153.1...v1.153.2)
+[`cc01e29`](https://github.com/JLRoper/agent-worktree-gui/commit/cc01e293be2f915fc8ea3dd7652fcb049e14fac8) · [compare v1.153.1...v1.153.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.153.1...v1.153.2)
 
 ### Docs & tests
 
@@ -25,8 +25,7 @@ has no tag.
 
 ### Other
 
-- Stop drawing a second queued chip for one Enter ([`ea16a15`](https://github.com/JLRoper/agent-worktree-gui/commit/ea16a159e19e0169ffeb026b52f7a4719e23991c))
-- chore: 1.153.2 - the version this landing carries ([`d4ebf68`](https://github.com/JLRoper/agent-worktree-gui/commit/d4ebf68b9a0829436e3daf3b9de383b7063b0f63))
+- One Enter in a reply box queued the reply twice (#833) ([`cc01e29`](https://github.com/JLRoper/agent-worktree-gui/commit/cc01e293be2f915fc8ea3dd7652fcb049e14fac8))
 
 ## v1.153.1 — 2026-11-21 · 4 commits
 
