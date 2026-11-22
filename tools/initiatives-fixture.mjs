@@ -20,7 +20,10 @@
 //     path tokens, and one with no worktrees at all (an empty initiative is a real state, not a bug);
 //   * a `missing` tree on one initiative, so the dimmed "no longer on the board" row is in the picture;
 //   * two assistants with queue rows across all four task states, so the count strips are mixed and the task folds
-//     have something exact to open.
+//     have something exact to open;
+//   * a wave store on one initiative (three waves, one with two named lanes and a member from each project), so the
+//     lane the redesign draws - and its 10px project tag - is in the DOM every capture and gate measures, not only in
+//     the one run that remembered to seed it.
 //
 // The repositories are throwaway. Nothing here touches a checkout, a remote, or the reader's `~/.wag`.
 import { spawn } from "node:child_process";
@@ -236,6 +239,31 @@ function writeState(home) {
   ];
   writeFileSync(path.join(state, "assistants.json"), `${JSON.stringify({ version: 1, assistants }, null, 1)}\n`, "utf8");
   const queues = queueTasks(home);
+  // THE WAVE STORE, so the lane the tab draws is in every measurement of it. Three waves on init_sso; wave-flip holds
+  // two named lanes (cookie and login), each with one task from a different project, which is what makes the lane's
+  // member rows and their 10px project tags measurable. The task ids are the fixture's own (11 and 13 are init_sso's
+  // running and done tasks); a lane is the task's field, so this is a store the route reads, not markup injected into
+  // the page.
+  const lanes = { 11: "cookie", 13: "login" };
+  for (const tasks of Object.values(queues)) {
+    for (const task of tasks) {
+      if (lanes[task.id]) task.lane = lanes[task.id];
+      if (task.id === 11 || task.id === 13) task.waveId = "wave-flip";
+      if (task.id === 21) task.waveId = "wave-proof";
+    }
+  }
+  const waves = {
+    version: 1,
+    savedAt: new Date().toISOString(),
+    byInitiative: {
+      init_sso: [
+        { id: "wave-proof", initiativeId: "init_sso", position: 1, title: "Prove the Okta callback through the VIP", entryGate: { check: "clean" }, exitGate: { check: "clean" }, template: null, auto: true },
+        { id: "wave-flip", initiativeId: "init_sso", position: 2, title: "Flip the Menu login to SSO behind the toggle", entryGate: { check: "clean" }, exitGate: { check: "pr-open" }, template: null, auto: false },
+        { id: "wave-retire", initiativeId: "init_sso", position: 3, title: "Retire the LDAP fallback and close the migration", entryGate: null, exitGate: null, template: "sefl-review-loop", auto: false },
+      ],
+    },
+  };
+  writeFileSync(path.join(state, "waves.json"), `${JSON.stringify(waves, null, 2)}\n`, "utf8");
   for (const [id, tasks] of Object.entries(queues)) {
     const dir = path.join(state, "assistants", id);
     mkdirSync(dir, { recursive: true });
