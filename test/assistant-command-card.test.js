@@ -6,18 +6,21 @@
 // on top of that card: a malformed bracket is not a title, and it never changes what the line is or what the panel
 // does with it.
 //
-//   1. the emoji map: one emoji per kind, nine kinds, no kind without one;
+//   1. the emoji map: one emoji per kind, ten kinds, no kind without one;
 //   2. the 80-character rule, named and exported: a title of 80 characters counts, 81 does not - and the line is a
 //      card either way, because the rule decides the TITLE and never whether a readable line is drawn;
 //   3. the header: the kind's emoji, then the recipient, then the title when one parses;
 //   4. a card for ANY readable line: untitled QUEUE, MESSAGE and SPAWN, and a titled one alongside them;
-//   5. the card is the SAME component a tool's result uses (core/console-format.js's frame), with a real button for
+//   5. a TO is a card too - its thread on the head, its own colon grammar (the FIRST colon after the thread), an
+//      empty payload still a card, and its message NEVER clamped: the whole text is behind the frame's own head;
+//   6. the card is the SAME component a tool's result uses (core/console-format.js's frame), with a real button for
 //      its head and a body folded to two lines;
-//   6. the agent card's transcript reaches that card through the one prose renderer, and holds no builder of its own;
-//   7. the four lines the panel asks to see still run: an unclosed bracket, an 81-character bracket, a bracket on a
+//   7. the agent card's transcript reaches that card through the one prose renderer, and holds no builder of its own;
+//   8. the four lines the panel asks to see still run: an unclosed bracket, an 81-character bracket, a bracket on a
 //      TODO line and a line with no bracket at all, each parsed by the EXECUTING grammar into the same row as before;
-//   8. the queue row is byte-for-byte what it was: the title is not stripped from what executes;
-//   9. the panes call the one module, the page loads it after the frame it needs, and no surface builds a second card.
+//   9. the queue row is byte-for-byte what it was: the title is not stripped from what executes - and the TO line the
+//      card draws is the same line the executor sends, read by lib/assistant/actions.js, which is untouched;
+//  10. the panes call the one module, the page loads it after the frame it needs, and no surface builds a second card.
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import { readFileSync } from "node:fs";
@@ -55,17 +58,20 @@ const EM = M.COMMAND_EMOJI;
 const head = (what) => `<span class="code-what">${what}</span>`;
 
 test("one emoji per kind, and a kind with no emoji is a bug", () => {
-  assert.equal(M.KINDS.length, 9);
+  assert.equal(M.KINDS.length, 10);
   const glyphs = M.KINDS.map((k) => M.COMMAND_EMOJI[k]);
   assert.deepEqual(Object.keys(M.COMMAND_EMOJI).sort(), [...M.KINDS].sort());
   assert.equal(new Set(glyphs).size, glyphs.length, "two kinds share an emoji");
   for (const glyph of glyphs) assert.ok(glyph && glyph.length >= 1, "a kind has no emoji");
-  // The nine the panel names, in the head's order, and TO is deliberately not one of them: it addresses a worker.
-  assert.deepEqual(M.KINDS, ["QUEUE", "MESSAGE", "SPAWN", "TODO", "RULE", "NOTE", "WATCH", "CHARTER", "RESTART"]);
-  assert.equal(M.parseCommandLine("TO panel-assistant: hello"), null);
+  // The ten the panel names, in the head's order, and TO leads them: it is the one line a worker receives, and the
+  // card is a second reading of the line - it changes nothing about the send path.
+  assert.deepEqual(M.KINDS, ["TO", "QUEUE", "MESSAGE", "SPAWN", "TODO", "RULE", "NOTE", "WATCH", "CHARTER", "RESTART"]);
+  assert.equal(M.parseCommandLine("TO panel-assistant: hello").kind, "TO");
   // …and a line that is not of the vocabulary is not a card at all.
-  assert.equal(M.cardHtml("TO panel-assistant: hello", { key: "k" }), "");
   assert.equal(M.cardHtml("just a sentence about QUEUEing work", { key: "k" }), "");
+  // A sentence that merely begins with the word is not a TO line: its field break is the colon right after the
+  // thread, and there is no such colon in `TO be clear, this is fine`.
+  assert.equal(M.parseCommandLine("TO be clear, this is fine"), null);
 });
 
 test("the header is the emoji, then the recipient, then the title when one parses", () => {
@@ -144,6 +150,122 @@ test("untitled MESSAGE, QUEUE and SPAWN lines are cards, and a titled one keeps 
   assert.ok(block.includes(`<div class="jl jl-text">here is what is queued.</div>`), "the prose line is not a card");
   // The four keys are the lines' own places in the message, so a repaint keeps each card's fold apart.
   for (let i = 1; i <= 4; i += 1) assert.match(block, new RegExp(`data-code-key="cmd\\|msg\\|1\\|${i}"`));
+});
+
+// ---- a TO is the line a worker receives, so it is carded and never folded ------------------------------------
+// The reader's decision: a TO was left as prose because it addresses a WORKER thread rather than the panel's own
+// command. That reason was about OWNERSHIP, not readability - and a TO is the one line in a reply a worker actually
+// acts on, the hardest of them to find in a wall of prose. So it gets the same card as QUEUE and SPAWN, with its own
+// colon grammar, and the card does not fold its message.
+
+const TO_LINE = "TO wtgui-worker-a: read docs/reports/card.html:12 and land it";
+const TO_DRIVE = "TO wtgui-worker-a: keep C: in the text: it is a drive letter, not a field";
+const TO_EMPTY = "TO wtgui-worker-a:";
+
+test("a TO line is a card with its thread as the recipient, split on the first colon only", () => {
+  const parsed = M.parseCommandLine(TO_LINE);
+  assert.ok(parsed, "a TO line is readable");
+  assert.equal(parsed.kind, "TO");
+  assert.equal(parsed.recipient, "wtgui-worker-a", "the thread is the recipient");
+  assert.equal(parsed.body, "read docs/reports/card.html:12 and land it", "the payload is everything after the first colon");
+  assert.equal(M.headerOf(parsed), `${EM.TO} wtgui-worker-a`, "the head is the kind's emoji and the thread");
+  // A colon inside the payload never re-splits it: the path's own `:12` and a drive letter stay in the text.
+  for (const line of [TO_LINE, TO_DRIVE]) {
+    const p = M.parseCommandLine(line);
+    assert.ok(p, `a TO is readable: ${line}`);
+    assert.equal(p.recipient, "wtgui-worker-a", "the first colon is the only field break");
+    assert.ok(p.body.includes(":"), "the payload keeps its own colon");
+  }
+  assert.equal(M.parseCommandLine(TO_DRIVE).body, "keep C: in the text: it is a drive letter, not a field");
+  // The thread may be written in quotes; the quotes are display dressing and are not part of the name.
+  assert.equal(M.parseCommandLine('TO "wtgui-worker-a": hello').recipient, "wtgui-worker-a");
+  // A TO with NO payload is still a TO: the line addresses the worker even when the text starts on the next line.
+  const empty = M.parseCommandLine(TO_EMPTY);
+  assert.ok(empty, "an empty-payload TO is still readable");
+  assert.equal(empty.recipient, "wtgui-worker-a");
+  assert.equal(empty.body, "");
+  const emptyCard = M.cardHtml(TO_EMPTY, { key: "k-empty" });
+  assert.notEqual(emptyCard, "", "an empty-payload TO still cards");
+  // The count slot is hidden on a command card (the stylesheet shows it only for a SPAWN's bullets), so the marker
+  // for "there is no text yet" is on the head itself, where the reader actually sees it.
+  assert.ok(emptyCard.includes(head(`${EM.TO} wtgui-worker-a (no text)`)), "with the thread on its head and the fact that it has no text");
+  assert.equal(emptyCard.includes("code-prompt-label"), false, "and no empty prompt row under a label");
+  // A sentence that merely starts with the word is not a TO line, and neither is a TO with no thread.
+  assert.equal(M.parseCommandLine("TO be clear, this is fine"), null);
+  assert.equal(M.parseCommandLine("TO : hello"), null);
+});
+
+test("a TO card does not fold its message, and never shows it behind the two-line clamp", () => {
+  const card = M.cardHtml(TO_LINE, { key: "cmd|msg|1|3" });
+  assert.notEqual(card, "");
+  // The whole message is the body, and the card carries NO clamp: no `data-code-clamp`, no `is-clamped`, and the
+  // body is the frame's own shut body until the reader presses the head - the same affordance every card has.
+  assert.equal(card.includes("is-clamped"), false, "a TO card is never clamped");
+  assert.equal(card.includes("data-code-clamp"), false, "a TO card names no preview rows");
+  assert.match(card, /<div class="code-body" hidden>/);
+  assert.ok(card.includes("read docs/reports/card.html:12 and land it"), "the message is in the body, whole");
+  // A caller that asks for a clamp gets none for a TO: this is the one kind whose text must not be cut.
+  const asked = M.cardHtml(TO_LINE, { key: "k", clamp: 2 });
+  assert.equal(asked.includes("data-code-clamp"), false, "a caller's clamp is not applied to a TO");
+  // Opened (the reader's own press, kept in the page's open book), the whole message is on the page.
+  const opened = M.cardHtml(TO_LINE, { key: "k-open", open: new Set(["k-open"]) });
+  assert.match(opened, /class="code-box is-cmd is-open"/);
+  assert.equal(opened.includes("code-body\" hidden"), false, "an opened TO shows its body");
+  assert.ok(opened.includes("read docs/reports/card.html:12 and land it"));
+  // The contrast, in the same block: the SPAWN beside it is still folded to the reader's preview rows.
+  const spawn = M.cardHtml(PLAIN_SPAWN, { key: "k-spawn" });
+  assert.match(spawn, /class="code-box is-cmd is-clamped"/);
+  assert.match(spawn, /data-code-clamp="2"/);
+});
+
+test("a reply with a TO, a QUEUE, a SPAWN and a NOTE cards the four and swallows no prose", () => {
+  const reply = [
+    "here is what I did, and what the worker should do next.",
+    TO_LINE,
+    "the queue line below is for the director.",
+    PLAIN_QUEUE,
+    "and the tree it cut:",
+    PLAIN_SPAWN,
+    "NOTE: the rail was resized, nothing else moved.",
+    "that is the whole reply.",
+  ].join("\n");
+  const block = M.cardsHtml(reply, { scope: "msg|9", open: new Set() });
+  assert.equal((block.match(/class="code-box is-cmd/g) || []).length, 4, "four cards: TO, QUEUE, SPAWN, NOTE");
+  assert.ok(block.includes(head(`${EM.TO} wtgui-worker-a`)), "the TO card's head is its thread");
+  assert.ok(block.includes(head(`${EM.QUEUE} assistant-3`)), "the QUEUE card is drawn as before");
+  assert.ok(block.includes(head(`${EM.SPAWN} IN #12 agent-worktree-gui`)), "the SPAWN card is drawn as before");
+  assert.ok(block.includes(head(`${EM.NOTE} NOTE`)), "the NOTE card is drawn as before");
+  // The prose around them is untouched - nothing is swallowed by a card.
+  for (const line of ["here is what I did, and what the worker should do next.", "the queue line below is for the director.", "and the tree it cut:", "that is the whole reply."]) {
+    assert.ok(block.includes(`<div class="jl jl-text">${line}</div>`), `prose is still prose: ${line}`);
+  }
+  // MESSAGE keeps its pipe grammar: a TO's colon did not change the field break of any other kind.
+  const message = M.cardHtml("MESSAGE assistant-3 | the deploy moved", { key: "k" });
+  assert.ok(message.includes(head(`${EM.MESSAGE} assistant-3`)));
+  assert.match(message, /data-code-clamp="2"/, "MESSAGE still folds to two lines");
+  // The four card keys are the lines' own places in the message; the TO is line 2 of the reply and the NOTE line 7.
+  assert.match(block, /data-code-key="cmd\|msg\|9\|1"/);
+  assert.match(block, /data-code-key="cmd\|msg\|9\|6"/);
+});
+
+test("the same TO line that cards is the same line that sends: the executing grammar is unchanged", () => {
+  // The line, read by the panel's own action reader. The card's recipient and body are the parse's thread and text -
+  // not a second grammar, and not a stripped one.
+  for (const line of [TO_LINE, TO_DRIVE]) {
+    const rows = parseActions(line);
+    assert.equal(rows.to.length, 1, "one TO row, as before");
+    const p = M.parseCommandLine(line);
+    assert.equal(rows.to[0].thread, p.recipient, "the card's recipient is the thread the panel sends to");
+    assert.equal(rows.to[0].text, p.body, "the card's body is the text the panel sends, byte for byte");
+  }
+  // An empty-payload TO is a card and NOT a send: the executing grammar requires text after the colon, and this
+  // change does not touch it. The card says `no text`; it does not imply a delivery.
+  assert.equal(M.cardHtml(TO_EMPTY, { key: "k" }) === "", false);
+  assert.deepEqual(parseActions(TO_EMPTY).to, [], "the empty-payload TO sends nothing, exactly as before");
+  // The reading that decides autonomy and delivery is lib/assistant/actions.js's, and the card imports none of it.
+  const source = read("../public/core/assistant-command.js");
+  assert.doesNotMatch(source, /(?:import|require)\s*\(?\s*["'][^"']*assistant\/actions/, "the card does not import the executor");
+  assert.match(read("../lib/assistant/actions.js"), /const to = \/\^\\s\*TO\\s\+\(\[A-Za-z0-9\._:-\]\+\)\\s\*:\\s\*\(\.\+\)\$\//, "the TO grammar is untouched");
 });
 
 test("the card is the tool card's own frame, with a button head and a two-line body", () => {
@@ -467,4 +589,19 @@ test("the agent card's transcript folds the same TODOs into the same card, throu
   // The seam, in one place: the transcript asks the frame for the fold, and the frame asks the one module.
   assert.match(markdown, /cf\.commandFold\(/);
   assert.match(read("../public/core/console-format.js"), /commandFold: cfCommandFold/);
+});
+
+// The browser proof is named here because a verify script no test names is a script nobody runs: `npm run
+// test:module tools/verify-to-card.mjs` treats that as a finding, not a pass.
+test("the TO card's browser proof is wired the way the repo reads a harness", () => {
+  const harness = read("../tools/verify-to-card.mjs");
+  assert.match(harness.split("\n").slice(0, 40).join("\n"), /^\/\/\s*HARNESS:\s*LIVE GATE\b/m);
+  const pkg = JSON.parse(read("../package.json"));
+  assert.equal(pkg.scripts["verify:to-card"], "node tools/verify-to-card.mjs");
+  // Its own throwaway panel and its own browser profile under the OS temp folder, and it reaps the panel.
+  assert.match(harness, /mkdtempSync\(path\.join\(tmpdir\(\), "wtgui-to-card-"\)\)/);
+  assert.match(harness, /await panel\.stop\(\)/);
+  // The 1440 proof the reader asked for, and the evidence page that carries the shots inline (no machine path).
+  assert.match(harness, /viewport: \{ width: 1440, height: 900 \}/);
+  assert.match(harness, /data:image\/png;base64/);
 });

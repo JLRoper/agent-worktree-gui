@@ -4,7 +4,9 @@
 // ...`, `SPAWN IN <tree> | ...`, `TODO ADD ...` - and the reader meets them as plain prose in the transcript. This
 // module reads the one thing a reader needs at a glance (which kind, who it is for, what it is called) and hands
 // back the SAME `.code-box` frame a tool's result is drawn in: a head with a caret and a line count, a body folded
-// to two lines, and a whole card that toggles on a press anywhere inside it.
+// to two lines, and a whole card that toggles on a press anywhere inside it. A TO is the one kind that is not
+// folded: its message is the text a worker acts on, so the card opens on the whole of it (see "A TO'S MESSAGE IS
+// NOT FOLDED" below).
 //
 // DISPLAY ONLY, AND THIS IS THE WHOLE OF THE RULE. Nothing here is read by the executing grammar: lib/assistant/
 // actions.js parses the line as it always did, byte for byte, and the title is NOT stripped from what runs. A card
@@ -22,16 +24,24 @@
 // the body, so the two-line clamp never hides them, and the head counts them (`5 todos`). A TODO with no SPAWN above
 // it keeps its card, exactly as it was.
 //
+// A TO'S MESSAGE IS NOT FOLDED. A TO addresses a WORKER thread and is the one line in a reply that a worker actually
+// receives - the panel sends it (lib/assistant/actions.js owns that reading, and this module never touches it), so
+// the card must not put the message behind a two-line preview that looks like the whole of it. The TO card is a card
+// like the others with one difference: its body is not clamped. It is the frame's own shut state, opened by the head
+// every other card has, so the whole message is one press away and nothing about it is cut mid-sentence. Its field
+// break is its own too - a TO splits on the FIRST colon after the thread, never a pipe - because a TO's text may
+// carry a colon of its own (a `file:line`, a drive letter) and none of those is a second field.
+//
 // THE TITLE. A line's payload may lead with `[Title]`. The title counts only when its closing bracket arrives
 // within the rule below (`COMMAND_TITLE_MAX`): a longer one, or one that never closes, is not a title, and it stays
 // in the body as the payload it is. That is deliberate - a title is a display nicety, and a model writing
 // `[a long sentence that never ends` must not be able to change what a reader is shown the line MEANS.
 //
 // THE HEADER. One emoji for the kind, then the recipient, then the title when there is one: `assistant-3 |
-// Playwright test`. The recipient is the field the kind addresses - the assistant for QUEUE/MESSAGE, the tree or
-// project for SPAWN, the thread for WATCH, `gateway`/`panel` for RESTART - and a kind that addresses nobody (RULE,
-// NOTE, CHARTER) draws the emoji and the title alone, or the kind's own name when it has no title either, so a head
-// is never a bare glyph.
+// Playwright test`. The recipient is the field the kind addresses - the thread for TO, the assistant for QUEUE/MESSAGE,
+// the tree or project for SPAWN, the thread for WATCH, `gateway`/`panel` for RESTART - and a kind that addresses
+// nobody (RULE, NOTE, CHARTER) draws the emoji and the title alone, or the kind's own name when it has no title
+// either, so a head is never a bare glyph.
 //
 // WHERE IT IS DRAWN. public/turns.js paints the board's tail with it (a folded turn's peek, and the compact card a
 // turn freezes to), public/assistant.js paints the transcript's entries with it, and the agent card's own transcript
@@ -47,6 +57,7 @@
   // One emoji per kind, and one only: the header is the first thing a reader's eye lands on, so a kind that has no
   // glyph here is a bug (the test counts them), not a line drawn without one.
   const COMMAND_EMOJI = Object.freeze({
+    TO: "\u{1F4E8}",
     QUEUE: "\u{1F9FE}",
     MESSAGE: "\u2709\uFE0F",
     SPAWN: "\u{1F331}",
@@ -95,9 +106,10 @@
     return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
 
-  // The nine kinds, in the order the vocabulary lists them. TO is deliberately absent: it addresses a WORKER thread
-  // and is not the panel's own command (lib/assistant/actions.js says so), so it keeps its prose line.
-  const KINDS = ["QUEUE", "MESSAGE", "SPAWN", "TODO", "RULE", "NOTE", "WATCH", "CHARTER", "RESTART"];
+  // The ten kinds, in the order the vocabulary lists them. TO leads because it is the one line a worker receives -
+  // the grammar says so, and the panel's own action reader (lib/assistant/actions.js) reads it with its own shape.
+  // Giving it a card changes nothing about that: the card is a second, display-only reading of the same string.
+  const KINDS = ["TO", "QUEUE", "MESSAGE", "SPAWN", "TODO", "RULE", "NOTE", "WATCH", "CHARTER", "RESTART"];
   const KIND_RE = new RegExp(`^\\s*(${KINDS.join("|")})\\b([\\s\\S]*)$`, "i");
 
   const QUOTES = /^["']|["']$/g;
@@ -110,6 +122,18 @@
   // (and lib/todos.js for TODO) so a line that gets a card is a line the executing grammar reads as a command: the
   // card never invents a reading the panel does not have.
   function fieldsOf(kind, rest) {
+    if (kind === "TO") {
+      // `TO <thread>: <text>` - the one kind whose field break is a COLON, not the pipe the three below share. The
+      // break is the FIRST colon after the thread: the thread is one token (git-thread ids carry no colon), and the
+      // payload is everything after it, colons and Windows paths included, so a `file:line` or a `C:` inside the
+      // message is never read as a second field. The thread is trimmed of a quote pair, and the payload may be EMPTY:
+      // `TO <thread>:` with the body on the following lines is still a TO, and hiding it would hide the recipient.
+      const m = /^\s*([^\s:]+)\s*:\s*([\s\S]*)$/.exec(rest);
+      if (!m) return null;
+      const recipient = m[1].trim().replace(QUOTES, "");
+      if (!recipient) return null;
+      return { recipient, payload: m[2] };
+    }
     if (kind === "QUEUE" || kind === "MESSAGE" || kind === "SPAWN") {
       // The pipe is the field break for all three: the text may contain anything, a Windows path's colon included.
       const m = /^([\s\S]*?)\s*\|\s*([\s\S]*)$/.exec(rest);
@@ -292,8 +316,11 @@
     // equal, and dropping the card would drop them with it.
     const list = (Array.isArray(bullets) ? bullets : []).filter(Boolean);
     // An id op (`TODO DONE 3`) carries no payload and no title: there is nothing a body could show, so the prose
-    // line it has always been is the whole command.
-    if (!parsed.title && !parsed.body && !list.length) return "";
+    // line it has always been is the whole command. A TO is the one exception: `TO <thread>:` with an empty payload
+    // is still the line that addresses the worker, so it is drawn with the recipient on the head and no body at all
+    // (the head says `(no text)`), rather than being hidden as if it were not a TO.
+    const emptyBody = !String(parsed.body || "").trim();
+    if (!parsed.title && emptyBody && !list.length && parsed.kind !== "TO") return "";
     const box = frame();
     if (!box) return "";
     // The reader's preview rows (Settings > Display) unless the caller named its own number. The attribute and the
@@ -323,7 +350,7 @@
       kind: "cmd",
       at: 0,
       rows: Math.max(1, lines.length),
-      what: headerOf(parsed),
+      what: headerOf(parsed) + (parsed.kind === "TO" && emptyBody ? " (no text)" : ""),
       title: parsed.text.trim(),
       // The head says how many bullets the card carries, and the bullets ride BETWEEN the head and the body so a
       // folded card still shows them: they are not part of the body the clamp cuts.
@@ -332,7 +359,9 @@
       body,
       opts: { key: key || keyOf(scope, ref) },
       open,
-      clamp: rows,
+      // A TO's body is never clamped: it is the message a worker acts on, so the whole of it is behind the frame's
+      // own head and no two-line preview can read as if it were the whole thing. Every other kind folds as it did.
+      clamp: parsed.kind === "TO" ? 0 : rows,
       attrs,
     });
   }

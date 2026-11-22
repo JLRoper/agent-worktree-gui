@@ -118,7 +118,10 @@ test("the folded height is the reader's number of preview rows, and its fallback
   assert.equal(3 * 12, 36);
   // The attribute and the stylesheet are written from the same setting: the card asks the page for the number.
   assert.match(read("../public/core/assistant-command.js"), /const rows = Number\(clamp\) > 0 \? Number\(clamp\) : previewRows\(\);/);
-  assert.match(read("../public/core/assistant-command.js"), /clamp: rows,/);
+  // …and every kind but TO is folded to it. A TO is the one exception, and it is named where the clamp is passed:
+  // its body is the message a worker acts on, so no preview may stand in for the whole of it (see the module's own
+  // "A TO'S MESSAGE IS NOT FOLDED").
+  assert.match(read("../public/core/assistant-command.js"), /clamp: parsed\.kind === "TO" \? 0 : rows,/);
   assert.match(app, /globalThis\.wtCommandPreviewRows = cmdLookState\.rows;/);
   // The unit travels with the value: a bare number in `padding: var(--cmd-pad-top) var(--cmd-pad)` is an invalid
   // declaration and the property would fall back to 0 instead of the reader's pixels.
