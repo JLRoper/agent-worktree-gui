@@ -80,8 +80,8 @@ test("the moved control keeps its handler: one press closes the stream, the next
   assert.match(handler, /paintPauseButton\(\)/, "the button is repainted from that flag");
   assert.match(handler, /state\.es\?\.close\(\)/, "pausing closes the live stream");
   assert.match(handler, /setStream\("paused", "warn"\)/, "…and the status line says paused");
-  assert.match(handler, /connect\(\)/, "resuming reconnects");
-  assert.match(handler, /resync\(\)/, "…and re-syncs the board");
+  assert.match(handler, /connect\(\{ waitForSnapshot: true \}\)/, "resuming reconnects");
+  assert.match(handler, /resync\(\{ automatic: true \}\)/, "…and re-syncs the board");
 
   // The label, the pressed state and the title are one paint, so a reader who closes Settings and opens it again
   // reads the same answer, and the tooltip never promises the gesture the button no longer does.

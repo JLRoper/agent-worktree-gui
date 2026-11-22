@@ -33,7 +33,9 @@ function walk(dir, out = []) {
     const rel = `${dir}/${name}`;
     const full = join(ROOT, rel);
     if (statSync(full).isDirectory()) {
-      if (name === "node_modules" || name === ".git") continue;
+      // public/reviews and public/docs are generated, gitignored artifacts (see .gitignore); nothing in them is the
+      // panel's page, and a review report's prose can mention a q key without binding one.
+      if (name === "node_modules" || name === ".git" || rel === "public/reviews" || rel === "public/docs") continue;
       walk(rel, out);
     } else if (/\.(js|mjs|html)$/.test(name) && !VENDORED.has(rel)) {
       out.push(rel);
