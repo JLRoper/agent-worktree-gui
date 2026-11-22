@@ -931,6 +931,16 @@ free-text row for questions that offer choices; an open-ended question always ke
 keeps its **Send answer** button). Answered, it reads `✓ answered: …`; a question answered elsewhere, withdrawn or
 expired leaves `· question closed without an answer here`.
 
+**The countdown is the gateway's window, not the panel's.** While the box is open it draws a bar and `~Ns left`
+from the deadline the gateway is enforcing: the prompt's own `timeout_s` when the gateway sent one, otherwise the
+same resolution every gateway surface uses - `clarify.timeout` in `config.yaml`, else `agent.clarify_timeout`, else
+the default that build ships (90 s on the gateway this panel runs against). A `0` or a negative there means the
+gateway waits indefinitely, so the card draws no bar at all rather than invent one. When the clock reaches zero the
+choices, the typed answer and **Send** are disabled and the note says the answer can no longer be delivered,
+because a press there could only be refused. A reply that names a wait which has already closed is answered in the
+room instead of being dropped: one message back names the wait, the option that was too late, how long it was open,
+what its record says closed it, and that nothing was applied.
+
 **A question whose run has already ended is not answered — it says so.** A run can end while its question is still
 drawn: a stop, a failed turn, the gateway dropping it. Answering then used to collapse the box with
 `✓ answered: …` even though no turn was left to read the answer, because the gateway's clarify route accepts the

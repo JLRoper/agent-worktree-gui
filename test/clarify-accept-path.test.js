@@ -129,11 +129,15 @@ test("one press answers a question once, greys every copy, and clears both surfa
   const page = await pageSource();
   const settings = await settingsSource();
   const decls = sliceBetween(page, "const questionPicks = new Map();", "const RECOMMENDED_RE");
+  // The card's window helpers are declared above the answer path, and `paintQuestionFlight` reads both of them:
+  // a spent window must stay shut when an in-flight answer ends badly. The slice carries them, so the harness
+  // builds the shipped page rather than a page with a hole in it.
+  const clock = sliceBetween(page, "const WINDOW_OVER_NOTE", "// One clock for the page");
   const helpers = // turnBlock moved to public/render-jobs.js in step 7 of docs/reports/module-map-2026-11-07.html, so the
   // region ends on the next declaration that stayed, artifactsFor.
   sliceBetween(page, "// Every card that draws this question", "function artifactsFor(");
   const build = pageHarness(
-    `${decls}\n${helpers}\n${declaredIn(settings, "applyQuestionAnswered")}`,
+    `${decls}\n${clock}\n${helpers}\n${declaredIn(settings, "applyQuestionAnswered")}`,
     ["document", "state", "apiFetch", "renderConversation", "assistantSessionFor", "window", "paintHumanButton", "showBanner"],
     ["answerRunQuestion", "questionFlights"],
   );
