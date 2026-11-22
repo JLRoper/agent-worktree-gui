@@ -4082,6 +4082,35 @@ function cancelHeldReply(entry) {
   }).catch(() => null);
 }
 
+// The Retry on a PARKED record (the panel could not start its turn and will not ask again). Only the panel may
+// revive it - it owns the state - so this asks, then lets the drain try once more. The record's words never left
+// the store, which is why a retry is possible at all.
+async function retryHeldReply(entry, thread) {
+  if (!entry || !entry.heldId) return false;
+  const warn = thread ? document.querySelector(`[data-reply-warn="${CSS.escape(thread)}"]`) : null;
+  try {
+    const r = await apiFetch("/api/held-replies", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "retry", id: entry.heldId }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.ok) {
+      if (warn) warn.textContent = `still parked — ${d.error || `HTTP ${r.status}`}`;
+      return false;
+    }
+    entry.state = undefined;
+    entry.why = undefined;
+    renderConversation(thread);
+    paintQueueWait(thread);
+    void drainReplyQueue(thread);
+    return true;
+  } catch (err) {
+    if (warn) warn.textContent = `still parked — the panel could not be asked (${err.message})`;
+    return false;
+  }
+}
+
 
 // The panel's own copy of what this tab holds, read ONCE when the page has a job snapshot (so it does not race the
 // page's first paint): every record still owed a turn goes back into its thread's queue, with its text and its
@@ -4121,7 +4150,9 @@ async function acceptHeldReply(heldId, thread = "") {
     if (warn) {
       warn.textContent = d.gone
         ? "that queued reply was already sent, so it is off the queue"
-        : `still held — ${why}`;
+        : d.parked
+          ? "that queued reply is parked — it could not be sent, so use Retry on its card"
+          : `still held — ${why}`;
     }
     return { ok: false, gone: Boolean(d.gone), why };
   } catch (err) {
@@ -4164,6 +4195,18 @@ function applyHeldReplies(list) {
         threads.add(thread);
         continue;
       }
+      // Parked: the panel could not start it and will not ask again. The entry STAYS on the card, with the reason
+      // and a Retry, because the words are still the reader's and still stored.
+      if (rec && rec.state === "parked") {
+        entry.state = "parked";
+        entry.why = rec.why || "";
+        threads.add(thread);
+      } else if (rec && rec.state === "held" && entry.state) {
+        // A retry (here or in another tab) took it back off the parked shelf.
+        entry.state = undefined;
+        entry.why = undefined;
+        threads.add(thread);
+      }
       keep.push(entry);
     }
     if (keep.length !== q.length) {
@@ -4178,7 +4221,7 @@ function applyHeldReplies(list) {
   for (const q of state.replyQueue.values()) for (const e of q) if (e?.heldId) known.add(e.heldId);
   for (const rec of records) {
     if (!rec || known.has(rec.id)) continue;
-    if (rec.state !== "held" && rec.state !== "sending") continue;
+    if (rec.state !== "held" && rec.state !== "sending" && rec.state !== "parked") continue;
     if (!rec.thread || !String(rec.text || "").trim()) continue;
     const mine = entryFor(rec.thread, rec);
     if (mine) {
@@ -4189,13 +4232,22 @@ function applyHeldReplies(list) {
       continue;
     }
     const q = state.replyQueue.get(rec.thread) || [];
-    q.push({ text: rec.text, at: Number(rec.at) || Date.now(), attachments: rec.attachments || [], heldId: rec.id });
+    q.push({
+      text: rec.text,
+      at: Number(rec.at) || Date.now(),
+      attachments: rec.attachments || [],
+      heldId: rec.id,
+      ...(rec.state === "parked" ? { state: "parked", why: rec.why || "" } : {}),
+    });
     q.sort((a, b) => (Number(a.at) || 0) - (Number(b.at) || 0));
     state.replyQueue.set(rec.thread, q);
     threads.add(rec.thread);
   }
   for (const thread of threads) {
     renderConversation(thread);
+    // The count beside Queue reply is drawn from the queue's SENDABLE entries, so a record that just became parked
+    // (or was revived) has to repaint that note too - renderConversation does not touch the composer's line.
+    paintQueueWait(thread);
     void drainReplyQueue(thread);
   }
 }
@@ -4258,10 +4310,11 @@ function queuePressInFlight(thread) {
   return Boolean(thread && state.replyPress.get(thread));
 }
 
-// Does this thread hold a reply that has not gone out yet? The count the card shows and the drain walks. It closes
-// nothing: a press is closed only for its own flight, so this is not a predicate any press asks.
+// Does this thread hold a reply that has not gone out yet? The count the card shows and the drain walks. A PARKED
+// entry is not waiting to go: the panel will not send it, so it must not be counted as queued (it has its own card
+// with Retry/×). It closes nothing either way.
 function queueWaitingOn(thread) {
-  return replyQueued(thread).length > 0;
+  return replyQueued(thread).some((e) => e && e.state !== "parked");
 }
 
 // The sentence a closed box carries while a press is in flight, in one place: the renderer writes it on the box
@@ -4283,7 +4336,7 @@ function pressSettled() {
 // message - and the note counts what is held instead.
 function paintQueueWait(thread) {
   const inFlight = queuePressInFlight(thread);
-  const held = replyQueued(thread).length;
+  const held = replyQueued(thread).filter((e) => e && e.state !== "parked").length;
   const card = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`);
   const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
   const btn = card?.querySelector("[data-queue-reply]");
@@ -4366,6 +4419,12 @@ function ghostTurnHtml(thread, q, edit, freeToSend) {
   const chips = q.attachments?.length
     ? `<div class="ghost-chips">${attachmentChipsFor(q.attachments)}</div>`
     : "";
+  // A PARKED entry: the panel could not start it and will not ask again. It keeps its place, its words and its age,
+  // and offers the two honest actions - Retry (the panel revives the record) or the × (cancel it).
+  if (q.state === "parked") {
+    const why = q.why || "the panel could not start a turn for it";
+    return `<div class="ghost-turn parked"><div class="ghost-head mono"><span class="ghost-badge parked">not sent</span><span class="queue-ago" data-queued-at="${q.at}">${fmtDur(Date.now() - q.at)}</span><span class="dimmer" title="${esc(why)}">parked — ${esc(why)}</span><button class="ghost-retry" type="button" data-queue-retry="${esc(thread)}" data-queue-retry-id="${esc(q.heldId || "")}" data-queue-retry-at="${q.at}" title="try this held reply once more">Retry</button><button class="ghost-cancel" type="button" data-queue-cancel="${esc(thread)}" data-queue-cancel-at="${q.at}" title="cancel this held reply — it will not be sent" aria-label="cancel this held reply for ${esc(thread)}">✕</button></div><div class="ghost-prompt">${linkifyText(q.text)}</div>${chips}</div>`;
+  }
   if (!edit || edit.at !== q.at) {
     return `${head("sends when the current turn finishes", false)}<div class="ghost-prompt" data-edit-queued-open="${q.at}" data-edit-thread="${esc(thread)}" role="button" tabindex="0" title="click to edit this held reply">${linkifyText(q.text)}</div>${chips}</div>`;
   }
@@ -4619,10 +4678,12 @@ async function drainReplyQueue(thread) {
   // identity (`at`): the turn finishing and the reader working on a held reply can land in the same moment. ONE guard
   // answers for both of the reasons an entry must not be sent — the reader took it back with its ×, or the reader has
   // it open in its editor — so the queue has no second check that could disagree with either of them.
-  const next = replyQueued(thread)[0];
+  // A PARKED entry cannot be sent - the panel will not start it - and it must not block the entries behind it: it
+  // stays on the card with its reason and Retry/×, and the drain takes the first entry that can actually go.
+  const next = replyQueued(thread).find((e) => e && !e.sending && e.state !== "parked");
   // `sending` is this page's own flight marker: a second drain call (one per job event) must not send the same entry
   // twice now that the entry stays in the queue until its turn exists.
-  if (!next || next.sending || threadBusy(thread) || childrenOut(thread)) return;
+  if (!next || threadBusy(thread) || childrenOut(thread)) return;
   const blocked = heldReplyBlocked(thread, next);
   if (blocked === "editing") {
     // Held, not sent: the entry keeps its place and its age, the card says why it is waiting, and saving the edit is
@@ -11825,6 +11886,17 @@ document.addEventListener("click", async (e) => {
     e.preventDefault();
     e.stopPropagation();
     cancelQueuedReply(queueCancel.dataset.queueCancel, Number(queueCancel.dataset.queueCancelAt) || 0);
+    return;
+  }
+  // The Retry on a parked entry: ask the panel to revive that one record, then let the drain try it once more.
+  const queueRetry = e.target.closest("[data-queue-retry]");
+  if (queueRetry) {
+    e.preventDefault();
+    e.stopPropagation();
+    const thread = queueRetry.dataset.queueRetry;
+    const at = Number(queueRetry.dataset.queueRetryAt) || 0;
+    const entry = replyQueued(thread).find((x) => x && x.at === at);
+    void retryHeldReply(entry, thread);
     return;
   }
   // Queue reply: hold the text (do not send) because a turn is running on this thread.

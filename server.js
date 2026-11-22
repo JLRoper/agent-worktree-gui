@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import { logger, log, parseLevel } from "./lib/log.js";
 import { syncTiming } from "./lib/sync-timing.js";
 import { createLoopLag, withActivity, markActivity, currentActivity, realMonotonicMs } from "./lib/loop-lag.js";
+import { PerformanceObserver } from "node:perf_hooks";
 import { Pool } from "./lib/pool.js";
 import { createSnapshotCache } from "./lib/snapshot-cache.js";
 // Every helper process this panel starts is registered here: it carries a hard ceiling and dies with its
@@ -701,18 +702,33 @@ logger.setLevel(config.logging.level);
 // evidence — the panel serves every request from one event loop, so a stall here delays every
 // handler behind it. Stall lines carry the activity breadcrumb the scan passes set
 // (lib/loop-lag.js), and GET /api/diagnostics reports the rolling stats.
+// How long the GC itself held the loop. The sampler's CPU evidence already separates a held loop from a suspend;
+// this separates a GC pause from synchronous JS inside that class, which is the difference between "our code is slow"
+// and "the heap is being collected". Best effort: a runtime without `gc` entries leaves the sampler with CPU alone.
+let gcTotalMs = 0;
+try {
+  const gcObserver = new PerformanceObserver((list) => {
+    for (const entry of list.getEntries()) gcTotalMs += Number(entry.duration) || 0;
+  });
+  gcObserver.observe({ entryTypes: ["gc"] });
+  gcObserver.unref?.();
+} catch {
+  /* no GC entries here: cpuMs still labels the pause */
+}
+
 const loopLag = createLoopLag({
   warnMs: config.logging.stallWarnMs,
-  onStall: ({ ms, at, activity, kind }) =>
-    logger.warn(`event loop stalled ${Math.round(ms)}ms (${kind}, at ${new Date(at).toISOString().slice(11, 19)}Z, activity: ${activity})`),
+  onStall: ({ ms, at, activity, kind, cpuPct }) =>
+    logger.warn(`event loop stalled ${Math.round(ms)}ms (${kind}, cpu ${cpuPct}%, at ${new Date(at).toISOString().slice(11, 19)}Z, activity: ${activity})`),
   // A wall-clock jump or a system suspend is not a held loop: say so with both clocks and the
   // process uptime captured at detection, so the unexplained long gap can be told apart from a
   // genuine synchronous block instead of being reported as one. `mono` is a monotonic clock;
   // `uptime()` is captured with every sample. Tests inject a virtual clock and leave mono at the
   // wall clock for backward-compatible stall counting.
   mono: realMonotonicMs,
-  onPause: ({ wallMs, monoMs, uptimeSeconds, activity, kind }) =>
-    logger.warn(`event loop pause classified ${kind}: wall ${Math.round(wallMs)}ms, monotonic ${Math.round(monoMs)}ms, uptime ${uptimeSeconds}s, activity ${activity}`),
+  gcMs: () => gcTotalMs,
+  onPause: ({ wallMs, monoMs, uptimeSeconds, activity, kind, cpuPct }) =>
+    logger.warn(`event loop pause classified ${kind}: wall ${Math.round(wallMs)}ms, monotonic ${Math.round(monoMs)}ms, uptime ${uptimeSeconds}s, cpu ${cpuPct}%, activity ${activity}`),
 });
 loopLag.start();
 // ---- one panel per port, asked before this one touches anything ----------------------------------
@@ -2498,7 +2514,7 @@ async function startThreadReply({ thread = "", text = "", displayPrompt = null, 
   const said = String(text || "").trim();
   if (!said) return { status: 400, body: { error: "reply text is required" } };
   const first = jobs.firstOfThread(String(thread || ""));
-  if (!first) return { status: 404, body: { error: `unknown thread: ${thread}` } };
+  if (!first) return { status: 404, body: { error: `unknown thread: ${thread}`, code: "unknown_thread" } };
 
   // Run where the agent actually is: the tree that agent was created for, and only while that is still a tree of its
   // own. This used to be a `stat(…).isDirectory()` test with a fall back to `first.cwd` — the same dead path — which
@@ -2604,6 +2620,7 @@ async function sendHeldReply(entry, { by = "reader" } = {}) {
       ok: false,
       state: now?.state || "gone",
       gone: !now || now.state === "sent" || now.state === "cancelled",
+      parked: now?.state === "parked",
       why: !now ? "no such held reply" : now.state === "sent" ? `that held reply already started turn ${now.jobId || "(unknown)"}` : `that held reply is ${now.state}`,
     };
   }
@@ -2642,8 +2659,11 @@ async function sendHeldReply(entry, { by = "reader" } = {}) {
     });
     if (out.status !== 202) {
       const why = String(out.body?.error || `the panel answered ${out.status}`);
-      heldReplies.release(claimed.id, why);
-      return { ok: false, busy: out.status === 409, why, state: "held" };
+      // A 404 with `unknown_thread` cannot fix itself: the panel has no job for this thread and nothing creates one.
+      // Parking it is what stops the 2s drain retrying the same words for hours (one record did, for 45.9h).
+      const permanent = out.body?.code === "unknown_thread";
+      const rec = heldReplies.fail(claimed.id, why, { permanent });
+      return { ok: false, busy: out.status === 409 && !permanent, why, state: rec?.state || "held", parked: permanent };
     }
     const job = out.body.job;
     heldReplies.sent(claimed.id, job?.id);
@@ -2651,8 +2671,10 @@ async function sendHeldReply(entry, { by = "reader" } = {}) {
     return { ok: true, job };
   } catch (e) {
     const why = String((e && e.message) || e);
-    heldReplies.release(claimed.id, why);
-    return { ok: false, busy: Boolean(e && (e.code === "thread_busy" || e.code === "tree_busy")), why };
+    const busy = Boolean(e && (e.code === "thread_busy" || e.code === "tree_busy"));
+    // A busy thread is not a failure: the hold goes when the turn ends, with no backoff. Anything else backs off.
+    const rec = busy ? heldReplies.release(claimed.id, why) : heldReplies.fail(claimed.id, why);
+    return { ok: false, busy, why, state: rec?.state || "held" };
   }
 }
 
@@ -2667,35 +2689,62 @@ async function sendHeldReply(entry, { by = "reader" } = {}) {
 // promise and never run again. That is measured: it is why the first draft of this never started a hold after a
 // settle.
 let heldDraining = null;
+// The last failure line written for a record. The clock runs every 2s while anything is open, and an unchanged
+// reason is not news: without this, one permanently failing record wrote 58,119 lines in a day (measured 2026-11-21).
+const heldFailureLogged = new Map();
 function drainHeldReplies({ why = "drain" } = {}) {
   if (heldDraining) return heldDraining;
   const pass = (async () => {
     const started = [];
+    const parked = [];
     let failed = null;
+    let changed = false;
+    const now = Date.now();
     const threads = [];
     for (const r of heldReplies.view().open) if (!threads.includes(r.thread)) threads.push(r.thread);
     for (const thread of threads) {
       const head = heldReplies.openForThread(thread)[0];
       if (!head || head.state !== "held") continue;
+      // A transient failure waits out its backoff: the clock keeps running, this record does not.
+      if (head.nextTryAt && head.nextTryAt > now) continue;
       // A live run on the thread OR in its tree refuses the turn (lib/jobs.js `busyFor`): the hold keeps its place.
       if (jobs.busyFor(thread).held) continue;
       if (assistant && assistant.isAssistantThread(thread) && assistant.assistantLive(assistant.assistantIdForThread(thread))) continue;
       const out = await sendHeldReply(head, { by: why });
-      if (out.ok) started.push({ id: head.id, thread, jobId: out.job?.id || null });
-      else if (out.state === "held") failed = { id: head.id, thread, why: out.why || "" };
+      if (out.ok) {
+        started.push({ id: head.id, thread, jobId: out.job?.id || null });
+        heldFailureLogged.delete(head.id);
+        changed = true;
+      } else if (out.state === "parked") {
+        // A permanent failure: said once, then never retried. The record keeps the reader's words and the card
+        // offers Retry, so parking is not losing it.
+        parked.push({ id: head.id, thread, why: out.why || "" });
+        heldFailureLogged.set(head.id, out.why || "");
+        changed = true;
+      } else if (out.state === "held") {
+        const reason = out.why || "";
+        if (heldFailureLogged.get(head.id) !== reason) {
+          heldFailureLogged.set(head.id, reason);
+          failed = { id: head.id, thread, why: reason };
+          changed = true;
+        }
+      }
     }
-    if (started.length || failed) {
+    if (started.length) {
       log(
-        `held replies (${why}): ${started.length} started${started.length ? ` (${started.map((s) => `${s.id} -> ${s.jobId || "?"}`).join(", ")})` : ""}` +
-          `${failed ? `; ${failed.id} kept waiting: ${failed.why}` : ""}`,
+        `held replies (${why}): ${started.length} started (${started.map((s) => `${s.id} -> ${s.jobId || "?"}`).join(", ")})`,
       );
+    }
+    for (const p of parked) log(`held reply ${p.id} parked: ${p.why} — it will not be retried; the card offers Retry`);
+    if (failed) log(`held replies (${why}): ${failed.id} kept waiting: ${failed.why}`);
+    if (changed) {
       try {
         broadcast({ type: "held-replies", held: heldReplies.view() });
       } catch {
         /* a broadcast is best effort: the page's next snapshot carries the same records */
       }
     }
-    return { started, failed };
+    return { started, parked, failed };
   })();
   heldDraining = pass;
   // Scheduled after the assignment above, so it cannot run before it. `armHeldDrain` afterwards: the store's open set
@@ -6540,7 +6589,19 @@ const server = createServer(async (req, res) => {
       if (action === "cancel") {
         const out = heldReplies.cancel(id, String(body.reason || "the reader took it back"));
         if (!out.ok) return sendJson(res, 409, { error: out.why, code: "held-cancel", state: out.state || null });
+        heldFailureLogged.delete(id);
         return sendJson(res, 200, { ok: true, reply: out.reply, changed: Boolean(out.changed), counts: heldReplies.view().counts });
+      }
+      if (action === "retry") {
+        // The card's Retry on a parked record. Only a parked one may be revived: a held one is already waiting, and a
+        // settled one is not the reader's to reopen. The drain asks the thread again at once; if the reason is still
+        // there it backs off (or parks again) rather than looping.
+        const out = heldReplies.retry(id);
+        if (!out.ok) return sendJson(res, /^no such/.test(out.why) ? 404 : 409, { error: out.why, code: "held-retry", state: heldReplies.get(id)?.state || null });
+        heldFailureLogged.delete(id);
+        armHeldDrain();
+        void drainHeldReplies({ why: "retry" });
+        return sendJson(res, 200, { ok: true, reply: out.reply, counts: heldReplies.view().counts });
       }
       if (action === "send") {
         const entry = heldReplies.get(id);
@@ -6555,6 +6616,7 @@ const server = createServer(async (req, res) => {
           code: out.gone ? "held-gone" : "held-waiting",
           gone: Boolean(out.gone),
           busy: Boolean(out.busy),
+          parked: Boolean(out.parked),
           state: out.state || "held",
           counts: heldReplies.view().counts,
         });

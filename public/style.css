@@ -3413,6 +3413,15 @@ button.tq-send:disabled, button.tq-choice:disabled { opacity: .55; cursor: defau
    drawn no taller than that line so adding it reflows nothing. Never a send: transparent, no fill, no arrow. */
 .ghost-head .ghost-cancel { flex: none; margin-left: auto; padding: 0 4px; font: 10.5px/1 var(--mono); background: transparent; border: 1px solid var(--line); color: var(--dim); border-radius: 5px; cursor: pointer; }
 .ghost-head .ghost-cancel:hover, .ghost-head .ghost-cancel:focus-visible { color: #ff9c94; border-color: #57262a; background: var(--red-bg); }
+/* A PARKED held reply: the panel could not start it and will not ask again. It is not dimmed like a waiting one —
+   it is a thing that failed — and it carries the two honest actions, Retry and ×. */
+.ghost-turn.parked { opacity: .9; border-color: #5b2a2a; background: rgba(70, 26, 26, .16); }
+.ghost-badge.parked { color: #ff9c94; border-color: #57262a; }
+.ghost-head .ghost-retry { flex: none; margin-left: auto; padding: 0 6px; font: 10.5px/1 var(--mono); background: transparent; border: 1px solid #6b4d16; color: #ffd479; border-radius: 5px; cursor: pointer; }
+.ghost-head .ghost-retry:hover, .ghost-head .ghost-retry:focus-visible { background: rgba(255, 212, 121, .1); }
+.ghost-head .ghost-retry + .ghost-cancel { margin-left: 0; }
+.ghost-turn.parked .ghost-prompt { cursor: default; }
+.ghost-turn.parked .ghost-prompt:hover { background: transparent; outline: none; }
 .queue-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 /* display:block, or the inline-block baseline leaves ~5px of the wrap under the textarea and the
    button's bottom offset is measured from there — which is why it sat on the border. */

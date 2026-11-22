@@ -75,6 +75,7 @@ function harness() {
     setAttachments: () => {},
     renderChips: () => {},
     renderConversation: (thread) => calls.renders.push(thread),
+    paintQueueWait: () => {},
     drainReplyQueue: (thread) => {
       calls.drains.push(thread);
       return Promise.resolve({ started: null });
