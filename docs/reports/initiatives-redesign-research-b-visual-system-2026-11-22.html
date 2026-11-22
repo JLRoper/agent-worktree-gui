@@ -1,0 +1,642 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Initiatives tab, round B: the tab as a visual system</title>
+<style>
+  :root {
+    --bg: #10141a; --card: #181d26; --sunk: #13181f; --line: #262c37; --hair: #3c424d;
+    --text: #e6e9ef; --dim: #9aa4b2; --meta: #7c8798;
+    --ok: #7ee787; --done: #6fcf97; --wait: #f0c674; --bad: #ff9c94; --info: #9ecbff; --violet: #c8a6ff; --link: #7fb2e8;
+    --mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.62 ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 48px 28px 120px; }
+  header.top { border-bottom: 1px solid var(--line); padding-bottom: 28px; margin-bottom: 40px; }
+  .eyebrow { font: 600 11.5px/1.4 var(--mono); letter-spacing: .09em; text-transform: uppercase; color: var(--meta); }
+  h1 { font-size: 34px; line-height: 1.18; letter-spacing: -.015em; margin: 14px 0 12px; font-weight: 650; }
+  .lede { font-size: 17px; line-height: 1.55; color: var(--dim); max-width: 74ch; margin: 0; }
+  .meta { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-top: 22px; font: 12px/1.5 var(--mono); color: var(--meta); }
+  .meta b { color: var(--dim); font-weight: 600; }
+  h2 { font-size: 24px; line-height: 1.3; letter-spacing: -.01em; margin: 56px 0 6px; font-weight: 650; }
+  h2 .n { color: var(--meta); font: 600 13px/1 var(--mono); margin-right: 10px; vertical-align: 4px; }
+  h3 { font-size: 17px; line-height: 1.4; margin: 32px 0 8px; font-weight: 620; }
+  h4 { font-size: 14px; line-height: 1.4; margin: 22px 0 6px; font-weight: 620; color: var(--text); }
+  p { margin: 10px 0; max-width: 82ch; }
+  .kicker { color: var(--dim); max-width: 78ch; margin: 0 0 18px; }
+  ul, ol { max-width: 82ch; padding-left: 20px; }
+  li { margin: 6px 0; }
+  code { font: 12.5px/1.5 var(--mono); background: #0c1015; border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; color: #cfd6e2; }
+  pre { font: 12.5px/1.6 var(--mono); background: #0c1015; border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; overflow-x: auto; color: #cfd6e2; }
+  pre code { background: none; border: 0; padding: 0; }
+  a { color: var(--link); text-decoration: none; border-bottom: 1px solid rgba(127,178,232,.3); }
+  a:hover { border-bottom-color: var(--link); }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0 8px; font-size: 13.5px; }
+  th, td { text-align: left; padding: 9px 12px 9px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font: 600 11px/1.4 var(--mono); letter-spacing: .07em; text-transform: uppercase; color: var(--meta); border-bottom-color: var(--hair); }
+  td.num { font-family: var(--mono); white-space: nowrap; }
+  tbody tr:hover td { background: rgba(255,255,255,.015); }
+  figure { margin: 22px 0 30px; }
+  figure img { display: block; width: auto; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--sunk); }
+  figcaption { font: 12px/1.55 var(--mono); color: var(--meta); margin-top: 9px; }
+  figcaption b { color: var(--dim); font-weight: 600; }
+  .duo { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+  .duo figure { margin: 0 0 6px; }
+  .tag { display: inline-block; font: 600 10.5px/18px var(--mono); padding: 0 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--dim); text-transform: uppercase; letter-spacing: .06em; }
+  .tag.before { color: var(--wait); border-color: #4d3d12; background: rgba(240,198,116,.08); }
+  .tag.after { color: var(--ok); border-color: #1f4a2a; background: rgba(126,231,135,.07); }
+  .callout { border-left: 2px solid var(--hair); background: var(--sunk); border-radius: 0 8px 8px 0; padding: 12px 16px; margin: 18px 0; max-width: 84ch; }
+  .callout.warn { border-left-color: var(--bad); }
+  .callout.good { border-left-color: var(--ok); }
+  .callout p { margin: 4px 0; }
+  .callout .h { font: 600 11px/1.4 var(--mono); letter-spacing: .07em; text-transform: uppercase; color: var(--meta); }
+  details { border: 1px solid var(--line); border-radius: 10px; padding: 0 16px; margin: 18px 0; background: #0e1218; }
+  details[open] { padding-bottom: 12px; }
+  summary { cursor: pointer; padding: 13px 0; font-weight: 600; font-size: 14px; }
+  summary::marker { color: var(--meta); }
+  .spec { border: 1px solid var(--line); border-radius: 12px; background: var(--card); padding: 20px 22px; margin: 20px 0; }
+  .spec-row { display: grid; grid-template-columns: 150px 1fr; gap: 14px; align-items: baseline; padding: 9px 0; border-top: 1px solid #1e242e; }
+  .spec-row:first-child { border-top: 0; }
+  .spec-lbl { font: 11.5px/1.5 var(--mono); color: var(--meta); }
+  .tst { color: var(--text); letter-spacing: -.01em; }
+  .tst.head { font-size: 18px; line-height: 24px; font-weight: 600; }
+  .tst.title { font-size: 15px; line-height: 20px; font-weight: 600; }
+  .tst.body { font-size: 12.5px; line-height: 19px; }
+  .tst.meta { font-size: 11.5px; line-height: 17px; color: var(--dim); }
+  .tst.micro { font-size: 10.5px; line-height: 16px; color: var(--dim); }
+  .ramp { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+  .ramp i { display: block; background: #232a35; border: 1px solid var(--hair); }
+  .sp bars span { display: inline-block; height: 10px; background: #2b333f; border-radius: 2px; margin-right: 10px; vertical-align: middle; }
+  .sw { display: flex; flex-wrap: wrap; gap: 10px; }
+  .sw div { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: 11px/1.45 var(--mono); min-width: 132px; }
+  .sw b { display: block; font-size: 11.5px; margin-bottom: 2px; }
+  .sw .k { color: var(--meta); }
+  .pill { display: inline-block; font: 600 10.5px/18px var(--mono); padding: 0 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--dim); }
+  .pill.ok { color: var(--ok); border-color: #1f4a2a; background: rgba(126,231,135,.07); }
+  .pill.done { color: var(--done); border-color: #2a4432; }
+  .pill.wait { color: var(--wait); border-color: #4d3d12; background: rgba(240,198,116,.08); }
+  .pill.bad { color: var(--bad); border-color: #4a2a2a; background: #2a1a1a; }
+  .pill.cur { color: #ecd9ff; border-color: #55407a; background: #2a2044; }
+  .foot { margin-top: 64px; padding-top: 22px; border-top: 1px solid var(--line); font: 12px/1.7 var(--mono); color: var(--meta); }
+  .toc { display: flex; flex-wrap: wrap; gap: 8px 18px; font: 12px/1.6 var(--mono); margin: 26px 0 0; }
+  .toc a { color: var(--meta); border: 0; }
+  .toc a:hover { color: var(--dim); }
+  @media (max-width: 860px) { .duo { grid-template-columns: 1fr; } .spec-row { grid-template-columns: 1fr; gap: 2px; } h1 { font-size: 27px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <div class="eyebrow">research round B &middot; independent of round A &middot; read-only on the product</div>
+  <h1>The Initiatives tab as a visual system, with values instead of adjectives</h1>
+  <p class="lede">Round B expresses the tab's look as a token sheet with numbers in it, spends that sheet on a real capture at three widths plus the docked rail, and is honest about the two things a restyle cannot fix: the wave lane has no CSS at all, and the description preview is measured from a line box the type change invalidates.</p>
+  <div class="meta">
+    <span><b>base</b> a5937437 &middot; 1.155.5 (cut from ac327faf, rebased; the tab's own files are unchanged in that range)</span>
+    <span><b>branch</b> wtgui/research-round-b-for-the-initiatives-tab-1d1d2c</span>
+    <span><b>date</b> 2026-11-22</span>
+    <span><b>captures</b> 19 PNG, 3 pane widths + 2 docked windows</span>
+    <span><b>product files changed</b> none</span>
+  </div>
+  <nav class="toc">
+    <a href="#what">1 what this is</a>
+    <a href="#today">2 the tab today</a>
+    <a href="#tokens">3 the tokens</a>
+    <a href="#spent">4 the sheet spent</a>
+    <a href="#right">5 what must survive</a>
+    <a href="#three">6 the three smallest changes</a>
+    <a href="#breaks">7 what breaks</a>
+    <a href="#method">8 method</a>
+    <a href="#notdone">9 what I did not do</a>
+  </nav>
+</header>
+
+<h2 id="what"><span class="n">1</span>What this round is</h2>
+
+<p>The reader's request, from the row this worktree was cut for: keep all the information and the structure, reinvent the look and the feel, stay near the current colour theme, make it modern, and do the headless research before and after.</p>
+
+<p>So the shape here is a <b>visual system</b>, not a redesign. Nothing in the tab is re-laid-out except the wide card's columns, no sentence the tab writes is deleted, no field, chip, count, link, control, empty state or keyboard path is removed. What changes is the set of values those things are drawn with, and every value below is a number with a job, measured off the running tab before it was changed.</p>
+
+<h3>How this stayed independent</h3>
+<p>Round A has a report in this repository. I did not open it, did not search for it, and did not ask its author anything. I also did not read any file under the sibling worktree. The brief's point is that two opinions only mean something if they were reached separately, so the only inputs here are the product's source, the running tab in a sandbox, and 19 photographs of it. If round A and round B agree on something, that agreement was not arranged.</p>
+
+<h3>What "read-only" means here, and how it is proved</h3>
+<ul>
+  <li>No change to <code>public/</code>, <code>lib/</code>, <code>server.js</code> or any product file. Before this report: <code>git status --short</code> printed nothing but the untracked <code>docs/assets/initiatives-redesign/</code> this round adds.</li>
+  <li>The restyle is delivered as three stylesheets injected into the page (section 4.2). That is why the rename proof in section 4.3 can be a measurement rather than a promise: the same DOM, the same script, one sheet added.</li>
+  <li>The reader's live panel on <code>127.0.0.1:7331</code> was never addressed by the capture run. The fixture boots <code>server.js</code> with its own <code>WAG_HOME</code> under scratch, on a free port (section 8.1).</li>
+</ul>
+
+<h2 id="today"><span class="n">2</span>The tab as it stands, measured</h2>
+
+<p class="kicker">Nine type sizes, twenty line boxes, three weights and no shadows in 152 elements. Those are the numbers the rest of this document is spent on.</p>
+
+<p>I photographed the tab in the fixture panel's own data: four initiatives (one empty, one with a missing tree, one with a long description full of unbreakable tokens, one with two waves), nine worktrees across three projects, two assistant queues. One initiative is open at a time, which is the tab's own rule. The pane is the floating assistant at 1440, 1024 and 768 wide, and the docked rail at 1440 and 768, because the pane ranges from 347 to 1438px across those two frames and a look that only works at one width is not a system.</p>
+
+<figure>
+  <img src="../assets/initiatives-redesign/b-visual-system/01-current-pane-1440-folded.png" alt="The Initiatives tab at a 1440px pane, every initiative folded to its title card">
+  <figcaption><b>01-current-pane-1440-folded.png</b> &middot; viewport 1456x1400 &middot; clip <code>#as-initiatives</code> &middot; pane 1438x1400 &middot; command <code>node capture.mjs</code>, see 8.1. The head is a card, the four cards below it are cards, and a card's name is 15px while the pane's own title is 13.5px.</figcaption>
+</figure>
+
+<table>
+  <thead><tr><th>measure</th><th>the tab today</th><th>where it comes from</th></tr></thead>
+  <tbody>
+    <tr><td>elements drawn in the pane</td><td class="num">152</td><td>a computed-style sweep of every node under <code>#as-initiatives</code></td></tr>
+    <tr><td>type sizes in use</td><td class="num">9<br><span style="color:var(--meta)">10, 10.5, 11, 11.5, 12, 12.5, 13.5, 14, 15</span></td><td>13.5px base, 14px inherited from body, and one rule per component</td></tr>
+    <tr><td>line boxes in use</td><td class="num">20</td><td>every component carries its own multiplier (1.35, 1.4, 1.45, 1.5, 1.55)</td></tr>
+    <tr><td>weights</td><td class="num">400 &middot; 600 &middot; 700<br><span style="color:var(--meta)">135 / 14 / 3</span></td><td>700 is used 3 times, on the pane title and two section heads</td></tr>
+    <tr><td>radius values</td><td class="num">6<br><span style="color:var(--meta)">0, 4, 6, 7, 8, 999</span></td><td>the 7px is one element; the card is 8px <code>public/style.css:4834</code></td></tr>
+    <tr><td>shadows</td><td class="num">0</td><td>no <code>box-shadow</code> in the whole block</td></tr>
+    <tr><td>bordered elements</td><td class="num">53</td><td>mostly 1px <code>--line</code></td></tr>
+    <tr><td>lane rules (<code>border-left</code> &gt; 1.5px)</td><td class="num">0</td><td><code>grep -c '\.wave-lane' public/style.css</code> is <b>0</b>: the lane has no rule at all</td></tr>
+    <tr><td>open card height, pane 1440</td><td class="num">673px</td><td>one initiative, two waves, three lanes, four members</td></tr>
+    <tr><td>open card height, pane 768</td><td class="num">895px</td><td>same card, single column</td></tr>
+    <tr><td>controls</td><td class="num">14 at 28/32px<br><span style="color:var(--meta)">narrowest 37px</span></td><td>the 28px floor the gate already enforces</td></tr>
+    <tr><td><code>--line</code> on the card</td><td class="num">1.12:1</td><td>measured, not estimated: <code>rgb(33,39,48)</code> on <code>rgb(24,29,38)</code></td></tr>
+    <tr><td>colour literals in the block</td><td class="num">41</td><td>183 lines, 149 declarations, <code>public/style.css:4827-5009</code></td></tr>
+  </tbody>
+</table>
+
+<p>Two of those numbers explain most of what the tab feels like. The first is <b>1.12:1</b>: a card against the canvas is a fill you cannot see, so every card edge in the tab is actually carried by the text inside it, and the eye reads the whole pane as one undifferentiated field with lines of words on it. The second is <b>9 sizes and 20 line boxes in 152 elements</b>: there is no step that means "this is a name" and no step that means "this is a hint", so the reader has to read to find out what is a heading. Nothing here is a matter of taste; both are countable.</p>
+
+<h3>1.1 The inversion at the top of the tab</h3>
+<p>The pane's own title is drawn inside the same card chrome as an initiative, at 13.5px/700 (<code>public/style.css:4838-4839</code>). A card's name is 15px/600 at any pane wider than 1000px (<code>public/style.css:4995</code>) and 13.5px below that. So at a wide pane the page title is <b>smaller than the names it introduces</b>, and only its weight tells the reader it is a title. That is the single clearest reason the top of the tab reads as "one more card" rather than as a page.</p>
+
+<figure>
+  <img src="../assets/initiatives-redesign/b-visual-system/02-current-card-1440.png" alt="One open initiative at a 1440px pane before the token sheet">
+  <figcaption><b>02-current-card-1440.png</b> &middot; viewport 1456x1400 &middot; clip <code>#as-initiatives [data-init-card="init_sso"]</code>. Grid <code>543.375px 640px</code> at this pane: the words get 543, Projects gets 640, and the rows inside Projects put "Menu" at one end of 640 and "1 tree" at the other. The wave block is the only thing in the card with a box of its own, and its lanes are flat text with no rule, no bed and no indent.</figcaption>
+</figure>
+
+<h2 id="tokens"><span class="n">3</span>The tokens, with values</h2>
+
+<p class="kicker">A token is a value with a job. If two tokens can hold the same value they are one token, and if a token has no job it is a variable. The sheet below has 41 declarations and every one of them is spent somewhere in section 4.</p>
+
+<h3>3.1 The specimen</h3>
+<p>This block is drawn by the report's own stylesheet with the same numbers the tab would use. It is here so a reader can judge the steps before looking at a photograph of them.</p>
+
+<div class="spec">
+  <div class="spec-row"><div class="spec-lbl">--t-head 18 / 24 / 600</div><div class="tst head">Initiatives</div></div>
+  <div class="spec-row"><div class="spec-lbl">--t-title 15 / 20 / 600</div><div class="tst title">Kafka rating pipeline hardening</div></div>
+  <div class="spec-row"><div class="spec-lbl">--t-body 12.5 / 19</div><div class="tst body">Hardening the rating pipeline from the consumer inward: retry topics, dead-letter handling, and a DBA-signed verify pack that can be rerun without a human reading.</div></div>
+  <div class="spec-row"><div class="spec-lbl">--t-meta 11.5 / 17</div><div class="tst meta">edited 3h ago by assistant-1 &middot; runs in 1 tree</div></div>
+  <div class="spec-row"><div class="spec-lbl">--t-micro 10.5 / 16</div><div class="tst micro"><span class="pill">2 projects</span> <span class="pill ok">running</span> <span class="pill done">done</span> <span class="pill wait">parked</span> <span class="pill bad">unresolved</span> <span class="pill cur">current</span></div></div>
+  <div class="spec-row"><div class="spec-lbl">radius 4 / 6 / 8 / 12 / 999</div><div class="ramp"><i style="width:34px;height:34px;border-radius:4px"></i><i style="width:34px;height:34px;border-radius:6px"></i><i style="width:34px;height:34px;border-radius:8px"></i><i style="width:34px;height:34px;border-radius:12px"></i><i style="width:52px;height:20px;border-radius:999px"></i></div></div>
+  <div class="spec-row sp"><div class="spec-lbl">space 4 / 8 / 12 / 16 / 24 / 32</div><div class="bars"><span style="width:4px"></span><span style="width:8px"></span><span style="width:12px"></span><span style="width:16px"></span><span style="width:24px"></span><span style="width:32px"></span></div></div>
+  <div class="spec-row"><div class="spec-lbl">--e-1 / --e-2</div><div class="ramp"><i style="width:120px;height:44px;border-radius:8px;border-color:#3c424d;box-shadow:inset 0 1px 0 rgba(255,255,255,.045)"></i><i style="width:120px;height:44px;border-radius:12px;border-color:#3c424d;box-shadow:inset 0 1px 0 rgba(255,255,255,.05), 0 1px 2px rgba(0,0,0,.30)"></i></div></div>
+  <div class="spec-row"><div class="spec-lbl">colour roles</div><div class="sw">
+    <div style="background:var(--card);border-color:#3c424d"><b>--surface-card</b><span class="k">--card, 1.09:1 on canvas</span></div>
+    <div style="background:#13181f"><b>--surface-sunken</b><span class="k">--surface, the wave</span></div>
+    <div style="background:#00000029"><b>--surface-inset</b><span class="k">rgba(0,0,0,.16), the lane</span></div>
+    <div><b style="color:var(--text)">--ink-strong</b><span class="k">13.90:1</span></div>
+    <div><b style="color:var(--dim)">--ink</b><span class="k">6.70:1</span></div>
+    <div><b style="color:#7c8798">--ink-meta</b><span class="k">4.65:1, replaces a 3.58:1</span></div>
+    <div><b style="color:var(--ok)">--tone-ok</b><span class="k">10.37:1</span></div>
+    <div><b style="color:var(--wait)">--tone-wait</b><span class="k">9.67:1</span></div>
+    <div><b style="color:var(--bad)">--tone-bad</b><span class="k">8.27:1</span></div>
+    <div><b style="color:var(--link)">--tone-link</b><span class="k">7.59:1</span></div>
+    <div><b style="color:var(--violet)">--tone-unknown</b><span class="k">8.33:1</span></div>
+    <div><b style="color:#ecd9ff">--tone-current</b><span class="k">11.2:1</span></div>
+  </div></div>
+</div>
+
+<h3>3.2 The sheet, and what each value replaces</h3>
+<p>The right-hand column is the point: a token that does not replace a measured value is decoration. Every "replaces" cell was read off the running tab before the sheet was added.</p>
+
+<table>
+  <thead><tr><th>token</th><th>value</th><th>replaces, as measured today</th></tr></thead>
+  <tbody>
+    <tr><td><code>--t-head</code></td><td class="num">18 / 24 / 600</td><td>13.5px / 1.35 / 700 on the pane title (<code>style.css:4839</code>), which is smaller than a card's name</td></tr>
+    <tr><td><code>--t-title</code></td><td class="num">15 / 20 / 600</td><td>13.5px/1.35 base (<code>4851</code>) and 15px at a wide pane (<code>4995</code>): one name, two sizes, one of them undeclared</td></tr>
+    <tr><td><code>--t-body</code></td><td class="num">12.5 / 19</td><td>12px/1.55 description (<code>4853</code>), 12/17.4 tree names, 12.5/17.5 project rows, 14/1.45 inherited body</td></tr>
+    <tr><td><code>--t-meta</code></td><td class="num">11.5 / 17</td><td>11.5/1.45 help (<code>4840</code>), 12/17.4 store name, 12/normal on two buttons</td></tr>
+    <tr><td><code>--t-micro</code></td><td class="num">10.5 / 16</td><td>10.5/1.35 caret, 10.5/1.5 section heads, 11/1.5 chips (<code>1122</code>)</td></tr>
+    <tr><td><code>--ls-tight</code></td><td class="num">-0.01em</td><td>0 on names, 0.66px on two elements, 0.55em on no element (the caps tracking was already 0)</td></tr>
+    <tr><td><code>--ls-caps</code></td><td class="num">0.07em</td><td>nothing: uppercase heads had no tracking at all</td></tr>
+    <tr><td><code>--s-0..--s-6</code></td><td class="num">0, 4, 8, 12, 16, 24, 32</td><td>a padding set of ten values (0, 2, 4, 5, 6, 7, 8, 9, 10, 12) and a gap set of five (4, 6, 8, 10, 24)</td></tr>
+    <tr><td><code>--s-inset</code></td><td class="num">2px</td><td>2px appears twice as an optical inset; it is named so it cannot grow into a spacing step</td></tr>
+    <tr><td><code>--r-1..--r-4</code>, <code>--r-pill</code></td><td class="num">4 / 6 / 8 / 12 / 999</td><td>{0, 4, 6, 7, 8, 999}: the 7px was one element, the card was 8, and nothing expressed nesting</td></tr>
+    <tr><td><code>--bw</code></td><td class="num">1px</td><td>1px everywhere, plus 2px on the focus ring: one width, two jobs</td></tr>
+    <tr><td><code>--line-hairline</code></td><td class="num">color-mix(--line 78%, --dim)<br><span style="color:var(--meta)">resolves to rgb(60,66,77), 1.24:1</span></td><td><code>--line</code> at 1.12:1: a split inside a plane has to be visible, not just present</td></tr>
+    <tr><td><code>--line-control</code></td><td class="num">color-mix(--line 40%, --dim)<br><span style="color:var(--meta)">resolves to rgb(124,135,152), 4.65:1</span></td><td>controls whose edge was <code>--line</code> at 1.12:1, i.e. a button you could not see the shape of</td></tr>
+    <tr><td><code>--line-focus</code></td><td class="num">#7fb2e8, 7.59:1</td><td>already the ring colour; it keeps its value and gains a name and a radius rule</td></tr>
+    <tr><td><code>--e-0..--e-2</code>, <code>--e-ring</code></td><td class="num">none &middot; lit edge &middot; lit edge + 2px &middot; 2px</td><td>nothing: zero shadows in 152 elements. On a #10141A canvas a 35% black shadow moves one channel by 6; a 4.5% white inset moves it by 9</td></tr>
+    <tr><td><code>--d-control</code>, <code>--d-control-lg</code>, <code>--d-pill</code></td><td class="num">28 / 32 / 18</td><td>14 controls already at 28 and 32, but chips drew at five line heights (14.18 to 17.5) because each rule picked its own padding</td></tr>
+    <tr><td><code>--d-card-pad</code>, <code>--d-card-gap</code></td><td class="num">12 / 12</td><td>12 and 12: unchanged, and now a value the folds inherit instead of repeat</td></tr>
+    <tr><td><code>--ink-strong</code>, <code>--ink</code>, <code>--ink-meta</code></td><td class="num">--text &middot; --dim &middot; #7C8798</td><td>--text 13.90:1, --dim 6.70:1, --dimmer 3.58:1. Every word that carried a fact at 3.58:1 moves to 4.65:1</td></tr>
+    <tr><td><code>--tone-*</code> (9 triples)</td><td class="num">ok, done, wait, bad, info, unknown, current, neutral, link</td><td>41 literals across 183 lines: each triple is the ink, the bed and the edge a state was already using</td></tr>
+    <tr><td><code>--surface-pressed</code></td><td class="num">#232a35</td><td>one hand-painted pressed colour that had no name</td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <div class="h">the one rule the sheet refuses to break</div>
+  <p>Every surface is a reference to a variable the reader's Panel contrast slider already owns. <code>CONTRAST_MAX</code> at <code>public/app.js:14891</code> rewrites nine surface variables (<code>--console, --bg, --surface, --card, --panel, --band, --hover, --panel-2, --line</code>) from the slider, default 15%, through <code>applyContrast</code> at <code>public/settings.js:615</code>. A restyle that hard-codes <code>#181d26</code> as the card would look right at one slider position and fight the reader at every other. So the two boundary greys are <b>derived</b>: <code>color-mix</code> over <code>--line</code> and <code>--dim</code>, with a literal fallback for a browser without <code>color-mix</code>. The hairlines move when the slider moves.</p>
+</div>
+
+<h3>3.3 The three sheets</h3>
+<p>They are layered in this order and each one has exactly one job. <b>tokens</b> declares values and paints nothing. <b>roles</b> renames the tab's 41 colour literals to those values, value for value. <b>apply</b> is the actual restyle. The separation is what makes the next section measurable.</p>
+
+<details>
+<summary>tokens.css - 41 declarations, no selector that paints</summary>
+<pre><code>:root {
+  /* type: five steps, every one with a fixed line box in px, never a multiplier */
+  --t-head: 18px;    --lh-head: 24px;    --fw-head: 600;
+  --t-title: 15px;   --lh-title: 20px;   --fw-title: 600;
+  --t-body: 12.5px;  --lh-body: 19px;
+  --t-meta: 11.5px;  --lh-meta: 17px;
+  --t-micro: 10.5px; --lh-micro: 16px;
+  --ls-tight: -0.01em;
+  --ls-caps: 0.07em;
+
+  /* space: a 4px base; 2px exists only as an optical inset inside a control */
+  --s-0: 0; --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 24px; --s-6: 32px;
+  --s-inset: 2px;
+
+  /* radius: monotone with nesting, so depth is readable without a shadow */
+  --r-pill: 999px; --r-1: 4px; --r-2: 6px; --r-3: 8px; --r-4: 12px;
+
+  /* border: one width, three jobs */
+  --bw: 1px;
+  --line-hairline: #3C424D;
+  --line-hairline: color-mix(in srgb, var(--line) 78%, var(--dim));
+  --line-control: #6A727E;
+  --line-control: color-mix(in srgb, var(--line) 40%, var(--dim));
+  --line-focus: #7fb2e8;
+
+  /* elevation: a lit edge first; on this canvas a shadow can only darken by 6 channels */
+  --e-0: none;
+  --e-1: inset 0 var(--bw) 0 rgba(255, 255, 255, .045);
+  --e-2: inset 0 var(--bw) 0 rgba(255, 255, 255, .05), 0 1px 2px rgba(0, 0, 0, .30);
+  --e-ring: 2px;
+
+  /* density */
+  --d-control: 28px; --d-control-lg: 32px; --d-pill: 18px;
+  --d-card-pad: 12px; --d-card-gap: 12px;
+
+  /* colour roles: surfaces, all still owned by CONTRAST_MAX */
+  --surface-canvas: var(--bg);
+  --surface-card: var(--card);
+  --surface-sunken: var(--surface);
+  --surface-inset: rgba(0, 0, 0, .16);
+  --surface-hover: var(--hover);
+
+  /* colour roles: ink, measured on --card */
+  --ink-strong: var(--text);   /* 13.90:1 */
+  --ink: var(--dim);           /*  6.70:1 */
+  --ink-meta: #7C8798;         /*  4.65:1, replaces --dimmer at 3.58:1 */
+
+  /* colour roles: a triple per state; the values are today's, named */
+  --tone-neutral-ink: var(--dim);  --tone-neutral-bg: transparent;  --tone-neutral-line: var(--line);
+  --tone-ok-ink: #7ee787;          --tone-ok-bg: var(--green-bg);   --tone-ok-line: #1f4a2a;
+  --tone-done-ink: #6fcf97;        --tone-done-bg: transparent;     --tone-done-line: #2a4432;
+  --tone-wait-ink: #f0c674;        --tone-wait-bg: var(--amber-bg); --tone-wait-line: #4d3d12;
+  --tone-bad-ink: #ff9c94;         --tone-bad-bg: #2a1a1a;          --tone-bad-line: #4a2a2a;
+  --tone-bad-solid: #e5534b;       --tone-bad-soft: #ffb4ac;
+  --tone-info-ink: #9ecbff;        --tone-info-bg: var(--blue-bg);  --tone-info-line: #1c3a56;
+  --tone-unknown-ink: #c8a6ff;     --tone-unknown-bg: var(--violet-bg); --tone-unknown-line: #3b2d5c;
+  --tone-current-ink: #ecd9ff;     --tone-current-bg: #2a2044;      --tone-current-line: #55407a;
+  --tone-link-ink: #7fb2e8;        /* 7.59:1, tree names and branch links */
+  --surface-pressed: #232a35;
+}</code></pre>
+</details>
+
+<details>
+<summary>roles.css - the rename proof: 41 literals to 23 roles, no pixel moved</summary>
+<p>Each declaration below replaces a literal that the product block already used, with the same value. Injected on its own it changes nothing, which is the point: it proves the sheet is a naming, not a repaint. Section 4.3 measures that claim (152 elements compared, 0 changed).</p>
+<pre><code>#as-initiatives .chip.good, .wave-mstate.is-running, .wave-state.is-running { color: var(--tone-ok-ink); border-color: var(--tone-ok-line); background: var(--tone-ok-bg); }
+#as-initiatives .chip.bad, .wave-unresolved, .wave-ask.is-bad { color: var(--tone-bad-ink); border-color: var(--tone-bad-line); background: var(--tone-bad-bg); }
+#as-initiatives .chip.warn, .wave-gate.is-unknown, .wave-auto.is-on { color: var(--tone-wait-ink); border-color: var(--tone-wait-line); background: var(--tone-wait-bg); }
+#as-initiatives .chip.info, .wave-state.is-ready { color: var(--tone-info-ink); border-color: var(--tone-info-line); background: var(--tone-info-bg); }
+#as-initiatives .wave-current { color: var(--tone-current-ink); border-color: var(--tone-current-line); background: var(--tone-current-bg); }
+#as-initiatives .wave-state.is-done, .wave-mstate.is-done { color: var(--tone-done-ink); border-color: var(--tone-done-line); }
+#as-initiatives .wave-state.is-unknown, .chip.live { color: var(--tone-unknown-ink); border-color: var(--tone-unknown-line); background: var(--tone-unknown-bg); }
+#as-initiatives .init-tree-name a, .init-branch { color: var(--tone-link-ink); }
+/* ... 34 more, all value for value; the full list is the 41 literals in style.css:4827-5009 */</code></pre>
+</details>
+
+<details>
+<summary>apply.css - the spend, 66 rule blocks, no element renamed and no markup touched</summary>
+<pre><code>/* 0. the pane's base. Today every container inherits body's 14px/1.45, which is where 9 sizes came from. */
+#as-initiatives { font-size: var(--t-body); line-height: var(--lh-body); }
+
+/* 1. the page head: no fill, no border, one step above a name */
+#as-initiatives > .as-group:first-child { padding: 0 0 var(--s-2); border: 0; background: transparent; box-shadow: none; margin-bottom: var(--s-3); }
+#as-initiatives > .as-group:first-child h4 { font-size: var(--t-head); line-height: var(--lh-head); font-weight: var(--fw-head); letter-spacing: var(--ls-tight); }
+
+/* 2. the card is a plane: largest radius, the slider's own fill, a lit top edge instead of a shadow */
+.init-card { padding: var(--d-card-pad); border-color: var(--line-hairline); border-radius: var(--r-4); box-shadow: var(--e-2); margin-bottom: var(--d-card-gap); }
+.init-head-btn { min-height: var(--d-control-lg); border-radius: var(--r-2); }
+.init-title, #as-initiatives .init-card .init-title { font-size: var(--t-title); line-height: var(--lh-title); font-weight: var(--fw-title); letter-spacing: var(--ls-tight); }
+.init-desc { font-size: var(--t-body); line-height: var(--lh-body); margin: 0 0 var(--s-3); }
+
+/* 3. folds and rows: 32 for a fold, 28 for a row, one radius for both */
+.init-proj { min-height: var(--d-control-lg); border-radius: var(--r-2); padding: var(--s-1) var(--s-2); font-size: var(--t-body); line-height: var(--lh-meta); }
+.init-tree-name { font-size: var(--t-body); line-height: var(--lh-body); min-height: var(--d-control); }
+.init-trees { margin: var(--s-1) 0 var(--s-2) var(--s-4); padding-left: var(--s-3); border-left-color: var(--line-hairline); }
+.init-tree { padding: var(--s-2) 0; border-top-color: var(--line-hairline); }
+
+/* 4. one pill: chips were drawn at five line heights because each rule picked its own padding */
+#as-initiatives .chip { font-size: var(--t-micro); line-height: var(--d-pill); padding: 0 7px; border-radius: var(--r-pill); letter-spacing: 0; }
+#as-initiatives .as-hint { font-size: var(--t-meta); line-height: var(--lh-meta); }
+
+/* 4b. the last six strays: each a product rule carrying its own multiplier (1.35, 1.4, 1.45) */
+#as-initiatives .init-caret { line-height: var(--lh-micro); }
+#as-initiatives .as-help, #as-initiatives .as-help b { font-size: var(--t-meta); line-height: var(--lh-meta); }
+#as-initiatives .mono { font-size: var(--t-meta); line-height: var(--lh-meta); }
+#as-initiatives button { font-size: var(--t-body); line-height: var(--lh-micro); }
+#as-initiatives .as-group:not(.init-card) { border-radius: var(--r-3); }
+
+/* 5. the wave: the box the lane never had */
+.wave-row { border-color: var(--line-hairline); border-radius: var(--r-3); box-shadow: var(--e-1); }
+.wave-lane { padding: var(--s-1) 0 var(--s-1) var(--s-3); border-left: 2px solid var(--tone-neutral-line); background: var(--surface-inset); border-radius: 0 var(--r-2) var(--r-2) 0; }
+.wave-lane[data-lane-state="running"] { border-left-color: var(--tone-ok-ink); }
+.wave-lane[data-lane-state="done"] { border-left-color: var(--tone-done-ink); }
+.wave-lane[data-lane-state="parked"] { border-left-color: var(--tone-wait-ink); }
+.wave-title { flex: 0 1 auto; max-width: 68ch; font-size: var(--t-body); line-height: var(--lh-body); font-weight: var(--fw-title); }
+.wave-template { flex: 1 1 100%; margin-top: var(--s-inset); }
+
+/* 6..8. the wide card: three columns, the slack at the card's own right edge */
+@container (min-width: 1160px) {
+  .init-card:not(.is-titlecard) {
+    grid-template-columns: minmax(0, 68ch) minmax(300px, 400px) minmax(0, 1fr);
+    grid-template-areas: "head side ." "desc side ." "chips side ." "waves waves waves" "assist assist assist" "hist hist hist";
+    column-gap: var(--s-5);
+  }
+}
+@container (min-width: 1000px) and (max-width: 1159px) {
+  .init-card:not(.is-titlecard) {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+    grid-template-areas: "head side" "desc side" "chips side" "waves waves" "assist assist" "hist hist";
+  }
+}
+
+/* 9. the ring keeps its 2px and follows its own corners */
+#as-initiatives button:focus-visible, #as-initiatives [data-init-card-toggle]:focus-visible { outline: var(--e-ring) solid var(--line-focus); outline-offset: 2px; border-radius: var(--r-2); }</code></pre>
+</details>
+
+<h2 id="spent"><span class="n">4</span>The sheet spent on a real capture</h2>
+
+<p class="kicker">Same page, same fixture, same viewport, same clip: the only difference between each pair is that the second image had the token and apply sheets in the page at load.</p>
+
+<h3>4.1 The five pairs</h3>
+
+<div class="duo">
+  <figure>
+    <img src="../assets/initiatives-redesign/b-visual-system/01-current-pane-1440-folded.png" alt="Before, pane 1440, folded">
+    <figcaption><span class="tag before">before</span> <b>01</b> pane 1440 &middot; clip <code>#as-initiatives</code> &middot; 1456x1400</figcaption>
+  </figure>
+  <figure>
+    <img src="../assets/initiatives-redesign/b-visual-system/10-applied-pane-1440-folded.png" alt="After, pane 1440, folded">
+    <figcaption><span class="tag after">after</span> <b>10</b> pane 1440 &middot; clip <code>#as-initiatives</code> &middot; 1456x1400</figcaption>
+  </figure>
+</div>
+
+<p>At 1440 the change is almost entirely at the top of the tab. The head stops being a card and becomes a page title at 18px, so the four cards below it are the only cards on screen. Each card gains a 12px corner and a lit top edge, which is what makes it a card at all: the fill against the canvas was 1.09:1 before, i.e. invisible.</p>
+
+<div class="duo">
+  <figure>
+    <img src="../assets/initiatives-redesign/b-visual-system/04-current-card-1024.png" alt="Before, one open card at a 1024px pane">
+    <figcaption><span class="tag before">before</span> <b>04</b> pane 1024 &middot; clip one open card &middot; 1040x1400</figcaption>
+  </figure>
+  <figure>
+    <img src="../assets/initiatives-redesign/b-visual-system/13-applied-card-1024.png" alt="After, one open card at a 1024px pane">
+    <figcaption><span class="tag after">after</span> <b>13</b> pane 1024 &middot; clip one open card &middot; 1040x1400</figcaption>
+  </figure>
+</div>
+
+<p>This is the pair that shows the one structural change, and it is a correction rather than a taste. The product's breakpoint at <code>public/style.css:4982</code> is <code>minmax(0, 72ch) minmax(320px, 640px)</code>: the side column's 640px maximum is reached before the word column's 72ch is, so at a 1022px pane the words get <b>318px</b> and Projects gets <b>638px</b>. The primary column is the narrow one exactly where the two-column layout turns on. The sheet moves the breakpoint to 1160 and caps the side column at 400, so at 1022 the words get 634 and Projects 340. Nothing is added or removed: the same two columns, the right way round.</p>
+
+<div class="duo">
+  <figure>
+    <img src="../assets/initiatives-redesign/b-visual-system/05-current-lane-zoom.png" alt="Before, the wave block at a 1024px pane">
+    <figcaption><span class="tag before">before</span> <b>05</b> pane 1024 &middot; clip <code>.init-wavefold</code> &middot; 1040x1400</figcaption>
+  </figure>
+  <figure>
+    <img src="../assets/initiatives-redesign/b-visual-system/14-applied-lane-zoom.png" alt="After, the wave block at a 1024px pane">
+    <figcaption><span class="tag after">after</span> <b>14</b> pane 1024 &middot; clip <code>.init-wavefold</code> &middot; 1040x1400</figcaption>
+  </figure>
+</div>
+
+<p>The lane is the weakest-drawn region in the tab and it is not a styling opinion: <code>grep -c '\.wave-lane' public/style.css</code> is <b>0</b>. Every lane in the tab is a bare flex row at the inherited body size with padding 0, no border, no radius and no indent, so "lane lib/login.js - done" and the task below it sit at the same left edge and read as consecutive lines of prose. The sheet gives the lane a 2px left rule coloured by the state <code>waves-lane.js</code> already writes into <code>data-lane-state</code>, an inset bed, and a 6px radius on the right only, so the lane owns its members without becoming a second card. No JavaScript: <code>public/core/waves-lane.js</code> already emits the attribute.</p>
+
+<div class="duo">
+  <figure>
+    <img src="../assets/initiatives-redesign/b-visual-system/07-current-card-768.png" alt="Before, one open card at a 768px pane">
+    <figcaption><span class="tag before">before</span> <b>07</b> pane 768 &middot; clip one open card &middot; 784x1400</figcaption>
+  </figure>
+  <figure>
+    <img src="../assets/initiatives-redesign/b-visual-system/16-applied-card-768.png" alt="After, one open card at a 768px pane">
+    <figcaption><span class="tag after">after</span> <b>16</b> pane 768 &middot; clip one open card &middot; 784x1400</figcaption>
+  </figure>
+</div>
+
+<p>At 768 the card is one column and the sheet keeps it that way. What changes is that the wave's name is no longer squeezed to 180px by the template sentence sitting beside it: the template line takes its own row and the wave head reads W1, the name, then the two state chips, left to right. That costs about 19px per wave, and at this width it tips one lane row into an extra line: the card measures 940px against 895, which is the honest price of the change and it is in the ledger below.</p>
+
+<div class="duo">
+  <figure>
+    <img src="../assets/initiatives-redesign/b-visual-system/08-current-window-1440-docked.png" alt="Before, the docked rail in a 1440x1000 window">
+    <figcaption><span class="tag before">before</span> <b>08</b> window 1440x1000, docked &middot; no clip &middot; pane 479px</figcaption>
+  </figure>
+  <figure>
+    <img src="../assets/initiatives-redesign/b-visual-system/17-applied-window-1440-docked.png" alt="After, the docked rail in a 1440x1000 window">
+    <figcaption><span class="tag after">after</span> <b>17</b> window 1440x1000, docked &middot; no clip &middot; pane 479px</figcaption>
+  </figure>
+</div>
+
+<p>The docked rail at 479px is the frame the reader actually works in. Here the token sheet is doing the thing it was built for: the head is a title rather than a card, the four cards are separated by 12px of canvas plus a lit edge instead of a 1.12:1 hairline, and the descriptions are two lines with the dots in the right place because the cut was measured against the new line box (section 7.1 explains what happens when it is not).</p>
+
+<h3>4.2 What the numbers became</h3>
+
+<table>
+  <thead><tr><th>measure</th><th>before</th><th>after</th><th>read</th></tr></thead>
+  <tbody>
+    <tr><td>type sizes</td><td class="num">9</td><td class="num">5</td><td>18 / 15 / 12.5 / 11.5 / 10.5, and nothing off the ladder (measured: zero elements outside the five)</td></tr>
+    <tr><td>line boxes</td><td class="num">20</td><td class="num">6</td><td>24 / 20 / 19 / 17 / 16 plus the pill's own 18px (<code>--d-pill</code>), which is a density token, not a type step</td></tr>
+    <tr><td>weights</td><td class="num">3</td><td class="num">2 + 1 bold</td><td>400 and 600 carry the tab; the single 700 left is the bold in the tier sentence</td></tr>
+    <tr><td>radius values</td><td class="num">6</td><td class="num">6</td><td>same count, but now monotone with nesting: card 12 &gt; group 8 &gt; row 6 &gt; inset 4, plus the pill at 999. Before it was 0, 4, 6, 7, 8, 999 with no order</td></tr>
+    <tr><td>shadows</td><td class="num">0</td><td class="num">4</td><td>one per card (<code>--e-2</code>), plus a lit edge on each wave row (<code>--e-1</code>)</td></tr>
+    <tr><td>lane rules</td><td class="num">0</td><td class="num">2</td><td>one 2px rule per lane, coloured by the lane's own state</td></tr>
+    <tr><td>controls at 28/32px</td><td class="num">14</td><td class="num">14</td><td>heights unchanged. The type step moved the line box by 1px and the padding absorbed it, so the gate's 28px floor still holds</td></tr>
+    <tr><td>open card, pane 1440</td><td class="num">673px</td><td class="num">694px</td><td><b>+21px</b>, +3.1%: the description is 12.5/19 instead of 12/18.6</td></tr>
+    <tr><td>open card, pane 1024</td><td class="num">692px</td><td class="num">718px</td><td><b>+26px</b>: the words widen, so the description loses a line and the waves gain one</td></tr>
+    <tr><td>open card, pane 768</td><td class="num">895px</td><td class="num">940px</td><td><b>+45px</b>: the template sentence takes its own row on each of the two waves, and at a 677px content column that tips one lane row into an extra 19px line. This is the width to watch: the same card is +21px at 1440 and +26px at 1024</td></tr>
+    <tr><td>folded list, pane 1440</td><td class="num">862px</td><td class="num">851px</td><td><b>-11px</b>: the head loses its card padding and the chips lose their 2px vertical padding, so the list the reader scans most often is slightly shorter even though an open card is slightly taller</td></tr>
+    <tr><td>colour strings in the pane</td><td class="num">23</td><td class="num">27 at 1440, 28 at 768</td><td>the 41 literals did not disappear, they were named; the sheet paints four colours the tab never had (a lit edge, an inset bed, a pressed surface, a hairline) and removes none</td></tr>
+  </tbody>
+</table>
+
+<div class="callout warn">
+  <div class="h">what this direction costs, said plainly</div>
+  <p><b>It is not a density win.</b> One open card is 21 to 45px taller than it was, because the body text is half a pixel larger and two waves put their template sentence on its own row. If the reader's complaint is "one initiative takes a screen", this sheet does not answer it; the three changes in section 6 plus the 3-column split are what buy back the width, and folding the projects column is what would buy back the height (section 7.3).</p>
+</div>
+
+<h3>4.3 The rename proof: 152 elements, 0 changed</h3>
+<p>Before the apply sheet, I injected only <b>tokens + roles</b> into the same page in the same state (one open card, pane 1024) and compared every rendered element's computed colour, border, radius, shadow, type, padding, gap, letter-spacing and geometry, in DOM order.</p>
+<pre><code>rename proof: 152 elements compared, 0 changed</code></pre>
+<p>That is the difference between a restyle and a re-theme. Renaming a colour cannot change what the reader sees, so if the tab ever needs to be reverted, <code>roles.css</code> is a no-op and <code>apply.css</code> is one file to drop. It also means the after captures differ from the before captures <b>only</b> by the rulings in section 4.2, which is why the numbers in that table are worth reading.</p>
+
+<h3>4.4 The hazard, photographed</h3>
+<figure>
+  <img src="../assets/initiatives-redesign/b-visual-system/19-hazard-3-line-preview.png" alt="A folded card whose two-line preview drew three lines">
+  <figcaption><b>19-hazard-3-line-preview.png</b> &middot; window 1440x1000, docked &middot; clip one folded card &middot; the same three sheets, added <i>after</i> the tab's first paint. The preview is 57px tall against a 19px line box: <b>three lines</b>, with the dots at the end of the third.</figcaption>
+</figure>
+<p>This is not a rendering artefact, it is the defect section 7.1 describes, reproduced on purpose: the two-line cut is measured from the line box the card drew, so a stylesheet that arrives after the first paint leaves a preview cut for 12/18.6 and drawn at 12.5/19. Every "after" capture in this report therefore injects the sheets <b>at load</b>, through an init script, which is what an implementation would do.</p>
+
+<h2 id="right"><span class="n">5</span>What the current tab gets right and must survive</h2>
+
+<p class="kicker">The reader kept the structure on purpose. Anything below that a restyle loses is a failed restyle, however modern it looks.</p>
+
+<h3>5.1 One open state per initiative, folded to a title card</h3>
+<p>The list and the detail are one surface: no modal, no route, no second window. Four cards at a 117px pitch let a reader scan every initiative's name, description, three counts and an edit time in two thirds of a screen, then open one in place. This is the tab's best idea and a "modern" redesign is exactly the kind of change that throws it away in favour of a master-detail split. <b>Keep.</b> Cost of losing it: the reader loses the only view where all four initiatives are comparable at once.</p>
+
+<h3>5.2 The two-line preview is measured, not clamped</h3>
+<p><code>paintInitDescription</code> (<code>public/assistant.js:3760</code>) measures the dots with a canvas (<code>:3720</code>), binary-searches a <code>Range</code> for the last offset whose bottom edge fits two lines (<code>3730</code>), then backs off to a whole word that still fits. The result never ends mid-word and never overflows its box, and the dots always fit because their width was reserved. A redesign that reaches for <code>-webkit-line-clamp: 2</code> loses both properties: the browser clips at an arbitrary character and the ellipsis is drawn over the text. <b>Keep the function, and keep its contract</b> (see 7.1: the contract is a line box, and the sheet changes it).</p>
+
+<h3>5.3 Four counts that never disappear</h3>
+<p><code>countChips</code> (<code>public/core/initiative-fold.js:120</code>) draws projects, worktrees and assistants every time, so a zero reads as "0 worktrees" rather than as an absent chip. That distinction is the tab's honesty: an initiative with no worktree is a fact the reader needs, and a chip that vanishes when it is zero makes "none" and "not loaded" look the same. <b>Keep.</b> A tidier design that hides zero counts is a regression in information, not in taste.</p>
+
+<h3>5.4 The tier as a sentence, not a dropdown</h3>
+<p>The permission tier is written out: "ask me for everything - every create, edit, attach and detach waits for your answer". The four tiers are <code>all</code>, <code>remove</code>, <code>own</code> and <code>none</code>; a select showing "own" would be shorter and would tell the reader nothing. <b>Keep the sentence.</b> The sheet only changes its type step.</p>
+
+<h3>5.5 The lane's sentences are the design</h3>
+<p>"lane lib/login.js - done", "runs in 1 tree", "2 lanes - closing this wave is ONE commit that names them all" (<code>public/core/waves-lane.js:85, 138</code>), the refusal "The lanes cannot be isolated, so this wave cannot close." (<code>:102</code>), and the empty state's "no waves recorded on this initiative yet" all carry the model. The boxes this round adds are decoration around them. <b>Keep every sentence verbatim</b>: a restyle that shortens "runs in 1 tree" to an icon has deleted the only place the tab explains what a lane is.</p>
+
+<h3>5.6 Focus survives a rebuild</h3>
+<p>The pane is rebuilt on every snapshot. <code>INIT_FOCUS_ATTRS</code> (19 attributes, <code>public/assistant.js:3939</code>) and <code>restoreInitFocus</code> (<code>:3958</code>) put the reader's focus back on the same control, and <code>.init-focus-restored</code> re-paints the ring for a script focus. <b>Keep the attribute list in step with any markup change</b>: the list is a contract between the renderer and the restore, and a new control that carries none of the 19 attributes loses the reader's place on the next tick.</p>
+
+<h3>5.7 The title is a button, the description is its own fold</h3>
+<p>The card's name is a <code>button</code> with <code>aria-expanded</code>, and the description fold is a separate control (<code>[data-init-desc-fold]</code>). So a reader can open a card without opening its description, and a keyboard reader gets two distinct stops with their own labels. <b>Keep both stops.</b> The most common "cleaner" rewrite merges them into one row and silently removes one of the two.</p>
+
+<h3>5.8 The refusal to use shadows, and the colour values</h3>
+<p>There is not one <code>box-shadow</code> in 152 elements, and on a #10141A canvas that instinct is right: a 35% black shadow moves a channel by 6, so it cannot separate anything. The tab's mistake is not the missing shadow, it is that the 1px <code>--line</code> at 1.12:1 does not separate anything either, so the card has no edge at all. The sheet keeps the no-shadow principle and adds a <b>lit</b> edge (<code>--e-1</code>, a 4.5% white inset, which moves a channel by 9) rather than a dark one. <b>Keep the tone values</b>: every tone triple is already 8.2:1 or better on its own bed, and they are now named rather than repeated.</p>
+
+<h2 id="three"><span class="n">6</span>The three smallest changes, ranked</h2>
+
+<p class="kicker">Ranked by perceived modernity per line of product CSS touched. Each one is a patch to <code>public/style.css</code> alone, with the token declarations it needs; none needs JavaScript and none changes markup.</p>
+
+<table>
+  <thead><tr><th>#</th><th>change</th><th>files / lines</th><th>what the eye gets</th><th>risk</th></tr></thead>
+  <tbody>
+    <tr><td class="num">1</td><td>The card becomes a plane: hairline edge, 12px radius, lit top edge</td><td class="num">1 file, 4 declarations + 3 tokens</td><td>Every card in the list becomes an object. 4 cards at once, at every width, in the dock too</td><td>The lit edge is a constant 4.5% white, so it does not follow the contrast slider; the radius ladder must be adopted with it or the card and the wave box disagree</td></tr>
+    <tr><td class="num">2</td><td>The pane head stops being a card and gains a type step</td><td class="num">1 file, 6 declarations + 4 tokens</td><td>The top of the tab reads as a page: 18px title, then cards. Fixes the inversion where a card name is larger than the page title</td><td>Keyed to <code>&gt; .as-group:first-child</code>, the product's own selector (<code>style.css:4838</code>). It cannot fire on the loading or error branches, which emit <code>.as-empty</code>; it would fire on any future first-child group</td></tr>
+    <tr><td class="num">3</td><td>The lane gets a body: 2px state rule, inset bed, right-only radius</td><td class="num">1 file, 7 declarations + 2 tokens</td><td>The only region of the tab with no CSS at all becomes a stack. 8 lanes in this fixture, and the two-lane wave finally reads as two things</td><td>Costs 3px of width inside a 340px dock where the pane is already 331-348px; the rule must carry <code>data-lane-state</code>, never the wave's state, or a wave whose lanes disagree paints as one colour</td></tr>
+  </tbody>
+</table>
+
+<h3>6.1 Why that order</h3>
+<p>Change 1 touches four elements on every screen for four lines of CSS, and it is the change that makes the rest of the sheet legible: without an edge, a radius and a lit top do not exist, and the pane stays a field of words. Change 2 is six lines for the first thing the eye lands on, and it fixes a measurable inversion (13.5px title above 15px names) rather than adding decoration. Change 3 buys the most of the three in isolation, because it is the only place where the tab currently shows no design at all, but it costs the most care: seven declarations, a width budget at 340px, and a colour decision per lane state. If the reader wants one change and not three, take 1 and 2: together they are ten declarations and they change what the tab looks like from across the room.</p>
+
+<div class="callout good">
+  <div class="h">the smallest possible version</div>
+  <p>If only one line is allowed: <code>.init-card { border-color: #3c424d; border-radius: 12px; box-shadow: inset 0 1px 0 rgba(255,255,255,.045); }</code>. One declaration block, one file, no new token, no JS. It is the difference between a list of paragraphs and a list of cards.</p>
+</div>
+
+<h2 id="breaks"><span class="n">7</span>What breaks if only the look changes</h2>
+
+<p class="kicker">Six things in this tab are load-bearing under the look. A restyle that ignores them ships a bug that the eye cannot see and the keyboard finds.</p>
+
+<h3>7.1 The two-line preview is cut against the old line box</h3>
+<p>The cut is measured from the rendered line box: <code>initDescCutAt</code> walks a <code>Range</code> against <code>el.getBoundingClientRect().top + 2 * lineHeight</code>. Change <code>--t-body</code> from 12 to 12.5 and the preview is still cut for the old box, so it draws <b>three</b> lines with the dots at the end of the third. Measured on this fixture: 57px tall against a 19px line box. The trigger for a re-cut today is the pane's width observer, which does not fire when only the font changes. <b>This is the one change that cannot be done in CSS.</b> The fix is small: re-run <code>paintInitDescriptions(host)</code> when the settings event that changes font size or zoom fires, or observe the element's <i>height</i> as well as the pane's width. Without it, the restyle is visually wrong at every width, in the one place the reader reads first.</p>
+
+<h3>7.2 The 340px dock is a width budget, not a preference</h3>
+<p><code>DOCK_MIN = 340</code> (<code>public/assistant.js:17</code>) and <code>clampDockWidth</code> (<code>:344</code>) cap the rail at half the window. At a 768px window the pane measures <b>331 to 348px</b> in this fixture. Any fixed width in the new look (a 320px projects column, a form control with a min-width, a 12px radius plus 16px padding on both sides) has to fit inside 331. The sheet's widths are all <code>minmax(0, ...)</code> or derived from the pane, which is why the 768 captures have no horizontal overflow.</p>
+
+<h3>7.3 The 28px control floor</h3>
+<p>Controls are 28px (row) and 32px (fold) today, and the gate already treats 28 as the floor. At 12.5px with a 16px line box and the existing padding they stay at 28 and 32 (measured: unchanged). A body step of 14px would put the same button at 30px and the row at 30, i.e. still legal but no longer aligned with the two-height density the reader has. If the type scale moves again, the control height has to be re-measured before it is believed.</p>
+
+<h3>7.4 The contrast slider owns nine variables</h3>
+<p><code>CONTRAST_MAX</code> (<code>public/app.js:14891</code>) rewrites <code>--console, --bg, --surface, --card, --panel, --band, --hover, --panel-2, --line</code>, and <code>applyContrast</code> (<code>public/settings.js:615</code>) writes them onto <code>document.documentElement</code> at the reader's setting, default 15%. A literal surface in a new sheet is a surface that stops responding: the reader raises the contrast and one new colour stays where it was. The sheet derives its two boundary greys from <code>--line</code> and <code>--dim</code> for exactly this reason, and keeps every surface a <code>var()</code>.</p>
+
+<h3>7.5 The focus ring is a contrast value, not a colour</h3>
+<p>The ring is <code>#7fb2e8</code> at 2px, 7.59:1 against the card today. A card that gets lighter (a higher contrast setting, or a lighter <code>--card</code>) lowers that ratio; a card that gets darker raises it. If the restyle changes the card's fill, the ring has to be re-measured against the new fill, not copied. The sheet keeps the ring's value and adds the radius rule so a pill and a button each show a ring that follows its own corners.</p>
+
+<h3>7.6 The title's own clamp</h3>
+<p><code>.init-title</code> is <code>-webkit-line-clamp: 2</code> (<code>public/style.css:4851</code>). A title that fits one line at 13.5px can take two at 15px, and the clamp will then hide the rest of a long initiative's name rather than the 2 lines being an accident. In this fixture every name fits one line at 1440 and two at 463, so the step is safe here; a longer name is not. If the title step goes up again, the clamp has to be re-checked or the name becomes unreadable in the dock.</p>
+
+<h3>7.7 What has to change anyway, look or no look</h3>
+<ul>
+  <li><b>The breakpoint's column order</b> (<code>style.css:4982</code>). Measured 318px of words against 638px of Projects at a 1022 pane. This is a grid change, not a colour: the sheet does it in CSS, but a "look only" round that skips it leaves the primary column the narrow one.</li>
+  <li><b>The lane has no rule to restyle</b> (<code>grep -c '.wave-lane'</code> is 0). It has to be written, not adjusted.</li>
+  <li><b>The member row repeats the project per member</b> (<code>public/core/waves-lane.js</code>, <code>memberHtml</code>): at a 331px pane the wave block is 239px tall because each member pill wraps twice. A tighter member (id and title on line one, project on line two, no chip) is a markup shape, not a stylesheet. This is the one place where a look-only round cannot reach the reader's actual complaint about the wave.</li>
+  <li><b>The open state is memory only.</b> A reload folds every initiative, so the reader's place is lost on every refresh. Not a look problem, and it is the thing that makes the tab feel older than it looks.</li>
+</ul>
+
+<h2 id="method"><span class="n">8</span>Method, commands and the ledger</h2>
+
+<h3>8.1 Where every image came from</h3>
+<p>A fixture panel, not the reader's. <code>tools/initiatives-fixture.mjs</code> writes a <code>WAG_HOME</code> under scratch with three projects, nine worktrees, four initiatives and two assistant queues; <code>startFixturePanel</code> boots this tree's <code>server.js</code> against it on a free port. The reader's listener on 7331 was never addressed, so its pid and start time are untouched. Playwright comes from the Windows global npm prefix (<code>%APPDATA%/npm/node_modules/playwright</code>, chromium-1248), which is what <code>tools/browser.mjs</code> already resolves.</p>
+<p>One run wrote all 19 images:</p>
+<pre><code># from the run's scratch folder, which held capture.mjs and the three sheets printed in 3.3
+node capture.mjs</code></pre>
+<p>node 26.3.0, Playwright chromium-1248, <code>deviceScaleFactor: 1</code>, every page headless. Each image is a <code>page.screenshot</code> with either a clip or the full window; the clip and viewport are recorded per image in the table below, because a clip is part of the evidence: a card photographed 376px down a scroller is cut by the image edge and not by its own border, which is why the script scrolls the card to the pane's top first.</p>
+
+<table>
+  <thead><tr><th>file</th><th>viewport</th><th>clip</th><th>what it shows</th></tr></thead>
+  <tbody>
+    <tr><td class="num"><a href="../assets/initiatives-redesign/b-visual-system/01-current-pane-1440-folded.png">01-current-pane-1440-folded</a><td class="num">1456x1400</td><td><code>#as-initiatives</code></td><td>the tab at a 1438px pane, four cards folded</td></tr>
+    <tr><td class="num"><a href="../assets/initiatives-redesign/b-visual-system/02-current-card-1440.png">02-current-card-1440</a><td class="num">1456x1400</td><td>one open card</td><td>the open initiative: grid 543/640, wave block, two lanes</td></tr>
+    <tr><td class="num"><a href="../assets/initiatives-redesign/b-visual-system/03-current-pane-1024-folded.png">03-current-pane-1024-folded</a><td class="num">1040x1400</td><td><code>#as-initiatives</code></td><td>the folded list at a 1022px pane</td></tr>
+    <tr><td class="num"><a href="../assets/initiatives-redesign/b-visual-system/04-current-card-1024.png">04-current-card-1024</a><td class="num">1040x1400</td><td>one open card</td><td>the inversion: 318px of words beside 638px of Projects</td></tr>
+    <tr><td class="num"><a href="../assets/initiatives-redesign/b-visual-system/05-current-lane-zoom.png">05-current-lane-zoom</a><td class="num">1040x1400</td><td><code>.init-wavefold</code></td><td>the lane with no rule, no bed, no indent</td></tr>
+    <tr><td class="num"><a href="../assets/initiatives-redesign/b-visual-system/06-current-pane-768-folded.png">06-current-pane-768-folded</a><td class="num">784x1400</td><td><code>#as-initiatives</code></td><td>the folded list at a 766px pane</td></tr>
+    <tr><td class="num"><a href="../assets/initiatives-redesign/b-visual-system/07-current-card-768.png">07-current-card-768</a><td class="num">784x1400</td><td>one open card</td><td>the single-column card, unsheeted</td></tr>
+    <tr><td class="num"><a href="../assets/initiatives-redesign/b-visual-system/08-current-window-1440-docked.png">08-current-window-1440-docked</a><td class="num">1440x1000</td><td>window</td><td>the docked rail, pane 479px</td></tr>
+    <tr><td class="num"><a href="../assets/initiatives-redesign/b-visual-system/09-current-window-768-docked.png">09-current-window-768-docked</a><td class="num">768x1000</td><td>window</td><td>the docked rail at the 340px floor</td></tr>
+    <tr><td class="num"><a href="../assets/initiatives-redesign/b-visual-system/10-applied-pane-1440-folded.png">10-applied-pane-1440-folded</a><td class="num">1456x1400</td><td><code>#as-initiatives</code></td><td>the same, with the sheets at load</td></tr>
+    <tr><td class="num"><a href="../assets/initiatives-redesign/b-visual-system/11-applied-card-1440.png">11-applied-card-1440</a><td class="num">1456x1400</td><td>one open card</td><td>three columns, the slack at the card's right edge</td></tr>
+    <tr><td class="num"><a href="../assets/initiatives-redesign/b-visual-system/12-applied-pane-1024-folded.png">12-applied-pane-1024-folded</a><td class="num">1040x1400</td><td><code>#as-initiatives</code></td><td>the folded list, sheets</td></tr>
+    <tr><td class="num"><a href="../assets/initiatives-redesign/b-visual-system/13-applied-card-1024.png">13-applied-card-1024</a><td class="num">1040x1400</td><td>one open card</td><td>634px of words beside 340px of Projects</td></tr>
+    <tr><td class="num"><a href="../assets/initiatives-redesign/b-visual-system/14-applied-lane-zoom.png">14-applied-lane-zoom</a><td class="num">1040x1400</td><td><code>.init-wavefold</code></td><td>the lane with its state rule and bed</td></tr>
+    <tr><td class="num"><a href="../assets/initiatives-redesign/b-visual-system/15-applied-pane-768-folded.png">15-applied-pane-768-folded</a><td class="num">784x1400</td><td><code>#as-initiatives</code></td><td>the folded list, sheets</td></tr>
+    <tr><td class="num"><a href="../assets/initiatives-redesign/b-visual-system/16-applied-card-768.png">16-applied-card-768</a><td class="num">784x1400</td><td>one open card</td><td>the single column, sheets, nothing clipped</td></tr>
+    <tr><td class="num"><a href="../assets/initiatives-redesign/b-visual-system/17-applied-window-1440-docked.png">17-applied-window-1440-docked</a><td class="num">1440x1000</td><td>window</td><td>the docked rail, sheets</td></tr>
+    <tr><td class="num"><a href="../assets/initiatives-redesign/b-visual-system/18-applied-window-768-docked.png">18-applied-window-768-docked</a><td class="num">768x1000</td><td>window</td><td>the docked rail at the floor, sheets</td></tr>
+    <tr><td class="num"><a href="../assets/initiatives-redesign/b-visual-system/19-hazard-3-line-preview.png">19-hazard-3-line-preview</a><td class="num">1440x1000</td><td>one folded card</td><td>the sheet added after first paint: 3 lines, dots at the end</td></tr>
+  </tbody>
+</table>
+
+<h3>8.2 How the sheets reached the page</h3>
+<p>For the "after" half, one init script appends the three sheets on <code>DOMContentLoaded</code>, before the tab's first paint. That is deliberate: <code>addStyleTag</code> after load is what produced the 3-line preview in 19, and an implementation ships its stylesheet in the page. The rename proof in 4.3 is the only place a sheet is added after load, because there the point is to compare the same painted page.</p>
+<pre><code>await page.addInitScript((text) =&gt; {
+  const add = () =&gt; {
+    const style = document.createElement("style");
+    style.id = "wag-token-sheet-b";
+    style.textContent = text;
+    (document.head || document.documentElement).appendChild(style);
+  };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", add, { once: true });
+  else add();
+}, `${TOKENS}\n${ROLES}\n${APPLY}`);</code></pre>
+
+<h3>8.3 What the measurements are</h3>
+<p>Every number in sections 2 and 4 is <code>getComputedStyle</code> plus <code>getBoundingClientRect</code> over every rendered element under <code>#as-initiatives</code>, collected in the same page state as the photograph (folded or one card open), from the same run. Nothing is estimated and nothing is read off an image. The contrast ratios are computed from the resolved <code>rgb()</code> strings the browser reported, on the card's own resolved fill.</p>
+
+<h3>8.4 Tests</h3>
+<p><code>npm run test:changed -- --list</code> answers: one changed file, <code>docs/assets/initiatives-redesign/</code>, and no test names or imports it. That is a sentence, not a pass, so I also ran the whole suite once: <code>npm test</code> (<code>node --test --test-concurrency=4 test/*.test.js</code>). The result is recorded in the pull request and repeated at the end of this report's run; no product file is in this diff, so the suite cannot be affected by it either way.</p>
+
+<h2 id="notdone"><span class="n">9</span>What I did not do</h2>
+<ul>
+  <li><b>I did not read round A.</b> Not the report, not its captures, not the sibling tree. If this round reaches a different conclusion from A, that is the intended value of the exercise and not a conflict to resolve.</li>
+  <li><b>I did not change a product file.</b> The three sheets live in scratch and are printed in full in 3.3 so they can be adopted as a patch; adopting them is a <code>public/style.css</code> edit plus the two JS lines in 7.1, and that is the reader's decision.</li>
+  <li><b>I did not photograph the reader's data.</b> Every image is the fixture: four initiatives, nine trees, two waves. A real list with thirty initiatives and a wave whose gates are unknown will stress the sheet in ways this fixture cannot.</li>
+  <li><b>I did not verify the sheet against a contrast slider position other than the default.</b> The surfaces are all derived, so it should hold, but "should" is not measured; the honest next step for that is one capture at 40% contrast.</li>
+</ul>
+
+<div class="callout">
+  <div class="h">the direction in one paragraph</div>
+  <p>Spend the palette that is already there. One plane per card, at the largest radius in a monotone ladder, with a lit top edge instead of a shadow; five type steps with fixed line boxes, every size and every line box a value; one pill height; a lane that is a quoted block under its wave, coloured by the lane's own state; and a page head that stops pretending to be a card. Two of those three things need only <code>public/style.css</code>. The third, the description preview, needs the re-cut hook in 7.1, and that is the whole bill.</p>
+</div>
+
+<div class="foot">
+  round B &middot; independent of round A by design &middot; 19 captures from a fixture panel on this tree's server.js &middot; base ac327faf &middot; no product file changed &middot; every ratio computed from the browser's own resolved colours
+</div>
+
+</div>
+</body>
+</html>
