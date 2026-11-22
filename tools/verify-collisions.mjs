@@ -13,7 +13,8 @@
 //      count, not a marker count - and its title names "1 collision";
 //   3. the pair is handed to the reader by the panel's own pass, not by a fixture flag: two sweeps more than
 //      COLLISION_PASS_MS apart with nobody standing down is the second of the three conditions in collision-flow.js;
-//   4. H steps into it: the collision card is centred, flashed, and the ruling press takes the caret;
+//   4. H steps into it: the collision card is centred, flashed, and the ruling press takes the caret - and a press
+//      outside the card is the reader leaving it, so the row's chip is what re-opens it for the ruling;
 //   5. a worker's COLLISION line is on the same pair - filed against its own tree, resolved to the other row, and read
 //      back off the card as the worker's own sentence - because the fixture runs `Jobs.harvestCollisions` against the
 //      book the panel boots from, so the parse, the record and the render are one path;
@@ -245,9 +246,17 @@ const result = await (async () => {
                 title: el.getAttribute("title") || "",
                 text: (el.textContent || "").trim(),
               })),
+              pops: [...document.querySelectorAll(".rowchip-pop")].map((el) => ({ kind: el.dataset.rowchipPop, key: el.dataset.popKey })),
             };
           });
 
+        // A 404 the page makes for a resource nobody asked about (the favicon is one) is not this gate's business;
+        // any OTHER failed request is, so the URLs are kept and asserted on below rather than only the console string.
+        // The collector's console text for a failed load carries no URL, so this list is the only place the URL is.
+        const failed = [];
+        page.on("response", (r) => {
+          if (r.status() >= 400 && !/favicon/i.test(r.url())) failed.push(`${r.status()} ${r.url()}`);
+        });
         await openPage(page, panel.base, { selector: "header.topbar #btn-human" });
         await rowsLoaded();
 
@@ -326,6 +335,10 @@ const result = await (async () => {
         ok("…on the card, with the pair's evidence", stepped.blocks.length >= 1 && stepped.blocks[0].chips.includes("lib/shared.js"), JSON.stringify(stepped.blocks.map((b) => b.chips)));
         ok("…and the worker's sentence is on it", stepped.blocks.some((b) => b.notes.some((n) => n.includes(NOTE))), JSON.stringify(stepped.blocks.map((b) => b.notes)));
         ok("…marked as reported by its worker", stepped.blocks.some((b) => /reported by its worker/.test(b.when)), JSON.stringify(stepped.blocks.map((b) => b.when)));
+        // The card H lands on is the row's own COLLISION CHIP popup, not a block in the row's detail. Its chip key is
+        // what the shot's press below can close and what the ruling step re-opens through the chip.
+        const landedKey = stepped.pops.find((p) => p.kind === "collision")?.key || null;
+        ok("…and the card is the row's collision chip popup", Boolean(landedKey), JSON.stringify(stepped.pops));
 
         // Both cards on screen for the shot: the row the rotation landed on is open, the other one is opened here.
         await page.evaluate(() => {
@@ -340,6 +353,22 @@ const result = await (async () => {
 
         // ---- 5. the ruling ---------------------------------------------------------------------------------
         section("the reader rules");
+        // A PRESS OUTSIDE AN OPEN CARD IS THE READER LEAVING IT (public/board-scaffold.js's document click handler):
+        // the shot above pressed the other row open, and that press closed the card and forgot it in the chip store.
+        // Measured, not assumed: renderAll() on its own re-anchors an open card (paintRowChipPops, called at the end of
+        // renderProjectRows) and leaves it standing. So the card is re-opened here with the reader's own press on the
+        // row's collision chip: this section is about the ruling writing to the pair, not about surviving another press.
+        const closedByPress = await page.evaluate(() => !document.querySelector(".rowchip-pop"));
+        const forgotten = await page.evaluate(() => !JSON.parse(localStorage.getItem("wm.openRowChips") || "[]").some((id) => String(id).startsWith("collision|")));
+        ok("the shot's press on the other row was the reader leaving the card, so it closed and the chip forgot it", closedByPress && forgotten, `closed ${closedByPress}, forgotten ${forgotten}`);
+        const reopened = await page.evaluate((k) => {
+          const chip = document.querySelector(`[data-rowchip="collision"][data-rowchip-key="${CSS.escape(k)}"]`);
+          if (!chip) return false;
+          chip.click();
+          return true;
+        }, landedKey);
+        ok("…and the row's collision chip re-opens it, the way the reader's press does", reopened === true, String(reopened));
+        await page.waitForTimeout(200);
         const pairKey = (await view()).rows.find((r) => r.path === ONE)?.collisions[0]?.key;
         const mine = await page.evaluate(() => {
           const r = [...state.rows.values()].find((x) => (x.collisions || []).length);
@@ -397,7 +426,8 @@ const result = await (async () => {
         );
 
         ok("no page error", pageErrors.length === 0, pageErrors.join(" | "));
-        ok("no console error", consoleErrors.length === 0, consoleErrors.join(" | "));
+        ok("no failed request the panel made", failed.length === 0, failed.join(" | "));
+        ok("no console error", consoleErrors.filter((m) => !/Failed to load resource/.test(m)).length === 0, consoleErrors.join(" | "));
         return failures;
       },
       { viewport: { width: 1440, height: 900 } },
