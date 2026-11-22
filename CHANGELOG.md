@@ -17,17 +17,17 @@ has no tag.
 
 ## v1.157.2 — 2026-11-22 · 4 commits
 
-[`51e45da`](https://github.com/JLRoper/agent-worktree-gui/commit/51e45daeeee63aa99eab225a12a00c080af2c1e8) · [compare v1.157.1...v1.157.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.157.1...v1.157.2)
+[`8969cb4`](https://github.com/JLRoper/agent-worktree-gui/commit/8969cb4b6a2a06d57a80abcc2c8f6449da2d259f) · [compare v1.157.1...v1.157.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.157.1...v1.157.2)
 
 ### Docs & tests
 
 - docs: the report names the base it was measured on ([`40b3cb5`](https://github.com/JLRoper/agent-worktree-gui/commit/40b3cb53c683bc6f76315512769f58ddcf186fd7))
 - docs: render the changelog - 684 releases ([`86bea38`](https://github.com/JLRoper/agent-worktree-gui/commit/86bea388ed56b88aaec57b74624b98af66ea7d97))
-- docs(reports): the Initiatives tab as a visual system, round B ([`e7d1801`](https://github.com/JLRoper/agent-worktree-gui/commit/e7d1801e57c0d61f7c8014a25ce0ae1f180a1ca5))
+- docs(reports): the Initiatives tab as a visual system, round B ([`d251056`](https://github.com/JLRoper/agent-worktree-gui/commit/d251056bddaf1db95875511d0ce7599635a8a2ad))
 
 ### Other
 
-- chore: 1.157.2 - the version this landing carries ([`51e45da`](https://github.com/JLRoper/agent-worktree-gui/commit/51e45daeeee63aa99eab225a12a00c080af2c1e8))
+- chore: 1.157.2 - the version this landing carries ([`8969cb4`](https://github.com/JLRoper/agent-worktree-gui/commit/8969cb4b6a2a06d57a80abcc2c8f6449da2d259f))
 
 ## v1.157.1 — 2026-11-22 · 3 commits
 
