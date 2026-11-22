@@ -5007,8 +5007,10 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
   letter-spacing: 0;
   color: var(--tab-ink-3);
 }
-#as-initiatives .init-actions { flex: 0 1 auto; min-width: 0; margin: 0; flex-wrap: wrap; }
+#as-initiatives .init-actions { flex: 0 1 auto; min-width: 0; margin: 0; flex-wrap: nowrap; }
 #as-initiatives .init-shell .as-actions button {
+  flex: 0 0 auto;
+  white-space: nowrap;
   min-height: var(--tab-control);
   padding: 0 var(--tab-s3);
   border: 1px solid var(--tab-line);
@@ -5026,6 +5028,25 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
 #as-initiatives .init-shell .as-actions button.primary { color: #0f1115; background: var(--tab-accent); border-color: var(--tab-accent); font-weight: 600; }
 #as-initiatives .init-shell .as-actions button.primary:hover { background: #4ad35c; color: #0f1115; }
 #as-initiatives .init-shell .as-actions button[disabled] { opacity: .55; cursor: not-allowed; }
+/* THE FOUR VERBS ARE ONE ROW, AND THE PRIMARY ONE IS FIRST. The toolbar used to order About, Compact rows, New
+   initiative, Refresh, so the tab's only create action was third in every path and a second row orphaned Refresh at
+   768. The fix is two things that must hold together: the order (New initiative, Refresh, About, Compact rows, in the
+   markup, which is also the keyboard order) and a row that does not wrap in the narrow dock. The words shorten rather
+   than the row: under 430px of pane the density control says "Density", and under 320px it says "Aa" and the primary
+   says "New". The accessible name is "Density - compact rows", which contains each visible word, so a reader speaking
+   the label still finds the control. */
+#as-initiatives .init-lbl-sm, #as-initiatives .init-lbl-xs { display: none; }
+@container (max-width: 430px) {
+  #as-initiatives .init-actions { gap: var(--tab-s1); }
+  #as-initiatives .init-shell .as-actions button { padding: 0 6px; }
+  #as-initiatives .init-lbl-density { display: none; }
+  #as-initiatives .init-lbl-sm { display: inline; }
+}
+@container (max-width: 320px) {
+  #as-initiatives .init-lbl { display: none; }
+  #as-initiatives .init-lbl-sm { display: none; }
+  #as-initiatives .init-lbl-xs { display: inline; }
+}
 /* THE META LINE: what the store holds, who may change it, and whether this read is in flight. The tier sentence is
    NOT folded away and NOT a tooltip: it is the reader's only statement of who may change the map (round B, eight
    things that must survive). */
@@ -5060,7 +5081,7 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
 /* FOLDED IS A ROW ON THE GROUND, NOT A CARD: the list reads as one ledger, the title and its preview carry the
    identity, and the route mark and status word say where the work has got to before any card is opened. */
 #as-initiatives .init-card.is-titlecard {
-  padding: var(--tab-s3) var(--tab-s2);
+  padding: var(--tab-s3) var(--tab-s2) var(--tab-s3) 45px;
   border: 0;
   border-bottom: 1px solid var(--tab-line);
   border-radius: 0;
@@ -5125,10 +5146,11 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
 #as-initiatives .init-card:not(.is-titlecard) .init-title { flex: 1 1 auto; display: block; -webkit-line-clamp: unset; overflow: visible; }
 /* THE ROUTE MARK, at rest: one dot per wave, in the wave's own derived state, the current one ringed. It is a second
    read of the same fact the status word says, so it is never the only answer; decorative, so aria-hidden. */
-/* THE MARK HANGS IN THE ROW'S GUTTER. A folded row that has a route is indented by one slot, and the dots sit in that
-   slot: the title, the preview and the counts then share one left edge inside the row, and a row with no route keeps
-   the full width rather than reserving a gap for a mark it does not have. */
-#as-initiatives .init-card.is-titlecard.has-route { padding-left: 45px; }
+/* THE MARK HANGS IN THE ROW'S GUTTER, AND THE GUTTER IS RESERVED ON EVERY ROW. The 45px is the glyph's own slot:
+   10px in from the row, 27px of dots, 8px to the title. A row WITH a route paints the dots in it; a row without one
+   leaves it empty. Reserving it on both is what keeps one reading edge down the whole ledger - if only the route row
+   paid the tax, its title would sit 37px right of every other (the review's measured 977 x3 and 1014) and the eye
+   would read a ragged left edge exactly where the new mark arrived. */
 #as-initiatives .init-card.is-titlecard { position: relative; }
 #as-initiatives .init-glyph { flex: 0 0 27px; width: 27px; display: inline-flex; align-items: center; gap: 3px; padding-top: 6px; }
 #as-initiatives .init-card.is-titlecard .init-glyph { position: absolute; left: 10px; top: calc(var(--tab-s3) + 6px); padding-top: 0; }
@@ -5171,6 +5193,11 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
    title box is as wide as the row, so a flowing chevron lands mid-row on a two-line title. */
 #as-initiatives .init-card.is-titlecard .init-head-btn { padding-right: 18px; }
 #as-initiatives .init-card.is-titlecard .init-caret { position: absolute; right: var(--tab-s2); top: calc(var(--tab-s3) + 2px); font-size: 11px; line-height: 1; }
+/* THE OPEN CARET IS A REAL GLYPH. A folded row ends its head with ▸ in the disclosure column; the open plate used to
+   end with nothing at all, so the only evidence of the open state was the absence of the folded mark (and the test
+   could only assert "not ▸ at the end"). The plate's head now draws ▾ at its own right edge, just before Edit, so the
+   state has a mark as well as aria-expanded - and the gate asserts that mark, not its absence. */
+#as-initiatives .init-head-btn .init-caret.is-open { margin-left: auto; padding-left: 2px; font-size: 11px; line-height: 1.2; color: var(--tab-ink-3); }
 
 /* THE DESCRIPTION: body at a reading size, 68ch, and its fold re-measures because the line height is unitless. */
 #as-initiatives .init-desc {
@@ -5182,7 +5209,7 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-#as-initiatives .init-card.is-titlecard .init-desc { margin: 0 0 var(--tab-s1); color: var(--tab-ink-3); }
+#as-initiatives .init-card.is-titlecard .init-desc { margin: 0 0 var(--tab-s1); color: var(--tab-ink-2); }
 #as-initiatives .init-desc.is-empty { color: var(--tab-ink-3); font-style: italic; }
 #as-initiatives .init-descfold { margin-bottom: var(--tab-s3); }
 #as-initiatives .init-desc-head { margin-bottom: var(--tab-s1); }
@@ -5217,6 +5244,15 @@ tbody tr.row.flash-clarify { animation: flashrow-clarify var(--flash-row, 900ms)
 #as-initiatives .init-chips .chip + .chip::before { content: "\00b7"; margin: 0 7px; color: var(--tab-ink-3); }
 #as-initiatives .init-chips .chip.is-zero { color: var(--tab-ink-3); border: 0; background: transparent; }
 #as-initiatives .init-chips .init-meta { flex: 0 0 auto; margin-left: auto; font-size: var(--tab-fs-meta); line-height: 1.5; color: var(--tab-ink-3); }
+/* THE COUNTS STEP UP ON THE HOVER FILL. The row's hover raises the ground under the counts from --tab-row (#171c24)
+   to --tab-hover (#1c2330), and ink-3 on that fill measures 4.50:1 - the AA floor and two steps below the preview
+   beside it. Rest is left alone (ink-3 is the counts' own role); on hover the counts and the provenance take ink-2, so
+   the secondary ink is never the hardest thing on the row to read. The 10px lane project tag keeps ink-3: 4.51 on
+   --tab-raised is the pair round B named as the floor, and it is not tinted by this row's hover. */
+#as-initiatives .init-card.is-titlecard:hover .init-chips .chip,
+#as-initiatives .init-card.is-titlecard:hover .init-chips .chip.is-zero,
+#as-initiatives .init-card.is-titlecard:hover .init-chips .init-meta,
+#as-initiatives .init-card.is-titlecard:hover .init-chips .chip + .chip::before { color: var(--tab-ink-2); }
 
 /* SECTION HEADS: sentence case, one weight, a hairline that carries the eye to the count. */
 #as-initiatives .init-sechead {
