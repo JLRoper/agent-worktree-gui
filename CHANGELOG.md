@@ -4,16 +4,29 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.153.1 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.153.2 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-673 releases from v0.1.0 (2026-10-20) to v1.153.1 (2026-11-21), 2366 commits between the tags. Every release is anchored by an
+674 releases from v0.1.0 (2026-10-20) to v1.153.2 (2026-11-21), 2369 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.153.2 — 2026-11-21 · 3 commits
+
+[`d4ebf68`](https://github.com/JLRoper/agent-worktree-gui/commit/d4ebf68b9a0829436e3daf3b9de383b7063b0f63) · [compare v1.153.1...v1.153.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.153.1...v1.153.2)
+
+### Docs & tests
+
+- docs: render the changelog - 673 releases ([`96c32d8`](https://github.com/JLRoper/agent-worktree-gui/commit/96c32d82b284d3c46b9729d0423c791be95552a3))
+
+### Other
+
+- Stop drawing a second queued chip for one Enter ([`ea16a15`](https://github.com/JLRoper/agent-worktree-gui/commit/ea16a159e19e0169ffeb026b52f7a4719e23991c))
+- chore: 1.153.2 - the version this landing carries ([`d4ebf68`](https://github.com/JLRoper/agent-worktree-gui/commit/d4ebf68b9a0829436e3daf3b9de383b7063b0f63))
 
 ## v1.153.1 — 2026-11-21 · 4 commits
 
