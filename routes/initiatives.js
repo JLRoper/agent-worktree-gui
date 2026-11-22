@@ -172,7 +172,9 @@ export function initiativesView({ initiatives, projectForPath, rowFor, assistant
     people.sort((a, b) => String(b.lastAt || "").localeCompare(String(a.lastAt || "")) || a.name.localeCompare(b.name));
     // THE WAVE LANE (lib/waves.js): this initiative's waves in position order, each folded with the tasks that name
     // it, its derived state and its gate reads. A read, not a record: nothing here is stored on the initiative, and a
-    // wave with no member draws as `empty` rather than as a default membership.
+    // wave with no member draws as `empty` rather than as a default membership. Each wave also carries `autoOpen`, the
+    // answer for THIS read about the switch on the wave before it - so the tab and GET /api/waves evaluate the auto
+    // switch in the same fold, at the same moment, from the same evidence map.
     const lane = waves
       ? waveLane({ waves, initiativeId: init.id, tasks: waveTasks, rowFor, templateExists, evidenceFor })
       : { waves: [], skipped: [], currentId: null };

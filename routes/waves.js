@@ -13,6 +13,12 @@
 // `laneJoinOwed` and `laneRefused` per wave without a second read, a store field or a cache to keep warm. The join a
 // lane set owes is a CALL (`joinWaveLanes`), not a route: nothing here writes, and no scheduler was added.
 //
+// THE AUTO SWITCH IS EVALUATED BY THIS READ, AND ONLY BY A READ. Each wave's `autoOpen` says whether the wave before it
+// opened it - its switch on, its exit gate met from the SAME live evidence read below, and that wave done - and names
+// the wave and the evidence in its sentence (`waveAutoOpens`, lib/waves.js). Nothing here writes an open, schedules a
+// start, or checks a clock: if nobody asks this route or GET /api/initiatives, nothing opens, and the next read is the
+// next answer. That limitation is the design, not a gap to paper over with a timer.
+//
 // MEMBERS COME FROM EVERY ASSISTANT'S QUEUE, not from the initiative's tree keys. Membership is the task's own
 // `waveId` (decision 2, 2026-11-21): a wave may span projects, so filtering by tree would silently drop a member whose
 // worktree belongs to another initiative - the exact inference the design forbids.
