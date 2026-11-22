@@ -67,15 +67,21 @@ pair, "no row on this board and no live agent answers to it" for the note that n
 simplified shape, and none of them imports a helper the fix added: the assertions are about behaviour, so the build
 that shipped the defects runs them and fails on its own answer.
 
-Failing-first, proved against `git archive ac327faf` (the tree that shipped the defects) with the same test file
-copied in: CHANGED, 4 of 4.
+Failing-first, proved rather than asserted: the same test file copied into a `git archive` of `ac327faf`, the tree
+that shipped the defects, reads 0 of 4 passing (each case fails on its own answer, not at import); on this tip it reads
+4 of 4.
 
-The existing suites that name or import the changed modules were run on the tip - the collision detector, the book, the
-sweep, the settle path, the card and the review lane: CHANGED, all green. The full suite, `npm test`, was run once on
-this tip: CHANGED.
+The suites that name or import the changed modules were run on the REBASED tip - `test/collisions.test.js`,
+`test/collision-settle.test.js`, `test/collision-card.test.js`, `test/collision-count.test.js` and
+`test/review-lane.test.js`: 78 tests, 78 pass, 0 fail. That includes every escalation case the sweep already had.
+
+The full suite, `npm test` (`node --test --test-concurrency=4 test/*.test.js`, 412 files), was run once on this
+branch's commit: exit 0, no failing test. The base then moved six commits, so the collision suites above were re-run
+on the rebased tip rather than quoting the pre-rebase reading as current.
 
 ## The version and the base
 
 1.155.3, a patch: fixes in what the collision book counts, no new capability. The branch was cut from `f3f08550`, six
 commits behind `origin/main`; it was rebased onto `17c78060` (1.155.2) before the pull request was opened, so the bump
-sits above the number the base carries.
+sits above the number the base carries. The sweep's own answer (`routes/collisions.js:70`) now says when it closed
+records whose trees are gone, so a reader of the log sees the verdict rather than only the pairs it swept.
