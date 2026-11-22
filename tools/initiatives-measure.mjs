@@ -13,15 +13,10 @@
 
 const HOST = "#as-initiatives";
 
-const PAGE_FN = `(() => {
-  const host = document.querySelector(${JSON.stringify(HOST)});
-  if (!host) return { error: "the initiatives pane is not on screen" };
-  const one = (sel, root = host) => root.querySelector(sel);
-  const all = (sel, root = host) => [...root.querySelectorAll(sel)];
-  const style = (node) => getComputedStyle(node);
-  const round = (n) => Math.round(Number(n) * 10) / 10;
-
-  // ---- colour and contrast ---------------------------------------------------------------------
+// The colour and contrast arithmetic the sample is scored on. It is one string because two page functions use it -
+// the pane sample, and the folded row read again with the pointer on it - and two copies would be two definitions
+// of the same number.
+const CONTRAST_JS = `
   const parse = (value) => {
     const m = String(value || "").match(/rgba?\\(([^)]+)\\)/);
     if (!m) return null;
@@ -45,7 +40,7 @@ const PAGE_FN = `(() => {
   const ratio = (a, b) => {
     const l1 = luminance(a);
     const l2 = luminance(b);
-    return round((Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05));
+    return Math.round(((Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05)) * 100) / 100;
   };
   const pageBg = (() => {
     const body = parse(style(document.body).backgroundColor);
@@ -68,7 +63,17 @@ const PAGE_FN = `(() => {
     if (!fg) return null;
     return ratio(fg.a < 1 ? over(fg, bg) : fg, bg);
   };
+`;
 
+const PAGE_FN = `(() => {
+  const host = document.querySelector(${JSON.stringify(HOST)});
+  if (!host) return { error: "the initiatives pane is not on screen" };
+  const one = (sel, root = host) => root.querySelector(sel);
+  const all = (sel, root = host) => [...root.querySelectorAll(sel)];
+  const style = (node) => getComputedStyle(node);
+  const round = (n) => Math.round(Number(n) * 10) / 10;
+
+  ${CONTRAST_JS}
   const textOf = (node) => String(node ? node.textContent || "" : "").replace(/\\s+/g, " ").trim().slice(0, 90);
   const typeOf = (sel) => {
     const node = one(sel);
@@ -197,7 +202,11 @@ const PAGE_FN = `(() => {
     type: {
       title: typeOf(".init-title"),
       description: typeOf(".init-desc"),
+      // The same .init-desc shape, said explicitly: the folded preview is the place the review measured 4.90 rest
+      // and 4.50 hover, and a sample that only reads the first .init-desc by class cannot tell which card it read.
+      foldedPreview: typeOf(".init-card.is-titlecard .init-desc"),
       chip: typeOf(".init-chips .chip"),
+      meta: typeOf(".init-chips .init-meta"),
       hint: typeOf(".init-chips .as-hint"),
       fold: typeOf(".init-proj .init-proj-name"),
       project: typeOf(".init-project .init-proj"),
@@ -205,6 +214,12 @@ const PAGE_FN = `(() => {
       mini: typeOf(".init-mini"),
       assist: typeOf(".init-assist-btn"),
       empty: typeOf(".init-empty"),
+      // The lane is the other place round B changed ink: its gate word, its automation word, and the 10px project tag
+      // whose 4.51 on --tab-raised is the named floor. They live inside an OPEN card, which is why the docked sample
+      // never saw them until the gate opened one before measuring.
+      laneGate: typeOf(".wave-gate"),
+      laneAuto: typeOf(".wave-auto"),
+      laneProject: typeOf(".wave-member-project"),
     },
     cardBox: box(card),
     headerBox: box(one(".init-head")),
@@ -234,6 +249,11 @@ const PAGE_FN = `(() => {
       assist: leftOf(".init-assists"),
       history: leftOf(".init-history"),
     },
+    // The folded list's one reading edge: every title on every folded row, not just the first. The review measured
+    // 977 x3 against 1014 for the one row that carried a route, and the old gate could not see it because it sampled
+    // one element by class.
+    foldedLefts: all(".init-card.is-titlecard .init-title").map((n) => round(n.getBoundingClientRect().left)),
+    foldedCount: all(".init-card.is-titlecard").length,
     chips,
     lineLength,
     sections,
@@ -253,9 +273,32 @@ export async function measurePane(page) {
   return page.evaluate(PAGE_FN);
 }
 
-// The interactive half: hover, keyboard focus and an active press, each read from computed styles. It leaves the pane
-// as it found it (the fold is pressed twice, the pointer is moved off), so a caller can measure and then screenshot.
+// The folded row read again while the pointer is on it. It is a separate page function because the hover fill only
+// exists under a real pointer: the rest sample can read ink-3 at 4.90 on --tab-row and never see the 4.50 the same
+// ink draws on --tab-hover. The rows it reads are scoped to the folded card itself - the first chip in the host is
+// inside whatever card is open, and reading that would be the very sampling mistake this round is fixing.
+const foldedHoverFn = (index) => `(() => {
+  const host = document.querySelector(${JSON.stringify(HOST)});
+  if (!host) return [];
+  const style = (node) => getComputedStyle(node);
+${CONTRAST_JS}
+  const row = host.querySelectorAll(".init-card.is-titlecard")[${Number(index)}];
+  if (!row) return [];
+  return [
+    [".init-desc", "folded preview"],
+    [".init-chips .chip", "count chip"],
+    [".init-chips .init-meta", "provenance"],
+  ]
+    .map(([sel, name]) => {
+      const node = row.querySelector(sel);
+      return node ? { selector: sel, name, ratio: contrastOf(node), color: style(node).color, rowBackground: style(row).backgroundColor } : null;
+    })
+    .filter(Boolean);
+})()`;
+
 export async function measureInteractions(page) {
+  // The interactive half: hover, keyboard focus and an active press, each read from computed styles. It leaves the pane
+  // as it found it (the fold is pressed twice, the pointer is moved off), so a caller can measure and then screenshot.
   const out = { hover: {}, focus: {}, active: {}, keyboard: {} };
   const read = async (sel) => page.evaluate((s) => {
     const node = document.querySelector(`#as-initiatives ${s}`);
@@ -286,6 +329,19 @@ export async function measureInteractions(page) {
     await treeLink.hover();
     await page.waitForTimeout(80);
     out.hover.treeAfter = await read(".init-tree-name");
+  }
+
+  // THE FOLDED ROW ON HOVER, read with the pointer actually on it. The row's fill rises to --tab-hover and the inks
+  // drawn on it change with the ground; these three readings are what the contrast check needs to see the 4.50 the
+  // round shipped. The pointer is lifted and the fill is given a tick to animate out before the keyboard pass.
+  out.hover.folded = [];
+  const foldedIndex = await page.evaluate(() => [...document.querySelectorAll("#as-initiatives .init-card.is-titlecard")].findIndex((r) => r.querySelector(".init-desc") && r.querySelector(".init-chips .chip") && r.querySelector(".init-chips .init-meta")));
+  if (foldedIndex >= 0) {
+    await page.locator("#as-initiatives .init-card.is-titlecard").nth(foldedIndex).hover();
+    await page.waitForTimeout(80);
+    out.hover.folded = await page.evaluate(foldedHoverFn(foldedIndex));
+    await page.mouse.move(2, 2);
+    await page.waitForTimeout(60);
   }
   await page.mouse.move(2, 2);
 
@@ -438,10 +494,20 @@ export function scoreInitiatives(m, interactions, { emptyPane = null, widePane =
   add("type-fold", "project, tree and assistant rows are at least 12px", [t.fold, t.tree, t.assist].every((x) => (x?.fontSize || 0) >= 12), `${px(t.fold?.fontSize)} fold, ${px(t.tree?.fontSize)} tree, ${px(t.assist?.fontSize)} assistant`);
   add("type-meta", "hints and chips are at least 10.5px", [t.hint, t.chip].every((x) => (x?.fontSize || 0) >= 10.5), `${px(t.hint?.fontSize)} hint, ${px(t.chip?.fontSize)} chip`);
 
-  // 2. AA CONTRAST, every measured text run, not only the title.
-  const contrasts = [t.title, t.description, t.chip, t.hint, t.fold, t.tree, t.mini, t.assist].filter(Boolean).map((x) => ({ selector: x.selector, ratio: x.contrast }));
+  // 2. AA CONTRAST, every measured text run, not only the title - and the two places round B changed ink: the folded
+  // preview, and the lane inside an open card. The hover readings are separate entries because the row's own hover
+  // fill is a different background: the rest sample cannot see 4.50 on #1c2330.
+  const contrasts = [t.title, t.description, t.foldedPreview, t.chip, t.meta, t.hint, t.fold, t.tree, t.mini, t.assist, t.laneGate, t.laneAuto, t.laneProject]
+    .filter(Boolean)
+    .map((x) => ({ selector: x.selector, ratio: x.contrast }))
+    .concat((it.hover?.folded || []).map((x) => ({ selector: `${x.selector} (hover)`, ratio: x.ratio })));
   const worst = contrasts.reduce((min, x) => (x.ratio == null ? min : !min || x.ratio < min.ratio ? x : min), null);
-  add("contrast-aa", "every text run is at least 4.5:1 against its own background", contrasts.length > 0 && contrasts.every((x) => (x.ratio || 0) >= 4.5), worst ? `worst ${worst.ratio}:1 at ${worst.selector}` : "no text measured");
+  add("contrast-aa", "every text run is at least 4.5:1 against its own background", contrasts.length > 0 && contrasts.every((x) => (x.ratio || 0) >= 4.5), worst ? `worst ${worst.ratio}:1 at ${worst.selector}, ${contrasts.length} runs` : "no text measured");
+  // 2b. THE SAMPLE ITSELF. A green contrast check on a sample that never entered the folded row or the lane is how the
+  // round's "worst 5:1" headline survived a 4.50 measurement: it read the first .init-desc by class, in the open card.
+  const hoverSel = new Set((it.hover?.folded || []).map((x) => x.selector));
+  const sampled = { folded: Boolean(t.foldedPreview), lane: Boolean(t.laneGate && t.laneAuto && t.laneProject), hover: hoverSel.has(".init-desc") && hoverSel.has(".init-chips .chip") && hoverSel.has(".init-chips .init-meta") };
+  add("contrast-sample", "the contrast sample enters the folded row, its hover fill and the lane", sampled.folded && sampled.lane && sampled.hover, `folded preview ${sampled.folded ? "read" : "MISSING"}, folded hover ${sampled.hover ? "read" : "MISSING"}, lane ${sampled.lane ? "read" : "MISSING"} (gate ${Boolean(t.laneGate)}, auto ${Boolean(t.laneAuto)}, project ${Boolean(t.laneProject)})`);
 
   // 3. A 4px SPACING SCALE. Card padding, the gaps between folds and the margins under the description and chips
   // are the readable rhythm; 7, 9 and 5 are three different opinions about the same gap.
@@ -455,14 +521,21 @@ export function scoreInitiatives(m, interactions, { emptyPane = null, widePane =
   const small = (m.targets || []).filter((x) => x.height < 28 || x.width < 24);
   add("hit-targets", "every control is at least 28px tall and 24px wide", small.length === 0 && (m.targets || []).length >= 5, small.length ? small.map((x) => `${x.selector} ${x.width}x${x.height}`).join("; ") : `${(m.targets || []).length} controls measured, smallest ${Math.min(...(m.targets || []).map((x) => x.height))}px`);
 
-  // 5. CHIPS FIT. An ellipsis is not a chip that fits: the branch name is the long one on purpose.
-  add("chips-fit", "no chip clips its text", (m.chips?.clipped || []).length === 0, (m.chips?.clipped || []).length ? `${m.chips.clipped.length} clipped: ${m.chips.clipped.map((c) => c.text.slice(0, 40)).join(" | ")}` : `${m.chips?.count || 0} chips, widest ${px(m.chips?.widest)}`);
+  // 5. CHIPS FIT. An ellipsis is not a chip that fits: the branch name is the long one on purpose. An empty sample is
+  // not a pass: a fixture with no chips used to satisfy "no chip clips its text" while measuring nothing.
+  add("chips-fit", "no chip clips its text in a sample that has chips", (m.chips?.count || 0) > 0 && (m.chips?.clipped || []).length === 0, (m.chips?.clipped || []).length ? `${m.chips.clipped.length} clipped: ${m.chips.clipped.map((c) => c.text.slice(0, 40)).join(" | ")}` : (m.chips?.count || 0) > 0 ? `${m.chips.count} chips, widest ${px(m.chips?.widest)}` : "no chips in the sample - counted as a failure, not a pass");
 
   // 6. ALIGNMENT. The title, the description, the chips and the sections share one left edge; the indented lists are
   // one step in, not four different ones.
   const lefts = Object.values(m.left || {}).filter((n) => Number.isFinite(n));
   const spread = lefts.length ? Math.max(...lefts) - Math.min(...lefts) : 999;
   add("alignment", "the card's text shares one left edge", spread <= 20, `left edges ${lefts.join(", ")} (spread ${spread}px)`);
+  // 6b. THE FOLDED LIST'S EDGE. The alignment check above reads the open card; the folded ledger is where the route
+  // mark's gutter used to push one title 37px right of the others. Every folded title must share the edge, and the
+  // old rubric's number for the whole list is 16px.
+  const folded = Array.isArray(m.foldedLefts) ? m.foldedLefts : [];
+  const foldedSpread = folded.length > 1 ? Math.max(...folded) - Math.min(...folded) : 999;
+  add("folded-alignment", "every folded title starts on one left edge", folded.length >= 2 && foldedSpread <= 16, folded.length ? `${folded.length} folded titles at ${folded.join(", ")} (spread ${foldedSpread}px)` : "no folded rows in the sample");
 
   // 7. LINE LENGTH at the widest float: prose past ~80 characters is a wall, not a paragraph.
   const line = widePane?.lineLength || m.lineLength;

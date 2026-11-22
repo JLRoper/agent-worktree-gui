@@ -8,7 +8,7 @@
 // WHAT THIS GATE PROVES. The brief asked for a tab beside Role that holds each big piece of work's shape, a chart
 // column fed from the same store, and two gestures that make the map usable: a worktree link that takes the reader to
 // the row, and an assistant's name that takes the cursor to its input. Every claim below is measured on the real page
-// at 1440x900, never read out of the source:
+// at 1440x900 - except claim 9, which is measured at the two narrow docks - never read out of the source:
 //
 //   1. THE EMPTY STATE, before anything exists: the tab says what an initiative is, the store file does not exist yet,
 //      and the first write is the tab's own New initiative.
@@ -30,7 +30,11 @@
 //   7. THE NAME: an assistant's name opens its pane and puts the caret in the box it types into - nothing is sent.
 //   8. THE COUNTS, ORDERED: beside each assistant, queued/running/completed/parked for THIS initiative's trees,
 //      newest work first, all four drawn always - a zero is a chip, not an absence - so the strip never shifts.
-//   9. HEALTH: zero page errors and zero console errors, and the tab is drawn in the panel's own chips and type: the
+//   9. THE TOOLBAR AT THE NARROW DOCK: the four actions read New initiative, Refresh, About, Compact rows - in that
+//      order, which is also the keyboard order - and they share one row in the 347px pane a 768 window draws and the
+//      239px pane a 480 window draws. The density control shortens to Density and then to Aa, and the primary to New,
+//      rather than letting Refresh orphan onto a second row; the short forms keep the full names in aria-label.
+//  10. HEALTH: zero page errors and zero console errors, and the tab is drawn in the panel's own chips and type: the
 //      card is an .as-group, the chip is .chip, and the type follows the tab's five steps (title 15.5, body 12.5,
 //      meta 11.5, chip 10.5).
 //
@@ -413,6 +417,11 @@ try {
               open: head?.getAttribute("aria-expanded") === "true",
               headTag: head?.tagName || "",
               headText: head?.textContent.replace(/\s+/g, " ").trim() || "",
+              // THE CARET ITSELF. A glyph element carrying its text, and the computed size/colour it is painted at - so
+              // the gate asserts a drawn open caret, not "the head does not end with the folded one".
+              caret: head?.querySelector(".init-caret")?.textContent || "",
+              caretOpen: Boolean(head?.querySelector(".init-caret.is-open")),
+              caretFs: head?.querySelector(".init-caret") ? getComputedStyle(head.querySelector(".init-caret")).fontSize : "",
               descOpen: dhead?.getAttribute("aria-expanded") === "true",
               hasDescHeader: Boolean(dhead),
               descHeadTag: dhead?.tagName || "",
@@ -442,7 +451,7 @@ try {
         const storeDesc = (await store()).initiatives[0].description;
         const titleCard = await cardState();
         ok("a card starts as its title card", /(^|\s)is-titlecard(\s|$)/.test(titleCard.group), titleCard.group);
-        ok("…whose title is the fold's own button, saying it is folded", titleCard.headTag === "BUTTON" && titleCard.open === false && titleCard.headText.startsWith("SSO migration") && titleCard.headText.endsWith("▸"), `${titleCard.headTag} aria-expanded=${titleCard.open} ${titleCard.headText}`);
+        ok("…whose title is the fold's own button, saying it is folded", titleCard.headTag === "BUTTON" && titleCard.open === false && titleCard.headText.startsWith("SSO migration") && titleCard.caret === "▸" && !titleCard.caretOpen, `${titleCard.headTag} aria-expanded=${titleCard.open} caret=${JSON.stringify(titleCard.caret)} ${titleCard.headText}`);
         check("…with the body behind the fold: no project folds, no worktree rows, no Edit", { projects: titleCard.projects, trees: titleCard.trees, edit: titleCard.edit }, { projects: 0, trees: 0, edit: 0 });
         check("the collapsed card shows the description's first two lines", titleCard.lines, 2);
         check("…and no header to fold: a title card has nothing inside it to fold", titleCard.hasDescHeader, false);
@@ -461,7 +470,7 @@ try {
         await page.locator(`[data-init-card="${initId}"] .init-title`).click();
         await page.waitForSelector(`[data-init-card="${initId}"] .init-project`, { timeout: 15_000 });
         const opened = await cardState();
-        ok("a press on the title card unfolds it", opened.open === true && !/▸$/.test(opened.headText), `aria-expanded=${opened.open} ${opened.headText}`);
+        ok("a press on the title card unfolds it, and the open head draws the open caret", opened.open === true && opened.caret === "▾" && opened.caretOpen === true && opened.headText.endsWith("▾") && opened.caretFs === "11px", `aria-expanded=${opened.open} caret=${JSON.stringify(opened.caret)} ${opened.caretFs} ${opened.headText}`);
         check("…its body is drawn: two project folds, no worktree rows yet, Edit present", { projects: opened.projects, trees: opened.trees, edit: opened.edit }, { projects: 2, trees: 0, edit: 1 });
         ok("…and the description is whole, its own header saying so", opened.descOpen === true && opened.hasDescHeader && opened.descHeadTag === "BUTTON" && opened.dots === "", `desc aria-expanded=${opened.descOpen}`);
         check("expanded, the description is the store's description, breaks and all", opened.text, storeDesc);
@@ -713,7 +722,59 @@ try {
         }, slash(trees.ssoOne));
         check("an edited title reaches the chart's chip without a reload", edited, ["SSO migration (Menu)"]);
 
-        // ---- 9. health ----------------------------------------------------------------------------
+        // ---- 9. the toolbar at the narrow dock -------------------------------------------------------
+        console.log("\n== 9. the four actions, in order, on one row at 347 and 239 ==");
+        // The dock is the state the review measured: at a 768 window the rail is 347px wide, at 480 it is 239px. The
+        // frame is switched through the panel's own route and the page is reopened, because the dock is read at boot.
+        const docked = await fetch(`${base}/api/settings/general`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ dockMode: "docked" }),
+          signal: AbortSignal.timeout(8000),
+        });
+        ok("the panel switched to the docked frame through its own route", docked.ok, `HTTP ${docked.status}`);
+        await openPage(page, base, { selector: "section.project" });
+        const toolbarAt = async (width) => {
+          await page.setViewportSize({ width, height: 900 });
+          await page.waitForTimeout(250);
+          await openTab();
+          await page.waitForSelector("#as-initiatives .init-actions button", { timeout: 20_000 });
+          return page.evaluate(() => {
+            const pane = document.getElementById("as-initiatives");
+            const buttons = [...pane.querySelectorAll(".init-actions button")].filter((b) => !b.hidden);
+            const key = (b) => (b.hasAttribute("data-init-new") ? "new" : b.hasAttribute("data-init-refresh") ? "refresh" : b.hasAttribute("data-init-about") ? "about" : b.hasAttribute("data-init-density") ? "density" : "?");
+            // The label the reader actually reads: the span the container query has not hidden.
+            const label = (b) => [...b.querySelectorAll(".init-lbl, .init-lbl-sm, .init-lbl-xs")].filter((s) => s.getClientRects().length).map((s) => s.textContent).join("").trim() || b.textContent.trim();
+            const actions = pane.querySelector(".init-actions");
+            return {
+              pane: pane.clientWidth,
+              order: buttons.map(key),
+              labels: buttons.map(label),
+              names: buttons.map((b) => b.getAttribute("aria-label") || b.textContent.trim()),
+              rows: [...new Set(buttons.map((b) => Math.round(b.getBoundingClientRect().top)))].length,
+              heights: [...new Set(buttons.map((b) => Math.round(b.getBoundingClientRect().height)))],
+              widestRight: Math.round(Math.max(...buttons.map((b) => b.getBoundingClientRect().right))),
+              paneRight: Math.round(pane.getBoundingClientRect().right),
+              overflow: actions.scrollWidth - actions.clientWidth,
+            };
+          });
+        };
+        const wide = await toolbarAt(768);
+        check("at a 768 window the pane is 347px, the width the review measured", wide.pane, 347);
+        check("the four actions read New initiative, Refresh, About, Compact rows in that order", wide.order, ["new", "refresh", "about", "density"]);
+        check("the four share one row at 347px", wide.rows, 1);
+        check("the density control says Density when the pane is 347px", wide.labels, ["New initiative", "Refresh", "About", "Density"]);
+        ok("nothing runs past the pane's right edge at 347px", wide.widestRight <= wide.paneRight && wide.overflow <= 0, `widest right ${wide.widestRight} of ${wide.paneRight}, actions overflow ${wide.overflow}`);
+        ok("the visible short forms still announce the full names", wide.names[0] === "New initiative" && wide.names[3] === "Density - compact rows", wide.names.join(" | "));
+        const narrow = await toolbarAt(480);
+        check("at a 480 window the pane is 239px, the width the review measured", narrow.pane, 239);
+        check("the same four, in the same order, at 239px", narrow.order, ["new", "refresh", "about", "density"]);
+        check("the four share one row at 239px", narrow.rows, 1);
+        check("the primary says New and the density toggle says Aa at 239px", narrow.labels, ["New", "Refresh", "About", "Aa"]);
+        ok("nothing runs past the pane's right edge at 239px", narrow.widestRight <= narrow.paneRight && narrow.overflow <= 0, `widest right ${narrow.widestRight} of ${narrow.paneRight}, actions overflow ${narrow.overflow}`);
+        check("every control keeps its 30px height at both widths", [...new Set([...wide.heights, ...narrow.heights])], [30]);
+
+        // ---- 10. health ----------------------------------------------------------------------------
         console.log("\n== health ==");
         check("no page errors", pageErrors.map(String), []);
         check("no console errors", consoleErrors.map(String), []);

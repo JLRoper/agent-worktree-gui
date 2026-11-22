@@ -100,6 +100,17 @@ const expandFirstCard = async (page) => {
   await page.waitForSelector("#as-initiatives .init-card:not(.is-titlecard) .init-projects", { timeout: 10_000 });
 };
 
+// A named card, opened. The docked contrast sample needs the lane, and the lane is drawn only inside an open card:
+// the fixture's first card (Kafka) has no waves, while Menu SSO carries the fixture's three. Opening the first card
+// and measuring would keep the sample exactly where the review found it - outside the lane it was meant to read.
+const expandCard = async (page, id) => {
+  const head = page.locator(`#as-initiatives [data-init-card-toggle="${id}"]`);
+  if (!(await head.count())) return false;
+  if ((await head.getAttribute("aria-expanded")) !== "true") await head.click();
+  await page.waitForSelector("#as-initiatives .wave-gate", { timeout: 10_000 });
+  return true;
+};
+
 const openSurface = async (page) => {
   await expandFirstCard(page);
   await page.click("#as-initiatives .init-card:not(.is-titlecard) [data-init-fold]");
@@ -196,7 +207,10 @@ try {
       const out = { at: new Date().toISOString(), version: deps.version, home: slash(HOME), live: { before: liveBefore } };
       await openInitiatives(page, panel.base);
       await openSurface(page);
-      out.docked = { pane: await measurePane(page), interactions: await measureInteractions(page) };
+      // ...and the card that carries the fixture's waves, so the docked sample enters the lane as well as the folded
+      // rows. A false here is not fatal to the run: the contrast-sample check fails and says so.
+      const laneOpen = await expandCard(page, "init_sso");
+      out.docked = { laneOpen, pane: await measurePane(page), interactions: await measureInteractions(page) };
 
       // THE EMPTY TAB: the store is moved aside for one read, then put back. The route answers `found: false`; no
       // markup is faked.
@@ -241,6 +255,7 @@ try {
         async ({ page: wide }) => {
           await openInitiatives(wide, panel.base);
           await openSurface(wide);
+          await expandCard(wide, "init_sso");
           out.wide = { pane: await measurePane(wide), interactions: await measureInteractions(wide) };
         },
         {
