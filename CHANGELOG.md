@@ -4,16 +4,30 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.157.4 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.157.5 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-687 releases from v0.1.0 (2026-10-20) to v1.157.4 (2026-11-22), 2422 commits between the tags. Every release is anchored by an
+688 releases from v0.1.0 (2026-10-20) to v1.157.5 (2026-11-22), 2426 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.157.5 — 2026-11-22 · 4 commits
+
+[`6645ac2`](https://github.com/JLRoper/agent-worktree-gui/commit/6645ac2888de02e0b4798a930d3713b7265d2ef7) · [compare v1.157.4...v1.157.5](https://github.com/JLRoper/agent-worktree-gui/compare/v1.157.4...v1.157.5)
+
+### Docs & tests
+
+- docs(reports): name the run's scratch dir, not this host ([`7d008e2`](https://github.com/JLRoper/agent-worktree-gui/commit/7d008e2ee8f3f0fe50ed5f9131a52c29c334b483))
+- docs: render the changelog - 687 releases ([`ef14eea`](https://github.com/JLRoper/agent-worktree-gui/commit/ef14eead33d990267c166ac09ade8da4d0facaee))
+- docs(reports): rebuild the Route implementation report, and commit it this time ([`b94df84`](https://github.com/JLRoper/agent-worktree-gui/commit/b94df84a359b033e1efaccc5f57d6891b52a4381))
+
+### Other
+
+- chore: 1.157.5 - the version this landing carries ([`6645ac2`](https://github.com/JLRoper/agent-worktree-gui/commit/6645ac2888de02e0b4798a930d3713b7265d2ef7))
 
 ## v1.157.4 — 2026-11-22 · 4 commits
 
