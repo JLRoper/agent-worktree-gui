@@ -9,7 +9,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
-import { closeSessionStore, sessionIndex, sessionUsage } from "../lib/session-usage.js";
+import { closeSessionStore, forgetSessionUsage, sessionIndex, sessionUsage } from "../lib/session-usage.js";
 
 function store(t, { id = "session-one", title = "First session" } = {}) {
   const dir = mkdtempSync(path.join(tmpdir(), "wag-session-store-"));
@@ -101,4 +101,21 @@ test("closeSessionStore frees the file, and a later read reopens it", (t) => {
   // A real read after the close must open a fresh handle, not fail.
   assert.equal(sessionUsage(s.id, { dbPath: s.dbPath, maxAgeMs: 0 }).input_tokens, 100);
   closeSessionStore(s.dbPath);
+});
+
+test("forgetSessionUsage makes the next read fresh without maxAge 0", (t) => {
+  const s = store(t);
+  assert.equal(sessionUsage(s.id, { dbPath: s.dbPath, maxAgeMs: 3000 }).input_tokens, 100);
+  s.db.prepare("update sessions set input_tokens = 300 where id = ?").run(s.id);
+  assert.equal(
+    sessionUsage(s.id, { dbPath: s.dbPath, maxAgeMs: 3000 }).input_tokens,
+    100,
+    "inside the window the cached row is served, which is why a settle must clear it",
+  );
+  forgetSessionUsage(s.id);
+  assert.equal(
+    sessionUsage(s.id, { dbPath: s.dbPath, maxAgeMs: 3000 }).input_tokens,
+    300,
+    "the settle's clear makes the next read the final one",
+  );
 });
