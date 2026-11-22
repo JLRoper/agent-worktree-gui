@@ -3410,6 +3410,17 @@
   let initErr = "";
   let initSeq = 0;
   let initNewOpen = false; // the create form
+  let initAboutOpen = false; // the About fold: the one explanatory paragraph, kept word for word behind one control
+  // THE DENSITY IS THE READER'S, NOT A CONSTANT (round B 3.4). The token layer has two settings and this is the only
+  // state behind the choice; it is remembered on this machine, because a reader who wants the tighter rail wants it
+  // on the next reload too. It is a look setting only - no colour, type size or state role moves.
+  let initDense = (() => {
+    try {
+      return localStorage.getItem("wm.initDensity") === "compact";
+    } catch {
+      return false;
+    }
+  })();
   let initEditId = ""; // the initiative whose words are in the edit form
   let initAddId = ""; // the initiative whose "add a worktree" picker is open
   let initDraft = { newTitle: "", newDesc: "", editTitle: "", editDesc: "", addTree: "" };
@@ -3540,7 +3551,7 @@
       <button type="button" class="init-proj init-assist-fold" data-init-task-fold="${esc(key)}" aria-expanded="${tasksOpen ? "true" : "false"}" aria-label="${esc(`${who}: ${tasksOpen ? "hide" : "show"} the ${n} task${n === 1 ? "" : "s"} on this initiative`)}" title="${tasksOpen ? "fold" : "unfold"} the exact tasks ${esc(who)} is doing on this initiative's worktrees - every queue row on its trees, newest activity first">
         <span class="init-caret">${tasksOpen ? "▾" : "▸"}</span>
         <span class="init-proj-name">tasks</span>
-        <span class="chip is-zero" data-init-task-count>${n}</span>
+        <span class="chip${n ? "" : " is-zero"}" data-init-task-count>${n}</span>
       </button>
       <span class="as-hint init-assist-when">${running ? "working now" : a.lastAt ? `worked ${esc(relTime(a.lastAt))} ago` : "no stamped work yet"}</span>
       <span class="init-counts">${chips}</span>
@@ -3849,11 +3860,23 @@
           ${descBody}
         </div>`
       : descBody;
-    return `<article class="as-group init-card${open ? "" : " is-titlecard"}" data-init-card="${esc(init.id)}">
+    // THE ROUTE MARK AND THE STATUS WORD (round A direction B at rest, round B 4.1 for the words). Both come from
+    // `wtInitiativeFold.routeGlyph`, which reads only the payload: the dots are one per wave in that wave's own derived
+    // state, and the status names the current station. The dots are aria-hidden because the status word says the same
+    // fact in words - the tab never carries a state in colour alone.
+    const route = wtInitiativeFold.routeGlyph(init, initDoc?.waveStatus || null);
+    // THE MARK'S SLOT IS RESERVED ON EVERY FOLDED ROW, even one with no route: the dots sit in a fixed 27px slot so
+    // every title in the ledger starts on the same left edge, whether or not that initiative has a wave to draw.
+    const glyphHtml = open
+      ? ""
+      : `<span class="init-glyph" aria-hidden="true"${route.dots.length ? ` title="${esc(route.title)}"` : ""}>${route.dots.map((d) => `<i class="${d.tone}${d.current ? " is-current" : ""}"></i>`).join("")}</span>`;
+    const statusHtml = `<span class="init-status ${route.tone}" data-init-status="${esc(init.id)}" title="${esc(route.title)}">${esc(route.label)}</span>`;
+    return `<article class="as-group init-card${open ? "" : " is-titlecard"}${!open && route.dots.length ? " has-route" : ""}" data-init-card="${esc(init.id)}">
       <div class="init-head">
         <button type="button" class="init-head-btn" data-init-card-toggle="${esc(init.id)}" aria-expanded="${open ? "true" : "false"}" title="this initiative ${open ? "is open - a press folds it back to its title card" : "is folded to its title card - a press unfolds it, and one open state is kept per initiative while the tab is open"}">
+          ${glyphHtml}
           <span class="init-title">${esc(init.title)}</span>
-          <span class="init-caret" aria-hidden="true">${open ? "▾" : "▸"}</span>
+          ${open ? "" : `<span class="init-caret" aria-hidden="true">▸</span>`}
         </button>
         ${open ? `<button type="button" class="init-mini" data-init-edit="${esc(init.id)}"${blocked || editing ? " disabled" : ""} title="edit the title and the description - the words are free to change, unlike who is behind the work">Edit</button>` : ""}
       </div>
@@ -3862,6 +3885,7 @@
         <span class="chip" title="${init.projectCount} project${init.projectCount === 1 ? "" : "s"} this initiative spans">${init.projectCount} project${init.projectCount === 1 ? "" : "s"}</span>
         <span class="chip" title="${init.treeCount} worktree${init.treeCount === 1 ? "" : "s"} behind this piece of work">${init.treeCount} worktree${init.treeCount === 1 ? "" : "s"}</span>
         <span class="chip" title="${init.assistantCount} assistant${init.assistantCount === 1 ? "" : "s"} have worked on this initiative's worktrees">${init.assistantCount} assistant${init.assistantCount === 1 ? "" : "s"}</span>
+        ${statusHtml}
         ${init.updatedAt ? `<span class="as-hint init-meta">edited ${esc(relTime(init.updatedAt))} ago${init.updatedBy && init.updatedBy !== "reader" ? ` by ${esc(init.updatedBy)}` : ""}</span>` : ""}
       </div>
       ${open
@@ -3882,7 +3906,7 @@
         <button type="button" class="init-proj" data-init-assist-fold="${esc(init.id)}" aria-expanded="${assistantsOpen ? "true" : "false"}" title="${assistantsOpen ? "fold" : "unfold"} the assistants that worked on this initiative, newest first - folded, the card stays a map of the work">
           <span class="init-caret">${assistantsOpen ? "▾" : "▸"}</span>
           <span class="init-proj-name">Assistants</span>
-          <span class="chip is-zero">${assistants.length}</span>
+          <span class="chip${assistants.length ? "" : " is-zero"}">${assistants.length}</span>
         </button>
         ${assistHtml}
       </div>
@@ -3890,7 +3914,7 @@
         <button type="button" class="init-proj" data-init-history-fold="${esc(init.id)}" aria-expanded="${historyOpen ? "true" : "false"}" title="${historyOpen ? "fold" : "unfold"} the history of this initiative: every attach, detach, create and edit, with the actor and the time - the record a removal is judged against, and one every tier writes">
           <span class="init-caret">${historyOpen ? "▾" : "▸"}</span>
           <span class="init-proj-name">History</span>
-          <span class="chip is-zero">${history.length}</span>
+          <span class="chip${history.length ? "" : " is-zero"}">${history.length}</span>
         </button>
         ${historyOpen
           ? `<div class="init-history">${
@@ -3940,7 +3964,7 @@
     "data-init-card-toggle", "data-init-fold", "data-init-desc-fold", "data-init-assist-fold", "data-init-task-fold",
     "data-init-history-fold", "data-init-add", "data-init-edit", "data-init-move", "data-init-open", "data-init-new",
     "data-init-refresh", "data-init-task-card", "data-init-tasks-more", "data-init-assistant", "data-init-create",
-    "data-init-save", "data-init-cancel", "data-init-field",
+    "data-init-save", "data-init-cancel", "data-init-field", "data-init-about", "data-init-density",
   ];
   let initKeyboardModality = false;
   document.addEventListener("keydown", (e) => {
@@ -4015,16 +4039,27 @@
         </div>`;
     const tier = initDoc.tier && initDoc.tier.id ? initDoc.tier : { id: "all", label: "ask me for everything", hint: "every create, edit, attach and detach waits for your answer" };
     const focusToken = initFocusToken(host);
+    // THE SHELL IS A TOOLBAR AND ONE META LINE (round A direction B). The heading and its hint, the reader's four
+    // verbs, then what the store holds and who may change it. The one explanatory paragraph keeps its words exactly and
+    // moves behind About, which is the whole of round A's first compression: the preamble said a lot before the first
+    // initiative, and none of it is lost, it is one press away.
+    host.dataset.density = initDense ? "compact" : "comfortable";
     host.innerHTML = `
-      <div class="as-group">
-        <h4>Initiatives <span class="as-hint">the big pieces of work, and the worktrees behind each one</span></h4>
-        <p class="as-help">You and the assistants create and edit initiatives; the tier below decides whether a change asks you first. Every change records the actor and the time.</p>
-        ${storeLine}
-        <p class="as-help init-tier" data-init-tier="${esc(tier.id)}">Initiative changes: <b>${esc(tier.label)}</b> - ${esc(tier.hint)}. Settings, Board tab changes the level.</p>
-        <div class="as-actions">
-          <button type="button" data-init-new="head"${unreadable ? " disabled" : ""}${initNewOpen ? " hidden" : ""}>New initiative</button>
-          <button type="button" data-init-refresh title="read the store again - the tab also re-reads after every write and every answered move">Refresh</button>
-          <span class="as-hint">${initLoading ? "reading…" : initErr ? `read failed: ${esc(initErr)}` : ""}</span>
+      <div class="as-group init-shell">
+        <div class="init-toolbar">
+          <h4>Initiatives <span class="as-hint">the big pieces of work, and the worktrees behind each one</span></h4>
+          <div class="as-actions init-actions">
+            <button type="button" data-init-about aria-expanded="${initAboutOpen ? "true" : "false"}" title="what this tab holds, and who may change it - the words the card used to open with">About</button>
+            <button type="button" data-init-density aria-pressed="${initDense ? "true" : "false"}" title="draw the same rows on a tighter 4px rhythm - the type, the contrast and every state role stay identical">Compact rows</button>
+            <button type="button" data-init-new="head"${unreadable ? " disabled" : ""}${initNewOpen ? " hidden" : ""}>New initiative</button>
+            <button type="button" data-init-refresh title="read the store again - the tab also re-reads after every write and every answered move">Refresh</button>
+          </div>
+        </div>
+        ${initAboutOpen ? `<div class="init-about" data-init-about-body><p class="as-help">You and the assistants create and edit initiatives; the tier below decides whether a change asks you first. Every change records the actor and the time.</p></div>` : ""}
+        <div class="init-meta">
+          ${storeLine}
+          <p class="as-help init-tier" data-init-tier="${esc(tier.id)}">Initiative changes: <b>${esc(tier.label)}</b> - ${esc(tier.hint)}. Settings, Board tab changes the level.</p>
+          <span class="as-hint init-read">${initLoading ? "reading…" : initErr ? `read failed: ${esc(initErr)}` : ""}</span>
         </div>
         ${newForm}
       </div>
@@ -4208,8 +4243,26 @@
         return;
       }
       if (kind !== "self") return;
-      const el = e.target.closest("[data-init-fold], [data-init-assist-fold], [data-init-task-fold], [data-init-history-fold], [data-init-task-card], [data-init-tasks-more], [data-init-open], [data-init-edit], [data-init-add], [data-init-cancel], [data-init-create], [data-init-save], [data-init-move], [data-init-assistant], [data-init-new], [data-init-refresh]");
+      const el = e.target.closest("[data-init-fold], [data-init-assist-fold], [data-init-task-fold], [data-init-history-fold], [data-init-task-card], [data-init-tasks-more], [data-init-open], [data-init-edit], [data-init-add], [data-init-cancel], [data-init-create], [data-init-save], [data-init-move], [data-init-assistant], [data-init-new], [data-init-refresh], [data-init-about], [data-init-density]");
       if (!el) return;
+      // THE TWO SHELL CONTROLS. About shows the one paragraph the card used to open with, word for word; density
+      // rewrites ONE attribute on the pane, and the token layer's second block does the rest. Neither touches a store,
+      // so both repaint from the document already held rather than asking the server a question.
+      if (el.hasAttribute("data-init-about")) {
+        initAboutOpen = !initAboutOpen;
+        renderAssistantInitiatives(true);
+        return;
+      }
+      if (el.hasAttribute("data-init-density")) {
+        initDense = !initDense;
+        try {
+          localStorage.setItem("wm.initDensity", initDense ? "compact" : "comfortable");
+        } catch {
+          /* a browser with storage off still gets the setting for this session - it just will not remember it */
+        }
+        renderAssistantInitiatives(true);
+        return;
+      }
       // THE QUEUE'S OWN CARD, PRESSED IN THE INITIATIVES TAB. It is the same card the queue draws, in its compact
       // read-only mode, so the press does what the card can no longer do for itself: it opens that task in its REAL
       // queue - the assistant's pane on the queue sub-tab, the row widened into the window, centred in the pane's

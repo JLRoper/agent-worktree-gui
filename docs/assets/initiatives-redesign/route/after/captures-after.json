@@ -1,0 +1,787 @@
+{
+  "label": "after",
+  "tree": "this working tree",
+  "at": "2026-11-22T18:12:18.666Z",
+  "widths": {
+    "1440-dock": {
+      "pane": {
+        "width": 479,
+        "scroll": 1830
+      },
+      "folded": 145,
+      "foldedCount": 3,
+      "foldedRowHeights": [
+        145,
+        142,
+        141
+      ],
+      "openCard": 1164,
+      "type": {
+        "title": {
+          "fs": 16,
+          "fw": "600",
+          "lh": 19,
+          "color": "rgb(233, 237, 244)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 39,
+          "w": 429
+        },
+        "desc": {
+          "fs": 13,
+          "fw": "400",
+          "lh": 20,
+          "color": "rgb(127, 138, 154)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 40,
+          "w": 447
+        },
+        "chip": {
+          "fs": 12,
+          "fw": "400",
+          "lh": 17,
+          "color": "rgb(127, 138, 154)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 17,
+          "w": 50
+        },
+        "status": {
+          "fs": 11,
+          "fw": "600",
+          "lh": 15,
+          "color": "rgb(139, 149, 165)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 20,
+          "w": 72
+        },
+        "sectionHead": {
+          "fs": 12,
+          "fw": "600",
+          "lh": 17,
+          "color": "rgb(233, 237, 244)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 17,
+          "w": 429
+        },
+        "tier": {
+          "fs": 12,
+          "fw": "400",
+          "lh": 17,
+          "color": "rgb(127, 138, 154)",
+          "bg": "rgb(16, 21, 28)",
+          "h": 53,
+          "w": 422
+        },
+        "waveTitle": {
+          "fs": 13,
+          "fw": "600",
+          "lh": 16,
+          "color": "rgb(233, 237, 244)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 16,
+          "w": 233
+        },
+        "waveState": {
+          "fs": 11,
+          "fw": "600",
+          "lh": 15,
+          "color": "rgb(63, 185, 80)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 20,
+          "w": 42
+        },
+        "gate": {
+          "fs": 11,
+          "fw": "500",
+          "lh": 15,
+          "color": "rgb(86, 211, 100)",
+          "bg": "rgba(46, 160, 67, 0.14)",
+          "h": 20,
+          "w": 110
+        },
+        "member": {
+          "fs": 12,
+          "fw": "400",
+          "lh": 17,
+          "color": "rgb(230, 233, 239)",
+          "bg": "rgb(20, 25, 34)",
+          "h": 26,
+          "w": 318
+        },
+        "memberId": {
+          "fs": 11,
+          "fw": "600",
+          "lh": 17,
+          "color": "rgb(127, 138, 154)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 17,
+          "w": 18
+        }
+      },
+      "contrast": {
+        "desc": 4.9,
+        "chip": 4.9,
+        "status": 5.7,
+        "gate": 7.3,
+        "auto": 7.2,
+        "memberProject": 4.5,
+        "tier": 5.2,
+        "sectionHead": 15
+      },
+      "chips": {
+        "total": 36,
+        "buttons": 15,
+        "links": 0
+      },
+      "waves": {
+        "rows": 3,
+        "spine": {
+          "width": "2px",
+          "color": "rgb(63, 185, 80)"
+        },
+        "lanes": [
+          {
+            "name": "cookie",
+            "left": 1023,
+            "top": 1061,
+            "w": 379,
+            "h": 92
+          },
+          {
+            "name": "login",
+            "left": 1023,
+            "top": 1161,
+            "w": 379,
+            "h": 70
+          }
+        ],
+        "laneSet": {
+          "columns": "379px",
+          "w": 379
+        },
+        "member": {
+          "display": "flex",
+          "columns": "none",
+          "h": 26
+        }
+      },
+      "docked": "dock"
+    },
+    "768-dock": {
+      "pane": {
+        "width": 347,
+        "scroll": 2209
+      },
+      "folded": 166,
+      "foldedCount": 3,
+      "foldedRowHeights": [
+        166,
+        142,
+        162
+      ],
+      "openCard": 1429,
+      "type": {
+        "title": {
+          "fs": 16,
+          "fw": "600",
+          "lh": 19,
+          "color": "rgb(233, 237, 244)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 39,
+          "w": 297
+        },
+        "desc": {
+          "fs": 13,
+          "fw": "400",
+          "lh": 20,
+          "color": "rgb(127, 138, 154)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 40,
+          "w": 315
+        },
+        "chip": {
+          "fs": 12,
+          "fw": "400",
+          "lh": 17,
+          "color": "rgb(127, 138, 154)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 17,
+          "w": 50
+        },
+        "status": {
+          "fs": 11,
+          "fw": "600",
+          "lh": 15,
+          "color": "rgb(139, 149, 165)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 20,
+          "w": 72
+        },
+        "sectionHead": {
+          "fs": 12,
+          "fw": "600",
+          "lh": 17,
+          "color": "rgb(233, 237, 244)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 17,
+          "w": 297
+        },
+        "tier": {
+          "fs": 12,
+          "fw": "400",
+          "lh": 17,
+          "color": "rgb(127, 138, 154)",
+          "bg": "rgb(16, 21, 28)",
+          "h": 70,
+          "w": 297
+        },
+        "waveTitle": {
+          "fs": 13,
+          "fw": "600",
+          "lh": 16,
+          "color": "rgb(233, 237, 244)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 16,
+          "w": 233
+        },
+        "waveState": {
+          "fs": 11,
+          "fw": "600",
+          "lh": 15,
+          "color": "rgb(63, 185, 80)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 20,
+          "w": 42
+        },
+        "gate": {
+          "fs": 11,
+          "fw": "500",
+          "lh": 15,
+          "color": "rgb(86, 211, 100)",
+          "bg": "rgba(46, 160, 67, 0.14)",
+          "h": 20,
+          "w": 110
+        },
+        "member": {
+          "fs": 12,
+          "fw": "400",
+          "lh": 17,
+          "color": "rgb(230, 233, 239)",
+          "bg": "rgb(20, 25, 34)",
+          "h": 47,
+          "w": 247
+        },
+        "memberId": {
+          "fs": 11,
+          "fw": "600",
+          "lh": 17,
+          "color": "rgb(127, 138, 154)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 17,
+          "w": 18
+        }
+      },
+      "contrast": {
+        "desc": 4.9,
+        "chip": 4.9,
+        "status": 5.7,
+        "gate": 7.3,
+        "auto": 7.2,
+        "memberProject": 4.5,
+        "tier": 5.2,
+        "sectionHead": 15
+      },
+      "chips": {
+        "total": 36,
+        "buttons": 15,
+        "links": 0
+      },
+      "waves": {
+        "rows": 3,
+        "spine": {
+          "width": "2px",
+          "color": "rgb(63, 185, 80)"
+        },
+        "lanes": [
+          {
+            "name": "cookie",
+            "left": 483,
+            "top": 1371,
+            "w": 247,
+            "h": 129
+          },
+          {
+            "name": "login",
+            "left": 483,
+            "top": 1509,
+            "w": 247,
+            "h": 92
+          }
+        ],
+        "laneSet": {
+          "columns": "247px",
+          "w": 247
+        },
+        "member": {
+          "display": "flex",
+          "columns": "none",
+          "h": 47
+        }
+      },
+      "docked": "dock"
+    },
+    "1440-float": {
+      "pane": {
+        "width": 1382,
+        "scroll": 1501
+      },
+      "folded": 142,
+      "foldedCount": 3,
+      "foldedRowHeights": [
+        142,
+        142,
+        141
+      ],
+      "openCard": 866,
+      "type": {
+        "title": {
+          "fs": 16,
+          "fw": "600",
+          "lh": 19,
+          "color": "rgb(233, 237, 244)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 19,
+          "w": 688
+        },
+        "desc": {
+          "fs": 13,
+          "fw": "400",
+          "lh": 20,
+          "color": "rgb(127, 138, 154)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 40,
+          "w": 445
+        },
+        "chip": {
+          "fs": 12,
+          "fw": "400",
+          "lh": 17,
+          "color": "rgb(127, 138, 154)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 17,
+          "w": 50
+        },
+        "status": {
+          "fs": 11,
+          "fw": "600",
+          "lh": 15,
+          "color": "rgb(139, 149, 165)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 20,
+          "w": 72
+        },
+        "sectionHead": {
+          "fs": 12,
+          "fw": "600",
+          "lh": 17,
+          "color": "rgb(233, 237, 244)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 17,
+          "w": 1332
+        },
+        "tier": {
+          "fs": 12,
+          "fw": "400",
+          "lh": 17,
+          "color": "rgb(127, 138, 154)",
+          "bg": "rgb(16, 21, 28)",
+          "h": 53,
+          "w": 422
+        },
+        "waveTitle": {
+          "fs": 13,
+          "fw": "600",
+          "lh": 16,
+          "color": "rgb(233, 237, 244)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 16,
+          "w": 233
+        },
+        "waveState": {
+          "fs": 11,
+          "fw": "600",
+          "lh": 15,
+          "color": "rgb(63, 185, 80)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 20,
+          "w": 42
+        },
+        "gate": {
+          "fs": 11,
+          "fw": "500",
+          "lh": 15,
+          "color": "rgb(86, 211, 100)",
+          "bg": "rgba(46, 160, 67, 0.14)",
+          "h": 20,
+          "w": 110
+        },
+        "member": {
+          "fs": 12,
+          "fw": "400",
+          "lh": 17,
+          "color": "rgb(230, 233, 239)",
+          "bg": "rgb(20, 25, 34)",
+          "h": 26,
+          "w": 760
+        },
+        "memberId": {
+          "fs": 11,
+          "fw": "600",
+          "lh": 17,
+          "color": "rgb(127, 138, 154)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 17,
+          "w": 44
+        }
+      },
+      "contrast": {
+        "desc": 4.9,
+        "chip": 4.9,
+        "status": 5.7,
+        "gate": 7.3,
+        "auto": 7.2,
+        "memberProject": 4.5,
+        "tier": 5.2,
+        "sectionHead": 15
+      },
+      "chips": {
+        "total": 36,
+        "buttons": 15,
+        "links": 0
+      },
+      "waves": {
+        "rows": 3,
+        "spine": {
+          "width": "2px",
+          "color": "rgb(63, 185, 80)"
+        },
+        "lanes": [
+          {
+            "name": "cookie",
+            "left": 71,
+            "top": 922,
+            "w": 637,
+            "h": 70
+          },
+          {
+            "name": "login",
+            "left": 716,
+            "top": 922,
+            "w": 637,
+            "h": 70
+          }
+        ],
+        "laneSet": {
+          "columns": "637px 637px 0px",
+          "w": 1282
+        },
+        "member": {
+          "display": "grid",
+          "columns": "44px 444px 150px 80px",
+          "h": 26
+        }
+      },
+      "docked": "float"
+    },
+    "1440-float-compact": {
+      "pane": {
+        "width": 1382,
+        "scroll": 1357
+      },
+      "folded": 130,
+      "foldedCount": 3,
+      "foldedRowHeights": [
+        130,
+        130,
+        129
+      ],
+      "openCard": 778,
+      "type": {
+        "title": {
+          "fs": 16,
+          "fw": "600",
+          "lh": 19,
+          "color": "rgb(233, 237, 244)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 19,
+          "w": 688
+        },
+        "desc": {
+          "fs": 13,
+          "fw": "400",
+          "lh": 20,
+          "color": "rgb(127, 138, 154)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 40,
+          "w": 445
+        },
+        "chip": {
+          "fs": 12,
+          "fw": "400",
+          "lh": 17,
+          "color": "rgb(127, 138, 154)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 17,
+          "w": 50
+        },
+        "status": {
+          "fs": 11,
+          "fw": "600",
+          "lh": 15,
+          "color": "rgb(139, 149, 165)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 20,
+          "w": 72
+        },
+        "sectionHead": {
+          "fs": 12,
+          "fw": "600",
+          "lh": 17,
+          "color": "rgb(233, 237, 244)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 17,
+          "w": 1340
+        },
+        "tier": {
+          "fs": 12,
+          "fw": "400",
+          "lh": 17,
+          "color": "rgb(127, 138, 154)",
+          "bg": "rgb(16, 21, 28)",
+          "h": 53,
+          "w": 422
+        },
+        "waveTitle": {
+          "fs": 13,
+          "fw": "600",
+          "lh": 16,
+          "color": "rgb(233, 237, 244)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 16,
+          "w": 233
+        },
+        "waveState": {
+          "fs": 11,
+          "fw": "600",
+          "lh": 15,
+          "color": "rgb(63, 185, 80)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 20,
+          "w": 42
+        },
+        "gate": {
+          "fs": 11,
+          "fw": "500",
+          "lh": 15,
+          "color": "rgb(86, 211, 100)",
+          "bg": "rgba(46, 160, 67, 0.14)",
+          "h": 20,
+          "w": 110
+        },
+        "member": {
+          "fs": 12,
+          "fw": "400",
+          "lh": 17,
+          "color": "rgb(230, 233, 239)",
+          "bg": "rgb(20, 25, 34)",
+          "h": 26,
+          "w": 760
+        },
+        "memberId": {
+          "fs": 11,
+          "fw": "600",
+          "lh": 17,
+          "color": "rgb(127, 138, 154)",
+          "bg": "rgba(0, 0, 0, 0)",
+          "h": 17,
+          "w": 44
+        }
+      },
+      "contrast": {
+        "desc": 4.9,
+        "chip": 4.9,
+        "status": 5.7,
+        "gate": 7.3,
+        "auto": 7.2,
+        "memberProject": 4.5,
+        "tier": 5.2,
+        "sectionHead": 15
+      },
+      "chips": {
+        "total": 36,
+        "buttons": 15,
+        "links": 0
+      },
+      "waves": {
+        "rows": 3,
+        "spine": {
+          "width": "2px",
+          "color": "rgb(63, 185, 80)"
+        },
+        "lanes": [
+          {
+            "name": "cookie",
+            "left": 63,
+            "top": 850,
+            "w": 645,
+            "h": 70
+          },
+          {
+            "name": "login",
+            "left": 716,
+            "top": 850,
+            "w": 645,
+            "h": 70
+          }
+        ],
+        "laneSet": {
+          "columns": "645px 645px 0px",
+          "w": 1298
+        },
+        "member": {
+          "display": "grid",
+          "columns": "44px 444px 150px 80px",
+          "h": 26
+        }
+      },
+      "docked": "float"
+    }
+  },
+  "facts": {
+    "doc": [
+      {
+        "id": "init_kafka",
+        "title": "Kafka rating pipeline hardening across the consumer, the retry topic and the DBA-signed verify pack",
+        "trees": 2,
+        "waves": 0
+      },
+      {
+        "id": "init_sso",
+        "title": "Menu SSO migration",
+        "trees": 2,
+        "waves": 3
+      },
+      {
+        "id": "init_sweeper",
+        "title": "Batch sweeper retry budget",
+        "trees": 0,
+        "waves": 0
+      },
+      {
+        "id": "init_release",
+        "title": "Quarter-end release readiness",
+        "trees": 4,
+        "waves": 0
+      }
+    ],
+    "1440-dock": {
+      "checked": 78,
+      "missing": []
+    },
+    "768-dock": {
+      "checked": 78,
+      "missing": []
+    }
+  },
+  "shots": [
+    {
+      "file": "01-1440-list.png",
+      "slug": "01-1440-list",
+      "note": "the folded ledger at 1440, the assistant docked at 480"
+    },
+    {
+      "file": "01b-1440-pane.png",
+      "slug": "01b-1440-pane",
+      "element": "#as-initiatives",
+      "viewport": {
+        "width": 1440,
+        "height": 969
+      },
+      "note": "the whole tab at 1440 docked"
+    },
+    {
+      "file": "02-1440-open.png",
+      "slug": "02-1440-open",
+      "note": "the plate and its route at 1440 docked"
+    },
+    {
+      "file": "02b-1440-plate.png",
+      "slug": "02b-1440-plate",
+      "element": "#as-initiatives [data-init-card=\"init_sso\"]",
+      "viewport": {
+        "width": 1440,
+        "height": 1990
+      },
+      "note": "the open initiative at 1440 docked"
+    },
+    {
+      "file": "02c-1440-waves.png",
+      "slug": "02c-1440-waves",
+      "element": "#as-initiatives [data-init-card=\"init_sso\"] .init-wavefold",
+      "viewport": {
+        "width": 1440,
+        "height": 1990
+      },
+      "note": "the wave lane at 1440 docked"
+    },
+    {
+      "file": "03-1440-all-folds.png",
+      "slug": "03-1440-all-folds",
+      "note": "every fold open, the fact check's own reading"
+    },
+    {
+      "file": "04-768-list.png",
+      "slug": "04-768-list",
+      "note": "the folded ledger at 768"
+    },
+    {
+      "file": "05-768-open.png",
+      "slug": "05-768-open",
+      "note": "the plate and its route at 768"
+    },
+    {
+      "file": "05b-768-waves.png",
+      "slug": "05b-768-waves",
+      "element": "#as-initiatives [data-init-card=\"init_sso\"] .init-wavefold",
+      "viewport": {
+        "width": 768,
+        "height": 2369
+      },
+      "note": "the wave lane at 768"
+    },
+    {
+      "file": "06-wide-list.png",
+      "slug": "06-wide-list",
+      "note": "the ledger at 1440 with the assistant floated"
+    },
+    {
+      "file": "07-wide-open.png",
+      "slug": "07-wide-open",
+      "note": "the wide plate: words left, cast right, route full width"
+    },
+    {
+      "file": "07b-wide-waves.png",
+      "slug": "07b-wide-waves",
+      "element": "#as-initiatives [data-init-card=\"init_sso\"] .init-wavefold",
+      "viewport": {
+        "width": 1440,
+        "height": 1661
+      },
+      "note": "the lane set side by side on the wide plate"
+    },
+    {
+      "file": "08-wide-compact.png",
+      "slug": "08-wide-compact",
+      "note": "the same plate on the compact token set"
+    }
+  ]
+}

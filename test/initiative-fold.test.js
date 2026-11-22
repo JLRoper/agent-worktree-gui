@@ -250,3 +250,63 @@ test("the history fold is an accordion on the card, folded by default, and the a
   assert.match(assistant, /if \(el\.dataset\.initHistoryFold\) \{/, "the press handler answers the history fold");
   assert.match(assistant, /\[data-init-fold\], \[data-init-assist-fold\], \[data-init-task-fold\], \[data-init-history-fold\]/, "and the selector includes it");
 });
+
+test("the route mark draws one dot per wave in that wave's own state, and names the current station", () => {
+  const glyph = fold.routeGlyph({
+    id: "init_a",
+    waveCurrentId: "wave_02",
+    waves: [
+      { id: "wave_01", position: 1, state: "done", stateWord: "done" },
+      { id: "wave_02", position: 2, state: "running", stateWord: "running", stateWhy: "#4 is running" },
+      { id: "wave_03", position: 3, state: "empty", stateWord: "no members" },
+    ],
+  });
+  assert.equal(glyph.label, "W2 running", "the folded row says where the work has got to");
+  assert.equal(glyph.tone, "is-running");
+  assert.deepEqual(
+    glyph.dots.map((d) => [d.position, d.state, d.current]),
+    [[1, "done", false], [2, "running", true], [3, "empty", false]],
+  );
+  // The dots carry the state's own class, so the CSS colours them from the same role tokens as the pills.
+  assert.deepEqual(glyph.dots.map((d) => d.tone), ["is-done", "is-running", "is-empty"]);
+  // The tooltip holds the whole route and the read's reason, so the mark is never colour alone.
+  assert.match(glyph.title, /W1 done, W2 running \(current\), W3 empty/);
+  assert.match(glyph.title, /#4 is running/);
+});
+
+test("a route with no waves, or a store that cannot be read, is SAID rather than drawn as an empty route", () => {
+  const none = fold.routeGlyph({ id: "init_a", waves: [] });
+  assert.equal(none.label, "no waves");
+  assert.deepEqual(none.dots, []);
+  assert.equal(none.tone, "is-idle");
+  const bad = fold.routeGlyph({ id: "init_a", waves: [] }, { readable: false, found: true, error: "Unexpected token } in JSON" });
+  assert.equal(bad.label, "waves unreadable");
+  assert.equal(bad.tone, "is-unknown");
+  assert.match(bad.title, /Unexpected token/);
+});
+
+test("a route the read named no current wave on counts its stations instead of inventing a position", () => {
+  const glyph = fold.routeGlyph({
+    id: "init_a",
+    waves: [
+      { id: "wave_01", position: 1, state: "done" },
+      { id: "wave_02", position: 2, state: "done" },
+    ],
+  });
+  assert.equal(glyph.label, "2 waves");
+  assert.equal(glyph.dots.some((d) => d.current), false);
+  assert.equal(glyph.tone, "is-idle");
+});
+
+test("an unknown state word is drawn idle, never as a state the read did not give", () => {
+  const glyph = fold.routeGlyph({ id: "init_a", waves: [{ id: "wave_01", position: 1, state: "something-new" }] });
+  assert.equal(glyph.dots[0].state, "something-new");
+  assert.equal(glyph.dots[0].tone, "is-empty");
+});
+
+test("the pane draws the mark from the module, and the status word is on every card", () => {
+  assert.match(assistant, /wtInitiativeFold\.routeGlyph\(init, initDoc\?\.waveStatus \|\| null\)/);
+  assert.match(assistant, /class="init-glyph" aria-hidden="true"/, "the dots are decorative: the status word says the same fact");
+  assert.match(assistant, /class="init-status \$\{route\.tone\}"/);
+  assert.match(assistant, /data-init-status="\$\{esc\(init\.id\)\}"/);
+});
