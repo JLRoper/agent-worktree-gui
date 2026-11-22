@@ -4,16 +4,33 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.157.2 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.157.3 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-685 releases from v0.1.0 (2026-10-20) to v1.157.2 (2026-11-22), 2414 commits between the tags. Every release is anchored by an
+686 releases from v0.1.0 (2026-10-20) to v1.157.3 (2026-11-22), 2418 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.157.3 — 2026-11-22 · 4 commits
+
+[`eeb1ee5`](https://github.com/JLRoper/agent-worktree-gui/commit/eeb1ee59094480d61b4b71f9a39c2a58a78b60a4) · [compare v1.157.2...v1.157.3](https://github.com/JLRoper/agent-worktree-gui/compare/v1.157.2...v1.157.3)
+
+### Added
+
+- feat(initiatives): the tab as The Route, on round B's token layer ([`0773a88`](https://github.com/JLRoper/agent-worktree-gui/commit/0773a88a4ae83f748c961c3c9874988e13108f71))
+
+### Docs & tests
+
+- docs: render the changelog - 685 releases ([`8f0a0b5`](https://github.com/JLRoper/agent-worktree-gui/commit/8f0a0b505278803389e4580415f276f8e1dfc279))
+- docs: render the changelog - 685 releases ([`c269259`](https://github.com/JLRoper/agent-worktree-gui/commit/c269259883a1029209d1a2936e708302a2e8aed7))
+
+### Other
+
+- chore: 1.157.3 - the version this landing carries ([`eeb1ee5`](https://github.com/JLRoper/agent-worktree-gui/commit/eeb1ee59094480d61b4b71f9a39c2a58a78b60a4))
 
 ## v1.157.2 — 2026-11-22 · 4 commits
 
