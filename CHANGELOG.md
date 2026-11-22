@@ -17,11 +17,11 @@ has no tag.
 
 ## v1.157.3 — 2026-11-22 · 4 commits
 
-[`eeb1ee5`](https://github.com/JLRoper/agent-worktree-gui/commit/eeb1ee59094480d61b4b71f9a39c2a58a78b60a4) · [compare v1.157.2...v1.157.3](https://github.com/JLRoper/agent-worktree-gui/compare/v1.157.2...v1.157.3)
+[`ccfaacb`](https://github.com/JLRoper/agent-worktree-gui/commit/ccfaacb7f9909c8dc87624796fbf316933fda643) · [compare v1.157.2...v1.157.3](https://github.com/JLRoper/agent-worktree-gui/compare/v1.157.2...v1.157.3)
 
 ### Added
 
-- feat(initiatives): the tab as The Route, on round B's token layer ([`0773a88`](https://github.com/JLRoper/agent-worktree-gui/commit/0773a88a4ae83f748c961c3c9874988e13108f71))
+- feat(initiatives): the tab as The Route, on round B's token layer ([`01c22b3`](https://github.com/JLRoper/agent-worktree-gui/commit/01c22b3f1c961d59cc4d0a84e5085a184bda9ed6))
 
 ### Docs & tests
 
@@ -30,7 +30,7 @@ has no tag.
 
 ### Other
 
-- chore: 1.157.3 - the version this landing carries ([`eeb1ee5`](https://github.com/JLRoper/agent-worktree-gui/commit/eeb1ee59094480d61b4b71f9a39c2a58a78b60a4))
+- chore: 1.157.3 - the version this landing carries ([`ccfaacb`](https://github.com/JLRoper/agent-worktree-gui/commit/ccfaacb7f9909c8dc87624796fbf316933fda643))
 
 ## v1.157.2 — 2026-11-22 · 4 commits
 
