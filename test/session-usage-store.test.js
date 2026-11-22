@@ -119,3 +119,20 @@ test("forgetSessionUsage makes the next read fresh without maxAge 0", (t) => {
     "the settle's clear makes the next read the final one",
   );
 });
+
+test("the compaction count is cached for a minute across row refreshes", (t) => {
+  const s = store(t);
+  assert.equal(sessionUsage(s.id, { dbPath: s.dbPath, maxAgeMs: 0 }).compactions, 2);
+  s.db.prepare("insert into messages (session_id, timestamp, _compressed_summary) values (?, ?, 1)").run(s.id, 1_700_000_003);
+  assert.equal(
+    sessionUsage(s.id, { dbPath: s.dbPath, maxAgeMs: 0 }).compactions,
+    2,
+    "a row refresh does not re-scan the session's messages inside the compaction window",
+  );
+  forgetSessionUsage(s.id);
+  assert.equal(
+    sessionUsage(s.id, { dbPath: s.dbPath, maxAgeMs: 0 }).compactions,
+    3,
+    "the settle's clear lets the next read see the new compaction",
+  );
+});
