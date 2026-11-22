@@ -9,7 +9,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { createHeldReplies, HELD_DONE_KEEP, HELD_TOTAL_CAP } from "../lib/held-replies.js";
+import { createHeldReplies, HELD_DONE_KEEP, HELD_TOTAL_CAP, HELD_BACKOFF_MAX_MS, heldBackoffMs } from "../lib/held-replies.js";
 
 function tmpFile() {
   const dir = mkdtempSync(path.join(os.tmpdir(), "held-replies-"));
@@ -222,6 +222,91 @@ test("a hold needs a thread and words, and says which one is missing", () => {
     assert.throws(() => store.add({ thread: "", text: "x" }), /thread it is meant for/);
     assert.throws(() => store.add({ thread: "wtgui-a", text: "  " }), /needs its text/);
     assert.deepEqual(store.view().replies, [], "and nothing was written for either");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- a failure is a state, not a retry loop ------------------------------------------------------
+// One record for a thread the panel no longer has was retried every 2s for 45.9 hours and wrote 87% of a day's
+// log (measured 2026-11-21). A permanent reason parks the record; a transient one backs off. Neither drops the
+// reader's words, and neither is retried forever at the clock's beat.
+
+test("a permanent failure PARKS the record: kept, never replayed, and Retry revives it", () => {
+  const { file, dir } = tmpFile();
+  try {
+    const store = fresh(file);
+    const { reply } = store.add({ thread: "gone-thread", text: "still mine" });
+    store.claim(reply.id);
+    const parked = store.fail(reply.id, "unknown thread: gone-thread", { permanent: true, now: 1_700_000_000_000 });
+    assert.equal(parked.state, "parked");
+    assert.equal(parked.attempts, 1);
+    assert.equal(parked.lastError, "unknown thread: gone-thread");
+    assert.ok(parked.parkedAt, "the moment it was parked is on the record");
+    assert.deepEqual(store.view().open, [], "parked is not owed a turn: the drain never asks again");
+    assert.equal(store.view().counts.parked, 1);
+    assert.equal(store.claim(reply.id), null, "and it cannot be claimed");
+    // The words survive a restart, still parked.
+    const again = fresh(file);
+    assert.equal(again.get(reply.id).state, "parked");
+    assert.equal(again.get(reply.id).text, "still mine");
+    assert.deepEqual(again.view().open, []);
+    // Retry is the reader's way back: held, with the attempt record cleared.
+    const out = again.retry(reply.id);
+    assert.equal(out.ok, true);
+    assert.equal(again.get(reply.id).state, "held");
+    assert.equal(again.get(reply.id).attempts, 0);
+    assert.equal(again.get(reply.id).nextTryAt, 0);
+    assert.equal(again.get(reply.id).why, null);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a transient failure backs off 2s, 4s, 8s ... capped, and the record stays held", () => {
+  const { file, dir } = tmpFile();
+  try {
+    const store = fresh(file);
+    const { reply } = store.add({ thread: "wtgui-a", text: "go" });
+    store.claim(reply.id);
+    const t = 1_700_000_000_000;
+    store.fail(reply.id, "the gateway is down", { now: t });
+    assert.equal(store.get(reply.id).state, "held", "a transient reason is never parked: the words are still owed a turn");
+    assert.equal(store.get(reply.id).attempts, 1);
+    assert.equal(store.get(reply.id).nextTryAt, t + 2_000);
+    store.claim(reply.id);
+    store.fail(reply.id, "the gateway is down", { now: t + 2_000 });
+    assert.equal(store.get(reply.id).attempts, 2);
+    assert.equal(store.get(reply.id).nextTryAt, t + 2_000 + 4_000);
+    // The ceiling: an outage is never abandoned, and never hammered.
+    for (let i = 0; i < 20; i += 1) {
+      store.claim(reply.id);
+      store.fail(reply.id, "down", { now: t + i * 1_000 });
+    }
+    assert.equal(store.get(reply.id).state, "held");
+    assert.equal(store.get(reply.id).nextTryAt - (t + 19_000), HELD_BACKOFF_MAX_MS);
+    assert.equal(heldBackoffMs(1), 2_000);
+    assert.equal(heldBackoffMs(3), 8_000);
+    assert.equal(heldBackoffMs(99), HELD_BACKOFF_MAX_MS);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("fail never reopens a settled record, and retry only revives a parked one", () => {
+  const { file, dir } = tmpFile();
+  try {
+    const store = fresh(file);
+    const { reply } = store.add({ thread: "wtgui-a", text: "went" });
+    store.claim(reply.id);
+    store.sent(reply.id, "job-1");
+    assert.equal(store.fail(reply.id, "too late"), null, "a sent turn is not reopened by a late failure");
+    assert.equal(store.get(reply.id).state, "sent");
+    assert.equal(store.get(reply.id).lastError, null);
+    // A held record is already waiting; retry is only for the parked shelf.
+    const held = store.add({ thread: "wtgui-b", text: "waiting" }).reply;
+    assert.equal(store.retry(held.id).ok, false);
+    assert.equal(store.get(held.id).state, "held");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
