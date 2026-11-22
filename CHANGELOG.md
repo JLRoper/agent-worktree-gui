@@ -4,16 +4,30 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.154.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.155.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-675 releases from v0.1.0 (2026-10-20) to v1.154.0 (2026-11-21), 2373 commits between the tags. Every release is anchored by an
+676 releases from v0.1.0 (2026-10-20) to v1.155.0 (2026-11-21), 2377 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.155.0 — 2026-11-21 · 4 commits
+
+[`993011a`](https://github.com/JLRoper/agent-worktree-gui/commit/993011af570cc3a610c91f01673a8715e8a8e20b) · [compare v1.154.0...v1.155.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.154.0...v1.155.0)
+
+### Docs & tests
+
+- docs: render the changelog - 675 releases ([`afe58ea`](https://github.com/JLRoper/agent-worktree-gui/commit/afe58ea7f0d281e3b5d0748f1d65ad18dd15d6d9))
+- docs: the landing note for the auto switch, with what the sweep answered ([`19f6827`](https://github.com/JLRoper/agent-worktree-gui/commit/19f6827deecb3c5171ff55f79b8d03c93c431f60))
+
+### Other
+
+- the auto switch opens the next wave on a read, and defaults off ([`d3fcf09`](https://github.com/JLRoper/agent-worktree-gui/commit/d3fcf0953c5a4054720dcd899214fa9f4987721d))
+- chore: 1.155.0 - the version this landing carries ([`993011a`](https://github.com/JLRoper/agent-worktree-gui/commit/993011af570cc3a610c91f01673a8715e8a8e20b))
 
 ## v1.154.0 — 2026-11-21 · 5 commits
 
