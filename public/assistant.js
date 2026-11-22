@@ -3876,7 +3876,7 @@
         <button type="button" class="init-head-btn" data-init-card-toggle="${esc(init.id)}" aria-expanded="${open ? "true" : "false"}" title="this initiative ${open ? "is open - a press folds it back to its title card" : "is folded to its title card - a press unfolds it, and one open state is kept per initiative while the tab is open"}">
           ${glyphHtml}
           <span class="init-title">${esc(init.title)}</span>
-          ${open ? "" : `<span class="init-caret" aria-hidden="true">▸</span>`}
+          ${open ? `<span class="init-caret is-open" aria-hidden="true">▾</span>` : `<span class="init-caret" aria-hidden="true">▸</span>`}
         </button>
         ${open ? `<button type="button" class="init-mini" data-init-edit="${esc(init.id)}"${blocked || editing ? " disabled" : ""} title="edit the title and the description - the words are free to change, unlike who is behind the work">Edit</button>` : ""}
       </div>
@@ -4049,10 +4049,10 @@
         <div class="init-toolbar">
           <h4>Initiatives <span class="as-hint">the big pieces of work, and the worktrees behind each one</span></h4>
           <div class="as-actions init-actions">
-            <button type="button" data-init-about aria-expanded="${initAboutOpen ? "true" : "false"}" title="what this tab holds, and who may change it - the words the card used to open with">About</button>
-            <button type="button" data-init-density aria-pressed="${initDense ? "true" : "false"}" title="draw the same rows on a tighter 4px rhythm - the type, the contrast and every state role stay identical">Compact rows</button>
-            <button type="button" data-init-new="head"${unreadable ? " disabled" : ""}${initNewOpen ? " hidden" : ""}>New initiative</button>
+            <button type="button" data-init-new="head" aria-label="New initiative"${unreadable ? " disabled" : ""}${initNewOpen ? " hidden" : ""}><span class="init-lbl">New initiative</span><span class="init-lbl-xs">New</span></button>
             <button type="button" data-init-refresh title="read the store again - the tab also re-reads after every write and every answered move">Refresh</button>
+            <button type="button" data-init-about aria-expanded="${initAboutOpen ? "true" : "false"}" title="what this tab holds, and who may change it - the words the card used to open with">About</button>
+            <button type="button" data-init-density aria-pressed="${initDense ? "true" : "false"}" aria-label="Density - compact rows" title="draw the same rows on a tighter 4px rhythm - the type, the contrast and every state role stay identical"><span class="init-lbl init-lbl-density">Compact rows</span><span class="init-lbl-sm">Density</span><span class="init-lbl-xs">Aa</span></button>
           </div>
         </div>
         ${initAboutOpen ? `<div class="init-about" data-init-about-body><p class="as-help">You and the assistants create and edit initiatives; the tier below decides whether a change asks you first. Every change records the actor and the time.</p></div>` : ""}
