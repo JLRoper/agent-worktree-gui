@@ -4,16 +4,37 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.155.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.155.1 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-676 releases from v0.1.0 (2026-10-20) to v1.155.0 (2026-11-21), 2377 commits between the tags. Every release is anchored by an
+677 releases from v0.1.0 (2026-10-20) to v1.155.1 (2026-11-22), 2385 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.155.1 — 2026-11-22 · 8 commits
+
+[`f26f1a0`](https://github.com/JLRoper/agent-worktree-gui/commit/f26f1a0d4ad32ead50d5dbb79d2bb41aedfe0ff0) · [compare v1.155.0...v1.155.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.155.0...v1.155.1)
+
+### Fixed
+
+- fix(collisions): re-open the card the gate's own shot closed ([`f26f1a0`](https://github.com/JLRoper/agent-worktree-gui/commit/f26f1a0d4ad32ead50d5dbb79d2bb41aedfe0ff0))
+
+### Docs & tests
+
+- docs: render the changelog - 676 releases ([`c1b238b`](https://github.com/JLRoper/agent-worktree-gui/commit/c1b238bd125eb2bcca05b4c2ceefe6561bc9a660))
+- test(activity-worker): the fixture cwd is relative, so the push gate passes ([`31b0d8b`](https://github.com/JLRoper/agent-worktree-gui/commit/31b0d8b6d6541f59877a4f01d5e74f702c43737e))
+
+### Other
+
+- a held reply whose thread is gone parks; a stall is labelled by the CPU it burned ([`5d07fe4`](https://github.com/JLRoper/agent-worktree-gui/commit/5d07fe463ee3f60584ac72287921e6b76c5562c1))
+- a parent is cached by the branch tip, so an unmoved branch is not re-derived ([`088469e`](https://github.com/JLRoper/agent-worktree-gui/commit/088469e3ca5a71946371dd45f52935f20db28b88))
+- an unchanged row costs one git process: the scan caches the date by sha and the count by ref+sha ([`a8961f5`](https://github.com/JLRoper/agent-worktree-gui/commit/a8961f57e1a5ef4bce9b17a3c22d160be9d05355))
+- the session readout keeps one read-only store handle, and the index cache knows its store ([`38249b0`](https://github.com/JLRoper/agent-worktree-gui/commit/38249b01a99239cac363a18789ffcc9b85f342a8))
+- one activity worker per read kind, so a liveness tick is a message and not a process ([`1d202ff`](https://github.com/JLRoper/agent-worktree-gui/commit/1d202ffc037505b3c562db7b31a2250c42ec1888))
 
 ## v1.155.0 — 2026-11-21 · 4 commits
 
