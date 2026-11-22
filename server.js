@@ -3160,6 +3160,10 @@ function sweepCollisionsNow() {
       probeShared: (pair) => probeSharedFiles(pair),
       probeLanded: (side, opts) => probeLanded(side, opts),
       mainFor: (name) => collisionMainBranch(name),
+      // THE ABSENCE QUESTION: is every side of a record waiting on the reader still a tree on this disk? A record
+      // whose trees are all gone leaves the count by itself (lib/collision-flow.js step 3b), so the badge cannot
+      // outlive the work it was about.
+      treeExists: (treePath) => existsSync(treePath),
     });
   } catch (err) {
     log(`collisions: the sweep failed (${String((err && err.message) || err)})`);

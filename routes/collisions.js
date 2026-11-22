@@ -67,7 +67,7 @@ export function createCollisionsRoutes({ book, getConfig = () => ({}), sweep = n
         sendJson(res, 200, {
           ok: true,
           say: report
-            ? `swept ${report.pairs} pair${report.pairs === 1 ? "" : "s"}, settled ${(report.settled || []).length} automatically, filed ${report.filed.length}, handed over ${report.escalated.length}`
+            ? `swept ${report.pairs} pair${report.pairs === 1 ? "" : "s"}, settled ${(report.settled || []).length} automatically, filed ${report.filed.length}, handed over ${report.escalated.length}${(report.gone || []).length ? `, closed ${report.gone.length} whose trees are gone` : ""}`
             : "no sweep is wired",
           report,
           state: view(),

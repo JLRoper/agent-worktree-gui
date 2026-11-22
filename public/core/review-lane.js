@@ -218,9 +218,17 @@
     } else if (Array.isArray(rec.stoodByTask) && rec.stoodByTask.length) bits.push(`already stood down: ${rec.stoodByTask.map((f) => `${f.tree} is ${f.state}`).join(", ")}`);
     else if (rec.state === "reader") bits.push("yours to rule on - H steps into it");
     // A VERDICT: the note named nothing alive, so the panel settled it and the marker says so instead of reading like
-    // an alarm. It is checked before the "with both assistants" fallback, which would claim a live pair.
-    else if (rec.state === "absent") bits.push("resolved by absence - no row on this board and no live agent answers to it");
-    else bits.push("with both assistants");
+    // an alarm. It is checked before the "with both assistants" fallback, which would claim a live pair. Two kinds of
+    // verdict share the state: a note whose target answered to nothing, and a pair (or note) whose trees have all been
+    // removed - the second names the trees, because "no live agent answers to it" would be false for a pair that had
+    // two rows until they went.
+    else if (rec.state === "absent") {
+      bits.push(
+        rec.absent?.how === "trees-gone"
+          ? "resolved by absence - every tree it names is gone from disk"
+          : "resolved by absence - no row on this board and no live agent answers to it",
+      );
+    } else bits.push("with both assistants");
     return bits.join(" - ");
   }
 
