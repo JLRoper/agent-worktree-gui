@@ -238,6 +238,132 @@ test("prose that merely OPENS with a one-letter word is not read as a choice", a
   assert.equal(el.state().messages[0].status, "open", "the wait is still open and still answerable");
 });
 
+// ---- a pick that arrives after its wait closed --------------------------------------------------------------
+// The board measured this on 2026-11-21: wait 635 closed at 23:30:02 after the gateway's 90 s, "635A" arrived at
+// 23:31:20, and the panel said nothing at all - hear() filters the open list by number, so a numbered answer to a
+// closed wait fell through to `return false`. The reader could not tell a lost message from a busy panel.
+test("a pick naming a closed wait is answered in the room, naming the wait, and changes nothing", async (t) => {
+  const dir = await scratch(t, "element-late-pick");
+  const stub = stubBridge(dir);
+  t.after(() => stub.stop());
+  const rowClosed = clarifyRow();
+  const jobs = stubJobs([rowClosed]);
+  const el = channel(dir, jobs, { bridge: stub.bridge });
+
+  await el.sweep();
+  const n = el.state().messages[0].n;
+  // The gateway gives up exactly as it does on a timeout: the prompt leaves the run, the record says closed.
+  rowClosed.question = null;
+  rowClosed.questionDone = { answer: "", at: new Date().toISOString(), closed: true };
+  await el.sweep();
+  assert.equal(el.state().messages[0].status, "closed", "the wait is closed while its record stays");
+  assert.equal(stub.sent.length, 1, "closing a wait sends nothing: the record is edited in place");
+
+  stub.say(`${n}A`);
+  await el.sweep();
+  assert.deepEqual(jobs.calls, [], "an answer to a closed wait is never delivered to the gateway");
+  assert.equal(stub.sent.length, 2, "it is ANSWERED instead of dropped: one message back to the room");
+  const ack = stub.sent[1];
+  assert.match(ack, new RegExp(`WTGUI wait ${n} `), "the acknowledgement names the wait by its number");
+  assert.match(ack, new RegExp(`${n}A\\. Deploy to QA arrived after this wait closed`), "and names the option that was too late");
+  assert.match(ack, /NOTHING was applied/);
+  assert.match(ack, /cannot be delivered/);
+  const rec = el.state().messages[0];
+  assert.equal(rec.latePicks.length, 1, "the record keeps the fact, so the Bridge view cannot show a vanished answer");
+  assert.equal(rec.latePicks[0].letter, "A");
+  assert.match(rec.text, new RegExp(`↩ A arrived after this wait closed`), "and its own text says so");
+});
+
+test("a late pick carrying the reader's own words says they were not sent either", async (t) => {
+  const dir = await scratch(t, "element-late-note");
+  const stub = stubBridge(dir);
+  t.after(() => stub.stop());
+  const rowClosed = clarifyRow();
+  const jobs = stubJobs([rowClosed]);
+  const el = channel(dir, jobs, { bridge: stub.bridge });
+
+  await el.sweep();
+  const n = el.state().messages[0].n;
+  rowClosed.question = null;
+  rowClosed.questionDone = { answer: "", at: new Date().toISOString(), closed: true };
+  await el.sweep();
+  stub.say(`${n}B. use javaorcl_two instead`);
+  await el.sweep();
+  assert.deepEqual(jobs.calls, []);
+  assert.match(stub.sent.at(-1), /were not sent either/);
+});
+
+test("two late picks on one wait both measure from its close, not from the first acknowledgement", async (t) => {
+  const dir = await scratch(t, "element-late-twice");
+  const stub = stubBridge(dir);
+  t.after(() => stub.stop());
+  const rowClosed = clarifyRow();
+  const jobs = stubJobs([rowClosed]);
+  const el = channel(dir, jobs, { bridge: stub.bridge });
+
+  await el.sweep();
+  const n = el.state().messages[0].n;
+  rowClosed.question = null;
+  rowClosed.questionDone = { answer: "", at: new Date().toISOString(), closed: true };
+  await el.sweep();
+  const closedAt = el.state().messages[0].closedAt;
+  assert.ok(closedAt, "the record keeps the moment the wait stopped accepting answers");
+
+  stub.say(`${n}B`);
+  await el.sweep();
+  stub.say(`${n}A`);
+  await el.sweep();
+  assert.equal(stub.sent.length, 3, "two picks, two acknowledgements");
+  assert.equal(el.state().messages[0].closedAt, closedAt, "a late acknowledgement never moves the close time");
+  const openFor = stub.sent.slice(1).map((s) => /It was open for ([^\n,]+)/.exec(s)?.[1]);
+  assert.equal(openFor[1], openFor[0], "both name the same window: the one the wait was open for");
+  assert.equal(el.state().messages[0].latePicks.length, 2, "and both are on the record");
+});
+
+test("a late pick is acknowledged once, not once per sweep", async (t) => {
+  const dir = await scratch(t, "element-late-once");
+  const stub = stubBridge(dir);
+  t.after(() => stub.stop());
+  const rowClosed = clarifyRow();
+  const jobs = stubJobs([rowClosed]);
+  const el = channel(dir, jobs, { bridge: stub.bridge });
+
+  await el.sweep();
+  const n = el.state().messages[0].n;
+  rowClosed.question = null;
+  rowClosed.questionDone = { answer: "", at: new Date().toISOString(), closed: true };
+  await el.sweep();
+  stub.say(`${n}A`);
+  await el.sweep();
+  await el.sweep();
+  assert.equal(stub.sent.length, 2, "one pick, one acknowledgement - a sweep never re-sends it");
+});
+
+test("silence stays for the two lines that name no closed wait: an unnumbered letter, and a letter never offered", async (t) => {
+  const dir = await scratch(t, "element-late-silence");
+  const stub = stubBridge(dir);
+  t.after(() => stub.stop());
+  const rowClosed = clarifyRow();
+  const jobs = stubJobs([rowClosed]);
+  const el = channel(dir, jobs, { bridge: stub.bridge });
+
+  await el.sweep();
+  const n = el.state().messages[0].n;
+  rowClosed.question = null;
+  rowClosed.questionDone = { answer: "", at: new Date().toISOString(), closed: true };
+  await el.sweep();
+
+  stub.say("A"); // no number to name a wait with: prose, as before
+  await el.sweep();
+  stub.say(`${n}C`); // a letter this wait never offered is not a pick of it
+  await el.sweep();
+  stub.say("999A"); // a number this channel never sent
+  await el.sweep();
+  assert.equal(stub.sent.length, 1, "nothing invented a wait, and nothing was announced about one");
+  assert.deepEqual(jobs.calls, []);
+});
+
+
 test("an approval waiting on a human goes out too, with the card's own words for each choice", async (t) => {
   const dir = await scratch(t, "element-approval");
   const stub = stubBridge(dir);
