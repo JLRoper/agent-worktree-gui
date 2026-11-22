@@ -52,7 +52,7 @@ import { ReviewInbox } from "./lib/review-inbox.js";
 // the three conditions; routes/collisions.js is the read, the ask and the ruling.
 import { CollisionBook, filingKey, owningTaskFor } from "./lib/collisions.js";
 import { rulingRowsFor, sweepCollisions } from "./lib/collision-flow.js";
-import { probeLanded, probePairMerge, probeSharedFiles } from "./lib/collision-merge.js";
+import { probeLanded, probePairMerge, probeSharedFiles, probeVersionOnly, registeredWorktrees } from "./lib/collision-merge.js";
 import { COLLISIONS_PATH, createCollisionsRoutes } from "./routes/collisions.js";
 import { Hosts, docOf, prListing, proposeMapping, renderTemplate } from "./lib/hosts.js";
 // What a worktree is FOR: the definition catalogue (reader-edited over the shipped seed), where each tree stands in
@@ -3081,6 +3081,39 @@ function collisionMainBranch(name) {
   const first = list.map((b) => String((b && b.branch) || b || "").trim()).filter(Boolean)[0];
   return first ? first.replace(/^origin\//, "") : "main";
 }
+// THE TREES GIT REGISTERS, per repository, cached for half a minute. A leftover directory is a real shape on this
+// board: a tree whose branch was deleted, whose `git worktree remove` refused with "Permission denied" because a dead
+// run's child still holds a file, and which no longer appears in `git worktree list`. It cannot stand down, land or
+// answer a ruling, so a pair standing on it is absent rather than a question - and telling it from a live tree takes the
+// registration, not the folder. One list per repository per half minute, and nothing is ever removed by a sweep.
+const collisionRegisteredCache = new Map();
+function collisionRegisteredPaths(treePath) {
+  const project = projectOfTree(treePath);
+  const repo = String(project?.path || "").trim();
+  if (!repo) return null;
+  const key = guardPathKey(repo);
+  const hit = collisionRegisteredCache.get(key);
+  if (hit && Date.now() - hit.at < 30_000) return hit.paths;
+  let paths = null;
+  try {
+    const got = registeredWorktrees(repo);
+    paths = got.ok ? got.paths : null;
+  } catch (err) {
+    log(`collisions: could not list the worktrees of ${repo} (${String((err && err.message) || err)})`);
+    paths = null;
+  }
+  collisionRegisteredCache.set(key, { at: Date.now(), paths });
+  return paths;
+}
+// Is this path a tree git still registers? `true`/`false` when the repository answered, `null` when the question was not
+// asked (no project owns the path, or git could not list the worktrees). The sweep treats only an explicit `false` as
+// an absence, so a failed read never drops a live question.
+function collisionTreeRegistered(treePath) {
+  const paths = collisionRegisteredPaths(treePath);
+  if (!Array.isArray(paths)) return null;
+  const key = guardPathKey(treePath);
+  return paths.includes(key);
+}
 // The queues and rows a worker's COLLISION note is resolved against, read at the moment the note is filed: a note that
 // names a queue row (#12, or the thread it was carried on) and a note that names this same tree both need the board as
 // it stands, not the board as it stood when the panel booted.
@@ -3164,6 +3197,12 @@ function sweepCollisionsNow() {
       // whose trees are all gone leaves the count by itself (lib/collision-flow.js step 3b), so the badge cannot
       // outlive the work it was about.
       treeExists: (treePath) => existsSync(treePath),
+      // ... AND IS IT STILL A TREE GIT REGISTERS? A leftover directory passes the disk check and fails this one, and it
+      // has no worker behind it: one such side is enough to close the pair instead of asking the reader about it.
+      treeRegistered: (treePath) => collisionTreeRegistered(treePath),
+      // THE VERSION LINE: two landings claiming the next patch above main share package.json and nothing else. That is a
+      // land order the land step settles, not a file fight, so the sweep names it and asks nobody.
+      probeVersionOnly: (pair) => probeVersionOnly(pair),
     });
   } catch (err) {
     log(`collisions: the sweep failed (${String((err && err.message) || err)})`);
@@ -3179,7 +3218,16 @@ function sweepCollisionsNow() {
     const record = collisions.get(settled.pairKey);
     if (record?.ruling?.auto) fileCollisionRuling(record);
   }
-  if (moved && (report.filed.length || report.settled.length || report.escalated.length || report.stoodDown.length)) broadcastSnapshot();
+  if (
+    moved &&
+    (report.filed.length ||
+      report.settled.length ||
+      report.escalated.length ||
+      report.stoodDown.length ||
+      (report.landOrder || []).length ||
+      (report.landOrderWithdrawn || []).length)
+  )
+    broadcastSnapshot();
   return report;
 }
 // The sweep's clock. Ten seconds is a scan or two on a busy board and nothing on a quiet one, and the route can ask for

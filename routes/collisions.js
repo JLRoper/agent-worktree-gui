@@ -32,7 +32,11 @@ export function createCollisionsRoutes({ book, getConfig = () => ({}), sweep = n
     const state = book.state();
     // The count the Human button's collision switch reads is the READER's list, not every pair the panel knows about:
     // a pair still in the assistants' pass is not waiting on the reader. `total` is the whole book, for the tab.
-    return { ...state, counts: state.byState, states: COLLISION_STATES };
+    //
+    // `landOrders` is the version-line answer, broken out because it is the one kind of pair the reader has been asked
+    // about and should not be: a pair named here is counted in `byState.ruled`, and says so on its own card.
+    const records = Array.isArray(state.records) ? state.records : [];
+    return { ...state, counts: state.byState, states: COLLISION_STATES, landOrders: records.filter((rec) => rec.landOrder).length };
   };
   return async function handle(req, res, { url } = {}) {
     const route = String(url?.pathname || req.url || "").split("?")[0].replace(/\/+$/, "") || "/";
@@ -67,7 +71,11 @@ export function createCollisionsRoutes({ book, getConfig = () => ({}), sweep = n
         sendJson(res, 200, {
           ok: true,
           say: report
-            ? `swept ${report.pairs} pair${report.pairs === 1 ? "" : "s"}, settled ${(report.settled || []).length} automatically, filed ${report.filed.length}, handed over ${report.escalated.length}${(report.gone || []).length ? `, closed ${report.gone.length} whose trees are gone` : ""}`
+            ? `swept ${report.pairs} pair${report.pairs === 1 ? "" : "s"}, settled ${(report.settled || []).length} automatically, filed ${report.filed.length}, handed over ${report.escalated.length}${
+                (report.landOrder || []).length ? `, ${report.landOrder.length} named as a land order (version line only)` : ""
+              }${(report.landOrderWithdrawn || []).length ? `, ${report.landOrderWithdrawn.length} land order withdrawn` : ""}${
+                (report.gone || []).length ? `, closed ${report.gone.length} whose trees are gone` : ""
+              }`
             : "no sweep is wired",
           report,
           state: view(),

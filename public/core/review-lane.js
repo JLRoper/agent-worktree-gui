@@ -192,6 +192,16 @@
     return bits.join(" - ");
   }
 
+  // A LAND ORDER is a pair the VERSION LINE alone put together: both sides claim the next patch above main, nothing else
+  // differs, and the land step settles it by rebasing onto the current main and keeping the higher version. It is named
+  // (both trees, the manifest, both numbers) but it is never a question, so the marker says "land order" instead of
+  // "collision". Read from the record's own fields, so the lane does not need to know how the sweep decided.
+  function landOrderOf(rec) {
+    if (!rec) return null;
+    if (rec.landOrder) return rec.landOrder;
+    return rec.ruling?.basis === "version" ? rec.ruling : null;
+  }
+
   // What a collision marker says: the counterpart by NAME, then the evidence, then whose turn it is. The counterpart is
   // the first thing, because "this row is in a collision" without naming the other tree is the bare flag this whole
   // feature exists to avoid. The TASK each side is working is named after the evidence, because "two trees landing into
@@ -200,7 +210,8 @@
     if (!rec) return "";
     const other = rec.other?.name || rec.otherTarget || "an unnamed tree";
     const files = Array.isArray(rec.files) ? rec.files : [];
-    const bits = [`collision with ${other}`, plural(files.length, "shared file", "shared files")];
+    const order = landOrderOf(rec);
+    const bits = [`${order ? "land order" : "collision"} with ${other}`, plural(files.length, "shared file", "shared files")];
     if (files.length) bits.push(files.slice(0, 4).join(", "));
     const taskOf = (side) =>
       side?.task ? `#${side.task.id}${side.task.name ? ` ${side.task.name}` : ""}${side.task.state ? ` (${side.task.state})` : ""}` : "no task row";
@@ -208,25 +219,41 @@
     if (mine || rec.other) bits.push(`${mine?.name || "this tree"} ${taskOf(mine)} vs ${other} ${taskOf(rec.other)}`);
     if (rec.state === "ruled") {
       const ruling = rec.ruling || {};
-      // AN AUTOMATIC PICK SAYS SO, with the reason git gave. "already ruled" would credit it to the reader and hide the
-      // one thing he needs to know about it: a pick the panel made is one press from being overruled.
-      bits.push(
-        ruling.auto
-          ? `auto-settled: ${ruling.name || "a side"} goes first${ruling.reason ? ` - ${ruling.reason}` : " - no merge risk either way"}`
-          : `already ruled: ${ruling.name || "a side"} goes first`,
-      );
+      if (order) {
+        // BOTH NUMBERS, AND WHY IT IS NOT A FIGHT. The order is the lower version first because the higher number is the
+        // one that rebases on top of it, and nothing here is the reader's to arbitrate.
+        const versions = order.versions || rec.versionCheck?.versions || {};
+        const lower = order.pick === "b" ? rec.b : rec.a;
+        const higher = order.pick === "b" ? rec.a : rec.b;
+        const lowerVersion = order.pick === "b" ? versions.b : versions.a;
+        const higherVersion = order.pick === "b" ? versions.a : versions.b;
+        bits.push(
+          `land order: ${lower?.name || "the lower version"} ${lowerVersion || ""} goes first and ${higher?.name || "the higher version"} ${
+            higherVersion || ""
+          } lands on top - a version line alone, not a file fight`,
+        );
+      } else {
+        // AN AUTOMATIC PICK SAYS SO, with the reason git gave. "already ruled" would credit it to the reader and hide the
+        // one thing he needs to know about it: a pick the panel made is one press from being overruled.
+        bits.push(
+          ruling.auto
+            ? `auto-settled: ${ruling.name || "a side"} goes first${ruling.reason ? ` - ${ruling.reason}` : " - no merge risk either way"}`
+            : `already ruled: ${ruling.name || "a side"} goes first`,
+        );
+      }
     } else if (Array.isArray(rec.stoodByTask) && rec.stoodByTask.length) bits.push(`already stood down: ${rec.stoodByTask.map((f) => `${f.tree} is ${f.state}`).join(", ")}`);
     else if (rec.state === "reader") bits.push("yours to rule on - H steps into it");
     // A VERDICT: the note named nothing alive, so the panel settled it and the marker says so instead of reading like
-    // an alarm. It is checked before the "with both assistants" fallback, which would claim a live pair. Two kinds of
-    // verdict share the state: a note whose target answered to nothing, and a pair (or note) whose trees have all been
-    // removed - the second names the trees, because "no live agent answers to it" would be false for a pair that had
-    // two rows until they went.
+    // an alarm. It is checked before the "with both assistants" fallback, which would claim a live pair. Three kinds of
+    // verdict share the state: a note whose target answered to nothing, a pair (or note) whose trees have all been
+    // removed, and a pair with a side git no longer registers - a leftover directory that cannot stand down or land.
     else if (rec.state === "absent") {
       bits.push(
         rec.absent?.how === "trees-gone"
           ? "resolved by absence - every tree it names is gone from disk"
-          : "resolved by absence - no row on this board and no live agent answers to it",
+          : rec.absent?.how === "tree-unregistered"
+            ? "resolved by absence - a tree it names is no longer a registered worktree, a leftover directory with no worker behind it"
+            : "resolved by absence - no row on this board and no live agent answers to it",
       );
     } else bits.push("with both assistants");
     return bits.join(" - ");
@@ -245,6 +272,7 @@
     title,
     markerTitle,
     collisionTitle,
+    landOrderOf,
     KIND_KEYS,
     kindKey,
     keepKinds,

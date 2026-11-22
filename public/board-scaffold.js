@@ -2217,6 +2217,17 @@ function collisionBlockHtml(row, key) {
     // withdraw beside it is the reader's one press to overrule it (withdrawing an automatic pick stops the sweep from
     // putting the same order straight back, so the pair becomes his).
     const auto = state === "ruled" && Boolean(rec.ruling?.auto);
+    // A LAND ORDER: the version line alone put this pair together, and the land step settles it - the tree with the
+    // lower number goes first, and the higher number rebases onto the current main on top of it. It is named with both
+    // numbers and it is never a question, so the card must not read like a pick the reader has to check, which is what
+    // "auto-settled from git's own merge check" would say about it.
+    const order = rec.landOrder && typeof rec.landOrder === "object" ? rec.landOrder : null;
+    const orderVersions = order?.versions && typeof order.versions === "object" ? order.versions : rec.versionCheck?.versions || {};
+    const orderLowPick = order?.pick === "b" ? "b" : "a";
+    const orderLow = orderLowPick === "b" ? rec.b : rec.a;
+    const orderHigh = orderLowPick === "b" ? rec.a : rec.b;
+    const orderLowVersion = orderLowPick === "b" ? orderVersions.b : orderVersions.a;
+    const orderHighVersion = orderLowPick === "b" ? orderVersions.a : orderVersions.b;
     // THE PILL IS A WORD, NOT A PARAGRAPH. It used to print the whole stand-down - "already stood down: <tree>
     // (<task title>) is parked, <tree> ... is done" - which is the same prose the History section repeats in full,
     // and it is why the card's first screen was a wall of text. At a glance a reader needs to know WHICH of these
@@ -2229,15 +2240,17 @@ function collisionBlockHtml(row, key) {
           ? "same tree, not a collision"
           : kind === "none"
             ? "no row matches"
-            : auto
-              ? `auto-settled: ${esc(rec.ruling?.name || "a side")} goes first`
-              : state === "ruled"
-                ? `already ruled: ${esc(rec.ruling?.name || "a side")}${rec.ruling?.taskId ? ` (#${esc(rec.ruling.taskId)})` : ""} goes first`
-                : stoodByTask.length
-                  ? "stood down"
-                  : state === "reader"
-                    ? "yours to rule on"
-                    : "with both assistants";
+            : order
+              ? `land order: ${esc(orderLow?.name || "the lower version")} ${esc(orderLowVersion || "")} goes first`
+              : auto
+                ? `auto-settled: ${esc(rec.ruling?.name || "a side")} goes first`
+                : state === "ruled"
+                  ? `already ruled: ${esc(rec.ruling?.name || "a side")}${rec.ruling?.taskId ? ` (#${esc(rec.ruling.taskId)})` : ""} goes first`
+                  : stoodByTask.length
+                    ? "stood down"
+                    : state === "reader"
+                      ? "yours to rule on"
+                      : "with both assistants";
     // WHAT GIT SAID, when it said "the reader's": both directions conflict, or it could not answer. A card that asked
     // for a decision with no reason visible is the bare flag this whole surface exists to avoid.
     const dirs = rec.merge || null;
@@ -2252,7 +2265,15 @@ function collisionBlockHtml(row, key) {
     // THE MERGE CHECK SECTION'S ONE LINE: git's own verdict on the order, and how many files the two branches share.
     // That is the whole reason to open the section, said in its header so a closed section still reads.
     const mergeKey = [
-      bothConflict ? "both directions conflict" : gitUnknown ? "git could not answer" : anyClean ? "clean one way" : "not checked",
+      order
+        ? "version line only"
+        : bothConflict
+          ? "both directions conflict"
+          : gitUnknown
+            ? "git could not answer"
+            : anyClean
+              ? "clean one way"
+              : "not checked",
       files.length ? `${files.length} shared file${files.length === 1 ? "" : "s"}` : measured ? "no shared file" : "",
     ]
       .filter(Boolean)
@@ -2276,9 +2297,11 @@ function collisionBlockHtml(row, key) {
     if (state === "ruled" && !superseded) {
       actions.push(
         `<button class="btn-collision-clear" type="button" data-collision-rule="${esc(rec.key)}" data-collision-pick="clear" title="${
-          auto
-            ? "withdraw this automatic pick - the panel will not put the same order back, so the pair is yours to rule"
-            : "withdraw the ruling - the pair goes back to the assistants' own pass"
+          order
+            ? "withdraw this land order - the pair becomes yours to rule, and the sweep will not put the same version order back"
+            : auto
+              ? "withdraw this automatic pick - the panel will not put the same order back, so the pair is yours to rule"
+              : "withdraw the ruling - the pair goes back to the assistants' own pass"
         }">withdraw the ruling</button>`,
       );
     } else if (rec.canAsk && canRule) {
@@ -2325,6 +2348,7 @@ function collisionBlockHtml(row, key) {
         ...(Array.isArray(rec.stoodDown) ? rec.stoodDown : []).map((s) => `notice #${s.taskId}${s.state ? ` ${s.state}` : ""}`),
         superseded ? `superseded ${superseded.short || String(superseded.commit || "").slice(0, 7)}` : "",
         absent ? "resolved by absence" : "",
+        order ? `land order: ${order.pick === "b" ? rec.b?.name || "a side" : rec.a?.name || "a side"} first` : "",
         rec.ruling ? `${rec.ruling.auto ? "auto-picked" : "ruled"}: ${rec.ruling.name || "a side"}` : "",
       ]
         .filter(Boolean)
@@ -2340,11 +2364,17 @@ function collisionBlockHtml(row, key) {
       stood ? `<div class="collision-stood">${esc(stood)}</div>` : "",
       peerLine,
       rec.notes && rec.notes.length ? `<ul class="collision-notes">${rec.notes.map((n) => `<li>“${esc(n.text)}”</li>`).join("")}</ul>` : "",
-      auto
-        ? `<div class="collision-ruling-note">settled by the panel from git's own merge check - withdraw it to make this pair yours</div>`
-        : rec.ruling?.note
-          ? `<div class="collision-ruling-note">your note: ${esc(rec.ruling.note)}</div>`
-          : "",
+      order
+        ? `<div class="collision-ruling-note collision-land-order" data-collision-land-order="${esc(order.at || "")}">a land order, not a file fight: ${esc(
+            orderLow?.name || "one tree",
+          )} carries ${esc(orderLowVersion || "the lower version")} and ${esc(orderHigh?.name || "the other tree")} carries ${esc(
+            orderHighVersion || "the higher version",
+          )}, so ${esc(orderLow?.name || "the first")} goes first and the higher number lands on top - the land step rebases onto main and keeps it, so nothing here waits on you</div>`
+        : auto
+          ? `<div class="collision-ruling-note">settled by the panel from git's own merge check - withdraw it to make this pair yours</div>`
+          : rec.ruling?.note
+            ? `<div class="collision-ruling-note">your note: ${esc(rec.ruling.note)}</div>`
+            : "",
       superseded
         ? `<div class="collision-ruling-note collision-superseded" data-collision-superseded="${esc(superseded.commit)}">the landing <span class="mono">${esc(superseded.short || superseded.commit)}</span> carried ${esc(superseded.side === "b" ? rec.b?.name || "the other side" : rec.a?.name || "this side")} into ${esc(superseded.main || "main")}${superseded.landedAt ? ` ${relTime(superseded.landedAt)} ago` : ""}, after this report was stamped${superseded.reportAt ? ` (${esc(String(superseded.reportAt))})` : ""} - the pair is history and asks nothing of you</div>`
         : "",
@@ -2357,8 +2387,8 @@ function collisionBlockHtml(row, key) {
     const secId = (slug) => `${String(rec.key || key).replace(/[^A-Za-z0-9]+/g, "-")}-${lane}-${slug}`;
     return `<div class="collision-block is-${esc(state)}${lane === "history" ? " is-history" : ""}" data-collision-block="${esc(key)}" data-collision-key="${esc(rec.key)}" data-collision-pair="${esc(rec.key)}" data-collision-lane="${esc(lane)}">
       <div class="collision-head">
-        <span class="collision-mark" role="img" aria-label="collision with ${esc(other)}">◆</span>
-        <h4>Collision</h4>
+        <span class="collision-mark" role="img" aria-label="${order ? "land order" : "collision"} with ${esc(other)}">◆</span>
+        <h4>${order ? "Land order" : "Collision"}</h4>
         <span class="collision-other">with <b>${esc(other)}</b>${otherBranch ? ` <span class="collision-branch mono">${esc(otherBranch)}</span>` : ""}</span>
         <span class="collision-state is-${esc(state)}">${stateWord}</span>
         <span class="collision-when mono">${esc([when, rec.source === "reported" ? "reported by its worker" : ""].filter(Boolean).join(" · "))}</span>
