@@ -17,7 +17,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { TASK_WAVE_MAX, pickTask, readQueueFile, settleTasks, writeQueueFile } from "../lib/assistant/queue.js";
+import { TASK_WAVE_MAX, editTask, pickTask, readQueueFile, settleTasks, writeQueueFile } from "../lib/assistant/queue.js";
 
 const base = (over = {}) => ({ id: 1, title: "prove the lane", state: "queued", ...over });
 
@@ -84,4 +84,36 @@ test("a settle preserves the wave id, and a row with none still has none after i
   );
   assert.equal(out.tasks.find((x) => x.id === 1).waveId, "wave_01");
   assert.equal(out.tasks.find((x) => x.id === 2).waveId, null);
+});
+
+test("an abandonment is a NAMED reason carried on the row, and a bare flag normalises to none", (t) => {
+  const dir = mkdtempSync(path.join(tmpdir(), "wtgui-queue-abandon-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const file = path.join(dir, "queue.json");
+  // A reason round-trips through the file, because the wave gate reads it on a later request than the one that wrote it.
+  const written = writeQueueFile(file, [base({ abandoned: { reason: "the feed was retired", by: "roper", at: "2026-11-21T10:00:00.000Z" } })], 2);
+  assert.equal(written[0].abandoned.reason, "the feed was retired");
+  assert.equal(written[0].abandoned.by, "roper");
+  const read = readQueueFile(file);
+  assert.equal(read.error, null);
+  assert.equal(read.tasks[0].abandoned.reason, "the feed was retired");
+  // A bare flag is a status word: it normalises to none, so no gate can close on it.
+  assert.equal(pickTask(base({ abandoned: true })).abandoned, null);
+  assert.equal(pickTask(base({ abandoned: { reason: "   " } })).abandoned, null);
+  assert.equal(pickTask(base({ abandoned: false })).abandoned, null);
+  assert.equal(pickTask(base()).abandoned, null);
+  // A string is the reason, not a truthy flag.
+  assert.equal(pickTask(base({ abandoned: "superseded by wave 3" })).abandoned.reason, "superseded by wave 3");
+});
+
+test("the edit door sets and clears an abandonment; an unnamed value cannot be set", () => {
+  const tasks = [base({ id: 7, abandoned: null })];
+  const named = editTask(tasks, 7, { abandoned: { reason: "the upstream feed was retired", by: "roper" } });
+  assert.equal(named.task.abandoned.reason, "the upstream feed was retired");
+  // An unnamed value clears rather than storing a half-abandonment.
+  assert.equal(editTask(tasks, 7, { abandoned: true }).task.abandoned, null);
+  // Absent leaves the row alone.
+  assert.equal(editTask(named.tasks, 7, { reason: "still abandoned, new sentence" }).task.abandoned.reason, "the upstream feed was retired");
+  // Cleared with null, and the row still exists with no abandonment.
+  assert.equal(editTask(named.tasks, 7, { abandoned: null }).task.abandoned, null);
 });

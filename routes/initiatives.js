@@ -77,7 +77,7 @@ function taskRowOf(task, nowMs, rowFor) {
  * The whole tab's document, built from the store plus the two things only the composition root knows: which project a
  * path belongs to, and what the board's row for it says. Pure enough to run over a fixture: every seam is a function.
  */
-export function initiativesView({ initiatives, projectForPath, rowFor, assistants = [], queueFor = () => null, now = Date.now(), tier = null, waves = null, templateExists = null }) {
+export function initiativesView({ initiatives, projectForPath, rowFor, assistants = [], queueFor = () => null, now = Date.now(), tier = null, waves = null, templateExists = null, evidenceFor = null, boardTasks = null }) {
   const status = initiatives.statusOf();
   const list = initiatives.initiativeList();
   const level = initiativeTierInfo(tier);
@@ -92,7 +92,9 @@ export function initiativesView({ initiatives, projectForPath, rowFor, assistant
   });
   // Every assistant's rows, flattened once: a wave's members are the tasks that NAME it, from any project (decision
   // 2, 2026-11-21), so the fold must not filter them by this initiative's tree keys the way the assistant strips do.
-  const waveTasks = board.flatMap((b) => b.tasks);
+  // The route may hand the SAME objects it gathered evidence for, so a member's evidence key and its fold key cannot
+  // be built from two different reads of one row.
+  const waveTasks = Array.isArray(boardTasks) ? boardTasks : board.flatMap((b) => b.tasks);
   const waveStatus = waves && typeof waves.statusOf === "function" ? waves.statusOf() : null;
   const out = list.map((init) => {
     const trees = initiatives.treesFor(init.id).map((rec) => {
@@ -172,7 +174,7 @@ export function initiativesView({ initiatives, projectForPath, rowFor, assistant
     // it, its derived state and its gate reads. A read, not a record: nothing here is stored on the initiative, and a
     // wave with no member draws as `empty` rather than as a default membership.
     const lane = waves
-      ? waveLane({ waves, initiativeId: init.id, tasks: waveTasks, rowFor, templateExists })
+      ? waveLane({ waves, initiativeId: init.id, tasks: waveTasks, rowFor, templateExists, evidenceFor })
       : { waves: [], skipped: [], currentId: null };
     return {
       id: init.id,
@@ -233,6 +235,10 @@ export function createInitiativesRoutes({
   // still drives this route, and the tab then draws an empty lane rather than failing.
   waves = null,
   templateExists = null,
+  // The live evidence behind a wave gate (lib/wave-evidence.js): the pull request read through the host's API and
+  // the landing judged by content on origin/main. Supplied by the composition root, which is the only place the host
+  // mapping and the project registry live. Absent, thrown, or missing a member, the gate reads cannot tell and blocks.
+  waveEvidence = null,
   // Called after a write the tab should see at once (create, edit, an answered move): the composition root invalidates
   // the board snapshot and broadcasts it, so a chart chip appears the moment a membership changes rather than on the
   // next unrelated repaint. Defaulted so a fixture can drive the routes without a server.
@@ -268,8 +274,42 @@ export function createInitiativesRoutes({
       error: `${status.file || "the initiative store"} could not be read (${status.error || "unknown error"}) - it was NOT overwritten. Fix or move that file, then try again: every initiative on the board lives in it.`,
     };
   };
-  const view = () =>
-    initiativesView({
+  // The members' rows, flattened EXACTLY as initiativesView builds them, so the evidence keys and the fold's member
+  // keys are the same strings. Each row goes into the queue read and the evidence read unchanged; `waveMemberKey`
+  // reads the task's own id and worktree, never the assistant it came from.
+  const waveTasks = () => {
+    const out = [];
+    for (const rec of Array.isArray(assistant?.assistants) ? assistant.assistants : []) {
+      let view = null;
+      try {
+        view = typeof assistant?.queueView === "function" ? assistant.queueView(rec.id) : null;
+      } catch {
+        view = null; // its own pane reports the error; a wave read must not fail because one queue did
+      }
+      for (const task of Array.isArray(view?.tasks) ? view.tasks : []) out.push(task);
+    }
+    return out;
+  };
+  // One evidence read per request, shared by every initiative's lane: a Map keyed by waveMemberKey, or null when no
+  // reader was supplied or the read threw. Null is cannot-tell for every gate - the fold still paints, the gates
+  // never pass.
+  const evidenceFor = async (tasks) => {
+    if (typeof waveEvidence !== "function") return null;
+    try {
+      const map = await waveEvidence({ tasks, rowFor });
+      if (map instanceof Map) return map;
+      log("initiatives: the wave evidence reader answered no map, so every gate reads cannot tell");
+    } catch (error) {
+      log(`initiatives: the wave evidence read failed, so every gate reads cannot tell: ${String((error && error.message) || error)}`);
+    }
+    return null;
+  };
+  // `view` is async because the gates are a live read. It answers the whole document the tab draws; every caller
+  // awaits it, so a POST's answer carries the same lane the next GET would.
+  const view = async () => {
+    const tasks = waveTasks();
+    const evidence = await evidenceFor(tasks);
+    return initiativesView({
       initiatives,
       projectForPath,
       rowFor,
@@ -278,7 +318,10 @@ export function createInitiativesRoutes({
       tier: tierOf(),
       waves,
       templateExists,
+      boardTasks: tasks,
+      evidenceFor: (member) => (evidence ? evidence.get(member.key) || null : null),
     });
+  };
 
   return async function initiativesRoutes(req, res, route, url) {
     if (route !== INITIATIVES_PATH && !route.startsWith(`${INITIATIVES_PATH}/`)) return false;
@@ -291,7 +334,7 @@ export function createInitiativesRoutes({
         sendJson(res, 405, { error: `GET is not allowed on ${route}` });
         return true;
       }
-      sendJson(res, 200, view());
+      sendJson(res, 200, await view());
       return true;
     }
     if (req.method !== "POST") {
@@ -364,7 +407,7 @@ export function createInitiativesRoutes({
       }
       log(`initiatives: "${out.initiative.title}" created (${out.initiative.id}) by ${by}, not asked (tier ${tierOf()})`);
       onChange("created");
-      sendJson(res, 201, { ok: true, asked: false, changed: true, initiative: out.initiative, ...view() });
+      sendJson(res, 201, { ok: true, asked: false, changed: true, initiative: out.initiative, ...(await view()) });
       return true;
     }
 
@@ -424,7 +467,7 @@ export function createInitiativesRoutes({
       }
       if (out.changed !== false) onChange("edited");
       log(`initiatives: "${out.initiative.title}" edited (${out.initiative.id}) by ${by}, not asked (tier ${tierOf()})`);
-      sendJson(res, 200, { ok: true, asked: false, changed: out.changed !== false, initiative: out.initiative, ...view() });
+      sendJson(res, 200, { ok: true, asked: false, changed: out.changed !== false, initiative: out.initiative, ...(await view()) });
       return true;
     }
 
@@ -461,7 +504,7 @@ export function createInitiativesRoutes({
           initiative: { id: rec.id, title: rec.title },
           tree,
           note: action === "add" ? "that worktree is already in this initiative" : "that worktree is not in this initiative",
-          ...view(),
+          ...(await view()),
         });
         return true;
       }
@@ -487,7 +530,7 @@ export function createInitiativesRoutes({
           initiative: { id: rec.id, title: rec.title },
           tree,
           action,
-          ...view(),
+          ...(await view()),
         });
         return true;
       }

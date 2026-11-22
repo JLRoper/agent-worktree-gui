@@ -207,7 +207,7 @@ test("the wave never reads green on an exit nobody can see: unknown, then ready 
   );
   assert.equal(doc.waves[0].state, "ready");
   assert.equal(doc.waves[0].gates.exit.state, "unknown");
-  assert.match(doc.waves[0].gates.exit.why, /name no pull request/);
+  assert.match(doc.waves[0].gates.exit.why, /names no pull request/);
 });
 
 test("no wave-state field is written to the wave store by any of the reads above", () => {

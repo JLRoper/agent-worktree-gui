@@ -43,7 +43,7 @@ const wave = (over = {}) => ({
 
 test("the module publishes the lane and its four gate words", () => {
   assert.equal(typeof lane.laneHtml, "function");
-  assert.deepEqual(lane.GATE_WORDS, { met: "met", unmet: "not met", unknown: "cannot tell", none: "no gate" });
+  assert.deepEqual(lane.GATE_WORDS, { met: "met", unmet: "not met", unknown: "cannot tell", none: "no gate", abandoned: "abandoned" });
 });
 
 test("a member row carries the task's own state, its id and its project", () => {
@@ -168,4 +168,31 @@ test("every wave id, title and member title is escaped", () => {
   assert.doesNotMatch(html, /<img src=x/);
   assert.match(html, /&lt;img src=x onerror=&quot;alert\(1\)&quot;&gt;/);
   assert.match(html, /&lt;\/span&gt;&lt;script&gt;bad\(\)&lt;\/script&gt;/);
+});
+
+test("a member abandoned with a NAMED reason is drawn abandoned, with the reason, not as its stale state word", () => {
+  // The row's own state is `queued`; the person's decision is what the lane must draw.
+  const html = lane.memberHtml({ id: 6, title: "the retired feed", project: "agent-worktree-gui", state: "queued", abandoned: { reason: "the upstream feed was retired", by: "roper" } });
+  assert.match(html, /data-member-state="abandoned"/);
+  assert.match(html, /data-member-abandoned="the upstream feed was retired"/);
+  assert.match(html, /is-abandoned/);
+  assert.match(html, /abandoned: the upstream feed was retired/);
+  assert.doesNotMatch(html, /data-member-state="queued"/);
+  // A member abandoned WITHOUT a reason is not an abandonment at all: the lane draws the row's state, and the gate
+  // (not the lane) is what refuses it.
+  const bare = lane.memberHtml({ id: 7, title: "no reason", state: "queued", abandoned: { reason: "  " } });
+  assert.match(bare, /data-member-state="queued"/);
+  assert.doesNotMatch(bare, /is-abandoned/);
+});
+
+test("the abandoned gate answer is a chip of its own, not drawn as met or as cannot tell", () => {
+  const w = wave({
+    state: "abandoned",
+    stateWord: "abandoned",
+    gates: { entry: { check: null, state: "none", met: false, cannotTell: false, why: "no entry gate" }, exit: { check: "pr-merged", state: "abandoned", met: false, cannotTell: false, clamped: true, why: "#2 was abandoned: the feed was retired" } },
+  });
+  const html = lane.waveHtml(w);
+  assert.match(html, /data-gate-state="abandoned"/);
+  assert.match(html, /#2 was abandoned: the feed was retired/);
+  assert.doesNotMatch(html, /data-gate-state="met"/);
 });

@@ -73,6 +73,10 @@ export function createWavesRoutes({
   store,
   sendJson,
   templateExists = () => null,
+  // The evidence read behind a gate (lib/wave-evidence.js), supplied by the composition root because only it holds
+  // the host mapping and the project registry. `waveEvidence({tasks, rowFor})` answers a Map keyed by
+  // `waveMemberKey(task)`; absent, thrown or missing a member, the gate reads cannot tell and blocks.
+  waveEvidence = null,
   log = () => {},
 } = {}) {
   if (!waves) throw new Error("createWavesRoutes needs the Waves store");
@@ -110,12 +114,27 @@ export function createWavesRoutes({
       });
       return true;
     }
+    const tasks = queueRows(assistant);
+    // ONE evidence read per request, consulted by the entry and exit gate of every wave in the answer. A collector
+    // that answers no map, throws, or never reached a member leaves `evidenceOf` answering null for it, and the gate
+    // reads cannot tell - the read is fail-closed by construction, never fail-open.
+    let evidence = null;
+    if (typeof waveEvidence === "function") {
+      try {
+        const map = await waveEvidence({ tasks, rowFor });
+        evidence = map instanceof Map ? map : null;
+        if (!evidence) log("waves: the evidence reader answered no map, so every gate reads cannot tell");
+      } catch (error) {
+        log(`waves: the evidence read failed, so every gate reads cannot tell: ${String((error && error.message) || error)}`);
+      }
+    }
     const lane = waveLane({
       waves,
       initiativeId,
-      tasks: queueRows(assistant),
+      tasks,
       rowFor,
       templateExists,
+      evidenceFor: (member) => (evidence ? evidence.get(member.key) || null : null),
     });
     log(`waves: read ${lane.waves.length} wave${lane.waves.length === 1 ? "" : "s"} for ${initiativeId}`);
     sendJson(res, 200, {
