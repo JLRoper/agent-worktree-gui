@@ -415,6 +415,20 @@ thead th,
 .settings-row select { flex: 1; min-width: 0; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; font: 12px var(--mono); }
 .settings-preview { margin-top: 10px; padding: 9px 10px; border: 1px dashed var(--line); border-radius: 6px; font-size: 13px; color: var(--text); }
 
+/* ---- Settings > the row glossary: what a letter or a chip means, in prose -------------------------------------
+   Reading, not setting. A block follows the heading row that names it, so the settings search treats it the way it
+   treats a preview strip: it travels with the row above and is hidden when that row does not answer. The panel is
+   340 px wide until it is dragged, so every long token (a route, a branch shape) wraps instead of widening the
+   window, and the prose is the panel's own reading size rather than a tooltip's. The T and R marks keep the chart's
+   `.kind-mark` ink; only their cell margins are dropped, so the letter reads as part of the line rather than a cell. */
+.settings-glossary { margin: 4px 0 2px; padding: 2px 0 2px 10px; border-left: 2px solid #232c38; font-size: 12px; line-height: 1.55; color: var(--dim); overflow-wrap: anywhere; }
+.settings-glossary p { margin: 6px 0 0; }
+.settings-glossary-say { color: var(--dim); }
+.settings-glossary dl { margin: 2px 0 0; }
+.settings-glossary dt { display: flex; align-items: baseline; flex-wrap: wrap; gap: 3px; margin-top: 9px; font: 12px var(--mono); color: var(--text); }
+.settings-glossary dd { margin: 3px 0 0; }
+.settings-glossary .kind-mark { margin-right: 1px; vertical-align: 0; }
+
 /* ---- Settings > Prompt: three box-in-box budget diagrams ------------------------------------
    The outer box is the whole prompt, the two inside it are its carriers (system text and turn text),
    and each section is a box inside its carrier whose BAR is its share of the turn. The window is a
