@@ -306,7 +306,7 @@
   <h2 id="proof">How this was proved</h2>
   <div class="split">
     <div>
-      <p>The panel was booted from <code>server.js</code> on a free loopback port with <code>WAG_HOME</code> pointed at <code>C:/Users/roper/AppData/Local/Temp/wag/330fb817/home-main</code>. <code>PANEL_CONFIG</code> was not set, so the instance could not fall back to the reader's <code>~/.wag</code>; nothing under the live panel's state was read or written. The fixture is the repository's own <code>tools/initiatives-fixture.mjs</code>: four initiatives over three projects and eight worktrees, including one worktree whose path is missing. Waves were seeded into the fixture's own <code>state/waves.json</code>, because <code>routes/waves.js</code> is read-only in this slice and has no writer to call. Tasks were pointed at those waves through the queue's own <code>waveId</code>, which is the only link between a task and a wave.</p>
+      <p>The panel was booted from <code>server.js</code> on a free loopback port with <code>WAG_HOME</code> pointed at a scratch directory, <code>$WAG_SCRATCH/home-main</code>. <code>PANEL_CONFIG</code> was not set, so the instance could not fall back to the reader's <code>~/.wag</code>; nothing under the live panel's state was read or written. The fixture is the repository's own <code>tools/initiatives-fixture.mjs</code>: four initiatives over three projects and eight worktrees, including one worktree whose path is missing. Waves were seeded into the fixture's own <code>state/waves.json</code>, because <code>routes/waves.js</code> is read-only in this slice and has no writer to call. Tasks were pointed at those waves through the queue's own <code>waveId</code>, which is the only link between a task and a wave.</p>
       <p>The captures are real renders of <code>GET /api/initiatives</code> and <code>GET /api/waves</code> through the real scan and the real queue read. They are not mock-ups and they are not injected DOM. The harness is about 150 lines of Playwright that imports <code>tools/browser.mjs</code>; it lives in the scratch directory, not in the repository, because this round is allowed to write only the report and <code>docs/assets/initiatives-redesign/a/</code>.</p>
     </div>
     <div class="side">
@@ -318,9 +318,10 @@
   </div>
 
   <h3>The exact capture command and viewports</h3>
-  <pre>node C:/Users/roper/AppData/Local/Temp/wag/330fb817/capture-main.mjs
-node C:/Users/roper/AppData/Local/Temp/wag/330fb817/capture-crops.mjs
-node C:/Users/roper/AppData/Local/Temp/wag/330fb817/capture-loading.mjs</pre>
+  <pre># from the run's scratch directory
+node capture-main.mjs
+node capture-crops.mjs
+node capture-loading.mjs</pre>
   <p class="cap">1440x900 for the realistic default, 1440x3000, 1024x3000 and 768x3000 for the tall open-card evidence, 1024x900 and 768x900 for the same list at a real window height, and 1440x1600 in the wide floating panel. The tall viewport is only a way to fit the whole card in one PNG; the width is the width named. The tab was opened by pressing <code>#btn-assistant</code>, then <code>#as-tabs [data-as-tab="initiatives"]</code>, and the harness waited for at least four <code>.init-card</code> elements before every shot.</p>
 
   <h2 id="where">Where the tab is drawn today, and whether extracting it is the first move</h2>
