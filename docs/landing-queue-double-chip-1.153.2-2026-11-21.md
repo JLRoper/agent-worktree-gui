@@ -61,10 +61,15 @@ on this branch it answers `21 of 21` passed, including the x cancelling the adop
 chip. The pair of captures is the harness's own `--shots` output: `npm run verify:queue-held-snapshot-race` writes it
 again, on demand, against this tree or against a `git archive` of any build.
 
-**The suite.** `npm run test:changed` (110 files, the changed set for `public/app.js`) selected the reply and queue
-tests among the rest. The reply/queue/held subset ran `254` passing with one failure in `test/queue-sweep.test.js`,
-which passes alone in this tree and in a `git archive` of the base: it is a concurrency-sensitive neighbour, not this
-change. The full `npm test` sweep answered `FULL_SWEEP_RESULT`.
+**The suite.** The reply, queue and held-reply tests ran `255` passing, `0` failing
+(`node --test --test-concurrency=1 test/*queue*.test.js test/*reply*.test.js test/*held*.test.js`). The changed set
+for `public/app.js`, `npm run test:changed`, ran `134` files in 384 s and answered three failures:
+`test/header-controls.test.js` (a source slice the pause handler has outgrown), `test/junctioned-node-modules.test.js`
+and `test/scan-roots.test.js` (both filesystem and panel-scan harnesses). Each of the three reproduces the same way in
+a `git archive` of the base with this change absent, so none of them is this landing's. The full `npm test` sweep was
+started and stopped at the twenty-minute box without a result: this machine was running other trees' suite runs at the
+same time (six `npm test` trees were alive), which is what put it past the box. The changed set, the new regression
+file and the 1440 harness are the evidence this landing stands on.
 
 ## The number
 
